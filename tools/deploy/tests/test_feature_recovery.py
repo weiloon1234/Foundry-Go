@@ -71,8 +71,9 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
         self.assertEqual(base.read_bytes(), original)
 
 
-    def target(self, *, running=('http', 'relay'), holds=(), mode='takeover', public=False, scheduler=False):
-        self.build_archive(independent=True, secrets=True, public=public, rehearsal_safe=mode == 'rehearsal', scheduler=scheduler)
+    def target(self, *, running=('http', 'relay'), holds=(), mode='takeover', public=False, public_binding=False, scheduler=False):
+        self.build_archive(independent=True, secrets=True, public=public, public_binding=public_binding,
+                           rehearsal_safe=mode == 'rehearsal', scheduler=scheduler)
         if mode == 'rehearsal':
             self.build_archive(secrets=True, rehearsal_safe=True, scheduler=scheduler)
         if public:
@@ -143,6 +144,22 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
         lifecycle.prepare_recovery(self.host, registry, entry, self.journal, self.snapshot,
                                    self.archive, c.digest(self.archive), wiring.TOOLS)
         self.journal['completed'].append('application')
+
+    def test_recovery_preserves_archived_template_floor_after_application_rollback(self):
+        registry, entry = self.target()
+        self.snapshot['selection']['minimum_generation'] = 14
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            self.assertEqual(lifecycle.load(self.host, entry)[1].minimum_generation, 14)
+
+    def test_public_binding_recovery_uses_generation_fourteen_and_replacement_profile(self):
+        registry, entry = self.target(public=True, public_binding=True)
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            _, selection, inventory, _ = lifecycle.load(self.host, entry)
+            self.assertEqual(selection.minimum_generation, 14)
+            binding, = inventory.specs['http'].bindings.public_listeners
+            self.assertEqual(binding.public_addresses, ('203.0.113.11', '2001:db8:42::11'))
 
     def test_takeover_exact_release_enablement_private_health_and_fresh_replay(self):
         registry, entry = self.target(running=('relay',), public=True)

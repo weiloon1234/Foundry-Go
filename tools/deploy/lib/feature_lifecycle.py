@@ -17,11 +17,11 @@ import services
 from contracts import (AdmissionDisposition, AdmissionRecord, Deployment,
                        DeploymentSelection, DeployError, FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, HostTransition,
                        ProcessIdentity, ReleaseDeclaration, ResolvedBundleBinding, ResolvedEndpointBinding,
-                       ResolvedExecutableBinding, RoleBindings, RuntimeResolution, UnitIdentity, UnitSpec,
+                       ResolvedExecutableBinding, ResolvedPublicListenerBinding, RoleBindings, RuntimeResolution, UnitIdentity, UnitSpec,
                        ValidationPermit, atomic_json, atomic_write, canonical_digest, check_path, contract_uuid,
                        digest, marker, read_json, record_document, require)
 from topology import (ApplicationExecutable, ArtifactExecutable, BuiltinRole, BundleDirectoryBinding,
-                      EndpointBinding, ExecutableBinding, ExecutableRole, PackageExecutable, parse_profile, parse_topology)
+                      EndpointBinding, ExecutableBinding, ExecutableRole, PackageExecutable, PublicListenerReference, parse_profile, parse_topology)
 
 LATER = "the post-preview B24 lifecycle release"
 
@@ -175,10 +175,16 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
     profile = parse_profile(profile if profile is not None else declaration.profile_json, topology)
     affected = set(affected) if affected is not None else {role.common.name for role in topology.roles}
     if previous is not None:
-        # Endpoint consumers have changed effective inputs when their provider moves.
+        previous_public = dict(previous.profile.listeners)
+        current_public = dict(profile.listeners)
+        affected.update(role.common.name for role in topology.roles for _, binding in role.common.bindings
+                        if isinstance(binding, PublicListenerReference) and
+                        previous_public.get(binding.role + "." + binding.listener) !=
+                        current_public.get(binding.role + "." + binding.listener))
+        # Listener consumers have changed effective inputs when their provider moves.
         while True:
             consumers = {role.common.name for role in topology.roles for _, binding in role.common.bindings
-                         if isinstance(binding, EndpointBinding) and binding.role in affected}
+                         if isinstance(binding, (EndpointBinding, PublicListenerReference)) and binding.role in affected}
             if consumers <= affected:
                 break
             affected.update(consumers)
@@ -206,6 +212,7 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
         paths = services.ServicePaths.for_unit(unit, resolution_id)
         views = services.bundle_views(role, paths, topology, profile.architecture, roots, declaration.artifacts)
         executable_bindings, endpoint_bindings, bundle_bindings = [], [], []
+        public_listener_bindings = []
         for binding_name, binding in role.common.bindings:
             if isinstance(binding, ExecutableBinding):
                 path, checksum = executable(host, binding.executable, declaration, release_path, roots)
@@ -214,11 +221,18 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
                 endpoint = next((e for e in endpoints if (e.role, e.listener) == (binding.role, binding.listener)), None)
                 require(endpoint is not None, "service_binding", "Declared endpoint is unallocated.")
                 endpoint_bindings.append(ResolvedEndpointBinding(binding_name, endpoint, binding.scheme))
+            elif isinstance(binding, PublicListenerReference):
+                public = dict(profile.listeners).get(binding.role + "." + binding.listener)
+                require(public is not None, "service_binding", "Declared public listener is unplaced.")
+                provider = next(r for r in topology.roles if r.common.name == binding.role)
+                listener = dict(provider.listeners)[binding.listener]
+                public_listener_bindings.append(ResolvedPublicListenerBinding(binding_name, binding.role, binding.listener,
+                    public.hostname, public.ports[0], listener.tls, listener.transport, public.public_addresses))
             else:
                 require(isinstance(binding, BundleDirectoryBinding), "service_binding", "Unknown binding kind.")
                 view = next(v for v in views if v.name == binding.mount)
                 bundle_bindings.append(ResolvedBundleBinding(binding_name, view.destination, view.artifact_sha256))
-        bindings = RoleBindings(name, tuple(executable_bindings), tuple(endpoint_bindings), tuple(bundle_bindings))
+        bindings = RoleBindings(name, tuple(executable_bindings), tuple(endpoint_bindings), tuple(bundle_bindings), tuple(public_listener_bindings))
         if isinstance(role, BuiltinRole):
             path = release_path / "artisan"
             binary, checksum = absolute(host, path), digest(path)
@@ -391,6 +405,8 @@ def transition_enablement(host, entry, inventory, *, restoring=False):
 def transition(host, registry, entry, inventory, state, attempt, *, stop_only=False,
                names=None, configuration=None, launch=None, review=None, maintenance_request=None):
     import release
+    from upgrades import check_feature_generation
+    minimum_generation = check_feature_generation(registry, inventory.topology, entry)
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
     old = entry.get("deployment_selection", {}).get("selected_resolution_id", inventory.resolution.id)
     previous = load(host, entry)[2] if "deployment_selection" in entry else inventory
@@ -421,7 +437,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     inventory.start_order(running)
     attempt["running_roles"] = sorted(running)
     host.save_state(entry, state)
-    selected = DeploymentSelection(inventory.profile.instance_id, FEATURE_LIFECYCLE_GENERATION, tuple(sorted(FEATURE_CAPABILITIES)),
+    selected = DeploymentSelection(inventory.profile.instance_id, minimum_generation, tuple(sorted(FEATURE_CAPABILITIES)),
                  inventory.resolution.id, None if old == inventory.resolution.id else old,
                  AdmissionRecord(inventory.profile.instance_id, inventory.resolution.id, inventory.resolution.deployment_sha256,
                                  inventory.resolution.private_revision, attempt["operation_id"], AdmissionDisposition.PENDING),

@@ -196,11 +196,12 @@ class ServicePaths:
         return cls(f"/run/foundry/services/{identity.instance_id}/{resolution_id}/{identity.role}",
                    f"/var/lib/foundry/service-state/{identity.instance_id}/{identity.role}")
 
-    def config(self, name, mode):
+    def config(self, name, mode, path="value"):
         from contracts import contract_name
         contract_name(name)
+        contract_path(path)
         return (self.state + "/seeds/" + name if mode == "seed-once"
-                else self.base + "/current/config/" + name) + "/value"
+                else self.base + "/current/config/" + name) + "/" + path
 
     def bundle(self, mount):
         return self.base + "/view/" + mount.area + "/" + mount.path
@@ -243,13 +244,33 @@ def configuration_digest(role, members, views=(), secret_paths=None):
     sources = {m.path: m for m in members}
     require(all(c.source in sources for _, c in role.configs),
             "service_config_source", "Configuration inventory is incomplete.")
-    return canonical_digest({"configs": [(name, asdict(config), asdict(sources[config.source]))
+    def declaration(config):
+        value = asdict(config)
+        if config.format is None:
+            for key in ("format", "path", "directory_environment"):
+                value.pop(key)
+        return value
+    return canonical_digest({"configs": [(name, declaration(config), asdict(sources[config.source]))
                                           for name, config in role.configs],
                              "bundles": [asdict(view) for view in views],
                              "secret_paths": secret_paths or {}})
 
 
+def config_environment(role, paths):
+    """One path-only environment projection for unit files and workload dispatch."""
+    result = {}
+    if isinstance(role, ExecutableRole):
+        for name, config in role.configs:
+            key = config.directory_environment
+            if key is not None:
+                require(key not in result and key not in dict(role.environment),
+                        "service_environment", "A configuration directory environment has conflicting declarations.")
+                result[key] = paths.base + "/current/config/" + name
+    return result
+
+
 def validate_views(role, paths, views):
+    config_environment(role, paths)
     expected = dict(role.common.artifact_mounts)
     require({v.name for v in views} == set(expected) and len(views) == len(expected),
             "service_bundle", "Bundle views must exactly cover the declared placements.")
@@ -265,7 +286,8 @@ def resolve_argument(argument, role, spec, resolution, paths, views, secret_path
     if kind is ArgumentKind.LITERAL:
         return value
     if kind is ArgumentKind.CONFIG:
-        return paths.config(value, dict(role.configs)[value].mode)
+        config = dict(role.configs)[value]
+        return paths.config(value, config.mode, config.path)
     if kind in (ArgumentKind.LISTENER_PORT, ArgumentKind.LISTENER_ADDRESS):
         endpoint = next((e for e in resolution.endpoints if e.role == role.common.name and e.listener == value), None)
         require(endpoint is not None, "service_listener", "Declared listener has no selected allocation.")
@@ -335,6 +357,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     environment = [(key, resolve_argument(value, role, spec, inventory.resolution, paths, views, secret_paths))
                    for key, value in role.environment]
     environment += [(key, contract_path(secret_paths[key], absolute=True)) for key, _ in role.secret_files]
+    environment += list(config_environment(role, paths).items())
     replacements = {"MARKER": marker(entry), "ROLE": name, "ACCOUNT": inventory.name,
                     "AFTER": f"{boot} {after}", "BASE": contract_path(paths.base, absolute=True),
                     "WRITABLE": " ".join(systemd_word(p) for p in (paths.state, paths.base + "/invocations")),

@@ -753,7 +753,7 @@ def prepare_unit_paths(host, role, spec, resolution, *, views=()):
 
 
 def prepare_service(host, store, invocation, role, spec, release_root, members, *,
-                    views=(), secret_paths=None, uid, gid, permit_id=None):
+                    views=(), secret_paths=None, uid, gid, permit_id=None, entry=None):
     """Publish one complete invocation view after admission, never reuse failed output.
 
     Call with the invocation-pinned UnitSpec and the selected release inventory.
@@ -810,6 +810,27 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
         # Never walk/chown existing app-writable state or follow a seed link.
         require(data.stat().st_uid == uid, "service_account", "Persistent data has an unexpected owner.")
         resolve = lambda argument: resolve_argument(argument, role, spec, resolution, paths, views, secret_paths or {})
+        def template_value(reference):
+            from topology import Argument, ArgumentKind
+            parts = reference.split(".")
+            if parts[0] == "secret":
+                require(entry is not None and entry["profile"]["instance_id"] == invocation.unit.instance_id
+                        and parts[1] in dict(role.secret_files) and parts[1] in (secret_paths or {}),
+                        "service_config_template", "Template secret is undeclared or unavailable.")
+                return _read_value_file(host, entry, secret_paths[parts[1]])
+            name, field = parts[1:]
+            require(name in dict(role.common.bindings), "service_config_template", "Template binding is undeclared.")
+            if field == "path":
+                binding = next((b for b in spec.bindings.executables if b.name == name), None)
+                require(binding is not None, "service_config_template", "Template executable binding is unresolved.")
+                return binding.path
+            binding = next((b for b in spec.bindings.endpoints if b.name == name), None)
+            require(binding is not None, "service_config_template", "Template endpoint binding is unresolved.")
+            if field == "address":
+                return binding.endpoint.address
+            if field == "port":
+                return str(binding.endpoint.port)
+            return resolve(Argument(ArgumentKind.BINDING, name))
         require(tuple(resolve(a) for a in role.arguments) == spec.arguments,
                 "service_arguments", "Prepared bindings differ from frozen argv.")
         total = 0
@@ -817,11 +838,14 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
             member = inventory.get(config.source)
             require(member is not None and member.kind == "config", "service_config_source", "Configuration is not inventoried.")
             content = _service_source(host, release_root, member)
-            if config.mode == "rendered-json" or config.bindings:
+            if config.format is not None:
+                from config_templates import render
+                content = render(content, config.format, template_value, limit=MAX_VALUE_BYTES)
+            elif config.mode == "rendered-json" or config.bindings:
                 content = _render_service_json(content, config.bindings, resolve)
             total += len(content)
             require(total <= MAX_SERVICE_CONFIG_BYTES, "service_config_size", "Service configuration view exceeds its bound.")
-            atomic_write(baselines / name, content, mode=0o444)
+            atomic_write(baselines / name, content, mode=0o640 if config.format else 0o444, group=gid)
             if config.mode == "seed-once":
                 directory = check_path(seeds / name, "directory")
                 if directory.exists():
@@ -841,12 +865,17 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
                     os.chown(directory, uid, gid)
             else:
                 directory = _service_directory(host, configs / name)
+                destination = directory / config.path
+                parents = [directory]
+                for part in Path(config.path).parts[:-1]:
+                    parents.append(_service_directory(host, parents[-1] / part))
                 if config.mode == "recreate":
-                    atomic_write(directory / "value", content, mode=0o600, owner=uid, group=gid)
-                    os.chmod(directory, 0o700)
-                    os.chown(directory, uid, gid)
+                    atomic_write(destination, content, mode=0o600, owner=uid, group=gid)
+                    for parent in reversed(parents):
+                        os.chmod(parent, 0o700)
+                        os.chown(parent, uid, gid)
                 else:
-                    atomic_write(directory / "value", content, mode=0o444)
+                    atomic_write(destination, content, mode=0o640 if config.format else 0o444, group=gid)
         # Only a framework-created relative link may be replaced, under this lock.
         if current.exists() or current.is_symlink():
             info = current.lstat()

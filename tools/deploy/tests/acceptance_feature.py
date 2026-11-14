@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in generation-12 preview scenario inside the existing disposable harness.
+"""Opt-in generation-14 templates and bindings in the disposable harness.
 
 Use the ordinary deploy-acceptance archive. The artifact is a second, pinned copy
 of that fixture's Linux artisan binary; no artifact network download is needed.
@@ -14,6 +14,8 @@ import io
 import ipaddress
 import json
 from pathlib import Path
+import pwd
+import secrets
 import sys
 import tarfile
 import tomllib
@@ -30,6 +32,7 @@ import acceptance_network as network
 import edge
 import firewall
 import listeners
+import services
 
 PORT = 8554
 RELAY_BODY = "feature-relay-ready"
@@ -95,6 +98,38 @@ def assert_listener_report(result, entry):
                    for f in value["findings"])
 
 
+def assert_public_listener_binding(inventory, profile):
+    public, = inventory.specs["http"].bindings.public_listeners
+    assert (public.name, public.role, public.listener, public.hostname, public.port, public.tls, public.transport,
+            public.public_addresses) == ("relay_public", "relay", "control", "relay." + profile["domain"],
+                                         PORT, "none", "tcp", tuple(network.ADDRESSES))
+
+
+def assert_secret_template(host, inventory, entry, secret):
+    paths = services.ServicePaths.for_unit(inventory.specs["relay"].identity, inventory.resolution.id)
+    config = Path(paths.config("private", "rendered-template", "relay.yaml"))
+    account = pwd.getpwnam(entry["name"])
+    assert config.is_file(), "Prepared secret template is missing"
+    assert (config.stat().st_uid, config.stat().st_gid, config.stat().st_mode & 0o777) == (0, account.pw_gid, 0o640)
+    assert json.loads(config.read_text().removeprefix("token: ")) == secret, "Prepared template differs from private input"
+    baseline = Path(paths.base) / "current/baselines/private"
+    assert baseline.read_bytes() == config.read_bytes()
+    assert (baseline.stat().st_uid, baseline.stat().st_gid, baseline.stat().st_mode & 0o777) == (0, account.pw_gid, 0o640)
+    assert run(["runuser", "-u", entry["name"], "--", "test", "-r", str(config)], check=False).returncode == 0
+    # Check every workload process, not merely MainPID, without printing bytes.
+    for unit in inventory.units.values():
+        members = listeners.process_members(host, unit)
+        assert members, "Workload cgroup has no processes"
+        for pid in members:
+            for leaf in ("cmdline", "environ"):
+                assert secret.encode() not in Path(f"/proc/{pid}/{leaf}").read_bytes(), "Secret leaked into a process interface"
+        assert secret not in run(["systemctl", "cat", unit]).stdout, "Secret leaked into a unit"
+    journal = run(["journalctl", "--boot", "--no-pager", "--output=cat"], timeout=30).stdout
+    assert secret not in journal and json.dumps(secret)[1:-1] not in journal, "Secret leaked into the journal"
+    assert secret not in json.dumps(host.read_registry()), "Secret leaked into public state"
+    return config.resolve()
+
+
 def feature_archive(source, destination, host_id):
     with tarfile.open(source, "r:gz") as incoming:
         files = {item.name: incoming.extractfile(item).read() for item in incoming if item.isfile()}
@@ -115,19 +150,25 @@ def feature_archive(source, destination, host_id):
     topology = parse_topology({"schema": 2, "roles": [
         {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["jq"],
          "bindings": {"relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
+                      "relay_public": {"public_listener": {"role": "relay", "listener": "control"}},
                       "checksum": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}}},
         {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
          "arguments": [{"literal": "feature:relay"}, {"listener_address": "control"}, {"listener_port": "control"}],
+         "secret_files": {"TOKEN_FILE": "relay-template-token"},
+         "configs": {"private": {"source": "deploy/files/relay.yaml", "mode": "rendered-template",
+                                 "format": "yaml", "path": "relay.yaml", "directory_environment": "XDG_CONFIG_HOME"}},
          "listeners": {"control": {"transport": "tcp", "bind": "public", "tls": "none", "authentication": True}},
          "readiness": {"kind": "http", "listener": "control", "path": "/ready", "status": 200, "body": "feature-relay-ready"},
          "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
          "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64},
          "maintenance": "continue", "state": {"kind": "disposable"}}],
+        "secrets": {"relay-template-token": {"prompt": "Relay template token"}},
         "artifacts": {"relay": {"version": "fixture-1", "format": "file", "executables": {"server": "relay"},
             "platforms": {platform: {"url": "https://acceptance.invalid/relay", "sha256": checksum}}}}})
     profile = parse_profile(profile, topology).projection()
     payload_path = "deploy/artifacts/relay/" + checksum + ".bin"
     files[payload_path] = files["artisan"]
+    files["deploy/files/relay.yaml"] = b"token: {{secret.TOKEN_FILE}}\n"
     payload = destination.parent / "relay-fixture.bin"
     payload.write_bytes(files["artisan"])
     members = artifacts.inspect_payload(dict(topology.artifacts)["relay"], platform, payload, artifacts.ExpansionBudget())
@@ -163,6 +204,8 @@ def main():
     project, profile, topology, disks = feature_archive(args.archive, archive, shared.HOST_ID)
     shared.private_json(shared.WORK / "topology.json", {**topology.projection(), "sha256": topology.sha256})
     private = shared.bootstrap_secrets(disks)
+    secret = secrets.token_urlsafe(32) + '"#;]雪'
+    private.setdefault("configuration", {})["FOUNDRY_SERVICE_SECRET__RELAY_TEMPLATE_TOKEN"] = secret
     with ExitStack() as cleanup:
         network.prepare_peer(host, cleanup.callback)
         original = host.run(["readlink", "/proc/self/ns/net"]).stdout.strip()
@@ -182,10 +225,11 @@ def main():
         from feature_lifecycle import load
         _, entry = host.require_identity(project, profile)
         _, _, inventory, _ = load(host, entry)
+        assert_public_listener_binding(inventory, profile)
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", unit]).stdout.strip() == "active"
-        # HTTP readiness calls the relay using deployment.LoadBindings, proving app delivery.
-        import services
+        first_config = assert_secret_template(host, inventory, entry, secret)
+        # The fixture loads both private and public bindings before HTTP readiness.
         import time
         assert services.wait_ready(host, inventory, "http", time.monotonic() + 90)
         public_observation(host, topology, profile, inventory=inventory, opened=True)
@@ -198,6 +242,8 @@ def main():
         assert services.wait_ready(host, inventory, "http", time.monotonic() + 90)
         _, entry = host.require_identity(project, profile)
         _, _, inventory, _ = load(host, entry)
+        assert_public_listener_binding(inventory, profile)
+        assert assert_secret_template(host, inventory, entry, secret) != first_config, "Restart reused a prepared template"
         public_observation(host, topology, profile, inventory=inventory, opened=True)
         for operation in ("down", "up"):
             changed = action(operation, request(project, profile, confirm=True, operation_id=str(uuid.uuid4())))
@@ -210,7 +256,7 @@ def main():
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", "--quiet", unit], check=False).returncode != 0
         public_observation(host, topology, profile)
-        print("PASS feature preview: package, artifact, admission, app binding, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
+        print("PASS host capabilities: package, artifact, admission, private template, private/public app bindings, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
 
 
 if __name__ == "__main__":

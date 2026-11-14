@@ -13,7 +13,10 @@ applications and generation 9–12 hosts keep their existing behavior. Upgrade t
 before using release 1 capabilities. The v0.31.0 generation-12 preview remains
 supported by its installed tools. Enablement adoption and release 1 transitions set a sticky
 generation-13 client floor, including after application rollback. The application
-declarations and binding API are unchanged from v0.31.0.
+declarations and existing binding API remain compatible. Configuration templates
+and public listener bindings, added in v0.33.0, require generation 14 and set a
+sticky generation-14 client floor, including after rollback to a release without
+either capability.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
 
@@ -57,6 +60,8 @@ not implied by a command appearing in the legacy deployment guide.
 Service secrets use the existing private configuration intake. Declare names in
 `secrets` and map service `_FILE` variables through `secret_files`; explicit
 `secret_file` arguments and per-start configuration references also receive paths.
+The [secret template mode](#secret-configuration-templates) can place their values
+inside private prepared files.
 Supply `FOUNDRY_SERVICE_SECRET__<UPPERCASE_NAME>` keys through hidden input or
 `FOUNDRY_SECRET_CONFIG_FILE`. Hyphens in names become underscores. SSH sends values
 on stdin. Unknown names, namespace collisions and simultaneous value/`_FILE`
@@ -264,6 +269,7 @@ callback, because the app starts after the relay.
       "maintenance": "continue",
       "bindings": {
         "relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
+        "relay_public": {"public_listener": {"role": "relay", "listener": "ingress"}},
         "json": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}
       }
     },
@@ -448,14 +454,160 @@ paths under `deploy/bin/`.
   an artifact/application executable reference under `executable`, or a bundle
   reference. Endpoint schemes are `http` and `tcp`; builtin HTTP's listener name
   is `http`. An enabled consumer cannot bind an unplaced endpoint producer.
+  `{"public_listener":{"role":"relay","listener":"ingress"}}` supplies a
+  public listener record through the runtime descriptor. It has no implicit argv
+  or environment conversion and requires generation 14.
 
 Custom `configs` map names to `source` under `deploy/files/` and `mode`:
-`immutable`, `seed-once`, `recreate`, or `rendered-json`. Per-start preparation
+`immutable`, `seed-once`, `recreate`, `rendered-json`, or `rendered-template`. Per-start preparation
 rebuilds `recreate` files; `seed-once` retains the initial seed across starts.
 Only `recreate` and `rendered-json` accept `bindings`, a map from JSON pointers to
 typed listener address/port, bundle, binding or copy-number values. Do not insert
 secrets here. Custom `environment` is an explicit map of nonsecret typed argv
 values; reserved process/application names and `_FILE` names are rejected.
+
+### Secret configuration templates
+
+Use `rendered-template` for a daemon that reads secrets from its own configuration
+file. Declare `format` as `ini`, `yaml`, `json`, or `text`. Use `recreate` with the
+same `format` when the daemon rewrites the file. Template rendering is a fixed
+framework preparation step after start admission. It never executes a shell,
+application hook, or template expression.
+
+The optional `path` defaults to `value` and is relative to that config's directory
+inside the invocation view. Absolute paths, traversal, and empty path components
+are refused. An argv reference such as `{"config":"settings"}` resolves the
+declared file. `directory_environment` may be `HOME` or `XDG_CONFIG_HOME`; the
+framework sets that variable to this config's directory in both the unit and
+workload environment. Duplicate claims and conflicts with explicit role
+environment entries refuse. Existing `{"config_root":"self"}` still names the
+bundle config view, not this invocation directory.
+
+Placeholders have these forms:
+
+| Placeholder | Value |
+| --- | --- |
+| `{{secret.TOKEN_FILE}}` | Current private value of this role's declared `secret_files.TOKEN_FILE` alias |
+| `{{binding.api.address}}` | Resolved endpoint address |
+| `{{binding.api.port}}` | Resolved endpoint port, encoded as a string |
+| `{{binding.api.url}}` | Resolved endpoint URL, including brackets for IPv6 |
+| `{{binding.tool.path}}` | Resolved executable path |
+
+Names come from the role's existing `secret_files` and `bindings` declarations.
+There are no expressions, loops, conditions, or arbitrary file reads. Unknown
+placeholders, undeclared secrets, mismatched binding kinds, and unresolved bindings
+fail preparation before the workload runs. Inserted values are never interpreted
+again as placeholders.
+
+Encoding applies to the complete containing value, including literal prefixes and
+suffixes:
+
+| Format | Template syntax and encoding |
+| --- | --- |
+| `json` | Valid JSON with placeholders inside string values, for example `{"password":"{{secret.TOKEN_FILE}}"}`. Keys cannot contain placeholders. Output uses JSON string escaping. |
+| `yaml` | Single-line block mappings and sequences with plain identifier keys. Put placeholders in unquoted values. Output uses double-quoted scalars with escaped backslashes, controls, and line separators, preserving other Unicode as UTF-8. The closing quote precedes the line ending, preventing continuation into the next setting. Static quoted scalars and JSON flow values are accepted; multiline scalars, multiline quotes, tags, anchors, aliases, directives, and complex keys are refused. |
+| `ini` | Section headers and `key=value` assignments. Placeholders belong only after `=`. Output is a raw value. CR, LF, NUL, other controls, Unicode line separators, surrounding whitespace, backslashes, quotes, `#`, and `;` are refused because portable INI escaping cannot preserve them reliably. A trailing backslash can consume the next assignment as a continuation. `]` and ordinary Unicode remain literal values. |
+| `text` | The entire file is one value. Controls and Unicode line separators are refused, including a final newline. No newline is appended, so a trailing backslash has no following line to continue. |
+
+For example, a YAML value can combine `{{binding.api.url}}` with a literal path.
+Encoding protects the configuration format; it does not percent-encode URL query
+components. For a callback URL containing a shared secret, store the complete URL
+as the private value, as in the MediaMTX example below.
+
+Every admitted start reads the protected release template and current private
+secret files. The rendered baseline and read-only output are root-owned mode
+`0640`, readable by the instance group. `recreate` makes an instance-owned mode
+`0600` copy beneath private writable directories, allowing replacement by rename.
+The next start discards that copy's edits. A complete view is published atomically;
+failed preparation cannot select partial output. Existing invocation retention,
+cleanup, and size limits apply. `seed-once` templates are refused because a
+persistent seed would retain the old secret after rotation.
+
+Secret intake, rotation, and backups keep their existing owner. Declaring
+`secret_files` also supplies the private file path in the corresponding `_FILE`
+variable; the value never enters the environment. Rotation restarts the affected
+enabled, running consumers, which render again. Framework argv, units, release
+files, diagnostics, reports, and public state contain no rendered secret values.
+Applications remain responsible for what they write to their own logs.
+
+#### OBS-style writable INI
+
+Declare a top-level secret:
+
+```json
+{"secrets":{"obs-password":{"prompt":"OBS WebSocket password"}}}
+```
+
+Add these fields to the OBS executable role:
+
+```json
+{
+	"secret_files": {"OBS_PASSWORD_FILE": "obs-password"},
+	"configs": {
+		"obs": {
+			"source": "deploy/files/obs-global.ini",
+			"mode": "recreate",
+			"format": "ini",
+			"path": ".config/obs-studio/global.ini",
+			"directory_environment": "HOME"
+		}
+	}
+}
+```
+
+Put this nonsecret template in `deploy/files/obs-global.ini`:
+
+```ini
+[OBSWebSocket]
+ServerPassword={{secret.OBS_PASSWORD_FILE}}
+```
+
+Supply `FOUNDRY_SERVICE_SECRET__OBS_PASSWORD` through the existing hidden
+configuration intake or private `FOUNDRY_SECRET_CONFIG_FILE`. Choose a password
+representable by the INI rules above. The daemon finds the working copy at
+`$HOME/.config/obs-studio/global.ini` and can rewrite it. Each new invocation starts
+from the release template with the current password. To use `XDG_CONFIG_HOME`
+instead, set `directory_environment` to that name and `path` to
+`obs-studio/global.ini`.
+
+#### MediaMTX-style YAML
+
+Declare a top-level secret for the complete authentication callback URL:
+
+```json
+{"secrets":{"media-auth-url":{"prompt":"Media authentication callback URL"}}}
+```
+
+Add these fields to the media executable role:
+
+```json
+{
+	"secret_files": {"AUTH_CALLBACK_URL_FILE": "media-auth-url"},
+	"configs": {
+		"settings": {
+			"source": "deploy/files/mediamtx.yaml",
+			"mode": "rendered-template",
+			"format": "yaml",
+			"path": "mediamtx.yaml"
+		}
+	},
+	"arguments": [{"config": "settings"}]
+}
+```
+
+Put this template in `deploy/files/mediamtx.yaml`, matching the configuration keys
+of the pinned daemon version:
+
+```yaml
+authMethod: http
+authHTTPAddress: {{secret.AUTH_CALLBACK_URL_FILE}}
+```
+
+Supply `FOUNDRY_SERVICE_SECRET__MEDIA_AUTH_URL` privately. The argv element is only
+the prepared configuration path. A daemon that uses a `--config` flag can instead
+declare `[{"literal":"--config"},{"config":"settings"}]`. The callback URL is
+written as one YAML double-quoted scalar, so quotes, comment markers, YAML
+indicators, and Unicode in the private value cannot add YAML keys or lines.
 
 ### Release-carried artifacts
 
@@ -556,14 +708,16 @@ and deployment digest, plus schema-1 role bindings. Do not write or discover thi
 file yourself. It is invocation-specific; private HTTP allocation is selected
 with the journaled effective environment, not guessed from the profile.
 
-This consumer fixture loads the two HTTP-role bindings from the worked example:
+This consumer fixture loads the three HTTP-role bindings from the worked example:
 
 <!-- compiled-source: tests/fixtures/consumer/hostcapabilities/bindings.go#host-capability-bindings -->
 ```go
-// RelayDependencies contains the private control endpoint and tool used by the app.
+// RelayDependencies contains the relay addresses and tool used by the app.
 type RelayDependencies struct {
 	// Control addresses the relay's private HTTP control listener.
 	Control deployment.Endpoint
+	// Public describes the relay's profile-selected public listener.
+	Public deployment.PublicListener
 	// JSON is the package-owned jq executable for JSON processing.
 	JSON deployment.Executable
 }
@@ -583,7 +737,11 @@ func LoadRelayDependencies() (dependencies RelayDependencies, present bool, err 
 	if err != nil {
 		return RelayDependencies{}, true, err
 	}
-	return RelayDependencies{Control: control, JSON: jsonTool}, true, nil
+	public, err := bindings.PublicListener("relay_public")
+	if err != nil {
+		return RelayDependencies{}, true, err
+	}
+	return RelayDependencies{Control: control, Public: public, JSON: jsonTool}, true, nil
 }
 ```
 
@@ -593,6 +751,26 @@ the URL API. `JSON.Path` is an absolute verified path, not a PATH lookup;
 execute it with an argument vector when the application needs jq for JSON processing.
 `Executable` also carries `SHA256`. `Bundle(name)` returns a `BundleDirectory`
 with its service-local `Path` and `SHA256`.
+
+`PublicListener(name)` returns the declared role and listener, profile-owned
+`Hostname`, public `Port`, and `PublicAddresses`, plus topology-owned `TLS` and
+`Transport`. TLS is `deployment.TLSEdge` or `deployment.TLSNone`; transport is
+`deployment.TCPTransport`. The application chooses its protocol scheme, such as
+`rtsp`, and constructs a URL with `net.JoinHostPort` and `net/url`.
+The binding contains no secrets and does not assert current readiness or grant
+access. Authentication remains the listener's application responsibility.
+
+The listener must be public and placed. The binding does not add a startup
+prerequisite; declare `requires` when startup must wait for its provider.
+Public listener records are delivered through the runtime descriptor, not scalar
+argv, environment, or rendered-config binding references. Each lookup returns
+an owned address slice. The process retains its startup snapshot, and changed
+bindings restart consumers through the existing deployment lifecycle.
+
+Role-binding schema 1 adds an optional `public_listeners` collection. The writer
+omits it when empty, preserving descriptors and digests for existing bindings.
+A v0.32.0 binary can read a new descriptor that has no public listener bindings.
+Upgrade the consuming binary before declaring a public listener binding.
 
 `LoadBindings` returns `present == false` without error only when the environment
 selector is absent. An explicitly invalid selector or malformed descriptor is an
@@ -608,13 +786,14 @@ role descriptor. Neither loader downloads artifacts nor replaces host verificati
 
 Use the application's pinned framework tool and the thin Make targets from the
 [deployment invocation guide](deployment.md#recipe-deploy). Feature topology
-requires generation 13 for release 1 operations. Update the application's
-Foundry-Go pin to v0.32.0 or later. Use the host's existing profile
+requires generation 13 for release 1 operations and generation 14 for configuration
+templates or public listener bindings. Use a Foundry-Go pin containing the required
+tool generation. Use the host's existing profile
 to review and apply the forward-only tool upgrade. A deployed generation-12 preview
 keeps its schema-3 profile for `tools-plan`, `tools-apply` and `upgrade-resume`.
 For a legacy host, upgrade before adopting schema 3. Direct upgrades require at
 least generation 9; older hosts must reach that generation first. A fresh host gets
-the pinned generation-13 tools during bootstrap.
+the pinned tools during bootstrap.
 
 ```sh
 ENVIRONMENT=production ACTION=tools-plan make deploy
@@ -623,7 +802,8 @@ ENVIRONMENT=production ACTION=tools-apply PLAN_TOKEN='<reviewed-token>' OPERATIO
 
 Keep the operation UUID for a tool-upgrade resume. Review the plan; the apply
 command asks for confirmation. Tool generation is independent of the framework's
-semantic version: verify the selected bundle reports generation 13, rather than
+semantic version: verify the selected bundle reports at least generation 13, or
+generation 14 when using templates or public listener bindings, rather than
 assuming a version label establishes support.
 
 Before bootstrap, prepare the existing SSH, PostgreSQL/Redis and HTTP certificate

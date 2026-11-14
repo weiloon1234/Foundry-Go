@@ -148,6 +148,8 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertEqual(placed["schema"], 3)
         self.assertEqual([p.artifact for p in declaration.artifacts], ["relay"])
         self.assertEqual(dict(topology.roles[0].common.bindings)["relay"].role, "relay")
+        public = dict(topology.roles[0].common.bindings)["relay_public"]
+        self.assertEqual((public.role, public.listener), ("relay", "control"))
         from topology import parse_profile
         import listeners
         policy = dict(topology.roles[1].listeners)["control"]
@@ -250,7 +252,8 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(release, "finish", side_effect=finish))
             stack.enter_context(patch.object(lifecycle, "ready", side_effect=lambda host, entry, inventory, name, deadline: (events.append("ready:" + name), True)[1]))
             stack.enter_context(patch.object(services, "wait_ready_set", side_effect=lambda *args: (events.append("ready-set"), True)[1]))
-            lifecycle.transition(self.host, {}, self.entry, self.inventory, state, running)
+            lifecycle.transition(self.host, {"tools": {"generation": upgrades.protocol()["generation"]}},
+                                 self.entry, self.inventory, state, running)
         status.assert_called_once_with(self.host, self.entry, release.release_path(self.host, self.entry, self.inventory.deployment.release), env_file=Path("/effective.env"))
         ordered = ["pending", "stopped", "closed", "migrate", "db:seed", "switched", "ready:http", "ready:relay", "ready:worker", "ready-set", "opened", "finished", "committed"]
         self.assertEqual(ordered, [event for event in events if event in ordered])

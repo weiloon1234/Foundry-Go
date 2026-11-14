@@ -24,7 +24,8 @@ if __name__ == "__main__":
 
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
-                       FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
+                       FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION,
+                       TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
@@ -58,7 +59,8 @@ REHEARSAL_FILES = frozenset({"local/containers.py", "local/rehearsal.py", "local
     "local/rehearsal_probe.py", "local/host.Dockerfile", "local/acceptance.Dockerfile"})
 GENERATION_13_FILES = REHEARSAL_FILES | frozenset({"lib/feature_plan.py", "lib/feature_maintenance.py",
     "lib/recovery_rehearsal.py", "lib/operation_lock.py", "lib/feature_recovery.py"})
-REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES
+GENERATION_14_FILES = frozenset({"lib/config_templates.py"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES
 
 
 def required_files(generation: int) -> frozenset[str]:
@@ -69,6 +71,8 @@ def required_files(generation: int) -> frozenset[str]:
         required |= GENERATION_12_FILES
     if generation >= 13:
         required |= GENERATION_13_FILES
+    if generation >= 14:
+        required |= GENERATION_14_FILES
     return required
 
 
@@ -409,7 +413,66 @@ def check_instance_capabilities(entry: dict, client_generation: int) -> None:
         return
     selection = DeploymentSelection.parse(entry["deployment_selection"])
     require(type(client_generation) is int and client_generation >= selection.minimum_generation,
-            "instance_capability_required", "This instance requires a host-capability-aware client.")
+            "instance_capability_required", f"This instance requires deploy client generation {selection.minimum_generation}; upgrade the tools.")
+
+
+def feature_generation(topology, entry):
+    """Application rollback cannot lower a selected capability floor."""
+    from topology import ExecutableRole, PublicListenerReference
+    templates = any(config.format is not None for role in topology.roles if isinstance(role, ExecutableRole)
+                    for _, config in role.configs)
+    public_listeners = any(isinstance(binding, PublicListenerReference) for role in topology.roles
+                           for _, binding in role.common.bindings)
+    return max(FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION if templates or public_listeners else 0,
+               entry.get("deployment_selection", {}).get("minimum_generation", 0))
+
+
+def check_feature_generation(registry, topology, entry, *, client_generation=None):
+    minimum = feature_generation(topology, entry)
+    if client_generation is not None:
+        require(type(client_generation) is int and client_generation >= minimum,
+                "instance_capability_required", f"These declarations require deploy client generation {minimum}.")
+    require(registry["tools"]["generation"] >= minimum, "host_upgrade_required",
+            f"Upgrade the host tools to generation {minimum} before using these declarations.")
+    return minimum
+
+
+def check_target_capabilities(host, request, action):
+    """Inspect older clients' target declarations before staging or recovery setup."""
+    if action not in {"release-plan", "activate", "rollback", "recover-plan", "recover-apply"}:
+        return
+    registry = host.read_registry(missing=True)
+    installed = registry if registry is not None else {"tools": protocol()}
+    generation = request.get("client", {}).get("generation", 0)
+    if type(generation) is int and generation >= FEATURE_DELIVERY_GENERATION and installed["tools"]["generation"] >= FEATURE_DELIVERY_GENERATION:
+        return
+    from topology import parse_topology
+    if action in {"recover-plan", "recover-apply"}:
+        import recover
+        require(isinstance(request.get("recovery_archive"), str), "recovery_members", "A staged private recovery archive is required.")
+        recovered = recover.archive_configuration(request["project"], request["profile"],
+            recover.read_archive(Path(request["recovery_archive"])), request.get("topology"))
+        if recovered["feature"] is None:
+            return
+        topology = recovered["feature"].topology
+        entry = recovered["metadata"]
+    else:
+        import release
+        _, entry = host.require_identity(request["project"], request["profile"])
+        if entry.get("topology", {}).get("schema") != TOPOLOGY_SCHEMA and "deployment_selection" not in entry:
+            return
+        if request.get("target") is not None:
+            manifest = read_json(release.release_path(host, entry, request["target"]) / "manifest.json")
+        elif request.get("archive") is not None:
+            manifest = release.unpack_archive(host, Path(request["archive"]), None, entry,
+                                              request.get("archive_sha256"), reviewed=True)
+        else:
+            return  # The action's owner reports missing target inputs.
+        if manifest.get("schema") != ARCHIVE_SCHEMA:
+            return
+        from contracts import ReleaseDeclaration
+        topology = parse_topology(ReleaseDeclaration.parse(manifest["deployment"]).topology_json)
+    check_feature_generation(installed, topology, entry, client_generation=generation)
 
 
 def _check_feature_request(registry, request, action):
@@ -427,6 +490,14 @@ def _check_feature_request(registry, request, action):
                 "instance_capability_required", "B24 release 1 operations require deploy client generation 13.")
         require(registry is None or registry["tools"]["generation"] >= FEATURE_LIFECYCLE_GENERATION,
                 "host_upgrade_required", "Upgrade this generation-12 host to generation 13 before B24 release 1 operations.")
+        if isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA:
+            from topology import parse_topology
+            parsed_topology = parse_topology(topology, registered="sha256" in topology)
+            minimum = feature_generation(parsed_topology, {})
+            require(request.get("client", {}).get("generation", 0) >= minimum,
+                    "instance_capability_required", f"These declarations require deploy client generation {minimum}.")
+            if registry is not None:
+                check_feature_generation(registry, parsed_topology, {})
     if requested and action not in supported | UPGRADE_ACTIONS | {"tools-plan"}:
         from feature_lifecycle import refuse
         refuse(action)

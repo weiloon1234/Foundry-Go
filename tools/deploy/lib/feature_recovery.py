@@ -82,6 +82,10 @@ def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_d
         manifest = release.unpack_archive(host, Path(archive), None, entry, checksum, reviewed=True)
         declaration = ReleaseDeclaration.parse(snapshot['declaration'])
         topology = parse_topology(declaration.topology_json)
+        from upgrades import check_feature_generation
+        minimum_generation = check_feature_generation(registry, topology,
+            {"deployment_selection": {"minimum_generation": max(snapshot["selection"]["minimum_generation"],
+                entry.get("deployment_selection", {}).get("minimum_generation", 0))}})
         source = parse_profile(intent['source_profile'], topology)
         original = services.UnitInventory(entry['name'], topology, source,
             Deployment.parse(snapshot['deployment']), RuntimeResolution.parse(snapshot['resolution']))
@@ -132,7 +136,7 @@ def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_d
                 'recovery_reconciliation', 'Recovery preparation has an unresolved prior operation.')
         store = admission.AdmissionStore(host, inventory.profile.instance_id)
         store.record_operation(attempt)
-        selection = DeploymentSelection(inventory.profile.instance_id, FEATURE_LIFECYCLE_GENERATION,
+        selection = DeploymentSelection(inventory.profile.instance_id, minimum_generation,
             tuple(sorted(FEATURE_CAPABILITIES)), inventory.resolution.id, None,
             AdmissionRecord(inventory.profile.instance_id, inventory.resolution.id, inventory.resolution.deployment_sha256,
                             inventory.resolution.private_revision, intent['operation_id'], AdmissionDisposition.PENDING),

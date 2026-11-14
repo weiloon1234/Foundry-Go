@@ -1,5 +1,55 @@
 # Changelog
 
+## v0.33.0 — 2026-11-14
+
+- Added: secret configuration templates from release files for daemons that read
+  credentials from their own configuration. `rendered-template` produces a
+  root-owned mode-0640 file readable by the instance group. `recreate` with a
+  declared `format` makes an instance-owned mode-0600 working copy for daemons
+  that rewrite their configuration. Every admitted start renders current secrets
+  again and replaces the working copy, discarding its edits. `seed-once` refuses
+  secret templates so rotation cannot leave an old secret in a persistent copy.
+  Relative `path` destinations stay within the prepared config view.
+  `directory_environment` sets `HOME` or `XDG_CONFIG_HOME` to the configuration's
+  directory; conflicting or duplicate declarations refuse.
+- Added: value-only placeholders for declared service secrets and resolved
+  bindings: `{{secret.TOKEN_FILE}}`, `{{binding.api.address}}`,
+  `{{binding.api.port}}`, `{{binding.api.url}}`, and `{{binding.tool.path}}`.
+  Unknown placeholders, undeclared secrets, mismatched binding kinds, and
+  unresolved bindings refuse before the workload starts. Templates have no
+  expressions, loops, conditions, or application hooks. JSON uses string escaping
+  and refuses placeholders in keys. YAML uses double-quoted scalars with escaped
+  backslashes, controls, and line separators; multiline scalars, multiline quotes,
+  tags, anchors, aliases, directives, and complex keys refuse. INI substitutes raw
+  assignment values and refuses controls, Unicode line separators, surrounding
+  whitespace, backslashes, quotes, `#`, and `;`, preventing continuation into the
+  next assignment. Text treats the entire file as one value and refuses controls
+  and Unicode line separators, including a final newline. Secret rotation restarts
+  affected enabled, running consumers. Rendered secrets never enter framework
+  argv, environment values, unit files, release configuration, logs, reports, or
+  public state.
+- Added: public listener bindings through `public_listener` role/listener
+  declarations and `deployment.Bindings.PublicListener`. Applications receive the
+  profile-owned hostname, public port, and addresses with the topology-owned TLS
+  mode and transport. Bindings reject private or unplaced listeners, retain
+  immutable startup snapshots, and restart consumers when changed.
+- Changed: configuration templates and public listener bindings require deploy
+  tool generation 14 on both the client and host. Update the application's
+  Foundry-Go pin to v0.33.0. From a generation 9–13 host, run
+  `ACTION=tools-plan make deploy`, then
+  `ACTION=tools-apply PLAN_TOKEN='<token>' OPERATION='<stable-uuid-v4>' make deploy`
+  using its existing profile. Older hosts must first reach generation 9.
+  Use `ACTION=upgrade-resume` with the same operation UUID after interruption.
+  Fresh bootstrap installs generation 14. Selecting either capability retains a
+  generation-14 client requirement that application rollback cannot lower.
+  Bootstrap planning, release planning, and activation accept registered topology
+  projections and verify their checksums.
+- Changed: existing applications and declarations require no changes. Existing
+  configuration modes, bindings, and descriptors retain their behavior when the
+  new capabilities are omitted. Hosts keep working with their installed tools
+  until upgraded. See the [host capabilities guide](docs/guides/host-capabilities.md)
+  for declarations and worked configuration examples.
+
 ## v0.32.0 — 2026-11-14
 
 - Added: B24 release 1 completes the v0.31.0 host capabilities preview while

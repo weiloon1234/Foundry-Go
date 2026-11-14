@@ -588,6 +588,7 @@ FEATURE_CAPABILITIES = frozenset({"topology-v2", "profile-v3", "release-v2"})
 # Historical capability floor, independent of the currently selected tool generation.
 FEATURE_INTRODUCTION_GENERATION = 12
 FEATURE_LIFECYCLE_GENERATION = 13
+FEATURE_DELIVERY_GENERATION = 14
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
 
 
@@ -670,9 +671,9 @@ def canonical_digest(value):
                                      allow_nan=False).encode()).hexdigest()
 
 
-def _record(value, names):
+def _record(value, names, optional=()):
     value = contract_document(value)
-    contract_object(value, ("schema", *names))
+    contract_object(value, ("schema", *names), optional)
     require(type(value["schema"]) is int and value["schema"] == RECORD_SCHEMA,
             "unsupported_schema", "Unsupported deployment record schema.")
     return value
@@ -1097,21 +1098,45 @@ class ResolvedBundleBinding:
 
 
 @dataclass(frozen=True)
+class ResolvedPublicListenerBinding:
+    name: str
+    role: str
+    listener: str
+    hostname: str
+    port: int
+    tls: str
+    transport: str
+    public_addresses: tuple[str, ...]
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("name", "role", "listener", "hostname", "port", "tls", "transport", "public_addresses"))
+        require(value["tls"] in ("edge", "none") and value["transport"] == "tcp",
+                "invalid_contract", "Invalid public listener protocol.")
+        addresses = contract_list(value["public_addresses"], public_address, minimum=1, maximum=16)
+        require(len(set(addresses)) == len(addresses), "invalid_contract", "Duplicate public listener addresses.")
+        return cls(contract_name(value["name"]), contract_name(value["role"]), contract_name(value["listener"]),
+                   dns_hostname(value["hostname"]), contract_int(value["port"], 1, 65535), value["tls"], value["transport"], addresses)
+
+
+@dataclass(frozen=True)
 class RoleBindings:
     role: str
     executables: tuple[ResolvedExecutableBinding, ...]
     endpoints: tuple[ResolvedEndpointBinding, ...]
     bundles: tuple[ResolvedBundleBinding, ...]
+    public_listeners: tuple[ResolvedPublicListenerBinding, ...] = ()
 
     @classmethod
     def parse(cls, value):
-        v = _record(value, ("role", "executables", "endpoints", "bundles"))
+        v = _record(value, ("role", "executables", "endpoints", "bundles"), ("public_listeners",))
         executables = contract_list(v["executables"], ResolvedExecutableBinding.parse, maximum=128)
         endpoints = contract_list(v["endpoints"], ResolvedEndpointBinding.parse, maximum=128)
         bundles = contract_list(v["bundles"], ResolvedBundleBinding.parse, maximum=64)
-        names = [b.name for b in (*executables, *endpoints, *bundles)]
+        public_listeners = contract_list(v.get("public_listeners", []), ResolvedPublicListenerBinding.parse, maximum=128)
+        names = [b.name for b in (*executables, *endpoints, *bundles, *public_listeners)]
         require(len(set(names)) == len(names), "invalid_contract", "Binding names must be unique across kinds.")
-        return cls(contract_name(v["role"]), executables, endpoints, bundles)
+        return cls(contract_name(v["role"]), executables, endpoints, bundles, public_listeners)
 
 
 @dataclass(frozen=True)
@@ -1351,10 +1376,12 @@ def record_document(record):
                  BundleReferences, DeploymentSelection, RecoveryPublicBinding, RoleBindings, UnitSpec,
                  HostTransition, Deployment, UnitGenerationReference, CleanupObligation)
     nested = (UnitIdentity, AllocatedEndpoint, EffectiveEnvironment, ProcessIdentity, RecoveryListenerBinding, DNSObservation,
-              ResolvedExecutableBinding, ResolvedEndpointBinding, ResolvedBundleBinding)
+              ResolvedExecutableBinding, ResolvedEndpointBinding, ResolvedBundleBinding, ResolvedPublicListenerBinding)
     def encode(value):
         if type(value) in versioned + nested:
             result = {f.name: encode(getattr(value, f.name)) for f in dataclass_fields(value)}
+            if isinstance(value, RoleBindings) and not value.public_listeners:
+                result.pop("public_listeners")  # Preserve descriptors and digests for existing binaries.
             if type(value) in versioned:
                 result = {"schema": RECORD_SCHEMA, **result}
             if isinstance(value, RecoveryListenerBinding):

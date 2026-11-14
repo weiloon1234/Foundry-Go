@@ -4,10 +4,12 @@ package hostcapabilities
 import "github.com/weiloon1234/Foundry-Go/deployment"
 
 // doc-example:begin host-capability-bindings
-// RelayDependencies contains the private control endpoint and tool used by the app.
+// RelayDependencies contains the relay addresses and tool used by the app.
 type RelayDependencies struct {
 	// Control addresses the relay's private HTTP control listener.
 	Control deployment.Endpoint
+	// Public describes the relay's profile-selected public listener.
+	Public deployment.PublicListener
 	// JSON is the package-owned jq executable for JSON processing.
 	JSON deployment.Executable
 }
@@ -27,7 +29,11 @@ func LoadRelayDependencies() (dependencies RelayDependencies, present bool, err 
 	if err != nil {
 		return RelayDependencies{}, true, err
 	}
-	return RelayDependencies{Control: control, JSON: jsonTool}, true, nil
+	public, err := bindings.PublicListener("relay_public")
+	if err != nil {
+		return RelayDependencies{}, true, err
+	}
+	return RelayDependencies{Control: control, Public: public, JSON: jsonTool}, true, nil
 }
 
 // doc-example:end host-capability-bindings
