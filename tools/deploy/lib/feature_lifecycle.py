@@ -411,7 +411,8 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
                 running = {name for name in enabled if release.service(host, previous.units[name])["ActiveState"] == "active"}
     inventory.start_order(enabled)
     holds, running, maintenance_intent = feature_maintenance.selection(
-        host, entry, inventory, enabled, running, maintenance_request["action"] if maintenance_request else None)
+        host, entry, inventory, enabled, running, maintenance_request["action"] if maintenance_request else None,
+        allow_start=not (maintenance_request and maintenance_request.get("maintenance_no_start")))
     maintenance_intent["operation_id"] = attempt["operation_id"]
     running = set(running)
     if review is not None:

@@ -427,7 +427,7 @@ def _check_feature_request(registry, request, action):
                 "instance_capability_required", "B24 release 1 operations require deploy client generation 13.")
         require(registry is None or registry["tools"]["generation"] >= FEATURE_LIFECYCLE_GENERATION,
                 "host_upgrade_required", "Upgrade this generation-12 host to generation 13 before B24 release 1 operations.")
-    if requested and action not in supported:
+    if requested and action not in supported | UPGRADE_ACTIONS | {"tools-plan"}:
         from feature_lifecycle import refuse
         refuse(action)
     if not registry:

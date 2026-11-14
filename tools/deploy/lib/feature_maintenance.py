@@ -71,7 +71,7 @@ def candidate(host, entry, state, request):
     return inventory, launch, affected
 
 
-def selection(host, entry, inventory, enabled, running, action):
+def selection(host, entry, inventory, enabled, running, action, *, allow_start=True):
     """Compute intent without changing shared pause, markers, or processes."""
     saved = record(host, entry)
     observed = live(host, entry)
@@ -81,7 +81,7 @@ def selection(host, entry, inventory, enabled, running, action):
     else:
         down = observed["down"] if observed is not None else bool(prior_holds)
     holds = (stopped_roles(inventory.topology) & inventory.roles.keys()) if down else set()
-    if observed is None and action not in ("down", "up"):
+    if not allow_start or observed is None and action not in ("down", "up"):
         # Preserve even removed copies in the private journal until shared state
         # is observed. The selected graph carries only its declared holds.
         holds |= prior_holds
@@ -160,7 +160,7 @@ def shared_change(host, entry, request):
     return maintenance.run(host, entry, path, action, maintenance.arguments(action, request.get("maintenance", {})))
 
 
-def reconcile(host, project, profile):
+def reconcile(host, project, profile, *, allow_start=True):
     """Observe first; the owned executor rechecks before any marker or stop."""
     import feature_lifecycle as lifecycle
     with host.lock("host"), host.lock(profile["instance_id"]):
@@ -173,10 +173,15 @@ def reconcile(host, project, profile):
         observed = live(host, entry)
         if observed is None:
             return  # Unavailable shared state never clears a hold.
+        if not allow_start and not observed["down"]:
+            return  # A drill/inspection/stop cannot restore workloads as a side effect.
         saved = record(host, entry)
         _, _, inventory, _ = lifecycle.load(host, entry)
         expected = stopped_roles(inventory.topology) & inventory.roles.keys() if observed["down"] else set()
         actual = set(saved["holds"]) & inventory.roles.keys() if saved else set()
+        if not allow_start:
+            expected |= actual
         if actual == expected:
             return
-    lifecycle.request_operation(host, "down" if observed["down"] else "up", project, profile, maintenance_reconcile=True)
+    lifecycle.request_operation(host, "down" if observed["down"] else "up", project, profile,
+        maintenance_reconcile=True, **({"maintenance_no_start": True} if not allow_start else {}))

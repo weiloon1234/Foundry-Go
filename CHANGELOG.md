@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed: restore drills and other operations that must not start workloads use
+  down-only maintenance reconciliation, preserving holds after external
+  `artisan up` and changed maintenance policies. Schema-3 generation-12 preview
+  profiles can plan, apply and resume generation-13 host tool upgrades while
+  retaining the existing compatibility and upgrade-owner checks.
+
 - Fixed: deployment and rollback reviews during maintenance expect public rules
   only for enabled, unheld roles. A policy change from stop to continue restores
   the previously running enabled copy and verifies readiness; independent cleanup

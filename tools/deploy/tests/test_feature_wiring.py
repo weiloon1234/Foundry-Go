@@ -924,6 +924,44 @@ class FeatureWiringTests(FeatureWiringFixture):
             self.assertEqual(error.exception.code, expected)
         self.assertNotIn(["ufw", "reload"], self.host.commands)
 
+    def test_deployed_generation_12_profile_can_plan_apply_and_resume_generation_13_upgrade(self):
+        from contextlib import ExitStack
+        source = self.host.paths.root / 'preview-tools'
+        shutil.copytree(TOOLS, source, ignore=shutil.ignore_patterns('__pycache__'))
+        metadata = c.read_json(source / 'protocol.json')
+        metadata['generation'] = 12
+        c.atomic_json(source / 'protocol.json', metadata)
+        # Construct deployed preview state using its prior capability floor and
+        # immutable generation-12 bundle. The upgrade uses current guards unchanged.
+        with ExitStack() as stack:
+            for module in (lifecycle, upgrades):
+                stack.enter_context(patch.object(module, 'FEATURE_LIFECYCLE_GENERATION', 12))
+            for module, path in ((lifecycle, 'lib/feature_lifecycle.py'), (upgrades, 'lib/upgrades.py'),
+                                 (provision, 'lib/provision.py'), (manager, 'server/manage.py')):
+                stack.enter_context(patch.object(module, '__file__', str(source / path)))
+            self.envelope = upgrades.protocol_metadata(source)
+            plan = self.request('bootstrap-plan', topology=self.topology.projection())
+            self.request('bootstrap-apply', topology=self.topology.projection(), plan_token=plan['plan_token'], confirm=True)
+            self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        _, entry = self.host.require_identity(self.project, self.profile)
+        store, selected, inventory, _ = lifecycle.load(self.host, entry)
+        self.assertEqual(selected.minimum_generation, 12)
+        self.assertEqual(self.host.read_registry()['tools']['generation'], 12)
+        # Preview units were deliberately disabled after startup.
+        self.host.run(['systemctl', 'disable', *inventory.units.values()])
+        (store.durable / 'enablement.json').unlink()
+        before = dict(self.host.running)
+        self.envelope = upgrades.protocol_metadata(TOOLS)
+        plan = self.request('tools-plan')
+        operation = str(uuid.uuid4())
+        result = self.request('tools-apply', plan_token=plan['plan_token'], operation_id=operation)
+        self.assertEqual(result['outcome'], 'succeeded')
+        self.assertEqual(self.host.read_registry()['tools']['generation'], 13)
+        self.assertEqual(self.host.running, before)
+        self.assertFalse(set(inventory.units.values()) & self.host.enabled)
+        self.assertEqual(self.request('upgrade-resume', plan_token=plan['plan_token'],
+                                     operation_id=operation)['outcome'], 'unchanged')
+
     def test_second_bootstrap_after_tool_upgrade_retains_verified_boot_pin(self):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())
         self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)

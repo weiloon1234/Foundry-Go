@@ -603,10 +603,11 @@ role descriptor. Neither loader downloads artifacts nor replaces host verificati
 
 Use the application's pinned framework tool and the thin Make targets from the
 [deployment invocation guide](deployment.md#recipe-deploy). Feature topology
-requires generation 13 for release 1 operations. On an already bound older host, use its existing
-profile to review and apply the forward-only tool upgrade **before** switching
-the consumer to schema 3. Do not use a feature profile to request an older host's
-upgrade. A fresh host gets the pinned generation-13 tools during bootstrap.
+requires generation 13 for release 1 operations. Use the host's existing profile
+to review and apply the forward-only tool upgrade. A deployed generation-12 preview
+keeps its schema-3 profile for `tools-plan`, `tools-apply` and `upgrade-resume`.
+For a legacy host, upgrade before adopting schema 3. A fresh host gets the pinned
+generation-13 tools during bootstrap.
 
 ```sh
 ENVIRONMENT=production ACTION=tools-plan make deploy
@@ -687,6 +688,11 @@ Use deploy `down` for immediate fencing of supervised service listeners. Direct
 application record. The next privileged instance action reconciles that record
 through the owned lifecycle operation. A host report identifies stopped-policy
 services that are still admitting while the shared record is down.
+
+Restore drills, backups, logs, configuration-key inspection, release planning and
+stop may reconcile toward down or do nothing; they never restore held workloads
+or open their listeners as a reconciliation side effect. After an external
+`artisan up`, use deploy `up` or `status` to restore those copies separately.
 
 Held copies are reported separately from failed or unexpectedly inactive services.
 HTTP uses its maintenance liveness contract while paused. Deploy, configuration,

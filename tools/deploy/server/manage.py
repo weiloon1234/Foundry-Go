@@ -107,7 +107,8 @@ def execute(host, action, request):
             enablement_migration = feature_lifecycle.migrate_enablement(host, registry, entry)
         if action not in ("down", "up", "activate", "rollback"):
             import feature_maintenance
-            feature_maintenance.reconcile(host, project, profile)
+            feature_maintenance.reconcile(host, project, profile,
+                allow_start=action in ("status", "restart", "config-set", "keys-rotate"))
             _, entry = host.require_identity(project, profile)
     if action == "release-plan":
         if not feature_lifecycle.is_feature(entry):

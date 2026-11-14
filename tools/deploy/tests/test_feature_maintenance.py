@@ -33,6 +33,50 @@ class MaintenanceTransitionTests(wiring.FeatureWiringFixture):
         return self.request('rollback', target=self.original, expected_current=self.version, operation_id=operation,
                             plan_token=plan['plan_token'], confirm=True)
 
+    def test_restore_drill_after_external_up_never_starts_or_exposes_held_roles(self):
+        self.held(public=True)
+        self.host.maintenance_down = False
+        before = dict(self.host.running), list(self.host.started), dict(self.host.firewall_live)
+        with patch.object(wiring.provision.backup, 'restore_drill', return_value={'status': 'complete'}) as drill:
+            self.request('restore-drill', confirm=True, backup_id=str(uuid.uuid4()))
+        drill.assert_called_once()
+        self.assertEqual((self.host.running, self.host.started, self.host.firewall_live), before)
+        self.assertTrue(self.marker.exists())
+
+    def test_stop_after_external_up_does_not_start_held_roles_first(self):
+        self.held(public=True)
+        self.host.maintenance_down = False
+        before = list(self.host.started)
+        self.request('stop')
+        self.assertEqual(self.host.started, before)
+        self.assertFalse(self.host.running)
+
+    def test_restore_drill_can_reconcile_external_down_without_starts(self):
+        _, inventory = self.held(public=True)
+        self.request('up', confirm=True)
+        self.host.maintenance_down = True
+        before = list(self.host.started)
+        with patch.object(wiring.provision.backup, 'restore_drill', return_value={'status': 'complete'}):
+            self.request('restore-drill', confirm=True, backup_id=str(uuid.uuid4()))
+        self.assertEqual(self.host.started, before)
+        self.assertTrue(self.marker.exists())
+        self.assertNotIn(inventory.units['relay'], self.host.running)
+
+    def test_no_start_down_executor_keeps_hold_after_continue_policy_change(self):
+        self.held(public=True)
+        self.build_archive(independent=True, public=True, maintenance='continue', version='20261115T000000Z-abcdef12')
+        with patch.object(feature_maintenance, 'live', return_value=None):
+            self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        before = dict(self.host.running), list(self.host.started), dict(self.host.firewall_live)
+        with patch.object(wiring.provision.backup, 'restore_drill', return_value={'status': 'complete'}):
+            self.request('restore-drill', confirm=True, backup_id=str(uuid.uuid4()))
+        # The pinned executor must retain the restriction as well as the initial
+        # observation: even down can otherwise release a changed-policy hold.
+        lifecycle.request_operation(self.host, 'down', self.project, self.profile,
+                                    maintenance_reconcile=True, maintenance_no_start=True)
+        self.assertEqual((self.host.running, self.host.started, self.host.firewall_live), before)
+        self.assertTrue(self.marker.exists())
+
     def test_public_held_role_allows_deploy_and_rollback_review(self):
         self.held(public=True)
         self.build_archive(independent=True, public=True, version='20261115T000000Z-abcdef12')
