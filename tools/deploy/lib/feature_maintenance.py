@@ -15,12 +15,20 @@ def stopped_roles(topology):
         return set()  # Legacy workers/schedulers retain their application pause contract.
     roles = {role.common.name: role for role in topology.roles}
     stopped = {name for name, role in roles.items() if role.common.maintenance == "stop"}
-    require("http" not in stopped, "maintenance_graph", "HTTP must continue serving its maintenance contract.")
+    require("http" not in stopped, "maintenance_graph",
+            'Role http must remain running; declare maintenance: "continue" for http.')
     for name, role in roles.items():
-        dependencies = set(role.common.requires) | {binding.role for _, binding in role.common.bindings
-                                                    if isinstance(binding, EndpointBinding)}
-        require(name in stopped or not dependencies & stopped, "maintenance_graph",
-                "A continuing role requires a stopped provider; declare the provider's maintenance policy as serve.")
+        if name in stopped:
+            continue
+        for binding_name, binding in role.common.bindings:
+            if isinstance(binding, EndpointBinding):
+                require(binding.role not in stopped, "maintenance_graph",
+                        f'Role {name} continues but endpoint binding {binding_name} targets stopped role {binding.role}; '
+                        f'declare {binding.role} maintenance: "continue", or remove binding {binding_name} from {name}.')
+        for provider in role.common.requires:
+            require(provider not in stopped, "maintenance_graph",
+                    f'Role {name} continues but requires stopped role {provider}; '
+                    f'declare {provider} maintenance: "continue", or remove that requires prerequisite from {name}.')
     return stopped
 
 

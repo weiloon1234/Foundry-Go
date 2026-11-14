@@ -485,7 +485,7 @@ def _role(value):
     require(len(packages) == len(set(packages)), "invalid_topology", "Duplicate package requirements.")
     requires = contract_names(value.get("requires", ["http"] if name in ("scheduler", "worker") else []))
     maintenance = value.get("maintenance", "serve" if name == "http" else "stop")
-    require(maintenance in ("serve", "stop"), "invalid_topology", "Invalid maintenance policy.")
+    require(maintenance in ("continue", "serve", "stop"), "invalid_topology", "Invalid maintenance policy.")
     shared = RoleCommon(name, packages, requires, contract_map(value.get("bindings", {}), parse_binding, maximum=128), maintenance,
                         contract_map(value.get("artifact_mounts", {}), ArtifactMount.parse, maximum=64))
     if builtin:

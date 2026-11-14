@@ -543,12 +543,10 @@ def _remaining(deadline, maximum=5):
     return min(maximum, available)
 
 
-def worker_connection(host, entry, candidate):
-    """Validate the tool's worker selection against a specific release."""
-    if "worker" not in instance_units(entry):
-        return
+def worker_connection(host, entry, candidate, *, env_file=None):
+    """Resolve an explicitly selected worker from its target release and private inputs."""
     configuration = host.paths.instance_config(entry["name"])
-    values = parse_env(check_path(configuration / "app.env", "file").read_text())
+    values = parse_env(check_path(env_file if env_file is not None else configuration / "app.env", "file").read_text())
     key = "APP__WORKER__CONNECTION"
     if key + "_FILE" in values:
         from runtime_config import _read_value_file

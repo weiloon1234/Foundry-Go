@@ -1210,6 +1210,8 @@ def deploy(project, profile, settings):
             say(json.dumps(status, indent=2))
             name = instance_name(project, profile)
             confirm(f"Put {name} into maintenance mode" if action == "down" else f"Bring {name} out of maintenance mode")
+            if "deployment_selection" in status.get("instance", {}):
+                request["operation_id"] = operation_id(profile, action, parameters)
             display(ssh.request(action, {**request, **parameters, "confirm": True}))
         elif action == "deploy":
             say(f"Build and activate {instance_name(project, profile)} on {profile['host']['address']}; pending forward migrations and seeders run during activation.")

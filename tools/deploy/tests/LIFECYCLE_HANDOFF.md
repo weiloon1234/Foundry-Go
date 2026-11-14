@@ -2,7 +2,7 @@
 
 This reference records lane A's private configuration and unit-graph interfaces.
 Service-secret review, delivery, rotation, target-owned rollback and application
-configuration revisions are implemented. Maintenance and recovery integration remain
+configuration revisions and maintenance are implemented. Recovery integration remains
 in progress. The live network scenarios are opt-in and have not run locally.
 
 ## Lane A interfaces available in this worktree
@@ -89,19 +89,24 @@ seeding. `profile_update` carries the selected target projection to the client.
 Removed-role enablement is retained privately for reviewed restoration. No rollback
 reads a historical secret snapshot.
 
+Reviewed release recovery uses the held running set, filtered by actual enablement
+and the target graph, and cannot clear the hold before startup and readiness succeed.
+Worker configuration resolves from the target declaration and effective environment.
+
 A published configuration that fails readiness leaves a private configuration hold
 and pending admission. Independent cleanup proves closure before corrective config
 or a reviewed release can proceed. Ordinary starts and restart cannot clear it.
 
-## Maintenance work awaiting executable-provider mapping
+## Maintenance interface
 
 `feature_maintenance` owns persistent per-copy marker paths, the saved enabled and
-running selection, and live shared-store reconciliation. Its graph check currently
-rejects a continuing endpoint consumer whose provider stops. The operator accepted
-that rule and requires actionable diagnostics naming consumer, binding and provider.
-Executable bindings identify an executable reference, not a provider role. Mapping
-those references to provider roles is awaiting clarification; item 3 is not complete.
+running selection, and live shared-store reconciliation. Maintenance prerequisites
+are `requires` and endpoint-binding edges only. Executable bindings refer to
+installed files and do not depend on a role remaining alive. `continue` is accepted;
+existing `serve` declarations retain their original projection and digest.
 
 The graph lifecycle and renderers carry maintenance holds without changing actual
 enablement. Independent failed-up cleanup preserves unchanged invocation origins,
 allowing an explicit retry after closure while the shared pause remains off.
+Recovery callers can use `marker_path`, `publish_markers` and `clear_markers` under
+the instance lock; clearing still requires pending admission and proven closure.

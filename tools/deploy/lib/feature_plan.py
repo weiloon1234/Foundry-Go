@@ -144,6 +144,8 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                   "private_intent_id": intent, "configuration_intent_id": configuration_intent,
                   "observations": observed, "endpoints": [asdict(e) for e in inventory.resolution.endpoints],
                   "unit_changes": list(inventory.units), "required_service_secrets": requirements,
+                  "maintenance_policy": {name: "stop" if role.common.maintenance == "stop" else "continue"
+                                         for name, role in inventory.roles.items()},
                   "restoring": restoring, "enabled_roles": list(enabled), "running_roles": list(running),
                   "removed_enablement": removed}
         public["plan_token"] = canonical_digest(public)

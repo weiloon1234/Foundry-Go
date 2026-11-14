@@ -316,12 +316,12 @@ class FeatureWiringTests(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, public=False, secrets=False, independent=False, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, public=False, secrets=False, independent=False, worker=False, endpoint_binding=False, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
             {"name": "http", "kind": "builtin", "requires": [] if independent else ["relay"], "packages": ["jq"],
-             "bindings": {**({} if independent else {"relay": {"endpoint": {"role": "relay", "listener": "api", "scheme": "http"}}}),
+             "bindings": {**({} if independent and not endpoint_binding else {"relay": {"endpoint": {"role": "relay", "listener": "api", "scheme": "http"}}}),
                           "checksum": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}}},
             {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
              "arguments": [{"listener_address": "api"}, {"listener_port": "api"}],
@@ -331,11 +331,12 @@ class FeatureWiringTests(unittest.TestCase):
              "readiness": {"kind": "http", "listener": "api", "path": "/ready", "status": 200},
              "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
              "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64},
-             "maintenance": "stop" if independent else "serve", "state": {"kind": "disposable"}}],
+             "maintenance": "stop" if independent else "serve", "state": {"kind": "disposable"}},
+            *([{"name": "worker", "kind": "builtin"}] if worker else [])],
             **({"secrets": {"relay-token": {"prompt": "Relay token"}}} if secrets else {}),
             "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
                 "platforms": {"linux-arm64": {"url": "https://example.invalid/relay", "sha256": checksum}}}}})
-        self.profile.update(schema=3, placement={"http": 1, "relay": 1}, listeners={})
+        self.profile.update(schema=3, placement={"http": 1, "relay": 1, **({"worker": 1} if worker else {})}, listeners={})
         if public:
             from test_host_capabilities import profile
             self.profile["listeners"] = {"relay.api": profile()["listeners"]["relay.ingress"]}
@@ -345,7 +346,7 @@ class FeatureWiringTests(unittest.TestCase):
         members = artifacts.inspect_payload(dict(self.topology.artifacts)["relay"], "linux-arm64", payload, artifacts.ExpansionBudget())
         path = "deploy/artifacts/relay.bin"
         self.version = version
-        files = {"artisan": binary, "config/deploy.toml": b"[project]\n", "public/index.html": b"fixture",
+        files = {"artisan": binary, "config/deploy.toml": b'[project]\n[app.worker]\nconnection = "target-queue"\n', "public/index.html": b"fixture",
                  "private-source-maps/" + self.version + "/a.map": b"{}", path: binary}
         kinds = artifacts.declared_release_files(self.topology, (), (path,))
         declaration = c.ReleaseDeclaration.parse({"schema": 2, "topology": self.topology.projection(), "profile": self.profile,
@@ -607,6 +608,69 @@ class FeatureWiringTests(unittest.TestCase):
         self.assertFalse((store.durable / "configuration-hold.json").exists())
         self.assertEqual(lifecycle.load(self.host, entry)[1].admission.disposition, c.AdmissionDisposition.COMMITTED)
 
+    def failed_configuration_for_rollback(self):
+        self.test_service_secret_rotation_retains_http_and_private_values()
+        target = self.version
+        self.build_archive(secrets=True, independent=True, version="20261115T000000Z-abcdef12")
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        with patch.object(release.backup, "archive_keys"), patch.object(services, "wait_ready", return_value=False):
+            with self.assertRaises(c.DeployError):
+                self.request("config-set", secrets={"configuration": {"APP__TEST__TOKEN": "held-canary"}}, confirm=True)
+        self.assertFalse(self.host.running)
+        arguments = {"target": target, "expected_current": self.version, "operation_id": str(uuid.uuid4())}
+        reviewed = self.request("release-plan", **arguments)
+        self.assertEqual(set(reviewed["running_roles"]), {"http", "relay"})
+        return {**arguments, "plan_token": reviewed["plan_token"]}
+
+    def test_reviewed_rollback_starts_held_configuration_before_clearing_hold(self):
+        arguments = self.failed_configuration_for_rollback()
+        _, entry = self.host.require_identity(self.project, self.profile)
+        store, _, _, _ = lifecycle.load(self.host, entry)
+        hold = store.durable / "configuration-hold.json"
+        observed = []
+        ready = services.wait_ready_set
+        def check(*args, **kwargs):
+            self.assertTrue(hold.exists())
+            observed.append(set(args[2]))
+            return ready(*args, **kwargs)
+        with patch.object(services, "wait_ready_set", side_effect=check):
+            self.request("rollback", **arguments)
+        self.assertIn({"http", "relay"}, observed)
+        self.assertFalse(hold.exists())
+        self.assertEqual(set(role for _, _, role in self.host.running.values()), {"http", "relay"})
+        self.assertEqual(lifecycle.load(self.host, entry)[1].admission.disposition, c.AdmissionDisposition.COMMITTED)
+
+    def test_reviewed_rollback_readiness_failure_keeps_configuration_hold(self):
+        arguments = self.failed_configuration_for_rollback()
+        _, entry = self.host.require_identity(self.project, self.profile)
+        store, _, _, _ = lifecycle.load(self.host, entry)
+        before = c.read_json(store.durable / "configuration-hold.json")
+        with patch.object(services, "wait_ready", return_value=False), self.assertRaises(c.DeployError):
+            self.request("rollback", **arguments)
+        self.assertEqual(c.read_json(store.durable / "configuration-hold.json"), before)
+        self.assertEqual(lifecycle.load(self.host, entry)[1].admission.disposition, c.AdmissionDisposition.PENDING)
+        self.assertFalse(self.host.running)
+
+    def test_rollback_restores_removed_worker_using_target_configuration(self):
+        self.build_archive(worker=True, independent=True)
+        target = self.version
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        current_profile = dict(self.profile)
+        self.build_archive(independent=True, version="20261115T000000Z-abcdef12")
+        self.profile = current_profile
+        result = self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        self.profile = result["profile_update"]
+        self.assertNotIn("worker", {r["name"] for r in self.request("status")["instance"]["topology"]["roles"]})
+        self.rollback_target(target)
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, inventory, _ = lifecycle.load(self.host, entry)
+        self.assertIn(inventory.units["worker"], self.host.enabled)
+        self.assertIn(inventory.units["worker"], self.host.running)
+        args = inventory.specs["worker"].arguments
+        self.assertEqual(args[args.index("--connection") + 1], "target-queue")
+
     def test_rotation_preserves_enabled_but_stopped_service(self):
         self.test_service_secret_rotation_retains_http_and_private_values()
         _, entry = self.host.require_identity(self.project, self.profile)
@@ -708,6 +772,35 @@ class FeatureWiringTests(unittest.TestCase):
         self.request("up", confirm=True)
         self.assertFalse(self.host.maintenance_down)
         self.assertEqual(self.host.running, running)
+
+    def test_maintenance_endpoint_binding_names_consumer_provider_and_binding_before_deployment(self):
+        self.build_archive(independent=True)
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        running = dict(self.host.running)
+        self.build_archive(independent=True, endpoint_binding=True, version="20261115T000000Z-abcdef12")
+        with self.assertRaises(c.DeployError) as error:
+            self.request("release-plan", archive=str(self.archive), archive_sha256=c.digest(self.archive), operation_id=str(uuid.uuid4()))
+        self.assertEqual(error.exception.code, "maintenance_graph")
+        self.assertIn("Role http", error.exception.detail)
+        self.assertIn("endpoint binding relay", error.exception.detail)
+        self.assertIn("stopped role relay", error.exception.detail)
+        self.assertIn('maintenance: "continue"', error.exception.detail)
+        self.assertIn("remove binding relay", error.exception.detail)
+        self.assertEqual(self.host.running, running)
+
+    def test_executable_binding_to_same_file_as_stopped_role_is_not_a_maintenance_dependency(self):
+        import feature_maintenance
+        self.build_archive(independent=True)
+        value = self.topology.projection()
+        value["roles"][0]["bindings"]["relay-cli"] = {"executable": {"artifact": "relay", "entry": "server"}}
+        self.assertEqual(feature_maintenance.stopped_roles(parse_topology(value)), {"relay"})
+        value["roles"][0]["bindings"]["relay"] = {"endpoint": {"role": "relay", "listener": "api", "scheme": "http"}}
+        value["roles"][1]["maintenance"] = "continue"
+        parsed = parse_topology(value)
+        self.assertEqual(feature_maintenance.stopped_roles(parsed), set())
+        self.assertEqual(parsed.projection(), value)
 
     def test_maintenance_rejects_continuing_consumer_of_stopped_provider(self):
         import feature_maintenance

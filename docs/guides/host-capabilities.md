@@ -173,7 +173,7 @@ callback, because the app starts after the relay.
       "kind": "builtin",
       "packages": ["jq"],
       "requires": ["relay"],
-      "maintenance": "serve",
+      "maintenance": "continue",
       "bindings": {
         "relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
         "json": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}
@@ -202,7 +202,7 @@ callback, because the app starts after the relay.
       "readiness": {"kind": "http", "listener": "control", "path": "/ready", "status": 200, "timeout_seconds": 30},
       "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5, "window_seconds": 60, "stop_seconds": 30},
       "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64, "file_descriptors": 1024},
-      "maintenance": "stop",
+      "maintenance": "continue",
       "state": {"kind": "disposable"}
     }
   ],
@@ -330,8 +330,15 @@ paths under `deploy/bin/`.
 - **State:** required `kind` is `disposable`, `external`, or `local-unprotected`.
   The last additionally requires `acknowledged: true`; the others omit it.
   This declaration does not turn service-local state into a backup guarantee.
-- **Maintenance:** `serve` or `stop`; default `serve` for HTTP, `stop` otherwise.
-  HTTP must serve. Every prerequisite of a continuing role must also serve.
+- **Maintenance:** `continue` or `stop`; the existing `serve` spelling remains
+  accepted for compatibility. HTTP continues by default; other feature roles stop.
+  HTTP must continue. Every `requires` prerequisite and endpoint-binding provider
+  of a continuing role must also continue. Invalid graphs name the consumer,
+  provider and binding before deployment. Endpoint bindings do not add startup
+  ordering or implicitly start a disabled provider.
+  Executable bindings never create maintenance prerequisites: they name installed
+  files (a package path, an artifact entry or an application executable), and
+  stopping a role for maintenance does not remove or change those files.
   Feature `down` closes exposure and stops only roles declared `stop`; HTTP and
   continuing services retain their processes and exposure. Root-owned persistent
   per-copy markers prevent held units from starting after reboot or automatic

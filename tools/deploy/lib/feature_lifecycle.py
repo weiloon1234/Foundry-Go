@@ -214,12 +214,13 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
             path = release_path / "artisan"
             binary, checksum = absolute(host, path), digest(path)
             command = {"http": "serve", "worker": "queue:work", "scheduler": "schedule:work"}[name]
+            environment = host.paths.instance_config(entry["name"]) / next(e.path for e in environments if e.role == name)
             args = [command]
             if name == "worker":
                 import release
-                args += ["--connection", release.worker_connection(host, entry, release_path)]
+                args += ["--connection", release.worker_connection(host, entry, release_path, env_file=environment)]
             args += ["--config", absolute(host, release_path / "config/deploy.toml"), "--env-file",
-                     absolute(host, host.paths.instance_config(entry["name"]) / next(e.path for e in environments if e.role == name))]
+                     absolute(host, environment)]
             config_sha = canonical_digest({"config": manifest["files"]["config/deploy.toml"], "revision": seed.private_revision,
                                            "environment_path": next(e.path for e in environments if e.role == name)})
         else:
@@ -343,6 +344,16 @@ def current_executor(host):
 
 
 
+def configuration_hold_running(host, entry):
+    path = admission.AdmissionStore(host, entry["profile"]["instance_id"]).durable / "configuration-hold.json"
+    if not path.exists():
+        return None
+    held = admission.read_owned(host, path, lambda value: value)
+    require(held["private_revision"] == entry["configuration_revision"],
+            "configuration_reconciliation", "Configuration hold revision differs.")
+    return set(held["running_roles"])
+
+
 def transition_enablement(host, entry, inventory, *, restoring=False):
     import release
     if "deployment_selection" not in entry:
@@ -355,8 +366,10 @@ def transition_enablement(host, entry, inventory, *, restoring=False):
             "service_enablement", "Invalid removed-copy enablement evidence.")
     desired = {name for name in inventory.roles if name in enabled or name not in previous.roles and
                (removed.get(name, False) if restoring or name in removed else True)}
+    held_running = configuration_hold_running(host, entry)
     running = {name for name in desired if name not in previous.roles or
-               release.service(host, previous.units[name])["ActiveState"] == "active"}
+               (name in held_running if held_running is not None else
+                release.service(host, previous.units[name])["ActiveState"] == "active")}
     while any(set(inventory.roles[name].common.requires) - desired for name in desired):
         desired = {name for name in desired if set(inventory.roles[name].common.requires) <= desired}
     running &= desired
@@ -382,11 +395,9 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
         enabled = services.enabled_units(host, previous.units) if "deployment_selection" in entry else tuple(inventory.roles)
         running, removed = set(enabled), {}
         if attempt["action"] == "config" or maintenance_request:
-            hold = store.durable / "configuration-hold.json"
-            if hold.exists():
-                held = admission.read_owned(host, hold, lambda v: v)
-                require(held["private_revision"] == entry["configuration_revision"], "configuration_reconciliation", "Configuration hold revision differs.")
-                running = set(held["running_roles"]) & set(enabled)
+            held_running = configuration_hold_running(host, entry)
+            if held_running is not None:
+                running = held_running & set(enabled)
             else:
                 running = {name for name in enabled if release.service(host, previous.units[name])["ActiveState"] == "active"}
     inventory.start_order(enabled)
@@ -633,6 +644,7 @@ def prepare_release(host, entry, state, request):
     declaration = ReleaseDeclaration.parse(manifest["deployment"])
     topology = parse_topology(declaration.topology_json)
     profile_record = parse_profile(declaration.profile_json, topology)
+    feature_maintenance.stopped_roles(topology)
     require(release.legacy_profile(profile_record.projection()) == release.legacy_profile(entry["profile"]),
             "release_identity", "Reviewed releases cannot change the instance host or infrastructure profile.")
     release.persist_declaration(host, entry, manifest, topology.projection(), profile_record.projection(), request["archive_sha256"])

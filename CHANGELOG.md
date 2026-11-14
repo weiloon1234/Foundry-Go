@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Added: maintenance graph validation treats endpoint bindings and `requires` as
+  prerequisites of continuing roles and names invalid consumer/provider bindings.
+  Executable bindings refer to installed files and create no maintenance edge.
+  `maintenance: "continue"` is accepted alongside the existing `serve` spelling.
+  Feature maintenance requests retain a client operation UUID for safe replay.
+
+- Fixed: reviewed rollback restores the configuration hold's intended running set
+  and validates startup before clearing the hold. Failed validation keeps the hold.
+  Restored workers resolve their connection from the target release and its current
+  private environment, including when the current release has no worker.
+
 - Fixed: selective configuration transitions keep boot coordinators consistent
   with per-role generation records. Pending continuity requires the exact existing
   live admitted workload; automatic replacement invocations need a scoped permit.
