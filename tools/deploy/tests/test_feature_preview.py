@@ -30,7 +30,7 @@ class FeaturePreviewTests(unittest.TestCase):
     def test_effective_environment_preserves_secrets_and_selects_exact_http_port(self):
         root = self.host.paths.instance_config(self.entry["name"])
         root.mkdir(parents=True)
-        original = 'APP__HTTP__SERVER__ADDRESS=127.0.0.1:8100\nPRIVATE=keep-current\nKEY_FILE=/etc/secret\n'
+        original = 'APP__HTTP__SERVER__ADDRESS=127.0.0.1:8100\nPRIVATE=keep-current\nKEY_FILE=/etc/secret\nAPP__SCHEDULER__ENABLED=true\nAPP__SCHEDULER__ENABLED_FILE=/old/scheduler\n'
         (root / "app.env").write_text(original)
         endpoints = (c.AllocatedEndpoint("http", "http", "127.0.0.1", 8200),)
         with patch.object(runtime_config, "validate_runtime_environment"):
@@ -38,6 +38,8 @@ class FeaturePreviewTests(unittest.TestCase):
         resolution = replace(self.inventory.resolution, environments=environments)
         path = runtime_config.effective_environment_path(self.host, self.entry, resolution)
         values = c.parse_env(path.read_text())
+        self.assertEqual(values["APP__SCHEDULER__ENABLED"], "false")
+        self.assertNotIn("APP__SCHEDULER__ENABLED_FILE", values)
         self.assertEqual(values["PRIVATE"], "keep-current")
         self.assertEqual(values["KEY_FILE"], "/etc/secret")
         self.assertEqual(values["APP__HTTP__SERVER__ADDRESS"], "127.0.0.1:8200")

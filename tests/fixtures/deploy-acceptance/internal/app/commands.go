@@ -88,6 +88,9 @@ func Run(ctx context.Context, arguments []string, streams cli.Streams) error {
 		}
 		settings.App.HTTP.Enabled = false
 		builder = application.New(settings.App)
+		if settings.App.Scheduler.Enabled {
+			builder.Schedules(scheduleDeclarations)
+		}
 		commands := cli.Module("fixture.cli", foundation.NewKey[*cli.Registry]("fixture.commands"),
 			registry, invocation, streams, application.MaintenanceProvider)
 		built, err := builder.Register(commands).Build(ctx)

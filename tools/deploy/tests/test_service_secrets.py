@@ -109,6 +109,24 @@ class ServiceSecretTests(unittest.TestCase):
         self.assertNotEqual(rotated["relay-token"], paths["relay-token"])
         self.assertEqual(Path(paths["relay-token"]).read_text(), self.value + "\n")
 
+    def test_feature_runtime_scheduler_setting_follows_placement(self):
+        credentials = {"database_password": "d" * 43, "redis_password": "r" * 43}
+        self.assertEqual(config.runtime_environment(self.entry, credentials)["APP__SCHEDULER__ENABLED"], "false")
+        self.raw["roles"].append({"name": "scheduler", "kind": "builtin"})
+        topology = t.parse_topology(self.raw)
+        self.entry["topology"] = {**self.raw, "sha256": topology.sha256}
+        for count in (0, 1):
+            self.entry["profile"]["placement"]["scheduler"] = count
+            t.parse_profile(self.entry["profile"], topology)
+            self.assertEqual(config.runtime_environment(self.entry, credentials)["APP__SCHEDULER__ENABLED"],
+                             "true" if count else "false")
+        legacy = fixture()[2]
+        self.assertNotIn("APP__SCHEDULER__ENABLED", config.runtime_environment(legacy, credentials))
+        configured = {**credentials, "configuration": {"APP__SCHEDULER__ENABLED": "true"}}
+        self.assertEqual(config.runtime_environment(legacy, configured)["APP__SCHEDULER__ENABLED"], "true")
+        with self.assertRaises(c.DeployError):
+            config.validate_configuration_changes({"APP__SCHEDULER__ENABLED": "false"}, self.entry)
+
     def test_application_projection_never_contains_reserved_keys(self):
         credentials = {"database_password": "d" * 43, "redis_password": "r" * 43,
                        "configuration": {self.key: self.value, "APP_SETTING": "ordinary"}}

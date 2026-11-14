@@ -158,8 +158,21 @@ func TestArchiveConfigurationAndRealDeclarations(t *testing.T) {
 }
 
 func TestMaintenanceCommandsShareStateAcrossInvocations(t *testing.T) {
+	for _, schedulerEnabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(schedulerEnabled), func(t *testing.T) {
+			testMaintenanceCommandsShareState(t, schedulerEnabled)
+		})
+	}
+}
+
+func testMaintenanceCommandsShareState(t *testing.T, schedulerEnabled bool) {
 	path := filepath.Join(t.TempDir(), "maintenance.toml")
-	configuration := fmt.Sprintf(`[app.services.cache]
+	configuration := fmt.Sprintf(`[app.scheduler]
+enabled = %t
+[app.services.coordination]
+enabled = true
+driver = "memory"
+[app.services.cache]
 default = "maintenance"
 [app.maintenance]
 store = "maintenance"
@@ -167,7 +180,7 @@ store = "maintenance"
 driver = "file"
 [app.services.cache.stores.maintenance.file]
 root = %q
-`, t.TempDir())
+`, schedulerEnabled, t.TempDir())
 	if err := os.WriteFile(path, []byte(configuration), 0600); err != nil {
 		t.Fatal(err)
 	}

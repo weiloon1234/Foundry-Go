@@ -98,8 +98,16 @@ def configuration_parts(changes, entry=None, *, topology=None):
     return application, service
 
 
+SCHEDULER_ENABLED = "APP__SCHEDULER__ENABLED"
+
+
+def scheduler_environment(roles):
+    return {SCHEDULER_ENABLED: "true" if "scheduler" in roles else "false"}
+
+
 def pipeline_keys(entry=None):
-    return PIPELINE_KEYS | (uploads.RUNTIME_KEYS if entry and "uploads" in entry["profile"] else frozenset())
+    scheduler = {SCHEDULER_ENABLED} if entry and entry["profile"].get("schema") == 3 else frozenset()
+    return PIPELINE_KEYS | scheduler | (uploads.RUNTIME_KEYS if entry and "uploads" in entry["profile"] else frozenset())
 
 
 def validate_configuration_changes(changes, entry=None):
@@ -318,6 +326,9 @@ def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
     # Initial application settings (such as first-deploy seed credentials) apply last.
     application, _ = configuration_parts(credentials.get("configuration") or {}, entry)
     values.update(application)
+    if entry["profile"].get("schema") == 3:
+        values.pop(SCHEDULER_ENABLED + "_FILE", None)
+        values.update(scheduler_environment(name for name, count in entry["profile"]["placement"].items() if count))
     return values
 
 
@@ -624,6 +635,7 @@ def validate_runtime_environment(host, entry):
         require(http.port == entry["allocations"]["http_port"], "runtime_resolution_conflict",
                 "HTTP registry projection differs from the selected runtime resolution.")
         expected["APP__HTTP__SERVER__ADDRESS"] = _http_address(http)
+        expected.update(scheduler_environment(resolution.roles))
     owned_keys = pipeline_keys(entry)
     if any(values.get(key) != value for key, value in expected.items() if key in owned_keys):
         raise DeployError("configuration_identity", "Pipeline-owned runtime configuration differs from registered identity/credentials.")
@@ -853,7 +865,7 @@ def _http_address(endpoint):
 
 
 def effective_environments(host, entry, resolution_id, roles, endpoints, *, values=None):
-    """Snapshot current private settings; HTTP allocation changes only this projection."""
+    """Snapshot private settings with the selected HTTP allocation and role placement."""
     from admission import protected_directory
     from contracts import EffectiveEnvironment, atomic_write, contract_uuid, digest, parse_env
     contract_uuid(resolution_id)
@@ -862,6 +874,8 @@ def effective_environments(host, entry, resolution_id, roles, endpoints, *, valu
     http = next((e for e in endpoints if e.role == "http" and e.listener == "http"), None)
     require(http is not None, "runtime_resolution", "The HTTP runtime allocation is missing.")
     values["APP__HTTP__SERVER__ADDRESS"] = _http_address(http)
+    values.pop(SCHEDULER_ENABLED + "_FILE", None)
+    values.update(scheduler_environment(roles))
     payload = dump_env(values)
     result = []
     for role in roles:

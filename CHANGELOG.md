@@ -2,6 +2,10 @@
 
 ## v0.32.0 — 2026-11-14
 
+- Fixed: feature runtime environments derive scheduler enablement from placed
+  roles, overriding release defaults when no scheduler is placed. Legacy
+  environment rendering is unchanged. Acceptance maintenance commands reuse the
+  application's schedule declarations when the scheduler is enabled.
 - Fixed: the deployment acceptance application registers standard maintenance
   commands and shares maintenance state through its main Redis connection.
 - Fixed: deployment and independent cleanup stop active services even when their
