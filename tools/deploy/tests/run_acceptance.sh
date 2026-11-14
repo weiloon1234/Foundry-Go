@@ -275,7 +275,8 @@ recovery_target() {
     --mount "type=bind,source=$framework/tools/deploy,target=/verification/deploy,readonly" \
     --image "$base_image" >"$logs/$recovery_mode-create.log" 2>&1
   recovery_hosts+=("$recovery_host")
-  python3 "$containers" boot "$recovery_host" "$certs" >"$logs/$recovery_mode-start.log" 2>&1
+  # Recovery installs the synthetic CA only after production's empty-host preflight.
+  python3 "$containers" start-host "$recovery_host" >"$logs/$recovery_mode-start.log" 2>&1
   # Same image-only policy handling as acceptance.Dockerfile, before the target
   # is presented to production recovery. Production never replaces this file.
   docker exec "$recovery_host" sh -c 'if [ -e /usr/sbin/policy-rc.d ]; then mv /usr/sbin/policy-rc.d /usr/sbin/policy-rc.d.acceptance-image; fi'

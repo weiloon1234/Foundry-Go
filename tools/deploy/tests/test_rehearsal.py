@@ -284,6 +284,53 @@ class RehearsalTests(unittest.TestCase):
 class ContainerOwnershipTests(unittest.TestCase):
     setUp = BuildInputTests.setUp
 
+    def test_recovery_targets_start_without_installing_foundry_resources(self):
+        runner = Path(__file__).with_name("run_acceptance.sh").read_text()
+        setup = runner[runner.index("recovery_target() {"):runner.index('recovery_target "$rehearsal" rehearsal')]
+        for mode in ("rehearsal", "takeover"):
+            with self.subTest(mode=mode):
+                subprocess.run(["bash", "-c", """
+set -eu
+logs=$1
+containers=$2
+mode=$3
+platform=linux/arm64
+network=owned-network
+framework=/fixture
+base_image=base-image
+certs=/synthetic-certs
+recovery_hosts=()
+python3() {
+  if [[ "$2" != create-host ]]; then
+    printf '%s\n' "$@" > "$logs/start-args"
+  fi
+}
+docker() { :; }
+phase_on() { :; }
+""" + setup + '\nrecovery_target recovery-host "$mode"\n', "recovery-setup",
+                    str(self.root), str(containers.ASSETS / "containers.py"), mode],
+                    capture_output=True, text=True, check=True, timeout=5)
+                arguments = (self.root / "start-args").read_text().splitlines()
+                with patch.object(sys, "argv", arguments), patch.object(containers, "run",
+                        return_value=subprocess.CompletedProcess([], 0, "", "")) as run:
+                    containers.main()
+                self.assertEqual([call.args[0] for call in run.call_args_list], [
+                    ["docker", "start", "recovery-host"],
+                    ["docker", "exec", "recovery-host", "test", "-S", "/run/systemd/private"],
+                    ["docker", "exec", "recovery-host", "systemctl", "start", "multi-user.target"],
+                ])
+
+    def test_application_host_boot_retains_synthetic_ca_setup(self):
+        with patch.object(containers, "run", return_value=subprocess.CompletedProcess([], 0, "", "")) as run:
+            containers.boot_host("app-host", self.root)
+        calls = [call.args[0] for call in run.call_args_list]
+        self.assertIn(["docker", "exec", "app-host", "systemctl", "start", "multi-user.target"], calls)
+        for name in ("ca.crt", "ca.key"):
+            self.assertIn(["docker", "cp", self.root / name, "app-host:/etc/foundry/acceptance-ca/" + name], calls)
+        self.assertIn(["docker", "exec", "app-host", "chmod", "600",
+                       "/etc/foundry/acceptance-ca/ca.key", "/etc/foundry/acceptance-ca/ca.crt"], calls)
+        self.assertEqual(calls[-1], ["docker", "exec", "app-host", "update-ca-certificates"])
+
     def test_cleanup_refuses_foreign_names_and_removes_only_label_owned_resources(self):
         resources = containers.Resources(self.root)
         foreign = resources.reserve("container", "foreign")

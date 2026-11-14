@@ -84,7 +84,7 @@ authorityKeyIdentifier=keyid,issuer
     (directory / "private.key").chmod(0o600)
 
 
-def boot_host(name, certs):
+def start_host(name):
     run(["docker", "start", name])
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
@@ -94,6 +94,10 @@ def boot_host(name, certs):
     else:
         raise ContainerError("Disposable systemd bus did not start")
     run(["docker", "exec", name, "systemctl", "start", "multi-user.target"])
+
+
+def boot_host(name, certs):
+    start_host(name)
     run(["docker", "exec", name, "mkdir", "-m", "700", "-p", "/etc/foundry/acceptance-ca"])
     for file in ("ca.crt", "ca.key"):
         run(["docker", "cp", Path(certs) / file, name + ":/etc/foundry/acceptance-ca/" + file])
@@ -157,6 +161,8 @@ def main():
     commands.add_parser("s3-image")
     ca = commands.add_parser("ca")
     ca.add_argument("directory")
+    start = commands.add_parser("start-host", help="Start systemd without installing Foundry resources")
+    start.add_argument("name")
     boot = commands.add_parser("boot")
     boot.add_argument("name")
     boot.add_argument("certs")
@@ -169,6 +175,8 @@ def main():
         print(S3_IMAGE)
     elif args.command == "ca":
         create_ca(args.directory)
+    elif args.command == "start-host":
+        start_host(args.name)
     elif args.command == "boot":
         boot_host(args.name, args.certs)
     else:

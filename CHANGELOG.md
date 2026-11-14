@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed: acceptance recovery targets start systemd without installing Foundry CA
+  resources before the empty-host preflight. Synthetic CA installation remains
+  deferred until recovery's application phase.
+
 - Added: `foundry deploy rehearse` runs an application's own acceptance archive
   through production bootstrap, activation, readiness, report, stop and restart
   in disposable Ubuntu containers. Separate peers check public TCP/TLS and source
