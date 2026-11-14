@@ -9,9 +9,6 @@ FIELDS = frozenset({"message", "retry", "allow", "except", "bypass"})
 
 
 def status(host, entry, release_path):
-    from feature_lifecycle import is_feature
-    if is_feature(entry):
-        return None  # Policy-aware feature maintenance is capability-gated.
     import release
 
     result = release.app(host, entry, release_path, "maintenance:status",

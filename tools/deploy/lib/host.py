@@ -247,7 +247,7 @@ class Host:
         for key in ("current", "previous"):
             if state[key] is not None:
                 try:
-                    validate_manifest(state[key], entry, reviewed=entry.get("topology", {}).get("schema") == 2)
+                    validate_manifest(state[key], entry, reviewed=entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry)
                 except (DeployError, TypeError):
                     raise DeployError(code, detail) from None
         if state["last_attempt"] is not None:

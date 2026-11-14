@@ -86,7 +86,8 @@ def run(action, pin, launch):
     require(action == "prepare", "feature_runtime_action", "Unsupported runtime action.")
     roots = {key: tuple(value) for key, value in launch["artifact_roots"].items()}
     from contracts import ReleaseDeclaration
-    declaration = ReleaseDeclaration.parse(launch["declaration"])
+    from release import runtime_declaration
+    declaration = runtime_declaration(launch["declaration"])
     views = services.bundle_views(role, paths, topology=inventory.topology,
                                   architecture=inventory.profile.architecture, artifact_roots=roots, payloads=declaration.artifacts)
     release = host.paths.opt(entry["name"]) / "releases" / inventory.deployment.release

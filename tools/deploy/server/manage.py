@@ -38,8 +38,8 @@ def execute(host, action, request):
     arguments = {"recover-plan": recovery_fields,
                  "recover-apply": recovery_fields | {"archive", "plan_token", "old_server_gone"}, "bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
                  "restart": {"role"}, "stop": {"role"}, "logs": {"role", "lines"}, "down": maintenance.FIELDS,
-                 "activate": {"archive", "archive_sha256", "plan_token"}, "release-plan": {"archive", "archive_sha256", "secrets"}, "config-set": {"values", "secrets"},
-                 "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current"},
+                 "activate": {"archive", "archive_sha256", "plan_token"}, "release-plan": {"archive", "archive_sha256", "secrets", "target", "expected_current", "topology"}, "config-set": {"values", "secrets"},
+                 "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current", "plan_token"},
                  "backup-keys-rotate": {"secrets"}, "backup-recipients-rotate": {"secrets"},
                  "dns-token-rotate": {"secrets"}, "backup-configure": {"secrets"}, "backup-run": {"kind"},
                  "restore-drill": {"backup_id", "target_time", "target_inclusive", "retain"},
@@ -105,15 +105,28 @@ def execute(host, action, request):
         with host.lock("host"), host.lock(profile["instance_id"]):
             registry, entry = host.require_identity(project, profile)
             enablement_migration = feature_lifecycle.migrate_enablement(host, registry, entry)
+        if action not in ("down", "up", "activate", "rollback"):
+            import feature_maintenance
+            feature_maintenance.reconcile(host, project, profile)
+            _, entry = host.require_identity(project, profile)
     if action == "release-plan":
+        if not feature_lifecycle.is_feature(entry):
+            require(request.get("target") is not None, "invalid_request", "Legacy release plans select an explicit rollback target.")
+            return release.legacy_rollback_plan(host, project, profile, request["target"], request.get("expected_current"),
+                                                request.get("operation_id"), request.get("topology"))
         import feature_plan
         private = request.get("secrets", {})
         require(isinstance(private, dict) and set(private) <= {"configuration"}, "invalid_secrets", "Invalid release private input.")
-        return feature_plan.plan(host, project, profile, request["archive"], request["archive_sha256"],
-                                 request.get("operation_id"), private.get("configuration"))
-    if feature_lifecycle.is_feature(entry) and action in ("activate", "restart", "stop", "down", "up"):
+        return feature_plan.plan(host, project, profile, request.get("archive"), request.get("archive_sha256"),
+                                 request.get("operation_id"), private.get("configuration"), target=request.get("target"),
+                                 expected_current=request.get("expected_current"), supplied_topology=request.get("topology"))
+    if feature_lifecycle.is_feature(entry) and action in ("activate", "rollback", "restart", "stop", "down", "up"):
         feature_lifecycle.check_operation(action)
-        arguments = {key: request[key] for key in ("archive", "archive_sha256", "plan_token", "role") if key in request}
+        arguments = {key: request[key] for key in ("archive", "archive_sha256", "plan_token", "role", "target", "expected_current") if key in request}
+        if action in ("down", "up"):
+            require(request.get("confirm") is True, "confirmation_required", "Confirm the maintenance change.")
+            arguments["maintenance"] = {key: request[key] for key in maintenance.FIELDS if key in request}
+            maintenance.arguments(action, arguments["maintenance"])
         return feature_lifecycle.request_operation(host, action, project, profile,
                    operation_id=request.get("operation_id"), **arguments)
     if action in ("capacity-plan", "capacity-apply"):
@@ -173,7 +186,7 @@ def execute(host, action, request):
                                 operation_id=request.get("operation_id"))
     if action == "rollback":
         return release.rollback(host, project, profile, request.get("target"),
-                                request.get("expected_current"), request.get("operation_id"))
+                                request.get("expected_current"), request.get("operation_id"), request.get("plan_token"))
     if action == "reconcile":
         require(request.get("confirm") is True, "confirmation_required", "Inspect status and confirm reconciliation first.")
         return release.reconcile(host, project, profile)

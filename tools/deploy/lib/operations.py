@@ -98,10 +98,12 @@ def completion(host, entry, pin):
     store, selected, _, _ = feature_lifecycle.load(host, entry)
     state = host.load_state(entry)
     attempt = state.get("last_attempt") or {}
+    no_graph_change = (attempt.get("maintenance_action") in ("down", "up")
+                       and not (root / "transition.json").exists())
     return (receipt == {"schema": 1, "operation_id": pin["operation_id"], "invocation_id": pin["invocation_id"],
                         "result_sha256": canonical_digest(result)} and result.get("ok") is True and
             selected.admission.disposition is AdmissionDisposition.COMMITTED and
-            selected.admission.operation_id == pin["operation_id"] and
+            (selected.admission.operation_id == pin["operation_id"] or no_graph_change) and
             entry.get("deployment_selection") == record_document(selected) and
             attempt.get("operation_id") == pin["operation_id"] and attempt.get("outcome") == "succeeded" and
             store._operations()[pin["operation_id"]]["outcome"] == "succeeded")
@@ -124,7 +126,11 @@ def cleanup(host, request, pin):
     import release
     operation = pin["operation_id"]
     with host.lock("host"), host.lock(pin["instance_id"]):
-        registry, entry = host.require_identity(request["project"], request["profile"])
+        registry = host.read_registry()
+        entry = registry["instances"][pin["instance_id"]]
+        require(release.legacy_profile(entry["profile"]) == release.legacy_profile(request["profile"]),
+                "operation_identity", "Operation infrastructure identity changed.")
+        registry, entry = host.require_identity(request["project"], entry["profile"])
         store = admission.AdmissionStore(host, pin["instance_id"])
         try:
             complete = completion(host, entry, pin)
@@ -139,7 +145,14 @@ def cleanup(host, request, pin):
         store.cleanup_status(operation, pin["invocation_id"], "pending")
         state = host.load_state(entry)
         attempt = state.get("last_attempt") or {}
-        if attempt.get("operation_id") == operation:
+        applied = attempt.get("operation_id") == operation and (
+            attempt.get("outcome") == "failed_applied" or
+            attempt.get("outcome") == "failed" and attempt.get("maintenance_action") in ("down", "up"))
+        context = directory(host, operation) / "transition.json"
+        if not context.exists() and (attempt.get("operation_id") != operation or attempt.get("outcome") == "failed"):
+            store.cleanup_status(operation, pin["invocation_id"], "complete")
+            return 0
+        if attempt.get("operation_id") == operation and not applied:
             state["status"] = "unknown"
             release.finish(host, entry, state, "needs_reconciliation", "operation_cleanup_pending")
             store.record_operation(state["last_attempt"])
@@ -182,7 +195,8 @@ def cleanup(host, request, pin):
         except Exception:
             closed = False
         if stopped and closed:
-            store.cleanup_status(operation, pin["invocation_id"], "closed")
+            store.record_boot_closure(evidence)
+            store.cleanup_status(operation, pin["invocation_id"], "complete" if applied else "closed")
         # Closed workloads do not reconcile an interrupted deploy. The cleanup
         # record remains unresolved and blocks every later start.
         return 0 if stopped and closed else 1

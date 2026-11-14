@@ -9,6 +9,7 @@ import uuid
 import admission
 import artifacts
 import feature_network
+import feature_maintenance
 import packages
 import operations
 import runtime_config
@@ -34,9 +35,7 @@ def refuse(action):
 
 
 def check_operation(action):
-    if action in ("down", "up"):
-        refuse("policy-aware maintenance down/up with retained-role closure and admission")
-    require(action in ("activate", "restart", "stop", "config-set"), "capability_unavailable", f"Feature operation requires {LATER}.")
+    require(action in ("activate", "rollback", "restart", "stop", "config-set", "down", "up"), "capability_unavailable", f"Feature operation requires {LATER}.")
 
 
 def absolute(host, path):
@@ -129,12 +128,6 @@ def selected_releases(host, entry, state):
             "release_history", "Retained selection history exceeds its supported bounds.")
     return versions
 
-
-def check_activation(host, entry, state, manifest):
-    version = manifest["version"]
-    current = (state.get("current") or {}).get("version")
-    if version != current and version in selected_releases(host, entry, state):
-        refuse("rollback")
 
 
 def record_selection(host, entry, state, version):
@@ -235,7 +228,7 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
             draft = UnitSpec(unit, binary, checksum, (), canonical_digest(raw_roles[name]), bindings, config_sha)
             args = [services.resolve_argument(a, role, draft, seed, paths, views, secrets[name]) for a in role.arguments]
         specs.append(UnitSpec(unit, binary, checksum, tuple(args), canonical_digest(raw_roles[name]), bindings, config_sha))
-    deployment = Deployment(profile.instance_id, manifest["version"], 2, topology.sha256,
+    deployment = Deployment(profile.instance_id, manifest["version"], manifest["schema"], topology.sha256,
                             canonical_digest(profile.projection()), tuple(specs))
     resolution = replace(seed, deployment_sha256=canonical_digest(record_document(deployment)),
                          bindings_sha256=canonical_digest([record_document(s.bindings) for s in specs]),
@@ -265,7 +258,8 @@ def install_units(host, registry, entry, inventory, launch, tools_dir, *, names=
     require(registry["tools"]["bundle_sha256"] == checksum, "host_upgrade_required", "Install the selected preview tools first.")
     operations.install_runtime(host, tools_dir)
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
-    declaration = ReleaseDeclaration.parse(launch["declaration"])
+    from release import runtime_declaration
+    declaration = runtime_declaration(launch["declaration"])
     provision._unit_checks(host, entry)
     for name, spec in inventory.specs.items():
         if names is not None and name not in names:
@@ -343,34 +337,81 @@ def current_executor(host):
     return ProcessIdentity.parse({"pid": os.getpid(), "start_ticks": int(stat[19]), "invocation_id": invocation})
 
 
+
+def transition_enablement(host, entry, inventory, *, restoring=False):
+    import release
+    if "deployment_selection" not in entry:
+        return tuple(inventory.roles), tuple(inventory.roles), {}
+    _, _, previous, _ = load(host, entry)
+    enabled = set(services.enabled_units(host, previous.units))
+    path = admission.AdmissionStore(host, inventory.profile.instance_id).durable / "removed-enablement.json"
+    removed = admission.read_owned(host, path, lambda v: v) if path.exists() else {}
+    require(isinstance(removed, dict) and all(isinstance(k, str) and type(v) is bool for k, v in removed.items()),
+            "service_enablement", "Invalid removed-copy enablement evidence.")
+    desired = {name for name in inventory.roles if name in enabled or name not in previous.roles and
+               (removed.get(name, False) if restoring or name in removed else True)}
+    running = {name for name in desired if name not in previous.roles or
+               release.service(host, previous.units[name])["ActiveState"] == "active"}
+    while any(set(inventory.roles[name].common.requires) - desired for name in desired):
+        desired = {name for name in desired if set(inventory.roles[name].common.requires) <= desired}
+    running &= desired
+    while any(set(inventory.roles[name].common.requires) - running for name in running):
+        running = {name for name in running if set(inventory.roles[name].common.requires) <= running}
+    inventory.start_order(desired)
+    inventory.start_order(running)
+    return tuple(sorted(desired)), tuple(sorted(running)), {name: name in enabled for name in previous.roles if name not in inventory.roles}
+
 def transition(host, registry, entry, inventory, state, attempt, *, stop_only=False,
-               names=None, configuration=None, launch=None):
+               names=None, configuration=None, launch=None, review=None, maintenance_request=None):
     import release
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
     old = entry.get("deployment_selection", {}).get("selected_resolution_id", inventory.resolution.id)
     previous = load(host, entry)[2] if "deployment_selection" in entry else inventory
     names = set(names) if names is not None else set(previous.roles) | set(inventory.roles)
     retained = set(inventory.roles) - names
-    enabled = (tuple(inventory.roles) if "deployment_selection" not in entry
-               else tuple(name for name in services.enabled_units(host, previous.units) if name in inventory.roles)
-                    + tuple(name for name in inventory.roles if name not in previous.roles))
+    if review is not None:
+        enabled, running, removed = transition_enablement(host, entry, inventory, restoring=review["restoring"])
+        require(list(enabled) == review["enabled_roles"] and list(running) == review["running_roles"],
+                "stale_plan", "Enablement or running selection changed after review.")
+    else:
+        enabled = services.enabled_units(host, previous.units) if "deployment_selection" in entry else tuple(inventory.roles)
+        running, removed = set(enabled), {}
+        if attempt["action"] == "config" or maintenance_request:
+            hold = store.durable / "configuration-hold.json"
+            if hold.exists():
+                held = admission.read_owned(host, hold, lambda v: v)
+                require(held["private_revision"] == entry["configuration_revision"], "configuration_reconciliation", "Configuration hold revision differs.")
+                running = set(held["running_roles"]) & set(enabled)
+            else:
+                running = {name for name in enabled if release.service(host, previous.units[name])["ActiveState"] == "active"}
     inventory.start_order(enabled)
-    running = set(enabled)
-    if attempt["action"] == "config":
-        running = {name for name in enabled if release.service(host, previous.units[name])["ActiveState"] == "active"}
-        inventory.start_order(running)
-        attempt["running_roles"] = sorted(running)
-        host.save_state(entry, state)
+    holds, running, maintenance_intent = feature_maintenance.selection(
+        host, entry, inventory, enabled, running, maintenance_request["action"] if maintenance_request else None)
+    maintenance_intent["operation_id"] = attempt["operation_id"]
+    running = set(running)
+    inventory.start_order(running)
+    attempt["running_roles"] = sorted(running)
+    host.save_state(entry, state)
     selected = DeploymentSelection(inventory.profile.instance_id, 12, tuple(sorted(FEATURE_CAPABILITIES)),
                  inventory.resolution.id, None if old == inventory.resolution.id else old,
                  AdmissionRecord(inventory.profile.instance_id, inventory.resolution.id, inventory.resolution.deployment_sha256,
                                  inventory.resolution.private_revision, attempt["operation_id"], AdmissionDisposition.PENDING),
-                 tuple(enabled), ())
+                 tuple(enabled), tuple(sorted(holds)))
     request = transition_request(entry, inventory, attempt["operation_id"], names=names, previous=previous)
     if retained:
         store.retain_units(previous, inventory, retained, attempt["operation_id"])
     operations.bind_transition(host, entry, inventory, request)
     store.record_operation(attempt)
+    if removed:
+        removed_path = store.durable / "removed-enablement.json"
+        prior = admission.read_owned(host, removed_path, lambda v: v) if removed_path.exists() else {}
+        atomic_json(removed_path, {**prior, **removed}, mode=0o600)
+    # Intent precedes the shared command, marker publication and every stop.
+    atomic_json(operations.directory(host, attempt["operation_id"]) / "maintenance-intent.json", maintenance_intent, mode=0o600)
+    maintenance_result = feature_maintenance.shared_change(host, entry, maintenance_request) if maintenance_request else {}
+    if holds:
+        atomic_json(store.durable / "maintenance.json", maintenance_intent, mode=0o600)
+    feature_maintenance.publish_markers(host, inventory, holds)
     store.begin(selected, inventory.resolution)
     store._write(store.durable / "transition.json", request)
     units = {**previous.units, **inventory.units}
@@ -379,17 +420,32 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     evidence = feature_network.close(host, entry, request, inventory.resolution, units)
     store.record_boot_closure(evidence)
     store._write(store.durable / "transition.json", replace(request, closure_id=evidence.id))
+    feature_maintenance.clear_markers(host, inventory, holds)
     http = next(e for e in inventory.resolution.endpoints if e.role == "http" and e.listener == "http")
     entry["deployment_selection"] = record_document(selected)
     entry["topology"] = {**inventory.topology.projection(), "sha256": inventory.topology.sha256}
+    entry["profile"] = inventory.profile.projection()
     entry["allocations"]["http_port"] = http.port
+    if attempt.get("redis_inventory") is not None:
+        release.phase(host, entry, state, "redis")
+        store.record_operation(attempt)
+        release.widen_redis_grants(host, registry, entry, attempt["redis_inventory"], state)
     if configuration is not None:
+        from contracts import reserve_runtime_storage
+        _, values = runtime_config.read_configuration_revision(host, entry, configuration)
+        reserve_runtime_storage(registry, entry, values, lambda value: runtime_config._read_value_file(host, entry, value))
+        host.journal(registry, entry)
         release.phase(host, entry, state, "configuration")
         store.record_operation(attempt)
         runtime_config.publish_configuration_revision(host, registry, entry, configuration)
         attempt["configuration_applied" if attempt["action"] == "config" else "private_configuration_applied"] = True
         state["configuration_revision"] = entry["configuration_revision"]
+        from contracts import select_runtime_storage
+        select_runtime_storage(registry, entry, runtime_config.validate_runtime_environment(host, entry),
+                               lambda value: runtime_config._read_value_file(host, entry, value))
     host.journal(registry, entry)
+    for name in set(previous.roles) - set(inventory.roles):
+        host.run(["systemctl", "disable", previous.units[name]])
     if launch is not None:
         install_units(host, registry, entry, inventory, launch, Path(__file__).resolve().parents[1], names=names)
     path = release.release_path(host, entry, inventory.deployment.release)
@@ -421,6 +477,8 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     else:
         if enabled:
             host.run(["systemctl", "enable", *(inventory.units[name] for name in enabled)])
+        for name in set(inventory.roles) - set(enabled):
+            host.run(["systemctl", "disable", inventory.units[name]])
         attempt.update(phase="health")
         host.save_state(entry, state)
         store.record_operation(attempt)
@@ -437,7 +495,10 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
         if running:
             feature_network.open_public(host, entry, inventory.resolution, evidence)
     state["status"] = "stopped" if stop_only or not enabled else (
-        "healthy" if running == set(inventory.roles) else "degraded")
+        "healthy" if running | holds == set(inventory.roles) else "degraded")
+    if attempt.get("redis_inventory") is not None:
+        release.queue_redis_narrowing(state, attempt["redis_inventory"])
+    atomic_json(store.durable / "maintenance.json", maintenance_intent, mode=0o600)
     release.finish(host, entry, state, "succeeded")
     store.record_operation(state["last_attempt"])
     store.commit()
@@ -445,11 +506,16 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     if active_permit.exists():
         store.revoke_permit(contract_uuid(active_permit.read_text()))
         active_permit.unlink()
+    if configuration is not None or review is not None:
+        (store.durable / "configuration-hold.json").unlink(missing_ok=True)
     entry["deployment_selection"] = record_document(store._selection()[0])
     enablement = store.durable / "enablement.json"
     if not enablement.exists():
         atomic_json(enablement, {"schema": 1, "authority": "systemd", "state": "complete"}, mode=0o600)
     host.journal(registry, entry)
+    if attempt.get("redis_inventory") is not None:
+        release.narrow_redis_grants(host, registry, entry, attempt["redis_inventory"], state)
+    return maintenance_result
 
 
 def boot(host, entry, inventory):
@@ -466,7 +532,8 @@ def boot(host, entry, inventory):
         for name, spec in inventory.specs.items():
             origin = origins.get(name, {}).get("resolution_id", resolution.id)
             source, launch = load_resolution(host, entry, origin)
-            declaration = ReleaseDeclaration.parse(launch["declaration"])
+            from release import runtime_declaration
+            declaration = runtime_declaration(launch["declaration"])
             role = source.roles[name]
             paths = services.ServicePaths.for_unit(spec.identity, origin)
             views = services.bundle_views(role, paths, source.topology, source.profile.architecture,
@@ -484,7 +551,7 @@ def open_boot(host, entry, inventory):
                 "admission_pending", "A pending operation requires reconciliation before boot startup.")
         store.require_cleanup_clear()
         store._completed(selection)
-        enabled = services.enabled_units(host, inventory.units)
+        enabled = tuple(sorted(set(services.enabled_units(host, inventory.units)) - set(selection.maintenance_holds)))
         inventory.start_order(enabled)
         if not enabled:
             return
@@ -505,10 +572,11 @@ def configuration_request(host, project, profile, changes):
         store.require_cleanup_clear()
         runtime_config.validate_configuration_changes(changes, entry)
         application, _ = runtime_config.configuration_parts(changes, entry)
-        require(not application, "capability_unavailable", f"Application configuration changes require {LATER}.")
         identifier = runtime_config.stage_configuration_revision(host, entry, changes, inventory.topology, inventory.profile)
-        record, _ = runtime_config.read_configuration_revision(host, entry, identifier)
-        if record["paths"] == runtime_config.service_secret_snapshot(host, entry):
+        record, values = runtime_config.read_configuration_revision(host, entry, identifier)
+        if (record["paths"] == runtime_config.service_secret_snapshot(host, entry)
+                and values == runtime_config.validate_runtime_environment(host, entry)
+                and not (store.durable / "configuration-hold.json").exists()):
             return {"ok": True, "unchanged": True, "configuration_revision": entry["configuration_revision"]}
     return request_operation(host, "config-set", project, profile, configuration_intent=identifier)
 
@@ -519,11 +587,11 @@ def configuration_candidate(host, entry, state, request):
     record, values = runtime_config.read_configuration_revision(host, entry, request["configuration_intent"])
     manifest = state["current"]
     path = release.verified_release(host, entry, manifest)
-    declaration = ReleaseDeclaration.parse(prior_launch["declaration"])
+    declaration = release.runtime_declaration(prior_launch["declaration"])
     paths = runtime_config.service_secret_paths(host, entry, previous.topology, paths=record["paths"], profile=previous.profile)
     affected = {name for name in previous.roles if paths.get(name, {}) != prior_launch["secret_paths"].get(name, {})}
-    if record["application_keys"]:
-        affected.update(name for name, role in previous.roles.items() if isinstance(role, BuiltinRole))
+    if record["application_keys"] or (admission.AdmissionStore(host, previous.profile.instance_id).durable / "configuration-hold.json").exists():
+        affected.update(previous.roles)
     require(affected, "invalid_configuration", "Configuration intent has no changed effective inputs.")
     inventory, paths = resolve(host, entry, manifest, declaration, path, prior_launch["artifact_roots"], request["operation_id"],
         private_paths=record["paths"], values=values, revision=record["revision"], previous=previous, affected=affected)
@@ -532,27 +600,37 @@ def configuration_candidate(host, entry, state, request):
     release.app(host, entry, path, "config:check", env_file=env)
     if record["application_keys"]:
         release.require_configuration_keys(host, entry, path, env, record["application_keys"])
-    affected = {name for name in inventory.roles if inventory.specs[name] != previous.specs[name]}
+    affected = {name for name in inventory.roles if inventory.specs[name] != previous.specs[name]
+                or next(e.sha256 for e in inventory.resolution.environments if e.role == name) !=
+                   next(e.sha256 for e in previous.resolution.environments if e.role == name)}
+    if (admission.AdmissionStore(host, previous.profile.instance_id).durable / "configuration-hold.json").exists():
+        affected = set(inventory.roles)
+    if any(key.startswith(release.STORAGE_CONFIGURATION) for key in record["application_keys"]):
+        release.probe_storage(host, entry, path, env)
+    redis_inventory = release.release_redis_inventory(host, entry, path, env_file=env)
     attempt = release.begin(host, entry, state, "config", manifest["version"], metadata={
         "operation_id": request["operation_id"], "configuration_revision": record["revision"],
         "configuration_sha256": record["sha256"], "previous_configuration_sha256": record["previous_sha256"]})
+    attempt["redis_inventory"] = redis_inventory
     return inventory, launch, affected, attempt
 
 
 def prepare_release(host, entry, state, request):
     import release
     archive = check_path(Path(request["archive"]), "file")
-    guard = lambda manifest: check_activation(host, entry, state, manifest)
-    release.unpack_archive(host, archive, None, entry, request["archive_sha256"], manifest_check=guard, reviewed=True)
+    release.unpack_archive(host, archive, None, entry, request["archive_sha256"], reviewed=True)
     stage_root = operations.staging(host, entry, request["operation_id"])
     admission.protected_directory(host, stage_root, 0o700)
     staging = stage_root / "release"
     budget = artifacts.ExpansionBudget()
     manifest = release.unpack_archive(host, archive, staging, entry, request["archive_sha256"],
-                                      expansion_budget=budget, manifest_check=guard, reviewed=True)
+                                      expansion_budget=budget, reviewed=True)
     declaration = ReleaseDeclaration.parse(manifest["deployment"])
     topology = parse_topology(declaration.topology_json)
     profile_record = parse_profile(declaration.profile_json, topology)
+    require(release.legacy_profile(profile_record.projection()) == release.legacy_profile(entry["profile"]),
+            "release_identity", "Reviewed releases cannot change the instance host or infrastructure profile.")
+    release.persist_declaration(host, entry, manifest, topology.projection(), profile_record.projection(), request["archive_sha256"])
     plan = packages.inspect(host, feature_network.package_topology(topology), profile_record)
     require(not plan["missing"], "capability_unavailable", f"New package requirements after bootstrap need {LATER}; rebuild this preview host.")
     prepared = artifacts.verify_release_tree(declaration, staging, budget,
@@ -611,45 +689,76 @@ def execute(host, request, *, pin=None):
         migrate_enablement(host, registry, entry)
         admission.AdmissionStore(host, profile["instance_id"]).require_cleanup_clear(request["operation_id"])
         release.require_idle(state)
-        inventory, attempt, names = None, None, None
+        inventory, attempt, names, review = None, None, None, None
+        prior_status, prior_current, prior_previous = state["status"], state["current"], state["previous"]
         try:
-            if action == "config-set":
+            if action in ("down", "up"):
+                inventory, launch, names = feature_maintenance.candidate(host, entry, state, request)
+                attempt = release.begin(host, entry, state, "restart", inventory.deployment.release,
+                    metadata={"operation_id": request["operation_id"], "maintenance_action": action})
+                if not names:
+                    # No held copies: HTTP and every continuing unit retain admission.
+                    store = admission.AdmissionStore(host, profile["instance_id"])
+                    maintenance_result = feature_maintenance.shared_change(host, entry, request)
+                    enabled = services.enabled_units(host, inventory.units)
+                    if enabled:
+                        require(services.wait_ready_set(host, inventory, enabled, time.monotonic() + release.READINESS_SECONDS),
+                                "readiness_failed", "Maintenance changed but the running graph did not become ready.")
+                    release.finish(host, entry, state, "succeeded")
+                    store.record_operation(state["last_attempt"])
+                    return {"ok": True, "maintenance": {"down": action == "down"},
+                            **({"bypass_path": maintenance_result["bypass_path"]}
+                               if "bypass_path" in maintenance_result else {})}
+            elif action == "config-set":
                 inventory, launch, names, attempt = configuration_candidate(host, entry, state, request)
-            elif action != "activate":
+            elif action not in ("activate", "rollback"):
                 store, selected, inventory, launch = load(host, entry)
                 require(request.get("role", "all") == "all", "capability_unavailable", f"Named feature operations require {LATER}.")
                 attempt = release.begin(host, entry, state, "restart" if action == "restart" else "stop", inventory.deployment.release,
                                         metadata={"operation_id": request["operation_id"]})
             else:
                 import feature_plan
-                manifest, inventory, launch, configuration = feature_plan.reviewed(host, registry, entry, request)
+                manifest, inventory, launch, configuration, review = feature_plan.reviewed(host, registry, entry, request)
                 request = {**request, "configuration_intent": configuration}
                 release_path = release.release_path(host, entry, manifest["version"])
                 env = runtime_config.effective_environment_path(host, entry, inventory.resolution, candidate=True)
                 release.native_runtime(host, entry)
                 release.protect_maps(host, entry, release_path)
                 patterns = release.release_redis_inventory(host, entry, release_path, env_file=env)
-                attempt = release.begin(host, entry, state, "deploy", manifest["version"], metadata={"operation_id": request["operation_id"]})
+                attempt = release.begin(host, entry, state, "rollback" if review["restoring"] else "deploy", manifest["version"], metadata={"operation_id": request["operation_id"]})
             store = admission.AdmissionStore(host, profile["instance_id"])
             store.record_operation(attempt)
-            if action == "activate":
-                release.phase(host, entry, state, "redis")
-                store.record_operation(attempt)
-                release.widen_redis_grants(host, registry, entry, patterns, state)
+            if action in ("activate", "rollback"):
+                attempt["redis_inventory"] = patterns
                 state["previous"], state["current"] = state["current"], manifest
-            transition(host, registry, entry, inventory, state, attempt, stop_only=action == "stop", names=names,
-                       configuration=request.get("configuration_intent"), launch=launch if action in ("activate", "config-set") else None)
+            maintenance_result = transition(host, registry, entry, inventory, state, attempt, stop_only=action == "stop", names=names,
+                       configuration=request.get("configuration_intent"), launch=launch if action in ("activate", "rollback", "config-set", "down", "up") else None, review=review,
+                       maintenance_request=request if action in ("down", "up") else None)
         except (DeployError, OSError):
             if attempt is None:
                 raise
-            state["status"] = "unknown"
-            release.finish(host, entry, state, "needs_reconciliation", "feature_transition_pending")
             store = admission.AdmissionStore(host, profile["instance_id"])
+            if not (operations.directory(host, request["operation_id"]) / "transition.json").exists():
+                state.update(status=prior_status, current=prior_current, previous=prior_previous)
+                release.finish(host, entry, state, "failed", "feature_validation_failed")
+                store.record_operation(state["last_attempt"])
+                raise
+            applied = attempt["action"] == "config" and attempt.get("configuration_applied") is True
+            if applied:
+                atomic_json(store.durable / "configuration-hold.json", {"operation_id": attempt["operation_id"],
+                    "private_revision": entry["configuration_revision"], "running_roles": attempt["running_roles"]}, mode=0o600)
+            maintenance_failed = action in ("down", "up")
+            state["status"] = "failed" if applied or maintenance_failed else "unknown"
+            release.finish(host, entry, state, "failed_applied" if applied else "failed" if maintenance_failed else "needs_reconciliation",
+                           "configuration_readiness" if applied else "maintenance_readiness" if maintenance_failed else "feature_transition_pending")
             store.record_operation(state["last_attempt"])
-            # ExecStopPost owns closure independently, including SIGKILL paths.
+            # Cleanup must still prove exit and closure before corrective configuration.
             raise
         return {"ok": True, "instance": entry["name"], "version": inventory.deployment.release,
-                "status": state["status"], "preview": True,
+                **({"maintenance": {"down": action == "down"},
+                    **({"bypass_path": maintenance_result["bypass_path"]}
+                       if "bypass_path" in maintenance_result else {})} if action in ("down", "up") else {}),
+                "status": state["status"], "profile_update": entry["profile"],
                 "retention": {"error": {"code": "capability_unavailable", "detail": f"Feature helper pruning requires {LATER}; all bundles retained."}}}
 
 
@@ -663,7 +772,13 @@ def request_operation(host, action, project, profile, *, operation_id=None, **ar
         request = {"schema": 1, "action": action, "operation_id": operation_id, "project": project, "profile": profile, **arguments}
         path = directory / "request.json"
         if path.exists():
-            require(read_json(path) == request, "operation_identity", "Operation UUID belongs to another request.")
+            previous_request = read_json(path)
+            if (directory / "result.json").exists():
+                import release
+                require(release.legacy_profile(previous_request["profile"]) == release.legacy_profile(profile),
+                        "operation_identity", "Operation profile identity changed.")
+                request["profile"] = previous_request["profile"]
+            require(previous_request == request, "operation_identity", "Operation UUID belongs to another request.")
             if (directory / "result.json").exists():
                 admission.AdmissionStore(host, profile["instance_id"]).require_cleanup_clear()
                 receipt = read_json(directory / "result.json")
@@ -673,7 +788,9 @@ def request_operation(host, action, project, profile, *, operation_id=None, **ar
             refuse("interrupted-operation reconciliation")
         store = admission.AdmissionStore(host, profile["instance_id"])
         store.require_cleanup_clear()
-        if action == "activate":
+        require(action not in ("restart", "down", "up") or not (store.durable / "configuration-hold.json").exists(),
+                "configuration_held", "The published configuration is held; submit corrective config or a reviewed release transition.")
+        if action in ("activate", "rollback"):
             import release
             state = host.load_state(entry)
             release.require_idle(state)

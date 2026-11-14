@@ -213,13 +213,20 @@ class AdmissionStore:
         """Freeze unchanged per-role origins before selecting a partial transition."""
         from contracts import canonical_digest
         selected, resolution = self._selection()
-        require(selected.admission.disposition is AdmissionDisposition.COMMITTED and resolution == old.resolution,
-                "admission_retained", "Only committed units can be retained.")
         attempts = self._operations()
-        require(attempts[selected.admission.operation_id]["outcome"] in ("succeeded", "reconciled")
+        previous = self._retained_records(resolution)
+        attempt = attempts.get(selected.admission.operation_id, {})
+        retry_maintenance = (selected.admission.disposition is AdmissionDisposition.PENDING
+                             and attempt.get("outcome") == "failed"
+                             and attempt.get("maintenance_action") in ("down", "up")
+                             and set(names) <= previous.keys())
+        require(resolution == old.resolution and
+                (selected.admission.disposition is AdmissionDisposition.COMMITTED or retry_maintenance),
+                "admission_retained", "Only committed units or unchanged origins of cleaned maintenance can be retained.")
+        self.require_cleanup_clear(operation_id)
+        require((attempt.get("outcome") in ("succeeded", "reconciled") or retry_maintenance)
                 and all(key == operation_id or value["outcome"] in TERMINAL_OUTCOMES
                         for key, value in attempts.items()), "admission_journal", "Retained selection has unresolved operations.")
-        previous = self._retained_records(resolution)
         closure = read_owned(self.host, self.runtime / "boot.json", ClosureEvidence.parse)
         result = {}
         for name in sorted(names):
@@ -327,9 +334,13 @@ class AdmissionStore:
 
     def _authorize(self, invocation, permit_id):
         selection, resolution = self._selection()
+        require(permit_id is not None or not (self.durable / "configuration-hold.json").exists(),
+                "configuration_held", "Current private configuration is held pending a validated correction.")
         retained = self.retained_invocation(invocation, resolution)
         self.require_cleanup_clear(selection.admission.operation_id if permit_id is not None or retained is not None else None)
         unit = invocation.unit
+        from feature_maintenance import marker_path
+        require(not self.host.paths.p(marker_path(unit)).exists(), "maintenance_held", "This copy is held for maintenance.")
         require(invocation.boot_id == boot_id(self.host) and unit.instance_id == self.instance_id and
                 (invocation.resolution_id == resolution.id or retained is not None) and unit.role in resolution.roles and
                 unit.role not in selection.maintenance_holds,

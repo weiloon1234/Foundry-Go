@@ -604,7 +604,7 @@ def feature_open(host, entry, resolution, evidence):
     enabled = set(services.enabled_units(host, inventory.units)) - set(selection.maintenance_holds)
     configured_enabled = set(enabled)
     attempt = store._operations().get(selection.admission.operation_id, {})
-    if selection.admission.disposition is AdmissionDisposition.PENDING and attempt.get("action") == "config" and "running_roles" in attempt:
+    if selection.admission.disposition is AdmissionDisposition.PENDING and "running_roles" in attempt:
         require(set(attempt["running_roles"]) <= enabled, "network_selection", "Enablement changed during configuration publication.")
         enabled = set(attempt["running_roles"])
     inventory.start_order(enabled)

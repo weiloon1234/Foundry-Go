@@ -495,7 +495,7 @@ class CapabilityCompatibilityTests(unittest.TestCase):
             with self.assertRaises(c.DeployError) as caught:
                 upgrades.check_instance_capabilities(feature, generation)
             self.assertEqual(caught.exception.code, "instance_capability_required")
-        for action in ("status", "restart", "config-set", "rollback"):
+        for action in ("status", "restart", "config-set", "keys-rotate"):
             with patch("upgrades.protocol", return_value={"protocol": {"major": 2, "minor": 0}, "generation": 99,
                                                        "minimum_client_generation": 1}):
                 request = {"profile": legacy["profile"], "client": {"generation": 9}, "protocol": {"major": 2, "minor": 0}}
@@ -507,7 +507,7 @@ class CapabilityCompatibilityTests(unittest.TestCase):
         # gates and the network owner still control feature execution.
         upgrades.check_instance_capabilities(feature, upgrades.protocol()["generation"])
         with self.assertRaises(c.DeployError) as caught:
-            upgrades._check_feature_request(mixed, {"profile": feature["profile"], "client": {"generation": 12}}, "rollback")
+            upgrades._check_feature_request(mixed, {"profile": feature["profile"], "client": {"generation": 12}}, "keys-rotate")
         self.assertEqual(caught.exception.code, "capability_unavailable")
 
     def test_source_protocol_fixtures_preserve_upgrade_floors(self):

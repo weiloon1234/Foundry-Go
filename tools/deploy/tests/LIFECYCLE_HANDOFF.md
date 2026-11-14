@@ -1,8 +1,8 @@
 # B24 release 1 lifecycle handoff
 
 This reference records lane A's private configuration and unit-graph interfaces.
-Service-secret review, delivery and rotation are implemented. Rollback,
-application configuration changes, maintenance and recovery integration remain
+Service-secret review, delivery, rotation, target-owned rollback and application
+configuration revisions are implemented. Maintenance and recovery integration remain
 in progress. The live network scenarios are opt-in and have not run locally.
 
 ## Lane A interfaces available in this worktree
@@ -69,3 +69,33 @@ network scenarios do not fabricate application/cgroup closure evidence.
 The topology-2, profile-3, frozen deployment records and application binding API
 remain unchanged. Retained unit origins are recorded privately; new resolutions
 materialize their own environments and compare credential digests only privately.
+
+## Target-owned release declarations and configuration holds
+
+`release.persist_declaration` records a complete validated topology and profile,
+keyed by archive and topology digests. `release.target_declaration` loads that
+release's record. Historical legacy imports require an explicitly supplied matching
+topology; when the archive digest was not retained, the record identifies its
+manifest provenance rather than inventing an archive digest.
+
+Rollback and archive reactivation resolve current private configuration, allocate
+fresh affected endpoints and validate schema compatibility without migration or
+seeding. `profile_update` carries the selected target projection to the client.
+Removed-role enablement is retained privately for reviewed restoration. No rollback
+reads a historical secret snapshot.
+
+A published configuration that fails readiness leaves a private configuration hold
+and pending admission. Independent cleanup proves closure before corrective config
+or a reviewed release can proceed. Ordinary starts and restart cannot clear it.
+
+## Maintenance work awaiting the endpoint-binding decision
+
+`feature_maintenance` owns persistent per-copy marker paths, the saved enabled and
+running selection, and live shared-store reconciliation. Its graph check currently
+rejects a continuing endpoint consumer whose provider stops. The frozen declaration
+contract does not make endpoint bindings `requires` edges; that additional check
+is pending the operator's decision and item 3 is not complete.
+
+The graph lifecycle and renderers carry maintenance holds without changing actual
+enablement. Independent failed-up cleanup preserves unchanged invocation origins,
+allowing an explicit retry after closure while the shared pause remains off.

@@ -601,7 +601,7 @@ def validate_runtime_environment(host, entry):
     credentials = read_credentials(host, entry)
     path = check_path(host.paths.instance_config(entry["name"]) / "app.env", "file")
     resolution = None
-    if entry.get("topology", {}).get("schema") == 2 and "deployment_selection" in entry:
+    if "deployment_selection" in entry:
         from admission import AdmissionStore
         _, resolution = AdmissionStore(host, entry["profile"]["instance_id"])._selection()
         path = effective_environment_path(host, entry, resolution)
@@ -912,6 +912,9 @@ def write_binding_descriptor(host, entry, deployment, resolution, spec, *, candi
                   "release": entry["allocations"]["paths"]["application"] + "/releases/" + deployment.release,
                   "deployment_sha256": resolution.deployment_sha256, "unit": asdict(spec.identity),
                   "bindings": record_document(spec.bindings)}
+    if deployment.archive_schema == 1:
+        descriptor = {key: descriptor[key] for key in ("instance", "user", "env_file", "work_dir")}
+        descriptor["schema"] = 1
     if path.exists():
         require(read_json(path) == descriptor, "runtime_resolution_conflict", "An immutable role descriptor already differs.")
     atomic_json(path, descriptor, mode=0o644)

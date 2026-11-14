@@ -240,6 +240,24 @@ class SystemdContractTests(unittest.TestCase):
                                instance=unit)
 
 
+    def test_persistent_hold_survives_reload_without_changing_enablement(self):
+        marker = self.root / "maintenance.hold"
+        marker.write_text("held")
+        unit = self.write_unit(self.prefix + '-hold.service',
+            '[Unit]\nConditionPathExists=!' + str(marker) + '\n'
+            '[Service]\nType=exec\nExecStart=/usr/bin/sleep infinity\n'
+            '[Install]\nWantedBy=multi-user.target\n')
+        self.host.run(['systemctl', 'enable', '--runtime', unit])
+        self.host.run(['systemctl', 'start', unit])
+        self.assertEqual(self.show(unit)['ActiveState'], 'inactive')
+        self.host.run(['systemctl', 'daemon-reload'])
+        self.host.run(['systemctl', 'start', unit])
+        self.assertEqual(self.show(unit)['ActiveState'], 'inactive')
+        self.assertEqual(self.host.run(['systemctl', 'is-enabled', unit]).stdout.strip(), 'enabled-runtime')
+        marker.unlink()
+        self.host.run(['systemctl', 'start', unit])
+        self.assertEqual(self.show(unit)['ActiveState'], 'active')
+
     def assert_code(self, code, action):
         with self.assertRaises(DeployError) as raised:
             action()

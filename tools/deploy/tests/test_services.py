@@ -212,6 +212,17 @@ class ServiceInventoryTests(unittest.TestCase):
             self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() + 1))
         self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() - 1))
 
+    def test_paused_http_uses_liveness_without_weakening_normal_readiness(self):
+        role = self.inventory.roles["http"]
+        connection = MagicMock()
+        response = connection.getresponse.return_value
+        response.status, response.read.return_value = 200, b'{"status":"ok"}'
+        with patch.object(services.http.client, "HTTPConnection", return_value=connection):
+            self.assertTrue(services.probe(role, self.inventory.resolution, time.monotonic() + 1, paused=True))
+            self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/live"))
+            self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() + 1))
+            self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/ready"))
+
     def test_bundle_views_select_exact_architecture_and_confined_export(self):
         raw = declaration()
         raw["artifacts"] = {"extension": bundle()}
@@ -291,7 +302,8 @@ class ServiceInventoryTests(unittest.TestCase):
                         if role.common.name == "worker":
                             dependent_probed = True
                         return not (failure == "probe" and dependent_probed and role.common.name == "http")
-                    with patch.object(release, "service", side_effect=inspect), \
+                    with patch.object(host, "read_registry", return_value={"instances": {}}), \
+                            patch.object(release, "service", side_effect=inspect), \
                             patch.object(release, "_matches_executable", return_value=True), \
                             patch.object(release, "STABILITY_SECONDS", .02), \
                             patch.object(services, "readiness_probe", return_value=None), \

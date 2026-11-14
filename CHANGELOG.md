@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added: feature maintenance down/up with journaled persistent per-copy systemd
+  hold markers, selective exposure closure and actual enablement preservation.
+  HTTP and continuing roles retain their processes; held copies remain stopped
+  through deploy, restart and reboot. Up honors deliberate disablement, validates
+  readiness and reports failure without claiming to restore the application pause.
+  Privileged instance actions reconcile direct artisan maintenance changes;
+  unavailable shared state never clears holds. Reports distinguish held copies
+  and still-admitting services, and an opt-in systemd contract covers hold markers.
+
 - Changed: feature units retain systemd enablement after startup. Committed start
   admission and role reporting read systemd enablement; stored enabled-role sets
   are audit projections. Systemd starts enabled workloads at boot with declared
@@ -22,6 +31,19 @@
   records ingress separately from verified backend closure and limits validation
   permits to the proven unit/address set. Opt-in network scenarios cover retained
   live TCP/TLS sessions during selective withdrawal and reopening.
+
+- Added: target-owned release declarations persisted for legacy and feature
+  activations. Older rollback targets accept an explicit topology only when its
+  digest matches the target manifest; the current declaration is never a fallback.
+- Added: reviewed feature and legacy rollback, and reactivation of prior releases,
+  preserving current credentials/keyrings with fresh safe backend allocations.
+  Surviving enablement and recorded removed-role enablement are preserved; missing
+  removed-role evidence leaves those roles disabled. Legacy targets keep feature
+  admission while receiving their legacy runtime descriptor.
+- Added: application configuration revisions, private aliases, storage and Redis
+  validation, and failed-applied configuration holds. Independent cleanup must
+  prove closure before corrective configuration can proceed; ordinary starts
+  cannot bypass a held revision.
 
 ## v0.31.0 — 2026-11-14
 

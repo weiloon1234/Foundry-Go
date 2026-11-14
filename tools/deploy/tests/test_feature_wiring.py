@@ -247,6 +247,13 @@ class WiringHost(Host):
         elif args[0] == "runuser":
             if "redis:keys" in args:
                 output = "[]"
+            elif "config:inspect" in args:
+                output = json.dumps([{"Name": "app.test.token", "Source": "environment", "Secret": True}])
+            elif "maintenance:status" in args:
+                output = json.dumps({"down": getattr(self, "maintenance_down", False)})
+            elif "down" in args or "up" in args:
+                self.maintenance_down = "down" in args
+                output = json.dumps({"down": self.maintenance_down})
             elif "migrate:status" in args:
                 output = '{"targets":[{"problems":[],"migrations":[]}]}'
         elif args[0] == "journalctl":
@@ -300,7 +307,7 @@ class FeatureWiringTests(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, public=False, secrets=False, independent=False):
+    def build_archive(self, *, public=False, secrets=False, independent=False, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -315,7 +322,7 @@ class FeatureWiringTests(unittest.TestCase):
              "readiness": {"kind": "http", "listener": "api", "path": "/ready", "status": 200},
              "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
              "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64},
-             "maintenance": "stop", "state": {"kind": "disposable"}}],
+             "maintenance": "stop" if independent else "serve", "state": {"kind": "disposable"}}],
             **({"secrets": {"relay-token": {"prompt": "Relay token"}}} if secrets else {}),
             "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
                 "platforms": {"linux-arm64": {"url": "https://example.invalid/relay", "sha256": checksum}}}}})
@@ -328,7 +335,7 @@ class FeatureWiringTests(unittest.TestCase):
         payload.write_bytes(binary)
         members = artifacts.inspect_payload(dict(self.topology.artifacts)["relay"], "linux-arm64", payload, artifacts.ExpansionBudget())
         path = "deploy/artifacts/relay.bin"
-        self.version = "20261114T000000Z-abcdef12"
+        self.version = version
         files = {"artisan": binary, "config/deploy.toml": b"[project]\n", "public/index.html": b"fixture",
                  "private-source-maps/" + self.version + "/a.map": b"{}", path: binary}
         kinds = artifacts.declared_release_files(self.topology, (), (path,))
@@ -425,6 +432,108 @@ class FeatureWiringTests(unittest.TestCase):
         self.assertEqual(error.exception.code, "stale_plan")
         self.assertEqual(self.host.running, before)
 
+    def rollback_target(self, target, *, topology=None):
+        arguments = {"target": target, "expected_current": self.request("status")["live_version"], "operation_id": str(uuid.uuid4())}
+        reviewed = self.request("release-plan", **arguments, **({"topology": topology} if topology else {}))
+        result = self.request("rollback", **arguments, plan_token=reviewed["plan_token"])
+        self.profile = result["profile_update"]
+        before = list(self.host.started)
+        self.assertEqual(self.request("release-plan", **arguments), reviewed)
+        self.assertEqual(self.request("rollback", **arguments, plan_token=reviewed["plan_token"]), result)
+        self.assertEqual(self.host.started, before)
+        return result
+
+    def test_feature_rollback_preserves_rotated_credentials_and_allocates_fresh_ports(self):
+        import runtime_config
+        self.test_service_secret_rotation_retains_http_and_private_values()
+        target = self.version
+        self.build_archive(secrets=True, independent=True, version="20261115T000000Z-abcdef12")
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, previous, _ = lifecycle.load(self.host, entry)
+        snapshots = runtime_config.service_secret_snapshot(self.host, entry)
+        commands = len(self.host.commands)
+        self.rollback_target(target)
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, current, launch = lifecycle.load(self.host, entry)
+        self.assertEqual(current.deployment.release, target)
+        self.assertEqual(entry["configuration_revision"], 2)
+        self.assertEqual(runtime_config.service_secret_snapshot(self.host, entry), snapshots)
+        self.assertFalse(set(previous.resolution.endpoints) & set(current.resolution.endpoints))
+        self.assertFalse(any("migrate" in command or "db:seed" in command for command in self.host.commands[commands:]))
+
+    def test_legacy_rollback_requires_target_topology_and_preserves_current_secrets(self):
+        import runtime_config
+        self.test_service_secret_rotation_retains_http_and_private_values()
+        _, entry = self.host.require_identity(self.project, self.profile)
+        feature = self.host.load_state(entry)["current"]
+        target = "20261112T000000Z-abcdef12"
+        topology = parse_topology({"schema": 1, "roles": [{"name": "http"}]})
+        manifest = {**feature, "schema": 1, "version": target, "topology_sha256": topology.sha256}
+        manifest.pop("deployment")
+        manifest["files"] = {key.replace(feature["version"], target): value for key, value in feature["files"].items() if not key.startswith("deploy/")}
+        path = release.release_path(self.host, entry, target)
+        source = release.release_path(self.host, entry, feature["version"])
+        for name in manifest["files"]:
+            self.host.owned_write(path / name, (source / name.replace(target, feature["version"])).read_bytes(), mode=0o755 if name == "artisan" else 0o644)
+        self.host.owned_write(path / "manifest.json", json.dumps(manifest))
+        with self.assertRaises(c.DeployError) as error:
+            self.rollback_target(target)
+        self.assertEqual(error.exception.code, "rollback_topology_required")
+        with self.assertRaises(c.DeployError) as error:
+            self.rollback_target(target, topology={"schema": 1, "roles": [{"name": "http"}, {"name": "worker"}]})
+        self.assertEqual(error.exception.code, "release_topology")
+        secret = runtime_config.service_secret_snapshot(self.host, entry)
+        self.rollback_target(target, topology=topology.projection())
+        _, entry = self.host.require_identity(self.project, self.profile)
+        store, selection, inventory, launch = lifecycle.load(self.host, entry)
+        self.assertEqual(inventory.deployment.archive_schema, 1)
+        self.assertEqual(set(inventory.roles), {"http"})
+        self.assertEqual(runtime_config.service_secret_snapshot(self.host, entry), secret)
+        self.assertEqual(selection.admission.disposition, c.AdmissionDisposition.COMMITTED)
+        descriptor = c.read_json(self.host.paths.p(launch["descriptors"]["http"]))
+        self.assertEqual(descriptor["schema"], 1)
+        self.assertNotIn("bindings", descriptor)
+        self.assertFalse(any("relay" in unit for unit in self.host.running))
+        self.assertTrue((store.durable / "removed-enablement.json").exists())
+        self.rollback_target(feature["version"])
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, restored, _ = lifecycle.load(self.host, entry)
+        self.assertEqual(set(restored.roles), {"http", "relay"})
+        self.assertEqual(runtime_config.service_secret_snapshot(self.host, entry), secret)
+        self.assertIn(restored.units["relay"], self.host.enabled)
+
+
+    def test_reactivating_previous_archive_uses_current_configuration(self):
+        self.test_service_secret_rotation_retains_http_and_private_values()
+        retained = self.archive.with_name("retained.tar.gz")
+        shutil.copyfile(self.archive, retained)
+        target = self.version
+        self.build_archive(secrets=True, independent=True, version="20261115T000000Z-abcdef12")
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        commands = len(self.host.commands)
+        self.request("activate", archive=str(retained), archive_sha256=c.digest(retained))
+        self.assertEqual(self.request("status")["live_version"], target)
+        self.assertFalse(any("migrate" in cmd or "db:seed" in cmd for cmd in self.host.commands[commands:]))
+
+    def test_application_configuration_and_failed_applied_correction(self):
+        import runtime_config
+        self.test_service_secret_rotation_retains_http_and_private_values()
+        with patch.object(release.backup, "archive_keys"), patch.object(services, "wait_ready", return_value=False):
+            with self.assertRaises(c.DeployError):
+                self.request("config-set", secrets={"configuration": {"APP__TEST__TOKEN": "new-app-canary"}}, confirm=True)
+        _, entry = self.host.require_identity(self.project, self.profile)
+        self.assertEqual(self.host.load_state(entry)["last_attempt"]["outcome"], "failed_applied")
+        self.assertEqual(runtime_config.validate_runtime_environment(self.host, entry)["APP__TEST__TOKEN"], "new-app-canary")
+        store, selection, _, _ = lifecycle.load(self.host, entry)
+        self.assertEqual(selection.admission.disposition, c.AdmissionDisposition.PENDING)
+        store.require_cleanup_clear()
+        self.assertTrue((store.durable / "configuration-hold.json").exists())
+        with patch.object(release.backup, "archive_keys"):
+            self.request("config-set", secrets={"configuration": {"APP__TEST__TOKEN": "corrected-app-canary"}}, confirm=True)
+        self.assertFalse((store.durable / "configuration-hold.json").exists())
+        self.assertEqual(lifecycle.load(self.host, entry)[1].admission.disposition, c.AdmissionDisposition.COMMITTED)
+
     def test_rotation_preserves_enabled_but_stopped_service(self):
         self.test_service_secret_rotation_retains_http_and_private_values()
         _, entry = self.host.require_identity(self.project, self.profile)
@@ -436,6 +545,104 @@ class FeatureWiringTests(unittest.TestCase):
         self.assertEqual(self.host.started, [])
         self.assertEqual(result["status"], "degraded")
         self.assertIn(inventory.units["relay"], self.host.enabled)
+
+    def test_maintenance_holds_retain_http_and_honor_disable_on_up(self):
+        import feature_maintenance
+        self.build_archive(independent=True)
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, inventory, _ = lifecycle.load(self.host, entry)
+        before = self.host.running[inventory.units["http"]]
+        self.request("down", confirm=True)
+        _, entry = self.host.require_identity(self.project, self.profile)
+        store, selection, inventory, _ = lifecycle.load(self.host, entry)
+        marker = self.host.paths.p(feature_maintenance.marker_path(inventory.specs["relay"].identity))
+        self.assertTrue(marker.is_file())
+        self.assertEqual(selection.maintenance_holds, ("relay",))
+        self.assertIn(inventory.units["relay"], self.host.enabled)
+        self.assertNotIn(inventory.units["relay"], self.host.running)
+        self.assertEqual(self.host.running[inventory.units["http"]], before)
+        content = self.host.paths.p("/etc/systemd/system/" + inventory.units["relay"]).read_text()
+        self.assertIn("ConditionPathExists=!" + feature_maintenance.marker_path(inventory.specs["relay"].identity), content)
+        self.host.run(["systemctl", "disable", inventory.units["relay"]])
+        self.request("up", confirm=True)
+        self.assertFalse(marker.exists())
+        self.assertNotIn(inventory.units["relay"], self.host.running)
+        self.assertNotIn(inventory.units["relay"], self.host.enabled)
+        self.assertEqual(self.host.running[inventory.units["http"]], before)
+        store.require_cleanup_clear()
+
+    def test_direct_artisan_pause_reconciles_on_status_and_unavailable_store_retains_holds(self):
+        import feature_maintenance
+        self.build_archive(independent=True)
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        self.host.maintenance_down = True
+        result = self.request("status")
+        self.assertTrue(result["services"]["relay"]["maintenance_held"])
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, inventory, _ = lifecycle.load(self.host, entry)
+        with patch("maintenance.status", return_value=None):
+            self.request("status")
+        self.assertNotIn(inventory.units["relay"], self.host.running)
+        self.host.maintenance_down = False
+        self.request("status")
+        self.assertIn(inventory.units["relay"], self.host.running)
+        self.assertEqual(feature_maintenance.record(self.host, entry)["holds"], [])
+
+    def test_failed_up_keeps_shared_pause_off_and_allows_explicit_retry_after_cleanup(self):
+        self.build_archive(independent=True)
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        self.request("down", confirm=True)
+        with patch.object(services, "wait_ready_set", return_value=False), self.assertRaises(c.DeployError):
+            self.request("up", confirm=True)
+        self.assertFalse(self.host.maintenance_down)
+        _, entry = self.host.require_identity(self.project, self.profile)
+        store, _, inventory, _ = lifecycle.load(self.host, entry)
+        store.require_cleanup_clear()
+        self.assertNotIn(inventory.units["relay"], self.host.running)
+        self.assertEqual(self.host.load_state(entry)["last_attempt"]["outcome"], "failed")
+        self.request("up", confirm=True)
+        self.assertIn(inventory.units["relay"], self.host.running)
+
+    def test_deploy_during_maintenance_keeps_hold_and_up_restores_new_release(self):
+        self.build_archive(independent=True)
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        self.request("down", confirm=True)
+        self.build_archive(independent=True, version="20261115T000000Z-abcdef12")
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, selection, inventory, _ = lifecycle.load(self.host, entry)
+        self.assertEqual(selection.maintenance_holds, ("relay",))
+        self.assertNotIn(inventory.units["relay"], self.host.running)
+        self.request("up", confirm=True)
+        self.assertEqual(self.host.running[inventory.units["relay"]][1].deployment.release, self.version)
+
+    def test_maintenance_without_stopped_roles_retains_entire_graph(self):
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        running = dict(self.host.running)
+        self.request("down", confirm=True)
+        self.assertTrue(self.host.maintenance_down)
+        self.request("up", confirm=True)
+        self.assertFalse(self.host.maintenance_down)
+        self.assertEqual(self.host.running, running)
+
+    def test_maintenance_rejects_continuing_consumer_of_stopped_provider(self):
+        import feature_maintenance
+        value = self.topology.projection()
+        next(role for role in value["roles"] if role["name"] == "relay")["maintenance"] = "stop"
+        with self.assertRaises(c.DeployError) as error:
+            feature_maintenance.stopped_roles(parse_topology(value))
+        self.assertEqual(error.exception.code, "maintenance_graph")
 
     def test_plan_apply_activate_report_logs_restart_and_boot_use_current_owners(self):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())

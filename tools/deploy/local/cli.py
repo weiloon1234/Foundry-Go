@@ -1199,6 +1199,9 @@ def deploy(project, profile, settings):
             confirm(f"{action} for {instance_name(project, profile)}")
             display(ssh.request(action, {**request, **arguments, "confirm": True}))
             return
+        if action in ("deploy", "rollback") and profile.get("schema") == 3:
+            canonical = ssh.request("sync", request)
+            request["profile"] = canonical["profile"]
         status = ssh.request("status", request)
         remember_releases(profile, status)
         if action == "status":
@@ -1217,7 +1220,7 @@ def deploy(project, profile, settings):
                 destination = remote + "/app.tar.gz"
                 ssh.upload(archive, destination)
                 activation = {**request, "archive": destination, "archive_sha256": digest(archive)}
-                if profile.get("schema") == 3:
+                if profile.get("schema") == 3 or "deployment_selection" in status.get("instance", {}):
                     activation["operation_id"] = operation_uuid(os.environ.get("OPERATION") or str(uuid.uuid4()))
                     plan = ssh.request("release-plan", activation)
                     if not plan["ok"]:
@@ -1229,7 +1232,11 @@ def deploy(project, profile, settings):
                         raise LocalError("Release review is incomplete")
                     activation["plan_token"] = plan["plan_token"]
                 confirm("Activate this completed release, including its pending forward migrations")
-                display(ssh.request("activate", {**activation, "confirm": True}))
+                result = ssh.request("activate", {**activation, "confirm": True})
+                display(result)
+                if result.get("profile_update"):
+                    save_profile(result["profile_update"])
+                    request["profile"] = result["profile_update"]
                 remember_releases(profile, ssh.request("status", request))
         elif action == "config":
             say(json.dumps(ssh.request("config-keys", request), indent=2))
@@ -1282,9 +1289,20 @@ def deploy(project, profile, settings):
                 raise LocalError("rollback requires exact TARGET and EXPECTED_CURRENT release versions")
             arguments = {"target": target, "expected_current": expected}
             say(json.dumps(arguments, indent=2))
-            confirm(f"Roll back {instance_name(project, profile)} to this target")
             operation = operation_id(profile, "rollback", arguments)
-            display(ssh.request("rollback", {**request, **arguments, "operation_id": operation, "confirm": True}))
+            if "deployment_selection" in status.get("instance", {}) or os.environ.get("ROLLBACK_TOPOLOGY_FILE"):
+                review_request = {**request, **arguments, "operation_id": operation}
+                if os.environ.get("ROLLBACK_TOPOLOGY_FILE"):
+                    review_request["topology"] = read_json(Path(os.environ["ROLLBACK_TOPOLOGY_FILE"]))
+                plan = ssh.request("release-plan", review_request)
+                display(plan)
+                arguments["plan_token"] = plan["plan_token"]
+            confirm(f"Roll back {instance_name(project, profile)} to this target")
+            result = ssh.request("rollback", {**request, **arguments, "operation_id": operation, "confirm": True})
+            display(result)
+            if result.get("profile_update"):
+                save_profile(result["profile_update"])
+                request["profile"] = result["profile_update"]
             remember_releases(profile, ssh.request("status", request))
         elif action == "logs":
             result = ssh.request("logs", {**request, "role": role, "lines": logs["lines"]})

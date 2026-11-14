@@ -33,9 +33,7 @@ that is a capability milestone, not a promised framework version or date.
 
 | Refused in the preview | Consequence |
 | --- | --- |
-| Rollback to a previous feature release or to legacy; activation of a previously selected, noncurrent release | Deploy a new release instead; selection history survives retention. |
-| Application configuration changes, configuration holds and key rotation | Service-secret rotation is supported through `config`; other configuration operations remain gated. |
-| Maintenance holds, both `down` and `up` | Both refuse before mutation. Declaring `maintenance: serve` does not enable partial maintenance. Use whole-instance `stop` and `restart` when full downtime is acceptable. |
+| Encryption key rotation | The dedicated `keys rotate` action remains gated for feature instances. Generic edits cannot change the keyring contract. |
 | Changed reprovisioning of a selected instance | Changes to its profile, package requirements or owned network/boot files refuse. Unchanged re-bootstrap is supported. |
 | Newly required packages at activation | Bootstrap installs packages; deployment cannot silently add missing packages. |
 | Named lifecycle operations | Start/restart/stop the complete enabled instance. Selecting a role for logs is supported. |
@@ -45,8 +43,8 @@ that is a capability milestone, not a promised framework version or date.
 | Host capacity changes involving features; backup configuration/run, restore drill and recovery operations for feature instances | These owners are not integrated with feature lifecycle yet. Legacy neighbors retain their existing supported operations. |
 
 The server feature-operation allowlist is `bootstrap-plan`, `bootstrap-apply`,
-`release-plan`, `activate`, `restart`, `stop`, `status`, `logs`, `sync`, `config-keys`,
-`config-set` and `report`.
+`release-plan`, `activate`, `rollback`, `restart`, `stop`, `status`, `logs`, `sync`, `config-keys`,
+`config-set`, `down`, `up` and `report`.
 Host tool upgrades have their own upgrade protocol. Other feature mutations are
 not implied by a command appearing in the legacy deployment guide.
 
@@ -71,6 +69,33 @@ any consumers whose endpoint bindings change. Unchanged services retain their
 processes and exposure; deliberately stopped services stay stopped. An interrupted
 publication remains pending for reconciliation. Do not infer that old credentials
 were restored from an unsuccessful operation.
+
+Rollback and reactivation validate the target release against **current** private
+configuration and the complete current keyring before withdrawing ingress. They
+never restore a historical secret snapshot, migrate backwards or run seeders.
+Fresh runtime allocations keep old nginx references away from the target code.
+Surviving roles retain actual systemd enablement. Removed roles retain enablement
+evidence for later rollback; without that evidence they remain disabled, along
+with dependent roles, and the plan reports the resulting selection.
+
+Every newly activated release retains its complete validated topology and profile
+under the release state owner, keyed by archive digest and topology digest.
+Rollback uses that target-owned record. For older releases, provide
+`ROLLBACK_TOPOLOGY_FILE=/path/to/topology.json` when planning rollback. The server
+requires its digest to match the target manifest's `topology_sha256`; it never
+uses the current topology as a substitute. If the original archive digest was
+never recorded, the imported declaration is explicitly keyed by retained manifest
+digest, without claiming an archive digest. Missing or mismatched declarations
+refuse before stopping services.
+
+Application configuration changes use the application's `config:inspect` and
+`config:check`, including private file aliases, storage validation and Redis grant
+reconciliation. A known published revision whose startup fails is `failed_applied`.
+After independent cleanup proves closure, a corrective revision can proceed;
+ordinary starts remain held meanwhile. Unknown publication or cleanup outcomes
+still require reconciliation. Rollback to legacy uses its schema-1 runtime
+descriptor and current credentials while retaining sticky feature admission and
+capable-client requirements. Service secrets remain private for later roll-forward.
 
 Current tools keep feature workload units enabled after startup and read systemd
 enablement for committed admission, restart selection, and reporting. Systemd
@@ -301,7 +326,13 @@ paths under `deploy/bin/`.
   The last additionally requires `acknowledged: true`; the others omit it.
   This declaration does not turn service-local state into a backup guarantee.
 - **Maintenance:** `serve` or `stop`; default `serve` for HTTP, `stop` otherwise.
-  This records intended later behavior; both preview maintenance actions refuse.
+  HTTP must serve. Every prerequisite of a continuing role must also serve.
+  Feature `down` closes exposure and stops only roles declared `stop`; HTTP and
+  continuing services retain their processes and exposure. Root-owned persistent
+  per-copy markers prevent held units from starting after reboot or automatic
+  restart. Actual systemd enablement remains unchanged. `up` restores the remembered
+  running copies that are still declared and enabled; a deliberate disable wins.
+  Legacy built-in worker/scheduler application pause behavior remains unchanged.
 - **Dependencies:** `requires` names role prerequisites and must be acyclic.
   Defaults are `[]`, except scheduler/worker default to `["http"]`. Enabled roles
   require enabled prerequisites. Executable and endpoint bindings resolve values;
@@ -483,3 +514,19 @@ router. Do not add Docker port publishing or DNAT over a Foundry-owned port in t
 same observed namespace. Test reachability from a peer namespace or another
 machine, not from the host loopback; verify permitted traffic reaches the relay
 through nginx stream and that stop closes it.
+
+### Maintenance holds and shared application state
+
+Use deploy `down` for immediate fencing of supervised service listeners. Direct
+`artisan down` and maintenance changes from another host only update the shared
+application record. The next privileged instance action reconciles that record
+through the owned lifecycle operation. A host report identifies stopped-policy
+services that are still admitting while the shared record is down.
+
+Held copies are reported separately from failed or unexpectedly inactive services.
+HTTP uses its maintenance liveness contract while paused. Deploy, configuration,
+restart and boot retain persistent holds; an unavailable shared store never clears
+them. `up` removes markers only under pending admission after closure is proven.
+If readiness then fails, the operation reports failure and closes the affected
+services; it does not claim the application pause was restored. After cleanup
+proves closure, an explicit `up` can retry the held selection.

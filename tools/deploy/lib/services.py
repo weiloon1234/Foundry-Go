@@ -274,6 +274,8 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     identity = [spec.identity.instance_id, name, "1", inventory.resolution.id,
                 bundle_sha256, canonical_digest(record_document(spec))]
     hooks = {action: command_line([*helper, action, *identity]) for action in ("admit", "prepare", "dispatch", "running", "cleanup")}
+    from feature_maintenance import marker_path
+    condition = "ConditionPathExists=!" + marker_path(spec.identity) + "\n"
     after = " ".join(inventory.units[n] for n in role.common.requires)
     boot = f"foundry-admission-{spec.identity.instance_id}.service"
     mounts = "\n".join("BindReadOnlyPaths=" + systemd_word(view.source + ":" + view.destination) for view in views)
@@ -290,7 +292,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
         content = content.replace("[Service]\n", "[Service]\nExecCondition=+" + hooks["admit"] +
                                   "\nExecStartPre=+" + hooks["prepare"] + "\nExecStartPost=+" + hooks["running"] +
                                   "\nExecStopPost=+" + hooks["cleanup"] + "\n")
-        content = content.replace("[Unit]\n", f"[Unit]\nAfter={boot} {after}\n")
+        content = content.replace("[Unit]\n", f"[Unit]\n{condition}After={boot} {after}\n")
         if mounts:
             content = content.replace("[Service]\n", "[Service]\n" + mounts + "\n")
         return content
@@ -312,19 +314,19 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
                     "ENVIRONMENT": "\n".join("Environment=" + systemd_word(key + "=" + value) for key, value in environment),
                     "MOUNTS": mounts}
     content = (TEMPLATES / "custom.service").read_text()
-    return re.sub(r"@([A-Z]+)@", lambda match: replacements[match[1]], content)
+    return re.sub(r"@([A-Z]+)@", lambda match: replacements[match[1]], content).replace("[Unit]\n", "[Unit]\n" + condition)
 
 
-def readiness_probe(role):
+def readiness_probe(role, paused=False):
     from topology import Probe
     if isinstance(role, ExecutableRole):
         return role.readiness
-    return Probe("http", "http", 90, "/health/ready", 200, None) if role.common.name == "http" else None
+    return Probe("http", "http", 90, "/health/live" if paused else "/health/ready", 200, None) if role.common.name == "http" else None
 
 
-def probe(role, resolution, deadline):
+def probe(role, resolution, deadline, *, paused=False):
     from host import OperationTimeout, wall_clock_budget
-    contract = readiness_probe(role)
+    contract = readiness_probe(role, paused)
     if contract is None:
         return True
     remaining = min(contract.timeout_seconds, deadline - time.monotonic())
@@ -332,14 +334,14 @@ def probe(role, resolution, deadline):
         return False
     try:
         with wall_clock_budget(remaining):
-            return _probe(role, resolution, deadline)
+            return _probe(role, resolution, deadline, paused=paused)
     except OperationTimeout:
         return False
 
 
-def _probe(role, resolution, deadline):
+def _probe(role, resolution, deadline, *, paused=False):
     """One bounded local probe. Identity/stability checks remain required around it."""
-    contract = readiness_probe(role)
+    contract = readiness_probe(role, paused)
     endpoint = next((e for e in resolution.endpoints if e.role == role.common.name and
                      e.listener == contract.listener), None)
     require(endpoint is not None, "service_listener", "Readiness allocation is missing.")
@@ -361,10 +363,10 @@ def _probe(role, resolution, deadline):
             if len(body) > 65536:
                 return False
             if not isinstance(role, ExecutableRole):
-                from release import readiness_body
+                from release import readiness_body, liveness_body
                 import json
                 try:
-                    return readiness_body(json.loads(body))
+                    return (liveness_body if paused else readiness_body)(json.loads(body))
                 except (ValueError, UnicodeError):
                     return False
             return contract.body is None or contract.body.encode() in body
@@ -386,6 +388,18 @@ def wait_ready_set(host, inventory, names, deadline):
     from release import STABILITY_SECONDS, _matches_executable, service
     names = tuple(names)
     require(names and set(names) <= inventory.roles.keys(), "service_selection", "Select known readiness roles.")
+    paused = False
+    if "http" in names:
+        import feature_maintenance
+        entry = host.read_registry()["instances"].get(inventory.profile.instance_id)
+        if deadline <= time.monotonic():
+            return False
+        try:
+            with wall_clock_budget(deadline - time.monotonic()):
+                observed = feature_maintenance.live(host, entry) if entry else None
+        except OperationTimeout:
+            return False
+        paused = observed is not None and observed["down"]
     checks = {}
     for name in names:
         role, spec = inventory.roles[name], inventory.specs[name]
@@ -422,7 +436,8 @@ def wait_ready_set(host, inventory, names, deadline):
                         ready = listeners.returncode == 0 and any(
                             len(line.split()) >= 5 and line.split()[3] == local and
                             f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
-                    healthy = ready and probe(role, inventory.resolution, deadline) and healthy
+                    healthy = ready and (probe(role, inventory.resolution, deadline, paused=True) if paused and name == "http"
+                                         else probe(role, inventory.resolution, deadline)) and healthy
                 # Recheck the entire set after the last probe, including prerequisites
                 # observed before a slow dependent. A changed identity resets nothing.
                 if healthy:

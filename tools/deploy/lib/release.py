@@ -7,6 +7,7 @@ Configuration and key rotation share the same candidate validation and selection
 from __future__ import annotations
 
 import copy
+from dataclasses import dataclass
 import hashlib
 import json
 import os
@@ -45,13 +46,13 @@ def valid_version(value):
 def validate_manifest(manifest, entry, *, reviewed=False):
     require(isinstance(manifest, dict), "invalid_release", "Release manifest must be an object.")
     feature = manifest.get("schema") == 2
-    require(feature == (entry["profile"].get("schema") == 3), "capability_unavailable",
+    require(reviewed or feature == (entry["profile"].get("schema") == 3), "capability_unavailable",
             "Feature-to-legacy release selection requires the post-preview B24 lifecycle release.")
     declaration = None
     if feature:
         from contracts import ReleaseDeclaration
         declaration = ReleaseDeclaration.parse(manifest.get("deployment"))
-        require(json.loads(declaration.profile_json) == entry["profile"] and
+        require((reviewed or json.loads(declaration.profile_json) == entry["profile"]) and
                 (reviewed or "topology" not in entry or declaration.topology_sha256 == entry["topology"]["sha256"]),
                 "release_identity", "Feature release declarations differ from the registered profile/topology.")
     expected = {"schema": 2 if feature else SCHEMA, "layout_version": LAYOUT_VERSION, "project_id": entry["project_id"],
@@ -85,6 +86,99 @@ def validate_manifest(manifest, entry, *, reviewed=False):
                 "release_inventory", "Feature inventory differs from the frozen release declaration.")
     return manifest
 
+
+
+
+@dataclass(frozen=True)
+class LegacyDeclaration:
+    topology_json: str
+    profile_json: str
+    topology_sha256: str
+    inventory: tuple = ()
+    artifacts: tuple = ()
+    application_executables: tuple = ()
+
+    def projection(self):
+        return {"schema": 1, "topology": json.loads(self.topology_json), "profile": json.loads(self.profile_json)}
+
+
+def runtime_declaration(value):
+    from contracts import ReleaseDeclaration, contract_object
+    from topology import parse_profile, parse_topology
+    if value.get("schema") == 2:
+        return ReleaseDeclaration.parse(value)
+    contract_object(value, ("schema", "topology", "profile"))
+    topology = parse_topology(value["topology"])
+    require(value["schema"] == topology.schema == 1, "invalid_contract", "Invalid legacy runtime declaration.")
+    profile = parse_profile(value["profile"], topology)
+    return LegacyDeclaration(topology.canonical_json, profile.canonical_json, topology.sha256)
+
+def legacy_profile(profile):
+    from contracts import PROFILE_SCHEMA
+    return {**{key: value for key, value in profile.items() if key not in ("placement", "listeners", "schema")}, "schema": PROFILE_SCHEMA}
+
+
+def persist_declaration(host, entry, manifest, topology, profile, archive_sha256=None):
+    """The release owner keeps declarations independently of mutable registration."""
+    from admission import protected_directory, read_owned
+    from contracts import atomic_json, canonical_digest, contract_digest
+    from topology import parse_profile, parse_topology
+    topology = parse_topology(topology, registered="sha256" in topology)
+    profile = parse_profile(profile, topology)
+    require(topology.sha256 == manifest.get("topology_sha256", topology.sha256) and
+            (archive_sha256 is not None or "topology_sha256" in manifest), "release_topology",
+            "The target declaration must match the target archive's topology_sha256.")
+    root = host.paths.instance_state(entry["name"]) / "release-declarations"
+    manifest_sha256 = canonical_digest(manifest)
+    archive_key = contract_digest(archive_sha256) if archive_sha256 is not None else "manifest-" + manifest_sha256
+    path = root / archive_key / (topology.sha256 + ".json")
+    value = {"schema": 1, "archive_sha256": archive_sha256, "manifest_sha256": manifest_sha256,
+             "topology_sha256": topology.sha256, "topology": topology.projection(), "profile": profile.projection()}
+    protected_directory(host, path.parent, 0o700)
+    if path.exists():
+        require(read_owned(host, path, lambda v: v) == value, "release_conflict", "Persisted release declaration differs.")
+    else:
+        atomic_json(path, value, mode=0o600)
+    index = root / "releases" / (manifest["version"] + ".json")
+    protected_directory(host, index.parent, 0o700)
+    if index.exists():
+        previous = read_owned(host, index, lambda v: v)
+        previous_path = root / previous["archive_key"] / (previous["topology_sha256"] + ".json")
+        saved = read_owned(host, previous_path, lambda v: v)
+        require(saved["topology"] == value["topology"] and saved["profile"] == value["profile"]
+                and previous["manifest_sha256"] == manifest_sha256 and previous["topology_sha256"] == topology.sha256,
+                "release_conflict", "Release identity already belongs to different bytes or topology.")
+    atomic_json(index, {"archive_key": archive_key, "manifest_sha256": manifest_sha256,
+                        "topology_sha256": topology.sha256}, mode=0o600)
+    return value
+
+
+def target_declaration(host, entry, manifest, supplied=None):
+    """Resolve retained targets from their own declarations, never the current topology."""
+    from admission import read_owned
+    from contracts import canonical_digest, contract_digest
+    from topology import parse_topology
+    root = host.paths.instance_state(entry["name"]) / "release-declarations"
+    index = root / "releases" / (manifest["version"] + ".json")
+    if index.exists():
+        record = read_owned(host, index, lambda v: v)
+        checksum = record["archive_key"]
+        contract_digest(checksum.removeprefix("manifest-"))
+        topology_digest = contract_digest(record["topology_sha256"])
+        value = read_owned(host, root / checksum / (topology_digest + ".json"), lambda v: v)
+        require(value["manifest_sha256"] == record["manifest_sha256"] == canonical_digest(manifest)
+                and value["topology_sha256"] == manifest.get("topology_sha256", value["topology_sha256"]),
+                "release_conflict", "Target declaration differs from its retained manifest.")
+        if supplied is not None:
+            require(parse_topology(supplied, registered="sha256" in supplied).projection() == value["topology"],
+                    "release_topology", "Supplied declaration differs from the target's persisted declaration.")
+        return value
+    if manifest["schema"] == 2:
+        declaration = manifest["deployment"]
+        return persist_declaration(host, entry, manifest, declaration["topology"], declaration["profile"])
+    require(supplied is not None, "rollback_topology_required",
+            "This older release has no persisted topology. Supply its topology to release-plan; its digest must match the target's topology_sha256.")
+    return persist_declaration(host, entry, manifest, supplied, legacy_profile(entry["profile"]))
 
 def safe_member(name):
     path = PurePosixPath(name)
@@ -224,7 +318,7 @@ def switch_to(host, entry, version):
 
 def app(host, entry, release, command, env_file=None, extra=(), timeout=90, check=True):
     environment = {"WEB__PUBLIC_DIR": str(release / "public")}
-    if entry.get("topology", {}).get("schema") == 2:
+    if entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry:
         from feature_lifecycle import load
         from runtime_config import effective_environment_path
         if env_file is None:
@@ -611,15 +705,20 @@ def services(host, entry):
     result = {}
     selected = current_version(host, entry)
     executable = release_path(host, entry, selected) / "artisan" if selected else None
-    inventory = None
+    inventory, held, enabled = None, set(), set()
     if "deployment_selection" in entry:
         from feature_lifecycle import load
-        inventory = load(host, entry)[2]
+        _, selection, inventory, _ = load(host, entry)
+        held = set(selection.maintenance_holds)
+        enabled = set(enabled_roles(host, entry))
     for role, unit in instance_units(entry).items():
         if inventory is not None:
             executable = host.paths.p(inventory.specs[role].executable)
         try:
             observed = service(host, unit)
+            if inventory is not None:
+                observed["maintenance_held"] = role in held
+                observed["enabled"] = role in enabled
             observed["executable_matches"] = bool(executable and _matches_executable(observed, executable))
             observed.pop("process", None)
             result[role] = observed
@@ -978,6 +1077,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
         staging = host.paths.opt(entry["name"]) / "releases" / (".stage-" + uuid.uuid4().hex)
         try:
             manifest = unpack_archive(host, Path(archive), staging, entry, checksum)
+            persist_declaration(host, entry, manifest, entry["topology"], entry["profile"], checksum)
             import upgrades
             pruned_tools = upgrades.prune_tools(host, registry["tools"]["bundle_sha256"])
             version = manifest["version"]
@@ -1087,10 +1187,48 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                 shutil.rmtree(staging)
 
 
-def rollback(host, project, profile, target, expected_current, operation_id):
-    if profile.get("schema") == 3:
-        from feature_lifecycle import refuse
-        refuse("rollback")
+
+def legacy_rollback_plan(host, project, profile, target, expected_current, operation_id, supplied=None):
+    from contracts import atomic_json, canonical_digest, contract_uuid
+    from admission import protected_directory
+    contract_uuid(operation_id)
+    with host.lock("host"), host.lock(profile["instance_id"]):
+        registry, entry = host.require_identity(project, profile)
+        path = host.paths.instance_state(entry["name"]) / "rollback-plans" / (operation_id + ".json")
+        if path.exists():
+            from admission import read_owned
+            saved = read_owned(host, path, lambda value: value)
+            require(saved["target"] == target and saved["expected_current"] == expected_current,
+                    "operation_conflict", "Rollback review identity changed.")
+            if supplied is not None:
+                from topology import parse_topology
+                require(parse_topology(supplied).sha256 == saved["topology_sha256"],
+                        "release_topology", "Supplied topology differs from the reviewed target.")
+            return saved
+        require_idle(host.load_state(entry))
+        require(current_version(host, entry) == expected_current, "stale_current", "Refresh the current release before reviewing rollback.")
+        manifest = read_json(release_path(host, entry, target) / "manifest.json")
+        verified_release(host, entry, manifest)
+        declaration = target_declaration(host, entry, manifest, supplied)
+        require(declaration["topology"] == {key: value for key, value in entry["topology"].items() if key != "sha256"},
+                "release_topology", "Legacy operation shape cannot change topology; use a capable feature transition.")
+        value = {"ok": True, "operation_id": operation_id, "target": target, "expected_current": expected_current,
+                 "host_revision": registry["revision"], "configuration_revision": entry["configuration_revision"],
+                 "archive_sha256": declaration["archive_sha256"], "manifest_sha256": declaration["manifest_sha256"],
+                 "topology_sha256": declaration["topology_sha256"]}
+        value["plan_token"] = canonical_digest(value)
+        path = host.paths.instance_state(entry["name"]) / "rollback-plans" / (operation_id + ".json")
+        protected_directory(host, path.parent, 0o700)
+        require(not path.exists() or read_json(path) == value, "operation_conflict", "Rollback review identity changed.")
+        atomic_json(path, value, mode=0o600)
+        return value
+
+def rollback(host, project, profile, target, expected_current, operation_id, plan_token=None):
+    _, selected_entry = host.require_identity(project, profile)
+    from feature_lifecycle import is_feature, request_operation
+    if is_feature(selected_entry):
+        return request_operation(host, "rollback", project, profile, operation_id=operation_id,
+                                 target=target, expected_current=expected_current, plan_token=plan_token)
     require(valid_version(target) and valid_version(expected_current) and valid_uuid(operation_id),
             "invalid_rollback", "Rollback requires explicit target, expected current and an operation UUIDv4.")
     _, entry = host.require_identity(project, profile)
@@ -1099,6 +1237,9 @@ def rollback(host, project, profile, target, expected_current, operation_id):
         state = host.load_state(entry)
         target_manifest = read_json(release_path(host, entry, target) / "manifest.json")
         validate_manifest(target_manifest, entry)
+        declaration = target_declaration(host, entry, target_manifest)
+        require(declaration["topology"] == {key: value for key, value in entry["topology"].items() if key != "sha256"},
+                "release_topology", "Target topology differs from the registered legacy operation shape.")
         receipt = _operation_path(host, entry, operation_id)
         recorded = next((item for item in [state.get("last_attempt"), *reversed(state["history"])]
                          if item and item.get("operation_id") == operation_id), None)
@@ -1116,6 +1257,15 @@ def rollback(host, project, profile, target, expected_current, operation_id):
             require(prior["outcome"] not in ("running", "needs_reconciliation"),
                     "reconciliation_required", "Reconcile the interrupted rollback before retrying.")
             raise DeployError(prior.get("error") or "rollback_failed", "This rollback completed unsuccessfully; use a new operation ID.")
+        if plan_token is not None:
+            from contracts import canonical_digest
+            from admission import read_owned
+            plan_path = host.paths.instance_state(entry["name"]) / "rollback-plans" / (operation_id + ".json")
+            plan = read_owned(host, plan_path, lambda value: value)
+            require(plan_token == plan["plan_token"] == canonical_digest({k: v for k, v in plan.items() if k != "plan_token"})
+                    and plan["target"] == target and plan["expected_current"] == expected_current
+                    and plan["host_revision"] == registry["revision"]
+                    and plan["configuration_revision"] == entry["configuration_revision"], "stale_plan", "Rollback review is stale.")
         require_idle(state)
         check_live_state(host, entry, state)
         validate_runtime_environment(host, entry)
@@ -1301,7 +1451,9 @@ def require_configuration_keys(host, entry, release, env_file, keys):
 
 
 def config_set(host, project, profile, changes):
-    if profile.get("schema") == 3:
+    _, selected_entry = host.require_identity(project, profile)
+    from feature_lifecycle import is_feature
+    if is_feature(selected_entry):
         from feature_lifecycle import configuration_request
         return configuration_request(host, project, profile, changes)
     _, entry = host.require_identity(project, profile)

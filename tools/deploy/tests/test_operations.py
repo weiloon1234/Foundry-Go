@@ -30,6 +30,7 @@ class OperationTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.host = Host(Paths(Path(temporary.name).resolve()))
+        self.host.owned_write(self.host.paths.p("/proc/sys/kernel/random/boot_id"), BOOT)
         self.inventory, self.entry, _ = inventory_fixture()
         self.entry["configuration_revision"] = 7
         self.request = {"schema": 1, "operation_id": OPERATION, "action": "restart", "project": {},
@@ -50,6 +51,7 @@ class OperationTests(unittest.TestCase):
         return stage
 
     def cleanup_dependencies(self, stack):
+        stack.enter_context(patch.object(self.host, "read_registry", return_value=self.registry))
         stack.enter_context(patch.object(self.host, "require_identity", return_value=(self.registry, self.entry)))
         stack.enter_context(patch.object(self.host, "load_state", return_value=self.state))
         stack.enter_context(patch.object(self.host, "save_state"))
@@ -219,12 +221,6 @@ class OperationTests(unittest.TestCase):
             run.assert_not_called()
         self.assertFalse(operations.directory(self.host, OPERATION).exists())
         self.assertFalse(operations.staging(self.host, self.entry, OPERATION).exists())
-        lifecycle.record_selection(self.host, self.entry, self.state, previous)
-        self.state["previous"] = None
-        self.state["history"] = []
-        with self.assertRaises(c.DeployError):
-            lifecycle.check_activation(self.host, self.entry, self.state, {"version": previous})
-        lifecycle.check_activation(self.host, self.entry, self.state, {"version": current})
 
     def test_boot_refuses_opening_when_a_prerequisite_becomes_unhealthy(self):
         selected = c.DeploymentSelection.parse(selection())
