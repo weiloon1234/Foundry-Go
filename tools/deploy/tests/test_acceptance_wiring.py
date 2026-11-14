@@ -15,6 +15,28 @@ from test_contracts import fixture
 
 
 class AcceptanceWiringTests(unittest.TestCase):
+    def test_fixture_builder_selects_rehearsal_profile_without_changing_existing_profile(self):
+        from test_local import cli
+        files = sorted((build_acceptance.FIXTURE / 'deploy').rglob('*.json'))
+        before = {path: path.read_bytes() for path in files}
+        project, selected = build_acceptance.fixture_profile(cli, 'arm64', 'acceptance-lab')
+        self.assertEqual(selected, json.loads(before[build_acceptance.FIXTURE / 'deploy/environments/acceptance-lab.json']))
+        self.assertEqual(project, json.loads(before[build_acceptance.FIXTURE / 'deploy/project.json']))
+        _, existing = build_acceptance.fixture_profile(cli, 'amd64', 'acceptance')
+        self.assertEqual(existing['environment'], 'acceptance')
+        self.assertEqual(existing['architecture'], 'amd64')
+        self.assertIsNone(existing['host']['host_id'])
+        with self.assertRaisesRegex(ValueError, 'architecture must match'):
+            build_acceptance.fixture_profile(cli, 'amd64', 'acceptance-lab')
+        self.assertEqual(before, {path: path.read_bytes() for path in files})
+
+    def test_fixture_builder_refuses_unknown_environment_before_reading_files(self):
+        cli = Mock()
+        for environment in ('production', '../acceptance'):
+            with self.subTest(environment=environment), self.assertRaises(ValueError):
+                build_acceptance.fixture_profile(cli, 'arm64', environment)
+        cli.read_json.assert_not_called()
+
     def test_upgrade_precedes_ordinary_host_exercises(self):
         runner = Path(__file__).with_name('run_acceptance.sh').read_text()
         phases = runner[runner.index('phase foreign-baseline '):runner.index('# Set before invocation:')]

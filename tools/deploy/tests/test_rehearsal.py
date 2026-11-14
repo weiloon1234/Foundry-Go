@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tomllib
 import unittest
 from unittest.mock import Mock, patch
 
@@ -25,6 +26,34 @@ from topology import parse_topology
 class RehearsalTests(unittest.TestCase):
     setUp = BuildInputTests.setUp
     request_and_stage = BuildInputTests.request_and_stage
+
+    def test_deploy_acceptance_fixture_profile_passes_rehearsal_guards(self):
+        root = Path(__file__).resolve().parents[3] / "tests/fixtures/deploy-acceptance"
+        project, profile, topology, manifest, config = rehearsal.inputs(root, "acceptance-lab", None)
+        parsed = rehearsal.acceptance_profile(project, profile, topology.projection())
+        self.assertEqual(parsed.architecture, "arm64")
+        self.assertIsNotNone(parsed.host_id)
+        self.assertEqual(profile["environment"], "acceptance-lab")
+        self.assertEqual(profile["runtime_environment"], "testing")
+        self.assertEqual(profile["domain"], "acceptance-lab.acceptance.invalid")
+        self.assertEqual(dict(parsed.placement), {"http": 1, "scheduler": 1, "worker": 1})
+        existing = read_json(root / "deploy/environments/acceptance.json")
+        self.assertNotEqual(profile["instance_id"], existing["instance_id"])
+        self.assertIsNone(manifest)
+        self.assertIsNone(config)
+        rehearsal.network_plan(topology, profile)
+
+    def test_deploy_acceptance_fixture_binds_all_external_disks(self):
+        root = Path(__file__).resolve().parents[3] / "tests/fixtures/deploy-acceptance"
+        path = self.root / "rehearsal-bindings.json"
+        path.write_bytes((root / "deploy/acceptance-lab-bindings.json").read_bytes())
+        path.chmod(0o600)
+        config = tomllib.loads((root / "config/deploy.toml").read_text())
+        settings, buckets = rehearsal.test_bindings(path, "acceptance-lab", config, "fixture")
+        self.assertEqual(set(settings["app_storage"]["disks"]), {"attachments"})
+        binding = settings["app_storage"]["disks"]["attachments"]["cloud"]
+        self.assertEqual(binding["endpoint"], "https://s3:9000")
+        self.assertEqual([binding["bucket"]], buckets)
 
     def application(self, feature=False):
         if feature:
