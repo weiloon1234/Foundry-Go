@@ -33,6 +33,39 @@ class MaintenanceTransitionTests(wiring.FeatureWiringFixture):
         return self.request('rollback', target=self.original, expected_current=self.version, operation_id=operation,
                             plan_token=plan['plan_token'], confirm=True)
 
+    def test_http_maintenance_response_preserves_holds_until_up(self):
+        checked = []
+        original = self.probe
+        def observe(role, resolution, deadline, **kwargs):
+            checked.append((role.common.name, getattr(self.host, 'maintenance_down', False)))
+            return original(role, resolution, deadline, **kwargs)
+        with patch.object(wiring.release, "READINESS_SECONDS", .3), patch.object(services, 'probe', side_effect=observe):
+            entry, inventory = self.held()
+            self.assertTrue(self.host.maintenance_down)
+            self.assertNotIn(inventory.units['relay'], self.host.running)
+            self.assertIn(inventory.units['http'], self.host.running)
+            self.assertEqual(feature_maintenance.record(self.host, entry)['holds'], ['relay'])
+            self.assertIn(('http', True), checked)
+            self.assertNotIn(('relay', True), checked)
+            checked.clear()
+            self.request('down', confirm=True)
+            self.assertTrue(checked)
+            self.assertEqual(set(checked), {('http', True)})
+            checked.clear()
+            self.request('up', confirm=True)
+            self.assertFalse(self.host.maintenance_down)
+            self.assertTrue(checked)
+            self.assertTrue(all(not down for _, down in checked))
+            self.assertIn(inventory.units['relay'], self.host.running)
+            self.assertFalse(self.marker.exists())
+
+    def test_unknown_shared_state_does_not_accept_http_rejection(self):
+        import time
+        _, inventory = self.held()
+        with patch.object(feature_maintenance, 'live', return_value=None):
+            self.assertFalse(services.wait_ready_set(self.host, inventory, ('http',), time.monotonic() + .1))
+        self.assertTrue(self.marker.exists())
+
     def test_restore_drill_after_external_up_never_starts_or_exposes_held_roles(self):
         self.held(public=True)
         self.host.maintenance_down = False
@@ -65,8 +98,12 @@ class MaintenanceTransitionTests(wiring.FeatureWiringFixture):
     def test_no_start_down_executor_keeps_hold_after_continue_policy_change(self):
         self.held(public=True)
         self.build_archive(independent=True, public=True, maintenance='continue', version='20261115T000000Z-abcdef12')
+        # The application is serving normally, but the tool cannot observe the
+        # shared record. That must not release the existing persistent hold.
+        self.host.maintenance_down = False
         with patch.object(feature_maintenance, 'live', return_value=None):
             self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        self.host.maintenance_down = True
         before = dict(self.host.running), list(self.host.started), dict(self.host.firewall_live)
         with patch.object(wiring.provision.backup, 'restore_drill', return_value={'status': 'complete'}):
             self.request('restore-drill', confirm=True, backup_id=str(uuid.uuid4()))
@@ -127,6 +164,9 @@ class MaintenanceTransitionTests(wiring.FeatureWiringFixture):
     def test_unavailable_store_preserves_hold_across_reviewed_policy_change(self):
         self.held()
         self.build_archive(independent=True, maintenance='continue', version='20261115T000000Z-abcdef12')
+        # The application is serving normally, but the tool cannot observe the
+        # shared record. That must not release the existing persistent hold.
+        self.host.maintenance_down = False
         with patch.object(feature_maintenance, 'live', return_value=None):
             self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
             _, entry = self.host.require_identity(self.project, self.profile)
@@ -136,6 +176,7 @@ class MaintenanceTransitionTests(wiring.FeatureWiringFixture):
             self.assertTrue(self.marker.exists())
             self.assertNotIn(inventory.units['relay'], self.host.running)
         # A later observation reconciles the changed policy and restores the copy.
+        self.host.maintenance_down = True
         self.request('status')
         self.assertIn(inventory.units['relay'], self.host.running)
         self.assertFalse(self.marker.exists())

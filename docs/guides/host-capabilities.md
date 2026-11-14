@@ -710,6 +710,13 @@ through nginx stream and that stop closes it.
 
 ### Maintenance holds and shared application state
 
+While the shared record is confirmed down, HTTP readiness checks accept the
+framework's 503 maintenance response as `status: "maintenance"`. Process identity,
+listener ownership and stability checks still apply. Continuing custom roles
+keep their declared probes; held roles are not probed. An unavailable shared
+record or a different HTTP failure does not establish maintenance readiness.
+`up` lifts the shared pause before requiring normal HTTP readiness.
+
 Use deploy `down` for immediate fencing of supervised service listeners. Direct
 `artisan down` and maintenance changes from another host only update the shared
 application record. The next privileged instance action reconciles that record

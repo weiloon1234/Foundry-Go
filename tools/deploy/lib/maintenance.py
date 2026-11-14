@@ -8,6 +8,14 @@ from contracts import DeployError, parse_json, require
 FIELDS = frozenset({"message", "retry", "allow", "except", "bypass"})
 
 
+def classify_readiness(observed, shared):
+    """A confirmed shared pause distinguishes HTTP rejection from an outage."""
+    if (observed is not None and shared and shared.get("down") is True
+            and (observed.get("ready") is True or observed.get("http_status") == 503)):
+        return {**observed, "status": "maintenance"}
+    return observed
+
+
 def status(host, entry, release_path):
     import release
 

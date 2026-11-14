@@ -223,6 +223,19 @@ class ServiceInventoryTests(unittest.TestCase):
             self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() + 1))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/ready"))
 
+    def test_maintenance_response_requires_shared_pause_and_builtin_http(self):
+        connection = MagicMock()
+        response = connection.getresponse.return_value
+        response.read.return_value = b'{"outcome":"rejected"}'
+        with patch.object(services.http.client, "HTTPConnection", return_value=connection):
+            for status in (503, 500, 302):
+                response.status = status
+                self.assertEqual(services.probe(self.inventory.roles["http"], self.inventory.resolution,
+                                               time.monotonic() + 1, paused=True), status == 503)
+                self.assertFalse(services.probe(self.inventory.roles["http"], self.inventory.resolution, time.monotonic() + 1))
+                self.assertFalse(services.probe(self.inventory.roles["relay"], self.inventory.resolution,
+                                                time.monotonic() + 1, paused=True))
+
     def test_release_carried_bundle_keeps_payload_digest_and_platform_checks(self):
         raw = declaration()
         raw["artifacts"] = {"extension": bundle()}

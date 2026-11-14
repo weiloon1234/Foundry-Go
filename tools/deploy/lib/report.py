@@ -434,7 +434,7 @@ def instance_report(host, entry, deadline, problems, *, host_claims=()):
         problem(problems, "maintenance_probe_unavailable", instance_id,
                 detail="Run the report as root to distinguish maintenance from an outage.")
     if ready is not None and live_maintenance and live_maintenance["down"]:
-        ready = {**ready, "status": "maintenance"}
+        ready = maintenance.classify_readiness(ready, live_maintenance)
         for role, item in topology.items():
             if item.get("maintenance") == "stop" and item["state"] and item["state"]["active"] == "active":
                 problem(problems, "maintenance_still_admitting", instance_id,

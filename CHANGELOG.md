@@ -2,6 +2,11 @@
 
 ## v0.32.0 — 2026-11-14
 
+- Fixed: feature and legacy HTTP readiness accept maintenance rejection only while
+  the shared record is confirmed down. Continuing custom services retain their
+  declared probes, held services are excluded, and up clears the shared pause
+  before normal readiness. Reports distinguish maintenance rejection from other
+  HTTP failures.
 - Fixed: feature runtime environments derive scheduler enablement from placed
   roles, overriding release defaults when no scheduler is placed. Legacy
   environment rendering is unchanged. Acceptance maintenance commands reuse the

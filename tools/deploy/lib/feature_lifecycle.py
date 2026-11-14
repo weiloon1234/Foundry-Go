@@ -738,7 +738,8 @@ def execute(host, request, *, pin=None):
                     # No held copies: HTTP and every continuing unit retain admission.
                     store = admission.AdmissionStore(host, profile["instance_id"])
                     maintenance_result = feature_maintenance.shared_change(host, entry, request)
-                    enabled = services.enabled_units(host, inventory.units)
+                    held = feature_maintenance.active_holds(host, entry, inventory)
+                    enabled = tuple(name for name in services.enabled_units(host, inventory.units) if name not in held)
                     if enabled:
                         require(services.wait_ready_set(host, inventory, enabled, time.monotonic() + release.READINESS_SECONDS),
                                 "readiness_failed", "Maintenance changed but the running graph did not become ready.")

@@ -2069,7 +2069,7 @@ class ReleaseTests(unittest.TestCase):
 
     def test_maintenance_readiness_requires_exact_liveness_and_process_identity(self):
         observations = self.process_observations()
-        cases = [(200, b'{"status":"ok"}', 42, True), (503, b'{"status":"ok"}', 42, False),
+        cases = [(200, b'{"status":"ok"}', 42, True), (503, b'{"outcome":"rejected"}', 42, True), (503, b'{}', 99, False), (500, b'{}', 42, False),
                  (200, b'{"ready":true}', 42, False), (200, b'{"status":"ok","extra":1}', 42, False),
                  (200, b'{"status":"up"}', 42, False), (200, b' ' * 4097, 42, False),
                  (200, b'{"status":"ok"}', 99, False)]
@@ -2083,7 +2083,10 @@ class ReleaseTests(unittest.TestCase):
             response.__enter__.return_value = response
             response.status, response.read.return_value = status, body
             opener = MagicMock()
-            opener.open.return_value = response
+            if status >= 400:
+                opener.open.side_effect = release.urllib.error.HTTPError("http://127.0.0.1/health/live", status, "rejected", {}, None)
+            else:
+                opener.open.return_value = response
             with self.subTest(status=status, body=body, pid=pid), patch.object(self.host, "run", side_effect=command), \
                     patch.object(release.urllib.request, "build_opener", return_value=opener), \
                     patch.object(release, "STABILITY_SECONDS", 0), \
@@ -2092,7 +2095,8 @@ class ReleaseTests(unittest.TestCase):
             probe.assert_called_once()
             self.assertTrue(opener.open.called)
             self.assertTrue(all(call.args[0].endswith("/health/live") for call in opener.open.call_args_list))
-            response.read.assert_called_with(4097)
+            if status < 400:
+                response.read.assert_called_with(4097)
 
     def test_readiness_requires_exact_json_and_the_selected_process_listener(self):
         observations = self.process_observations()

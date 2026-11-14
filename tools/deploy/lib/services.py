@@ -394,10 +394,15 @@ def _probe(role, resolution, deadline, *, paused=False):
             connection.request("GET", contract.path, headers={"Connection": "close"})
             response = connection.getresponse()
             # A literal bounded response, no redirects, proxies or remote URLs.
-            if response.status != contract.status:
-                return False
             body = response.read(65537)
             if len(body) > 65536:
+                return False
+            if not isinstance(role, ExecutableRole):
+                from maintenance import classify_readiness
+                observed = classify_readiness({"ready": False, "http_status": response.status}, {"down": paused})
+                if observed.get("status") == "maintenance":
+                    return True
+            if response.status != contract.status:
                 return False
             if not isinstance(role, ExecutableRole):
                 from release import readiness_body, liveness_body

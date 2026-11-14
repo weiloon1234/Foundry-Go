@@ -295,6 +295,11 @@ class ReportTests(unittest.TestCase):
         probe.assert_called_once_with(self.host, self.host.registry["instances"][INSTANCE_ID],
                                       self.host.paths.opt("abc-production") / "current")
         self.assertNotIn("instance_state_inconsistent", [p["code"] for p in result["problems"]])
+        self.ready.return_value = {"ready": False, "http_status": 500}
+        item = self.item(report.collect_report(self.host))
+        self.assertNotEqual(item["readiness"].get("status"), "maintenance")
+        self.assertFalse(item["metadata_consistent"])
+        self.ready.return_value = {"ready": False, "http_status": 503}
         self.service.return_value["active"] = "failed"
         self.assertFalse(self.item(report.collect_report(self.host))["metadata_consistent"])
         self.service.return_value["active"] = "active"

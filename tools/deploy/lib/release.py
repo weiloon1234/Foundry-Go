@@ -764,10 +764,15 @@ def _ready(host, entry, deadline, include_background=True, role="all", roles=Non
         healthy = all(_matches_executable(item, path / "artisan") for item in live.values())
         if healthy and "http" in units:
             try:
-                with opener.open(f"http://127.0.0.1:{entry['allocations']['http_port']}{endpoint}", timeout=_remaining(deadline, 3)) as response:
-                    payload = response.read(4097)
-                    body = parse_json(payload) if len(payload) <= 4096 else None
-                    healthy = response.status == 200 and accepts(body)
+                try:
+                    with opener.open(f"http://127.0.0.1:{entry['allocations']['http_port']}{endpoint}", timeout=_remaining(deadline, 3)) as response:
+                        payload = response.read(4097)
+                        body = parse_json(payload) if len(payload) <= 4096 else None
+                        healthy = response.status == 200 and accepts(body)
+                except urllib.error.HTTPError as error:
+                    with error:
+                        observed = maintenance.classify_readiness({"ready": False, "http_status": error.code}, {"down": paused})
+                        healthy = observed.get("status") == "maintenance"
                 listeners = host.run(["ss", "-Hltpn", f"sport = :{entry['allocations']['http_port']}"],
                                      check=False, timeout=_remaining(deadline))
                 healthy = (healthy and listeners.returncode == 0

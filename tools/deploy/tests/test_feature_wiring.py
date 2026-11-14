@@ -43,6 +43,7 @@ import provision
 import release
 import report
 import services
+from services import probe as actual_probe
 import upgrades
 from topology import parse_profile, parse_topology
 from test_artifacts import elf
@@ -315,7 +316,7 @@ class FeatureWiringFixture(unittest.TestCase):
             (release, "reconcile_redis_grants", {}),
             (edge, "_worker_identities", {"side_effect": lambda h: ((h.worker, 42),)}),
             (listeners, "process_members", {"side_effect": lambda h, u: frozenset({h.worker}) if u == "nginx.service" else frozenset({h.running[u][0].pid})}),
-            (services, "probe", {"return_value": True}),
+            (services, "probe", {"side_effect": self.probe}),
             (operations, "Host", {"return_value": self.host}),
             (feature_runtime, "Host", {"return_value": self.host}),
         ):
@@ -324,6 +325,17 @@ class FeatureWiringFixture(unittest.TestCase):
         runtime_os = Mock(wraps=os)
         runtime_os.geteuid.return_value = 0
         self.enterContext(patch.object(feature_runtime, "os", runtime_os))
+
+    def probe(self, role, resolution, deadline, *, paused=False):
+        down = getattr(self.host, "maintenance_down", False)
+        response = Mock()
+        response.status = 503 if down and role.common.name == "http" else 200
+        response.read.return_value = (b'{"outcome":"rejected"}' if response.status == 503 else
+                                      b'{"status":"ok"}' if paused else b'{"ready":true}')
+        connection = Mock()
+        connection.getresponse.return_value = response
+        with patch.object(services.http.client, "HTTPConnection", return_value=connection):
+            return actual_probe(role, resolution, deadline, paused=paused)
 
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
