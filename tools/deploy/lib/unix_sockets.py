@@ -61,8 +61,9 @@ def _run_probe(host, directory, name, uid, gid, timeout, *, group="", expected=N
         account = pwd.getpwuid(uid)
         if uid <= 0 or gid <= 0 or account.pw_gid != gid or timeout <= 0:
             return Result.UNSAFE
-        result = host.run(["runuser", "-u", account.pw_name, "--", "/usr/bin/python3", "-I",
-                           str(Path(__file__).with_name("unix_socket_probe.py")), str(uid), str(gid),
+        source = Path(__file__).with_name("unix_socket_probe.py").read_text(encoding="utf-8")
+        result = host.run(["runuser", "-u", account.pw_name, "--", "/usr/bin/python3", "-I", "-c",
+                           source, str(uid), str(gid),
                            str(directory), name, str(timeout), group,
                            *(str(n) for n in (expected or (0, 0))), "stale" if expected is not None else "readiness"],
                           timeout=timeout, check=False)

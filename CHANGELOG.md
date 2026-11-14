@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed: Unix readiness and stale-socket helpers receive their verified source
+  before dropping privileges, so root-only tool staging directories no longer
+  prevent takeover readiness or socket cleanup.
+
 - Fixed: Unix readiness and stale-socket checks now connect through a bounded
   helper running as the instance account. The helper pins socket leaves without
   following symlinks and validates connected peers by UID and unit cgroup,

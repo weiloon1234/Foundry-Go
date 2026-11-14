@@ -157,6 +157,57 @@ class UnixDeclarationsTests(unittest.TestCase):
         self.assertIn('XDG_RUNTIME_DIR=' + directory, services.render_unit(inventory, 'relay', entry, DIGEST))
 
 
+class UnixProbeLaunchTests(unittest.TestCase):
+    def test_unreadable_source_fails_before_starting_instance_helper(self):
+        account = type('Account', (), {'pw_name': 'instance-user', 'pw_gid': 1235})()
+        with patch.object(unix_sockets.pwd, 'getpwuid', return_value=account), \
+                patch.object(Path, 'read_text', side_effect=PermissionError), patch.object(Host, 'run') as run:
+            self.assertEqual(unix_sockets._run_probe(Host(), '/instance/sockets', 'wl0', 1234, 1235, 2,
+                             group='/system.slice/provider.service'), Result.UNSAFE)
+        run.assert_not_called()
+
+    def test_helper_executes_without_account_access_to_staged_bundle(self):
+        account = pwd.getpwnam('nobody') if os.geteuid() == 0 else pwd.getpwuid(os.geteuid())
+        with tempfile.TemporaryDirectory(prefix='probe-', dir='/tmp') as temporary:
+            staged = Path(temporary) / 'staged-tools'
+            staged.mkdir(mode=0o700)
+            # A small executable fixture isolates source delivery and argv from
+            # Linux-only socket syscalls; the real probe has separate coverage.
+            source = staged / 'unix_socket_probe.py'
+            source.write_text('''import os, sys
+uid, gid, directory, name, seconds, group, device, inode, mode = sys.argv[1:]
+assert os.geteuid() == int(uid) and os.getegid() == int(gid)
+assert directory == '/instance/sockets' and name == 'wl0' and float(seconds) == 2
+if mode == 'readiness':
+    assert group == '/system.slice/provider.service' and (device, inode) == ('0', '0')
+    sys.exit(0)
+assert mode == 'stale' and group == '' and (device, inode) == ('12', '34')
+sys.exit(3)
+''')
+            host = Host()
+            run = host.run
+            completed = []
+            def as_instance(args, **kwargs):
+                # Without root, revoke this account's traversal just as dropping
+                # to another UID loses access to a root-owned mode-0700 bundle.
+                if os.geteuid() != 0:
+                    staged.chmod(0)
+                    args = [sys.executable, *args[5:]]
+                try:
+                    result = run(args, **kwargs)
+                    completed.append(result)
+                    return result
+                finally:
+                    staged.chmod(0o700)
+            with patch.object(unix_sockets, '__file__', str(staged / 'unix_sockets.py')), \
+                    patch.object(host, 'run', side_effect=as_instance):
+                for options, expected in (({'group': '/system.slice/provider.service'}, Result.READY),
+                                          ({'expected': (12, 34)}, Result.STALE)):
+                    with self.subTest(options=options):
+                        self.assertEqual(unix_sockets._run_probe(host, '/instance/sockets', 'wl0',
+                            account.pw_uid, account.pw_gid, 2, **options), expected, completed[-1].stderr)
+
+
 class UnixPreparationTests(unittest.TestCase):
     def setUp(self):
         # Keep real AF_UNIX paths below macOS's smaller sockaddr_un bound.
@@ -181,6 +232,7 @@ class UnixPreparationTests(unittest.TestCase):
             # Native tests run the fixed child under the already unprivileged test
             # account. The production privilege-drop command is asserted separately.
             assert args[:5] == ['runuser', '-u', pwd.getpwuid(os.getuid()).pw_name, '--', '/usr/bin/python3']
+            assert args[5:7] == ['-I', '-c'], 'Instance probes must not open files from the tool bundle'
             return run([sys.executable, *args[5:]], **kwargs)
         self.enterContext(patch.object(self.host, 'run', side_effect=command))
 
@@ -319,9 +371,9 @@ class UnixPreparationTests(unittest.TestCase):
                                             group='/system.slice/provider.service')
         self.assertEqual(result, Result.READY)
         args = run.call_args.args[0]
-        self.assertEqual(args[:6], ['runuser', '-u', 'instance-user', '--', '/usr/bin/python3', '-I'])
-        self.assertEqual(Path(args[6]).name, 'unix_socket_probe.py')
-        self.assertEqual(args[7:9], ['1234', '1235'])
+        self.assertEqual(args[:7], ['runuser', '-u', 'instance-user', '--', '/usr/bin/python3', '-I', '-c'])
+        self.assertEqual(args[7], Path(unix_sockets.__file__).with_name('unix_socket_probe.py').read_text(encoding='utf-8'))
+        self.assertEqual(args[8:10], ['1234', '1235'])
         self.assertEqual(run.call_args.kwargs, {'timeout': .25, 'check': False})
         with patch.object(self.host, 'run', side_effect=c.DeployError('command_unavailable', 'timeout')):
             self.assertEqual(unix_sockets._run_probe(self.host, self.directory, 'wl0', os.getuid(), os.getgid(), .01), Result.UNSAFE)

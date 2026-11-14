@@ -45,6 +45,7 @@ import report
 import services
 from services import probe as actual_probe
 import upgrades
+import unix_sockets
 from topology import parse_profile, parse_topology
 from test_artifacts import elf
 from test_contracts import fixture
@@ -190,7 +191,7 @@ class WiringHost(Host):
         elif args[0] == "useradd":
             name = args[-1]
             comment = args[args.index("--comment") + 1]
-            self.account = f"{name}:x:{os.getuid() + self.account_sequence}:{os.getgid() + self.account_sequence}:{comment}:{c.instance_paths(name)['data']}:/usr/sbin/nologin"
+            self.account = f"{name}:x:{max(1, os.getuid()) + self.account_sequence}:{max(1, os.getgid()) + self.account_sequence}:{comment}:{c.instance_paths(name)['data']}:/usr/sbin/nologin"
             self.account_sequence += 1
         elif args[0] == "nginx":
             if "-T" in args:
@@ -249,6 +250,9 @@ class WiringHost(Host):
                     if unit == self.starting:
                         values.update(ActiveState="activating", SubState="start-post")
                 output = "\n".join(k + "=" + v for k, v in values.items())
+                if "--value" in args:
+                    assert args[-2:] == ["--property=ControlGroup", "--value"]
+                    output = values["ControlGroup"]
             elif action not in ("disable", "daemon-reload", "enable", "reset-failed"):
                 raise AssertionError(args)
         elif args[0] == "ss":
@@ -271,7 +275,23 @@ class WiringHost(Host):
                             rows.append(f'LISTEN 0 128 {endpoint.address}:{endpoint.port} 0.0.0.0:* users:(("app",pid={process.pid},fd=3))')
             output = "\n".join(rows)
         elif args[0] == "runuser":
-            if "redis:keys" in args:
+            if Path(args[4]).name == "python3":
+                if args[5] == release.service_script(self):
+                    assert args[6] in ("copy-runtime-maps", "prune-runtime-maps")
+                else:
+                    assert args[4:7] == ["/usr/bin/python3", "-I", "-c"], "Instance probes must not open files from the tool bundle"
+                    assert args[7] == Path(unix_sockets.__file__).with_name("unix_socket_probe.py").read_text(encoding="utf-8")
+                    uid, gid, directory, name, seconds, group, device, inode, mode = args[8:]
+                    assert mode == "readiness" and (device, inode) == ("0", "0")
+                    assert 0 < float(seconds) == kwargs["timeout"] <= 5
+                    entry = next(entry for entry in self.read_registry()["instances"].values() if entry["name"] == args[2])
+                    assert (int(uid), int(gid)) == (entry["allocations"]["uid"], entry["allocations"]["gid"])
+                    code = unix_sockets.Result.READY if any(
+                        group == "/system.slice/" + unit and endpoint.role == role and endpoint.name == name
+                        and str(self.paths.p(endpoint.directory)) == directory
+                        for unit, (_, inventory, role) in self.running.items()
+                        for endpoint in inventory.resolution.unix_endpoints) else unix_sockets.Result.UNSAFE
+            elif "redis:keys" in args:
                 output = "[]"
             elif "config:inspect" in args:
                 output = json.dumps([{"Name": "app.test.token", "Source": "environment", "Secret": True}])
@@ -334,7 +354,10 @@ class FeatureWiringFixture(unittest.TestCase):
     def probe(self, host, inventory, name, deadline, *, paused=False):
         role = inventory.roles[name]
         if services.readiness_probe(role) and services.readiness_probe(role).kind == "unix":
-            return True  # Socket I/O is the fake-host boundary; real Unix probes have separate coverage.
+            entry = host.read_registry()["instances"][inventory.profile.instance_id]
+            account = SimpleNamespace(pw_name=entry["name"], pw_gid=entry["allocations"]["gid"])
+            with patch.object(unix_sockets.pwd, "getpwuid", return_value=account):
+                return actual_probe(host, inventory, name, deadline, paused=paused)
         down = getattr(self.host, "maintenance_down", False)
         response = Mock()
         response.status = 503 if down and role.common.name == "http" else 200

@@ -161,8 +161,14 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
             self.assertEqual(selection.minimum_generation, 15)
             self.assertEqual(launch['declaration'], self.snapshot['declaration'])
             self.assertEqual(inventory.resolution.unix_endpoints, c.RuntimeResolution.parse(self.snapshot['resolution']).unix_endpoints)
-            lifecycle.activate_recovery(self.host, registry, entry, self.journal)
-            self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
+            staged = self.host.paths.root / 'staged-tools'
+            staged.mkdir(mode=0o700)
+            shutil.copyfile(wiring.TOOLS / 'lib/unix_socket_probe.py', staged / 'unix_socket_probe.py')
+            with patch.object(wiring.unix_sockets, '__file__', str(staged / 'unix_sockets.py')):
+                lifecycle.activate_recovery(self.host, registry, entry, self.journal)
+                self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
+            self.assertTrue(any(args[:1] == ['runuser'] and args[4:7] == ['/usr/bin/python3', '-I', '-c']
+                                for args in self.host.commands))
             self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
             self.assertEqual(self.host.started[-2:], ['relay', 'http'])
 
