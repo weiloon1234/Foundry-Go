@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Added: release-carried platform artifacts use a typed release source beneath
+  `deploy/artifacts/`, optionally produced by an explicit build argument vector.
+  The archive builder records SHA-256 in the release inventory without a URL or
+  download. Existing artifact verification, immutable publication, bundle exports,
+  and ABI evidence apply. Service bundle activation integration remains incomplete.
+  Missing, linked, overlapping, or stale build outputs refuse. Existing HTTPS
+  artifact declarations are unchanged.
+
 ## v0.31.0 — 2026-11-14
 
 - Added: generation-12 host capabilities preview with topology schema 2 and

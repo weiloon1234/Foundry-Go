@@ -226,7 +226,7 @@ paths under `deploy/bin/`.
   package defaults remain fenced unless their owner explicitly hands them off.
 - **Artifacts:** `version` is a single path component. `platforms` maps
   `linux-amd64` and/or `linux-arm64` to an HTTPS `url` and 64-hex `sha256` of the
-  download. URLs cannot carry credentials, query strings or fragments. Declare
+  download, or a [release source](#release-carried-artifacts). URLs cannot carry credentials, query strings or fragments. Declare
   the selected profile platform for every artifact. An artifact version cannot
   be reused with changed bytes. `executables` maps export names to relative
   members. `file` exports exactly one executable; `tar.gz` can also export
@@ -285,6 +285,70 @@ Only `recreate` and `rendered-json` accept `bindings`, a map from JSON pointers 
 typed listener address/port, bundle, binding or copy-number values. Do not insert
 secrets here. Custom `environment` is an explicit map of nonsecret typed argv
 values; reserved process/application names and `_FILE` names are rejected.
+
+### Release-carried artifacts
+
+Archive build and artifact verification support this source. Bundle activation
+is not yet complete: `services.bundle_views()` still requires a topology download
+pin. It needs to accept the release inventory digest before a release-carried
+bundle can be mounted by a service.
+
+For an artifact that belongs to the application repository, replace the platform's
+`url` and `sha256` fields with a typed `source` object:
+
+```json
+{
+  "linux-arm64": {
+    "source": {
+      "release": {
+        "path": "deploy/artifacts/linux-arm64/obs-extension.tar.gz"
+      }
+    }
+  }
+}
+```
+
+The path names one file beneath `deploy/artifacts/` in the frozen application
+snapshot. Declare a separate platform entry for each supported architecture.
+The builder copies that exact file, computes SHA-256, and records the digest in
+`deployment.artifacts` and the release file inventory. It performs no download.
+The source declaration stays unchanged, so the bootstrap topology hash remains
+stable. The release inventory identifies the acquired bytes.
+
+To produce the file inside the archive builder, add an argument vector to the
+`release` object:
+
+```json
+{
+  "path": "deploy/artifacts/linux-arm64/obs-extension.tar.gz",
+  "build": ["sh", "deploy/build-obs-extension.sh"]
+}
+```
+
+The command runs once for the selected platform from the writable snapshot root,
+after the application build and before artifact acquisition. It receives
+`ARCHITECTURE`, `GOOS=linux`, `GOARCH`, and the builder's target `CC`. It has a
+20-minute deadline. Arguments undergo no shell expansion. Keep the build script
+and its inputs in the repository; ignored or excluded files are not build inputs.
+The output must not exist before this command runs. A nonzero exit, missing file,
+symlink, hard link, duplicate source path, or source change during copying fails
+the build. The builder does not search directories or expand globs.
+
+Keep the artifact's existing `format`, exports, modules, and provenance fields.
+For example, package an OBS shared library and shader beneath a bundle directory
+in a `tar.gz` file, declare the library in `modules`, and export that directory
+through `bundles`. The normal Linux architecture checks, bundle ABI evidence,
+expansion bounds, and immutable publication still apply.
+Change `version` when the bytes change. This source does not permit replacing an
+already published artifact version or bypassing the preview's package-service ABI
+requirement. A platform cannot combine `source` with `url` or a handwritten
+`sha256`.
+
+Build with the application's usual entry point:
+
+```sh
+ENVIRONMENT=acceptance-local ACTION=build make release
+```
 
 ### Profile field reference
 

@@ -1220,7 +1220,7 @@ class ReleaseDeclaration:
         for payload in artifacts:
             artifact = dict(topology.artifacts)[payload.artifact]
             require(payload.platform == "linux-" + profile.architecture
-                    and dict(artifact.platforms)[payload.platform].sha256 == payload.sha256
+                    and dict(artifact.platforms)[payload.platform].accepts_digest(payload.sha256)
                     and payload.path in files and files[payload.path].sha256 == payload.sha256
                     and files[payload.path].kind == "artifact", "invalid_contract", "Artifact payload differs from its architecture pin.")
             members = {m.path: m for m in payload.members}
