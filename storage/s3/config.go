@@ -90,6 +90,8 @@ type Config struct {
 	VerifyPublication bool
 	AllowHTTP         bool
 	Compatible        CompatibleCapabilities
+	rehearsal         storage.Rehearsal
+	rehearsalDisk     storage.DiskID
 }
 
 // DefaultConfig returns an AWS profile with bounded multipart uploads, retries and
@@ -125,6 +127,9 @@ func R2Config(bucket, endpoint string, credentials aws.CredentialsProvider) Conf
 func (c Config) Validate() error {
 	invalid := func() error {
 		return newFailure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
+	}
+	if cap, granted := c.rehearsal.Cap(c.rehearsalDisk); granted && (cap != c.PartBytes || c.Provider != Compatible || !c.Compatible.SingleRequestConditions || !(c.Compatible.ConditionalCreate || c.Compatible.ConditionalReplace)) {
+		return invalid()
 	}
 	if c.Provider != AWS && c.Provider != R2 && c.Provider != Compatible || len(c.Bucket) < 3 || len(c.Bucket) > 63 || c.Region == "" || len(c.Region) > 128 || c.PartBytes < MinPartBytes || c.PartBytes > MaxPartBytes || c.MaxUploads < 1 || c.MaxUploads > 64 || c.MaxObjectBytes < 1 || c.MaxObjectBytes > c.PartBytes*MaxParts || c.ReadAttempts < 1 || c.ReadAttempts > 5 || c.PartAttempts < 1 || c.PartAttempts > 5 || c.AbortTimeout <= 0 || c.AbortTimeout > time.Minute || c.PartConcurrency < 1 || c.PartConcurrency > 16 {
 		return invalid()
@@ -174,4 +179,11 @@ func (c Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+// WithRehearsal binds a sealed deploy grant to this disk. Validate rejects a
+// granted cap that differs from the stand-in's single-request PartBytes limit.
+func (c Config) WithRehearsal(id storage.DiskID, grant storage.Rehearsal) Config {
+	c.rehearsalDisk, c.rehearsal = id, grant
+	return c
 }

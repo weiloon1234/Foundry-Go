@@ -1525,13 +1525,59 @@ private rehearsal binding file:
 
 List only unique names already present in `storage_disks`. This permission applies
 only when the pinned stand-in lacks multipart certification. Rehearsal then sets
-`single_request_conditions: true` for those disks and reports a reduced-fidelity
-run on stderr and in `evidence.json.storage_fidelity`. Conditional writes are
-limited to the disk's `PartBytes`. Application policies and `MaxObjectBytes` stay
-unchanged, so a policy requiring larger conditional writes can still refuse
-startup. This opt-in does not prove that policy. It is a rehearsal input and is
-not accepted as production configuration. Once the image is certified, the same
-binding preserves multipart conditions without a cap.
+`single_request_conditions: true` and records those disks and their exact caps in
+the deploy-owned runtime descriptor's typed `rehearsal` block.
+Attachment policies above `PartBytes` pass startup capability validation.
+Application policy maxima and `MaxObjectBytes` remain unchanged. Actual
+conditional creates and replacements require a declared size at or below
+`PartBytes`; larger or unknown-size writes fail before storage I/O with
+`storage.RehearsalLimitExceeded` (`storage_rehearsal_limit_exceeded`). Attachments
+retain that typed error and its message naming reduced-fidelity rehearsal.
+Unconditional writes retain their normal limits.
+
+The application reads this block through `deployment.LoadRehearsal` from
+`FOUNDRY_DEPLOY_RUNTIME_FILE` only when the process carries a nonempty
+`FOUNDRY_REHEARSAL_RUN_ID`. Without that identity, assembly never reads the
+descriptor, even if its path is empty, missing, unreadable, or malformed. A descriptor containing the block must be a regular,
+root-owned file with no group/world write permission; invalid ownership or shape
+returns `fault.Invalid`. Its run identity must exactly match the process's
+`FOUNDRY_REHEARSAL_RUN_ID`. An absent descriptor, absent block, or mismatched
+identity retains normal production capabilities and strict startup limits.
+With an identity but no matching grant, one redacted JSON notice per load reports
+`foundry_rehearsal_storage_no_grant`; it includes no path, run ID, or file contents.
+An unset/empty descriptor path or nonexistent descriptor counts as missing;
+other read failures and malformed data refuse while the identity is present.
+Without an identity, grant loading imposes no descriptor or schema requirement.
+With an identity, valid schema-1 rollback descriptors and schema-2 descriptors
+without the block preserve strict capabilities; malformed descriptor shapes refuse.
+A present block must belong to a valid schema-2 descriptor; malformed blocks,
+including explicit `null`, refuse startup with `fault.Invalid`. Feature consumers
+that explicitly call `deployment.LoadBindings` retain its strict binding contract.
+The validated descriptor supplies an immutable, per-disk grant to storage and
+attachment assembly; a run-ID environment variable alone grants nothing.
+
+No application configuration key enables this mode. The retired
+`cloud.conditional_write_mode` key is rejected, even with a run identity.
+The deploy tool generates the block only from its private disposable-host context
+after verifying the matching acceptance profile. Production profiles, archives,
+and generic configuration changes cannot issue it. Rehearsal application units
+and console commands receive the matching identity and descriptor.
+
+The application emits one redacted JSON startup notice per affected disk per
+process. It lists the runtime cap, `MaxObjectBytes`, and declared attachment
+`MaxStoredBytes` values above the cap. Refusals emit disk-only JSON counters;
+`Disk.RehearsalRefusals()` and the optional
+`foundry_storage_rehearsal_refusals_total` metric expose the process count.
+No object keys, upload names, contents, or credentials appear in these records.
+Rehearsal collects the public fields into
+`evidence.json.storage_fidelity.reduced_disks` and each observation's report.
+`runtime_refusals_observed` counts refusal events in the bounded journal window
+(last 4096 records per unit); `policy_observation: "pending"` means the startup
+notice has not been observed. Process counters reset on restart.
+
+This opt-in does not certify large conditional writes. Once the image is
+certified, the same binding preserves multipart conditions without a cap.
+Production R2 capabilities and strict S3 listing checks are unchanged.
 
 `configuration` supplies literal application configuration values
 through the production bootstrap interface. Use rehearsal-only values; host file

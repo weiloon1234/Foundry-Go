@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/config"
+	"github.com/weiloon1234/Foundry-Go/deployment"
 	"github.com/weiloon1234/Foundry-Go/diagnostics"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -80,6 +81,13 @@ func New(settings Settings, opts ...Option) *Builder {
 			break
 		}
 		b.state.err = option(&b.state.options)
+	}
+	if b.state.err == nil {
+		grant, _, err := deployment.LoadRehearsal()
+		b.state.err = err
+		if err == nil {
+			b.state.options.infrastructure = append(b.state.options.infrastructure, infrastructure.WithRehearsal(grant))
+		}
 	}
 	return b
 }
@@ -351,6 +359,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	}
 	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, stickyReadsConfigured(s.Services.Database), routes, spas, fallbacks, middleware, observers, collector, captureOption)
 	registerWebhookCapture(builder, s.Features.WebhookCapture, captureRecorder)
+	registerRehearsalStorage(builder, s)
 	registerMetricsCollectors(builder, recorder, channels, s.Realtime.Enabled)
 	if err := registerTelemetry(ctx, builder, s.Features.Telemetry, collector, readiness); err != nil {
 		return nil, err

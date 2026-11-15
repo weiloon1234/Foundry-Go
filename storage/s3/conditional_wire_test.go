@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/weiloon1234/Foundry-Go/internal/deployrehearsal"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -386,5 +387,26 @@ func TestLargeConditionalMultipartStreamsDefaultParts(t *testing.T) {
 	defer peer.mu.Unlock()
 	if peer.invalid || len(peer.uploads) != 0 {
 		t.Fatal("invalid default-part transfer or retained staging")
+	}
+}
+
+func TestCompatibleRehearsalGrantRefusesBeforeIO(t *testing.T) {
+	_, b, _, _ := conditionalWireProfile(t, Compatible)
+	b.config.Compatible.SingleRequestConditions = true
+	b.config = b.config.WithRehearsal("uploads", deployrehearsal.New(map[storage.DiskID]int64{"uploads": b.config.PartBytes}))
+	if err := b.config.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	key, _ := storage.ParseKey("restricted")
+	for _, condition := range []storage.WriteCondition{storage.IfAbsent(), conditionFor(t, `"old"`)} {
+		source := &conditionalCountReader{}
+		_, err := b.Put(t.Context(), key, source, conditionalOptions(b.config.PartBytes+1, 'a', condition))
+		if !errors.Is(err, storage.RehearsalLimitExceeded) || source.read != 0 {
+			t.Fatal("rehearsal condition reached source", err)
+		}
+	}
+	b.config.Provider = R2
+	if err := b.config.Validate(); !errors.Is(err, storage.Invalid) {
+		t.Fatal("R2 accepted marker", err)
 	}
 }

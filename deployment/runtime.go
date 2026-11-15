@@ -107,20 +107,28 @@ func detect(executable func() (string, error)) (Runtime, bool, error) {
 	if err != nil {
 		return Runtime{}, false, safeerror.WrapFault(fault.Internal, "cannot read deployment runtime descriptor", err)
 	}
-	var wire descriptor
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if len(data) > maxDescriptorBytes || decoder.Decode(&wire) != nil || decoder.Decode(new(json.RawMessage)) != io.EOF {
-		return Runtime{}, false, safeerror.NewFault(fault.Invalid, "invalid deployment runtime descriptor")
-	}
-	if wire.Schema != 1 || !instanceName.MatchString(wire.Instance) || wire.User != wire.Instance || wire.User == "root" || !filepath.IsAbs(wire.EnvFile) || !filepath.IsAbs(wire.WorkDir) {
-		return Runtime{}, false, safeerror.NewFault(fault.Invalid, "invalid deployment runtime descriptor fields")
+	wire, err := decodeLegacyDescriptor(data)
+	if err != nil {
+		return Runtime{}, false, err
 	}
 	return Runtime{
 		Release: release, Instance: wire.Instance, User: wire.User,
 		ConfigFile: filepath.Join(release, "config/deploy.toml"), EnvFile: wire.EnvFile,
 		WorkDir: wire.WorkDir, PublicDir: filepath.Join(release, "public"),
 	}, true, nil
+}
+
+func decodeLegacyDescriptor(data []byte) (descriptor, error) {
+	var wire descriptor
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if len(data) > maxDescriptorBytes || decoder.Decode(&wire) != nil || decoder.Decode(new(json.RawMessage)) != io.EOF {
+		return descriptor{}, safeerror.NewFault(fault.Invalid, "invalid deployment runtime descriptor")
+	}
+	if wire.Schema != 1 || !instanceName.MatchString(wire.Instance) || wire.User != wire.Instance || wire.User == "root" || !filepath.IsAbs(wire.EnvFile) || !filepath.IsAbs(wire.WorkDir) {
+		return descriptor{}, safeerror.NewFault(fault.Invalid, "invalid deployment runtime descriptor fields")
+	}
+	return wire, nil
 }
 
 type process struct {

@@ -154,6 +154,7 @@ func (p *Plan) disk(name storage.DiskID, settings DiskSettings) {
 		// keeps explicit R2 validation intact until the provider is resolved at Build.
 		placeholder := credentials.ProviderFunc(func(context.Context) (credentials.Value, error) { return credentials.Value{}, nil })
 		config, _ := settings.cloudConfig(placeholder)
+		config = config.WithRehearsal(name, p.options.rehearsal)
 		if settings.Cloud.Credentials == "" {
 			config.Credentials = nil
 			p.providers = append(p.providers, s3.Module(owner, key, config))

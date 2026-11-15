@@ -71,6 +71,9 @@ class S3CertificationTests(unittest.TestCase):
                     mapped = settings["app_storage"]["disks"]
                     self.assertTrue(mapped["uploads"]["cloud"]["compatible"]["single_request_conditions"])
                     self.assertEqual(mapped["small"]["cloud"]["compatible"], disks["small"]["cloud"]["compatible"])
+                    self.assertNotIn("conditional_write_mode", mapped["uploads"]["cloud"])
+                    self.assertNotIn("conditional_write_mode", mapped["small"]["cloud"])
+                    self.assertEqual(fidelity["reduced_disks"][0]["runtime_cap_bytes"], 8 << 20)
                     self.assertEqual(fidelity["status"], "reduced")
                     self.assertEqual(fidelity["conditional_writes_capped_at_part_bytes"], ["uploads"])
                     if driver == "s3_compatible":

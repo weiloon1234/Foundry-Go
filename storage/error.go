@@ -11,16 +11,17 @@ import (
 type Code string
 
 const (
-	NotFound            Code = "storage_not_found"
-	Forbidden           Code = "storage_forbidden"
-	Unsupported         Code = "storage_unsupported"
-	PreconditionFailed  Code = "storage_precondition_failed"
-	RangeNotSatisfiable Code = "storage_range_not_satisfiable"
-	LimitExceeded       Code = "storage_limit_exceeded"
-	Invalid             Code = "storage_invalid"
-	Unavailable         Code = "storage_unavailable"
-	IntegrityFailed     Code = "storage_integrity_failed"
-	Closed              Code = "storage_closed"
+	NotFound               Code = "storage_not_found"
+	Forbidden              Code = "storage_forbidden"
+	RehearsalLimitExceeded Code = "storage_rehearsal_limit_exceeded"
+	Unsupported            Code = "storage_unsupported"
+	PreconditionFailed     Code = "storage_precondition_failed"
+	RangeNotSatisfiable    Code = "storage_range_not_satisfiable"
+	LimitExceeded          Code = "storage_limit_exceeded"
+	Invalid                Code = "storage_invalid"
+	Unavailable            Code = "storage_unavailable"
+	IntegrityFailed        Code = "storage_integrity_failed"
+	Closed                 Code = "storage_closed"
 )
 
 // Error returns the classification string.
@@ -81,7 +82,12 @@ func Failure(code Code, op Operation, outcome Outcome, cause error) *Error {
 }
 
 // Error returns the classification and operation without formatting the cause.
-func (e *Error) Error() string { return fmt.Sprintf("%s: %s", e.code, e.operation) }
+func (e *Error) Error() string {
+	if e.code == RehearsalLimitExceeded {
+		return fmt.Sprintf("%s: %s: reduced-fidelity rehearsal conditional write exceeds runtime cap", e.code, e.operation)
+	}
+	return fmt.Sprintf("%s: %s", e.code, e.operation)
+}
 
 // Format writes the classification and operation without exposing the cause.
 func (e *Error) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(e.Error())) }

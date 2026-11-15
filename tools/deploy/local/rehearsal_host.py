@@ -106,9 +106,11 @@ def observe(context, *, stopped=False):
     else:
         from release import ready
         require(ready(host, entry, timeout=120), "readiness_failed", "Application did not pass production readiness.")
+    from rehearsal_storage import collect
+    storage_fidelity = collect(host, units)
     from listeners import observe_sockets
     sockets = observe_sockets(host)
-    return {"ok": True, "ready": not stopped, "units": dict(zip(unit_selection_names(units), units.values())), "report": collect_report(host),
+    return {"ok": True, "ready": not stopped, "units": dict(zip(unit_selection_names(units), units.values())), "report": {**collect_report(host), "storage_fidelity": storage_fidelity}, "storage_fidelity": storage_fidelity,
             "udp_sockets": [{"address": row.socket.address, "port": row.socket.port}
                             for row in sockets if row.socket.transport == "udp"],
             "public_udp": "unavailable"}

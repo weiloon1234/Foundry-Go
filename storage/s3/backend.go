@@ -183,6 +183,7 @@ func (b *Backend) Capabilities() storage.Capabilities {
 		capabilities.ConditionalDelete, capabilities.Versions = declared.ConditionalDelete, declared.Versions
 		if declared.SingleRequestConditions {
 			capabilities.ConditionalWriteMaxBytes = b.config.PartBytes
+			capabilities = capabilities.WithRehearsal(b.config.rehearsalDisk, b.config.rehearsal)
 		}
 	}
 	return capabilities

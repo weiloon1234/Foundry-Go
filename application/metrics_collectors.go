@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/redis"
+	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
@@ -32,6 +33,9 @@ func registerMetricsCollectors(builder *foundation.Builder, recorder *observabil
 			return err
 		}
 		if err := registerDatabaseCollector(recorder, services.Databases); err != nil {
+			return err
+		}
+		if err := registerStorageCollector(recorder, services.Storage); err != nil {
 			return err
 		}
 		if err := registerRedisCollector(recorder, services.Redis); err != nil {
@@ -235,4 +239,22 @@ func jobsCollector(monitor *jobs.DepthMonitor) observability.Collector {
 			w.Gauge("foundry_jobs_queue_sampled_timestamp_seconds", "Unix time of the last successful queue depth sample.", float64(reading.SampledAt.Unix()), connection, queue)
 		}
 	}
+}
+
+func registerStorageCollector(recorder *observability.Recorder, registry *storage.Registry) error {
+	var disks []*storage.Disk
+	for _, name := range registry.Disks() {
+		disk, err := registry.Disk(name)
+		if err == nil && disk.Capabilities().ConditionalWriteMode == storage.RehearsalRuntime {
+			disks = append(disks, disk)
+		}
+	}
+	if len(disks) == 0 {
+		return nil
+	}
+	return recorder.RegisterCollector("foundry.storage.rehearsal", func(w *observability.MetricWriter) {
+		for _, disk := range disks {
+			w.Counter("foundry_storage_rehearsal_refusals_total", "Conditional writes refused by the reduced-fidelity rehearsal runtime cap.", float64(disk.RehearsalRefusals()), observability.Label{Name: "disk", Value: string(disk.ID())})
+		}
+	})
 }

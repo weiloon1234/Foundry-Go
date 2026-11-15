@@ -142,7 +142,7 @@ func New(dependencies Dependencies, config Config, collections ...Registration) 
 		if !capabilities.ConditionalCreate || !capabilities.ConditionalRead {
 			return nil, storageFailure(storage.Unsupported, storage.PutOperation, storage.Unchanged, nil)
 		}
-		if err := capabilities.ValidatePut(storage.PutOptions{Size: value.Set(collection.policy.MaxStoredBytes), Condition: storage.IfAbsent()}); err != nil {
+		if err := capabilities.ValidatePutPolicy(storage.PutOptions{Size: value.Set(collection.policy.MaxStoredBytes), Condition: storage.IfAbsent()}); err != nil {
 			return nil, err
 		}
 		if collection.policy.Image.IsSet() || len(collection.policy.Variants) > 0 {

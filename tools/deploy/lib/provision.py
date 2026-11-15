@@ -292,6 +292,9 @@ def _template(tools_dir, name, entry, *, postgres_unit=""):
     replacements["@VARIABLE@"] = nginx_variable(entry, "upgrade")
     for key, value in replacements.items():
         content = content.replace(key, value)
+    if "[Service]\n" in content:
+        from rehearsal_storage import unit_environment
+        content = content.replace("[Service]\n", "[Service]\n" + unit_environment(entry))
     return content
 
 
