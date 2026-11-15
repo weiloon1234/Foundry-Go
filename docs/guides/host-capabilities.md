@@ -893,6 +893,13 @@ Use `{"copy_number": "self"}` in typed arguments or
 environment references for the decimal ordinal; JSON field bindings receive an
 integer.
 
+Copies of one role run under the same service account on one host. A program with
+its own single-instance check, common in desktop and GUI applications, treats copy
+2 as a duplicate of copy 1. Add the program's multi-instance flag to the role's
+arguments. For OBS Studio this is `--multi`. Without it, a headless copy waits on
+the "already running" dialog before it logs anything or opens its listener, and
+readiness fails.
+
 Role-level network confinement and shared-directory grants apply to every copy.
 If regrowth restores a deliberately disabled copy, dependents that cannot remain
 in the running selection enter the reviewed stop scope. Their exit and network
