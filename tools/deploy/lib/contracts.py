@@ -223,6 +223,13 @@ def instance_name(project, profile):
     return project["slug"] + "-" + profile["environment"]
 
 
+def validate_profile_identity(profile, environment, siblings=()):
+    require(profile["environment"] == environment, "invalid_profile",
+            "Profile environment does not match its filename.")
+    require(all(other["instance_id"] != profile["instance_id"] for other in siblings),
+            "invalid_profile", "Environment profiles share a copied instance UUID; create each environment with make bootstrap.")
+
+
 def instance_paths(name):
     """Absolute layout-v2 resource paths; Host.Paths remaps filesystem fixtures."""
     require(isinstance(name, str) and len(name) <= 31 and SLUG_PATTERN.fullmatch(name) is not None,

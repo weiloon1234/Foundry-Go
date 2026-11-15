@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Offline deployment validation
+
+- Added: `ACTION=validate make deploy` checks deployment declarations locally,
+  with optional `ENVIRONMENT` selection and `FORMAT=json` diagnostics. It reuses
+  deployment validators, renders service templates with synthetic values, checks
+  rehearsal bindings, and reports the minimum required deploy-tool generation
+  without SSH, Docker, downloads, private settings, or host state.
+
 ### Numbered copies
 
 - Fixed: numbered listeners compose with PROXY and managed DNS. Every copy gets

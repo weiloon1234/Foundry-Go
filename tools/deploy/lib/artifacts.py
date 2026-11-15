@@ -484,6 +484,18 @@ def _remove_staging(path):
         shutil.rmtree(path)
 
 
+def release_sources(topology, platform):
+    """Validate release-carried source declarations without acquiring their bytes."""
+    from topology import ReleaseArtifactPlatform
+    sources = set()
+    for _, artifact in topology.artifacts:
+        pin = dict(artifact.platforms)[platform]
+        if isinstance(pin, ReleaseArtifactPlatform):
+            _safe_path(pin.source.path)
+            require(pin.source.path not in sources, "build_source", "Release artifacts must have distinct source files.")
+            sources.add(pin.source.path)
+
+
 def declared_release_files(topology, application_executables, payload_paths):
     """The shared schema-2 allowlist; never include an arbitrary deploy directory."""
     declared = {"artisan": "application", "config/deploy.toml": "config"}

@@ -22,9 +22,13 @@ from topology import ExecutableRole, ReleaseArtifactPlatform, parse_profile, par
 
 
 def public_env(request, destination):
+    Path(destination).write_text(render_public_env(request["profile"]), encoding="utf-8")
+
+
+def render_public_env(profile):
     # The browser build's public-env guard remains the authoritative allowlist.
     lines = []
-    for key, value in request["profile"]["public_env"].items():
+    for key, value in profile["public_env"].items():
         if not re.fullmatch(r"VITE_[A-Z0-9_]+", key) or not isinstance(value, str):
             raise ValueError("invalid public build setting")
         if any(char in value for char in "\r\n\x00$"):
@@ -39,7 +43,7 @@ def public_env(request, destination):
         if quote is None:
             raise ValueError("public build value cannot be represented literally with dotenv quoting")
         lines.append(f"{key}={quote}{value}{quote}\n")
-    Path(destination).write_text("".join(lines), encoding="utf-8")
+    return "".join(lines)
 
 
 def public_command(args):
@@ -90,6 +94,7 @@ def prepare(request, work, stage):
         return request
     profile = parse_profile(request["profile"], topology)
     platform = "linux-" + profile.architecture
+    artifacts.release_sources(topology, platform)
     declarations = {}
     for role in topology.roles:
         if isinstance(role, ExecutableRole):
@@ -115,16 +120,13 @@ def prepare(request, work, stage):
         target.parent.mkdir(parents=True, exist_ok=True)
         with source_path.open("rb") as incoming, target.open("xb") as outgoing:
             shutil.copyfileobj(incoming, outgoing, artifacts.CHUNK)
-    carried, sources = {}, set()
+    carried = {}
     budget = artifacts.ExpansionBudget()
     for name, artifact in topology.artifacts:
         pin = dict(artifact.platforms)[platform]
         if not isinstance(pin, ReleaseArtifactPlatform):
             continue
         source = pin.source
-        artifacts._safe_path(source.path)
-        require(source.path not in sources, "build_source", "Release artifacts must have distinct source files.")
-        sources.add(source.path)
         source_path = check_path(work / source.path, "file")
         if source.build:
             require(not source_path.exists(), "build_source", "A built artifact output must not already exist.")
