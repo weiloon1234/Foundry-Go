@@ -259,7 +259,7 @@ func (p *Plan) validate() error {
 	}
 	for name := range p.options.rehearsal.Disks() {
 		disk, ok := s.Storage.Disks[name]
-		if !ok || disk.Driver != CompatibleDisk {
+		if ok && disk.Driver != CompatibleDisk {
 			return storage.Failure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
 		}
 	}

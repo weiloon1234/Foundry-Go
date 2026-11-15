@@ -1,6 +1,8 @@
 package application
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,14 +13,68 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
+	"github.com/weiloon1234/Foundry-Go/database"
+	dbcommand "github.com/weiloon1234/Foundry-Go/database/command"
+	"github.com/weiloon1234/Foundry-Go/database/seed"
 	"github.com/weiloon1234/Foundry-Go/deployment"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/internal/deployrehearsal"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/storage"
+	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
+
+func TestRehearsalReducedDatabaseRuntime(t *testing.T) {
+	for _, operation := range []string{"list", "run"} {
+		t.Run(operation, func(t *testing.T) {
+			t.Setenv(deployment.RehearsalRunEnvironment, "")
+			s := DefaultSettings()
+			s.HTTP.Enabled = false
+			connection := infrastructure.DefaultConnectionSettings()
+			connection.Primary.Host, connection.Primary.Database, connection.Primary.User = "unused.example.test", "fixture", "fixture"
+			if operation == "run" {
+				connection.Primary = infrastructure.PostgreSQLSettingsFromConfig(pgtest.Config(t))
+			}
+			s.Services.Database.Connections = infrastructure.DatabaseConnections{"default": connection}
+			builder := New(s, WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))))
+			// Match the reduced CLI profile while injecting the sealed grant at the
+			// same boundary as the full-runtime test; deployment tests own loading.
+			builder.state.options.infrastructure = append(builder.state.options.infrastructure, infrastructure.WithRehearsal(deployrehearsal.New(map[storage.DiskID]int64{"profile-media": 8 << 20})))
+			app, err := builder.Build(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := app.Shutdown(context.Background()); err != nil {
+					t.Error(err)
+				}
+			})
+			if len(app.Resources().Storage.Disks()) != 0 {
+				t.Fatal("grant configured storage in a database-only runtime")
+			}
+			var result int
+			seeders, err := seed.New(seed.Definition{ID: "app.rehearsal", Run: func(ctx context.Context, tx *database.Tx) error {
+				return database.ScanOne(ctx, tx, "SELECT 1", nil, &result)
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			command, err := dbcommand.Parse([]string{"seed", operation}, io.Discard)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			if err := app.RunDatabaseCommand(t.Context(), command, DatabaseCommandResources{Seeders: seeders}, &output); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(output.String(), "app.rehearsal") || operation == "run" && result != 1 {
+				t.Fatal("reduced runtime did not execute the seed command", output.String())
+			}
+		})
+	}
+}
 
 func TestRehearsalApplicationStartupNoticeAndRuntimeRefusal(t *testing.T) {
 	t.Setenv(deployment.RehearsalRunEnvironment, "")
@@ -34,7 +90,7 @@ func TestRehearsalApplicationStartupNoticeAndRuntimeRefusal(t *testing.T) {
 	builder := New(s, WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))))
 	// Inject the sealed grant at the assembly boundary; descriptor ownership and
 	// matching are exercised through the deployment reader's separate regressions.
-	builder.state.options.infrastructure = append(builder.state.options.infrastructure, infrastructure.WithRehearsal(deployrehearsal.New(map[storage.DiskID]int64{"default": disk.Cloud.PartBytes})))
+	builder.state.options.infrastructure = append(builder.state.options.infrastructure, infrastructure.WithRehearsal(deployrehearsal.New(map[storage.DiskID]int64{"default": disk.Cloud.PartBytes, "absent": disk.Cloud.PartBytes})))
 	app, err := builder.Build(t.Context())
 	if err != nil {
 		t.Fatal(err)

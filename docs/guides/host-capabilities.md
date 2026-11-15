@@ -1590,6 +1590,12 @@ including explicit `null`, refuse startup with `fault.Invalid`. Feature consumer
 that explicitly call `deployment.LoadBindings` retain its strict binding contract.
 The validated descriptor supplies an immutable, per-disk grant to storage and
 attachment assembly; a run-ID environment variable alone grants nothing.
+Grants apply only to disks configured by the current runtime. Reduced database,
+jobs, or maintenance runtimes ignore grants for disks they do not configure.
+A configured granted disk must still use `s3_compatible`, with a cap equal to
+`PartBytes`, single-request conditions, and conditional create or replace support.
+The deploy tool validates granted disk names against the application's declared
+disks before rehearsal.
 
 No application configuration key enables this mode. The retired
 `cloud.conditional_write_mode` key is rejected, even with a run identity.
