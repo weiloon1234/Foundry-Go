@@ -10,8 +10,8 @@
   unlisted roles. Release/declaration transitions discard caches after all old
   roles stop; reboot also clears them. Reports and backup coverage explicitly
   mark them disposable, never backed up or restored.
-  Granted roles also use private user namespaces to block same-account procfs
-  traversal through another role's `root`, `cwd`, or file descriptors.
+  A root-only host parent and granted roles' private user namespaces block
+  same-account procfs bypasses through host helpers and other roles' views.
 - Added: `shared_directory_path` argv/environment references and typed
   `deployment.Bindings.SharedDirectory` bindings with path, access and byte limit.
   This capability requires deploy-tool generation 16 on client and host; the

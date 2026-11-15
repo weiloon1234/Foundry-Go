@@ -60,6 +60,31 @@ def _inode_limit(directory):
     return min(65536, directory.max_bytes // 4096)
 
 
+def _host_parent(host, instance, *, create=False):
+    from admission import protected_directory, protected_path
+    path = host.paths.p(shared_directory_root(instance))
+    if create:
+        protected_directory(host, path, 0o700)
+    else:
+        protected_path(host, path, "directory")
+        if not path.exists():
+            return path  # Cleanup also permits caches absent since reboot.
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        uid, gid = (0, 0) if host.paths.root == Path("/") else (os.geteuid(), os.getegid())
+        info = os.fstat(fd)
+        require((info.st_uid, info.st_gid) == (uid, gid),
+                "shared_directory_parent", "Shared directory host parent must belong to root.")
+        if create:
+            # Tighten parents created by earlier generation-16 tools as 0755.
+            os.fchmod(fd, 0o700)
+        require(stat.S_IMODE(os.fstat(fd).st_mode) == 0o700,
+                "shared_directory_parent", "Shared directory host parent must have mode 0700.")
+    finally:
+        os.close(fd)
+    return path
+
+
 def _verify_directory(path, directory, uid, gid):
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
@@ -84,7 +109,7 @@ def prepare(host, topology, instance, uid, gid):
     require(type(uid) is int and type(gid) is int and uid >= 0 and gid >= 0
             and (host.paths.root != Path("/") or uid > 0 and gid > 0),
             "service_account", "Shared directories require the instance account.")
-    protected_directory(host, host.paths.p(shared_directory_root(instance)))
+    _host_parent(host, instance, create=True)
     for name, directory in topology.shared_directories:
         path = check_path(host.paths.p(shared_directory_path(instance, name)), "directory")
         record = _mount(host, path)
@@ -121,7 +146,7 @@ def discard(host, topology, instance, uid, gid):
     closed. Interrupted cleanup is replayable against the empty underlying root.
     """
     from admission import protected_path
-    protected_path(host, host.paths.p(shared_directory_root(instance)), "directory")
+    _host_parent(host, instance)
     for name, _ in topology.shared_directories:
         path = check_path(host.paths.p(shared_directory_path(instance, name)), "directory")
         if not path.exists():
@@ -142,8 +167,7 @@ def report(host, topology, instance, uid, gid):
     for item, (name, directory) in zip(result, topology.shared_directories):
         from contracts import DeployError
         try:
-            from admission import protected_path
-            protected_path(host, host.paths.p(shared_directory_root(instance)), "directory")
+            _host_parent(host, instance)
             path = check_path(host.paths.p(item["path"]), "directory")
             _verify_mount(_mount(host, path), instance, name)
             capacity = _verify_directory(path, directory, uid, gid)

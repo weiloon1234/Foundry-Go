@@ -152,7 +152,7 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertEqual(directories["render-cache"].access("http"), "read-write")
         self.assertEqual(directories["render-cache"].access("relay"), "read-only")
         self.assertIsNone(directories["render-cache"].access("socket-provider"))
-        self.assertEqual(directories["probe-cache"].access("socket-provider"), "read-write")
+        self.assertFalse(any(directory.access("socket-provider") for directory in directories.values()))
         public = dict(topology.roles[0].common.bindings)["relay_public"]
         self.assertEqual((public.role, public.listener), ("relay", "control"))
         from topology import parse_profile

@@ -1145,7 +1145,8 @@ on supported hosts with 4 KiB, 16 KiB, or 64 KiB pages.
 
 The host path is `/run/foundry/services/<instance UUID>/shared/<name>`. Each
 directory is a separate tmpfs mount owned by the instance account with mode
-`0700` and `nodev,nosuid,noexec`. Its ancestors remain root-owned. `/run` matches
+`0700` and `nodev,nosuid,noexec`. The host-side `shared` parent is root-owned with
+mode `0700`; its ancestors remain root-owned. `/run` matches
 the existing per-instance socket and invocation ownership tree and gives the
 cache an explicit reboot lifetime.
 
@@ -1240,11 +1241,22 @@ obsolete files and handle `ENOSPC`. There is no timer that races applications to
 delete files, and no fallback to an unbounded ordinary directory.
 
 All roles share the instance account. Mode bits cannot distinguish a reader from
-a writer. Each workload gets a private empty view of the shared parent. Foundry
-binds only granted directories into that view and sets `ReadWritePaths` for writers
+a writer. The host parent `/run/foundry/services/<instance UUID>/shared` is a
+root-owned directory with mode `0700`, verified without following symlinks.
+Instance-account processes outside units cannot traverse it, including readiness
+probes and operator invocations. Traversing such a process's `/proc/<pid>/root`
+still encounters this root-only parent and fails with `EACCES`.
+
+Each workload gets a private empty `TemporaryFileSystem` view of the shared parent.
+Foundry binds only granted directories into that view and sets `ReadWritePaths` for writers
 or `ReadOnlyPaths` for readers. Readers also get a read-only bind mount. This
 policy applies to builtin app roles and custom roles under `ProtectSystem=strict`.
 Unlisted roles receive no directory binding or filesystem view of the cache.
+Systemd resolves bind sources against the host root and sets up these mounts as
+root before changing to the unit's `User=`. The private parent view remains
+searchable by the instance account; its mode is independent of the host parent.
+See systemd's [bind mount setup](https://github.com/systemd/systemd/blob/v259/src/core/namespace.c)
+and [namespace and credential ordering](https://github.com/systemd/systemd/blob/v259/src/core/exec-invoke.c).
 
 Every role with a shared-directory grant also runs with `PrivateUsers=yes`,
 including builtin writers and custom readers. Systemd creates a separate,
@@ -1266,9 +1278,8 @@ copied into a less privileged mount namespace. See the
 
 Roles still share one instance account for everything outside shared directories.
 This policy does not give each role separate account-owned state or IPC authority.
-A process deliberately launched outside the unit sandboxes still has the account's
-ordinary host-path permissions. The privileged `+` preparation helper runs outside
-the workload sandbox so it can create and verify the host-owned mounts.
+The privileged `+` preparation helper runs as host root outside the workload
+sandbox so it can create and verify the host parent and mounts.
 
 ### Lifetime, reports, and cleanup
 
@@ -1276,7 +1287,8 @@ Each admitted start uses the privileged preparation helper to create or verify
 the mount before the workload starts. Preparation serializes across the instance
 and checks the mount source, filesystem type, capacity, inode limit, owner, mode,
 and absence of symlinks. Existing files beneath an unmounted directory and foreign
-mounts cause refusal. The helper's
+mounts cause refusal. Preparation tightens an existing protected host parent to
+mode `0700`; reports and cleanup reject parent ownership or mode drift. The helper's
 [`+` systemd prefix](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html#ExecStart=)
 performs this work outside the workload's filesystem namespace.
 
@@ -1291,7 +1303,9 @@ Reports include `shared_directories` with `state: "disposable"`, `backed_up: fal
 `restored: false`, the configured limit, used bytes, and the observed mount status.
 An unverifiable mount produces `shared_directory_unverified`. Backup coverage
 records the same exclusion. Backups retain declarations but never cache files;
-recovery prepares fresh caches.
+recovery prepares fresh caches. Run reports as root to verify the mounts and
+measure used bytes. Unprivileged reports retain the disposable coverage but mark
+the inaccessible mounts unverified and omit used bytes.
 
 The deploy tool has no instance-removal action. During manual instance removal,
 stop and disable every role first and verify that all unit processes have exited.
