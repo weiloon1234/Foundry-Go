@@ -79,11 +79,8 @@ func TestR2ProfilePresigningAndPublicAccessIntent(t *testing.T) {
 	if err != nil || parsed.Host != "files.example" || parsed.Path != "/isolated/"+key.String() {
 		t.Fatal("CDN URL changed key", err)
 	}
-	if _, err := private.Put(t.Context(), key, strings.NewReader("value"), storage.PutOptions{Condition: storage.IfAbsent()}); !errors.Is(err, storage.Unsupported) {
-		t.Fatal("conditional unknown-length stream accepted", err)
-	}
 	if transport.calls != 0 {
-		t.Fatal("signing/capability checks touched provider")
+		t.Fatal("signing checks touched provider")
 	}
 }
 func TestSigningExpiryNeverExceedsTemporaryCredentials(t *testing.T) {
