@@ -1,0 +1,84 @@
+{
+  "schema": 2,
+  "roles": [
+    {
+      "name": "http",
+      "kind": "builtin",
+      "requires": [
+        "relay"
+      ],
+      "bindings": {
+        "rehearsal": {
+          "copies": {
+            "role": "relay",
+            "listener": "control",
+            "scheme": "http",
+            "secret": "copy-token"
+          }
+        }
+      }
+    },
+    {
+      "name": "relay",
+      "kind": "executable",
+      "executable": {
+        "application": "rehearsal-relay"
+      },
+      "arguments": [
+        {
+          "literal": "feature:relay"
+        },
+        {
+          "listener_address": "control"
+        },
+        {
+          "listener_port": "control"
+        }
+      ],
+      "secret_files": {
+        "TOKEN_FILE": {
+          "secret": "copy-token",
+          "scope": "copy"
+        }
+      },
+      "listeners": {
+        "control": {
+          "transport": "tcp",
+          "bind": "loopback"
+        }
+      },
+      "readiness": {
+        "kind": "http",
+        "listener": "control",
+        "path": "/ready",
+        "status": 200,
+        "body": "feature-relay-ready"
+      },
+      "restart": {
+        "policy": "on-failure",
+        "delay_seconds": 5,
+        "burst": 5
+      },
+      "limits": {
+        "memory_bytes": 134217728,
+        "cpu_percent": 100,
+        "tasks": 32
+      },
+      "maintenance": "stop",
+      "state": {
+        "kind": "disposable"
+      }
+    }
+  ],
+  "secrets": {
+    "copy-token": {
+      "scope": "copy",
+      "prompt": "Rehearsal copy token"
+    }
+  },
+  "application_executables": {
+    "rehearsal-relay": {
+      "go_package": "./cmd/artisan"
+    }
+  }
+}

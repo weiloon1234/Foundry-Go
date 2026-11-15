@@ -79,6 +79,13 @@ func featureBindingProbe() (func(context.Context) error, error) {
 	if !present {
 		return func(context.Context) error { return nil }, nil
 	}
+	if _, err := bindings.Copies("rehearsal"); err == nil {
+		return func(ctx context.Context) error {
+			return featureCopies(ctx, []string{"rehearsal", "2", "present"})
+		}, nil
+	} else if !errors.Is(err, fault.Missing) {
+		return nil, err
+	}
 	// Console calls retain the HTTP bindings but hold no shared-directory grant.
 	// Only processes with a grant run the writer probe.
 	if directory, err := bindings.SharedDirectory("render-cache"); err == nil {

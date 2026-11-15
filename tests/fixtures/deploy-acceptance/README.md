@@ -35,6 +35,45 @@ the container scenarios use the app's health endpoint, not portal navigation.
 See [the deploy test instructions](../../../tools/deploy/README.md) for the
 container cells and recovery flag.
 
+## Uploads and feature-copy rehearsal
+
+`deploy/rehearsal` is a separate `acceptance-run` declaration overlay.
+The builder installs it only in the isolated fixture copy, preserving the ordinary
+acceptance topology and all existing container phases. It declares HTTP plus two
+copies of the existing `feature:relay` command, delivered as an application
+executable. HTTP readiness checks both copy endpoints and their read-only secret
+files through the existing copies probe. Each copy receives its own generated
+secret. No secret values are stored in the checked-in bindings template.
+
+The upload declaration includes the templated media route. Proxy, request,
+attachment and small pools each use a 16 MiB sparse image. Staging uses 1,152 MiB
+to leave filesystem headroom above both roles' 512 MiB staging budgets, matching
+the fixture's existing attachment policy. Images are sparse; their declared sizes
+are not preallocated physical storage. The private bindings opt the R2 attachment
+disk into the existing reduced-fidelity single-request cap.
+
+On a native arm64 Docker engine, run from the framework repository root:
+
+```sh
+info=$(mktemp -d)
+python3 tools/deploy/tests/build_acceptance.py \
+  --architecture arm64 --environment acceptance-run \
+  --archive-file "$info/archive.txt" --app-root-file "$info/app-root.txt"
+app_root=$(cat "$info/app-root.txt")
+python3 tools/deploy/local/cli.py --app-root "$app_root" rehearse \
+  --environment acceptance-run --archive "$(cat "$info/archive.txt")" \
+  --bindings "$app_root/.deploy/rehearsal-bindings.json" \
+  --ubuntu 24.04 --output "$info/evidence"
+```
+
+The build is required: the ordinary acceptance archive has a different profile
+and topology. The builder retains its isolated source and private bindings for
+inspection. Rehearsal evidence should show `upload-volumes` before
+`bootstrap-plan`, a public `release_plan` in the activation phase, both relay
+copies ready, and successful stop/restart and upload-volume cleanup. This run uses
+`deploy rehearse` directly, not `run_acceptance.sh --feature-preview`, which owns
+the separate feature acceptance scenarios.
+
 The test controller calls the installed release's CLI through `release.app`:
 
 ```sh

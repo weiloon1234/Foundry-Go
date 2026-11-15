@@ -31,6 +31,7 @@ sys.path.insert(0, str(TOOLS_ROOT / "local"))
 from edge import edge_findings
 import journal
 import maintenance
+import release_review
 
 from contracts import (BACKUP_POLICY, DeployError, PREFIX, RENEWAL_WARNING, SCHEMA, PROFILE_SCHEMA, LAYOUT_VERSION, VERSION_PATTERN, atomic_json, check_path, digest, identity, instance_name, instance_paths, now, parse_json, read_json, slug,
                        validate_profile, validate_project)
@@ -163,6 +164,11 @@ def collect_service_secrets(requirements, configuration=None):
             raise LocalError("A required service secret is empty: " + key)
         changes[key] = value
     return changes
+
+
+def release_secret_configuration(requirements):
+    supplied = secret_input("config", "Service secret configuration JSON", structured=True, required=False)
+    return collect_service_secrets(requirements, supplied)
 
 
 def operation_uuid(value):
@@ -1290,17 +1296,12 @@ def deploy(project, profile, settings):
                 destination = remote + "/app.tar.gz"
                 ssh.upload(archive, destination)
                 activation = {**request, "archive": destination, "archive_sha256": digest(archive)}
-                if profile.get("schema") == 3 or "deployment_selection" in status.get("instance", {}):
+                if release_review.required(profile, status):
                     activation["operation_id"] = operation_uuid(os.environ.get("OPERATION") or str(uuid.uuid4()))
-                    plan = ssh.request("release-plan", activation)
-                    if not plan["ok"]:
-                        supplied = secret_input("config", "Service secret configuration JSON", structured=True, required=False)
-                        configuration = collect_service_secrets(plan["required_service_secrets"], supplied)
-                        plan = ssh.request("release-plan", {**activation, "secrets": {"configuration": configuration}})
+                    plan = release_review.review(ssh.request, activation, release_secret_configuration)
                     display(plan)
                     if not plan["ok"]:
                         raise LocalError("Release review is incomplete")
-                    activation["plan_token"] = plan["plan_token"]
                 confirm("Activate this completed release, including its pending forward migrations")
                 result = ssh.request("activate", {**activation, "confirm": True})
                 display(result)

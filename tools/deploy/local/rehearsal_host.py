@@ -8,9 +8,12 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import unit_selection_names, unit_selection_identities
-from contracts import DeployError, check_path, digest, read_json, require
+from contracts import DeployError, check_path, digest, identity, read_json, require
 from host import Host
 from containers import run
+import containers
+import uploads
+import release_review
 
 WORK = Path("/var/lib/foundry-rehearsal")
 TOOLS = Path(__file__).resolve().parents[1]
@@ -42,10 +45,50 @@ def action(name, context, *, bootstrap=False, **extra):
         value = json.loads(result.stdout)
     except ValueError:
         raise DeployError("rehearsal_action", "Production action returned no valid response.") from None
-    if result.returncode or "error" in value or value.get("ok") is False:
+    if result.returncode or "error" in value or (value.get("ok") is False and name != "release-plan"):
         code = value.get("error", {}).get("code", "rehearsal_action")
         raise DeployError(code, "Production rehearsal action refused; private output withheld.")
     return value
+
+
+class MissingServiceSecrets(DeployError):
+    def __init__(self, names):
+        self.names = sorted(names)
+        super().__init__("rehearsal_service_secrets_missing", "Supply rehearsal binding configuration: " + ", ".join(self.names))
+
+
+def error_result(error):
+    result = {"ok": False, "error": error.code if isinstance(error, DeployError) else "rehearsal_phase_failed"}
+    if isinstance(error, MissingServiceSecrets):
+        result["missing_service_secrets"] = error.names
+    return result
+
+
+def release_secret_configuration(requirements):
+    supplied = read_json(WORK / "secrets.json").get("configuration", {})
+    missing = [row["key"] for row in requirements if not row["present"] and not supplied.get(row["key"])]
+    if missing:
+        raise MissingServiceSecrets(missing)
+    # Bindings also contain application settings, which release review does not
+    # accept. Only the plan's missing service/copy keys belong in this request.
+    return {row["key"]: supplied[row["key"]] for row in requirements if not row["present"]}
+
+
+def activate(context):
+    evidence = {"operation_id": context["activation_operation_id"]}
+    try:
+        archive = WORK / "app.tar.gz"
+        require(digest(archive) == context["archive_sha256"], "rehearsal_archive", "Copied archive digest differs.")
+        activation = {"archive": str(archive), "archive_sha256": context["archive_sha256"], **evidence}
+        status = action("status", context)
+        if release_review.required(context["profile"], status):
+            plan = release_review.review(lambda name, arguments: action(name, context, **arguments),
+                                         activation, release_secret_configuration)
+            evidence["release_plan"] = plan
+            require(plan["ok"], "rehearsal_release_review", "Rehearsal release review is incomplete.")
+        return {**action("activate", context, **activation), **evidence}
+    except Exception as error:
+        return {**evidence, **error_result(error)}
 
 
 def prepare(context):
@@ -119,18 +162,36 @@ def observe(context, *, stopped=False):
 def phase(name, context):
     if name == "prepare":
         return prepare(context)
+    if name in ("upload-volumes", "release-upload-volumes"):
+        from topology import instance_units, validate_topology
+        entry = {**identity(context["project"], context["profile"]),
+                 "profile": context["profile"], "topology": validate_topology(context["topology"])}
+        workdir = WORK / "upload-volumes"
+        if name == "release-upload-volumes":
+            if workdir.exists():
+                # Failed activation can leave services holding files open.
+                run(["systemctl", "stop", "nginx.service", *instance_units(entry).values()], check=False)
+            containers.release_upload_volumes(workdir)
+            return {"ok": True}
+        value = context["profile"]["uploads"]
+        paths = uploads.volume_paths(entry)
+        containers.provision_upload_volumes(paths, value["pools"], workdir)
+        return {"ok": True, "upload_storage": {"status": "reduced", "backing": "loop-mounted sparse ext4",
+                "pools": {name: {"mount": str(path), "image_bytes": value["pools"][name]}
+                          for name, path in paths.items()},
+                "real_block_device_certified": False, "quota_enforcement_certified": False}}
     if name == "bootstrap-plan":
         result = action(name, context, bootstrap=True, topology=context["topology"])
         require(result.get("host_id") == context["profile"]["host"]["host_id"], "rehearsal_identity", "Bootstrap changed host identity.")
         (WORK / "plan.json").write_text(json.dumps(result))
         return {"ok": True, "plan": result}
     if name == "bootstrap-apply":
+        plan = read_json(WORK / "plan.json")
+        release_secret_configuration(plan.get("observations", {}).get("required_service_secrets", []))
         return action(name, context, bootstrap=True, topology=context["topology"],
-                      plan_token=read_json(WORK / "plan.json")["plan_token"], secrets=read_json(WORK / "secrets.json"))
+                      plan_token=plan["plan_token"], secrets=read_json(WORK / "secrets.json"))
     if name == "activate":
-        archive = WORK / "app.tar.gz"
-        require(digest(archive) == context["archive_sha256"], "rehearsal_archive", "Copied archive digest differs.")
-        return action(name, context, archive=str(archive), archive_sha256=context["archive_sha256"])
+        return activate(context)
     if name in ("restart", "stop"):
         return action(name, context)
     if name in ("observe", "stopped"):
@@ -144,6 +205,6 @@ if __name__ == "__main__":
         result = phase(sys.argv[1], guard())
     except Exception as error:
         # Even application exception formatting can disclose private values.
-        result = {"ok": False, "error": error.code if isinstance(error, DeployError) else "rehearsal_phase_failed"}
+        result = error_result(error)
     print(json.dumps(result))
     sys.exit(0 if result.get("ok", True) else 1)

@@ -12,6 +12,7 @@ import sys
 import tarfile
 import tempfile
 import tomllib
+import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import rehearsal_storage
@@ -268,17 +269,20 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
     private = directory / "private"
     private.mkdir(mode=0o700)
     evidence = {"run_id": resources.token, "status": "failed", "archive_sha256": digest(archive), "environment": environment,
+        "activation_operation_id": str(uuid.uuid4()),
         "profile_sha256": canonical_digest(profile), "topology_sha256": topology.sha256, "ubuntu": ubuntu,
         "architecture": profile["architecture"], "cpus": cpus, "memory_gib": memory_gib, "network": plan,
         "storage_fidelity": fidelity,
         "phases": [], "external_checks": {"production_dns_acme": "unavailable", "cloud_firewalls": "unavailable",
         "global_dns_cutover": "manual", "public_udp": "unavailable"}}
     platform, failed = "linux/" + profile["architecture"], True
+    upload_cleanup = False
     def terminated(_signal, _frame):
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         raise KeyboardInterrupt
 
     previous_sigterm = signal.getsignal(signal.SIGTERM)
+    previous_sigint = signal.getsignal(signal.SIGINT)
     try:
         signal.signal(signal.SIGTERM, terminated)
         from upgrades import tool_bundle
@@ -337,6 +341,7 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
         boot_host(host, certs)
         run(["docker", "exec", host, "mkdir", "-m", "700", WORK])
         context = {"run_id": resources.token, "project": project, "profile": profile, "topology": topology.projection(),
+                   "activation_operation_id": evidence["activation_operation_id"],
                    "archive_sha256": evidence["archive_sha256"], "storage_buckets": buckets,
                    "storage_runtime_caps": [{"disk": row["disk"], "runtime_cap_bytes": row["runtime_cap_bytes"]}
                                             for row in fidelity["reduced_disks"]]}
@@ -346,7 +351,8 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
             path.chmod(0o600)
             run(["docker", "cp", path, host + ":" + WORK + "/" + name])
         run(["docker", "cp", archive, host + ":" + WORK + "/app.tar.gz"], timeout=300)
-        for name in ("prepare", "bootstrap-plan", "bootstrap-apply", "isolate", "closed-probes", "activate", "observe",
+        for name in ("prepare", *(("upload-volumes",) if "uploads" in profile else ()),
+                     "bootstrap-plan", "bootstrap-apply", "isolate", "closed-probes", "activate", "observe",
                      "open-probes", "stop", "stopped", "stopped-probes", "restart", "observe", "restarted-probes", "stop"):
             if name == "isolate":
                 run(["docker", "network", "disconnect", provision, host])
@@ -358,13 +364,22 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
                                        name in ("open-probes", "restarted-probes"))
                 result = {"ok": all(p["status"] != "failed" for p in probes), "probes": probes}
             else:
+                if name == "upload-volumes":
+                    upload_cleanup = True
                 result = phase(host, name, resources.token)
+            if name == "upload-volumes" and "upload_storage" in result:
+                fidelity["status"] = "reduced"
+                fidelity["upload_volumes"] = result["upload_storage"]
+                print("Reduced-fidelity upload storage: loop-mounted sparse ext4 sized to declared quotas; "
+                      "no real block-device or quota-enforcement certification.", file=sys.stderr)
             if name == "observe" and "storage_fidelity" in result:
                 observed = {row["disk"]: row for row in result["storage_fidelity"]}
                 for row in fidelity["reduced_disks"]:
                     if row["disk"] in observed:
                         row.update(observed[row["disk"]])
             evidence["phases"].append({"phase": name, **result})
+            if result.get("error") == "rehearsal_service_secrets_missing":
+                print(result["error"] + ": " + ", ".join(result["missing_service_secrets"]), file=sys.stderr)
             (directory / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
             require(result.get("ok", True), "rehearsal_phase", "Rehearsal phase refused: " + name + "; see evidence.json.")
         failed = False
@@ -376,11 +391,29 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
         try:
             # A repeated termination must not interrupt owned-resource cleanup.
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
             if failed and keep_failed:
                 evidence["retained"] = True
                 evidence["retained_resources"] = [name for kind, name in resources.items]
+                if upload_cleanup:
+                    evidence["upload_volumes_retained"] = True
+                    print("Upload stand-in mounts and images retained with the failed host for debugging "
+                          "(partial provisioning failures roll back their mounts).", file=sys.stderr)
             else:
-                cleanup = resources.cleanup()
+                released = True
+                if upload_cleanup:
+                    try:
+                        result = phase(host, "release-upload-volumes", resources.token)
+                    except Exception:
+                        result = {"ok": False, "error": "upload_standin_cleanup"}
+                    evidence["phases"].append({"phase": "release-upload-volumes", **result})
+                    released = result.get("ok") is True
+                # Keep the host and its dependencies if unmounting failed. Never
+                # destroy the only place from which its loop devices can be released.
+                cleanup = resources.cleanup() if released else [name for kind, name in resources.items]
+                if not released:
+                    print("Upload volume cleanup failed; containers retained. Retry release-upload-volumes "
+                          "inside the host before removing Docker resources.", file=sys.stderr)
                 evidence["cleanup_failures"] = cleanup
                 evidence["retained_resources"] = cleanup
                 if not cleanup:
@@ -392,5 +425,6 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
             print("Retained resources: " + (", ".join(evidence["retained_resources"]) or "none"), file=sys.stderr)
         finally:
             signal.signal(signal.SIGTERM, previous_sigterm)
+            signal.signal(signal.SIGINT, previous_sigint)
     require(evidence["status"] == "passed", "rehearsal_cleanup", "Rehearsal cleanup is incomplete; inspect resources.json.")
     return directory

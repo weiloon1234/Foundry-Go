@@ -1,5 +1,8 @@
 """Shared disposable systemd container setup for rehearsal and acceptance."""
 import argparse
+from contextlib import contextmanager
+import errno
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -170,6 +173,107 @@ class Resources:
             except (OSError, ContainerError, ValueError, TypeError, KeyError):
                 failed.append(name)
         return failed
+
+
+def _upload_root_directory(path):
+    from contracts import check_path, require
+    check_path(path, "directory")
+    for parent in (path, *path.parents):
+        info = parent.stat()
+        require(info.st_uid == 0 and not info.st_mode & 0o022,
+                "upload_standin_ownership", "Stand-in parents must be root-controlled.")
+
+
+@contextmanager
+def _upload_volume_lock(workdir):
+    from contracts import check_path, require
+    require(os.geteuid() == 0, "upload_standin_ownership", "Stand-in volumes require root.")
+    _upload_root_directory(workdir.parent)
+    # The lock outlives the journal. A disconnected docker exec may still be
+    # provisioning when another exec enters cleanup.
+    lock = check_path(workdir.parent / ".upload-volumes.lock", "file")
+    with open(lock, "a", opener=lambda path, flags: os.open(path, flags, 0o600)) as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        yield
+
+
+def provision_upload_volumes(paths, quotas, workdir):
+    """Journal ownership before mutation; undo every attempted mount on failure."""
+    from contracts import atomic_write, check_path, require
+    workdir = Path(workdir)
+    with _upload_volume_lock(workdir):
+        require(not workdir.exists(), "upload_standin_exists", "Stand-in work directory already exists.")
+        directories, images = [], []
+        for name, path in paths.items():
+            path = check_path(Path(path), "directory")
+            require(not path.exists(), "upload_standin_exists", "Refusing an existing upload volume.")
+            require(name in quotas and type(quotas[name]) is int and quotas[name] > 0
+                    and Path(name).name == name and name not in (".", ".."),
+                    "upload_standin_plan", "Invalid stand-in pool or quota.")
+            require(not workdir.is_relative_to(path) and not path.is_relative_to(workdir),
+                    "upload_standin_plan", "Stand-in images must be outside the upload pools.")
+            missing, cursor = [], path
+            while not cursor.exists():
+                missing.append(cursor)
+                cursor = cursor.parent
+            _upload_root_directory(cursor)
+            for directory in reversed(missing):
+                if str(directory) not in directories:
+                    directories.append(str(directory))
+            images.append(str(workdir / (name + ".ext4")))
+        state = {"paths": [str(p) for p in paths.values()], "images": images, "directories": directories}
+        try:
+            workdir.mkdir(mode=0o700)
+            workdir.chmod(0o700)
+            atomic_write(workdir / "volumes.json", json.dumps(state), mode=0o600)
+            for directory in directories:
+                Path(directory).mkdir(mode=0o755)
+                Path(directory).chmod(0o755)
+            for (name, path), image in zip(paths.items(), images):
+                run(["truncate", "-s", str(quotas[name]), image])
+                run(["mkfs.ext4", "-q", "-m", "0", "-F", image])
+                run(["mount", "-o", "loop,nodev,nosuid", image, str(path)])
+        except BaseException:
+            _release_upload_volumes(workdir)
+            raise
+
+
+def _release_upload_volumes(workdir):
+    from contracts import check_path, read_json, require
+    if not workdir.exists():
+        return
+    journal = check_path(workdir / "volumes.json", "file")
+    if journal.exists():
+        state = read_json(journal)
+        failed = []
+        for path in reversed(state["paths"]):
+            try:
+                if os.path.ismount(path):
+                    run(["umount", path])
+            except Exception:
+                failed.append(path)
+        require(not failed, "upload_standin_cleanup", "Upload mounts remain; retain the disposable host and retry cleanup.")
+        for image in state["images"]:
+            Path(image).unlink(missing_ok=True)
+        for directory in reversed(state["directories"]):
+            try:
+                Path(directory).rmdir()
+            except FileNotFoundError:
+                pass
+            except OSError as error:
+                # Bootstrap can subsequently populate a newly created shared
+                # parent such as /var/lib/foundry. Remove only empty directories.
+                if error.errno not in (errno.ENOTEMPTY, errno.EEXIST):
+                    raise
+        journal.unlink()
+    workdir.rmdir()
+
+
+def release_upload_volumes(workdir):
+    """Unmount before deleting images; keep the journal if cleanup needs a retry."""
+    workdir = Path(workdir)
+    with _upload_volume_lock(workdir):
+        _release_upload_volumes(workdir)
 
 
 def main():

@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tomllib
 import unittest
+import uuid
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "local"))
@@ -22,6 +23,7 @@ from test_build_artifacts import FeatureBuildTests
 from test_host_capabilities import declaration, profile as feature_profile
 from test_local import cli, fixture, metadata
 from topology import parse_topology
+from test_uploads import profile as upload_policy
 
 
 class RehearsalTests(unittest.TestCase):
@@ -57,7 +59,7 @@ class RehearsalTests(unittest.TestCase):
         self.assertEqual(binding["endpoint"], "https://s3:9000")
         self.assertEqual([binding["bucket"]], buckets)
 
-    def application(self, feature=False):
+    def application(self, feature=False, uploads=False):
         if feature:
             request, stage, _ = FeatureBuildTests.feature(self)
             # The minimal feature archive needs no remote artifact acquisition.
@@ -71,6 +73,9 @@ class RehearsalTests(unittest.TestCase):
         profile = request["profile"]
         profile.update(environment="acceptance-local", runtime_environment="testing", domain="app.acceptance.invalid",
                        edge_origin_lockdown=False, architecture="amd64")
+        if uploads:
+            profile["uploads"] = upload_policy()
+            profile["uploads"]["routes"] = ["/acceptance/resources/{resource}/media"]
         for binding in profile.get("listeners", {}).values():
             binding["dns"]["hostname"] = "relay.acceptance.invalid"
             binding["source_cidrs"] = ["203.0.113.20/32"]
@@ -180,6 +185,7 @@ class RehearsalTests(unittest.TestCase):
                                   "restart", "observe", "stop"])
         evidence = read_json(output / "evidence.json")
         self.assertEqual(evidence["status"], "passed")
+        self.assertEqual(uuid.UUID(evidence["activation_operation_id"]).version, 4)
         self.assertEqual(evidence["storage_fidelity"]["status"], "preserved")
         self.assertEqual(evidence["archive_sha256"], digest(archive))
         self.assertEqual(evidence["profile_sha256"], canonical_digest(profile))
@@ -193,6 +199,97 @@ class RehearsalTests(unittest.TestCase):
         path.mkdir()
         for name in ("ca.crt", "ca.key", "public.crt", "private.key"):
             (path / name).write_text("test")
+
+    def test_upload_volumes_precede_plan_and_release_before_container_cleanup(self):
+        archive, _, _, _ = self.application(uploads=True)
+        phases = []
+        def phase(host, name, token):
+            phases.append(name)
+            if name == "upload-volumes":
+                return {"ok": True, "upload_storage": {"status": "reduced", "backing": "loop-mounted sparse ext4"}}
+            return {"ok": True}
+        def cleanup():
+            self.assertEqual(phases[-1], "release-upload-volumes")
+            return []
+        output = self.root / "upload-evidence"
+        with patch.object(rehearsal, "run", return_value=subprocess.CompletedProcess([], 0, "amd64", "")), \
+                patch.object(rehearsal, "create_ca", side_effect=self.ca), patch.object(rehearsal, "create_host"), \
+                patch.object(rehearsal, "boot_host"), patch.object(rehearsal, "phase", side_effect=phase), \
+                patch.object(containers.Resources, "cleanup", side_effect=cleanup):
+            rehearsal.rehearse(self.root, "acceptance-local", archive, output=output)
+        self.assertEqual(phases[:3], ["prepare", "upload-volumes", "bootstrap-plan"])
+        evidence = read_json(output / "evidence.json")
+        self.assertEqual(evidence["storage_fidelity"]["status"], "reduced")
+        self.assertEqual(evidence["storage_fidelity"]["upload_volumes"]["status"], "reduced")
+        self.assertEqual(evidence["status"], "passed")
+
+    def test_upload_cleanup_is_registered_before_provision_and_retention_is_explicit(self):
+        archive, _, _, _ = self.application(uploads=True)
+        for keep, termination in ((False, False), (True, False), (False, True), (True, True)):
+            with self.subTest(keep=keep, termination=termination):
+                phases = []
+                def phase(host, name, token):
+                    phases.append(name)
+                    if name == "upload-volumes":
+                        if termination:
+                            signal.raise_signal(signal.SIGTERM)
+                        return {"ok": False}
+                    return {"ok": True}
+                output = self.root / ("upload-failure-" + str(keep) + str(termination))
+                with patch.object(rehearsal, "run", return_value=subprocess.CompletedProcess([], 0, "amd64", "")), \
+                        patch.object(rehearsal, "create_ca", side_effect=self.ca), patch.object(rehearsal, "create_host"), \
+                        patch.object(rehearsal, "boot_host"), patch.object(rehearsal, "phase", side_effect=phase), \
+                        patch.object(containers.Resources, "cleanup", return_value=[]) as cleanup, \
+                        patch.object(rehearsal, "print") as report, self.assertRaises(DeployError):
+                    rehearsal.rehearse(self.root, "acceptance-local", archive, output=output, keep_failed=keep)
+                self.assertNotIn("bootstrap-plan", phases)
+                self.assertEqual("release-upload-volumes" in phases, not keep)
+                self.assertEqual(cleanup.call_count, 0 if keep else 1)
+                if keep:
+                    self.assertTrue(read_json(output / "evidence.json")["upload_volumes_retained"])
+                    self.assertIn("mounts and images retained", "\n".join(call.args[0] for call in report.call_args_list))
+
+    def test_upload_cleanup_failure_retains_host_and_private_files(self):
+        archive, _, _, _ = self.application(uploads=True)
+        output = self.root / "upload-cleanup-failure"
+        def phase(host, name, token):
+            return {"ok": name != "release-upload-volumes"}
+        with patch.object(rehearsal, "run", return_value=subprocess.CompletedProcess([], 0, "amd64", "")), \
+                patch.object(rehearsal, "create_ca", side_effect=self.ca), patch.object(rehearsal, "create_host"), \
+                patch.object(rehearsal, "boot_host"), patch.object(rehearsal, "phase", side_effect=phase), \
+                patch.object(containers.Resources, "cleanup") as cleanup, self.assertRaises(DeployError):
+            rehearsal.rehearse(self.root, "acceptance-local", archive, output=output)
+        cleanup.assert_not_called()
+        self.assertTrue((output / "private").exists())
+        evidence = read_json(output / "evidence.json")
+        self.assertEqual(evidence["status"], "failed")
+        self.assertTrue(any("-host-" in name for name in evidence["retained_resources"]))
+
+    def test_host_provisions_production_pool_paths_and_declared_quotas(self):
+        import uploads
+        from contracts import identity
+        _, project, profile, topology = self.application(uploads=True)
+        context = {"project": project, "profile": profile, "topology": parse_topology(topology).projection()}
+        with patch.object(rehearsal_host.containers, "provision_upload_volumes") as provision:
+            result = rehearsal_host.phase("upload-volumes", context)
+        paths = uploads.volume_paths(identity(project, profile))
+        provision.assert_called_once_with(paths, profile["uploads"]["pools"], rehearsal_host.WORK / "upload-volumes")
+        self.assertEqual(result["upload_storage"]["status"], "reduced")
+        self.assertFalse(result["upload_storage"]["real_block_device_certified"])
+        self.assertFalse(result["upload_storage"]["quota_enforcement_certified"])
+        self.assertEqual(result["upload_storage"]["pools"]["request"]["image_bytes"], profile["uploads"]["pools"]["request"])
+
+    def test_host_stops_services_before_releasing_upload_volumes(self):
+        _, project, profile, topology = self.application(uploads=True)
+        context = {"project": project, "profile": profile, "topology": parse_topology(topology).projection()}
+        work = self.root / "host-work"
+        (work / "upload-volumes").mkdir(parents=True)
+        calls = Mock()
+        with patch.object(rehearsal_host, "WORK", work), patch.object(rehearsal_host, "run", calls.stop), \
+                patch.object(rehearsal_host.containers, "release_upload_volumes", calls.release):
+            rehearsal_host.phase("release-upload-volumes", context)
+        self.assertEqual([call[0] for call in calls.mock_calls], ["stop", "release"])
+        self.assertIn("nginx.service", calls.stop.call_args.args[0])
 
     def test_failed_run_retention_is_opt_in_and_reports_exact_phase(self):
         archive, _, _, _ = self.application()

@@ -1482,6 +1482,31 @@ denials, closure after stop, and access after restart. A final stop precedes
 cleanup. TLS probes verify the synthetic CA and listener hostname. UDP sockets
 are inventoried without claiming public UDP acceptance.
 
+Feature releases follow the real client's `release-plan` then `activate` flow:
+rehearsal reviews when the profile uses schema 3 or host status reports a
+`deployment_selection`. The review and activation share a fresh operation UUID
+and the returned plan token. Evidence records `activation_operation_id` and the
+public plan in the activation phase, including when activation subsequently fails.
+
+Supply required service secrets in the bindings file's existing `configuration`
+object, using the exact keys in the plan's `required_service_secrets`. A secret
+with `scope: "copy"` requires a separate key for every placed copy; a shared key
+does not satisfy those requirements. Rehearsal checks bootstrap requirements too.
+Missing or empty values fail with `rehearsal_service_secrets_missing` and the
+missing key names. Only requested service keys are sent on a release-plan retry;
+application settings stay in bootstrap configuration. Secret values never enter
+public plan evidence or terminal output.
+
+When the profile declares `uploads`, rehearsal prepares a dedicated loop-mounted
+sparse ext4 filesystem for each upload pool after host preparation and before
+`bootstrap-plan`. Each image is sized to that pool's declared hard quota. Images
+live in a root-owned `0700` directory outside the application and upload paths;
+new mount parents are root-owned `0755` directories. The production mount,
+ownership and capacity checks run unchanged. No extra binding or flag is needed.
+`evidence.json.storage_fidelity.upload_volumes` records this as reduced fidelity:
+it does not certify real block devices or production quota enforcement. Sparse
+images also depend on free space in the Docker VM's backing storage.
+
 Package preparation and bootstrap use a separate provisioning network. Before
 activation, rehearsal disconnects that network and switches DNS to the local
 server, which has no upstream resolver. Runtime has no route to production
@@ -1610,6 +1635,22 @@ and keeps evidence. Cleanup failures preserve private files and fail the run.
 `--keep-failed` retains a failed run explicitly and prints its identity and evidence
 directory for inspection; it does not retain successful runs.
 
+Upload stand-in mounts are unmounted and their images removed before container
+cleanup, including failed or interrupted runs. A partial provisioning failure
+rolls back its attempted mounts. `--keep-failed` keeps completed mounts and images
+with the failed host for debugging and reports that retention. If unmounting
+fails, rehearsal fails and retains the containers and private files so cleanup
+can be retried. For a retained host, release upload volumes before removing it:
+
+```sh
+docker exec -e FOUNDRY_DISPOSABLE_HOST=1 -e FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT=1 \
+  -e FOUNDRY_REHEARSAL_RUN_ID="$RUN_ID" "$HOST_CONTAINER" \
+  python3 -B /verification/deploy/local/rehearsal_host.py release-upload-volumes
+```
+
+Use the run ID and host container name from `resources.json`. This cleanup stops
+the application's services and nginx before unmounting, and can be retried.
+
 Synthetic tests do not establish real DNS-01, provider policy, global DNS cutover,
 cloud firewall behavior, sustained capacity or business recovery. Production
 refusals remain refusals. Release-carried bundles use the same verified service
@@ -1617,6 +1658,13 @@ views as HTTPS artifacts.
 The framework acceptance runner uses the same shipped host images, CA setup and
 systemd container helpers; its fixture-specific scenarios and private module proxy
 remain separate from application rehearsal.
+
+The [deploy acceptance fixture](../../tests/fixtures/deploy-acceptance/README.md)
+has an `acceptance-run` overlay that covers upload mounts, release planning
+and two custom-role copies in one run. Its builder prepares an isolated source
+copy and generates private per-copy bindings; the ordinary acceptance topology
+and phases remain unchanged. Follow its build and rehearsal commands to exercise
+the current checkout on a native arm64 Docker engine.
 
 ## Loopback-confined roles and wildcard private listeners
 
