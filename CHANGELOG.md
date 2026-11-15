@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.38.3 — 2026-11-16
+
+- Fixed: units for roles with release-carried artifact views rendered
+  `BindReadOnlyPaths="SOURCE:DESTINATION"` as one quoted word, which systemd
+  reads as a single missing source path. Such roles failed at namespace setup
+  (status 226/NAMESPACE, reported as a skipped exec condition) and never
+  started. Views now render as `"SOURCE":"DESTINATION"`. A real-systemd contract
+  test starts a unit with an artifact view and checks the service sees the
+  bound content. Apply the tools with `ACTION=tools-plan` and `tools-apply`;
+  they rewrite existing units, and affected roles start correctly on their next
+  start. Tool generation stays 18.
+
 ## v0.38.2 — 2026-11-16
 
 - Fixed: a rehearsal storage grant applies only to disks the current runtime
