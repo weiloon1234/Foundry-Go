@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added: release 2a consumer contracts for copy-scoped secrets, ordered `copies`
+  bindings and `deployment.Bindings.Copies`, with owned snapshots and optional
+  read-only secret-file grants. Shrinking retains private values for regrowth and
+  rollback. Console descriptors retain HTTP copy endpoints but omit secret paths.
+- Added: explicit public port lists ordered by copy ordinal, separate nginx routes
+  and firewall claims, and typed `PublicListener.Ports`. Empty copy collections
+  and singleton port extensions are omitted from descriptor wire records.
+  Lifecycle integration remains with the numbered-copy lane.
+
 - Added: generation-17 foundations for numbered custom service copies: bounded
   unit identities, placement expansion, per-copy endpoint allocations and stable
   socket paths, and `copy_ordinal` references. Counts above one remain rejected

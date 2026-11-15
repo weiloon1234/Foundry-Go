@@ -415,38 +415,54 @@ def listener_findings(profile, *, topology):
             for name, policy in public_policies(profile, topology).items()]
 
 
+def resolve_public_listener_binding(topology, profile, name, reference):
+    """Public descriptor ports follow dense placement ordinals; singleton wire is unchanged."""
+    from contracts import ResolvedPublicListenerBinding, ResolvedPublicPort
+    public = dict(profile.listeners).get(reference.role + "." + reference.listener)
+    require(public is not None, "service_binding", "Declared public listener is unplaced.")
+    role = next(role for role in topology.roles if role.common.name == reference.role)
+    listener = dict(role.listeners)[reference.listener]
+    require(len(public.ports) == dict(profile.placement)[reference.role],
+            "invalid_profile", "Bind one public port per placed copy.")
+    ports = tuple(ResolvedPublicPort(ordinal, port) for ordinal, port in enumerate(public.ports, 1)) if len(public.ports) > 1 else ()
+    return ResolvedPublicListenerBinding(name, reference.role, reference.listener, public.hostname,
+                                        public.ports[0], listener.tls, listener.transport, public.public_addresses, ports)
+
+
 def stream_projection(profile, resolution, lineage, *, topology):
-    """One runtime file per role; no certificate material enters application custody."""
+    """One runtime file per listener copy; certificates remain in edge custody."""
     from certificates import CONFIG_DIR
     from listeners import public_policies
     policies = public_policies(profile, topology)
     if any(policy.tls == "edge" for policy in policies.values()):
         dns_hostname(lineage)
-    endpoints = {(e.role, e.listener): e for e in resolution.endpoints}
+    endpoints = {(e.role, e.ordinal, e.listener): e for e in resolution.endpoints}
     result = {}
     for name, binding in profile.listeners:
         tls = policies[name].tls == "edge"
         role, listener = name.split(".")
-        require((role, listener) in endpoints, "nginx_backend_missing", "Resolve every public listener's private backend first.")
-        endpoint = endpoints[role, listener]
-        backend = ("[" + endpoint.address + "]" if ":" in endpoint.address else endpoint.address) + ":" + str(endpoint.port)
-        lines = []
-        for address in binding.public_addresses:
-            for port in binding.ports:
+        require(len(binding.ports) == dict(profile.placement)[role],
+                "invalid_profile", "Bind one public port per placed copy.")
+        for ordinal, port in enumerate(binding.ports, 1):
+            require((role, ordinal, listener) in endpoints, "nginx_backend_missing", "Resolve every public listener's private backend first.")
+            endpoint = endpoints[role, ordinal, listener]
+            backend = ("[" + endpoint.address + "]" if ":" in endpoint.address else endpoint.address) + ":" + str(endpoint.port)
+            lines = []
+            for address in binding.public_addresses:
                 bind = ("[" + address + "]" if ":" in address else address) + ":" + str(port)
                 lines.append("    listen " + bind + (" ssl" if tls else "") + (" ipv6only=on" if ":" in address else "") + ";")
-        content = (TEMPLATES / "nginx-tcp-tls.conf").read_text()
-        tls_content = ("    ssl_certificate " + CONFIG_DIR + "/live/" + lineage + "/fullchain.pem;\n"
-                       "    ssl_certificate_key " + CONFIG_DIR + "/live/" + lineage + "/privkey.pem;\n"
-                       "    ssl_protocols TLSv1.2 TLSv1.3;\n"
-                       "    ssl_session_cache off;\n"
-                       "    ssl_session_tickets off;\n") if tls else ""
-        replacements = {"@INSTANCE@": profile.instance_id, "@LISTENER@": name, "@LISTEN@": "\n".join(lines),
-                        "@TLS@": tls_content, "@BACKEND@": backend,
-                        "@SOURCES@": "\n".join("    allow " + cidr + ";" for cidr in binding.source_cidrs)}
-        for token, value in replacements.items():
-            content = content.replace(token, value)
-        result["stream-" + name + ".conf"] = content
+            content = (TEMPLATES / "nginx-tcp-tls.conf").read_text()
+            tls_content = ("    ssl_certificate " + CONFIG_DIR + "/live/" + lineage + "/fullchain.pem;\n"
+                           "    ssl_certificate_key " + CONFIG_DIR + "/live/" + lineage + "/privkey.pem;\n"
+                           "    ssl_protocols TLSv1.2 TLSv1.3;\n"
+                           "    ssl_session_cache off;\n"
+                           "    ssl_session_tickets off;\n") if tls else ""
+            replacements = {"@INSTANCE@": profile.instance_id, "@LISTENER@": name, "@LISTEN@": "\n".join(lines),
+                            "@TLS@": tls_content, "@BACKEND@": backend,
+                            "@SOURCES@": "\n".join("    allow " + cidr + ";" for cidr in binding.source_cidrs)}
+            for token, value in replacements.items():
+                content = content.replace(token, value)
+            result["stream-" + name + (f".{ordinal}" if ordinal != 1 else "") + ".conf"] = content
     return result
 
 

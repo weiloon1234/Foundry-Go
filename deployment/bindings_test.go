@@ -122,7 +122,7 @@ func TestBindingsConcreteValuesAndRuntimeSelection(t *testing.T) {
 func TestBindingsRejectInvalidAndPrivateData(t *testing.T) {
 	valid := bindingDocument()
 	cases := []string{"{}", "null", valid + "{}", strings.Replace(valid, `"schema":2`, `"schema":2,"schema":2`, 1),
-		strings.Replace(valid, `"ordinal":1`, `"ordinal":2`, 1), strings.Replace(valid, `"role":"http"`, `"role":"other"`, 1),
+		strings.Replace(valid, `"ordinal":1`, `"ordinal":129`, 1), strings.Replace(valid, `"role":"http"`, `"role":"other"`, 1),
 		strings.Replace(valid, "127.0.0.1", "203.0.113.10", 1), strings.Replace(valid, `"port":8201`, `"port":80`, 1),
 		strings.Replace(valid, `"name":"relay"`, `"name":"checksum"`, 1),
 		strings.Replace(valid, `"path":"/usr/bin/sha256sum"`, `"path":"/usr/../private-secret"`, 1),

@@ -61,18 +61,15 @@ def conflicts(left, right):
 
 def public_policies(profile, topology):
     """Resolve modes from the matching topology, never from an address binding."""
-    from topology import ExecutableRole, parse_profile
-    parse_profile(profile.projection(), topology)
-    declarations = {role.common.name + "." + name: listener
-                    for role in topology.roles if isinstance(role, ExecutableRole)
-                    for name, listener in role.listeners}
-    return {name: declarations[name] for name, _ in profile.listeners}
+    from topology import expand_placement, public_listener_policies
+    expand_placement(topology, profile.instance_id, profile.placement)
+    return public_listener_policies(topology, profile.placement, profile.listeners)
 
 
 def public_claims(profile):
-    return tuple(ListenerClaim(profile.instance_id, *name.split("."), 1,
+    return tuple(ListenerClaim(profile.instance_id, *name.split("."), ordinal,
                                SocketIdentity("tcp", ipaddress.ip_address(address).version, address, port), "nginx")
-                 for name, binding in profile.listeners for address in binding.public_addresses for port in binding.ports)
+                 for name, binding in profile.listeners for ordinal, port in enumerate(binding.ports, 1) for address in binding.public_addresses)
 
 
 def wildcard_listeners(topology):
