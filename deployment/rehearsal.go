@@ -2,6 +2,8 @@ package deployment
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"os"
 	"regexp"
 	"syscall"
@@ -29,39 +31,58 @@ type rehearsalWire struct {
 func (b Bindings) Rehearsal() storage.Rehearsal { return b.rehearsal }
 
 // LoadRehearsal reads only the optional rehearsal grant from the selected runtime
-// descriptor. The boolean reports block presence. No descriptor or no block
-// grants nothing and imposes no descriptor schema requirement on application
-// assembly. A present block requires the full protected schema-2 descriptor.
+// descriptor. The boolean reports block presence. Without a nonempty process
+// rehearsal identity it performs no file access. Active rehearsal validates
+// schema-1 or schema-2 descriptors; only a protected schema-2 block can grant
+// reduced fidelity. A missing descriptor or block grants nothing.
 func LoadRehearsal() (storage.Rehearsal, bool, error) {
 	return loadRehearsalOwned(rootOwnedDescriptor)
 }
 
-func loadRehearsalOwned(owned func(os.FileInfo) bool) (storage.Rehearsal, bool, error) {
+func loadRehearsalOwned(owned func(os.FileInfo) bool) (grant storage.Rehearsal, present bool, err error) {
+	runID := os.Getenv(RehearsalRunEnvironment)
+	if runID == "" {
+		return storage.Rehearsal{}, false, nil
+	}
+	defer func() {
+		if err == nil && len(grant.Disks()) == 0 {
+			slog.New(slog.NewJSONHandler(os.Stderr, nil)).Warn("rehearsal identity has no matching storage grant; strict capabilities apply", "event", "foundry_rehearsal_storage_no_grant")
+		}
+	}()
 	path, exists := os.LookupEnv(BindingsEnvironment)
-	if !exists {
+	if !exists || path == "" {
 		return storage.Rehearsal{}, false, nil
 	}
 	data, info, err := readRuntimeDescriptor(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return storage.Rehearsal{}, false, nil
+	}
 	if err != nil {
 		return storage.Rehearsal{}, false, err
 	}
 	var envelope struct {
+		Schema    int             `json:"schema"`
 		Rehearsal json.RawMessage `json:"rehearsal"`
 	}
 	if err := json.Unmarshal(data, &envelope); err != nil {
 		return storage.Rehearsal{}, false, invalidBindings()
 	}
-	if len(envelope.Rehearsal) == 0 {
-		return storage.Rehearsal{}, false, nil
+	present = len(envelope.Rehearsal) != 0
+	if envelope.Schema == 1 && !present {
+		_, err := decodeLegacyDescriptor(data)
+		return storage.Rehearsal{}, false, err
 	}
 	wire, err := decodeFeatureDescriptor(data, info, owned)
 	if err != nil {
-		return storage.Rehearsal{}, true, err
+		return storage.Rehearsal{}, present, err
+	}
+	if !present {
+		return storage.Rehearsal{}, false, nil
 	}
 	if wire.Rehearsal == nil {
 		return storage.Rehearsal{}, true, invalidBindings()
 	}
-	grant, err := wire.Rehearsal.grant(os.Getenv(RehearsalRunEnvironment))
+	grant, err = wire.Rehearsal.grant(runID)
 	return grant, true, err
 }
 

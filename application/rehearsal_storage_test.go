@@ -21,7 +21,7 @@ import (
 )
 
 func TestRehearsalApplicationStartupNoticeAndRuntimeRefusal(t *testing.T) {
-	t.Setenv("FOUNDRY_REHEARSAL_RUN_ID", strings.Repeat("a", 32))
+	t.Setenv(deployment.RehearsalRunEnvironment, "")
 	s, disk := rehearsalApplicationSettings()
 	log, err := os.CreateTemp(t.TempDir(), "startup")
 	if err != nil {
@@ -103,7 +103,6 @@ func TestAbsentRehearsalPreservesApplicationAssembly(t *testing.T) {
 		{"local", ""},
 		{"legacy rollback", `{"schema":1,"instance":"app-1","user":"app-1","env_file":"/etc/foundry/app.env","work_dir":"/var/lib/foundry/app"}`},
 		{"feature", `{"schema":2,"instance":"app-1","user":"app-1","env_file":"/etc/foundry/app.env","work_dir":"/var/lib/foundry/app","release":"/opt/foundry/app/releases/one","deployment_sha256":"` + strings.Repeat("a", 64) + `","unit":{"instance_id":"00000000-0000-4000-8000-000000000001","role":"http","ordinal":1},"bindings":{"schema":1,"role":"http","executables":[],"endpoints":[],"bundles":[]}}`},
-		{"no imposed schema", `{}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, id := range []string{"", strings.Repeat("a", 32)} {
@@ -155,6 +154,7 @@ func assertStrictRehearsalApplication(t *testing.T) {
 }
 
 func TestMalformedRehearsalBlockRefusesApplicationAssembly(t *testing.T) {
+	t.Setenv(deployment.RehearsalRunEnvironment, strings.Repeat("a", 32))
 	for _, block := range []string{`null`, `{}`, `[]`, `false`} {
 		path := filepath.Join(t.TempDir(), "runtime.json")
 		if err := os.WriteFile(path, []byte(`{"schema":2,"rehearsal":`+block+`}`), 0600); err != nil {
@@ -164,6 +164,77 @@ func TestMalformedRehearsalBlockRefusesApplicationAssembly(t *testing.T) {
 		settings, _ := rehearsalApplicationSettings()
 		if _, err := New(settings).Build(t.Context()); !errors.Is(err, fault.Invalid) {
 			t.Fatal("malformed block accepted", block, err)
+		}
+	}
+}
+
+func TestDormantRehearsalIgnoresBrokenDescriptorAtStartup(t *testing.T) {
+	t.Setenv(deployment.RehearsalRunEnvironment, "")
+	if err := os.Unsetenv(deployment.RehearsalRunEnvironment); err != nil {
+		t.Fatal(err)
+	}
+	malformed := filepath.Join(t.TempDir(), "private-descriptor.json")
+	if err := os.WriteFile(malformed, []byte(`private-malformed-json`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	unreadable := filepath.Join(t.TempDir(), "private-unreadable.json")
+	if err := os.WriteFile(unreadable, []byte(`{}`), 0000); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"", filepath.Join(t.TempDir(), "missing"), malformed, unreadable} {
+		t.Setenv(deployment.BindingsEnvironment, path)
+		assertStrictRehearsalApplication(t)
+	}
+}
+
+func TestMissingRehearsalGrantNoticeIsSingleAndRedacted(t *testing.T) {
+	for _, identity := range []string{"", strings.Repeat("a", 32)} {
+		t.Setenv(deployment.RehearsalRunEnvironment, identity)
+		for _, document := range []string{"", `{"schema":1,"instance":"app-1","user":"app-1","env_file":"/etc/foundry/app.env","work_dir":"/var/lib/foundry/app"}`} {
+			path := filepath.Join(t.TempDir(), "private-runtime.json")
+			if document != "" {
+				if err := os.WriteFile(path, []byte(document), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv(deployment.BindingsEnvironment, path)
+			output, err := os.CreateTemp(t.TempDir(), "notice")
+			if err != nil {
+				t.Fatal(err)
+			}
+			previous := os.Stderr
+			func() {
+				os.Stderr = output
+				defer func() { os.Stderr = previous }()
+				assertStrictRehearsalApplication(t)
+			}()
+			output.Close()
+			data, err := os.ReadFile(output.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if identity == "" {
+				if len(data) != 0 {
+					t.Fatal("dormant notice")
+				}
+				continue
+			}
+			if strings.Contains(string(data), "private") || strings.Contains(string(data), identity) {
+				t.Fatal("notice leaked descriptor or identity")
+			}
+			lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+			if len(lines) != 1 {
+				t.Fatal("expected one notice", len(lines))
+			}
+			var record struct {
+				Event string `json:"event"`
+			}
+			if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+				t.Fatal(err)
+			}
+			if record.Event != "foundry_rehearsal_storage_no_grant" {
+				t.Fatal("missing strict-capability notice")
+			}
 		}
 	}
 }

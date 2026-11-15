@@ -13,8 +13,12 @@
   cannot enable the mode. Production descriptor generation never emits the block.
   Missing or mismatched grants retain strict production capabilities.
 - Fixed: optional rehearsal-grant loading preserves legacy rollback and local
-  application startup. Absent blocks impose no descriptor schema requirement;
-  present blocks retain strict validation and malformed blocks refuse startup.
+  application startup. Valid legacy and feature descriptors without a block
+  grant nothing; present blocks retain strict validation.
+- Fixed: rehearsal loading is completely dormant without a process rehearsal
+  identity, preserving startup even with a broken deployment descriptor path.
+  Active rehearsal without a matching grant keeps strict capabilities and emits
+  one redacted notice; malformed active descriptor JSON, shapes, or blocks refuse.
 - Reports include caps, exceeding policy maxima, and observed runtime refusals;
   startup notices and counters contain no object data.
 - Production R2 behavior, declared S3-compatible guarantees, and strict listing

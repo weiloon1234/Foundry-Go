@@ -78,7 +78,7 @@ func TestRehearsalDescriptorGateAndAssembly(t *testing.T) {
 			}
 			t.Setenv(BindingsEnvironment, writeBindingDocument(t, tc.document))
 			grant, present, err := loadRehearsalOwned(func(os.FileInfo) bool { return true })
-			if err != nil || present != (tc.name != "no block") {
+			if err != nil || present != (tc.name != "no block" && tc.run != "") {
 				t.Fatal("optional rehearsal read", present, err)
 			}
 			if cap, ok := bindings.Rehearsal().Cap("uploads"); ok != tc.granted || ok && cap != 8<<20 {
@@ -162,6 +162,7 @@ func TestRehearsalDescriptorGateAndAssembly(t *testing.T) {
 }
 
 func TestRehearsalDescriptorRejectsMalformedGrants(t *testing.T) {
+	t.Setenv(RehearsalRunEnvironment, strings.Repeat("a", 32))
 	for _, invalid := range []string{
 		strings.Replace(rehearsalDocument(), `"runtime_cap_bytes":8388608`, `"runtime_cap_bytes":0`, 1),
 		strings.Replace(rehearsalDocument(), `"disks":[`, `"disks":[{"disk":"uploads","runtime_cap_bytes":8388608},`, 1),
@@ -198,7 +199,7 @@ func TestRunEnvironmentWithoutDescriptorGrantsNothing(t *testing.T) {
 }
 
 func TestOptionalRehearsalWithoutBlock(t *testing.T) {
-	for _, document := range []string{"", `{"schema":1,"instance":"app-1","user":"app-1","env_file":"/etc/foundry/app.env","work_dir":"/var/lib/foundry/app"}`, bindingDocument(), `{}`} {
+	for _, document := range []string{"", `{"schema":1,"instance":"app-1","user":"app-1","env_file":"/etc/foundry/app.env","work_dir":"/var/lib/foundry/app"}`, bindingDocument()} {
 		t.Setenv(RehearsalRunEnvironment, strings.Repeat("a", 32))
 		t.Setenv(BindingsEnvironment, "")
 		if document == "" {
@@ -216,6 +217,7 @@ func TestOptionalRehearsalWithoutBlock(t *testing.T) {
 }
 
 func TestOptionalRehearsalRejectsMalformedPresentBlock(t *testing.T) {
+	t.Setenv(RehearsalRunEnvironment, strings.Repeat("a", 32))
 	for _, block := range []string{`null`, `{}`, `false`, `[]`, `"invalid"`, `{"run_id":"invalid","disks":[]}`} {
 		document := strings.Replace(bindingDocument(), `"schema":2`, `"schema":2,"rehearsal":`+block, 1)
 		t.Setenv(BindingsEnvironment, writeBindingDocument(t, document))
@@ -234,5 +236,36 @@ func TestOptionalRehearsalRejectsMalformedPresentBlock(t *testing.T) {
 	t.Setenv(BindingsEnvironment, writeBindingDocument(t, legacy))
 	if _, _, err := loadRehearsalOwned(func(os.FileInfo) bool { return true }); !errors.Is(err, fault.Invalid) {
 		t.Fatal("schema one issued grant", err)
+	}
+}
+
+func TestDormantRehearsalDoesNotReadDescriptor(t *testing.T) {
+	t.Setenv(RehearsalRunEnvironment, "")
+	if err := os.Unsetenv(RehearsalRunEnvironment); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"", t.TempDir() + "/missing", writeBindingDocument(t, `not json`), writeBindingDocument(t, rehearsalDocument())} {
+		t.Setenv(BindingsEnvironment, path)
+		grant, present, err := loadRehearsalOwned(func(os.FileInfo) bool { t.Fatal("dormant ownership check"); return false })
+		if err != nil || present || len(grant.Disks()) != 0 {
+			t.Fatal("dormant descriptor accessed", present, err)
+		}
+	}
+}
+
+func TestActiveRehearsalMissingDescriptorKeepsStrictCapabilities(t *testing.T) {
+	t.Setenv(RehearsalRunEnvironment, strings.Repeat("a", 32))
+	for _, path := range []string{"", t.TempDir() + "/missing"} {
+		t.Setenv(BindingsEnvironment, path)
+		grant, present, err := LoadRehearsal()
+		if err != nil || present || len(grant.Disks()) != 0 {
+			t.Fatal("missing descriptor granted or refused", present, err)
+		}
+	}
+	for _, document := range []string{`not json`, `{}`, `{"schema":1}`, `{"schema":2}`, `{"schema":3}`, strings.Replace(bindingDocument(), `"user":"app-1"`, `"user":"root"`, 1)} {
+		t.Setenv(BindingsEnvironment, writeBindingDocument(t, document))
+		if _, _, err := LoadRehearsal(); !errors.Is(err, fault.Invalid) {
+			t.Fatal("malformed descriptor accepted", err)
+		}
 	}
 }

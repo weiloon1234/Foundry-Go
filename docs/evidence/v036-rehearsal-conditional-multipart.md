@@ -306,3 +306,49 @@ Touched-source SHA-256 (6 Go/Python files, sorted relative path, NUL, contents,
 NUL; documentation excluded):
 `3b923371109fe2e68557ce675c1fa9542a95996ed984e0a61d4c6fbbb336ffe4`.
 No containers, commits, new services, or service resets were used.
+
+
+## Dormant rehearsal loading correction (round 3)
+
+`LoadRehearsal` now checks the process identity before looking up or opening the
+descriptor. An absent or empty identity returns no grant immediately, including
+when the selected descriptor path is empty, missing, unreadable, or contains
+malformed JSON. `application.New` has no other descriptor reader.
+
+With a nonempty identity, an unset/empty descriptor path, nonexistent file,
+absent block, or mismatched run ID retains strict capabilities. Each successful
+load without a grant emits exactly one fixed-text JSON notice with event
+`foundry_rehearsal_storage_no_grant`; no path, run ID, credentials, or descriptor
+contents are logged. Other read errors, malformed JSON, and malformed blocks
+remain typed refusals. The active path validates descriptor shape even without
+a block, reusing the existing legacy decoder for schema 1 and feature decoder
+for schema 2. Matching grants retain ownership and shape validation.
+
+Regression coverage includes dormant application build/start for missing, empty,
+malformed, and unreadable descriptors; silence when dormant; one redacted notice
+for active missing descriptors/blocks; active malformed data refusal; and the
+existing valid/mismatched grant and 500 MiB policy tests. Synthetic storage-log
+tests inject their grant without claiming an active process identity.
+
+Verification on 2026-11-15 from baseline `0e599a85`:
+
+- `GOFLAGS=-trimpath go build ./deployment ./application` passed.
+- `GOFLAGS=-trimpath go vet ./deployment ./application` passed.
+- `GOFLAGS=-trimpath go test -count=1 -timeout=20m ./deployment ./application`
+  passed. The run loaded `/Users/weiloon/Projects/rust-go/Foundry-Go/.env.test`
+  without printing its contents, with `FOUNDRY_TEST_POSTGRES_REQUIRED=1`,
+  `FOUNDRY_TEST_REDIS_REQUIRED=1`, and `FOUNDRY_TEST_REDIS_ADDR=127.0.0.1:6379`.
+- Source review found no other descriptor reader in `application.New`.
+
+- Final review added schema validation to the active no-block path using the
+  shared legacy decoder. The same build, vet, and required-backend Go tests
+  passed again for the final source.
+- `make deploy-tools-check` passed: 1,416 tests in 224.451 seconds, 18 skips,
+  no failures. Existing opt-in live Cloudflare/systemd and Linux-only socket
+  cases remain skipped.
+- Final `make docs-check` and `git diff --check` passed.
+
+Touched-source SHA-256 (4 Go files, sorted relative path, NUL, contents,
+NUL; documentation excluded):
+`20352aa6105f7c094dda829622b4a599027e1f4e61f930bb9a6b85350cf2cd7d`.
+No containers, commits, new services, or service resets were used.

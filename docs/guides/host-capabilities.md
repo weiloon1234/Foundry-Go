@@ -1524,14 +1524,20 @@ retain that typed error and its message naming reduced-fidelity rehearsal.
 Unconditional writes retain their normal limits.
 
 The application reads this block through `deployment.LoadRehearsal` from
-`FOUNDRY_DEPLOY_RUNTIME_FILE`. A descriptor containing the block must be a regular,
+`FOUNDRY_DEPLOY_RUNTIME_FILE` only when the process carries a nonempty
+`FOUNDRY_REHEARSAL_RUN_ID`. Without that identity, assembly never reads the
+descriptor, even if its path is empty, missing, unreadable, or malformed. A descriptor containing the block must be a regular,
 root-owned file with no group/world write permission; invalid ownership or shape
 returns `fault.Invalid`. Its run identity must exactly match the process's
 `FOUNDRY_REHEARSAL_RUN_ID`. An absent descriptor, absent block, or mismatched
 identity retains normal production capabilities and strict startup limits.
-Grant loading imposes no schema requirement when the block is absent: legacy
-schema-1 rollback descriptors, schema-2 descriptors without the block, and local
-applications with no descriptor all retain their ordinary assembly behavior.
+With an identity but no matching grant, one redacted JSON notice per load reports
+`foundry_rehearsal_storage_no_grant`; it includes no path, run ID, or file contents.
+An unset/empty descriptor path or nonexistent descriptor counts as missing;
+other read failures and malformed data refuse while the identity is present.
+Without an identity, grant loading imposes no descriptor or schema requirement.
+With an identity, valid schema-1 rollback descriptors and schema-2 descriptors
+without the block preserve strict capabilities; malformed descriptor shapes refuse.
 A present block must belong to a valid schema-2 descriptor; malformed blocks,
 including explicit `null`, refuse startup with `fault.Invalid`. Feature consumers
 that explicitly call `deployment.LoadBindings` retain its strict binding contract.
