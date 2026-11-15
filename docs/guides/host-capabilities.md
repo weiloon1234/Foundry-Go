@@ -1251,33 +1251,46 @@ takes the directory as a positional argument, add
 These are literal paths, with no shell expansion. OBS does not interpret the
 Foundry reference itself. The wrapper supplies the resolved file path to OBS.
 
-Load the scheduler's typed binding once during application assembly and inject
-the returned `deployment.SharedDirectory` into the media preparation handler:
+One application binary runs HTTP, worker, scheduler, and console processes.
+Load bindings once during assembly and register the media preparation handler
+only when this process holds the grant. For example:
 
 ```go
-bindings, present, err := deployment.LoadBindings()
-if err != nil {
-	return err
+func mediaPreparationCache() (deployment.SharedDirectory, bool, error) {
+	bindings, present, err := deployment.LoadBindings()
+	if err != nil || !present {
+		return deployment.SharedDirectory{}, false, err
+	}
+	cache, err := bindings.SharedDirectory("render-cache")
+	if errors.Is(err, fault.Missing) {
+		// HTTP, worker, and console processes have no grant; assembly continues.
+		return deployment.SharedDirectory{}, false, nil
+	}
+	if err != nil {
+		return deployment.SharedDirectory{}, false, err
+	}
+	if cache.Access != deployment.DirectoryReadWrite {
+		return deployment.SharedDirectory{}, false, fmt.Errorf("media preparation requires write access")
+	}
+	return cache, true, nil
 }
-if !present {
-	return fmt.Errorf("scheduler requires deployed file bindings")
-}
-cache, err := bindings.SharedDirectory("render-cache")
-if err != nil {
-	return err
-}
-if cache.Access != deployment.DirectoryReadWrite {
-	return fmt.Errorf("scheduler requires write access")
-}
-// Write the completed media to a temporary file in cache.Path, close it,
-// then rename it to prepared.mp4 so readers never see a partial replacement.
 ```
+
+When the returned boolean is true, inject the `deployment.SharedDirectory` into
+the media preparation handler. Otherwise, continue assembling the application
+without that handler. Write completed media to a temporary file in `cache.Path`,
+close it, then rename it to `prepared.mp4` so readers never see a partial replacement.
 
 `cache.Path` is the shared path. `cache.Access` is `DirectoryReadWrite` for the
 scheduler and `DirectoryReadOnly` for an OBS wrapper that uses Go bindings.
 `cache.MaxBytes` is the declared limit. Lookups for missing or ungranted names
 return `fault.Missing`. The descriptor omits `shared_directories` for roles with
 no grants. Older strict readers need an application upgrade before receiving a grant.
+Console calls and operator invocations never receive shared directories. Their
+descriptor retains the HTTP descriptor's other bindings and runtime fields but
+omits `shared_directories`, so the same lookup returns `fault.Missing`. This also
+applies to release checks, maintenance, recovery, and rehearsal console calls.
+The HTTP unit's own descriptor keeps its declared grants.
 
 The directory grant does not imply startup order or file readiness. Add
 `"requires": ["scheduler"]` to the reader when it must start after the scheduler.

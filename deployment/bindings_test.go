@@ -73,6 +73,9 @@ func TestBindingsConcreteValuesAndRuntimeSelection(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatal(ok, err)
 	}
+	if _, err := bindings.SharedDirectory("render-cache"); !errors.Is(err, fault.Missing) {
+		t.Fatal("descriptor without shared directories must return Missing", err)
+	}
 	executable, err := bindings.Executable("checksum")
 	if err != nil || executable.Path != "/usr/bin/sha256sum" {
 		t.Fatal(executable, err)

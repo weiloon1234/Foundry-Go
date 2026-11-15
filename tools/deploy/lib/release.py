@@ -320,16 +320,14 @@ def app(host, entry, release, command, env_file=None, extra=(), timeout=90, chec
     environment = {"WEB__PUBLIC_DIR": str(release / "public")}
     if entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry:
         from feature_lifecycle import load
-        from runtime_config import effective_environment_path
+        from runtime_config import console_binding_descriptor, effective_environment_path
         if env_file is None:
             _, _, inventory, _ = load(host, entry)
             env_file = effective_environment_path(host, entry, inventory.resolution)
         relative = Path(env_file).relative_to(host.paths.instance_config(entry["name"]))
         require(len(relative.parts) == 4 and relative.parts[0] == "runtime" and relative.parts[2:] == ("http", "app.env"),
                 "runtime_resolution", "Console calls require the selected HTTP environment.")
-        descriptor = host.paths.opt(entry["name"]) / "runtime" / relative.parts[1] / "http.json"
-        check_path(descriptor, "file")
-        require(descriptor.is_file(), "runtime_resolution", "Console binding descriptor is missing.")
+        descriptor = console_binding_descriptor(host, entry, relative.parts[1])
         environment["FOUNDRY_DEPLOY_RUNTIME_FILE"] = str(descriptor)
     config = env_file or host.paths.instance_config(entry["name"]) / "app.env"
     check_path(config, "file")
