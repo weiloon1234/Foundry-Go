@@ -91,7 +91,8 @@ class FeatureRecoveryAcceptanceTests(unittest.TestCase):
         coverage = {"supported_components": ["postgresql", "encrypted_configuration", "selected_deployment"],
                     "complete_instance_coverage": protected,
                     "service_state": [{"role": "relay", "kind": "disposable" if protected else "local-unprotected"},
-                                      {"role": "socket-provider", "kind": "disposable"}],
+                                      {"role": "socket-provider", "kind": "disposable"},
+                                      {"role": "wildcard", "kind": "disposable"}],
                     "findings": findings}
         return {"status": "complete", "pgbackrest_label": "20261101-000000F",
                 "database_point": {"pgbackrest_label": "20261101-000000F"}, "deployment_sha256": "a" * 64,
