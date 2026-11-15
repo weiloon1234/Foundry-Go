@@ -529,6 +529,13 @@ class FeatureWiringFixture(unittest.TestCase):
 
 
 class FeatureWiringTests(FeatureWiringFixture):
+    def test_bootstrap_accepts_continuing_provider_with_two_copy_secrets(self):
+        self.build_archive(maintenance="continue", copies=2, copies_binding=True)
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.assertTrue(plan["ok"])
+        self.assertEqual(plan["entry"]["topology"], {**self.topology.projection(), "sha256": self.topology.sha256})
+        self.assertEqual(len(plan["observations"]["required_service_secrets"]), 2)
+
     def test_confined_wildcard_lifecycle_and_failed_proof_close_all_work(self):
         import network_confinement
         self.build_archive(confined=True)

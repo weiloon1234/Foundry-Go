@@ -369,6 +369,12 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     validate_project(project)
     validate_profile(profile, project)
     topology = validate_topology(topology, registered="sha256" in topology)
+    from topology import parse_topology, parse_profile
+    feature = topology["schema"] == 2
+    if feature:
+        import feature_maintenance
+        parsed = parse_topology({k: v for k, v in topology.items() if k != "sha256"})
+        feature_maintenance.stopped_roles(parsed)
     snapshot = inspect_host(host)
     require(snapshot["os"] == "ubuntu" and snapshot["os_version"] in {"24.04", "26.04"}, "unsupported_host", "Ubuntu 24.04 or 26.04 is required.")
     require(snapshot["architecture"] == profile["architecture"], "architecture_mismatch", "Profile architecture differs from host.")
@@ -407,12 +413,9 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
         target = check_path(host.paths.p(path), "directory")
         require(existing is not None or not target.exists(), "provision_conflict", "Unregistered instance path already exists.")
     _site_checks(host, entry)
-    from topology import parse_topology, parse_profile
-    feature = topology["schema"] == 2
     if feature:
         from feature_network import capability, package_topology
         capability()
-        parsed = parse_topology({k: v for k, v in topology.items() if k != "sha256"})
         placed = parse_profile(bound, parsed)
     observations = {"packages": packages.inspect(host, package_topology(parsed), placed) if feature else packages.inspect(host), "postgresql": postgres.inspect(host, registry),
                     "redis": redis_acl.inspect(host, registry), "certificate": certificates.inspect(host, entry)}

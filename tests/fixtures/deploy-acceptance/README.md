@@ -42,8 +42,11 @@ The builder installs it only in the isolated fixture copy, preserving the ordina
 acceptance topology and all existing container phases. It declares HTTP plus two
 copies of the existing `feature:relay` command, delivered as an application
 executable. HTTP readiness checks both copy endpoints and their read-only secret
-files through the existing copies probe. Each copy receives its own generated
-secret. No secret values are stored in the checked-in bindings template.
+files through the existing copies probe. Relay continues during maintenance because
+HTTP depends on it. The builder generates a distinct `copy-token` for each copy in
+the private `.deploy/rehearsal-bindings.json` configuration. Bootstrap installs
+these supplied secrets, which are then available to release review. No secret
+values are stored in the checked-in bindings template.
 
 The upload declaration includes the templated media route. Proxy, request,
 attachment and small pools each use a 16 MiB sparse image. Staging uses 1,152 MiB
