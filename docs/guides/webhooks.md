@@ -203,6 +203,7 @@ declaration allows.
 | `enabled` | `true` | `false` stops capturing; the viewer and retention keep working |
 | `database`, `schema` | default connection, its schema or `public` | where the table lives |
 | `config.force_redacted` | `false` | store every prefix redacted |
+| `config.mask_names` | `[]` | extra credential names under every prefix, exact and case-insensitive (at most 64, each 1 to 128 bytes, no control characters) |
 | `config.body_bytes` | 2 MiB (1 KiB to 8 MiB) | body read before the handler; larger bodies are omitted |
 | `config.value_bytes` | 4 KiB (64 B to 1 MiB) | longer redacted values read `[omitted N bytes]` |
 | `config.rate`, `config.burst` | 50, 50 (1 to 10,000) | captures admitted per second per process |
@@ -233,7 +234,12 @@ sensitive-name rule plus the word `auth`, a final word `key` (but not
 `ticket`, `signature` and `sig` parameters. The same query rule masks values in
 the query or fragment of a URL-valued request header (`Location`,
 `Content-Location`, `Referer`, `Link`, `Refresh`); paths are never masked.
-Multipart value parts without a form name are masked.
+Multipart value parts without a form name are masked. `config.mask_names` adds
+vendor credential names, such as `query` or `user`, under every webhook prefix.
+Matching is exact and case-insensitive: `query` masks `Query`, but not
+`query_id`. These names mask request headers, query values, including those in
+URL-valued request headers, and redacted JSON, form and multipart fields.
+Full-mode bodies stay exact, while request headers and query values stay masked.
 
 `http.FullCaptureBody()` stores complete bodies within the limit exactly as
 received, which is what a signature check needs. Those bodies can hold card

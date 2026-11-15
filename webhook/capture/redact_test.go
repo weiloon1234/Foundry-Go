@@ -214,6 +214,104 @@ func TestRedactMasksURLQueriesInRequestHeadersOnly(t *testing.T) {
 	}
 }
 
+func TestRedactExtraNames(t *testing.T) {
+	for _, test := range []struct {
+		name, contentType, body, redacted, unchanged string
+	}{
+		{
+			"json", "application/json",
+			`{"Query":"secret","nested":[{"USER":"nested-secret","query_id":"visible"}],"user_id":"visible"}`,
+			`{"Query":"[masked]","nested":[{"USER":"[masked]","query_id":"visible"}],"user_id":"visible"}`,
+			`{"Query":"secret","nested":[{"USER":"nested-secret","query_id":"visible"}],"user_id":"visible"}`,
+		},
+		{
+			"form", "application/x-www-form-urlencoded",
+			"Query=secret&USER=nested-secret&query_id=visible",
+			`[{"name":"Query","values":["[masked]"]},{"name":"USER","values":["[masked]"]},{"name":"query_id","values":["visible"]}]`,
+			`[{"name":"Query","values":["secret"]},{"name":"USER","values":["nested-secret"]},{"name":"query_id","values":["visible"]}]`,
+		},
+		{
+			"multipart", "multipart/form-data; boundary=b",
+			"--b\r\nContent-Disposition: form-data; name=\"Query\"\r\n\r\nsecret\r\n--b\r\nContent-Disposition: form-data; name=\"query_id\"\r\n\r\nvisible\r\n--b--\r\n",
+			`[{"name":"Query","bytes":6,"value":"[masked]"},{"name":"query_id","bytes":7,"value":"visible"}]`,
+			`[{"name":"Query","bytes":6,"value":"secret"},{"name":"query_id","bytes":7,"value":"visible"}]`,
+		},
+	} {
+		for _, full := range []bool{false, true} {
+			for _, names := range [][]string{nil, {}, {"query", "user"}} {
+				mode := "redacted"
+				if full {
+					mode = "full"
+				}
+				t.Run(test.name+"/"+mode+"/"+strings.Join(names, ","), func(t *testing.T) {
+					config := DefaultConfig()
+					config.MaskNames = names
+					s := snapshot(test.contentType, []byte(test.body))
+					s.Metadata.Full = full
+					s.Metadata.RawQuery = "Query=secret&query_id=visible&USER=nested-secret"
+					s.Metadata.Headers = []httpcapture.Field{
+						{Name: "Query", Values: []string{"secret"}},
+						{Name: "query_id", Values: []string{"visible"}},
+					}
+					url := "/return?Query=secret&query_id=visible#USER=nested-secret"
+					for _, name := range []string{"Location", "Content-Location", "Referer", "Link", "Refresh"} {
+						s.Metadata.Headers = append(s.Metadata.Headers, httpcapture.Field{Name: name, Values: []string{url}})
+					}
+					s.Completion.ResponseHeaders = []httpcapture.Field{
+						{Name: "Query", Values: []string{"sent"}},
+						{Name: "Location", Values: []string{url}},
+					}
+					row, body := redactBodyText(t, s, config.policy())
+					wantBody, wantValue, wantUser, wantURL := test.unchanged, "secret", "nested-secret", url
+					if len(names) > 0 {
+						wantBody, wantValue, wantUser = test.redacted, capturedisclosure.Masked, capturedisclosure.Masked
+						wantURL = "/return?Query=[masked]&query_id=visible#USER=[masked]"
+					}
+					if full {
+						wantBody = test.body
+					}
+					if body != wantBody {
+						t.Fatalf("body = %s, want %s", body, wantBody)
+					}
+					wantQuery := `[{"name":"Query","values":["` + wantValue + `"]},{"name":"query_id","values":["visible"]},{"name":"USER","values":["` + wantUser + `"]}]`
+					if query, err := row.Query.Text(); err != nil || query != wantQuery {
+						t.Fatal("query disclosure changed", query, err)
+					}
+					headers, err := row.Headers.Decode()
+					if err != nil || len(headers) != len(s.Metadata.Headers) || headers[0].Values[0] != wantValue || headers[1].Values[0] != "visible" {
+						t.Fatal("request header disclosure changed", headers, err)
+					}
+					for _, header := range headers[2:] {
+						if header.Values[0] != wantURL {
+							t.Fatal("URL header disclosure changed", header)
+						}
+					}
+					response, err := row.ResponseHeaders.Decode()
+					if err != nil || len(response) != 2 || response[0].Values[0] != "sent" || response[1].Values[0] != url {
+						t.Fatal("response headers were not stored whole", response, err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestRedactExtraNamesSnapshotCallerConfiguration(t *testing.T) {
+	config := DefaultConfig()
+	config.MaskNames = []string{"query"}
+	p := config.policy()
+	config.MaskNames[0] = "user"
+	s := snapshot("application/json", []byte(`{"Query":"secret","user":"visible"}`))
+	_, body := redactBodyText(t, s, p)
+	if body != `{"Query":"[masked]","user":"visible"}` {
+		t.Fatal("caller mutation changed the retained policy", body)
+	}
+	_, body = redactBodyText(t, s, DefaultConfig().policy())
+	if body != `{"Query":"secret","user":"visible"}` {
+		t.Fatal("extra names leaked into an independent policy", body)
+	}
+}
+
 func TestRedactStoresOnlyValidText(t *testing.T) {
 	s := snapshot("application/x-www-form-urlencoded", []byte("a=%00%ff"))
 	s.Metadata.Method = "P\x00ST"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	stdhttp "net/http"
+	"reflect"
 	"testing"
 	"testing/fstest"
 
@@ -93,7 +94,7 @@ func captureOrigins(app *application.App) []string {
 
 func TestWebhookCaptureSettingsDefaults(t *testing.T) {
 	defaults := application.DefaultSettings().Features.WebhookCapture
-	if !defaults.Enabled || defaults.Config != capture.DefaultConfig() || defaults.Database != "" || defaults.Schema != "" {
+	if !defaults.Enabled || !reflect.DeepEqual(defaults.Config, capture.DefaultConfig()) || defaults.Database != "" || defaults.Schema != "" {
 		t.Fatal("webhook capture defaults changed")
 	}
 	if _, err := application.WebhookCaptureCommand(); err != nil {

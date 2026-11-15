@@ -8,7 +8,6 @@ package capture
 import (
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/http"
@@ -23,7 +22,7 @@ const (
 	// MaxExclusions bounds the deny-list.
 	MaxExclusions = 64
 	// MaxMaskNames bounds the extra credential names.
-	MaxMaskNames = 64
+	MaxMaskNames = capturedisclosure.MaxMaskNames
 )
 
 // Config holds deployment policy and limits for outbound capture. Settings
@@ -80,13 +79,11 @@ func (c Config) Validate() error {
 	if c.ValueBytes < 64 || c.ValueBytes > 1<<20 || c.Retention < time.Hour || c.Retention > 365*24*time.Hour || c.MaxRows < 1_000 || c.MaxRows > 10_000_000 {
 		return invalid("outbound capture limits are out of range")
 	}
-	if len(c.MaskNames) > MaxMaskNames {
+	switch capturedisclosure.ValidateNames(c.MaskNames) {
+	case capturedisclosure.ErrTooManyNames:
 		return invalid("outbound capture has too many mask names")
-	}
-	for _, name := range c.MaskNames {
-		if name == "" || len(name) > 128 || strings.ContainsFunc(name, unicode.IsControl) {
-			return invalid("outbound capture has an invalid mask name")
-		}
+	case capturedisclosure.ErrInvalidName:
+		return invalid("outbound capture has an invalid mask name")
 	}
 	_, err := rules(c.Exclude)
 	return err

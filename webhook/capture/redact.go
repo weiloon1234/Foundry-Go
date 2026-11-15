@@ -15,19 +15,24 @@ type policy struct {
 	forceRedacted bool
 	valueBytes    int
 	bodyBytes     int
+	names         capturedisclosure.Names
 }
 
 func (c Config) policy() policy {
-	return policy{forceRedacted: c.ForceRedacted, valueBytes: c.ValueBytes, bodyBytes: c.BodyBytes}
+	return policy{forceRedacted: c.ForceRedacted, valueBytes: c.ValueBytes, bodyBytes: c.BodyBytes, names: capturedisclosure.NewNames(c.MaskNames)}
 }
 
 func (p policy) disclosure() capturedisclosure.Policy {
-	return capturedisclosure.Policy{ValueBytes: p.valueBytes, BodyBytes: p.bodyBytes}
+	return capturedisclosure.Policy{ValueBytes: p.valueBytes, BodyBytes: p.bodyBytes, Names: p.names}
 }
 
-func requestCredential(name string) bool { return capturedisclosure.CredentialName(name, nil) }
-func queryCredential(name string) bool   { return capturedisclosure.CredentialQueryName(name, nil) }
-func noCredential(string) bool           { return false }
+func (p policy) requestCredential(name string) bool {
+	return capturedisclosure.CredentialName(name, p.names)
+}
+func (p policy) queryCredential(name string) bool {
+	return capturedisclosure.CredentialQueryName(name, p.names)
+}
+func noCredential(string) bool { return false }
 
 // redact turns one kernel snapshot into the stored row without I/O, through
 // the shared disclosure owner. Input it cannot represent safely is omitted
@@ -51,7 +56,7 @@ func redact(s httpcapture.Snapshot, p policy) (store.Capture, error) {
 			omissions = append(omissions, omission)
 		}
 	}
-	query, queryTruncated, queryValid := capturedisclosure.Fields(m.RawQuery, m.QueryTruncated, p.disclosure(), queryCredential)
+	query, queryTruncated, queryValid := capturedisclosure.Fields(m.RawQuery, m.QueryTruncated, p.disclosure(), p.queryCredential)
 	if !queryValid {
 		query = nil
 	}
@@ -91,7 +96,7 @@ func redact(s httpcapture.Snapshot, p policy) (store.Capture, error) {
 	if status, present := c.Status.Get(); present {
 		row.ResponseStatus = value.Of(int32(status))
 	}
-	if row.Headers, err = value.NewJSON(capturedisclosure.Headers(m.Headers, requestCredential, queryCredential)); err != nil {
+	if row.Headers, err = value.NewJSON(capturedisclosure.Headers(m.Headers, p.requestCredential, p.queryCredential)); err != nil {
 		return store.Capture{}, err
 	}
 	if row.ResponseHeaders, err = value.NewJSON(capturedisclosure.Headers(c.ResponseHeaders, noCredential, noCredential)); err != nil {

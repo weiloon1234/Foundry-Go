@@ -5,8 +5,33 @@ import (
 	"unicode"
 
 	"github.com/weiloon1234/Foundry-Go/audit/record"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
+
+// MaxMaskNames bounds the extra credential names in either capture direction.
+const MaxMaskNames = 64
+
+var (
+	// ErrTooManyNames means the extra credential-name list exceeds its bound.
+	ErrTooManyNames = safeerror.NewFault(fault.Invalid, "capture has too many mask names")
+	// ErrInvalidName means an extra name is empty, over 128 bytes or contains a control character.
+	ErrInvalidName = safeerror.NewFault(fault.Invalid, "capture has an invalid mask name")
+)
+
+// ValidateNames checks deployment names without including them in errors.
+func ValidateNames(names []string) error {
+	if len(names) > MaxMaskNames {
+		return ErrTooManyNames
+	}
+	for _, name := range names {
+		if name == "" || len(name) > 128 || strings.ContainsFunc(name, unicode.IsControl) {
+			return ErrInvalidName
+		}
+	}
+	return nil
+}
 
 // Names are extra credential names from deployment settings, matched exactly
 // and case-insensitively.
