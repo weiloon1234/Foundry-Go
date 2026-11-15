@@ -1,7 +1,6 @@
 package infrastructure
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 
@@ -49,7 +48,6 @@ type migrationEndpoint struct {
 func (s DatabaseSettings) MigrationGroups(targets ...MigrationTarget) ([]MigrationGroup, error) {
 	var groups []MigrationGroup
 	byEndpoint := make(map[migrationEndpoint]int)
-	byKey := make([]map[migrate.Key]int, 0)
 	for _, target := range targets {
 		name := target.Connection
 		if name == "" {
@@ -78,50 +76,25 @@ func (s DatabaseSettings) MigrationGroups(targets ...MigrationTarget) ([]Migrati
 			index = len(groups)
 			byEndpoint[endpoint] = index
 			groups = append(groups, MigrationGroup{Schema: schema})
-			byKey = append(byKey, make(map[migrate.Key]int))
 		}
 		group := &groups[index]
 		if !slices.Contains(group.Connections, name) {
 			group.Connections = append(group.Connections, name)
 		}
-		definitions := append(slices.Clone(target.Definitions), migrate.KnownHistory(target.Definitions...)...)
-		for _, definition := range definitions {
-			definition = definition.Clone()
-			if definition.Availability != migrate.Available && definition.Availability != migrate.FeatureDisabled {
-				return nil, safeerror.NewFault(fault.Invalid, "invalid migration availability")
-			}
-			if previous, seen := byKey[index][definition.Key]; seen {
-				// Features sharing one schema may repeat the same framework migration.
-				prior := group.Definitions[previous]
-				availability := definition.Availability
-				definition.Availability = prior.Availability
-				if !prior.Equal(definition) {
-					return nil, safeerror.NewFault(fault.Conflict, fmt.Sprintf("migration targets sharing schema %s have conflicting definitions for %s/%s", schema, definition.Key.Origin, definition.Key.ID))
-				}
-				// Any enabled consumer of a shared store needs its migrations.
-				if availability == migrate.Available {
-					group.Definitions[previous].Availability = migrate.Available
-				}
-				continue
-			}
-			byKey[index][definition.Key] = len(group.Definitions)
-			group.Definitions = append(group.Definitions, definition)
-		}
+		group.Definitions = append(group.Definitions, target.Definitions...)
 	}
 	for i := range groups {
 		slices.Sort(groups[i].Connections)
-		registry, err := migrate.New(groups[i].Definitions...)
+		definitions, err := migrate.MergeDefinitions(groups[i].Definitions...)
 		if err != nil {
 			return nil, err
 		}
-		for _, entry := range registry.Entries() {
-			if _, exists := byKey[i][entry.Key]; exists {
-				continue
-			}
-			definition, _ := registry.Definition(entry.Key)
-			groups[i].Definitions = append(groups[i].Definitions, definition)
+		if _, err := migrate.New(definitions...); err != nil {
+			return nil, err
 		}
+		groups[i].Definitions = definitions
 	}
+
 	slices.SortFunc(groups, func(a, b MigrationGroup) int {
 		if order := strings.Compare(string(a.Connections[0]), string(b.Connections[0])); order != 0 {
 			return order

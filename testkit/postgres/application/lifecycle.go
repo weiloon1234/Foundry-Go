@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -26,7 +27,8 @@ type Application interface {
 	ShutdownTimeout() time.Duration
 	// Done closes only after all owned work and dependency cleanup finish.
 	Done() <-chan struct{}
-	// Migrations returns application migration targets.
+	// Migrations returns runnable application migration targets. Start uses
+	// MigrationHistory when the application also exposes complete history.
 	Migrations() []infrastructure.MigrationTarget
 }
 
@@ -84,7 +86,11 @@ func (e *Environment) Start(t testing.TB, app Application, domain ...infrastruct
 		}
 	})
 	started := time.Now()
-	targets := append(app.Migrations(), domain...)
+	targets, err := e.applicationTargets(app)
+	if err != nil {
+		return closeFailed(err)
+	}
+	targets = append(targets, domain...)
 	if err := e.Migrate(t.Context(), targets...); err != nil {
 		return closeFailed(err)
 	}
@@ -93,6 +99,41 @@ func (e *Environment) Start(t testing.TB, app Application, domain ...infrastruct
 		return closeFailed(err)
 	}
 	return nil
+}
+
+// applicationTargets uses complete history for configured apps, including a
+// disabled-only namespace that an explicit domain target may later extend.
+// Custom Application implementations can still supply ordinary targets alone.
+func (e *Environment) applicationTargets(app Application) ([]infrastructure.MigrationTarget, error) {
+	history, ok := app.(interface {
+		MigrationHistory() []infrastructure.MigrationGroup
+	})
+	if !ok {
+		return app.Migrations(), nil
+	}
+	if e == nil || len(e.settings.Connections) == 0 {
+		return nil, fault.New(fault.Invalid, "uninitialized PostgreSQL test environment")
+	}
+	var targets []infrastructure.MigrationTarget
+	for _, group := range history.MigrationHistory() {
+		if len(group.Connections) == 0 {
+			return nil, fault.New(fault.Invalid, "migration history requires a connection")
+		}
+		connection := group.Connections[0]
+		_, schema, err := e.settings.ScopedSchema(connection)
+		if err != nil {
+			return nil, err
+		}
+		// WithDatabaseScopes preserves archive settings, including public.
+		// Never open an unowned namespace merely to inspect disabled history.
+		if group.Schema != schema && !slices.ContainsFunc(group.Definitions, func(d migrate.Definition) bool {
+			return d.Availability != migrate.FeatureDisabled
+		}) {
+			continue
+		}
+		targets = append(targets, infrastructure.MigrationTarget{Connection: connection, Schema: group.Schema, Definitions: group.Definitions})
+	}
+	return targets, nil
 }
 
 // migrationGroups keeps every target inside its test namespace, then reuses the

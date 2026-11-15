@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -136,7 +135,16 @@ func validName(name string) bool {
 // invalid dependencies, and cycles are errors. Independent nodes sort by ID,
 // then origin. Dependency lists are canonicalized; SQL ordering is preserved.
 func New(definitions ...Definition) (*Registry, error) {
-	definitions, err := withHistory(definitions)
+	// Explicit duplicates remain declaration errors; carried history and grouped
+	// targets use MergeDefinitions to collapse matching declarations.
+	explicit := make(map[Key]bool, len(definitions))
+	for _, definition := range definitions {
+		if explicit[definition.Key] {
+			return nil, safeerror.NewFault(fault.Duplicate, "migration key is duplicated: "+keyLabel(definition.Key))
+		}
+		explicit[definition.Key] = true
+	}
+	definitions, err := MergeDefinitions(definitions...)
 	if err != nil {
 		return nil, err
 	}
@@ -144,9 +152,6 @@ func New(definitions ...Definition) (*Registry, error) {
 	for _, definition := range definitions {
 		if (definition.Availability != Available && definition.Availability != FeatureDisabled) || (definition.Mode != Transactional && definition.Mode != NonTransactional) || !validKey(definition.Key) || !validName(string(definition.Version)) || len(definition.SQL) == 0 {
 			return nil, safeerror.NewFault(fault.Invalid, "invalid migration definition")
-		}
-		if _, exists := byKey[definition.Key]; exists {
-			return nil, safeerror.NewFault(fault.Duplicate, "migration key is duplicated: "+keyLabel(definition.Key))
 		}
 		statements := append([]string(nil), definition.SQL...)
 		down := append([]string(nil), definition.Down...)
@@ -239,11 +244,17 @@ func sortKeys(keys []Key) {
 }
 func keyLabel(key Key) string { return fmt.Sprintf("(%s, %s)", key.Origin, key.ID) }
 
-// Equal compares declarations, including availability, without comparing the
-// immutable history context carried by RunnableDefinitions.
+// Equal compares declarations, including availability and ordered SQL/Down.
+// Dependency order, nil versus empty slices, and carried history are immaterial.
+// Duplicate dependencies remain invalid and are not collapsed by comparison.
 func (d Definition) Equal(other Definition) bool {
-	d.history, other.history = nil, nil
-	return reflect.DeepEqual(d, other)
+	left, right := slices.Clone(d.Requires), slices.Clone(other.Requires)
+	sortKeys(left)
+	sortKeys(right)
+	return d.Availability == other.Availability && d.Mode == other.Mode &&
+		d.Key == other.Key && d.Version == other.Version &&
+		slices.Equal(d.SQL, other.SQL) && slices.Equal(d.Down, other.Down) &&
+		slices.Equal(left, right)
 }
 
 // RunnableDefinitions returns owned executable definitions. Each carries the
@@ -262,10 +273,9 @@ func (r *Registry) RunnableDefinitions() []Definition {
 	return definitions
 }
 
-// KnownHistory returns owned disabled definitions attached to runnable snapshots.
-// Composers expand this metadata before deduplicating declarations. New includes
-// it automatically. Distinct contexts remain separate so callers can detect drift.
-func KnownHistory(definitions ...Definition) []Definition {
+// knownHistory expands every distinct snapshot context before merging, so no
+// declaration can discard another context and hide a conflict.
+func knownHistory(definitions ...Definition) []Definition {
 	var known []Definition
 	seen := make(map[*Registry]bool)
 	for _, definition := range definitions {
@@ -284,25 +294,33 @@ func KnownHistory(definitions ...Definition) []Definition {
 	return known
 }
 
-func withHistory(definitions []Definition) ([]Definition, error) {
-	result := slices.Clone(definitions)
-	explicit := make(map[Key]bool, len(definitions))
-	for _, definition := range definitions {
-		explicit[definition.Key] = true
-	}
-	known := make(map[Key]Definition)
-	for _, d := range KnownHistory(definitions...) {
-		if explicit[d.Key] {
-			continue
+// MergeDefinitions composes owned declarations with their carried history in
+// first-seen order. Repeated keys must agree, including Down; dependency order
+// does not matter. Available wins when consumers share the same declaration.
+// New validates the resulting definitions and dependency graph before use.
+func MergeDefinitions(definitions ...Definition) ([]Definition, error) {
+	all := append(slices.Clone(definitions), knownHistory(definitions...)...)
+	var result []Definition
+	byKey := make(map[Key]int, len(all))
+	for _, definition := range all {
+		if definition.Availability != Available && definition.Availability != FeatureDisabled {
+			return nil, safeerror.NewFault(fault.Invalid, "invalid migration availability")
 		}
-		if previous, exists := known[d.Key]; exists {
-			if !previous.Equal(d) {
-				return nil, safeerror.NewFault(fault.Conflict, "conflicting migration history context: "+keyLabel(d.Key))
+		if index, exists := byKey[definition.Key]; exists {
+			availability := definition.Availability
+			definition.Availability = result[index].Availability
+			if !result[index].Equal(definition) {
+				return nil, safeerror.NewFault(fault.Conflict, "conflicting migration definitions: "+keyLabel(definition.Key))
+			}
+			if availability == Available {
+				result[index].Availability = Available
 			}
 			continue
 		}
-		known[d.Key] = d
-		result = append(result, d)
+		definition = definition.Clone()
+		definition.history = nil
+		byKey[definition.Key] = len(result)
+		result = append(result, definition)
 	}
 	return result, nil
 }
