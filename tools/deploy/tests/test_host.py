@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import DeployError
 from host import Host
 import host as host_module
+from timing_support import ManualClock
 
 
 class DNSResolverTests(unittest.TestCase):
@@ -183,42 +184,67 @@ with machine.command_journal(path):
 
     def test_sixteen_failed_inspections_release_capacity_and_share_the_journal_deadline(self):
         with tempfile.TemporaryDirectory() as root:
-            host, slots = Host(), threading.BoundedSemaphore(16)
+            host, slots, clock = Host(), threading.BoundedSemaphore(16), ManualClock()
             path = Path(root).resolve() / "commands.json"
             path.write_text("[]")
-            completed = threading.Barrier(17)
+            journal_ready = threading.Barrier(17)
+            deadlines = []
+            attempted, attempting, file_waiting = set(), threading.Event(), threading.Event()
+            thread_lock, flock = host._command_journal_lock, host_module.fcntl.flock
+            attempt_lock = threading.Lock()
+            def acquire(*args, **kwargs):
+                with attempt_lock:
+                    attempted.add(threading.get_ident())
+                    if len(attempted) == 16:
+                        attempting.set()
+                return thread_lock.acquire(*args, **kwargs)
+            def file_lock(*args):
+                try:
+                    return flock(*args)
+                except BlockingIOError:
+                    file_waiting.set()
+                    raise
+            observed_lock = Mock(wraps=thread_lock)
+            observed_lock.acquire.side_effect = acquire
+            record = host._record_command_failure
+            def journal(*args):
+                deadlines.append(host_module.current_observation().deadline)
+                journal_ready.wait(10)
+                return record(*args)
             def spawn(args, **kwargs):
                 process = self.process()
                 process.returncode = 0 if args[2] == "healthy.service" else 5
-                def communicate(**kwargs):
-                    if process.returncode:
-                        completed.wait(2)
-                    return "", ""
-                process.communicate.side_effect = communicate
+                process.communicate.return_value = ("", "")
                 return process
-            def inspect(index):
-                with host_module.ObservationBudget(time.monotonic() + 30, slots):
+            def inspect(unit):
+                with host_module.ObservationBudget(clock.monotonic() + 30, slots):
                     try:
-                        host.run(["systemctl", "show", f"failed-{index}.service"], timeout=.5)
+                        return host.run(["systemctl", "show", unit], timeout=5)
                     except BaseException as error:
                         return error
-                self.fail("Failed inspection was accepted")
-            with host.command_journal(path), ThreadPoolExecutor(16) as pool:
-                with self.held_journal_file(path), patch.object(host_module.subprocess, "Popen", side_effect=spawn):
-                    started = time.monotonic()
-                    futures = [pool.submit(inspect, index) for index in range(16)]
-                    completed.wait(2)
-                    healthy_error = None
+            with host.command_journal(path), ThreadPoolExecutor(17) as pool:
+                with self.held_journal_file(path), patch.object(host_module, "time", clock), \
+                        patch.object(host_module.subprocess, "Popen", side_effect=spawn), \
+                        patch.object(host, "_record_command_failure", side_effect=journal), \
+                        patch.object(host, "_command_journal_lock", observed_lock), \
+                        patch.object(host_module.fcntl, "flock", side_effect=file_lock):
+                    futures = [pool.submit(inspect, f"failed-{index}.service") for index in range(16)]
                     try:
-                        with host_module.ObservationBudget(time.monotonic() + .2, slots):
-                            host.run(["systemctl", "show", "healthy.service"], timeout=.2)
-                    except BaseException as error:
-                        healthy_error = error
-                    done, _ = wait(futures, timeout=max(0, started + 1 - time.monotonic()))
+                        journal_ready.wait(10)
+                        self.assertEqual(deadlines, [1005] * 16)
+                        # All failures are persisting while the external lock is
+                        # held. Healthy inspection must complete before expiry.
+                        healthy = pool.submit(inspect, "healthy.service").result(timeout=10)
+                        self.assertIsInstance(healthy, subprocess.CompletedProcess)
+                        self.assertEqual(healthy.returncode, 0)
+                        self.assertTrue(attempting.wait(10), "Not all failures attempted journal locking")
+                        self.assertTrue(file_waiting.wait(10), "Journal file lock was not contended")
+                    finally:
+                        clock.advance(5)
+                    done, _ = wait(futures, timeout=10)
                     within_budget = len(done) == 16
-                errors = [future.result(timeout=2) for future in futures]
-            self.assertIsNone(healthy_error, "Journal persistence retained inspection capacity")
-            self.assertTrue(within_budget, "Journal lock waits exceeded the shared inspection deadline")
+                errors = [future.result(timeout=10) for future in futures]
+            self.assertTrue(within_budget, "Journal waits did not finish at the inspection deadline with the file lock still held")
             self.assertEqual(json.loads(path.read_text()), [])
             for error in errors:
                 self.assertIsInstance(error, DeployError)
@@ -229,27 +255,41 @@ with machine.command_journal(path):
     def test_cancellation_interrupts_both_journal_lock_waits(self):
         for held in ("thread", "file"):
             with self.subTest(held=held), tempfile.TemporaryDirectory() as root:
-                host, entered = Host(), threading.Event()
+                host, waiting, clock = Host(), threading.Event(), ManualClock()
                 path = Path(root).resolve() / "commands.json"
                 path.write_text("[]")
-                budget = host_module.ObservationBudget(time.monotonic() + 30)
+                budget = host_module.ObservationBudget(clock.monotonic() + 30)
+                thread_lock, flock = host._command_journal_lock, host_module.fcntl.flock
+                def acquire(*args, **kwargs):
+                    waiting.set()
+                    return thread_lock.acquire(*args, **kwargs)
+                def file_lock(*args):
+                    try:
+                        return flock(*args)
+                    except BlockingIOError:
+                        waiting.set()
+                        raise
+                observed_lock = Mock(wraps=thread_lock)
+                observed_lock.acquire.side_effect = acquire
                 def fail():
                     with budget:
-                        entered.set()
                         try:
                             host.check_result(subprocess.CompletedProcess(["systemctl", "show", "test.service"], 5, "", ""))
                         except BaseException as error:
                             return error
                 with host.command_journal(path), ThreadPoolExecutor(1) as pool:
-                    with host._command_journal_lock if held == "thread" else self.held_journal_file(path):
-                        future = pool.submit(fail)
-                        self.assertTrue(entered.wait(1))
-                        time.sleep(.05)
-                        budget.cancel()
-                        done, _ = wait((future,), timeout=.5)
-                        interrupted = bool(done)
-                    error = future.result(timeout=2)
-                self.assertTrue(interrupted, "Cancellation did not interrupt the journal lock wait")
+                    with thread_lock if held == "thread" else self.held_journal_file(path):
+                        with patch.object(host_module, "time", clock), \
+                                patch.object(host, "_command_journal_lock", observed_lock if held == "thread" else thread_lock), \
+                                patch.object(host_module.fcntl, "flock", side_effect=file_lock):
+                            future = pool.submit(fail)
+                            self.assertTrue(waiting.wait(10), "Worker never attempted the held lock")
+                            budget.cancel()
+                            done, _ = wait((future,), timeout=10)
+                            interrupted = bool(done)
+                    error = future.result(timeout=10)
+                # Logical time never advanced: completion cannot be a timeout.
+                self.assertTrue(interrupted, "Cancellation did not interrupt the held journal lock")
                 self.assertIsInstance(error, DeployError)
                 self.assertEqual(error.code, "command_failed")
                 self.assertIn("journal entry was not recorded", error.detail)

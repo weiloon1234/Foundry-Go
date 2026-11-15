@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Readiness concurrency and journal-lock tests use controlled monotonic time and
+  worker checkpoints, preserving deadline, stability and cancellation checks
+  without depending on scheduler timing under parallel test load.
+
 - Artifact downloads now follow signed HTTPS redirects, including GitHub release
   assets, with the exact path and query. Declared pins still reject queries,
   credentials and fragments. Redirects retain public-address and peer checks,

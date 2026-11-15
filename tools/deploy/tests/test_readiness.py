@@ -13,14 +13,16 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
 import contracts as c
-from host import Host, Paths
+from host import Host, Paths, current_observation
+import host as host_module
+from timing_support import Checkpoints, ManualClock
 import release
 import services
 from test_copies import numbered_inventory
 
 
 class ReadinessTests(unittest.TestCase):
-    def fixture(self, count=1):
+    def fixture(self, count=1, clock=time):
         stack = self.enterContext(ExitStack())
         root = stack.enter_context(tempfile.TemporaryDirectory())
         host = Host(Paths(root))
@@ -32,7 +34,7 @@ class ReadinessTests(unittest.TestCase):
             path.write_bytes(b"native")
             path.chmod(0o755)
             inventory.specs[name] = replace(spec, executable_sha256=c.digest(path))
-        started = time.monotonic()
+        started = clock.monotonic()
         observation = {"ActiveState": "active", "NRestarts": "0", "MainPID": "20",
                        "process": {"start": "42"}, "ExecMainStartTimestampMonotonic": str(int(started * 1_000_000))}
         stack.enter_context(patch.object(host, "read_registry", return_value={"instances": {}}))
@@ -40,49 +42,40 @@ class ReadinessTests(unittest.TestCase):
         stack.enter_context(patch.object(release, "_matches_executable", return_value=True))
         return host, inventory, started, observation
 
-    def test_twelve_second_probe_does_not_expire_ten_second_peer(self):
-        host, inventory, started, _ = self.fixture()
-        names = inventory.select(roles=("http", "relay"))
-        fast_observations = []
-        def probe(host, inventory, identity, deadline):
-            if identity.role == "relay":
-                time.sleep(12)
-            else:
-                fast_observations.append(time.monotonic() - started)
-            return True
-        def contract(role):
-            return SimpleNamespace(timeout_seconds=10 if role.common.name == "http" else 30, listener="unused")
-        with patch.object(services, "probe", side_effect=probe), \
-                patch.object(services, "readiness_probe", side_effect=contract), \
-                patch.object(release, "STABILITY_SECONDS", 5):
-            self.assertTrue(services.wait_ready_set(host, inventory, names, started + 35, starting=True))
-        self.assertTrue(any(5 <= elapsed < 10 for elapsed in fast_observations))
-
-    def test_sixteen_slow_probes_cannot_queue_112_short_deadlines(self):
-        host, inventory, started, observation = self.fixture(128)
+    def slow_peer_scenario(self, count):
+        clock, checkpoints = ManualClock(), Checkpoints()
+        host, inventory, started, observation = self.fixture(count, clock)
         relay = inventory.roles["relay"]
         inventory.roles["slow"] = replace(relay, common=replace(relay.common, name="slow"))
+        slow_count = 16 if count == 128 else 1
         def rename(identity):
             if identity.role != "relay":
                 return identity
-            return c.UnitIdentity(identity.instance_id, "slow" if identity.ordinal <= 16 else "relay",
-                                  identity.ordinal if identity.ordinal <= 16 else identity.ordinal - 16)
+            return c.UnitIdentity(identity.instance_id, "slow" if identity.ordinal <= slow_count else "relay",
+                                  identity.ordinal if identity.ordinal <= slow_count else identity.ordinal - slow_count)
         inventory.units = {rename(name): unit for name, unit in inventory.units.items()}
         inventory.specs = {rename(name): replace(spec, identity=rename(name)) for name, spec in inventory.specs.items()}
-        names = tuple(name for name in inventory.units if name.role in ("slow", "relay"))
-        first, fast_stable = {}, set()
+        names = inventory.select(roles=("slow", "relay") if count == 128 else ("http", "slow"))
+        slow = tuple(name for name in names if name.role == "slow")
+        fast = tuple(name for name in names if name.role != "slow")
+        calls, first, proved = {}, {}, {}
         active_commands, peak_commands = 0, 0
         lock = threading.Lock()
+        inspection_wave = threading.Barrier(min(len(names), services.READINESS_INSPECTIONS))
+        admitted = 0
         def spawn(*args, **kwargs):
             from unittest.mock import Mock
-            nonlocal active_commands, peak_commands
+            nonlocal active_commands, peak_commands, admitted
             with lock:
+                admitted += 1
+                synchronize = admitted <= inspection_wave.parties
                 active_commands += 1
                 peak_commands = max(peak_commands, active_commands)
             def communicate(**kwargs):
                 nonlocal active_commands
                 try:
-                    time.sleep(.005)
+                    if synchronize:
+                        inspection_wave.wait(10)
                     return "", ""
                 finally:
                     with lock:
@@ -92,27 +85,52 @@ class ReadinessTests(unittest.TestCase):
             host.run(["systemctl", "show", unit], timeout=5)
             return observation
         def probe(host, inventory, identity, deadline):
-            elapsed = time.monotonic() - started
-            first.setdefault(identity, elapsed)
-            if identity.role == "slow":
-                time.sleep(12)
-            elif 5 <= elapsed < 10:
-                fast_stable.add(identity)
+            calls[identity] = attempt = calls.get(identity, 0) + 1
+            first.setdefault(identity, clock.monotonic() - started)
+            if attempt == 2:
+                self.assertEqual(current_observation().deadline, started + (30 if identity in slow else 10),
+                                 "The first observation must not complete the stability proof")
+            if identity in slow and attempt <= 2:
+                checkpoints.hold((identity, attempt))
+            elif identity in fast and attempt in (2, 3):
+                if attempt == 3:
+                    # A third observation must retain the peer beyond its original
+                    # ten-second deadline only after its five-second proof.
+                    proved[identity] = (clock.monotonic() - started, current_observation().deadline)
+                checkpoints.hold((identity, attempt))
             return True
+        def scenario():
+            checkpoints.wait(*((name, 1) for name in slow), *((name, 2) for name in fast))
+            self.assertEqual(set(first), set(names))
+            self.assertEqual(set(first.values()), {0})
+            clock.advance(6)
+            checkpoints.release(*((name, 2) for name in fast))
+            checkpoints.wait(*((name, 3) for name in fast))
+            self.assertEqual(proved, {name: (6, started + 35) for name in fast})
+            clock.advance(6)
+            checkpoints.release(*((name, 1) for name in slow))
+            checkpoints.wait(*((name, 2) for name in slow))
+            clock.advance(6)
+            # Subsequent health checks return immediately. Repeating the artificial
+            # twelve-second stall can start a third probe before the group drains.
         def contract(role):
             return SimpleNamespace(timeout_seconds=30 if role.common.name == "slow" else 10, listener="unused")
-        with patch("host.subprocess.Popen", side_effect=spawn), patch("host.os.killpg"), \
+        with patch.object(services, "time", clock), patch.object(host_module, "time", clock), \
+                patch("host.subprocess.Popen", side_effect=spawn), patch("host.os.killpg"), \
                 patch.object(release, "service", side_effect=inspect), \
                 patch.object(services, "probe", side_effect=probe), \
                 patch.object(services, "readiness_probe", side_effect=contract), \
-                patch.object(release, "STABILITY_SECONDS", 5):
+                patch.object(release, "STABILITY_SECONDS", 5), checkpoints.drive(clock, scenario):
             self.assertTrue(services.wait_ready_set(host, inventory, names, started + 35, starting=True))
-        self.assertEqual(len(first), 128)
-        self.assertLess(max(first.values()), 2)
-        self.assertEqual(len(fast_stable), 112)
-        self.assertGreater(peak_commands, 1)
-        self.assertLessEqual(peak_commands, 16)
+        self.assertEqual(len(proved), len(fast))
+        self.assertEqual(peak_commands, min(len(names), services.READINESS_INSPECTIONS))
         self.assertEqual(active_commands, 0)
+
+    def test_twelve_second_probe_does_not_expire_ten_second_peer(self):
+        self.slow_peer_scenario(1)
+
+    def test_sixteen_slow_probes_cannot_queue_112_short_deadlines(self):
+        self.slow_peer_scenario(128)
 
     def test_specific_errors_survive_false_peer_and_follow_inventory_order(self):
         from host import current_observation
@@ -138,7 +156,8 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual([error.code for error in caught.exception.__cause__.exceptions], ["confinement", "inspection"])
 
     def test_128_sleeping_probes_are_fair_and_bounded(self):
-        host, inventory, started, _ = self.fixture(128)
+        clock, checkpoints = ManualClock(), Checkpoints()
+        host, inventory, started, _ = self.fixture(128, clock)
         import socket
         counts, active, peak, threads = {}, 0, 0, 0
         sockets = []
@@ -151,22 +170,28 @@ class ReadinessTests(unittest.TestCase):
                 threads = max(threads, sum(t.name.startswith("foundry-ready") for t in threading.enumerate()))
                 active += 1
                 peak = max(peak, active)
-                counts[identity] = counts.get(identity, 0) + 1
+                counts[identity] = attempt = counts.get(identity, 0) + 1
             try:
-                time.sleep(.02)
+                if attempt <= 2:
+                    checkpoints.hold((identity, attempt))
                 return True
             finally:
                 sock.close()
                 with lock:
                     active -= 1
-        with patch.object(services, "probe", side_effect=probe), \
+        def scenario():
+            checkpoints.wait(*((name, 1) for name in inventory.units))
+            checkpoints.release(*((name, 1) for name in inventory.units))
+            checkpoints.wait(*((name, 2) for name in inventory.units))
+            clock.advance(5)
+        with patch.object(services, "time", clock), patch.object(host_module, "time", clock), \
+                patch.object(services, "probe", side_effect=probe), \
                 patch.object(services, "readiness_probe", return_value=None), \
-                patch.object(release, "STABILITY_SECONDS", .2):
-            self.assertTrue(services.wait_ready_set(host, inventory, inventory.units, started + 5, starting=True))
+                patch.object(release, "STABILITY_SECONDS", 5), checkpoints.drive(clock, scenario):
+            self.assertTrue(services.wait_ready_set(host, inventory, inventory.units, started + 30, starting=True))
         self.assertEqual(set(counts), set(inventory.units))
         self.assertTrue(all(count >= 2 for count in counts.values()))
-        self.assertGreater(peak, 16)
-        self.assertLessEqual(peak, len(inventory.units))
+        self.assertEqual(peak, len(inventory.units))
         self.assertLessEqual(threads, len(inventory.units))
         self.assertLessEqual(threads, c.MAX_UNITS)
         self.assertTrue(all(sock.fileno() == -1 for sock in sockets))
