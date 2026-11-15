@@ -49,16 +49,33 @@ def replacement_binding(value, metadata, profile, operation_id, mode):
             and binding.target_host_id == profile["host"]["host_id"]
             and binding.deployment_sha256 == canonical_digest(metadata["feature_recovery"]["deployment"])
             and {item.name for item in binding.listeners} == set(listeners)
-            and binding.dns_cutover == "external_pending",
+            and binding.dns_cutover in ("external_pending", "managed_pending"),
             "recovery_public_binding", "Replacement binding differs from the source selection, target or operation.")
     hostnames = {}
     for item in binding.listeners:
         original = listeners[item.name]
         require(item.hostname == original["dns"]["hostname"] and item.ports == tuple(original["ports"])
+                and item.dns_mode == original["dns"]["mode"]
                 and set(item.old_addresses) == set(original["dns"]["public_addresses"])
                 and item.source_binding_sha256 == canonical_digest(original)
                 and not set(item.old_addresses) & set(item.replacement_addresses),
                 "recovery_public_binding", "Replacement bindings must preserve listener identity and use new addresses.")
+        if item.dns_mode == "managed":
+            from dns import Record
+            records = {r.ownership_id: r for r in (Record.parse(v) for v in original["dns"]["records"])}
+            require(len(item.managed_records) == len(records)
+                    and {c.ownership_id for c in item.managed_records} == set(records)
+                    and {c.prior.value.content for c in item.managed_records} == set(item.old_addresses)
+                    and {c.desired.content for c in item.managed_records} == set(item.replacement_addresses),
+                    "recovery_public_binding", "Recovery must update every owned record exactly once.")
+            for change in item.managed_records:
+                record = records[change.ownership_id]
+                require(change.zone_id == original["dns"]["zone_id"] and change.instance_id == binding.source_instance_id
+                        and change.prior.value.name == change.desired.name == item.hostname
+                        and change.prior.value.content == record.address
+                        and change.prior.value.ttl == change.desired.ttl == record.ttl
+                        and change.prior.value.proxied is False,
+                        "recovery_public_binding", "Recovery may change only explicit public addresses, preserving owned record policy.")
         addresses = (frozenset(item.old_addresses), frozenset(item.replacement_addresses))
         require(item.hostname not in hostnames or hostnames[item.hostname] == addresses,
                 "recovery_public_binding", "Listeners sharing a hostname must request the same DNS records.")
@@ -71,6 +88,10 @@ def effective_profile(profile, binding):
     if binding is not None:
         for item in binding.listeners:
             value["listeners"][item.name]["dns"]["public_addresses"] = list(item.replacement_addresses)
+            if item.managed_records:
+                addresses = {c.ownership_id: c.desired.content for c in item.managed_records}
+                for record in value["listeners"][item.name]["dns"]["records"]:
+                    record["address"] = addresses[record["ownership_id"]]
     return value
 
 
@@ -107,6 +128,16 @@ def _dns_result(host, journal):
             and journal.get("private_takeover_healthy_at"), "recovery_dns_not_ready",
             "DNS instructions require old-server-stopped confirmation and private takeover health.")
     binding = RecoveryPublicBinding.parse(raw)
+    managed = any(item.dns_mode == "managed" for item in binding.listeners)
+    if managed:
+        import dns
+        registry = host.read_registry()
+        entry = registry["instances"][binding.source_instance_id]
+        state = dns.load(host, entry)
+        item = state["operations"].get(binding.operation_id)
+        require(item is not None and item["changes"] == dns.recovery_changes(binding)
+                and len(item["results"]) == len(item["changes"]) and set(item["results"].values()) == {"applied"},
+                "dns_reconciliation", "Managed cutover has not been proved by record-ID read-back.")
     profile = parse_profile(journal["intent"]["effective_profile"], parse_topology(journal["intent"]["topology"], registered=True))
     observations = []
     for _, listener in profile.listeners:
@@ -119,9 +150,11 @@ def _dns_result(host, journal):
     matched = all(any(o.state == "resolved" and o.hostname == item.hostname and set(o.addresses) == set(item.replacement_addresses)
                       for o in observations) for item in binding.listeners)
     observed = replace(binding, observations=observations,
-                       dns_cutover="external_observed" if matched else "external_pending")
+                       dns_cutover="managed_applied" if managed else "external_observed" if matched else "external_pending")
     instructions = []
     for item in binding.listeners:
+        if item.dns_mode == "managed":
+            continue
         for family, kind in ((4, "A"), (6, "AAAA")):
             old = sorted(a for a in item.old_addresses if ipaddress.ip_address(a).version == family)
             new = sorted(a for a in item.replacement_addresses if ipaddress.ip_address(a).version == family)
@@ -134,6 +167,7 @@ def _dns_result(host, journal):
         journal.setdefault("dns_matched_at", now())
     _save(host, journal)
     return {"dns_cutover": observed.dns_cutover, "dns_recovery": journal["dns_recovery"],
+            "dns_propagation": "observed_match" if matched else "unverified",
             "dns_matched_at": journal.get("dns_matched_at"), "traffic_cutover": "operator_verification_required",
             "remaining_manual_steps": instructions}
 
@@ -363,6 +397,13 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
                       recovery_enabled_roles=list(enabled), recovery_maintenance_holds=list(holds),
                       deployment_sha256=canonical_digest(recovered["metadata"]["feature_recovery"]["deployment"]))
     journal = _load(host)
+    if binding is not None and any(item.dns_mode == "managed" for item in binding.listeners) and journal is None:
+        import dns
+        import certificates
+        key = recovered["prefix"] + "managed-dns.json"
+        require(key in files, "dns_recovery", "Recovery requires the archived managed DNS ownership file.")
+        intake = parse_json(files[recovered["prefix"] + "bootstrap-secrets.json"])
+        dns.recovery_review(binding, recovered["metadata"], parse_json(files[key]), certificates.intake_dns_token(intake))
     if not journal:
         require(not host.paths.p(JOURNAL).parent.exists(), "recovery_conflict", "An unclaimed recovery directory already exists.")
     if not journal or journal["phase"] == "preflight":
@@ -461,7 +502,7 @@ def _restore_runtime_access(host, entry, recovered):
     if snapshot is not None:
         paths.update(snapshot.get("service_secret_files", []))
         paths.update(path for role in snapshot["secret_paths"].values() for path in role.values())
-    private_names = {"secrets.json", "bootstrap-secrets.json", "backup.json", "certificate.json", "service-secrets.json"}
+    private_names = {"secrets.json", "bootstrap-secrets.json", "backup.json", "certificate.json", "service-secrets.json", "managed-dns.json"}
     require(all(path.startswith(canonical) and ".." not in Path(path).parts
                 and Path(path).name not in private_names for path in paths),
             "recovery_members", "A runtime file reference cannot grant access to private configuration records.")

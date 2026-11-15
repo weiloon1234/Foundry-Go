@@ -3,6 +3,7 @@ from pathlib import Path
 from dataclasses import asdict
 
 import admission
+import dns
 import feature_lifecycle as lifecycle
 import feature_network
 import listeners
@@ -15,7 +16,7 @@ from contracts import (Deployment, ReleaseDeclaration, RuntimeResolution, atomic
 from topology import parse_profile, parse_topology
 
 
-def observations(host, registry, entry, topology, profile):
+def observations(host, registry, entry, topology, profile, operation_id):
     import release
     import feature_maintenance
     package = packages.inspect(host, feature_network.package_topology(topology), profile)
@@ -24,7 +25,7 @@ def observations(host, registry, entry, topology, profile):
         _, _, current, _ = lifecycle.load(host, entry)
         enabled = list(services.enabled_units(host, current.units))
         units = {name: release.service(host, unit) for name, unit in current.units.items()}
-        network = feature_network.plan(host, current.topology, current.profile, package, entry=entry)
+        network = feature_network.plan(host, current.topology, current.profile, package, entry=entry, review_operation=operation_id)
     else:
         network = feature_network.plan(host, topology, profile, package, entry=entry)
     return {"host_revision": registry["revision"], "configuration_revision": entry["configuration_revision"],
@@ -32,7 +33,8 @@ def observations(host, registry, entry, topology, profile):
             "maintenance": feature_maintenance.live(host, entry), "maintenance_hold": feature_maintenance.record(host, entry),
             "current_resolution": entry.get("deployment_selection", {}).get("selected_resolution_id"),
             "packages": package, "network": network, "enabled": enabled, "units": units,
-            "dns": [listeners.external_dns(binding, listeners.observe_dns(binding)) for _, binding in profile.listeners]}
+            "dns": [listeners.external_dns(binding, listeners.observe_dns(binding)) for _, binding in profile.listeners
+                    if binding.dns_mode == "external"]}
 
 
 
@@ -135,7 +137,8 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
         if restoring:
             require(not release.migration_status(host, entry, target_path, env_file=env),
                     "rollback_schema", "Target release is incompatible with the current database schema.")
-        observed = observations(host, registry, entry, topology, candidate_profile)
+        observed = observations(host, registry, entry, topology, candidate_profile, operation_id)
+        managed_dns = dns.plan(host, entry, candidate_profile, operation_id)
         enabled, running, removed = lifecycle.transition_enablement(host, entry, inventory, restoring=restoring)
         holds, maintenance_running, _ = feature_maintenance.selection(host, entry, inventory, enabled, running, None)
         # Values and credential-derived digests exist only in the private records.
@@ -151,6 +154,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                   "restoring": restoring, "enabled_roles": list(enabled), "running_roles": list(running),
                   "maintenance_holds": sorted(holds), "maintenance_running_roles": sorted(maintenance_running),
                   "removed_enablement": removed}
+        public["managed_dns"] = managed_dns
         public["plan_token"] = canonical_digest(public)
         admission.protected_directory(host, path.parent, 0o700)
         atomic_json(path, {"public": public, "manifest": manifest, "launch": launch}, mode=0o600)
@@ -175,7 +179,8 @@ def reviewed(host, registry, entry, request, *, pin=None):
                 "stale_plan", "Release archive changed after review.")
     topology = parse_topology(launch["topology"])
     profile = parse_profile(launch["profile"], topology)
-    current = observations(host, registry, entry, topology, profile)
+    dns.verify(host, entry, public.get("managed_dns", []))
+    current = observations(host, registry, entry, topology, profile, request["operation_id"])
     expected = public["observations"]
     if pin is not None:
         operations.verify_executor(host, request, pin)

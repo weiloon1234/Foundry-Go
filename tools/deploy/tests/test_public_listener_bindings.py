@@ -70,7 +70,7 @@ class PublicListenerBindingTests(unittest.TestCase):
         request = {"client": {"generation": 13}, "project": {}, "profile": {}, "recovery_archive": "/private/input"}
         for topology, floor in ((self.declaration(), 13), (declaration(), 14)):
             recovered = {"feature": SimpleNamespace(topology=t.parse_topology(topology)),
-                         "metadata": {"deployment_selection": {"minimum_generation": floor}}}
+                         "metadata": {"profile": {}, "deployment_selection": {"minimum_generation": floor}}}
             with self.subTest(floor=floor), patch.object(recover, "read_archive", return_value={}), \
                     patch.object(recover, "archive_configuration", return_value=recovered), \
                     self.assertRaisesRegex(c.DeployError, "generation 14"):

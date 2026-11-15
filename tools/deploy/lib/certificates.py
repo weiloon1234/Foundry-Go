@@ -164,6 +164,19 @@ def _resolve_zone(token, domain):
         raise DeployError("certificate_zone_invalid", "Cloudflare zone lookup failed; verify token scope privately.") from None
 
 
+def dns_token(host, entry, zone_id):
+    """Borrow the certificate owner's scoped token without creating another store."""
+    require(zone_id == _zone(entry), "dns_zone_mismatch", "Managed DNS must use the certificate owner's zone.")
+    return _credentials(host, entry).read_text().removeprefix("dns_cloudflare_api_token = ").strip()
+
+
+def intake_dns_token(value):
+    """Read the same private intake during bootstrap or replacement-host planning."""
+    token = value.get("cloudflare_dns_token")
+    _validate_token(token)
+    return token
+
+
 def _validate_token(token):
     require(isinstance(token, str) and re.fullmatch(r"[A-Za-z0-9_-]{20,256}", token),
             "certificate_credentials", "Supply the zone-scoped token through secrets.cloudflare_dns_token on SSH stdin.")
@@ -261,8 +274,7 @@ def _stage_credentials(host, registry, entry):
     value = read_json(_private(host, intake))
     require(value.get("instance_id") == entry["profile"]["instance_id"],
             "certificate_ownership", "Private certificate intake belongs to another instance.")
-    token = value.get("cloudflare_dns_token")
-    _validate_token(token)
+    token = intake_dns_token(value)
     if entry["certificate"].get("zone_ref") is None:
         entry["certificate"]["zone_ref"] = _resolve_zone(token, entry["profile"]["domain"])
         host.journal(registry, entry)

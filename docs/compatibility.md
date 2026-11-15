@@ -13,6 +13,20 @@ Generation leaves handwritten comments unchanged. Retired source-edit journals
 fail with a typed `generate.RetiredJournalError` and retain staging; reconcile them
 with the generator that created them before upgrading.
 
+## Managed Cloudflare DNS — unreleased
+
+Managed DNS and outbound PROXY protocol share deploy-tool generation 18 in
+v0.37.0. Upgrade both client and host before selecting either feature. Each
+capability retains its own sticky generation floor through rollback and recovery.
+Upload templates keep their generation-17 floor. Existing external DNS profiles
+remain external and do not authorize provider writes.
+
+Managed public listeners require explicit record ownership UUIDs, zone IDs,
+addresses, and TTLs. Activation, rollback, and replacement-host recovery change
+only owned records after provider-state review. Unknown write outcomes require
+reconciliation before public admission. See the
+[managed DNS guide](guides/host-capabilities.md#managed-cloudflare-dns).
+
 ## Outbound PROXY protocol — unreleased
 
 Public TCP listeners may declare `proxy_protocol: "v1"` in topology schema 2.

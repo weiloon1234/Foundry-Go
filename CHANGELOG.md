@@ -1,5 +1,62 @@
 # Changelog
 
+## Unreleased
+
+- Added: public TCP stream listeners can declare topology-level
+  `"proxy_protocol": "v1"` on the listener so nginx sends the client's address and
+  port to a PROXY-aware backend. Both plaintext and edge TLS are supported; the
+  field is rejected on private/Unix listeners, roles and profile bindings. The
+  backend requires a separate non-PROXY readiness listener. Reports expose the
+  selected version per public listener. Declaring the capability requires deploy
+  client and host generation 18 and retains that floor through rollback/recovery.
+  HTTP sites keep forwarded headers; inbound PROXY and outbound v2 are unsupported.
+  The opt-in nginx stream acceptance now checks real client addresses and ports
+  over IPv4/IPv6 for both TLS modes.
+- Fixed: disabling a framework persistence feature retains its migration
+  definitions, so applied history stays valid and unrelated migrations can
+  proceed. Pending disabled migrations report `pending_feature_disabled` and run
+  after re-enabling the feature. Availability does not change historical
+  checksums. Rollback refuses a selection containing a disabled feature before
+  executing any reversal. PostgreSQL cache definitions also remain known when a
+  configured store changes drivers. Keep the feature's database and schema
+  settings when disabling it. `App.Migrations()` keeps runnable definitions grouped
+  by physical target and carries disabled history into `migrate.New` automatically;
+  `App.MigrationHistory()` also exposes disabled-only targets. `WithDatabaseScopes`
+  preserves the job archive's existing schema. Reconciled disabled checkpoints no
+  longer force unrelated migrations to reuse an older batch. Registry and target
+  composition share conflict checks, including rollback SQL, while dependency
+  order no longer causes false conflicts. The PostgreSQL application testkit uses
+  complete history for owned namespaces, including disabled-only targets extended
+  by explicit domain migrations.
+- Fixed: partially rejected DNS batches close as resolved failures, allowing a
+  new reviewed correction or rollback after proven cleanup while admission stays
+  closed. Only validation codes 9005 and 9313 prove rejection; other outcomes
+  require read-back. Diagnostics discard provider free text and retain codes with
+  fixed framework descriptions.
+- Fixed: managed DNS ownership comments fit Cloudflare's 100-character limit on
+  every plan. Provider errors retain bounded codes and fixed descriptions;
+  definite HTTP rejections are recorded separately from uncertain writes.
+  The controlled provider enforces comment and DNS hostname limits.
+- Fixed: managed DNS application has its own total budget, and replacement-host
+  public opening receives a fresh readiness budget after cutover. DNS intents
+  retain a pending admission phase if opening or deployment completion fails.
+  Reports show that phase and owned records left behind by failed listener removal.
+- Added: managed Cloudflare DNS for public TCP listener hostnames. Profiles declare
+  the zone, explicit addresses, TTLs, and stable per-record ownership UUIDs.
+  Release plans bind fresh provider state; activation and rollback compare it
+  again and mutate only owned records after closure and private health. Listener
+  removal deletes only owned IDs. Tokens reuse the certificate owner's scoped
+  custody and rotation. Records remain DNS-only.
+- Added: durable DNS mutation intents, read-back reconciliation after lost create,
+  update, or delete acknowledgements, provider drift reports, and typed replacement
+  host cutover with archived ownership evidence. Unknown outcomes never authorize
+  public admission or automatic retries. Managed profiles retain client and host
+  generation floor 18.
+- Added: a local controlled Cloudflare adapter, lifecycle and container fault
+  scenarios, and an opt-in live test restricted to random test names. See the
+  [managed DNS guide](docs/guides/host-capabilities.md#managed-cloudflare-dns)
+  for token permissions and recovery limits.
+
 ## v0.36.0 — 2026-11-15
 
 - Added: parameterized large-upload routes. Upload ingress `routes` accept the
@@ -39,36 +96,6 @@
   9–16 host, run `ACTION=tools-plan make deploy`, then
   `ACTION=tools-apply PLAN_TOKEN='<token>' OPERATION='<stable-uuid-v4>' make deploy`.
   Fresh bootstrap installs generation 17. Existing declarations need no changes.
-## Unreleased
-
-- Added: public TCP stream listeners can declare topology-level
-  `"proxy_protocol": "v1"` on the listener so nginx sends the client's address and
-  port to a PROXY-aware backend. Both plaintext and edge TLS are supported; the
-  field is rejected on private/Unix listeners, roles and profile bindings. The
-  backend requires a separate non-PROXY readiness listener. Reports expose the
-  selected version per public listener. Declaring the capability requires deploy
-  client and host generation 18 and retains that floor through rollback/recovery.
-  HTTP sites keep forwarded headers; inbound PROXY and outbound v2 are unsupported.
-  The opt-in nginx stream acceptance now checks real client addresses and ports
-  over IPv4/IPv6 for both TLS modes.
-## Unreleased
-
-- Fixed: disabling a framework persistence feature retains its migration
-  definitions, so applied history stays valid and unrelated migrations can
-  proceed. Pending disabled migrations report `pending_feature_disabled` and run
-  after re-enabling the feature. Availability does not change historical
-  checksums. Rollback refuses a selection containing a disabled feature before
-  executing any reversal. PostgreSQL cache definitions also remain known when a
-  configured store changes drivers. Keep the feature's database and schema
-  settings when disabling it. `App.Migrations()` keeps runnable definitions grouped
-  by physical target and carries disabled history into `migrate.New` automatically;
-  `App.MigrationHistory()` also exposes disabled-only targets. `WithDatabaseScopes`
-  preserves the job archive's existing schema. Reconciled disabled checkpoints no
-  longer force unrelated migrations to reuse an older batch. Registry and target
-  composition share conflict checks, including rollback SQL, while dependency
-  order no longer causes false conflicts. The PostgreSQL application testkit uses
-  complete history for owned namespaces, including disabled-only targets extended
-  by explicit domain migrations.
 
 ## v0.35.0 — 2026-11-15
 

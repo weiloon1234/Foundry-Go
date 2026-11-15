@@ -1136,8 +1136,9 @@ def check_release_tools(ssh, request, manifest, entry):
     topology = parse_topology(declaration.topology_json)
     installed = ssh.request("hello", request)
     try:
-        check_feature_generation({"tools": installed["tools"]}, topology, entry,
-                                 profile=json.loads(declaration.profile_json))
+        from contracts import contract_document
+        candidate = contract_document(declaration.profile_json)
+        check_feature_generation({"tools": installed["tools"]}, topology, entry, profile=candidate)
     except DeployError as error:
         raise LocalError(f"{error.code}: {error.detail}") from None
 

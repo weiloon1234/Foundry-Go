@@ -203,7 +203,7 @@ class UploadPolicyTests(unittest.TestCase):
             upgrades.check_feature_generation(registry, topology, self.entry, profile=target)
         # Feature selections retain the floor even after application rollback.
         self.assertEqual(17, upgrades.feature_generation(topology, {"deployment_selection": {"minimum_generation": 17}}))
-        self.assertEqual(17, upgrades.protocol()["generation"])
+        self.assertGreaterEqual(upgrades.protocol()["generation"], upgrades.UPLOAD_TEMPLATE_GENERATION)
 
     def test_release_target_profile_and_recovery_require_generation_17(self):
         import release

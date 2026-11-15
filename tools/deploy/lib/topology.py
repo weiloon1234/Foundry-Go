@@ -7,6 +7,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from dns import Record
 import ipaddress
 import re
 from urllib.parse import urlsplit
@@ -810,6 +813,9 @@ class PublicListenerBinding:
     source_cidrs: tuple[str, ...]
     hostname: str
     public_addresses: tuple[str, ...]
+    dns_mode: str = "external"
+    zone_id: str | None = None
+    records: tuple[Record, ...] = ()
 
     @classmethod
     def parse(cls, value):
@@ -825,14 +831,26 @@ class PublicListenerBinding:
             require(network is not None and str(network) == item, "invalid_profile", "Source CIDRs must be canonical.")
             return item
         cidrs = contract_list(value["source_cidrs"], cidr, minimum=1, maximum=64)
-        dns = contract_object(value["dns"], ("mode", "hostname", "public_addresses", "proxied"))
-        require(dns["mode"] == "external" and dns["proxied"] is False,
-                "unsupported_capability", "Public TCP requires external DNS-only records in release 1.")
+        dns = contract_object(value["dns"], ("mode", "hostname", "public_addresses", "proxied"), ("zone_id", "records"))
+        require(dns["mode"] in ("external", "managed") and dns["proxied"] is False,
+                "unsupported_capability", "Public TCP requires DNS-only records.")
         addresses = contract_list(dns["public_addresses"], public_address, minimum=1, maximum=16)
         require(len(set(cidrs)) == len(cidrs) and len(set(addresses)) == len(addresses), "invalid_profile", "Duplicate network bindings.")
         require({ipaddress.ip_network(c).version for c in cidrs} <= {ipaddress.ip_address(a).version for a in addresses},
                 "invalid_profile", "Source CIDRs require a bound address family.")
-        return cls(ports, cidrs, dns_hostname(dns["hostname"]), addresses)
+        records, zone = (), None
+        if dns["mode"] == "managed":
+            from dns import Record, provider_id
+            require("records" in dns and "zone_id" in dns, "invalid_profile", "Managed DNS requires a zone and per-record ownership.")
+            records = contract_list(dns["records"], Record.parse, minimum=1, maximum=16)
+            zone = provider_id(dns["zone_id"])
+            require(len({r.ownership_id for r in records}) == len(records)
+                    and len({r.address for r in records}) == len(records)
+                    and {r.address for r in records} == set(addresses),
+                    "invalid_profile", "Managed records must cover explicit public addresses exactly once.")
+        else:
+            require("records" not in dns and "zone_id" not in dns, "invalid_profile", "External DNS has no managed ownership fields.")
+        return cls(ports, cidrs, dns_hostname(dns["hostname"]), addresses, dns["mode"], zone, records)
 
 
 @dataclass(frozen=True)
@@ -865,6 +883,17 @@ def validate_feature_profile(value, project=None):
     raw = value["listeners"]
     require(isinstance(raw, dict) and len(raw) <= MAX_LISTENERS, "invalid_profile", "Invalid public listener bindings.")
     listeners = tuple((n, PublicListenerBinding.parse(v)) for n, v in sorted(raw.items()))
+    names, owners = {}, {}
+    for _, binding in listeners:
+        dns_identity = (binding.dns_mode, binding.zone_id, binding.public_addresses, binding.records)
+        require(binding.hostname not in names or names[binding.hostname] == dns_identity,
+                "invalid_profile", "Listeners sharing a hostname must share the exact DNS declaration.")
+        names[binding.hostname] = dns_identity
+        for record in binding.records:
+            identity = (binding.hostname, binding.zone_id, record)
+            require(record.ownership_id not in owners or owners[record.ownership_id] == identity,
+                    "invalid_profile", "A DNS ownership ID must identify exactly one record.")
+            owners[record.ownership_id] = identity
     ports = [p for _, listener in listeners for p in listener.ports]
     require(len(ports) == len(set(ports)) and not {22, 80, 443}.intersection(ports),
             "invalid_profile", "Public listener ports overlap or conflict with reserved host services.")

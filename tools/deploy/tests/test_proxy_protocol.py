@@ -4,6 +4,7 @@ from dataclasses import FrozenInstanceError, replace
 import json
 from types import SimpleNamespace
 import unittest
+import uuid
 from unittest.mock import Mock, patch
 
 from test_host_capabilities import declaration, profile
@@ -100,27 +101,27 @@ class ProxyProtocolTests(unittest.TestCase):
             self.assertTrue(records)
             self.assertTrue(all(record["proxy_protocol"] == expected for record in records))
 
-    def test_generation_19_client_host_and_sticky_floor(self):
+    def test_generation_18_client_host_and_sticky_floor(self):
         parsed = t.parse_topology(proxy_topology())
-        self.assertEqual(c.FEATURE_PROXY_PROTOCOL_GENERATION, 19)
+        self.assertEqual(c.FEATURE_PROXY_PROTOCOL_GENERATION, 18)
         self.assertGreaterEqual(upgrades.protocol()["generation"], c.FEATURE_PROXY_PROTOCOL_GENERATION)
-        for topology, entry in ((parsed, {}), (t.parse_topology(declaration()), {"deployment_selection": {"minimum_generation": 19}})):
-            self.assertEqual(upgrades.feature_generation(topology, entry), 19)
-            for client, host, code in ((18, 19, "instance_capability_required"), (19, 18, "host_upgrade_required")):
+        for topology, entry in ((parsed, {}), (t.parse_topology(declaration()), {"deployment_selection": {"minimum_generation": 18}})):
+            self.assertEqual(upgrades.feature_generation(topology, entry), 18)
+            for client, host, code in ((17, 18, "instance_capability_required"), (18, 17, "host_upgrade_required")):
                 with self.assertRaisesRegex(c.DeployError, "generation 18") as caught:
                     upgrades.check_feature_generation({"tools": {"generation": host}}, topology, entry, client_generation=client)
                 self.assertEqual(caught.exception.code, code)
-            upgrades.check_feature_generation({"tools": {"generation": 19}}, topology, entry, client_generation=19)
+            upgrades.check_feature_generation({"tools": {"generation": 18}}, topology, entry, client_generation=18)
         self.assertEqual(upgrades.feature_generation(t.parse_topology(declaration()), {}), 13)
         with self.assertRaisesRegex(c.DeployError, "generation 18"):
-            upgrades._check_feature_request({"tools": {"generation": 19}, "instances": {}},
-                {"topology": proxy_topology(), "client": {"generation": 18}}, "bootstrap-plan")
+            upgrades._check_feature_request({"tools": {"generation": 18}, "instances": {}},
+                {"topology": proxy_topology(), "client": {"generation": 17}}, "bootstrap-plan")
 
     def test_recovery_preflight_checks_archived_declaration_and_sticky_floor(self):
         host = Mock()
         host.read_registry.return_value = None
-        request = {"client": {"generation": 18}, "project": {}, "profile": {}, "recovery_archive": "/private/input"}
-        for raw, floor in ((proxy_topology(), 13), (declaration(), 19)):
+        request = {"client": {"generation": 17}, "project": {}, "profile": {}, "recovery_archive": "/private/input"}
+        for raw, floor in ((proxy_topology(), 13), (declaration(), 18)):
             recovered = {"feature": SimpleNamespace(topology=t.parse_topology(raw)),
                          "metadata": {"deployment_selection": {"minimum_generation": floor}}}
             with patch.object(recover, "read_archive", return_value={}), \
@@ -140,24 +141,25 @@ class ProxyProtocolDeliveryTests(wiring.FeatureWiringFixture):
         self.build_archive(public=True, proxy_protocol=True, independent=True, maintenance="continue",
                            version="20261115T020000Z-abcdef19")
         before = self.host.read_registry()
-        with patch.dict(self.envelope, client={**self.envelope["client"], "generation": 18}), \
+        with patch.dict(self.envelope, client={**self.envelope["client"], "generation": 17}), \
                 self.assertRaisesRegex(c.DeployError, "generation 18"):
-            self.request("release-plan", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+            self.request("release-plan", archive=str(self.archive), archive_sha256=c.digest(self.archive),
+                         operation_id=str(uuid.uuid4()))
         self.assertEqual(self.host.read_registry(), before)
         self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
         registry, entry = self.host.require_identity(self.project, self.profile)
-        self.assertEqual(entry["deployment_selection"]["minimum_generation"], 19)
+        self.assertEqual(entry["deployment_selection"]["minimum_generation"], 18)
         older_entry = copy.deepcopy(entry)
         older_entry["deployment_selection"]["minimum_generation"] = 13
         with patch.object(self.host, "require_identity", return_value=(registry, older_entry)), \
                 self.assertRaisesRegex(c.DeployError, "generation 18"):
             upgrades.check_target_capabilities(self.host, {"project": self.project, "profile": self.profile,
-                "client": {"generation": 18}, "target": self.version}, "rollback")
+                "client": {"generation": 17}, "target": self.version}, "rollback")
         wiring.FeatureWiringTests.rollback_target(self, old_version)
         _, entry = self.host.require_identity(self.project, self.profile)
-        self.assertEqual(entry["deployment_selection"]["minimum_generation"], 19)
+        self.assertEqual(entry["deployment_selection"]["minimum_generation"], 18)
         with self.assertRaisesRegex(c.DeployError, "generation 18"):
-            upgrades.check_instance_capabilities(entry, 18)
+            upgrades.check_instance_capabilities(entry, 17)
 
 
 if __name__ == "__main__":

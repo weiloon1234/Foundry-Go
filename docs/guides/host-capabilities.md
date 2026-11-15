@@ -23,6 +23,8 @@ generation 16 on both client and host, with the same sticky rollback/recovery fl
 Outbound PROXY protocol requires generation 18 on both client and host. Declaring
 it sets a sticky generation-18 floor, retained after rollback and recovery even
 when the selected release no longer declares it.
+Managed Cloudflare DNS requires generation 18 on both client and host. Selecting
+managed mode keeps that floor after rollback or removal of the last managed listener.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
 
@@ -136,7 +138,6 @@ launch origin does not grant permission to start.
 | --- | --- |
 | Wrappers, role instance counts above one, ordinals other than one | B24 release 2 |
 | Outbound PROXY v2 and inbound PROXY to nginx | Unsupported; outbound v1 is available with generation 18 |
-| Managed application DNS records | B24 release 2; release 1 DNS is external only |
 | UDP listeners | Planned for B24 release 2; unsupported in release 1 |
 | Artifact formats other than `file` and `tar.gz` | Unsupported format; no later numbered release is promised |
 
@@ -201,10 +202,11 @@ unchanged hostname, port, transport and address families, explicit new addresses
 the source binding digest, source and target identities, deployment digest and
 operation UUID. Rehearsal rejects this argument. The source descriptor remains
 immutable; the effective replacement profile is separate, token-bound evidence.
-After confirmed old-server stop and private takeover health, recovery emits exact
+For external DNS, after confirmed old-server stop and private takeover health, recovery emits exact
 DNS-only A/AAAA instructions. `external_pending` and `external_observed` are
 separate from host readiness. Recursive answers never prove provider ownership or
-complete traffic cutover, and the tool makes no application DNS writes.
+complete traffic cutover. Managed DNS follows the
+[owned record cutover contract](#managed-cloudflare-dns).
 
 Replacement recovery verifies the original archive/commit, installs its
 packages and artifacts, proves the graph stopped with ingress closed, and restores
@@ -233,10 +235,10 @@ callback interfaces and the opt-in container acceptance scenario.
 | --- | --- |
 | `deploy/project.json` | Schema-1 project UUID and slug; retain this identity across environments. |
 | `deploy/topology.json` | Schema-2 role names, commands, packages, artifact pins, private listener intent, readiness, dependencies and binding names. |
-| `deploy/environments/production.json` | Schema-3 host/instance identity, placement, public ports, source CIDRs, external DNS intent and existing environment settings. |
+| `deploy/environments/production.json` | Schema-3 host/instance identity, placement, public ports, source CIDRs, DNS intent and existing environment settings. |
 | `deploy/files/` | Nonsecret configuration templates referenced by topology. |
 | Application source | Binding consumption, HTTP authorization callback and business authorization. |
-| Operator's DNS provider | External DNS records; release 1 reports intent but does not create application records. |
+| Operator's DNS provider | External records remain operator-owned. Managed records use explicit Cloudflare zone and per-record ownership. |
 
 The application release builder includes the topology and verified artifact
 payloads. Operators supply placement and exposure policy in the profile. Do not
@@ -840,9 +842,10 @@ public custom listeners. Loopback listeners have no profile entry. Each has:
 - `source_cidrs`: 1–64 unique canonical CIDRs. Each address family must have a
   corresponding public bound address. Choose the actual permitted clients;
   `0.0.0.0/0` is an intentional allow-all IPv4 policy, not a safe default.
-- `dns`: `mode: "external"`, a `hostname`, 1–16 literal `public_addresses`, and
+- `dns`: `mode: "external"` or `"managed"`, a `hostname`, 1–16 literal `public_addresses`, and
   `proxied: false`. Addresses must be bindable on the host. The profile does not
-  provision interfaces or upstream NAT.
+  provision interfaces or upstream NAT. Managed mode also requires `zone_id` and
+  `records`, described below.
 
 `domain` remains the app's HTTP hostname; each raw TCP listener has its own
 `dns.hostname`. `edge_origin_lockdown` is the existing HTTP edge policy, not a
@@ -996,12 +999,186 @@ instance through admission. Report lists the listener under its instance with
 exposure and DNS observations. Read status after a lost SSH connection; a lost
 reply does not establish whether the operation completed.
 
+### Managed Cloudflare DNS
+
+Managed DNS creates A and AAAA records for public listener hostnames. The record's
+address determines its family. All records require `proxied: false`, including
+plain TCP listeners. Use a separate hostname from a proxied HTTP site.
+DNS-only records disclose the origin address and do not provide Cloudflare HTTP
+WAF or authentication.
+
+Each managed listener declares the following `dns` object:
+
+```json
+{
+  "mode": "managed",
+  "hostname": "relay.example.org",
+  "public_addresses": ["203.0.113.10", "2001:db8::10"],
+  "proxied": false,
+  "zone_id": "0123456789abcdef0123456789abcdef",
+  "records": [
+    {"ownership_id": "ceadee2d-9789-483a-902c-c7c4ff59cd6a", "address": "203.0.113.10", "ttl": 300},
+    {"ownership_id": "944a3de2-287b-47be-a8ae-d0371fda6b52", "address": "2001:db8::10", "ttl": 300}
+  ]
+}
+```
+
+Generate each ownership UUID once and keep it across address and TTL changes.
+The records must cover `public_addresses` exactly once. TTL is `1` for automatic
+or 60–86400 seconds. An ownership UUID cannot move to another zone, hostname, or
+address family. Listeners sharing a hostname must share the same DNS declaration.
+Addresses always come from the profile, never SSH or a provider lookup.
+
+The certificate owner supplies the token from its root-only
+`/etc/foundry/cloudflare/zones/<zone-id>.ini`. The zone must match the instance's
+certificate `zone_ref`. Bootstrap takes `secrets.cloudflare_dns_token` through
+private SSH stdin. Use the existing `ACTION=dns-token-rotate` path for rotation.
+There is no DNS token field in a profile and no service access to this token.
+
+For the shared certificate and managed-DNS token, create these Cloudflare API
+token permissions, restricted to **Include / Specific zone / the selected zone**:
+
+- **Zone / DNS / Edit**, named `DNS Write` in the API reference.
+- **Zone / Zone / Read**, required by the existing certificate owner's zone lookup.
+
+No account-wide permission or Global API Key is needed. The record endpoints
+accept [DNS Write](https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/create/).
+The isolated live test below takes an explicit zone ID and needs only DNS Edit on
+that test zone. A subdomain test prefix limits test writes; it does not narrow the
+token's zone-wide permission.
+
+`release-plan` includes `managed_dns` changes with the prior provider state and
+exact desired state. Apply rechecks record IDs, name, family, address, TTL, proxy
+mode, ownership comment, provider version, ETag when returned, and a metadata
+digest. Any changed state invalidates the plan. Existing unowned records at the
+hostname are refused, even when they already have the requested address.
+
+The root-owned instance configuration file `managed-dns.json` records provider
+IDs and the full instance, ownership, and creation operation UUIDs. The provider
+comment is `foundry:v1:` followed by the 64-character SHA-256 digest of the
+canonical JSON array `[instance_id, ownership_id, create_operation_id]`. Its 75
+characters fit Cloudflare's 100-character limit on every plan; planning validates
+that limit. Verification matches the comment exactly and checks the stored record
+ID and hostname. Matching an address or comment alone cannot adopt an existing
+record. The encrypted configuration backup includes this file. Take a
+new backup after changing DNS if the replacement host must recover those records.
+
+Activation and rollback use the same planner. DNS changes occur after observed
+listener closure and private health, before public admission. Removing a listener
+deletes only its owned record IDs after closure. Shared records remain while a
+listener still declares them. Stopping a service retains its DNS records.
+DNS application has a separate 300-second budget. Recovery, activation, and
+rollback give public opening a fresh readiness budget after DNS reconciliation.
+
+Each provider mutation has a durable intent before its single write attempt.
+Only an HTTP 4xx write response with `success: false` and an entirely allow-listed
+set of validation error codes proves rejection. HTTP 408, 409, and 429 are always
+uncertain, regardless of their codes. The allow-list is deliberately limited to:
+
+| Code | Fixed diagnostic | Evidence for rejection before mutation |
+| --- | --- | --- |
+| 9005 | Invalid IPv4 record content. | Cloudflare's [SDK exception example](https://github.com/cloudflare/python-cloudflare/tree/2.19.0#exception-handling) documents this response to creating an A record with invalid IPv4 content. |
+| 9313 | DNS record comment exceeds the provider limit. | The owner's test-zone certification observed this validation rejection with no record created; Cloudflare documents the [comment limits](https://developers.cloudflare.com/dns/manage-dns-records/reference/record-attributes/). |
+
+These codes describe invalid record input, not authentication, service availability,
+or a conflicting operation. No other code is inferred from its numeric range or
+message. Legacy nested error chains, malformed entries, and mixed lists containing
+any other code remain uncertain. Cloudflare [removed the generic validation wrapper](https://developers.cloudflare.com/fundamentals/api/reference/deprecations/#2024-10-01);
+the deprecated wrapper code 1004 is not allow-listed.
+
+A definite rejection records `rejected`, with later changes marked `not_attempted`,
+and returns `dns_provider_rejected`. Earlier applied records retain their ownership
+IDs and provider snapshots. The DNS operation closes with `public_admission: "failed"`;
+it cannot commit admission or replay writes. Reports include
+`managed_dns_provider_rejected` with each record's result and numeric rejection codes.
+After cleanup proves workload exit and listener closure, a new reviewed release or
+rollback can proceed from fresh provider observations. For example, if A applied
+and B was rejected, the next plan binds A's owned ID and B's absence. Restart alone
+cannot reopen admission; a reviewed operation must fully succeed.
+The corrective plan includes the failed operation's intended running roles,
+subject to current enablement, dependencies, and maintenance holds.
+
+Unlisted coded 4xx, HTTP 408, 409, 429, 5xx, incomplete or invalid error responses, timeouts, and lost
+acknowledgements remain uncertain and trigger read-back rather than another write.
+A lost create acknowledgement is matched to its persisted creation
+identity. An absent unknown create remains unresolved and never triggers a second
+POST. Updates and deletes reconcile through the same owned provider IDs:
+
+- Exact desired state proves application. Delete is proved by absence of its ID.
+- Exact prior state permits a newly reviewed operation, never an automatic retry.
+- Any third state requires operator review. Foundry does not delete and recreate
+  the record, claim rollback, or open public admission.
+
+The DNS owner retains both states and the operation identity for reconciliation.
+Deployment cleanup still owns stopped workloads and admission; DNS read-back
+alone cannot clear an unresolved deployment. Reports include record mode, safe
+provider snapshots, drift, and unresolved operation IDs. Host readiness, provider
+application, and DNS propagation remain separate results.
+The DNS operation records `public_admission: "pending"` before lifecycle writes
+and changes it to `"committed"` only after successful deployment admission.
+If opening fails after provider updates, cleanup closes the workloads and the
+report includes `managed_dns_public_admission_pending`, with the operation UUID,
+prior and desired records, and fresh provider outcomes. DNS read-back does not
+clear this phase or restart the service. The lifecycle owner must reconcile the
+deployment before completing admission.
+
+Reports also inspect owned record IDs absent from the selected profile. These
+produce `managed_dns_retained_record`, even when the last DNS operation succeeded.
+The record reports whether the provider still publishes it, has drifted, is absent,
+or could not be observed. A failed listener removal cannot hide retained DNS.
+
+Cloudflare's documented record update endpoint has no conditional-update
+contract. Foundry re-reads immediately before writing, but an external editor can
+still change a record between that read and the write. Serialize manual provider
+edits with deployments. Requests disable redirects and proxies, use a 10-second
+socket timeout and a 15-second wall budget, and cap responses at 256 KiB. Record
+inventories and operations are limited to 128 records. Diagnostics retain at most
+three numeric provider error codes, with fixed framework-authored descriptions for
+known validation codes and a generic description for others. Provider free text is
+discarded: it never reaches CLI errors, persisted rejection details, or reports.
+The complete error-code list is checked before classifying a rejection, even when
+only the first three codes are displayed. Errors never print complete API responses.
+
+Replacement-host `RecoveryPublicBinding` uses `dns_cutover: "managed_pending"`
+when any listener uses managed DNS. Each managed listener includes
+`managed_records`, a list of the typed `managed_dns` change objects. Each object
+contains `zone_id`, `ownership_id`, `instance_id`, `create_operation_id`, `prior`,
+and `desired`. Use the source report's ownership and provider snapshots for the
+IDs and prior state; change only the desired address. The intent preserves the
+source binding digest, deployment digest, source and target identities, and
+operation UUID. Planning compares custody with the encrypted backup and reads the
+provider afresh. Apply compares again after old-server-stopped confirmation and
+private takeover health. `managed_applied` proves provider read-back, while
+`dns_propagation` reports address observations separately. External listeners in
+the same recovery still produce manual instructions. Rehearsal cannot publish a
+managed cutover.
+
+The local controlled provider tests exercise the real HTTP adapter and lifecycle
+owners without Cloudflare credentials:
+
+```sh
+cd tools/deploy/tests
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest test_dns test_dns_live
+```
+
+The live test skips unless `FOUNDRY_TEST_CLOUDFLARE_REQUIRED=1`. Supply
+`FOUNDRY_TEST_CLOUDFLARE_ZONE_ID`, `FOUNDRY_TEST_CLOUDFLARE_API_TOKEN`, and
+`FOUNDRY_TEST_CLOUDFLARE_DOMAIN` privately in the environment. The domain must be
+the test zone or a subdomain of it. The test creates random names under
+`foundry-dns-test.<domain>` and deletes only IDs with its own creation receipt and
+matching random hostname. It never resets the zone. The container feature scenario
+also invokes `tests/acceptance_dns.py` against the controlled loopback provider.
+Ordinary application rehearsal continues to use external local DNS.
+
+The [Managed DNS live certification](../evidence/v037-managed-dns-live-certification.md)
+records the 2026-11-15 test-zone results and reproduction command.
+
 ### External DNS and Docker-host NAT
 
 Create external DNS-only A/AAAA records for the listener hostname, pointing at the
 intended reachable addresses. Raw TCP is not HTTP: do not enable a provider's HTTP
 proxy on this name. `proxied: false` records that requirement; DNS answers alone
-cannot prove the provider configuration or a completed global cutover. Release 1
+cannot prove the provider configuration or a completed global cutover. External mode
 does not create, update or delete these application records. Certificate
 DNS challenges remain the separate existing certificate owner's responsibility.
 
@@ -1009,7 +1186,7 @@ Bootstrap and release plans and network reports show the required records and
 the recursive lookup state: `resolved`, `unresolved` (resolution failed), or
 `unavailable` (the two-second lookup deadline expired or no usable observation
 could be collected). A first deployment does not require the hostname to resolve.
-DNS is informational: changed answers do not invalidate a reviewed release plan,
+External DNS is informational: changed answers do not invalidate a reviewed release plan,
 and neither readiness nor public exposure depends on them. Recovery retains failed
 observations explicitly and leaves external cutover pending.
 

@@ -9,6 +9,7 @@ import uuid
 
 import admission
 import artifacts
+import dns
 import feature_network
 import feature_maintenance
 import packages
@@ -416,7 +417,7 @@ def transition_enablement(host, entry, inventory, *, restoring=False):
     import release
     if "deployment_selection" not in entry:
         return tuple(inventory.roles), tuple(inventory.roles), {}
-    _, _, previous, _ = load(host, entry)
+    store, selection, previous, _ = load(host, entry)
     enabled = set(services.enabled_units(host, previous.units))
     path = admission.AdmissionStore(host, inventory.profile.instance_id).durable / "removed-enablement.json"
     removed = admission.read_owned(host, path, lambda v: v) if path.exists() else {}
@@ -425,6 +426,9 @@ def transition_enablement(host, entry, inventory, *, restoring=False):
     desired = {name for name in inventory.roles if name in enabled or name not in previous.roles and
                (removed.get(name, False) if restoring or name in removed else True)}
     held_running = configuration_hold_running(host, entry)
+    previous_attempt = store._operations().get(selection.admission.operation_id, {})
+    if previous_attempt.get("outcome") == "failed" and dns.rejected_operation(host, entry, selection.admission.operation_id):
+        held_running = set(previous_attempt["running_roles"])
     running = {name for name in desired if name not in previous.roles or
                (name in held_running if held_running is not None else
                 release.service(host, previous.units[name])["ActiveState"] == "active")}
@@ -582,6 +586,8 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
         start_units(host, entry, inventory, starting, deadline)
         require(not running or services.wait_ready_set(host, inventory, running, deadline),
                 "readiness_failed", "The selected running set did not remain ready before public opening.")
+        if review is not None:
+            dns.apply(host, entry, review.get("managed_dns", []), attempt["operation_id"], track_public_admission=True)
         if running:
             feature_network.open_public(host, entry, inventory.resolution, evidence)
     state["status"] = "stopped" if stop_only or not enabled else (
@@ -605,6 +611,8 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     host.journal(registry, entry)
     if attempt.get("redis_inventory") is not None:
         release.narrow_redis_grants(host, registry, entry, attempt["redis_inventory"], state)
+    if review is not None:
+        dns.commit_public_admission(host, entry, attempt["operation_id"])
     return maintenance_result
 
 
@@ -892,6 +900,10 @@ def request_operation(host, action, project, profile, *, operation_id=None, **ar
             refuse("interrupted-operation reconciliation")
         store = admission.AdmissionStore(host, profile["instance_id"])
         store.require_cleanup_clear()
+        if action not in ("activate", "rollback", "stop"):
+            require(not any(item.get("public_admission") == dns.PublicAdmission.FAILED.value
+                            for item in dns.load(host, entry)["operations"].values()),
+                    "dns_review_required", "Rejected DNS requires a newly reviewed release or rollback before admission.")
         require(action not in ("restart", "down", "up") or not (store.durable / "configuration-hold.json").exists(),
                 "configuration_held", "The published configuration is held; submit corrective config or a reviewed release transition.")
         if action in ("activate", "rollback"):
