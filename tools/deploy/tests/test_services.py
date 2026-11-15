@@ -225,7 +225,7 @@ class ServiceInventoryTests(unittest.TestCase):
         host = MagicMock()
         host.read_registry.return_value = {"instances": {INSTANCE: entry}}
         with patch.object(admission, "AdmissionStore", side_effect=PermissionError("private")):
-            selected = feature_runtime.selected(host, c.record_document(invocation), launch, dispatch=True)
+            selected = feature_runtime.selected(host, c.record_document(invocation), launch, require_selection=False)
             self.assertEqual(selected[3], self.inventory.specs[invocation.unit])
             with self.assertRaises(PermissionError):
                 feature_runtime.selected(host, c.record_document(invocation), launch)

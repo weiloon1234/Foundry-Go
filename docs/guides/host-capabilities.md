@@ -933,6 +933,13 @@ network closure and old-reference rules. Persistent state and seed files are
 retained, including when a copy is later added again. An uncertain stop leaves
 resources retained for reconciliation.
 
+Stop-time cleanup validates the invocation's pinned launch record and unit cgroup
+even after the copy leaves the selected profile. Admission, preparation, and running
+hooks still require a selected or retained origin. Before removing a proven-stopped
+unit, shrinking records any failed state in the private operation journal, resets
+only that unit's failure, and verifies it is inactive. Failed resets retain its
+unit file and runtime views for reconciliation.
+
 ### Profile field reference
 
 Profile 3 retains the existing profile fields, adding `placement` and `listeners`.

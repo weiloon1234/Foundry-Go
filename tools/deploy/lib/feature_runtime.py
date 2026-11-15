@@ -13,7 +13,7 @@ import services
 from topology import ExecutableRole, parse_profile, parse_topology
 
 
-def selected(host, pin, launch, *, dispatch=False):
+def selected(host, pin, launch, *, require_selection=True):
     invocation = HelperInvocation.parse(pin)
     deployment = Deployment.parse(launch["deployment"])
     resolution = RuntimeResolution.parse(launch["resolution"])
@@ -24,19 +24,20 @@ def selected(host, pin, launch, *, dispatch=False):
     inventory = services.UnitInventory(entry["name"], topology, profile, deployment, resolution)
     spec = inventory.specs[invocation.unit]
     selected_profile = entry["profile"] == profile.projection()
-    if not selected_profile and not dispatch:
+    if not selected_profile and require_selection:
         store = admission.AdmissionStore(host, invocation.unit.instance_id)
         _, current = store._selection()
         selected_profile = store.retained_origin(invocation, current) is not None
     require(canonical_digest(record_document(spec)) == invocation.unit_spec_sha256 and
-            resolution.id == invocation.resolution_id and (selected_profile or dispatch),
+            resolution.id == invocation.resolution_id and (selected_profile or not require_selection),
             "feature_runtime_selection", "Pinned unit differs from its immutable launch record.")
     return invocation, entry, inventory, spec
 
 
 def run(action, pin, launch):
     host = Host()
-    invocation, entry, inventory, spec = selected(host, pin, launch, dispatch=action == "dispatch")
+    invocation, entry, inventory, spec = selected(host, pin, launch,
+                                                require_selection=action not in ("dispatch", "cleanup"))
     role = inventory.roles[spec.identity.role]
     paths = services.ServicePaths.for_unit(spec.identity, invocation.resolution_id)
     view = host.paths.p(paths.base) / "invocations" / invocation.process.invocation_id

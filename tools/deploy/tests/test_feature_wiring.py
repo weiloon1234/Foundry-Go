@@ -236,6 +236,8 @@ class WiringHost(Host):
                 self.enabled.update(args[2:])
             elif action == "disable":
                 self.enabled.difference_update(args[2:])
+            elif action == "reset-failed":
+                self.failed.difference_update(args[2:])
             elif action == "is-enabled":
                 output, code = ("enabled", 0) if unit in self.enabled else (("disabled", 1) if loaded else ("not-found", 4))
             elif action == "reload":
@@ -266,8 +268,9 @@ class WiringHost(Host):
                         values[directive] = "{ argv[]=" + " ".join(operations.command(phase, pin["operation_id"], pin["bundle_sha256"])) + " ; }"
                 else:
                     current = self.running.get(unit)
-                    values = {"Id": unit, "LoadState": "loaded" if loaded else "not-found", "ActiveState": "active" if current else "inactive",
-                              "SubState": "running" if current else "dead", "MainPID": str(current[0].pid) if current else "0",
+                    failed = unit in self.failed
+                    values = {"Id": unit, "LoadState": "loaded" if loaded else "not-found", "ActiveState": "active" if current else "failed" if failed else "inactive",
+                              "SubState": "running" if current else "failed" if failed else "dead", "MainPID": str(current[0].pid) if current else "0",
                               "ControlPID": "0", "Job": "0", "ControlGroup": "/system.slice/" + unit if current else "",
                               "NRestarts": "0", "InvocationID": current[0].invocation_id if current else "",
                               "ExecMainStartTimestampMonotonic": self.start_times[unit] if current else "0"}

@@ -16,7 +16,8 @@
 - Changed: copy count changes go through reviewed release plans. Unchanged copies
   keep running. Shrinking proves process exit and network closure before removing
   units and runtime views, and retains persistent state, seed files, and secrets
-  for regrowth and rollback. Concurrent readiness gives each unit its own deadline
+  for regrowth and rollback. Removed units' failed states are recorded and cleared
+  only after proven exit. Concurrent readiness gives each unit its own deadline
   and stability proof from its process-start time, within the group budget.
   Slow probes do not block peers; failure cancels and drains owned probes and commands.
   Journal waits honour deadlines and cancellation; unrecorded failures are reported.

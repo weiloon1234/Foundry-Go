@@ -668,6 +668,13 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     for name in previous.stop_order(set(previous.units) - set(inventory.units)):
         require(name in evidence.units, "admission_closed_required", "Removed copy lacks complete closure evidence.")
         record_removed_copy_enablement(host, entry, name, removed[name])
+        observed = services.stopped_unit(host, previous.units[name])
+        if observed["ActiveState"] == "failed":
+            atomic_json(operations.directory(host, attempt["operation_id"]) /
+                        ("removed-unit-" + name.record_key + ".json"), observed, mode=0o600)
+            host.run(["systemctl", "reset-failed", previous.units[name]], timeout=5)
+            require(services.stopped_unit(host, previous.units[name])["ActiveState"] == "inactive",
+                    "feature_stop_unverified", "Removed unit retains failed state after reset.")
         host.run(["systemctl", "disable", previous.units[name]])
         path = admission.protected_path(host, host.paths.p("/etc/systemd/system/" + previous.units[name]), "file")
         if path.exists():

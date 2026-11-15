@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import admission
 import contracts as c
 import feature_lifecycle as lifecycle
+import feature_runtime
+import operations
 import services
 import shared_directories
 from test_feature_wiring import FeatureWiringFixture
@@ -37,6 +39,93 @@ class FeatureCopiesTests(FeatureWiringFixture):
         self.profile = result["profile_update"]
         _, entry = self.host.require_identity(self.project, self.profile)
         return entry, lifecycle.load(self.host, entry)[2]
+
+    def removed_invocation(self):
+        entry, inventory = self.deploy_copies()
+        removed = inventory.identity("relay", 3)
+        unit = inventory.units[removed]
+        process = self.host.running[unit][0]
+        launch = lifecycle.load_resolution(self.host, entry, inventory.resolution.id)[1]
+        pin = c.HelperInvocation(admission.boot_id(self.host), removed, process,
+                                self.host.read_registry()["tools"]["bundle_sha256"],
+                                c.canonical_digest(c.record_document(inventory.specs[removed])),
+                                inventory.resolution.id, 1, None)
+        request, review = self.review_copies(2, "20261115T000000Z-abcdef12")
+        self.apply_copies(request, review)
+        self.host.owned_write(self.host.paths.p("/proc/self/cgroup"), "0::/system.slice/" + unit)
+        return c.record_document(pin), launch
+
+    def test_cleanup_accepts_deselected_removed_copy(self):
+        pin, launch = self.removed_invocation()
+        with patch.object(admission, "AdmissionStore", side_effect=AssertionError("cleanup read current admission")):
+            self.assertEqual(0, feature_runtime.run("cleanup", pin, launch))
+
+    def test_deselected_start_hooks_and_invalid_cleanup_still_refuse(self):
+        pin, launch = self.removed_invocation()
+        for action in ("admit", "prepare", "running"):
+            with self.subTest(action=action), self.assertRaises(c.DeployError) as raised:
+                feature_runtime.run(action, pin, launch)
+            self.assertEqual("feature_runtime_selection", raised.exception.code)
+        for field, value in (("unit_spec_sha256", "a" * 64), ("resolution_id", str(uuid.uuid4()))):
+            with self.subTest(field=field), self.assertRaises(c.DeployError) as raised:
+                feature_runtime.run("cleanup", {**pin, field: value}, launch)
+            self.assertEqual("feature_runtime_selection", raised.exception.code)
+        self.host.owned_write(self.host.paths.p("/proc/self/cgroup"), "0::/system.slice/unrelated.service")
+        with self.assertRaises(c.DeployError) as raised:
+            feature_runtime.run("cleanup", pin, launch)
+        self.assertEqual("feature_runtime_identity", raised.exception.code)
+
+    def test_shrink_records_failed_removed_unit_before_reset_and_leaves_it_inactive(self):
+        _, inventory = self.deploy_copies()
+        removed = inventory.identity("relay", 3)
+        unit = inventory.units[removed]
+        self.host.failed.add("unrelated.service")
+        request, review = self.review_copies(2, "20261115T000000Z-abcdef12")
+        command = self.host.run
+        resets = []
+        def failed_stop(args, **kwargs):
+            if args[:2] == ["systemctl", "reset-failed"]:
+                self.assertEqual([unit], args[2:])
+                record = c.read_json(operations.directory(self.host, request["operation_id"]) /
+                                     ("removed-unit-" + removed.record_key + ".json"))
+                self.assertEqual((unit, "loaded", "failed"),
+                                 tuple(record[key] for key in ("Id", "LoadState", "ActiveState")))
+                self.assertEqual(("0", "0", "", "0"),
+                                 tuple(record[key] for key in ("MainPID", "ControlPID", "ControlGroup", "Job")))
+                self.assertTrue(self.host.paths.p("/etc/systemd/system/" + unit).is_file())
+                store = admission.AdmissionStore(self.host, removed.instance_id)
+                self.assertTrue(c.read_json(store.durable / "removed-enablement.json")[removed.record_key])
+                closure = c.ClosureEvidence.parse(c.read_json(store.runtime / "boot.json"))
+                self.assertIn(removed, closure.units)
+                resets.append(unit)
+            result = command(args, **kwargs)
+            if args == ["systemctl", "stop", unit]:
+                self.host.failed.add(unit)
+            return result
+        with patch.object(self.host, "run", side_effect=failed_stop):
+            self.apply_copies(request, review)
+        self.assertEqual([unit], resets)
+        proof = services.stopped_unit(self.host, unit)
+        self.assertEqual(("not-found", "inactive"), (proof["LoadState"], proof["ActiveState"]))
+        self.assertEqual({"unrelated.service"}, self.host.failed)
+
+    def test_shrink_retains_unit_when_failed_state_does_not_clear(self):
+        _, inventory = self.deploy_copies()
+        removed = inventory.identity("relay", 3)
+        unit = inventory.units[removed]
+        request, review = self.review_copies(2, "20261115T000000Z-abcdef12")
+        command = self.host.run
+        def failed_reset(args, **kwargs):
+            result = command(args, **kwargs)
+            if args in (["systemctl", "stop", unit], ["systemctl", "reset-failed", unit]):
+                self.host.failed.add(unit)
+            return result
+        with patch.object(self.host, "run", side_effect=failed_reset), self.assertRaises(c.DeployError) as raised:
+            self.apply_copies(request, review)
+        self.assertEqual("feature_stop_unverified", raised.exception.code)
+        self.assertTrue(self.host.paths.p("/etc/systemd/system/" + unit).is_file())
+        self.assertTrue(self.host.paths.p(services.ServicePaths.for_unit(removed, inventory.resolution.id).base).exists())
+        self.assertIn(unit, self.host.enabled)
 
     def test_regrow_disabled_copy_stops_excluded_running_dependent(self):
         _, inventory = self.deploy_copies(2)
@@ -123,6 +212,8 @@ class FeatureCopiesTests(FeatureWiringFixture):
             self.assertNotIn(grown.units[identity], self.host.enabled)
             self.assertFalse(self.host.paths.p("/etc/systemd/system/" + grown.units[identity]).exists())
             self.assertFalse(removed_views[identity].exists())
+            self.assertEqual("inactive", services.stopped_unit(self.host, grown.units[identity])["ActiveState"])
+            self.assertNotIn(["systemctl", "reset-failed", grown.units[identity]], self.host.commands)
         for identity, path in state_files.items():
             self.assertEqual(path.read_text(), identity.record_key)
         self.assertEqual(shared_file.read_text(), "shared cache")
@@ -144,6 +235,7 @@ class FeatureCopiesTests(FeatureWiringFixture):
         self.assertIn(inventory.units[removed], self.host.enabled)
         self.assertTrue(self.host.paths.p("/etc/systemd/system/" + inventory.units[removed]).exists())
         self.assertTrue(self.host.paths.p(services.ServicePaths.for_unit(removed, inventory.resolution.id).base).exists())
+        self.assertNotIn(["systemctl", "reset-failed", inventory.units[removed]], self.host.commands)
 
     def test_copy_selector_stops_restarts_one_copy_and_preserves_siblings(self):
         self.build_archive(copies=2, independent=True)
