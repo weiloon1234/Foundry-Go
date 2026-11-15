@@ -3,6 +3,7 @@ from dataclasses import asdict, replace
 import json
 import os
 from pathlib import Path
+import re
 import time
 import uuid
 
@@ -281,6 +282,14 @@ def save_launch(host, entry, inventory, declaration, roots, secret_paths):
     return launch
 
 
+def prepare_shared_directories(host, entry, inventory):
+    import shared_directories
+    store = admission.AdmissionStore(host, inventory.profile.instance_id)
+    with store._lock("shared-directories"):
+        shared_directories.prepare(host, inventory.topology, inventory.profile.instance_id,
+                                   entry["allocations"]["uid"], entry["allocations"]["gid"])
+
+
 def install_units(host, registry, entry, inventory, launch, tools_dir):
     import provision
     import upgrades
@@ -290,6 +299,7 @@ def install_units(host, registry, entry, inventory, launch, tools_dir):
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
     from release import runtime_declaration
     provision._unit_checks(host, entry)
+    prepare_shared_directories(host, entry, inventory)
     origins = store._retained_records(inventory.resolution)
     generations = {}
     for name, spec in inventory.specs.items():
@@ -347,19 +357,29 @@ def stop_units(host, inventory, names=None):
         services.stopped_unit(host, unit)
 
 
-def start_units(host, inventory, names, deadline):
+def start_units(host, entry, inventory, names, deadline):
     """Takeover/lifecycle interface: start an explicit enabled graph without enabling it."""
     names = set(names)
     enabled = services.enabled_units(host, inventory.units)
     require(names <= set(enabled), "service_enablement", "Cannot start a deliberately disabled role.")
     order = inventory.start_order(enabled)
+    if names:
+        prepare_shared_directories(host, entry, inventory)
     for prerequisite in inventory.prerequisites(names) - names:
         require(services.wait_ready(host, inventory, prerequisite, deadline),
                 "service_prerequisite", "A retained prerequisite is unavailable.")
     for name in order:
         if name in names:
             require(time.monotonic() < deadline, "service_deadline", "Startup exhausted its shared deadline.")
-            host.run(["systemctl", "start", inventory.units[name]], timeout=max(.001, deadline - time.monotonic()))
+            try:
+                host.run(["systemctl", "start", inventory.units[name]], timeout=max(.001, deadline - time.monotonic()))
+            except DeployError:
+                observed = host.run(["systemctl", "show", inventory.units[name],
+                    "--property=ExecMainStatus,ExecCondition,ExecStartPre", "--no-pager"], check=False, timeout=5)
+                if observed.returncode == 0 and re.search(r"(?m)^ExecMainStatus=226$|status=226(?:/NAMESPACE)?(?:[ ;}]|$)", observed.stdout):
+                    raise DeployError("service_namespace", "Unit namespace setup failed (226/NAMESPACE). "
+                                      "Run the deploy action again to prepare host paths, or use reboot recovery.") from None
+                raise
             require(services.wait_ready(host, inventory, name, deadline), "readiness_failed", "Selected role failed readiness.")
 
 
@@ -551,7 +571,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
             store.issue_permit(permit, evidence)
             atomic_write(store.runtime / "active-permit", permit.id, mode=0o600)
         deadline = time.monotonic() + release.READINESS_SECONDS
-        start_units(host, inventory, starting, deadline)
+        start_units(host, entry, inventory, starting, deadline)
         require(not running or services.wait_ready_set(host, inventory, running, deadline),
                 "readiness_failed", "The selected running set did not remain ready before public opening.")
         if running:
@@ -581,7 +601,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
 
 
 def boot(host, entry, inventory):
-    """Boot only reconstructs closure; it never replays a pending operation."""
+    """Rebuild closure and host paths before workloads; never replay pending operations."""
     with host.lock("host"), host.lock(inventory.profile.instance_id):
         store = admission.AdmissionStore(host, inventory.profile.instance_id)
         selected, resolution = store._selection()
@@ -590,6 +610,7 @@ def boot(host, entry, inventory):
                                  canonical_digest(record_document(inventory.deployment)), None)
         evidence = feature_network.close(host, entry, request, resolution, inventory.units)
         store.record_boot_closure(evidence)
+        prepare_shared_directories(host, entry, inventory)
         origins = store._retained_records(resolution)
         for name, spec in inventory.specs.items():
             origin = origins.get(name, {}).get("resolution_id", resolution.id)

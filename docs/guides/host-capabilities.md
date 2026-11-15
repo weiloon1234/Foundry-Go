@@ -1293,23 +1293,36 @@ copied into a less privileged mount namespace. See the
 
 Roles still share one instance account for everything outside shared directories.
 This policy does not give each role separate account-owned state or IPC authority.
-The privileged `+` preparation helper runs as host root outside the workload
-sandbox so it can create and verify the host parent and mounts.
+The privileged `+` per-start helper runs as root but still sees the unit's
+filesystem namespace, including its shared-directory mounts. It verifies that
+view; it does not create or mount caches.
 
 ### Lifetime, reports, and cleanup
 
-Each admitted start uses the privileged preparation helper to create or verify
-the mount before the workload starts. Preparation serializes across the instance
-and checks the mount source, filesystem type, capacity, inode limit, owner, mode,
-and absence of symlinks. Existing files beneath an unmounted directory and foreign
-mounts cause refusal. Systemd creates a missing `TemporaryFileSystem=` mount
+Deploy operations prepare caches in the host mount namespace before loading or
+starting instance units. This covers activation, release transitions, rollback,
+recovery and rehearsal, maintenance up, and explicit start or restart. Preparation
+holds the instance's shared-directories lock and verifies that its mount namespace
+matches PID 1's. At reboot, the root admission boot coordinator prepares caches
+after network closure and before the instance units ordered after it start.
+The later boot opener checks readiness before reopening traffic.
+
+Host preparation checks the mount source, filesystem type, capacity, inode limit,
+owner, mode, and absence of symlinks. Existing files beneath an unmounted directory
+and foreign mounts cause refusal. Systemd creates a missing `TemporaryFileSystem=` mount
 point with mode `0755` at unit start, before the privileged hooks run. Preparation
 and discard accept a host parent only when it is a real, nonsymlink directory
 owned by root:root with mode `0700` or exactly `0755`. They tighten `0755` to
 `0700` with `fchmod` on the opened directory and re-verify it before mounting or
-unmounting any cache. Other owners, types, and modes are refused unchanged. The helper's
-[`+` systemd prefix](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html#ExecStart=)
-performs this work outside the workload's filesystem namespace.
+unmounting any cache. Other owners, types, and modes are refused unchanged.
+
+Each admitted start uses its privileged hook only to verify granted views: each
+must be an exact tmpfs mount with its declared source, size and inode limits,
+instance owner, and mode. Readers must see a read-only mount. Ungranted roles
+verify no cache views. The `+` prefix does not move this hook into the host mount
+namespace. If a granted bind source is missing, systemd can fail with
+`226/NAMESPACE` before any hook runs. Run the deploy action again to prepare host
+paths, or use reboot recovery; no unit hook can repair a missing bind source.
 
 Ordinary restarts preserve the cache. Reboot clears it. A release change or shared
 directory declaration change discards the previous caches after every old role

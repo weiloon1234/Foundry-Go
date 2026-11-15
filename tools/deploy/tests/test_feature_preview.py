@@ -299,8 +299,9 @@ class FeaturePreviewTests(unittest.TestCase):
             scenario.assert_listener_report(value, {"name": "fixture-acceptance"})
 
     def test_transition_closes_before_migration_and_opens_only_after_all_readiness(self):
-        from contextlib import ExitStack
+        from contextlib import ExitStack, nullcontext
         import release
+        import shared_directories
         from test_admission import attempt
         from test_host_capabilities import BOOT, INVOCATION
         events = []
@@ -309,6 +310,7 @@ class FeaturePreviewTests(unittest.TestCase):
         state = {"last_attempt": running, "previous": None, "current": {}, "history": []}
         evidence = c.ClosureEvidence.parse(closure())
         store = Mock()
+        store._lock = Mock(side_effect=lambda *_: nullcontext())
         store.begin.side_effect = lambda *_: events.append("pending")
         store.commit.side_effect = lambda: events.append("committed")
         store._selection.return_value = (c.DeploymentSelection.parse(__import__("test_host_capabilities").selection()), None)
@@ -320,6 +322,7 @@ class FeaturePreviewTests(unittest.TestCase):
             running["outcome"] = "succeeded"
         with ExitStack() as stack:
             stack.enter_context(patch.object(lifecycle.admission, "AdmissionStore", return_value=store))
+            stack.enter_context(patch.object(shared_directories, "prepare", side_effect=lambda *_: events.append("shared-prepared")))
             stack.enter_context(patch.object(lifecycle.admission, "boot_id", return_value=BOOT))
             stack.enter_context(patch.object(lifecycle, "current_executor", return_value=c.ProcessIdentity(123, 456, INVOCATION)))
             stack.enter_context(patch.object(self.host, "journal"))
@@ -342,7 +345,7 @@ class FeaturePreviewTests(unittest.TestCase):
             lifecycle.transition(self.host, {"tools": {"generation": upgrades.protocol()["generation"]}},
                                  self.entry, self.inventory, state, running)
         status.assert_called_once_with(self.host, self.entry, release.release_path(self.host, self.entry, self.inventory.deployment.release), env_file=Path("/effective.env"))
-        ordered = ["pending", "stopped", "closed", "migrate", "db:seed", "switched", "ready:http", "ready:relay", "ready:worker", "ready-set", "opened", "finished", "committed"]
+        ordered = ["pending", "stopped", "closed", "migrate", "db:seed", "switched", "shared-prepared", "ready:http", "ready:relay", "ready:worker", "ready-set", "opened", "finished", "committed"]
         self.assertEqual(ordered, [event for event in events if event in ordered])
 
     def test_feature_worker_uses_frozen_arguments_without_legacy_worker_environment(self):

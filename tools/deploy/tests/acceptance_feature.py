@@ -497,6 +497,25 @@ def main():
         assert_shared_files(host, inventory, entry, reported)
         assert Path(endpoint.path).stat().st_ino != old_inode, "Restart did not replace the stale provider socket"
         public_observation(host, topology, profile, inventory=inventory, opened=True)
+        # Recreate the cache state seen after reboot, then use the real boot owners.
+        import feature_lifecycle
+        import feature_network
+        import shared_directories
+        feature_lifecycle.stop_units(host, inventory)
+        shared_directories.discard(host, inventory.topology, profile["instance_id"],
+                                   entry["allocations"]["uid"], entry["allocations"]["gid"])
+        cache = Path(inventory.specs["http"].bindings.shared_directories[0].path)
+        cache.parent.rmdir()
+        feature_network.prepare_boot(host)
+        feature_lifecycle.boot(host, entry, inventory)
+        assert cache.is_mount(), "Boot did not prepare the cache before unit startup"
+        for name in inventory.start_order(services.enabled_units(host, inventory.units)):
+            host.run(["systemctl", "start", inventory.units[name]])
+        feature_lifecycle.open_boot(host, entry, inventory)
+        reported = json.loads(run([LAUNCHER, "report"], input=json.dumps(request(project, profile))).stdout)
+        assert_shared_files(host, inventory, entry, reported)
+        public_observation(host, topology, profile, inventory=inventory, opened=True)
+        second = run(["systemctl", "show", inventory.units["relay"], "-p", "InvocationID", "--value"]).stdout
         for operation in ("down", "up"):
             changed = action(operation, request(project, profile, confirm=True, operation_id=str(uuid.uuid4())))
             assert changed["maintenance"]["down"] is (operation == "down")

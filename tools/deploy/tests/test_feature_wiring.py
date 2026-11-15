@@ -43,6 +43,7 @@ import provision
 import release
 import report
 import services
+import shared_directories
 from services import probe as actual_probe
 import upgrades
 import unix_sockets
@@ -65,6 +66,7 @@ class WiringHost(Host):
     def __init__(self, root):
         super().__init__(Paths(root))
         self.commands, self.started = [], []
+        self.shared_prepared = set()
         self.account, self.nginx = None, False
         self.account_sequence = 0
         self.worker = 90
@@ -98,6 +100,7 @@ class WiringHost(Host):
         registry = self.read_registry()
         entry = next(iter(registry["instances"].values()))
         _, selection, selected, _ = lifecycle.load(self, entry)
+        assert (selected.profile.instance_id, selected.topology.sha256) in self.shared_prepared, "Host caches were not prepared before unit start"
         role = next(role for role, name in selected.units.items() if name == unit)
         text = self.paths.p("/etc/systemd/system/" + unit).read_text()
         arguments = shlex.split(next(line.split("=", 1)[1].lstrip("+") for line in text.splitlines() if line.startswith("ExecCondition=")))
@@ -111,8 +114,12 @@ class WiringHost(Host):
         pin = c.HelperInvocation(admission.boot_id(self), inventory.specs[role].identity, process, bundle,
                                 c.canonical_digest(c.record_document(inventory.specs[role])), inventory.resolution.id, 1, None)
         self.owned_write(self.paths.p("/proc/self/cgroup"), "0::/system.slice/" + unit)
-        for action in ("admit", "prepare"):
-            feature_runtime.run(action, c.record_document(pin), launch)
+        with patch.object(shared_directories, "prepare", side_effect=AssertionError("Unit hooks must not prepare host caches")), \
+                patch.object(shared_directories, "verify", wraps=shared_directories.verify) as verified:
+            for action in ("admit", "prepare"):
+                feature_runtime.run(action, c.record_document(pin), launch)
+            verified.assert_called_once_with(self, inventory.topology, inventory.specs[role].identity.instance_id, role,
+                                             entry["allocations"]["uid"], entry["allocations"]["gid"])
         self.proc(process.pid, invocation, alive=False)
         main = self.proc(process.pid + 1, invocation, self.paths.p(inventory.specs[role].executable), unit)
         self.running[unit] = (main, inventory, role)
@@ -230,6 +237,7 @@ class WiringHost(Host):
             elif action == "start" and unit.startswith("foundry-"):
                 self.start(unit)
             elif action == "stop":
+                self.shared_prepared.clear()
                 code = 0 if loaded else 5
                 record = self.running.pop(unit, None)
                 if record:
@@ -318,6 +326,11 @@ class FeatureWiringFixture(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.enterContext(patch.object(listeners, "observe_dns", side_effect=lambda binding: c.DNSObservation(binding.hostname, tuple(binding.public_addresses), c.now(), "recursive")))
         self.host = WiringHost(Path(temporary.name))
+        prepare_shared = shared_directories.prepare
+        def prepare(host, topology, instance, uid, gid):
+            prepare_shared(host, topology, instance, uid, gid)
+            host.shared_prepared.add((instance, topology.sha256))
+        self.enterContext(patch.object(shared_directories, "prepare", side_effect=prepare))
         self.project, self.profile, _ = fixture()
         self.archive = self.host.paths.root / "feature.tar.gz"
         self.build_archive()

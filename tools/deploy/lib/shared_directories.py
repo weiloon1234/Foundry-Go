@@ -50,9 +50,11 @@ def _mount(host, path):
         require(False, "shared_directory_mount", "Invalid shared directory mount observation.")
 
 
-def _verify_mount(record, instance, name):
+def _verify_mount(record, instance, name, *, readonly=False):
+    options = set(record.get("options", "").split(",")) if record else set()
     require(record is not None and record.get("source") == _source(instance, name) and record.get("fstype") == "tmpfs"
-            and {"rw", "nosuid", "nodev", "noexec"} <= set(record.get("options", "").split(",")),
+            and {"ro" if readonly else "rw", "nosuid", "nodev", "noexec"} <= options
+            and ("rw" if readonly else "ro") not in options,
             "shared_directory_mount", "Shared directory must be its owned, restricted tmpfs mount.")
 
 
@@ -113,10 +115,13 @@ def _verify_directory(path, directory, uid, gid):
 def prepare(host, topology, instance, uid, gid):
     """Called under the instance's shared-directory preparation lock, as host root.
 
-    The privileged ExecStartPre prefix bypasses service filesystem namespaces.
+    Run before systemd constructs workload namespaces, never from a unit hook.
     Never overlay an occupied directory or adopt an unrelated mount.
     """
     from admission import protected_directory
+    if host.paths.root == Path("/"):
+        require(os.geteuid() == 0 and os.path.samefile("/proc/self/ns/mnt", "/proc/1/ns/mnt"),
+                "shared_directory_namespace", "Shared directory preparation requires root in the host mount namespace.")
     require(type(uid) is int and type(gid) is int and uid >= 0 and gid >= 0
             and (host.paths.root != Path("/") or uid > 0 and gid > 0),
             "service_account", "Shared directories require the instance account.")
@@ -140,6 +145,17 @@ def prepare(host, topology, instance, uid, gid):
             if capacity.f_blocks * capacity.f_frsize != directory.max_bytes or capacity.f_files != _inode_limit(directory):
                 host.run(["mount", "-t", "tmpfs", "-o", "remount," + options, _source(instance, name), str(path)], timeout=10)
         _verify_mount(_mount(host, path), instance, name)
+        _verify_directory(path, directory, uid, gid)
+
+
+def verify(host, topology, instance, role, uid, gid):
+    """Read-only verification of granted mounts in the calling unit's namespace."""
+    for name, directory in topology.shared_directories:
+        access = directory.access(role)
+        if access is None:
+            continue
+        path = check_path(host.paths.p(shared_directory_path(instance, name)), "directory")
+        _verify_mount(_mount(host, path), instance, name, readonly=access == "read-only")
         _verify_directory(path, directory, uid, gid)
 
 

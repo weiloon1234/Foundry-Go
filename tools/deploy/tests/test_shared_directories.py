@@ -155,6 +155,45 @@ class SharedPreparationTests(unittest.TestCase):
     def prepare(self):
         shared.prepare(self.host, self.topology, INSTANCE, self.uid, self.gid)
 
+    def test_host_preparation_refuses_a_private_mount_namespace(self):
+        with patch.object(os, "geteuid", return_value=0), patch.object(os.path, "samefile", return_value=False), \
+                patch("admission.protected_directory") as mkdir, self.assertRaises(c.DeployError) as caught:
+            shared.prepare(Host(), self.topology, INSTANCE, 1001, 1001)
+        self.assertEqual(caught.exception.code, "shared_directory_namespace")
+        mkdir.assert_not_called()
+
+    def test_unit_view_verification_is_read_only_and_skips_ungranted_roles(self):
+        self.path.mkdir(parents=True, mode=0o700)
+        # The private parent need not match the root-only host parent.
+        self.path.parent.chmod(0o755)
+        for role, access in (("http", "rw"), ("relay", "ro")):
+            record = {**self.record, "options": access + ",nosuid,nodev,noexec"}
+            with patch.object(shared, "_mount", return_value=record), patch.object(os, "fstatvfs", return_value=self.capacity), \
+                    patch.object(os, "fchmod") as chmod, patch.object(self.host, "run") as run:
+                shared.verify(self.host, self.topology, INSTANCE, role, self.uid, self.gid)
+            chmod.assert_not_called()
+            run.assert_not_called()
+        with patch.object(shared, "_mount") as mount, patch.object(os, "open") as opened:
+            shared.verify(self.host, self.topology, INSTANCE, "worker", self.uid, self.gid)
+        mount.assert_not_called()
+        opened.assert_not_called()
+
+    def test_unit_view_verification_refuses_mount_and_limit_drift(self):
+        self.path.mkdir(parents=True, mode=0o700)
+        reader = {**self.record, "options": "ro,nosuid,nodev,noexec"}
+        for record in (None, {**reader, "source": "foreign"}, {**reader, "fstype": "ext4"},
+                       self.record, {**reader, "options": "ro,rw,nosuid,nodev,noexec"}):
+            with self.subTest(record=record), patch.object(shared, "_mount", return_value=record), self.assertRaises(c.DeployError):
+                shared.verify(self.host, self.topology, INSTANCE, "relay", self.uid, self.gid)
+        for field in ("f_blocks", "f_files"):
+            capacity = copy.copy(self.capacity)
+            setattr(capacity, field, getattr(capacity, field) + 1)
+            with self.subTest(field=field), patch.object(shared, "_mount", return_value=reader), \
+                    patch.object(os, "fstatvfs", return_value=capacity), self.assertRaises(c.DeployError):
+                shared.verify(self.host, self.topology, INSTANCE, "relay", self.uid, self.gid)
+        with patch.object(shared, "_mount", return_value=reader), self.assertRaises(c.DeployError):
+            shared.verify(self.host, self.topology, INSTANCE, "http", self.uid, self.gid)
+
     def test_mount_create_verify_and_idempotent_reuse(self):
         with patch.object(shared, "_mount", side_effect=[None, self.record]), \
                 patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0)), \
