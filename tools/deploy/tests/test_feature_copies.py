@@ -18,8 +18,8 @@ from test_feature_wiring import FeatureWiringFixture
 
 
 class FeatureCopiesTests(FeatureWiringFixture):
-    def deploy_copies(self, count=3):
-        self.build_archive(copies=count, application_content=b"unchanged application")
+    def deploy_copies(self, count=3, *, independent=False):
+        self.build_archive(copies=count, independent=independent, application_content=b"unchanged application")
         plan = self.request("bootstrap-plan", topology=self.topology.projection())
         self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
         self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
@@ -237,15 +237,72 @@ class FeatureCopiesTests(FeatureWiringFixture):
         self.assertTrue(self.host.paths.p(services.ServicePaths.for_unit(removed, inventory.resolution.id).base).exists())
         self.assertNotIn(["systemctl", "reset-failed", inventory.units[removed]], self.host.commands)
 
-    def test_copy_selector_stops_restarts_one_copy_and_preserves_siblings(self):
-        self.build_archive(copies=2, independent=True)
-        plan = self.request("bootstrap-plan", topology=self.topology.projection())
-        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
-        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+    def test_plain_stop_then_restart_enables_and_verifies_every_copy(self):
+        entry, inventory = self.deploy_copies(2)
+        self.assertEqual(self.request("stop")["status"], "stopped")
+        self.assertFalse(self.host.enabled & set(inventory.units.values()))
+        self.assertFalse(self.host.running)
         _, entry = self.host.require_identity(self.project, self.profile)
-        inventory = lifecycle.load(self.host, entry)[2]
+        self.assertEqual(lifecycle.load(self.host, entry)[1].enabled_roles, ())
+
+        self.host.commands.clear()
+        with patch.object(services, "wait_ready_set", wraps=services.wait_ready_set) as readiness:
+            result = self.request("restart")
+        self.assertEqual(result["status"], "healthy")
+        self.assertEqual(set(services.enabled_units(self.host, inventory.units)), set(inventory.units))
+        self.assertEqual(set(self.host.running), set(inventory.units.values()))
+        self.assertTrue(any(set(call.args[2]) == set(inventory.units) for call in readiness.call_args_list))
+        starts = [command[3:] for command in self.host.commands if command[:3] == ["systemctl", "start", "--no-block"]]
+        self.assertEqual(starts, [[inventory.units[name] for name in inventory.copies("relay")],
+                                  [inventory.units[inventory.identity("http")]]])
+        _, entry = self.host.require_identity(self.project, self.profile)
+        store, selection, inventory, _ = lifecycle.load(self.host, entry)
+        self.assertEqual(set(selection.enabled_roles), set(c.unit_selection_names(inventory.units)))
+        self.assertEqual(selection.admission.disposition, c.AdmissionDisposition.COMMITTED)
+        self.assertEqual(self.host.load_state(entry)["status"], "healthy")
+        store.require_cleanup_clear()
+
+    def test_plain_restart_after_stop_retains_maintenance_holds(self):
+        import feature_maintenance
+        entry, inventory = self.deploy_copies(2, independent=True)
+        self.request("down", confirm=True)
+        self.request("stop")
+        result = self.request("restart")
+        self.assertEqual(result["status"], "healthy")
+        self.assertTrue(self.host.maintenance_down)
+        self.assertEqual(set(services.enabled_units(self.host, inventory.units)), set(inventory.units))
+        self.assertEqual(set(self.host.running), {inventory.units[inventory.identity("http")]})
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, selection, inventory, _ = lifecycle.load(self.host, entry)
+        self.assertEqual(set(selection.maintenance_holds), set(c.unit_selection_names(inventory.copies("relay"))))
+        for identity in inventory.copies("relay"):
+            self.assertTrue(self.host.paths.p(feature_maintenance.marker_path(identity)).is_file())
+        self.request("up", confirm=True)
+        self.assertEqual(set(self.host.running), set(inventory.units.values()))
+
+    def test_named_restart_refuses_hold_and_up_preserves_disabled_copy(self):
+        entry, inventory = self.deploy_copies(2, independent=True)
+        first, second = inventory.copies("relay")
+        self.request("down", confirm=True)
+        self.request("stop", role="relay", copy=2)
+        with self.assertRaises(c.DeployError) as error:
+            self.request("restart", role="relay", copy=2)
+        self.assertEqual(error.exception.code, "service_held")
+        self.assertNotIn(inventory.units[second], self.host.enabled)
+        self.assertNotIn(inventory.units[second], self.host.running)
+        self.request("up", confirm=True)
+        self.assertIn(inventory.units[first], self.host.running)
+        self.assertNotIn(inventory.units[second], self.host.enabled)
+        self.assertNotIn(inventory.units[second], self.host.running)
+        self.request("restart", role="relay", copy=2)
+        self.assertEqual(set(services.enabled_units(self.host, inventory.units)), set(inventory.units))
+        self.assertEqual(set(self.host.running), set(inventory.units.values()))
+
+    def test_copy_selector_stops_restarts_one_copy_and_preserves_siblings(self):
+        entry, inventory = self.deploy_copies(2, independent=True)
         first, second = inventory.copies("relay")
         original = self.host.running[inventory.units[first]]
+        http = self.host.running[inventory.units[inventory.identity("http")]]
         result = self.request("stop", role="relay", copy=2)
         self.assertEqual(result["status"], "degraded")
         self.assertNotIn(inventory.units[second], self.host.enabled)
@@ -255,6 +312,7 @@ class FeatureCopiesTests(FeatureWiringFixture):
         self.assertIn(inventory.units[second], self.host.running)
         self.assertIn(inventory.units[second], self.host.enabled)
         self.assertEqual(self.host.running[inventory.units[first]], original)
+        self.assertEqual(self.host.running[inventory.units[inventory.identity("http")]], http)
 
     def test_public_copy_operations_preserve_sibling_route_and_allocation(self):
         import edge

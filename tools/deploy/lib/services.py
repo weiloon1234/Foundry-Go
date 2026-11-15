@@ -596,7 +596,8 @@ def wait_ready_set(host, inventory, names, deadline, *, starting=False):
     from host import OperationTimeout, wall_clock_budget
     from release import STABILITY_SECONDS, _matches_executable, service
     names = tuple(names)
-    require(names and len(names) == len(set(names)) and len(names) <= MAX_UNITS and set(names) <= inventory.units.keys(),
+    require(names, "readiness_failed", "Cannot verify readiness: no units selected.")
+    require(len(names) == len(set(names)) and len(names) <= MAX_UNITS and set(names) <= inventory.units.keys(),
             "service_selection", "Select unique, known readiness units within the instance cap.")
     selected = set(names)
     names = tuple(name for name in inventory.units if name in selected)

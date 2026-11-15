@@ -1109,8 +1109,11 @@ Bootstrap runs `bootstrap-plan`, presents findings and confirmation, then runs
 `bootstrap-apply`. It installs declared packages and reserves closed exposure.
 Deployment builds/downloads/verifies artifact payloads, prepares the instance,
 starts enabled roles in dependency order and opens ingress last. The public port
-must be closed before first activation and after stop. Restart resumes the selected
-instance through admission. Report lists the listener under its instance with
+must be closed before first activation and after stop. Plain restart re-enables every
+declared role and placed copy, including after stop, and resumes the selected
+instance through admission and readiness in dependency order. Maintenance holds
+still prevent held copies from starting; use `up` to lift them. Named restarts
+retain their selected scope and refuse held copies. Report lists the listener under its instance with
 exposure and DNS observations. Read status after a lost SSH connection; a lost
 reply does not establish whether the operation completed.
 
