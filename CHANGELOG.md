@@ -4,6 +4,10 @@
 
 ### Offline deployment validation
 
+- Fixed: declaration reads pin every directory component without following links,
+  preventing parent-symlink swaps from reaching private inputs. Declaration-only
+  privacy rules no longer exclude application packages from release snapshots.
+
 - Fixed: interactive validation dispatches before local or remote state access.
   Selected profiles retain release/deploy sibling identity checks; declaration
   reads reject private paths and linked files. Release path safety and collision

@@ -3,11 +3,11 @@ import os
 from pathlib import PurePosixPath
 import stat
 
-from contracts import (MAX_JSON, check_path, parse_json, require, validate_profile,
+from contracts import (MAX_JSON, check_path, open_directory, parse_json, require, validate_profile,
                        validate_profile_identity)
 
 
-def source_allowed(name):
+def declaration_allowed(name):
     path = PurePosixPath(name)
     require(not path.is_absolute() and ".." not in path.parts and "\\" not in name
             and not any(ord(c) < 32 for c in name), "unsafe_path", "Source contains an unsafe path.")
@@ -25,13 +25,17 @@ def source_allowed(name):
 
 
 def read_declaration(root, path, limit):
-    require(path.is_relative_to(root) and source_allowed(path.relative_to(root).as_posix()),
+    require(path.is_relative_to(root) and declaration_allowed(path.relative_to(root).as_posix()),
             "unsafe_path", "Declaration must use a public application source path.")
     check_path(path, "file")
-    info = path.lstat()
-    require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1,
-            "unsafe_path", "Declarations must be regular files without links.")
-    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    # No component can resolve through a link, so the policy-checked relative
+    # chain is also the chain traversed from the pinned application directory.
+    relative = path.relative_to(root)
+    with open_directory(root) as application, open_directory(relative.parent, dir_fd=application) as parent:
+        info = os.stat(relative.name, dir_fd=parent, follow_symlinks=False)
+        require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1,
+                "unsafe_path", "Declarations must be regular files without links.")
+        descriptor = os.open(relative.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
     with os.fdopen(descriptor, "rb") as stream:
         current = os.fstat(stream.fileno())
         require(stat.S_ISREG(current.st_mode) and current.st_nlink == 1

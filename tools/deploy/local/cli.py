@@ -682,11 +682,16 @@ def production_profile(profile):
 
 
 def source_allowed(name):
-    from declaration_inputs import source_allowed as allowed
-    try:
-        return allowed(name)
-    except DeployError as error:
-        raise LocalError(error.detail) from error
+    path = PurePosixPath(name)
+    if path.is_absolute() or ".." in path.parts or "\\" in name or any(ord(c) < 32 for c in name):
+        raise LocalError("source contains an unsafe path")
+    excluded = {".git", ".deploy", "dist", "bin", ".aws", ".ssh", ".netrc", ".npmrc", ".codex",
+                "storage", "node_modules", "go.work", "go.work.sum"}
+    return not (any(part in excluded or part.startswith(".env") for part in path.parts)
+                or path.suffix.lower() in {".pem", ".key", ".p12", ".pfx"}
+                or name in {".claude/settings.local.json", "CLAUDE.local.md", "config/app.toml"}
+                or name.startswith("public/build/")
+                or name.startswith("config/") and name.endswith(".local.toml"))
 
 
 def validate_source_links(names, links):

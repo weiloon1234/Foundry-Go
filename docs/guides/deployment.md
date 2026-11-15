@@ -73,6 +73,9 @@ This checks declarations without requiring private file permissions or preparing
 test credentials. Container storage certification remains a rehearsal check.
 Binding files must use public source paths. Private paths, symbolic links, hard
 links, and non-regular files are refused before their contents are read.
+Directory components are opened without following links, so concurrent parent
+replacement cannot redirect a read. These declaration-only privacy rules do not
+change release source selection, including application packages named `secrets`.
 
 Exit status is 0 when every check passes and 1 for invalid declarations. Text is
 the default. `FORMAT=json` or `--format json` returns schema 1 with `action`, `ok`,

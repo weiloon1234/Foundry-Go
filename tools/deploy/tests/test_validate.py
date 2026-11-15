@@ -73,6 +73,11 @@ class OfflineValidationTests(unittest.TestCase):
             def guarded(filename, *args, _original=original, **kwargs):
                 if not isinstance(filename, int):
                     self.assertNotEqual(Path(filename), path, "private or linked declaration was opened")
+                    if kwargs.get("dir_fd") is not None:
+                        expected = path.lstat()
+                        actual = os.stat(filename, dir_fd=kwargs["dir_fd"], follow_symlinks=False)
+                        self.assertNotEqual((actual.st_dev, actual.st_ino), (expected.st_dev, expected.st_ino),
+                                            "private or linked declaration was opened relative to a directory")
                 return _original(filename, *args, **kwargs)
             stack.enter_context(patch(module + "." + name, side_effect=guarded))
         return stack
@@ -292,6 +297,7 @@ class OfflineValidationTests(unittest.TestCase):
         self.assertTrue(any(c["kind"] == "rehearsal" and c["path"] == "deploy/lab.json" for c in result["checks"]))
 
     def test_private_bindings_are_refused_before_open(self):
+        from declaration_inputs import declaration_allowed
         for name in (".deploy/settings.json", ".DEPLOY/settings.json", "secrets/bindings.json", "SeCrEtS/bindings.json", "deploy/secrets/bindings.json",
                      ".secrets/bindings.json", "deploy/service-secrets/value", "deploy/copy-secrets/value",
                      "deploy/bootstrap-secrets.json", ".ssh/config", ".aws/credentials", ".netrc", ".npmrc",
@@ -300,7 +306,7 @@ class OfflineValidationTests(unittest.TestCase):
             with self.subTest(path=name):
                 path = self.root / name
                 self.write(name, {"private": "must-not-read"})
-                self.assertFalse(cli.source_allowed(name))
+                self.assertFalse(declaration_allowed(name))
                 with self.forbid_open(path):
                     result = self.failed("rehearsal", "unsafe_path", environment="acceptance-lab", flags=("--bindings", name))
                 self.assertNotIn("must-not-read", json.dumps(result))
@@ -330,11 +336,56 @@ class OfflineValidationTests(unittest.TestCase):
         path = self.root / "deploy/acceptance-lab-bindings.json"
         original = os.open
         def swap(filename, *args, **kwargs):
-            if Path(filename) == path:
+            if filename == path.name and kwargs.get("dir_fd") is not None:
                 os.link(path, self.root / "secret-alias")
             return original(filename, *args, **kwargs)
         with patch.object(declaration_inputs.os, "open", side_effect=swap):
             self.failed("rehearsal", "unsafe_path", environment="acceptance-lab")
+
+    def test_parent_swapped_to_private_symlink_after_path_check_is_never_read(self):
+        import declaration_inputs
+        public = self.root / "deploy/public-bindings"
+        public.mkdir()
+        path = public / "settings.json"
+        self.write("deploy/public-bindings/settings.json", self.read("deploy/acceptance-lab-bindings.json"))
+        self.write(".deploy/settings.json", {"private": "must-not-read"})
+        original = declaration_inputs.check_path
+        swapped = []
+        def swap(checked, kind=None):
+            result = original(checked, kind)
+            if checked == path:
+                public.rename(public.with_name("saved-public-bindings"))
+                public.symlink_to(self.root / ".deploy", target_is_directory=True)
+                swapped.append(True)
+            return result
+        with patch.object(declaration_inputs, "check_path", side_effect=swap), \
+                self.forbid_open(self.root / ".deploy/settings.json"):
+            result = self.failed("rehearsal", "unsafe_path", environment="acceptance-lab",
+                                 flags=("--bindings", "deploy/public-bindings/settings.json"))
+        self.assertEqual(swapped, [True])
+        self.assertNotIn("must-not-read", json.dumps(result))
+
+    def test_opened_parent_stays_pinned_when_its_path_becomes_a_private_symlink(self):
+        import declaration_inputs
+        public = self.root / "deploy/public-bindings"
+        public.mkdir()
+        self.write("deploy/public-bindings/settings.json", self.read("deploy/acceptance-lab-bindings.json"))
+        self.write(".deploy/settings.json", {"private": "must-not-read"})
+        original = os.open
+        swapped = []
+        def swap(filename, *args, **kwargs):
+            descriptor = original(filename, *args, **kwargs)
+            if filename == public.name and kwargs.get("dir_fd") is not None:
+                public.rename(public.with_name("saved-public-bindings"))
+                public.symlink_to(self.root / ".deploy", target_is_directory=True)
+                swapped.append(True)
+            return descriptor
+        with patch.object(declaration_inputs.os, "open", side_effect=swap), \
+                self.forbid_open(self.root / ".deploy/settings.json"):
+            status, result = self.invoke(environment="acceptance-lab", flags=("--bindings", "deploy/public-bindings/settings.json"))
+        self.assertEqual(swapped, [True])
+        self.assertEqual(status, 0, result)
+        self.assertNotIn("must-not-read", json.dumps(result))
 
     def test_single_environment_refuses_hardlinked_sibling_before_open(self):
         path = self.root / "deploy/environments/acceptance.json"

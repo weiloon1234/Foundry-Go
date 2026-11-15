@@ -5,12 +5,14 @@ belong to Go; these contracts describe deployment resources, not application DTO
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from dns import Change
 from enum import Enum
 import ipaddress
+import errno
 import grp
 import pwd
 import hashlib
@@ -490,6 +492,32 @@ def check_path(path, kind=None):
     if path.exists() and kind:
         require(path.is_dir() if kind == "directory" else path.is_file(), "unsafe_path", "Deployment path has an unexpected file type.")
     return path
+
+
+@contextmanager
+def open_directory(path, *, dir_fd=None):
+    """Own a directory descriptor reached only through no-follow component opens."""
+    path = Path(path)
+    require(".." not in path.parts and (path.is_absolute() or dir_fd is not None),
+            "unsafe_path", "Directory traversal requires a confined path and an explicit root.")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    descriptor = os.open(path.anchor, flags) if path.is_absolute() else os.dup(dir_fd)
+    try:
+        require(stat.S_ISDIR(os.fstat(descriptor).st_mode), "unsafe_path", "Expected a directory descriptor.")
+        parts = path.parts[1:] if path.is_absolute() else path.parts
+        for part in parts:
+            try:
+                child = os.open(part, flags, dir_fd=descriptor)
+            except OSError as error:
+                if error.errno in (errno.ELOOP, errno.ENOTDIR):
+                    raise DeployError("unsafe_path", "Directory traversal encountered a link or non-directory.") from None
+                raise
+            os.close(descriptor)
+            descriptor = child
+            require(stat.S_ISDIR(os.fstat(descriptor).st_mode), "unsafe_path", "Expected a directory descriptor.")
+        yield descriptor
+    finally:
+        os.close(descriptor)
 
 
 def _unique_object(pairs):
