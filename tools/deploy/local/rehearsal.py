@@ -167,9 +167,10 @@ def test_bindings(path, environment, config, token):
                          and not compatible.get("single_request_conditions", False))
             if multipart and certification["status"] != "passed":
                 require(name in capped, "rehearsal_storage_capability",
-                        "Disk " + name + ": stand-in lacks certified conditional CompleteMultipartUpload. "
-                        "Certify the pinned S3 image or explicitly list this disk in rehearsal bindings "
-                        "allow_single_request_conditions for a reduced-fidelity rehearsal capped at PartBytes.")
+                        "Disk " + name + ": " + certification.get("gap", "stand-in lacks certified conditional CompleteMultipartUpload")
+                        + '. Add "allow_single_request_conditions": ' + json.dumps([name])
+                        + " to the rehearsal binding input for a reduced-fidelity rehearsal capped at PartBytes, "
+                        "or use a stand-in with passing certification.")
                 compatible["single_request_conditions"] = True
                 reduced.append(name)
             disk["driver"] = "s3_compatible"

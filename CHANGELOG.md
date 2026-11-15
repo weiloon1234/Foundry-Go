@@ -10,7 +10,12 @@
 - Added: container acceptance runs the existing conditional multipart matrix
   against the pinned S3 stand-in through a Compatible-provider entry point.
   `--s3-certification-only` runs that phase without an application archive and
-  retains digest-bound results. Container certification is pending.
+  retains digest-bound results and a bounded, sanitized first-failure message per
+  failed case. The pinned VersityGW v1.10.0 remains uncertified because its
+  multipart listing response omits `EncodingType=url`. Rehearsal of R2 policies
+  above `PartBytes` currently requires `allow_single_request_conditions` and
+  reports reduced fidelity. Production is unaffected. A future stand-in upgrade
+  must pass certification before the opt-in can be removed.
 
 ## v0.35.0 — 2026-11-15
 

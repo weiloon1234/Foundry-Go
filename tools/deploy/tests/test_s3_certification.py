@@ -81,6 +81,18 @@ class S3CertificationTests(unittest.TestCase):
             _, _, fidelity = self.bind({"uploads": {"driver": "s3_compatible", "cloud": {"compatible": declared}}}, status="pending")
             self.assertEqual(fidelity["status"], "preserved")
 
+    def test_pinned_refusal_names_disk_listing_gap_and_exact_opt_in(self):
+        path, config = self.bindings({"uploads": {"driver": "r2"}})
+        with self.assertRaises(DeployError) as raised:
+            rehearsal.test_bindings(path, "acceptance-test", config, "test")
+        self.assertIn("Disk uploads:", str(raised.exception))
+        self.assertIn("ListMultipartUploads omits EncodingType=url", str(raised.exception))
+        self.assertIn('Add "allow_single_request_conditions": ["uploads"]', str(raised.exception))
+        path, config = self.bindings({"uploads": {"driver": "r2"}}, ["uploads"])
+        _, _, fidelity = rehearsal.test_bindings(path, "acceptance-test", config, "test")
+        self.assertEqual(fidelity["status"], "reduced")
+        self.assertEqual(fidelity["s3_certification"]["status"], "failed")
+
     def test_opt_in_is_bounded_to_unique_bound_names_and_never_forces_a_cap(self):
         disks = {"uploads": {"driver": "r2"}}
         for invalid in (True, "uploads", ["missing"], ["uploads", "uploads"], [False], [{}]):
@@ -128,6 +140,59 @@ class S3CertificationTests(unittest.TestCase):
         self.assertLess(source.index('"$tests/certify_s3.py"'), source.index('phase foreign-baseline '))
         self.assertIn('--s3-certification-only)', source)
         self.assertIn('--output "$logs/s3-certification.json"', source)
+
+    def test_first_failure_is_sanitized_bounded_and_assigned_to_each_failed_case(self):
+        name = containers.S3_CONDITIONAL_TEST
+        child = name + "/5242880"
+        other = name + "/5242881"
+        output = f"""=== RUN   {name}
+=== RUN   {child}
+    provider_test.go:135: certification needs multipart inspection permissions storage_integrity_failed: list https://private.invalid/key?X-Amz-Signature=secret
+    provider_test.go:126: later failure storage_unavailable: delete Authorization: secret
+--- FAIL: {child} (0.1s)
+=== RUN   {other}
+    conditional_multipart_test.go:158: {"secret " * 1000}storage_forbidden: put
+--- FAIL: {other} (0.1s)
+=== NAME  {name}
+    provider_test.go:126: parent cleanup failure storage_unavailable: delete
+--- FAIL: {name} (0.2s)
+"""
+        terminal = f"--- FAIL: {name} (0.2s)"
+        result = certify_s3.matrix_result(subprocess.CompletedProcess([], 1, output))
+        parent_first = output.replace(terminal + "\n", "").replace(
+            f"--- FAIL: {child}", terminal + f"\n--- FAIL: {child}")
+        reordered = certify_s3.matrix_result(subprocess.CompletedProcess([], 1, parent_first))
+        self.assertEqual(sorted(result["cases"], key=lambda case: case["test"]),
+                         sorted(reordered["cases"], key=lambda case: case["test"]))
+        cases = {case["test"]: case for case in result["cases"]}
+        expected = "provider_test.go:135: multipart inspection precondition failed; storage_integrity_failed: list"
+        self.assertEqual(cases[child]["first_failure"], expected)
+        self.assertEqual(cases[name]["first_failure"], expected)
+        self.assertEqual(cases[other]["first_failure"],
+                         "conditional_multipart_test.go:158: test assertion failed (diagnostic withheld); storage_forbidden: put")
+        for case in cases.values():
+            self.assertLessEqual(len(case["first_failure"]), 256)
+        encoded = json.dumps(result)
+        for private in ("secret", "private.invalid", "X-Amz", "Authorization", "later failure", "cleanup failure"):
+            self.assertNotIn(private, encoded)
+
+    def test_parent_context_and_unknown_diagnostics_do_not_leak_or_relabel_passed_cases(self):
+        name = containers.S3_CONDITIONAL_TEST
+        output = f"""=== RUN   {name}
+=== RUN   {name}/5242880
+    provider_test.go:100: private debug text
+--- PASS: {name}/5242880 (0.1s)
+=== NAME  {name}
+    provider_test.go:126: private cleanup text storage_invalid: close
+--- FAIL: {name} (0.2s)
+--- FAIL: {name}/5242881 (0.1s)
+"""
+        result = certify_s3.matrix_result(subprocess.CompletedProcess([], 1, output))
+        self.assertNotIn("first_failure", result["cases"][0])
+        self.assertNotIn("private", json.dumps(result))
+        self.assertEqual(result["cases"][1]["first_failure"],
+                         "provider_test.go:126: test assertion failed (diagnostic withheld); storage_invalid: close")
+        self.assertEqual(result["cases"][2]["first_failure"], "Test failed; diagnostic unavailable")
 
     def test_certification_records_failure_and_refuses_a_different_image_before_build(self):
         output = self.root / "evidence.json"

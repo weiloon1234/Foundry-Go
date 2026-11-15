@@ -1102,10 +1102,16 @@ single-request cap, matching the certified R2 driver. S3-compatible disks retain
 their declared `cloud.compatible` block without gaining capabilities.
 
 Multipart conditions require a passing certification record for the exact pinned
-stand-in image. The current record is pending. Without certification, rehearsal
-refuses any bound disk that declares multipart conditions before creating
-containers. The error names the disk and the missing conditional
-`CompleteMultipartUpload` capability. See the
+stand-in image. The pinned VersityGW v1.10.0 is uncertified: its
+`ListMultipartUploads` response omits the requested `EncodingType=url` and fails
+S3 listing conformance. Rehearsal of R2 policies above `PartBytes` currently
+requires the explicit `allow_single_request_conditions` opt-in below and reports
+reduced fidelity. Production R2 behavior is unaffected.
+
+Without the opt-in, rehearsal refuses any bound disk that declares multipart
+conditions before creating containers. The error names the disk, the listing
+conformance gap, and the exact opt-in to add. A future stand-in upgrade must pass
+the certification before the opt-in can be removed. See the
 [stand-in certification evidence and command](../evidence/v036-rehearsal-conditional-multipart.md).
 
 To accept reduced fidelity for specific disks, add this optional field to the

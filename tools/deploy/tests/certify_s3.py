@@ -21,11 +21,47 @@ def matrix_passed(exit_code, cases):
 
 
 def matrix_result(result):
-    # Keep test identities/results, never SDK diagnostics, request URLs or credentials.
-    cases = [{"test": name, "status": status.lower()} for status, name in re.findall(
-        r"^\s*--- (PASS|FAIL|SKIP): (" + S3_CONDITIONAL_TEST + r"[\w/-]*) \(", result.stdout, re.MULTILINE)]
+    cases, diagnostics, active = [], {}, None
+    test_name = S3_CONDITIONAL_TEST + r"[\w/-]*"
+    for line in result.stdout.splitlines():
+        context = re.fullmatch(r"=== (?:RUN|NAME)\s+(" + test_name + r")\s*", line)
+        if context:
+            active = context[1]
+            continue
+        finished = re.match(r"\s*--- (PASS|FAIL|SKIP): (" + test_name + r") \(", line)
+        if finished:
+            status, name = finished.groups()
+            cases.append({"test": name, "status": status.lower()})
+            continue
+        failure = re.fullmatch(r"\s*((?:provider|conditional_multipart)_test\.go:[0-9]{1,6}): (.*)", line)
+        if active and failure:
+            diagnostics.setdefault(active, safe_failure(failure[1], failure[2]))
+    # Go can report parent results before children. Attribute diagnostics only
+    # after all statuses are known, keeping their original observation order.
+    failed = {case["test"] for case in cases if case["status"] == "fail"}
+    failures = {}
+    for name, message in diagnostics.items():
+        if name in failed:
+            while name:
+                failures.setdefault(name, message)
+                name = name.rpartition("/")[0]
+    for case in cases:
+        if case["status"] == "fail":
+            case["first_failure"] = failures.get(case["test"], "Test failed; diagnostic unavailable")
     ok = matrix_passed(result.returncode, cases)
     return {"status": "passed" if ok else "failed", "exit_code": result.returncode, "cases": cases}
+
+
+def safe_failure(location, diagnostic):
+    # Allowlist summaries and framework codes instead of trying to redact arbitrary
+    # SDK text, which can contain endpoints, signed URLs, headers and object keys.
+    summary = ("multipart inspection precondition failed"
+               if diagnostic.startswith("certification needs multipart inspection permissions")
+               else "test assertion failed (diagnostic withheld)")
+    fault = re.search(r"\bstorage_(?:not_found|forbidden|unsupported|precondition_failed|range_not_satisfiable|"
+                      r"limit_exceeded|invalid|unavailable|integrity_failed|closed): "
+                      r"(?:put|open|stat|delete|list|copy|move|sign|close)\b", diagnostic)
+    return (location + ": " + summary + ("; " + fault[0] if fault else ""))[:256]
 
 
 def in_host(binary):

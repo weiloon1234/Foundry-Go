@@ -14,8 +14,9 @@ S3_IMAGE = "versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533
 # A pending/failed matrix never grants multipart conditions to rehearsal.
 S3_CONDITIONAL_MULTIPART = {
     "image": "versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316",
-    "status": "pending",
-    "evidence": None,
+    "status": "failed",
+    "evidence": "docs/evidence/v036-rehearsal-s3-certification-20261115.json",
+    "gap": "ListMultipartUploads omits EncodingType=url; conditional CompleteMultipartUpload remains uncertified",
 }
 S3_CONDITIONAL_TEST = "TestRealCompatibleConditionalMultipart"
 LABEL = "org.foundry.rehearsal"
