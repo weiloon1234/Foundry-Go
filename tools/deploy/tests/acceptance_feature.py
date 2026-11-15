@@ -45,7 +45,7 @@ import acceptance_copies_ops
 PORT = 8554
 RELAY_BODY = "feature-relay-ready"
 COPIES_ROLE = "copies"
-COPIES_PROGRAM = '''import errno,http.server,json,os,socket,sys,threading
+COPIES_PROGRAM = '''import errno,http.server,json,os,socket,sys,tempfile,threading
 from pathlib import Path
 port,unix_path,cache,state,provider,ordinal=sys.argv[1:]
 ordinal=int(ordinal)
@@ -67,22 +67,33 @@ def serve_unix():
 threading.Thread(target=serve_unix,daemon=True).start()
 class Handler(http.server.BaseHTTPRequestHandler):
  def do_GET(self):
-  shared=Path(cache)/'frame.txt'
-  ready=shared.exists() and shared.read_bytes()==b'prepared-media'
+  if self.path not in ('/ready','/frame'):
+   self.send_error(404)
+   return
+  frame_ready=None
+  if self.path=='/frame':
+   shared=Path(cache)/'frame.txt'
+   frame_ready=shared.exists() and shared.read_bytes()==b'prepared-media'
   try:
-   descriptor=os.open(shared,os.O_WRONLY)
+   if self.path=='/ready':
+    descriptor,probe=tempfile.mkstemp(prefix='.readiness-',dir=cache)
+   else:
+    descriptor=os.open(shared,os.O_WRONLY)
   except OSError as error:
-   ready=ready and error.errno==errno.EROFS
+   read_only=error.errno==errno.EROFS
   else:
    os.close(descriptor)
-   ready=False
+   if self.path=='/ready': os.unlink(probe)
+   read_only=False
   with socket.socket(socket.AF_UNIX) as connection:
    connection.settimeout(3)
    connection.connect(provider)
    connection.sendall(b'ping')
    provider_ready=connection.recv(32)==b'unix-ready'
-  body=json.dumps({'ordinal':ordinal,'pid':os.getpid(),'state':str(state),'unix':unix_path,'shared_read_only':ready,'provider_ready':provider_ready}).encode()
-  self.send_response(200 if ready and provider_ready else 503)
+  result={'ordinal':ordinal,'pid':os.getpid(),'state':str(state),'unix':unix_path,'shared_read_only':read_only,'provider_ready':provider_ready}
+  if frame_ready is not None: result['frame_ready']=frame_ready
+  body=json.dumps(result).encode()
+  self.send_response(200 if read_only and provider_ready and frame_ready is not False else 503)
   self.end_headers()
   self.wfile.write(body)
  def log_message(self,*args): pass
@@ -579,7 +590,7 @@ def assert_confined_wildcard(host, inventory):
 
 
 def assert_numbered_copies(host, inventory, entry, count):
-    """Inspect each real copy, using one readiness budget for the complete set."""
+    """Inspect each real copy after activation has started HTTP and written its frame."""
     import http.client
     import socket
     import time
@@ -616,14 +627,14 @@ def assert_numbered_copies(host, inventory, entry, count):
             connection.connect(unix.path)
             assert connection.recv(32) == str(identity.ordinal).encode()
         with closing(http.client.HTTPConnection(tcp.address, tcp.port, timeout=3)) as connection:
-            connection.request("GET", "/ready")
+            connection.request("GET", "/frame")
             response = connection.getresponse()
             assert response.status == 200
             delivered = json.loads(response.read(4096))
         paths = services.ServicePaths.for_unit(identity, inventory.resolution.id)
         state = Path(paths.state) / "data/probe"
         assert delivered == {"ordinal": identity.ordinal, "pid": int(live["MainPID"]), "state": str(state),
-                             "unix": unix.path, "shared_read_only": True, "provider_ready": True}
+                             "unix": unix.path, "shared_read_only": True, "provider_ready": True, "frame_ready": True}
         provider, = spec.bindings.endpoints
         assert provider.name == "socket" and provider.endpoint.role == "socket-provider"
         grant, = spec.bindings.shared_directories
