@@ -136,3 +136,30 @@ func TestPublicListenerCopyPorts(t *testing.T) {
 		t.Fatal(listener)
 	}
 }
+
+func TestCopySecretFileRejectsExplicitNullAndMalformedValues(t *testing.T) {
+	for _, value := range []string{`null`, `false`, `42`, `[]`, `{}`, `""`} {
+		t.Run(value, func(t *testing.T) {
+			document := copiesBindingDocument(false, true)
+			for ordinal := 1; ordinal <= 2; ordinal++ {
+				field := fmt.Sprintf(`"secret_file":"/etc/foundry/instances/app-1/copy-secrets/service-%d.secret"`, ordinal)
+				document = strings.Replace(document, field, `"secret_file":`+value, 1)
+			}
+			if _, err := ReadBindings(writeBindingDocument(t, document)); !errors.Is(err, fault.Invalid) {
+				t.Fatal("accepted explicit invalid secret file", err)
+			}
+		})
+	}
+}
+
+func TestPublicCopyPortsRejectExplicitNullAndMalformedValues(t *testing.T) {
+	for _, value := range []string{`null`, `false`, `42`, `"ports"`, `{}`, `[]`, `[null,null]`,
+		`[{"ordinal":1,"port":8554,"unexpected":true},{"ordinal":2,"port":8555}]`} {
+		t.Run(value, func(t *testing.T) {
+			document := strings.Replace(publicBindingDocument(), `"port":8554`, `"port":8554,"ports":`+value, 1)
+			if _, err := ReadBindings(writeBindingDocument(t, document)); !errors.Is(err, fault.Invalid) {
+				t.Fatal("accepted explicit invalid public ports", err)
+			}
+		})
+	}
+}

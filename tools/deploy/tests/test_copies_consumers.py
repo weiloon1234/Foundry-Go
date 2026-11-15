@@ -210,20 +210,6 @@ class CopiesConsumerTests(unittest.TestCase):
         with self.assertRaises(c.DeployError):
             listeners.public_policies(bad, self.topology)
 
-    def test_unit_sandbox_exposes_only_declared_copy_files_readonly(self):
-        root = c.instance_paths(self.entry["name"])["configuration"] + "/copy-secrets"
-        first, second = root + "/first.secret", root + "/second.secret"
-        own = {"PASSWORD_FILE": first}
-        empty = c.RoleBindings("relay", (), (), ())
-        policy = config.copy_secret_sandbox(self.entry, empty, own)
-        self.assertIn("TemporaryFileSystem=", policy)
-        self.assertIn("PrivateUsers=yes", policy)
-        self.assertIn("BindReadOnlyPaths=" + services.systemd_word(first), policy)
-        self.assertNotIn(second, policy)
-        ungranted = config.copy_secret_sandbox(self.entry, empty, {})
-        self.assertIn("TemporaryFileSystem=", ungranted)
-        self.assertNotIn("BindReadOnlyPaths=", ungranted)
-
     def test_empty_collections_preserve_wire_and_console_drops_only_secret_paths(self):
         self.assertNotIn("copies", c.record_document(c.RoleBindings("http", (), (), ())))
         paths = self.stage()

@@ -121,14 +121,14 @@ func (e Endpoint) URL() url.URL {
 	return url.URL{Scheme: string(e.Scheme), Host: net.JoinHostPort(e.Address.String(), strconv.Itoa(int(e.Port)))}
 }
 
-// Copy is one placed provider and its optional, read-only secret file grant.
+// Copy is one placed provider and its optional secret file path.
 // It contains file paths, never secret values.
 type Copy struct {
 	// Ordinal is the provider's stable copy number, starting at one.
 	Ordinal int
 	// Endpoint addresses this copy's declared private listener.
 	Endpoint Endpoint
-	// SecretFile is empty when no secret file is granted to this invocation.
+	// SecretFile is empty when no secret file path is included in this descriptor.
 	SecretFile string
 }
 
@@ -322,7 +322,7 @@ type copyWire struct {
 	Ordinal    int                 `json:"ordinal"`
 	Endpoint   endpointAddressWire `json:"endpoint"`
 	Scheme     string              `json:"scheme"`
-	SecretFile *string             `json:"secret_file,omitempty"`
+	SecretFile json.RawMessage     `json:"secret_file,omitempty"`
 }
 type copiesWire struct {
 	Name   string     `json:"name"`
@@ -346,7 +346,7 @@ type publicListenerWire struct {
 	TLS             TLSMode           `json:"tls"`
 	Transport       ListenerTransport `json:"transport"`
 	PublicAddresses []string          `json:"public_addresses"`
-	Ports           []publicPortWire  `json:"ports,omitempty"`
+	Ports           json.RawMessage   `json:"ports,omitempty"`
 }
 type sharedDirectoryWire struct {
 	Name     string          `json:"name"`
@@ -532,7 +532,9 @@ func (w featureDescriptor) bindings() (Bindings, error) {
 			}
 			secret := ""
 			if item.SecretFile != nil {
-				secret = *item.SecretFile
+				if err := json.Unmarshal(item.SecretFile, &secret); err != nil {
+					return Bindings{}, invalidBindings()
+				}
 				if !absolutePath(secret) || filepath.Dir(secret) != "/etc/foundry/instances/"+w.Instance+"/copy-secrets" {
 					return Bindings{}, invalidBindings()
 				}
@@ -568,12 +570,18 @@ func (w featureDescriptor) bindings() (Bindings, error) {
 		}
 		ports := []PublicPort{{Ordinal: 1, Port: uint16(v.Port)}}
 		if v.Ports != nil {
-			if len(v.Ports) < 2 || len(v.Ports) > maxRoleCopies || v.Ports[0].Port != v.Port {
+			var entries []publicPortWire
+			decoder := json.NewDecoder(bytes.NewReader(v.Ports))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&entries); err != nil {
 				return Bindings{}, invalidBindings()
 			}
-			ports = make([]PublicPort, 0, len(v.Ports))
+			if len(entries) < 2 || len(entries) > maxRoleCopies || entries[0].Port != v.Port {
+				return Bindings{}, invalidBindings()
+			}
+			ports = make([]PublicPort, 0, len(entries))
 			seen := make(map[int]bool)
-			for index, port := range v.Ports {
+			for index, port := range entries {
 				if port.Ordinal != index+1 || port.Port < 1 || port.Port > 65535 || seen[port.Port] {
 					return Bindings{}, invalidBindings()
 				}

@@ -306,31 +306,6 @@ def resolve_copies_bindings(host, entry, topology, profile, role, resolution, *,
     return tuple(result)
 
 
-def copy_secret_sandbox(entry, bindings, secret_paths):
-    """Unit policy: hide all copy snapshots, then mount only exact grants read-only.
-
-    Call for every unit, including roles without grants. The directory is also
-    created by prepare_copy_secret_directory before starting any feature unit.
-    """
-    from services import systemd_word
-    root = instance_paths(entry["name"])["configuration"] + "/copy-secrets"
-    granted = {path for path in secret_paths.values() if str(Path(path).parent) == root}
-    granted.update(copy.secret_file for binding in bindings.copies for copy in binding.copies if copy.secret_file)
-    require(all(str(Path(path).parent) == root for path in granted),
-            "service_secret", "Copy grants must reference the instance's copy secret directory.")
-    lines = ["TemporaryFileSystem=" + systemd_word(root + ":ro")]
-    if granted:
-        lines.append("PrivateUsers=yes")
-    for path in sorted(granted):
-        lines += ["BindReadOnlyPaths=" + systemd_word(path), "ReadOnlyPaths=" + systemd_word(path)]
-    return "\n".join(lines) + "\n"
-
-
-def prepare_copy_secret_directory(host, entry):
-    from admission import protected_directory
-    protected_directory(host, host.paths.instance_config(entry["name"]) / "copy-secrets")
-
-
 def service_secret_snapshot_paths(host, entry):
     """Backup/recovery interface: exact current service-secret files, including retained names."""
     paths = service_secret_snapshot(host, entry)
@@ -1115,7 +1090,7 @@ def write_binding_descriptor(host, entry, deployment, resolution, spec, *, candi
 
 
 def console_binding_descriptor(host, entry, resolution_id):
-    """Console invocations retain HTTP bindings except unit-only filesystem grants.
+    """Console invocations retain HTTP bindings but omit secret paths and shared directories.
 
     Derive from the immutable HTTP descriptor so existing resolutions also work;
     never alter the descriptor delivered to the HTTP unit itself.

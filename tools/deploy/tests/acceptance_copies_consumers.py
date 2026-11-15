@@ -15,7 +15,7 @@ def check_copies_consumers(host, entry, inventory, *, consumer, binding_name, pr
       host/entry: the current Host and registered entry after activation or resize.
       inventory: A1's UnitIdentity-keyed UnitInventory for that selected resolution.
       consumer: the UnitIdentity of a running builtin fixture consumer (HTTP or scheduler).
-      binding_name: its `copies` binding, granting producer's copy-scoped secret.
+      binding_name: its `copies` binding, delivering producer's copy-scoped secret paths.
       producer/secret_variable: executable role name and its declared `_FILE` alias.
       public_binding_name: optional consumer public_listener binding; all public
         listeners in this inventory must be enabled and exposed for this check.
@@ -24,7 +24,7 @@ def check_copies_consumers(host, entry, inventory, *, consumer, binding_name, pr
       previous_paths: optional private snapshot returned by a previous call; use
         after grow/shrink/regrow without rotation to prove retained path identity.
       check_console: HTTP declares binding_name too; verify the console keeps its
-        endpoint list but omits the unit-only secret grants.
+        endpoint list but omits the secret paths.
 
     Returns the private name-to-path snapshot for the next resize assertion.
     Never put that return value in public acceptance output. No value is printed.
@@ -48,7 +48,7 @@ def check_copies_consumers(host, entry, inventory, *, consumer, binding_name, pr
     expected = [unit for unit in inventory.units if unit.role == producer]
     assert [item.ordinal for item in binding.copies] == [unit.ordinal for unit in expected], "Copy list differs from placement"
     assert expected, "Scenario requires placed copies"
-    values, granted_paths = [], []
+    values = []
     for identity, item in zip(expected, binding.copies):
         path = delivered[identity][secret_variable]
         assert item.secret_file == path, "Consumer and producer have different secret selections"
@@ -56,7 +56,6 @@ def check_copies_consumers(host, entry, inventory, *, consumer, binding_name, pr
         assert stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o640, "Unsafe copy secret mode"
         assert info.st_uid == 0 and info.st_gid == entry["allocations"]["gid"], "Unsafe copy secret ownership"
         values.append(Path(path).read_bytes().rstrip(b"\n"))
-        granted_paths.append(path)
         pid = str(service(inventory.units[identity])["pid"])
         namespace = ["nsenter", "--target", pid, "--mount", "--", "runuser", "-u", entry["name"], "--"]
         run([*namespace, "test", "-r", path], timeout=10)
@@ -73,18 +72,10 @@ def check_copies_consumers(host, entry, inventory, *, consumer, binding_name, pr
         unit_text = run(["systemctl", "cat", inventory.units[identity]], timeout=10).stdout.encode()
         assert values[-1] not in unit_text and values[-1] not in Path(f"/proc/{pid}/cmdline").read_bytes(), "Private value escaped into a unit or argv"
     assert len(set(values)) == len(values), "Scenario must supply distinct copy passwords"
-    for identity in expected:
-        pid = str(service(inventory.units[identity])["pid"])
-        own = delivered[identity][secret_variable]
-        for path in granted_paths:
-            if path != own:
-                result = run(["nsenter", "--target", pid, "--mount", "--", "runuser", "-u", entry["name"], "--", "test", "-r", path],
-                             timeout=10, check=False)
-                assert result.returncode != 0, "Producer can read a sibling copy's private file"
     leaf = consumer.role + (f".{consumer.ordinal}" if consumer.ordinal != 1 else "")
     descriptor = host.paths.opt(entry["name"]) / "runtime" / inventory.resolution.id / (leaf + ".json")
     artisan = entry["allocations"]["paths"]["application"] + "/releases/" + inventory.deployment.release + "/artisan"
-    arguments = [artisan, "feature:copies", binding_name, str(len(expected)), "granted"]
+    arguments = [artisan, "feature:copies", binding_name, str(len(expected)), "present"]
     if public_binding_name is not None:
         arguments.append(public_binding_name)
     pid = str(service(inventory.units[consumer])["pid"])

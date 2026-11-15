@@ -31,17 +31,12 @@ lifting the gate or running the container scenario.
    `edge.resolve_public_listener_binding(topology, profile, binding_name, reference)`.
    Do not keep constructing a scalar record from `public.ports[0]` in lifecycle.
    The helper preserves the old singleton record and adds `ports` for count > 1.
-4. Before loading units, call
-   `runtime_config.prepare_copy_secret_directory(host, entry)`. Append
-   `runtime_config.copy_secret_sandbox(entry, spec.bindings,
-   secrets.get(identity, {}))` to **every** unit's Service section, including
-   builtins and roles with no grant. It hides the copy-secret directory behind a
-   private read-only tmpfs and exposes only exact file grants read-only. Keep the
-   mask after removing copy-scoped declarations because retained snapshots still
-   exist. Granted units use `PrivateUsers=yes`, following the existing
-   shared-directory isolation pattern.
-   Keep this policy in the unit digest and loaded-unit verification.
-5. Runtime preparation must validate all granted copy paths before dispatch,
+4. Copy secrets use ordinary service-secret storage and permissions: root owner,
+   instance group, mode 0640, and protected directory ancestry. Staging creates
+   `copy-secrets/` as needed. There are no copy-secret sandbox hooks to integrate.
+   Each copy gets a distinct value, but every role of the instance can read it
+   because roles share one account. Rendered templates share that boundary too.
+5. Runtime preparation must validate all delivered copy paths before dispatch,
    including builtin consumers. The owning helper remains
    `runtime_config._read_value_file(host, entry, path)`; never log its result.
    Copy files live under the existing instance configuration directory in
@@ -103,15 +98,15 @@ but must not include private snapshot contents or secret-derived hashes.
   unique and ascending. A named binding may contain an empty list.
 - `Bindings.Copies(name)` returns an owned `[]Copy`, where `Copy` contains
   `Ordinal int`, `Endpoint Endpoint`, and `SecretFile string`. Missing or ungranted
-  names return `fault.Missing`. An omitted file grant becomes an empty string.
+  names return `fault.Missing`. An omitted secret path becomes an empty string. Explicit null is rejected.
 - `PublicListener.Ports` is an owned `[]PublicPort`, with `Ordinal int` and
   `Port uint16`. `Port` remains the first copy's port. Multi-copy wire adds
   `ports: [{"ordinal": 1, "port": ...}, ...]`; singleton wire is unchanged.
-  Profile `ports` order selects ordinal, without load balancing.
-- Console descriptors omit copy secret paths because console execution has no
-  unit sandbox grant. They retain the HTTP copy list and all other existing
-  HTTP descriptor rules. This is a descriptor/access contract, not a claim that
-  a privileged operator cannot read private files.
+  Profile `ports` order selects ordinal, without load balancing. Explicit null or
+  malformed `ports` is rejected; only omission selects the singleton default.
+- Console descriptors omit copy secret paths and retain the HTTP copy list and
+  all other existing HTTP descriptor rules. The omission limits descriptor
+  contents, not filesystem access under the shared instance account.
 
 ## Container callback
 
@@ -120,11 +115,11 @@ fixture. Its docstring lists every input. Call it after grow/shrink/regrow with
 A1's current identity-keyed inventory. Pass its private returned snapshot as
 `previous_paths` to prove reuse without rotation. It checks ordinal lists,
 producer `_FILE` delivery, optional recreated config content, file ownership and
-modes, read-only consumer grants, sibling denial, endpoint connectivity, optional
+modes, consumer secret-file readability and non-writability, endpoint connectivity, optional
 public routes/firewall exposure, and console path omission.
 
 The compiled fixture command is `feature:copies <binding> <count>
-<granted|omitted> [public-binding]`. The callback runs it as the instance account
+<present|omitted> [public-binding]`. The callback runs it as the instance account
 inside the actual consumer mount namespace. It never passes private values on
 argv or prints them. The callback does not start containers or perform lifecycle
 transitions. `acceptance_feature.py` is unchanged.
@@ -172,6 +167,49 @@ The suite's 15 existing skips are expected on this macOS workspace:
 No lane C test is skipped. These host-only checks remain with the lead's Linux
 acceptance environment; this task does not authorize running containers.
 The tech lead reported Go build, deployment vet/tests and fixture build passing
-before this round; this round changes no Go source and does not rerun Go checks.
+before fix round 1; that round changed no Go source and did not rerun Go checks.
 No containers have run. Remaining integration work is limited to the explicit
 A1/A2 hooks above, not failing or disabled lane C regression tests.
+
+## Fix round 2
+
+Removed `copy_secret_sandbox`, its tmpfs mask, `PrivateUsers=yes`, per-file
+`BindReadOnlyPaths`/`ReadOnlyPaths`, and `prepare_copy_secret_directory`. There
+were no production call sites in this branch. The sandbox-policy unit test and
+container callback's sibling-read denial assertion were removed. A1 must not add
+these removed hooks when integrating this lane.
+
+Copy snapshots retain the existing service-secret owner, instance group, mode
+0640, no-follow reads and backup enumeration. Staging still creates the protected
+`copy-secrets/` subdirectory. Copies receive distinct values, not an isolation
+boundary: every role shares the instance account and can read these secrets,
+including values in rendered templates. Console path omission is unchanged and
+does not restrict filesystem access. Guides, compatibility notes and the
+changelog now state that boundary. The fixture callback uses `present|omitted`
+for secret path presence, with ordinary file readability/non-writability checks.
+
+Go's pointer/slice wire fields conflated omitted fields with explicit JSON null.
+`secret_file` and public `ports` now retain raw field presence before strict
+validation. Explicit null, wrong types and malformed collections return
+`fault.Invalid`; omitted fields retain their compatibility defaults. Port entries
+still reject unknown fields. Both new null regressions failed before the fix and
+pass after it; existing omission and valid-list tests remain green.
+
+Verification for this round:
+
+- Targeted Python command above: **52 tests passed, no skips** (the removed
+  isolation-policy test accounts for the decrease from 53).
+- `make deploy-tools-check`: **1,247 tests in 98.697 seconds, OK (skipped=15)**.
+  It ran outside the sandbox for the existing Unix-socket bind tests. The 15
+  existing macOS platform skips have the Linux/systemd reasons listed above;
+  no lane C test is skipped and no failures remain.
+- All three touched Python modules compile, including the container callback.
+- `go build ./...`: passed.
+- `go vet ./deployment/...`: passed.
+- `go test -count=1 . ./deployment/...`: passed.
+- Fixture `GOWORK=off go build ./...`: passed.
+
+Go checks used the existing cache outside the workspace sandbox after a sandboxed
+regression run was denied access to a Go build-cache file. No containers ran and
+no commit was made. A1's remaining identity-keyed delivery hooks are unchanged;
+copy-secret sandbox integration is no longer required.

@@ -24,8 +24,10 @@ returns owned ordinal/port entries while `Port` retains the first copy's port.
 
 Copy-scoped secret snapshots use a separate private namespace. Existing shared
 keys and files remain valid. Shrinking retains values for rollback and regrowth.
-Console descriptors omit copy secret paths because console processes have no unit
-sandbox grant. See [numbered copy consumers](guides/host-capabilities.md#numbered-copy-consumers).
+Like role secrets, copy-scoped secrets are readable by every role of the instance
+because roles share one account. Console descriptors omit copy secret paths; this
+limits descriptor contents, not filesystem access. See
+[numbered copy consumers](guides/host-capabilities.md#numbered-copy-consumers).
 The foundation still gates counts above one until the lifecycle migration lands.
 
 ## Loopback confinement — v0.35.0

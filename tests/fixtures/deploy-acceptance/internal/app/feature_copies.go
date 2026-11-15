@@ -14,8 +14,8 @@ import (
 // featureCopies runs inside the consuming unit's mount namespace for acceptance.
 // The descriptor supplies paths; no private values enter arguments or output.
 func featureCopies(ctx context.Context, args []string) error {
-	if len(args) < 3 || len(args) > 4 || (args[2] != "granted" && args[2] != "omitted") {
-		return fmt.Errorf("copies probe requires binding, count, grant mode and optional public binding")
+	if len(args) < 3 || len(args) > 4 || (args[2] != "present" && args[2] != "omitted") {
+		return fmt.Errorf("copies probe requires binding, count, secret path presence and optional public binding")
 	}
 	count, err := strconv.Atoi(args[1])
 	if err != nil || count < 0 || count > 128 {
@@ -30,8 +30,8 @@ func featureCopies(ctx context.Context, args []string) error {
 		return fmt.Errorf("copies binding has unexpected placement")
 	}
 	for index, copy := range copies {
-		if copy.Ordinal != index+1 || (copy.SecretFile != "") != (args[2] == "granted") {
-			return fmt.Errorf("copies binding has unexpected identity or secret grant")
+		if copy.Ordinal != index+1 || (copy.SecretFile != "") != (args[2] == "present") {
+			return fmt.Errorf("copies binding has unexpected identity or secret path")
 		}
 		if copy.SecretFile != "" {
 			file, err := os.Open(copy.SecretFile)
@@ -47,7 +47,7 @@ func featureCopies(ctx context.Context, args []string) error {
 			writable, err := os.OpenFile(copy.SecretFile, os.O_WRONLY, 0)
 			if err == nil {
 				_ = writable.Close()
-				return fmt.Errorf("copy secret grant is writable")
+				return fmt.Errorf("copy secret file is writable")
 			}
 		}
 		address := copy.Endpoint.Path

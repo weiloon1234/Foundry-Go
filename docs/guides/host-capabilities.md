@@ -1485,10 +1485,12 @@ password={{secret.PASSWORD_FILE}}
 ```
 
 `recreate` renders the copy's current value on each start. Private snapshots keep
-root ownership, instance-group access, mode 0640, and no-follow reads. Units see
-only their granted copy-secret files through read-only mounts. Secret bytes stay
-out of argv, unit files, descriptors, public plans, and framework diagnostics.
-Applications remain responsible for their own logging.
+root ownership, instance-group access, mode 0640, and no-follow reads.
+Copy-scoped secrets give each copy its own value. Like role secrets, they are
+readable by every role of the instance because roles share one account. Rendered
+baselines and recreated configs do not isolate secret values between roles either.
+Secret bytes stay out of argv, unit files, descriptors, public plans, and framework
+diagnostics. Applications remain responsible for their own logging.
 
 ### Lists of placed copies
 
@@ -1535,9 +1537,10 @@ for _, copy := range copies {
 Each `Copy` contains `Ordinal int`, `Endpoint deployment.Endpoint`, and
 `SecretFile string`. TCP endpoints have an address and private port. Unix endpoints
 have `Directory`, `Name`, and `Path`, including the copy suffix. `SecretFile` is
-empty when no secret is granted. The consuming unit receives read-only access to
-the declared secret files. Each lookup returns an owned slice of values, so caller
-mutations cannot change the startup snapshot. Unknown or ungranted names return
+empty when no secret path is included. The files use the instance's ordinary
+secret-file permissions; a binding supplies paths, not additional isolation.
+Each lookup returns an owned slice of values, so caller mutations cannot change
+the startup snapshot. Unknown or ungranted names return
 `fault.Missing`. Shrinking removes those ordinals from the list. A declared list
 can be empty when its provider is unplaced and no prerequisite requires it.
 
@@ -1551,9 +1554,9 @@ template binding placeholders.
 
 Console calls retain the HTTP descriptor's copy endpoints, as they retain other
 HTTP bindings. They omit every `secret_file`, along with `shared_directories`.
-A console process has no unit sandbox grant for these files, so its descriptor
-must not advertise that access. This omission preserves the v0.35.0 console
-selection rule without extending unit-only filesystem grants.
+This keeps secret paths out of console descriptors while preserving the v0.35.0
+HTTP selection rule. The omission limits descriptor contents; it does not restrict
+file access for processes using the shared instance account.
 
 ### One public port per copy
 
