@@ -112,6 +112,21 @@ func TestWebhookCaptureBuildFailures(t *testing.T) {
 		"duplicate": func(b *application.Builder) *application.Builder {
 			return b.CaptureWebhooks(capturePrefix(t, "/wh")).CaptureWebhooks(capturePrefix(t, "/wh", http.FullCaptureBody()))
 		},
+		"full exclusion": func(b *application.Builder) *application.Builder {
+			return b.CaptureWebhooks(capturePrefix(t, "/wh"), capturePrefix(t, "/wh/media", http.FullCaptureBody(), http.ExcludeFromCapture()))
+		},
+		"only exclusions": func(b *application.Builder) *application.Builder {
+			return b.CaptureWebhooks(capturePrefix(t, "/wh/media", http.ExcludeFromCapture()))
+		},
+		"uncontained exclusion": func(b *application.Builder) *application.Builder {
+			return b.CaptureWebhooks(capturePrefix(t, "/wh"), capturePrefix(t, "/other", http.ExcludeFromCapture()))
+		},
+		"exclusion segment boundary": func(b *application.Builder) *application.Builder {
+			return b.CaptureWebhooks(capturePrefix(t, "/wh"), capturePrefix(t, "/whx/media", http.ExcludeFromCapture()))
+		},
+		"duplicate exclusion and capture": func(b *application.Builder) *application.Builder {
+			return b.CaptureWebhooks(capturePrefix(t, "/wh"), capturePrefix(t, "/wh/media", http.ExcludeFromCapture()), capturePrefix(t, "/wh/media"))
+		},
 		"zero declaration": func(b *application.Builder) *application.Builder { return b.CaptureWebhooks(http.CaptureDeclaration{}) },
 		"too many": func(b *application.Builder) *application.Builder {
 			return b.CaptureWebhooks(make([]http.CaptureDeclaration, 33)...)
@@ -144,7 +159,7 @@ func TestWebhookCaptureRejectsGuardedRoutesInConfiguredAssembly(t *testing.T) {
 	portal := http.AssetsModule("capture.portal", assets, http.DefaultAssetsConfig(http.FilesystemAssets(fstest.MapFS{"index.html": {Data: []byte("<!doctype html>")}})))
 	build := func(path string) error {
 		app, err := application.New(captureSettings(), quiet()).Register(portal).SPA("portal", assets, http.DefaultSPAConfig()).
-			HTTP(plainRoutes, guardedRoutes(path)).Fallback(fallbacks).CaptureWebhooks(capturePrefix(t, "/wh")).Build(t.Context())
+			HTTP(plainRoutes, guardedRoutes(path)).Fallback(fallbacks).CaptureWebhooks(capturePrefix(t, "/wh"), capturePrefix(t, "/wh/media", http.ExcludeFromCapture())).Build(t.Context())
 		if err == nil {
 			stop(t, app)
 		}
@@ -152,6 +167,9 @@ func TestWebhookCaptureRejectsGuardedRoutesInConfiguredAssembly(t *testing.T) {
 	}
 	if err := build("/wh/session"); !errors.Is(err, fault.Invalid) {
 		t.Fatal("authenticated route beneath a capture prefix passed the configured assembly", err)
+	}
+	if err := build("/wh/media/auth"); !errors.Is(err, fault.Invalid) {
+		t.Fatal("exclusion allowed an authenticated route beneath a capture prefix", err)
 	}
 	if err := build("/admin/session"); err != nil {
 		t.Fatal("unrelated authenticated route was rejected", err)
@@ -170,7 +188,7 @@ func TestWebhookCaptureWiring(t *testing.T) {
 	for _, enabled := range []bool{true, false} {
 		s := captureSettings()
 		s.Features.WebhookCapture.Enabled = enabled
-		app, err := application.New(s, quiet()).HTTP(plainRoutes).CaptureWebhooks(capturePrefix(t, "/wh"), capturePrefix(t, "/wh/debug", http.FullCaptureBody())).Build(t.Context())
+		app, err := application.New(s, quiet()).HTTP(plainRoutes).CaptureWebhooks(capturePrefix(t, "/wh"), capturePrefix(t, "/wh/media", http.ExcludeFromCapture()), capturePrefix(t, "/wh/media/debug", http.FullCaptureBody())).Build(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}

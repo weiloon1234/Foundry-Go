@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	stdhttp "net/http"
@@ -14,12 +15,297 @@ import (
 	"testing"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/webhook"
 )
+
+func captureDeclaration(t testing.TB, path string, options ...CaptureOption) CaptureDeclaration {
+	t.Helper()
+	prefix, err := ParsePathPrefix(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return CapturePrefix(prefix, options...)
+}
+
+func TestWebhookCaptureExclusionValidation(t *testing.T) {
+	capture := captureDeclaration(t, "/wh")
+	exclude := captureDeclaration(t, "/wh/media", ExcludeFromCapture())
+	for name, declarations := range map[string][]CaptureDeclaration{
+		"full exclusion":                  {capture, captureDeclaration(t, "/wh/media", FullCaptureBody(), ExcludeFromCapture())},
+		"full exclusion reversed":         {capture, captureDeclaration(t, "/wh/media", ExcludeFromCapture(), FullCaptureBody())},
+		"no capturing declaration":        {exclude},
+		"unrelated capture":               {captureDeclaration(t, "/other"), exclude},
+		"segment boundary":                {capture, captureDeclaration(t, "/whx/media", ExcludeFromCapture())},
+		"capture is deeper":               {captureDeclaration(t, "/wh/media/debug"), exclude},
+		"duplicate capture and exclusion": {capture, exclude, captureDeclaration(t, "/wh/media")},
+		"duplicate exclusions":            {capture, exclude, exclude},
+		"root exclusion":                  {capture, captureDeclaration(t, "/", ExcludeFromCapture())},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateCaptureDeclarations(declarations...)
+			if !errors.Is(err, fault.Invalid) {
+				t.Fatal("invalid exclusion passed validation", err)
+			}
+			if strings.Contains(err.Error(), "/wh") || strings.Contains(err.Error(), "/other") {
+				t.Fatal("validation exposed a declared path")
+			}
+		})
+	}
+	if err := ValidateCaptureDeclarations(
+		captureDeclaration(t, "/wh/media/debug", FullCaptureBody()),
+		captureDeclaration(t, "/wh/media/private", ExcludeFromCapture()),
+		exclude, capture,
+	); err != nil {
+		t.Fatal("valid unordered exclusions and re-inclusion failed", err)
+	}
+	declarations := []CaptureDeclaration{capture}
+	for i := 1; i < MaxCapturePrefixes; i++ {
+		declarations = append(declarations, captureDeclaration(t, "/wh/"+strings.Repeat("x", i), ExcludeFromCapture()))
+	}
+	if err := ValidateCaptureDeclarations(declarations...); err != nil {
+		t.Fatal("valid declaration limit failed", err)
+	}
+	declarations = append(declarations, captureDeclaration(t, "/wh/overflow", ExcludeFromCapture()))
+	if err := ValidateCaptureDeclarations(declarations...); !errors.Is(err, fault.Invalid) {
+		t.Fatal("exclusions did not count toward the declaration limit", err)
+	}
+}
+
+func TestWebhookCaptureExclusionSkipsPrereadAndReservation(t *testing.T) {
+	recorder := captureTestRecorder(t)
+	options, err := configureServer([]ServerOption{WithWebhookCapture(recorder,
+		captureDeclaration(t, "/wh", FullCaptureBody()),
+		captureDeclaration(t, "/wh/media", ExcludeFromCapture()),
+	)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sealed := range []bool{false, true} {
+		if sealed {
+			recorder.Seal()
+		}
+		data := bytes.Repeat([]byte("user=password&token=private\x00"), 100)
+		source := &captureTrackingBody{Reader: bytes.NewReader(data)}
+		called := false
+		router, err := NewRouter(HandleRaw(
+			DefineRoute(RouteSpec{ID: "capture.excluded", Method: POST, Access: Public}, StaticPath("/wh/media/auth")),
+			func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
+				called = true
+				if source.read.Load() != 0 {
+					t.Error("excluded body was preread")
+				}
+				if rows, retained := recorder.Usage(); rows != 0 || retained != 0 {
+					t.Error("excluded request reserved capture capacity")
+				}
+				body, err := io.ReadAll(r.Body)
+				if err != nil || !bytes.Equal(body, data) {
+					t.Error("excluded handler did not receive the complete body", err)
+				}
+				w.WriteHeader(204)
+			},
+		))
+		if err != nil {
+			t.Fatal(err)
+		}
+		owner := newHandlerLifetime()
+		owner.capture = options.capture
+		handler := owner.wrap(router, slog.New(slog.NewTextHandler(io.Discard, nil)), DefaultServerConfig())
+		request := httptest.NewRequest("POST", "/wh/media/auth", nil)
+		request.Body, request.ContentLength = source, int64(len(data))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if record := recorder.Drain(); record != nil {
+			record.Release()
+			t.Fatal("excluded request produced a snapshot")
+		}
+		if !called || response.Code != 204 || recorder.Drops() != [httpcapture.DropReasons]uint64{} {
+			t.Fatal("excluded request was captured or counted as a loss")
+		}
+	}
+}
+
+func TestWebhookCaptureExclusionThroughServer(t *testing.T) {
+	for _, test := range []struct {
+		path, prefix string
+		status       int
+		full, busy   bool
+	}{
+		{path: "/wh/media", status: 200},
+		{path: "/wh/media/auth", status: 200},
+		{path: "/wh/media/auth", busy: true, status: 200},
+		{path: "/wh/me%64ia/auth", status: 200},
+		{path: "/wh//media/auth"},
+		{path: "/wh/./media/auth"},
+		{path: "/wh/x/../media/auth"},
+		{path: "/wh/media/../media/auth"},
+		{path: "/wh/%2F/media/auth"},
+		{path: "/wh/media/../sibling"},
+		{path: "/wh/media/./debug"},
+		{path: "/wh/media/debug/../auth"},
+		{path: "/wh/x/../media"},
+		{path: "/wh/x/../media/."},
+		{path: "/wh/x/../media/x/.."},
+		{path: "/wh/sibling", prefix: "/wh", status: 200},
+		{path: "/wh/mediator", prefix: "/wh", status: 200},
+		{path: "/wh/media/debug", prefix: "/wh/media/debug", full: true, status: 200},
+		{path: "/wh/media/debug/./auth", prefix: "/wh/media/debug", full: true},
+		{path: "/wh/x/../media/debug", prefix: "/wh"},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			config := httpcapture.DefaultConfig()
+			config.BodyBytes, config.QueueSize, config.Rate, config.Burst = 1024, 1, 10000, 10000
+			recorder, err := httpcapture.New[httpcapture.Snapshot](config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				recorder.Seal()
+				for record := recorder.Drain(); record != nil; record = recorder.Drain() {
+					record.Release()
+				}
+			})
+			var routes []RouteRegistration
+			for _, path := range []string{"/wh/media", "/wh/media/auth", "/wh/media/debug", "/wh/media/debug/auth", "/wh/sibling", "/wh/mediator"} {
+				route := DefineRoute(RouteSpec{ID: RouteID("capture" + strings.ReplaceAll(path, "/", ".")), Method: POST, Access: Public}, StaticPath(path))
+				routes = append(routes, HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
+					body, err := io.ReadAll(r.Body)
+					if err != nil {
+						t.Error("handler body read failed", err)
+					}
+					_, _ = w.Write(body)
+				}))
+			}
+			router, err := NewRouter(routes...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			serverConfig := DefaultServerConfig()
+			serverConfig.Address = "127.0.0.1:0"
+			completed := make(chan struct{}, 1)
+			server, err := Prepare(router, serverConfig, slog.New(slog.NewTextHandler(io.Discard, nil)),
+				WithWebhookCapture(recorder,
+					captureDeclaration(t, "/wh/media", ExcludeFromCapture()),
+					captureDeclaration(t, "/wh"),
+					captureDeclaration(t, "/wh/media/debug", FullCaptureBody()),
+				),
+				WithRequestObserver(RequestObserverFunc(func(context.Context, RequestEvent) {
+					select {
+					case completed <- struct{}{}:
+					default:
+					}
+				})),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			done := make(chan error, 1)
+			t.Cleanup(func() {
+				cancel()
+				select {
+				case err := <-done:
+					if err != nil && !errors.Is(err, context.Canceled) {
+						t.Error(err)
+					}
+				case <-time.After(3 * time.Second):
+					t.Error("capture server did not finish")
+				}
+			})
+			go func() { done <- server.Run(ctx) }()
+			ready, stopReady := context.WithTimeout(t.Context(), 3*time.Second)
+			address, err := server.Ready(ready)
+			stopReady()
+			if err != nil {
+				t.Fatal(err)
+			}
+			transport := &stdhttp.Transport{}
+			t.Cleanup(transport.CloseIdleConnections)
+			client := &stdhttp.Client{Transport: transport, Timeout: 3 * time.Second, CheckRedirect: func(*stdhttp.Request, []*stdhttp.Request) error { return stdhttp.ErrUseLastResponse }}
+			const body = "user=alice&password=private&token=private"
+
+			request := func(location string) (int, string) {
+				t.Helper()
+				response, err := client.Post("http://"+address+location, "application/x-www-form-urlencoded", strings.NewReader(body))
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := io.ReadAll(response.Body)
+				_ = response.Body.Close()
+				if err != nil {
+					t.Fatal("response body read failed", err)
+				}
+				select {
+				case <-completed:
+				case <-time.After(3 * time.Second):
+					t.Fatal("request did not complete")
+				}
+				return response.StatusCode, string(got)
+			}
+			assertCapture := func(prefix string, full bool) {
+				t.Helper()
+				record := recorder.Drain()
+				if record == nil {
+					t.Fatal("missing capture")
+				}
+				defer record.Release()
+				if record.Snapshot.Metadata.Prefix != prefix || record.Snapshot.Metadata.Full != full || record.DroppedBefore != 0 || string(record.Snapshot.Body.Prefix) != body {
+					t.Error("capturing declaration lost its snapshot or body policy")
+				}
+			}
+			var held *httpcapture.Record[httpcapture.Snapshot]
+			if test.busy {
+				reservation := recorder.NewLane().Reserve(httpcapture.MetadataBytes)
+				if reservation == nil {
+					t.Fatal("could not occupy the recorder's only slot")
+				}
+				reservation.Complete(httpcapture.Snapshot{}, httpcapture.MetadataBytes)
+				held = recorder.Drain()
+				if held == nil {
+					t.Fatal("missing capacity holder")
+				}
+				defer held.Release()
+			}
+			rowsBefore, bytesBefore := recorder.Usage()
+			status, got := request(test.path)
+			if test.status != 0 && status != test.status {
+				t.Error("unexpected response", status)
+			}
+			if status == 200 && got != body {
+				t.Error("handler did not receive the full body")
+			}
+			if test.prefix == "" {
+				if record := recorder.Drain(); record != nil {
+					record.Release()
+					t.Error("excluded request produced a snapshot")
+				}
+				if rows, retained := recorder.Usage(); rows != rowsBefore || retained != bytesBefore {
+					t.Error("excluded request leaked capture capacity")
+				}
+			} else {
+				assertCapture(test.prefix, test.full)
+			}
+			if held != nil {
+				held.Release()
+			}
+			status, got = request("/wh/sibling")
+			if status != 200 || got != body {
+				t.Error("later capturing request did not reach the handler")
+			}
+			assertCapture("/wh", false)
+			if rows, retained := recorder.Usage(); rows != 0 || retained != 0 {
+				t.Error("capture capacity was not released")
+			}
+			if recorder.Drops() != [httpcapture.DropReasons]uint64{} {
+				t.Error("exclusion changed capture loss counters")
+			}
+		})
+	}
+}
 
 func captureTestRecorder(t testing.TB) *httpcapture.Recorder[httpcapture.Snapshot] {
 	t.Helper()

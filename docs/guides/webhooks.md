@@ -150,17 +150,38 @@ router misses, kernel rejections and handler failures, so developers can see
 what a gateway sent and what the application answered. Capture is a debugging
 aid. Payment and other gateway domain tables stay authoritative.
 
-Declare prefixes in Go next to the HTTP composition. Prefixes and full-body
-mode never come from deployment files. Pass the declaration to
-`application.New(settings, options...).CaptureWebhooks(declaration)`.
+Declare prefixes in Go next to the HTTP composition. Prefixes, exclusions and
+full-body mode never come from deployment files. Pass the declarations to
+`application.New(settings, options...).CaptureWebhooks(declarations...)`.
+Use `http.ExcludeFromCapture()` for a subtree that carries credentials, such as
+an authentication callback:
 
 <!-- compiled-source: tests/fixtures/consumer/teamworkflow/capture.go#webhook-capture-declaration -->
 ```go
-func Webhooks() (http.CaptureDeclaration, error) {
+func Webhooks() ([]http.CaptureDeclaration, error) {
 	prefix, err := http.ParsePathPrefix("/wh")
-	return http.CapturePrefix(prefix), err
+	if err != nil {
+		return nil, err
+	}
+	auth, err := http.ParsePathPrefix("/wh/stream-auth")
+	if err != nil {
+		return nil, err
+	}
+	return []http.CaptureDeclaration{
+		http.CapturePrefix(prefix),
+		http.CapturePrefix(auth, http.ExcludeFromCapture()),
+	}, nil
 }
 ```
+
+This captures `/wh` and its descendants except `/wh/stream-auth` and its
+descendants. The most specific declaration decides: a deeper capturing
+declaration, such as `/wh/stream-auth/debug`, captures again with its own body mode.
+Capture is skipped if the most specific declaration for either the decoded
+request path or its cleaned form is an exclusion.
+Exclusion happens in the kernel before any capture body preread. It creates no
+snapshot, reserves no capture capacity, increments no `dropped_before` count
+and emits no capture log. The handler receives the original body as usual.
 
 Mount the viewer inside an existing guarded group with the store from
 `services.WebhookCaptures()`. At least one access option is required; in an
@@ -189,9 +210,13 @@ spans at most 30 days and pages newest first with 30 items by default and 100
 at most. Show takes the request ID from `X-Request-ID`. Both are generated
 client operations, such as `developerWebhookCapturesList`.
 
-The root prefix, duplicate prefixes, more than 32 prefixes, capture without
-HTTP and an authenticated route under a prefix fail `Build`. The most specific
-prefix selects the body mode.
+The root prefix, duplicate prefixes, more than 32 declarations, capture without
+HTTP and an authenticated or upload-admission route under a capturing prefix
+fail `Build`. Exclusions do not relax the route restriction. Each exclusion
+requires a strictly shorter capturing prefix that contains it at a path segment
+boundary. Combining `FullCaptureBody()` with `ExcludeFromCapture()`, or
+declaring only exclusions, also fails validation. At least one declaration must
+capture; exclusions count toward the 32-declaration limit.
 
 ### Settings
 

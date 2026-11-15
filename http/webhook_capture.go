@@ -3,6 +3,7 @@ package http
 import (
 	"cmp"
 	stdhttp "net/http"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -14,19 +15,28 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// CaptureDeclaration is an immutable prefix/body-policy declaration. Its zero
+// CaptureDeclaration is an immutable prefix/capture-policy declaration. Its zero
 // value is invalid. Runtime settings may reduce, but never expand, this policy.
 type CaptureDeclaration struct {
-	prefix PathPrefix
-	full   bool
+	prefix  PathPrefix
+	full    bool
+	exclude bool
 }
 
-// CaptureOption selects a declaration's body policy.
-type CaptureOption struct{ full bool }
+// CaptureOption selects whether and how a declaration captures requests.
+type CaptureOption struct{ full, exclude bool }
 
 // FullCaptureBody explicitly opts a declared prefix into complete exact bodies.
 // Header and query disclosure policy is independent of this selection.
 func FullCaptureBody() CaptureOption { return CaptureOption{full: true} }
+
+// ExcludeFromCapture skips capture for a prefix and its descendants before any
+// snapshot, capacity reservation or body preread. A more specific declaration
+// may capture again. Exclusions require a strictly shorter capturing prefix and
+// cannot be combined with FullCaptureBody.
+// Capture is skipped if the most specific declaration for either the decoded
+// request path or its cleaned form is an exclusion.
+func ExcludeFromCapture() CaptureOption { return CaptureOption{exclude: true} }
 
 // CapturePrefix declares a literal decoded URL path prefix and its descendants.
 // Invalid/root/duplicate declarations are rejected at server preparation.
@@ -34,6 +44,7 @@ func CapturePrefix(prefix PathPrefix, options ...CaptureOption) CaptureDeclarati
 	d := CaptureDeclaration{prefix: prefix}
 	for _, option := range options {
 		d.full = d.full || option.full
+		d.exclude = d.exclude || option.exclude
 	}
 	return d
 }
@@ -101,19 +112,41 @@ func CredentialQueryName(name string) bool {
 const MaxCapturePrefixes = 32
 
 // ValidateCaptureDeclarations rejects an empty or oversized set, the root
-// prefix, zero declarations and duplicate prefixes. Application assembly uses
-// it before any resource opens; WithWebhookCapture applies the same rule.
+// prefix, zero declarations, duplicate prefixes and invalid exclusion policies.
+// Exclusions require a capturing ancestor and cannot select full bodies. At least
+// one declaration must capture. Application assembly uses this validation before
+// any resource opens; WithWebhookCapture applies the same rules.
 func ValidateCaptureDeclarations(declarations ...CaptureDeclaration) error {
 	if len(declarations) == 0 || len(declarations) > MaxCapturePrefixes {
 		return safeerror.NewFault(fault.Invalid, "HTTP capture requires 1 to 32 prefixes")
 	}
 	seen := make(map[string]bool, len(declarations))
+	hasCapture := false
 	for _, declaration := range declarations {
 		path := declaration.prefix.normalized()
 		if declaration.prefix.path == "" || path == "" || path == "/" || seen[path] {
 			return safeerror.NewFault(fault.Invalid, "HTTP capture has an invalid or duplicate prefix")
 		}
 		seen[path] = true
+		if declaration.exclude && declaration.full {
+			return safeerror.NewFault(fault.Invalid, "HTTP capture exclusion cannot select full bodies")
+		}
+		hasCapture = hasCapture || !declaration.exclude
+	}
+	if !hasCapture {
+		return safeerror.NewFault(fault.Invalid, "HTTP capture requires a capturing declaration")
+	}
+	for _, declaration := range declarations {
+		if !declaration.exclude {
+			continue
+		}
+		path := declaration.prefix.normalized()
+		if !slices.ContainsFunc(declarations, func(ancestor CaptureDeclaration) bool {
+			prefix := ancestor.prefix.normalized()
+			return !ancestor.exclude && len(prefix) < len(path) && matchesAssetPrefix(path, prefix)
+		}) {
+			return safeerror.NewFault(fault.Invalid, "HTTP capture exclusion requires a capturing ancestor")
+		}
 	}
 	return nil
 }
@@ -147,19 +180,28 @@ type kernelCapture struct {
 	head        *captureResponse
 }
 
+func (p *capturePolicy) selectDeclaration(location string) *CaptureDeclaration {
+	for i := range p.prefixes {
+		if matchesAssetPrefix(location, p.prefixes[i].prefix.normalized()) {
+			return &p.prefixes[i]
+		}
+	}
+	return nil
+}
+
 func (p *capturePolicy) begin(r *stdhttp.Request, proxy *proxyPolicy, started time.Time) *kernelCapture {
 	if p == nil || r.URL == nil || RequestID(r.Context()) == "" {
 		return nil
 	}
-	var selected *CaptureDeclaration
-	for i := range p.prefixes {
-		if matchesAssetPrefix(r.URL.Path, p.prefixes[i].prefix.normalized()) {
-			selected = &p.prefixes[i]
-			break
-		}
-	}
-	if selected == nil {
+	location := r.URL.Path
+	selected := p.selectDeclaration(location)
+	if selected == nil || selected.exclude {
 		return nil
+	}
+	if cleaned := path.Clean(location); cleaned != location {
+		if declaration := p.selectDeclaration(cleaned); declaration != nil && declaration.exclude {
+			return nil
+		}
 	}
 	// The whole body allowance is reserved before the preread, which is short.
 	lease := p.lane.Reserve(int64(p.recorder.BodyBytes() + 1 + httpcapture.MetadataBytes))

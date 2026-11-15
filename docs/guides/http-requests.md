@@ -94,6 +94,9 @@ recorder admits it, the kernel snapshots method, escaped path, query, headers
 and the trusted client address. Kernel rejections are stored without reading
 the body.
 
+When the most specific declaration uses `http.ExcludeFromCapture()`, the kernel
+skips capture before any snapshot, reservation or body preread.
+
 For an admitted request the kernel reads at most the capture limit plus one
 byte from the original stream, then replays those bytes followed by the rest of
 the stream. Handlers, verifiers and route body limits see the original bytes,

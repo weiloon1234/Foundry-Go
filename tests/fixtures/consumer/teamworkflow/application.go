@@ -27,7 +27,7 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 	if err != nil {
 		return nil, err
 	}
-	return application.New(settings, options...).CaptureWebhooks(webhooks).Events(application.Topic(Submitted)).Features(func(services application.Services) (application.FeatureDeclarations, error) {
+	return application.New(settings, options...).CaptureWebhooks(webhooks...).Events(application.Topic(Submitted)).Features(func(services application.Services) (application.FeatureDeclarations, error) {
 		receiver, err := services.Databases.Connection("receiver")
 		if err != nil {
 			return application.FeatureDeclarations{}, err

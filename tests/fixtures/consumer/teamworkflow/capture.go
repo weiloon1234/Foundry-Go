@@ -15,12 +15,21 @@ var ReadCaptures = auth.DefinePermission("workflow.captures.read", func(_ contex
 	return actor.ID == 1, nil
 })
 
-// Webhooks declares the gateway callback prefix. Unmatched paths under it are
-// captured too, so no placeholder handler is needed.
+// Webhooks captures gateway callbacks except the credential-bearing auth subtree.
 // doc-example:begin webhook-capture-declaration
-func Webhooks() (http.CaptureDeclaration, error) {
+func Webhooks() ([]http.CaptureDeclaration, error) {
 	prefix, err := http.ParsePathPrefix("/wh")
-	return http.CapturePrefix(prefix), err
+	if err != nil {
+		return nil, err
+	}
+	auth, err := http.ParsePathPrefix("/wh/stream-auth")
+	if err != nil {
+		return nil, err
+	}
+	return []http.CaptureDeclaration{
+		http.CapturePrefix(prefix),
+		http.CapturePrefix(auth, http.ExcludeFromCapture()),
+	}, nil
 } // doc-example:end webhook-capture-declaration
 
 // CaptureRoutes mounts the framework viewer behind the developer gate.
