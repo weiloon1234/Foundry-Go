@@ -13,6 +13,22 @@
   credentials and fragments. Redirects retain public-address and peer checks,
   the hop limit and SHA-256 verification. Signed queries never enter origin
   evidence or errors, and artifact paths remain digest-based.
+### Offline deployment validation
+
+- Fixed: declaration reads pin every directory component without following links,
+  preventing parent-symlink swaps from reaching private inputs. Declaration-only
+  privacy rules no longer exclude application packages from release snapshots.
+
+- Fixed: interactive validation dispatches before local or remote state access.
+  Selected profiles retain release/deploy sibling identity checks; declaration
+  reads reject private paths and linked files. Release path safety and collision
+  checks are shared, and the Makefile example keeps JSON stdout free of recipe echo.
+
+- Added: `ACTION=validate make deploy` checks deployment declarations locally,
+  with optional `ENVIRONMENT` selection and `FORMAT=json` diagnostics. It reuses
+  deployment validators, renders service templates with synthetic values, checks
+  rehearsal bindings, and reports the minimum required deploy-tool generation
+  without SSH, Docker, downloads, private settings, or host state.
 
 ### Numbered copies
 

@@ -45,7 +45,7 @@ COMMANDS = {
     "release": "build a local Docker release without contacting a server",
     "rehearse": "exercise an acceptance archive in disposable local containers",
 }
-ACTIONS = ("capacity", "deploy", "status", "rollback", "restart", "stop", "down", "up", "logs", "shell", "config", "keys rotate", "reconcile",
+ACTIONS = ("validate", "capacity", "deploy", "status", "rollback", "restart", "stop", "down", "up", "logs", "shell", "config", "keys rotate", "reconcile",
            "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run",
            "restore-drill", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate")
 
@@ -298,19 +298,13 @@ def select_environment(mode, settings):
 
 
 def profile_config(environment, project):
+    from declaration_inputs import load_profile
     path = ROOT / "deploy" / "environments" / f"{environment}.json"
     if path.exists():
-        profile = validate_profile(read_json(path), project)
-        if profile["environment"] != environment:
-            raise LocalError("profile environment does not match its filename")
-        for sibling in path.parent.glob("*.json"):
-            if sibling == path:
-                continue
-            other = validate_profile(read_json(sibling), project)
-            if other["environment"] != sibling.stem:
-                raise LocalError("an environment profile does not match its filename")
-            if other["instance_id"] == profile["instance_id"]:
-                raise LocalError("environment profiles share a copied instance UUID; create each environment with make bootstrap")
+        try:
+            profile = load_profile(ROOT, environment, project)
+        except DeployError as error:
+            raise LocalError(error.detail) from error
         return profile, False
     runtime = {"prod": "production", "uat": "staging", "dev": "development", "test": "testing"}.get(environment, environment)
     if runtime not in ("production", "staging", "testing", "development"):
@@ -1159,12 +1153,19 @@ def check_release_tools(ssh, request, manifest, entry):
         raise LocalError(f"{error.code}: {error.detail}") from None
 
 
-def deploy(project, profile, settings):
+def select_deploy_action():
     action = os.environ.get("ACTION") or ask("Action (" + " / ".join(ACTIONS) + ")", "deploy")
     if action not in ACTIONS:
         raise LocalError("unsupported deployment action")
+    return action
+
+
+def deploy(project, profile, settings):
+    action = select_deploy_action()
     logs = log_parameters(action)
     ordinal = copy_parameter(action)
+    if action == "validate":
+        raise LocalError("validate must be dispatched before loading deployment state")
     if ordinal is not None:
         import operation_selection
         try:
@@ -1410,6 +1411,7 @@ def main():
     parser.add_argument("--ubuntu", choices=("24.04", "26.04"))
     parser.add_argument("--output", type=Path)
     parser.add_argument("--bindings", type=Path)
+    parser.add_argument("--format", choices=("text", "json"))
     parser.add_argument("--keep-failed", action="store_true")
     parser.add_argument("--cpus", type=int)
     parser.add_argument("--memory-gib", type=int)
@@ -1425,8 +1427,14 @@ def main():
         value = getattr(arguments, option)
         if value is not None:
             os.environ[option.upper()] = value
-    ROOT = resolve_app_root(arguments.app_root)
     mode = arguments.command
+    if mode == "deploy":
+        os.environ["ACTION"] = select_deploy_action()
+    if mode == "deploy" and os.environ.get("ACTION") == "validate":
+        from validate import validate_action
+        return validate_action(arguments.app_root, os.environ.get("ENVIRONMENT"),
+                               arguments.format or os.environ.get("FORMAT", "text"), arguments.bindings)
+    ROOT = resolve_app_root(arguments.app_root)
     if mode != "deploy":
         copy_parameter(mode)
     if mode == "rehearse":
@@ -1472,7 +1480,7 @@ def interrupted(_signal, _frame):
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, interrupted)
     try:
-        main()
+        sys.exit(main())
     except (LocalError, DeployError, ValueError, OSError, KeyError) as error:
         say(f"Deployment stopped: {error}")
         sys.exit(1)

@@ -5,7 +5,7 @@ import pwd
 import time
 import stat
 
-from contracts import DeployError, copy_socket_name, require, socket_directory
+from contracts import DeployError, copy_socket_name, open_directory, require, socket_directory
 from unix_socket_probe import Result
 from topology import ExecutableRole, EndpointBinding, CopiesBinding
 
@@ -29,15 +29,13 @@ def prepare(host, role, identity, uid, gid, *, remove_stale=False):
             "service_account", "Sockets require the unprivileged instance account.")
     path = host.paths.p(socket_directory(identity.instance_id))
     protected_directory(host, path.parent)
-    parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
+    with open_directory(path.parent) as parent:
         try:
             os.mkdir(path.name, mode=0o700, dir_fd=parent)
             created = True
         except FileExistsError:
             created = False
-        fd = os.open(path.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
-        try:
+        with open_directory(path.name, dir_fd=parent) as fd:
             if created:
                 os.fchown(fd, uid, gid)
                 os.fchmod(fd, 0o700)
@@ -49,10 +47,6 @@ def prepare(host, role, identity, uid, gid, *, remove_stale=False):
                     if listener.transport != "unix":
                         continue
                     _remove_stale(host, fd, path, copy_socket_name(listener.socket, identity.ordinal), uid, gid)
-        finally:
-            os.close(fd)
-    finally:
-        os.close(parent)
 
 
 def _run_probe(host, directory, name, uid, gid, timeout, *, group="", expected=None):

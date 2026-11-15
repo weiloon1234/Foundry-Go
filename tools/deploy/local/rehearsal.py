@@ -117,17 +117,12 @@ def network_plan(topology, profile):
     return {"hosts": hosts, "subnets": [str(n) for n in subnets], **infrastructure, "records": records, "probes": probes}
 
 
-def test_bindings(path, environment, config, token):
-    value = {"environment": environment, "configuration": {}, "storage_disks": []}
-    if path is not None:
-        path = check_path(Path(path).absolute(), "file")
-        require(path.is_file() and path.stat().st_mode & 0o077 == 0,
-                "rehearsal_bindings", "Test binding files must be private (0600).")
-        value = read_json(path)
-        required = {"environment", "configuration", "storage_disks"}
-        require(isinstance(value, dict) and required <= set(value)
-                and set(value) <= required | {"allow_single_request_conditions"}
-                and value["environment"] == environment, "rehearsal_bindings", "Test bindings must name the selected acceptance environment.")
+def validate_bindings(value, environment, config):
+    """Validate declarations without private file permissions, credentials or containers."""
+    required = {"environment", "configuration", "storage_disks"}
+    require(isinstance(value, dict) and required <= set(value)
+            and set(value) <= required | {"allow_single_request_conditions"}
+            and value["environment"] == environment, "rehearsal_bindings", "Test bindings must name the selected acceptance environment.")
     require(isinstance(value["configuration"], dict) and all(isinstance(k, str) and isinstance(v, str)
             and not k.endswith("_FILE") for k, v in value["configuration"].items()),
             "rehearsal_bindings", "Test configuration accepts literal strings, without host file references.")
@@ -142,6 +137,21 @@ def test_bindings(path, environment, config, token):
             and all(isinstance(n, str) for n in capped) and len(capped) == len(set(capped))
             and set(capped) <= set(names), "rehearsal_bindings",
             "allow_single_request_conditions must list unique, explicitly bound disk names.")
+    require(all(disks[name]["driver"] in ("r2", "s3_compatible") for name in names),
+            "rehearsal_bindings", "This storage driver has no compatible test binding.")
+
+
+def test_bindings(path, environment, config, token):
+    value = {"environment": environment, "configuration": {}, "storage_disks": []}
+    if path is not None:
+        path = check_path(Path(path).absolute(), "file")
+        require(path.is_file() and path.stat().st_mode & 0o077 == 0,
+                "rehearsal_bindings", "Test binding files must be private (0600).")
+        value = read_json(path)
+    validate_bindings(value, environment, config)
+    names = value["storage_disks"]
+    disks = config.get("app", {}).get("services", {}).get("storage", {}).get("disks", {})
+    capped = value.get("allow_single_request_conditions", [])
     try:
         certification = s3_certification()
     except ContainerError as error:
@@ -157,7 +167,6 @@ def test_bindings(path, environment, config, token):
         selected = copy.deepcopy(disks)
         for name in names:
             disk = selected[name]
-            require(disk["driver"] in ("r2", "s3_compatible"), "rehearsal_bindings", "This storage driver has no compatible test binding.")
             bucket = "app-" + token + "-" + str(len(buckets))
             buckets.append(bucket)
             cloud = disk.setdefault("cloud", {})

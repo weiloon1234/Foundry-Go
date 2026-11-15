@@ -1201,13 +1201,17 @@ class LocalDeploymentTests(unittest.TestCase):
             path.write_text(value)
         return files
 
-    def snapshot_with_links(self, production, links=(), special=None):
+    def snapshot_with_links(self, production, links=(), special=None, extra_files=None):
         root = self.root / uuid.uuid4().hex
         root.mkdir()
         project, profile = fixture()
         if not production:
             profile["runtime_environment"] = "staging"
         files = self.snapshot_files(project, profile, root)
+        for name, content in (extra_files or {}).items():
+            files[name] = content
+            (root / name).parent.mkdir(parents=True, exist_ok=True)
+            (root / name).write_text(content)
         name = "system/.claude/skills/rule.md"
         files[name] = "skill content\n"
         (root / name).parent.mkdir(parents=True)
@@ -1254,6 +1258,30 @@ class LocalDeploymentTests(unittest.TestCase):
                 patch.object(cli, "build_request", return_value=request):
             snapshot = cli.source_snapshot(project, profile, request, work)
         return snapshot, work / "source.tar"
+
+    def test_source_snapshots_preserve_application_secret_packages(self):
+        files = {"internal/secrets/provider.go": "package secrets\n",
+                 "internal/service-secrets/provider.go": "package servicesecrets\n",
+                 "internal/copy-secrets/provider.go": "package copysecrets\n"}
+        for production in (False, True):
+            with self.subTest(production=production):
+                snapshot, archive = self.snapshot_with_links(production, extra_files=files)
+                with tarfile.open(archive) as bundle:
+                    for name, content in files.items():
+                        self.assertEqual((snapshot / name).read_text(), content)
+                        self.assertEqual(bundle.extractfile(name).read(), content.encode())
+                self.assertFalse((snapshot / ".env").exists())
+
+    def test_source_policy_retains_pre_validate_lane_path_decisions(self):
+        # Boundary examples from 166d3813, including paths the declaration reader refuses.
+        for name in ("internal/secrets/provider.go", "internal/.secrets/provider.go", "deploy/value.secret",
+                     "deploy/secrets.json", "config/APP.toml", ".DEPLOY/settings.json"):
+            with self.subTest(accepted=name):
+                self.assertTrue(cli.source_allowed(name))
+        for name in (".deploy/settings.json", ".aws/credentials", ".ssh/config", ".env", "config/app.toml",
+                     "config/staging.local.toml", "deploy/value.key", "internal/bin/helper", "node_modules/module.js"):
+            with self.subTest(excluded=name):
+                self.assertFalse(cli.source_allowed(name))
 
     def test_source_snapshot_preserves_relative_in_tree_symlinks(self):
         links = [("system/.agents/skills", "../.claude/skills"),

@@ -816,6 +816,17 @@ def _render_service_json(data, bindings, resolve):
     return result
 
 
+def render_service_config(data, config, resolve, template_value):
+    """The same bounded rendering for declaration checks and service preparation."""
+    require(len(data) <= MAX_VALUE_BYTES, "service_config_size", "Service configuration source exceeds its bound.")
+    if config.format is not None:
+        from config_templates import render
+        return render(data, config.format, template_value, limit=MAX_VALUE_BYTES)
+    if config.mode == "rendered-json" or config.bindings:
+        return _render_service_json(data, config.bindings, resolve)
+    return data
+
+
 def prepare_bundle_views(host, views):
     """Before loading units, create only protected mountpoint skeletons.
 
@@ -924,16 +935,13 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
         # Never walk/chown existing app-writable state or follow a seed link.
         require(data.stat().st_uid == uid, "service_account", "Persistent data has an unexpected owner.")
         resolve = lambda argument: resolve_argument(argument, role, spec, resolution, paths, views, secret_paths or {})
-        def template_value(reference):
+        def secret_value(name):
+            require(entry is not None and entry["profile"]["instance_id"] == invocation.unit.instance_id
+                    and name in (secret_paths or {}),
+                    "service_config_template", "Template secret is undeclared or unavailable.")
+            return _read_value_file(host, entry, secret_paths[name])
+        def binding_value(name, field):
             from topology import Argument, ArgumentKind
-            parts = reference.split(".")
-            if parts[0] == "secret":
-                require(entry is not None and entry["profile"]["instance_id"] == invocation.unit.instance_id
-                        and parts[1] in dict(role.secret_files) and parts[1] in (secret_paths or {}),
-                        "service_config_template", "Template secret is undeclared or unavailable.")
-                return _read_value_file(host, entry, secret_paths[parts[1]])
-            name, field = parts[1:]
-            require(name in dict(role.common.bindings), "service_config_template", "Template binding is undeclared.")
             if field == "path":
                 binding = next((b for b in spec.bindings.executables if b.name == name), None)
                 require(binding is not None, "service_config_template", "Template executable binding is unresolved.")
@@ -945,6 +953,8 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
             if field == "port":
                 return str(binding.endpoint.port)
             return resolve(Argument(ArgumentKind.BINDING, name))
+        from config_templates import resolve_reference
+        template_value = lambda reference: resolve_reference(role, reference, secret_value, binding_value)
         require(tuple(resolve(a) for a in role.arguments) == spec.arguments,
                 "service_arguments", "Prepared bindings differ from frozen argv.")
         total = 0
@@ -952,11 +962,7 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
             member = inventory.get(config.source)
             require(member is not None and member.kind == "config", "service_config_source", "Configuration is not inventoried.")
             content = _service_source(host, release_root, member)
-            if config.format is not None:
-                from config_templates import render
-                content = render(content, config.format, template_value, limit=MAX_VALUE_BYTES)
-            elif config.mode == "rendered-json" or config.bindings:
-                content = _render_service_json(content, config.bindings, resolve)
+            content = render_service_config(content, config, resolve, template_value)
             total += len(content)
             require(total <= MAX_SERVICE_CONFIG_BYTES, "service_config_size", "Service configuration view exceeds its bound.")
             atomic_write(baselines / name, content, mode=0o640 if config.format else 0o444, group=gid)

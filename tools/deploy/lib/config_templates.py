@@ -9,6 +9,21 @@ TOKEN = re.compile(r"\{\{(secret\.[A-Z][A-Z0-9_]*_FILE|binding\.[a-z][a-z0-9_-]*
 KEY = r"[A-Za-z_][A-Za-z0-9_.-]*"
 
 
+def resolve_reference(role, reference, secret_value, binding_value):
+    """Validate declaration ownership before resolving runtime or synthetic values."""
+    from topology import EndpointBinding, ExecutableBinding
+    parts = reference.split(".")
+    if parts[0] == "secret":
+        require(parts[1] in dict(role.secret_files), "service_config_template", "Template secret is undeclared.")
+        return secret_value(parts[1])
+    name, field = parts[1:]
+    binding = dict(role.common.bindings).get(name)
+    require(isinstance(binding, ExecutableBinding) if field == "path" else
+            isinstance(binding, EndpointBinding) and binding.scheme != "unix",
+            "service_config_template", "Template binding field requires a declared executable or TCP/HTTP endpoint.")
+    return binding_value(name, field)
+
+
 def _require(condition):
     require(condition, "service_config_template", "Invalid template value, position, reference or encoding.")
 

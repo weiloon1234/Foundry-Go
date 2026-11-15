@@ -19,6 +19,74 @@ operations described below.
 - [Probe release storage](#recipe-storage-probe)
 - [Prepare readiness](production-operations.md#recipe-startup-readiness)
 
+## Validate declarations offline
+
+Run the existing deploy target with `ACTION=validate` to check every profile in
+`deploy/environments`:
+
+```sh
+ACTION=validate make deploy
+```
+
+To check one profile, use the existing `ENVIRONMENT` selector:
+
+```sh
+ENVIRONMENT=staging ACTION=validate make deploy
+```
+
+Sibling profiles are always checked for valid identities and duplicate instance
+UUIDs, as they are for release and deploy. Selection limits detailed results to
+the named profile. Without `ACTION`, select `validate` from the action menu before
+the tool opens local settings or connects to a host.
+
+For CI, request the versioned JSON result and retain the command's exit status:
+
+```sh
+ACTION=validate FORMAT=json make deploy > deploy-validation.json
+# Equivalent direct invocation:
+go tool foundry deploy deploy --action validate --format json
+```
+
+The Makefile recipe below and `Makefile.example` suppress recipe echo with `@`.
+For an older unsilenced application Makefile, use `make -s deploy` in CI.
+
+Install Python 3.11 or later and cache the application's pinned Go toolchain and
+Foundry-Go module before running CI without network access. Validation uses no
+SSH, Docker, downloads, secret input files, or host state. It does not create or
+read `.deploy` settings. Explicit validation does not prompt.
+
+The action checks project identity, topology, selected profiles, placement and
+copy counts, public listeners including PROXY and managed DNS fields, upload
+routes, shared directories, and release artifact and bundle declarations.
+It parses `config/deploy.toml` and renders declared service configuration through
+the runtime renderer with synthetic secret and binding values. Artifact checks
+cover declarations, not payload existence, downloads, builds, checksums, or ABI
+compatibility with an installed service. Runtime secret contents, application
+configuration semantics, and live host/provider readiness still require release
+and deployment checks.
+
+For each selected profile, validation checks `deploy/<environment>-bindings.json`
+when present, including rehearsal profile and network restrictions and storage
+disk bindings. For another in-application binding file, use
+`--environment acceptance-lab --bindings deploy/lab.json` with the direct command.
+This checks declarations without requiring private file permissions or preparing
+test credentials. Container storage certification remains a rehearsal check.
+Binding files must use public source paths. Private paths, symbolic links, hard
+links, and non-regular files are refused before their contents are read.
+Directory components are opened without following links, so concurrent parent
+replacement cannot redirect a read. These declaration-only privacy rules do not
+change release source selection, including application packages named `secrets`.
+
+Exit status is 0 when every check passes and 1 for invalid declarations. Text is
+the default. `FORMAT=json` or `--format json` returns schema 1 with `action`, `ok`,
+`minimum_generation`, and `checks`. Each check contains `kind`, an application-relative
+`path`, nullable `profile` and `role`, `status` (`passed`, `failed`, or `skipped`),
+nullable `minimum_generation`, and `errors` containing `code` and `detail`.
+Existing validators retain their error codes. A skipped dependent check reports
+`validation_dependency`. The overall generation is the maximum required by the
+selected profiles, or `null` when invalid declarations prevent its calculation.
+The result contains no rendered configuration or secret values.
+
 <a id="recipe-deploy"></a>
 ## Invocation
 
@@ -30,7 +98,7 @@ application directory. An application Makefile can contain these thin targets:
 ```makefile
 .PHONY: bootstrap deploy release
 bootstrap deploy release:
-	GOWORK=off go tool foundry deploy --dir "$(CURDIR)" "$@"
+	@GOWORK=off go tool foundry deploy --dir "$(CURDIR)" "$@"
 ```
 
 The operator's machine needs Python 3.11 or later. Deployment rules stay in the

@@ -13,10 +13,10 @@
 # Secrets: use the hidden prompts or FOUNDRY_SECRET_<NAME>_FILE paths.
 .PHONY: bootstrap deploy release
 bootstrap deploy release:
-	GOWORK=off go tool foundry deploy --dir "$(CURDIR)" "$@"
+	@GOWORK=off go tool foundry deploy --dir "$(CURDIR)" "$@"
 
 # ENVIRONMENT must name an explicit acceptance profile with a host UUID.
 # Omit ARCHIVE to build that profile first. No SSH connection is made.
 .PHONY: rehearse
 rehearse:
-	GOWORK=off go tool foundry deploy --dir "$(CURDIR)" rehearse $(if $(ARCHIVE),--archive "$(ARCHIVE)",) --ubuntu "$(or $(UBUNTU),24.04)" $(if $(BINDINGS),--bindings "$(BINDINGS)",)
+	@GOWORK=off go tool foundry deploy --dir "$(CURDIR)" rehearse $(if $(ARCHIVE),--archive "$(ARCHIVE)",) --ubuntu "$(or $(UBUNTU),24.04)" $(if $(BINDINGS),--bindings "$(BINDINGS)",)
