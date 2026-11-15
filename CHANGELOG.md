@@ -17,8 +17,11 @@
   conditional-write size cap remains unchanged pending live certification.
 - Added: topology-level disposable shared directories with explicit writer and
   reader roles, backed by individual size-limited tmpfs mounts under
-  `/run/foundry/services/<instance UUID>/shared/<name>`. Per-start preparation
-  verifies ownership, mode, mount identity and limits. Systemd grants writers
+  `/run/foundry/services/<instance UUID>/shared/<name>`. Deploy operations and boot
+  prepare host mounts under the shared-directories lock before units start.
+  Per-start hooks verify granted views, including reader read-only mounts;
+  missing bind sources fail closed with `226/NAMESPACE` before hooks can run.
+  Systemd grants writers
   read/write access, readers read-only access, and hides the shared tree from
   unlisted roles. Release/declaration transitions discard caches after all old
   roles stop; reboot also clears them. Reports and backup coverage explicitly

@@ -16,7 +16,7 @@ recovery, never a public report. An instance without an index returns an empty t
 selection in reverse dependency order and proves process and cgroup exit. An
 omitted selection means the whole graph. It does not change enablement.
 
-`feature_lifecycle.start_units(host, inventory, names, deadline)` starts an explicit
+`feature_lifecycle.start_units(host, entry, inventory, names, deadline)` starts an explicit
 enabled selection in dependency order. It checks retained prerequisites before
 starting dependents and checks each started role's readiness. It never enables a
 disabled unit. The deadline is an absolute `time.monotonic()` deadline.

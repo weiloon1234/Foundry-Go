@@ -251,7 +251,7 @@ def execute(host, request, pin):
             store.issue_permit(permit, closure)
             atomic_write(store.runtime / 'active-permit', permit.id, mode=0o600)
         deadline = time.monotonic() + release.READINESS_SECONDS
-        lifecycle.start_units(host, inventory, running, deadline)
+        lifecycle.start_units(host, entry, inventory, running, deadline)
         require(not running or services.wait_ready_set(host, inventory, running, deadline),
                 'readiness_failed', 'Recovered graph did not pass private readiness.')
         if running:

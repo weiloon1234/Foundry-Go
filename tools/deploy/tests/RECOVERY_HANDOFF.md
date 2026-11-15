@@ -50,7 +50,7 @@ configuration and PostgreSQL, and prepares Redis before these calls:
 2. `feature_lifecycle.activate_recovery(host, registry, entry, journal)` runs in
    the `release` phase, after `application` is recorded complete. Prove the restored
    schema matches the selected release, restore current credential/Redis bindings,
-   and call `start_units(host, inventory, journal["intent"]["recovery_roles"], deadline)`
+   and call `start_units(host, entry, inventory, journal["intent"]["recovery_roles"], deadline)`
    through existing admission and cleanup owners. This seam checks live systemd
    enablement and does not enable units. Use one bounded deadline. A timeout never
    proves callback exit. Return
