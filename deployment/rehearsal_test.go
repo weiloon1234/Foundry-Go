@@ -76,7 +76,14 @@ func TestRehearsalDescriptorGateAndAssembly(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			grant := bindings.Rehearsal()
+			t.Setenv(BindingsEnvironment, writeBindingDocument(t, tc.document))
+			grant, present, err := loadRehearsalOwned(func(os.FileInfo) bool { return true })
+			if err != nil || present != (tc.name != "no block") {
+				t.Fatal("optional rehearsal read", present, err)
+			}
+			if cap, ok := bindings.Rehearsal().Cap("uploads"); ok != tc.granted || ok && cap != 8<<20 {
+				t.Fatal("binding reader grant differs")
+			}
 			if _, ok := grant.Cap("uploads"); ok != tc.granted {
 				t.Fatal("incorrect grant")
 			}
@@ -162,8 +169,13 @@ func TestRehearsalDescriptorRejectsMalformedGrants(t *testing.T) {
 		strings.Replace(rehearsalDocument(), strings.Repeat("a", 32), "invalid", 1),
 		strings.Replace(rehearsalDocument(), `"disks":[{"disk":"uploads","runtime_cap_bytes":8388608}]`, `"disks":[]`, 1),
 	} {
-		if _, err := readFeatureDescriptorOwned(writeBindingDocument(t, invalid), func(os.FileInfo) bool { return true }); err == nil {
+		path := writeBindingDocument(t, invalid)
+		if _, err := readFeatureDescriptorOwned(path, func(os.FileInfo) bool { return true }); err == nil {
 			t.Fatal("malformed grant accepted")
+		}
+		t.Setenv(BindingsEnvironment, path)
+		if _, present, err := loadRehearsalOwned(func(os.FileInfo) bool { return true }); !present || !errors.Is(err, fault.Invalid) {
+			t.Fatal("optional reader accepted malformed grant", present, err)
 		}
 	}
 }
@@ -182,5 +194,45 @@ func TestRunEnvironmentWithoutDescriptorGrantsNothing(t *testing.T) {
 	bindings, present, err = LoadBindings()
 	if err != nil || !present || len(bindings.Rehearsal().Disks()) != 0 {
 		t.Fatal("descriptor without block granted rehearsal", err)
+	}
+}
+
+func TestOptionalRehearsalWithoutBlock(t *testing.T) {
+	for _, document := range []string{"", `{"schema":1,"instance":"app-1","user":"app-1","env_file":"/etc/foundry/app.env","work_dir":"/var/lib/foundry/app"}`, bindingDocument(), `{}`} {
+		t.Setenv(RehearsalRunEnvironment, strings.Repeat("a", 32))
+		t.Setenv(BindingsEnvironment, "")
+		if document == "" {
+			if err := os.Unsetenv(BindingsEnvironment); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			t.Setenv(BindingsEnvironment, writeBindingDocument(t, document))
+		}
+		grant, present, err := LoadRehearsal()
+		if err != nil || present || len(grant.Disks()) != 0 {
+			t.Fatal("absent block changed startup", present, err)
+		}
+	}
+}
+
+func TestOptionalRehearsalRejectsMalformedPresentBlock(t *testing.T) {
+	for _, block := range []string{`null`, `{}`, `false`, `[]`, `"invalid"`, `{"run_id":"invalid","disks":[]}`} {
+		document := strings.Replace(bindingDocument(), `"schema":2`, `"schema":2,"rehearsal":`+block, 1)
+		t.Setenv(BindingsEnvironment, writeBindingDocument(t, document))
+		if _, present, err := loadRehearsalOwned(func(os.FileInfo) bool { return true }); !present || !errors.Is(err, fault.Invalid) {
+			t.Fatal("malformed block accepted", block, present, err)
+		}
+	}
+	t.Setenv(RehearsalRunEnvironment, strings.Repeat("a", 32))
+	t.Setenv(BindingsEnvironment, writeBindingDocument(t, rehearsalDocument()))
+	if os.Geteuid() != 0 {
+		if _, present, err := LoadRehearsal(); !present || !errors.Is(err, fault.Invalid) {
+			t.Fatal("unowned block accepted", present, err)
+		}
+	}
+	legacy := strings.Replace(rehearsalDocument(), `"schema":2`, `"schema":1`, 1)
+	t.Setenv(BindingsEnvironment, writeBindingDocument(t, legacy))
+	if _, _, err := loadRehearsalOwned(func(os.FileInfo) bool { return true }); !errors.Is(err, fault.Invalid) {
+		t.Fatal("schema one issued grant", err)
 	}
 }

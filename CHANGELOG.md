@@ -12,6 +12,9 @@
   Removed the general disk configuration marker; environment variables alone
   cannot enable the mode. Production descriptor generation never emits the block.
   Missing or mismatched grants retain strict production capabilities.
+- Fixed: optional rehearsal-grant loading preserves legacy rollback and local
+  application startup. Absent blocks impose no descriptor schema requirement;
+  present blocks retain strict validation and malformed blocks refuse startup.
 - Reports include caps, exceeding policy maxima, and observed runtime refusals;
   startup notices and counters contain no object data.
 - Production R2 behavior, declared S3-compatible guarantees, and strict listing

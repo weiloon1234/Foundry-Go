@@ -165,6 +165,22 @@ class FeaturePreviewTests(unittest.TestCase):
         path = runtime_config.console_binding_descriptor(self.host, self.entry, CURRENT)
         self.assertEqual(c.read_json(path), c.read_json(source))
         self.assertEqual(c.read_json(path)["schema"], 1)
+        for descriptor in (source, path):
+            self.assertEqual(set(c.read_json(descriptor)), {"schema", "instance", "user", "env_file", "work_dir"})
+            self.assertNotIn("rehearsal", c.read_json(descriptor))
+
+    def test_legacy_rollback_console_receives_schema_one_without_rehearsal(self):
+        source, env = self.console_source(grants=False, archive_schema=1)
+        self.entry["topology"] = {"schema": 2}
+        self.host.paths.data(self.entry["name"]).mkdir(parents=True)
+        with patch.object(self.host, "run") as run, \
+                patch.object(lifecycle, "load", return_value=(None, None, self.inventory, None)), \
+                patch.object(runtime_config, "effective_environment_path", return_value=env):
+            release.app(self.host, self.entry, self.host.paths.opt(self.entry["name"]), "config:check", env_file=env)
+        selected = Path(run.call_args.kwargs["env"]["FOUNDRY_DEPLOY_RUNTIME_FILE"])
+        self.assertEqual(c.read_json(selected), c.read_json(source))
+        self.assertEqual(c.read_json(selected)["schema"], 1)
+        self.assertNotIn("rehearsal", c.read_json(selected))
 
     def test_console_descriptor_refuses_drift_and_symlinks(self):
         source, _ = self.console_source()

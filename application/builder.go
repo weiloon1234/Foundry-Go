@@ -83,10 +83,10 @@ func New(settings Settings, opts ...Option) *Builder {
 		b.state.err = option(&b.state.options)
 	}
 	if b.state.err == nil {
-		bindings, _, err := deployment.LoadBindings()
+		grant, _, err := deployment.LoadRehearsal()
 		b.state.err = err
 		if err == nil {
-			b.state.options.infrastructure = append(b.state.options.infrastructure, infrastructure.WithRehearsal(bindings.Rehearsal()))
+			b.state.options.infrastructure = append(b.state.options.infrastructure, infrastructure.WithRehearsal(grant))
 		}
 	}
 	return b

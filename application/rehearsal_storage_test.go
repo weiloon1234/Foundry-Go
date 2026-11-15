@@ -6,11 +6,13 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/deployment"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/internal/deployrehearsal"
 	"github.com/weiloon1234/Foundry-Go/secret"
@@ -96,12 +98,36 @@ func rehearsalApplicationSettings() (Settings, infrastructure.DiskSettings) {
 	return s, disk
 }
 
-func TestRehearsalIdentityWithoutDescriptorKeepsProductionCapabilities(t *testing.T) {
-	t.Setenv(deployment.RehearsalRunEnvironment, strings.Repeat("a", 32))
-	t.Setenv(deployment.BindingsEnvironment, "")
-	if err := os.Unsetenv(deployment.BindingsEnvironment); err != nil {
-		t.Fatal(err)
+func TestAbsentRehearsalPreservesApplicationAssembly(t *testing.T) {
+	for _, tc := range []struct{ name, document string }{
+		{"local", ""},
+		{"legacy rollback", `{"schema":1,"instance":"app-1","user":"app-1","env_file":"/etc/foundry/app.env","work_dir":"/var/lib/foundry/app"}`},
+		{"feature", `{"schema":2,"instance":"app-1","user":"app-1","env_file":"/etc/foundry/app.env","work_dir":"/var/lib/foundry/app","release":"/opt/foundry/app/releases/one","deployment_sha256":"` + strings.Repeat("a", 64) + `","unit":{"instance_id":"00000000-0000-4000-8000-000000000001","role":"http","ordinal":1},"bindings":{"schema":1,"role":"http","executables":[],"endpoints":[],"bundles":[]}}`},
+		{"no imposed schema", `{}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, id := range []string{"", strings.Repeat("a", 32)} {
+				t.Setenv(deployment.RehearsalRunEnvironment, id)
+				t.Setenv(deployment.BindingsEnvironment, "")
+				if tc.document == "" {
+					if err := os.Unsetenv(deployment.BindingsEnvironment); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					path := filepath.Join(t.TempDir(), "runtime.json")
+					if err := os.WriteFile(path, []byte(tc.document), 0600); err != nil {
+						t.Fatal(err)
+					}
+					t.Setenv(deployment.BindingsEnvironment, path)
+				}
+				assertStrictRehearsalApplication(t)
+			}
+		})
 	}
+}
+
+func assertStrictRehearsalApplication(t *testing.T) {
+	t.Helper()
 	s, disk := rehearsalApplicationSettings()
 	app, err := New(s, WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))).Build(t.Context())
 	if err != nil {
@@ -125,5 +151,19 @@ func TestRehearsalIdentityWithoutDescriptorKeepsProductionCapabilities(t *testin
 	}
 	if err := caps.ValidatePutPolicy(storage.PutOptions{Condition: storage.IfAbsent(), Size: value.Set[int64](500 << 20)}); !errors.Is(err, storage.Unsupported) {
 		t.Fatal("production startup limit bypassed", err)
+	}
+}
+
+func TestMalformedRehearsalBlockRefusesApplicationAssembly(t *testing.T) {
+	for _, block := range []string{`null`, `{}`, `[]`, `false`} {
+		path := filepath.Join(t.TempDir(), "runtime.json")
+		if err := os.WriteFile(path, []byte(`{"schema":2,"rehearsal":`+block+`}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(deployment.BindingsEnvironment, path)
+		settings, _ := rehearsalApplicationSettings()
+		if _, err := New(settings).Build(t.Context()); !errors.Is(err, fault.Invalid) {
+			t.Fatal("malformed block accepted", block, err)
+		}
 	}
 }

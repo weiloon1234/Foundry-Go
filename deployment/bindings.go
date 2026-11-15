@@ -415,27 +415,40 @@ func readFeatureDescriptor(path string) (featureDescriptor, error) {
 }
 
 func readFeatureDescriptorOwned(path string, owned func(os.FileInfo) bool) (featureDescriptor, error) {
-	var wire featureDescriptor
+	data, info, err := readRuntimeDescriptor(path)
+	if err != nil {
+		return featureDescriptor{}, err
+	}
+	return decodeFeatureDescriptor(data, info, owned)
+}
+
+// readRuntimeDescriptor captures bytes and ownership from the same open file.
+func readRuntimeDescriptor(path string) ([]byte, os.FileInfo, error) {
 	if !absolutePath(path) {
-		return wire, invalidBindings()
+		return nil, nil, invalidBindings()
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return wire, safeerror.WrapFault(fault.Internal, "cannot open deployment binding descriptor", err)
+		return nil, nil, safeerror.WrapFault(fault.Internal, "cannot open deployment binding descriptor", err)
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
-		return wire, invalidBindings()
+		return nil, nil, invalidBindings()
 	}
 	data, err := io.ReadAll(io.LimitReader(file, maxBindingsBytes+1))
 	if err != nil {
-		return wire, safeerror.WrapFault(fault.Internal, "cannot read deployment binding descriptor", err)
+		return nil, nil, safeerror.WrapFault(fault.Internal, "cannot read deployment binding descriptor", err)
 	}
 	canonical, err := jsonwire.Canonical(data, jsonwire.Limits{Bytes: maxBindingsBytes, Depth: 12, Nodes: 1 << 19})
 	if err != nil {
-		return wire, invalidBindings()
+		return nil, nil, invalidBindings()
 	}
+	return canonical, info, nil
+}
+
+func decodeFeatureDescriptor(canonical []byte, info os.FileInfo, owned func(os.FileInfo) bool) (featureDescriptor, error) {
+	var wire featureDescriptor
 	decoder := json.NewDecoder(bytes.NewReader(canonical))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&wire) != nil || decoder.Decode(new(json.RawMessage)) != io.EOF {

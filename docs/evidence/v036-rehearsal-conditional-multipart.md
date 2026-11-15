@@ -149,13 +149,13 @@ through attachment error wrapping.
 
 The security correction replaces the general configuration marker with a typed
 `rehearsal` block in the deploy-generated schema-2 runtime descriptor. It contains
-`run_id` and exact `{disk, runtime_cap_bytes}` grants. `deployment.LoadBindings`
-validates descriptor shape and requires a regular root-owned file with no
+`run_id` and exact `{disk, runtime_cap_bytes}` grants. `deployment.LoadRehearsal`
+validates a present block's descriptor shape and requires a regular root-owned file with no
 group/world write permission before accepting a block. A matching
 `FOUNDRY_REHEARSAL_RUN_ID` yields an immutable grant, passed through application
 and infrastructure assembly to the S3 adapter and attachment policy validation.
-Missing descriptors/blocks or mismatched IDs grant nothing. Invalid descriptors
-fail closed. No mutable application-global state is introduced.
+Missing descriptors/blocks or mismatched IDs grant nothing. Present blocks require
+a valid schema-2 descriptor. No mutable application-global state is introduced.
 
 The handwritten disk declaration no longer exposes `conditional_write_mode`;
 the generated schema rejects that retired key even with an operator-set run ID.
@@ -260,3 +260,49 @@ Documentation is excluded from this fingerprint.
 
 No containers, commits, or live storage-provider certification were run. Existing
 PostgreSQL and Redis services were used; no services were started or reset.
+
+
+## Optional grant loading compatibility correction (round 2)
+
+`application.New` now calls `deployment.LoadRehearsal` instead of the feature-only
+`LoadBindings`. No selected descriptor or no rehearsal block returns an empty
+grant with `present=false`, without adding a descriptor schema requirement to
+application assembly. This preserves schema-1 legacy rollback, schema-2 without
+a block, and local application startup. The explicit feature binding API remains
+strict. Invalid selected file paths or malformed JSON still refuse rather than
+silently falling back.
+
+A present block reuses the complete schema-2 decoder, ownership validation, and
+run-ID matching. Explicit null and malformed blocks return `fault.Invalid`.
+Both loaders share the bounded canonical read and capture ownership and bytes
+from the same open file, avoiding a second read between checking and granting.
+
+Regressions exercise application build/start and strict disk capabilities with
+and without a process run ID for no descriptor, schema 1, schema 2 without a
+block, and an otherwise schema-free document. The loader regressions retain
+matching/mismatched identity, root ownership, malformed grants, exact disk caps,
+and the 500 MiB attachment startup/runtime-refusal assertions. Python coverage
+checks schema-1 unit and console descriptor generation and the descriptor
+actually selected by rollback `config:check`.
+
+Verification on 2026-11-15, from baseline `fd47a51c`:
+
+- `GOFLAGS=-trimpath go build ./deployment ./application` passed.
+- `GOFLAGS=-trimpath go vet ./deployment ./application` passed.
+- `GOFLAGS=-trimpath go test -count=1 -timeout=20m ./deployment ./application`
+  passed. The run loaded `/Users/weiloon/Projects/rust-go/Foundry-Go/.env.test`
+  privately, with `FOUNDRY_TEST_POSTGRES_REQUIRED=1`,
+  `FOUNDRY_TEST_REDIS_REQUIRED=1`, and `FOUNDRY_TEST_REDIS_ADDR=127.0.0.1:6379`.
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tools/deploy/lib:tools/deploy/local:tools/deploy/tests
+  python3 -m unittest test_feature_preview` passed all 24 tests.
+
+- `make docs-check` and `git diff --check` passed.
+
+- `make deploy-tools-check` passed: 1,416 tests in 228.145 seconds, 18 skips,
+  no failures. Skips are the existing opt-in live Cloudflare/systemd and
+  Linux-only socket cases.
+
+Touched-source SHA-256 (6 Go/Python files, sorted relative path, NUL, contents,
+NUL; documentation excluded):
+`3b923371109fe2e68557ce675c1fa9542a95996ed984e0a61d4c6fbbb336ffe4`.
+No containers, commits, new services, or service resets were used.
