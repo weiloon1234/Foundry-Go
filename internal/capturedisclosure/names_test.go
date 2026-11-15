@@ -6,6 +6,20 @@ import (
 	"testing"
 )
 
+func TestExtraNamesFoldCase(t *testing.T) {
+	extra := NewNames([]string{"user", "Kelvin"})
+	for _, name := range []string{"user", "USER", "User", "uſer", "UſER", "kelvin", "Kelvin"} {
+		if !CredentialName(name, extra) || !CredentialQueryName(name, extra) {
+			t.Fatalf("%q is not masked", name)
+		}
+	}
+	for _, name := range []string{"users", "user_id", "username", "kelvins"} {
+		if CredentialName(name, extra) {
+			t.Fatalf("%q is masked", name)
+		}
+	}
+}
+
 func TestValidateNames(t *testing.T) {
 	for _, test := range []struct {
 		name  string
