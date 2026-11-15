@@ -2,8 +2,14 @@
 
 ## Unreleased
 
-- Fixed: grouped readiness now observes units concurrently through a bounded,
-  fair worker queue. Slow probes no longer delay a healthy peer's stability proof.
+- Fixed: every unit now has an independent readiness observer, bounded by the
+  256-unit cap. Only short local inspections share 16 command slots, so slow
+  probes cannot consume healthy peers' deadlines. Worker errors are collected
+  after cancellation and reported in inventory order. Concurrent command
+  failures preserve journal entries under thread and file locks.
+
+- Fixed: grouped readiness observes units concurrently with independent
+  stability proofs.
   Failure and deadline cancellation close probe sockets, reap command processes,
   and join workers before the lifecycle operation continues.
 

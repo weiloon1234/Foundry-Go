@@ -78,6 +78,86 @@ class HostCommandTests(unittest.TestCase):
                 self.assertEqual(path.read_bytes(), before)
             self.assertIsNone(host._command_journal)
 
+    def test_concurrent_command_failures_preserve_both_journal_records(self):
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        with tempfile.TemporaryDirectory() as root:
+            host = Host()
+            path = Path(root).resolve() / "commands.json"
+            path.write_text("[]")
+            reading = threading.Barrier(2)
+            read = host_module.read_json
+            def overlap(path):
+                result = read(path)
+                try:
+                    reading.wait(.2)
+                except threading.BrokenBarrierError:
+                    pass
+                return result
+            def fail(unit):
+                with self.assertRaises(DeployError):
+                    host.check_result(subprocess.CompletedProcess(["systemctl", "show", unit], 5, "", ""))
+            with host.command_journal(path), patch.object(host_module, "read_json", side_effect=overlap), ThreadPoolExecutor(2) as pool:
+                futures = [pool.submit(fail, unit) for unit in ("first.service", "second.service")]
+                for future in futures:
+                    future.result()
+            records = json.loads(path.read_text())
+            self.assertEqual({tuple(record["units"]) for record in records}, {("first.service",), ("second.service",)})
+            self.assertEqual(len(records), 2)
+
+    def test_command_journal_serializes_independent_processes(self):
+        import time
+        script = """
+import sys, time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import host
+from contracts import DeployError
+from subprocess import CompletedProcess
+path, gate, label = Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
+read = host.read_json
+def slow_read(path):
+    records = read(path)
+    time.sleep(.01)
+    return records
+host.read_json = slow_read
+machine = host.Host()
+with machine.command_journal(path):
+    (gate.parent / label).touch()
+    while not gate.exists():
+        time.sleep(.005)
+    for n in range(10):
+        try:
+            machine.check_result(CompletedProcess(['systemctl', 'show', label + str(n) + '.service'], 5, '', ''))
+        except DeployError as error:
+            assert error.code == 'command_failed'
+"""
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root).resolve()
+            path, gate = root / "commands.json", root / "start"
+            path.write_text("[]")
+            processes = [subprocess.Popen([sys.executable, "-B", "-c", script,
+                str(Path(host_module.__file__).parent), str(path), str(gate), name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                for name in ("first", "second")]
+            try:
+                deadline = time.monotonic() + 5
+                while not all((root / name).exists() for name in ("first", "second")) and time.monotonic() < deadline:
+                    time.sleep(.01)
+                self.assertTrue(all((root / name).exists() for name in ("first", "second")))
+                gate.touch()
+                for process in processes:
+                    _, error = process.communicate(timeout=10)
+                    self.assertEqual(process.returncode, 0, error.decode())
+            finally:
+                for process in processes:
+                    if process.poll() is None:
+                        process.kill()
+                    process.communicate()
+            records = json.loads(path.read_text())
+            self.assertEqual(len(records), 20)
+            self.assertEqual({tuple(record["units"]) for record in records},
+                             {(name + str(n) + ".service",) for name in ("first", "second") for n in range(10)})
+
     def test_timeout_kills_descendant_process_group_before_returning_error(self):
         process = self.process()
         process.communicate.side_effect = subprocess.TimeoutExpired(["private-argument"], 1)
@@ -109,7 +189,7 @@ class HostCommandTests(unittest.TestCase):
             raise host_module.OperationTimeout("cancelled while communicating")
         process.communicate.side_effect = communicate
         with patch("host.subprocess.Popen", return_value=process), patch("host.os.killpg") as kill, budget:
-            with self.assertRaises(DeployError):
+            with self.assertRaises(host_module.OperationTimeout):
                 Host().run(["/usr/bin/runuser"])
         kill.assert_called_once_with(process.pid, signal.SIGKILL)
         process.wait.assert_called_once_with()

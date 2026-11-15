@@ -4,8 +4,7 @@ UnitSpec and RuntimeResolution are the handoff from artifact/package and listene
 owners. No package installation, listener allocation or lifecycle activation lives
 here. Production dispatch stays closed until the complete lifecycle is installed.
 """
-from collections import deque
-from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 import http.client
@@ -13,14 +12,15 @@ from pathlib import Path
 import re
 import socket
 import time
+import threading
 
 from contracts import (Deployment, RuntimeResolution, UnitIdentity, canonical_digest,
                        contract_digest, contract_path, contract_uuid, instance_paths,
-                       marker, record_document, require)
+                       marker, record_document, require, MAX_UNITS, DeployError)
 from topology import (ArgumentKind, BuiltinRole, ExecutableRole, parse_profile,
                       parse_topology, expand_placement, role_unit_name)
 
-READINESS_WORKERS = 16
+READINESS_INSPECTIONS = 16
 
 RUNTIME_ENTRY = "/usr/local/lib/foundry/runtime-v1"
 TEMPLATES = Path(__file__).resolve().parents[1] / "server/templates"
@@ -594,7 +594,10 @@ def wait_ready_set(host, inventory, names, deadline, *, starting=False):
     from host import OperationTimeout, wall_clock_budget
     from release import STABILITY_SECONDS, _matches_executable, service
     names = tuple(names)
-    require(names and set(names) <= inventory.units.keys(), "service_selection", "Select known readiness roles.")
+    require(names and len(names) == len(set(names)) and len(names) <= MAX_UNITS and set(names) <= inventory.units.keys(),
+            "service_selection", "Select unique, known readiness units within the instance cap.")
+    selected = set(names)
+    names = tuple(name for name in inventory.units if name in selected)
     paused = False
     if inventory.identity("http") in names:
         import feature_maintenance
@@ -627,8 +630,8 @@ def wait_ready_set(host, inventory, names, deadline, *, starting=False):
                                     for name, seconds in limits.items()}
     tokens, stable_since, proved = {}, {}, set()
     from host import ObservationBudget
-    # At most one job owns a unit's state. Completed jobs return to the tail,
-    # allowing large groups to share workers without holding slots during stability.
+    # A unit owns its observer for the entire group wait. Only short local
+    # commands share capacity; a slow network probe never occupies a peer's slot.
     def observe(name, budget, final=False):
         role, executable, endpoint, local = checks[name]
         with budget:
@@ -682,61 +685,91 @@ def wait_ready_set(host, inventory, names, deadline, *, starting=False):
             budget.check()
             tokens[name] = current
             stable_since.setdefault(name, time.monotonic())
-            if time.monotonic() - stable_since[name] >= STABILITY_SECONDS:
+            if name not in proved and time.monotonic() - stable_since[name] >= STABILITY_SECONDS:
                 proved.add(name)
                 budget.deadline = deadline
+                changed.set()
             return True
 
-    pending, active = deque(names), {}
-    due = dict.fromkeys(names, observation_start)
-    phase = "observing"
-    pool = ThreadPoolExecutor(max_workers=READINESS_WORKERS, thread_name_prefix="foundry-ready")
-    try:
-        while time.monotonic() < deadline:
-            for future in tuple(active):
-                if future.done():
-                    name, budget = active.pop(future)
-                    if not future.result():
-                        return False
-                    if phase == "observing":
-                        due[name] = time.monotonic() + .1
-                        pending.append(name)
-            if phase == "observing" and len(proved) == len(names):
-                phase = "draining"
-                pending.clear()
-            if phase == "draining" and not active:
-                # All probes have returned. Recheck every process, including a
-                # fast peer whose last probe preceded the slowest completion.
-                phase = "checking"
-                pending.extend(names)
-            if phase == "checking" and not pending and not active:
-                return True
-            now = time.monotonic()
-            if any(now >= budget.deadline for _, budget in active.values()):
-                return False
-            if any(name not in proved and now >= expires.get(name, deadline) for name in pending):
-                return False
-            for _ in range(len(pending)):
-                if len(active) >= READINESS_WORKERS:
-                    break
-                name = pending.popleft()
-                if phase == "observing" and due[name] > now:
-                    pending.append(name)
-                    continue
-                until = deadline if name in proved else expires.get(name, deadline)
-                if now >= until:
+    finish, recheck, changed = threading.Event(), threading.Event(), threading.Event()
+    drained = {name: threading.Event() for name in names}
+    inspections = threading.BoundedSemaphore(READINESS_INSPECTIONS)
+    budgets = {name: ObservationBudget(expires.get(name, deadline), inspections) for name in names}
+
+    def watch(name):
+        budget = budgets[name]
+        try:
+            while not finish.is_set():
+                if not observe(name, budget):
                     return False
-                budget = ObservationBudget(until)
-                active[pool.submit(observe, name, budget, phase == "checking")] = (name, budget)
-            pause = min(.02, max(0, deadline - time.monotonic()))
-            if active:
-                wait(active, timeout=pause, return_when=FIRST_COMPLETED)
-            else:
-                time.sleep(pause)
+                finish.wait(.1)
+            drained[name].set()
+            changed.set()
+            while not recheck.wait(.02):
+                budget.check()
+            return observe(name, budget, final=True)
+        except OperationTimeout:
+            return False
+
+    pool = ThreadPoolExecutor(max_workers=len(names), thread_name_prefix="foundry-ready")
+    futures, cancellation_errors = {}, {}
+    succeeded, coordinator_error = False, None
+    try:
+        for name in names:
+            futures[name] = pool.submit(watch, name)
+            futures[name].add_done_callback(lambda _: changed.set())
+        while time.monotonic() < deadline:
+            changed.clear()
+            completed = [future for future in futures.values() if future.done()]
+            if any(future.exception() is not None or not future.result() for future in completed):
+                break
+            if len(completed) == len(names):
+                succeeded = True
+                break
+            if any(time.monotonic() >= budget.deadline for budget in budgets.values()):
+                break
+            if len(proved) == len(names):
+                finish.set()
+            if all(event.is_set() for event in drained.values()):
+                recheck.set()
+            changed.wait(min(.02, max(0, deadline - time.monotonic())))
     except OperationTimeout:
-        return False
+        pass
+    except BaseException as error:
+        coordinator_error = error
     finally:
-        for _, budget in active.values():
-            budget.cancel()
-        pool.shutdown(wait=True, cancel_futures=True)
-    return False
+        if not succeeded:
+            for name, budget in budgets.items():
+                try:
+                    budget.cancel()
+                except BaseException as error:
+                    cancellation_errors[name] = error
+        finish.set()
+        recheck.set()
+        pool.shutdown(wait=True)
+
+    # Inspect every result after joining, including errors raised during cleanup.
+    # Completion order must never choose the error reported to an operator.
+    failures = []
+    for name in names:
+        if name in cancellation_errors:
+            failures.append((name, cancellation_errors[name]))
+        if name in futures:
+            try:
+                succeeded = futures[name].result() and succeeded
+            except OperationTimeout:
+                succeeded = False
+            except BaseException as error:
+                failures.append((name, error))
+    if failures:
+        first = failures[0][1]
+        code = first.code if isinstance(first, DeployError) else "readiness_inspection"
+        detail = "; ".join(name.record_key + ": " + (error.code + ": " + error.detail if isinstance(error, DeployError)
+                         else "Readiness inspection failed; inspect the operation on the host.") for name, error in failures)
+        causes = [error for _, error in failures]
+        if coordinator_error is not None:
+            causes.append(coordinator_error)
+        raise DeployError(code, detail) from BaseExceptionGroup("Readiness observer failures", causes)
+    if coordinator_error is not None:
+        raise coordinator_error
+    return succeeded
