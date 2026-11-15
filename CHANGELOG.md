@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.38.1 — 2026-11-16
+
+- Fixed: a plain `ACTION=restart` of a stopped feature (schema 2) instance now
+  re-enables and starts every declared role and placed copy in dependency order,
+  verifies readiness and records `healthy`, as a plain restart already does for
+  schema 1. Previously the instance stayed `stopped`. Maintenance holds still keep
+  held copies down until `up`; named `ROLE`/`COPY` restarts keep their scope.
+- Fixed: `deploy rehearse` provisions upload pools for profiles that declare
+  `uploads`. Each pool is a sparse loop-mounted ext4 image sized to its declared
+  quota, created before `bootstrap-plan` so production mount, isolation and
+  capacity checks run unchanged, and unmounted and removed after the run, including
+  on failure or interrupt, unless `--keep-failed` retains a failed run for
+  debugging. Evidence records the stand-in as reduced fidelity. Container upload
+  acceptance shares the same stand-in.
+- Fixed: `deploy rehearse` runs the client's release review before activating a
+  schema-3 or feature release, supplying required service and copy secrets from
+  the rehearsal bindings' `configuration`. Missing secrets fail with
+  `rehearsal_service_secrets_missing` and their names only. The client and
+  rehearsal share one review flow; client prompts and output are unchanged.
+- Changed: offline `ACTION=validate` and bootstrap planning reject a maintenance
+  graph in which a continuing role requires or binds a role declared
+  `maintenance: "stop"` (`maintenance_graph`), instead of failing at the first
+  release plan. Resuming an existing registration with its unchanged recorded
+  topology is not blocked; release planning still refuses that graph.
+- Changed: a readiness check with no selected units fails with `readiness_failed`
+  instead of `service_selection`.
+
 ## v0.38.0 — 2026-11-16
 
 - Added: `http.ExcludeFromCapture()` declares a webhook capture prefix that is
