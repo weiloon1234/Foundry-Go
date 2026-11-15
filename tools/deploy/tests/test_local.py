@@ -1440,7 +1440,7 @@ class ConfinedReleaseToolTests(unittest.TestCase):
         from test_network_confinement import confined_topology
         remote = MagicMock()
         remote.request.return_value = {"tools": {"generation": 15}}
-        with patch.object(contracts.ReleaseDeclaration, "parse", return_value=SimpleNamespace(topology_json=confined_topology())):
+        with patch.object(contracts.ReleaseDeclaration, "parse", return_value=SimpleNamespace(topology_json=confined_topology(), profile_json="{}")):
             with self.assertRaisesRegex(cli.LocalError, "host_upgrade_required: Upgrade the host tools to generation 16"):
                 cli.check_release_tools(remote, {}, {"schema": 2, "deployment": {}}, {})
             remote.request.assert_called_once_with("hello", {})

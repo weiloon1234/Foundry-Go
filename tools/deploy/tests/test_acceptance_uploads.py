@@ -11,6 +11,30 @@ import uploads
 
 
 class UploadAcceptanceTests(unittest.TestCase):
+    def test_template_phase_requires_large_body_success_and_sibling_refusal(self):
+        host = Mock()
+        host.paths.data.return_value = Path("/unused")
+        scenario = acceptance.Scenarios(host, {"name": "fixture"}, {})
+        scenario.success, scenario.clean = Mock(), Mock()
+        def refusal(entry, path):
+            guarded = ("//resource/" in path or "%2fresources" in path or
+                       "/./resource/" in path or "%2e/resource/" in path or
+                       "/other/../" in path or "/other/.%2e/" in path)
+            return 400 if guarded else 413
+        with patch.object(acceptance, "Monitor"), patch.object(acceptance, "upload") as upload, \
+                patch.object(acceptance, "refused_upload", side_effect=refusal) as refuse:
+            scenario.templates()
+            self.assertEqual(2, upload.call_count)
+            self.assertEqual([False, True], [call.kwargs["chunked"] for call in upload.call_args_list])
+            for call in upload.call_args_list:
+                self.assertGreater(call.kwargs["size"], 25 * acceptance.MIB)
+                self.assertEqual("/acceptance/resources/" + call.args[1] + "/media", call.kwargs["path"])
+            self.assertTrue(any(call.args[1].endswith("/thumbnail") for call in refuse.call_args_list))
+        with patch.object(acceptance, "Monitor"), patch.object(acceptance, "upload"), \
+                patch.object(acceptance, "refused_upload", return_value=200):
+            with self.assertRaisesRegex(AssertionError, "default body limit"):
+                scenario.templates()
+
     def test_upload_configuration_requires_identical_migration_history(self):
         normal = {'targets': [{'migrations': [{'key': {'origin': 'fixture', 'id': 'one'}, 'state': 'applied'}]}]}
         changed = {'targets': [{'migrations': [{'key': {'origin': 'fixture', 'id': 'extra'}, 'state': 'pending'}]}]}

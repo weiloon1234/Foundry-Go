@@ -72,10 +72,12 @@ fixture-check:
 	$(GO) run ./internal/cmd/checkdocs --go-inputs "$$task_doc_inputs"
 
 generate:
+	$(GO) generate ./internal/httppath
 	@$(call generate_packages,)
 	$(GO) run ./internal/cmd/renderdocs
 
 generate-check:
+	cd internal/httppath && $(GO) run ./cmd/export -check
 	@$(call generate_packages,--check)
 	$(GO) run ./internal/cmd/renderdocs --check
 

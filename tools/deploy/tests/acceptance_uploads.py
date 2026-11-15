@@ -38,7 +38,8 @@ BLOCK = b'x' * (64 << 10)
 
 
 def policy():
-    return {"schema": 1, "routes": ["/acceptance/uploads/large", "/acceptance/uploads/short"],
+    return {"schema": 1, "routes": ["/acceptance/uploads/large", "/acceptance/uploads/short",
+                                     "/acceptance/resources/{resource}/media"],
             "body_bytes": 129 * MIB, "file_bytes": FILE_BYTES,
             "proxy_slots": 3, "request_slots": 4, "attachment_slots": 3,
             "staging_slots": 2, "staging_object_bytes": 512 * MIB,
@@ -82,11 +83,13 @@ def request(entry, path, method="GET", direct=False):
 
 
 def upload(entry, identifier, *, size=FILE_BYTES, chunked=False, hold="", kind="large",
-           direct=False, delay=0, stall=0, disconnect=False, headers_received=None):
+           direct=False, delay=0, stall=0, disconnect=False, headers_received=None, path=None):
     conn = connection(entry, direct)
     started = time.monotonic()
     try:
-        conn.putrequest("POST", f"/acceptance/uploads/{kind}?id={identifier}&hold={hold}")
+        # Scoped requests must take identity from the path, not this legacy query.
+        query_id = identifier if path is None else "unused"
+        conn.putrequest("POST", f"{path or '/acceptance/uploads/' + kind}?id={query_id}&hold={hold}")
         conn.putheader("Content-Type", "multipart/form-data; boundary=acceptance")
         conn.putheader("Connection", "close")
         conn.putheader("Transfer-Encoding" if chunked else "Content-Length",
@@ -123,6 +126,19 @@ def upload(entry, identifier, *, size=FILE_BYTES, chunked=False, hold="", kind="
     except (BrokenPipeError, ConnectionResetError, http.client.RemoteDisconnected,
             ssl.SSLEOFError, ssl.SSLZeroReturnError):
         return {"status": 0, "elapsed": time.monotonic() - started}
+    finally:
+        conn.close()
+
+
+def refused_upload(entry, path):
+    """A declared >25m body must be refused before nginx asks for its bytes."""
+    conn = connection(entry)
+    try:
+        conn.putrequest("POST", path)
+        conn.putheader("Content-Length", str(26 * MIB))
+        conn.putheader("Connection", "close")
+        conn.endheaders()
+        return conn.getresponse().status
     finally:
         conn.close()
 
@@ -379,6 +395,29 @@ class Scenarios:
                 self.success(identifier, upload(self.entry, identifier, chunked=chunked), FILE_BYTES)
             self.clean()
 
+    def templates(self):
+        # Use the resource ID in the path, through the real typed Go endpoint.
+        for chunked in (False, True):
+            identifier = self.identifier()
+            path = "/acceptance/resources/" + identifier + "/media"
+            with Monitor(self.paths):
+                self.success(identifier, upload(self.entry, identifier, size=26 * MIB,
+                                               chunked=chunked, path=path), 26 * MIB)
+            self.clean()
+        prefix = "/acceptance/resources/"
+        for path in (prefix + "resource/thumbnail", prefix + "resource/media/",
+                     prefix + "a/b/media", prefix + "a%2Fb/media",
+                     prefix + "x" * 1025 + "/media"):
+            assert refused_upload(self.entry, path) == 413, "Sibling path escaped the default body limit"
+        # These normalize INTO the regex location; raw-path guards must refuse.
+        for path in (prefix + "/resource/media", "/acceptance%2fresources/resource/media",
+                     prefix + "./resource/media", prefix + "%2e/resource/media",
+                     prefix + "other/../resource/media", prefix + "other/.%2e/resource/media"):
+            assert refused_upload(self.entry, path) == 400, "Normalized alias reached upload admission"
+        for path in (prefix + "/media", prefix + "./media", prefix + "../media", prefix + "%2e%2e/media"):
+            assert refused_upload(self.entry, path) in (400, 413)
+        self.clean()
+
     def clients(self):
         # Progress every 100 ms is below the 3 s idle gap and within total time.
         for name, kwargs, success in (
@@ -554,7 +593,8 @@ def main():
     failures = []
     with configured_fixture() as (host, entry, paths):
         scenarios = Scenarios(host, entry, paths)
-        cases = [("silent-150s", scenarios.silent), ("known-and-chunked", scenarios.bodies),
+        cases = [("parameterized-routes", scenarios.templates),
+                 ("silent-150s", scenarios.silent), ("known-and-chunked", scenarios.bodies),
                  ("slow-stalled-trickling-disconnected", scenarios.clients)]
         cases += [("saturation-" + pool, lambda pool=pool: scenarios.saturation(pool))
                   for pool in ("proxy", "request", "attachment", "staging")]

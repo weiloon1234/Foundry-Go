@@ -375,6 +375,8 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     bound = copy.deepcopy(profile)
     bound["host"]["host_id"] = host_id
     registry = registry or new_registry(host_id, tools_dir)
+    upgrades.check_upload_generation(registry, {"profile": bound},
+                                     client_generation=upgrades.protocol(tools_dir)["generation"])
     existing = registry["instances"].get(profile["instance_id"])
     if existing:
         require(existing["project_id"] == project["id"] and existing["name"] == identity(project, profile)["name"], "identity_mismatch", "Instance UUID belongs to a different identity.")

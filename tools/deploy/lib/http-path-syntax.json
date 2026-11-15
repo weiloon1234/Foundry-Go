@@ -1,0 +1,14 @@
+{
+  "parameter_prefix": "{",
+  "parameter_suffix": "}",
+  "tail_suffix": "...",
+  "parameter_name": "[A-Za-z_][A-Za-z0-9_]*",
+  "forbidden_literal_characters": "{}%?#\\",
+  "forbidden_segments": [
+    ".",
+    ".."
+  ],
+  "control_max": 31,
+  "control_delete": 127,
+  "trailing_slash": "exact"
+}
