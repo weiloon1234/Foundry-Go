@@ -317,7 +317,9 @@ The relay declares a plain public TCP listener on port 8554. A separate dual-fam
 network namespace receives the fixture's HTTP readiness bytes through nginx stream;
 this tests plain TCP forwarding, not RTSP protocol handling. Real UFW and nginx
 observations verify closure before activation and after stop, and the host report
-must list the listener. The acceptance image includes UFW, iptables and nftables;
+must list the listener. A plain stop/restart cycle must re-enable every placed copy,
+restore readiness and public access, and record healthy before the final stop.
+The acceptance image includes UFW, iptables and nftables;
 bootstrap installs nginx and its stream module through the normal package owner.
 Run:
 

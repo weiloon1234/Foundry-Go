@@ -66,6 +66,16 @@ class ServiceInventoryTests(unittest.TestCase):
         self.clock = self.enterContext(readiness_clock(ManualClock()))
         self.inventory, self.entry, self.members = inventory_fixture()
 
+    def test_readiness_refuses_empty_selection_without_weakening_unit_guard(self):
+        identity = self.inventory.identity("http")
+        for names, code in (((), "readiness_failed"), ((identity, identity), "service_selection"),
+                            ((c.UnitIdentity(INSTANCE, "unknown", 1),), "service_selection")):
+            with self.subTest(names=names), self.assertRaises(c.DeployError) as error:
+                services.wait_ready_set(None, self.inventory, names, self.clock.monotonic() + 1)
+            self.assertEqual(error.exception.code, code)
+            if not names:
+                self.assertEqual(error.exception.detail, "Cannot verify readiness: no units selected.")
+
     def test_inventory_and_orders_include_builtins_and_custom_singleton(self):
         self.assertEqual(self.inventory.units, {self.inventory.identity("http"): "foundry-http@abc-production.service",
                          self.inventory.identity("relay"): "foundry-app-abc-production-relay@1.service", self.inventory.identity("worker"): "foundry-worker@abc-production.service"})

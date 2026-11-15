@@ -133,6 +133,26 @@ class OfflineValidationTests(unittest.TestCase):
         self.assertNotIn("acceptance-lab", output.getvalue())
         self.assertEqual(self.invoke(flags=("--format", "json", "--environment", "acceptance"))[0], 0)
 
+    def test_rehearsal_maintenance_graph_is_checked_offline(self):
+        topology = self.read("deploy/rehearsal/topology.json")
+        self.write("deploy/topology.json", topology)
+        self.write("deploy/environments/acceptance-run.json",
+                   self.read("deploy/rehearsal/environments/acceptance-run.json"))
+        status, result = self.invoke(environment="acceptance-run")
+        self.assertEqual(status, 0, result)
+        self.assertTrue(all(item["status"] == "passed" for item in result["checks"]))
+
+        topology["roles"][1]["maintenance"] = "stop"
+        self.write("deploy/topology.json", topology)
+        result = self.failed("topology", "maintenance_graph", environment="acceptance-run")
+        check = next(item for item in result["checks"] if item["kind"] == "topology")
+        self.assertEqual(check["errors"], [{"code": "maintenance_graph", "detail":
+            'Role http continues but requires stopped role relay; declare relay maintenance: "continue", '
+            'or remove that requires prerequisite from http.'}])
+        self.assertTrue(all(item["status"] == "skipped" for item in result["checks"]
+                            if item["kind"] in {"profile", "release"}))
+        self.assertEqual(self.read("deploy/topology.json"), topology)
+
     def test_every_action_selector_dispatches_before_local_or_remote_state(self):
         for options in ({}, {"action": None, "menu": "validate"}, {"action": "", "menu": "validate"},
                         {"action": None, "flags": ("--action", "validate")},

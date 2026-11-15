@@ -6,6 +6,7 @@ import tomllib
 from typing import Literal
 
 import artifacts
+import feature_maintenance
 from config_templates import resolve_reference
 from contracts import DeployError, MAX_JSON, check_path, require, slug, validate_project
 from declaration_inputs import load_profile, read_declaration, read_declaration_json
@@ -90,8 +91,13 @@ def validate_declarations(root: Path, environment: str | None = None, bindings: 
         checks.append(item)
         return item
 
+    def read_topology():
+        topology = parse_topology(read_declaration_json(root, root / "deploy/topology.json"))
+        feature_maintenance.stopped_roles(topology)
+        return topology
+
     project = check("project", "deploy/project.json").run(lambda: validate_project(read_declaration_json(root, root / "deploy/project.json")))
-    topology = check("topology", "deploy/topology.json").run(lambda: parse_topology(read_declaration_json(root, root / "deploy/topology.json")))
+    topology = check("topology", "deploy/topology.json").run(read_topology)
     config = check("configuration", "config/deploy.toml").run(
         lambda: tomllib.loads(read_declaration(root, root / "config/deploy.toml", MAX_JSON).decode("utf-8")))
 

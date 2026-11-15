@@ -864,6 +864,21 @@ def main():
         assert action("stop", request(project, profile, operation_id=str(uuid.uuid4())))["ok"]
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", "--quiet", unit], check=False).returncode != 0
+        assert not services.enabled_units(host, inventory.units)
+        public_observation(host, topology, profile)
+        restarted = action("restart", request(project, profile, operation_id=str(uuid.uuid4())))
+        assert restarted["ok"] and restarted["status"] == "healthy", restarted
+        _, entry = host.require_identity(project, profile)
+        store, selection, inventory, _ = load(host, entry)
+        assert set(services.enabled_units(host, inventory.units)) == set(inventory.units)
+        assert set(selection.enabled_roles) == set(unit_selection_names(inventory.units))
+        assert host.load_state(entry)["status"] == "healthy"
+        assert services.wait_ready_set(host, inventory, inventory.units, time.monotonic() + 90)
+        store.require_cleanup_clear()
+        assert_numbered_copies(host, inventory, entry, len(inventory.copies(COPIES_ROLE)))
+        public_observation(host, topology, profile, inventory=inventory, opened=True)
+        assert action("stop", request(project, profile, operation_id=str(uuid.uuid4())))["status"] == "stopped"
+        assert not services.enabled_units(host, inventory.units)
         public_observation(host, topology, profile)
         # Use the same cleanup owner as release transitions after confirmed stop.
         import shared_directories

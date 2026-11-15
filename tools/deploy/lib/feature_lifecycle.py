@@ -579,6 +579,8 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
                 "stale_plan", "Enablement or running selection changed after review.")
     else:
         enabled = services.enabled_units(host, previous.units) if "deployment_selection" in entry else tuple(inventory.units)
+        if attempt["action"] == "restart" and not named and maintenance_request is None:
+            enabled = tuple(inventory.units)
         running, removed = set(enabled), {}
         if named or attempt["action"] == "config" or maintenance_request:
             held_running = configuration_hold_running(host, entry)

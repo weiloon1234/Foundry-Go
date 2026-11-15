@@ -3,6 +3,7 @@
 import argparse
 import importlib.util
 import os
+import secrets
 import shutil
 import subprocess
 import uuid
@@ -14,7 +15,7 @@ FIXTURE = DEPLOY.parents[1] / 'tests/fixtures/deploy-acceptance'
 
 
 MODULE = 'github.com/weiloon1234/Foundry-Go'
-ENVIRONMENTS = ('acceptance', 'acceptance-lab')
+ENVIRONMENTS = ('acceptance', 'acceptance-lab', 'acceptance-run')
 
 
 def prepare_candidate(cli, workspace):
@@ -69,25 +70,46 @@ def fixture_profile(cli, architecture, environment):
     if environment not in ENVIRONMENTS:
         raise ValueError('Select an explicit fixture acceptance profile')
     project = cli.validate_project(cli.read_json(FIXTURE / 'deploy/project.json'))
-    profile = cli.read_json(FIXTURE / 'deploy/environments' / (environment + '.json'))
-    if environment == 'acceptance-lab' and profile['architecture'] != architecture:
+    declarations = FIXTURE / 'deploy/rehearsal' if environment == 'acceptance-run' else FIXTURE / 'deploy'
+    profile = cli.read_json(declarations / 'environments' / (environment + '.json'))
+    if environment != 'acceptance' and profile['architecture'] != architecture:
         raise ValueError('Rehearsal architecture must match its explicit fixture profile')
     profile['architecture'] = architecture
     profile = cli.validate_profile(profile, project)
     if profile['runtime_environment'] != 'testing' or profile['environment'] != environment:
         raise ValueError('The fixture builder accepts only its disposable acceptance profiles')
-    if environment == 'acceptance-lab':
+    if environment != 'acceptance':
         from rehearsal import acceptance_profile
-        acceptance_profile(project, profile, cli.read_json(FIXTURE / 'deploy/topology.json'))
+        acceptance_profile(project, profile, cli.read_json(declarations / 'topology.json'))
     return project, profile
 
 
-def build_fixture(architecture, archive_file, environment='acceptance'):
+def prepare_rehearsal(snapshot, profile):
+    """Install rehearsal declarations only in the privately packaged fixture copy."""
+    from contracts import atomic_json, read_json
+    from runtime_config import service_secret_requirements
+    from topology import parse_profile, parse_topology
+    declarations = snapshot / 'deploy/rehearsal'
+    topology = parse_topology(read_json(declarations / 'topology.json'))
+    parsed = parse_profile(profile, topology)
+    shutil.copyfile(declarations / 'topology.json', snapshot / 'deploy/topology.json')
+    atomic_json(snapshot / 'deploy/environments' / (profile['environment'] + '.json'), profile)
+    bindings = read_json(declarations / 'bindings.json')
+    bindings['configuration'] = {row['key']: secrets.token_urlsafe(32)
+                                 for row in service_secret_requirements(topology, parsed, {})}
+    atomic_json(snapshot / '.deploy/rehearsal-bindings.json', bindings, mode=0o600)
+
+
+def build_fixture(architecture, archive_file, environment='acceptance', *, app_root_file=None):
     archive_file = Path(archive_file).expanduser().absolute()
     if archive_file.exists() or archive_file.is_symlink():
         raise ValueError('Use a new archive path file; existing files are never overwritten')
     if not archive_file.parent.is_dir():
         raise ValueError('The archive path file needs an existing parent directory')
+    if app_root_file is not None:
+        app_root_file = Path(app_root_file).expanduser().absolute()
+        if app_root_file == archive_file or app_root_file.exists() or app_root_file.is_symlink() or not app_root_file.parent.is_dir():
+            raise ValueError('Use a new app-root path file in an existing directory')
     spec = importlib.util.spec_from_file_location('acceptance_deploy_cli', DEPLOY / 'local/cli.py')
     cli = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cli)
@@ -98,13 +120,19 @@ def build_fixture(architecture, archive_file, environment='acceptance'):
         workspace.mkdir(parents=True, mode=0o700)
         # Retain inputs on failure: a Docker writer may still own their mounts.
         snapshot, proxy, _ = prepare_candidate(cli, workspace)
+        if environment == 'acceptance-run':
+            prepare_rehearsal(snapshot, profile)
         cli.ROOT = snapshot
         cli.execute = acceptance_execute(cli.execute, snapshot, proxy)
         archive = cli.build(project, profile)
     with archive_file.open('x') as stream:
         stream.write(str(archive) + '\n')
+    if app_root_file is not None:
+        with app_root_file.open('x') as stream:
+            stream.write(str(snapshot) + '\n')
     print('Fixture archive: ' + str(archive))
     print('Archive path file: ' + str(archive_file))
+    print('Fixture app root: ' + str(snapshot))
 
 
 def main():
@@ -113,8 +141,9 @@ def main():
     parser.add_argument('--environment', choices=ENVIRONMENTS, default='acceptance')
     parser.add_argument('--archive-file', required=True, type=Path,
                         help='New file in which to retain the completed archive path')
+    parser.add_argument('--app-root-file', type=Path, help='New file in which to retain the isolated fixture root')
     arguments = parser.parse_args()
-    build_fixture(arguments.architecture, arguments.archive_file, arguments.environment)
+    build_fixture(arguments.architecture, arguments.archive_file, arguments.environment, app_root_file=arguments.app_root_file)
 
 
 if __name__ == '__main__':

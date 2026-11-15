@@ -109,6 +109,24 @@ class FoundationProvisionTests(unittest.TestCase):
         self.assertNotEqual(before["plan_token"], after["plan_token"])
         self.assertNotEqual(before["entry"]["allocations"]["http_port"], after["entry"]["allocations"]["http_port"])
 
+    def test_invalid_rehearsal_maintenance_graph_refuses_before_host_inspection(self):
+        declarations = TOOLS.parents[1] / "tests/fixtures/deploy-acceptance/deploy"
+        project = json.loads((declarations / "project.json").read_text())
+        profile = json.loads((declarations / "rehearsal/environments/acceptance-run.json").read_text())
+        topology = json.loads((declarations / "rehearsal/topology.json").read_text())
+        topology["roles"][1]["maintenance"] = "stop"
+        with patch.object(provision, "inspect_host", side_effect=AssertionError("host inspection")), \
+                self.assertRaises(DeployError) as error:
+            provision.bootstrap_plan(self.host, project, profile, TOOLS, topology=topology)
+        self.assertEqual(error.exception.code, "maintenance_graph")
+        self.assertEqual(error.exception.detail,
+                         'Role http continues but requires stopped role relay; declare relay maintenance: "continue", '
+                         'or remove that requires prerequisite from http.')
+        self.assertEqual(self.host.commands, [])
+        self.assertEqual(self.host.writes, [])
+        for module in (provision.packages, provision.postgres, provision.redis_acl, provision.certificates):
+            module.inspect.assert_not_called()
+
     def test_existing_instance_keeps_allocation_and_refuses_topology_drift(self):
         first = self.plan()
         self.register(first)

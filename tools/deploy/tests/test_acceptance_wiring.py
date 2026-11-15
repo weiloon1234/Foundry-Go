@@ -3,6 +3,7 @@ import importlib.util
 from contextlib import ExitStack
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -15,6 +16,54 @@ from test_contracts import fixture
 
 
 class AcceptanceWiringTests(unittest.TestCase):
+    def test_rehearsal_overlay_provisions_uploads_and_two_private_copy_bindings(self):
+        from test_local import cli
+        import rehearsal
+        from runtime_config import service_secret_requirements
+        from topology import parse_profile
+        import uploads
+        before = {path: path.read_bytes() for path in (build_acceptance.FIXTURE / 'deploy').rglob('*.json')}
+        project, profile = build_acceptance.fixture_profile(cli, 'arm64', 'acceptance-run')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            shutil.copytree(build_acceptance.FIXTURE / 'deploy', root / 'deploy')
+            build_acceptance.prepare_rehearsal(root, profile)
+            actual_project, actual_profile, topology, _, _ = rehearsal.inputs(root, 'acceptance-run', None)
+            self.assertEqual(actual_project, project)
+            self.assertEqual(actual_profile, profile)
+            parsed = parse_profile(profile, topology)
+            self.assertEqual(dict(parsed.placement), {'http': 1, 'relay': 2})
+            self.assertEqual(topology.schema, 2)
+            self.assertIn('/acceptance/resources/{resource}/media', profile['uploads']['routes'])
+            minimum = uploads.minimum_bytes(profile['uploads'])
+            for name, quota in profile['uploads']['pools'].items():
+                factor = len(topology.roles) if name in ('attachment', 'staging') else 1
+                self.assertGreater(quota, minimum[name] * factor + (2 << 20))
+            path = root / '.deploy/rehearsal-bindings.json'
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            bindings = json.loads(path.read_text())
+            requirements = service_secret_requirements(topology, parsed, {})
+            self.assertEqual(set(bindings['configuration']), {row['key'] for row in requirements})
+            self.assertEqual(len(set(bindings['configuration'].values())), 2)
+            self.assertTrue(all(bindings['configuration'].values()))
+            self.assertEqual(bindings['allow_single_request_conditions'], ['attachments'])
+            config = {'app': {'services': {'storage': {'disks': {'attachments': {'driver': 'r2'}}}}}}
+            rehearsal.validate_bindings(bindings, profile['environment'], config)
+            for path in (root / 'deploy/environments').glob('*.json'):
+                if path.name != 'acceptance-run.json':
+                    self.assertEqual(path.read_bytes(), before[build_acceptance.FIXTURE / 'deploy/environments' / path.name])
+        self.assertEqual(before, {path: path.read_bytes() for path in before})
+
+    def test_builder_refuses_existing_app_root_output_before_building(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output = root / 'app-root.txt'
+            output.write_text('keep')
+            with patch.object(importlib.util, 'spec_from_file_location') as load, self.assertRaises(ValueError):
+                build_acceptance.build_fixture('arm64', root / 'archive.txt', app_root_file=output)
+            load.assert_not_called()
+            self.assertEqual(output.read_text(), 'keep')
+
     def test_fixture_builder_selects_rehearsal_profile_without_changing_existing_profile(self):
         from test_local import cli
         files = sorted((build_acceptance.FIXTURE / 'deploy').rglob('*.json'))

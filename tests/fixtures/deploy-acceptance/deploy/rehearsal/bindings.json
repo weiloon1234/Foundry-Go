@@ -1,0 +1,10 @@
+{
+  "environment": "acceptance-run",
+  "configuration": {},
+  "storage_disks": [
+    "attachments"
+  ],
+  "allow_single_request_conditions": [
+    "attachments"
+  ]
+}

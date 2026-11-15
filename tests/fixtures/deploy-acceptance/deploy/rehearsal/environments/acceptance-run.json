@@ -1,0 +1,61 @@
+{
+  "schema": 3,
+  "environment": "acceptance-run",
+  "instance_id": "d2a93aa2-79c6-4c61-83e3-78e729a18906",
+  "host": {
+    "address": "acceptance-run.acceptance.invalid",
+    "port": 22,
+    "host_id": "d4f58973-58f9-4e36-9fc0-411675c0a69d"
+  },
+  "runtime_environment": "testing",
+  "domain": "acceptance-run.acceptance.invalid",
+  "certbot_email": "acceptance@example.invalid",
+  "architecture": "arm64",
+  "public_env": {},
+  "edge_origin_lockdown": false,
+  "retention": {
+    "server_releases": 5,
+    "local_releases": 3,
+    "pre_migration_dumps": 7
+  },
+  "backup_policy": {
+    "interval_hours": 24,
+    "full_retention_days": 35,
+    "pitr_days": 28
+  },
+  "placement": {
+    "http": 1,
+    "relay": 2
+  },
+  "listeners": {},
+  "uploads": {
+    "schema": 1,
+    "routes": [
+      "/acceptance/uploads/large",
+      "/acceptance/uploads/short",
+      "/acceptance/resources/{resource}/media"
+    ],
+    "body_bytes": 2097152,
+    "file_bytes": 1048576,
+    "proxy_slots": 1,
+    "request_slots": 1,
+    "attachment_slots": 1,
+    "staging_slots": 1,
+    "staging_object_bytes": 536870912,
+    "request_total_seconds": 300,
+    "attachment_total_seconds": 240,
+    "storage_total_seconds": 210,
+    "proxy_read_idle_seconds": 360,
+    "client_body_idle_seconds": 3,
+    "proxy_send_idle_seconds": 60,
+    "send_idle_seconds": 60,
+    "connect_seconds": 10,
+    "pools": {
+      "proxy": 16777216,
+      "request": 16777216,
+      "attachment": 16777216,
+      "staging": 1207959552,
+      "small": 16777216
+    }
+  }
+}

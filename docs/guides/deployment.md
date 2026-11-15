@@ -58,6 +58,12 @@ read `.deploy` settings. Explicit validation does not prompt.
 The action checks project identity, topology, selected profiles, placement and
 copy counts, public listeners including PROXY and managed DNS fields, upload
 routes, shared directories, and release artifact and bundle declarations.
+Topology checks include maintenance dependencies: a continuing role cannot require
+or bind an endpoint of a stopped role, and HTTP must remain running. Invalid graphs
+report `maintenance_graph`. Bootstrap planning checks new or changed topologies
+before host inspection. An unchanged registered topology can resume bootstrap even
+if older tools accepted an invalid graph; release planning still rejects that
+graph before activation.
 It parses `config/deploy.toml` and renders declared service configuration through
 the runtime renderer with synthetic secret and binding values. Artifact checks
 cover declarations, not payload existence, downloads, builds, checksums, or ABI

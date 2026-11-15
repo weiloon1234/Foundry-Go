@@ -647,7 +647,8 @@ class UpgradeTests(unittest.TestCase):
         source = Path(__file__).resolve().parents[1]
         _, files, _ = upgrades.tool_bundle(source)
         expected = {name for name in upgrades.REQUIRED_FILES | upgrades.REHEARSAL_FILES if name.endswith('.py')}
-        expected.update({'lib/unix_socket_probe.py', 'lib/copy_enablement.py', 'lib/operation_selection.py', 'lib/rehearsal_storage.py'})
+        expected.update({'lib/unix_socket_probe.py', 'lib/copy_enablement.py', 'lib/operation_selection.py',
+                         'lib/rehearsal_storage.py', 'lib/release_review.py'})
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
     def test_generation_fifteen_before_socket_probe_helper_can_upgrade(self):

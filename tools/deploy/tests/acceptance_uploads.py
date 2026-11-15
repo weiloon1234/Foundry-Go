@@ -22,6 +22,8 @@ import uuid
 
 TOOLS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLS / "lib"))
+sys.path.insert(0, str(TOOLS / "local"))
+import containers
 from acceptance_http import https_response
 from acceptance_support import WORK, fixture, guard, run, service, wait_for
 from contracts import atomic_write, check_path
@@ -230,35 +232,12 @@ def configured_fixture():
     assert original_site == _template(TOOLS, "nginx-https.conf", original), "Refusing drifted nginx site"
     registry = host.paths.registry.read_bytes()
     temporary = WORK / ("uploads-" + str(uuid.uuid4()))
-    temporary.mkdir(mode=0o700)
     env_file = host.paths.instance_config(entry["name"]) / (temporary.name + ".env")
     assert not env_file.exists()
-    mounted = []
-    created_directories = []
-    images = []
     changed = False
     baseline = None
     try:
-        for name, path in paths.items():
-            assert not path.exists(), "Refusing an existing upload volume"
-            # guard() uses umask 077. Only newly created root-controlled mount
-            # parents become traversable; never chmod an existing parent.
-            missing = []
-            cursor = path
-            while not cursor.exists():
-                missing.append(cursor)
-                cursor = cursor.parent
-            check_path(cursor, "directory")
-            for directory in reversed(missing):
-                directory.mkdir(mode=0o755)
-                directory.chmod(0o755)
-                created_directories.append(directory)
-            image = temporary / (name + ".ext4")
-            images.append(image)
-            run(["truncate", "-s", str(policy()["pools"][name]), str(image)])
-            run(["mkfs.ext4", "-q", "-m", "0", "-F", str(image)])
-            run(["mount", "-o", "loop,nodev,nosuid", str(image), str(path)])
-            mounted.append(path)
+        containers.provision_upload_volumes(paths, policy()["pools"], temporary)
         uploads.provision(host, entry)
         values = uploads.runtime_values(entry)
         original_env = host.paths.instance_config(entry["name"]) / "app.env"
@@ -286,22 +265,18 @@ def configured_fixture():
         service(unit)
         yield host, entry, paths
     finally:
-        if changed:
-            run(["systemctl", "stop", unit])
-            atomic_write(fragment, original_unit)
-            atomic_write(site, original_site)
-            run(["systemctl", "daemon-reload"])
-            run(["nginx", "-t", "-q"])
-            run(["systemctl", "restart", unit])
-            run(["systemctl", "reload", "nginx"])
-        env_file.unlink(missing_ok=True)
-        for path in reversed(mounted):
-            run(["umount", str(path)])
-        for image in images:
-            image.unlink(missing_ok=True)
-        for directory in reversed(created_directories):
-            directory.rmdir()
-        temporary.rmdir()
+        try:
+            if changed:
+                run(["systemctl", "stop", unit])
+                atomic_write(fragment, original_unit)
+                atomic_write(site, original_site)
+                run(["systemctl", "daemon-reload"])
+                run(["nginx", "-t", "-q"])
+                run(["systemctl", "restart", unit])
+                run(["systemctl", "reload", "nginx"])
+            env_file.unlink(missing_ok=True)
+        finally:
+            containers.release_upload_volumes(temporary)
         assert host.paths.registry.read_bytes() == registry, "Acceptance changed the registry"
         wait_for(lambda: https_response(original, "/health/ready")[0] == 200, "Original fixture did not recover")
         if baseline is not None:
