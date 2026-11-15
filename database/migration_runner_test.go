@@ -656,3 +656,42 @@ func TestDisabledInterruptedMigrationPreservesReconciliationAndDoesNotResume(t *
 		t.Fatal("re-enabled migration did not resume from checkpoint", result, err)
 	}
 }
+
+func TestDisabledCheckpointDoesNotReuseBatchForUnrelatedMigrations(t *testing.T) {
+	server := newMigrationServer()
+	server.loseStatement = "CONCURRENT_INDEX"
+	feature := migrate.Definition{Key: migrate.Key{Origin: "foundry.test", ID: "001"}, Version: "v1", Mode: migrate.NonTransactional, SQL: []string{"CONCURRENT_INDEX", "NEXT"}}
+	runner, _ := migrationRunner(t, server, 1, []migrate.Definition{feature}, nil)
+	if _, err := runner.Up(t.Context()); !errors.Is(err, migrate.ErrReconciliationRequired) {
+		t.Fatal(err)
+	}
+	report, err := runner.Status(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runner.Reconcile(t.Context(), *report.Statuses[0].Progress, migrate.StatementApplied); err != nil {
+		t.Fatal(err)
+	}
+	feature.Availability = migrate.FeatureDisabled
+	first := migrate.Definition{Key: migrate.Key{Origin: "app", ID: "100"}, Version: "v1", SQL: []string{"FIRST"}, Down: []string{"UNDO_FIRST"}}
+	second := migrate.Definition{Key: migrate.Key{Origin: "app", ID: "050"}, Version: "v1", SQL: []string{"SECOND"}, Down: []string{"UNDO_SECOND"}}
+	runner, _ = migrationRunner(t, server, 2, []migrate.Definition{feature, first}, nil)
+	earlier, err := runner.Up(t.Context())
+	if err != nil || len(earlier.Applied) != 1 || earlier.Batch <= report.Statuses[0].Progress.Batch {
+		t.Fatal("disabled checkpoint chose the batch", earlier, err)
+	}
+	runner, _ = migrationRunner(t, server, 3, []migrate.Definition{feature, first, second}, nil)
+	later, err := runner.Up(t.Context())
+	if err != nil || len(later.Applied) != 1 || later.Batch <= earlier.Batch {
+		t.Fatal("later run reused an old batch", later, err)
+	}
+	feature.Availability = migrate.Available
+	runner, _ = migrationRunner(t, server, 4, []migrate.Definition{feature, first, second}, nil)
+	if _, err := runner.Up(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := runner.RollbackPlan(t.Context(), 1)
+	if err != nil || len(plan) != 1 || plan[0].Key != second.Key {
+		t.Fatal("rollback picked the older migration", plan, err)
+	}
+}

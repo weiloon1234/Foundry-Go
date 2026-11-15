@@ -2,7 +2,6 @@ package infrastructure
 
 import (
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -85,7 +84,8 @@ func (s DatabaseSettings) MigrationGroups(targets ...MigrationTarget) ([]Migrati
 		if !slices.Contains(group.Connections, name) {
 			group.Connections = append(group.Connections, name)
 		}
-		for _, definition := range target.Definitions {
+		definitions := append(slices.Clone(target.Definitions), migrate.KnownHistory(target.Definitions...)...)
+		for _, definition := range definitions {
 			definition = definition.Clone()
 			if definition.Availability != migrate.Available && definition.Availability != migrate.FeatureDisabled {
 				return nil, safeerror.NewFault(fault.Invalid, "invalid migration availability")
@@ -95,7 +95,7 @@ func (s DatabaseSettings) MigrationGroups(targets ...MigrationTarget) ([]Migrati
 				prior := group.Definitions[previous]
 				availability := definition.Availability
 				definition.Availability = prior.Availability
-				if !reflect.DeepEqual(prior, definition) {
+				if !prior.Equal(definition) {
 					return nil, safeerror.NewFault(fault.Conflict, fmt.Sprintf("migration targets sharing schema %s have conflicting definitions for %s/%s", schema, definition.Key.Origin, definition.Key.ID))
 				}
 				// Any enabled consumer of a shared store needs its migrations.
@@ -110,8 +110,16 @@ func (s DatabaseSettings) MigrationGroups(targets ...MigrationTarget) ([]Migrati
 	}
 	for i := range groups {
 		slices.Sort(groups[i].Connections)
-		if _, err := migrate.New(groups[i].Definitions...); err != nil {
+		registry, err := migrate.New(groups[i].Definitions...)
+		if err != nil {
 			return nil, err
+		}
+		for _, entry := range registry.Entries() {
+			if _, exists := byKey[i][entry.Key]; exists {
+				continue
+			}
+			definition, _ := registry.Definition(entry.Key)
+			groups[i].Definitions = append(groups[i].Definitions, definition)
 		}
 	}
 	slices.SortFunc(groups, func(a, b MigrationGroup) int {

@@ -7,7 +7,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/storage"
@@ -82,9 +81,6 @@ func TestCacheDriverSwitchKeepsTypedConsumer(t *testing.T) {
 						return err
 					}
 					for _, definition := range targets[0].Definitions {
-						if definition.Availability == migrate.FeatureDisabled {
-							continue
-						}
 						for _, statement := range definition.SQL {
 							if _, err := tx.Exec(t.Context(), statement); err != nil {
 								return err

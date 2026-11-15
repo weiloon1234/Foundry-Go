@@ -157,7 +157,7 @@ func (p *Postgres) Up(ctx context.Context) (result RunResult, err error) {
 		}
 		result.Batch = report.LastBatch + 1
 		for _, status := range report.Statuses {
-			if status.Progress != nil {
+			if status.Progress != nil && status.Definition.Availability == Available {
 				result.Batch = min(result.Batch, status.Progress.Batch)
 			}
 		}

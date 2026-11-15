@@ -1,11 +1,15 @@
 package application_test
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/application"
+	dbcommand "github.com/weiloon1234/Foundry-Go/database/command"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	outboundcapture "github.com/weiloon1234/Foundry-Go/httpclient/capture"
@@ -33,20 +37,20 @@ func TestBuilderMigrationsJoinApplicationTargetsAsSnapshots(t *testing.T) {
 	}
 	t.Cleanup(func() { stop(t, app) })
 	targets[0].Definitions[0].SQL[0] = "changed after registration"
-	// Framework feature targets come first; a database brings outbound capture.
 	got := app.Migrations()
-	frameworkCapture := false
-	for _, target := range got[:len(got)-1] {
-		frameworkCapture = frameworkCapture || slices.ContainsFunc(target.Definitions, func(d migrate.Definition) bool {
-			return d.Key.Origin == outboundcapture.MigrationOrigin && d.Availability == migrate.Available
-		})
+	if len(got) != 1 || got[0].Connection != "default" {
+		t.Fatalf("physical migration targets: %+v", got)
 	}
-	domain := &got[len(got)-1]
-	if !frameworkCapture || domain.Connection != "" || domain.Definitions[0].SQL[0] != "CREATE TABLE records (id uuid PRIMARY KEY)" {
-		t.Fatalf("application migrations: %+v", got)
+	definitions := got[0].Definitions
+	if !slices.ContainsFunc(definitions, func(d migrate.Definition) bool { return d.Key.Origin == outboundcapture.MigrationOrigin }) {
+		t.Fatal("framework capture migration missing")
 	}
-	domain.Definitions[0].SQL[0] = "changed after inspection"
-	if app.Migrations()[len(got)-1].Definitions[0].SQL[0] != "CREATE TABLE records (id uuid PRIMARY KEY)" {
+	index := slices.IndexFunc(definitions, func(d migrate.Definition) bool { return d.Key == targets[0].Definitions[0].Key })
+	if index < 0 || definitions[index].SQL[0] != "CREATE TABLE records (id uuid PRIMARY KEY)" {
+		t.Fatal("application declaration changed")
+	}
+	definitions[index].SQL[0] = "changed after inspection"
+	if app.Migrations()[0].Definitions[index].SQL[0] != "CREATE TABLE records (id uuid PRIMARY KEY)" {
 		t.Fatal("App.Migrations exposed owned definitions")
 	}
 }
@@ -63,5 +67,52 @@ func TestBuilderMigrationsAreValidatedAtBuild(t *testing.T) {
 		if _, err := application.New(migrationSettings(), quiet()).Migrations(test.targets...).Build(t.Context()); !errors.Is(err, test.code) {
 			t.Fatalf("%s: %v", name, err)
 		}
+	}
+}
+
+func TestMigrationHistoryIncludesDisabledOnlyTargetsAsOwnedSnapshots(t *testing.T) {
+	s := migrationSettings()
+	s.Features.Audit.Schema = "historical_audit"
+	app, err := application.New(s, quiet()).Build(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stop(t, app) })
+	for _, target := range app.Migrations() {
+		if target.Schema == s.Features.Audit.Schema {
+			t.Fatal("disabled-only target exposed to legacy runner loop")
+		}
+	}
+	groups := app.MigrationHistory()
+	index := slices.IndexFunc(groups, func(group infrastructure.MigrationGroup) bool { return group.Schema == s.Features.Audit.Schema })
+	if index < 0 {
+		t.Fatal("disabled-only history disappeared")
+	}
+	registry, err := migrate.New(groups[index].Definitions...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := registry.Inspect(nil)
+	if err != nil || report.Check() != nil || len(report.Statuses) == 0 {
+		t.Fatal("disabled-only inspection failed", report, err)
+	}
+	for _, status := range report.Statuses {
+		if status.State != migrate.PendingDisabled {
+			t.Fatal("disabled-only migration became runnable", status)
+		}
+	}
+	original := groups[index].Definitions[0].SQL[0]
+	groups[index].Definitions[0].SQL[0], groups[index].Connections[0] = "mutated", "mutated"
+	again := app.MigrationHistory()[index]
+	if again.Definitions[0].SQL[0] != original || again.Connections[0] != "default" {
+		t.Fatal("history snapshots share mutable storage")
+	}
+	show, err := dbcommand.Parse([]string{"migrate", "show", "--schema", s.Features.Audit.Schema, "--migration", string(again.Definitions[0].Key.Origin) + "/" + string(again.Definitions[0].Key.ID)}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := app.RunDatabaseCommand(t.Context(), show, application.DatabaseCommandResources{}, &output); err != nil || !strings.Contains(output.String(), "foundry.audit") {
+		t.Fatal("command cannot inspect disabled-only history", output.String(), err)
 	}
 }

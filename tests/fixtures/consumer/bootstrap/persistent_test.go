@@ -22,7 +22,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -120,9 +119,6 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	if err := withinSchema(t.Context(), db, schema, func(tx *database.Tx) error {
 		for _, target := range app.Migrations() {
 			for _, d := range target.Definitions {
-				if d.Availability == migrate.FeatureDisabled {
-					continue
-				}
 				for _, sql := range d.SQL {
 					if _, err := tx.Exec(t.Context(), sql); err != nil {
 						return err

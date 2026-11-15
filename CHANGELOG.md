@@ -9,7 +9,11 @@
   checksums. Rollback refuses a selection containing a disabled feature before
   executing any reversal. PostgreSQL cache definitions also remain known when a
   configured store changes drivers. Keep the feature's database and schema
-  settings when disabling it.
+  settings when disabling it. `App.Migrations()` keeps runnable definitions grouped
+  by physical target and carries disabled history into `migrate.New` automatically;
+  `App.MigrationHistory()` also exposes disabled-only targets. `WithDatabaseScopes`
+  preserves the job archive's existing schema. Reconciled disabled checkpoints no
+  longer force unrelated migrations to reuse an older batch.
 
 ## v0.35.0 — 2026-11-15
 

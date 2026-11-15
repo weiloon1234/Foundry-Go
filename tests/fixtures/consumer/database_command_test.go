@@ -89,13 +89,13 @@ func TestApplicationDatabaseCommandRefusesUnknownDatabaseBeforeIO(t *testing.T) 
 			t.Error(err)
 		}
 	})
-	// Framework targets precede the application's own declarations.
+	// One physical target contains framework and application declarations.
 	targets := app.Migrations()
-	if len(targets) < 2 || len(targets[len(targets)-1].Definitions) != len(migrations.Definitions()) {
+	if len(targets) != 1 {
 		t.Fatalf("application migration targets: %+v", targets)
 	}
 	captureFound := false
-	for _, target := range targets[:len(targets)-1] {
+	for _, target := range targets {
 		for _, definition := range target.Definitions {
 			captureFound = captureFound || definition.Key.Origin == outboundcapture.MigrationOrigin && definition.Availability == migrate.Available
 		}

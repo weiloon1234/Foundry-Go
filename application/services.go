@@ -89,7 +89,7 @@ type App struct {
 	*foundation.App
 	resources  Services
 	server     *http.Server
-	migrations []infrastructure.MigrationTarget
+	migrations []applicationMigrationGroup
 	databases  infrastructure.DatabaseSettings
 	// encryption is the parsed application key ring that every database pool,
 	// including RunDatabaseCommand's, uses for encrypted model fields.
@@ -118,14 +118,39 @@ func (a *App) HTTPReady(ctx context.Context) (string, error) {
 	return a.server.Ready(ctx)
 }
 
-// Migrations returns owned copies of the known framework feature targets
-// followed by the Builder.Migrations targets. Explicit tooling such as
-// RunDatabaseCommand and the PostgreSQL testkit applies them; boot never does.
+// Migrations returns runnable targets, grouped by physical database and schema.
+// Definitions contain only executable SQL and carry immutable disabled-history
+// metadata understood by migrate.New. Boot never applies migrations.
 func (a *App) Migrations() []infrastructure.MigrationTarget {
 	if a == nil {
 		return nil
 	}
-	return cloneMigrations(a.migrations)
+	var targets []infrastructure.MigrationTarget
+	for _, group := range a.migrations {
+		definitions := group.registry.RunnableDefinitions()
+		if len(definitions) != 0 {
+			targets = append(targets, infrastructure.MigrationTarget{Connection: group.Connections[0], Schema: group.Schema, Definitions: definitions})
+		}
+	}
+	return targets
+}
+
+// MigrationHistory returns owned snapshots of every declared physical target,
+// including schemas with only disabled definitions. RunDatabaseCommand uses
+// this complete history for status, up, show and rollback.
+func (a *App) MigrationHistory() []infrastructure.MigrationGroup {
+	if a == nil {
+		return nil
+	}
+	groups := make([]infrastructure.MigrationGroup, len(a.migrations))
+	for i, group := range a.migrations {
+		groups[i] = infrastructure.MigrationGroup{Connections: slices.Clone(group.Connections), Schema: group.Schema}
+		for _, entry := range group.registry.Entries() {
+			definition, _ := group.registry.Definition(entry.Key)
+			groups[i].Definitions = append(groups[i].Definitions, definition)
+		}
+	}
+	return groups
 }
 
 // Format writes a fixed label without exposing service values.

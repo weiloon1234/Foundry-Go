@@ -11,6 +11,7 @@ import (
 // persistence feature with its selected scoped connection. It preserves named
 // defaults and rejects incompatible explicit schemas before application Build.
 // Blank/public feature schemas follow the connection; custom schemas must match.
+// Worker.Archive retains its independently configured database and schema.
 func (s Settings) WithDatabaseScopes(databases infrastructure.DatabaseSettings) (Settings, error) {
 	schema, err := SettingsConfigSchema()
 	if err != nil {
@@ -24,7 +25,7 @@ func (s Settings) WithDatabaseScopes(databases infrastructure.DatabaseSettings) 
 	if err != nil {
 		return Settings{}, err
 	}
-	for _, target := range persistenceTargets(&result) {
+	for _, target := range featurePersistenceTargets(&result.Features) {
 		name, scope, err := databases.ScopedSchema(*target.connection)
 		if err != nil {
 			return Settings{}, err

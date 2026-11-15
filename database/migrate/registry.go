@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -77,6 +78,8 @@ func FeatureDefinitions(enabled bool, definitions ...Definition) []Definition {
 // nontransactional migration cannot declare Down. Without Down a migration is
 // irreversible and rollback refuses to cross it.
 type Definition struct {
+	// history is immutable registry-owned metadata carried by runnable snapshots.
+	history *Registry
 	// Availability is deployment metadata, excluded from the checksum.
 	Availability Availability
 	Mode         ExecutionMode
@@ -133,6 +136,10 @@ func validName(name string) bool {
 // invalid dependencies, and cycles are errors. Independent nodes sort by ID,
 // then origin. Dependency lists are canonicalized; SQL ordering is preserved.
 func New(definitions ...Definition) (*Registry, error) {
+	definitions, err := withHistory(definitions)
+	if err != nil {
+		return nil, err
+	}
 	byKey := make(map[Key]migration, len(definitions))
 	for _, definition := range definitions {
 		if (definition.Availability != Available && definition.Availability != FeatureDisabled) || (definition.Mode != Transactional && definition.Mode != NonTransactional) || !validKey(definition.Key) || !validName(string(definition.Version)) || len(definition.SQL) == 0 {
@@ -231,3 +238,71 @@ func sortKeys(keys []Key) {
 	})
 }
 func keyLabel(key Key) string { return fmt.Sprintf("(%s, %s)", key.Origin, key.ID) }
+
+// Equal compares declarations, including availability, without comparing the
+// immutable history context carried by RunnableDefinitions.
+func (d Definition) Equal(other Definition) bool {
+	d.history, other.history = nil, nil
+	return reflect.DeepEqual(d, other)
+}
+
+// RunnableDefinitions returns owned executable definitions. Each carries the
+// registry's disabled history, so passing these snapshots to New preserves
+// inspection and drift checks without exposing disabled SQL in the slice.
+func (r *Registry) RunnableDefinitions() []Definition {
+	var definitions []Definition
+	for _, item := range r.ordered {
+		if item.entry.Availability != Available {
+			continue
+		}
+		definition, _ := r.Definition(item.entry.Key)
+		definition.history = r
+		definitions = append(definitions, definition)
+	}
+	return definitions
+}
+
+// KnownHistory returns owned disabled definitions attached to runnable snapshots.
+// Composers expand this metadata before deduplicating declarations. New includes
+// it automatically. Distinct contexts remain separate so callers can detect drift.
+func KnownHistory(definitions ...Definition) []Definition {
+	var known []Definition
+	seen := make(map[*Registry]bool)
+	for _, definition := range definitions {
+		history := definition.history
+		if history == nil || seen[history] {
+			continue
+		}
+		seen[history] = true
+		for _, item := range history.ordered {
+			if item.entry.Availability == FeatureDisabled {
+				d, _ := history.Definition(item.entry.Key)
+				known = append(known, d)
+			}
+		}
+	}
+	return known
+}
+
+func withHistory(definitions []Definition) ([]Definition, error) {
+	result := slices.Clone(definitions)
+	explicit := make(map[Key]bool, len(definitions))
+	for _, definition := range definitions {
+		explicit[definition.Key] = true
+	}
+	known := make(map[Key]Definition)
+	for _, d := range KnownHistory(definitions...) {
+		if explicit[d.Key] {
+			continue
+		}
+		if previous, exists := known[d.Key]; exists {
+			if !previous.Equal(d) {
+				return nil, safeerror.NewFault(fault.Conflict, "conflicting migration history context: "+keyLabel(d.Key))
+			}
+			continue
+		}
+		known[d.Key] = d
+		result = append(result, d)
+	}
+	return result, nil
+}

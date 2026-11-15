@@ -30,7 +30,7 @@ type DatabaseCommandResources struct {
 // be reachable. The pool connects only for a command that needs the database;
 // migrate show, seed list and prune list read their registries without I/O.
 // It uses the application's encryption key ring, if any, for encrypted model
-// fields. Every App.Migrations() group on that database gets a runner that
+// fields. Every App.MigrationHistory() group on that database gets a runner that
 // keeps history in <schema>.schema_migrations and executes with that schema as
 // its search path; --schema selects one. Status stays read-only and creates no
 // history table. Up runs the schemas in order and stops at the first failure.
@@ -46,21 +46,13 @@ func (a *App) RunDatabaseCommand(ctx context.Context, invocation dbcommand.Comma
 	if !ok {
 		return safeerror.NewFault(fault.Missing, "selected database connection is not configured")
 	}
-	groups, err := a.databases.MigrationGroups(a.migrations...)
-	if err != nil {
-		return err
-	}
 	var selected []infrastructure.MigrationGroup
 	var registries []*migrate.Registry
-	for _, group := range groups {
+	for _, group := range a.migrations {
 		if !slices.Contains(group.Connections, name) {
 			continue
 		}
-		registry, err := migrate.New(group.Definitions...)
-		if err != nil {
-			return err
-		}
-		selected, registries = append(selected, group), append(registries, registry)
+		selected, registries = append(selected, group.MigrationGroup), append(registries, group.registry)
 	}
 	if err := ctx.Err(); err != nil {
 		return err

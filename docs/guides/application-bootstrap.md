@@ -73,8 +73,9 @@ No Go file is executed from a runtime config path, and no model path is scanned.
 prefix and generated typed overrides. Configuration is copied when the builder
 is created. Build validates without opening a listener, file or database pool.
 Run/Start uses the existing reverse-order application lifecycle; migrations remain
-explicit. `app.Migrations()` exposes configured cache and enabled feature contributions,
-followed by the application's own `Builder.Migrations` targets, for tooling.
+explicit. `app.Migrations()` exposes runnable framework and application definitions,
+merged by physical database and schema. Its snapshots retain disabled history for
+`migrate.New`; `app.MigrationHistory()` also lists disabled-only targets.
 `app.RunDatabaseCommand` runs one parsed `migrate`, `seed` or `prune` command against
 the selected database without starting the application; see
 [application migration targets](migrations-and-seeding.md#application-migration-targets).

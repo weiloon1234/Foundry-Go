@@ -69,3 +69,29 @@ func TestDisabledFeaturePendingAndSnapshots(t *testing.T) {
 		t.Fatal("unknown availability accepted", err)
 	}
 }
+
+func TestRunnableSnapshotsCarryImmutableDisabledHistory(t *testing.T) {
+	source := definitions()
+	source[1].Availability = migrate.FeatureDisabled
+	original := registry(t, source...)
+	runnable := original.RunnableDefinitions()
+	if len(runnable) != 1 || runnable[0].Availability != migrate.Available || runnable[0].Key != appKey {
+		t.Fatal("disabled SQL exposed as runnable", runnable)
+	}
+	rebuilt := registry(t, runnable[0].Clone())
+	applied := history(original.Entries()[:1])
+	report, err := rebuilt.Inspect(applied)
+	if err != nil || report.Check() != nil || report.Statuses[0].State != migrate.Complete {
+		t.Fatal("runnable snapshot lost disabled history", report, err)
+	}
+	source[1].SQL[0] = "mutated input"
+	snapshot, _ := original.Definition(baseKey)
+	snapshot.SQL[0] = "mutated inspection"
+	if got, _ := registry(t, runnable...).Definition(baseKey); got.SQL[0] != "CREATE SCHEMA foundry_ops" {
+		t.Fatal("history context was mutable")
+	}
+	runnable[0].SQL[0] = "changed runnable"
+	if got, _ := original.Definition(appKey); got.SQL[0] == runnable[0].SQL[0] {
+		t.Fatal("runnable SQL snapshot shared storage")
+	}
+}

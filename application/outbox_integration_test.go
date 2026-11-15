@@ -6,7 +6,6 @@ import (
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/jobs"
@@ -60,9 +59,6 @@ func TestConfiguredOutboxKeepsTransactionSchemaAndNamedQueue(t *testing.T) {
 		}
 		for _, target := range app.Migrations() {
 			for _, definition := range target.Definitions {
-				if definition.Availability == migrate.FeatureDisabled {
-					continue
-				}
 				for _, sql := range definition.SQL {
 					if _, err := tx.Exec(t.Context(), sql); err != nil {
 						return err

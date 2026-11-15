@@ -93,11 +93,10 @@ func collectedFeatureRegistry(t *testing.T, s Settings, extra ...migrate.Definit
 	if err != nil {
 		t.Fatal(err)
 	}
-	targets, err := featureMigrations(plan, s, nil)
+	groups, err := featureMigrations(plan, s, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	groups, err := s.Services.Database.MigrationGroups(targets...)
 	if err != nil || len(groups) != 1 {
 		t.Fatalf("feature groups: %+v %v", groups, err)
 	}

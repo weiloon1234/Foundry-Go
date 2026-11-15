@@ -53,7 +53,7 @@ func TestUploadSettingsPreserveFixtureMigrations(t *testing.T) {
 		found := false
 		for _, target := range baseline {
 			for _, definition := range target.Definitions {
-				found = found || reflect.DeepEqual(definition, expected)
+				found = found || definition.Equal(expected)
 			}
 		}
 		if !found {

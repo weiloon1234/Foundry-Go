@@ -142,3 +142,20 @@ func TestCacheMigrationAvailabilityIncludesEveryStoreSharingTheTarget(t *testing
 		}
 	}
 }
+
+func TestMigrationGroupsRetainHistoryWhenRunnableDefinitionIsDeduplicated(t *testing.T) {
+	active := migrationDefinition("app", "001", "SELECT 1")
+	disabled := migrationDefinition("foundry.history", "001", "SELECT 2")
+	disabled.Availability = migrate.FeatureDisabled
+	registry, err := migrate.New(active, disabled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups, err := migrationDatabases().MigrationGroups(
+		infrastructure.MigrationTarget{Definitions: []migrate.Definition{active}},
+		infrastructure.MigrationTarget{Definitions: registry.RunnableDefinitions()},
+	)
+	if err != nil || len(groups) != 1 || len(groups[0].Definitions) != 2 {
+		t.Fatal("deduplication discarded disabled history", groups, err)
+	}
+}
