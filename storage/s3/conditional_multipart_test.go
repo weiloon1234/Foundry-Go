@@ -17,52 +17,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// This test-only adapter reaches the real R2 publication protocol while the
-// shipping profile remains gated. It is not a consumer opt-out or certification.
-// Every other R2 capability and its actual SDK client remain unchanged.
-type conditionalCandidate struct{ *Backend }
-
-func (b conditionalCandidate) Capabilities() storage.Capabilities {
-	c := b.Backend.Capabilities()
-	c.ConditionalWriteMaxBytes = 0
-	return c
-}
-func (b conditionalCandidate) Put(ctx context.Context, key storage.ObjectKey, source io.Reader, options storage.PutOptions) (storage.ObjectInfo, error) {
-	if err := b.ready(ctx, storage.PutOperation); err != nil {
-		return storage.ObjectInfo{}, err
-	}
-	full, err := b.object(key)
-	if err != nil {
-		return storage.ObjectInfo{}, err
-	}
-	if source == nil {
-		return storage.ObjectInfo{}, storage.Invalid
-	}
-	if err := options.Validate(b.config.MaxObjectBytes); err != nil {
-		return storage.ObjectInfo{}, err
-	}
-	if err := b.Capabilities().ValidatePut(options); err != nil {
-		return storage.ObjectInfo{}, err
-	}
-	if err := b.validateMetadata(options.Metadata); err != nil {
-		return storage.ObjectInfo{}, err
-	}
-	return b.put(ctx, key, full, source, options)
-}
-func candidateDisk(t *testing.T, b *Backend) *storage.Disk {
-	t.Helper()
-	disk, err := storage.NewDisk("conditional-candidate", conditionalCandidate{b}, storage.DefaultConfig())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := disk.Close(context.Background()); err != nil {
-			t.Error(err)
-		}
-	})
-	return disk
-}
-
 type conditionalGate struct {
 	client                                        aws.HTTPClient
 	mu                                            sync.Mutex
@@ -147,7 +101,7 @@ func conditionalRead(t *testing.T, disk *storage.Disk, key storage.ObjectKey, si
 	t.Helper()
 	reader, info, err := disk.Open(t.Context(), key, storage.ReadOptions{})
 	if err != nil {
-		t.Fatal("candidate read", err)
+		t.Fatal("conditional read", err)
 	}
 	hash := sha256.New()
 	n, readErr := io.Copy(hash, reader)
@@ -457,9 +411,9 @@ func runConditionalMatrix(t *testing.T, disk *storage.Disk, b *Backend, gate *co
 	}
 }
 
-func TestRealR2ConditionalMultipartCandidate(t *testing.T) {
+func TestRealR2ConditionalMultipart(t *testing.T) {
 	// realConfig requires explicit test bucket/prefix and owner-supplied credentials.
-	// This test never changes the production capability restriction.
+	// Exercise the shipping backend for single-request and multipart conditions.
 	cfg := realConfig(t, R2)
 	cfg.MaxUploads = 4
 	cfg.PartAttempts = 1
@@ -467,8 +421,7 @@ func TestRealR2ConditionalMultipartCandidate(t *testing.T) {
 	cfg.HTTPClient = gate
 	for _, size := range []int64{cfg.PartBytes, cfg.PartBytes + 1} {
 		t.Run(strconv.FormatInt(size, 10), func(t *testing.T) {
-			_, backend := providerFactory(t, cfg)
-			disk := candidateDisk(t, backend)
+			disk, backend := providerFactory(t, cfg)
 			runConditionalMatrix(t, disk, backend, gate, size)
 		})
 	}

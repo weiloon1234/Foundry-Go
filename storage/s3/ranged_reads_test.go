@@ -54,17 +54,7 @@ func TestRealR2RangedReads(t *testing.T) {
 }
 
 func TestR2RangedReadsWire(t *testing.T) {
-	_, backend, _, peer := conditionalWire(t)
-	// Use the shipping backend, including its unchanged conditional-write cap.
-	disk, err := storage.NewDisk("ranged-wire", backend, storage.DefaultConfig())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := disk.Close(context.Background()); err != nil {
-			t.Error(err)
-		}
-	})
+	disk, backend, _, peer := conditionalWire(t)
 	runRangedReads(t, disk, 2*backend.config.PartBytes+123, backend.config.PartBytes)
 	peer.mu.Lock()
 	defer peer.mu.Unlock()

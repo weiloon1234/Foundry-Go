@@ -3,8 +3,11 @@
 ## Unreleased
 
 - Added: opt-in live R2 multipart ranged-read certification and a matching TLS
-  stand-in test, including the seekable reader used by attachments. The R2
-  conditional-write size cap remains unchanged pending live certification.
+  stand-in test, including the seekable reader used by attachments.
+- Changed: R2 conditional create and replace now support multipart objects above
+  `PartBytes` (up to `MaxObjectBytes`) after live certification on 2026-11-15.
+  The conditional matrix now uses the production backend directly. See the
+  [live evidence](docs/evidence/b26-resource-provider-acceptance.md#recorded-live-result-2026-11-15).
 
 ## v0.34.0 — 2026-11-15
 

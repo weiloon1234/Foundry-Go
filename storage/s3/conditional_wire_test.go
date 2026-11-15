@@ -318,9 +318,6 @@ func conditionalWireProfile(t *testing.T, provider Provider) (*storage.Disk, *Ba
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
-	if provider == R2 {
-		return candidateDisk(t, b), b, gate, peer
-	}
 	disk, err := storage.NewDisk("conditional-wire", b, storage.DefaultConfig())
 	if err != nil {
 		t.Fatal(err)
@@ -328,7 +325,7 @@ func conditionalWireProfile(t *testing.T, provider Provider) (*storage.Disk, *Ba
 	t.Cleanup(func() { _ = disk.Close(context.Background()) })
 	return disk, b, gate, peer
 }
-func TestR2ConditionalPublicationCandidateWireMatrix(t *testing.T) {
+func TestR2ConditionalPublicationWireMatrix(t *testing.T) {
 	for _, size := range []int64{8 << 20, (8 << 20) + 1} {
 		t.Run(strconv.FormatInt(size, 10), func(t *testing.T) {
 			disk, b, gate, peer := conditionalWire(t)
@@ -341,14 +338,18 @@ func TestR2ConditionalPublicationCandidateWireMatrix(t *testing.T) {
 		})
 	}
 }
-func TestR2ShippingProfileStillRejectsUncertifiedCreateAndReplace(t *testing.T) {
-	_, b, _, _ := conditionalWire(t)
+func TestCompatibleSingleRequestConditionsRejectMultipart(t *testing.T) {
+	_, b, _, _ := conditionalWireProfile(t, Compatible)
+	b.config.Compatible.SingleRequestConditions = true
+	if b.Capabilities().ConditionalWriteMaxBytes != b.config.PartBytes {
+		t.Fatal("compatible single-request bound missing")
+	}
 	key, _ := storage.ParseKey("restricted")
 	for _, condition := range []storage.WriteCondition{storage.IfAbsent(), conditionFor(t, `"old"`)} {
 		source := &conditionalCountReader{}
 		_, err := b.Put(t.Context(), key, source, conditionalOptions(b.config.PartBytes+1, 'a', condition))
 		if !errors.Is(err, storage.Unsupported) || source.read != 0 {
-			t.Fatal("uncertified multipart condition reached source", err)
+			t.Fatal("single-request-only condition reached source", err)
 		}
 	}
 }

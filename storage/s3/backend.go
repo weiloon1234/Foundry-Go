@@ -173,12 +173,9 @@ func (b *Backend) Capabilities() storage.Capabilities {
 		capabilities.ConditionalDelete = true
 		capabilities.Versions = true
 	case R2:
-		// Keep both create and replace on PutObject until live certification of
-		// conditional multipart completion passes for both operations. Wire tests
-		// alone do not establish provider support.
+		// Live multipart certification: docs/evidence/b26-resource-provider-acceptance.md.
 		capabilities.RequiresNFCKeys = true
 		capabilities.ConditionalCreate, capabilities.ConditionalReplace = true, true
-		capabilities.ConditionalWriteMaxBytes = b.config.PartBytes
 	case Compatible:
 		declared := b.config.Compatible
 		capabilities.RequiresNFCKeys = declared.RequiresNFCKeys
