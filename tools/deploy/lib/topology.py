@@ -190,6 +190,14 @@ class EndpointBinding:
 
 
 @dataclass(frozen=True)
+class CopiesBinding:
+    role: str
+    listener: str
+    scheme: str
+    secret: str | None = None
+
+
+@dataclass(frozen=True)
 class PublicListenerReference:
     role: str
     listener: str
@@ -205,7 +213,7 @@ class BundleDirectoryBinding:
     mount: str
 
 
-Binding = Union[EndpointBinding, ExecutableBinding, BundleDirectoryBinding, PublicListenerReference]
+Binding = Union[EndpointBinding, ExecutableBinding, BundleDirectoryBinding, PublicListenerReference, CopiesBinding]
 
 
 def parse_binding(value) -> Binding:
@@ -217,6 +225,11 @@ def parse_binding(value) -> Binding:
     if "public_listener" in value:
         listener = contract_object(value["public_listener"], ("role", "listener"))
         return PublicListenerReference(contract_name(listener["role"]), contract_name(listener["listener"]))
+    if "copies" in value:
+        copies = contract_object(value["copies"], ("role", "listener", "scheme"), ("secret",))
+        require(copies["scheme"] in ("tcp", "http", "unix"), "invalid_topology", "Unsupported copy endpoint scheme.")
+        return CopiesBinding(contract_name(copies["role"]), contract_name(copies["listener"]), copies["scheme"],
+                             contract_name(copies["secret"]) if "secret" in copies else None)
     contract_object(value, ("endpoint",))
     endpoint = contract_object(value["endpoint"], ("role", "listener", "scheme"))
     require(endpoint["scheme"] in ("tcp", "http", "unix"), "unsupported_capability", "Unsupported private endpoint scheme.")
@@ -611,7 +624,7 @@ def _role(value):
     require(all(a.kind is not ArgumentKind.SECRET_FILE for _, a in env),
             "invalid_topology", "Secret paths require the secret_files owner.")
     return ExecutableRole(shared, parse_executable(value["executable"]), args, configs,
-                          tuple((_secret_file_name(k), contract_name(v)) for k, v in sorted(secrets.items())), listeners,
+                          tuple((_secret_file_name(k), secret_reference(v)) for k, v in sorted(secrets.items())), listeners,
                           Probe.parse(value["readiness"]), RestartPolicy.parse(value["restart"]),
                           ResourceLimits.parse(value["limits"]), StatePolicy.parse(value["state"]),
                           env, rehearsal_safe)
@@ -640,13 +653,33 @@ class SharedDirectory:
         return "read-write" if role in self.writers else "read-only" if role in self.readers else None
 
 
+def secret_reference(value):
+    if isinstance(value, str):
+        return contract_name(value)
+    contract_object(value, ("secret",), ("scope",))
+    require("scope" not in value or value["scope"] == "copy", "invalid_topology", "Unknown secret scope.")
+    return contract_name(value["secret"])
+
+
+@dataclass(frozen=True)
+class SecretDeclaration:
+    prompt: str
+    scope: str = "role"
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, (), ("prompt", "scope"))
+        require("scope" not in value or value["scope"] == "copy", "invalid_topology", "Unknown secret scope.")
+        return cls(contract_text(value.get("prompt", "Service secret"), limit=256), value.get("scope", "role"))
+
+
 @dataclass(frozen=True)
 class Topology:
     schema: int
     roles: tuple[Role, ...]
     artifacts: tuple[tuple[str, Artifact], ...]
     application_executables: tuple[tuple[str, ApplicationBinary], ...]
-    secrets: tuple[tuple[str, str], ...]
+    secrets: tuple[tuple[str, SecretDeclaration], ...]
     sha256: str
     canonical_json: str
     shared_directories: tuple[tuple[str, SharedDirectory], ...] = ()
@@ -659,12 +692,15 @@ class Topology:
 SERVICE_SECRET_PREFIX = "FOUNDRY_SERVICE_SECRET__"
 
 
+def service_secret_component(name):
+    return contract_name(name).upper().replace("-", "_")
+
+
 def service_secret_keys(names):
     """Map declaration names to the reserved private configuration namespace."""
     result, aliases = {}, set()
     for name in sorted(names):
-        contract_name(name)
-        key = SERVICE_SECRET_PREFIX + name.upper().replace("-", "_")
+        key = SERVICE_SECRET_PREFIX + service_secret_component(name)
         require(key not in aliases and key + "_FILE" not in aliases,
                 "invalid_topology", "Service secret names collide in the configuration namespace.")
         result[key] = name
@@ -695,12 +731,16 @@ def parse_topology(document, *, registered=False) -> Topology:
                 "invalid_topology", "Shared directory names must not collide with role binding names.")
     artifacts = contract_map(value.get("artifacts", {}), Artifact.parse, maximum=MAX_ARTIFACTS)
     binaries = contract_map(value.get("application_executables", {}), ApplicationBinary.parse, maximum=64)
-    def secret(v):
-        contract_object(v, (), ("prompt",))
-        return contract_text(v.get("prompt", "Service secret"), limit=256)
-    secrets = contract_map(value.get("secrets", {}), secret, maximum=128)
+    secrets = contract_map(value.get("secrets", {}), SecretDeclaration.parse, maximum=128)
+    for raw_role in value["roles"]:
+        for reference in raw_role.get("secret_files", {}).values():
+            if isinstance(reference, dict) and "scope" in reference:
+                require(secret_reference(reference) in dict(secrets)
+                        and dict(secrets)[reference["secret"]].scope == reference["scope"],
+                        "invalid_topology", "Secret reference scope must match its declaration.")
     service_secret_keys(dict(secrets))
-    graph = {r.common.name: r.common.requires for r in roles}
+    graph = {r.common.name: (*r.common.requires, *(b.role for _, b in r.common.bindings if isinstance(b, CopiesBinding)))
+             for r in roles}
     visited, visiting = set(), set()
     def visit(name):
         require(name in names and name not in visiting, "invalid_topology", "Unknown role dependency or dependency cycle.")
@@ -741,6 +781,12 @@ def parse_topology(document, *, registered=False) -> Topology:
                 target = role_map.get(binding.role)
                 listeners = dict(target.listeners) if isinstance(target, ExecutableRole) else {"http": None} if binding.role == "http" else {}
                 require(binding.listener in listeners, "invalid_topology", "Unknown endpoint listener.")
+                if isinstance(binding, CopiesBinding):
+                    require(isinstance(target, ExecutableRole), "invalid_topology", "Copies require an executable provider.")
+                    require(binding.secret is None or binding.secret in dict(target.secret_files).values()
+                            and dict(secrets).get(binding.secret) is not None
+                            and dict(secrets)[binding.secret].scope == "copy",
+                            "invalid_topology", "Copies secrets must be copy-scoped and declared by their provider.")
                 if isinstance(binding, PublicListenerReference):
                     require(isinstance(target, ExecutableRole) and listeners[binding.listener].bind == "public",
                             "invalid_topology", "Public listener bindings require a declared public listener.")
@@ -782,7 +828,7 @@ def parse_topology(document, *, registered=False) -> Topology:
             require(argument.kind not in targets or argument.value in targets[argument.kind],
                     "invalid_topology", "Unknown role argument/config reference.")
             require(argument.kind is not ArgumentKind.BINDING or
-                    not isinstance(dict(role.common.bindings)[argument.value], PublicListenerReference),
+                    not isinstance(dict(role.common.bindings)[argument.value], (PublicListenerReference, CopiesBinding)),
                     "invalid_topology", "Public listener records are available through the runtime descriptor, not scalar binding arguments.")
     projection = {k: v for k, v in value.items() if k != "sha256"}
     checksum = canonical_digest(projection)
@@ -801,7 +847,8 @@ class PublicListenerBinding:
     @classmethod
     def parse(cls, value):
         contract_object(value, ("ports", "source_cidrs", "dns"))
-        ports = contract_list(value["ports"], lambda p: contract_int(p, 1, 65535), minimum=1, maximum=1)
+        ports = contract_list(value["ports"], lambda p: contract_int(p, 1, 65535), minimum=1, maximum=MAX_ROLE_COPIES)
+        require(len(set(ports)) == len(ports), "invalid_profile", "Public ports must be unique.")
         def cidr(item):
             try:
                 network = ipaddress.ip_network(item, strict=True) if isinstance(item, str) else None
@@ -889,6 +936,19 @@ def validate_feature_profile(value, project=None):
     return placement, listeners
 
 
+def public_listener_policies(topology, placement, listeners):
+    """Validate public port ownership independently of the temporary count gate."""
+    counts = dict(placement)
+    expected = {role.common.name + "." + name: listener for role in topology.roles
+                if isinstance(role, ExecutableRole) and counts[role.common.name]
+                for name, listener in role.listeners if listener.bind == "public"}
+    require(len(dict(listeners)) == len(listeners) and set(dict(listeners)) == set(expected),
+            "invalid_profile", "Bind every placed public listener exactly once.")
+    require(all(len(binding.ports) == counts[name.split(".")[0]] for name, binding in listeners),
+            "invalid_profile", "Bind one public port per placed copy, ordered by ordinal.")
+    return expected
+
+
 def parse_profile(document, topology: Topology, project=None) -> DeploymentProfile:
     value = contract_document(document)
     require(isinstance(value, dict), "invalid_profile", "Invalid deployment profile.")
@@ -898,12 +958,8 @@ def parse_profile(document, topology: Topology, project=None) -> DeploymentProfi
         placement, listeners = tuple((r.common.name, 1) for r in topology.roles), ()
     else:
         placement, listeners = validate_feature_profile(value, project)
-        counts = dict(placement)
         expand_placement(topology, value["instance_id"], placement)
-        raw = value["listeners"]
-        expected = {r.common.name + "." + n for r in topology.roles if isinstance(r, ExecutableRole)
-                    and counts[r.common.name] for n, l in r.listeners if l.bind == "public"}
-        require(set(raw) == expected, "invalid_profile", "Bind every placed public listener exactly once.")
+        public_listener_policies(topology, placement, listeners)
         platform = "linux-" + value["architecture"]
         require(all(platform in dict(a.platforms) for _, a in topology.artifacts)
                 and all(a.go_package or platform in dict(a.platforms) for _, a in topology.application_executables),

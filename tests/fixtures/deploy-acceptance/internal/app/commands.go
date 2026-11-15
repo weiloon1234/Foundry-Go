@@ -57,6 +57,9 @@ func Run(ctx context.Context, arguments []string, streams cli.Streams) error {
 	if len(args) == 0 {
 		return fmt.Errorf("fixture command is required")
 	}
+	if args[0] == "feature:copies" {
+		return featureCopies(ctx, args[1:])
+	}
 	if args[0] == "feature:unix" {
 		return featureUnix(ctx, args[1:])
 	}

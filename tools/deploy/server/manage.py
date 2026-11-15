@@ -207,8 +207,10 @@ def execute(host, action, request):
     if action == "config-keys":
         values = parse_env(check_path(host.paths.instance_config(entry["name"]) / "app.env", "file").read_text())
         if feature_lifecycle.is_feature(entry):
-            from topology import parse_topology, service_secret_keys
-            values.update({key: "[redacted]" for key in service_secret_keys(dict(parse_topology(entry["topology"], registered=True).secrets))})
+            from topology import parse_topology, parse_profile
+            from runtime_config import service_secret_keys
+            topology = parse_topology(entry["topology"], registered=True)
+            values.update({key: "[redacted]" for key in service_secret_keys(topology, parse_profile(entry["profile"], topology))})
         return {"keys": sorted(values), "locked_keys": sorted(release.pipeline_keys(entry)), "configuration_revision": entry["configuration_revision"]}
     if action == "logs":
         # Explicit operator action. Logs are never included in the host report.

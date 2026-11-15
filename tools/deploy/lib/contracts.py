@@ -1206,6 +1206,50 @@ class ResolvedBundleBinding:
 
 
 @dataclass(frozen=True)
+class ResolvedCopy:
+    ordinal: int
+    endpoint: AllocatedEndpoint | UnixEndpoint
+    scheme: str
+    secret_file: str = ""
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("ordinal", "endpoint", "scheme"), ("secret_file",))
+        ordinal = contract_int(value["ordinal"], 1, MAX_ROLE_COPIES)
+        endpoint = ResolvedEndpointBinding.parse({"name": "copy", "endpoint": value["endpoint"], "scheme": value["scheme"]})
+        require(endpoint.endpoint.ordinal == ordinal, "invalid_contract", "Copy endpoint ordinal differs.")
+        secret = contract_path(value["secret_file"], absolute=True) if "secret_file" in value else ""
+        return cls(ordinal, endpoint.endpoint, endpoint.scheme, secret)
+
+
+@dataclass(frozen=True)
+class ResolvedCopiesBinding:
+    name: str
+    copies: tuple[ResolvedCopy, ...]
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("name", "copies"))
+        copies = contract_list(value["copies"], ResolvedCopy.parse, maximum=MAX_ROLE_COPIES)
+        require([c.ordinal for c in copies] == list(range(1, len(copies) + 1)),
+                "invalid_contract", "Copies must be dense and ordered by ordinal.")
+        require(len({(c.endpoint.role, c.endpoint.listener, c.scheme, bool(c.secret_file)) for c in copies}) <= 1,
+                "invalid_contract", "Copy binding providers and secret grants must agree.")
+        return cls(contract_name(value["name"]), copies)
+
+
+@dataclass(frozen=True)
+class ResolvedPublicPort:
+    ordinal: int
+    port: int
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("ordinal", "port"))
+        return cls(contract_int(value["ordinal"], 1, MAX_ROLE_COPIES), contract_int(value["port"], 1, 65535))
+
+
+@dataclass(frozen=True)
 class ResolvedPublicListenerBinding:
     name: str
     role: str
@@ -1215,16 +1259,21 @@ class ResolvedPublicListenerBinding:
     tls: str
     transport: str
     public_addresses: tuple[str, ...]
+    ports: tuple[ResolvedPublicPort, ...] = ()
 
     @classmethod
     def parse(cls, value):
-        contract_object(value, ("name", "role", "listener", "hostname", "port", "tls", "transport", "public_addresses"))
+        contract_object(value, ("name", "role", "listener", "hostname", "port", "tls", "transport", "public_addresses"), ("ports",))
+        ports = contract_list(value["ports"], ResolvedPublicPort.parse, minimum=2, maximum=MAX_ROLE_COPIES) if "ports" in value else ()
+        require(not ports or ([p.ordinal for p in ports] == list(range(1, len(ports) + 1))
+                              and ports[0].port == value["port"] and len({p.port for p in ports}) == len(ports)),
+                "invalid_contract", "Public ports must be unique and ordered by ordinal.")
         require(value["tls"] in ("edge", "none") and value["transport"] == "tcp",
                 "invalid_contract", "Invalid public listener protocol.")
         addresses = contract_list(value["public_addresses"], public_address, minimum=1, maximum=16)
         require(len(set(addresses)) == len(addresses), "invalid_contract", "Duplicate public listener addresses.")
         return cls(contract_name(value["name"]), contract_name(value["role"]), contract_name(value["listener"]),
-                   dns_hostname(value["hostname"]), contract_int(value["port"], 1, 65535), value["tls"], value["transport"], addresses)
+                   dns_hostname(value["hostname"]), contract_int(value["port"], 1, 65535), value["tls"], value["transport"], addresses, ports)
 
 
 @dataclass(frozen=True)
@@ -1253,18 +1302,20 @@ class RoleBindings:
     bundles: tuple[ResolvedBundleBinding, ...]
     public_listeners: tuple[ResolvedPublicListenerBinding, ...] = ()
     shared_directories: tuple[ResolvedSharedDirectory, ...] = ()
+    copies: tuple[ResolvedCopiesBinding, ...] = ()
 
     @classmethod
     def parse(cls, value):
-        v = _record(value, ("role", "executables", "endpoints", "bundles"), ("public_listeners", "shared_directories"))
+        v = _record(value, ("role", "executables", "endpoints", "bundles"), ("public_listeners", "shared_directories", "copies"))
         executables = contract_list(v["executables"], ResolvedExecutableBinding.parse, maximum=128)
         endpoints = contract_list(v["endpoints"], ResolvedEndpointBinding.parse, maximum=128)
         bundles = contract_list(v["bundles"], ResolvedBundleBinding.parse, maximum=64)
         public_listeners = contract_list(v.get("public_listeners", []), ResolvedPublicListenerBinding.parse, maximum=128)
         shared = contract_list(v.get("shared_directories", []), ResolvedSharedDirectory.parse, maximum=32)
-        names = [b.name for b in (*executables, *endpoints, *bundles, *public_listeners, *shared)]
+        copies = contract_list(v.get("copies", []), ResolvedCopiesBinding.parse, maximum=128)
+        names = [b.name for b in (*executables, *endpoints, *bundles, *public_listeners, *shared, *copies)]
         require(len(set(names)) == len(names), "invalid_contract", "Binding names must be unique across kinds.")
-        return cls(contract_name(v["role"]), executables, endpoints, bundles, public_listeners, shared)
+        return cls(contract_name(v["role"]), executables, endpoints, bundles, public_listeners, shared, copies)
 
 
 @dataclass(frozen=True)
@@ -1512,7 +1563,7 @@ def record_document(record):
                  BundleReferences, DeploymentSelection, RecoveryPublicBinding, RoleBindings, UnitSpec,
                  HostTransition, Deployment, UnitGenerationReference, CleanupObligation)
     nested = (UnitIdentity, AllocatedEndpoint, UnixEndpoint, EffectiveEnvironment, ProcessIdentity, RecoveryListenerBinding, DNSObservation,
-              ResolvedExecutableBinding, ResolvedEndpointBinding, ResolvedBundleBinding, ResolvedPublicListenerBinding, ResolvedSharedDirectory)
+              ResolvedExecutableBinding, ResolvedEndpointBinding, ResolvedBundleBinding, ResolvedPublicListenerBinding, ResolvedSharedDirectory, ResolvedCopy, ResolvedCopiesBinding, ResolvedPublicPort)
     def encode(value):
         if type(value) in versioned + nested:
             result = {f.name: encode(getattr(value, f.name)) for f in dataclass_fields(value)}
@@ -1522,6 +1573,12 @@ def record_document(record):
                 result.pop("unix_endpoints")
             if isinstance(value, RoleBindings) and not value.public_listeners:
                 result.pop("public_listeners")  # Preserve descriptors and digests for existing binaries.
+            if isinstance(value, RoleBindings) and not value.copies:
+                result.pop("copies")
+            if isinstance(value, ResolvedCopy) and not value.secret_file:
+                result.pop("secret_file")
+            if isinstance(value, ResolvedPublicListenerBinding) and not value.ports:
+                result.pop("ports")
             if isinstance(value, RoleBindings) and not value.shared_directories:
                 result.pop("shared_directories")
             if type(value) in versioned:

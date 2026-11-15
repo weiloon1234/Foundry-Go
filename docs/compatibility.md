@@ -13,6 +13,23 @@ Generation leaves handwritten comments unchanged. Retired source-edit journals
 fail with a typed `generate.RetiredJournalError` and retain staging; reconcile them
 with the generator that created them before upgrading.
 
+## Numbered copy consumers — release 2a
+
+Role-binding schema 1 adds `copies` only when a consumer declares a list binding.
+Numbered public listener records add an ordered `ports` collection; singleton
+records retain their existing wire shape. Upgrade affected consumer binaries
+before adding either declaration. Older strict readers reject these new fields.
+`deployment.Bindings.Copies` returns owned values, and `PublicListener.Ports`
+returns owned ordinal/port entries while `Port` retains the first copy's port.
+
+Copy-scoped secret snapshots use a separate private namespace. Existing shared
+keys and files remain valid. Shrinking retains values for rollback and regrowth.
+Like role secrets, copy-scoped secrets are readable by every role of the instance
+because roles share one account. Console descriptors omit copy secret paths; this
+limits descriptor contents, not filesystem access. See
+[numbered copy consumers](guides/host-capabilities.md#numbered-copy-consumers).
+The foundation still gates counts above one until the lifecycle migration lands.
+
 ## Loopback confinement — v0.35.0
 
 Role `network.confinement: "loopback"` and private TCP listener `wildcard: true`

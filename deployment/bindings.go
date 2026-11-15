@@ -22,6 +22,7 @@ import (
 // BindingsEnvironment selects the root-owned descriptor for this role invocation.
 const BindingsEnvironment = "FOUNDRY_DEPLOY_RUNTIME_FILE"
 const maxBindingsBytes = 4 << 20
+const maxRoleCopies = 128
 
 // BindingName identifies a binding declared by the consuming role.
 type BindingName string
@@ -66,13 +67,13 @@ const (
 	Unix EndpointScheme = "unix"
 )
 
-// Unit identifies a single placed service. Ordinals above one require a later capability.
+// Unit identifies a single placed service copy.
 type Unit struct {
 	// Instance identifies the deployed environment instance.
 	Instance InstanceID
 	// Role identifies the placed service role.
 	Role RoleName
-	// Ordinal is the service copy number; the preview supports only one.
+	// Ordinal is the service copy number, from 1 through 128.
 	Ordinal uint16
 }
 
@@ -120,6 +121,25 @@ func (e Endpoint) URL() url.URL {
 	return url.URL{Scheme: string(e.Scheme), Host: net.JoinHostPort(e.Address.String(), strconv.Itoa(int(e.Port)))}
 }
 
+// Copy is one placed provider and its optional secret file path.
+// It contains file paths, never secret values.
+type Copy struct {
+	// Ordinal is the provider's stable copy number, starting at one.
+	Ordinal int
+	// Endpoint addresses this copy's declared private listener.
+	Endpoint Endpoint
+	// SecretFile is empty when no secret file path is included in this descriptor.
+	SecretFile string
+}
+
+// PublicPort maps a provider copy to its explicit public edge port.
+type PublicPort struct {
+	// Ordinal is the provider's copy number, starting at one.
+	Ordinal int
+	// Port is the public port selected by the profile.
+	Port uint16
+}
+
 // PublicListener is the declared public face of a placed listener.
 // It is immutable for this invocation; it does not attest to current readiness.
 type PublicListener struct {
@@ -129,8 +149,10 @@ type PublicListener struct {
 	Listener ListenerName
 	// Hostname is the public DNS hostname selected by the profile.
 	Hostname string
-	// Port is the public port selected by the profile.
+	// Port is the first copy's public port, retained for singleton consumers.
 	Port uint16
+	// Ports contains every placed copy's public port, ordered by ordinal.
+	Ports []PublicPort
 	// TLS is the TLS mode declared by the topology.
 	TLS TLSMode
 	// Transport is the network transport declared by the topology.
@@ -178,6 +200,18 @@ type Bindings struct {
 	bundles           map[BindingName]BundleDirectory
 	publicListeners   map[BindingName]PublicListener
 	sharedDirectories map[BindingName]SharedDirectory
+	copies            map[BindingName][]Copy
+}
+
+// Copies returns the placed providers in ordinal order as an owned slice.
+// A declared binding may be empty. An unknown or ungranted name returns fault.Missing.
+// Mutating the returned slice or its values cannot change this startup snapshot.
+func (b Bindings) Copies(name BindingName) ([]Copy, error) {
+	value, ok := b.copies[name]
+	if !ok {
+		return nil, safeerror.NewFault(fault.Missing, "deployment copies binding is missing")
+	}
+	return slices.Clone(value), nil
 }
 
 // SharedDirectory returns a topology directory explicitly granted to this role.
@@ -224,6 +258,7 @@ func (b Bindings) PublicListener(name BindingName) (PublicListener, error) {
 		return PublicListener{}, safeerror.NewFault(fault.Missing, "deployment public listener binding is missing")
 	}
 	value.PublicAddresses = slices.Clone(value.PublicAddresses)
+	value.Ports = slices.Clone(value.Ports)
 	return value, nil
 }
 
@@ -268,18 +303,34 @@ type executableWire struct {
 	Path   string `json:"path"`
 	SHA256 string `json:"source_sha256"`
 }
+type endpointAddressWire struct {
+	Role      string  `json:"role"`
+	Ordinal   *int    `json:"ordinal,omitempty"`
+	Listener  string  `json:"listener"`
+	Address   *string `json:"address"`
+	Port      *int    `json:"port"`
+	Directory *string `json:"directory"`
+	Name      *string `json:"name"`
+	Path      *string `json:"path"`
+}
 type endpointWire struct {
-	Name     string `json:"name"`
-	Endpoint struct {
-		Role      string  `json:"role"`
-		Listener  string  `json:"listener"`
-		Address   *string `json:"address"`
-		Port      *int    `json:"port"`
-		Directory *string `json:"directory"`
-		Name      *string `json:"name"`
-		Path      *string `json:"path"`
-	} `json:"endpoint"`
-	Scheme string `json:"scheme"`
+	Name     string              `json:"name"`
+	Endpoint endpointAddressWire `json:"endpoint"`
+	Scheme   string              `json:"scheme"`
+}
+type copyWire struct {
+	Ordinal    int                 `json:"ordinal"`
+	Endpoint   endpointAddressWire `json:"endpoint"`
+	Scheme     string              `json:"scheme"`
+	SecretFile json.RawMessage     `json:"secret_file,omitempty"`
+}
+type copiesWire struct {
+	Name   string     `json:"name"`
+	Copies []copyWire `json:"copies"`
+}
+type publicPortWire struct {
+	Ordinal int `json:"ordinal"`
+	Port    int `json:"port"`
 }
 type bundleWire struct {
 	Name   string `json:"name"`
@@ -295,6 +346,7 @@ type publicListenerWire struct {
 	TLS             TLSMode           `json:"tls"`
 	Transport       ListenerTransport `json:"transport"`
 	PublicAddresses []string          `json:"public_addresses"`
+	Ports           json.RawMessage   `json:"ports,omitempty"`
 }
 type sharedDirectoryWire struct {
 	Name     string          `json:"name"`
@@ -319,6 +371,7 @@ type featureDescriptor struct {
 		Bundles           []bundleWire          `json:"bundles"`
 		PublicListeners   []publicListenerWire  `json:"public_listeners,omitempty"`
 		SharedDirectories []sharedDirectoryWire `json:"shared_directories,omitempty"`
+		Copies            []copiesWire          `json:"copies,omitempty"`
 	} `json:"bindings"`
 }
 
@@ -368,7 +421,7 @@ func readFeatureDescriptor(path string) (featureDescriptor, error) {
 	if err != nil {
 		return wire, safeerror.WrapFault(fault.Internal, "cannot read deployment binding descriptor", err)
 	}
-	canonical, err := jsonwire.Canonical(data, jsonwire.Limits{Bytes: maxBindingsBytes, Depth: 12, Nodes: 8192})
+	canonical, err := jsonwire.Canonical(data, jsonwire.Limits{Bytes: maxBindingsBytes, Depth: 12, Nodes: 1 << 19})
 	if err != nil {
 		return wire, invalidBindings()
 	}
@@ -387,16 +440,55 @@ func readFeatureDescriptor(path string) (featureDescriptor, error) {
 	return wire, nil
 }
 
+func copySocketName(name string, ordinal *int) bool {
+	if ordinal != nil && *ordinal > 1 {
+		suffix := "." + strconv.Itoa(*ordinal)
+		if !strings.HasSuffix(name, suffix) {
+			return false
+		}
+		name = strings.TrimSuffix(name, suffix)
+	}
+	return socketIdentifier.MatchString(name)
+}
+
+func resolveEndpoint(v endpointWire, instance string) (Endpoint, error) {
+	if !bindingIdentifier.MatchString(v.Endpoint.Role) || !bindingIdentifier.MatchString(v.Endpoint.Listener) ||
+		(v.Endpoint.Ordinal != nil && (*v.Endpoint.Ordinal < 1 || *v.Endpoint.Ordinal > maxRoleCopies)) {
+		return Endpoint{}, invalidBindings()
+	}
+	endpoint := Endpoint{Role: RoleName(v.Endpoint.Role), Listener: ListenerName(v.Endpoint.Listener), Scheme: EndpointScheme(v.Scheme)}
+	if endpoint.Scheme == Unix {
+		directory := "/run/foundry/services/" + instance + "/sockets"
+		if v.Endpoint.Address != nil || v.Endpoint.Port != nil || v.Endpoint.Directory == nil || v.Endpoint.Name == nil || v.Endpoint.Path == nil ||
+			*v.Endpoint.Directory != directory || !copySocketName(*v.Endpoint.Name, v.Endpoint.Ordinal) ||
+			*v.Endpoint.Path != directory+"/"+*v.Endpoint.Name || len(*v.Endpoint.Path) > 107 {
+			return Endpoint{}, invalidBindings()
+		}
+		endpoint.Path, endpoint.Directory, endpoint.Name = *v.Endpoint.Path, directory, *v.Endpoint.Name
+	} else {
+		if v.Endpoint.Address == nil || v.Endpoint.Port == nil || v.Endpoint.Directory != nil || v.Endpoint.Name != nil || v.Endpoint.Path != nil ||
+			*v.Endpoint.Port < 1024 || *v.Endpoint.Port > 65535 || (endpoint.Scheme != HTTP && endpoint.Scheme != TCP) {
+			return Endpoint{}, invalidBindings()
+		}
+		address, err := netip.ParseAddr(*v.Endpoint.Address)
+		if err != nil || (address.String() != "127.0.0.1" && address.String() != "::1") {
+			return Endpoint{}, invalidBindings()
+		}
+		endpoint.Address, endpoint.Port = address, uint16(*v.Endpoint.Port)
+	}
+	return endpoint, nil
+}
+
 func (w featureDescriptor) bindings() (Bindings, error) {
 	if !digestIdentifier.MatchString(w.Deployment) || !instanceIdentifier.MatchString(w.Unit.Instance) ||
-		!bindingIdentifier.MatchString(w.Unit.Role) || w.Unit.Ordinal != 1 || w.Bindings.Schema != 1 ||
+		!bindingIdentifier.MatchString(w.Unit.Role) || (w.Unit.Ordinal < 1 || w.Unit.Ordinal > maxRoleCopies) || w.Bindings.Schema != 1 ||
 		w.Bindings.Role != w.Unit.Role || len(w.Bindings.Executables) > 128 || len(w.Bindings.Endpoints) > 128 || len(w.Bindings.Bundles) > 64 ||
-		w.Bindings.Executables == nil || w.Bindings.Endpoints == nil || w.Bindings.Bundles == nil || len(w.Bindings.PublicListeners) > 128 || len(w.Bindings.SharedDirectories) > 32 {
+		w.Bindings.Executables == nil || w.Bindings.Endpoints == nil || w.Bindings.Bundles == nil || len(w.Bindings.PublicListeners) > 128 || len(w.Bindings.SharedDirectories) > 32 || len(w.Bindings.Copies) > 128 {
 		return Bindings{}, invalidBindings()
 	}
-	b := Bindings{unit: Unit{InstanceID(w.Unit.Instance), RoleName(w.Unit.Role), 1}, deployment: SHA256(w.Deployment),
+	b := Bindings{unit: Unit{InstanceID(w.Unit.Instance), RoleName(w.Unit.Role), uint16(w.Unit.Ordinal)}, deployment: SHA256(w.Deployment),
 		executables: make(map[BindingName]Executable), endpoints: make(map[BindingName]Endpoint), bundles: make(map[BindingName]BundleDirectory),
-		publicListeners: make(map[BindingName]PublicListener), sharedDirectories: make(map[BindingName]SharedDirectory)}
+		publicListeners: make(map[BindingName]PublicListener), sharedDirectories: make(map[BindingName]SharedDirectory), copies: make(map[BindingName][]Copy)}
 	names := make(map[string]bool)
 	unique := func(name string) bool {
 		if !bindingIdentifier.MatchString(name) || names[name] {
@@ -415,27 +507,45 @@ func (w featureDescriptor) bindings() (Bindings, error) {
 		if !unique(v.Name) || !bindingIdentifier.MatchString(v.Endpoint.Role) || !bindingIdentifier.MatchString(v.Endpoint.Listener) {
 			return Bindings{}, invalidBindings()
 		}
-		endpoint := Endpoint{Role: RoleName(v.Endpoint.Role), Listener: ListenerName(v.Endpoint.Listener), Scheme: EndpointScheme(v.Scheme)}
-		if endpoint.Scheme == Unix {
-			directory := "/run/foundry/services/" + w.Unit.Instance + "/sockets"
-			if v.Endpoint.Address != nil || v.Endpoint.Port != nil || v.Endpoint.Directory == nil || v.Endpoint.Name == nil || v.Endpoint.Path == nil ||
-				*v.Endpoint.Directory != directory || !socketIdentifier.MatchString(*v.Endpoint.Name) ||
-				*v.Endpoint.Path != directory+"/"+*v.Endpoint.Name || len(*v.Endpoint.Path) > 107 {
-				return Bindings{}, invalidBindings()
-			}
-			endpoint.Path, endpoint.Directory, endpoint.Name = *v.Endpoint.Path, directory, *v.Endpoint.Name
-		} else {
-			if v.Endpoint.Address == nil || v.Endpoint.Port == nil || v.Endpoint.Directory != nil || v.Endpoint.Name != nil || v.Endpoint.Path != nil ||
-				*v.Endpoint.Port < 1024 || *v.Endpoint.Port > 65535 || (endpoint.Scheme != HTTP && endpoint.Scheme != TCP) {
-				return Bindings{}, invalidBindings()
-			}
-			address, err := netip.ParseAddr(*v.Endpoint.Address)
-			if err != nil || (address.String() != "127.0.0.1" && address.String() != "::1") {
-				return Bindings{}, invalidBindings()
-			}
-			endpoint.Address, endpoint.Port = address, uint16(*v.Endpoint.Port)
+		endpoint, err := resolveEndpoint(v, w.Unit.Instance)
+		if err != nil {
+			return Bindings{}, err
 		}
 		b.endpoints[BindingName(v.Name)] = endpoint
+	}
+	for _, v := range w.Bindings.Copies {
+		if !unique(v.Name) || v.Copies == nil || len(v.Copies) > maxRoleCopies {
+			return Bindings{}, invalidBindings()
+		}
+		copies := make([]Copy, 0, len(v.Copies))
+		for index, item := range v.Copies {
+			ordinal := 1
+			if item.Endpoint.Ordinal != nil {
+				ordinal = *item.Endpoint.Ordinal
+			}
+			if item.Ordinal != index+1 || ordinal != item.Ordinal {
+				return Bindings{}, invalidBindings()
+			}
+			endpoint, err := resolveEndpoint(endpointWire{Endpoint: item.Endpoint, Scheme: item.Scheme}, w.Unit.Instance)
+			if err != nil {
+				return Bindings{}, err
+			}
+			secret := ""
+			if item.SecretFile != nil {
+				if err := json.Unmarshal(item.SecretFile, &secret); err != nil {
+					return Bindings{}, invalidBindings()
+				}
+				if !absolutePath(secret) || filepath.Dir(secret) != "/etc/foundry/instances/"+w.Instance+"/copy-secrets" {
+					return Bindings{}, invalidBindings()
+				}
+			}
+			if index > 0 && (endpoint.Role != copies[0].Endpoint.Role || endpoint.Listener != copies[0].Endpoint.Listener ||
+				endpoint.Scheme != copies[0].Endpoint.Scheme || (secret == "") != (copies[0].SecretFile == "")) {
+				return Bindings{}, invalidBindings()
+			}
+			copies = append(copies, Copy{Ordinal: item.Ordinal, Endpoint: endpoint, SecretFile: secret})
+		}
+		b.copies[BindingName(v.Name)] = copies
 	}
 	for _, v := range w.Bindings.Bundles {
 		if !unique(v.Name) || !absolutePath(v.Path) || !digestIdentifier.MatchString(v.SHA256) {
@@ -458,8 +568,29 @@ func (w featureDescriptor) bindings() (Bindings, error) {
 			}
 			addresses = append(addresses, address)
 		}
+		ports := []PublicPort{{Ordinal: 1, Port: uint16(v.Port)}}
+		if v.Ports != nil {
+			var entries []publicPortWire
+			decoder := json.NewDecoder(bytes.NewReader(v.Ports))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&entries); err != nil {
+				return Bindings{}, invalidBindings()
+			}
+			if len(entries) < 2 || len(entries) > maxRoleCopies || entries[0].Port != v.Port {
+				return Bindings{}, invalidBindings()
+			}
+			ports = make([]PublicPort, 0, len(entries))
+			seen := make(map[int]bool)
+			for index, port := range entries {
+				if port.Ordinal != index+1 || port.Port < 1 || port.Port > 65535 || seen[port.Port] {
+					return Bindings{}, invalidBindings()
+				}
+				seen[port.Port] = true
+				ports = append(ports, PublicPort{Ordinal: port.Ordinal, Port: uint16(port.Port)})
+			}
+		}
 		b.publicListeners[BindingName(v.Name)] = PublicListener{Role: RoleName(v.Role), Listener: ListenerName(v.Listener),
-			Hostname: v.Hostname, Port: uint16(v.Port), TLS: v.TLS, Transport: v.Transport, PublicAddresses: addresses}
+			Hostname: v.Hostname, Port: uint16(v.Port), Ports: ports, TLS: v.TLS, Transport: v.Transport, PublicAddresses: addresses}
 	}
 	for _, v := range w.Bindings.SharedDirectories {
 		if !unique(v.Name) || v.Path != "/run/foundry/services/"+w.Unit.Instance+"/shared/"+v.Name ||

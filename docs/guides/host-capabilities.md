@@ -832,8 +832,9 @@ profile architecture against artifact platform coverage.
 The profile `listeners` map uses `<role>.<listener>` keys for exactly the enabled
 public custom listeners. Loopback listeners have no profile entry. Each has:
 
-- `ports`: exactly one port, 1–65535, unique across the profile; 22, 80 and 443 are
-  reserved. This is the public port, not a service's allocated private port.
+- `ports`: one explicit port per placed copy, ordered by ordinal, 1–65535 and
+  unique across the profile; 22, 80 and 443 are reserved. These are public ports,
+  not allocated private ports. See [numbered ports](#one-public-port-per-copy).
 - `source_cidrs`: 1–64 unique canonical CIDRs. Each address family must have a
   corresponding public bound address. Choose the actual permitted clients;
   `0.0.0.0/0` is an intentional allow-all IPv4 policy, not a safe default.
@@ -902,7 +903,7 @@ execute it with an argument vector when the application needs jq for JSON proces
 with its service-local `Path` and `SHA256`.
 
 `PublicListener(name)` returns the declared role and listener, profile-owned
-`Hostname`, public `Port`, and `PublicAddresses`, plus topology-owned `TLS` and
+`Hostname`, public `Port`, ordered `Ports`, and `PublicAddresses`, plus topology-owned `TLS` and
 `Transport`. TLS is `deployment.TLSEdge` or `deployment.TLSNone`; transport is
 `deployment.TCPTransport`. The application chooses its protocol scheme, such as
 `rtsp`, and constructs a URL with `net.JoinHostPort` and `net/url`.
@@ -1454,3 +1455,177 @@ path without force, then remove its empty underlying directory with `rmdir`.
 Retain any busy, foreign, or nonempty path for investigation. Never remove the
 shared parent recursively while mounts exist. A later host reboot also removes
 these runtime-only caches.
+
+## Numbered copy consumers
+
+The release 2a consumer contract supports distinct secrets and endpoints for each
+placed executable copy. Ordinals are dense from 1 through the role's count.
+Builtins remain singletons. The foundation's profile gate still rejects counts
+above one until the lifecycle migration is merged.
+
+### Copy-scoped secrets
+
+Declare scope at the topology's existing secret owner:
+
+```json
+{
+	"secrets": {
+		"worker-password": {"scope": "copy", "prompt": "Worker control password"},
+		"license": {"prompt": "Shared worker license"}
+	}
+}
+```
+
+The executable role references those names through its file interface:
+
+```json
+{
+	"secret_files": {
+		"PASSWORD_FILE": {"secret": "worker-password", "scope": "copy"},
+		"LICENSE_FILE": "license"
+	},
+	"configs": {
+		"settings": {
+			"source": "deploy/files/worker.ini",
+			"mode": "recreate",
+			"format": "ini"
+		}
+	}
+}
+```
+
+The short reference `"PASSWORD_FILE": "worker-password"` inherits the declaration's
+scope. An explicit reference scope must match that declaration. Omitting scope
+preserves the existing shared secret behavior and configuration key names.
+
+For a role named `renderer`, the configuration owner derives
+`FOUNDRY_SERVICE_SECRET__COPY__RENDERER__1__WORKER_PASSWORD` for copy 1 and the
+corresponding `__2__` key for copy 2. Names are uppercase with hyphens replaced by
+underscores. Collisions are rejected. Use the returned requirement keys with the
+existing hidden prompts or `FOUNDRY_SECRET_CONFIG_FILE` configuration input. The
+`_FILE` input alias remains available; never supply both forms for one key.
+
+Bootstrap and release-plan review request only missing values for placed copies.
+Growth from two copies to three requests only copy 3's password. Shrinking to one
+keeps copies 2 and 3's private snapshots. Regrowth and rollback reuse those values.
+Shrinking does not erase credentials. The existing encrypted configuration backup
+includes retained snapshots.
+
+Each unit receives its own `PASSWORD_FILE` path. Its explicit `secret_file`
+arguments and template references use the same selected path. For example,
+`deploy/files/worker.ini` can contain:
+
+```ini
+[control]
+password={{secret.PASSWORD_FILE}}
+```
+
+`recreate` renders the copy's current value on each start. Private snapshots keep
+root ownership, instance-group access, mode 0640, and no-follow reads.
+Copy-scoped secrets give each copy its own value. Like role secrets, they are
+readable by every role of the instance because roles share one account. Rendered
+baselines and recreated configs do not isolate secret values between roles either.
+Secret bytes stay out of argv, unit files, descriptors, public plans, and framework
+diagnostics. Applications remain responsible for their own logging.
+
+### Lists of placed copies
+
+A scheduler can consume every renderer's control endpoint and password file:
+
+```json
+{
+	"name": "scheduler",
+	"kind": "builtin",
+	"requires": ["renderer"],
+	"bindings": {
+		"renderers": {
+			"copies": {
+				"role": "renderer",
+				"listener": "control",
+				"scheme": "http",
+				"secret": "worker-password"
+			}
+		}
+	}
+}
+```
+
+The target must be an executable role with the named listener. `scheme` is `http`
+or `tcp` for TCP listeners, and `unix` for Unix listeners. An optional `secret`
+must name a copy-scoped secret used by that provider's `secret_files`. Copy binding
+edges and explicit `requires` edges must not form a cycle. Declare `requires` when
+startup must wait for the provider; Unix consumers require their provider.
+
+`Bindings.Copies(name)` returns `[]deployment.Copy` ordered by `Ordinal`:
+
+```go
+copies, err := bindings.Copies("renderers")
+if err != nil {
+	return err
+}
+for _, copy := range copies {
+	// Pass these concrete values to the application-owned worker client.
+	client := NewWorkerClient(copy.Ordinal, copy.Endpoint, copy.SecretFile)
+	workers = append(workers, client)
+}
+```
+
+Each `Copy` contains `Ordinal int`, `Endpoint deployment.Endpoint`, and
+`SecretFile string`. TCP endpoints have an address and private port. Unix endpoints
+have `Directory`, `Name`, and `Path`, including the copy suffix. `SecretFile` is
+empty when no secret path is included. The files use the instance's ordinary
+secret-file permissions; a binding supplies paths, not additional isolation.
+Each lookup returns an owned slice of values, so caller mutations cannot change
+the startup snapshot. Unknown or ungranted names return
+`fault.Missing`. Shrinking removes those ordinals from the list. A declared list
+can be empty when its provider is unplaced and no prerequisite requires it.
+
+The descriptor adds `bindings.copies` only for consumers that declare a list.
+Each entry has `name` and `copies`; each item has `ordinal`, `endpoint`, `scheme`,
+and an optional `secret_file`. Empty outer collections are omitted. Existing
+roles without list bindings retain their descriptor shape and digests. Upgrade a
+consuming binary before declaring a list, because older strict readers reject
+new fields. Lists are available through the descriptor, not scalar arguments or
+template binding placeholders.
+
+Console calls retain the HTTP descriptor's copy endpoints, as they retain other
+HTTP bindings. They omit every `secret_file`, along with `shared_directories`.
+This keeps secret paths out of console descriptors while preserving the v0.35.0
+HTTP selection rule. The omission limits descriptor contents; it does not restrict
+file access for processes using the shared instance account.
+
+### One public port per copy
+
+For two placed `renderer` copies with a topology-declared public TCP listener
+named `ingress`, the profile can bind:
+
+```json
+{
+	"listeners": {
+		"renderer.ingress": {
+			"ports": [9551, 9552],
+			"source_cidrs": ["203.0.113.0/24"],
+			"dns": {
+				"mode": "external",
+				"hostname": "render.example.org",
+				"public_addresses": ["203.0.113.10"],
+				"proxied": false
+			}
+		}
+	}
+}
+```
+
+List position selects the ordinal: port 9551 routes to copy 1's private backend,
+and port 9552 routes to copy 2's. The list length must equal the placed count.
+Ports are unique across the profile, with the existing reserved-port rules.
+Each copy gets its own nginx stream server and firewall opening for the selected
+addresses and permitted source CIDRs. No shared-port load balancing is inferred.
+The topology still owns TLS and authentication policy.
+
+A `public_listener` binding exposes `PublicListener.Ports []deployment.PublicPort`.
+Each entry contains `Ordinal int` and `Port uint16`. The slice is ordered and
+caller-owned. `PublicListener.Port` remains the first copy's port for existing
+singleton callers. Singleton wire records stay unchanged; numbered records add
+`ports: [{"ordinal": 1, "port": 9551}, {"ordinal": 2, "port": 9552}]`.
+The Go reader also supplies a one-entry `Ports` slice for legacy singleton records.
