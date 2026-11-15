@@ -75,10 +75,7 @@ def _host_parent(host, instance, *, create=False):
         info = os.fstat(fd)
         require((info.st_uid, info.st_gid) == (uid, gid),
                 "shared_directory_parent", "Shared directory host parent must belong to root.")
-        if create:
-            # Tighten parents created by earlier generation-16 tools as 0755.
-            os.fchmod(fd, 0o700)
-        require(stat.S_IMODE(os.fstat(fd).st_mode) == 0o700,
+        require(stat.S_IMODE(info.st_mode) == 0o700,
                 "shared_directory_parent", "Shared directory host parent must have mode 0700.")
     finally:
         os.close(fd)

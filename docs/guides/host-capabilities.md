@@ -1287,8 +1287,8 @@ Each admitted start uses the privileged preparation helper to create or verify
 the mount before the workload starts. Preparation serializes across the instance
 and checks the mount source, filesystem type, capacity, inode limit, owner, mode,
 and absence of symlinks. Existing files beneath an unmounted directory and foreign
-mounts cause refusal. Preparation tightens an existing protected host parent to
-mode `0700`; reports and cleanup reject parent ownership or mode drift. The helper's
+mounts cause refusal. Preparation, reports and cleanup also refuse a host parent
+that is not root-owned with mode `0700`, without changing it. The helper's
 [`+` systemd prefix](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html#ExecStart=)
 performs this work outside the workload's filesystem namespace.
 

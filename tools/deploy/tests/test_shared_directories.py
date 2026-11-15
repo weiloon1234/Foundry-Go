@@ -171,15 +171,15 @@ class SharedPreparationTests(unittest.TestCase):
             self.prepare()
             run.assert_not_called()
 
-    def test_preparation_tightens_legacy_parent_without_changing_cache(self):
+    def test_preparation_refuses_a_parent_with_another_mode_without_changing_it(self):
         self.path.mkdir(parents=True, mode=0o700)
         self.path.parent.chmod(0o755)
         (self.path / "keep").write_text("retained")
-        with patch.object(shared, "_mount", return_value=self.record), patch.object(self.host, "run") as run, \
-                patch.object(os, "statvfs", return_value=self.capacity), patch.object(os, "fstatvfs", return_value=self.capacity):
+        with patch.object(self.host, "run") as run, self.assertRaises(c.DeployError) as raised:
             self.prepare()
+        self.assertEqual(raised.exception.code, "shared_directory_parent")
         run.assert_not_called()
-        self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o755)
         self.assertEqual((self.path / "keep").read_text(), "retained")
 
     def test_parent_symlink_and_foreign_owner_are_not_adopted(self):
