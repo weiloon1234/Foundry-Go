@@ -44,6 +44,29 @@ const (
 	NonTransactional ExecutionMode = "nontransactional"
 )
 
+// Availability controls execution without changing a migration's historical identity.
+// Available is the zero value for ordinary application and plugin definitions.
+type Availability string
+
+const (
+	Available       Availability = ""
+	FeatureDisabled Availability = "feature_disabled"
+)
+
+// FeatureDefinitions snapshots a framework feature's history and records whether
+// it may execute. Disabling a feature never removes its historical definitions.
+func FeatureDefinitions(enabled bool, definitions ...Definition) []Definition {
+	result := make([]Definition, len(definitions))
+	for i, definition := range definitions {
+		result[i] = definition.Clone()
+		result[i].Availability = Available
+		if !enabled {
+			result[i].Availability = FeatureDisabled
+		}
+	}
+	return result
+}
+
 // Definition is the handwritten or generated source of an immutable migration.
 // SQL entries execute in order using Mode (transactional by default). Requires
 // references declared migrations; New snapshots all slices and computes hashes.
@@ -54,12 +77,16 @@ const (
 // nontransactional migration cannot declare Down. Without Down a migration is
 // irreversible and rollback refuses to cross it.
 type Definition struct {
-	Mode     ExecutionMode
-	Key      Key
-	Version  Version
-	SQL      []string
-	Down     []string
-	Requires []Key
+	// history is immutable registry-owned metadata carried by runnable snapshots.
+	history *Registry
+	// Availability is deployment metadata, excluded from the checksum.
+	Availability Availability
+	Mode         ExecutionMode
+	Key          Key
+	Version      Version
+	SQL          []string
+	Down         []string
+	Requires     []Key
 }
 
 // Clone returns a copy that shares no SQL, Down or Requires storage with d.
@@ -74,12 +101,13 @@ func (d Definition) Clone() Definition {
 // Entry is immutable migration metadata, returned as a caller-owned snapshot.
 // Checksum covers origin, ID, introduced version, ordered SQL and dependencies.
 type Entry struct {
-	Mode       ExecutionMode `json:"mode,omitempty"`
-	Key        Key           `json:"key"`
-	Version    Version       `json:"version"`
-	Checksum   Checksum      `json:"checksum"`
-	Requires   []Key         `json:"requires,omitempty"`
-	Reversible bool          `json:"reversible,omitempty"`
+	Availability Availability  `json:"availability,omitempty"`
+	Mode         ExecutionMode `json:"mode,omitempty"`
+	Key          Key           `json:"key"`
+	Version      Version       `json:"version"`
+	Checksum     Checksum      `json:"checksum"`
+	Requires     []Key         `json:"requires,omitempty"`
+	Reversible   bool          `json:"reversible,omitempty"`
 }
 
 type migration struct {
@@ -107,13 +135,23 @@ func validName(name string) bool {
 // invalid dependencies, and cycles are errors. Independent nodes sort by ID,
 // then origin. Dependency lists are canonicalized; SQL ordering is preserved.
 func New(definitions ...Definition) (*Registry, error) {
+	// Explicit duplicates remain declaration errors; carried history and grouped
+	// targets use MergeDefinitions to collapse matching declarations.
+	explicit := make(map[Key]bool, len(definitions))
+	for _, definition := range definitions {
+		if explicit[definition.Key] {
+			return nil, safeerror.NewFault(fault.Duplicate, "migration key is duplicated: "+keyLabel(definition.Key))
+		}
+		explicit[definition.Key] = true
+	}
+	definitions, err := MergeDefinitions(definitions...)
+	if err != nil {
+		return nil, err
+	}
 	byKey := make(map[Key]migration, len(definitions))
 	for _, definition := range definitions {
-		if (definition.Mode != Transactional && definition.Mode != NonTransactional) || !validKey(definition.Key) || !validName(string(definition.Version)) || len(definition.SQL) == 0 {
+		if (definition.Availability != Available && definition.Availability != FeatureDisabled) || (definition.Mode != Transactional && definition.Mode != NonTransactional) || !validKey(definition.Key) || !validName(string(definition.Version)) || len(definition.SQL) == 0 {
 			return nil, safeerror.NewFault(fault.Invalid, "invalid migration definition")
-		}
-		if _, exists := byKey[definition.Key]; exists {
-			return nil, safeerror.NewFault(fault.Duplicate, "migration key is duplicated: "+keyLabel(definition.Key))
 		}
 		statements := append([]string(nil), definition.SQL...)
 		down := append([]string(nil), definition.Down...)
@@ -149,7 +187,7 @@ func New(definitions ...Definition) (*Registry, error) {
 		if err != nil {
 			return nil, safeerror.WrapFault(fault.Internal, "cannot encode migration definition", err)
 		}
-		byKey[definition.Key] = migration{entry: Entry{Mode: definition.Mode, Key: definition.Key, Version: definition.Version, Checksum: Checksum(sha256.Sum256(encoded)), Requires: requires, Reversible: len(down) != 0}, statements: statements, down: down}
+		byKey[definition.Key] = migration{entry: Entry{Availability: definition.Availability, Mode: definition.Mode, Key: definition.Key, Version: definition.Version, Checksum: Checksum(sha256.Sum256(encoded)), Requires: requires, Reversible: len(down) != 0}, statements: statements, down: down}
 	}
 	keys := make([]Key, 0, len(byKey))
 	for key := range byKey {
@@ -189,7 +227,7 @@ func (r *Registry) Definition(key Key) (Definition, bool) {
 		return Definition{}, false
 	}
 	item := r.ordered[index]
-	return Definition{Mode: item.entry.Mode, Key: item.entry.Key, Version: item.entry.Version, SQL: item.statements, Down: item.down, Requires: item.entry.Requires}.Clone(), true
+	return Definition{Availability: item.entry.Availability, Mode: item.entry.Mode, Key: item.entry.Key, Version: item.entry.Version, SQL: item.statements, Down: item.down, Requires: item.entry.Requires}.Clone(), true
 }
 
 func copyEntry(entry Entry) Entry {
@@ -205,3 +243,84 @@ func sortKeys(keys []Key) {
 	})
 }
 func keyLabel(key Key) string { return fmt.Sprintf("(%s, %s)", key.Origin, key.ID) }
+
+// Equal compares declarations, including availability and ordered SQL/Down.
+// Dependency order, nil versus empty slices, and carried history are immaterial.
+// Duplicate dependencies remain invalid and are not collapsed by comparison.
+func (d Definition) Equal(other Definition) bool {
+	left, right := slices.Clone(d.Requires), slices.Clone(other.Requires)
+	sortKeys(left)
+	sortKeys(right)
+	return d.Availability == other.Availability && d.Mode == other.Mode &&
+		d.Key == other.Key && d.Version == other.Version &&
+		slices.Equal(d.SQL, other.SQL) && slices.Equal(d.Down, other.Down) &&
+		slices.Equal(left, right)
+}
+
+// RunnableDefinitions returns owned executable definitions. Each carries the
+// registry's disabled history, so passing these snapshots to New preserves
+// inspection and drift checks without exposing disabled SQL in the slice.
+func (r *Registry) RunnableDefinitions() []Definition {
+	var definitions []Definition
+	for _, item := range r.ordered {
+		if item.entry.Availability != Available {
+			continue
+		}
+		definition, _ := r.Definition(item.entry.Key)
+		definition.history = r
+		definitions = append(definitions, definition)
+	}
+	return definitions
+}
+
+// knownHistory expands every distinct snapshot context before merging, so no
+// declaration can discard another context and hide a conflict.
+func knownHistory(definitions ...Definition) []Definition {
+	var known []Definition
+	seen := make(map[*Registry]bool)
+	for _, definition := range definitions {
+		history := definition.history
+		if history == nil || seen[history] {
+			continue
+		}
+		seen[history] = true
+		for _, item := range history.ordered {
+			if item.entry.Availability == FeatureDisabled {
+				d, _ := history.Definition(item.entry.Key)
+				known = append(known, d)
+			}
+		}
+	}
+	return known
+}
+
+// MergeDefinitions composes owned declarations with their carried history in
+// first-seen order. Repeated keys must agree, including Down; dependency order
+// does not matter. Available wins when consumers share the same declaration.
+// New validates the resulting definitions and dependency graph before use.
+func MergeDefinitions(definitions ...Definition) ([]Definition, error) {
+	all := append(slices.Clone(definitions), knownHistory(definitions...)...)
+	var result []Definition
+	byKey := make(map[Key]int, len(all))
+	for _, definition := range all {
+		if definition.Availability != Available && definition.Availability != FeatureDisabled {
+			return nil, safeerror.NewFault(fault.Invalid, "invalid migration availability")
+		}
+		if index, exists := byKey[definition.Key]; exists {
+			availability := definition.Availability
+			definition.Availability = result[index].Availability
+			if !result[index].Equal(definition) {
+				return nil, safeerror.NewFault(fault.Conflict, "conflicting migration definitions: "+keyLabel(definition.Key))
+			}
+			if availability == Available {
+				result[index].Availability = Available
+			}
+			continue
+		}
+		definition = definition.Clone()
+		definition.history = nil
+		byKey[definition.Key] = len(result)
+		result = append(result, definition)
+	}
+	return result, nil
+}

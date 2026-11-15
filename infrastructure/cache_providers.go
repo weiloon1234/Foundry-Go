@@ -133,8 +133,9 @@ type MigrationTarget struct {
 	Definitions []migrate.Definition
 }
 
-// Migrations returns cache migration targets deduplicated by connection and schema; a nil plan
-// returns nil.
+// Migrations returns known cache migration targets deduplicated by connection
+// and schema. A target is available while any store uses PostgreSQL; other
+// drivers retain disabled definitions at the configured target. A nil plan returns nil.
 func (p *Plan) Migrations() []MigrationTarget {
 	if p == nil {
 		return nil
@@ -143,16 +144,19 @@ func (p *Plan) Migrations() []MigrationTarget {
 	seen := make(map[struct {
 		connection database.ConnectionName
 		schema     string
-	}]bool)
+	}]int)
 	for _, t := range cacheTargets(p.settings) {
 		key := struct {
 			connection database.ConnectionName
 			schema     string
 		}{t.Connection, t.Schema}
-		if seen[key] {
+		if index, exists := seen[key]; exists {
+			if t.Definitions[0].Availability == migrate.Available {
+				result[index] = t.MigrationTarget
+			}
 			continue
 		}
-		seen[key] = true
+		seen[key] = len(result)
 		result = append(result, t.MigrationTarget)
 	}
 	return result

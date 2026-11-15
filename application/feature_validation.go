@@ -62,7 +62,10 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 			return f, err
 		}
 	}
-	for _, target := range persistenceTargets(&f) {
+	for _, target := range featurePersistenceTargets(&f) {
+		if !target.enabled {
+			continue
+		}
 		if *target.connection == "" {
 			*target.connection = s.Services.Database.Default
 		}

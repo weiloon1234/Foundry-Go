@@ -13,6 +13,7 @@ import (
 	"foundry.test/consumer/migrations"
 	"github.com/weiloon1234/Foundry-Go/application"
 	dbcommand "github.com/weiloon1234/Foundry-Go/database/command"
+	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	outboundcapture "github.com/weiloon1234/Foundry-Go/httpclient/capture"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
@@ -88,9 +89,19 @@ func TestApplicationDatabaseCommandRefusesUnknownDatabaseBeforeIO(t *testing.T) 
 			t.Error(err)
 		}
 	})
-	// The framework's outbound capture target precedes the application's own.
-	if targets := app.Migrations(); len(targets) != 2 || targets[0].Definitions[0].Key.Origin != outboundcapture.MigrationOrigin || len(targets[1].Definitions) != 2 {
+	// One physical target contains framework and application declarations.
+	targets := app.Migrations()
+	if len(targets) != 1 {
 		t.Fatalf("application migration targets: %+v", targets)
+	}
+	captureFound := false
+	for _, target := range targets {
+		for _, definition := range target.Definitions {
+			captureFound = captureFound || definition.Key.Origin == outboundcapture.MigrationOrigin && definition.Availability == migrate.Available
+		}
+	}
+	if !captureFound {
+		t.Fatal("outbound capture target missing")
 	}
 	// Showing a definition reads the registry only, so the unreachable pool never connects.
 	show, err := dbcommand.Parse([]string{"migrate", "show", "--migration", string(migrations.Origin) + "/" + string(migrations.AddRecordLabel)}, io.Discard)

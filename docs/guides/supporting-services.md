@@ -119,8 +119,8 @@ registries, managers and lifecycle modules. Domain callbacks perform pure
 construction; do not call operations or resolve a manager being constructed from
 that callback's own declarations.
 
-`app.Migrations()` returns independent definition snapshots grouped by configured
-database/schema. Merge them with domain definitions in an explicit migration task.
+`app.Migrations()` returns runnable definition snapshots grouped by physical
+database/schema. Passing them to `migrate.New` retains disabled-feature history. Merge them with domain definitions in an explicit migration task.
 Normal Build/Start never applies migrations. An enabled outbox publisher expects
 its migrations to exist before startup. Job outboxes select only durable queue
 backends and reuse the connection's dispatcher. `services.JobOutbox(name)` returns

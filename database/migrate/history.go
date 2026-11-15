@@ -22,11 +22,12 @@ type Applied struct {
 type State string
 
 const (
-	Pending    State = "pending"
-	Incomplete State = "incomplete"
-	Complete   State = "applied"
-	Changed    State = "changed"
-	Missing    State = "missing_definition"
+	Pending         State = "pending"
+	PendingDisabled State = "pending_feature_disabled"
+	Incomplete      State = "incomplete"
+	Complete        State = "applied"
+	Changed         State = "changed"
+	Missing         State = "missing_definition"
 )
 
 // Status contains current metadata and, when present, its recorded history.
@@ -47,6 +48,7 @@ const (
 	DefinitionChanged      ProblemCode = "definition_changed"
 	DefinitionMissing      ProblemCode = "definition_missing"
 	DependencyNotApplied   ProblemCode = "dependency_not_applied"
+	DependencyDisabled     ProblemCode = "dependency_feature_disabled"
 )
 
 // Problem identifies history drift without including migration SQL or values.
@@ -91,6 +93,9 @@ func (r *Registry) Inspect(history []Applied) (Report, error) {
 	for _, item := range r.ordered {
 		entry := copyEntry(item.entry)
 		status := Status{Key: entry.Key, State: Pending, Definition: &entry}
+		if entry.Availability == FeatureDisabled {
+			status.State = PendingDisabled
+		}
 		if applied, exists := byKey[entry.Key]; exists {
 			status.State = Complete
 			status.Applied = &applied
@@ -102,6 +107,14 @@ func (r *Registry) Inspect(history []Applied) (Report, error) {
 				if _, exists := byKey[key]; !exists {
 					dependency := key
 					report.Problems = append(report.Problems, Problem{Code: DependencyNotApplied, Key: entry.Key, Dependency: &dependency})
+				}
+			}
+		}
+		if status.State == Pending {
+			for _, key := range entry.Requires {
+				if _, applied := byKey[key]; !applied && r.ordered[r.byKey[key]].entry.Availability == FeatureDisabled {
+					dependency := key
+					report.Problems = append(report.Problems, Problem{Code: DependencyDisabled, Key: entry.Key, Dependency: &dependency})
 				}
 			}
 		}

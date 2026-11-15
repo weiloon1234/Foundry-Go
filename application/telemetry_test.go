@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/diagnostics"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -210,5 +211,55 @@ func TestTelemetryReadinessRejectsMissingWrongAndDuplicateKeys(t *testing.T) {
 	}
 	if _, err := New(telemetryFixtureSettings(), telemetryQuiet()).TelemetryReadiness(key).TelemetryReadiness(key).Build(t.Context()); !errors.Is(err, fault.Duplicate) {
 		t.Fatal(err)
+	}
+}
+
+func TestBuiltApplicationRetainsDisabledTelemetryHistory(t *testing.T) {
+	s := telemetryFixtureSettings()
+	var history []migrate.Applied
+	for _, enabled := range []bool{true, false, true} {
+		s.Features.Telemetry.Enabled = enabled
+		app, err := New(s, telemetryQuiet()).Build(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { closeTelemetryApp(t, app) })
+		groups, err := s.Services.Database.MigrationGroups(app.Migrations()...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var matched bool
+		for _, group := range groups {
+			if !slices.ContainsFunc(group.Definitions, func(d migrate.Definition) bool { return d.Key.Origin == "foundry.telemetry" }) {
+				continue
+			}
+			matched = true
+			registry, err := migrate.New(group.Definitions...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			report, err := registry.Inspect(history)
+			if err != nil || report.Check() != nil {
+				t.Fatal("toggle broke application history", report, err)
+			}
+			for _, status := range report.Statuses {
+				if status.Key.Origin != "foundry.telemetry" {
+					continue
+				}
+				if !enabled && (status.State != migrate.Complete || status.Definition.Availability != migrate.FeatureDisabled) {
+					t.Fatal("disabled applied definition disappeared", status)
+				}
+			}
+			if len(history) == 0 {
+				for _, entry := range registry.Entries() {
+					if entry.Key.Origin == "foundry.telemetry" {
+						history = append(history, migrate.Applied{Key: entry.Key, Version: entry.Version, Checksum: entry.Checksum, Batch: 1, AppliedAt: time.Now()})
+					}
+				}
+			}
+		}
+		if !matched {
+			t.Fatal("telemetry history missing from App.Migrations")
+		}
 	}
 }

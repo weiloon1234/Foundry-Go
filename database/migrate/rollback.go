@@ -39,9 +39,10 @@ func (p *Postgres) RollbackPlan(ctx context.Context, steps int) ([]Applied, erro
 // Rollback reverses the last steps applied migrations, newest first, each in
 // its own transaction that runs the Down SQL and removes its history entry.
 // It holds the migration lock and refuses before changing anything when
-// history has drifted or awaits reconciliation, when a selected migration has
-// no Down SQL, or when a migration outside the selection depends on one inside
-// it. Earlier reversals stay committed if a later one fails. Rollback is an
+// history has drifted or awaits reconciliation, when a selected migration belongs
+// to a disabled feature or has no Down SQL, or when a migration outside the
+// selection depends on one inside it. Earlier reversals stay committed if a later
+// one fails. Rollback is an
 // explicit operator action; it never runs during boot or migrate up.
 func (p *Postgres) Rollback(ctx context.Context, steps int) (result RollbackResult, err error) {
 	err = p.locked(ctx, func(session *database.Session) error {
@@ -104,6 +105,9 @@ func (p *Postgres) rollbackSelection(report Report, history []Applied, steps int
 	for _, applied := range selected {
 		chosen[applied.Key] = true
 		item := p.registry.ordered[p.registry.byKey[applied.Key]]
+		if item.entry.Availability == FeatureDisabled {
+			return nil, safeerror.NewFault(fault.Conflict, "migration "+keyLabel(applied.Key)+" belongs to a disabled feature; enable it before rollback")
+		}
 		if len(item.down) == 0 {
 			return nil, safeerror.NewFault(fault.Invalid, "migration "+keyLabel(applied.Key)+" declares no Down SQL and cannot be rolled back")
 		}

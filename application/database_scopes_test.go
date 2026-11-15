@@ -25,7 +25,7 @@ func TestDatabaseScopesAlignEveryPersistenceDeclaration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, target := range persistenceTargets(&result.Features) {
+	for _, target := range featurePersistenceTargets(&result.Features) {
 		if *target.schema != "isolated" || *target.connection == "" {
 			t.Fatal("persistence target did not follow scope")
 		}
@@ -36,7 +36,7 @@ func TestDatabaseScopesAlignEveryPersistenceDeclaration(t *testing.T) {
 	if s.Features.Audit.Schema != "public" || s.Services.Cache.Stores["default"].Postgres.Schema != "public" {
 		t.Fatal("original feature settings mutated")
 	}
-	for _, target := range persistenceTargets(&s.Features) {
+	for _, target := range featurePersistenceTargets(&s.Features) {
 		previous := *target.schema
 		*target.schema = "explicit_other"
 		if _, err := s.WithDatabaseScopes(s.Services.Database); !errors.Is(err, fault.Invalid) {
@@ -56,6 +56,22 @@ func TestDatabaseScopesAlignEveryPersistenceDeclaration(t *testing.T) {
 		bad.Default = name
 		if _, err := s.WithDatabaseScopes(bad); err == nil {
 			t.Fatal("default alias changed")
+		}
+	}
+}
+
+func TestDatabaseScopesPreserveWorkerArchiveExactly(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		for _, schema := range []string{"", "public", "historical_archive"} {
+			s := DefaultSettings()
+			c := infrastructure.DefaultConnectionSettings()
+			c.Primary.Host, c.Primary.Database, c.Primary.User, c.Primary.Schema = "127.0.0.1", "test", "test", "isolated"
+			s.Services.Database.Connections = infrastructure.DatabaseConnections{"default": c}
+			s.Worker.Archive = JobArchiveSettings{Enabled: enabled, Database: "", Schema: schema}
+			scoped, err := s.WithDatabaseScopes(s.Services.Database)
+			if err != nil || scoped.Worker.Archive != s.Worker.Archive {
+				t.Fatalf("archive moved during scoping: %#v -> %#v: %v", s.Worker.Archive, scoped.Worker.Archive, err)
+			}
 		}
 	}
 }

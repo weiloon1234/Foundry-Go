@@ -1,8 +1,6 @@
 package infrastructure
 
 import (
-	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -50,7 +48,6 @@ type migrationEndpoint struct {
 func (s DatabaseSettings) MigrationGroups(targets ...MigrationTarget) ([]MigrationGroup, error) {
 	var groups []MigrationGroup
 	byEndpoint := make(map[migrationEndpoint]int)
-	byKey := make([]map[migrate.Key]int, 0)
 	for _, target := range targets {
 		name := target.Connection
 		if name == "" {
@@ -79,31 +76,25 @@ func (s DatabaseSettings) MigrationGroups(targets ...MigrationTarget) ([]Migrati
 			index = len(groups)
 			byEndpoint[endpoint] = index
 			groups = append(groups, MigrationGroup{Schema: schema})
-			byKey = append(byKey, make(map[migrate.Key]int))
 		}
 		group := &groups[index]
 		if !slices.Contains(group.Connections, name) {
 			group.Connections = append(group.Connections, name)
 		}
-		for _, definition := range target.Definitions {
-			definition = definition.Clone()
-			if previous, seen := byKey[index][definition.Key]; seen {
-				// Features sharing one schema may repeat the same framework migration.
-				if !reflect.DeepEqual(group.Definitions[previous], definition) {
-					return nil, safeerror.NewFault(fault.Conflict, fmt.Sprintf("migration targets sharing schema %s have conflicting definitions for %s/%s", schema, definition.Key.Origin, definition.Key.ID))
-				}
-				continue
-			}
-			byKey[index][definition.Key] = len(group.Definitions)
-			group.Definitions = append(group.Definitions, definition)
-		}
+		group.Definitions = append(group.Definitions, target.Definitions...)
 	}
 	for i := range groups {
 		slices.Sort(groups[i].Connections)
-		if _, err := migrate.New(groups[i].Definitions...); err != nil {
+		definitions, err := migrate.MergeDefinitions(groups[i].Definitions...)
+		if err != nil {
 			return nil, err
 		}
+		if _, err := migrate.New(definitions...); err != nil {
+			return nil, err
+		}
+		groups[i].Definitions = definitions
 	}
+
 	slices.SortFunc(groups, func(a, b MigrationGroup) int {
 		if order := strings.Compare(string(a.Connections[0]), string(b.Connections[0])); order != 0 {
 			return order

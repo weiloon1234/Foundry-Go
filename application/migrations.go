@@ -3,12 +3,10 @@ package application
 import (
 	"slices"
 
-	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
-	"github.com/weiloon1234/Foundry-Go/jobs/archive"
 )
 
 // maxMigrationTargets bounds the application's own migration declarations.
@@ -17,8 +15,8 @@ const maxMigrationTargets = 128
 // Migrations adds the application's own historical definitions. A blank
 // Connection selects the default connection and a blank Schema that
 // connection's schema (public when unscoped). The targets are snapshotted,
-// join App.Migrations() and App.RunDatabaseCommand after the framework feature
-// targets, are validated with them at Build, and are never applied during boot.
+// join the framework definitions in App.Migrations and App.RunDatabaseCommand,
+// are validated with them at Build, and are never applied during boot.
 func (b *Builder) Migrations(targets ...infrastructure.MigrationTarget) *Builder {
 	b.mutate(func() {
 		if len(targets) > maxMigrationTargets-len(b.state.migrations) {
@@ -30,61 +28,43 @@ func (b *Builder) Migrations(targets ...infrastructure.MigrationTarget) *Builder
 	return b
 }
 
-// featureMigrations collects enabled framework feature targets by connection and
-// schema, then appends the application's own targets. Every target is resolved
-// and validated through the shared migration grouping before any I/O.
-func featureMigrations(plan *infrastructure.Plan, s Settings, domain []infrastructure.MigrationTarget) ([]infrastructure.MigrationTarget, error) {
-	type target struct {
-		connection database.ConnectionName
-		schema     string
-	}
-	groups := make(map[target][]migrate.Definition)
-	add := func(connection database.ConnectionName, schema string, definitions []migrate.Definition) {
-		key := target{connection, schema}
-		groups[key] = append(groups[key], definitions...)
-	}
-	for _, t := range plan.Migrations() {
-		add(t.Connection, t.Schema, t.Definitions)
-	}
-	features := s.Features
-	for _, t := range persistenceTargets(&features) {
-		if t.definitions != nil {
-			add(*t.connection, *t.schema, t.definitions())
+// featureMigrations uses the shared grouping owner to merge framework and
+// application declarations into one immutable registry per physical history.
+func featureMigrations(plan *infrastructure.Plan, s Settings, domain []infrastructure.MigrationTarget) ([]applicationMigrationGroup, error) {
+	targets := plan.Migrations()
+	for _, target := range persistenceTargets(&s) {
+		if target.definitions == nil || (!target.enabled && len(s.Services.Database.Connections) == 0) {
+			continue
 		}
-	}
-	if s.Worker.Archive.Enabled {
-		add(s.Worker.Archive.Database, s.Worker.Archive.Schema, archive.Migrations())
-	}
-	keys := make([]target, 0, len(groups))
-	for key := range groups {
-		keys = append(keys, key)
-	}
-	slices.SortFunc(keys, func(a, b target) int {
-		if a.connection < b.connection {
-			return -1
-		}
-		if a.connection > b.connection {
-			return 1
-		}
-		if a.schema < b.schema {
-			return -1
-		}
-		if a.schema > b.schema {
-			return 1
-		}
-		return 0
-	})
-	result := make([]infrastructure.MigrationTarget, 0, len(keys)+len(domain))
-	for _, key := range keys {
-		result = append(result, infrastructure.MigrationTarget{Connection: key.connection, Schema: key.schema, Definitions: groups[key]})
+		targets = append(targets, infrastructure.MigrationTarget{
+			Connection: *target.connection, Schema: *target.schema,
+			Definitions: migrate.FeatureDefinitions(target.enabled, target.definitions()...),
+		})
 	}
 	// Build already snapshotted the domain targets under the builder lock.
-	result = append(result, domain...)
-	if _, err := s.Services.Database.MigrationGroups(result...); err != nil {
+	targets = append(targets, domain...)
+	resolved, err := s.Services.Database.MigrationGroups(targets...)
+	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	var history []applicationMigrationGroup
+	for _, group := range resolved {
+		registry, err := migrate.New(group.Definitions...)
+		if err != nil {
+			return nil, err
+		}
+		history = append(history, applicationMigrationGroup{group, registry})
+	}
+	return history, nil
 }
+
+// Each immutable registry owns both execution and history inspection for one
+// physical target. The group retains every configured alias for command routing.
+type applicationMigrationGroup struct {
+	infrastructure.MigrationGroup
+	registry *migrate.Registry
+}
+
 func cloneMigrations(input []infrastructure.MigrationTarget) []infrastructure.MigrationTarget {
 	result := slices.Clone(input)
 	for i := range result {

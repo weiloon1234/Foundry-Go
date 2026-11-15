@@ -608,3 +608,90 @@ func TestMigrationSearchPathAppliesToSessionAndIsRestored(t *testing.T) {
 		}
 	}
 }
+
+func TestDisabledPendingMigrationsDoNotCreateHistoryOrExecuteSQL(t *testing.T) {
+	server := newMigrationServer()
+	definitions := migrate.FeatureDefinitions(false, migrationDefinitions()...)
+	runner, _ := migrationRunner(t, server, 1, definitions, nil)
+	result, err := runner.Up(t.Context())
+	if err != nil || len(result.Applied) != 0 || len(server.ddl) != 0 || len(server.committedSQL) != 0 {
+		t.Fatal("disabled-only target wrote to database", result, err)
+	}
+	report, err := runner.Status(t.Context())
+	if err != nil || report.Check() != nil || len(report.Statuses) != len(definitions) {
+		t.Fatal("disabled-only status", report, err)
+	}
+	for _, status := range report.Statuses {
+		if status.State != migrate.PendingDisabled {
+			t.Fatal("disabled pending state lost", status)
+		}
+	}
+}
+
+func TestDisabledInterruptedMigrationPreservesReconciliationAndDoesNotResume(t *testing.T) {
+	server := newMigrationServer()
+	server.loseStatement = "CONCURRENT_INDEX"
+	definition := migrate.Definition{Key: migrate.Key{Origin: "foundry.test", ID: "index"}, Version: "v1", Mode: migrate.NonTransactional, SQL: []string{"CONCURRENT_INDEX", "NEXT"}}
+	enabled, _ := migrationRunner(t, server, 1, []migrate.Definition{definition}, nil)
+	if _, err := enabled.Up(t.Context()); !errors.Is(err, migrate.ErrReconciliationRequired) {
+		t.Fatal("interruption missing", err)
+	}
+	disabled, _ := migrationRunner(t, server, 2, migrate.FeatureDefinitions(false, definition), nil)
+	report, err := disabled.Status(t.Context())
+	if err != nil || report.Check() == nil || report.Statuses[0].State != migrate.Incomplete || report.Statuses[0].Definition.Availability != migrate.FeatureDisabled {
+		t.Fatal("disabled feature hid uncertainty", report, err)
+	}
+	if _, err := disabled.Up(t.Context()); !errors.Is(err, fault.Conflict) {
+		t.Fatal("uncertain disabled history accepted", err)
+	}
+	if _, err := disabled.Reconcile(t.Context(), *report.Statuses[0].Progress, migrate.StatementApplied); err != nil {
+		t.Fatal(err)
+	}
+	result, err := disabled.Up(t.Context())
+	if err != nil || len(result.Applied) != 0 || !reflect.DeepEqual(server.committedSQL, []string{"CONCURRENT_INDEX"}) || len(server.progress) != 1 {
+		t.Fatal("disabled feature resumed SQL or lost its checkpoint", result, err)
+	}
+	result, err = enabled.Up(t.Context())
+	if err != nil || len(result.Applied) != 1 || !reflect.DeepEqual(server.committedSQL, []string{"CONCURRENT_INDEX", "NEXT"}) || len(server.progress) != 0 {
+		t.Fatal("re-enabled migration did not resume from checkpoint", result, err)
+	}
+}
+
+func TestDisabledCheckpointDoesNotReuseBatchForUnrelatedMigrations(t *testing.T) {
+	server := newMigrationServer()
+	server.loseStatement = "CONCURRENT_INDEX"
+	feature := migrate.Definition{Key: migrate.Key{Origin: "foundry.test", ID: "001"}, Version: "v1", Mode: migrate.NonTransactional, SQL: []string{"CONCURRENT_INDEX", "NEXT"}}
+	runner, _ := migrationRunner(t, server, 1, []migrate.Definition{feature}, nil)
+	if _, err := runner.Up(t.Context()); !errors.Is(err, migrate.ErrReconciliationRequired) {
+		t.Fatal(err)
+	}
+	report, err := runner.Status(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runner.Reconcile(t.Context(), *report.Statuses[0].Progress, migrate.StatementApplied); err != nil {
+		t.Fatal(err)
+	}
+	feature.Availability = migrate.FeatureDisabled
+	first := migrate.Definition{Key: migrate.Key{Origin: "app", ID: "100"}, Version: "v1", SQL: []string{"FIRST"}, Down: []string{"UNDO_FIRST"}}
+	second := migrate.Definition{Key: migrate.Key{Origin: "app", ID: "050"}, Version: "v1", SQL: []string{"SECOND"}, Down: []string{"UNDO_SECOND"}}
+	runner, _ = migrationRunner(t, server, 2, []migrate.Definition{feature, first}, nil)
+	earlier, err := runner.Up(t.Context())
+	if err != nil || len(earlier.Applied) != 1 || earlier.Batch <= report.Statuses[0].Progress.Batch {
+		t.Fatal("disabled checkpoint chose the batch", earlier, err)
+	}
+	runner, _ = migrationRunner(t, server, 3, []migrate.Definition{feature, first, second}, nil)
+	later, err := runner.Up(t.Context())
+	if err != nil || len(later.Applied) != 1 || later.Batch <= earlier.Batch {
+		t.Fatal("later run reused an old batch", later, err)
+	}
+	feature.Availability = migrate.Available
+	runner, _ = migrationRunner(t, server, 4, []migrate.Definition{feature, first, second}, nil)
+	if _, err := runner.Up(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := runner.RollbackPlan(t.Context(), 1)
+	if err != nil || len(plan) != 1 || plan[0].Key != second.Key {
+		t.Fatal("rollback picked the older migration", plan, err)
+	}
+}

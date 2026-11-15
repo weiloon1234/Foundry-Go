@@ -30,6 +30,10 @@ func TestRunDatabaseCommandMigratesEverySchemaOfOnlyTheSelectedDatabase(t *testi
 	elsewhere := connection
 	elsewhere.Primary.Host = "unreachable.invalid"
 	s.Services.Database.Connections = infrastructure.DatabaseConnections{"default": connection, "elsewhere": elsewhere}
+	s, err := s.WithDatabaseScopes(s.Services.Database)
+	if err != nil {
+		t.Fatal(err)
+	}
 	records := func(sql string) []migrate.Definition {
 		return []migrate.Definition{{Key: migrate.Key{Origin: "app", ID: "000001_records"}, Version: "v1", SQL: []string{sql}}}
 	}

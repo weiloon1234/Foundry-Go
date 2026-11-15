@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	cachepg "github.com/weiloon1234/Foundry-Go/cache/postgres"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
@@ -37,9 +38,10 @@ func cacheTargets(s Settings) []cacheTarget {
 	var result []cacheTarget
 	for _, name := range keys(s.Cache.Stores) {
 		c := s.Cache.Stores[name]
-		if c.Driver == PostgresCache {
-			result = append(result, cacheTarget{name, MigrationTarget{Connection: c.Database, Schema: c.Postgres.Schema, Definitions: cachepg.Migrations()}})
+		if c.Driver != PostgresCache && len(s.Database.Connections) == 0 {
+			continue
 		}
+		result = append(result, cacheTarget{name, MigrationTarget{Connection: c.Database, Schema: c.Postgres.Schema, Definitions: migrate.FeatureDefinitions(c.Driver == PostgresCache, cachepg.Migrations()...)}})
 	}
 	return result
 }

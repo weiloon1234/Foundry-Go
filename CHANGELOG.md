@@ -51,6 +51,24 @@
   HTTP sites keep forwarded headers; inbound PROXY and outbound v2 are unsupported.
   The opt-in nginx stream acceptance now checks real client addresses and ports
   over IPv4/IPv6 for both TLS modes.
+## Unreleased
+
+- Fixed: disabling a framework persistence feature retains its migration
+  definitions, so applied history stays valid and unrelated migrations can
+  proceed. Pending disabled migrations report `pending_feature_disabled` and run
+  after re-enabling the feature. Availability does not change historical
+  checksums. Rollback refuses a selection containing a disabled feature before
+  executing any reversal. PostgreSQL cache definitions also remain known when a
+  configured store changes drivers. Keep the feature's database and schema
+  settings when disabling it. `App.Migrations()` keeps runnable definitions grouped
+  by physical target and carries disabled history into `migrate.New` automatically;
+  `App.MigrationHistory()` also exposes disabled-only targets. `WithDatabaseScopes`
+  preserves the job archive's existing schema. Reconciled disabled checkpoints no
+  longer force unrelated migrations to reuse an older batch. Registry and target
+  composition share conflict checks, including rollback SQL, while dependency
+  order no longer causes false conflicts. The PostgreSQL application testkit uses
+  complete history for owned namespaces, including disabled-only targets extended
+  by explicit domain migrations.
 
 ## v0.35.0 — 2026-11-15
 

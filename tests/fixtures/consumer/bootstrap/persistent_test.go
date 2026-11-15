@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	stdhttp "net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -87,8 +88,14 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 		}
 	})
 	targets := app.Migrations()
-	if len(targets) != 1 || targets[0].Schema != schema {
-		t.Fatal("migration targets were not grouped")
+	groups, err := s.Services.Database.MigrationGroups(targets...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(groups, func(group infrastructure.MigrationGroup) bool {
+		return group.Schema == schema && len(group.Definitions) != 0
+	}) {
+		t.Fatal("configured migration target missing")
 	}
 	original := targets[0].Definitions[0].SQL[0]
 	targets[0].Definitions[0].SQL[0] = "mutated"
