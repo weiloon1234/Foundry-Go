@@ -1,6 +1,7 @@
 """Managed DNS behavior against a bounded loopback provider, never Cloudflare."""
 from dataclasses import asdict, replace
 import copy
+import io
 from pathlib import Path
 import signal
 import sys
@@ -9,6 +10,7 @@ import time
 import unittest
 from unittest.mock import patch, Mock
 import uuid
+from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import certificates
@@ -56,6 +58,149 @@ class ManagedDNSTests(unittest.TestCase):
         operation, plan = self.new_plan()
         dns.apply(self.host, self.entry, plan, operation)
         return next(iter(self.provider.records))
+
+    def test_ownership_comment_fits_free_plan_and_binds_full_identity(self):
+        operation, plan = self.new_plan()
+        change = dns.Change.parse(plan[0])
+        self.assertRegex(change.comment, r"^foundry:v1:[a-f0-9]{64}$")
+        self.assertLessEqual(len(change.comment), 100)
+        self.assertEqual(change.comment, dns.Change.parse(asdict(change)).comment)
+        for field in ("instance_id", "ownership_id", "create_operation_id"):
+            self.assertNotEqual(change.comment, replace(change, **{field: str(uuid.uuid4())}).comment)
+        with patch.object(dns.Change, "comment", new=property(lambda self: "x" * 101)):
+            with self.assertRaises(c.DeployError):
+                self.new_plan()
+
+    def test_fake_rejects_live_failure_payload_and_invalid_names(self):
+        _, plan = self.new_plan()
+        body = {**plan[0]["desired"], "name": "a" * 32 + ".foundry-dns-test." + "b" * 12 + ".org",
+                "comment": f"foundry:{INSTANCE}:{OWNER}:{OPERATION}"}
+        self.assertEqual((len(body["name"]), len(body["comment"])), (66, 118))
+        client = dns.Cloudflare(TOKEN)
+        for invalid in (body, {**body, "comment": "valid", "name": "a" * 64 + ".example.org"},
+                        {**body, "comment": "valid", "name": "bad..example.org"},
+                        {**body, "comment": "valid", "name": "-bad.example.org"},
+                        {**body, "comment": "valid", "name": ".".join(["a" * 63] * 4)}):
+            with self.subTest(name=invalid["name"]):
+                with self.assertRaises(c.DeployError) as failure:
+                    client.request("POST", ZONE, body=invalid)
+                self.assertEqual(failure.exception.code, "dns_provider_rejected")
+                self.assertFalse(self.provider.records)
+
+    def test_definite_create_rejection_preserves_diagnostics_without_reconciliation(self):
+        operation, plan = self.new_plan()
+        self.provider.fault = (400, {"success": False, "errors": [
+            {"code": 9313, "message": "DNS record comment exceeds the maximum length of 100 characters."}]})
+        with self.assertRaises(c.DeployError) as failure:
+            dns.apply(self.host, self.entry, plan, operation, track_public_admission=True)
+        self.assertEqual(failure.exception.code, "dns_provider_rejected")
+        self.assertIn("9313", str(failure.exception))
+        self.assertIn("100 characters", str(failure.exception))
+        self.assertFalse(self.provider.records)
+        calls = list(self.provider.calls)
+        self.assertEqual(calls[-1][0], "POST")
+        saved = dns.load(self.host, self.entry)["operations"][operation]
+        self.assertEqual(saved["results"][OWNER], "rejected")
+        self.assertNotIn("public_admission", saved)
+        with self.assertRaises(c.DeployError) as replay:
+            dns.apply(self.host, self.entry, plan, operation, track_public_admission=True)
+        self.assertEqual(replay.exception.code, "dns_provider_rejected")
+        self.assertIn("9313", str(replay.exception))
+        self.assertEqual(self.provider.calls, calls)
+        self.assertEqual(dns.report(self.host, self.entry, self.profile)[-1]["state"], "provider_rejected")
+        next_operation, reviewed = self.new_plan()
+        dns.apply(self.host, self.entry, reviewed, next_operation)
+        self.assertEqual(len(self.provider.records), 1)
+
+    def test_owned_record_rename_refuses_deletion(self):
+        record_id = self.create()
+        self.provider.put({**self.provider.records[record_id], "name": "renamed.example.org"}, record_id)
+        with self.assertRaises(c.DeployError):
+            self.new_plan(replace(self.profile, listeners=()))
+
+    def test_rejected_update_and_delete_preserve_owned_record_and_do_not_read_back(self):
+        record_id = self.create()
+        original = copy.deepcopy(self.provider.records[record_id])
+        for profile in (managed_profile("203.0.113.20"), replace(self.profile, listeners=())):
+            with self.subTest(removing=not profile.listeners):
+                operation, plan = self.new_plan(profile)
+                self.provider.fault = "reject"
+                with self.assertRaises(c.DeployError) as failure:
+                    dns.apply(self.host, self.entry, plan, operation)
+                self.assertEqual(failure.exception.code, "dns_provider_rejected")
+                self.assertIn("10000", failure.exception.detail)
+                self.assertEqual(self.provider.records[record_id], original)
+                self.assertIn(self.provider.calls[-1][0], ("PATCH", "DELETE"))
+                self.assertEqual(dns.load(self.host, self.entry)["owned"][OWNER]["prior"]["record_id"], record_id)
+
+    def test_uncertain_http_errors_reconcile_once_without_retry_and_keep_codes(self):
+        self.create()
+        for status, envelope in [(status, {"success": False, "errors": [{"code": 1001, "message": "Request failed"}]})
+                                 for status in (408, 409, 429, 500, 503)] + [
+                (400, {"success": False}), (400, {"success": True, "errors": [{"code": 1001}]}),
+                (200, {"success": False, "errors": [{"code": 1001, "message": "Request failed"}]})]:
+            with self.subTest(status=status, envelope=envelope):
+                operation, plan = self.new_plan(managed_profile("203.0.113.20"))
+                self.provider.fault = status, envelope
+                writes = sum(method == "PATCH" for method, _ in self.provider.calls)
+                with self.assertRaises(c.DeployError) as failure:
+                    dns.apply(self.host, self.entry, plan, operation)
+                self.assertEqual(failure.exception.code, "dns_reconciliation")
+                if "errors" in envelope:
+                    self.assertIn("1001", failure.exception.detail)
+                self.assertEqual(self.provider.calls[-1][0], "GET")
+                self.assertEqual(dns.load(self.host, self.entry)["operations"][operation]["results"][OWNER], "prior")
+                with self.assertRaises(c.DeployError):
+                    dns.apply(self.host, self.entry, plan, operation)
+                self.assertEqual(sum(method == "PATCH" for method, _ in self.provider.calls), writes + 1)
+
+    def test_diagnostics_are_bounded_sanitized_and_redacted_before_truncation(self):
+        for status in (400, 429):
+            with self.subTest(status=status):
+                # Updates permit a fresh reviewed operation after the uncertain 429.
+                if not self.provider.records:
+                    self.create()
+                operation, plan = self.new_plan(managed_profile("203.0.113.20"))
+                message = f"Invalid\nfield\x1b[31m {TOKEN} {ZONE.upper()} " + "x" * 300
+                self.provider.fault = status, {"success": False, "errors": [
+                    {"code": code, "message": message} for code in (9313, 10000, 1001, 9999)],
+                    "private": "DO-NOT-PRINT-RESPONSE"}
+                with self.assertRaises(c.DeployError) as failure:
+                    dns.apply(self.host, self.entry, plan, operation)
+                detail = failure.exception.detail
+                for code in (9313, 10000, 1001):
+                    self.assertIn(str(code), detail)
+                for hidden in (TOKEN, ZONE, ZONE.upper(), "9999", "DO-NOT-PRINT", "x" * 161):
+                    self.assertNotIn(hidden, detail)
+                self.assertTrue(all(32 <= ord(char) <= 126 for char in detail))
+                self.assertLess(len(detail), 1024)
+
+    def test_partial_batch_rejection_keeps_applied_records_pending_admission(self):
+        binding = self.profile.listeners[0][1]
+        extra = replace(binding.records[0], ownership_id=str(uuid.uuid4()), address="203.0.113.11")
+        profile = replace(self.profile, listeners=(("relay.ingress", replace(binding,
+            public_addresses=(*binding.public_addresses, extra.address), records=(*binding.records, extra))),))
+        operation, plan = self.new_plan(profile)
+        write = dns.Cloudflare.write
+        calls = []
+
+        def reject_second(client, change):
+            calls.append(change.ownership_id)
+            if len(calls) == 2:
+                self.provider.fault = "reject"
+            return write(client, change)
+
+        with patch.object(dns.Cloudflare, "write", reject_second):
+            with self.assertRaises(c.DeployError) as failure:
+                dns.apply(self.host, self.entry, plan, operation, track_public_admission=True)
+        self.assertEqual(failure.exception.code, "dns_provider_rejected")
+        saved = dns.load(self.host, self.entry)["operations"][operation]
+        self.assertEqual(saved["results"], {calls[0]: "applied", calls[1]: "rejected"})
+        self.assertEqual(saved["public_admission"], "pending")
+        self.assertEqual(len(self.provider.records), 1)
+        report = dns.report(self.host, self.entry, profile)[-1]
+        self.assertEqual(report["state"], "public_admission_pending")
+        self.assertIn("10000", report["rejections"][calls[1]])
 
     def test_create_update_delete_and_rollback_keep_record_identity(self):
         record_id = self.create()
@@ -154,7 +299,10 @@ class ManagedDNSTests(unittest.TestCase):
                 dns.apply(self.host, self.entry, plan, operation)
             self.assertNotIn(TOKEN, str(error.exception))
             self.assertNotIn("DO-NOT-PRINT", str(error.exception))
-            self.assertEqual(dns.load(self.host, self.entry)["operations"][operation]["results"][OWNER], "prior")
+            self.assertEqual(error.exception.code, "dns_provider_rejected" if fault == "reject" else "dns_reconciliation")
+            self.assertIn("10000" if fault == "reject" else "1015", error.exception.detail)
+            self.assertEqual(dns.load(self.host, self.entry)["operations"][operation]["results"][OWNER],
+                             "rejected" if fault == "reject" else "prior")
         self.assertEqual([m for m, _ in self.provider.calls].count("PATCH"), 2)
 
     def test_ownership_mismatch_refuses_delete(self):
@@ -318,6 +466,28 @@ class DNSContractTests(unittest.TestCase):
                 client.records(ZONE, "relay.example.org")
         self.assertEqual(response.read.call_args.args, (dns.MAX_RESPONSE + 1,))
         self.assertIsNone(dns.NoRedirect().redirect_request(None, None, 302, "", {}, "https://foreign.invalid"))
+
+    def test_http_error_bodies_are_bounded_and_malformed_errors_stay_uncertain(self):
+        client = dns.Cloudflare(TOKEN)
+        for raw, code in ((b"x" * (dns.MAX_RESPONSE + 1), "dns_response_bound"),
+                          (b"not-json", "dns_provider_unavailable")):
+            body = io.BytesIO(raw)
+            response = HTTPError("https://provider.invalid", 400, "Bad request", {}, body)
+            with patch.object(client._opener, "open", side_effect=response):
+                with self.assertRaises(c.DeployError) as failure:
+                    client.request("POST", ZONE, body={})
+            self.assertEqual(failure.exception.code, code)
+            self.assertTrue(body.closed)
+
+    def test_read_rejection_does_not_claim_a_write_was_rejected(self):
+        client = dns.Cloudflare(TOKEN)
+        response = HTTPError("https://provider.invalid", 403, "Forbidden", {},
+                             io.BytesIO(b'{"success":false,"errors":[{"code":10000,"message":"Authentication error"}]}'))
+        with patch.object(client._opener, "open", side_effect=response):
+            with self.assertRaises(c.DeployError) as failure:
+                client.records(ZONE, "relay.example.org")
+        self.assertEqual(failure.exception.code, "dns_provider_error")
+        self.assertIn("10000", failure.exception.detail)
 
     def test_missing_result_is_not_evidence_of_record_absence(self):
         client = dns.Cloudflare(TOKEN)

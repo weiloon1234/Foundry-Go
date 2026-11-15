@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import copy
 import json
+import re
 import socket
 import threading
 from urllib.parse import parse_qs, urlsplit
@@ -53,12 +54,24 @@ class Provider:
                 fault = fixture.fault
                 if method != "GET":
                     fixture.fault = None
+                if isinstance(fault, tuple) and method != "GET":
+                    return self.reply(*fault)
                 if fault == "rate_limit" and method != "GET":
-                    return self.reply(429, {"success": False, "errors": [{"message": "DO-NOT-PRINT-RESPONSE"}]})
+                    return self.reply(429, {"success": False, "errors": [{"code": 1015, "message": "Rate limited"}],
+                                            "private": "DO-NOT-PRINT-RESPONSE"})
                 if fault == "reject" and method != "GET":
-                    return self.reply(403, {"success": False})
+                    return self.reply(403, {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}]})
                 if fault == "lost_before" and method != "GET":
                     return self.lose()
+                if method in ("POST", "PATCH"):
+                    value = {**fixture.records.get(record_id, {}), **body}
+                    if not isinstance(value.get("comment", ""), str) or len(value.get("comment", "")) > 100:
+                        return self.reply(400, {"success": False, "errors": [{"code": 9313,
+                            "message": "DNS record comment exceeds the maximum length of 100 characters."}]})
+                    name = value.get("name")
+                    if not isinstance(name, str) or len(name) > 253 or not all(
+                            re.fullmatch(r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?", label) for label in name.split(".")):
+                        return self.reply(400, {"success": False, "errors": [{"code": 9000, "message": "Invalid DNS record name."}]})
                 if method == "GET":
                     if record_id:
                         if record_id not in fixture.records:

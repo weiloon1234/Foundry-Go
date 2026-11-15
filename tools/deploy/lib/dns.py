@@ -22,6 +22,7 @@ from host import OperationTimeout, wall_clock_budget
 
 MAX_RECORDS = 128
 MAX_RESPONSE = 256 * 1024
+MAX_COMMENT = 100
 APPLY_SECONDS = 300
 API = "https://api.cloudflare.com/client/v4"
 
@@ -29,6 +30,12 @@ API = "https://api.cloudflare.com/client/v4"
 class PublicAdmission(str, Enum):
     PENDING = "pending"
     COMMITTED = "committed"
+
+
+class ProviderRejected(DeployError):
+    """A coded HTTP rejection proves this request did not mutate the provider."""
+    def __init__(self, detail):
+        super().__init__("dns_provider_rejected", detail)
 
 
 def provider_id(value):
@@ -66,7 +73,7 @@ class Value:
         address = public_address(value["content"])
         require(value["type"] == ("A" if ipaddress.ip_address(address).version == 4 else "AAAA")
                 and type(value["proxied"]) is bool and isinstance(value["comment"], str)
-                and len(value["comment"]) <= 256, "dns_record", "Invalid provider record state.")
+                and len(value["comment"]) <= MAX_COMMENT, "dns_record", "Invalid provider record state.")
         return cls(dns_hostname(value["name"]), value["type"], address,
                    contract_int(value["ttl"], 1, 86400), value["proxied"], value["comment"])
 
@@ -118,7 +125,7 @@ class Change:
 
     @property
     def comment(self):
-        return f"foundry:{self.instance_id}:{self.ownership_id}:{self.create_operation_id}"
+        return "foundry:v1:" + canonical_digest([self.instance_id, self.ownership_id, self.create_operation_id])
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -133,6 +140,22 @@ class Cloudflare:
         self._token = token
         self._opener = build_opener(NoRedirect(), ProxyHandler({}))
 
+    def _errors(self, value, zone):
+        errors = value.get("errors") if isinstance(value, dict) else None
+        if not isinstance(errors, list):
+            return []
+        diagnostics = []
+        for error in errors[:3]:
+            if not isinstance(error, dict) or type(error.get("code")) is not int or not 0 <= error["code"] <= 2**31 - 1:
+                continue
+            message = error.get("message")
+            message = message if isinstance(message, str) else "Provider error"
+            for secret in (self._token, zone):
+                message = re.sub(re.escape(secret), "[redacted]", message, flags=re.IGNORECASE)
+            message = " ".join("".join(c if 32 <= ord(c) <= 126 else " " for c in message).split())
+            diagnostics.append(f"{error['code']}: {message[:160]}")
+        return diagnostics
+
     def request(self, method, zone, suffix="", body=None):
         url = API + "/zones/" + provider_id(zone) + "/dns_records" + suffix
         data = json.dumps(body, separators=(",", ":")).encode() if body is not None else None
@@ -142,20 +165,28 @@ class Cloudflare:
         try:
             remaining = signal.getitimer(signal.ITIMER_REAL)[0]
             with nullcontext() if 0 < remaining <= 15 else wall_clock_budget(15):
-                with self._opener.open(request, timeout=10) as response:
+                try:
+                    response = self._opener.open(request, timeout=10)
+                except HTTPError as error:
+                    response = error
+                with response:
+                    status = response.status
+                    if status == 404 and method == "GET" and suffix.startswith("/"):
+                        return None, None
                     raw = response.read(MAX_RESPONSE + 1)
                     require(len(raw) <= MAX_RESPONSE, "dns_response_bound", "DNS response exceeds its bound.")
                     value = json.loads(raw)
-                    require(isinstance(value, dict) and value.get("success") is True,
-                            "dns_provider_error", "Cloudflare rejected the DNS request.")
+                    diagnostics = self._errors(value, zone)
+                    if not (200 <= status < 300 and isinstance(value, dict) and value.get("success") is True):
+                        detail = f"Cloudflare HTTP {status}; no automatic retry was made."
+                        if diagnostics:
+                            detail += " " + "; ".join(diagnostics)
+                        if method in ("POST", "PATCH", "DELETE") and 400 <= status < 500 \
+                                and status not in (408, 409, 429) and isinstance(value, dict) \
+                                and value.get("success") is False and diagnostics:
+                            raise ProviderRejected(detail)
+                        raise DeployError("dns_rate_limited" if status == 429 else "dns_provider_error", detail)
                     return value, response.headers.get("ETag")
-        except HTTPError as error:
-            code = error.code
-            error.close()
-            if code == 404 and method == "GET" and suffix.startswith("/"):
-                return None, None
-            raise DeployError("dns_rate_limited" if code == 429 else "dns_provider_error",
-                              "Cloudflare request failed; no automatic retry was made.") from None
         except (URLError, OSError, ValueError, HTTPException) as error:
             from host import OperationTimeout
             if isinstance(error, OperationTimeout) and 0 < remaining <= 15:
@@ -224,14 +255,20 @@ def parse_state(value, instance_id):
                 "dns_state", "Invalid owned record identity.")
     for key, item in value["operations"].items():
         contract_uuid(key)
-        contract_object(item, ("changes", "results"), ("public_admission",))
+        contract_object(item, ("changes", "results"), ("public_admission", "rejections"))
         require("public_admission" not in item or item["public_admission"] in {s.value for s in PublicAdmission},
                 "dns_state", "Invalid DNS public admission phase.")
         changes = contract_list(item["changes"], Change.parse, maximum=MAX_RECORDS)
         require(all(c.instance_id == instance_id for c in changes) and isinstance(item["results"], dict)
                 and set(item["results"]) <= {c.ownership_id for c in changes}
-                and all(s in ("pending", "applied", "prior", "conflict") for s in item["results"].values()),
+                and all(s in ("pending", "applied", "prior", "conflict", "rejected") for s in item["results"].values()),
                 "dns_state", "Invalid DNS operation identity or result.")
+        rejections = item.get("rejections", {})
+        require(isinstance(rejections, dict)
+                and set(rejections) == {key for key, result in item["results"].items() if result == "rejected"}
+                and all(isinstance(detail, str) and 0 < len(detail) <= 1024
+                        and all(32 <= ord(c) <= 126 for c in detail) for detail in rejections.values()),
+                "dns_state", "Invalid DNS provider rejection.")
         require(item.get("public_admission") != PublicAdmission.COMMITTED.value or provider_applied(item),
                 "dns_state", "Committed DNS admission requires complete provider outcomes.")
     return value
@@ -333,7 +370,8 @@ def plan(host, entry, profile, operation_id):
             clients[zone] = provider(host, entry, zone)
         client = clients[zone]
         before = client.get(zone, owned.prior.record_id) if owned else None
-        require(owned is None or before is not None and before.value.comment == owned.comment,
+        require(owned is None or before is not None and before.value.comment == owned.comment
+                and (before.value.name, before.value.type) == (owned.prior.value.name, owned.prior.value.type),
                 "dns_ownership", "The owned provider record is missing or its ownership evidence changed.")
         change = Change(zone, key, profile.instance_id, owned.create_operation_id if owned else operation_id,
                         before, target.desired if target else None)
@@ -362,6 +400,9 @@ def verify(host, entry, changes):
                 (change.prior is not None and owned is not None and change.zone_id == owned.zone_id
                  and change.prior.record_id == owned.prior.record_id and change.comment == owned.comment),
                 "dns_ownership", "Plan record IDs differ from durable ownership.")
+        require(owned is None or (change.prior.value.name, change.prior.value.type)
+                == (owned.prior.value.name, owned.prior.value.type),
+                "dns_ownership", "Plan hostname differs from durable ownership.")
         if change.zone_id not in clients:
             clients[change.zone_id] = provider(host, entry, change.zone_id)
         client = clients[change.zone_id]
@@ -394,6 +435,9 @@ def _apply(host, entry, changes, operation_id, *, track_public_admission):
     state = load(host, entry)
     if operation_id in state["operations"]:
         require(state["operations"][operation_id]["changes"] == changes, "dns_intent", "DNS operation intent is immutable.")
+        rejections = state["operations"][operation_id].get("rejections", {})
+        if rejections:
+            raise ProviderRejected(next(iter(rejections.values())))
         if track_public_admission and "public_admission" not in state["operations"][operation_id]:
             state["operations"][operation_id]["public_admission"] = PublicAdmission.PENDING.value
             save(host, entry, state)
@@ -426,7 +470,14 @@ def _apply(host, entry, changes, operation_id, *, track_public_admission):
         try:
             if change.prior is None or change.desired != change.prior.value:
                 client.write(change)
-        except DeployError:
+        except ProviderRejected as error:
+            item["results"][change.ownership_id] = "rejected"
+            item.setdefault("rejections", {})[change.ownership_id] = error.detail
+            if set(item["results"].values()) == {"rejected"}:
+                item.pop("public_admission", None)
+            save(host, entry, state)
+            raise
+        except DeployError as error:
             # A transport or provider failure does not establish nonpublication.
             # Reconcile once by identity; never repeat the mutation.
             try:
@@ -434,7 +485,8 @@ def _apply(host, entry, changes, operation_id, *, track_public_admission):
             except DeployError:
                 pass
             if item["results"].get(change.ownership_id) != "applied":
-                raise DeployError("dns_reconciliation", "DNS outcome is unresolved; inspect the operation UUID and owned record IDs. No write was retried.") from None
+                raise DeployError("dns_reconciliation", "DNS outcome is unresolved; inspect the operation UUID and owned record IDs. "
+                                  "No write was retried. " + error.detail) from None
         reconcile(host, entry, state, operation_id, clients=clients)
         require(item["results"].get(change.ownership_id) == "applied", "dns_reconciliation",
                 "DNS read-back did not prove the requested state; public admission remains closed.")
@@ -505,13 +557,18 @@ def report(host, entry, profile):
                 if change.ownership_id not in item["results"]:
                     observed[change.ownership_id] = "not_attempted"
                     continue
+                if item["results"][change.ownership_id] == "rejected":
+                    observed[change.ownership_id] = "rejected"
+                    continue
                 try:
                     current = _read_result(provider(host, entry, change.zone_id), change)
                     observed[change.ownership_id] = _outcome(change, current)
                 except DeployError:
                     observed[change.ownership_id] = "unavailable"
-            values.append({"mode": "managed", "state": "public_admission_pending" if admission_pending else "reconciliation_required", "operation_id": operation_id,
-                           "results": item["results"], "observed_results": observed, "changes": item["changes"]})
+            values.append({"mode": "managed", "state": "public_admission_pending" if admission_pending else
+                           "provider_rejected" if item.get("rejections") else "reconciliation_required", "operation_id": operation_id,
+                           "results": item["results"], "observed_results": observed, "changes": item["changes"],
+                           **({"rejections": item["rejections"]} if item.get("rejections") else {})})
     return values
 
 
@@ -539,6 +596,7 @@ def recovery_review(binding, metadata, archived_state, token):
                 and change.zone_id == owned.zone_id == metadata.get("certificate", {}).get("zone_ref")
                 and change.create_operation_id == owned.create_operation_id
                 and change.prior.record_id == owned.prior.record_id
+                and (change.prior.value.name, change.prior.value.type) == (owned.prior.value.name, owned.prior.value.type)
                 and change.prior.value.comment == owned.comment,
                 "dns_recovery", "Recovery record IDs or ownership differ from the archived creation receipt.")
         require(client.get(change.zone_id, change.prior.record_id) == change.prior,

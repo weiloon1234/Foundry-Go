@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed: managed DNS ownership comments fit Cloudflare's 100-character limit on
+  every plan. Provider errors retain bounded, redacted codes and messages;
+  definite HTTP rejections are recorded separately from uncertain writes.
+  The controlled provider enforces comment and DNS hostname limits.
 - Fixed: managed DNS application has its own total budget, and replacement-host
   public opening receives a fresh readiness budget after cutover. DNS intents
   retain a pending admission phase if opening or deployment completion fails.

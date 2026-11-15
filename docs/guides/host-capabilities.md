@@ -1012,9 +1012,13 @@ digest. Any changed state invalidates the plan. Existing unowned records at the
 hostname are refused, even when they already have the requested address.
 
 The root-owned instance configuration file `managed-dns.json` records provider
-IDs and the creation operation UUID. A provider comment carries the instance,
-ownership, and creation UUIDs. Matching an address or comment alone cannot adopt
-an existing record. The encrypted configuration backup includes this file. Take a
+IDs and the full instance, ownership, and creation operation UUIDs. The provider
+comment is `foundry:v1:` followed by the 64-character SHA-256 digest of the
+canonical JSON array `[instance_id, ownership_id, create_operation_id]`. Its 75
+characters fit Cloudflare's 100-character limit on every plan; planning validates
+that limit. Verification matches the comment exactly and checks the stored record
+ID and hostname. Matching an address or comment alone cannot adopt an existing
+record. The encrypted configuration backup includes this file. Take a
 new backup after changing DNS if the replacement host must recover those records.
 
 Activation and rollback use the same planner. DNS changes occur after observed
@@ -1025,8 +1029,16 @@ DNS application has a separate 300-second budget. Recovery, activation, and
 rollback give public opening a fresh readiness budget after DNS reconciliation.
 
 Each provider mutation has a durable intent before its single write attempt.
-Timeouts, lost acknowledgements, and provider errors trigger read-back rather than
-another write. A lost create acknowledgement is matched to its persisted creation
+An HTTP 4xx response with `success: false` and provider error codes proves rejection,
+except for HTTP 408, 409, and 429. A definite rejection records `rejected` and returns
+`dns_provider_rejected` with the provider diagnostics. Replaying that operation
+returns the rejection without another write; a corrected request needs a new plan
+and operation. Reports include `managed_dns_provider_rejected`. If earlier records
+in the batch changed, their pending admission and reconciliation identities remain.
+
+HTTP 408, 409, 429, 5xx, incomplete or invalid error responses, timeouts, and lost
+acknowledgements remain uncertain and trigger read-back rather than another write.
+A lost create acknowledgement is matched to its persisted creation
 identity. An absent unknown create remains unresolved and never triggers a second
 POST. Updates and deletes reconcile through the same owned provider IDs:
 
@@ -1058,8 +1070,10 @@ contract. Foundry re-reads immediately before writing, but an external editor ca
 still change a record between that read and the write. Serialize manual provider
 edits with deployments. Requests disable redirects and proxies, use a 10-second
 socket timeout and a 15-second wall budget, and cap responses at 256 KiB. Record
-inventories and operations are limited to 128 records. Errors do not print tokens
-or complete API responses.
+inventories and operations are limited to 128 records. Diagnostics retain at most
+the first three provider error codes and messages, with each message limited to
+160 characters. Messages have control characters removed and the credential token
+and zone ID redacted before truncation. Errors never print complete API responses.
 
 Replacement-host `RecoveryPublicBinding` uses `dns_cutover: "managed_pending"`
 when any listener uses managed DNS. Each managed listener includes
