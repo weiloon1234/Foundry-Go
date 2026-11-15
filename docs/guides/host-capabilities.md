@@ -900,6 +900,11 @@ observer thread and at most one open probe socket, bounded by the 256-unit
 instance cap. Network probes never wait for another unit's observer. Only short
 local inspections (`systemctl show`, `ss`, and related status commands) share a
 16-slot semaphore; their existing timeouts include time waiting for a slot.
+Failed inspections release that slot before persisting safe command metadata.
+Thread and file journal locks share the remaining inspection deadline, and both
+waits honour cancellation. If the deadline expires or cancellation prevents a
+write, the caller still receives `command_failed` with a notice that the journal
+entry was not recorded. Inspect the failed command privately on the host.
 Each unit has its own probe cadence and stability window. A unit that finishes
 early remains under observation while slower peers finish; a lost probe or changed process invalidates
 its proof. Failure or deadline expiry closes active probe sockets, kills and

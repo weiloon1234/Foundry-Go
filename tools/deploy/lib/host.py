@@ -66,23 +66,22 @@ class ObservationBudget:
             self.deadline = previous
 
     @contextmanager
-    def inspection(self, args, timeout):
+    def inspection(self, args):
         command = Path(args[0]).name
         local = command == "ss" or (command == "systemctl" and len(args) > 1 and args[1] in {
             "show", "is-enabled", "is-active", "is-failed", "list-units", "list-unit-files"})
         if self.inspections is None or not local:
             yield
             return
-        with self.limit(timeout):
-            while True:
-                self.check()
-                if self.inspections.acquire(timeout=min(.02, max(0, self.deadline - time.monotonic()))):
-                    break
-            try:
-                self.check()
-                yield
-            finally:
-                self.inspections.release()
+        while True:
+            self.check()
+            if self.inspections.acquire(timeout=min(.02, max(0, self.deadline - time.monotonic()))):
+                break
+        try:
+            self.check()
+            yield
+        finally:
+            self.inspections.release()
 
     @contextmanager
     def own(self, cancel):
@@ -214,44 +213,49 @@ class Host:
         budget = current_observation()
         if budget:
             budget.check()
-        with budget.inspection(args, timeout) if budget else nullcontext():
-            try:
-                process = subprocess.Popen([str(a) for a in args], text=True,
-                                           stdin=subprocess.PIPE if input is not None else None,
-                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                           env=environment, cwd=cwd, start_new_session=True, pass_fds=pass_fds)
-                cancel_lock, cancelled = threading.Lock(), False
-                def cancel():
-                    nonlocal cancelled
-                    with cancel_lock:
-                        if cancelled:
-                            return
-                        try:
-                            os.killpg(process.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                        cancelled = True
+        with budget.limit(timeout) if budget else nullcontext():
+            with budget.inspection(args) if budget else nullcontext():
+                result = None
                 try:
-                    with budget.own(cancel) if budget else nullcontext():
-                        remaining = min(timeout, budget.deadline - time.monotonic()) if budget else timeout
-                        stdout, stderr = process.communicate(input=input, timeout=max(.001, remaining))
-                except BaseException:
-                    # A killed runuser/shell parent does not stop its descendants.
-                    # Own the session until cancellation has killed the whole group.
-                    cancel()
-                    process.wait()
-                    process.stdout.close()
-                    process.stderr.close()
-                    if process.stdin is not None:
-                        process.stdin.close()
+                    process = subprocess.Popen([str(a) for a in args], text=True,
+                                               stdin=subprocess.PIPE if input is not None else None,
+                                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                               env=environment, cwd=cwd, start_new_session=True, pass_fds=pass_fds)
+                    cancel_lock, cancelled = threading.Lock(), False
+                    def cancel():
+                        nonlocal cancelled
+                        with cancel_lock:
+                            if cancelled:
+                                return
+                            try:
+                                os.killpg(process.pid, signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                            cancelled = True
+                    try:
+                        with budget.own(cancel) if budget else nullcontext():
+                            remaining = min(timeout, budget.deadline - time.monotonic()) if budget else timeout
+                            stdout, stderr = process.communicate(input=input, timeout=max(.001, remaining))
+                            result = subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
+                    except BaseException as error:
+                        failed = (result is not None and check and result.returncode
+                                  and not (cancelled and result.returncode == -signal.SIGKILL))
+                        # A killed runuser/shell parent does not stop its descendants.
+                        # Own the session until cancellation has killed the whole group.
+                        cancel()
+                        process.wait()
+                        process.stdout.close()
+                        process.stderr.close()
+                        if process.stdin is not None:
+                            process.stdin.close()
+                        if not (isinstance(error, OperationTimeout) and failed):
+                            raise
+                except OperationTimeout:
                     raise
-                result = subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
-            except OperationTimeout:
-                raise
-            except (OSError, subprocess.TimeoutExpired) as error:
-                if budget and isinstance(error, subprocess.TimeoutExpired):
-                    budget.check()
-                raise DeployError("command_unavailable", "Required host command failed to start or exceeded its deadline.") from None
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    if budget and isinstance(error, subprocess.TimeoutExpired):
+                        budget.check()
+                    raise DeployError("command_unavailable", "Required host command failed to start or exceeded its deadline.") from None
             return self.check_result(result, check=check)
 
     @contextmanager
@@ -271,7 +275,6 @@ class Host:
             command = Path(result.args[0]).name
             journal = getattr(self, "_command_journal", None)
             if journal is not None:
-                path, fd = journal
                 # Arbitrary argv, output and environment can contain credentials.
                 # Only systemctl's known verb/unit operands have diagnostic value.
                 subcommand, units = None, []
@@ -286,23 +289,55 @@ class Host:
                             next(operands, None)
                         elif not argument.startswith("-") and re.fullmatch(r"[A-Za-z0-9_:.@\\-]{1,255}", argument):
                             units.append(argument)
-                with self._command_journal_lock:
-                    deadline = time.monotonic() + 10
-                    while True:
-                        try:
-                            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                            break
-                        except BlockingIOError:
-                            require(time.monotonic() < deadline, "command_journal_busy", "The operation command journal is busy.")
-                            time.sleep(.01)
-                    try:
-                        records = read_json(path) if path.exists() else []
-                        atomic_json(path, [*records, {"command": command, "subcommand": subcommand,
-                                    "units": units, "exit_status": result.returncode}][-64:], mode=0o600)
-                    finally:
-                        fcntl.flock(fd, fcntl.LOCK_UN)
+                try:
+                    self._record_command_failure(journal, {"command": command, "subcommand": subcommand,
+                                                           "units": units, "exit_status": result.returncode})
+                except OperationTimeout as error:
+                    budget = current_observation()
+                    reason = "observation cancelled" if budget and budget.cancelled.is_set() else "deadline expired"
+                    raise DeployError("command_failed", f"Host operation failed ({command}); command journal entry was not recorded "
+                                      f"({reason}). Inspect it privately on the host.") from error
+                except (OSError, DeployError) as error:
+                    raise DeployError("command_failed", f"Host operation failed ({command}); command journal persistence could not be confirmed. "
+                                      "Inspect it privately on the host.") from error
             raise DeployError("command_failed", f"Host operation failed ({command}); inspect it privately on the host.")
         return result
+
+    def _record_command_failure(self, journal, record):
+        path, fd = journal
+        budget = current_observation()
+        deadline = min(time.monotonic() + 10, budget.deadline) if budget else time.monotonic() + 10
+
+        def wait_seconds():
+            if budget:
+                budget.check()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise OperationTimeout("command journal deadline expired")
+            return min(.01, remaining)
+
+        while not self._command_journal_lock.acquire(timeout=wait_seconds()):
+            pass
+        try:
+            while True:
+                wait_seconds()
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if budget:
+                        budget.cancelled.wait(wait_seconds())
+                    else:
+                        time.sleep(wait_seconds())
+            try:
+                wait_seconds()
+                records = read_json(path) if path.exists() else []
+                wait_seconds()
+                atomic_json(path, [*records, record][-64:], mode=0o600)
+            finally:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            self._command_journal_lock.release()
 
     def check_control_directory(self, path):
         """Check a deployment-owned directory, without inspecting /tmp/test ancestors."""

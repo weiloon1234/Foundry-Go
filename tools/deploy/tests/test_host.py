@@ -1,7 +1,11 @@
 """Host command cancellation owns descendants as well as the immediate child."""
+from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor, wait
 import io
 import json
 import tempfile
+import threading
+import time
 from pathlib import Path
 import signal
 import socket
@@ -157,6 +161,135 @@ with machine.command_journal(path):
             self.assertEqual(len(records), 20)
             self.assertEqual({tuple(record["units"]) for record in records},
                              {(name + str(n) + ".service",) for name in ("first", "second") for n in range(10)})
+
+    @contextmanager
+    def held_journal_file(self, path):
+        ready = path.with_name("locked")
+        script = "import fcntl, pathlib, sys; lock = open(sys.argv[1], 'a'); fcntl.flock(lock, fcntl.LOCK_EX); pathlib.Path(sys.argv[2]).touch(); sys.stdin.read()"
+        child = subprocess.Popen([sys.executable, "-B", "-c", script, str(path) + ".lock", str(ready)],
+                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 5
+            while not ready.exists() and child.poll() is None and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertTrue(ready.exists(), "Journal lock holder did not start")
+            yield
+        finally:
+            try:
+                child.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.communicate()
+
+    def test_sixteen_failed_inspections_release_capacity_and_share_the_journal_deadline(self):
+        with tempfile.TemporaryDirectory() as root:
+            host, slots = Host(), threading.BoundedSemaphore(16)
+            path = Path(root).resolve() / "commands.json"
+            path.write_text("[]")
+            completed = threading.Barrier(17)
+            def spawn(args, **kwargs):
+                process = self.process()
+                process.returncode = 0 if args[2] == "healthy.service" else 5
+                def communicate(**kwargs):
+                    if process.returncode:
+                        completed.wait(2)
+                    return "", ""
+                process.communicate.side_effect = communicate
+                return process
+            def inspect(index):
+                with host_module.ObservationBudget(time.monotonic() + 30, slots):
+                    try:
+                        host.run(["systemctl", "show", f"failed-{index}.service"], timeout=.5)
+                    except BaseException as error:
+                        return error
+                self.fail("Failed inspection was accepted")
+            with host.command_journal(path), ThreadPoolExecutor(16) as pool:
+                with self.held_journal_file(path), patch.object(host_module.subprocess, "Popen", side_effect=spawn):
+                    started = time.monotonic()
+                    futures = [pool.submit(inspect, index) for index in range(16)]
+                    completed.wait(2)
+                    healthy_error = None
+                    try:
+                        with host_module.ObservationBudget(time.monotonic() + .2, slots):
+                            host.run(["systemctl", "show", "healthy.service"], timeout=.2)
+                    except BaseException as error:
+                        healthy_error = error
+                    done, _ = wait(futures, timeout=max(0, started + 1 - time.monotonic()))
+                    within_budget = len(done) == 16
+                errors = [future.result(timeout=2) for future in futures]
+            self.assertIsNone(healthy_error, "Journal persistence retained inspection capacity")
+            self.assertTrue(within_budget, "Journal lock waits exceeded the shared inspection deadline")
+            self.assertEqual(json.loads(path.read_text()), [])
+            for error in errors:
+                self.assertIsInstance(error, DeployError)
+                self.assertEqual(error.code, "command_failed")
+                self.assertIn("journal entry was not recorded", error.detail)
+                self.assertIn("deadline", error.detail)
+
+    def test_cancellation_interrupts_both_journal_lock_waits(self):
+        for held in ("thread", "file"):
+            with self.subTest(held=held), tempfile.TemporaryDirectory() as root:
+                host, entered = Host(), threading.Event()
+                path = Path(root).resolve() / "commands.json"
+                path.write_text("[]")
+                budget = host_module.ObservationBudget(time.monotonic() + 30)
+                def fail():
+                    with budget:
+                        entered.set()
+                        try:
+                            host.check_result(subprocess.CompletedProcess(["systemctl", "show", "test.service"], 5, "", ""))
+                        except BaseException as error:
+                            return error
+                with host.command_journal(path), ThreadPoolExecutor(1) as pool:
+                    with host._command_journal_lock if held == "thread" else self.held_journal_file(path):
+                        future = pool.submit(fail)
+                        self.assertTrue(entered.wait(1))
+                        time.sleep(.05)
+                        budget.cancel()
+                        done, _ = wait((future,), timeout=.5)
+                        interrupted = bool(done)
+                    error = future.result(timeout=2)
+                self.assertTrue(interrupted, "Cancellation did not interrupt the journal lock wait")
+                self.assertIsInstance(error, DeployError)
+                self.assertEqual(error.code, "command_failed")
+                self.assertIn("journal entry was not recorded", error.detail)
+                self.assertIn("cancelled", error.detail)
+                self.assertEqual(json.loads(path.read_text()), [])
+
+    def test_deadline_before_journal_write_preserves_failure_without_writing(self):
+        with tempfile.TemporaryDirectory() as root:
+            host = Host()
+            path = Path(root).resolve() / "commands.json"
+            path.write_text("[]")
+            budget = host_module.ObservationBudget(time.monotonic() + 5)
+            def expire(path):
+                budget.deadline = time.monotonic() - 1
+                return []
+            with host.command_journal(path), budget, patch.object(host_module, "read_json", side_effect=expire), \
+                    patch.object(host_module, "atomic_json") as write, self.assertRaises(DeployError) as raised:
+                host.check_result(subprocess.CompletedProcess(["systemctl", "show", "test.service"], 5, "", ""))
+            self.assertEqual(raised.exception.code, "command_failed")
+            self.assertIn("journal entry was not recorded (deadline expired)", raised.exception.detail)
+            write.assert_not_called()
+
+    def test_cancellation_after_failed_command_preserves_failure_and_unrecorded_notice(self):
+        with tempfile.TemporaryDirectory() as root:
+            host = Host()
+            path = Path(root).resolve() / "commands.json"
+            process = self.process()
+            process.returncode = 5
+            budget = host_module.ObservationBudget(time.monotonic() + 5)
+            def communicate(**kwargs):
+                budget.cancel()
+                return "private stdout", "private stderr"
+            process.communicate.side_effect = communicate
+            with host.command_journal(path), budget, patch.object(host_module.subprocess, "Popen", return_value=process), \
+                    patch.object(host_module.os, "killpg"), self.assertRaises(DeployError) as raised:
+                host.run(["systemctl", "show", "test.service"])
+            self.assertEqual(raised.exception.code, "command_failed")
+            self.assertIn("journal entry was not recorded (observation cancelled)", raised.exception.detail)
+            self.assertNotIn("private", raised.exception.detail.replace("privately", ""))
+            self.assertFalse(path.exists())
 
     def test_timeout_kills_descendant_process_group_before_returning_error(self):
         process = self.process()

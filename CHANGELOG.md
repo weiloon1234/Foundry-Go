@@ -4,6 +4,11 @@
 
 ### Numbered copies
 
+- Fixed: failed readiness inspections release command capacity before journaling.
+  Thread and file lock waits share the inspection deadline and honour cancellation.
+  If persistence cannot start in time, the caller still receives the command failure
+  with an explicit notice that its journal entry was not recorded.
+
 - Fixed: numbered listeners compose with PROXY and managed DNS. Every copy gets
   its declared PROXY policy and a separate readiness endpoint. Copy count and
   port changes do not write DNS; recovery retains DNS cutover and fresh public
