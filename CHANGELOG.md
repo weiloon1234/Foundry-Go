@@ -1,49 +1,61 @@
 # Changelog
 
-## Unreleased
+## v0.35.0 — 2026-11-15
 
-- Added: role-level loopback network confinement with verified systemd IP policy
-  and live ingress/egress BPF attachments, shared with recovery rehearsal. Private
-  TCP listeners may declare wildcard binding only on confined roles. Readiness
-  retains identity and ownership checks; ports are reserved across host addresses
-  and IP families. Reports distinguish verified private confinement from exposure.
-  Confined listeners create no firewall openings or nginx routes.
-- Added: deploy-tool generation 16 with a sticky confinement capability floor
-  through rollback and recovery, and disposable-container acceptance coverage.
-- Fixed: host-capabilities guide now documents supported release-carried bundle
-  activation using the verified release inventory digest.
-- Added: opt-in live R2 multipart ranged-read certification and a matching TLS
-  stand-in test, including the seekable reader used by attachments.
-- Changed: R2 conditional create and replace now support multipart objects above
-  `PartBytes` (up to `MaxObjectBytes`) after live certification on 2026-11-15.
-  The conditional matrix now uses the production backend directly. See the
-  [live evidence](docs/evidence/b26-resource-provider-acceptance.md#recorded-live-result-2026-11-15).
-- Added: topology-level disposable shared directories with explicit writer and
-  reader roles, backed by individual size-limited tmpfs mounts under
-  `/run/foundry/services/<instance UUID>/shared/<name>`. Deploy operations and boot
-  prepare host mounts under the shared-directories lock before units start.
-  Per-start hooks verify granted views, including reader read-only mounts;
-  missing bind sources fail closed with `226/NAMESPACE` before hooks can run.
-  Systemd grants writers
-  read/write access, readers read-only access, and hides the shared tree from
-  unlisted roles. Release/declaration transitions discard caches after all old
-  roles stop; reboot also clears them. Reports and backup coverage explicitly
-  mark them disposable, never backed up or restored.
-  A root-only host parent and granted roles' private user namespaces block
-  same-account procfs bypasses through host helpers and other roles' views.
-  Preparation and discard accept root:root parents with mode `0700` or exactly
-  `0755`, which systemd creates for missing mount points before startup hooks;
-  they tighten `0755` to `0700` through an opened directory fd and re-verify before
-  mount operations. Other ownership, types, or modes are refused. Reports never
-  modify permissions and mark an empty, unmounted `0755` parent `not_prepared`
-  without a finding; content, mounts, or other drift remain unverified.
-  Console calls made by the deploy tool retain HTTP bindings except shared
-  directories; their shared-directory lookups return `fault.Missing`.
-- Added: `shared_directory_path` argv/environment references and typed
-  `deployment.Bindings.SharedDirectory` bindings with path, access and byte limit.
-  This capability requires deploy-tool generation 16 on client and host; the
-  instance floor stays 16 after rollback. Existing descriptors omit the new
-  collection when no shared directory is granted.
+- Added: loopback network confinement for roles, declared with
+  `"network": {"confinement": "loopback"}`. The role's unit renders
+  `IPAddressDeny=any` and `IPAddressAllow=localhost`, so it can reach loopback
+  services and Unix sockets but no remote address. Every admitted start and
+  readiness check verifies the loaded IPv4 and IPv6 policy and the attached cgroup
+  ingress and egress BPF programs; missing support, an unobservable attachment or a
+  policy override refuses the start. Recovery rehearsal isolation uses the same
+  verifier. The public built-in HTTP role cannot be confined, and confined roles
+  cannot declare public listeners.
+- Added: wildcard private TCP listeners with `"wildcard": true`, for daemons that
+  cannot be told which address to bind. They are accepted only on confined roles.
+  Readiness accepts `0.0.0.0`, `[::]` or `*` on the allocated port while keeping
+  process identity and ownership checks. The port stays reserved across all host
+  addresses and both IP families, including historical allocations, and creates
+  no firewall opening or nginx route. Reports list these listeners with their
+  confinement and show the live confinement proof separately. Private port
+  allocation also skips the shared Redis port.
+- Added: disposable shared file directories between roles, declared at the
+  topology level under `shared_directories` with `state: "disposable"`,
+  `max_bytes`, `writers` and `readers`. Each directory is a size-limited tmpfs
+  mount at `/run/foundry/services/<instance UUID>/shared/<name>` with a bounded
+  inode count. Writers get read-write access, readers a read-only bind, and roles
+  without a grant see an empty view. Granted roles run in private user namespaces
+  and the host parent is root-only, so procfs traversal through other processes of
+  the instance account cannot reach a cache. Deploy operations and boot prepare the
+  mounts in the host namespace before units start; each start verifies the unit's
+  own view, and a missing cache fails the unit closed with `226/NAMESPACE`.
+  Release or declaration changes discard caches after every old role has stopped,
+  and reboot clears them. Reports and backup coverage mark them disposable; their
+  contents are never backed up or restored.
+- Added: `shared_directory_path` references for argv and environment entries, and
+  `deployment.Bindings.SharedDirectory(name)` returning the path, access mode and
+  byte limit. Processes without a grant, including console calls made by the deploy
+  tool, get `fault.Missing`; one application binary should treat that as "no grant".
+  Console calls otherwise keep the HTTP role's bindings. Commands typed in
+  `ACTION=shell` still receive no deployment bindings.
+- Changed: R2 conditional create and replace now use multipart completion for
+  objects above `PartBytes`, up to `MaxObjectBytes`. Live certification passed on
+  2026-11-15 for the full create and replace matrix and for ranged and seekable
+  reads of a 96 MiB object through the attachments seek reader. Large attachment
+  policies on R2 no longer fail validation. The live command and recorded results
+  are in [the provider evidence](docs/evidence/b26-resource-provider-acceptance.md#recorded-live-result-2026-11-15).
+- Changed: confinement, wildcard listeners and shared directories require deploy
+  tool generation 16 on both the client and host, and the instance keeps that floor
+  through rollback and recovery. Update the application's Foundry-Go pin to
+  v0.35.0. From a generation 9–15 host, run `ACTION=tools-plan make deploy`, then
+  `ACTION=tools-apply PLAN_TOKEN='<token>' OPERATION='<stable-uuid-v4>' make deploy`.
+  Use `ACTION=upgrade-resume` with the same operation UUID after interruption.
+  Fresh bootstrap installs generation 16.
+- Changed: existing applications and declarations require no changes. Listeners,
+  bindings and descriptors keep their behavior and shapes when the new
+  declarations are omitted.
+- Fixed: the host-capabilities guide now documents release-carried bundle
+  activation through the verified release inventory digest, matching the tool.
 
 ## v0.34.0 — 2026-11-15
 
