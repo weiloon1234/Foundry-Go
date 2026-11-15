@@ -242,7 +242,22 @@ func (p *conditionalPeer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			reject(412, "PreconditionFailed")
 			return
 		}
-		w.Header().Set("Content-Length", strconv.FormatInt(object.size, 10))
+		offset, length := int64(0), object.size
+		partial := r.Method == "GET" && r.Header.Get("Range") != ""
+		if partial {
+			var end int64
+			if _, err := fmt.Sscanf(r.Header.Get("Range"), "bytes=%d-%d", &offset, &end); err != nil || offset < 0 || end < offset {
+				reject(400, "InvalidArgument")
+				return
+			}
+			if offset >= object.size {
+				reject(416, "InvalidRange")
+				return
+			}
+			length = min(end, object.size-1) - offset + 1
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", offset, offset+length-1, object.size))
+		}
+		w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
 		w.Header().Set("Content-Type", object.metadata.Get("Content-Type"))
 		w.Header().Set("ETag", object.tag)
 		w.Header().Set("Last-Modified", time.Unix(1700000000, 0).UTC().Format(http.TimeFormat))
@@ -257,7 +272,10 @@ func (p *conditionalPeer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				p.invalid = true
 				return
 			}
-			_, _ = io.Copy(w, f)
+			if partial {
+				w.WriteHeader(http.StatusPartialContent)
+			}
+			_, _ = io.Copy(w, io.NewSectionReader(f, offset, length))
 			_ = f.Close()
 		}
 	default:

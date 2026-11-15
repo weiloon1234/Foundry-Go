@@ -12,6 +12,9 @@
   through rollback and recovery, and disposable-container acceptance coverage.
 - Fixed: host-capabilities guide now documents supported release-carried bundle
   activation using the verified release inventory digest.
+- Added: opt-in live R2 multipart ranged-read certification and a matching TLS
+  stand-in test, including the seekable reader used by attachments. The R2
+  conditional-write size cap remains unchanged pending live certification.
 
 ## v0.34.0 — 2026-11-15
 

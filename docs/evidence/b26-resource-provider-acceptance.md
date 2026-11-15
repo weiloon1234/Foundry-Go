@@ -174,8 +174,17 @@ The tests generate random descendants and clean only their exact objects/uploads
 
 ```sh
 FOUNDRY_TEST_R2_REQUIRED=1 go test -timeout=30m -count=1 -v ./storage/s3 \
-  -run '^(TestRealR2StorageContract|TestRealR2ConditionalMultipartCandidate)$'
+  -run '^(TestRealR2StorageContract|TestRealR2ConditionalMultipartCandidate|TestRealR2RangedReads)$'
 ```
+
+`TestRealR2RangedReads` uploads one multipart object with deterministic pseudorandom
+content and checks random ranges, EOF clamping, invalid ranges, and the
+`storage.Disk.OpenSeek` reader used by attachments. It verifies bytes and range
+metadata. `FOUNDRY_TEST_R2_LARGE_BYTES` sets the integer byte count (default
+100663296, or 96 MiB); it must exceed `PartBytes` and fit `MaxObjectBytes`.
+For a 500 MiB run, set it to `524288000`. The same sequence runs locally in
+`TestR2RangedReadsWire` against the TLS S3 stand-in. Live ranged-read certification
+remains pending until the owner runs this command against R2.
 
 The candidate matrix covers absent/existing and competing creates, matching/stale/
 missing-destination and competing replacements, destination mutation before
