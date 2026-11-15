@@ -9,6 +9,7 @@ import uuid
 
 import admission
 import artifacts
+import dns
 import feature_network
 import feature_maintenance
 import packages
@@ -583,8 +584,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
         require(not running or services.wait_ready_set(host, inventory, running, deadline),
                 "readiness_failed", "The selected running set did not remain ready before public opening.")
         if review is not None:
-            import dns
-            dns.apply(host, entry, review.get("managed_dns", []), attempt["operation_id"])
+            dns.apply(host, entry, review.get("managed_dns", []), attempt["operation_id"], track_public_admission=True)
         if running:
             feature_network.open_public(host, entry, inventory.resolution, evidence)
     state["status"] = "stopped" if stop_only or not enabled else (
@@ -608,6 +608,8 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     host.journal(registry, entry)
     if attempt.get("redis_inventory") is not None:
         release.narrow_redis_grants(host, registry, entry, attempt["redis_inventory"], state)
+    if review is not None:
+        dns.commit_public_admission(host, entry, attempt["operation_id"])
     return maintenance_result
 
 

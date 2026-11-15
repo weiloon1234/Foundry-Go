@@ -1021,6 +1021,8 @@ Activation and rollback use the same planner. DNS changes occur after observed
 listener closure and private health, before public admission. Removing a listener
 deletes only its owned record IDs after closure. Shared records remain while a
 listener still declares them. Stopping a service retains its DNS records.
+DNS application has a separate 300-second budget. Recovery, activation, and
+rollback give public opening a fresh readiness budget after DNS reconciliation.
 
 Each provider mutation has a durable intent before its single write attempt.
 Timeouts, lost acknowledgements, and provider errors trigger read-back rather than
@@ -1038,6 +1040,18 @@ Deployment cleanup still owns stopped workloads and admission; DNS read-back
 alone cannot clear an unresolved deployment. Reports include record mode, safe
 provider snapshots, drift, and unresolved operation IDs. Host readiness, provider
 application, and DNS propagation remain separate results.
+The DNS operation records `public_admission: "pending"` before lifecycle writes
+and changes it to `"committed"` only after successful deployment admission.
+If opening fails after provider updates, cleanup closes the workloads and the
+report includes `managed_dns_public_admission_pending`, with the operation UUID,
+prior and desired records, and fresh provider outcomes. DNS read-back does not
+clear this phase or restart the service. The lifecycle owner must reconcile the
+deployment before completing admission.
+
+Reports also inspect owned record IDs absent from the selected profile. These
+produce `managed_dns_retained_record`, even when the last DNS operation succeeded.
+The record reports whether the provider still publishes it, has drifted, is absent,
+or could not be observed. A failed listener removal cannot hide retained DNS.
 
 Cloudflare's documented record update endpoint has no conditional-update
 contract. Foundry re-reads immediately before writing, but an external editor can

@@ -4,6 +4,7 @@ Callers hold the instance lock. Provider observations never grant public admissi
 """
 from dataclasses import asdict, dataclass
 from contextlib import nullcontext
+from enum import Enum
 from http.client import HTTPException
 import ipaddress
 import json
@@ -17,11 +18,17 @@ import admission
 import certificates
 from contracts import (DeployError, atomic_json, canonical_digest, contract_int, contract_list,
                        contract_object, contract_uuid, dns_hostname, public_address, require)
-from host import wall_clock_budget
+from host import OperationTimeout, wall_clock_budget
 
 MAX_RECORDS = 128
 MAX_RESPONSE = 256 * 1024
+APPLY_SECONDS = 300
 API = "https://api.cloudflare.com/client/v4"
+
+
+class PublicAdmission(str, Enum):
+    PENDING = "pending"
+    COMMITTED = "committed"
 
 
 def provider_id(value):
@@ -201,6 +208,10 @@ def state_path(host, entry):
     return admission.protected_path(host, host.paths.instance_config(entry["name"]) / "managed-dns.json", "file")
 
 
+def provider_applied(item):
+    return len(item["results"]) == len(item["changes"]) and set(item["results"].values()) <= {"applied"}
+
+
 def parse_state(value, instance_id):
     contract_object(value, ("schema", "instance_id", "owned", "operations"))
     require(value["schema"] == 1 and value["instance_id"] == instance_id
@@ -213,12 +224,16 @@ def parse_state(value, instance_id):
                 "dns_state", "Invalid owned record identity.")
     for key, item in value["operations"].items():
         contract_uuid(key)
-        contract_object(item, ("changes", "results"))
+        contract_object(item, ("changes", "results"), ("public_admission",))
+        require("public_admission" not in item or item["public_admission"] in {s.value for s in PublicAdmission},
+                "dns_state", "Invalid DNS public admission phase.")
         changes = contract_list(item["changes"], Change.parse, maximum=MAX_RECORDS)
         require(all(c.instance_id == instance_id for c in changes) and isinstance(item["results"], dict)
                 and set(item["results"]) <= {c.ownership_id for c in changes}
                 and all(s in ("pending", "applied", "prior", "conflict") for s in item["results"].values()),
                 "dns_state", "Invalid DNS operation identity or result.")
+        require(item.get("public_admission") != PublicAdmission.COMMITTED.value or provider_applied(item),
+                "dns_state", "Committed DNS admission requires complete provider outcomes.")
     return value
 
 
@@ -359,23 +374,43 @@ def verify(host, entry, changes):
     return clients
 
 
-def apply(host, entry, changes, operation_id):
+def apply(host, entry, changes, operation_id, *, track_public_admission=False):
+    """Bound the entire provider phase independently of service readiness."""
+    remaining = signal.getitimer(signal.ITIMER_REAL)[0]
+    enclosing = 0 < remaining <= APPLY_SECONDS
+    try:
+        with nullcontext() if enclosing else wall_clock_budget(APPLY_SECONDS):
+            return _apply(host, entry, changes, operation_id, track_public_admission=track_public_admission)
+    except OperationTimeout:
+        if enclosing:
+            raise
+        raise DeployError("dns_budget_exhausted", "DNS application exceeded its budget; reconcile its operation and record IDs. No write was retried.") from None
+
+
+def _apply(host, entry, changes, operation_id, *, track_public_admission):
     operation_id = contract_uuid(operation_id)
     if not changes:
         return {}
     state = load(host, entry)
     if operation_id in state["operations"]:
         require(state["operations"][operation_id]["changes"] == changes, "dns_intent", "DNS operation intent is immutable.")
+        if track_public_admission and "public_admission" not in state["operations"][operation_id]:
+            state["operations"][operation_id]["public_admission"] = PublicAdmission.PENDING.value
+            save(host, entry, state)
         results = reconcile(host, entry, state, operation_id)
         require(len(results) == len(changes) and set(results.values()) <= {"applied"}, "dns_reconciliation",
                 "DNS operation is unresolved. Exact prior state requires a newly reviewed operation; no write was retried.")
         return results
     require(not any({"pending", "conflict"}.intersection(i["results"].values()) for i in state["operations"].values()),
             "dns_reconciliation", "Resolve the previous DNS operation before another mutation.")
+    require(not any(i.get("public_admission") == PublicAdmission.PENDING.value for i in state["operations"].values()),
+            "dns_public_admission_pending", "Resolve the previous deployment admission before replacing its DNS intent.")
     clients = verify(host, entry, changes)
     # Retain only unresolved intents plus the latest completed operation; the
     # creation UUID stays with each owned record independently of journal retention.
     state["operations"] = {operation_id: {"changes": changes, "results": {}}}
+    if track_public_admission:
+        state["operations"][operation_id]["public_admission"] = PublicAdmission.PENDING.value
     save(host, entry, state)
     item = state["operations"][operation_id]
     for raw in changes:
@@ -404,6 +439,18 @@ def apply(host, entry, changes, operation_id):
         require(item["results"].get(change.ownership_id) == "applied", "dns_reconciliation",
                 "DNS read-back did not prove the requested state; public admission remains closed.")
     return item["results"]
+
+
+def commit_public_admission(host, entry, operation_id):
+    """Called by the lifecycle owner only after successful admission commit."""
+    state = load(host, entry)
+    item = state["operations"].get(contract_uuid(operation_id))
+    if item is None or "public_admission" not in item:
+        return
+    require(provider_applied(item),
+            "dns_reconciliation", "Public admission cannot complete with unresolved DNS writes.")
+    item["public_admission"] = PublicAdmission.COMMITTED.value
+    save(host, entry, state)
 
 
 def report(host, entry, profile):
@@ -435,8 +482,23 @@ def report(host, entry, profile):
         except DeployError:
             value["state"] = "unavailable"
         values.append(value)
+    selected = {r.ownership_id for _, binding in profile.listeners for r in binding.records}
+    for key in sorted(state["owned"].keys() - selected):
+        owned = Change.parse(state["owned"][key])
+        value = {"mode": "managed", "state": "retained_record", "hostname": owned.prior.value.name,
+                 "zone_id": owned.zone_id, "ownership_id": key, "record_id": owned.prior.record_id,
+                 "ownership": asdict(owned), "provider": None, "provider_state": "unavailable"}
+        try:
+            current = provider(host, entry, owned.zone_id).get(owned.zone_id, owned.prior.record_id)
+            value["provider_state"] = "absent" if current is None else "published" if current.value == owned.prior.value else "drift"
+            if current is not None and current.value.comment == owned.comment:
+                value["provider"] = asdict(current)
+        except DeployError:
+            pass
+        values.append(value)
     for operation_id, item in state["operations"].items():
-        if set(item["results"].values()) - {"applied"} or len(item["results"]) != len(item["changes"]):
+        admission_pending = item.get("public_admission") == PublicAdmission.PENDING.value
+        if admission_pending or not provider_applied(item):
             observed = {}
             for raw in item["changes"]:
                 change = Change.parse(raw)
@@ -448,7 +510,7 @@ def report(host, entry, profile):
                     observed[change.ownership_id] = _outcome(change, current)
                 except DeployError:
                     observed[change.ownership_id] = "unavailable"
-            values.append({"mode": "managed", "state": "reconciliation_required", "operation_id": operation_id,
+            values.append({"mode": "managed", "state": "public_admission_pending" if admission_pending else "reconciliation_required", "operation_id": operation_id,
                            "results": item["results"], "observed_results": observed, "changes": item["changes"]})
     return values
 
@@ -466,9 +528,9 @@ def recovery_changes(binding):
 def recovery_review(binding, metadata, archived_state, token):
     """Compare caller-supplied recovery snapshots with archived custody and fresh DNS."""
     state = parse_state(archived_state, binding.source_instance_id)
-    require(not any(set(i["results"].values()) - {"applied"} or len(i["results"]) != len(i["changes"])
+    require(not any(not provider_applied(i) or i.get("public_admission") == PublicAdmission.PENDING.value
                     for i in state["operations"].values()),
-            "dns_recovery", "Archived DNS has unresolved mutations; reconcile on the source before takeover.")
+            "dns_recovery", "Archived DNS has unresolved mutations or deployment admission; reconcile on the source before takeover.")
     client = Cloudflare(token)
     for raw in recovery_changes(binding):
         change = Change.parse(raw)
@@ -501,4 +563,4 @@ def recovery_apply(host, entry, intent, *, old_server_stopped, private_healthy):
             and binding.operation_id == intent["operation_id"]
             and binding.target_host_id == entry["profile"]["host"]["host_id"],
             "dns_recovery_not_ready", "Managed cutover requires confirmed stop and private takeover health.")
-    return apply(host, entry, changes, binding.operation_id)
+    return apply(host, entry, changes, binding.operation_id, track_public_admission=True)

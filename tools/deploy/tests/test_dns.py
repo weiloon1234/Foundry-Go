@@ -2,8 +2,10 @@
 from dataclasses import asdict, replace
 import copy
 from pathlib import Path
+import signal
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch, Mock
 import uuid
@@ -198,6 +200,47 @@ class ManagedDNSTests(unittest.TestCase):
         self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertNotIn(TOKEN, path.read_text())
 
+    def test_total_dns_budget_preserves_unknown_write_and_pending_admission(self):
+        operation, planned = self.new_plan()
+        write = dns.Cloudflare.write
+
+        def delayed_ack(client, change):
+            write(client, change)
+            time.sleep(2)
+
+        with patch.object(dns, "APPLY_SECONDS", 0.5), patch.object(dns.Cloudflare, "write", delayed_ack):
+            with self.assertRaises(c.DeployError) as failure:
+                dns.apply(self.host, self.entry, planned, operation, track_public_admission=True)
+        self.assertEqual(failure.exception.code, "dns_budget_exhausted")
+        saved = dns.load(self.host, self.entry)["operations"][operation]
+        self.assertEqual(saved["results"][OWNER], "pending")
+        self.assertEqual(saved["public_admission"], "pending")
+        with self.assertRaises(c.DeployError):
+            dns.commit_public_admission(self.host, self.entry, operation)
+        invalid = dns.load(self.host, self.entry)
+        invalid["operations"][operation]["public_admission"] = "committed"
+        with self.assertRaises(c.DeployError):
+            dns.parse_state(invalid, self.profile.instance_id)
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL)[0], 0)
+        observed = dns.report(self.host, self.entry, self.profile)[-1]
+        self.assertEqual(observed["state"], "public_admission_pending")
+        self.assertEqual(observed["observed_results"][OWNER], "applied")
+        dns.apply(self.host, self.entry, planned, operation, track_public_admission=True)
+        self.assertEqual(dns.load(self.host, self.entry)["operations"][operation]["public_admission"], "pending")
+        self.assertEqual([method for method, _ in self.provider.calls].count("POST"), 1)
+
+    def test_retained_records_report_drift_absence_and_failed_observation(self):
+        record_id = self.create()
+        removed = replace(self.profile, listeners=())
+        self.provider.put({**self.provider.records[record_id], "ttl": 600}, record_id)
+        self.assertEqual(dns.report(self.host, self.entry, removed)[0]["provider_state"], "drift")
+        with patch.object(dns, "provider", side_effect=c.DeployError("dns_provider_unavailable", "Unavailable")):
+            value = dns.report(self.host, self.entry, removed)[0]
+            self.assertEqual(value["state"], "retained_record")
+            self.assertEqual(value["provider_state"], "unavailable")
+        del self.provider.records[record_id]
+        self.assertEqual(dns.report(self.host, self.entry, removed)[0]["provider_state"], "absent")
+
     def test_recovery_preserves_owned_id_and_requires_takeover_health(self):
         record_id = self.create()
         operation, changes = self.new_plan(managed_profile("203.0.113.20"))
@@ -233,6 +276,7 @@ class ManagedDNSTests(unittest.TestCase):
         self.provider.fault = "lost_after"
         dns.recovery_apply(self.host, self.entry, intent, old_server_stopped=True, private_healthy=True)
         dns.recovery_apply(self.host, self.entry, intent, old_server_stopped=True, private_healthy=True)
+        self.assertEqual(dns.load(self.host, self.entry)["operations"][operation]["public_admission"], "pending")
         self.assertEqual(set(self.provider.records), {record_id})
         self.assertEqual(self.provider.records[record_id]["content"], "203.0.113.20")
         self.assertEqual([m for m, _ in self.provider.calls].count("PATCH"), 1)
@@ -305,9 +349,64 @@ class DNSLifecycleTests(FeatureWiringFixture):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())
         self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
 
+    def test_opening_failure_after_dns_is_reported_as_pending_admission(self):
+        import feature_lifecycle
+        import feature_network
+        self.build_managed()
+        self.bootstrap()
+        operation = str(uuid.uuid4())
+        with patch.object(feature_network, "open_public", side_effect=c.DeployError("readiness_failed", "Opening failed")):
+            with self.assertRaises(c.DeployError):
+                self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive), operation_id=operation)
+        self.assertTrue(self.provider.records)
+        self.assertFalse(self.host.running)
+        _, entry = self.host.require_identity(self.project, self.profile)
+        state = dns.load(self.host, entry)
+        self.assertEqual(state["operations"][operation]["public_admission"], "pending")
+        self.assertEqual(set(state["operations"][operation]["results"].values()), {"applied"})
+        report = feature_lifecycle.network_report(self.host, entry, ())
+        self.assertIn("managed_dns_public_admission_pending", {f["code"] for f in report["findings"]})
+        pending = next(v for v in report["dns"] if v["state"] == "public_admission_pending")
+        self.assertEqual(pending["operation_id"], operation)
+
+    def test_failed_listener_removal_reports_retained_owned_records(self):
+        import feature_lifecycle
+        import services
+        self.build_managed()
+        self.bootstrap()
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        record_id = next(iter(self.provider.records))
+        previous = copy.deepcopy(self.profile)
+        self.build_archive(version="20261115T010000Z-abcdef12")
+        self.profile = previous
+        with patch.object(services, "wait_ready_set", return_value=False):
+            with self.assertRaises(c.DeployError):
+                self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        entry = self.host.read_registry()["instances"][self.profile["instance_id"]]
+        self.assertFalse(entry["profile"]["listeners"])
+        self.assertIn(record_id, self.provider.records)
+        before = dns.state_path(self.host, entry).read_bytes()
+        report = feature_lifecycle.network_report(self.host, entry, ())
+        retained = next(v for v in report["dns"] if v["state"] == "retained_record")
+        self.assertEqual(retained["record_id"], record_id)
+        self.assertEqual(retained["provider_state"], "published")
+        self.assertIn("managed_dns_retained_record", {f["code"] for f in report["findings"]})
+        self.assertEqual(dns.state_path(self.host, entry).read_bytes(), before)
+
     def test_real_release_plan_activate_rollback_and_listener_removal(self):
         import feature_network
         import feature_lifecycle
+        monotonic, apply = time.monotonic, dns.apply
+        elapsed = [0]
+
+        def slow_apply(*args, **kwargs):
+            result = apply(*args, **kwargs)
+            elapsed[0] += release.READINESS_SECONDS + 1
+            return result
+
+        import release
+        self.enterContext(patch.object(time, "monotonic", side_effect=lambda: monotonic() + elapsed[0]))
+        self.enterContext(patch.object(dns, "apply", side_effect=slow_apply))
         self.build_managed()
         self.bootstrap()
         opened = feature_network.open_public
@@ -337,6 +436,7 @@ class DNSLifecycleTests(FeatureWiringFixture):
         self.assertFalse(self.provider.records)
         _, entry = self.host.require_identity(self.project, self.profile)
         self.assertEqual(feature_lifecycle.load(self.host, entry)[1].minimum_generation, 20)
+        self.assertEqual({item["public_admission"] for item in dns.load(self.host, entry)["operations"].values()}, {"committed"})
 
     def test_provider_drift_refuses_before_closure(self):
         self.build_managed()

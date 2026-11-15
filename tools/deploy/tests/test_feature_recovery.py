@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 import uuid
@@ -27,6 +28,23 @@ from topology import parse_profile
 
 
 class FeatureRecoveryTests(wiring.FeatureWiringFixture):
+    def test_dns_cutover_does_not_consume_public_opening_readiness(self):
+        import dns
+        registry, entry = self.target(running=('relay',), public=True)
+        monotonic = time.monotonic
+        elapsed = [0]
+
+        def slow_cutover(*args, **kwargs):
+            elapsed[0] += release.READINESS_SECONDS + 1
+
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            with patch.object(time, 'monotonic', side_effect=lambda: monotonic() + elapsed[0]), \
+                    patch.object(dns, 'recovery_apply', side_effect=slow_cutover):
+                lifecycle.activate_recovery(self.host, registry, entry, self.journal)
+            self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
+        self.assertTrue(self.host.running)
+
     def test_feature_key_archive_round_trips_effective_http_allocation(self):
         self.build_archive(unix=True)
         import backup

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed: managed DNS application has its own total budget, and replacement-host
+  public opening receives a fresh readiness budget after cutover. DNS intents
+  retain a pending admission phase if opening or deployment completion fails.
+  Reports show that phase and owned records left behind by failed listener removal.
 - Added: managed Cloudflare DNS for public TCP listener hostnames. Profiles declare
   the zone, explicit addresses, TTLs, and stable per-record ownership UUIDs.
   Release plans bind fresh provider state; activation and rollback compare it
