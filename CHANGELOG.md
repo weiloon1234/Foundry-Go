@@ -4,6 +4,11 @@
 
 ### Offline deployment validation
 
+- Fixed: interactive validation dispatches before local or remote state access.
+  Selected profiles retain release/deploy sibling identity checks; declaration
+  reads reject private paths and linked files. Release path safety and collision
+  checks are shared, and the Makefile example keeps JSON stdout free of recipe echo.
+
 - Added: `ACTION=validate make deploy` checks deployment declarations locally,
   with optional `ENVIRONMENT` selection and `FORMAT=json` diagnostics. It reuses
   deployment validators, renders service templates with synthetic values, checks

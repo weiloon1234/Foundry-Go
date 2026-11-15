@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from test_local import cli
+from test_local import cli, metadata
 from test_host_capabilities import bundle, declaration, profile as feature_profile
 from test_uploads import profile as upload_profile
 import runtime_config
@@ -36,10 +36,12 @@ class OfflineValidationTests(unittest.TestCase):
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(json.dumps(value))
 
-    def invoke(self, *, environment=None, format="json", flags=()):
+    def invoke(self, *, environment=None, format="json", flags=(), action="validate", menu=None):
         stdout, stderr = io.StringIO(), io.StringIO()
-        environ = {"ACTION": "validate", "FORMAT": format,
+        environ = {"FORMAT": format,
                    "FOUNDRY_SECRET_CONFIG_FILE": str(self.root / "must-not-read")}
+        if action is not None:
+            environ["ACTION"] = action
         if environment is not None:
             environ["ENVIRONMENT"] = environment
         with ExitStack() as stack:
@@ -48,15 +50,32 @@ class OfflineValidationTests(unittest.TestCase):
             stack.enter_context(patch.object(cli, "ROOT", None))
             for target in ("socket.socket", "socket.getaddrinfo", "subprocess.Popen"):
                 stack.enter_context(patch(target, side_effect=AssertionError("offline action attempted external I/O")))
-            for name in ("lock", "local_settings", "secret_input", "ask", "SSH", "build"):
+            for name in ("lock", "local_settings", "secret_input", "SSH", "build", "remember_releases"):
                 stack.enter_context(patch.object(cli, name, side_effect=AssertionError("offline action entered runtime")))
+            def answer(label, default=None):
+                self.assertTrue(label.startswith("Action ("), label)
+                self.assertIsNotNone(menu, "unexpected prompt")
+                return menu
+            ask = stack.enter_context(patch.object(cli, "ask", side_effect=answer))
             stack.enter_context(patch.object(runtime_config, "_read_value_file", side_effect=AssertionError("private read")))
             stack.enter_context(redirect_stdout(stdout))
             stack.enter_context(redirect_stderr(stderr))
             status = cli.main()
+            self.assertEqual(ask.call_count, 1 if menu is not None else 0)
         self.assertEqual(stderr.getvalue(), "")
         self.assertNotIn(str(self.root), stdout.getvalue())
         return status, json.loads(stdout.getvalue()) if format == "json" else stdout.getvalue()
+
+    def forbid_open(self, path):
+        stack = ExitStack()
+        for module, name in (("builtins", "open"), ("io", "open"), ("os", "open")):
+            original = getattr(__import__(module), name)
+            def guarded(filename, *args, _original=original, **kwargs):
+                if not isinstance(filename, int):
+                    self.assertNotEqual(Path(filename), path, "private or linked declaration was opened")
+                return _original(filename, *args, **kwargs)
+            stack.enter_context(patch(module + "." + name, side_effect=guarded))
+        return stack
 
     def failed(self, kind, code, **options):
         status, result = self.invoke(**options)
@@ -109,6 +128,39 @@ class OfflineValidationTests(unittest.TestCase):
         self.assertNotIn("acceptance-lab", output.getvalue())
         self.assertEqual(self.invoke(flags=("--format", "json", "--environment", "acceptance"))[0], 0)
 
+    def test_every_action_selector_dispatches_before_local_or_remote_state(self):
+        for options in ({}, {"action": None, "menu": "validate"}, {"action": "", "menu": "validate"},
+                        {"action": None, "flags": ("--action", "validate")},
+                        {"action": "deploy", "flags": ("--action=validate",)},
+                        {"action": None, "flags": ("--act", "validate")}):
+            with self.subTest(options=options):
+                status, result = self.invoke(**options)
+                self.assertEqual(status, 0, result)
+                self.assertTrue(result["ok"])
+                self.assertFalse((self.root / ".deploy").exists())
+
+    def test_remote_dispatch_refuses_validate_without_opening_ssh(self):
+        with patch.dict(os.environ, {"ACTION": "validate"}), \
+                patch.object(cli, "SSH", side_effect=AssertionError("SSH opened")), \
+                self.assertRaisesRegex(cli.LocalError, "before loading deployment state"):
+            cli.deploy(None, None, None)
+
+    def test_makefile_example_stdout_is_exact_json(self):
+        shutil.copyfile(Path(cli.__file__).with_name("Makefile.example"), self.root / "Makefile")
+        tools = self.root / "test-tools"
+        tools.mkdir()
+        go = tools / "go"
+        # Exercise the actual make recipe and Python entry point without running Go.
+        go.write_text('#!' + sys.executable + '\nimport os, sys\n'
+                      'os.execv(sys.executable, [sys.executable, "-B", ' + repr(str(Path(cli.__file__)))
+                      + ', "--app-root", sys.argv[5], sys.argv[6]])\n')
+        go.chmod(0o755)
+        result = subprocess.run(["make", "deploy"], cwd=self.root, capture_output=True, text=True, timeout=15,
+                                env={"PATH": str(tools) + os.pathsep + os.environ["PATH"],
+                                     "ACTION": "validate", "FORMAT": "json", "PYTHONDONTWRITEBYTECODE": "1"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["ok"])
+
     def test_real_cli_exit_status_and_json(self):
         command = [sys.executable, "-B", str(Path(cli.__file__)), "--app-root", str(self.root),
                    "deploy", "--action", "validate", "--format", "json"]
@@ -137,21 +189,37 @@ class OfflineValidationTests(unittest.TestCase):
         value["runtime_environment"] = "invalid"
         self.write("deploy/environments/acceptance.json", value)
         self.failed("profile", "invalid_profile")
-        self.assertEqual(self.invoke(environment="acceptance-lab")[0], 0)
+        self.failed("profile", "invalid_profile", environment="acceptance-lab")
 
     def test_unknown_or_unsafe_profile_selector(self):
         self.failed("profile", "declaration_file", environment="missing")
         self.failed("selection", "invalid_profile", environment="../private")
 
-    def test_profile_filename_and_duplicate_identity(self):
+    def test_profile_filename(self):
         value = self.read("deploy/environments/acceptance.json")
         value["environment"] = "staging"
         self.write("deploy/environments/acceptance.json", value)
         self.failed("profile", "invalid_profile")
-        value["environment"] = "acceptance"
+
+    def test_single_environment_reuses_release_sibling_identity_checks(self):
+        project = self.read("deploy/project.json")
+        value = self.read("deploy/environments/acceptance.json")
         value["instance_id"] = self.read("deploy/environments/acceptance-lab.json")["instance_id"]
         self.write("deploy/environments/acceptance.json", value)
-        self.failed("profile", "invalid_profile")
+        for environment in ("acceptance", "acceptance-lab"):
+            with self.subTest(environment=environment), patch.object(cli, "ROOT", self.root):
+                result = self.failed("profile", "invalid_profile", environment=environment)
+                profiles = [c for c in result["checks"] if c["kind"] == "profile"]
+                self.assertEqual([c["profile"] for c in profiles], [environment])
+                with self.assertRaises(cli.LocalError) as raised:
+                    cli.profile_config(environment, project)
+                self.assertEqual(profiles[0]["errors"][0]["detail"], str(raised.exception))
+
+    def test_single_environment_checks_sibling_filename(self):
+        value = self.read("deploy/environments/acceptance.json")
+        value["environment"] = "staging"
+        self.write("deploy/environments/acceptance.json", value)
+        self.failed("profile", "invalid_profile", environment="acceptance-lab")
 
     def test_invalid_template(self):
         self.template('{"password":"{{secret.MISSING_FILE}}"}')
@@ -222,6 +290,97 @@ class OfflineValidationTests(unittest.TestCase):
         status, result = self.invoke(environment="acceptance-lab", flags=("--bindings", "deploy/lab.json"))
         self.assertEqual(status, 0, result)
         self.assertTrue(any(c["kind"] == "rehearsal" and c["path"] == "deploy/lab.json" for c in result["checks"]))
+
+    def test_private_bindings_are_refused_before_open(self):
+        for name in (".deploy/settings.json", ".DEPLOY/settings.json", "secrets/bindings.json", "SeCrEtS/bindings.json", "deploy/secrets/bindings.json",
+                     ".secrets/bindings.json", "deploy/service-secrets/value", "deploy/copy-secrets/value",
+                     "deploy/bootstrap-secrets.json", ".ssh/config", ".aws/credentials", ".netrc", ".npmrc",
+                     ".env", "config/app.toml", "config/APP.toml", "config/staging.local.toml", ".claude/settings.local.json",
+                     "deploy/value.secret", "deploy/value.key", "storage/bindings.json"):
+            with self.subTest(path=name):
+                path = self.root / name
+                self.write(name, {"private": "must-not-read"})
+                self.assertFalse(cli.source_allowed(name))
+                with self.forbid_open(path):
+                    result = self.failed("rehearsal", "unsafe_path", environment="acceptance-lab", flags=("--bindings", name))
+                self.assertNotIn("must-not-read", json.dumps(result))
+
+    def test_binding_links_and_special_files_are_refused_before_open(self):
+        path = self.root / "deploy/other-bindings.json"
+        source = self.root / "deploy/acceptance-lab-bindings.json"
+        for kind in ("symlink", "hardlink", "directory", "fifo"):
+            with self.subTest(kind=kind):
+                if kind == "symlink":
+                    path.symlink_to(source)
+                elif kind == "hardlink":
+                    os.link(source, path)
+                elif kind == "directory":
+                    path.mkdir()
+                else:
+                    os.mkfifo(path)
+                try:
+                    with self.forbid_open(path):
+                        self.failed("rehearsal", "unsafe_path", environment="acceptance-lab",
+                                    flags=("--bindings", "deploy/other-bindings.json"))
+                finally:
+                    path.rmdir() if kind == "directory" else path.unlink()
+
+    def test_public_binding_swapped_to_hardlink_before_open_is_not_read(self):
+        import declaration_inputs
+        path = self.root / "deploy/acceptance-lab-bindings.json"
+        original = os.open
+        def swap(filename, *args, **kwargs):
+            if Path(filename) == path:
+                os.link(path, self.root / "secret-alias")
+            return original(filename, *args, **kwargs)
+        with patch.object(declaration_inputs.os, "open", side_effect=swap):
+            self.failed("rehearsal", "unsafe_path", environment="acceptance-lab")
+
+    def test_single_environment_refuses_hardlinked_sibling_before_open(self):
+        path = self.root / "deploy/environments/acceptance.json"
+        os.link(path, self.root / "private-alias")
+        with self.forbid_open(path):
+            self.failed("profile", "unsafe_path", environment="acceptance-lab")
+
+    def test_declared_release_paths_use_preparation_safety_rules(self):
+        raw = self.feature()
+        for name in ("server.key", "server.pem", ".env/server", "node_modules/server"):
+            with self.subTest(path=name):
+                raw["application_executables"]["relay-server"] = {"platforms": {
+                    platform: "deploy/bin/" + name for platform in ("linux-amd64", "linux-arm64")}}
+                self.write("deploy/topology.json", raw)
+                result = self.failed("release", "artifact_private", environment="acceptance")
+                with self.assertRaises(cli.DeployError) as raised, \
+                        patch.object(metadata.subprocess, "run", side_effect=AssertionError("build started")):
+                    metadata.prepare({"profile": self.read("deploy/environments/acceptance.json")},
+                                     self.root, self.root / "stage")
+                self.assertEqual(raised.exception.code, next(c["errors"][0]["code"] for c in result["checks"] if c["kind"] == "release"))
+
+    def test_release_export_collisions_and_private_bundle_exports(self):
+        raw = self.feature()
+        for paths in (("deploy/bin/relay", "deploy/bin/relay"), ("deploy/bin/relay", "deploy/bin/relay/child")):
+            with self.subTest(paths=paths):
+                raw["application_executables"] = {name: {"platforms": {p: path for p in ("linux-amd64", "linux-arm64")}}
+                                                  for name, path in zip(("relay-server", "other"), paths)}
+                self.write("deploy/topology.json", raw)
+                self.failed("release", "artifact_inventory")
+        raw = self.feature()
+        raw["artifacts"] = {"extension": bundle()}
+        raw["artifacts"]["extension"]["bundles"]["private"] = ".env"
+        self.write("deploy/topology.json", raw)
+        self.failed("release", "artifact_private")
+
+    def test_duplicate_release_artifact_sources_use_preparation_checks(self):
+        raw = self.feature()
+        artifact = bundle()
+        artifact["platforms"] = {platform: {"source": {"release": {"path": "deploy/artifacts/shared.tar.gz"}}}
+                                 for platform in ("linux-amd64", "linux-arm64")}
+        raw["artifacts"] = {"first": artifact, "second": artifact}
+        self.write("deploy/topology.json", raw)
+        self.failed("release", "build_source")
+        with self.assertRaises(cli.DeployError) as raised:
+            metadata.prepare({"profile": self.read("deploy/environments/acceptance.json")}, self.root, self.root / "stage")
+        self.assertEqual(raised.exception.code, "build_source")
 
     def test_proxy_and_managed_dns_declarations(self):
         raw = self.feature()

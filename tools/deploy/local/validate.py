@@ -1,16 +1,14 @@
 """Offline deployment declaration checks. No runtime resources or private settings."""
 from dataclasses import asdict, dataclass, field
 import json
-import os
 from pathlib import Path
-import stat
 import tomllib
 from typing import Literal
 
 import artifacts
 from config_templates import resolve_reference
-from contracts import (DeployError, MAX_JSON, check_path, read_json, require, slug,
-                       validate_profile, validate_profile_identity, validate_project)
+from contracts import DeployError, MAX_JSON, check_path, require, slug, validate_project
+from declaration_inputs import load_profile, read_declaration, read_declaration_json
 from runtime_config import MAX_SERVICE_CONFIG_BYTES, MAX_VALUE_BYTES, render_service_config
 from topology import ArgumentKind, ExecutableRole, parse_profile, parse_topology
 from upgrades import feature_generation, protocol, upload_generation
@@ -59,17 +57,6 @@ class ValidationResult:
     checks: list[DeclarationCheck]
 
 
-def _read(path, limit):
-    check_path(path, "file")
-    with path.open("rb") as stream:
-        info = os.fstat(stream.fileno())
-        require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1,
-                "unsafe_path", "Declarations must be regular files without hard links.")
-        content = stream.read(limit + 1)
-    require(len(content) <= limit, "declaration_size", "Declaration file exceeds its size bound.")
-    return content
-
-
 def _render(root, role, config):
     artifacts._safe_path(config.source)
     def argument_value(argument):
@@ -82,19 +69,17 @@ def _render(root, role, config):
                                  lambda name, field: {"address": "127.0.0.1", "port": "1",
                                                       "url": "http://127.0.0.1:1", "path": "/synthetic/executable"}[field])
 
-    return len(render_service_config(_read(root / config.source, MAX_VALUE_BYTES), config,
+    return len(render_service_config(read_declaration(root, root / config.source, MAX_VALUE_BYTES), config,
                                      argument_value, template_value))
 
 
 def _release_declarations(topology, profile):
     platform = "linux-" + profile.architecture
-    artifacts.release_sources(topology, platform)
-    exports = ("deploy/bin/" + name if binary.go_package else dict(binary.platforms)[platform]
-               for name, binary in topology.application_executables)
+    exports = artifacts.release_sources(topology, platform)
     # Digests are build outputs; only declaration paths and their overlap matter here.
     payloads = (f"deploy/artifacts/{name}/" + "0" * 64 + (".tar.gz" if artifact.format == "tar.gz" else ".bin")
                 for name, artifact in topology.artifacts)
-    artifacts.declared_release_files(topology, exports, payloads)
+    artifacts.declared_release_files(topology, exports.values(), payloads)
 
 
 def validate_declarations(root: Path, environment: str | None = None, bindings: Path | None = None) -> ValidationResult:
@@ -105,10 +90,10 @@ def validate_declarations(root: Path, environment: str | None = None, bindings: 
         checks.append(item)
         return item
 
-    project = check("project", "deploy/project.json").run(lambda: validate_project(read_json(root / "deploy/project.json")))
-    topology = check("topology", "deploy/topology.json").run(lambda: parse_topology(read_json(root / "deploy/topology.json")))
+    project = check("project", "deploy/project.json").run(lambda: validate_project(read_declaration_json(root, root / "deploy/project.json")))
+    topology = check("topology", "deploy/topology.json").run(lambda: parse_topology(read_declaration_json(root, root / "deploy/topology.json")))
     config = check("configuration", "config/deploy.toml").run(
-        lambda: tomllib.loads(_read(root / "config/deploy.toml", MAX_JSON).decode("utf-8")))
+        lambda: tomllib.loads(read_declaration(root, root / "config/deploy.toml", MAX_JSON).decode("utf-8")))
 
     def profiles():
         require(environment is None or slug(environment), "invalid_profile", "Select a valid ENVIRONMENT profile name.")
@@ -120,17 +105,14 @@ def validate_declarations(root: Path, environment: str | None = None, bindings: 
 
     selection = check("selection", "deploy/environments", environment)
     paths = selection.run(profiles) or []
-    seen = []
     for path in paths:
         name = path.stem
         item = check("profile", path.relative_to(root).as_posix(), name)
 
         def read_profile():
             from build_metadata import render_public_env
-            value = validate_profile(read_json(path), project)
-            validate_profile_identity(value, name, seen)
+            value = load_profile(root, name, project)
             render_public_env(value)
-            seen.append(value)
             return value
 
         value = item.run(read_profile)
@@ -163,7 +145,7 @@ def validate_declarations(root: Path, environment: str | None = None, bindings: 
                 binding_check.path = binding_path.relative_to(root).as_posix()
                 acceptance_profile(project, value, topology.projection())
                 network_plan(topology, value)
-                validate_bindings(read_json(binding_path), name, config)
+                validate_bindings(read_declaration_json(root, binding_path), name, config)
 
             if parsed is None or config is None:
                 binding_check.skip()

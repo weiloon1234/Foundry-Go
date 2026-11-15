@@ -34,6 +34,11 @@ To check one profile, use the existing `ENVIRONMENT` selector:
 ENVIRONMENT=staging ACTION=validate make deploy
 ```
 
+Sibling profiles are always checked for valid identities and duplicate instance
+UUIDs, as they are for release and deploy. Selection limits detailed results to
+the named profile. Without `ACTION`, select `validate` from the action menu before
+the tool opens local settings or connects to a host.
+
 For CI, request the versioned JSON result and retain the command's exit status:
 
 ```sh
@@ -42,10 +47,13 @@ ACTION=validate FORMAT=json make deploy > deploy-validation.json
 go tool foundry deploy deploy --action validate --format json
 ```
 
+The Makefile recipe below and `Makefile.example` suppress recipe echo with `@`.
+For an older unsilenced application Makefile, use `make -s deploy` in CI.
+
 Install Python 3.11 or later and cache the application's pinned Go toolchain and
 Foundry-Go module before running CI without network access. Validation uses no
 SSH, Docker, downloads, secret input files, or host state. It does not create or
-read `.deploy` settings and does not prompt.
+read `.deploy` settings. Explicit validation does not prompt.
 
 The action checks project identity, topology, selected profiles, placement and
 copy counts, public listeners including PROXY and managed DNS fields, upload
@@ -63,6 +71,8 @@ disk bindings. For another in-application binding file, use
 `--environment acceptance-lab --bindings deploy/lab.json` with the direct command.
 This checks declarations without requiring private file permissions or preparing
 test credentials. Container storage certification remains a rehearsal check.
+Binding files must use public source paths. Private paths, symbolic links, hard
+links, and non-regular files are refused before their contents are read.
 
 Exit status is 0 when every check passes and 1 for invalid declarations. Text is
 the default. `FORMAT=json` or `--format json` returns schema 1 with `action`, `ok`,
@@ -85,7 +95,7 @@ application directory. An application Makefile can contain these thin targets:
 ```makefile
 .PHONY: bootstrap deploy release
 bootstrap deploy release:
-	GOWORK=off go tool foundry deploy --dir "$(CURDIR)" "$@"
+	@GOWORK=off go tool foundry deploy --dir "$(CURDIR)" "$@"
 ```
 
 The operator's machine needs Python 3.11 or later. Deployment rules stay in the

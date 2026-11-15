@@ -298,22 +298,13 @@ def select_environment(mode, settings):
 
 
 def profile_config(environment, project):
-    from contracts import validate_profile_identity
+    from declaration_inputs import load_profile
     path = ROOT / "deploy" / "environments" / f"{environment}.json"
     if path.exists():
-        profile = validate_profile(read_json(path), project)
         try:
-            validate_profile_identity(profile, environment)
+            profile = load_profile(ROOT, environment, project)
         except DeployError as error:
             raise LocalError(error.detail) from error
-        for sibling in path.parent.glob("*.json"):
-            if sibling == path:
-                continue
-            other = validate_profile(read_json(sibling), project)
-            try:
-                validate_profile_identity(other, sibling.stem, (profile,))
-            except DeployError as error:
-                raise LocalError(error.detail) from error
         return profile, False
     runtime = {"prod": "production", "uat": "staging", "dev": "development", "test": "testing"}.get(environment, environment)
     if runtime not in ("production", "staging", "testing", "development"):
@@ -691,16 +682,11 @@ def production_profile(profile):
 
 
 def source_allowed(name):
-    path = PurePosixPath(name)
-    if path.is_absolute() or ".." in path.parts or "\\" in name or any(ord(c) < 32 for c in name):
-        raise LocalError("source contains an unsafe path")
-    excluded = {".git", ".deploy", "dist", "bin", ".aws", ".ssh", ".netrc", ".npmrc", ".codex",
-                "storage", "node_modules", "go.work", "go.work.sum"}
-    return not (any(part in excluded or part.startswith(".env") for part in path.parts)
-                or path.suffix.lower() in {".pem", ".key", ".p12", ".pfx"}
-                or name in {".claude/settings.local.json", "CLAUDE.local.md", "config/app.toml"}
-                or name.startswith("public/build/")
-                or name.startswith("config/") and name.endswith(".local.toml"))
+    from declaration_inputs import source_allowed as allowed
+    try:
+        return allowed(name)
+    except DeployError as error:
+        raise LocalError(error.detail) from error
 
 
 def validate_source_links(names, links):
@@ -1162,12 +1148,19 @@ def check_release_tools(ssh, request, manifest, entry):
         raise LocalError(f"{error.code}: {error.detail}") from None
 
 
-def deploy(project, profile, settings):
+def select_deploy_action():
     action = os.environ.get("ACTION") or ask("Action (" + " / ".join(ACTIONS) + ")", "deploy")
     if action not in ACTIONS:
         raise LocalError("unsupported deployment action")
+    return action
+
+
+def deploy(project, profile, settings):
+    action = select_deploy_action()
     logs = log_parameters(action)
     ordinal = copy_parameter(action)
+    if action == "validate":
+        raise LocalError("validate must be dispatched before loading deployment state")
     if ordinal is not None:
         import operation_selection
         try:
@@ -1430,6 +1423,8 @@ def main():
         if value is not None:
             os.environ[option.upper()] = value
     mode = arguments.command
+    if mode == "deploy":
+        os.environ["ACTION"] = select_deploy_action()
     if mode == "deploy" and os.environ.get("ACTION") == "validate":
         from validate import validate_action
         return validate_action(arguments.app_root, os.environ.get("ENVIRONMENT"),

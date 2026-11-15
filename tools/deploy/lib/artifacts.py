@@ -485,15 +485,21 @@ def _remove_staging(path):
 
 
 def release_sources(topology, platform):
-    """Validate release-carried source declarations without acquiring their bytes."""
+    """Validate source/export paths before preparation or offline declaration checks."""
     from topology import ReleaseArtifactPlatform
+    exports = {name: "deploy/bin/" + name if binary.go_package else dict(binary.platforms)[platform]
+               for name, binary in topology.application_executables}
+    declared_release_files(topology, exports.values(), ())
     sources = set()
     for _, artifact in topology.artifacts:
+        for path in (*dict(artifact.executables).values(), *dict(artifact.bundles).values(), *artifact.modules):
+            _safe_path(path)
         pin = dict(artifact.platforms)[platform]
         if isinstance(pin, ReleaseArtifactPlatform):
             _safe_path(pin.source.path)
             require(pin.source.path not in sources, "build_source", "Release artifacts must have distinct source files.")
             sources.add(pin.source.path)
+    return exports
 
 
 def declared_release_files(topology, application_executables, payload_paths):
@@ -508,6 +514,10 @@ def declared_release_files(topology, application_executables, payload_paths):
     for path in payload_paths:
         require(path not in declared, "artifact_inventory", "Artifact payload overlaps another declaration.")
         declared[path] = "artifact"
+    for path in declared:
+        _safe_path(path)
+        require(not any(parent.as_posix() in declared for parent in Path(path).parents),
+                "artifact_inventory", "Declared release files overlap a parent directory.")
     return declared
 
 

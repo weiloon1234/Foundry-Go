@@ -167,10 +167,8 @@ def _feature_inputs(request, stage, budget):
             and request["manifest"].get("topology_sha256", topology.sha256) == topology.sha256,
             "build_identity", "Build topology/profile identity differs from the frozen manifest.")
     platform = "linux-" + profile.architecture
-    exports, payloads, origins = {}, [], {}
-    for name, binary in topology.application_executables:
-        path = "deploy/bin/" + name if binary.go_package else dict(binary.platforms)[platform]
-        exports[name] = path
+    exports = artifacts.release_sources(topology, platform)
+    payloads, origins = [], {}
     for name, artifact in topology.artifacts:
         pin = dict(artifact.platforms)[platform]
         carried = isinstance(pin, ReleaseArtifactPlatform)
