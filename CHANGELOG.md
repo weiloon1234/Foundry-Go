@@ -39,6 +39,18 @@
   9–16 host, run `ACTION=tools-plan make deploy`, then
   `ACTION=tools-apply PLAN_TOKEN='<token>' OPERATION='<stable-uuid-v4>' make deploy`.
   Fresh bootstrap installs generation 17. Existing declarations need no changes.
+## Unreleased
+
+- Added: public TCP stream listeners can declare topology-level
+  `"proxy_protocol": "v1"` on the listener so nginx sends the client's address and
+  port to a PROXY-aware backend. Both plaintext and edge TLS are supported; the
+  field is rejected on private/Unix listeners, roles and profile bindings. The
+  backend requires a separate non-PROXY readiness listener. Reports expose the
+  selected version per public listener. Declaring the capability requires deploy
+  client and host generation 18 and retains that floor through rollback/recovery.
+  HTTP sites keep forwarded headers; inbound PROXY and outbound v2 are unsupported.
+  The opt-in nginx stream acceptance now checks real client addresses and ports
+  over IPv4/IPv6 for both TLS modes.
 
 ## v0.35.0 — 2026-11-15
 

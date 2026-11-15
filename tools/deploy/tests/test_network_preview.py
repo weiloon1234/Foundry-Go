@@ -1,5 +1,6 @@
 """Local contract checks for the opt-in preview; no sockets or host commands."""
 import io
+import json
 import socket
 import ssl
 import threading
@@ -12,6 +13,33 @@ import acceptance_network as preview
 
 
 class PreviewFixtureTests(unittest.TestCase):
+    def test_proxy_fixture_uses_separate_health_and_outbound_v1_in_both_modes(self):
+        for mode in ("none", "edge"):
+            topology, profile = preview.preview_documents(mode, str(uuid.uuid4()), proxy_protocol=True)
+            relay = topology.roles[1]
+            self.assertEqual(relay.readiness.listener, "health")
+            self.assertIsNone(dict(relay.listeners)["health"].proxy_protocol)
+            endpoints = preview.listeners.allocate_private(profile.instance_id,
+                (("http", "http"), ("relay", "health"), ("relay", "ingress")), (), ())
+            resolution = preview.preview_resolution(topology, profile, endpoints)
+            rendered = preview.edge.stream_projection(profile, resolution, "preview.acceptance.invalid", topology=topology)
+            self.assertEqual(set(rendered), {"stream-relay.ingress.conf"})
+            self.assertIn("proxy_protocol on; # v1", rendered["stream-relay.ingress.conf"])
+
+    def test_proxy_fixture_reports_header_peer_and_payload_and_rejects_missing_header(self):
+        for header in (b"PROXY TCP4 203.0.113.20 203.0.113.10 43210 8554\r\n", b"peer\n", b"PROXY " + b"x" * 108):
+            connection = MagicMock()
+            reader = io.BytesIO(header + b"peer\n")
+            connection.makefile.return_value.__enter__.return_value = reader
+            connection.getpeername.return_value = ("127.0.0.1", 50000)
+            backend = preview.ProxyBackend.__new__(preview.ProxyBackend)
+            backend.serve(connection)
+            if header.endswith(b"\r\n"):
+                sent = json.loads(connection.sendall.call_args.args[0])
+                self.assertEqual(sent, {"header": header.decode().split(), "peer": ["127.0.0.1", 50000], "payload": "peer\n"})
+            else:
+                connection.sendall.assert_not_called()
+
     def test_peer_probe_checks_terminated_session_after_final_input(self):
         for mode in ("none", "edge"):
             for failure in (None, BrokenPipeError(), ConnectionResetError(), ssl.SSLEOFError()):

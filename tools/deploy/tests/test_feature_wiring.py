@@ -385,7 +385,7 @@ class FeatureWiringFixture(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, confined=False, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, confined=False, unix=False, public=False, proxy_protocol=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -410,6 +410,13 @@ class FeatureWiringFixture(unittest.TestCase):
             **({"secrets": {"relay-token": {"prompt": "Relay token"}}} if secrets else {}),
             "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
                 "platforms": {"linux-arm64": {"url": "https://example.invalid/relay", "sha256": checksum}}}}})
+        if proxy_protocol:
+            raw = self.topology.projection()
+            relay = raw["roles"][1]
+            relay["listeners"]["api"]["proxy_protocol"] = "v1"
+            relay["listeners"]["health"] = {"transport": "tcp", "bind": "loopback"}
+            relay["readiness"]["listener"] = "health"
+            self.topology = parse_topology(raw)
         if confined:
             raw = self.topology.projection()
             raw["roles"][1]["network"] = {"confinement": "loopback"}

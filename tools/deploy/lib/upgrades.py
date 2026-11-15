@@ -25,7 +25,7 @@ if __name__ == "__main__":
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
                        FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION, FEATURE_UNIX_GENERATION, FEATURE_CONFINEMENT_GENERATION,
-                       FEATURE_SHARED_DIRECTORY_GENERATION, UPLOAD_TEMPLATE_GENERATION,
+                       FEATURE_SHARED_DIRECTORY_GENERATION, UPLOAD_TEMPLATE_GENERATION, FEATURE_PROXY_PROTOCOL_GENERATION,
                        TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
@@ -455,6 +455,8 @@ def feature_generation(topology, entry, *, profile=None):
                            for _, binding in role.common.bindings)
     unix = any(listener.transport == "unix" for role in topology.roles if isinstance(role, ExecutableRole)
                for _, listener in role.listeners)
+    proxy_protocol = any(listener.proxy_protocol is not None for role in topology.roles if isinstance(role, ExecutableRole)
+                         for _, listener in role.listeners)
     confinement = any(r.common.confinement for r in topology.roles) or any(
         "wildcard" in listener for role in topology.projection()["roles"]
         for listener in role.get("listeners", {}).values())
@@ -464,6 +466,7 @@ def feature_generation(topology, entry, *, profile=None):
                FEATURE_SHARED_DIRECTORY_GENERATION if topology.shared_directories else 0,
                upload_generation(entry),
                upload_generation({"profile": profile or {}}),
+               FEATURE_PROXY_PROTOCOL_GENERATION if proxy_protocol else 0,
                entry.get("deployment_selection", {}).get("minimum_generation", 0))
 
 
@@ -484,7 +487,8 @@ def check_target_capabilities(host, request, action):
     registry = host.read_registry(missing=True)
     installed = registry if registry is not None else {"tools": protocol()}
     generation = request.get("client", {}).get("generation", 0)
-    latest = max(FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION, UPLOAD_TEMPLATE_GENERATION)
+    latest = max(FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION, UPLOAD_TEMPLATE_GENERATION,
+                 FEATURE_PROXY_PROTOCOL_GENERATION)
     if type(generation) is int and generation >= latest and installed["tools"]["generation"] >= latest:
         return
     from topology import parse_topology

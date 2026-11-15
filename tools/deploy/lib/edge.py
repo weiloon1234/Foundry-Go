@@ -443,6 +443,7 @@ def stream_projection(profile, resolution, lineage, *, topology):
                        "    ssl_session_tickets off;\n") if tls else ""
         replacements = {"@INSTANCE@": profile.instance_id, "@LISTENER@": name, "@LISTEN@": "\n".join(lines),
                         "@TLS@": tls_content, "@BACKEND@": backend,
+                        "@PROXY_PROTOCOL@": "    proxy_protocol on; # v1\n" if policies[name].proxy_protocol else "",
                         "@SOURCES@": "\n".join("    allow " + cidr + ";" for cidr in binding.source_cidrs)}
         for token, value in replacements.items():
             content = content.replace(token, value)

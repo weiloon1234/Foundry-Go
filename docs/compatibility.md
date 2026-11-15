@@ -13,6 +13,16 @@ Generation leaves handwritten comments unchanged. Retired source-edit journals
 fail with a typed `generate.RetiredJournalError` and retain staging; reconcile them
 with the generator that created them before upgrading.
 
+## Outbound PROXY protocol — unreleased
+
+Public TCP listeners may declare `proxy_protocol: "v1"` in topology schema 2.
+This requires deploy-tool generation 18 on client and host; rollback and recovery
+retain the instance floor. Existing declarations send no PROXY header. Upgrade
+the application backend to parse v1 before opting in, and provide a separate
+non-PROXY readiness listener. HTTP sites and runtime binding records retain their
+existing contracts. See the
+[PROXY protocol guide](guides/host-capabilities.md#outbound-proxy-protocol).
+
 ## Loopback confinement — v0.35.0
 
 Role `network.confinement: "loopback"` and private TCP listener `wildcard: true`

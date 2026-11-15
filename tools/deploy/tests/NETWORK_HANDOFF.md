@@ -445,6 +445,7 @@ clients as acknowledged by `authentication: true`.
 | Scenario | Real observations and assertions |
 | --- | --- |
 | Plain and TLS opening/withdrawal | Default-deny proof before backend startup; peer TCP connection failure while nginx is listening but UFW is closed; exact bytes after runtime opening over both families; new connections denied after withdrawal |
+| Outbound PROXY v1, plain and TLS | Separate non-PROXY health listener; peer sends ordinary payload; backend receives the exact client IPv4/IPv6 address and ephemeral port plus public destination in its PROXY header, while its socket peer remains loopback; withdrawal denies new connections |
 | Stale sessions, plain and TLS | The old session survives graceful withdrawal; evidence remains `ingress_withdrawn` with no exit/isolation proof; completion without exit proof refuses; fresh endpoints avoid retained/global references; stopping the old echo fixture terminates its session before reopening |
 | Boot cleanup primitives, plain and TLS | Stop nginx and the old fixture; reload UFW to discard runtime allows; call `edge.prepare_boot`; restart nginx and prove closed; reopen a fresh backend and prove both families reachable |
 | Reports | Validate nginx cgroup/socket ownership against the instance claim inventory; flag an undeclared public binding; exclude the declared port from unexpected exposure; attribute absent listeners after withdrawal to the instance and report historical ingress-only evidence |

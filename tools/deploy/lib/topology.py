@@ -269,6 +269,10 @@ class ConfigFile:
         return cls(source, value["mode"], tuple(result), format, path, directory_environment)
 
 
+class ProxyProtocol(str, Enum):
+    V1 = "v1"
+
+
 @dataclass(frozen=True)
 class Listener:
     transport: str
@@ -277,15 +281,21 @@ class Listener:
     authentication: bool
     socket: str | None = None
     wildcard: bool = False
+    proxy_protocol: ProxyProtocol | None = None
 
     @classmethod
     def parse(cls, value):
-        require(not isinstance(value, dict) or "proxy_protocol" not in value,
-                "unsupported_capability", "PROXY protocol requires a later capability.")
+        proxy_protocol = None
+        if isinstance(value, dict) and "proxy_protocol" in value:
+            require(value.get("transport") == "tcp" and value.get("bind") == "public",
+                    "invalid_topology", "proxy_protocol is only supported on public TCP stream listeners.")
+            require(value["proxy_protocol"] == ProxyProtocol.V1.value,
+                    "unsupported_capability", "proxy_protocol must be v1; the supported nginx packages do not send v2.")
+            proxy_protocol = ProxyProtocol(value["proxy_protocol"])
         if isinstance(value, dict) and value.get("transport") == "unix":
             contract_object(value, ("transport", "socket"))
             return cls("unix", "private", None, False, socket_name(value["socket"]))
-        contract_object(value, ("transport", "bind"), ("tls", "authentication", "wildcard"))
+        contract_object(value, ("transport", "bind"), ("tls", "authentication", "wildcard", "proxy_protocol"))
         require(value["transport"] == "tcp", "unsupported_capability", "UDP listeners require a later capability.")
         require(value["bind"] in ("loopback", "public"), "invalid_topology", "Invalid listener intent.")
         wildcard = value.get("wildcard", False)
@@ -297,7 +307,8 @@ class Listener:
         else:
             require("tls" not in value and "authentication" not in value,
                     "invalid_topology", "Private listeners do not declare public edge policy.")
-        return cls("tcp", value["bind"], value.get("tls"), value.get("authentication", False), wildcard=wildcard)
+        return cls("tcp", value["bind"], value.get("tls"), value.get("authentication", False),
+                   wildcard=wildcard, proxy_protocol=proxy_protocol)
 
 
 @dataclass(frozen=True)
@@ -557,7 +568,9 @@ Role = Union[BuiltinRole, ExecutableRole]
 
 def _role(value):
     require(isinstance(value, dict), "invalid_topology", "Role must be an object.")
-    require(not set(value).intersection(("wrapper", "instances", "proxy_protocol")),
+    require("proxy_protocol" not in value, "invalid_topology",
+            "Declare proxy_protocol on a public TCP stream listener, not on a role; the built-in HTTP role uses forwarded headers.")
+    require(not set(value).intersection(("wrapper", "instances")),
             "unsupported_capability", "Wrappers and numbered services require a later capability.")
     common = ("packages", "requires", "bindings", "maintenance", "artifact_mounts", "network")
     custom = ("executable", "arguments", "configs", "secret_files", "listeners", "readiness", "restart", "limits", "state", "environment",
@@ -758,6 +771,8 @@ def parse_topology(document, *, registered=False) -> Topology:
         executable(role.executable, role)
         listeners, configs = dict(role.listeners), dict(role.configs)
         require(role.readiness.listener in listeners, "invalid_topology", "Readiness requires a declared listener.")
+        require(listeners[role.readiness.listener].proxy_protocol is None, "invalid_topology",
+                "Readiness requires a separate non-PROXY listener; local TCP/HTTP probes do not send PROXY headers.")
         require((role.readiness.kind == "unix") == (listeners[role.readiness.listener].transport == "unix"),
                 "invalid_topology", "Readiness kind must match the listener transport.")
         require(all(secret in dict(secrets) for _, secret in role.secret_files), "invalid_topology", "Unknown secret reference.")
@@ -798,6 +813,8 @@ class PublicListenerBinding:
 
     @classmethod
     def parse(cls, value):
+        require(not isinstance(value, dict) or "proxy_protocol" not in value, "invalid_profile",
+                "Declare proxy_protocol on the topology's public TCP stream listener, not in profile bindings.")
         contract_object(value, ("ports", "source_cidrs", "dns"))
         ports = contract_list(value["ports"], lambda p: contract_int(p, 1, 65535), minimum=1, maximum=1)
         def cidr(item):
