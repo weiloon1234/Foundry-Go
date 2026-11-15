@@ -550,6 +550,14 @@ def instance_report(host, entry, deadline, problems, *, host_claims=()):
         "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),
     }
     if profile.get("schema") == 3:
+        import shared_directories
+        from topology import parse_topology
+        result["shared_directories"] = checked(problems, "shared_directory_unavailable", instance_id,
+            shared_directories.report, host, parse_topology(entry["topology"], registered=True), instance_id,
+            entry["allocations"]["uid"], entry["allocations"]["gid"])
+        for directory in result["shared_directories"] or ():
+            if directory.get("finding"):
+                problem(problems, directory["finding"], instance_id)
         from feature_lifecycle import network_report
         result["network"] = checked(problems, "declared_network_unavailable", instance_id,
                                     network_report, host, entry, host_claims)

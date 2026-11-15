@@ -110,6 +110,10 @@ def run(action, pin, launch):
                                        views=views, secret_paths=launch["secret_paths"].get(spec.identity.role, {}),
                                        uid=entry["allocations"]["uid"], gid=entry["allocations"]["gid"], permit_id=permit_id, entry=entry)
     with store.preparation(invocation, permit_id=permit_id):
+        import shared_directories
+        with store._lock("shared-directories"):
+            shared_directories.prepare(host, inventory.topology, spec.identity.instance_id,
+                                       entry["allocations"]["uid"], entry["allocations"]["gid"])
         import unix_sockets
         unix_sockets.prepare(host, role, spec.identity, entry["allocations"]["uid"], entry["allocations"]["gid"],
                              remove_stale=not dispatch.exists())

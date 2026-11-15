@@ -28,6 +28,18 @@ Socket files are runtime-only. Recovery restores declarations and prepares new
 socket paths; it never restores sockets from backup. See the
 [Unix listener guide](guides/host-capabilities.md#unix-socket-listeners).
 
+## Shared directory bindings — v0.35.0
+
+Declared shared directories require deploy-tool generation 16 on client and host.
+The instance floor remains 16 after rollback or recovery. Role-binding schema 1
+adds `shared_directories` only for roles granted access. Upgrade those application
+binaries before declaring the directories: earlier strict descriptor readers
+reject the new field. Roles with no grant retain their previous descriptor shape.
+
+Only disposable state is supported. Recovery restores declarations, never cached
+files. Reboot, release changes and shared-directory declaration changes discard
+the contents. See the [shared directory guide](guides/host-capabilities.md#shared-file-directories).
+
 ## Maintenance commands and deploy tools
 
 The server writes `config/deploy-runtime.json` into each unpacked release.

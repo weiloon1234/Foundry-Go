@@ -236,7 +236,9 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
                 require(isinstance(binding, BundleDirectoryBinding), "service_binding", "Unknown binding kind.")
                 view = next(v for v in views if v.name == binding.mount)
                 bundle_bindings.append(ResolvedBundleBinding(binding_name, view.destination, view.artifact_sha256))
-        bindings = RoleBindings(name, tuple(executable_bindings), tuple(endpoint_bindings), tuple(bundle_bindings), tuple(public_listener_bindings))
+        import shared_directories
+        bindings = RoleBindings(name, tuple(executable_bindings), tuple(endpoint_bindings), tuple(bundle_bindings),
+                                tuple(public_listener_bindings), shared_directories.bindings(topology, profile.instance_id, name))
         if isinstance(role, BuiltinRole):
             path = release_path / "artisan"
             binary, checksum = absolute(host, path), digest(path)
@@ -416,6 +418,10 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     old = entry.get("deployment_selection", {}).get("selected_resolution_id", inventory.resolution.id)
     previous = load(host, entry)[2] if "deployment_selection" in entry else inventory
     names = set(names) if names is not None else set(previous.roles) | set(inventory.roles)
+    discard_shared = (previous.deployment.release != inventory.deployment.release or
+                      previous.topology.shared_directories != inventory.topology.shared_directories)
+    require(not discard_shared or not previous.topology.shared_directories or set(previous.roles) <= names,
+            "shared_directory_transition", "Changing shared caches requires a full instance transition.")
     retained = set(inventory.roles) - names
     if review is not None:
         enabled, running, removed = transition_enablement(host, entry, inventory, restoring=review["restoring"])
@@ -467,6 +473,10 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     units = {**previous.units, **inventory.units}
     feature_network.withdraw(host, entry, request, inventory.resolution, units)
     stop_units(host, previous, names & previous.roles.keys())
+    if discard_shared:
+        import shared_directories
+        shared_directories.discard(host, previous.topology, inventory.profile.instance_id,
+                                   entry["allocations"]["uid"], entry["allocations"]["gid"])
     evidence = feature_network.close(host, entry, request, inventory.resolution, units)
     store.record_boot_closure(evidence)
     store._write(store.durable / "transition.json", replace(request, closure_id=evidence.id))

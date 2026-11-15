@@ -10,17 +10,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/deployment"
+	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 // featureRelay is the disposable custom service embedded in the fixture artifact.
 func featureRelay(ctx context.Context, args []string) error {
-	if len(args) != 2 && len(args) != 3 {
+	if len(args) < 2 || len(args) > 4 {
 		return fmt.Errorf("feature relay requires an address, port and optional Unix path")
 	}
-	if len(args) == 3 {
+	if len(args) >= 3 {
 		if err := featureUnixBinding(ctx, args[2]); err != nil {
 			return err
 		}
@@ -30,6 +32,14 @@ func featureRelay(ctx context.Context, args []string) error {
 		return err
 	}
 	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/shared" && len(args) == 4 {
+			if err := featureSharedReader(args[3]); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			_, _ = io.WriteString(w, "shared-read-only;writer-enospc")
+			return
+		}
 		if r.URL.Path != "/ready" {
 			http.NotFound(w, r)
 			return
@@ -59,6 +69,13 @@ func featureBindingProbe() (func(context.Context) error, error) {
 	}
 	if !present {
 		return func(context.Context) error { return nil }, nil
+	}
+	if directory, err := bindings.SharedDirectory("render-cache"); err == nil {
+		if err := featureSharedWriter(directory); err != nil {
+			return nil, err
+		}
+	} else if !errors.Is(err, fault.Missing) {
+		return nil, err
 	}
 	endpoint, err := bindings.Endpoint("relay")
 	if err != nil {
@@ -99,6 +116,17 @@ func featureUnix(ctx context.Context, args []string) error {
 	if len(args) != 1 || filepath.Dir(args[0]) != os.Getenv("XDG_RUNTIME_DIR") {
 		return fmt.Errorf("Unix provider requires its delivered socket path and directory")
 	}
+	bindings, present, err := deployment.LoadBindings()
+	if err != nil || !present {
+		return fmt.Errorf("Unix provider requires bindings")
+	}
+	if _, err := bindings.SharedDirectory("render-cache"); !errors.Is(err, fault.Missing) {
+		return fmt.Errorf("unlisted role received shared directory")
+	}
+	forbidden := "/run/foundry/services/" + string(bindings.Unit().Instance) + "/shared/render-cache/frame.txt"
+	if _, err := os.ReadFile(forbidden); err == nil {
+		return fmt.Errorf("unlisted role could read shared directory")
+	}
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Net: "unix", Name: args[0]})
 	if err != nil {
 		return err
@@ -117,11 +145,72 @@ func featureUnix(ctx context.Context, args []string) error {
 		}
 		_ = connection.SetDeadline(time.Now().Add(2 * time.Second))
 		var request [4]byte
-		if _, err := io.ReadFull(connection, request[:]); err == nil && string(request[:]) == "ping" {
-			_, _ = io.WriteString(connection, "unix-ready")
+		if _, err := io.ReadFull(connection, request[:]); err == nil {
+			switch string(request[:]) {
+			case "ping":
+				_, _ = io.WriteString(connection, "unix-ready")
+			case "deny":
+				if _, err := os.ReadFile(forbidden); errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
+					_, _ = io.WriteString(connection, "denied")
+				}
+			}
 		}
 		_ = connection.Close()
 	}
+}
+
+func featureSharedWriter(directory deployment.SharedDirectory) error {
+	if directory.Access != deployment.DirectoryReadWrite || directory.MaxBytes != 1<<20 {
+		return fmt.Errorf("shared writer binding incorrect")
+	}
+	if err := os.WriteFile(filepath.Join(directory.Path, "frame.txt"), []byte("prepared-media"), 0600); err != nil {
+		return err
+	}
+	path := filepath.Join(directory.Path, "bound-probe")
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(path)
+	block := make([]byte, 65536)
+	var writeErr error
+	for written := int64(0); written <= directory.MaxBytes; written += int64(len(block)) {
+		if _, writeErr = file.Write(block); writeErr != nil {
+			break
+		}
+	}
+	closeErr := file.Close()
+	if !errors.Is(writeErr, syscall.ENOSPC) || closeErr != nil {
+		return fmt.Errorf("shared directory did not enforce ENOSPC: %v, %v", writeErr, closeErr)
+	}
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(directory.Path, "bound-proof"), []byte("ENOSPC"), 0600)
+}
+
+func featureSharedReader(path string) error {
+	bindings, present, err := deployment.LoadBindings()
+	if err != nil || !present {
+		return fmt.Errorf("shared reader requires bindings")
+	}
+	directory, err := bindings.SharedDirectory("render-cache")
+	if err != nil || directory.Access != deployment.DirectoryReadOnly || directory.Path != path ||
+		path != os.Getenv("RENDER_CACHE") {
+		return fmt.Errorf("shared descriptor, argv and environment disagree")
+	}
+	for name, expected := range map[string]string{"frame.txt": "prepared-media", "bound-proof": "ENOSPC"} {
+		data, err := os.ReadFile(filepath.Join(path, name))
+		if err != nil || string(data) != expected {
+			return fmt.Errorf("shared reader did not read writer output")
+		}
+	}
+	for _, name := range []string{"reader-write", "frame.txt"} {
+		if err := os.WriteFile(filepath.Join(path, name), []byte("forbidden"), 0600); !errors.Is(err, syscall.EROFS) {
+			return fmt.Errorf("reader write did not fail with EROFS: %v", err)
+		}
+	}
+	return nil
 }
 
 func featureUnixBinding(ctx context.Context, path string) error {
