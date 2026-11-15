@@ -11,45 +11,117 @@ import re
 from contracts import AllocatedEndpoint, ClosureEvidence, ClosureStage, DeployError, contract_digest, require
 
 BOOT_UNIT = "foundry-edge-boot.service"
+BOOT_PATH = "/etc/systemd/system/" + BOOT_UNIT
 
 
-def boot_files(tools_dir, bundle):
+def boot_command(bundle):
     import services
-    command = services.command_line(["/usr/bin/python3", "-I", services.RUNTIME_ENTRY, "network-boot", bundle])
+    return ["/usr/bin/python3", "-I", services.RUNTIME_ENTRY, "network-boot", bundle]
+
+
+def boot_unit(bundle):
+    import services
+    command = services.command_line(boot_command(bundle))
     content = ("# Foundry feature network boot coordinator\n[Unit]\nDescription=Close feature routes before nginx\n"
                "After=ufw.service\nBefore=nginx.service\n[Service]\nType=oneshot\nUser=root\n"
                "RemainAfterExit=yes\nExecStart=" + command + "\nTimeoutStartSec=120\n")
+    return content
+
+
+def boot_files(tools_dir, bundle):
     dropin = (Path(tools_dir) / "server/templates/foundry-edge-boot.conf").read_text().replace("@BOOT_UNIT@", BOOT_UNIT)
-    return {"/etc/systemd/system/" + BOOT_UNIT: content,
+    return {BOOT_PATH: boot_unit(bundle),
             "/etc/systemd/system/nginx.service.d/foundry-edge-boot.conf": dropin}
 
 
+def boot_pin(host):
+    """Read the exact owned coordinator and its verified immutable bundle."""
+    import admission
+    import upgrades
+    from contracts import HOST_PATHS
+    path = admission.protected_path(host, host.paths.p(BOOT_PATH), "file")
+    if not path.exists():
+        return None
+    pattern = re.escape(boot_unit("@BUNDLE@")).replace(re.escape("@BUNDLE@"), r"([a-f0-9]{64})")
+    matched = re.fullmatch(pattern, path.read_text())
+    require(matched is not None, "nginx_boot_ownership", "The feature boot coordinator differs from its reviewed owner.")
+    bundle = matched[1]
+    pinned = upgrades._installed(host, {"bundle_sha256": bundle,
+                                "active_path": HOST_PATHS["tools"] + "/tools/" + bundle})
+    for name, content in boot_files(pinned, bundle).items():
+        installed = admission.protected_path(host, host.paths.p(name), "file")
+        require(not installed.exists() or installed.read_text() == content,
+                "nginx_boot_ownership", "The feature boot coordinator differs from its reviewed owner.")
+    return bundle, pinned
+
+
 def checked_boot_files(host, tools_dir, bundle):
-    """Keep an installed coordinator's immutable pin; never adopt arbitrary bytes."""
+    """A coordinator must use the selected tools' registry and profile readers."""
     import admission
     import services
-    import upgrades
     from operations import runtime_compatible
-    from contracts import HOST_PATHS
-    name = "/etc/systemd/system/" + BOOT_UNIT
-    path = admission.protected_path(host, host.paths.p(name), "file")
-    if path.exists():
-        pattern = re.escape(boot_files(tools_dir, "@BUNDLE@")[name]).replace(re.escape("@BUNDLE@"), r"([a-f0-9]{64})")
-        matched = re.fullmatch(pattern, path.read_text())
-        require(matched is not None, "nginx_boot_ownership", "The feature boot coordinator differs from its reviewed owner.")
-        bundle = matched[1]
-        pinned = upgrades._installed(host, {"bundle_sha256": bundle,
-                                    "active_path": HOST_PATHS["tools"] + "/tools/" + bundle})
+    pin = boot_pin(host)
+    if pin:
+        require(pin[0] == bundle, "boot_coordinator_upgrade_required",
+                "Advance the boot coordinator through a tools upgrade before changing application state.")
         runtime = admission.protected_path(host, host.paths.p(services.RUNTIME_ENTRY), "file")
-        require(runtime.exists() and runtime_compatible(runtime.read_bytes(), (pinned / "server/runtime_v1.py").read_bytes()),
-                "runtime_bridge_required", "The retained boot coordinator requires its compatible fixed runtime.")
-        tools_dir = pinned
-    expected = boot_files(tools_dir, bundle)
-    for name, content in expected.items():
-        path = admission.protected_path(host, host.paths.p(name), "file")
-        require(not path.exists() or path.read_text() == content,
-                "nginx_boot_ownership", "The feature boot coordinator differs from its reviewed owner.")
-    return expected
+        require(runtime.exists() and runtime_compatible(runtime.read_bytes(), (pin[1] / "server/runtime_v1.py").read_bytes()),
+                "runtime_bridge_required", "The boot coordinator requires its compatible fixed runtime.")
+    return boot_files(tools_dir, bundle)
+
+
+def boot_migration(host, tools_dir, bundle):
+    pin = boot_pin(host)
+    if not pin or pin[0] == bundle:
+        return None
+    # Only the bundle pin changes here. A new coordinator/drop-in format needs
+    # its own migration; never replace an administrator's configuration.
+    require(all(name == BOOT_PATH or content == boot_files(pin[1], pin[0])[name]
+                for name, content in boot_files(tools_dir, bundle).items()),
+            "nginx_boot_ownership", "The boot coordinator policy requires a separate migration.")
+    return {"path": BOOT_PATH, "from_bundle": pin[0], "to_bundle": bundle}
+
+
+def advance_boot(host, tools_dir, bundle):
+    """Resume the upgrade's atomic pin publication, reload and loaded-unit proof."""
+    require(host.host_lock_fd is not None, "tools_lock_required", "Boot coordinator migration requires the host lock.")
+    if not boot_pin(host):
+        return
+    if boot_migration(host, tools_dir, bundle):
+        host.owned_write(host.paths.p(BOOT_PATH), boot_files(tools_dir, bundle)[BOOT_PATH])
+    checked_boot_files(host, tools_dir, bundle)
+    # Repeat after a crash even when the file already has the target pin.
+    host.run(["systemctl", "daemon-reload"])
+    loaded = host.run(["systemctl", "show", BOOT_UNIT,
+        "--property=LoadState,FragmentPath,DropInPaths,NeedDaemonReload,ExecStart", "--no-pager"])
+    fields = dict(line.split("=", 1) for line in loaded.stdout.splitlines() if "=" in line)
+    require(all(fields.get(key) == value for key, value in
+                {"LoadState": "loaded", "FragmentPath": BOOT_PATH, "DropInPaths": "", "NeedDaemonReload": "no"}.items())
+            and re.findall(r"argv\[\]=(.*?) ;", fields.get("ExecStart", "")) == [" ".join(boot_command(bundle))],
+            "boot_coordinator_unverified", "The loaded boot coordinator does not match its target bundle.")
+
+
+def check_registry_writer(host, registry):
+    """Refuse new boot-visible state until the selected bundle owns the coordinator."""
+    from contracts import read_json
+    path = host.paths.p(BOOT_PATH)
+    if not path.exists() and not path.is_symlink():
+        return  # Bootstrap has not installed a coordinator yet.
+    if registry["tools"].get("upgrade_operation") and host.paths.registry.exists():
+        previous = read_json(host.paths.registry)
+        metadata = {"revision", "updated_at", "tools"}
+        if ({key: value for key, value in registry.items() if key not in metadata}
+                == {key: value for key, value in previous.items() if key not in metadata}):
+            return  # The upgrade intent may precede pin publication; application state cannot.
+    source = host.paths.p(registry["tools"]["active_path"])
+    checked_boot_files(host, source, registry["tools"]["bundle_sha256"])
+    from upgrades import feature_generation, protocol
+    from topology import parse_topology
+    generation = protocol(source)["generation"]
+    for entry in registry["instances"].values():
+        if entry.get("topology", {}).get("schema") == 2:
+            require(feature_generation(parse_topology(entry["topology"], registered=True), entry) <= generation,
+                    "boot_coordinator_upgrade_required", "The boot coordinator cannot read the requested capability generation.")
 
 
 def bootstrap_ready(host, entry, tools_dir, bundle):

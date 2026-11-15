@@ -801,9 +801,20 @@ use generation 18. The tools upgrade plan includes a runtime-v1 bridge when the
 installed helper matches the exact v0.35.0 bytes. The upgrade journal records the
 source and target digests, and the helper is atomically replaced before selecting
 the new bundle. Interrupted upgrades resume forward. Existing singleton invocation
-pins, cleanup and the retained network-boot coordinator remain compatible; unknown
-helper bytes are refused. This bridge is required because the old fixed helper
-rejects ordinals above one before importing its bundled library.
+pins and cleanup remain compatible; unknown helper bytes are refused. This bridge
+is required because the old fixed helper rejects ordinals above one before
+importing its bundled library.
+
+Every tools upgrade also advances an installed network-boot coordinator to the
+candidate bundle. Its pin change is recorded in the upgrade journal, atomically
+published, reloaded and checked against systemd's loaded command before tools
+selection. Resume repeats the reload and verification even if the file already
+has the new pin. Application registry writes refuse a stale coordinator or a
+capability above its parser generation. This protects new declarations at
+generation 14 (templates and public-listener bindings), 15 (Unix bindings),
+16 (confinement and shared directories), and subsequent generations, including
+17's separately delivered upload-route changes. Tools-upgrade intent writes may
+precede the advance only while application state remains unchanged.
 
 Counts above one require generation 18 on both the client and host. The floor
 remains selected through rollback and recovery, including a later single-copy
@@ -834,9 +845,12 @@ closure must be proved before the transition can complete.
 
 Readiness verifies each copy's process, listener ownership, stability, and BPF
 attachments where confinement is declared. Dependencies include every prerequisite
-copy. Units at the same dependency level start together and share a stability
-window; consumers start only after their prerequisites pass. Startup and final
-readiness use one shared 90-second deadline, independent of the copy count.
+copy. Units at the same dependency level are queued together without blocking.
+Each unit's readiness timeout starts at its own systemd monotonic process-start
+timestamp and includes its stability proof. A unit that finishes early remains
+under observation while slower peers finish; a lost probe or changed process
+invalidates its proof. Consumers start only after their prerequisites pass.
+Startup and final readiness still share one overall 90-second deadline.
 
 Build the changed profile into a release archive, then review and activate its
 release plan. The archived target profile owns the counts. The plan shows added,

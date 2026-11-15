@@ -29,6 +29,10 @@ because roles share one account. Console descriptors omit copy secret paths; thi
 limits descriptor contents, not filesystem access. See
 [numbered copy consumers](guides/host-capabilities.md#numbered-copy-consumers).
 Generation 18 supports reviewed count changes, copy selection, backup and recovery.
+Tools upgrades must advance the network-boot coordinator as well as the fixed
+helper: a generation-16 coordinator cannot parse numbered placement. The upgrade
+journals, publishes and verifies that pin before selecting the new tools. Registry
+writes require the selected bundle's coordinator and its capability floor.
 
 ## Loopback confinement — v0.35.0
 

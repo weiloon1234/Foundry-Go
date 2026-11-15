@@ -362,7 +362,7 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(release, "app", side_effect=lambda *args, **kw: events.append(args[3])))
             stack.enter_context(patch.object(release, "switch_to", side_effect=lambda *_: events.append("switched")))
             stack.enter_context(patch.object(release, "finish", side_effect=finish))
-            stack.enter_context(patch.object(services, "wait_ready_set", side_effect=lambda host, inv, names, deadline:
+            stack.enter_context(patch.object(services, "wait_ready_set", side_effect=lambda host, inv, names, deadline, **kwargs:
                 (events.append("ready-set" if set(names) == set(inv.units) else
                                "ready:" + ",".join(name.record_key for name in names)), True)[1]))
             lifecycle.transition(self.host, {"tools": {"generation": upgrades.protocol()["generation"]}},

@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+- Fixed: tools upgrades now advance and verify the network-boot coordinator's
+  bundle pin before selecting tools that can write newer registry/profile shapes.
+  Interrupted pin publication resumes, and stale coordinators block application
+  registry writes. Grouped startup tracks each unit's own readiness timeout from
+  its systemd process-start timestamp and keeps completed peers under observation.
+
 - Fixed: generation-16 hosts upgrade through an explicit, digest-bound runtime-v1
   bridge that preserves singleton invocation pins and resumes interrupted upgrades.
-  Numbered-copy startup now shares stability windows by dependency level; regrowth
+  Numbered-copy startup now observes readiness by dependency level; regrowth
   stops excluded dependents with exit proof. Socket declarations reserve `@` for
   derived copy suffixes, retaining the 107-byte path limit. Numbered copies use
   generation 18; generation 17 belongs to v0.36.0 parameterized upload routes.

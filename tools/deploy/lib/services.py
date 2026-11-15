@@ -557,8 +557,8 @@ def wait_ready(host, inventory, name, deadline):
     return wait_ready_set(host, inventory, (name,), deadline)
 
 
-def wait_ready_set(host, inventory, names, deadline):
-    """Observe every selected identity/probe in one shared stability window."""
+def wait_ready_set(host, inventory, names, deadline, *, starting=False):
+    """Prove each unit within its own budget, and keep proved peers healthy."""
     from contracts import digest
     from admission import protected_path
     from host import OperationTimeout, wall_clock_budget
@@ -577,7 +577,8 @@ def wait_ready_set(host, inventory, names, deadline):
         except OperationTimeout:
             return False
         paused = observed is not None and observed["down"]
-    checks = {}
+    checks, limits = {}, {}
+    observation_start = time.monotonic()
     for name in names:
         role, spec = inventory.roles[name.role], inventory.specs[name]
         contract = readiness_probe(role)
@@ -591,20 +592,33 @@ def wait_ready_set(host, inventory, names, deadline):
             local = endpoint.path if contract.kind == "unix" else (
                 f"[{endpoint.address}]:{endpoint.port}" if ":" in endpoint.address else f"{endpoint.address}:{endpoint.port}")
         checks[name] = (role, executable, endpoint, local)
-        if contract:
-            deadline = min(deadline, time.monotonic() + contract.timeout_seconds)
-    tokens, stable_since = {}, None
+        limits[name] = (contract.timeout_seconds if contract else None)
+    expires = {} if starting else {name: min(deadline, observation_start + seconds) if seconds else deadline
+                                    for name, seconds in limits.items()}
+    tokens, stable_since, proved = {}, {}, set()
     if deadline <= time.monotonic():
         return False
     try:
         with wall_clock_budget(deadline - time.monotonic()):
             while time.monotonic() < deadline:
-                healthy, observed_tokens = True, {}
+                healthy, observed_tokens = set(), {}
                 for name, (role, executable, endpoint, local) in checks.items():
                     if time.monotonic() >= deadline:
                         return False
                     observed = service(host, inventory.units[name], timeout=min(5, deadline - time.monotonic()))
                     if observed["ActiveState"] == "failed" or observed["NRestarts"] != "0":
+                        return False
+                    if name not in expires:
+                        start = observed.get("ExecMainStartTimestampMonotonic")
+                        require(isinstance(start, str) and start.isdecimal(),
+                                "service_start_time", "Systemd did not provide the unit's monotonic start timestamp.")
+                        if int(start) == 0:
+                            continue  # The queued start has not reached ExecStart yet.
+                        started = int(start) / 1_000_000
+                        require(started <= time.monotonic(), "service_start_time", "Unit start timestamp is in the future.")
+                        expires[name] = min(deadline, started + limits[name]) if limits[name] else deadline
+                    until = deadline if name in proved else expires[name]
+                    if time.monotonic() >= until:
                         return False
                     current = (observed["MainPID"], (observed.get("process") or {}).get("start"))
                     if name in tokens and current != tokens[name]:
@@ -617,31 +631,38 @@ def wait_ready_set(host, inventory, names, deadline):
                     if ready and endpoint:
                         unix = readiness_probe(role).kind == "unix"
                         command = ["ss", "-Hxlpn"] if unix else ["ss", "-Hltpn", f"sport = :{endpoint.port}"]
-                        listeners = host.run(command, check=False, timeout=min(5, deadline - time.monotonic()))
+                        listeners = host.run(command, check=False, timeout=min(5, until - time.monotonic()))
                         local_addresses = {local}
                         if isinstance(role, ExecutableRole) and dict(role.listeners)[endpoint.listener].wildcard:
                             local_addresses.update(f"{address}:{endpoint.port}" for address in ("0.0.0.0", "[::]", "*"))
                         ready = listeners.returncode == 0 and any(
                             len(line.split()) >= (8 if unix else 5) and line.split()[4 if unix else 3] in local_addresses and
                             f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
-                    healthy = ready and (probe(host, inventory, name, deadline, paused=True) if paused and name.role == "http"
-                                         else probe(host, inventory, name, deadline)) and healthy
-                # Recheck the entire set after the last probe, including prerequisites
-                # observed before a slow dependent. A changed identity resets nothing.
-                if healthy:
-                    for name, (_, executable, _, _) in checks.items():
-                        if time.monotonic() >= deadline:
+                    ready = ready and (probe(host, inventory, name, until, paused=True) if paused and name.role == "http"
+                                       else probe(host, inventory, name, until))
+                    if not ready:
+                        if name in proved:
                             return False
-                        after = service(host, inventory.units[name], timeout=min(5, deadline - time.monotonic()))
-                        if (not _matches_executable(after, executable) or after["NRestarts"] != "0" or
-                                (after["MainPID"], (after.get("process") or {}).get("start")) != observed_tokens[name]):
-                            return False
-                    if stable_since is None:
-                        tokens, stable_since = observed_tokens, time.monotonic()
-                    if time.monotonic() - stable_since >= STABILITY_SECONDS and time.monotonic() < deadline:
-                        return True
-                else:
-                    stable_since = None
+                        stable_since.pop(name, None)
+                    else:
+                        healthy.add(name)
+                # Recheck peers after the last probe, including one proved before
+                # a slow sibling. A changed process never inherits a stability proof.
+                for name in healthy:
+                    _, executable, _, _ = checks[name]
+                    until = deadline if name in proved else expires[name]
+                    if time.monotonic() >= until:
+                        return False
+                    after = service(host, inventory.units[name], timeout=min(5, until - time.monotonic()))
+                    if (not _matches_executable(after, executable) or after["NRestarts"] != "0" or
+                            (after["MainPID"], (after.get("process") or {}).get("start")) != observed_tokens[name]):
+                        return False
+                    tokens[name] = observed_tokens[name]
+                    stable_since.setdefault(name, time.monotonic())
+                    if time.monotonic() - stable_since[name] >= STABILITY_SECONDS:
+                        proved.add(name)
+                if len(proved) == len(names) and time.monotonic() < deadline:
+                    return True
                 time.sleep(max(0, min(.1, deadline - time.monotonic())))
     except OperationTimeout:
         return False

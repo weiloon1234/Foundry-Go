@@ -449,7 +449,7 @@ def start_units(host, entry, inventory, names, deadline):
         if not selected:
             return
         try:
-            host.run(["systemctl", "start", *(inventory.units[name] for name in selected)],
+            host.run(["systemctl", "start", "--no-block", *(inventory.units[name] for name in selected)],
                      timeout=max(.001, until - time.monotonic()))
         except DeployError:
             for name in selected:
@@ -457,7 +457,7 @@ def start_units(host, entry, inventory, names, deadline):
             raise
     def await_ready(level, until):
         selected = tuple(name for name in level if name in names)
-        if selected and not services.wait_ready_set(host, inventory, selected, until):
+        if selected and not services.wait_ready_set(host, inventory, selected, until, starting=True):
             # systemd 255 can report a skipped ExecCondition as a successful start.
             for name in selected:
                 _require_namespace_ready(host, inventory.units[name])

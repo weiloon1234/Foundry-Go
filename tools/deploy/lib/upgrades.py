@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
-                       FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION, FEATURE_UNIX_GENERATION, FEATURE_CONFINEMENT_GENERATION,
+                       FEATURE_CAPABILITIES, FEATURE_INTRODUCTION_GENERATION, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION, FEATURE_UNIX_GENERATION, FEATURE_CONFINEMENT_GENERATION,
                        FEATURE_SHARED_DIRECTORY_GENERATION, FEATURE_COPIES_GENERATION,
                        TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
@@ -71,7 +71,7 @@ def required_files(generation: int) -> frozenset[str]:
     required = BASE_REQUIRED_FILES
     if generation >= 11:
         required |= GENERATION_11_FILES
-    if generation >= 12:
+    if generation >= FEATURE_INTRODUCTION_GENERATION:
         required |= GENERATION_12_FILES
     if generation >= 13:
         required |= GENERATION_13_FILES
@@ -587,6 +587,22 @@ def check_upgrade_generation(installed: dict, tools_dir: Path | None = None) -> 
             "tools_upgrade_floor", "The host must already run generation 9 tools before this upgrade.")
 
 
+def tool_migrations(host, source, bundle):
+    migrations = []
+    generation = protocol(source)["generation"]
+    if generation >= FEATURE_COPIES_GENERATION:
+        from operations import runtime_migration
+        migration = runtime_migration(host, source)
+        if migration:
+            migrations.append(migration)
+    if generation >= FEATURE_INTRODUCTION_GENERATION:
+        from feature_network import boot_migration
+        migration = boot_migration(host, source, bundle)
+        if migration:
+            migrations.append(migration)
+    return migrations
+
+
 def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
     """Describe changed/removed paths and compatibility impact without mutating the host."""
     for entry in registry["instances"].values():
@@ -596,10 +612,7 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
     source, _, digest = tool_bundle(tools_dir)
     target = protocol(source)
     require(target["generation"] >= current["generation"], "tools_downgrade", "Host tool generations cannot be downgraded.")
-    migration = None
-    if target["generation"] >= FEATURE_COPIES_GENERATION:
-        from operations import runtime_migration
-        migration = runtime_migration(host, source)
+    migrations = tool_migrations(host, source, digest)
     _deletion_directory(host)
     retained_releases = []
     for instance_id, entry in registry["instances"].items():
@@ -639,7 +652,7 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
             "generation": target["generation"], "changed_paths": sorted(k for k in new if new[k] != old.get(k)),
             "removed_paths": sorted(old.keys() - new.keys()), "instances": sorted(registry["instances"]),
             "retained_releases": retained_releases,
-            "migration_steps": [migration] if migration else [], "service_effects": effects, "helper_architecture": None}
+            "migration_steps": migrations, "service_effects": effects, "helper_architecture": None}
 
 
 def verify_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = False) -> tuple[Path, list[Path], str]:
@@ -725,10 +738,7 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
         journal = {"schema": 1, "operation_id": operation, "host_id": registry["host_id"],
                    "bundle_sha256": digest, "previous_tools": copy.deepcopy(current), "phase": "intent",
                    "registry_sha256": _hash(registry)}
-        if protocol(source)["generation"] >= FEATURE_COPIES_GENERATION:
-            from operations import runtime_migration
-            migration = runtime_migration(host, source)
-            journal["migration_steps"] = [migration] if migration else []
+        journal["migration_steps"] = tool_migrations(host, source, digest)
         atomic_json(journal_dir / "registry-before.json", registry, 0o600)
         atomic_json(journal_path, journal, 0o600)
     if journal["phase"] == "complete":
@@ -781,6 +791,9 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
     if target_record["generation"] >= FEATURE_COPIES_GENERATION:
         from operations import migrate_runtime
         migrate_runtime(host, destination)
+    if target_record["generation"] >= FEATURE_INTRODUCTION_GENERATION:
+        from feature_network import advance_boot
+        advance_boot(host, destination, digest)
     _select(host, digest)
     registry["tools"] = target_record
     _save_registry(host, registry)

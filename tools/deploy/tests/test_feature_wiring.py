@@ -67,12 +67,14 @@ class WiringHost(Host):
     def __init__(self, root):
         super().__init__(Paths(root))
         self.commands, self.started = [], []
+        self.loaded_boot = None
         self.shared_prepared = set()
         self.account, self.nginx = None, False
         self.account_sequence = 0
         self.worker = 90
         self.sequence = 100
         self.running = {}
+        self.start_times = {}
         self.enabled = set()
         self.failed = set()
         self.public_profile = None
@@ -124,6 +126,7 @@ class WiringHost(Host):
         self.proc(process.pid, invocation, alive=False)
         main = self.proc(process.pid + 1, invocation, self.paths.p(inventory.specs[role].executable), unit)
         self.running[unit] = (main, inventory, role)
+        self.start_times[unit] = str(int(time.monotonic() * 1_000_000))
         self.starting = unit
         feature_runtime.run("running", c.record_document(pin), launch)
         self.starting = None
@@ -237,7 +240,8 @@ class WiringHost(Host):
                 self.worker += 1
             elif action == "start" and unit.startswith("foundry-"):
                 for selected in args[2:]:
-                    self.start(selected)
+                    if not selected.startswith("--"):
+                        self.start(selected)
             elif action == "stop":
                 self.shared_prepared.clear()
                 code = 0 if loaded else 5
@@ -245,8 +249,15 @@ class WiringHost(Host):
                 if record:
                     self.proc(record[0].pid, record[0].invocation_id, alive=False)
                     self.owned_write(self.paths.p("/sys/fs/cgroup/system.slice/" + unit + "/cgroup.procs"), "")
+            elif action == "daemon-reload":
+                boot = self.paths.p(feature_network.BOOT_PATH)
+                self.loaded_boot = boot.read_text() if boot.exists() else None
             elif action == "show":
-                if unit.startswith("foundry-operation-"):
+                if unit == feature_network.BOOT_UNIT:
+                    command = next(line.split("=", 1)[1] for line in self.loaded_boot.splitlines() if line.startswith("ExecStart="))
+                    values = {"LoadState": "loaded", "FragmentPath": feature_network.BOOT_PATH, "DropInPaths": "",
+                              "NeedDaemonReload": "no", "ExecStart": "{ argv[]=" + " ".join(shlex.split(command)) + " ; }"}
+                elif unit.startswith("foundry-operation-"):
                     pin = self.operation_pin
                     values = {"Type": "exec", "KillMode": "control-group", "Restart": "no", "Transient": "yes", "DropInPaths": ""}
                     for directive, phase in (("ExecStart", "operation"), ("ExecStopPost", "operation-cleanup")):
@@ -256,7 +267,8 @@ class WiringHost(Host):
                     values = {"Id": unit, "LoadState": "loaded" if loaded else "not-found", "ActiveState": "active" if current else "inactive",
                               "SubState": "running" if current else "dead", "MainPID": str(current[0].pid) if current else "0",
                               "ControlPID": "0", "Job": "0", "ControlGroup": "/system.slice/" + unit if current else "",
-                              "NRestarts": "0", "InvocationID": current[0].invocation_id if current else ""}
+                              "NRestarts": "0", "InvocationID": current[0].invocation_id if current else "",
+                              "ExecMainStartTimestampMonotonic": self.start_times[unit] if current else "0"}
                     if unit == self.starting:
                         values.update(ActiveState="activating", SubState="start-post")
                 output = "\n".join(k + "=" + v for k, v in values.items())
@@ -758,7 +770,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         runtime = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(runtime)
         content = self.host.paths.p("/etc/systemd/system/" + unit).read_text()
-        arguments = shlex.split(next(line.split("=", 1)[1] for line in content.splitlines() if line.startswith("ExecStart=")))[-7:]
+        arguments = shlex.split(next(line.split("=", 1)[1] for line in content.splitlines() if line.startswith("ExecStart=")))[3:]
         self.host.owned_write(self.host.paths.p("/proc/self/cgroup"), "0::/system.slice/" + unit)
         self.host.owned_write(self.host.paths.p("/proc/self/stat"), "22 (coordinator) " + " ".join(["S"] + ["0"] * 18 + ["42"]))
         def mapped(value):
@@ -771,7 +783,8 @@ class FeatureWiringTests(FeatureWiringFixture):
                 patch.object(runtime, "owned", side_effect=lambda path: admission.protected_path(self.host, path, "file" if path.is_file() else "directory")), \
                 patch.object(runtime, "pin_directory", side_effect=lambda path: admission.protected_directory(self.host, path)), \
                 patch.object(runtime, "os", SimpleNamespace(**{**vars(os), "geteuid": lambda: 0})), \
-                patch.dict(os.environ, INVOCATION_ID=uuid.uuid4().hex):
+                patch.dict(os.environ, INVOCATION_ID=uuid.uuid4().hex), \
+                patch("host.Host", return_value=self.host):
             self.assertEqual(runtime.main(arguments), 0)
 
     def test_reboot_after_selective_rotation_uses_per_role_generations(self):
@@ -1307,7 +1320,52 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertEqual(values[runtime_config.SCHEDULER_ENABLED], 'false')
         self.assertEqual(values['APP__TEST__TOKEN'], 'preview-upgrade')
 
-    def test_second_bootstrap_after_tool_upgrade_retains_verified_boot_pin(self):
+    def test_v035_boot_pin_refuses_copy_state_until_upgrade_then_reboots(self):
+        old_source = self.host.paths.root / "generation-16"
+        shutil.copytree(TOOLS, old_source, ignore=shutil.ignore_patterns("__pycache__"))
+        c.atomic_json(old_source / "protocol.json", {**upgrades.protocol(old_source), "generation": 16})
+        legacy = (Path(__file__).parent / "runtime_fixtures/v0_35_0/runtime_v1.py").read_bytes()
+        (old_source / "server/runtime_v1.py").write_bytes(legacy)
+        self.envelope = upgrades.protocol_metadata(old_source)
+        with patch.object(manager, "__file__", str(old_source / "server/manage.py")), \
+                patch.object(provision, "__file__", str(old_source / "lib/provision.py")):
+            plan = self.request("bootstrap-plan", topology=self.topology.projection())
+            self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.envelope = upgrades.protocol_metadata(TOOLS)
+        registry = self.host.read_registry()
+        before = self.host.paths.registry.read_bytes()
+        candidate = json.loads(before)
+        candidate["instances"][self.profile["instance_id"]]["profile"]["placement"]["relay"] = 2
+        for tools in (registry["tools"], upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)):
+            for pending in (None, str(uuid.uuid4())):
+                candidate["tools"] = {**tools, "upgrade_operation": pending}
+                with self.assertRaises(c.DeployError) as caught:
+                    self.host.write_registry(candidate)
+                self.assertEqual(caught.exception.code, "boot_coordinator_upgrade_required")
+                self.assertEqual(self.host.paths.registry.read_bytes(), before)
+        upgrade = upgrades.plan_upgrade(self.host, TOOLS)
+        self.assertEqual(upgrades.apply_upgrade(self.host, TOOLS, upgrade["plan_token"], str(uuid.uuid4()))["outcome"], "succeeded")
+        selected = self.host.read_registry()["tools"]["bundle_sha256"]
+        self.assertIn(selected, self.host.loaded_boot)
+        original_profile = self.profile.copy()
+        self.build_archive(copies=2)
+        self.profile = original_profile
+        result = self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        self.profile = result["profile_update"]
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, inventory, _ = lifecycle.load(self.host, entry)
+        self.assertEqual(len(inventory.copies("relay")), 2)
+        lifecycle.stop_units(self.host, inventory)
+        self.host.owned_write(self.host.paths.p("/proc/sys/kernel/random/boot_id"), str(uuid.uuid4()))
+        self.run_coordinator(feature_network.BOOT_UNIT)
+        self.run_coordinator("foundry-admission-" + self.profile["instance_id"] + ".service")
+        for identity in inventory.start_order(inventory.units):
+            self.host.start(inventory.units[identity])
+        self.run_coordinator("foundry-admission-open-" + self.profile["instance_id"] + ".service")
+        self.assertEqual(set(self.host.running), set(inventory.units.values()))
+        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, time.monotonic() + 1))
+
+    def test_second_bootstrap_after_tool_upgrade_uses_advanced_verified_boot_pin(self):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())
         self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
         pin = self.host.read_registry()["tools"]["bundle_sha256"]
@@ -1329,7 +1387,8 @@ class FeatureWiringTests(FeatureWiringFixture):
         plan = provision.bootstrap_plan(self.host, self.project, self.profile, source, topology=self.topology.projection())
         self.assertTrue(provision.bootstrap_apply(self.host, self.project, self.profile, source,
                          plan_token=plan["plan_token"], topology=self.topology.projection())["ok"])
-        self.assertEqual(boot.read_bytes(), before)
+        self.assertNotEqual(boot.read_bytes(), before)
+        self.assertIn(self.host.read_registry()["tools"]["bundle_sha256"], boot.read_text())
         self.assertTrue((self.host.paths.tools / "tools" / pin / "manifest.json").exists())
 
     def test_network_preparation_checks_owners_before_any_network_mutation(self):

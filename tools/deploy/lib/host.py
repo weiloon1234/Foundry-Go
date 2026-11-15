@@ -212,6 +212,8 @@ class Host:
 
     def write_registry(self, registry):
         validate_registry(registry)
+        from feature_network import check_registry_writer
+        check_registry_writer(self, registry)
         atomic_json(self.paths.registry, registry)
 
     def owned_write(self, path, content, mode=0o644, owner="root", group="root"):

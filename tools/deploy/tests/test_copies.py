@@ -116,19 +116,20 @@ class CopyFoundationTests(unittest.TestCase):
         import tempfile
         from host import Host, Paths
         inventory, entry, _ = numbered_inventory(128)
-        clock = [0.0]
+        clock = [1.0]
         def advance(seconds):
             clock[0] += max(seconds, 1.0)
         timer = SimpleNamespace(monotonic=lambda: clock[0], sleep=advance)
         started, probes, batches = set(), set(), []
         def start(argv, **kwargs):
             self.assertEqual(argv[:2], ["systemctl", "start"])
-            batches.append(tuple(argv[2:]))
-            started.update(argv[2:])
+            self.assertEqual(argv[2], "--no-block")
+            batches.append(tuple(argv[3:]))
+            started.update(argv[3:])
         def observe(host, unit, **kwargs):
             self.assertIn(unit, started)
             return {"ActiveState": "active", "NRestarts": "0", "MainPID": str(list(inventory.units.values()).index(unit) + 1),
-                    "process": {"start": "42"}}
+                    "process": {"start": "42"}, "ExecMainStartTimestampMonotonic": str(int(clock[0] * 1_000_000))}
         def probe(host, current, identity, deadline):
             probes.add(identity)
             return True
