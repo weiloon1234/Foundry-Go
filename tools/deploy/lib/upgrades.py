@@ -25,7 +25,7 @@ if __name__ == "__main__":
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
                        FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION, FEATURE_UNIX_GENERATION, FEATURE_CONFINEMENT_GENERATION,
-                       FEATURE_SHARED_DIRECTORY_GENERATION,
+                       FEATURE_SHARED_DIRECTORY_GENERATION, FEATURE_COPIES_GENERATION,
                        TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
@@ -423,9 +423,9 @@ def check_instance_capabilities(entry: dict, client_generation: int) -> None:
             "instance_capability_required", f"This instance requires deploy client generation {selection.minimum_generation}; upgrade the tools.")
 
 
-def feature_generation(topology, entry):
+def feature_generation(topology, entry, *, profile=None):
     """Application rollback cannot lower a selected capability floor."""
-    from topology import ExecutableRole, PublicListenerReference
+    from topology import ArgumentKind, ExecutableRole, PublicListenerReference
     templates = any(config.format is not None for role in topology.roles if isinstance(role, ExecutableRole)
                     for _, config in role.configs)
     public_listeners = any(isinstance(binding, PublicListenerReference) for role in topology.roles
@@ -435,15 +435,24 @@ def feature_generation(topology, entry):
     confinement = any(r.common.confinement for r in topology.roles) or any(
         "wildcard" in listener for role in topology.projection()["roles"]
         for listener in role.get("listeners", {}).values())
+    from topology import DeploymentProfile, parse_placement
+    profile = entry.get("profile", {}) if profile is None else profile
+    placement = profile.placement if isinstance(profile, DeploymentProfile) else parse_placement(profile.get("placement", {}))
+    copies = any(count > 1 for _, count in placement)
+    copy_references = any(argument.kind is ArgumentKind.COPY_ORDINAL
+                          for role in topology.roles if isinstance(role, ExecutableRole)
+                          for argument in (*role.arguments, *(value for _, value in role.environment),
+                                           *(value for _, config in role.configs for _, value in config.bindings)))
     return max(FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION if templates or public_listeners else 0,
                FEATURE_UNIX_GENERATION if unix else 0,
                FEATURE_CONFINEMENT_GENERATION if confinement else 0,
                FEATURE_SHARED_DIRECTORY_GENERATION if topology.shared_directories else 0,
+               FEATURE_COPIES_GENERATION if copies or copy_references else 0,
                entry.get("deployment_selection", {}).get("minimum_generation", 0))
 
 
-def check_feature_generation(registry, topology, entry, *, client_generation=None):
-    minimum = feature_generation(topology, entry)
+def check_feature_generation(registry, topology, entry, *, client_generation=None, profile=None):
+    minimum = feature_generation(topology, entry, profile=profile)
     if client_generation is not None:
         require(type(client_generation) is int and client_generation >= minimum,
                 "instance_capability_required", f"These declarations require deploy client generation {minimum}.")
@@ -459,10 +468,11 @@ def check_target_capabilities(host, request, action):
     registry = host.read_registry(missing=True)
     installed = registry if registry is not None else {"tools": protocol()}
     generation = request.get("client", {}).get("generation", 0)
-    latest = max(FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION)
+    latest = max(FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION, FEATURE_COPIES_GENERATION)
     if type(generation) is int and generation >= latest and installed["tools"]["generation"] >= latest:
         return
     from topology import parse_topology
+    target_profile = request.get("profile")
     if action in {"recover-plan", "recover-apply"}:
         import recover
         require(isinstance(request.get("recovery_archive"), str), "recovery_members", "A staged private recovery archive is required.")
@@ -472,6 +482,7 @@ def check_target_capabilities(host, request, action):
             return
         topology = recovered["feature"].topology
         entry = recovered["metadata"]
+        target_profile = entry.get("profile", {})
     else:
         import release
         _, entry = host.require_identity(request["project"], request["profile"])
@@ -487,8 +498,10 @@ def check_target_capabilities(host, request, action):
         if manifest.get("schema") != ARCHIVE_SCHEMA:
             return
         from contracts import ReleaseDeclaration
-        topology = parse_topology(ReleaseDeclaration.parse(manifest["deployment"]).topology_json)
-    check_feature_generation(installed, topology, entry, client_generation=generation)
+        declaration = ReleaseDeclaration.parse(manifest["deployment"])
+        topology = parse_topology(declaration.topology_json)
+        target_profile = json.loads(declaration.profile_json)
+    check_feature_generation(installed, topology, entry, client_generation=generation, profile=target_profile)
 
 
 def _check_feature_request(registry, request, action):
@@ -509,11 +522,11 @@ def _check_feature_request(registry, request, action):
         if isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA:
             from topology import parse_topology
             parsed_topology = parse_topology(topology, registered="sha256" in topology)
-            minimum = feature_generation(parsed_topology, {})
+            minimum = feature_generation(parsed_topology, {}, profile=profile)
             require(request.get("client", {}).get("generation", 0) >= minimum,
                     "instance_capability_required", f"These declarations require deploy client generation {minimum}.")
             if registry is not None:
-                check_feature_generation(registry, parsed_topology, {})
+                check_feature_generation(registry, parsed_topology, {}, profile=profile)
     if requested and action not in supported | UPGRADE_ACTIONS | {"tools-plan"}:
         from feature_lifecycle import refuse
         refuse(action)

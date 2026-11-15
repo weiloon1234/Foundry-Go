@@ -44,8 +44,8 @@ def build(host, mode="none", *, ports=(18000, 18002), instance_id=None, name="ab
     entry["certificate"]["lineage"] = profile.projection()["domain"]
     inventories = []
     for port in ports:
-        endpoints = (c.AllocatedEndpoint("http", "http", "127.0.0.1", port),
-                     c.AllocatedEndpoint("relay", "ingress", "127.0.0.1", port + 1))
+        endpoints = (c.AllocatedEndpoint("http", "http", "127.0.0.1", port, 1),
+                     c.AllocatedEndpoint("relay", "ingress", "127.0.0.1", port + 1, 1))
         specs = tuple(c.UnitSpec(c.UnitIdentity(instance_id, raw["name"], 1), "/usr/bin/python3", DIGEST,
                         ("--fixture-port", str(next(e.port for e in endpoints if e.role == raw["name"]))),
                         c.canonical_digest(raw), c.RoleBindings(raw["name"], (), (), ()), DIGEST)

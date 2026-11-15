@@ -15,7 +15,7 @@ from contracts import (Deployment, RuntimeResolution, UnitIdentity, canonical_di
                        contract_digest, contract_path, contract_uuid, instance_paths,
                        marker, record_document, require)
 from topology import (ArgumentKind, BuiltinRole, ExecutableRole, parse_profile,
-                      parse_topology)
+                      parse_topology, expand_placement, role_unit_name)
 
 RUNTIME_ENTRY = "/usr/local/lib/foundry/runtime-v1"
 TEMPLATES = Path(__file__).resolve().parents[1] / "server/templates"
@@ -91,6 +91,31 @@ class RoleState:
     ready: bool
 
 
+def expanded_unit_names(name, topology, profile):
+    instance_paths(name)
+    return {identity: role_unit_name(name, role, identity.ordinal)
+            for identity, role in expand_placement(topology, profile.instance_id, profile.placement).items()}
+
+
+def unit_specs(deployment):
+    """Index the validated persisted inventory by the same key as names and readiness."""
+    return {spec.identity: spec for spec in Deployment.parse(record_document(deployment)).units}
+
+
+def select_role_units(units, role="all", *, roles=None):
+    """Expand role selectors over any UnitIdentity-keyed inventory, preserving order."""
+    available = {identity.role for identity in units}
+    if roles is None:
+        require(isinstance(role, str) and (role == "all" or role in available),
+                "invalid_role", "Select a declared topology role.")
+        selected = available if role == "all" else {role}
+    else:
+        require(isinstance(roles, (list, tuple)) and all(isinstance(name, str) and name in available for name in roles)
+                and len(roles) == len(set(roles)), "invalid_role", "Select declared topology roles.")
+        selected = set(roles)
+    return tuple(identity for identity in units if identity.role in selected)
+
+
 class UnitInventory:
     def __init__(self, name, topology, profile, deployment, resolution):
         instance_paths(name)
@@ -103,7 +128,8 @@ class UnitInventory:
         require(deployment.instance_id == profile.instance_id and deployment.topology_sha256 == topology.sha256
                 and deployment.profile_sha256 == canonical_digest(profile.projection())
                 and resolution.deployment_sha256 == canonical_digest(record_document(deployment))
-                and {u.identity.role for u in deployment.units} == placed == set(resolution.roles),
+                and set(unit_specs(deployment)) == set(expand_placement(self.topology, profile.instance_id, profile.placement))
+                and placed == set(resolution.roles),
                 "service_inventory", "Unit inventory differs from the selected declaration or resolution.")
         self.roles = {role.common.name: role for role in self.topology.roles if role.common.name in placed}
         self.specs = {spec.identity.role: spec for spec in self.deployment.units}
@@ -111,12 +137,12 @@ class UnitInventory:
         require(all(spec.declaration_sha256 == canonical_digest(declarations[name])
                     for name, spec in self.specs.items()),
                 "service_inventory", "Resolved unit policy differs from its declared role.")
-        from topology import role_unit_name
-        self.units = {role: role_unit_name(name, value) for role, value in self.roles.items()}
-        from contracts import UnixEndpoint
-        expected_unix = tuple(UnixEndpoint.for_listener(profile.instance_id, role.common.name, listener_name, listener.socket)
-                              for role in self.roles.values() if isinstance(role, ExecutableRole)
-                              for listener_name, listener in role.listeners if listener.transport == "unix")
+        self.units = {identity.role: unit for identity, unit in expanded_unit_names(name, self.topology, self.profile).items()}
+        from listeners import private_listeners, unix_endpoints
+        require({(UnitIdentity(profile.instance_id, e.role, e.ordinal), e.listener) for e in resolution.endpoints}
+                == set(private_listeners(self.topology, self.profile)),
+                "service_inventory", "TCP endpoints differ from their placed declarations.")
+        expected_unix = unix_endpoints(self.topology, self.profile)
         require(set(resolution.unix_endpoints) == set(expected_unix),
                 "service_inventory", "Unix endpoints differ from their instance declarations.")
         for spec in self.specs.values():
@@ -206,8 +232,9 @@ class ServicePaths:
         from dataclasses import asdict
         UnitIdentity.parse(asdict(identity))
         contract_uuid(resolution_id)
-        return cls(f"/run/foundry/services/{identity.instance_id}/{resolution_id}/{identity.role}",
-                   f"/var/lib/foundry/service-state/{identity.instance_id}/{identity.role}")
+        name = identity.role if identity.ordinal == 1 else f"{identity.role}.{identity.ordinal}"
+        return cls(f"/run/foundry/services/{identity.instance_id}/{resolution_id}/{name}",
+                   f"/var/lib/foundry/service-state/{identity.instance_id}/{name}")
 
     def config(self, name, mode, path="value"):
         from contracts import contract_name
@@ -306,13 +333,15 @@ def resolve_argument(argument, role, spec, resolution, paths, views, secret_path
         require(binding is not None, "service_binding", "Shared directory is not granted to this role.")
         return binding.path
     if kind in (ArgumentKind.LISTENER_PORT, ArgumentKind.LISTENER_ADDRESS):
-        endpoint = next((e for e in resolution.endpoints if e.role == role.common.name and e.listener == value), None)
+        endpoint = next((e for e in resolution.endpoints if (e.role, e.ordinal, e.listener) ==
+                         (spec.identity.role, spec.identity.ordinal, value)), None)
         require(endpoint is not None, "service_listener", "Declared listener has no selected allocation.")
         return str(endpoint.port) if kind is ArgumentKind.LISTENER_PORT else endpoint.address
     from topology import LISTENER_SOCKET_ARGUMENTS, BINDING_SOCKET_ARGUMENTS
     if kind in LISTENER_SOCKET_ARGUMENTS | BINDING_SOCKET_ARGUMENTS:
         if kind in LISTENER_SOCKET_ARGUMENTS:
-            endpoint = next((e for e in resolution.unix_endpoints if e.role == role.common.name and e.listener == value), None)
+            endpoint = next((e for e in resolution.unix_endpoints if (e.role, e.ordinal, e.listener) ==
+                             (spec.identity.role, spec.identity.ordinal, value)), None)
         else:
             binding = next((b for b in spec.bindings.endpoints if b.name == value and b.scheme == "unix"), None)
             endpoint = binding.endpoint if binding else None
@@ -337,7 +366,7 @@ def resolve_argument(argument, role, spec, resolution, paths, views, secret_path
             return endpoint.endpoint.path
         address = endpoint.endpoint.address
         return f"{endpoint.scheme}://{'[' + address + ']' if ':' in address else address}:{endpoint.endpoint.port}"
-    if kind is ArgumentKind.COPY_NUMBER:
+    if kind in (ArgumentKind.COPY_NUMBER, ArgumentKind.COPY_ORDINAL):
         return str(spec.identity.ordinal)
     if kind is ArgumentKind.STATE_PATH:
         return paths.state + "/data/" + value
@@ -358,7 +387,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     paths = ServicePaths.for_unit(spec.identity, inventory.resolution.id)
     validate_views(role, paths, views)
     helper = ["/usr/bin/python3", "-I", RUNTIME_ENTRY]
-    identity = [spec.identity.instance_id, name, "1", inventory.resolution.id,
+    identity = [spec.identity.instance_id, spec.identity.role, str(spec.identity.ordinal), inventory.resolution.id,
                 bundle_sha256, canonical_digest(record_document(spec))]
     hooks = {action: command_line([*helper, action, *identity]) for action in ("admit", "prepare", "dispatch", "running", "cleanup")}
     from feature_maintenance import marker_path

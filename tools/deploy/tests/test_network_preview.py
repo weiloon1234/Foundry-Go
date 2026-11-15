@@ -50,7 +50,7 @@ class PreviewFixtureTests(unittest.TestCase):
         for mode in ("none", "edge"):
             with self.subTest(mode=mode), patch.object(preview.Host, "run", side_effect=AssertionError("host action")):
                 topology, profile = preview.preview_documents(mode, str(uuid.uuid4()))
-                endpoints = preview.listeners.allocate_private(profile.instance_id, (("http", "http"), ("relay", "ingress")), (), ())
+                endpoints = preview.listeners.allocate_private(profile.instance_id, ((preview.c.UnitIdentity(profile.instance_id, "http", 1), "http"), (preview.c.UnitIdentity(profile.instance_id, "relay", 1), "ingress")), (), ())
                 resolution = preview.preview_resolution(topology, profile, endpoints)
                 self.assertEqual(preview.c.RuntimeResolution.parse(preview.c.record_document(resolution)), resolution)
                 self.assertEqual({e.address for e in resolution.endpoints}, {"127.0.0.1"})

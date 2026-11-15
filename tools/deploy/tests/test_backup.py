@@ -58,6 +58,9 @@ def feature_fixture(*, state="disposable", secret=False, http_dependency=False, 
                          units=tuple(replace(unit, declaration_sha256=c.canonical_digest(role))
                                      for unit, role in zip(inventory.deployment.units, topology.projection()["roles"])))
     resolution = replace(inventory.resolution, deployment_sha256=c.canonical_digest(c.record_document(deployment)))
+    if public:
+        resolution = replace(resolution, endpoints=resolution.endpoints +
+                             (c.AllocatedEndpoint("relay", "ingress", "127.0.0.1", 8202, 1),))
     if http_port is not None:
         resolution = replace(resolution, endpoints=tuple(
             replace(e, port=http_port) if e.role == "http" and e.listener == "http" else e for e in resolution.endpoints))

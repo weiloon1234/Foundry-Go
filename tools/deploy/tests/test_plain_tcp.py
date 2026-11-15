@@ -22,7 +22,7 @@ def mixed_deployment():
     profile = t.parse_profile(profile, topology)
     resolution = fixture.runtime()
     resolution = replace(resolution, endpoints=(*resolution.endpoints,
-                         c.AllocatedEndpoint("relay", "secure", "127.0.0.1", 18002)))
+                         c.AllocatedEndpoint("relay", "secure", "127.0.0.1", 18002, 1)))
     return profile, topology, resolution
 
 

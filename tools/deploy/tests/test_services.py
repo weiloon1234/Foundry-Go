@@ -53,8 +53,8 @@ def inventory_fixture():
                               c.canonical_digest(profile), tuple(units))
     resolution = c.RuntimeResolution(CURRENT, c.canonical_digest(c.record_document(deployment)), 7,
                                      tuple(role.common.name for role in parsed.roles),
-                                     (c.AllocatedEndpoint("http", "http", "127.0.0.1", 8200),
-                                      c.AllocatedEndpoint("relay", "control", "127.0.0.1", 8201)),
+                                     (c.AllocatedEndpoint("http", "http", "127.0.0.1", 8200, 1),
+                                      c.AllocatedEndpoint("relay", "control", "127.0.0.1", 8201, 1)),
                                      tuple(c.EffectiveEnvironment(name, "runtime/" + CURRENT + "/" + name + "/app.env", OTHER)
                                            for name in ("http", "relay", "worker")), DIGEST, DIGEST, DIGEST)
     return services.UnitInventory(entry["name"], parsed, placed, deployment, resolution), entry, members
@@ -173,7 +173,7 @@ class ServiceInventoryTests(unittest.TestCase):
         with self.assertRaises(c.DeployError):
             services.render_unit(self.inventory, "relay", self.entry, DIGEST)
 
-    def test_release2_capabilities_remain_rejected(self):
+    def test_copies_remain_gated_while_identity_accepts_numbered_ordinals(self):
         raw = self.inventory.topology.projection()
         for field in ("wrapper", "instances"):
             with self.assertRaises(c.DeployError) as error:
@@ -184,8 +184,7 @@ class ServiceInventoryTests(unittest.TestCase):
         with self.assertRaises(c.DeployError) as error:
             t.parse_profile(profile, self.inventory.topology)
         self.assertEqual(error.exception.code, "unsupported_capability")
-        with self.assertRaises(c.DeployError):
-            c.UnitIdentity.parse({"instance_id": INSTANCE, "role": "relay", "ordinal": 2})
+        self.assertEqual(c.UnitIdentity.parse({"instance_id": INSTANCE, "role": "relay", "ordinal": 2}).ordinal, 2)
 
     def test_runtime_entry_refuses_every_action_without_importing_bundle(self):
         path = Path(__file__).resolve().parents[1] / "server/runtime_v1.py"

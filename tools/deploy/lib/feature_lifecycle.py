@@ -197,10 +197,8 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
     environments = runtime_config.effective_environments(host, entry, resolution_id,
                    roles, endpoints, values=values)
     # Resolution-independent placeholders are replaced before any record is published.
-    from contracts import UnixEndpoint
-    unix = tuple(UnixEndpoint.for_listener(profile.instance_id, role.common.name, name, listener.socket)
-                 for role in topology.roles if isinstance(role, ExecutableRole) and role.common.name in roles
-                 for name, listener in role.listeners if listener.transport == "unix")
+    from listeners import unix_endpoints
+    unix = unix_endpoints(topology, profile)
     seed = RuntimeResolution(resolution_id, "0" * 64, revision or entry["configuration_revision"], roles,
                              endpoints, environments, "0" * 64, "0" * 64, nginx, unix)
     specs = []
@@ -441,7 +439,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
                names=None, configuration=None, launch=None, review=None, maintenance_request=None):
     import release
     from upgrades import check_feature_generation
-    minimum_generation = check_feature_generation(registry, inventory.topology, entry)
+    minimum_generation = check_feature_generation(registry, inventory.topology, entry, profile=inventory.profile)
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
     old = entry.get("deployment_selection", {}).get("selected_resolution_id", inventory.resolution.id)
     previous = load(host, entry)[2] if "deployment_selection" in entry else inventory

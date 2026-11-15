@@ -39,7 +39,7 @@ def unix_inventory():
         role.update(requires=['relay'], bindings={'compositor': {'endpoint': {
             'role': 'relay', 'listener': 'control', 'scheme': 'unix'}}})
     topology = t.parse_topology(raw)
-    endpoint = c.UnixEndpoint.for_listener(INSTANCE, 'relay', 'control', 'wl0')
+    endpoint = c.UnixEndpoint.for_listener(INSTANCE, 'relay', 'control', 'wl0', ordinal=1)
     specs = []
     for role, document in zip(topology.roles, raw['roles']):
         spec = old.specs[role.common.name]
@@ -132,7 +132,7 @@ class UnixDeclarationsTests(unittest.TestCase):
         endpoint = replace(inventory.resolution.unix_endpoints[0], directory='/tmp', path='/tmp/wl0')
         with self.assertRaises(c.DeployError):
             c.UnixEndpoint.parse(c.record_document(endpoint))
-        endpoint = c.UnixEndpoint.for_listener('00000000-0000-4000-8000-000000000002', 'relay', 'control', 'wl0')
+        endpoint = c.UnixEndpoint.for_listener('00000000-0000-4000-8000-000000000002', 'relay', 'control', 'wl0', ordinal=1)
         with self.assertRaises(c.DeployError):
             services.UnitInventory(inventory.name, inventory.topology, inventory.profile, inventory.deployment,
                                    replace(inventory.resolution, unix_endpoints=(endpoint,)))

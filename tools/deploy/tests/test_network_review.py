@@ -148,7 +148,7 @@ server
         references = edge.upstream_references(host)
         self.assertEqual({(s.address, s.port) for s in references}, {("127.0.0.1", 19001), ("::1", 19002)})
         with self.assertRaises(c.DeployError):
-            listeners.allocate_private(fixture.INSTANCE, (("http", "http"),), (),
+            listeners.allocate_private(fixture.INSTANCE, ((c.UnitIdentity(fixture.INSTANCE, "http", 1), "http"),), (),
                                        tuple(listeners.ObservedSocket(s, ()) for s in references), first=19001, last=19001)
 
     def test_unresolved_multiline_reference_refuses_instead_of_partial_inventory(self):

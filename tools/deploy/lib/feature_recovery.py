@@ -86,7 +86,7 @@ def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_d
         from upgrades import check_feature_generation
         minimum_generation = check_feature_generation(registry, topology,
             {"deployment_selection": {"minimum_generation": max(snapshot["selection"]["minimum_generation"],
-                entry.get("deployment_selection", {}).get("minimum_generation", 0))}})
+                entry.get("deployment_selection", {}).get("minimum_generation", 0))}}, profile=intent["source_profile"])
         source = parse_profile(intent['source_profile'], topology)
         original = services.UnitInventory(entry['name'], topology, source,
             Deployment.parse(snapshot['deployment']), RuntimeResolution.parse(snapshot['resolution']))

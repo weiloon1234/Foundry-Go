@@ -56,8 +56,10 @@ def instance_units(entry: dict) -> dict[str, str]:
     return {role["name"]: unit_name(entry["name"], role["name"]) for role in topology["roles"]}
 
 
-def role_unit_name(name, role):
-    return unit_name(name, role.common.name) if isinstance(role, BuiltinRole) else f"foundry-app-{name}-{role.common.name}@1.service"
+def role_unit_name(name, role, ordinal=1):
+    contract_int(ordinal, 1, MAX_ROLE_COPIES)
+    require(not isinstance(role, BuiltinRole) or ordinal == 1, "invalid_profile", "Built-in roles have only copy 1.")
+    return unit_name(name, role.common.name) if isinstance(role, BuiltinRole) else f"foundry-app-{name}-{role.common.name}@{ordinal}.service"
 
 
 def selected_units(entry: dict, role="all", *, roles=None) -> dict[str, str]:
@@ -73,6 +75,7 @@ def selected_units(entry: dict, role="all", *, roles=None) -> dict[str, str]:
 
 # The frozen parsers are also the validation owners for shared lifecycle readers.
 from contracts import (ARCHIVE_SCHEMA, FEATURE_PROFILE_SCHEMA, MAX_ARTIFACTS, MAX_LISTENERS, MAX_ROLES,
+                       MAX_ROLE_COPIES, MAX_UNITS, UnitIdentity, UnixEndpoint,
                        TOPOLOGY_SCHEMA, PROFILE_SCHEMA, canonical_digest, contract_digest, contract_document,
                        contract_int, contract_list, contract_map, contract_name, contract_names,
                        contract_object, contract_path, contract_text, dns_hostname, public_address,
@@ -130,6 +133,7 @@ class ArgumentKind(str, Enum):
     BINDING_SOCKET_PATH = "binding_socket_path"
     BUNDLE = "bundle"
     COPY_NUMBER = "copy_number"
+    COPY_ORDINAL = "copy_ordinal"
     STATE_PATH = "state_path"
     RUNTIME_PATH = "runtime_path"
     SECRET_FILE = "secret_file"
@@ -169,7 +173,7 @@ class Argument:
             require(isinstance(item, str) and len(item.encode("utf-8", errors="surrogatepass")) <= 4096
                     and not any(0xD800 <= ord(c) <= 0xDFFF for c in item)
                     and all(ord(c) >= 32 and ord(c) != 127 for c in item), "invalid_topology", "Invalid literal argument.")
-        elif tag in ("copy_number", "config_root", "data_root"):
+        elif tag in ("copy_number", "copy_ordinal", "config_root", "data_root"):
             require(item == "self", "invalid_topology", "Copy ordinal reference must select self.")
         elif tag in ("state_path", "runtime_path"):
             contract_path(item)
@@ -259,7 +263,7 @@ class ConfigFile:
                     "invalid_topology", "Invalid JSON pointer.")
             argument = Argument.parse(raw)
             require(argument.kind in (ArgumentKind.LISTENER_ADDRESS, ArgumentKind.LISTENER_PORT,
-                                      ArgumentKind.BUNDLE, ArgumentKind.BINDING, ArgumentKind.COPY_NUMBER,
+                                      ArgumentKind.BUNDLE, ArgumentKind.BINDING, ArgumentKind.COPY_NUMBER, ArgumentKind.COPY_ORDINAL,
                                       ArgumentKind.SECRET_FILE),
                     "invalid_topology", "Config fields require typed nonsecret bindings.")
             result.append((pointer, argument))
@@ -832,6 +836,43 @@ class DeploymentProfile:
         return json.loads(self.canonical_json)
 
 
+def parse_placement(value):
+    """Parse schema-3 counts independently of the temporary execution gate."""
+    placement = contract_map(value, lambda v: contract_int(v, 0, MAX_ROLE_COPIES), maximum=MAX_ROLES)
+    require(sum(count for _, count in placement) <= MAX_UNITS,
+            "invalid_profile", "An instance permits at most 256 concrete units.")
+    return placement
+
+
+def expand_placement(topology, instance_id, placement):
+    """One declaration per concrete identity, ordered by declaration then ordinal."""
+    counts = dict(placement)
+    require(len(counts) == len(placement) and parse_placement(counts) == tuple(sorted(placement)),
+            "invalid_profile", "Invalid placement counts.")
+    require(set(counts) == {r.common.name for r in topology.roles} and counts.get("http") == 1,
+            "invalid_profile", "Placement must explicitly cover every role and place HTTP.")
+    units, sockets = {}, set()
+    for role in topology.roles:
+        count = counts[role.common.name]
+        require(not isinstance(role, BuiltinRole) or count <= 1,
+                "invalid_profile", "Built-in roles permit only zero or one copy.")
+        require(not count or all(counts[d] for d in role.common.requires),
+                "invalid_profile", "Placed role prerequisites must be placed.")
+        require(not count or all(not isinstance(b, (EndpointBinding, PublicListenerReference)) or counts[b.role]
+                                 for _, b in role.common.bindings),
+                "invalid_profile", "A placed consumer cannot bind an unplaced listener.")
+        for ordinal in range(1, count + 1):
+            identity = UnitIdentity(instance_id, role.common.name, ordinal)
+            units[identity] = role
+            if isinstance(role, ExecutableRole):
+                for name, listener in role.listeners:
+                    if listener.transport == "unix":
+                        endpoint = UnixEndpoint.for_listener(instance_id, identity.role, name, listener.socket, ordinal=ordinal)
+                        require(endpoint.path not in sockets, "invalid_profile", "Expanded Unix socket names overlap.")
+                        sockets.add(endpoint.path)
+    return units
+
+
 def validate_feature_profile(value, project=None):
     """Validate topology-independent profile fields through their frozen owners."""
     require(type(value.get("schema")) is int and value["schema"] == FEATURE_PROFILE_SCHEMA,
@@ -840,11 +881,9 @@ def validate_feature_profile(value, project=None):
     legacy = {k: v for k, v in value.items() if k not in ("placement", "listeners")}
     legacy["schema"] = PROFILE_SCHEMA
     validate_profile(legacy, project)
-    def count(v):
-        contract_int(v, 0, 65535)
-        require(v <= 1, "unsupported_capability", "Numbered services require a later capability.")
-        return v
-    placement = contract_map(value["placement"], count, maximum=MAX_ROLES)
+    placement = parse_placement(value["placement"])
+    require(all(count <= 1 for _, count in placement), "unsupported_capability",
+            "Numbered services require the complete copy lifecycle migration.")
     raw = value["listeners"]
     require(isinstance(raw, dict) and len(raw) <= MAX_LISTENERS, "invalid_profile", "Invalid public listener bindings.")
     listeners = tuple((n, PublicListenerBinding.parse(v)) for n, v in sorted(raw.items()))
@@ -864,14 +903,7 @@ def parse_profile(document, topology: Topology, project=None) -> DeploymentProfi
     else:
         placement, listeners = validate_feature_profile(value, project)
         counts = dict(placement)
-        require(set(counts) == {r.common.name for r in topology.roles} and counts.get("http") == 1,
-                "invalid_profile", "Placement must explicitly cover every role and place HTTP.")
-        for role in topology.roles:
-            require(not counts[role.common.name] or all(counts[d] for d in role.common.requires),
-                    "invalid_profile", "Placed role prerequisites must be placed.")
-            require(not counts[role.common.name] or all(not isinstance(b, (EndpointBinding, PublicListenerReference)) or counts[b.role]
-                                                       for _, b in role.common.bindings),
-                    "invalid_profile", "A placed consumer cannot bind an unplaced listener.")
+        expand_placement(topology, value["instance_id"], placement)
         raw = value["listeners"]
         expected = {r.common.name + "." + n for r in topology.roles if isinstance(r, ExecutableRole)
                     and counts[r.common.name] for n, l in r.listeners if l.bind == "public"}

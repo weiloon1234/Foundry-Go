@@ -425,7 +425,7 @@ class NetworkPreviewAcceptance(unittest.TestCase):
         references = edge.retain_global_references(self.host)
         reserved_claims = tuple(listeners.ListenerClaim(self.instance_id, e.role, e.listener, 1,
                                listeners.SocketIdentity("tcp", 4, e.address, e.port), "application") for e in reserved)
-        endpoints = listeners.allocate_private(self.instance_id, (("http", "http"), *((name, "ingress") for name, count in self.profile.placement if count and name != "http")),
+        endpoints = listeners.allocate_private(self.instance_id, listeners.private_listeners(self.topology, self.profile),
                      reserved_claims, (*listeners.observe_sockets(self.host), *(listeners.ObservedSocket(s, ()) for s in references)))
         return preview_resolution(self.topology, self.profile, endpoints)
 
@@ -628,7 +628,7 @@ class NetworkPreviewAcceptance(unittest.TestCase):
     def test_report_scopes_owner_and_flags_undeclared_listener(self):
         self.backend(self.candidate)
         self.expose(self.candidate)
-        foreign = EchoBackend(c.AllocatedEndpoint("fixture", "unexpected", ADDRESSES[0], 18555), None)
+        foreign = EchoBackend(c.AllocatedEndpoint("fixture", "unexpected", ADDRESSES[0], 18555, 1), None)
         self.backends.append(foreign)
         registry = {"instances": {self.instance_id: {"profile": self.profile.projection(),
                     "topology": {**self.topology.projection(), "sha256": self.topology.sha256}}}}
@@ -736,7 +736,7 @@ if __name__ == "__main__":
         import signal
         c.require(os.environ.get("FOUNDRY_DISPOSABLE_HOST") == "1" and os.geteuid() == 0
                   and Path("/.dockerenv").exists(), "acceptance_forbidden", "Echo units require a disposable container.")
-        backend = EchoBackend(c.AllocatedEndpoint("fixture", "echo", sys.argv[2], int(sys.argv[3])), None)
+        backend = EchoBackend(c.AllocatedEndpoint("fixture", "echo", sys.argv[2], int(sys.argv[3]), 1), None)
         def stop_echo(signum, frame):
             raise SystemExit(0)
         signal.signal(signal.SIGTERM, stop_echo)

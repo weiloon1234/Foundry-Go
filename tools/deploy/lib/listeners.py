@@ -10,7 +10,7 @@ import re
 import subprocess
 import uuid
 
-from contracts import (AllocatedEndpoint, ClosureEvidence, ClosureStage, DNSObservation, DeployError,
+from contracts import (AllocatedEndpoint, UnixEndpoint, UnitIdentity, ClosureEvidence, ClosureStage, DNSObservation, DeployError,
                        canonical_digest, contract_uuid, now, record_document, require)
 
 
@@ -94,7 +94,7 @@ def matches(claim, socket):
 
 def private_claims(instance_id, resolution, topology):
     wildcards = wildcard_listeners(topology)
-    return tuple(ListenerClaim(instance_id, endpoint.role, endpoint.listener, 1,
+    return tuple(ListenerClaim(instance_id, endpoint.role, endpoint.listener, endpoint.ordinal,
                                SocketIdentity("tcp", ipaddress.ip_address(endpoint.address).version,
                                               endpoint.address, endpoint.port), "application",
                                (endpoint.role, endpoint.listener) in wildcards)
@@ -110,16 +110,20 @@ def require_available(requested, reserved, observed):
 
 
 def allocate_private(instance_id, roles, reserved, observed, *, first=18000, last=60999, wildcards=()):
-    """Resolve (role, listener) pairs once; lane A owns the resulting resolution."""
+    """Resolve (UnitIdentity, listener) pairs once; retain every prior reservation."""
     contract_uuid(instance_id)
     result, claims = [], list(reserved)
     from contracts import REDIS_PORT
-    for role, name in roles:
+    for identity, name in roles:
+        require(isinstance(identity, UnitIdentity) and identity.instance_id == instance_id,
+                "network_scope", "Listener allocation requires a unit of the selected instance.")
+        role = identity.role
         for port in range(first, last + 1):
             if port == REDIS_PORT:
                 continue
-            endpoint = AllocatedEndpoint.parse({"role": role, "listener": name, "address": "127.0.0.1", "port": port})
-            claim = ListenerClaim(instance_id, role, name, 1, SocketIdentity("tcp", 4, endpoint.address, port), "application",
+            endpoint = AllocatedEndpoint.parse({"role": role, "listener": name, "address": "127.0.0.1", "port": port,
+                                                "ordinal": identity.ordinal})
+            claim = ListenerClaim(instance_id, role, name, identity.ordinal, SocketIdentity("tcp", 4, endpoint.address, port), "application",
                                   (role, name) in wildcards)
             if any(conflicts(reservation_socket(claim), reservation_socket(other)) for other in (*claims, *observed)):
                 continue
@@ -129,6 +133,24 @@ def allocate_private(instance_id, roles, reserved, observed, *, first=18000, las
         else:
             require(False, "listener_capacity", "No fresh private backend allocation is available.")
     return tuple(result)
+
+
+def private_listeners(topology, profile):
+    from topology import ExecutableRole, expand_placement
+    result = []
+    for identity, role in expand_placement(topology, profile.instance_id, profile.placement).items():
+        if identity.role == "http":
+            result.append((identity, "http"))
+        elif isinstance(role, ExecutableRole):
+            result.extend((identity, name) for name, listener in role.listeners if listener.transport == "tcp")
+    return tuple(result)
+
+
+def unix_endpoints(topology, profile):
+    from topology import ExecutableRole, expand_placement
+    return tuple(UnixEndpoint.for_listener(profile.instance_id, identity.role, name, listener.socket, ordinal=identity.ordinal)
+                 for identity, role in expand_placement(topology, profile.instance_id, profile.placement).items()
+                 if isinstance(role, ExecutableRole) for name, listener in role.listeners if listener.transport == "unix")
 
 
 def parse_sockets(text, transport, family):
@@ -384,7 +406,6 @@ def _feature_http(host, entry, inventory, history, *, closed, write=True):
 def feature_allocate(host, entry, topology, profile, operation_id, *, retained=None):
     """Lane A checkpoint-2 seam: inspect/reserve in memory; perform no writes/reloads."""
     import edge
-    from topology import ExecutableRole
     contract_uuid(operation_id)
     require(profile.instance_id == entry["profile"]["instance_id"], "network_scope", "Allocation belongs to another instance.")
     public_policies(profile, topology)
@@ -421,15 +442,12 @@ def feature_allocate(host, entry, topology, profile, operation_id, *, retained=N
     for _, inv in history:
         references += tuple(SocketIdentity("tcp", ipaddress.ip_address(e.address).version, e.address, e.port)
                             for e in edge.retained_references(host, inv.profile.instance_id))
-    roles = [("http", "http")]
-    placed = dict(profile.placement)
-    roles.extend((role.common.name, name) for role in topology.roles if isinstance(role, ExecutableRole)
-                 and placed[role.common.name] for name, listener in role.listeners if listener.transport == "tcp")
+    roles = private_listeners(topology, profile)
     retained = tuple(retained or ())
-    require(all((e.role, e.listener) in roles for e in retained)
-            and len({(e.role, e.listener) for e in retained}) == len(retained),
+    retained_keys = {(UnitIdentity(profile.instance_id, e.role, e.ordinal), e.listener) for e in retained}
+    require(retained_keys <= set(roles) and len(retained_keys) == len(retained),
             "network_scope", "Retained endpoints must belong to the candidate declaration.")
-    roles = [pair for pair in roles if pair not in {(e.role, e.listener) for e in retained}]
+    roles = [pair for pair in roles if pair not in retained_keys]
     endpoints = retained + allocate_private(profile.instance_id, roles, reserved,
                                  (*observed, *(ObservedSocket(s, ()) for s in references)), wildcards=wildcard_listeners(topology))
     return endpoints, canonical_digest(_feature_projection(entry, topology, profile, endpoints))

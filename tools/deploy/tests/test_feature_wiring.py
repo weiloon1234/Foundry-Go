@@ -497,7 +497,8 @@ class FeatureWiringTests(FeatureWiringFixture):
         endpoint, = inventory.resolution.unix_endpoints
         self.assertEqual([e.role for e in inventory.resolution.endpoints], ['http'])
         descriptor = c.read_json(self.host.paths.p(launch['descriptors']['http']))
-        self.assertEqual(descriptor['bindings']['endpoints'][0]['endpoint'], asdict(endpoint))
+        self.assertEqual(descriptor['bindings']['endpoints'][0]['endpoint'],
+                         {key: value for key, value in asdict(endpoint).items() if key != 'ordinal'})
         self.assertEqual(descriptor['bindings']['endpoints'][0]['scheme'], 'unix')
         directory = self.host.paths.p(endpoint.directory)
         self.assertEqual(directory.stat().st_mode & 0o777, 0o700)

@@ -34,7 +34,7 @@ class FeaturePreviewTests(unittest.TestCase):
         root.mkdir(parents=True)
         original = 'APP__HTTP__SERVER__ADDRESS=127.0.0.1:8100\nPRIVATE=keep-current\nKEY_FILE=/etc/secret\nAPP__SCHEDULER__ENABLED=true\nAPP__SCHEDULER__ENABLED_FILE=/old/scheduler\n'
         (root / "app.env").write_text(original)
-        endpoints = (c.AllocatedEndpoint("http", "http", "127.0.0.1", 8200),)
+        endpoints = (c.AllocatedEndpoint("http", "http", "127.0.0.1", 8200, 1),)
         with patch.object(runtime_config, "validate_runtime_environment"):
             environments = runtime_config.effective_environments(self.host, self.entry, CURRENT, ("http",), endpoints)
         resolution = replace(self.inventory.resolution, environments=environments)
