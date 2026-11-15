@@ -369,16 +369,18 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     validate_project(project)
     validate_profile(profile, project)
     topology = validate_topology(topology, registered="sha256" in topology)
+    registry = host.read_registry(missing=True)
+    existing = registry["instances"].get(profile["instance_id"]) if registry else None
     from topology import parse_topology, parse_profile
     feature = topology["schema"] == 2
     if feature:
         import feature_maintenance
         parsed = parse_topology({k: v for k, v in topology.items() if k != "sha256"})
-        feature_maintenance.stopped_roles(parsed)
+        if existing is None or existing["topology"] != topology:
+            feature_maintenance.stopped_roles(parsed)
     snapshot = inspect_host(host)
     require(snapshot["os"] == "ubuntu" and snapshot["os_version"] in {"24.04", "26.04"}, "unsupported_host", "Ubuntu 24.04 or 26.04 is required.")
     require(snapshot["architecture"] == profile["architecture"], "architecture_mismatch", "Profile architecture differs from host.")
-    registry = host.read_registry(missing=True)
     host_id = registry["host_id"] if registry else profile["host"]["host_id"] or str(uuid.uuid4())
     require(profile["host"]["host_id"] in (None, host_id), "host_mismatch", "Host UUID differs from the bound profile.")
     bound = copy.deepcopy(profile)
@@ -386,7 +388,6 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     registry = registry or new_registry(host_id, tools_dir)
     upgrades.check_upload_generation(registry, {"profile": bound},
                                      client_generation=upgrades.protocol(tools_dir)["generation"])
-    existing = registry["instances"].get(profile["instance_id"])
     if existing:
         require(existing["project_id"] == project["id"] and existing["name"] == identity(project, profile)["name"], "identity_mismatch", "Instance UUID belongs to a different identity.")
         require(existing["topology"] == topology, "topology_change_required", "Topology changes require a release plan.")

@@ -529,6 +529,37 @@ class FeatureWiringFixture(unittest.TestCase):
 
 
 class FeatureWiringTests(FeatureWiringFixture):
+    def test_bootstrap_resumes_unchanged_invalid_registered_graph_but_cannot_activate(self):
+        self.build_archive(maintenance="stop")
+        topology = self.topology.projection()
+        # Simulate an older tool registering this graph before package installation fails.
+        with patch("feature_maintenance.stopped_roles", return_value=set()):
+            plan = self.request("bootstrap-plan", topology=topology)
+            with patch.object(packages, "install_missing", side_effect=c.DeployError("package_failed", "Installation failed.")), \
+                    self.assertRaises(c.DeployError) as error:
+                self.request("bootstrap-apply", topology=topology, plan_token=plan["plan_token"], confirm=True)
+            self.assertEqual(error.exception.code, "package_failed")
+        _, entry = self.host.require_identity(self.project, self.profile)
+        self.assertEqual(entry["provisioning"]["state"], "failed")
+        self.assertEqual(entry["topology"], {**topology, "sha256": self.topology.sha256})
+
+        plan = self.request("bootstrap-plan", topology=topology)
+        self.assertTrue(plan["ok"])
+        corrected = self.topology.projection()
+        corrected["roles"][1]["maintenance"] = "continue"
+        with self.assertRaises(c.DeployError) as error:
+            self.request("bootstrap-plan", topology=corrected)
+        self.assertEqual(error.exception.code, "topology_change_required")
+        self.assertEqual(error.exception.detail, "Topology changes require a release plan.")
+
+        resumed = self.request("bootstrap-apply", topology=topology, plan_token=plan["plan_token"], confirm=True)
+        self.assertEqual(resumed["provisioning"], "ready")
+        with self.assertRaises(c.DeployError) as error:
+            self.request("release-plan", archive=str(self.archive), archive_sha256=c.digest(self.archive),
+                         operation_id=str(uuid.uuid4()))
+        self.assertEqual(error.exception.code, "maintenance_graph")
+        self.assertFalse(self.host.running)
+
     def test_bootstrap_accepts_continuing_provider_with_two_copy_secrets(self):
         self.build_archive(maintenance="continue", copies=2, copies_binding=True)
         plan = self.request("bootstrap-plan", topology=self.topology.projection())

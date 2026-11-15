@@ -116,7 +116,6 @@ class FoundationProvisionTests(unittest.TestCase):
         topology = json.loads((declarations / "rehearsal/topology.json").read_text())
         topology["roles"][1]["maintenance"] = "stop"
         with patch.object(provision, "inspect_host", side_effect=AssertionError("host inspection")), \
-                patch.object(self.host, "read_registry", side_effect=AssertionError("registry read")), \
                 self.assertRaises(DeployError) as error:
             provision.bootstrap_plan(self.host, project, profile, TOOLS, topology=topology)
         self.assertEqual(error.exception.code, "maintenance_graph")
