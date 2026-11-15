@@ -1,180 +1,95 @@
 # Changelog
 
-## Unreleased
+## v0.37.0 — 2026-11-15
 
-### Fixed
-
-- Readiness concurrency and journal-lock tests use controlled monotonic time and
-  worker checkpoints, preserving deadline, stability and cancellation checks
-  without depending on scheduler timing under parallel test load.
-
-- Artifact downloads now follow signed HTTPS redirects, including GitHub release
-  assets, with the exact path and query. Declared pins still reject queries,
-  credentials and fragments. Redirects retain public-address and peer checks,
-  the hop limit and SHA-256 verification. Signed queries never enter origin
-  evidence or errors, and artifact paths remain digest-based.
-### Offline deployment validation
-
-- Fixed: declaration reads pin every directory component without following links,
-  preventing parent-symlink swaps from reaching private inputs. Declaration-only
-  privacy rules no longer exclude application packages from release snapshots.
-
-- Fixed: interactive validation dispatches before local or remote state access.
-  Selected profiles retain release/deploy sibling identity checks; declaration
-  reads reject private paths and linked files. Release path safety and collision
-  checks are shared, and the Makefile example keeps JSON stdout free of recipe echo.
-
-- Added: `ACTION=validate make deploy` checks deployment declarations locally,
-  with optional `ENVIRONMENT` selection and `FORMAT=json` diagnostics. It reuses
-  deployment validators, renders service templates with synthetic values, checks
-  rehearsal bindings, and reports the minimum required deploy-tool generation
-  without SSH, Docker, downloads, private settings, or host state.
-### Rehearsal storage runtime caps
-
-- Reduced-fidelity rehearsal accepts attachment policies above the stand-in's
-  single-request cap at startup. Actual oversized conditional writes fail with
-  `storage.RehearsalLimitExceeded`, preserving the unchanged mutation outcome.
-- Fixed: reduced fidelity is granted only by a validated, root-owned deploy
-  runtime descriptor with exact disk caps and a matching rehearsal process ID.
-  Removed the general disk configuration marker; environment variables alone
-  cannot enable the mode. Production descriptor generation never emits the block.
-  Missing or mismatched grants retain strict production capabilities.
-- Fixed: optional rehearsal-grant loading preserves legacy rollback and local
-  application startup. Valid legacy and feature descriptors without a block
-  grant nothing; present blocks retain strict validation.
-- Fixed: rehearsal loading is completely dormant without a process rehearsal
-  identity, preserving startup even with a broken deployment descriptor path.
-  Active rehearsal without a matching grant keeps strict capabilities and emits
-  one redacted notice; malformed active descriptor JSON, shapes, or blocks refuse.
-- Reports include caps, exceeding policy maxima, and observed runtime refusals;
-  startup notices and counters contain no object data.
-- Production R2 behavior, declared S3-compatible guarantees, and strict listing
-  checks remain unchanged.
-
-### Numbered copies
-
-- Fixed: failed readiness inspections release command capacity before journaling.
-  Thread and file lock waits share the inspection deadline and honour cancellation.
-  If persistence cannot start in time, the caller still receives the command failure
-  with an explicit notice that its journal entry was not recorded.
-
-- Fixed: numbered listeners compose with PROXY and managed DNS. Every copy gets
-  its declared PROXY policy and a separate readiness endpoint. Copy count and
-  port changes do not write DNS; recovery retains DNS cutover and fresh public
-  readiness budgets. Boot-pin admission covers every generation-18 state shape.
-
-- Fixed: every unit now has an independent readiness observer, bounded by the
-  256-unit cap. Only short local inspections share 16 command slots, so slow
-  probes cannot consume healthy peers' deadlines. Worker errors are collected
-  after cancellation and reported in inventory order. Concurrent command
-  failures preserve journal entries under thread and file locks.
-
-- Fixed: grouped readiness observes units concurrently with independent
-  stability proofs.
-  Failure and deadline cancellation close probe sockets, reap command processes,
-  and join workers before the lifecycle operation continues.
-
-- Fixed: tools upgrades now advance and verify the network-boot coordinator's
-  bundle pin before selecting tools that can write newer registry/profile shapes.
-  Interrupted pin publication resumes, and stale coordinators block application
-  registry writes. Grouped startup tracks each unit's own readiness timeout from
-  its systemd process-start timestamp and keeps completed peers under observation.
-
-- Fixed: generation-16 hosts upgrade through an explicit, digest-bound runtime-v1
-  bridge that preserves singleton invocation pins and resumes interrupted upgrades.
-  Numbered-copy startup now observes readiness by dependency level; regrowth
-  stops excluded dependents with exit proof. Socket declarations reserve `@` for
-  derived copy suffixes, retaining the 107-byte path limit. Numbered copies use
-  generation 18; generation 17 belongs to v0.36.0 parameterized upload routes.
-
-- Added: generation-18 numbered custom service copies (0–128 per role, at most
-  256 units per instance), with per-copy units, private TCP and Unix listeners,
-  config views, seed/state paths, admission, confinement proof, and `copy_number`
-  resolution. Dependencies and readiness cover every copy under one deadline.
-- Changed: reviewed release plans identify added and removed copies, retain
-  unchanged running copies, and require exit and network closure proof before
-  removing units or runtime views. Persistent per-copy state is retained. Copy 1
-  keeps its existing paths and wire representation; generation 18 stays sticky.
-- Added: release 2a consumer contracts for copy-scoped secrets, ordered `copies`
-  bindings and `deployment.Bindings.Copies`, with owned snapshots and optional
-  secret-file paths. Each copy gets its own value, readable by every role of the
-  instance through their shared account. Shrinking retains private values for
-  regrowth and rollback. Console descriptors retain HTTP copy endpoints but omit
-  secret paths.
-- Added: explicit public port lists ordered by copy ordinal, separate nginx routes
-  and firewall claims, and typed `PublicListener.Ports`. Empty copy collections
-  and singleton port extensions are omitted from descriptor wire records.
-- Fixed: Go binding decoding rejects explicit null and malformed `secret_file`
-  and public `ports` fields; compatibility defaults apply only to omitted fields.
-- Added: numbered-copy operations with `ROLE` and `COPY` selection for stop,
-  restart, and logs; per-copy report and backup coverage; persistent maintenance
-  holds; rollback enablement evidence; and exact copy selections for recovery.
-  Selections, descriptors, secret snapshot identities and new paths share the
-  canonical `role@N` suffix. Singleton records keep their existing shapes.
-  Multi-copy reports group rows under `services[role].copies`.
-
-### PROXY protocol
-
-- Added: public TCP stream listeners can declare topology-level
-  `"proxy_protocol": "v1"` on the listener so nginx sends the client's address and
-  port to a PROXY-aware backend. Both plaintext and edge TLS are supported; the
-  field is rejected on private/Unix listeners, roles and profile bindings. The
-  backend requires a separate non-PROXY readiness listener. Reports expose the
-  selected version per public listener. Declaring the capability requires deploy
-  client and host generation 18 and retains that floor through rollback/recovery.
-  HTTP sites keep forwarded headers; inbound PROXY and outbound v2 are unsupported.
-  The opt-in nginx stream acceptance now checks real client addresses and ports
-  over IPv4/IPv6 for both TLS modes.
-
-### Framework migration history
-
-- Fixed: disabling a framework persistence feature retains its migration
-  definitions, so applied history stays valid and unrelated migrations can
-  proceed. Pending disabled migrations report `pending_feature_disabled` and run
-  after re-enabling the feature. Availability does not change historical
-  checksums. Rollback refuses a selection containing a disabled feature before
-  executing any reversal. PostgreSQL cache definitions also remain known when a
-  configured store changes drivers. Keep the feature's database and schema
-  settings when disabling it. `App.Migrations()` keeps runnable definitions grouped
-  by physical target and carries disabled history into `migrate.New` automatically;
-  `App.MigrationHistory()` also exposes disabled-only targets. `WithDatabaseScopes`
-  preserves the job archive's existing schema. Reconciled disabled checkpoints no
-  longer force unrelated migrations to reuse an older batch. Registry and target
-  composition share conflict checks, including rollback SQL, while dependency
-  order no longer causes false conflicts. The PostgreSQL application testkit uses
-  complete history for owned namespaces, including disabled-only targets extended
-  by explicit domain migrations.
-
-### Managed DNS
-
-- Fixed: partially rejected DNS batches close as resolved failures, allowing a
-  new reviewed correction or rollback after proven cleanup while admission stays
-  closed. Only validation codes 9005 and 9313 prove rejection; other outcomes
-  require read-back. Diagnostics discard provider free text and retain codes with
-  fixed framework descriptions.
-- Fixed: managed DNS ownership comments fit Cloudflare's 100-character limit on
-  every plan. Provider errors retain bounded codes and fixed descriptions;
-  definite HTTP rejections are recorded separately from uncertain writes.
-  The controlled provider enforces comment and DNS hostname limits.
-- Fixed: managed DNS application has its own total budget, and replacement-host
-  public opening receives a fresh readiness budget after cutover. DNS intents
-  retain a pending admission phase if opening or deployment completion fails.
-  Reports show that phase and owned records left behind by failed listener removal.
-- Added: managed Cloudflare DNS for public TCP listener hostnames. Profiles declare
-  the zone, explicit addresses, TTLs, and stable per-record ownership UUIDs.
-  Release plans bind fresh provider state; activation and rollback compare it
-  again and mutate only owned records after closure and private health. Listener
-  removal deletes only owned IDs. Tokens reuse the certificate owner's scoped
-  custody and rotation. Records remain DNS-only.
-- Added: durable DNS mutation intents, read-back reconciliation after lost create,
-  update, or delete acknowledgements, provider drift reports, and typed replacement
-  host cutover with archived ownership evidence. Unknown outcomes never authorize
-  public admission or automatic retries. Managed profiles retain client and host
-  generation floor 18.
-- Added: a local controlled Cloudflare adapter, lifecycle and container fault
-  scenarios, and an opt-in live test restricted to random test names. See the
-  [managed DNS guide](docs/guides/host-capabilities.md#managed-cloudflare-dns)
-  for token permissions and recovery limits.
+- Added: numbered custom service copies through profile `placement` counts of
+  0–128 per role, with at most 256 units per instance. Each copy has its own unit,
+  private TCP ports, Unix sockets, config views, seed files, and state paths.
+  `copy_number` resolves its ordinal. Copy 1 keeps existing paths and singleton
+  records. Public listeners accept one explicit port per copy, with separate
+  nginx routes and firewall claims, exposed through `deployment.PublicListener.Ports`.
+- Added: `ROLE` selects all placed copies; `COPY` selects one for stop, restart,
+  and logs. Reports, backup coverage, maintenance holds, and recovery selections
+  identify each copy. Rollback preserves surviving copies' enablement and restores
+  removed copies from recorded enablement evidence. Missing evidence leaves the
+  copy disabled. Recovery restores copies in dependency order and preserves holds.
+- Changed: copy count changes go through reviewed release plans. Unchanged copies
+  keep running. Shrinking proves process exit and network closure before removing
+  units and runtime views, and retains persistent state, seed files, and secrets
+  for regrowth and rollback. Concurrent readiness gives each unit its own deadline
+  and stability proof from its process-start time, within the group budget.
+  Slow probes do not block peers; failure cancels and drains owned probes and commands.
+  Journal waits honour deadlines and cancellation; unrecorded failures are reported.
+- Added: copy-scoped secrets with `scope: "copy"`, and ordered `copies` bindings
+  exposed by Go `deployment.Bindings.Copies`. Bindings return owned snapshots of
+  ordinals, endpoints, and optional secret-file paths. Like role secrets, each
+  copy's value is readable by all roles of the instance through their shared
+  account. Console bindings retain copy endpoints but omit secret-file paths.
+  Upgrade consuming binaries before declaring copy bindings.
+- Added: opt-in PROXY protocol v1 for public TCP stream listeners through
+  `"proxy_protocol": "v1"`. Nginx sends the client address and port to each
+  copy's backend for plaintext and edge TLS. Readiness requires a separate
+  non-PROXY listener per copy. Private and Unix listeners cannot opt in; inbound
+  PROXY and outbound v2 are unsupported. HTTP sites keep forwarded headers.
+- Added: managed Cloudflare A and AAAA records for public listener hostnames.
+  The profile listener's `dns` object declares `mode: "managed"`, `hostname`,
+  `public_addresses`, `proxied: false`, `zone_id`, and `records` containing stable
+  `ownership_id` UUIDs, explicit `address` values, and `ttl` values. Records cover
+  the declared addresses exactly once. Credentials reuse the certificate owner's
+  custody and rotation, with Zone DNS Edit and Zone Read restricted to one zone.
+  Reviewed plans bind provider state and recheck it before applying changes.
+  Activation and rollback change only owned record IDs after listener closure and
+  private health. Listener removal deletes only owned records. Count and port
+  changes never write DNS. Recovery retains ownership evidence, restores copies
+  before DNS cutover, and starts a fresh public-readiness budget after reconciliation.
+- Added: durable DNS mutation intents and read-back reconciliation for uncertain
+  create, update, or delete outcomes, without automatic write retries. Unresolved
+  outcomes keep public admission closed; reports expose drift and pending admission.
+  Definite rejection requires HTTP 4xx, excluding 408, 409, and 429, with
+  `success: false` and validation codes drawn only from the 9005/9313 allow-list.
+  Other outcomes require read-back. Rejected batches retain applied ownership and
+  require proven cleanup before a new reviewed operation. Provider diagnostics
+  retain codes and fixed descriptions, never provider free text. Create, update,
+  verification, and owned-only deletion passed
+  [live certification](docs/evidence/v037-managed-dns-live-certification.md).
+- Fixed: disabling framework persistence features retains their migration history
+  and checksums. Pending disabled definitions report `pending_feature_disabled`
+  and run after re-enablement; unrelated migrations can proceed. Rollback refuses
+  selections containing disabled features before any reversal. Keep disabled
+  features' database and schema settings. PostgreSQL cache history also survives
+  driver changes. The standard `App.Migrations()` and
+  `migrate.New(target.Definitions...)` loop keeps working; new
+  `App.MigrationHistory()` includes disabled-only targets for inspection and the
+  application testkit. `WithDatabaseScopes` is unchanged, including archive schemas.
+- Changed: reduced-fidelity rehearsal accepts attachment policies above the
+  stand-in's conditional-write cap at startup, replacing v0.36.0's startup refusal.
+  Oversized or unknown-size conditional writes fail before storage I/O with
+  `storage.RehearsalLimitExceeded`; application policy maxima remain unchanged.
+  The mode requires a validated, root-owned deploy descriptor `rehearsal` block
+  and a matching process rehearsal identity. Without an identity, loading is
+  dormant; absent or mismatched grants retain strict capabilities. Environment
+  variables alone cannot grant the mode. Reports include caps, exceeding policy
+  maxima, and runtime refusals without object data. Production storage is unchanged.
+- Fixed: artifact downloads follow signed HTTPS redirect targets with queries,
+  including GitHub release assets, while preserving address checks, redirect limits,
+  and SHA-256 verification. Queries are never logged or persisted. Declared artifact
+  pins still refuse queries, credentials, and fragments.
+- Added: `ACTION=validate make deploy` checks declarations offline, with optional
+  `ENVIRONMENT` selection and `FORMAT=json` diagnostics. It checks project and
+  profile identities, topology, placement, listeners, upload routes, shared
+  directories, artifact declarations, service templates with synthetic values,
+  and rehearsal bindings, and reports the minimum deploy-tool generation.
+  It uses no SSH, containers, downloads, private settings, or host state; payloads
+  and live readiness still require deployment checks. Example Makefile recipes
+  are now silent so recipe echo does not contaminate JSON output.
+- Changed: update the application's Foundry-Go pin to v0.37.0. The new deployment
+  capabilities require generation 18 on client and host, retained through rollback
+  and recovery. From a generation 9–17 host, run `ACTION=tools-plan make deploy`,
+  then `ACTION=tools-apply PLAN_TOKEN='<token>' OPERATION='<stable-uuid-v4>' make deploy`.
+  After interruption, use `ACTION=upgrade-resume` with the same token and operation
+  UUID. Tools upgrades automatically advance and verify the boot coordinator pin
+  and install the runtime helper bridge when required. Fresh bootstrap installs
+  generation 18. Existing declarations need no changes.
 
 ## v0.36.0 — 2026-11-15
 
