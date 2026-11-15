@@ -1,6 +1,6 @@
 # Managed DNS live certification
 
-On 2026-11-15, the owner reported three live runs against a Cloudflare test zone.
+On 2026-11-15, three live runs ran against the owner's Cloudflare test zone.
 Zone, domain, and token details are omitted.
 
 The first run failed with Cloudflare code 9313 because the ownership comment
