@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in generation-15 Unix sockets, templates and bindings in the disposable harness.
+"""Opt-in generation-16 confinement, Unix sockets, templates and bindings in the disposable harness.
 
 Use the ordinary deploy-acceptance archive. The artifact is a second, pinned copy
 of that fixture's Linux artisan binary; no artifact network download is needed.
@@ -23,7 +23,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import artifacts
-from contracts import ReleaseDeclaration, digest, read_json
+from contracts import DeployError, ReleaseDeclaration, digest, read_json
 from host import Host
 from topology import parse_topology, parse_profile
 from acceptance_support import LAUNCHER, action, guard, request, run
@@ -32,6 +32,7 @@ import acceptance_network as network
 import edge
 import firewall
 import listeners
+import network_confinement
 import services
 
 PORT = 8554
@@ -94,7 +95,13 @@ def assert_listener_report(result, entry):
     assert len(rows) == 2 and {row["address"] for row in rows} == set(network.ADDRESSES)
     assert all((row["role"], row["listener"], row["expected_owner"], row["tls"], row["authentication"]) ==
                ("relay", "control", "nginx", "none", True) for row in rows)
-    assert not any(f["code"] in {"listener_owner_unverified", "nginx_projection_unverified", "declared_listener_absent"}
+    confinement, = [r for r in value["confinement"] if r["role"] == "wildcard"]
+    assert confinement["state"] == "verified" and all(confinement["proof"]["programs"])
+    private, = [r for r in value["private_listeners"] if r["role"] == "wildcard"]
+    assert private["visibility"] == "private" and private["wildcard"] and private["confinement"] == "loopback"
+    assert not any(r["port"] == private["port"] for r in value["unexpected_exposure"])
+    assert private["port"] not in result["host"]["network"]["public_listeners"]
+    assert not any(f["code"] in {"network_confinement_unverified", "listener_owner_unverified", "nginx_projection_unverified", "declared_listener_absent"}
                    for f in value["findings"])
 
 
@@ -154,7 +161,7 @@ def assert_unix_binding(host, inventory, entry):
     return endpoint
 
 
-def feature_archive(source, destination, host_id):
+def feature_archive(source, destination, host_id, *, confined=False):
     with tarfile.open(source, "r:gz") as incoming:
         files = {item.name: incoming.extractfile(item).read() for item in incoming if item.isfile()}
     manifest = json.loads(files.pop("manifest.json"))
@@ -203,6 +210,32 @@ def feature_archive(source, destination, host_id):
         "secrets": {"relay-template-token": {"prompt": "Relay template token"}},
         "artifacts": {"relay": {"version": "fixture-1", "format": "file", "executables": {"server": "relay"},
             "platforms": {platform: {"url": "https://acceptance.invalid/relay", "sha256": checksum}}}}})
+    if confined:
+        python = f"python{sys.version_info.major}.{sys.version_info.minor}"
+        profile["placement"]["wildcard"] = 1
+        raw = topology.projection()
+        raw["roles"][0]["requires"].append("wildcard")
+        raw["roles"].append({
+            "name": "wildcard", "kind": "executable", "packages": [python, python + "-minimal"],
+            "executable": {"package": python + "-minimal", "path": "/usr/bin/" + python},
+            "network": {"confinement": "loopback"},
+            "arguments": [{"literal": "-I"}, {"literal": "-c"}, {"literal":
+                "import socket,sys; s=socket.create_server(('::',int(sys.argv[1])),family=socket.AF_INET6,dualstack_ipv6=True); "
+                "exec('while True:\\n c,a=s.accept(); c.close()')"}, {"listener_port": "control"}],
+            "listeners": {"control": {"transport": "tcp", "bind": "loopback", "wildcard": True}},
+            "readiness": {"kind": "tcp", "listener": "control", "timeout_seconds": 15},
+            "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
+            "limits": {"memory_bytes": 67108864, "cpu_percent": 100, "tasks": 16},
+            "maintenance": "continue", "state": {"kind": "disposable"}})
+        topology = parse_topology(raw)
+        invalid = copy.deepcopy(raw)
+        invalid["roles"][-1].pop("network")
+        try:
+            parse_topology(invalid)
+        except DeployError as error:
+            assert error.code == "invalid_topology" and "confinement" in error.detail
+        else:
+            raise AssertionError("Unconfined wildcard declaration was accepted")
     profile = parse_profile(profile, topology).projection()
     payload_path = "deploy/artifacts/relay/" + checksum + ".bin"
     files[payload_path] = files["artisan"]
@@ -230,6 +263,34 @@ def feature_archive(source, destination, host_id):
     return project, profile, topology, disks
 
 
+def assert_confined_wildcard(host, inventory):
+    import time
+    endpoint = next(e for e in inventory.resolution.endpoints if e.role == "wildcard")
+    assert services.wait_ready(host, inventory, "wildcard", time.monotonic() + 15)
+    proof = network_confinement.isolation(host, inventory, "wildcard")
+    assert len(proof["programs"]) == 2 and all(proof["programs"])
+    owners = listeners.process_members(host, inventory.units["wildcard"])
+    sockets = [s for s in listeners.observe_sockets(host) if s.socket.port == endpoint.port]
+    assert sockets and all(ipaddress.ip_address(s.socket.address).is_unspecified and s.pids
+                           and set(s.pids) <= owners for s in sockets)
+    # Explicit accepts remove default-deny firewall as an explanation for isolation.
+    with ExitStack() as cleanup:
+        for tool in ("iptables", "ip6tables"):
+            for chain in ("INPUT", "OUTPUT"):
+                for direction in ("--dport", "--sport"):
+                    rule = [chain, "-p", "tcp", direction, str(endpoint.port), "-j", "ACCEPT"]
+                    host.run([tool, "-I", *rule])
+                    cleanup.callback(host.run, [tool, "-D", *rule])
+        for prefix in ([], ["ip", "netns", "exec", network.PEER]):
+            for address in network.ADDRESSES:
+                result = host.run([*prefix, "python3", "-I", "-c", PEER_PROBE, address, str(endpoint.port), "no"],
+                                  check=False, timeout=8)
+                assert result.returncode == 2 and not result.stdout, "Confined port reachable on a non-loopback address"
+    assert not any(c.socket.port == endpoint.port for c in listeners.public_claims(inventory.profile))
+    assert not any(r.port == endpoint.port for r in edge.upstream_references(host))
+    return endpoint
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", required=True, type=Path)
@@ -239,7 +300,7 @@ def main():
     assert host.read_registry(missing=True) is None, "Feature scenario requires a fresh disposable host"
     shared.WORK.mkdir(mode=0o700, exist_ok=True)
     archive = shared.WORK / "feature.tar.gz"
-    project, profile, topology, disks = feature_archive(args.archive, archive, shared.HOST_ID)
+    project, profile, topology, disks = feature_archive(args.archive, archive, shared.HOST_ID, confined=True)
     shared.private_json(shared.WORK / "topology.json", {**topology.projection(), "sha256": topology.sha256})
     private = shared.bootstrap_secrets(disks)
     secret = secrets.token_urlsafe(32) + '"#;]雪'
@@ -264,6 +325,7 @@ def main():
         _, entry = host.require_identity(project, profile)
         _, _, inventory, _ = load(host, entry)
         assert_public_listener_binding(inventory, profile)
+        assert_confined_wildcard(host, inventory)
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", unit]).stdout.strip() == "active"
         endpoint = assert_unix_binding(host, inventory, entry)
@@ -287,6 +349,7 @@ def main():
         _, entry = host.require_identity(project, profile)
         _, _, inventory, _ = load(host, entry)
         assert_public_listener_binding(inventory, profile)
+        assert_confined_wildcard(host, inventory)
         assert assert_secret_template(host, inventory, entry, secret) != first_config, "Restart reused a prepared template"
         assert_unix_binding(host, inventory, entry)
         assert Path(endpoint.path).stat().st_ino != old_inode, "Restart did not replace the stale provider socket"
@@ -302,7 +365,7 @@ def main():
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", "--quiet", unit], check=False).returncode != 0
         public_observation(host, topology, profile)
-        print("PASS host capabilities: package, artifact, admission, private template, private/public/Unix app bindings, stale-socket restart, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
+        print("PASS host capabilities: package, artifact, admission, private template, private/public/Unix app bindings, verified wildcard confinement, stale-socket restart, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
 
 
 if __name__ == "__main__":

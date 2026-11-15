@@ -102,20 +102,20 @@ def migrate_enablement(host, registry, entry):
     return result
 
 
-def network_report(host, entry, host_claims):
+def network_report(host, entry, host_claims, host_confinement=None):
     from contracts import ClosureEvidence
     from report import declared_network
     if "deployment_selection" not in entry:
         topology = parse_topology(entry["topology"], registered=True)
         return declared_network(host, parse_profile(entry["profile"], topology), topology=topology,
-                                entry=entry, host_claims=host_claims)
+                                entry=entry, host_claims=host_claims, host_confinement=host_confinement)
     store, selection, inventory, _ = load(host, entry)
     require(entry["deployment_selection"] == record_document(selection),
             "network_selection", "Registry and private network selection differ.")
     path = store.runtime / "boot.json"
     closure = admission.read_owned(host, path, ClosureEvidence.parse) if path.exists() else None
     return declared_network(host, inventory.profile, topology=inventory.topology, entry=entry,
-                            resolution=inventory.resolution, closure=closure, host_claims=host_claims)
+                            resolution=inventory.resolution, closure=closure, host_claims=host_claims, host_confinement=host_confinement)
 
 
 def selected_releases(host, entry, state):

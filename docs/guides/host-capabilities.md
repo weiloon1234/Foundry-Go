@@ -18,7 +18,8 @@ and public listener bindings, added in v0.33.0, require generation 14 and set a
 sticky generation-14 client floor, including after rollback to a release without
 either capability. Unix listeners and endpoint bindings require generation 15 and
 set a sticky generation-15 floor. Upgrade both the host tools and deploy client
-before using them.
+before using them. Role loopback confinement and wildcard private listeners require
+generation 16 on both client and host, with the same sticky rollback/recovery floor.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
 
@@ -719,10 +720,10 @@ indicators, and Unicode in the private value cannot add YAML keys or lines.
 
 ### Release-carried artifacts
 
-Archive build and artifact verification support this source. Bundle activation
-is not yet complete: `services.bundle_views()` still requires a topology download
-pin. It needs to accept the release inventory digest before a release-carried
-bundle can be mounted by a service.
+Archive build, artifact verification and service bundle activation support this
+source. Service views use the verified release inventory digest for release-carried
+bundles, with the same platform, ABI, ownership and read-only mount checks as
+downloaded bundles.
 
 For an artifact that belongs to the application repository, replace the platform's
 `url` and `sha256` fields with a typed `source` object:
@@ -1125,3 +1126,66 @@ views as HTTPS artifacts.
 The framework acceptance runner uses the same shipped host images, CA setup and
 systemd container helpers; its fixture-specific scenarios and private module proxy
 remain separate from application rehearsal.
+
+## Loopback-confined roles and wildcard private listeners
+
+Some daemons accept a control port without accepting a listen address; obs-websocket
+is one example. Declare `"network": {"confinement": "loopback"}` on the role and
+`"wildcard": true` on each such private TCP listener. Upgrade client and host tools
+to generation 16 first. Activation, rollback and recovery retain that instance floor,
+even when the selected release no longer declares confinement.
+
+The following complete role is a small worked example of the same binding behavior.
+Add it alongside the required built-in `http` role in topology schema 2, and add
+`"control": 1` to profile schema 3's `placement`. This example uses Ubuntu 24.04's Python 3.12 packages; on another host, declare
+the versioned package that owns the resolved executable. It needs no public listener binding:
+
+```json
+{
+  "name": "control",
+  "kind": "executable",
+  "packages": ["python3.12", "python3.12-minimal"],
+  "executable": {"package": "python3.12-minimal", "path": "/usr/bin/python3.12"},
+  "network": {"confinement": "loopback"},
+  "arguments": [
+    {"literal": "-I"}, {"literal": "-m"}, {"literal": "http.server"},
+    {"listener_port": "api"}, {"literal": "--bind"}, {"literal": "0.0.0.0"}
+  ],
+  "listeners": {"api": {"transport": "tcp", "bind": "loopback", "wildcard": true}},
+  "readiness": {"kind": "tcp", "listener": "api", "timeout_seconds": 15},
+  "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
+  "limits": {"memory_bytes": 67108864, "cpu_percent": 100, "tasks": 16},
+  "state": {"kind": "disposable"}
+}
+```
+
+A consumer declares `requires: ["control"]` and an endpoint binding with role
+`control`, listener `api`, and scheme `http`. Its descriptor contains the allocated
+loopback address and port. For an OBS role, apply the same network/listener fields,
+use the pinned OBS executable and its service-local configuration, and populate
+the websocket server port setting through a typed `rendered-json` field binding
+to `{"listener_port": "api"}`. Keep daemon
+authentication enabled and pass its password through a declared secret file/template.
+A TCP readiness probe checks the listener; it does not authenticate a websocket session.
+
+Foundry renders `IPAddressDeny=any` and `IPAddressAllow=localhost` into the role's
+systemd unit. Every admitted start and readiness check verifies the effective IPv4
+and IPv6 policy and attached ingress/egress BPF programs on the live cgroup. Missing
+cgroup-v2/BPF support, an unobservable attachment or a policy override refuses the
+start or activation. The same verifier owns recovery rehearsal isolation.
+
+Confinement applies to the whole role, including outbound IP traffic: it can talk
+to loopback services and Unix sockets, but cannot connect to remote databases,
+remote APIs or external stream destinations. A role that streams off-host cannot
+use this confinement policy. Public listeners on confined roles and confinement of
+the public built-in HTTP role are rejected. A wildcard declaration without
+confinement is rejected even in recovery rehearsal.
+
+Readiness accepts `0.0.0.0`, `[::]` or `*` only on the allocated port, retaining
+process identity, ownership and stability checks. The port remains reserved across
+all host addresses and both IP families, including stopped historical allocations.
+A new allocation cannot collide with another instance, a public edge listener or
+Foundry's shared services. Such listeners create no firewall openings or nginx
+routes. Reports list them under `private_listeners` with their wildcard and
+confinement declarations, and show the live confinement proof separately. Failed
+proof or foreign ownership cannot hide a wildcard socket from exposure findings.

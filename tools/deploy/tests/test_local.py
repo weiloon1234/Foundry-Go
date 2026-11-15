@@ -1433,5 +1433,21 @@ class LocalDeploymentTests(unittest.TestCase):
         self.assertEqual(rollbacks[0]["operation_id"], operation)
 
 
+class ConfinedReleaseToolTests(unittest.TestCase):
+    def test_generation_fifteen_host_gets_upgrade_message_before_upload_or_target_parse(self):
+        from types import SimpleNamespace
+        import contracts
+        from test_network_confinement import confined_topology
+        remote = MagicMock()
+        remote.request.return_value = {"tools": {"generation": 15}}
+        with patch.object(contracts.ReleaseDeclaration, "parse", return_value=SimpleNamespace(topology_json=confined_topology())):
+            with self.assertRaisesRegex(cli.LocalError, "host_upgrade_required: Upgrade the host tools to generation 16"):
+                cli.check_release_tools(remote, {}, {"schema": 2, "deployment": {}}, {})
+            remote.request.assert_called_once_with("hello", {})
+            remote.upload.assert_not_called()
+            remote.request.return_value = {"tools": {"generation": 16}}
+            cli.check_release_tools(remote, {}, {"schema": 2, "deployment": {}}, {})
+
+
 if __name__ == "__main__":
     unittest.main()

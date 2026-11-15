@@ -94,7 +94,7 @@ class FeatureAdapterTests(unittest.TestCase):
             self.store.admit(invocation, permit_id=None if committed else permit_id)
         self.running = True
         private = tuple(listeners.ObservedSocket(cl.socket, (self.pid(self.current.units[cl.role]),))
-                        for cl in listeners.private_claims(self.instance, self.current.resolution))
+                        for cl in listeners.private_claims(self.instance, self.current.resolution, self.current.topology))
         public = tuple(listeners.ObservedSocket(cl.socket, (91,)) for cl in listeners.public_claims(self.current.profile))
         # Unrelated host HTTP and other app sockets must not be mistaken for this instance's listeners.
         self.sockets.return_value = (*private, *public, listeners.ObservedSocket(listeners.SocketIdentity("tcp", 4, "0.0.0.0", 80), (91,)))

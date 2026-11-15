@@ -272,7 +272,8 @@ class WiringHost(Host):
                 for process, inventory, role in self.running.values():
                     for endpoint in inventory.resolution.endpoints:
                         if endpoint.role == role and ipaddress.ip_address(endpoint.address).version == family:
-                            rows.append(f'LISTEN 0 128 {endpoint.address}:{endpoint.port} 0.0.0.0:* users:(("app",pid={process.pid},fd=3))')
+                            address = "0.0.0.0" if (role, endpoint.listener) in listeners.wildcard_listeners(inventory.topology) else endpoint.address
+                            rows.append(f'LISTEN 0 128 {address}:{endpoint.port} 0.0.0.0:* users:(("app",pid={process.pid},fd=3))')
             output = "\n".join(rows)
         elif args[0] == "runuser":
             if Path(args[4]).name == "python3":
@@ -371,7 +372,7 @@ class FeatureWiringFixture(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, confined=False, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -396,6 +397,11 @@ class FeatureWiringFixture(unittest.TestCase):
             **({"secrets": {"relay-token": {"prompt": "Relay token"}}} if secrets else {}),
             "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
                 "platforms": {"linux-arm64": {"url": "https://example.invalid/relay", "sha256": checksum}}}}})
+        if confined:
+            raw = self.topology.projection()
+            raw["roles"][1]["network"] = {"confinement": "loopback"}
+            raw["roles"][1]["listeners"]["api"]["wildcard"] = True
+            self.topology = parse_topology(raw)
         if unix:
             raw = self.topology.projection()
             raw['roles'][0]['requires'] = ['relay']
@@ -448,6 +454,25 @@ class FeatureWiringFixture(unittest.TestCase):
 
 
 class FeatureWiringTests(FeatureWiringFixture):
+    def test_confined_wildcard_lifecycle_and_failed_proof_close_all_work(self):
+        import network_confinement
+        self.build_archive(confined=True)
+        plan = self.request('bootstrap-plan', topology=self.topology.projection())
+        self.request('bootstrap-apply', topology=self.topology.projection(), plan_token=plan['plan_token'], confirm=True)
+        with patch.object(network_confinement, 'isolation', return_value={'programs': [[17], [18]]}) as proof:
+            self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
+            _, entry = self.host.require_identity(self.project, self.profile)
+            _, selection, inventory, _ = lifecycle.load(self.host, entry)
+            self.assertEqual(selection.minimum_generation, 16)
+            self.assertTrue(proof.called)
+            text = self.host.paths.p('/etc/systemd/system/' + inventory.units['relay']).read_text()
+            self.assertIn(network_confinement.FILTER, text)
+            self.request('restart')
+        with patch.object(network_confinement, 'isolation', side_effect=c.DeployError('network_confinement', 'No BPF')):
+            with self.assertRaises(c.DeployError):
+                self.request('restart')
+        self.assertFalse(self.host.running)
+
     def test_unix_lifecycle_prepares_descriptors_and_builtin_write_access(self):
         self.build_archive(unix=True)
         plan = self.request('bootstrap-plan', topology=self.topology.projection())

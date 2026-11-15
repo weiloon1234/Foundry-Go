@@ -205,7 +205,11 @@ class FeaturePreviewTests(unittest.TestCase):
         value = {"projects": [{"instances": [{"name": "fixture-acceptance", "network": {
             "listeners": [{"port": scenario.PORT, "address": address, "expected_owner": "nginx", "role": "relay",
                            "listener": "control", "tls": "none", "authentication": True}
-                          for address in scenario.network.ADDRESSES], "findings": []}}]}]}
+                          for address in scenario.network.ADDRESSES], "findings": [],
+            "confinement": [{"role": "wildcard", "state": "verified", "proof": {"programs": [[1], [2]]}}],
+            "private_listeners": [{"role": "wildcard", "port": 18000, "visibility": "private",
+                                   "wildcard": True, "confinement": "loopback"}], "unexpected_exposure": []}}]}],
+            "host": {"network": {"public_listeners": [scenario.PORT]}}}
         scenario.assert_listener_report(value, {"name": "fixture-acceptance"})
         value["projects"][0]["instances"][0]["network"]["findings"] = [{"code": "nginx_projection_unverified"}]
         with self.assertRaises(AssertionError):

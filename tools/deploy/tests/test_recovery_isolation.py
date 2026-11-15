@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
 from contracts import DeployError, HOST_PATHS
 from host import Host, Paths
 import operation_lock
-import recovery_rehearsal
+import network_confinement
 
 
 class RecoveryIsolationTests(unittest.TestCase):
@@ -29,13 +29,13 @@ class RecoveryIsolationTests(unittest.TestCase):
     def observe(self):
         output = '\n'.join(k + '=' + v for k, v in self.properties.items())
         with patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, output, '')):
-            return recovery_rehearsal.isolation(self.host, self.inventory, 'relay')
+            return network_confinement.isolation(self.host, self.inventory, 'relay')
 
     def test_loaded_loopback_policy_requires_attached_ingress_and_egress(self):
-        with patch.object(recovery_rehearsal, 'attached_programs', return_value=[[17], [18]]) as query:
+        with patch.object(network_confinement, 'attached_programs', return_value=[[17], [18]]) as query:
             self.assertEqual(self.observe()['programs'], [[17], [18]])
             query.assert_called_once_with(self.host, self.properties['ControlGroup'])
-        with patch.object(recovery_rehearsal, 'attached_programs', side_effect=DeployError('rehearsal_isolation', 'No BPF')):
+        with patch.object(network_confinement, 'attached_programs', side_effect=DeployError('network_confinement', 'No BPF')):
             with self.assertRaises(DeployError):
                 self.observe()
 
@@ -45,16 +45,16 @@ class RecoveryIsolationTests(unittest.TestCase):
                            ('DropInPaths', '/etc/systemd/system/override.conf'),
                            ('ControlGroup', '/system.slice/another.service')):
             with self.subTest(key=key, value=value), patch.dict(self.properties, {key: value}), \
-                    patch.object(recovery_rehearsal, 'attached_programs') as query:
+                    patch.object(network_confinement, 'attached_programs') as query:
                 with self.assertRaises(DeployError) as raised:
                     self.observe()
-                self.assertEqual(raised.exception.code, 'rehearsal_isolation')
+                self.assertEqual(raised.exception.code, 'network_confinement')
                 query.assert_not_called()
 
     def test_missing_cgroup_v2_refuses(self):
         with self.assertRaises(DeployError) as raised:
-            recovery_rehearsal.attached_programs(self.host, self.properties['ControlGroup'])
-        self.assertEqual(raised.exception.code, 'rehearsal_isolation')
+            network_confinement.attached_programs(self.host, self.properties['ControlGroup'])
+        self.assertEqual(raised.exception.code, 'network_confinement')
 
     def test_descriptor_handoff_retains_one_exclusive_host_lock(self):
         request = {'action': 'recover-activate', 'operation_id': str(uuid.uuid4())}

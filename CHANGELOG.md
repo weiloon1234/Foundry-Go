@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Added: role-level loopback network confinement with verified systemd IP policy
+  and live ingress/egress BPF attachments, shared with recovery rehearsal. Private
+  TCP listeners may declare wildcard binding only on confined roles. Readiness
+  retains identity and ownership checks; ports are reserved across host addresses
+  and IP families. Reports distinguish verified private confinement from exposure.
+  Confined listeners create no firewall openings or nginx routes.
+- Added: deploy-tool generation 16 with a sticky confinement capability floor
+  through rollback and recovery, and disposable-container acceptance coverage.
+- Fixed: host-capabilities guide now documents supported release-carried bundle
+  activation using the verified release inventory digest.
+
 ## v0.34.0 — 2026-11-15
 
 - Added: private Unix-socket listeners for custom roles, declared with

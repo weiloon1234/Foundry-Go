@@ -19,6 +19,7 @@ import feature_recovery
 import operation_lock
 import operations
 import recovery_rehearsal
+import network_confinement
 import release
 import runtime_config
 import services
@@ -179,6 +180,13 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
             self.prepare(registry, entry)
             self.assertEqual(lifecycle.load(self.host, entry)[1].minimum_generation, 14)
 
+    def test_recovery_keeps_confinement_floor_after_application_rollback(self):
+        registry, entry = self.target()
+        self.snapshot['selection']['minimum_generation'] = 16
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            self.assertEqual(lifecycle.load(self.host, entry)[1].minimum_generation, 16)
+
     def test_public_binding_recovery_uses_generation_fourteen_and_replacement_profile(self):
         registry, entry = self.target(public=True, public_binding=True)
         with self.host.lock('host'):
@@ -261,7 +269,7 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
                 content = self.host.paths.p('/etc/systemd/system/' + inventory.units[role]).read_text()
                 self.assertEqual('IPAddressDeny=any' in content, role == 'relay')
                 self.assertEqual('IPAddressAllow=localhost' in content, role == 'relay')
-            with patch.object(recovery_rehearsal, 'isolation', return_value={'proven': True}):
+            with patch.object(network_confinement, 'isolation', return_value={'proven': True}):
                 lifecycle.activate_recovery(self.host, registry, entry, self.journal)
                 self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
             self.assertFalse(self.host.paths.p('/run/foundry/nginx/' + inventory.profile.instance_id + '/http-open.conf').exists())
@@ -270,7 +278,7 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
         registry, entry = self.target(mode='rehearsal')
         with self.host.lock('host'):
             self.prepare(registry, entry)
-            with patch.object(recovery_rehearsal, 'isolation', side_effect=c.DeployError('rehearsal_isolation', 'Unsupported BPF')):
+            with patch.object(network_confinement, 'isolation', side_effect=c.DeployError('network_confinement', 'Unsupported BPF')):
                 with self.assertRaises(c.DeployError):
                     lifecycle.activate_recovery(self.host, registry, entry, self.journal)
             self.assertFalse(self.host.running)
@@ -299,7 +307,7 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
             self.prepare(registry, entry)
             _, _, inventory, _ = lifecycle.load(self.host, entry)
             self.assertEqual(runtime_config.validate_runtime_environment(self.host, entry)[runtime_config.SCHEDULER_ENABLED], 'false')
-            with patch.object(recovery_rehearsal, 'isolation', return_value={'proven': True}):
+            with patch.object(network_confinement, 'isolation', return_value={'proven': True}):
                 lifecycle.activate_recovery(self.host, registry, entry, self.journal)
                 self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
             self.assertNotIn(inventory.units['scheduler'], self.host.running)
