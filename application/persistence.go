@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	outboundcapture "github.com/weiloon1234/Foundry-Go/httpclient/capture"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
+	"github.com/weiloon1234/Foundry-Go/jobs/archive"
 	"github.com/weiloon1234/Foundry-Go/metadata"
 	"github.com/weiloon1234/Foundry-Go/notifications"
 	"github.com/weiloon1234/Foundry-Go/outbox"
@@ -20,17 +21,16 @@ import (
 )
 
 type persistenceTarget struct {
+	enabled     bool
 	connection  *database.ConnectionName
 	schema      *string
 	definitions func() []migrate.Definition
 }
 
-func persistenceTargets(s *FeatureSettings) []persistenceTarget {
+func featurePersistenceTargets(s *FeatureSettings) []persistenceTarget {
 	var targets []persistenceTarget
 	add := func(enabled bool, connection *database.ConnectionName, schema *string, definitions func() []migrate.Definition) {
-		if enabled {
-			targets = append(targets, persistenceTarget{connection, schema, definitions})
-		}
+		targets = append(targets, persistenceTarget{enabled, connection, schema, definitions})
 	}
 	add(s.Auth.Sessions.Enabled, &s.Auth.Sessions.Database, &s.Auth.Sessions.Schema, sessionpg.Migrations)
 	add(s.Auth.Tokens.Enabled, &s.Auth.Tokens.Database, &s.Auth.Tokens.Schema, tokenpg.Migrations)
@@ -42,18 +42,15 @@ func persistenceTargets(s *FeatureSettings) []persistenceTarget {
 	add(s.Notifications.Enabled, &s.Notifications.Database, &s.Notifications.Schema, notifications.Migrations)
 	add(s.WebhookCapture.declared, &s.WebhookCapture.Database, &s.WebhookCapture.Schema, capture.Migrations)
 	add(s.OutboundCapture.present, &s.OutboundCapture.Database, &s.OutboundCapture.Schema, outboundcapture.Migrations)
-	if s.Extensions.Enabled {
-		add(true, &s.Extensions.Database, &s.Extensions.Schema, func() []migrate.Definition {
-			definitions := append(settings.Migrations(), metadata.Migrations()...)
-			if s.Locales.Enabled {
-				definitions = append(definitions, translations.Migrations()...)
-			}
-			if s.Attachments.Enabled {
-				definitions = append(definitions, attachments.Migrations()...)
-			}
-			return definitions
-		})
-	}
+	add(s.Extensions.Enabled, &s.Extensions.Database, &s.Extensions.Schema, settings.Migrations)
+	add(s.Extensions.Enabled, &s.Extensions.Database, &s.Extensions.Schema, metadata.Migrations)
+	add(s.Extensions.Enabled && s.Locales.Enabled, &s.Extensions.Database, &s.Extensions.Schema, translations.Migrations)
+	add(s.Extensions.Enabled && s.Attachments.Enabled, &s.Extensions.Database, &s.Extensions.Schema, attachments.Migrations)
 	add(s.Reports.Enabled, &s.Reports.Database, &s.Reports.Config.Schema, nil)
 	return targets
+}
+
+func persistenceTargets(s *Settings) []persistenceTarget {
+	targets := featurePersistenceTargets(&s.Features)
+	return append(targets, persistenceTarget{s.Worker.Archive.Enabled, &s.Worker.Archive.Database, &s.Worker.Archive.Schema, archive.Migrations})
 }

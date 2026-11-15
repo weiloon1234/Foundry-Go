@@ -24,7 +24,7 @@ func (s Settings) WithDatabaseScopes(databases infrastructure.DatabaseSettings) 
 	if err != nil {
 		return Settings{}, err
 	}
-	for _, target := range persistenceTargets(&result.Features) {
+	for _, target := range persistenceTargets(&result) {
 		name, scope, err := databases.ScopedSchema(*target.connection)
 		if err != nil {
 			return Settings{}, err

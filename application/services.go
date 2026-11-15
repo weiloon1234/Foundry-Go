@@ -118,7 +118,7 @@ func (a *App) HTTPReady(ctx context.Context) (string, error) {
 	return a.server.Ready(ctx)
 }
 
-// Migrations returns owned copies of the enabled framework feature targets
+// Migrations returns owned copies of the known framework feature targets
 // followed by the Builder.Migrations targets. Explicit tooling such as
 // RunDatabaseCommand and the PostgreSQL testkit applies them; boot never does.
 func (a *App) Migrations() []infrastructure.MigrationTarget {

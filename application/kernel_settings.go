@@ -37,14 +37,14 @@ type JobArchiveSettings struct {
 // App.Migrations agree on one target.
 func prepareJobArchive(s Settings) (JobArchiveSettings, error) {
 	a := s.Worker.Archive
-	if !a.Enabled {
-		return a, nil
-	}
 	if a.Database == "" {
 		a.Database = s.Services.Database.Default
 	}
 	if a.Schema == "" {
 		a.Schema = "public"
+	}
+	if !a.Enabled {
+		return a, nil
 	}
 	if _, ok := s.Services.Database.Connections[a.Database]; !ok {
 		return a, safeerror.NewFault(fault.Missing, "job archive database connection is not configured")

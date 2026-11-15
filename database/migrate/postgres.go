@@ -123,12 +123,6 @@ type RunResult struct {
 // A new call inspects history again under the lock. No callback is blindly retried.
 func (p *Postgres) Up(ctx context.Context) (result RunResult, err error) {
 	err = p.locked(ctx, func(session *database.Session) error {
-		if err := p.ensureHistory(ctx, session); err != nil {
-			return err
-		}
-		if err := p.ensureProgress(ctx, session); err != nil {
-			return err
-		}
 		history, err := p.history(ctx, session)
 		if err != nil {
 			return err
@@ -142,7 +136,7 @@ func (p *Postgres) Up(ctx context.Context) (result RunResult, err error) {
 		}
 		var pending []migration
 		for _, status := range report.Statuses {
-			if status.State == Pending || status.State == Incomplete {
+			if (status.State == Pending || status.State == Incomplete) && status.Definition.Availability == Available {
 				pending = append(pending, p.registry.ordered[p.registry.byKey[status.Key]])
 			}
 		}
@@ -154,6 +148,12 @@ func (p *Postgres) Up(ctx context.Context) (result RunResult, err error) {
 		}
 		if report.LastBatch == math.MaxInt64 {
 			return safeerror.NewFault(fault.Invalid, "migration batch number is exhausted")
+		}
+		if err := p.ensureHistory(ctx, session); err != nil {
+			return err
+		}
+		if err := p.ensureProgress(ctx, session); err != nil {
+			return err
 		}
 		result.Batch = report.LastBatch + 1
 		for _, status := range report.Statuses {

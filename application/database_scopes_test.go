@@ -25,7 +25,7 @@ func TestDatabaseScopesAlignEveryPersistenceDeclaration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, target := range persistenceTargets(&result.Features) {
+	for _, target := range persistenceTargets(&result) {
 		if *target.schema != "isolated" || *target.connection == "" {
 			t.Fatal("persistence target did not follow scope")
 		}
@@ -36,7 +36,7 @@ func TestDatabaseScopesAlignEveryPersistenceDeclaration(t *testing.T) {
 	if s.Features.Audit.Schema != "public" || s.Services.Cache.Stores["default"].Postgres.Schema != "public" {
 		t.Fatal("original feature settings mutated")
 	}
-	for _, target := range persistenceTargets(&s.Features) {
+	for _, target := range persistenceTargets(&s) {
 		previous := *target.schema
 		*target.schema = "explicit_other"
 		if _, err := s.WithDatabaseScopes(s.Services.Database); !errors.Is(err, fault.Invalid) {

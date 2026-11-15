@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/storage"
@@ -63,8 +64,17 @@ func TestCacheDriverSwitchKeepsTypedConsumer(t *testing.T) {
 			}
 			t.Cleanup(func() { stop(t, app) })
 			if migrationDB != nil {
-				targets := app.Migrations()
-				if len(targets) != 1 || targets[0].Schema != schema {
+				groups, err := s.Services.Database.MigrationGroups(app.Migrations()...)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var targets []infrastructure.MigrationGroup
+				for _, group := range groups {
+					if group.Schema == schema {
+						targets = append(targets, group)
+					}
+				}
+				if len(targets) != 1 {
 					t.Fatal("shared cache migration was not deduplicated")
 				}
 				if err := migrationDB.Transaction(t.Context(), func(tx *database.Tx) error {
@@ -72,6 +82,9 @@ func TestCacheDriverSwitchKeepsTypedConsumer(t *testing.T) {
 						return err
 					}
 					for _, definition := range targets[0].Definitions {
+						if definition.Availability == migrate.FeatureDisabled {
+							continue
+						}
 						for _, statement := range definition.SQL {
 							if _, err := tx.Exec(t.Context(), statement); err != nil {
 								return err

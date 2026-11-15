@@ -44,6 +44,29 @@ const (
 	NonTransactional ExecutionMode = "nontransactional"
 )
 
+// Availability controls execution without changing a migration's historical identity.
+// Available is the zero value for ordinary application and plugin definitions.
+type Availability string
+
+const (
+	Available       Availability = ""
+	FeatureDisabled Availability = "feature_disabled"
+)
+
+// FeatureDefinitions snapshots a framework feature's history and records whether
+// it may execute. Disabling a feature never removes its historical definitions.
+func FeatureDefinitions(enabled bool, definitions ...Definition) []Definition {
+	result := make([]Definition, len(definitions))
+	for i, definition := range definitions {
+		result[i] = definition.Clone()
+		result[i].Availability = Available
+		if !enabled {
+			result[i].Availability = FeatureDisabled
+		}
+	}
+	return result
+}
+
 // Definition is the handwritten or generated source of an immutable migration.
 // SQL entries execute in order using Mode (transactional by default). Requires
 // references declared migrations; New snapshots all slices and computes hashes.
@@ -54,12 +77,14 @@ const (
 // nontransactional migration cannot declare Down. Without Down a migration is
 // irreversible and rollback refuses to cross it.
 type Definition struct {
-	Mode     ExecutionMode
-	Key      Key
-	Version  Version
-	SQL      []string
-	Down     []string
-	Requires []Key
+	// Availability is deployment metadata, excluded from the checksum.
+	Availability Availability
+	Mode         ExecutionMode
+	Key          Key
+	Version      Version
+	SQL          []string
+	Down         []string
+	Requires     []Key
 }
 
 // Clone returns a copy that shares no SQL, Down or Requires storage with d.
@@ -74,12 +99,13 @@ func (d Definition) Clone() Definition {
 // Entry is immutable migration metadata, returned as a caller-owned snapshot.
 // Checksum covers origin, ID, introduced version, ordered SQL and dependencies.
 type Entry struct {
-	Mode       ExecutionMode `json:"mode,omitempty"`
-	Key        Key           `json:"key"`
-	Version    Version       `json:"version"`
-	Checksum   Checksum      `json:"checksum"`
-	Requires   []Key         `json:"requires,omitempty"`
-	Reversible bool          `json:"reversible,omitempty"`
+	Availability Availability  `json:"availability,omitempty"`
+	Mode         ExecutionMode `json:"mode,omitempty"`
+	Key          Key           `json:"key"`
+	Version      Version       `json:"version"`
+	Checksum     Checksum      `json:"checksum"`
+	Requires     []Key         `json:"requires,omitempty"`
+	Reversible   bool          `json:"reversible,omitempty"`
 }
 
 type migration struct {
@@ -109,7 +135,7 @@ func validName(name string) bool {
 func New(definitions ...Definition) (*Registry, error) {
 	byKey := make(map[Key]migration, len(definitions))
 	for _, definition := range definitions {
-		if (definition.Mode != Transactional && definition.Mode != NonTransactional) || !validKey(definition.Key) || !validName(string(definition.Version)) || len(definition.SQL) == 0 {
+		if (definition.Availability != Available && definition.Availability != FeatureDisabled) || (definition.Mode != Transactional && definition.Mode != NonTransactional) || !validKey(definition.Key) || !validName(string(definition.Version)) || len(definition.SQL) == 0 {
 			return nil, safeerror.NewFault(fault.Invalid, "invalid migration definition")
 		}
 		if _, exists := byKey[definition.Key]; exists {
@@ -149,7 +175,7 @@ func New(definitions ...Definition) (*Registry, error) {
 		if err != nil {
 			return nil, safeerror.WrapFault(fault.Internal, "cannot encode migration definition", err)
 		}
-		byKey[definition.Key] = migration{entry: Entry{Mode: definition.Mode, Key: definition.Key, Version: definition.Version, Checksum: Checksum(sha256.Sum256(encoded)), Requires: requires, Reversible: len(down) != 0}, statements: statements, down: down}
+		byKey[definition.Key] = migration{entry: Entry{Availability: definition.Availability, Mode: definition.Mode, Key: definition.Key, Version: definition.Version, Checksum: Checksum(sha256.Sum256(encoded)), Requires: requires, Reversible: len(down) != 0}, statements: statements, down: down}
 	}
 	keys := make([]Key, 0, len(byKey))
 	for key := range byKey {
@@ -189,7 +215,7 @@ func (r *Registry) Definition(key Key) (Definition, bool) {
 		return Definition{}, false
 	}
 	item := r.ordered[index]
-	return Definition{Mode: item.entry.Mode, Key: item.entry.Key, Version: item.entry.Version, SQL: item.statements, Down: item.down, Requires: item.entry.Requires}.Clone(), true
+	return Definition{Availability: item.entry.Availability, Mode: item.entry.Mode, Key: item.entry.Key, Version: item.entry.Version, SQL: item.statements, Down: item.down, Requires: item.entry.Requires}.Clone(), true
 }
 
 func copyEntry(entry Entry) Entry {

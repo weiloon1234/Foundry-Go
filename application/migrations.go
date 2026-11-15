@@ -8,7 +8,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
-	"github.com/weiloon1234/Foundry-Go/jobs/archive"
 )
 
 // maxMigrationTargets bounds the application's own migration declarations.
@@ -30,7 +29,7 @@ func (b *Builder) Migrations(targets ...infrastructure.MigrationTarget) *Builder
 	return b
 }
 
-// featureMigrations collects enabled framework feature targets by connection and
+// featureMigrations collects known framework feature targets by connection and
 // schema, then appends the application's own targets. Every target is resolved
 // and validated through the shared migration grouping before any I/O.
 func featureMigrations(plan *infrastructure.Plan, s Settings, domain []infrastructure.MigrationTarget) ([]infrastructure.MigrationTarget, error) {
@@ -46,14 +45,17 @@ func featureMigrations(plan *infrastructure.Plan, s Settings, domain []infrastru
 	for _, t := range plan.Migrations() {
 		add(t.Connection, t.Schema, t.Definitions)
 	}
-	features := s.Features
-	for _, t := range persistenceTargets(&features) {
-		if t.definitions != nil {
-			add(*t.connection, *t.schema, t.definitions())
+	addFeature := func(enabled bool, connection database.ConnectionName, schema string, definitions []migrate.Definition) {
+		// Database-free applications have no framework persistence history.
+		if !enabled && len(s.Services.Database.Connections) == 0 {
+			return
 		}
+		add(connection, schema, migrate.FeatureDefinitions(enabled, definitions...))
 	}
-	if s.Worker.Archive.Enabled {
-		add(s.Worker.Archive.Database, s.Worker.Archive.Schema, archive.Migrations())
+	for _, t := range persistenceTargets(&s) {
+		if t.definitions != nil {
+			addFeature(t.enabled, *t.connection, *t.schema, t.definitions())
+		}
 	}
 	keys := make([]target, 0, len(groups))
 	for key := range groups {

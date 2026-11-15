@@ -60,7 +60,7 @@ func ApplyMigrations(ctx context.Context, runner *migrate.Postgres) (migrate.Run
 }
 ```
 
-Constructing the runner performs no I/O. `Status` only reads committed history; an absent history table yields pending definitions without creating a table or taking a migration lock. `Up` acquires a session advisory lock, ensures its history namespace, rereads and validates history, then executes each pending definition according to its declared mode. The default commits SQL and history in one transaction. It never synchronizes schema during ordinary application boot.
+Constructing the runner performs no I/O. `Status` only reads committed history; an absent history table yields pending definitions without creating a table or taking a migration lock. `Up` acquires a session advisory lock, rereads and validates history, then selects executable pending definitions. When work remains, it ensures its history namespace and executes each selected definition according to its declared mode. The default commits SQL and history in one transaction. It never synchronizes schema during ordinary application boot.
 
 All cooperating runners must use the same configured history schema and table. Defaults are `foundry_ops.schema_migrations`, a 30-second lock wait, 50-millisecond polling, five-second cleanup, at most 10,000 history records, a 10-second `StatementLockTimeout` and no `StatementTimeout`. An optional `SearchPath` names one schema that `Up`, `Rollback` and `Reconcile` set as their session `search_path` (followed by `pg_temp`, as a scoped pool does), so unqualified migration SQL creates and alters objects in that schema; empty keeps the connection's own path. History and progress tables are always schema-qualified.
 
@@ -83,7 +83,9 @@ migrate.Definition{
 }
 ```
 
-`Down` is excluded from the checksum, so adding or correcting it never drifts applied history; `Entry.Reversible` reports it. It must be valid inside one transaction, so a nontransactional migration cannot declare it. `runner.Rollback(ctx, steps)` reverses the last `steps` applied migrations, newest first (latest batch, then reverse registry order), each in its own transaction that runs `Down` and deletes its history row, while holding the migration lock. It refuses before changing anything when history has drifted or awaits reconciliation, when a selected migration has no `Down`, or when a migration outside the selection depends on one inside it. Earlier reversals stay committed if a later one fails; `RollbackResult.Interrupted` names an unconfirmed reversal. `runner.RollbackPlan(ctx, steps)` reports the same selection without locking or changing anything.
+`Down` is excluded from the checksum, so adding or correcting it never drifts applied history; `Entry.Reversible` reports it. It must be valid inside one transaction, so a nontransactional migration cannot declare it. `runner.Rollback(ctx, steps)` reverses the last `steps` applied migrations, newest first (latest batch, then reverse registry order), each in its own transaction that runs `Down` and deletes its history row, while holding the migration lock. It refuses before changing anything when history has drifted or awaits reconciliation, when a selected migration belongs to a disabled feature, when it has no `Down`, or when a migration outside the selection depends on one inside it. Earlier reversals stay committed if a later one fails; `RollbackResult.Interrupted` names an unconfirmed reversal. `runner.RollbackPlan(ctx, steps)` reports the same selection without locking or changing anything.
+
+Rollback selection includes all applied migrations, including disabled features. If the requested selection includes a disabled feature, both `RollbackPlan` and `Rollback` refuse the whole selection before running any `Down` SQL. They never skip it to reverse an older migration. Enable the feature before explicitly rolling it back. An unrelated selection remains eligible.
 
 Rollback is never implicit and is destructive by nature. `migrate rollback --step N` (default 1) prints the plan and exits with an error; only `--confirm` executes it. Rolled-back migrations become pending again, and a later `migrate up` reapplies them.
 
@@ -148,7 +150,17 @@ Status prints the report and returns a conflict error when history has drift. Mi
 <a id="recipe-migration-targets"></a>
 ## Application migration targets
 
-`app.Migrations()` returns the enabled framework feature targets followed by the application's own, declared with `Builder.Migrations`:
+`app.Migrations()` returns the known framework feature targets followed by the application's own, declared with `Builder.Migrations`. Runtime feature switches control execution, not historical identity.
+
+Framework definitions carry typed `migrate.Availability` metadata. `migrate.Available` is the zero value; `migrate.FeatureDisabled` prevents execution. Availability is excluded from checksums. With a feature disabled, applied migrations remain `migrate.Complete` and still undergo checksum and dependency checks. Pending definitions report `migrate.PendingDisabled`, printed as `pending_feature_disabled` in text and JSON. `Registry.Pending` and `Postgres.Up` skip them. Re-enable the feature to apply its pending definitions normally. Application-owned definitions remain available by default.
+
+This applies to sessions, tokens, MFA, idempotency, outbox, audit, telemetry, notifications, webhook capture declarations, extensions, translations, attachments and job archives. A configured cache store retains its PostgreSQL definitions when switched to another driver. Shared cache migrations remain available while any store on that target uses PostgreSQL. Outbound capture keeps its existing store semantics: disabling recording leaves the viewer and pruning store available, so its migrations remain executable whenever that store is present.
+
+Keep each feature's database and schema settings when disabling it. They identify the history to inspect and remain validated when databases are configured. Removing a connection or moving a feature to another schema does not move its history. Applications without database connections contribute no disabled framework targets. `WithDatabaseScopes` also aligns disabled feature targets so later toggles keep the same history.
+
+An available pending migration that requires an unapplied disabled migration reports `migrate.DependencyDisabled` and blocks execution. Foundry never enables a prerequisite implicitly. Applied prerequisites remain usable while their feature is disabled. Interrupted nontransactional migrations retain their progress and reconciliation requirements; disabling one does not resume its SQL. An `Up` with no executable pending work creates no history or progress tables.
+
+For example, register application migrations as follows:
 
 <!-- compiled-source: tests/fixtures/consumer/database_command_test.go#application-migrations -->
 ```go

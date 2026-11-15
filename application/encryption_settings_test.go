@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -165,6 +166,9 @@ func TestConfiguredMFAStoreAndReencryptCommand(t *testing.T) {
 		}
 		for _, target := range app.Migrations() {
 			for _, definition := range target.Definitions {
+				if definition.Availability == migrate.FeatureDisabled {
+					continue
+				}
 				for _, sql := range definition.SQL {
 					if _, err := tx.Exec(t.Context(), sql); err != nil {
 						return err

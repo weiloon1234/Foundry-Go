@@ -15,6 +15,7 @@ import (
 	"foundry.test/consumer/articles"
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
@@ -91,6 +92,9 @@ func startApplication(t *testing.T, configure ...func(*application.Settings)) fi
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		for _, target := range app.Migrations() {
 			for _, definition := range target.Definitions {
+				if definition.Availability == migrate.FeatureDisabled {
+					continue
+				}
 				for _, sql := range definition.SQL {
 					if _, err := tx.Exec(ctx, sql); err != nil {
 						return err

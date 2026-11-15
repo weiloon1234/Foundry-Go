@@ -91,3 +91,54 @@ func TestMigrationGroupsRejectConflictsBeforeIO(t *testing.T) {
 		t.Fatal("separate schemas were merged", err)
 	}
 }
+
+func TestMigrationGroupsMergeAvailabilityWithoutChangingDefinitions(t *testing.T) {
+	definition := migrationDefinition("foundry.shared", "001", "SELECT 1")
+	for _, enabledFirst := range []bool{false, true} {
+		first := migrate.FeatureDefinitions(enabledFirst, definition)
+		second := migrate.FeatureDefinitions(!enabledFirst, definition)
+		groups, err := migrationDatabases().MigrationGroups(
+			infrastructure.MigrationTarget{Definitions: first},
+			infrastructure.MigrationTarget{Connection: "alias", Definitions: second},
+		)
+		if err != nil || len(groups) != 1 || len(groups[0].Definitions) != 1 || groups[0].Definitions[0].Availability != migrate.Available {
+			t.Fatal("shared enabled store lost", groups, err)
+		}
+		if first[0].Availability == second[0].Availability {
+			t.Fatal("input availability mutated")
+		}
+		second[0].SQL[0] = "SELECT 2"
+		if _, err := migrationDatabases().MigrationGroups(infrastructure.MigrationTarget{Definitions: first}, infrastructure.MigrationTarget{Definitions: second}); !errors.Is(err, fault.Conflict) {
+			t.Fatal("availability hid definition drift", err)
+		}
+	}
+}
+
+func TestCacheMigrationAvailabilityIncludesEveryStoreSharingTheTarget(t *testing.T) {
+	for _, activeName := range []string{"a", "b"} {
+		s := infrastructure.DefaultSettings()
+		s.Database = migrationDatabases()
+		s.Cache.Default = "a"
+		s.Cache.Stores = infrastructure.CacheStores{"a": infrastructure.DefaultCacheSettings(), "b": infrastructure.DefaultCacheSettings()}
+		for name, store := range s.Cache.Stores {
+			store.Database = "main"
+			if string(name) == activeName {
+				store.Driver = infrastructure.PostgresCache
+			}
+			s.Cache.Stores[name] = store
+		}
+		plan, err := infrastructure.Configure(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		targets := plan.Migrations()
+		if len(targets) != 1 || len(targets[0].Definitions) == 0 {
+			t.Fatal("shared cache targets not deduplicated", targets)
+		}
+		for _, definition := range targets[0].Definitions {
+			if definition.Availability != migrate.Available {
+				t.Fatal("inactive cache hid an active store", activeName)
+			}
+		}
+	}
+}

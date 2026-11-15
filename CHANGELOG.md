@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: disabling a framework persistence feature retains its migration
+  definitions, so applied history stays valid and unrelated migrations can
+  proceed. Pending disabled migrations report `pending_feature_disabled` and run
+  after re-enabling the feature. Availability does not change historical
+  checksums. Rollback refuses a selection containing a disabled feature before
+  executing any reversal. PostgreSQL cache definitions also remain known when a
+  configured store changes drivers. Keep the feature's database and schema
+  settings when disabling it.
+
 ## v0.35.0 — 2026-11-15
 
 - Added: loopback network confinement for roles, declared with

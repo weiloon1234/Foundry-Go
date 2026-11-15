@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	stdhttp "net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -87,8 +89,14 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 		}
 	})
 	targets := app.Migrations()
-	if len(targets) != 1 || targets[0].Schema != schema {
-		t.Fatal("migration targets were not grouped")
+	groups, err := s.Services.Database.MigrationGroups(targets...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(groups, func(group infrastructure.MigrationGroup) bool {
+		return group.Schema == schema && len(group.Definitions) != 0
+	}) {
+		t.Fatal("configured migration target missing")
 	}
 	original := targets[0].Definitions[0].SQL[0]
 	targets[0].Definitions[0].SQL[0] = "mutated"
@@ -112,6 +120,9 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	if err := withinSchema(t.Context(), db, schema, func(tx *database.Tx) error {
 		for _, target := range app.Migrations() {
 			for _, d := range target.Definitions {
+				if d.Availability == migrate.FeatureDisabled {
+					continue
+				}
 				for _, sql := range d.SQL {
 					if _, err := tx.Exec(t.Context(), sql); err != nil {
 						return err

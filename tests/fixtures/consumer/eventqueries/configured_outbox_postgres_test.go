@@ -19,6 +19,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/config/toml"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/events"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
@@ -168,6 +169,9 @@ enabled = true
 		}
 		for _, target := range app.Migrations() {
 			for _, definition := range target.Definitions {
+				if definition.Availability == migrate.FeatureDisabled {
+					continue
+				}
 				for _, statement := range definition.SQL {
 					if _, err := tx.Exec(t.Context(), statement); err != nil {
 						return err

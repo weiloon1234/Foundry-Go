@@ -87,10 +87,20 @@ func (s DatabaseSettings) MigrationGroups(targets ...MigrationTarget) ([]Migrati
 		}
 		for _, definition := range target.Definitions {
 			definition = definition.Clone()
+			if definition.Availability != migrate.Available && definition.Availability != migrate.FeatureDisabled {
+				return nil, safeerror.NewFault(fault.Invalid, "invalid migration availability")
+			}
 			if previous, seen := byKey[index][definition.Key]; seen {
 				// Features sharing one schema may repeat the same framework migration.
-				if !reflect.DeepEqual(group.Definitions[previous], definition) {
+				prior := group.Definitions[previous]
+				availability := definition.Availability
+				definition.Availability = prior.Availability
+				if !reflect.DeepEqual(prior, definition) {
 					return nil, safeerror.NewFault(fault.Conflict, fmt.Sprintf("migration targets sharing schema %s have conflicting definitions for %s/%s", schema, definition.Key.Origin, definition.Key.ID))
+				}
+				// Any enabled consumer of a shared store needs its migrations.
+				if availability == migrate.Available {
+					group.Definitions[previous].Availability = migrate.Available
 				}
 				continue
 			}
