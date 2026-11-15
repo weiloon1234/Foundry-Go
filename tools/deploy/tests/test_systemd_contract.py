@@ -288,28 +288,49 @@ class SystemdContractTests(unittest.TestCase):
         # Only fixture-owned state; the helper reads the real kernel boot/PID IDs.
         from dataclasses import replace
         import admission
-        from contracts import (ClosureEvidence, DeploymentSelection, RuntimeResolution, atomic_json)
+        from contracts import (ClosureEvidence, Deployment, DeploymentSelection, ReleaseDeclaration,
+                               RoleBindings, RuntimeResolution, UnitSpec, atomic_json, canonical_digest, record_document)
+        import feature_lifecycle
+        import runtime_config
         from host import Paths
         from test_admission import attempt
         from test_host_capabilities import INSTANCE, DIGEST, OTHER, CURRENT, selection, resolution, closure
         (self.root / 'proc').symlink_to('/proc')
         host = Host(Paths(self.root))
         from test_contracts import fixture, registry
-        from topology import selected_units
+        from topology import parse_profile, parse_topology, selected_units, validate_topology
         from contracts import identity
         project, _, entry = fixture(project_slug='probe-' + self.prefix[-12:])
         entry['profile']['instance_id'] = INSTANCE
         # Database and Redis allocations derive from the instance ID.
         entry['allocations'].update(identity(project, entry['profile'])['allocations'])
+        topology = parse_topology({'schema': 2, 'roles': [{'name': 'http', 'kind': 'builtin'}], 'artifacts': {}})
+        profile = parse_profile({**entry['profile'], 'schema': 3, 'placement': {'http': 1}, 'listeners': {}}, topology)
+        entry.update(profile=profile.projection(), topology=validate_topology(topology.projection()), configuration_revision=7)
         host.write_registry(registry(entry))
         self.admission_unit = next(iter(selected_units(entry, 'http').values())).removesuffix('.service')
+        spec = UnitSpec(UnitIdentity(INSTANCE, 'http', 1), '/usr/bin/python3', DIGEST, (),
+                        canonical_digest(topology.projection()['roles'][0]), RoleBindings('http', (), (), ()), OTHER)
+        deployment = Deployment(INSTANCE, attempt()['release'], 2, topology.sha256,
+                                canonical_digest(profile.projection()), (spec,))
+        resolved = RuntimeResolution.parse(resolution())
+        environments = runtime_config.effective_environments(host, entry, CURRENT, resolved.roles, resolved.endpoints, values={})
+        resolved = replace(resolved, deployment_sha256=canonical_digest(record_document(deployment)), environments=environments,
+                           bindings_sha256=canonical_digest([record_document(spec.bindings)]))
+        inventory = services.UnitInventory(entry['name'], topology, profile, deployment, resolved)
+        declaration = ReleaseDeclaration.parse({'schema': 2, 'topology': topology.projection(), 'profile': profile.projection(),
+            'topology_sha256': topology.sha256, 'inventory': [{'path': 'config/deploy.toml', 'sha256': OTHER, 'size': 0, 'kind': 'config'}],
+            'artifacts': [], 'application_executables': {}})
+        feature_lifecycle.save_launch(host, entry, inventory, declaration, {}, {spec.identity: {}})
+        selected = DeploymentSelection.parse(selection())
+        selected = replace(selected, admission=replace(selected.admission, deployment_sha256=resolved.deployment_sha256))
         store = admission.AdmissionStore(host, INSTANCE)
         store.record_operation(attempt())
-        store.begin(DeploymentSelection.parse(selection()), RuntimeResolution.parse(resolution()))
+        store.begin(selected, resolved)
         evidence = replace(ClosureEvidence.parse(closure()), boot_id=admission.boot_id(host))
         store.record_boot_closure(evidence)
         atomic_json(self.root / 'probe-identity.json', {'instance': INSTANCE, 'bundle': OTHER,
-                                                      'spec': DIGEST, 'resolution': CURRENT})
+                                                      'spec': canonical_digest(record_document(spec)), 'resolution': CURRENT})
         return store, evidence
 
     def test_pending_gate_prevents_preparation_and_committed_restart_admits_new_invocation(self):
@@ -641,6 +662,37 @@ class SystemdContractTests(unittest.TestCase):
                                           '--output=short-iso'], timeout=5).stdout
                 self.wait_for(lambda: directory.name in journal(), timeout=max(0, deadline - time.monotonic()))
                 self.assertRegex(journal(), r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d')
+
+
+class AdmissionFixtureTests(unittest.TestCase):
+    def test_contract_fixture_saves_launch_before_pending_admission(self):
+        import admission
+        import feature_lifecycle
+        from contracts import canonical_digest, record_document
+        from dataclasses import replace
+        from test_host_capabilities import BOOT
+        with tempfile.TemporaryDirectory() as root:
+            fixture = SystemdContractTests('test_pending_gate_prevents_preparation_and_committed_restart_admits_new_invocation')
+            fixture.root = Path(root).resolve()
+            fixture.prefix = 'foundry-contract-probe-' + uuid.uuid4().hex[:12]
+            # Only the Linux boot observation is substituted. Evidence reads,
+            # writes, deployment hashes and copy membership checks remain real.
+            with patch.object(admission, 'boot_id', return_value=BOOT):
+                store, evidence = fixture.admission_fixture()
+            selected, resolution = store._selection()
+            entry = store.host.read_registry()['instances'][store.instance_id]
+            inventory, launch = feature_lifecycle.load_resolution(store.host, entry, resolution.id)
+            self.assertEqual(set(inventory.units), set(evidence.units))
+            self.assertEqual(resolution.deployment_sha256, canonical_digest(record_document(inventory.deployment)))
+            self.assertEqual(set(launch['descriptors']), {'http'})
+            with self.assertRaises(DeployError) as raised:
+                store.begin(replace(selected, enabled_roles=('http', 'relay@2')), resolution)
+            self.assertEqual(raised.exception.code, 'admission_selection')
+            path = store.host.paths.opt(entry['name']) / 'runtime' / resolution.id / 'launch.json'
+            path.unlink()
+            with self.assertRaises(DeployError) as raised:
+                store.begin(selected, resolution)
+            self.assertEqual(raised.exception.code, 'admission_missing')
 
 
 if __name__ == '__main__':
