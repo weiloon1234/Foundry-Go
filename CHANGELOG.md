@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Added: opt-in live R2 multipart ranged-read certification and a matching TLS
+  stand-in test, including the seekable reader used by attachments. The R2
+  conditional-write size cap remains unchanged pending live certification.
+
 ## v0.34.0 — 2026-11-15
 
 - Added: private Unix-socket listeners for custom roles, declared with
