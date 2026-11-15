@@ -18,7 +18,10 @@ def sandbox(topology, instance, role):
     # Hide the entire host tree, including retired declarations. Bind sources are
     # resolved in the host namespace, then exposed inside this private empty tree.
     lines = ["TemporaryFileSystem=" + systemd_word(shared_directory_root(instance) + ":ro")]
-    for binding in bindings(topology, instance, role):
+    granted = bindings(topology, instance, role)
+    if granted:
+        lines.append("PrivateUsers=yes")
+    for binding in granted:
         writable = binding.access == "read-write"
         path = systemd_word(binding.path)
         lines += [("BindPaths=" if writable else "BindReadOnlyPaths=") + path,

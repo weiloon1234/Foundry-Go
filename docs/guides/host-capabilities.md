@@ -1310,6 +1310,30 @@ or `ReadOnlyPaths` for readers. Readers also get a read-only bind mount. This
 policy applies to builtin app roles and custom roles under `ProtectSystem=strict`.
 Unlisted roles receive no directory binding or filesystem view of the cache.
 
+Every role with a shared-directory grant also runs with `PrivateUsers=yes`,
+including builtin writers and custom readers. Systemd creates a separate,
+root-owned user namespace for each workload and maps root and the instance's UID
+and GID to themselves. File ownership and Unix socket peer credentials therefore
+retain their existing values. Roles without grants keep their existing policy.
+
+Linux gates `/proc/<pid>/root`, `cwd`, and `fd` traversal with
+`PTRACE_MODE_READ_FSCREDS`. Across user namespaces, the capability check requires
+`CAP_SYS_PTRACE` in the target namespace. Matching the instance UID is insufficient.
+Sibling roles and unprivileged instance-account processes outside the units cannot
+use those procfs links to enter a granted role's filesystem view. All workload
+units retain an empty `CapabilityBoundingSet`. A role cannot unmount its read-only
+view to expose the host's writable mount; inherited mounts are also locked when
+copied into a less privileged mount namespace. See the
+[kernel capability checks](https://github.com/torvalds/linux/blob/v6.18/security/commoncap.c),
+[procfs link checks](https://github.com/torvalds/linux/blob/v6.18/fs/proc/base.c), and
+[systemd user namespace policy](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#PrivateUsers=).
+
+Roles still share one instance account for everything outside shared directories.
+This policy does not give each role separate account-owned state or IPC authority.
+A process deliberately launched outside the unit sandboxes still has the account's
+ordinary host-path permissions. The privileged `+` preparation helper runs outside
+the workload sandbox so it can create and verify the host-owned mounts.
+
 ### Lifetime, reports, and cleanup
 
 Each admitted start uses the privileged preparation helper to create or verify

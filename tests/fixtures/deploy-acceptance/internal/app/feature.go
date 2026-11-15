@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -32,6 +33,14 @@ func featureRelay(ctx context.Context, args []string) error {
 		return err
 	}
 	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/shared-proc" && r.Method == http.MethodPost && len(args) == 4 {
+			if err := featureProcDenied(r.Body); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			_, _ = io.WriteString(w, "proc-denied")
+			return
+		}
 		if r.URL.Path == "/shared" && len(args) == 4 {
 			if err := featureSharedReader(args[3]); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -153,10 +162,55 @@ func featureUnix(ctx context.Context, args []string) error {
 				if _, err := os.ReadFile(forbidden); errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
 					_, _ = io.WriteString(connection, "denied")
 				}
+			case "proc":
+				if err := featureProcDenied(connection); err == nil {
+					_, _ = io.WriteString(connection, "proc-denied")
+				}
 			}
 		}
 		_ = connection.Close()
 	}
+}
+
+// featureProcDenied runs in the real reader or unlisted service process. Only
+// permission failures prove isolation; ENOENT, EROFS and vanished PIDs do not.
+func featureProcDenied(input io.Reader) error {
+	var probe struct {
+		Paths []string `json:"paths"`
+		Links []string `json:"links"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(input, 8192))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&probe); err != nil {
+		return err
+	}
+	if len(probe.Paths) != 2 || len(probe.Links) != 3 {
+		return fmt.Errorf("proc probe requires root and cwd paths plus root, cwd and fd links")
+	}
+	denied := func(err error) bool { return errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) }
+	for _, path := range probe.Paths {
+		if !strings.HasPrefix(path, "/proc/") {
+			return fmt.Errorf("proc probe requires a procfs path")
+		}
+		for _, mode := range []int{os.O_RDONLY, os.O_WRONLY} {
+			file, err := os.OpenFile(path, mode, 0)
+			if err == nil {
+				_ = file.Close()
+			}
+			if !denied(err) {
+				return fmt.Errorf("proc file access did not fail with a permission error: %v", err)
+			}
+		}
+	}
+	for _, path := range probe.Links {
+		if !strings.HasPrefix(path, "/proc/") {
+			return fmt.Errorf("proc probe requires a procfs link")
+		}
+		if _, err := os.Readlink(path); !denied(err) {
+			return fmt.Errorf("proc link access did not fail with a permission error: %v", err)
+		}
+	}
+	return nil
 }
 
 func featureSharedWriter(directory deployment.SharedDirectory) error {

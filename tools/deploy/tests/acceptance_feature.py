@@ -5,7 +5,7 @@ Use the ordinary deploy-acceptance archive. The artifact is a second, pinned cop
 of that fixture's Linux artisan binary; no artifact network download is needed.
 Lane B's archive verification and publication remain production code paths.
 """
-from contextlib import ExitStack
+from contextlib import ExitStack, closing
 from dataclasses import asdict
 import argparse
 import copy
@@ -13,6 +13,7 @@ import hashlib
 import io
 import ipaddress
 import json
+import os
 from pathlib import Path
 import pwd
 import secrets
@@ -55,6 +56,102 @@ with connection:
     else:
         print("CONNECTED")
 '''
+
+PROCFS_PROBE = r'''
+import errno, json, os, sys
+from pathlib import Path
+
+def assert_denied(probe):
+    for path in probe['paths']:
+        for mode in (os.O_RDONLY, os.O_WRONLY):
+            try:
+                fd = os.open(path, mode)
+            except OSError as error:
+                assert error.errno in (errno.EACCES, errno.EPERM), (path, mode, error.errno)
+            else:
+                os.close(fd)
+                raise AssertionError(('procfs file access succeeded', path, mode))
+    for path in probe['links']:
+        try:
+            os.readlink(path)
+        except OSError as error:
+            assert error.errno in (errno.EACCES, errno.EPERM), (path, error.errno)
+        else:
+            raise AssertionError(('procfs link traversal succeeded', path))
+
+if __name__ == '__main__':
+    uid, namespace, units, probe = sys.argv[1:]
+    assert os.geteuid() == int(uid) > 0
+    assert os.readlink('/proc/self/ns/user') == namespace
+    status = dict(line.split(':', 1) for line in Path('/proc/self/status').read_text().splitlines() if ':' in line)
+    assert int(status['CapEff'].strip(), 16) == 0
+    group = Path('/proc/self/cgroup').read_text()
+    assert not any(unit in group for unit in json.loads(units)), 'Probe must run outside workload units'
+    assert_denied(json.loads(probe))
+'''
+
+
+def procfs_targets(pid, cache, cwd):
+    prefix = f"/proc/{pid}"
+    target = cache + "/frame.txt"
+    return {"paths": [prefix + "/root" + target, prefix + "/cwd/" + os.path.relpath(target, cwd)],
+            "links": [prefix + "/root", prefix + "/cwd", prefix + "/fd/1"]}
+
+
+def assert_procfs_isolation(host, inventory, entry, cache):
+    import fcntl
+    import http.client
+    import release
+    import socket
+    import struct
+    observed = {name: release.service(host, unit) for name, unit in inventory.units.items()}
+    namespaces, probes = {}, {}
+    for role, state in observed.items():
+        pid = int(state["MainPID"])
+        assert pid > 0 and state["process"] and pid in listeners.process_members(host, inventory.units[role])
+        namespace = f"/proc/{pid}/ns/user"
+        namespaces[role] = os.readlink(namespace)
+        assert namespaces[role] != os.readlink("/proc/self/ns/user")
+        # NS_GET_OWNER_UID: systemd, not the instance UID, must own the namespace.
+        with open(namespace, "rb") as file:
+            assert struct.unpack("I", fcntl.ioctl(file.fileno(), 0xb704, struct.pack("I", 0)))[0] == 0
+        status = dict(line.split(":", 1) for line in Path(f"/proc/{pid}/status").read_text().splitlines() if ":" in line)
+        assert set(status["Uid"].split()) == {str(entry["allocations"]["uid"])}
+        assert set(status["Gid"].split()) == {str(entry["allocations"]["gid"])}
+        assert int(status["CapEff"].strip(), 16) == int(status["CapBnd"].strip(), 16) == 0
+        if role not in ("http", "relay"):
+            continue
+        probe = procfs_targets(pid, cache, os.readlink(f"/proc/{pid}/cwd"))
+        # Positive controls reject bogus paths and vanished targets. Preserve '..'
+        # in the cwd route: it must resolve through the peer's procfs link first.
+        for path in probe["paths"]:
+            assert Path(path).read_bytes() == b"prepared-media"
+            if role == "http":
+                fd = os.open(path, os.O_WRONLY)
+                os.close(fd)
+        for path in probe["links"]:
+            assert os.readlink(path)
+        probes[role] = probe
+    assert len(set(namespaces.values())) == len(namespaces), "Granted roles shared a user namespace"
+
+    endpoint = next(e for e in inventory.resolution.endpoints if e.role == "relay")
+    with closing(http.client.HTTPConnection(endpoint.address, endpoint.port, timeout=5)) as connection:
+        connection.request("POST", "/shared-proc", body=json.dumps(probes["http"]),
+                           headers={"Content-Type": "application/json"})
+        response = connection.getresponse()
+        assert response.status == 200 and response.read(128) == b"proc-denied", "Reader bypassed writer sandbox via procfs"
+    host.run(["runuser", "-u", entry["name"], "--", "python3", "-I", "-c", PROCFS_PROBE,
+              str(entry["allocations"]["uid"]), os.readlink("/proc/self/ns/user"),
+              json.dumps(list(inventory.units.values())), json.dumps(probes["http"])], timeout=10)
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(5)
+        connection.connect(inventory.resolution.unix_endpoints[0].path)
+        connection.sendall(b"proc" + json.dumps(probes["relay"]).encode())
+        assert connection.recv(32) == b"proc-denied", "Unlisted role bypassed reader sandbox via procfs"
+    for name, before in observed.items():
+        after = release.service(host, inventory.units[name])
+        assert (before["MainPID"], before["process"]["start"]) == (after["MainPID"], after["process"]["start"])
+    assert Path(cache, "frame.txt").read_bytes() == b"prepared-media"
 
 
 def peer_reachable(host, *, opened):
@@ -143,7 +240,7 @@ def assert_shared_files(host, inventory, entry, report):
     binding, = inventory.specs["relay"].bindings.shared_directories
     assert binding.access == "read-only" and binding.max_bytes == 1048576
     assert inventory.specs["http"].bindings.shared_directories[0].access == "read-write"
-    assert not inventory.specs["socket-provider"].bindings.shared_directories
+    assert all(b.name != "render-cache" for b in inventory.specs["socket-provider"].bindings.shared_directories)
     assert Path(binding.path, "frame.txt").read_bytes() == b"prepared-media"
     import socket
     with socket.socket(socket.AF_UNIX) as connection:
@@ -159,6 +256,7 @@ def assert_shared_files(host, inventory, entry, report):
         assert response.status == 200 and response.read(128) == b"shared-read-only;writer-enospc"
     finally:
         connection.close()
+    assert_procfs_isolation(host, inventory, entry, binding.path)
     # The evidence comes from the real reader process in its unit, not runuser
     # outside the sandbox (all roles deliberately share the same UID).
     info = Path(binding.path).lstat()
@@ -168,7 +266,7 @@ def assert_shared_files(host, inventory, entry, report):
     capacity = __import__("os").statvfs(binding.path)
     assert capacity.f_blocks * capacity.f_frsize == binding.max_bytes
     coverage = backup.service_coverage(inventory)
-    cache, = coverage["shared_directories"]
+    cache = next(item for item in coverage["shared_directories"] if item["name"] == "render-cache")
     assert cache["state"] == "disposable" and not cache["backed_up"] and not cache["restored"]
     assert "shared_directories" not in coverage["supported_components"]
     # Inspect the real encrypted-configuration input archive before encryption.
@@ -177,7 +275,7 @@ def assert_shared_files(host, inventory, entry, report):
     assert not any(Path(binding.path) == path or Path(binding.path) in path.parents for path in files.values())
     instances = [instance for project in report["projects"] for instance in project["instances"]]
     instance = next(instance for instance in instances if instance["name"] == entry["name"])
-    cache, = instance["shared_directories"]
+    cache = next(item for item in instance["shared_directories"] if item["name"] == "render-cache")
     assert cache["status"] == "verified" and cache["bound"] == "tmpfs"
     assert cache["state"] == "disposable" and not cache["backed_up"] and not cache["restored"]
 
@@ -224,7 +322,10 @@ def feature_archive(source, destination, host_id, *, confined=False):
     checksum = hashlib.sha256(files["artisan"]).hexdigest()
     platform = "linux-" + profile["architecture"]
     topology = parse_topology({"schema": 2, "shared_directories": {
-        "render-cache": {"state": "disposable", "max_bytes": 1048576, "writers": ["http"], "readers": ["relay"]}}, "roles": [
+        "render-cache": {"state": "disposable", "max_bytes": 1048576, "writers": ["http"], "readers": ["relay"]},
+        # Exercise Unix readiness and stale cleanup for a namespaced provider,
+        # which remains unlisted for the media cache.
+        "probe-cache": {"state": "disposable", "max_bytes": 65536, "writers": ["socket-provider"], "readers": []}}, "roles": [
         {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["jq"],
          "bindings": {"relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
                       "relay_public": {"public_listener": {"role": "relay", "listener": "control"}},

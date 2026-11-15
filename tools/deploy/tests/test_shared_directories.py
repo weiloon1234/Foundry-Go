@@ -1,6 +1,7 @@
 """Shared cache declarations, delivery and mount refusal boundaries (no mounts)."""
 from dataclasses import replace
 import copy
+import errno
 import os
 from pathlib import Path
 import subprocess
@@ -22,11 +23,11 @@ from test_services import inventory_fixture
 from test_host_capabilities import INSTANCE, DIGEST, CURRENT
 
 
-def shared_inventory():
+def shared_inventory(*, writers=("http",), readers=("relay",)):
     old, entry, _ = inventory_fixture()
     raw = old.topology.projection()
     raw["shared_directories"] = {"render-cache": {"state": "disposable", "max_bytes": 1048576,
-                                                "writers": ["http"], "readers": ["relay"]}}
+                                                "writers": list(writers), "readers": list(readers)}}
     raw["roles"][1]["arguments"] = [{"shared_directory_path": "render-cache"}]
     raw["roles"][1]["environment"] = {"RENDER_CACHE": {"shared_directory_path": "render-cache"}}
     topology = t.parse_topology(raw)
@@ -87,13 +88,30 @@ class SharedDeclarationTests(unittest.TestCase):
             self.assertIn('TemporaryFileSystem="' + c.shared_directory_root(INSTANCE) + ':ro"', unit)
             self.assertIn("ProtectSystem=strict", unit)
             if directive:
+                self.assertEqual(unit.count("PrivateUsers=yes\n"), 1)
                 self.assertIn(directive + '="' + path + '"', unit)
                 self.assertIn(("BindPaths" if role == "http" else "BindReadOnlyPaths") + '="' + path + '"', unit)
             else:
+                self.assertNotIn("PrivateUsers=", unit)
                 self.assertNotIn(path, unit)
             if role == "relay":
                 self.assertIn('Environment="RENDER_CACHE=' + path + '"', unit)
         self.assertNotIn("render-cache", c.record_document(inventory.specs["worker"].bindings))
+
+    def test_user_namespace_policy_covers_both_access_modes_and_role_kinds(self):
+        for writers, readers in ((["http"], ["relay"]), (["relay"], ["http"])):
+            inventory, entry = shared_inventory(writers=writers, readers=readers)
+            for name in ("http", "relay"):
+                with self.subTest(writer=writers[0], role=name):
+                    unit = services.render_unit(inventory, name, entry, DIGEST)
+                    self.assertEqual(unit.count("PrivateUsers=yes\n"), 1)
+                    self.assertIn("CapabilityBoundingSet=\n", unit)
+                    self.assertIn("ExecStartPre=+", unit)
+                    self.assertNotIn("ExecStart=+", unit)
+            self.assertNotIn("PrivateUsers=", services.render_unit(inventory, "worker", entry, DIGEST))
+        old, entry, _ = inventory_fixture()
+        for name in old.roles:
+            self.assertNotIn("PrivateUsers=", services.render_unit(old, name, entry, DIGEST))
 
     def test_backup_excludes_disposable_files_and_inventory_rejects_tampering(self):
         inventory, _ = shared_inventory()
@@ -108,6 +126,17 @@ class SharedDeclarationTests(unittest.TestCase):
         resolution = replace(inventory.resolution, deployment_sha256=c.canonical_digest(c.record_document(deployment)))
         with self.assertRaises(c.DeployError):
             services.UnitInventory(inventory.name, inventory.topology, inventory.profile, deployment, resolution)
+
+    def test_user_namespace_keeps_cgroup_ip_filters_and_privileged_preparation(self):
+        import recovery_rehearsal
+        inventory, entry = shared_inventory()
+        inventory.roles["relay"] = replace(inventory.roles["relay"], recovery_rehearsal_safe=True)
+        with patch.object(recovery_rehearsal, "active", return_value=True):
+            unit = services.render_unit(inventory, "relay", entry, DIGEST)
+        self.assertIn("PrivateUsers=yes\n", unit)
+        self.assertIn(recovery_rehearsal.FILTER, unit)
+        self.assertIn("ExecStartPre=+", unit)
+        self.assertIn("ExecCondition=+", unit)
 
 
 class SharedPreparationTests(unittest.TestCase):
@@ -180,6 +209,39 @@ class SharedPreparationTests(unittest.TestCase):
             shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid)
             shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid)
         self.assertFalse(self.path.exists())
+
+
+class ProcfsAcceptanceTests(unittest.TestCase):
+    def setUp(self):
+        import acceptance_feature
+        self.scope = {"__name__": "procfs_acceptance_test"}
+        exec(compile(acceptance_feature.PROCFS_PROBE, "procfs-acceptance", "exec"), self.scope)
+        self.probe = acceptance_feature.procfs_targets(42, "/run/foundry/cache", "/var/lib/foundry/apps/example")
+
+    def test_probe_keeps_procfs_cwd_traversal_and_checks_both_open_modes(self):
+        self.assertEqual(self.probe["paths"], ["/proc/42/root/run/foundry/cache/frame.txt",
+            "/proc/42/cwd/../../../../../run/foundry/cache/frame.txt"])
+        self.assertEqual(self.probe["links"], ["/proc/42/root", "/proc/42/cwd", "/proc/42/fd/1"])
+        with patch.object(os, "open", side_effect=PermissionError(errno.EACCES, "denied")) as opened, \
+                patch.object(os, "readlink", side_effect=PermissionError(errno.EPERM, "denied")) as readlink:
+            self.scope["assert_denied"](self.probe)
+        self.assertEqual([(call.args[0], call.args[1]) for call in opened.call_args_list],
+                         [(path, mode) for path in self.probe["paths"] for mode in (os.O_RDONLY, os.O_WRONLY)])
+        self.assertEqual([call.args[0] for call in readlink.call_args_list], self.probe["links"])
+
+    def test_missing_paths_read_only_mounts_and_success_never_prove_denial(self):
+        for code in (errno.ENOENT, errno.ESRCH, errno.EROFS):
+            with self.subTest(code=code), patch.object(os, "open", side_effect=OSError(code, "not permission")), \
+                    self.assertRaises(AssertionError):
+                self.scope["assert_denied"](self.probe)
+        for sequence in ([11], [PermissionError(errno.EACCES, "denied"), 11]):
+            with patch.object(os, "open", side_effect=sequence), patch.object(os, "close") as closed, \
+                    self.assertRaises(AssertionError):
+                self.scope["assert_denied"](self.probe)
+            closed.assert_called_once_with(11)
+        with patch.object(os, "open", side_effect=PermissionError(errno.EACCES, "denied")), \
+                patch.object(os, "readlink", return_value="/"), self.assertRaises(AssertionError):
+            self.scope["assert_denied"](self.probe)
 
 
 if __name__ == "__main__":
