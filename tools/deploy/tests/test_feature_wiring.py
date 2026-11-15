@@ -18,12 +18,12 @@ from types import SimpleNamespace
 import sys
 import tarfile
 import tempfile
-import time
 import threading
 from contextlib import nullcontext
 import unittest
 from unittest.mock import Mock, patch
 import uuid
+from timing_support import ManualClock, readiness_clock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import unit_selection_names
@@ -68,6 +68,7 @@ DEFAULT_UNITS = {"nginx.service": ["nginx"], "redis-server.service": ["redis-ser
 class WiringHost(Host):
     def __init__(self, root):
         super().__init__(Paths(root))
+        self.clock = services.time
         self.commands, self.started = [], []
         self.loaded_boot = None
         self.shared_prepared = set()
@@ -128,7 +129,7 @@ class WiringHost(Host):
         self.proc(process.pid, invocation, alive=False)
         main = self.proc(process.pid + 1, invocation, self.paths.p(inventory.specs[role].executable), unit)
         self.running[unit] = (main, inventory, role)
-        self.start_times[unit] = str(int(time.monotonic() * 1_000_000))
+        self.start_times[unit] = str(int(self.clock.monotonic() * 1_000_000))
         self.starting = unit
         feature_runtime.run("running", c.record_document(pin), launch)
         self.starting = None
@@ -342,6 +343,7 @@ class WiringHost(Host):
 
 class FeatureWiringFixture(unittest.TestCase):
     def setUp(self):
+        self.clock = self.enterContext(readiness_clock(ManualClock()))
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.enterContext(patch.object(listeners, "observe_dns", side_effect=lambda binding: c.DNSObservation(binding.hostname, tuple(binding.public_addresses), c.now(), "recursive")))
@@ -824,7 +826,7 @@ class FeatureWiringTests(FeatureWiringFixture):
             self.host.start(inventory.units[name])
         self.run_coordinator("foundry-admission-open-" + self.profile["instance_id"] + ".service")
         self.assertEqual(set(self.host.running), set(inventory.units.values()))
-        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, time.monotonic() + 1))
+        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, self.clock.monotonic() + 1))
 
     def test_retained_automatic_restart_is_refused_during_pending_rotation(self):
         self.test_service_secret_rotation_retains_http_and_private_values()
@@ -1223,7 +1225,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertEqual(selected.admission.disposition, c.AdmissionDisposition.COMMITTED)
         self.assertEqual(self.host.started, ["relay", "http"])
         self.assertTrue(provision._ready_configuration(self.host, registry, entry, TOOLS))
-        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, time.monotonic() + 1))
+        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, self.clock.monotonic() + 1))
         network = lifecycle.network_report(self.host, entry, report.claim_inventory(registry))
         self.assertNotIn("nginx_projection_unverified", [f["code"] for f in network["findings"]])
         with patch.object(report, "os", SimpleNamespace(**{**vars(os), "geteuid": lambda: 0})), \
@@ -1412,7 +1414,7 @@ class FeatureWiringTests(FeatureWiringFixture):
             self.host.start(inventory.units[identity])
         self.run_coordinator("foundry-admission-open-" + self.profile["instance_id"] + ".service")
         self.assertEqual(set(self.host.running), set(inventory.units.values()))
-        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, time.monotonic() + 1))
+        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, self.clock.monotonic() + 1))
 
     def test_second_bootstrap_after_tool_upgrade_uses_advanced_verified_boot_pin(self):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())

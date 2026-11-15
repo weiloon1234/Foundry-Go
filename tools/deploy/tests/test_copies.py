@@ -18,6 +18,7 @@ import topology as t
 import upgrades
 from test_host_capabilities import CURRENT, INSTANCE, declaration, profile
 from test_services import inventory_fixture
+from timing_support import ManualClock, Checkpoints, readiness_clock
 
 
 def copy_fixture(count=2):
@@ -47,6 +48,9 @@ def numbered_inventory(count=3):
 
 
 class CopyFoundationTests(unittest.TestCase):
+    def setUp(self):
+        self.clock = self.enterContext(readiness_clock(ManualClock()))
+
     def test_inventory_selection_uses_only_copy_identities(self):
         inventory, _, _ = copy_fixture()
         relay = inventory.identity("relay")
@@ -100,8 +104,7 @@ class CopyFoundationTests(unittest.TestCase):
         def ready(identity, deadline):
             deadlines.append(deadline)
             return True
-        import time
-        deadline = time.monotonic() + 5
+        deadline = self.clock.monotonic() + 5
         inventory.start_in_order(inventory.units, deadline, start, ready)
         self.assertTrue(all(value == deadline for value in deadlines))
         self.assertGreater(starts.index(worker), max(starts.index(identity) for identity in copies))
@@ -116,8 +119,7 @@ class CopyFoundationTests(unittest.TestCase):
         import tempfile
         from host import Host, Paths
         inventory, entry, _ = numbered_inventory(128)
-        import time
-        began = time.monotonic()
+        began = self.clock.monotonic()
         deadline = began + release.READINESS_SECONDS
         started, probes, batches = set(), set(), []
         def start(argv, **kwargs):
@@ -132,6 +134,20 @@ class CopyFoundationTests(unittest.TestCase):
         def probe(host, current, identity, deadline):
             probes.add(identity)
             return True
+        wait = services.wait_ready_set
+        def prove_group(host, current, names, until, **kwargs):
+            names = tuple(names)
+            checkpoints, counts = Checkpoints(), {}
+            def observed_probe(host, current, identity, deadline):
+                counts[identity] = counts.get(identity, 0) + 1
+                if counts[identity] == 2:
+                    checkpoints.hold(identity)
+                return probe(host, current, identity, deadline)
+            def stabilize():
+                checkpoints.wait(*names)
+                self.clock.advance(5)
+            with patch.object(services, 'probe', side_effect=observed_probe), checkpoints.drive(self.clock, stabilize):
+                return wait(host, current, names, until, **kwargs)
         with tempfile.TemporaryDirectory() as root:
             host = Host(Paths(Path(root).resolve()))
             for identity, spec in inventory.specs.items():
@@ -146,16 +162,16 @@ class CopyFoundationTests(unittest.TestCase):
                     patch.object(host, "read_registry", return_value={"instances": {}}), \
                     patch.object(release, "service", side_effect=observe), \
                     patch.object(release, "_matches_executable", return_value=True), \
-                    patch.object(release, "STABILITY_SECONDS", .15), \
+                    patch.object(release, "STABILITY_SECONDS", 5), \
                     patch.object(services, "readiness_probe", return_value=None), \
-                    patch.object(services, "probe", side_effect=probe):
+                    patch.object(services, "wait_ready_set", side_effect=prove_group):
                 lifecycle.start_units(host, entry, inventory, inventory.units, deadline)
                 self.assertTrue(services.wait_ready_set(host, inventory, inventory.units, deadline))
         self.assertEqual(started, set(inventory.units.values()))
         self.assertEqual(probes, set(inventory.units))
         self.assertEqual([len(batch) for batch in batches], [1, 128, 1])
-        self.assertGreaterEqual(time.monotonic() - began, .6)
-        self.assertLess(time.monotonic(), deadline)
+        self.assertEqual(self.clock.monotonic() - began, 20)
+        self.assertLess(self.clock.monotonic(), deadline)
 
     def test_identity_is_frozen_ordered_and_bounded(self):
         for ordinal in (1, 2, 128):

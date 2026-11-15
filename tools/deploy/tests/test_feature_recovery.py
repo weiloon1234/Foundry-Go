@@ -7,7 +7,6 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
-import time
 import unittest
 from unittest.mock import patch
 import uuid
@@ -31,19 +30,16 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
     def test_dns_cutover_does_not_consume_public_opening_readiness(self):
         import dns
         registry, entry = self.target(running=('relay', 'relay@2'), public=True, copies=2)
-        monotonic = time.monotonic
-        elapsed = [0]
 
         def slow_cutover(*args, **kwargs):
             self.assertTrue(kwargs["private_healthy"])
             self.assertEqual({identity.record_key for _, _, identity in self.host.running.values()},
                              {"relay", "relay@2"})
-            elapsed[0] += release.READINESS_SECONDS + 1
+            self.clock.advance(release.READINESS_SECONDS + 1)
 
         with self.host.lock('host'):
             self.prepare(registry, entry)
-            with patch.object(time, 'monotonic', side_effect=lambda: monotonic() + elapsed[0]), \
-                    patch.object(dns, 'recovery_apply', side_effect=slow_cutover):
+            with patch.object(dns, 'recovery_apply', side_effect=slow_cutover):
                 lifecycle.activate_recovery(self.host, registry, entry, self.journal)
             self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
         self.assertTrue(self.host.running)

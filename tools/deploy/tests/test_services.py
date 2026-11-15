@@ -8,7 +8,6 @@ from pathlib import Path
 import sys
 import subprocess
 import tempfile
-import time
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -20,6 +19,7 @@ from host import Host, Paths
 import runtime_config
 import services
 import topology as t
+from timing_support import ManualClock, Checkpoints, readiness_clock
 from test_admission import attempt, helper
 from test_contracts import fixture
 from test_host_capabilities import (INSTANCE, OPERATION, BOOT, CURRENT, DIGEST, OTHER, bundle, declaration, selection, closure)
@@ -63,6 +63,7 @@ def inventory_fixture():
 
 class ServiceInventoryTests(unittest.TestCase):
     def setUp(self):
+        self.clock = self.enterContext(readiness_clock(ManualClock()))
         self.inventory, self.entry, self.members = inventory_fixture()
 
     def test_inventory_and_orders_include_builtins_and_custom_singleton(self):
@@ -96,7 +97,7 @@ class ServiceInventoryTests(unittest.TestCase):
 
     def test_tool_start_waits_for_each_prerequisite_under_one_deadline(self):
         events = []
-        deadline = time.monotonic() + 10
+        deadline = self.clock.monotonic() + 10
         def start(name, until):
             self.assertEqual(until, deadline)
             events.extend(("start", identity.role) for identity in name)
@@ -236,14 +237,14 @@ class ServiceInventoryTests(unittest.TestCase):
         response = connection.getresponse.return_value
         response.status = 302
         with patch.object(services, "_probe_socket"), patch.object(services.http.client, "HTTPConnection", return_value=connection) as client:
-            self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1))
+            self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), self.clock.monotonic() + 1))
             self.assertEqual(client.call_args.args, ("127.0.0.1", 8201))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/ready"))
             response.status, response.read.return_value = 200, b"ok"
-            self.assertTrue(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1))
+            self.assertTrue(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), self.clock.monotonic() + 1))
             response.read.return_value = b"x" * 65537
-            self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1))
-        self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() - 1))
+            self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), self.clock.monotonic() + 1))
+        self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), self.clock.monotonic() - 1))
 
     def test_paused_http_uses_liveness_without_weakening_normal_readiness(self):
         role = self.inventory.roles["http"]
@@ -251,9 +252,9 @@ class ServiceInventoryTests(unittest.TestCase):
         response = connection.getresponse.return_value
         response.status, response.read.return_value = 200, b'{"status":"ok"}'
         with patch.object(services, "_probe_socket"), patch.object(services.http.client, "HTTPConnection", return_value=connection):
-            self.assertTrue(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1, paused=True))
+            self.assertTrue(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), self.clock.monotonic() + 1, paused=True))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/live"))
-            self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1))
+            self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), self.clock.monotonic() + 1))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/ready"))
 
     def test_maintenance_response_requires_shared_pause_and_builtin_http(self):
@@ -264,10 +265,10 @@ class ServiceInventoryTests(unittest.TestCase):
             for status in (503, 500, 302):
                 response.status = status
                 self.assertEqual(services.probe(Host(), self.inventory, self.inventory.identity("http"),
-                                               time.monotonic() + 1, paused=True), status == 503)
-                self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity("http"), time.monotonic() + 1))
+                                               self.clock.monotonic() + 1, paused=True), status == 503)
+                self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity("http"), self.clock.monotonic() + 1))
                 self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity("relay"),
-                                                time.monotonic() + 1, paused=True))
+                                                self.clock.monotonic() + 1, paused=True))
 
     def test_release_carried_bundle_keeps_payload_digest_and_platform_checks(self):
         raw = declaration()
@@ -320,7 +321,7 @@ class ServiceInventoryTests(unittest.TestCase):
             observed = {"LoadState": "loaded", "ActiveState": "active", "NRestarts": "0", "MainPID": "20",
                         "ControlGroup": "/unit", "process": {"start": "42"}}
             def wait():
-                return services.wait_ready(host, self.inventory, self.inventory.identity("relay"), time.monotonic() + .5)
+                return services.wait_ready(host, self.inventory, self.inventory.identity("relay"), self.clock.monotonic() + .5)
             with patch.object(release, "service", return_value=observed) as inspect, \
                     patch.object(release, "_matches_executable", return_value=True), \
                     patch.object(release, "STABILITY_SECONDS", 0), \
@@ -333,7 +334,19 @@ class ServiceInventoryTests(unittest.TestCase):
                 observed["NRestarts"] = "0"
                 sockets.return_value = subprocess.CompletedProcess([], 0,
                         'LISTEN 0 128 127.0.0.1:8201 0.0.0.0:* users:(("other",pid=21,fd=3))', '')
-                self.assertFalse(wait())
+                checkpoints = Checkpoints()
+                inspections = 0
+                def foreign_socket(*args, **kwargs):
+                    nonlocal inspections
+                    inspections += 1
+                    if inspections == 2:
+                        checkpoints.hold('retry')
+                    return observed
+                def expire():
+                    checkpoints.wait('retry')
+                    self.clock.advance(1)
+                with patch.object(release, 'service', side_effect=foreign_socket), checkpoints.drive(self.clock, expire):
+                    self.assertFalse(wait())
                 sockets.return_value = subprocess.CompletedProcess([], 0,
                         'LISTEN 0 128 127.0.0.1:8201 0.0.0.0:* users:(("relay",pid=20,fd=3))', '')
                 inspect.side_effect = [observed, {**observed, "process": {"start": "43"}}]
@@ -365,7 +378,7 @@ class ServiceInventoryTests(unittest.TestCase):
                     patch.object(services, "probe", return_value=True), \
                     patch.object(host, "run", return_value=subprocess.CompletedProcess([], 0,
                         'u_str LISTEN 0 128 ' + endpoint.path + ' 123 * 0 users:(("relay",pid=20,fd=3))', '')) as sockets:
-                self.assertTrue(services.wait_ready(host, inventory, identity, time.monotonic() + .5))
+                self.assertTrue(services.wait_ready(host, inventory, identity, self.clock.monotonic() + .5))
             self.assertEqual(sockets.call_args.args[0], ["ss", "-Hxlpn"])
 
     def test_grouped_start_keeps_each_units_timeout_and_stability_proof(self):
@@ -385,36 +398,67 @@ class ServiceInventoryTests(unittest.TestCase):
                 path.write_bytes(b"native")
                 path.chmod(0o755)
                 inventory.specs[identity] = replace(spec, executable_sha256=c.digest(path))
-            for slow_start, slow_ready, failure in ((0, .45, None), (.6, 1.25, None),
-                    (0, 1.3, "timeout"), (0, .45, "peer_identity"), (0, .45, "peer_probe")):
+            for slow_start, slow_ready, failure in ((0, 4.5, None), (6, 12.5, None),
+                    (0, 13, "timeout"), (0, 4.5, "peer_identity"), (0, 4.5, "peer_probe")):
                 with self.subTest(slow_start=slow_start, slow_ready=slow_ready, failure=failure):
-                    began, observed = time.monotonic(), set()
+                    began, observed = self.clock.monotonic(), set()
+                    checkpoints, calls = Checkpoints(), {}
+                    queued = False
                     def inspect(host, unit, **kwargs):
+                        nonlocal queued
                         start = began + (0 if unit == inventory.units[short] else slow_start)
-                        pid = "99" if failure == "peer_identity" and unit == inventory.units[short] and time.monotonic() - began >= .35 else "20"
+                        timestamp = str(int(start * 1_000_000))
+                        if unit == inventory.units[slow] and slow_start and not queued:
+                            queued = True
+                            timestamp = "0"
+                        elif unit == inventory.units[slow] and self.clock.monotonic() < start:
+                            checkpoints.hold('queued')
+                        pid = "99" if failure == "peer_identity" and unit == inventory.units[short] and self.clock.monotonic() - began >= 3.5 else "20"
                         return {"ActiveState": "active", "NRestarts": "0", "MainPID": pid,
                                 "process": {"start": "42"},
-                                "ExecMainStartTimestampMonotonic": str(int(start * 1_000_000)) if time.monotonic() >= start else "0"}
+                                "ExecMainStartTimestampMonotonic": timestamp}
                     def probe(host, inventory, identity, deadline):
                         observed.add(identity)
-                        return (time.monotonic() - began < .35 if failure == "peer_probe" else True) if identity == short else time.monotonic() - began >= slow_ready
+                        calls[identity] = attempt = calls.get(identity, 0) + 1
+                        if identity == short and attempt in (2, 3):
+                            if attempt == 3:
+                                self.assertEqual(deadline, began + 30, 'Proved peer lost its shared budget')
+                            checkpoints.hold(('short', attempt))
+                        elif identity == slow and attempt <= 2:
+                            checkpoints.hold(('slow', attempt))
+                        return (self.clock.monotonic() - began < 3.5 if failure == "peer_probe" else True) if identity == short else self.clock.monotonic() - began >= slow_ready
+                    def advance():
+                        checkpoints.wait(('short', 2), 'queued' if slow_start else ('slow', 1))
+                        self.clock.advance(1)
+                        checkpoints.release(('short', 2))
+                        checkpoints.wait(('short', 3))
+                        if slow_start:
+                            self.clock.advance(slow_start - 1)
+                            checkpoints.release('queued')
+                            checkpoints.wait(('slow', 1))
+                        self.clock.advance(began + slow_ready - self.clock.monotonic())
+                        if failure:
+                            return
+                        checkpoints.release(('slow', 1))
+                        checkpoints.wait(('slow', 2))
+                        self.clock.advance(1)
                     def contract(role):
-                        return SimpleNamespace(timeout_seconds=.4 if role.common.name == "http" else 1.2, listener="unused")
+                        return SimpleNamespace(timeout_seconds=4 if role.common.name == "http" else 12, listener="unused")
                     with patch.object(lifecycle, "prepare_shared_directories"), \
                             patch.object(services, "enabled_units", return_value=tuple(inventory.units)), \
                             patch.object(host, "read_registry", return_value={"instances": {}}), \
                             patch.object(host, "run", return_value=subprocess.CompletedProcess([], 0, "", "")) as commands, \
                             patch.object(release, "service", side_effect=inspect), \
                             patch.object(release, "_matches_executable", return_value=True), \
-                            patch.object(release, "STABILITY_SECONDS", .1), \
+                            patch.object(release, "STABILITY_SECONDS", 1), \
                             patch.object(services, "readiness_probe", side_effect=contract), \
-                            patch.object(services, "probe", side_effect=probe):
+                            patch.object(services, "probe", side_effect=probe), checkpoints.drive(self.clock, advance):
                         if failure:
                             with self.assertRaises(c.DeployError):
-                                lifecycle.start_units(host, self.entry, inventory, (short, slow), began + 3)
+                                lifecycle.start_units(host, self.entry, inventory, (short, slow), began + 30)
                         else:
-                            lifecycle.start_units(host, self.entry, inventory, (short, slow), began + 3)
-                            self.assertGreaterEqual(time.monotonic() - began, slow_ready + .1)
+                            lifecycle.start_units(host, self.entry, inventory, (short, slow), began + 30)
+                            self.assertEqual(self.clock.monotonic() - began, slow_ready + 1)
                         self.assertEqual(commands.call_args_list[0].args[0],
                             ["systemctl", "start", "--no-block", inventory.units[short], inventory.units[slow]])
                         self.assertEqual(observed, {short, slow})
@@ -431,6 +475,7 @@ class ServiceInventoryTests(unittest.TestCase):
                 self.inventory.specs[name] = replace(spec, executable_sha256=c.digest(path))
             for failure in ("identity", "probe", "restart", None):
                 with self.subTest(failure=failure):
+                    checkpoints, calls = Checkpoints(), {}
                     observed = {"ActiveState": "active", "NRestarts": "0", "MainPID": "20", "process": {"start": "42"}}
                     dependent_probed = False
                     def inspect(host, unit, **kwargs):
@@ -443,16 +488,25 @@ class ServiceInventoryTests(unittest.TestCase):
                     def probe(host, inventory, name, deadline):
                         role = inventory.roles[name.role]
                         nonlocal dependent_probed
-                        if role.common.name == "worker":
+                        calls[name] = attempt = calls.get(name, 0) + 1
+                        if name.role == 'http' and attempt == 2:
+                            checkpoints.hold('http-proved')
+                        if role.common.name == "worker" and attempt == 1:
+                            checkpoints.hold('worker-before')
                             dependent_probed = True
+                            checkpoints.hold('worker-after')
                         return not (failure == "probe" and dependent_probed and role.common.name == "http")
+                    def change_peer():
+                        checkpoints.wait('http-proved', 'worker-before')
+                        checkpoints.release('worker-before')
+                        checkpoints.wait('worker-after')
                     with patch.object(host, "read_registry", return_value={"instances": {}}), \
                             patch.object(release, "service", side_effect=inspect), \
                             patch.object(release, "_matches_executable", return_value=True), \
-                            patch.object(release, "STABILITY_SECONDS", .02), \
+                            patch.object(release, "STABILITY_SECONDS", 0), \
                             patch.object(services, "readiness_probe", return_value=None), \
-                            patch.object(services, "probe", side_effect=probe):
-                        result = services.wait_ready_set(host, self.inventory, self.inventory.units, time.monotonic() + .25)
+                            patch.object(services, "probe", side_effect=probe), checkpoints.drive(self.clock, change_peer):
+                        result = services.wait_ready_set(host, self.inventory, self.inventory.units, self.clock.monotonic() + .25)
                     self.assertEqual(result, failure is None)
                     self.assertTrue(dependent_probed)
 

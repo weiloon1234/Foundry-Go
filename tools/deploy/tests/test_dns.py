@@ -781,16 +781,14 @@ class DNSLifecycleTests(FeatureWiringFixture):
     def test_real_release_plan_activate_rollback_and_listener_removal(self):
         import feature_network
         import feature_lifecycle
-        monotonic, apply = time.monotonic, dns.apply
-        elapsed = [0]
+        apply = dns.apply
 
         def slow_apply(*args, **kwargs):
             result = apply(*args, **kwargs)
-            elapsed[0] += release.READINESS_SECONDS + 1
+            self.clock.advance(release.READINESS_SECONDS + 1)
             return result
 
         import release
-        self.enterContext(patch.object(time, "monotonic", side_effect=lambda: monotonic() + elapsed[0]))
         self.enterContext(patch.object(dns, "apply", side_effect=slow_apply))
         self.build_managed()
         self.bootstrap()

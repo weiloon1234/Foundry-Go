@@ -1,24 +1,54 @@
 """Controlled monotonic time and worker checkpoints for concurrent deadline tests."""
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
+import importlib
 import threading
 import time
+from unittest.mock import patch
 
 
 class ManualClock:
     def __init__(self, start=1000):
         self.now = start
+        self.lock = threading.Lock()
 
     def monotonic(self):
-        return self.now
+        with self.lock:
+            return self.now
 
     def advance(self, seconds):
         assert seconds >= 0
-        self.now += seconds
+        with self.lock:
+            self.now += seconds
 
     def __getattr__(self, name):
         # Patch a consumer's time reference, never the shared time module used
         # by threading or by the test's real-time deadlock guards.
         return getattr(time, name)
+
+
+@contextmanager
+def readiness_clock(clock):
+    """Keep deadlines, observations and fake process timestamps in one time domain."""
+    with ExitStack() as stack:
+        for name in ("services", "host", "release", "feature_lifecycle", "feature_runtime",
+                     "feature_recovery", "unix_sockets"):
+            stack.enter_context(patch.object(importlib.import_module(name), "time", clock))
+        finished, expired = threading.Event(), threading.Event()
+        def guard():
+            if not finished.wait(120):
+                expired.set()
+                while not finished.is_set():
+                    clock.advance(1_000_000)
+                    finished.wait(.05)
+        watcher = threading.Thread(target=guard, name="readiness-test-deadlock-guard")
+        watcher.start()
+        try:
+            yield clock
+        finally:
+            finished.set()
+            watcher.join(10)
+            assert not watcher.is_alive(), "Readiness clock guard did not exit"
+            assert not expired.is_set(), "Readiness test exceeded its two-minute deadlock guard"
 
 
 class Checkpoints:

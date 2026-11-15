@@ -8,6 +8,7 @@ import contracts as c
 import feature_lifecycle as lifecycle
 import feature_maintenance
 import services
+from timing_support import Checkpoints
 
 
 class MaintenanceTransitionTests(wiring.FeatureWiringFixture):
@@ -60,10 +61,18 @@ class MaintenanceTransitionTests(wiring.FeatureWiringFixture):
             self.assertFalse(self.marker.exists())
 
     def test_unknown_shared_state_does_not_accept_http_rejection(self):
-        import time
         _, inventory = self.held()
-        with patch.object(feature_maintenance, 'live', return_value=None):
-            self.assertFalse(services.wait_ready_set(self.host, inventory, inventory.copies('http'), time.monotonic() + .1))
+        checkpoints = Checkpoints()
+        def probe(*args, **kwargs):
+            self.assertFalse(self.probe(*args, **kwargs))
+            checkpoints.hold('rejected')
+            return False
+        def expire():
+            checkpoints.wait('rejected')
+            self.clock.advance(1)
+        with patch.object(feature_maintenance, 'live', return_value=None), \
+                patch.object(services, 'probe', side_effect=probe), checkpoints.drive(self.clock, expire):
+            self.assertFalse(services.wait_ready_set(self.host, inventory, inventory.copies('http'), self.clock.monotonic() + .1))
         self.assertTrue(self.marker.exists())
 
     def test_restore_drill_after_external_up_never_starts_or_exposes_held_roles(self):

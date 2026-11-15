@@ -4,7 +4,6 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
 from unittest.mock import patch
 
@@ -15,12 +14,14 @@ import feature_lifecycle as lifecycle
 from host import Host, Paths
 import release
 import services
+from timing_support import ManualClock, readiness_clock
 from test_host_capabilities import selection
 from test_services import inventory_fixture
 
 
 class FeatureEnablementTests(unittest.TestCase):
     def setUp(self):
+        self.clock = self.enterContext(readiness_clock(ManualClock()))
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.host = Host(Paths(Path(temporary.name).resolve()))
@@ -80,7 +81,7 @@ class FeatureEnablementTests(unittest.TestCase):
     def test_takeover_start_cannot_override_disabled_unit(self):
         self.enabled = {self.inventory.units[self.inventory.identity("http")]}
         with self.assertRaises(c.DeployError) as caught:
-            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("relay"), time.monotonic() + 1)
+            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("relay"), self.clock.monotonic() + 1)
         self.assertEqual(caught.exception.code, "service_enablement")
         self.assertFalse(any(args[1] == "start" for args in self.commands))
 
@@ -109,7 +110,7 @@ class FeatureEnablementTests(unittest.TestCase):
                 patch.object(services, "wait_ready_set", return_value=True), \
                 patch.object(admission.AdmissionStore, "_lock", lock), \
                 patch.object(shared_directories, "prepare", side_effect=prepare), patch.object(self.host, "run", side_effect=start):
-            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), time.monotonic() + 1)
+            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), self.clock.monotonic() + 1)
 
     def test_namespace_start_failure_explains_host_preparation_recovery(self):
         for status in ("ExecMainStatus=226\n", "ExecCondition={ status=226/NAMESPACE ; }\n",
@@ -121,7 +122,7 @@ class FeatureEnablementTests(unittest.TestCase):
             with self.subTest(status=status), patch.object(lifecycle, "prepare_shared_directories"), \
                     patch.object(services, "enabled_units", return_value=self.inventory.copies("http")), \
                     patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
-                lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), time.monotonic() + 1)
+                lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), self.clock.monotonic() + 1)
             self.assertEqual(caught.exception.code, "service_namespace")
             self.assertIn("again", caught.exception.detail)
             self.assertIn("reboot recovery", caught.exception.detail)
@@ -135,7 +136,7 @@ class FeatureEnablementTests(unittest.TestCase):
                 patch.object(services, "enabled_units", return_value=self.inventory.copies("http")), \
                 patch.object(services, "wait_ready_set", return_value=False), \
                 patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
-            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), time.monotonic() + 1)
+            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), self.clock.monotonic() + 1)
         self.assertEqual(caught.exception.code, "service_namespace")
 
     def test_readiness_failure_without_namespace_status_stays_readiness_failed(self):
@@ -145,7 +146,7 @@ class FeatureEnablementTests(unittest.TestCase):
                 patch.object(services, "enabled_units", return_value=self.inventory.copies("http")), \
                 patch.object(services, "wait_ready_set", return_value=False), \
                 patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
-            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), time.monotonic() + 1)
+            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), self.clock.monotonic() + 1)
         self.assertEqual(caught.exception.code, "readiness_failed")
 
     def test_reported_enablement_ignores_stored_audit_projection(self):
