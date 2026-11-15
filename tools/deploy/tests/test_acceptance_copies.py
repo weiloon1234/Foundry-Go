@@ -98,9 +98,12 @@ class CopiesAcceptanceTests(unittest.TestCase):
     def test_count_variants_preserve_declarations_and_source_payload(self):
         original = digest(self.source)
         previous_topology = None
-        for count in (3, 4, 2):
-            version = '20261102T000000Z-' + str(count) * 40
+        original_profile = None
+        for step, count in enumerate((3, 4, 2, 4, 2, 3)):
+            version = '20261102T000000Z-' + str(step) * 40
             archive_path, _, profile, topology = self.build(count, version=version)
+            if original_profile is None:
+                original_profile = profile.projection()
             if previous_topology is not None:
                 self.assertEqual(previous_topology, topology.projection())
             previous_topology = topology.projection()
@@ -116,6 +119,7 @@ class CopiesAcceptanceTests(unittest.TestCase):
                     self.assertEqual(member.sha256, hashlib.sha256(data).hexdigest())
                     self.assertEqual(member.size, len(data))
         self.assertEqual(original, digest(self.source))
+        self.assertEqual(original_profile, profile.projection())
 
     def test_default_fixture_retains_singleton_recovery_contract(self):
         _, _, profile, topology = self.build(0)

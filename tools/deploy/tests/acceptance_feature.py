@@ -659,22 +659,26 @@ def check_copy_consumers(host, entry, inventory, *, previous_paths=None):
 
 def numbered_count_changes(host, project, profile, inventory, entry, source):
     import admission
+    from copy_enablement import removed_enablement
     from contracts import ClosureEvidence, ClosureStage
     from feature_lifecycle import load
-    previous = assert_numbered_copies(host, inventory, entry, 3)
+    original_profile = copy.deepcopy(profile)
+    original_count = profile["placement"][COPIES_ROLE]
+    previous = assert_numbered_copies(host, inventory, entry, original_count)
+    original_snapshot = previous
     private_paths = check_copy_consumers(host, entry, inventory)
+    original_secrets = {name: Path(path).read_bytes() for name, path in private_paths.items()}
     rollback_target = None
     restored_snapshot = None
-    for count in (4, 2):
+
+    def resize(count):
+        nonlocal profile, inventory, entry, previous, private_paths
         archive = shared.WORK / f"feature-copies-{count}.tar.gz"
         stamp = inventory.deployment.release.split("-", 1)[0]
-        version = stamp + "-" + hashlib.sha256((inventory.deployment.release + str(count)).encode()).hexdigest()[:40]
+        version = stamp + "-" + hashlib.sha256((inventory.deployment.release + str(count) + uuid.uuid4().hex).encode()).hexdigest()[:40]
         _, target, _, _ = feature_archive(source, archive, profile["host"]["host_id"],
                                           confined=True, copies=count, version=version)
         activation = request(project, profile, archive=str(archive), archive_sha256=digest(archive), operation_id=str(uuid.uuid4()))
-        if count == 2:
-            rollback_target = inventory.deployment.release
-            restored_snapshot = previous
         before_units = set(inventory.copies(COPIES_ROLE))
         from contracts import UnitIdentity
         after_units = {UnitIdentity(profile["instance_id"], COPIES_ROLE, ordinal) for ordinal in range(1, count + 1)}
@@ -683,7 +687,8 @@ def numbered_count_changes(host, project, profile, inventory, entry, source):
         assert set(plan["added_units"]) == set(unit_selection_names(sorted(added)))
         assert set(plan["removed_units"]) == set(unit_selection_names(sorted(removed)))
         assert set(unit_selection_names(sorted(before_units & after_units))) <= set(plan["retained_units"])
-        assert action("activate", {**activation, "plan_token": plan["plan_token"]})["ok"]
+        result = action("activate", {**activation, "plan_token": plan["plan_token"]})
+        assert result["ok"] and result["profile_update"] == target
         profile = target
         _, entry = host.require_identity(project, profile)
         _, _, inventory, _ = load(host, entry)
@@ -696,6 +701,7 @@ def numbered_count_changes(host, project, profile, inventory, entry, source):
             assert closure.stage is ClosureStage.APPLICATION_CLOSED and removed <= set(closure.units)
             assert closure.backend_exit_sha256 and closure.old_reference_isolation_sha256
         for identity in removed:
+            assert removed_enablement(host, entry)[identity] is True
             old = previous[identity]
             services.stopped_unit(host, old["unit"])
             assert not Path("/etc/systemd/system", old["unit"]).exists(), "Removed copy unit was retained"
@@ -706,6 +712,12 @@ def numbered_count_changes(host, project, profile, inventory, entry, source):
             assert Path(old["state"], "identity.json").read_bytes() == old["marker"], "Shrink deleted persistent copy data"
         private_paths = check_copy_consumers(host, entry, inventory, previous_paths=private_paths)
         previous = current
+
+    for count in (4, 2):
+        if count == 2:
+            rollback_target = inventory.deployment.release
+            restored_snapshot = previous
+        resize(count)
     import backup
     files, metadata = backup._archive_files(host, entry)
     import runtime_config
@@ -731,7 +743,21 @@ def numbered_count_changes(host, project, profile, inventory, entry, source):
     assert set(inventory.copies(COPIES_ROLE)) <= set(services.enabled_units(host, inventory.units))
     for identity, prior in restored_snapshot.items():
         assert current[identity]["state"] == prior["state"] and current[identity]["marker"] == prior["marker"]
-    check_copy_consumers(host, entry, inventory, previous_paths=private_paths)
+    private_paths = check_copy_consumers(host, entry, inventory, previous_paths=private_paths)
+    previous = current
+    # Keep the rollback proof above, then exercise regrowth before handing the
+    # original archive profile to the following recovery phase.
+    resize(2)
+    retained_enablement = removed_enablement(host, entry)
+    resize(original_count)
+    assert profile == original_profile, "Copies scenario did not restore the original archive profile"
+    assert set(inventory.copies(COPIES_ROLE)) <= set(services.enabled_units(host, inventory.units))
+    assert removed_enablement(host, entry) == retained_enablement, "Regrowth consumed removed-copy enablement history"
+    for identity, prior in original_snapshot.items():
+        assert previous[identity]["state"] == prior["state"] and previous[identity]["marker"] == prior["marker"], \
+            "Regrowth replaced retained copy state"
+    assert all(Path(private_paths[name]).read_bytes() == value for name, value in original_secrets.items()), \
+        "Regrowth replaced a retained copy secret"
     return profile, inventory, entry
 
 
@@ -846,7 +872,7 @@ def main():
         shared_directories.discard(host, inventory.topology, profile["instance_id"],
                                    entry["allocations"]["uid"], entry["allocations"]["gid"])
         assert not Path(inventory.specs[inventory.identity("http")].bindings.shared_directories[0].path).exists()
-        print("PASS host capabilities: package, artifact, admission, templates, private/public/Unix app bindings, verified wildcard confinement, shared files with reader EROFS and writer ENOSPC, disposable backup exclusion, stale-socket restart, public TCP via nginx stream, numbered copies 3->4->2->4 with consumers, copy operations, backup and rollback enablement, report, restart, maintenance continuity and stop closure")
+        print("PASS host capabilities: package, artifact, admission, templates, private/public/Unix app bindings, verified wildcard confinement, shared files with reader EROFS and writer ENOSPC, disposable backup exclusion, stale-socket restart, public TCP via nginx stream, numbered copies 3->4->2->4->2->3 with consumers, retained secrets/state, copy operations, backup and rollback enablement, report, restart, maintenance continuity and stop closure")
 
 
 if __name__ == "__main__":

@@ -28,8 +28,8 @@ import acceptance_feature as feature
 import acceptance_host as shared
 import acceptance_network as network
 import backup
-from contracts import (DeployError, FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION,
-                       ReleaseDeclaration, atomic_json, canonical_digest, digest, read_json)
+from contracts import (DeployError, FEATURE_CONFINEMENT_GENERATION, FEATURE_COPIES_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION,
+                       ReleaseDeclaration, atomic_json, canonical_digest, digest, read_json, unit_selection_names)
 import edge
 import feature_lifecycle
 from host import Host
@@ -57,8 +57,9 @@ def state_archive(source, destination, state, version):
         return "private-source-maps/" + version + "/" + name[len(prefix):] if name.startswith(prefix) else name
     files = {rename(name): value for name, value in files.items()}
     declaration = manifest["deployment"]
-    relay = next(role for role in declaration["topology"]["roles"] if role["name"] == "relay")
-    relay["state"] = {"kind": state, **({"acknowledged": True} if state == "local-unprotected" else {})}
+    for role in declaration["topology"]["roles"]:
+        if role["name"] in ("relay", feature.COPIES_ROLE):
+            role["state"] = {"kind": state, **({"acknowledged": True} if state == "local-unprotected" else {})}
     topology = parse_topology(declaration["topology"])
     declaration["topology_sha256"] = topology.sha256
     for member in declaration["inventory"]:
@@ -75,7 +76,7 @@ def state_archive(source, destination, state, version):
     return manifest
 
 
-def assert_coverage(receipt, *, protected):
+def assert_coverage(receipt, inventory, *, protected):
     assert receipt["status"] == "complete", "Supported backup components did not complete"
     assert receipt["pgbackrest_label"] and receipt["database_point"]["pgbackrest_label"] == receipt["pgbackrest_label"]
     keys = receipt["key_archive"]
@@ -86,11 +87,15 @@ def assert_coverage(receipt, *, protected):
     coverage = receipt["coverage"]
     assert set(coverage["supported_components"]) == {"postgresql", "encrypted_configuration", "selected_deployment"}
     assert coverage["complete_instance_coverage"] is protected
-    state = "disposable" if protected else "local-unprotected"
-    assert coverage["service_state"] == [{"role": "relay", "kind": state}, {"role": "socket-provider", "kind": "disposable"},
-                                         {"role": "wildcard", "kind": "disposable"}]
-    expected = [] if protected else [{"code": "service_state_unprotected", "role": "relay"}]
-    assert coverage["findings"] == keys["coverage"]["findings"] == expected
+    expected = backup.service_coverage(inventory)
+    assert expected["complete_instance_coverage"] is protected
+    assert coverage["service_state"] == keys["coverage"]["service_state"] == expected["service_state"]
+    assert coverage["findings"] == keys["coverage"]["findings"] == expected["findings"]
+
+
+def recovery_units(inventory):
+    """Recover the relay/provider graph while leaving HTTP, wildcard and copies disabled."""
+    return inventory.start_order(inventory.select(roles=("relay", "socket-provider")))
 
 
 def replacement_binding(metadata, target_id, operation):
@@ -126,6 +131,8 @@ def drill(host, project, profile, entry, receipt):
     assert result["status"] == "complete" and result["retained"] is True
     assert all(result["verification"][name] is False for name in
                ("custom_services_started", "network_listeners", "complete_instance_coverage"))
+    assert result["verification"]["service_state"] == [
+        {**state, "restored": False} for state in receipt["coverage"]["service_state"] if "ordinal" in state]
     try:
         restored = result["postgres"]
         assert restored["host"].startswith("/") and restored["sslmode"] == "disable"
@@ -173,15 +180,16 @@ def source():
             stopped_units(inventory)
             if state == "local-unprotected":
                 receipt = action("backup-run", request(project, profile, kind="full"), timeout=3600)
-                assert_coverage(receipt, protected=False)
+                assert_coverage(receipt, inventory, protected=False)
             else:
                 selected = archive
         # Out-of-band systemd changes deliberately leave cached selection alone.
         # HTTP depends on relay and the confined wildcard role; retain relay and its
         # Unix provider as the enabled graph.
-        run(["systemctl", "disable", inventory.units[inventory.identity("http")], inventory.units[inventory.identity("wildcard")]])
-        run(["systemctl", "enable", inventory.units[inventory.identity("relay")], inventory.units[inventory.identity("socket-provider")]])
-        assert set(services.enabled_units(host, inventory.units)) == set(inventory.select(roles=("relay", "socket-provider")))
+        enabled = recovery_units(inventory)
+        run(["systemctl", "disable", *(unit for identity, unit in inventory.units.items() if identity not in enabled)])
+        run(["systemctl", "enable", *(inventory.units[identity] for identity in enabled)])
+        assert set(services.enabled_units(host, inventory.units)) == set(enabled)
         run(["systemctl", "disable", "--now", "foundry-backup-full-cluster.timer", "foundry-backup-diff-cluster.timer"])
         for unit in ("foundry-backup-full-cluster.service", "foundry-backup-diff-cluster.service"):
             assert run(["systemctl", "show", unit, "-p", "ActiveState", "--value"]).stdout.strip() == "inactive"
@@ -191,7 +199,7 @@ def source():
                  f"INSERT INTO {table} SELECT n, 'feature-recovery-' || n FROM generate_series(1,25) n;")
         snapshot = table_snapshot(pg)
         receipt = action("backup-run", request(project, profile, kind="full"), timeout=3600)
-        assert_coverage(receipt, protected=True)
+        assert_coverage(receipt, inventory, protected=True)
         backup._backrest(host, ["check"], timeout=300)
         drill(host, project, profile, entry, receipt)
         assert table_snapshot(pg) == snapshot, "Backup/drill changed live data"
@@ -206,12 +214,12 @@ def source():
         recovered = recover.archive_configuration(project, profile, files, entry["topology"])
         metadata = recovered["metadata"]
         archived = metadata["feature_recovery"]
-        assert archived["selection"]["enabled_roles"] == ["relay", "socket-provider"], "Backup ignored live systemd enablement"
+        assert archived["selection"]["enabled_roles"] == sorted(unit_selection_names(enabled)), "Backup ignored live systemd enablement"
         assert archived["selection"]["maintenance_holds"] == [], "Fixture must not start with a maintenance hold"
         assert canonical_digest(archived["deployment"]) == receipt["deployment_sha256"]
         assert archived["declaration"] == read_manifest(selected)["deployment"]
         assert archived["selection"]["minimum_generation"] == max(FEATURE_CONFINEMENT_GENERATION,
-                                                                  FEATURE_SHARED_DIRECTORY_GENERATION)
+                                                                  FEATURE_SHARED_DIRECTORY_GENERATION, FEATURE_COPIES_GENERATION)
         assert archived["resolution"]["unix_endpoints"]
         assert not any("/run/" in name or name.endswith(".sock") for name in files), "Runtime sockets entered backup"
         shutil.copyfile(selected, EXPORT / "release.tar.gz")
@@ -248,8 +256,9 @@ def target_plan():
     packages = run(["dpkg-query", "-W", "-f=${binary:Package}\t${Version}\t${db:Status-Status}\n"]).stdout
     sockets = {row.socket for row in listeners.observe_sockets(host)}
     plan = manage.execute(host, "recover-plan", payload)
+    inventory = backup.parse_feature_snapshot(metadata["feature_recovery"], metadata)
     # Plan roles follow readiness order, so the Unix provider precedes its consumer.
-    assert plan["ok"] and plan["recovery_roles"] == plan["recovery_enabled_roles"] == ["socket-provider", "relay"], {
+    assert plan["ok"] and plan["recovery_roles"] == plan["recovery_enabled_roles"] == list(unit_selection_names(recovery_units(inventory))), {
         key: plan[key] for key in ("ok", "recovery_roles", "recovery_enabled_roles")}
     assert plan["recovery_maintenance_holds"] == []
     assert plan["recovery_public_binding"]["deployment_sha256"] == source["receipt"]["deployment_sha256"]
@@ -312,7 +321,7 @@ def takeover():
                 (directory / name).chmod(0o600)
             result = prepare(host, registry, entry, journal, snapshot, *args)
             stopped_units(archived_inventory)
-            assert set(services.enabled_units(host, archived_inventory.units)) == set(archived_inventory.select(roles=("relay", "socket-provider")))
+            assert set(services.enabled_units(host, archived_inventory.units)) == set(recovery_units(archived_inventory))
             probe_target(host, opened=False)
             prepared.append(True)
             return result
@@ -334,12 +343,15 @@ def takeover():
         _, selection, inventory, launch = feature_lifecycle.load(host, entry)
         assert launch["declaration"] == metadata["feature_recovery"]["declaration"]
         assert read_json(Path(recover.JOURNAL).with_name("source-deployment.json")) == metadata["feature_recovery"]
-        assert set(services.enabled_units(host, inventory.units)) == set(inventory.select(roles=("relay", "socket-provider"))) and selection.maintenance_holds == ()
+        assert set(inventory.units) == set(archived_inventory.units)
+        enabled = recovery_units(inventory)
+        assert set(services.enabled_units(host, inventory.units)) == set(enabled) and selection.maintenance_holds == ()
         assert run(["systemctl", "is-active", inventory.units[inventory.identity("relay")]]).stdout.strip() == "active"
-        disabled = run(["systemctl", "show", inventory.units[inventory.identity("http")], "-p", "ActiveState", "-p", "MainPID",
-                        "-p", "ExecMainStartTimestampMonotonic"]).stdout
-        assert dict(line.split("=", 1) for line in disabled.splitlines()) == {
-            "ActiveState": "inactive", "MainPID": "0", "ExecMainStartTimestampMonotonic": "0"}, "Disabled HTTP started during recovery"
+        for identity in set(inventory.units) - set(enabled):
+            disabled = run(["systemctl", "show", inventory.units[identity], "-p", "ActiveState", "-p", "MainPID",
+                            "-p", "ExecMainStartTimestampMonotonic"]).stdout
+            assert dict(line.split("=", 1) for line in disabled.splitlines()) == {
+                "ActiveState": "inactive", "MainPID": "0", "ExecMainStartTimestampMonotonic": "0"}, "Disabled unit started during recovery"
         assert run(["dpkg-query", "-W", "-f=${db:Status-Status}", "jq"]).stdout == "installed"
         run(["/usr/bin/jq", "--version"])
         for spec in inventory.specs.values():
@@ -359,7 +371,7 @@ def takeover():
         assert observed and not listeners.ownership_findings(claims, observed,
             {"nginx": listeners.process_members(host, "nginx.service")}, edge_verified=True)
         assert psql(postgres_settings(host, entry), f"SELECT count(*) FROM {source['table']};").stdout.strip() == "25"
-        assert_coverage(result["backup"], protected=True)
+        assert_coverage(result["backup"], inventory, protected=True)
     print("PASS feature takeover: confirmed stop, exact descriptor/data, packages/artifacts, enabled relay only, disabled HTTP never started, dual-family TCP from peer", flush=True)
 
 

@@ -6,16 +6,19 @@ import json
 from pathlib import Path
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import uuid
 
 import acceptance_feature as feature
 import acceptance_feature_recovery as scenario
-from contracts import ReleaseDeclaration, canonical_digest, digest
+from contracts import ReleaseDeclaration, canonical_digest, digest, unit_selection_names
 import recover
+import services
 from test_artifacts import elf
 from test_contracts import fixture
+from topology import parse_profile, parse_topology
 
 
 class FeatureRecoveryAcceptanceTests(unittest.TestCase):
@@ -40,7 +43,7 @@ class FeatureRecoveryAcceptanceTests(unittest.TestCase):
                 archive.addfile(item, io.BytesIO(data))
         self.archive = self.root / "feature.tar.gz"
         with patch.object(feature, "read_json", return_value=profile):
-            feature.feature_archive(source, self.archive, entry["host_id"])
+            feature.feature_archive(source, self.archive, entry["host_id"], confined=True, copies=3)
 
     def test_confined_wildcard_fixture_has_valid_versioned_executable_and_generation(self):
         from test_contracts import fixture
@@ -70,8 +73,10 @@ class FeatureRecoveryAcceptanceTests(unittest.TestCase):
                 self.assertEqual(manifest["version"], version)
                 self.assertEqual(declaration.topology_sha256, manifest["topology_sha256"])
                 self.assertEqual(manifest["deployment"]["profile"], old["deployment"]["profile"])
-                relay = next(role for role in manifest["deployment"]["topology"]["roles"] if role["name"] == "relay")
-                self.assertEqual(relay["state"], {"kind": state, **({"acknowledged": True} if state == "local-unprotected" else {})})
+                for name in ("relay", feature.COPIES_ROLE):
+                    role = next(role for role in manifest["deployment"]["topology"]["roles"] if role["name"] == name)
+                    self.assertEqual(role["state"], {"kind": state, **({"acknowledged": True} if state == "local-unprotected" else {})})
+                self.assertEqual(3, manifest["deployment"]["profile"]["placement"][feature.COPIES_ROLE])
                 self.assertEqual(manifest["deployment"]["artifacts"], old["deployment"]["artifacts"])
                 self.assertEqual(manifest["files"]["artisan"], old["files"]["artisan"])
                 with tarfile.open(path, "r:gz") as archive:
@@ -86,7 +91,20 @@ class FeatureRecoveryAcceptanceTests(unittest.TestCase):
                     self.assertTrue(archive.getmember("artisan").mode & 0o111)
         self.assertEqual(digest(self.archive), original)
 
-    def receipt(self, protected):
+    def inventory(self, protected):
+        state = "disposable" if protected else "local-unprotected"
+        manifest = scenario.state_archive(self.archive, self.root / (state + ".tar.gz"), state,
+                                          "20261102T000000Z-" + uuid.uuid4().hex)
+        # Coverage and ordering need placement only, without materializing executables.
+        inventory = object.__new__(services.UnitInventory)
+        inventory.topology = parse_topology(manifest["deployment"]["topology"])
+        inventory.profile = parse_profile(manifest["deployment"]["profile"], inventory.topology)
+        inventory.roles = {role.common.name: role for role in inventory.topology.roles}
+        inventory.units = services.expanded_unit_names(manifest["instance"], inventory.topology, inventory.profile)
+        inventory.resolution = SimpleNamespace(id=str(uuid.uuid4()))
+        return inventory
+
+    def receipt(self, protected, inventory):
         findings = [] if protected else [{"code": "service_state_unprotected", "role": "relay"}]
         coverage = {"supported_components": ["postgresql", "encrypted_configuration", "selected_deployment"],
                     "complete_instance_coverage": protected,
@@ -94,6 +112,12 @@ class FeatureRecoveryAcceptanceTests(unittest.TestCase):
                                       {"role": "socket-provider", "kind": "disposable"},
                                       {"role": "wildcard", "kind": "disposable"}],
                     "findings": findings}
+        for identity in inventory.copies(feature.COPIES_ROLE):
+            coverage["service_state"].append({"role": feature.COPIES_ROLE, "ordinal": identity.ordinal,
+                "kind": "disposable" if protected else "local-unprotected",
+                "persistent_state_paths": [services.ServicePaths.for_unit(identity, inventory.resolution.id).state]})
+            if not protected:
+                findings.append({"code": "service_state_unprotected", "role": feature.COPIES_ROLE, "ordinal": identity.ordinal})
         return {"status": "complete", "pgbackrest_label": "20261101-000000F",
                 "database_point": {"pgbackrest_label": "20261101-000000F"}, "deployment_sha256": "a" * 64,
                 "coverage": coverage, "key_archive": {"status": "complete", "object_key": "fixture/keys.age",
@@ -103,7 +127,9 @@ class FeatureRecoveryAcceptanceTests(unittest.TestCase):
 
     def test_receipt_assertion_distinguishes_success_and_complete_coverage(self):
         for protected in (True, False):
-            scenario.assert_coverage(self.receipt(protected), protected=protected)
+            inventory = self.inventory(protected)
+            scenario.assert_coverage(self.receipt(protected, inventory), inventory, protected=protected)
+        inventory = self.inventory(False)
         for mutate in (
                 lambda r: r.update(status="failed"),
                 lambda r: r["coverage"].update(complete_instance_coverage=True),
@@ -111,11 +137,23 @@ class FeatureRecoveryAcceptanceTests(unittest.TestCase):
                 lambda r: r["key_archive"]["coverage"].update(complete_instance_coverage=True),
                 lambda r: r["key_archive"].update(status="failed"),
                 lambda r: r["coverage"].update(supported_components=["postgresql"]),
-                lambda r: r["key_archive"].update(deployment_sha256="b" * 64)):
-            receipt = self.receipt(False)
+                lambda r: r["key_archive"].update(deployment_sha256="b" * 64),
+                lambda r: r["coverage"]["service_state"].pop(),
+                lambda r: r["coverage"]["service_state"][-1].update(ordinal=2),
+                lambda r: r["coverage"]["service_state"][-1].update(persistent_state_paths=[]),
+                lambda r: r["key_archive"]["coverage"]["service_state"].pop()):
+            receipt = self.receipt(False, inventory)
             mutate(receipt)
             with self.assertRaises(AssertionError):
-                scenario.assert_coverage(receipt, protected=False)
+                scenario.assert_coverage(receipt, inventory, protected=False)
+
+    def test_recovery_enablement_excludes_every_copy_and_keeps_provider_first(self):
+        inventory = self.inventory(True)
+        enabled = scenario.recovery_units(inventory)
+        self.assertEqual(("socket-provider", "relay"), unit_selection_names(enabled))
+        disabled = set(inventory.units) - set(enabled)
+        self.assertEqual({"http", "wildcard", "copies", "copies@2", "copies@3"},
+                         set(unit_selection_names(sorted(disabled))))
 
     def test_replacement_binding_preserves_source_and_binds_new_host_operation(self):
         manifest = scenario.read_manifest(self.archive)
