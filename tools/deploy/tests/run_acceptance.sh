@@ -217,9 +217,11 @@ else:
     raise SystemExit('S3 stand-in readiness deadline exceeded')
 PY
 
-python3 -B "$tests/certify_s3.py" --host "$host" --store "$s3" --platform "$platform" \
-  --env-file "$env_file" --output "$logs/s3-certification.json" >"$logs/s3-certification.log" 2>&1
+# Certification is explicit: rehearsal reads the recorded contract for the pinned
+# digest, so ordinary acceptance never depends on the stand-in's matrix result.
 if ((s3_only)); then
+  python3 -B "$tests/certify_s3.py" --host "$host" --store "$s3" --platform "$platform" \
+    --env-file "$env_file" --output "$logs/s3-certification.json" >"$logs/s3-certification.log" 2>&1
   echo 'PASS pinned S3 conditional multipart certification; see s3-certification.json'
   exit 0
 fi
