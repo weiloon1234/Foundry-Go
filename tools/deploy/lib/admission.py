@@ -175,14 +175,26 @@ class AdmissionStore:
                     value["status"] in ("reserved", "armed") and value["operation_id"] == validation_operation,
                     "operation_cleanup_pending", "An independent cleanup owner remains unresolved; starts are blocked.")
 
+    def _units(self, resolution):
+        from contracts import Deployment, canonical_digest
+        entry = self.host.read_registry()["instances"][self.instance_id]
+        path = self.host.paths.opt(entry["name"]) / "runtime" / resolution.id / "launch.json"
+        launch = read_owned(self.host, path, lambda value: value)
+        deployment = Deployment.parse(launch["deployment"])
+        require(deployment.instance_id == self.instance_id
+                and canonical_digest(record_document(deployment)) == resolution.deployment_sha256,
+                "admission_selection", "Deployment differs from the selected runtime resolution.")
+        return {spec.identity for spec in deployment.units}
+
     def _matching(self, selection, resolution):
-        from services import role_names, unit_identities
+        from contracts import unit_selection_identities
         a = selection.admission
+        units = self._units(resolution)
         require(selection.instance_id == self.instance_id and a.resolution_id == resolution.id
                 and a.deployment_sha256 == resolution.deployment_sha256
                 and a.private_revision == resolution.private_revision
-                and set(role_names(unit_identities(self.instance_id, selection.enabled_roles))) <= set(resolution.roles)
-                and set(role_names(unit_identities(self.instance_id, selection.maintenance_holds))) <= set(resolution.roles),
+                and set(unit_selection_identities(self.instance_id, selection.enabled_roles)) <= units
+                and set(unit_selection_identities(self.instance_id, selection.maintenance_holds)) <= units,
                 "admission_selection", "Admission does not match the selected runtime resolution.")
 
     def begin(self, selection, resolution):
@@ -213,7 +225,7 @@ class AdmissionStore:
     def retain_units(self, old, candidate, names, operation_id):
         """Freeze unchanged per-role origins before selecting a partial transition."""
         from contracts import canonical_digest
-        from services import unit_role_names
+        from contracts import unit_selection_names
         selected, resolution = self._selection()
         attempts = self._operations()
         previous = self._retained_records(resolution)
@@ -263,19 +275,18 @@ class AdmissionStore:
         path = self.durable / "retained" / (candidate.resolution.id + ".json")
         protected_directory(self.host, path.parent, 0o700)
         require(not path.exists(), "admission_retained", "Retained origins are immutable.")
-        atomic_json(path, {"deployment_sha256": candidate.resolution.deployment_sha256, "roles": dict(zip(unit_role_names(result), result.values()))}, mode=0o600)
+        atomic_json(path, {"deployment_sha256": candidate.resolution.deployment_sha256, "roles": dict(zip(unit_selection_names(result), result.values()))}, mode=0o600)
 
     def _retained_records(self, resolution):
         path = protected_path(self.host, self.durable / "retained" / (resolution.id + ".json"), "file")
         if not path.exists():
             return {}
         record = read_owned(self.host, path, lambda value: value)
-        from services import role_names, unit_identities
+        from contracts import unit_selection_identities
         require(record.get("deployment_sha256") == resolution.deployment_sha256
-                and isinstance(record.get("roles"), dict) and set(role_names(unit_identities(self.instance_id, record["roles"]))) <= set(resolution.roles),
+                and isinstance(record.get("roles"), dict) and set(unit_selection_identities(self.instance_id, record["roles"])) <= self._units(resolution),
                 "admission_retained", "Retained origins differ from the selected deployment.")
-        from services import unit_identities
-        return dict(zip(unit_identities(self.instance_id, record["roles"]), record["roles"].values()))
+        return dict(zip(unit_selection_identities(self.instance_id, record["roles"]), record["roles"].values()))
 
     def retained_origin(self, invocation, resolution):
         record = self._retained_records(resolution).get(invocation.unit)
@@ -366,7 +377,7 @@ class AdmissionStore:
         retained = self.retained_invocation(invocation, resolution) if permit_id is None else None
         self.require_cleanup_clear(selection.admission.operation_id if permit_id is not None or retained is not None else None)
         unit = invocation.unit
-        from services import unit_identities
+        from contracts import unit_selection_identities
         from topology import instance_units
         from feature_maintenance import marker_path
         entry = self.host.read_registry()["instances"][self.instance_id]
@@ -374,7 +385,7 @@ class AdmissionStore:
         require(not self.host.paths.p(marker_path(unit)).exists(), "maintenance_held", "This copy is held for maintenance.")
         require(invocation.boot_id == boot_id(self.host) and unit.instance_id == self.instance_id and
                 (invocation.resolution_id == resolution.id or origin is not None) and unit in units and unit.role in resolution.roles and
-                unit not in unit_identities(self.instance_id, selection.maintenance_holds),
+                unit not in unit_selection_identities(self.instance_id, selection.maintenance_holds),
                 "admission_denied", "Start identity is stale, unselected or held.")
         evidence = read_owned(self.host, self.runtime / "boot.json", ClosureEvidence.parse)
         continuation = origin if selection.admission.disposition is AdmissionDisposition.COMMITTED else retained

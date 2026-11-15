@@ -28,7 +28,7 @@ from contracts import (DeployError, HOST_PATHS, LAYOUT_VERSION, SCHEMA, VERSION_
 from runtime_config import (ENCRYPTION_KEYS, MAX_CONFIGURATION_CHANGES, PIPELINE_KEYS, pipeline_keys, validate_runtime_environment,
                             candidate_values, rotation_changes, validate_configuration_changes, _read_value_file)
 from topology import instance_units, selected_units
-from services import unit_identities, unit_role_names
+from contracts import unit_selection_identities, unit_selection_names
 from contracts import UnitIdentity
 from host import OperationTimeout, wall_clock_budget
 from redis_acl import (granted_redis_patterns, granted_redis_channels, reconcile_redis_grants,
@@ -469,7 +469,7 @@ def record_background_recovery(host, entry, state):
     if selected is None:
         selected = enabled_roles(host, entry)
     else:
-        selected = unit_identities(entry["profile"]["instance_id"], selected)
+        selected = unit_selection_identities(entry["profile"]["instance_id"], selected)
     for role, unit in selected_units(entry, roles=selected).items():
         if role.role == "http":
             continue
@@ -714,7 +714,7 @@ def services(host, entry):
     if "deployment_selection" in entry:
         from feature_lifecycle import load
         _, selection, inventory, _ = load(host, entry)
-        held = set(unit_identities(inventory.profile.instance_id, selection.maintenance_holds))
+        held = set(unit_selection_identities(inventory.profile.instance_id, selection.maintenance_holds))
         enabled = set(enabled_roles(host, entry))
     for role, unit in instance_units(entry).items():
         if inventory is not None:
@@ -1103,7 +1103,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                             **pruned_tools}
             release = publish_release(host, entry, staging, manifest)
             attempt = begin(host, entry, state, "deploy", version,
-                            metadata={"recovery_operation_id": operation_id or str(uuid.uuid4()), "roles": list(unit_role_names(prior_roles))})
+                            metadata={"recovery_operation_id": operation_id or str(uuid.uuid4()), "roles": list(unit_selection_names(prior_roles))})
             prior_current, prior_previous = state["current"], state["previous"]
             switched = False
             enabling_roles = False
@@ -1291,7 +1291,7 @@ def rollback(host, project, profile, target, expected_current, operation_id, pla
         resume_terminal_obligations(host, registry, entry, state)
         app(host, entry, release, "config:check")
         attempt = begin(host, entry, state, "rollback", target,
-                        metadata={"operation_id": operation_id, "expected_current": expected_current, "roles": list(unit_role_names(roles))})
+                        metadata={"operation_id": operation_id, "expected_current": expected_current, "roles": list(unit_selection_names(roles))})
         _save_operation(host, entry, attempt)
         if target == expected_current:
             state["status"] = role_status(entry, roles)
@@ -1375,7 +1375,7 @@ def reconcile(host, project, profile):
         if attempt["action"] == "deploy" and attempt["phase"] in ("validation", "redis", "backup"):
             resume_background_recovery(host, entry, state)
             resume_redis_transition(host, registry, entry, state)
-            state["status"] = role_status(entry, unit_identities(entry["profile"]["instance_id"], attempt["roles"]), "failed") if active and "roles" in attempt else "failed"
+            state["status"] = role_status(entry, unit_selection_identities(entry["profile"]["instance_id"], attempt["roles"]), "failed") if active and "roles" in attempt else "failed"
             finish(host, entry, state, "failed", "deployment_not_applied")
             return {"ok": True, "status": state["status"], "version": active, "outcome": "failed"}
         applied = False
@@ -1407,11 +1407,11 @@ def reconcile(host, project, profile):
                 deploy_reached_target = (attempt["action"] == "deploy"
                                          and attempt["phase"] in ("switch", "health")
                                          and active == attempt["release"])
-                roles = (list(unit_identities(entry["profile"]["instance_id"], attempt["roles"]))
+                roles = (list(unit_selection_identities(entry["profile"]["instance_id"], attempt["roles"]))
                          if attempt["action"] in ("config", "rollback") and "roles" in attempt else None)
                 if attempt["action"] == "deploy":
                     roles = (list(instance_units(entry)) if deploy_reached_target else
-                             list(unit_identities(entry["profile"]["instance_id"], attempt["roles"])) if "roles" in attempt else list(instance_units(entry)))
+                             list(unit_selection_identities(entry["profile"]["instance_id"], attempt["roles"])) if "roles" in attempt else list(instance_units(entry)))
                 restart(host, entry, state, roles=roles)
                 if deploy_reached_target:
                     host.run(["systemctl", "enable", *instance_units(entry).values()])
@@ -1421,7 +1421,7 @@ def reconcile(host, project, profile):
             else:
                 state["status"] = "failed" if attempt["action"] == "deploy" else "never_deployed"
         except (DeployError, OSError) as error:
-            retained = (list(unit_identities(entry["profile"]["instance_id"], attempt["roles"]))
+            retained = (list(unit_selection_identities(entry["profile"]["instance_id"], attempt["roles"]))
                         if attempt["action"] in ("config", "rollback") and "roles" in attempt else None)
             state["status"] = role_status(entry, retained, "failed") if retained is not None else "failed"
             outcome = ("failed_applied" if attempt["action"] == "config" and applied else
@@ -1563,7 +1563,7 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
         "configuration_revision": entry["configuration_revision"] + 1,
         "configuration_sha256": hashlib.sha256(payload.encode()).hexdigest(),
         "previous_configuration_sha256": digest(path),
-        "rotation_operation_id": rotation_operation_id, "roles": list(unit_role_names(roles))})
+        "rotation_operation_id": rotation_operation_id, "roles": list(unit_selection_names(roles))})
     try:
         host.owned_write(candidate, payload, 0o640, group=entry["name"])
         app(host, entry, live, "config:check", candidate)

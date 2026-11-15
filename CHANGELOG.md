@@ -19,14 +19,14 @@
 - Added: explicit public port lists ordered by copy ordinal, separate nginx routes
   and firewall claims, and typed `PublicListener.Ports`. Empty copy collections
   and singleton port extensions are omitted from descriptor wire records.
-  Lifecycle integration remains with the numbered-copy lane.
 - Fixed: Go binding decoding rejects explicit null and malformed `secret_file`
   and public `ports` fields; compatibility defaults apply only to omitted fields.
-
-- Added: generation-17 foundations for numbered custom service copies: bounded
-  unit identities, placement expansion, per-copy endpoint allocations and stable
-  socket paths, and `copy_ordinal` references. Counts above one remain rejected
-  until lifecycle migration is complete. Existing copy-1 record digests stay unchanged.
+- Added: numbered-copy operations with `ROLE` and `COPY` selection for stop,
+  restart, and logs; per-copy report and backup coverage; persistent maintenance
+  holds; rollback enablement evidence; and exact copy selections for recovery.
+  Selections, descriptors, secret snapshot identities and new paths share the
+  canonical `role@N` suffix. Singleton records keep their existing shapes.
+  Multi-copy reports group rows under `services[role].copies`.
 - Added: role-level loopback network confinement with verified systemd IP policy
   and live ingress/egress BPF attachments, shared with recovery rehearsal. Private
   TCP listeners may declare wildcard binding only on confined roles. Readiness

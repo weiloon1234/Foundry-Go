@@ -74,4 +74,4 @@ class CopyListenerTests(unittest.TestCase):
             return listeners.unix_endpoints(topology, placed)
         self.assertEqual(sockets(3)[:2], sockets(2))
         self.assertEqual(sockets(2)[:1], sockets(1))
-        self.assertEqual([e.name for e in sockets(3)], ["relay.sock", "relay.sock.2", "relay.sock.3"])
+        self.assertEqual([e.name for e in sockets(3)], ["relay.sock", "relay.sock@2", "relay.sock@3"])

@@ -13,6 +13,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from contracts import unit_selection_names
 import admission
 import contracts as c
 from host import Host, Paths
@@ -399,6 +400,8 @@ class ServicePreparationTests(unittest.TestCase):
         selected["enabled_roles"] = list(self.inventory.roles)
         selected["admission"]["deployment_sha256"] = self.inventory.resolution.deployment_sha256
         self.store.record_operation(attempt())
+        self.host.owned_write(self.host.paths.opt(self.entry["name"]) / "runtime" / self.inventory.resolution.id / "launch.json",
+                              json.dumps({"deployment": c.record_document(self.inventory.deployment)}), mode=0o640)
         self.store.begin(c.DeploymentSelection.parse(selected), self.inventory.resolution)
         evidence = closure()
         evidence["units"] = [{"instance_id": INSTANCE, "role": name, "ordinal": 1} for name in self.inventory.roles]
@@ -464,10 +467,12 @@ class ServicePreparationTests(unittest.TestCase):
         self.host.read_registry.return_value = {"instances": {INSTANCE: entry}}
         selected, _ = self.store._selection()
         selected = replace(selected, minimum_generation=17,
-                           enabled_roles=services.unit_role_names(inventory.units),
+                           enabled_roles=unit_selection_names(inventory.units),
                            admission=replace(selected.admission, disposition=c.AdmissionDisposition.PENDING,
                                deployment_sha256=inventory.resolution.deployment_sha256))
         self.store.record_operation(attempt())
+        self.host.owned_write(self.host.paths.opt(entry["name"]) / "runtime" / inventory.resolution.id / "launch.json",
+                              json.dumps({"deployment": c.record_document(inventory.deployment)}), mode=0o640)
         self.store.begin(selected, inventory.resolution)
         evidence = c.ClosureEvidence.parse(closure())
         self.store.record_boot_closure(replace(evidence, units=tuple(inventory.units), endpoints=inventory.resolution.endpoints))

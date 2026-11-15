@@ -16,6 +16,7 @@ import network_confinement
 import release
 import runtime_config
 import services
+from contracts import unit_selection_names, unit_selection_identities
 from contracts import (AdmissionDisposition, AdmissionRecord, Deployment,
                        DeploymentSelection, FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION,
                        HelperInvocation, ReleaseDeclaration, RuntimeResolution, ValidationPermit,
@@ -51,7 +52,7 @@ def prepared(host, entry, journal):
 
 
 def selected_roles(intent, inventory):
-    enabled, holds, running = (set(services.unit_identities(inventory.profile.instance_id, intent[key]))
+    enabled, holds, running = (set(unit_selection_identities(inventory.profile.instance_id, intent[key]))
                                for key in ('recovery_enabled_roles', 'recovery_maintenance_holds', 'recovery_roles'))
     require(enabled <= inventory.units.keys() and holds <= inventory.units.keys() and running == enabled - holds,
             'recovery_selection', 'Recovery must retain its exact reviewed enablement and holds.')
@@ -133,7 +134,7 @@ def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_d
         attempt = state.get('last_attempt')
         if attempt is None:
             attempt = release.begin(host, entry, state, 'restart', inventory.deployment.release,
-                metadata={'operation_id': intent['operation_id'], 'recovery_mode': intent['mode'], 'running_roles': list(services.unit_role_names(sorted(running)))})
+                metadata={'operation_id': intent['operation_id'], 'recovery_mode': intent['mode'], 'running_roles': list(unit_selection_names(sorted(running)))})
         require(attempt.get('operation_id') == intent['operation_id'] and attempt['outcome'] == 'running',
                 'recovery_reconciliation', 'Recovery preparation has an unresolved prior operation.')
         store = admission.AdmissionStore(host, inventory.profile.instance_id)
@@ -142,7 +143,7 @@ def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_d
             tuple(sorted(FEATURE_CAPABILITIES)), inventory.resolution.id, None,
             AdmissionRecord(inventory.profile.instance_id, inventory.resolution.id, inventory.resolution.deployment_sha256,
                             inventory.resolution.private_revision, intent['operation_id'], AdmissionDisposition.PENDING),
-            services.unit_role_names(sorted(enabled)), services.unit_role_names(sorted(holds)))
+            unit_selection_names(sorted(enabled)), unit_selection_names(sorted(holds)))
         transition = lifecycle.transition_request(entry, inventory, intent['operation_id'])
         operations.bind_transition(host, entry, inventory, transition)
         store.begin(selection, inventory.resolution)
@@ -171,8 +172,8 @@ def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_d
             host.run(['systemctl', 'enable' if name in enabled else 'disable', unit])
         require(set(services.enabled_units(host, inventory.units)) == enabled,
                 'recovery_selection', 'Systemd enablement differs from the recovery plan.')
-        atomic_json(store.durable / 'maintenance.json', {'operation_id': intent['operation_id'], 'holds': list(services.unit_role_names(sorted(holds))),
-                    'enabled': list(services.unit_role_names(sorted(enabled))), 'running': list(services.unit_role_names(sorted(enabled)))}, mode=0o600)
+        atomic_json(store.durable / 'maintenance.json', {'operation_id': intent['operation_id'], 'holds': list(unit_selection_names(sorted(holds))),
+                    'enabled': list(unit_selection_names(sorted(enabled))), 'running': list(unit_selection_names(sorted(enabled)))}, mode=0o600)
         atomic_json(store.durable / 'enablement.json', {'schema': 1, 'authority': 'systemd', 'state': 'complete'}, mode=0o600)
         atomic_json(root / 'recovery-prepared.json', {'resolution_id': inventory.resolution.id, 'closure_id': closure.id}, mode=0o600)
 
@@ -283,7 +284,7 @@ def _ready(host, entry, journal):
     store, selection, current, _ = lifecycle.load(host, entry)
     require(selection.admission.disposition is AdmissionDisposition.COMMITTED and current.resolution == inventory.resolution
             and entry['deployment_selection'] == record_document(selection)
-            and set(inventory.select(roles=selection.maintenance_holds)) == holds and set(services.enabled_units(host, inventory.units)) == enabled,
+            and set(unit_selection_identities(inventory.profile.instance_id, selection.maintenance_holds)) == holds and set(services.enabled_units(host, inventory.units)) == enabled,
             'recovery_readiness', 'Recovered selection, holds or systemd enablement changed.')
     store.require_cleanup_clear()
     store._completed(selection)
@@ -294,6 +295,7 @@ def _ready(host, entry, journal):
     runtime_config.validate_runtime_environment(host, entry)
     require(configuration_fingerprint(host, entry) == record['configuration_sha256'],
             'recovery_configuration', 'Current private configuration differs from recovery preparation.')
+    runtime_config.unit_secret_paths(host, entry, inventory.topology, profile=inventory.profile)
     for name in inventory.select():
         runtime_config.effective_environment_path(host, entry, inventory.resolution, name.role)
         marker = host.paths.p(feature_maintenance.marker_path(inventory.specs[name].identity))
@@ -305,7 +307,7 @@ def _ready(host, entry, journal):
         values = dict(line.split('=', 1) for line in observed.splitlines() if '=' in line)
         identity = values.get('InvocationID', '')
         require(len(identity) == 32 and all(c in '0123456789abcdef' for c in identity), 'recovery_readiness', 'Missing recovered process identity.')
-        invocation = admission.read_owned(host, store.runtime / 'admitted' / name.role / (identity + '.json'), HelperInvocation.parse)
+        invocation = admission.read_owned(host, store.runtime / 'admitted' / name.record_key / (identity + '.json'), HelperInvocation.parse)
         require(str(invocation.process.pid) == values.get('MainPID') and admission.executor_alive(host, invocation.process)
                 and invocation.unit_spec_sha256 == canonical_digest(record_document(inventory.specs[name])),
                 'recovery_readiness', 'Recovered process differs from its admission receipt.')

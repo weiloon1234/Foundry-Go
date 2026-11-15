@@ -64,7 +64,7 @@ def observe(host, entry, inventory):
                     (role.common.confinement == "loopback" and set(s.pids) <= owners and
                      any(c.identity == name and c.wildcard and listeners.matches(c, s.socket) for c in claims))
                     for s in sockets if owners & set(s.pids)),
-                'rehearsal_exposure', f'Rehearsal role {name.role} has a non-loopback listener.')
+                'rehearsal_exposure', f'Rehearsal role {name.record_key} has a non-loopback listener.')
     return canonical_digest({'projection': projection(entry, inventory.resolution.endpoints), 'references': [asdict(r) for r in references]})
 
 

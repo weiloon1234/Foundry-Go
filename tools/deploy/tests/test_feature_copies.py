@@ -116,6 +116,124 @@ class FeatureCopiesTests(FeatureWiringFixture):
         self.assertTrue(self.host.paths.p("/etc/systemd/system/" + inventory.units[removed]).exists())
         self.assertTrue(self.host.paths.p(services.ServicePaths.for_unit(removed, inventory.resolution.id).base).exists())
 
+    def test_copy_selector_stops_restarts_one_copy_and_preserves_siblings(self):
+        self.build_archive(copies=2, independent=True)
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        _, entry = self.host.require_identity(self.project, self.profile)
+        inventory = lifecycle.load(self.host, entry)[2]
+        first, second = inventory.copies("relay")
+        original = self.host.running[inventory.units[first]]
+        result = self.request("stop", role="relay", copy=2)
+        self.assertEqual(result["status"], "degraded")
+        self.assertNotIn(inventory.units[second], self.host.enabled)
+        self.assertNotIn(inventory.units[second], self.host.running)
+        self.assertEqual(self.host.running[inventory.units[first]], original)
+        self.request("restart", role="relay", copy=2)
+        self.assertIn(inventory.units[second], self.host.running)
+        self.assertIn(inventory.units[second], self.host.enabled)
+        self.assertEqual(self.host.running[inventory.units[first]], original)
+
+    def test_public_copy_operations_preserve_sibling_route_and_allocation(self):
+        import edge
+        self.build_archive(copies=2, independent=True, public=True)
+        self.configure_firewall()
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        _, entry = self.host.require_identity(self.project, self.profile)
+        inventory = lifecycle.load(self.host, entry)[2]
+        first, second = inventory.copies("relay")
+        original = self.host.running[inventory.units[first]]
+        endpoint = next(item for item in inventory.resolution.endpoints if (item.role, item.ordinal) == (first.role, first.ordinal))
+        directory = self.host.paths.p(edge.RUNTIME + "/" + inventory.profile.instance_id)
+        first_route = (directory / "stream-relay.api.conf").read_bytes()
+        second_route = directory / "stream-relay.api@2.conf"
+        self.request("stop", role="relay", copy=2)
+        self.assertFalse(second_route.exists())
+        self.assertEqual((directory / "stream-relay.api.conf").read_bytes(), first_route)
+        self.request("restart", role="relay", copy=2)
+        self.assertTrue(second_route.exists())
+        self.assertEqual((directory / "stream-relay.api.conf").read_bytes(), first_route)
+        _, entry = self.host.require_identity(self.project, self.profile)
+        inventory = lifecycle.load(self.host, entry)[2]
+        self.assertIn(endpoint, inventory.resolution.endpoints)
+        self.assertEqual(self.host.running[inventory.units[first]], original)
+        self.assertIn(inventory.units[second], self.host.running)
+
+    def test_named_stop_refuses_enabled_dependents(self):
+        _, inventory = self.deploy_copies(2)
+        with self.assertRaises(c.DeployError) as caught:
+            self.request("stop", role="relay", copy=2)
+        self.assertEqual(caught.exception.code, "service_dependents")
+        self.assertIn(inventory.units[inventory.identity("relay", 2)], self.host.running)
+
+    def test_copy_consumer_growth_backup_and_rollback_keep_private_snapshots(self):
+        import backup
+        import runtime_config
+        self.build_archive(copies=2, independent=True, copies_binding=True, application_content=b"same")
+        initial = self.version
+        private = {"FOUNDRY_SERVICE_SECRET__COPY__RELAY__" + str(n) + "__COPY_TOKEN": "copy-private-" + str(n) for n in (1, 2, 3)}
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True,
+                     secrets={"configuration": private})
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        _, entry = self.host.require_identity(self.project, self.profile)
+        inventory = lifecycle.load(self.host, entry)[2]
+        private_paths = runtime_config.service_secret_snapshot(self.host, entry)
+        first = inventory.identity("relay")
+        original = self.host.running[inventory.units[first]]
+        http = self.host.running[inventory.units[inventory.identity("http")]]
+        current_profile = self.profile.copy()
+        self.build_archive(copies=3, independent=True, copies_binding=True, application_content=b"same", version="20261115T000000Z-abcdef12")
+        self.profile = current_profile
+        request = {"archive": str(self.archive), "archive_sha256": c.digest(self.archive), "operation_id": str(uuid.uuid4())}
+        review = self.request("release-plan", **request)
+        self.assertIn("http", review["changed_units"])
+        self.assertIn("relay", review["retained_units"])
+        entry, inventory = self.apply_copies(request, review)
+        self.assertEqual(self.host.running[inventory.units[first]], original)
+        self.assertNotEqual(self.host.running[inventory.units[inventory.identity("http")]], http)
+        binding, = inventory.specs[inventory.identity("http")].bindings.copies
+        self.assertEqual([item.ordinal for item in binding.copies], [1, 2, 3])
+        _, _, _, launch = lifecycle.load(self.host, entry)
+        self.assertEqual(set(launch["secret_paths"]), {"relay", "relay@2", "relay@3"})
+        for item in binding.copies:
+            key = c.UnitIdentity(inventory.profile.instance_id, "relay", item.ordinal).record_key
+            self.assertEqual(item.secret_file, launch["secret_paths"][key]["TOKEN_FILE"])
+        directory = self.host.paths.instance_config(entry["name"])
+        files = {"instances/" + entry["name"] + "/" + path.relative_to(directory).as_posix(): path
+                 for path in runtime_config.service_secret_snapshot_paths(self.host, entry)}
+        with patch.object(backup, "instance_paths", return_value={"configuration": str(directory)}):
+            snapshot = backup._feature_snapshot(self.host, entry, files)
+        self.assertEqual(set(snapshot["secret_paths"]), set(launch["secret_paths"]))
+        rollback = {"target": initial, "expected_current": inventory.deployment.release, "operation_id": str(uuid.uuid4())}
+        review = self.request("release-plan", **rollback)
+        result = self.request("rollback", **rollback, plan_token=review["plan_token"])
+        self.profile = result["profile_update"]
+        _, entry = self.host.require_identity(self.project, self.profile)
+        inventory = lifecycle.load(self.host, entry)[2]
+        self.assertEqual(len(inventory.copies("relay")), 2)
+        self.assertEqual(runtime_config.service_secret_snapshot(self.host, entry), private_paths)
+        rollback = {"target": "20261115T000000Z-abcdef12", "expected_current": initial, "operation_id": str(uuid.uuid4())}
+        review = self.request("release-plan", **rollback)
+        self.assertEqual(review["restored_copies"], [{"role": "relay", "ordinal": 3, "enabled": True, "evidence": "recorded"}])
+        result = self.request("rollback", **rollback, plan_token=review["plan_token"])
+        self.profile = result["profile_update"]
+        _, entry = self.host.require_identity(self.project, self.profile)
+        inventory = lifecycle.load(self.host, entry)[2]
+        self.assertIn(inventory.units[inventory.identity("relay", 3)], self.host.enabled)
+
+    def test_admission_refuses_unplaced_copy_of_a_declared_role(self):
+        entry, inventory = self.deploy_copies(2)
+        store, selection, _, _ = lifecycle.load(self.host, entry)
+        from dataclasses import replace
+        invalid = replace(selection, enabled_roles=selection.enabled_roles + ("relay@3",))
+        with self.assertRaises(c.DeployError) as caught:
+            store._matching(invalid, inventory.resolution)
+        self.assertEqual(caught.exception.code, "admission_selection")
+
     def test_runtime_cleanup_never_follows_a_copy_symlink_into_state(self):
         _, inventory = self.deploy_copies()
         identity = inventory.identity("relay", 3)

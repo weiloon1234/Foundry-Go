@@ -28,7 +28,7 @@ from runtime_config import (CREDENTIAL_KEYS, ENCRYPTION_KEYS, runtime_environmen
                             initialize_bootstrap_secrets, candidate_values, rotation_changes,
                             validate_keyring_change)
 from topology import instance_units
-from services import unit_identities
+from contracts import unit_selection_identities
 from test_contracts import fixture, registry, storage_fixture
 
 CHECK_READY = release.ready
@@ -96,7 +96,7 @@ class ReleaseTests(unittest.TestCase):
         self.root = Path(temporary.name).resolve()
         self.host = ProcessHost(self.root)
         self.project, self.profile, self.entry = fixture()
-        self.http_identity, self.worker_identity, self.scheduler_identity = unit_identities(
+        self.http_identity, self.worker_identity, self.scheduler_identity = unit_selection_identities(
             self.profile["instance_id"], ("http", "worker", "scheduler"))
         self.profile["retention"] = {"server_releases": 1, "local_releases": 1, "pre_migration_dumps": 1}
         self.registry = registry(self.entry)
@@ -764,7 +764,7 @@ class ReleaseTests(unittest.TestCase):
         if not roles:
             self.health.assert_not_called()
         for call in self.health.call_args_list:
-            self.assertTrue(call.kwargs.get("include_background") is False or call.kwargs.get("roles") == list(unit_identities(self.entry["profile"]["instance_id"], roles)))
+            self.assertTrue(call.kwargs.get("include_background") is False or call.kwargs.get("roles") == list(unit_selection_identities(self.entry["profile"]["instance_id"], roles)))
 
     def test_config_rotation_and_rollback_preserve_enablement_and_replay(self):
         self.encryption_configuration()

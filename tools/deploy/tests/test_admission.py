@@ -55,6 +55,10 @@ class AdmissionTests(unittest.TestCase):
         command.start()
         self.addCleanup(command.stop)
         self.store = admission.AdmissionStore(self.host, INSTANCE)
+        from topology import instance_units
+        units = patch.object(admission.AdmissionStore, "_units", side_effect=lambda resolution: set(instance_units(self.host.read_registry()["instances"][INSTANCE])))
+        units.start()
+        self.addCleanup(units.stop)
         boot = self.host.paths.p("/proc/sys/kernel/random/boot_id")
         boot.parent.mkdir(parents=True)
         boot.write_text(BOOT)
@@ -116,7 +120,7 @@ class AdmissionTests(unittest.TestCase):
             single.require_closure(replace(evidence, units=(copies[1],), endpoints=(endpoints[0],)), resolution)
         # Matching permit, closure and receipt cannot admit an unplaced ordinal.
         entry["profile"]["placement"]["relay"] = 1
-        self.assert_denied(lambda: self.store.admit(invocations[1], permit_id=permit.id), "admission_denied")
+        self.assert_denied(lambda: self.store.admit(invocations[1], permit_id=permit.id), "admission_selection")
 
     def test_protected_directories_have_explicit_modes_despite_private_umask(self):
         target = self.host.paths.p("/run/prepared/nested/config")

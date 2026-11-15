@@ -127,8 +127,12 @@ def validate_attempt(value):
             and value["phase"] in ("validation", "redis", "backup", "migration", "seed", "switch", "health", "configuration")
             and (value["error"] is None or isinstance(value["error"], str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", value["error"]) is not None), code, detail)
     require(value["finished_at"] is None if value["outcome"] == "running" else valid_timestamp(value["finished_at"]), code, detail)
-    require("role" not in value or value["action"] in ("restart", "stop")
-            and value["role"] in ("all", *SERVICE_ROLES), code, detail)
+    if "role" in value:
+        require(value["action"] in ("restart", "stop"), code, detail)
+        contract_name(value["role"])
+    if "copy" in value:
+        require(value["action"] in ("restart", "stop") and value.get("role") not in (None, "all")
+                and type(value["copy"]) is int and 1 <= value["copy"] <= MAX_ROLE_COPIES, code, detail)
     if "roles" in value:
         roles = value["roles"]
         require(value["action"] in ("config", "rollback", "deploy") and isinstance(roles, list)
@@ -704,17 +708,28 @@ class UnitIdentity:
     @property
     def record_key(self):
         """Instance-local wire/path key; retain the original singleton spelling."""
-        return self.role if self.ordinal == 1 else f"{self.role}@{self.ordinal}"
+        return copy_key(self.role, self.ordinal)
 
     @classmethod
     def from_record_key(cls, instance_id, value):
-        require(isinstance(value, str), "invalid_contract", "Invalid copy identifier.")
-        role, separator, ordinal = value.partition("@")
-        require(not separator or re.fullmatch(r"[1-9][0-9]{0,2}", ordinal),
-                "invalid_contract", "Invalid copy ordinal.")
-        identity = cls(instance_id, role, int(ordinal) if separator else 1)
-        require(identity.record_key == value, "invalid_contract", "Copy identifiers must use their canonical spelling.")
-        return identity
+        return cls(instance_id, *copy_key_parts(value))
+
+
+def copy_key(name, ordinal):
+    """Stable copy suffix shared by records, files and socket leaves."""
+    contract_int(ordinal, 1, MAX_ROLE_COPIES)
+    return name if ordinal == 1 else f"{name}@{ordinal}"
+
+
+def copy_key_parts(value):
+    require(isinstance(value, str), "invalid_contract", "Invalid copy identifier.")
+    role, separator, suffix = value.partition("@")
+    contract_name(role)
+    require(not separator or re.fullmatch(r"[1-9][0-9]{0,2}", suffix),
+            "invalid_contract", "Invalid copy ordinal.")
+    ordinal = int(suffix) if separator else 1
+    require(copy_key(role, ordinal) == value, "invalid_contract", "Copy identifiers must use their canonical spelling.")
+    return role, ordinal
 
 
 def contract_unit_keys(instance_id, values):
@@ -722,6 +737,19 @@ def contract_unit_keys(instance_id, values):
     require(len(set(identities)) == len(identities), "invalid_contract", "Duplicate copy identifiers.")
     return tuple(identity.record_key for identity in identities)
 
+
+def unit_selection_names(identities):
+    identities = tuple(identities)
+    require(all(isinstance(identity, UnitIdentity) for identity in identities)
+            and len({identity.instance_id for identity in identities}) <= 1
+            and len(identities) <= MAX_UNITS and len(set(identities)) == len(identities),
+            "service_selection", "Copy selections require unique identities from one instance.")
+    return tuple(identity.record_key for identity in identities)
+
+
+def unit_selection_identities(instance_id, selection):
+    return tuple(UnitIdentity.from_record_key(instance_id, key)
+                 for key in contract_unit_keys(instance_id, list(selection)))
 
 @dataclass(frozen=True)
 class AllocatedEndpoint:
@@ -743,8 +771,8 @@ class AllocatedEndpoint:
 
 
 def socket_name(value):
-    require(isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,31}", value),
-            "invalid_contract", "Socket names require 1–32 ASCII letters, digits, dots, underscores or hyphens, starting with a letter or digit.")
+    require(isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_@.-]{0,31}", value),
+            "invalid_contract", "Socket names require 1–32 ASCII letters, digits, dots, underscores, @ or hyphens, starting with a letter or digit.")
     return value
 
 
@@ -752,7 +780,7 @@ def copy_socket_name(name, ordinal):
     """Preserve copy 1's path, independent of the role's current count."""
     socket_name(name)
     contract_int(ordinal, 1, MAX_ROLE_COPIES)
-    return name if ordinal == 1 else f"{name}.{ordinal}"
+    return copy_key(name, ordinal)
 
 
 def socket_directory(instance_id):
@@ -800,7 +828,7 @@ class UnixEndpoint:
                 "invalid_contract", "Unix endpoints belong to the instance socket directory.")
         ordinal = contract_int(value.get("ordinal", 1), 1, MAX_ROLE_COPIES)
         name = contract_text(value["name"], limit=32 + len(str(MAX_ROLE_COPIES)) + 1)
-        suffix = f".{ordinal}" if ordinal > 1 else ""
+        suffix = f"@{ordinal}" if ordinal > 1 else ""
         require(name.endswith(suffix), "invalid_contract", "Unix socket suffix must match its copy ordinal.")
         socket_name(name[:-len(suffix)] if suffix else name)
         require(value["path"] == directory + "/" + name and len(value["path"].encode()) <= 107,

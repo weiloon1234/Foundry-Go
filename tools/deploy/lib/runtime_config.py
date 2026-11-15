@@ -88,8 +88,8 @@ MAX_SERVICE_SECRET_PATHS = 32768
 
 
 def _copy_secret_name(role, ordinal, secret):
-    from contracts import MAX_ROLE_COPIES, contract_int, contract_name
-    return f"{contract_name(role)}.{contract_int(ordinal, 1, MAX_ROLE_COPIES)}.{contract_name(secret)}"
+    from contracts import copy_key, contract_name
+    return copy_key(contract_name(role), ordinal) + "." + contract_name(secret)
 
 
 def copy_secret_name(identity, secret):
@@ -136,10 +136,10 @@ def _validate_service_secret_names(paths):
             shared.append(name)
             continue
         parts = name.split(".")
-        require(len(parts) == 3 and 1 <= len(parts[1]) <= 3 and parts[1].isascii() and parts[1].isdigit(),
-                "service_secret", "Invalid private copy secret name.")
-        require(_copy_secret_name(parts[0], int(parts[1]), parts[2]) == name,
-                "service_secret", "Invalid private copy ordinal.")
+        from contracts import copy_key_parts, contract_name
+        require(len(parts) == 2, "service_secret", "Invalid private copy secret name.")
+        copy_key_parts(parts[0])
+        contract_name(parts[1])
     shared_keys(shared)
 
 
@@ -246,13 +246,6 @@ def select_service_secrets(host, entry, paths):
                      _json({"schema": 1, "instance_id": entry["profile"]["instance_id"], "paths": paths}) + "\n", 0o600)
 
 
-def service_secret_paths(host, entry, topology, *, paths=None, profile=None):
-    """Preserve role-keyed delivery for the foundation's singleton lifecycle."""
-    units = unit_secret_paths(host, entry, topology, paths=paths, profile=profile)
-    require(all(identity.ordinal == 1 for identity in units), "unsupported_capability",
-            "Numbered service secret delivery requires the identity-keyed lifecycle.")
-    return {identity.role: paths for identity, paths in units.items()}
-
 
 def unit_secret_paths(host, entry, topology, *, paths=None, profile=None):
     """Return UnitIdentity -> declared _FILE paths, never values.
@@ -324,7 +317,7 @@ def service_secret_requirements(topology, profile, paths):
                 name = copy_secret_name(identity, secret) if declaration.scope == "copy" else secret
                 prompt = declaration.prompt
                 if declaration.scope == "copy":
-                    prompt += f" ({identity.role} copy {identity.ordinal})"
+                    prompt += f" ({identity.record_key})"
                 required[name] = prompt
     return [{"key": key, "prompt": required[name], "present": name in paths, "redacted": True}
             for key, name in service_secret_keys(topology, profile).items() if name in required]
@@ -1033,9 +1026,11 @@ def effective_environments(host, entry, resolution_id, roles, endpoints, *, valu
     values["APP__HTTP__SERVER__ADDRESS"] = _http_address(http)
     values.pop(SCHEDULER_ENABLED + "_FILE", None)
     values.update(scheduler_environment(roles, rehearsal=recovery_rehearsal.active(entry)))
-    payload = dump_env(values)
+    from contracts import SERVICE_ROLES
     result = []
     for role in roles:
+        payload = dump_env(values if role in SERVICE_ROLES else
+                           {key: value for key, value in values.items() if key != "APP__HTTP__SERVER__ADDRESS"})
         relative = f"runtime/{resolution_id}/{role}/app.env"
         target = host.paths.instance_config(entry["name"]) / relative
         protected_directory(host, target.parent)

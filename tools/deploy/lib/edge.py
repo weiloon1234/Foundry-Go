@@ -3,6 +3,7 @@ from datetime import date
 import hashlib
 import ipaddress
 from pathlib import Path
+from contracts import copy_key, unit_selection_identities
 from dataclasses import dataclass
 import json
 import fnmatch
@@ -462,7 +463,7 @@ def stream_projection(profile, resolution, lineage, *, topology):
                             "@SOURCES@": "\n".join("    allow " + cidr + ";" for cidr in binding.source_cidrs)}
             for token, value in replacements.items():
                 content = content.replace(token, value)
-            result["stream-" + name + (f".{ordinal}" if ordinal != 1 else "") + ".conf"] = content
+            result["stream-" + copy_key(name, ordinal) + ".conf"] = content
     return result
 
 
@@ -531,15 +532,25 @@ def prepare_boot(host, instance_id):
         host.owned_write(path, json.dumps({"boot_id": boot, "endpoints": []}) + "\n", mode=0o600)
 
 
+def route_belongs_to(name, identity):
+    if name == "http-open.conf":
+        return identity.role == "http" and identity.ordinal == 1
+    if not name.startswith("stream-" + identity.role + ".") or not name.endswith(".conf"):
+        return False
+    suffix = name.removesuffix(".conf").partition("@")[2]
+    return suffix == (str(identity.ordinal) if identity.ordinal != 1 else "")
+
+
 def observe_projection(host, instance_id, roles, *, expected=None):
     """No worker-exit assertion: the returned identities explicitly include old workers."""
     from firewall import boot_id
     directory = host.paths.p(RUNTIME + "/" + contract_uuid(instance_id))
     roles = tuple(sorted(set(roles)))
+    identities = unit_selection_identities(instance_id, roles)
     contents = {}
     if directory.exists():
         for path in directory.glob("*.conf"):
-            if path.name.startswith("http-open") and "http" in roles or any(path.name.startswith("stream-" + role + ".") for role in roles):
+            if any(route_belongs_to(path.name, identity) for identity in identities):
                 contents[path.name] = check_path(path, "file").read_text()
     require(contents == (expected or {}), "nginx_projection_drift", "Selected runtime routes differ from their expected projection.")
     effective = host.run(["nginx", "-T"], timeout=10).stdout
@@ -557,10 +568,11 @@ def observe_projection(host, instance_id, roles, *, expected=None):
 
 
 def withdraw(host, instance_id, roles):
+    identities = unit_selection_identities(instance_id, roles)
     retain_global_references(host)
     directory = _runtime(host, instance_id)
     for path in directory.glob("*.conf"):
-        if path.name.startswith("http-open") and "http" in roles or any(path.name.startswith("stream-" + role + ".") for role in roles):
+        if any(route_belongs_to(path.name, identity) for identity in identities):
             check_path(path, "file").unlink()
     _reload(host)
     return observe_projection(host, instance_id, roles)
@@ -576,9 +588,12 @@ def open_runtime(host, profile, resolution, lineage, roles, *, topology, authori
     require(authorize() is True, "admission_required", "Fresh public-opening authority is required.")
     retain_global_references(host)
     roles = tuple(roles)
-    require(set(roles) <= set(resolution.roles), "nginx_projection_scope", "Opening roles must belong to the resolution.")
+    from topology import expand_placement
+    identities = unit_selection_identities(profile.instance_id, roles)
+    require(set(identities) <= expand_placement(topology, profile.instance_id, profile.placement).keys(),
+            "nginx_projection_scope", "Opening copies must belong to the resolution.")
     projection = {name: value for name, value in stream_projection(profile, resolution, lineage, topology=topology).items()
-                  if any(name.startswith("stream-" + role + ".") for role in roles)}
+                  if any(route_belongs_to(name, identity) for identity in identities)}
     if "http" in roles:
         projection["http-open.conf"] = '"" 1;\n'
     retain_references(host, profile.instance_id, resolution)

@@ -1,6 +1,6 @@
 """Shared journal selection, line limits and command arguments."""
 from contracts import require
-from topology import selected_units
+from operation_selection import units as selected_units
 
 DEFAULT_LINES = 100
 MAX_LINES = 2000
@@ -12,8 +12,8 @@ def validate_lines(value):
     return value
 
 
-def arguments(entry, role, lines, *, follow=False):
+def arguments(entry, role, lines, *, follow=False, ordinal=None):
     lines = validate_lines(lines)
-    units = selected_units(entry, role).values()
+    units = selected_units(entry, role, ordinal).values()
     return ["journalctl", *[arg for unit in units for arg in ("--unit", unit)],
             f"--lines={lines}", *(["--follow"] if follow else []), "--no-pager", "--output=short-iso"]

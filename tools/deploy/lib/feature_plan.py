@@ -10,6 +10,7 @@ import operations
 import packages
 import runtime_config
 import services
+from contracts import unit_selection_names
 from contracts import (Deployment, ReleaseDeclaration, RuntimeResolution, atomic_json,
                        canonical_digest, contract_uuid, digest, record_document, read_json, require)
 from topology import parse_profile, parse_topology
@@ -22,7 +23,7 @@ def observations(host, registry, entry, topology, profile):
     enabled, units = [], {}
     if "deployment_selection" in entry:
         _, _, current, _ = lifecycle.load(host, entry)
-        enabled = list(services.unit_role_names(services.enabled_units(host, current.units)))
+        enabled = list(unit_selection_names(services.enabled_units(host, current.units)))
         units = {name.record_key: release.service(host, unit) for name, unit in current.units.items()}
         network = feature_network.plan(host, current.topology, current.profile, package, entry=entry)
     else:
@@ -165,17 +166,22 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                   "action": "rollback" if rollback else "activate", "expected_current": expected_current,
                   "private_intent_id": intent, "configuration_intent_id": configuration_intent,
                   "observations": observed, "endpoints": [asdict(e) for e in inventory.resolution.endpoints],
-                  "unit_changes": sorted(services.unit_role_names(changes)),
-                  "added_units": sorted(services.unit_role_names(added)),
-                  "removed_units": sorted(services.unit_role_names(removed_units)),
-                  "changed_units": sorted(services.unit_role_names(changes - added - removed_units)),
-                  "retained_units": sorted(services.unit_role_names(set(inventory.units) - changes)),
+                  "unit_changes": sorted(unit_selection_names(changes)),
+                  "added_units": sorted(unit_selection_names(added)),
+                  "removed_units": sorted(unit_selection_names(removed_units)),
+                  "changed_units": sorted(unit_selection_names(changes - added - removed_units)),
+                  "retained_units": sorted(unit_selection_names(set(inventory.units) - changes)),
                   "required_service_secrets": requirements,
                   "maintenance_policy": {name: "stop" if role.common.maintenance == "stop" else "continue"
                                          for name, role in inventory.roles.items()},
-                  "restoring": restoring, "enabled_roles": list(services.unit_role_names(enabled)), "running_roles": list(services.unit_role_names(running)),
-                  "maintenance_holds": sorted(services.unit_role_names(holds)), "maintenance_running_roles": sorted(services.unit_role_names(maintenance_running)),
-                  "removed_enablement": dict(zip(services.unit_role_names(removed), removed.values()))}
+                  "restoring": restoring, "enabled_roles": list(unit_selection_names(enabled)), "running_roles": list(unit_selection_names(running)),
+                  "maintenance_holds": sorted(unit_selection_names(holds)), "maintenance_running_roles": sorted(unit_selection_names(maintenance_running)),
+                  "removed_enablement": dict(zip(unit_selection_names(removed), removed.values()))}
+        if restoring and "deployment_selection" in entry:
+            from copy_enablement import restoration_plan
+            restored = restoration_plan(host, entry, lifecycle.load(host, entry)[2], inventory)
+            if restored:
+                public["restored_copies"] = restored
         public["plan_token"] = canonical_digest(public)
         admission.protected_directory(host, path.parent, 0o700)
         atomic_json(path, {"public": public, "manifest": manifest, "launch": launch}, mode=0o600)

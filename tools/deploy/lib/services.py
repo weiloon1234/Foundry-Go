@@ -116,19 +116,6 @@ def select_role_units(units, role="all", *, roles=None):
     return tuple(identity for identity in units if identity.role in selected)
 
 
-def unit_role_names(identities):
-    """Serialize copy selections without changing singleton record bytes."""
-    identities = tuple(identities)
-    require(all(isinstance(identity, UnitIdentity) for identity in identities)
-            and len({identity.instance_id for identity in identities}) <= 1,
-            "service_selection", "Copy records require identities from one instance.")
-    return tuple(identity.record_key for identity in identities)
-
-
-def unit_identities(instance_id, roles):
-    """Parse copy records, including identities absent from a retained target."""
-    return tuple(UnitIdentity.from_record_key(instance_id, role) for role in roles)
-
 
 def role_names(identities):
     """Project a copy selection to distinct role policies in selection order."""
@@ -248,13 +235,13 @@ class UnitInventory:
         dependents = {name for name, state in states.items() if (state.enabled or state.running)
                       and name not in selected and self.prerequisites({name}) & selected}
         require(not dependents, "service_dependents", "Include dependent roles: " +
-                ", ".join(identity.role for identity in sorted(selected | dependents)) + "; use plain restart/stop.")
+                ", ".join(identity.record_key for identity in sorted(selected | dependents)) + "; use plain restart/stop.")
         if action == "restart":
             prerequisites = self.prerequisites(selected) - selected
             rejected = {name for name in prerequisites if not states[name].enabled or
                         states[name].held or states[name].pending or not states[name].ready}
             require(not rejected, "service_prerequisite", "Prerequisites unavailable: " +
-                    ", ".join(identity.role for identity in sorted(rejected)) + "; use plain restart.")
+                    ", ".join(identity.record_key for identity in sorted(rejected)) + "; use plain restart.")
             require(not any(states[name].held or states[name].pending for name in selected),
                     "service_held", "Selected roles are held or pending reconciliation.")
         return self.stop_order(selected) if action == "stop" else tuple(
@@ -271,7 +258,7 @@ class ServicePaths:
         from dataclasses import asdict
         UnitIdentity.parse(asdict(identity))
         contract_uuid(resolution_id)
-        name = identity.role if identity.ordinal == 1 else f"{identity.role}.{identity.ordinal}"
+        name = identity.record_key
         return cls(f"/run/foundry/services/{identity.instance_id}/{resolution_id}/{name}",
                    f"/var/lib/foundry/service-state/{identity.instance_id}/{name}")
 

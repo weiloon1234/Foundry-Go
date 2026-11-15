@@ -12,6 +12,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from contracts import unit_selection_names
 import admission
 import contracts as c
 import feature_lifecycle as lifecycle
@@ -298,5 +299,5 @@ class OperationTests(unittest.TestCase):
                 lifecycle.open_boot(self.host, self.entry, self.inventory)
             self.assertEqual(raised.exception.code, "readiness_failed")
             opening.assert_not_called()
-            self.assertEqual(services.unit_role_names(whole.call_args.args[2]), selected.enabled_roles)
+            self.assertEqual(unit_selection_names(whole.call_args.args[2]), selected.enabled_roles)
             commands.assert_not_called()

@@ -54,8 +54,8 @@ legacy profiles. `selected_units(..., role=...)` expands a role selector;
 `release.enabled_roles` preserve identity keys.
 
 Existing singleton wire records remain unchanged. At their boundaries,
-`services.unit_identities(instance_id, roles)` parses instance-local copy keys,
-including removed historical copies. `services.unit_role_names(identities)` emits
+`contracts.unit_selection_identities(instance_id, roles)` parses instance-local copy keys,
+including removed historical copies. `contracts.unit_selection_names(identities)` emits
 `identity.record_key`: the role name for ordinal 1 and `role@N` for later copies.
 Explicit `role@1`, leading zeroes, and mixed-instance selections are rejected.
 `UnitIdentity.from_record_key(instance_id, key)` owns parsing.
@@ -66,7 +66,7 @@ and secret-path records remain role-scoped until lane C changes their owners.
 
 ## Removal hook for A2
 
-`feature_lifecycle.record_removed_copy_enablement(host, entry,
+`copy_enablement.record_removed_copy_enablement(host, entry,
 identity: UnitIdentity, enabled: bool) -> None` is called once for each removed
 copy in descending stop order, after stopped-unit and network closure proof and
 before disabling or removing its unit file/runtime views. `enabled` is the
@@ -88,7 +88,7 @@ launch descriptor map. Lane C must preserve this path change when merging its
 runtime configuration changes. Copy 1 keeps `<role>.json`, including HTTP's
 `runtime/<id>/http.json`; the console descriptor stays `console/http.json`.
 
-A2 should parse serialized selections with `unit_identities`, including
+A2 should parse serialized selections with `unit_selection_identities`, including
 `backup`'s selected enablement graph. Failed maintenance restoration must intersect
 holds with `inventory.units`, not expand the role-policy `resolution.roles` as
 singleton records. Recovery invocation lookups must use `identity.record_key`
@@ -104,10 +104,9 @@ origins; ordinary activation and rollback keep their existing fresh-resolution
 behavior. The plan token covers the copy delta and observations, and activation
 rechecks enablement, running selection, and maintenance state before mutation.
 
-Lane C's optional acceptance entry point is
-`acceptance_copies_consumers.check(host, entry, inventory, phase=...)`.
-`phase` is `initial`, `grow`, or `shrink`. The scenario reports a missing module
-and continues; errors inside an installed module are not suppressed.
+The required consumer callback is `acceptance_copies_consumers.check`.
+`acceptance_feature.check_copy_consumers` supplies the fixture binding names and
+passes the private snapshot through growth, shrink and rollback.
 
 ## Endpoints and references
 
@@ -118,14 +117,14 @@ ordinal in memory. `AllocatedEndpoint.parse` treats an omitted wire ordinal as 1
 digests. Other ordinals are serialized explicitly.
 
 `contracts.copy_socket_name(name, ordinal)` preserves `name` for copy 1 and uses
-`name.<ordinal>` for later copies. `UnixEndpoint.for_listener(..., ordinal=n)`
+`name@<ordinal>` for later copies. `UnixEndpoint.for_listener(..., ordinal=n)`
 owns the derived path. Names never change when a count grows or shrinks. Expansion
-rejects collisions, including a declared `wl0.2` colliding with copy 2 of `wl0`.
+rejects collisions, including a declared `wl0@2` colliding with copy 2 of `wl0`.
 Private endpoint identity is `(role, ordinal, listener)` within a resolution.
 Wildcard reservations apply to every copy of the declaring role.
 
 `services.ServicePaths.for_unit` preserves existing copy-1 paths; later copies
-use `<role>.<ordinal>` for runtime and persistent state directories. Shared-directory
+use `<role>@<ordinal>` for runtime and persistent state directories. Shared-directory
 grants and network confinement remain role policies inherited by every copy.
 
 Arguments and environment use only `{"copy_number": "self"}`, resolved as the
@@ -154,3 +153,55 @@ records in `contracts.py`, and public claims in `listeners.py`. Lane A2 owns its
 enablement record changes in `contracts.py` and rollback enablement logic in
 `feature_lifecycle.py`. Keep allocation, identity, and socket naming in the shared
 helpers above.
+
+## A2 operations records (release 2a)
+
+A2 adds `contracts.unit_selection_names(identities)` and
+`unit_selection_identities(instance_id, selection)`. These serialize a concrete
+copy as `role` for ordinal 1 and `role@N` for ordinals 2–128. Role identifiers
+cannot contain dots, so this is unambiguous; explicit `.1`, leading zeroes,
+duplicates and mixed-instance selections are rejected. `DeploymentSelection`
+accepts these keys in `enabled_roles` and `maintenance_holds`, bounded by
+`MAX_UNITS`. Use these codecs for persisted **copy selections**, including
+operation intents/plans; retain role names for role policies and resolution.roles.
+The former services selection codecs are removed; contracts owns all selection serialization.
+
+The integrated removal hook is
+`copy_enablement.record_removed_copy_enablement(host, entry, identity, enabled)`.
+Lifecycle calls it once per removed copy after exit and network closure proof.
+`removed_enablement` and `restoration_plan` read the same canonical keys.
+Admission, listener, maintenance, plan, backup and recovery boundaries use the
+contracts selection codecs. Launch secret maps use each identity's `record_key`.
+Recovery validates the identity-keyed secret map and the copy's admission receipt.
+The role-level effective environment remains shared; copy secrets are delivered
+separately through each copy's frozen `_FILE` map.
+
+The required operations callback runs at count two, with `maintenance: stop`,
+no enabled dependents, and a completed backup ID. The scenario then rolls back
+the shrink and checks recorded enablement, persistent state and retained secrets.
+Generation 17 requires both `copy_enablement.py` and `operation_selection.py` in
+the installed bundle.
+
+### A2 files and verification
+
+- Selectors: `local/cli.py`, `local/Makefile.example`, `server/manage.py`,
+  `lib/journal.py`, `lib/operation_selection.py`.
+- Records, rollback and holds: `lib/contracts.py`, `lib/copy_enablement.py`,
+  `lib/feature_lifecycle.py`, `lib/feature_plan.py`, `lib/feature_maintenance.py`,
+  `lib/release.py`. A rollback with missing evidence remains degraded even when
+  maintenance holds otherwise cover every required copy.
+- Reports and recovery: `lib/report.py`, `lib/backup.py`, `lib/recover.py`,
+  `lib/feature_recovery.py`, `lib/recovery_rehearsal.py`, `local/rehearsal_host.py`.
+- Tests: `tests/test_copies_ops.py`, `tests/acceptance_copies_ops.py`,
+  `tests/test_acceptance_copies_ops.py`, `tests/test_backup.py`,
+  `tests/test_upgrades.py`.
+- Documentation: this handoff, `docs/guides/host-capabilities.md`, and
+  `CHANGELOG.md` (the last two paths are repository-relative).
+
+Verification was segmented: `make deploy-tools-check` ran 1,258 tests with 15
+skips. Two new-module integration failures were corrected; all 44
+`test_acceptance_*` units and the exact package-inventory test then passed.
+Five temporary Unix-socket tests blocked by the sandbox passed with the required
+permission. Copy/report/package checks passed in a 67-test rerun. Final
+local/report/held-rollback checks passed in a 131-test rerun, and the expanded
+copy operations checks passed separately. No container scenario was executed.

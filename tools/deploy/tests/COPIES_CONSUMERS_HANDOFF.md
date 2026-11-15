@@ -1,9 +1,8 @@
 # Release 2a consumer integration
 
-Lane C leaves lifecycle, inventory migration, operations and the count gate to
-A1/A2. This worktree contains consumer contracts and callable helpers. It is not
-an independently deployable numbered-copy lifecycle. Merge the hooks below before
-lifting the gate or running the container scenario.
+The release 2a integration wires the consumer contracts into lifecycle, operations,
+backup and recovery. The container scenario calls both required lane callbacks.
+The sections below record the shared interfaces and historical lane verification.
 
 ## A1 integration points
 
@@ -15,11 +14,9 @@ lifting the gate or running the container scenario.
    Builtins have no own `secret_files` map. Candidate configuration revision
    staging passes `profile` to the secret owner, so newly added roles and ordinals
    are checked against candidate placement rather than the current entry.
-   `service_secret_paths` retains the foundation's role-keyed singleton contract,
-   derived from `unit_secret_paths`; it refuses multiple ordinals instead of
-   collapsing them. A1 must switch its lifecycle resolution and configuration
-   publication callers to `unit_secret_paths` alongside its inventory migration,
-   then remove the singleton projection once no callers remain.
+   The former role-keyed `service_secret_paths` projection is removed. All
+   lifecycle callers use the identity-keyed owner and serialize launch maps with
+   `UnitIdentity.record_key`.
 2. `topology.CopiesBinding` is a separate binding type, not an `EndpointBinding`.
    Skip it in the existing scalar binding resolver. Call
    `runtime_config.resolve_copies_bindings(host, entry, topology, profile, role,
@@ -57,17 +54,17 @@ lifting the gate or running the container scenario.
    keys are unchanged. Public port list length is checked by
    `topology.public_listener_policies`, shared by profile parsing and edge policy.
 8. `write_binding_descriptor` preserves `<role>.json` for ordinal 1 and writes
-   `<role>.<ordinal>.json` for later ordinals. Use its returned path in per-unit
+   `<role>@<ordinal>.json` for later ordinals. Use its returned path in per-unit
    dispatch records. Console selection stays HTTP copy 1. Its derived descriptor
    retains copy endpoints but removes all copy `secret_file` fields, as well as
    `shared_directories`.
 9. For template preparation, `feature_runtime.run("prepare", pin, launch)` must select
-   `launch["secret_paths"][spec.identity]` through A1's launch identity decoder and
+   `launch["secret_paths"][spec.identity.record_key]` and
    pass that inner `_FILE` map to `runtime_config.prepare_service`. Pass the
    selected instance entry unchanged. The renderer checks the entry's instance
    UUID against `invocation.unit.instance_id` before reading the selected file.
-   The foundation-helper test now proves distinct recreate-template values for
-   identities 1 and 2 without requiring the lifecycle gate to be lifted.
+   The foundation-helper test proves distinct recreate-template values for
+   identities 1 and 2.
 
 Do not introduce a second inventory for these consumers. Declaration role policy
 and `UnitIdentity` placement remain the shared owners from `COPIES_HANDOFF.md`.
@@ -77,15 +74,15 @@ The scalar endpoint kind is unchanged; a list declaration uses `copies` explicit
 
 `service_secret_snapshot_paths` still returns the private index followed by every
 current or retained snapshot file. Copy snapshot index keys are
-`<role>.<ordinal>.<secret>` within the instance-owned index. The configuration
+`<record_key>.<secret>` within the instance-owned index. The configuration
 namespace is `FOUNDRY_SERVICE_SECRET__COPY__<ROLE>__<ORDINAL>__<SECRET>`.
 `runtime_config.service_secret_keys` owns derivation; callers must not recreate it.
 
-Update the launch/backup `secret_paths` reader to use A1's identity encoding.
-`backup.parse_feature_snapshot` currently checks role-string keys and caps
-`service_secret_files` at 128. Use the configuration owner's
-`MAX_SERVICE_SECRET_PATHS` bound plus one for the index. Preserve the nested
-`copy-secrets/` tree and restore its protected ancestry and exact file modes.
+Launch and backup `secret_paths` maps use `UnitIdentity.record_key`.
+`backup.parse_feature_snapshot` checks exact custom-copy coverage and uses
+`MAX_SERVICE_SECRET_PATHS` plus one for the index. Backup and recovery share a
+bounded archive entry allowance derived from that owner. Recovery preserves the
+nested `copy-secrets/` tree, protected ancestry and exact file modes.
 Retain removed ordinal values on shrink and ordinary rollback. A count change is
 not permission to erase or rotate a secret. Public reports may explain retention
 but must not include private snapshot contents or secret-derived hashes.
@@ -110,7 +107,7 @@ but must not include private snapshot contents or secret-derived hashes.
 
 ## Container callback
 
-`acceptance_copies_consumers.check_copies_consumers` operates on an already active
+`acceptance_copies_consumers.check` operates on an already active
 fixture. Its docstring lists every input. Call it after grow/shrink/regrow with
 A1's current identity-keyed inventory. Pass its private returned snapshot as
 `previous_paths` to prove reuse without rotation. It checks ordinal lists,
@@ -122,7 +119,7 @@ The compiled fixture command is `feature:copies <binding> <count>
 <present|omitted> [public-binding]`. The callback runs it as the instance account
 inside the actual consumer mount namespace. It never passes private values on
 argv or prints them. The callback does not start containers or perform lifecycle
-transitions. `acceptance_feature.py` is unchanged.
+transitions. `acceptance_feature.py` calls this helper through growth, shrink and rollback.
 
 ## Verification status
 

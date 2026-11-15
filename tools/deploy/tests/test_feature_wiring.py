@@ -24,6 +24,7 @@ from unittest.mock import Mock, patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from contracts import unit_selection_names
 import admission
 from listeners import observe_dns as actual_observe_dns
 import artifacts
@@ -385,7 +386,21 @@ class FeatureWiringFixture(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, confined=False, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, copies=1, application_content=None, version="20261114T000000Z-abcdef12"):
+    def configure_firewall(self):
+        from network_firewall_fixture import ROOT, rule_file, live_rules
+        placed = parse_profile(self.profile, self.topology)
+        self.host.public_profile = placed
+        self.host.firewall_live = {family: live_rules(placed.instance_id, family) for family in (4, 6)}
+        self.host.owned_write(self.host.paths.p("/etc/default/ufw"),
+                              'IPV6=yes\nDEFAULT_INPUT_POLICY="DROP"\nDEFAULT_FORWARD_POLICY="DROP"\nDEFAULT_OUTPUT_POLICY="ACCEPT"\nMANAGE_BUILTINS=no\n')
+        self.host.owned_write(self.host.paths.p("/etc/ufw/ufw.conf"), "ENABLED=yes\n")
+        for family, suffix in ((4, ""), (6, "6")):
+            for stem in ("before", "user", "after"):
+                self.host.owned_write(self.host.paths.p(f"/etc/ufw/{stem}{suffix}.rules"), rule_file(stem, family=family))
+        for name in ("ufw-init", "ufw-init-functions"):
+            self.host.owned_write(self.host.paths.p("/usr/lib/ufw/" + name), (ROOT / name).read_text())
+
+    def build_archive(self, *, confined=False, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, copies=1, copies_binding=False, application_content=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -410,6 +425,12 @@ class FeatureWiringFixture(unittest.TestCase):
             **({"secrets": {"relay-token": {"prompt": "Relay token"}}} if secrets else {}),
             "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
                 "platforms": {"linux-arm64": {"url": "https://example.invalid/relay", "sha256": checksum}}}}})
+        if copies_binding:
+            raw = self.topology.projection()
+            raw["secrets"] = {"copy-token": {"scope": "copy", "prompt": "Copy token"}}
+            raw["roles"][1]["secret_files"] = {"TOKEN_FILE": {"secret": "copy-token", "scope": "copy"}}
+            raw["roles"][0]["bindings"]["copies"] = {"copies": {"role": "relay", "listener": "api", "scheme": "http", "secret": "copy-token"}}
+            self.topology = parse_topology(raw)
         if confined:
             raw = self.topology.projection()
             raw["roles"][1]["network"] = {"confinement": "loopback"}
@@ -428,6 +449,8 @@ class FeatureWiringFixture(unittest.TestCase):
         if public:
             from test_host_capabilities import profile
             self.profile["listeners"] = {"relay.api": profile()["listeners"]["relay.ingress"]}
+            first = self.profile["listeners"]["relay.api"]["ports"][0]
+            self.profile["listeners"]["relay.api"]["ports"] = list(range(first, first + copies))
         self.profile = parse_profile(self.profile, self.topology).projection()
         payload = self.host.paths.root / "relay.bin"
         payload.write_bytes(binary)
@@ -953,7 +976,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         ready = services.wait_ready_set
         def check(*args, **kwargs):
             self.assertTrue(hold.exists())
-            observed.append(set(services.unit_role_names(args[2])))
+            observed.append(set(unit_selection_names(args[2])))
             return ready(*args, **kwargs)
         with patch.object(services, "wait_ready_set", side_effect=check):
             self.request("rollback", **arguments)
@@ -1202,20 +1225,6 @@ class FeatureWiringTests(FeatureWiringFixture):
         (store.durable / "selection.json").unlink()
         feature_network.prepare_boot(self.host)
         self.assertFalse(list(self.host.paths.p(edge.RUNTIME + "/" + self.profile["instance_id"]).glob("*.conf")))
-
-    def configure_firewall(self):
-        from network_firewall_fixture import ROOT, rule_file, live_rules
-        placed = parse_profile(self.profile, self.topology)
-        self.host.public_profile = placed
-        self.host.firewall_live = {family: live_rules(placed.instance_id, family) for family in (4, 6)}
-        self.host.owned_write(self.host.paths.p("/etc/default/ufw"),
-                              'IPV6=yes\nDEFAULT_INPUT_POLICY="DROP"\nDEFAULT_FORWARD_POLICY="DROP"\nDEFAULT_OUTPUT_POLICY="ACCEPT"\nMANAGE_BUILTINS=no\n')
-        self.host.owned_write(self.host.paths.p("/etc/ufw/ufw.conf"), "ENABLED=yes\n")
-        for family, suffix in ((4, ""), (6, "6")):
-            for stem in ("before", "user", "after"):
-                self.host.owned_write(self.host.paths.p(f"/etc/ufw/{stem}{suffix}.rules"), rule_file(stem, family=family))
-        for name in ("ufw-init", "ufw-init-functions"):
-            self.host.owned_write(self.host.paths.p("/usr/lib/ufw/" + name), (ROOT / name).read_text())
 
     def test_running_public_instance_rebootstrap_is_unchanged(self):
         self.build_archive(public=True)

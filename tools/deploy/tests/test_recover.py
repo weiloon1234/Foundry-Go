@@ -339,7 +339,7 @@ class RecoveryTests(unittest.TestCase):
         def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_dir):
             self.assertEqual(snapshot, metadata["feature_recovery"])
             self.assertIn("old_server_stopped_confirmed_at", journal)
-            self.assertEqual(journal["intent"]["recovery_roles"], list(recover.services.unit_role_names(inventory.start_order(inventory.select()))))
+            self.assertEqual(journal["intent"]["recovery_roles"], list(recover.unit_selection_names(inventory.start_order(inventory.select()))))
             events.append("prepare")
         def activate(host, registry, entry, journal):
             self.assertIn("application", journal["completed"])

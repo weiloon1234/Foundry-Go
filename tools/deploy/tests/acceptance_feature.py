@@ -26,6 +26,7 @@ import tomllib
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from contracts import unit_selection_names
 import artifacts
 from contracts import DeployError, ReleaseDeclaration, digest, read_json
 from host import Host
@@ -38,6 +39,8 @@ import firewall
 import listeners
 import network_confinement
 import services
+import acceptance_copies_consumers
+import acceptance_copies_ops
 
 PORT = 8554
 RELAY_BODY = "feature-relay-ready"
@@ -499,8 +502,12 @@ def feature_archive(source, destination, host_id, *, confined=False, copies=0, v
         profile["placement"][COPIES_ROLE] = copies
         raw = topology.projection()
         raw["shared_directories"]["render-cache"]["readers"].append(COPIES_ROLE)
+        raw["secrets"]["copy-token"] = {"scope": "copy", "prompt": "Copy token"}
+        raw["roles"][0]["bindings"]["copies"] = {"copies": {"role": COPIES_ROLE,
+            "listener": "control", "scheme": "http", "secret": "copy-token"}}
         raw["roles"].append({
-            "name": COPIES_ROLE, "kind": "executable", "packages": [python, python + "-minimal"],
+            "name": COPIES_ROLE, "kind": "executable",
+            "secret_files": {"COPY_TOKEN_FILE": {"secret": "copy-token", "scope": "copy"}}, "packages": [python, python + "-minimal"],
             "executable": {"package": python + "-minimal", "path": "/usr/bin/" + python},
             "network": {"confinement": "loopback"},
             "requires": ["socket-provider"],
@@ -514,7 +521,7 @@ def feature_archive(source, destination, host_id, *, confined=False, copies=0, v
             "readiness": {"kind": "http", "listener": "control", "path": "/ready", "status": 200, "timeout_seconds": 15},
             "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
             "limits": {"memory_bytes": 67108864, "cpu_percent": 100, "tasks": 16},
-            "maintenance": "continue", "state": {"kind": "local-unprotected", "acknowledged": True}})
+            "maintenance": "stop", "state": {"kind": "local-unprotected", "acknowledged": True}})
         topology = parse_topology(raw)
     profile = parse_profile(profile, topology).projection()
     payload_path = "deploy/artifacts/relay/" + checksum + ".bin"
@@ -633,16 +640,10 @@ def assert_numbered_copies(host, inventory, entry, count):
     return snapshot
 
 
-def check_copy_consumers(host, entry, inventory, *, phase):
-    """Lane C merge point: its optional assertions own secrets, Copies and public ports."""
-    try:
-        import acceptance_copies_consumers
-    except ModuleNotFoundError as error:
-        if error.name != "acceptance_copies_consumers":
-            raise
-        print("SKIP lane C copy-consumer checks: acceptance_copies_consumers is not merged", flush=True)
-        return
-    acceptance_copies_consumers.check(host, entry, inventory, phase=phase)
+def check_copy_consumers(host, entry, inventory, *, previous_paths=None):
+    return acceptance_copies_consumers.check(host, entry, inventory,
+        consumer=inventory.identity("http"), binding_name="copies", producer=COPIES_ROLE,
+        secret_variable="COPY_TOKEN_FILE", previous_paths=previous_paths, check_console=True)
 
 
 def numbered_count_changes(host, project, profile, inventory, entry, source):
@@ -650,7 +651,9 @@ def numbered_count_changes(host, project, profile, inventory, entry, source):
     from contracts import ClosureEvidence, ClosureStage
     from feature_lifecycle import load
     previous = assert_numbered_copies(host, inventory, entry, 3)
-    check_copy_consumers(host, entry, inventory, phase="initial")
+    private_paths = check_copy_consumers(host, entry, inventory)
+    rollback_target = None
+    restored_snapshot = None
     for count in (4, 2):
         archive = shared.WORK / f"feature-copies-{count}.tar.gz"
         stamp = inventory.deployment.release.split("-", 1)[0]
@@ -658,14 +661,17 @@ def numbered_count_changes(host, project, profile, inventory, entry, source):
         _, target, _, _ = feature_archive(source, archive, profile["host"]["host_id"],
                                           confined=True, copies=count, version=version)
         activation = request(project, profile, archive=str(archive), archive_sha256=digest(archive), operation_id=str(uuid.uuid4()))
+        if count == 2:
+            rollback_target = inventory.deployment.release
+            restored_snapshot = previous
         before_units = set(inventory.copies(COPIES_ROLE))
         from contracts import UnitIdentity
         after_units = {UnitIdentity(profile["instance_id"], COPIES_ROLE, ordinal) for ordinal in range(1, count + 1)}
         added, removed = after_units - before_units, before_units - after_units
         plan = action("release-plan", activation)
-        assert set(plan["added_units"]) == set(services.unit_role_names(sorted(added)))
-        assert set(plan["removed_units"]) == set(services.unit_role_names(sorted(removed)))
-        assert set(services.unit_role_names(sorted(before_units & after_units))) <= set(plan["retained_units"])
+        assert set(plan["added_units"]) == set(unit_selection_names(sorted(added)))
+        assert set(plan["removed_units"]) == set(unit_selection_names(sorted(removed)))
+        assert set(unit_selection_names(sorted(before_units & after_units))) <= set(plan["retained_units"])
         assert action("activate", {**activation, "plan_token": plan["plan_token"]})["ok"]
         profile = target
         _, entry = host.require_identity(project, profile)
@@ -683,12 +689,38 @@ def numbered_count_changes(host, project, profile, inventory, entry, source):
             services.stopped_unit(host, old["unit"])
             assert not Path("/etc/systemd/system", old["unit"]).exists(), "Removed copy unit was retained"
             runtime = host.paths.p("/run/foundry/services/" + identity.instance_id)
-            name = identity.role if identity.ordinal == 1 else f"{identity.role}.{identity.ordinal}"
+            name = identity.record_key
             assert not any((resolution / name).exists() for resolution in runtime.iterdir() if resolution.is_dir()), \
                 "Removed copy runtime view was retained"
             assert Path(old["state"], "identity.json").read_bytes() == old["marker"], "Shrink deleted persistent copy data"
-        check_copy_consumers(host, entry, inventory, phase="grow" if added else "shrink")
+        private_paths = check_copy_consumers(host, entry, inventory, previous_paths=private_paths)
         previous = current
+    import backup
+    files, metadata = backup._archive_files(host, entry)
+    import runtime_config
+    prefix = "instances/" + entry["name"] + "/"
+    configuration = host.paths.instance_config(entry["name"])
+    assert all(prefix + Path(path).relative_to(configuration).as_posix() in files
+               for path in runtime_config.service_secret_snapshot_paths(host, entry))
+    receipt = action("backup-run", request(project, profile, kind="full"), timeout=1800)
+    assert receipt["status"] == "complete"
+    acceptance_copies_ops.assert_copies_operations(host, project, profile, role=COPIES_ROLE, backup_id=receipt["backup_id"])
+    rollback = request(project, profile, target=rollback_target, expected_current=inventory.deployment.release,
+                       operation_id=str(uuid.uuid4()))
+    reviewed = action("release-plan", rollback)
+    restored = reviewed["restored_copies"]
+    assert {(item["role"], item["ordinal"], item["enabled"], item["evidence"]) for item in restored} == {
+        (COPIES_ROLE, 3, True, "recorded"), (COPIES_ROLE, 4, True, "recorded")}
+    result = action("rollback", {**rollback, "plan_token": reviewed["plan_token"]})
+    assert result["ok"]
+    profile = result["profile_update"]
+    _, entry = host.require_identity(project, profile)
+    _, _, inventory, _ = load(host, entry)
+    current = assert_numbered_copies(host, inventory, entry, 4)
+    assert set(inventory.copies(COPIES_ROLE)) <= set(services.enabled_units(host, inventory.units))
+    for identity, prior in restored_snapshot.items():
+        assert current[identity]["state"] == prior["state"] and current[identity]["marker"] == prior["marker"]
+    check_copy_consumers(host, entry, inventory, previous_paths=private_paths)
     return profile, inventory, entry
 
 
@@ -706,6 +738,10 @@ def main():
     private = shared.bootstrap_secrets(disks)
     secret = secrets.token_urlsafe(32) + '"#;]雪'
     private.setdefault("configuration", {})["FOUNDRY_SERVICE_SECRET__RELAY_TEMPLATE_TOKEN"] = secret
+    import runtime_config
+    for key in runtime_config.service_secret_keys(topology):
+        if key.startswith("FOUNDRY_SERVICE_SECRET__COPY__") and int(key.split("__")[-2]) <= 4:
+            private["configuration"][key] = secrets.token_urlsafe(32)
     with ExitStack() as cleanup:
         network.prepare_peer(host, cleanup.callback)
         original = host.run(["readlink", "/proc/self/ns/net"]).stdout.strip()
@@ -780,8 +816,9 @@ def main():
         for operation in ("down", "up"):
             changed = action(operation, request(project, profile, confirm=True, operation_id=str(uuid.uuid4())))
             assert changed["maintenance"]["down"] is (operation == "down")
-            for unit in inventory.units.values():
-                assert run(["systemctl", "is-active", unit]).stdout.strip() == "active"
+            for identity, unit in inventory.units.items():
+                active = run(["systemctl", "is-active", unit], check=False).stdout.strip()
+                assert active == ("inactive" if operation == "down" and identity.role == COPIES_ROLE else "active")
             assert run(["systemctl", "show", inventory.units[inventory.identity("relay")], "-p", "InvocationID", "--value"]).stdout == second
         public_observation(host, topology, profile, inventory=inventory, opened=True)
         profile, inventory, entry = numbered_count_changes(host, project, profile, inventory, entry, args.archive)
@@ -796,7 +833,7 @@ def main():
         shared_directories.discard(host, inventory.topology, profile["instance_id"],
                                    entry["allocations"]["uid"], entry["allocations"]["gid"])
         assert not Path(inventory.specs[inventory.identity("http")].bindings.shared_directories[0].path).exists()
-        print("PASS host capabilities: package, artifact, admission, templates, private/public/Unix app bindings, verified wildcard confinement, shared files with reader EROFS and writer ENOSPC, disposable backup exclusion, stale-socket restart, public TCP via nginx stream, numbered copies 3->4->2 with retained survivors and state, report, restart, maintenance continuity and stop closure")
+        print("PASS host capabilities: package, artifact, admission, templates, private/public/Unix app bindings, verified wildcard confinement, shared files with reader EROFS and writer ENOSPC, disposable backup exclusion, stale-socket restart, public TCP via nginx stream, numbered copies 3->4->2->4 with consumers, copy operations, backup and rollback enablement, report, restart, maintenance continuity and stop closure")
 
 
 if __name__ == "__main__":

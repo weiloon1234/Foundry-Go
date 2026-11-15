@@ -60,23 +60,32 @@ class CopyClosureTests(unittest.TestCase):
             self.scope(self.old, self.current)
         self.assertEqual(caught.exception.code, "network_retained_changed")
 
-    def test_partial_public_role_scope_fails_closed_until_public_copy_routing(self):
-        self.current.profile = replace(self.current.profile, listeners=(("relay.ingress", None),))
+    def test_partial_public_copy_scope_preserves_sibling_binding(self):
+        from topology import PublicListenerBinding
+        from test_host_capabilities import profile
+        binding = PublicListenerBinding.parse(profile()["listeners"]["relay.ingress"])
+        self.old.profile = replace(self.old.profile, listeners=(("relay.ingress", binding),))
+        self.current.profile = replace(self.current.profile,
+            listeners=(("relay.ingress", replace(binding, ports=(binding.ports[0], 9555))),))
+        _, _, _, scoped, retained = self.scope(self.old, self.current)
+        self.assertEqual(set(scoped), {self.copy})
+        self.assertIn(c.UnitIdentity(INSTANCE, "relay", 1), retained)
+        self.current.profile = replace(self.current.profile,
+            listeners=(("relay.ingress", replace(binding, ports=(9556, 9555))),))
         with self.assertRaises(c.DeployError) as caught:
             self.scope(self.old, self.current)
-        self.assertEqual(caught.exception.code, "network_scope")
-        self.assertIn("all copies", caught.exception.detail)
+        self.assertEqual(caught.exception.code, "network_retained_changed")
 
-    def test_policy_proof_deduplicates_roles_but_closure_keeps_exact_copies(self):
+    def test_network_proof_and_closure_keep_exact_copies(self):
         identities = (c.UnitIdentity(INSTANCE, "relay", 1), self.copy)
         fw = firewall.FirewallObservation(INSTANCE, BOOT, True, DIGEST, (), ())
-        ng = edge.EdgeObservation(INSTANCE, BOOT, ("relay",), True, DIGEST, ())
+        ng = edge.EdgeObservation(INSTANCE, BOOT, ("relay", "relay@2"), True, DIGEST, ())
         evidence = listeners.ingress_evidence(OPERATION, BOOT, self.old.resolution, self.current.resolution,
             identities, DIGEST, fw, ng, claims=())
         self.assertEqual(evidence.units, identities)
         self.assertEqual({e.ordinal for e in evidence.endpoints}, {1, 2})
         removed = listeners.ingress_evidence(OPERATION, BOOT, self.current.resolution, self.old.resolution,
-            (self.copy,), DIGEST, fw, ng, claims=())
+            (self.copy,), DIGEST, fw, replace(ng, roles=("relay@2",)), claims=())
         self.assertEqual([e.ordinal for e in removed.endpoints], [2])
         closed = listeners.complete_closure(removed, self.old.resolution, backend_exit_sha256=DIGEST,
                                             reserved=(), old_references=())

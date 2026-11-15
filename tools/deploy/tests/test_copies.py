@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from contracts import unit_selection_names, unit_selection_identities
 
 import contracts as c
 import listeners
@@ -53,15 +54,15 @@ class CopyFoundationTests(unittest.TestCase):
         self.assertEqual(inventory.select("relay", ordinal=1), (relay,))
         self.assertEqual(inventory.select(roles=["relay"]), (relay,))
         self.assertEqual(set(inventory.specs), set(inventory.units))
-        self.assertEqual(services.unit_identities(INSTANCE, services.unit_role_names(inventory.select())), inventory.select())
+        self.assertEqual(unit_selection_identities(INSTANCE, unit_selection_names(inventory.select())), inventory.select())
         for role, ordinal in (("relay", 2), ("absent", 1), ("relay", True)):
             with self.subTest(role=role, ordinal=ordinal), self.assertRaises(c.DeployError):
                 inventory.identity(role, ordinal)
         with self.assertRaises(c.DeployError):
             inventory.select(ordinal=1)
         numbered = c.UnitIdentity(INSTANCE, "relay", 2)
-        self.assertEqual(services.unit_role_names((numbered,)), ("relay@2",))
-        self.assertEqual(services.unit_identities(INSTANCE, ("relay@2",)), (numbered,))
+        self.assertEqual(unit_selection_names((numbered,)), ("relay@2",))
+        self.assertEqual(unit_selection_identities(INSTANCE, ("relay@2",)), (numbered,))
         old_role = "relay"
         with self.assertRaises(KeyError):
             inventory.units[old_role]
@@ -78,7 +79,7 @@ class CopyFoundationTests(unittest.TestCase):
                 c.UnitIdentity.from_record_key(INSTANCE, value)
         units = (c.UnitIdentity(INSTANCE, "relay", 1), c.UnitIdentity(INSTANCE, "relay", 2))
         self.assertEqual(services.role_names(units), ("relay",))
-        self.assertEqual(services.unit_role_names(units), ("relay", "relay@2"))
+        self.assertEqual(unit_selection_names(units), ("relay", "relay@2"))
 
     def test_numbered_inventory_expands_dependencies_and_rendered_units(self):
         inventory, entry, _ = numbered_inventory()
@@ -181,6 +182,7 @@ class CopyFoundationTests(unittest.TestCase):
     def test_production_profiles_accept_copies_but_inventory_must_match(self):
         raw = profile()
         raw["placement"]["relay"] = 2
+        raw["listeners"]["relay.ingress"]["ports"].append(9444)
         for parse in (lambda: c.validate_profile(raw), lambda: t.parse_profile(raw, t.parse_topology(declaration()))):
             parse()
         inventory, entry, _ = copy_fixture()
@@ -250,12 +252,12 @@ class CopyFoundationTests(unittest.TestCase):
         raw["roles"][1].update(readiness={"kind": "unix", "listener": "control"}, configs={}, arguments=[])
         topology = t.parse_topology(raw)
         endpoints = listeners.unix_endpoints(topology, placed)
-        self.assertEqual([(e.name, e.ordinal) for e in endpoints], [("wl0", 1), ("wl0.2", 2)])
+        self.assertEqual([(e.name, e.ordinal) for e in endpoints], [("wl0", 1), ("wl0@2", 2)])
         self.assertEqual(c.UnixEndpoint.parse({key: value for key, value in vars(endpoints[0]).items() if key != "ordinal"}), endpoints[0])
         longest = c.UnixEndpoint.for_listener(INSTANCE, "relay", "control", "x" * 32, ordinal=128)
         self.assertLessEqual(len(longest.path.encode()), 107)
         other = {**copy.deepcopy(raw["roles"][1]), "name": "other"}
-        other["listeners"]["control"]["socket"] = "wl0.2"
+        other["listeners"]["control"]["socket"] = "wl0@2"
         raw["roles"].append(other)
         with self.assertRaisesRegex(c.DeployError, "overlap"):
             t.expand_placement(t.parse_topology(raw), INSTANCE, placed.placement + (("other", 1),))
@@ -279,7 +281,7 @@ class CopyFoundationTests(unittest.TestCase):
             rendered = runtime_config._render_service_json(b'{"copy": 0}', (("/copy", role.arguments[0]),),
                                                            lambda argument: str(key.ordinal))
             self.assertEqual(c.parse_json(rendered), {"copy": key.ordinal})
-            self.assertTrue(paths.state.endswith("/relay" if key.ordinal == 1 else "/relay.2"))
+            self.assertTrue(paths.state.endswith("/relay" if key.ordinal == 1 else "/relay@2"))
             grants = shared_directories.bindings(topology, INSTANCE, key.role)
             self.assertEqual([(grant.name, grant.access) for grant in grants], [("cache", "read-write")])
         with self.assertRaises(c.DeployError):

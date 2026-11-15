@@ -17,7 +17,7 @@ func copiesBindingDocument(unix, secret bool) string {
 		if unix {
 			name := "worker"
 			if ordinal > 1 {
-				name += ".2"
+				name += "@2"
 			}
 			directory := "/run/foundry/services/00000000-0000-4000-8000-000000000001/sockets"
 			endpoint = fmt.Sprintf(`"directory":%q,"name":%q,"path":%q`, directory, name, directory+"/"+name)
@@ -44,7 +44,7 @@ func TestCopiesAreOrderedOwnedSnapshots(t *testing.T) {
 				copies[1].Endpoint.Role != "worker" || (copies[0].SecretFile != "") != secret {
 				t.Fatal(copies, err)
 			}
-			if unix && copies[1].Endpoint.Name != "worker.2" || !unix && copies[1].Endpoint.Port != 8202 {
+			if unix && copies[1].Endpoint.Name != "worker@2" || !unix && copies[1].Endpoint.Port != 8202 {
 				t.Fatal(copies)
 			}
 			original := copies[0]
@@ -98,7 +98,7 @@ func TestCopiesRejectMalformedAndConflictingGrants(t *testing.T) {
 			t.Fatal("accepted invalid copies descriptor", change, err)
 		}
 	}
-	badUnix := strings.Replace(copiesBindingDocument(true, false), `worker.2`, `worker.3`, -1)
+	badUnix := strings.Replace(copiesBindingDocument(true, false), `worker@2`, `worker@3`, -1)
 	if _, err := ReadBindings(writeBindingDocument(t, badUnix)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("accepted socket for another ordinal", err)
 	}

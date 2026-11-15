@@ -110,11 +110,15 @@ def run(action, pin, launch):
     views = services.bundle_views(role, paths, topology=inventory.topology,
                                   architecture=inventory.profile.architecture, artifact_roots=roots, payloads=declaration.artifacts)
     release = host.paths.opt(entry["name"]) / "releases" / inventory.deployment.release
+    for binding in spec.bindings.copies:
+        for copy in binding.copies:
+            if copy.secret_file:
+                runtime_config._read_value_file(host, entry, copy.secret_file)
     if isinstance(role, ExecutableRole):
-        for path in launch["secret_paths"].get(spec.identity.role, {}).values():
+        for path in launch["secret_paths"].get(spec.identity.record_key, {}).values():
             runtime_config._read_value_file(host, entry, path)
         runtime_config.prepare_service(host, store, invocation, role, spec, release, declaration.inventory,
-                                       views=views, secret_paths=launch["secret_paths"].get(spec.identity.role, {}),
+                                       views=views, secret_paths=launch["secret_paths"].get(spec.identity.record_key, {}),
                                        uid=entry["allocations"]["uid"], gid=entry["allocations"]["gid"], permit_id=permit_id, entry=entry)
     with store.preparation(invocation, permit_id=permit_id):
         import shared_directories
@@ -132,7 +136,7 @@ def run(action, pin, launch):
                        "WEB__PUBLIC_DIR": str(release / "public"),
                        "FOUNDRY_DEPLOY_RUNTIME_FILE": launch["descriptors"][spec.identity.record_key]}
         if isinstance(role, ExecutableRole):
-            secrets = launch["secret_paths"].get(spec.identity.role, {})
+            secrets = launch["secret_paths"].get(spec.identity.record_key, {})
             for key, value in role.environment:
                 require(key not in environment and not key.startswith("FOUNDRY_"),
                         "service_environment", "Custom environment cannot override framework runtime identity.")

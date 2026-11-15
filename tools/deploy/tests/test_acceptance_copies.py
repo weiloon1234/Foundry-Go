@@ -59,6 +59,12 @@ class CopiesAcceptanceTests(unittest.TestCase):
         self.assertEqual('control', role.readiness.listener)
         self.assertEqual('copy_number', role.arguments[-1].kind)
         self.assertEqual('local-unprotected', role.state.kind)
+        self.assertEqual('stop', role.common.maintenance)
+        raw = topology.projection()
+        self.assertEqual(raw['secrets']['copy-token']['scope'], 'copy')
+        self.assertEqual(raw['roles'][0]['bindings']['copies'], {'copies': {'role': scenario.COPIES_ROLE,
+            'listener': 'control', 'scheme': 'http', 'secret': 'copy-token'}})
+        self.assertEqual(dict(role.secret_files), {'COPY_TOKEN_FILE': 'copy-token'})
         self.assertIn('socket-provider', role.common.requires)
         binding = topology.projection()['roles'][-1]['bindings']['socket']['endpoint']
         self.assertEqual({'role': 'socket-provider', 'listener': 'control', 'scheme': 'unix'}, binding)
@@ -106,21 +112,17 @@ class CopiesAcceptanceTests(unittest.TestCase):
         self.assertNotIn(scenario.COPIES_ROLE, dict(profile.placement))
         self.assertEqual(16, upgrades.feature_generation(topology, {}, profile=profile))
 
-    def test_lane_c_hook_is_optional_and_preserves_dependency_failures(self):
-        with patch.dict(sys.modules, {'acceptance_copies_consumers': None}), patch('builtins.print') as output:
-            scenario.check_copy_consumers('host', 'entry', 'inventory', phase='initial')
-            self.assertIn('SKIP lane C', output.call_args.args[0])
-        check = Mock()
-        with patch.dict(sys.modules, {'acceptance_copies_consumers': SimpleNamespace(check=check)}):
-            scenario.check_copy_consumers('host', 'entry', 'inventory', phase='shrink')
-        check.assert_called_once_with('host', 'entry', 'inventory', phase='shrink')
-        real_import = builtins.__import__
-        def importing(name, *args, **kwargs):
-            if name == 'acceptance_copies_consumers':
-                raise ModuleNotFoundError('Missing lane C dependency', name='required_dependency')
-            return real_import(name, *args, **kwargs)
-        with patch('builtins.__import__', side_effect=importing), self.assertRaises(ModuleNotFoundError):
-            scenario.check_copy_consumers('host', 'entry', 'inventory', phase='grow')
+    def test_lane_c_hook_is_required_and_preserves_failures(self):
+        inventory = Mock()
+        inventory.identity.return_value = 'http identity'
+        with patch.object(scenario.acceptance_copies_consumers, 'check', return_value={'private': 'path'}) as check:
+            result = scenario.check_copy_consumers('host', 'entry', inventory, previous_paths={'retained': 'path'})
+        check.assert_called_once_with('host', 'entry', inventory, consumer='http identity',
+            binding_name='copies', producer=scenario.COPIES_ROLE, secret_variable='COPY_TOKEN_FILE',
+            previous_paths={'retained': 'path'}, check_console=True)
+        self.assertEqual(result, {'private': 'path'})
+        with patch.object(scenario.acceptance_copies_consumers, 'check', side_effect=RuntimeError('consumer failed')), self.assertRaises(RuntimeError):
+            scenario.check_copy_consumers('host', 'entry', inventory)
 
 
 if __name__ == '__main__':

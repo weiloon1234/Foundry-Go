@@ -491,7 +491,7 @@ class UpgradeTests(unittest.TestCase):
         source = Path(__file__).resolve().parents[1]
         _, files, _ = upgrades.tool_bundle(source)
         expected = {name for name in upgrades.REQUIRED_FILES | upgrades.REHEARSAL_FILES if name.endswith('.py')}
-        expected.add('lib/unix_socket_probe.py')
+        expected.update({'lib/unix_socket_probe.py', 'lib/copy_enablement.py', 'lib/operation_selection.py'})
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
     def test_generation_fifteen_before_socket_probe_helper_can_upgrade(self):
@@ -520,7 +520,7 @@ class UpgradeTests(unittest.TestCase):
 
     def test_inventory_requirements_are_cumulative_by_inspected_bundle_generation(self):
         additions = (upgrades.GENERATION_11_FILES | upgrades.GENERATION_12_FILES |
-                     upgrades.GENERATION_13_FILES | upgrades.GENERATION_14_FILES | upgrades.GENERATION_15_FILES | upgrades.GENERATION_16_FILES)
+                     upgrades.GENERATION_13_FILES | upgrades.GENERATION_14_FILES | upgrades.GENERATION_15_FILES | upgrades.GENERATION_16_FILES | upgrades.GENERATION_17_FILES)
         for generation in (9, 10, 11, 12, 13, 14, 15, 16, 17):
             with self.subTest(generation=generation):
                 for name in additions:

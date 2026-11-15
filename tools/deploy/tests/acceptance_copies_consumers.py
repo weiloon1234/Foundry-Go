@@ -6,7 +6,7 @@ import stat
 from acceptance_support import guard, run, service
 
 
-def check_copies_consumers(host, entry, inventory, *, consumer, binding_name, producer,
+def check(host, entry, inventory, *, consumer, binding_name, producer,
                            secret_variable, public_binding_name=None, config_name=None,
                            previous_paths=None, check_console=False):
     """Check an already activated fixture in a disposable systemd container.
@@ -32,6 +32,7 @@ def check_copies_consumers(host, entry, inventory, *, consumer, binding_name, pr
     transitions and must keep every placed producer enabled during these checks.
     """
     guard()
+    from contracts import copy_key
     import edge
     import firewall
     import listeners
@@ -72,7 +73,7 @@ def check_copies_consumers(host, entry, inventory, *, consumer, binding_name, pr
         unit_text = run(["systemctl", "cat", inventory.units[identity]], timeout=10).stdout.encode()
         assert values[-1] not in unit_text and values[-1] not in Path(f"/proc/{pid}/cmdline").read_bytes(), "Private value escaped into a unit or argv"
     assert len(set(values)) == len(values), "Scenario must supply distinct copy passwords"
-    leaf = consumer.role + (f".{consumer.ordinal}" if consumer.ordinal != 1 else "")
+    leaf = consumer.record_key
     descriptor = host.paths.opt(entry["name"]) / "runtime" / inventory.resolution.id / (leaf + ".json")
     artisan = entry["allocations"]["paths"]["application"] + "/releases/" + inventory.deployment.release + "/artisan"
     arguments = [artisan, "feature:copies", binding_name, str(len(expected)), "present"]
@@ -88,7 +89,7 @@ def check_copies_consumers(host, entry, inventory, *, consumer, binding_name, pr
             role, listener = name.split(".")
             for ordinal, port in enumerate(public.ports, 1):
                 endpoint = next(e for e in inventory.resolution.endpoints if (e.role, e.ordinal, e.listener) == (role, ordinal, listener))
-                leaf = "stream-" + name + (f".{ordinal}" if ordinal != 1 else "") + ".conf"
+                leaf = "stream-" + copy_key(name, ordinal) + ".conf"
                 rendered = host.paths.p(edge.RUNTIME + "/" + inventory.profile.instance_id + "/" + leaf).read_text()
                 assert f":{port}" in rendered and f"proxy_pass {endpoint.address}:{endpoint.port};" in rendered, "Public port routes to another copy"
     if check_console:

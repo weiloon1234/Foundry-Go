@@ -3,12 +3,14 @@ import os
 
 import admission
 import services
+from contracts import unit_selection_names, unit_selection_identities
 from contracts import HOST_PATHS, atomic_json, atomic_write, record_document, require
 from topology import EndpointBinding
 
 
 def marker_path(unit):
-    return f"{HOST_PATHS['state']}/admission/{unit.instance_id}/maintenance/{unit.role}-{unit.ordinal}.hold"
+    leaf = unit.role + "-1" if unit.ordinal == 1 else unit.record_key
+    return f"{HOST_PATHS['state']}/admission/{unit.instance_id}/maintenance/{leaf}.hold"
 
 
 def stopped_roles(topology):
@@ -41,8 +43,8 @@ def record(host, entry):
 
 def active_holds(host, entry, inventory):
     saved = record(host, entry)
-    held = set(services.unit_identities(inventory.profile.instance_id, saved["holds"])) if saved else set()
-    held.update(services.unit_identities(inventory.profile.instance_id,
+    held = set(unit_selection_identities(inventory.profile.instance_id, saved["holds"])) if saved else set()
+    held.update(unit_selection_identities(inventory.profile.instance_id,
                 entry.get("deployment_selection", {}).get("maintenance_holds", ())))
     held.update(name for name, spec in inventory.specs.items()
                 if admission.protected_path(host, host.paths.p(marker_path(spec.identity)), "file").exists())
@@ -62,13 +64,13 @@ def candidate(host, entry, state, request):
     _, _, previous, launch = lifecycle.load(host, entry)
     stopped = set(previous.select(roles=tuple(stopped_roles(previous.topology) & previous.roles.keys())))
     saved = record(host, entry)
-    affected = stopped | (set(services.unit_identities(previous.profile.instance_id, saved["holds"])) & previous.units.keys() if saved else set())
+    affected = stopped | (set(unit_selection_identities(previous.profile.instance_id, saved["holds"])) & previous.units.keys() if saved else set())
     if not affected:
         return previous, launch, affected
     declaration = release.runtime_declaration(launch["declaration"])
     inventory, paths = lifecycle.resolve(host, entry, state["current"], declaration,
         release.release_path(host, entry, previous.deployment.release), launch["artifact_roots"], request["operation_id"],
-        previous=previous, affected=affected, profile=previous.profile.projection())
+        previous=previous, affected=affected, profile=previous.profile.projection(), preserve_private=True)
     launch = lifecycle.save_launch(host, entry, inventory, declaration, launch["artifact_roots"], paths)
     return inventory, launch, affected
 
@@ -87,9 +89,9 @@ def selection(host, entry, inventory, enabled, running, action, *, allow_start=T
         # Preserve even removed copies in the private journal until shared state
         # is observed. The selected graph carries only its declared holds.
         holds |= prior_holds
-    prior_running = set(services.unit_identities(inventory.profile.instance_id, saved["running"])) if saved and saved["holds"] else set(running)
+    prior_running = set(unit_selection_identities(inventory.profile.instance_id, saved["running"])) if saved and saved["holds"] else set(running)
     if down and saved and saved["holds"]:
-        prior_running |= set(enabled) - set(services.unit_identities(inventory.profile.instance_id, saved["enabled"]))
+        prior_running |= set(enabled) - set(unit_selection_identities(inventory.profile.instance_id, saved["enabled"]))
     if action == "up":
         # A deliberate disable always wins over the remembered pre-down selection.
         running = (set(running) | prior_running) & set(enabled) & inventory.units.keys()
@@ -99,9 +101,9 @@ def selection(host, entry, inventory, enabled, running, action, *, allow_start=T
     while any(not inventory.prerequisites({name}) <= running for name in running):
         running = {name for name in running if inventory.prerequisites({name}) <= running}
     holds |= (prior_holds & set(enabled) & inventory.units.keys()) - running
-    value = {"operation_id": None, "holds": sorted(services.unit_role_names(holds)), "enabled": sorted(services.unit_role_names(enabled)),
-             "running": sorted(services.unit_role_names(prior_running | (set(running) if down else set()))),
-             "restore_holds": sorted(services.unit_role_names(prior_holds - holds))}
+    value = {"operation_id": None, "holds": sorted(unit_selection_names(holds)), "enabled": sorted(unit_selection_names(enabled)),
+             "running": sorted(unit_selection_names(prior_running | (set(running) if down else set()))),
+             "restore_holds": sorted(unit_selection_names(prior_holds - holds))}
     return holds & inventory.units.keys(), running, value
 
 
@@ -113,16 +115,16 @@ def restore_failed_holds(host, entry, inventory, previous, operation):
     if not path.exists():
         return False
     intent = admission.read_owned(host, path, lambda value: value)
-    released = set(services.unit_identities(inventory.profile.instance_id, intent.get("restore_holds", ())))
+    released = set(unit_selection_identities(inventory.profile.instance_id, intent.get("restore_holds", ())))
     if not released:
         return False
-    holds = set(services.unit_identities(inventory.profile.instance_id, intent["holds"])) | released
+    holds = set(unit_selection_identities(inventory.profile.instance_id, intent["holds"])) | released
     publish_markers(host, previous, holds)
     publish_markers(host, inventory, holds)
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
-    atomic_json(store.durable / "maintenance.json", {**intent, "holds": sorted(services.unit_role_names(holds))}, mode=0o600)
+    atomic_json(store.durable / "maintenance.json", {**intent, "holds": sorted(unit_selection_names(holds))}, mode=0o600)
     selected, resolution = store._selection()
-    selected = replace(selected, maintenance_holds=tuple(sorted(services.unit_role_names(holds & set(services.unit_identities(inventory.profile.instance_id, resolution.roles))))))
+    selected = replace(selected, maintenance_holds=tuple(sorted(unit_selection_names(holds & inventory.units.keys()))))
     store._write(store.durable / "selection.json", selected)
     entry["deployment_selection"] = record_document(selected)
     return True
@@ -180,7 +182,7 @@ def reconcile(host, project, profile, *, allow_start=True):
         saved = record(host, entry)
         _, _, inventory, _ = lifecycle.load(host, entry)
         expected = set(inventory.select(roles=tuple(stopped_roles(inventory.topology) & inventory.roles.keys()))) if observed["down"] else set()
-        actual = set(services.unit_identities(inventory.profile.instance_id, saved["holds"])) & inventory.units.keys() if saved else set()
+        actual = set(unit_selection_identities(inventory.profile.instance_id, saved["holds"])) & inventory.units.keys() if saved else set()
         if not allow_start:
             expected |= actual
         if actual == expected:

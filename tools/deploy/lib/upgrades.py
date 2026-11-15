@@ -63,7 +63,8 @@ GENERATION_13_FILES = REHEARSAL_FILES | frozenset({"lib/feature_plan.py", "lib/f
 GENERATION_14_FILES = frozenset({"lib/config_templates.py"})
 GENERATION_15_FILES = frozenset({"lib/unix_sockets.py"})
 GENERATION_16_FILES = frozenset({"lib/network_confinement.py", "lib/shared_directories.py"})
-REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES | GENERATION_15_FILES | GENERATION_16_FILES
+GENERATION_17_FILES = frozenset({"lib/copy_enablement.py", "lib/operation_selection.py"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES | GENERATION_15_FILES | GENERATION_16_FILES | GENERATION_17_FILES
 
 
 def required_files(generation: int) -> frozenset[str]:
@@ -80,6 +81,8 @@ def required_files(generation: int) -> frozenset[str]:
         required |= GENERATION_15_FILES
     if generation >= 16:
         required |= GENERATION_16_FILES
+    if generation >= 17:
+        required |= GENERATION_17_FILES
     return required
 
 
@@ -438,7 +441,10 @@ def feature_generation(topology, entry, *, profile=None):
     from topology import DeploymentProfile, parse_placement
     profile = entry.get("profile", {}) if profile is None else profile
     placement = profile.placement if isinstance(profile, DeploymentProfile) else parse_placement(profile.get("placement", {}))
-    copies = any(count > 1 for _, count in placement)
+    from topology import CopiesBinding
+    copies = (any(count > 1 for _, count in placement)
+              or any(secret.scope == "copy" for _, secret in topology.secrets)
+              or any(isinstance(binding, CopiesBinding) for role in topology.roles for _, binding in role.common.bindings))
     return max(FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION if templates or public_listeners else 0,
                FEATURE_UNIX_GENERATION if unix else 0,
                FEATURE_CONFINEMENT_GENERATION if confinement else 0,

@@ -7,12 +7,12 @@ import stat
 
 from contracts import DeployError, copy_socket_name, require, socket_directory
 from unix_socket_probe import Result
-from topology import ExecutableRole, EndpointBinding
+from topology import ExecutableRole, EndpointBinding, CopiesBinding
 
 
 def uses_sockets(role):
     return (isinstance(role, ExecutableRole) and any(l.transport == "unix" for _, l in role.listeners)
-            or any(isinstance(b, EndpointBinding) and b.scheme == "unix" for _, b in role.common.bindings))
+            or any(isinstance(b, (EndpointBinding, CopiesBinding)) and b.scheme == "unix" for _, b in role.common.bindings))
 
 
 def prepare(host, role, identity, uid, gid, *, remove_stale=False):
