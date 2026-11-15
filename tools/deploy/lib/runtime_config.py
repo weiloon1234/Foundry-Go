@@ -953,14 +953,12 @@ def effective_environment_path(host, entry, resolution, role="http", *, candidat
 def write_binding_descriptor(host, entry, deployment, resolution, spec, *, candidate=False):
     """Final app-facing descriptor: schema 2 embeds the frozen RoleBindings record."""
     from dataclasses import asdict
-    from contracts import atomic_json, canonical_digest, record_document
-    from admission import protected_directory
+    from contracts import canonical_digest, record_document
     require(spec in deployment.units and resolution.deployment_sha256 == canonical_digest(record_document(deployment)),
             "runtime_resolution", "Bindings belong to another selected deployment.")
     env = effective_environment_path(host, entry, resolution, spec.identity.role, candidate=candidate)
     absolute = lambda path: "/" + path.relative_to(host.paths.root).as_posix()
     path = host.paths.opt(entry["name"]) / "runtime" / resolution.id / (spec.identity.role + ".json")
-    protected_directory(host, path.parent)
     descriptor = {"schema": 2, "instance": entry["name"], "user": entry["name"],
                   "env_file": absolute(env), "work_dir": entry["allocations"]["paths"]["data"],
                   "release": entry["allocations"]["paths"]["application"] + "/releases/" + deployment.release,
@@ -969,7 +967,33 @@ def write_binding_descriptor(host, entry, deployment, resolution, spec, *, candi
     if deployment.archive_schema == 1:
         descriptor = {key: descriptor[key] for key in ("instance", "user", "env_file", "work_dir")}
         descriptor["schema"] = 1
-    if path.exists():
-        require(read_json(path) == descriptor, "runtime_resolution_conflict", "An immutable role descriptor already differs.")
-    atomic_json(path, descriptor, mode=0o644)
+    _write_binding_descriptor(host, path, descriptor)
     return absolute(path)
+
+
+def console_binding_descriptor(host, entry, resolution_id):
+    """Console invocations retain HTTP bindings except unit-only shared directories.
+
+    Derive from the immutable HTTP descriptor so existing resolutions also work;
+    never alter the descriptor delivered to the HTTP unit itself.
+    """
+    from admission import read_owned
+    from contracts import contract_uuid
+    root = host.paths.opt(entry["name"]) / "runtime" / contract_uuid(resolution_id)
+    descriptor = read_owned(host, root / "http.json", lambda value: value)
+    if "bindings" in descriptor:
+        descriptor["bindings"].pop("shared_directories", None)
+    # A subdirectory cannot collide with a custom role named console.
+    path = root / "console" / "http.json"
+    _write_binding_descriptor(host, path, descriptor)
+    return path
+
+
+def _write_binding_descriptor(host, path, descriptor):
+    from admission import protected_directory, protected_path
+    from contracts import atomic_json
+    protected_directory(host, path.parent)
+    protected_path(host, path, "file")
+    if path.exists():
+        require(read_json(path) == descriptor, "runtime_resolution_conflict", "An immutable binding descriptor already differs.")
+    atomic_json(path, descriptor, mode=0o644)

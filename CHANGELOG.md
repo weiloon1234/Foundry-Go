@@ -12,6 +12,8 @@
   mark them disposable, never backed up or restored.
   A root-only host parent and granted roles' private user namespaces block
   same-account procfs bypasses through host helpers and other roles' views.
+  Console calls and operator invocations retain HTTP bindings except shared
+  directories; their shared-directory lookups return `fault.Missing`.
 - Added: `shared_directory_path` argv/environment references and typed
   `deployment.Bindings.SharedDirectory` bindings with path, access and byte limit.
   This capability requires deploy-tool generation 16 on client and host; the

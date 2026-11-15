@@ -1,5 +1,6 @@
 """Preview boundaries and final binding delivery; never invokes host services."""
 from dataclasses import replace
+import copy
 import json
 from pathlib import Path
 import tempfile
@@ -12,6 +13,7 @@ import contracts as c
 import feature_lifecycle as lifecycle
 import feature_network as network
 import runtime_config
+import release
 import services
 import upgrades
 from host import Host, Paths
@@ -62,6 +64,86 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertEqual(value["unit"], {"instance_id": spec.identity.instance_id, "role": "http", "ordinal": 1})
         self.assertNotIn("environments", value)
         self.assertNotIn("private_revision", value)
+
+    def console_source(self, *, grants=True, archive_schema=2):
+        spec = self.inventory.specs["http"]
+        bindings = replace(spec.bindings,
+            executables=(c.ResolvedExecutableBinding("checksum", "/usr/bin/jq", "a" * 64),),
+            endpoints=(c.ResolvedEndpointBinding("relay", self.inventory.resolution.endpoints[1], "http"),),
+            bundles=(c.ResolvedBundleBinding("media", "/run/foundry/media", "b" * 64),),
+            public_listeners=(c.ResolvedPublicListenerBinding("public", "relay", "ingress", "relay.example.org",
+                                                            8554, "none", "tcp", ("203.0.113.10",)),),
+            shared_directories=(c.ResolvedSharedDirectory("render-cache", c.shared_directory_path(spec.identity.instance_id,
+                "render-cache"), "read-write", 1048576),) if grants else ())
+        spec = replace(spec, bindings=bindings)
+        deployment = replace(self.inventory.deployment, archive_schema=archive_schema,
+                             units=tuple(spec if unit.identity.role == "http" else unit for unit in self.inventory.deployment.units))
+        resolution = replace(self.inventory.resolution, deployment_sha256=c.canonical_digest(c.record_document(deployment)))
+        env = self.host.paths.instance_config(self.entry["name"]) / ("runtime/" + CURRENT + "/http/app.env")
+        env.parent.mkdir(parents=True)
+        env.write_text("APP__HTTP__SERVER__ADDRESS=127.0.0.1:8200\n")
+        with patch.object(runtime_config, "effective_environment_path", return_value=env):
+            location = runtime_config.write_binding_descriptor(self.host, self.entry, deployment, resolution, spec)
+        return self.host.paths.p(location), env
+
+    def test_console_descriptor_is_http_minus_shared_directories(self):
+        source, _ = self.console_source()
+        original = source.read_bytes()
+        expected = copy.deepcopy(c.read_json(source))
+        expected["bindings"].pop("shared_directories")
+        # A custom role named console owns console.json, not console/http.json.
+        sibling = source.with_name("console.json")
+        sibling.write_text("custom role descriptor")
+        path = runtime_config.console_binding_descriptor(self.host, self.entry, CURRENT)
+        self.assertEqual(c.read_json(path), expected)
+        self.assertEqual(path.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(source.read_bytes(), original)
+        self.assertEqual(sibling.read_text(), "custom role descriptor")
+        self.assertEqual(runtime_config.console_binding_descriptor(self.host, self.entry, CURRENT), path)
+        self.assertEqual(c.read_json(path), expected)
+
+    def test_console_descriptor_preserves_older_resolution_without_grants(self):
+        source, _ = self.console_source(grants=False)
+        path = runtime_config.console_binding_descriptor(self.host, self.entry, CURRENT)
+        self.assertEqual(c.read_json(path), c.read_json(source))
+
+    def test_console_descriptor_preserves_schema_one(self):
+        source, _ = self.console_source(grants=False, archive_schema=1)
+        path = runtime_config.console_binding_descriptor(self.host, self.entry, CURRENT)
+        self.assertEqual(c.read_json(path), c.read_json(source))
+        self.assertEqual(c.read_json(path)["schema"], 1)
+
+    def test_console_descriptor_refuses_drift_and_symlinks(self):
+        source, _ = self.console_source()
+        path = runtime_config.console_binding_descriptor(self.host, self.entry, CURRENT)
+        path.write_text(source.read_text())  # A stale console descriptor must not retain grants.
+        with self.assertRaises(c.DeployError):
+            runtime_config.console_binding_descriptor(self.host, self.entry, CURRENT)
+        path.unlink()
+        path.symlink_to(source)
+        with self.assertRaises(c.DeployError):
+            runtime_config.console_binding_descriptor(self.host, self.entry, CURRENT)
+        self.assertIn("shared_directories", c.read_json(source)["bindings"])
+
+    def test_console_calls_select_filtered_descriptor_with_explicit_and_selected_environments(self):
+        source, env = self.console_source()
+        self.entry["topology"] = {"schema": 2}
+        self.host.paths.data(self.entry["name"]).mkdir(parents=True)
+        for command in ("config:check", "migrate:status", "migrate", "db:seed", "deploy:storage-probe",
+                        "redis:keys", "maintenance:status", "down", "up"):
+            for explicit in (False, True):
+                with self.subTest(command=command, explicit=explicit), patch.object(self.host, "run") as run, \
+                        patch.object(lifecycle, "load", return_value=(None, None, self.inventory, None)), \
+                        patch.object(runtime_config, "effective_environment_path", return_value=env):
+                    release.app(self.host, self.entry, self.host.paths.opt(self.entry["name"]), command,
+                                env_file=env if explicit else None)
+                descriptor = Path(run.call_args.kwargs["env"]["FOUNDRY_DEPLOY_RUNTIME_FILE"])
+                self.assertNotEqual(descriptor, source)
+                expected = c.read_json(source)
+                expected["bindings"].pop("shared_directories")
+                self.assertEqual(c.read_json(descriptor), expected)
+                self.assertIn("shared_directories", c.read_json(source)["bindings"])
+                self.assertEqual(run.call_args.args[0][:4], ["runuser", "-u", self.entry["name"], "--"])
 
     def test_network_absence_refuses_before_any_host_action(self):
         with patch.object(network.importlib, "import_module", return_value=object()), self.assertRaises(c.DeployError) as raised:
