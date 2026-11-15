@@ -38,6 +38,7 @@ var largeFiles = attachments.Define(uploadIdentity, "large", largeUploadPolicy)
 var smallUploadDisk = storage.DefineDisk("acceptance-small-uploads")
 var smallFiles = attachments.Define(uploadIdentity, "small", attachments.Policy{Disk: smallUploadDisk, Cardinality: attachments.Single, AnyMedia: true, MaxBytes: 1 << 20, MaxStoredBytes: 1 << 20})
 
+type uploadPath struct{ ID string }
 type uploadQuery struct{ ID, Hold string }
 type uploadBody struct{ File http.UploadedFile }
 
@@ -221,7 +222,7 @@ func (u *uploadRuntime) routes(application.Services) ([]http.RouteRegistration, 
 		}
 		return http.NoContent{}, nil
 	}))
-	for _, kind := range []string{"large", "short", "small"} {
+	for _, kind := range []string{"large", "short", "small", "scoped"} {
 		form := fileForm
 		bodyBytes, fileBytes, timeout := u.settings.BodyBytes, u.settings.FileBytes, u.settings.Timeout
 		collection := largeFiles
@@ -239,21 +240,29 @@ func (u *uploadRuntime) routes(application.Services) ([]http.RouteRegistration, 
 		limits.Multipart.Bytes = bodyBytes
 		limits.Multipart.FileBytes = fileBytes
 		limits.Multipart.Parts, limits.Multipart.Files, limits.Multipart.Readers = 1, 1, 1
-		endpoint := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "acceptance.upload." + http.RouteID(kind), Method: http.POST, Access: http.Public}, http.StaticPath("/acceptance/uploads/"+kind), http.BodyLimit(bodyBytes), http.Timeout(timeout)), query, http.MultipartBody(form), http.JSONResponse(200, UploadReceiptJSON()), http.Limits(limits))
-		routes = append(routes, endpoint.Handle(func(ctx context.Context, in http.Input[http.NoPath, uploadQuery, uploadBody]) (UploadReceipt, error) {
-			if err := work.ValidateID(in.Query.ID); err != nil {
+		path := http.DefinePath[uploadPath]("/acceptance/uploads/" + kind)
+		if kind == "scoped" {
+			path = http.DefinePath("/acceptance/resources/{resource}/media", http.Param("resource", http.StringPath[string](), func(p *uploadPath) *string { return &p.ID }))
+		}
+		endpoint := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "acceptance.upload." + http.RouteID(kind), Method: http.POST, Access: http.Public}, path, http.BodyLimit(bodyBytes), http.Timeout(timeout)), query, http.MultipartBody(form), http.JSONResponse(200, UploadReceiptJSON()), http.Limits(limits))
+		routes = append(routes, endpoint.Handle(func(ctx context.Context, in http.Input[uploadPath, uploadQuery, uploadBody]) (UploadReceipt, error) {
+			identifier := in.Query.ID
+			if kind == "scoped" {
+				identifier = in.Path.ID
+			}
+			if err := work.ValidateID(identifier); err != nil {
 				return UploadReceipt{}, http.BadRequest
 			}
 			if in.Query.Hold != "" && in.Query.Hold != "publication" && in.Query.Hold != "staging" {
 				return UploadReceipt{}, http.BadRequest
 			}
-			if err := u.receipts.Mark(in.Query.ID + ".captured"); err != nil {
+			if err := u.receipts.Mark(identifier + ".captured"); err != nil {
 				return UploadReceipt{}, err
 			}
-			ctx = context.WithValue(ctx, uploadControlKey{}, uploadControl{in.Query.ID, in.Query.Hold})
-			owner := extensions.ORMIdentity(uploadIdentity).Reference(in.Query.ID)
+			ctx = context.WithValue(ctx, uploadControlKey{}, uploadControl{identifier, in.Query.Hold})
+			owner := extensions.ORMIdentity(uploadIdentity).Reference(identifier)
 			if err := u.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-				_, err := tx.Exec(ctx, `INSERT INTO acceptance_fixture (name,value) VALUES ($1,'upload')`, in.Query.ID)
+				_, err := tx.Exec(ctx, `INSERT INTO acceptance_fixture (name,value) VALUES ($1,'upload')`, identifier)
 				return err
 			}); err != nil {
 				return UploadReceipt{}, err
@@ -289,7 +298,7 @@ func (u *uploadRuntime) routes(application.Services) ([]http.RouteRegistration, 
 			if err := errors.Join(readErr, stored.Close()); err != nil {
 				return UploadReceipt{}, err
 			}
-			if err := u.receipts.Mark(in.Query.ID + ".committed"); err != nil {
+			if err := u.receipts.Mark(identifier + ".committed"); err != nil {
 				return UploadReceipt{}, err
 			}
 			return UploadReceipt{Operation: published.Operation.String(), Bytes: n, SHA256: fmt.Sprintf("%x", hash.Sum(nil))}, nil

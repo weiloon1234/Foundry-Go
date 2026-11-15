@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: upload template admission now requires an allow-listed origin-form
+  request target. Raw fragments cannot truncate nginx's matching URI to bypass
+  route or segment-length restrictions. Raw spaces, backslashes, controls and
+  absolute-form targets are refused. The exported grammar records that invalid
+  UTF-8 is rejected by the router after ingress admission.
+- Added: parameterized large-upload ingress routes using the HTTP router's
+  exported `{name}` syntax. Templates render escaped, anchored nginx locations,
+  reject overlaps and unsafe normalized aliases, and retain upload admission,
+  buffering and timeout policies. Routes and parameter segments are bounded.
+- Added: deploy-tool generation 17 for upload templates, with client and host
+  floors retained through rollback and recovery. Literal-only profiles retain
+  their exact locations and generation-16 compatibility.
+- Added: a resource-scoped typed upload endpoint and above-25m/default-limit
+  scenarios in container acceptance. Documented thick LVM provisioning for all
+  five upload pools, R2's conditional pool requirement, and operator route
+  confirmation where release archives lack a complete route manifest.
+
 ## v0.35.0 — 2026-11-15
 
 - Added: loopback network confinement for roles, declared with

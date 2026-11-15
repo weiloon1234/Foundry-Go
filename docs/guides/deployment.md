@@ -883,6 +883,10 @@ reservations. App credentials must be scoped to the app bucket;
 provider policy and denial probes establish that isolation. The framework does
 not create buckets or edit provider policies. Local upload staging beneath
 `/var/lib/foundry/apps/<name>/uploads` is not the durable attachment store.
+R2 itself does not require dedicated upload filesystems. If you enable the
+`uploads` profile below, the deploy tool requires all five pools even when the
+publication disk is R2. The current ingress contract does not omit unused pools
+based on the selected storage adapter.
 
 R2 attachment cleanup relies on write-once original and variant-generation keys,
 conditional creation, writer fencing, and durable retirement before unconditional
@@ -1328,7 +1332,7 @@ Changing an already configured instance's upload allocation requires a separate
 reviewed migration; bootstrap refuses that change with `upload_profile_change`.
 
 This one-HTTP-process example permits a 512 MiB file with 8 MiB for multipart
-framing and fields. Paths are exact decoded nginx locations. List every upload
+framing and fields. Literal paths are exact decoded nginx locations. List every upload
 alias explicitly; ordinary routes retain the 25m body limit and 120s upstream
 read-idle timeout.
 
@@ -1361,18 +1365,90 @@ read-idle timeout.
 }
 ```
 
-The application must register matching exact paths, file limits, encoded body
+The application must register matching paths, file limits, encoded body
 limits, and total deadlines using `MultipartAdmission`, `BodyLimit`, and `Timeout`.
 The [HTTP upload guide](http-uploads.md#admit-large-multipart-requests-before-capture)
-shows the typed assembly. Deployment cannot infer an arbitrary application's
-route declaration. Confirm the runtime route and generated nginx location together
-before advertising the upload endpoint.
+shows the typed assembly. Confirm that each path has a body-accepting method,
+such as POST, PUT or PATCH, and review the runtime route and generated nginx
+location together before advertising the endpoint. Ingress declarations select
+paths; application routing still owns methods, authentication and authorization.
+
+The release archive has no required, complete route inventory. Its `manifest.json`
+describes payload files and deployment topology. The build carries the executable,
+configuration and public assets, plus explicitly declared artifacts. Generated
+OpenAPI or contract files are not guaranteed archive members or complete listings
+of runtime routes. Release planning therefore does not claim a route drift check.
+Automating this check needs a versioned, release-bound inventory of every registered
+method and path, including private routes, with body acceptance metadata.
+
+### Parameterized upload routes
+
+Declare a resource-scoped endpoint with the router's single-segment syntax:
+
+```json
+"routes": ["/api/v1/resources/{resource}/media"]
+```
+
+This declaration requires deploy-tool generation 17 on the client and host.
+Install the host bundle before bootstrap. Literal-only profiles continue to work
+with generation 16 clients and hosts. Legacy instances keep their configured
+upload allocation fixed, so application rollback cannot lower this requirement.
+Feature deployment selections retain generation 17 through rollback and recovery,
+even if a later profile removes its templates.
+
+Parameter names use `[A-Za-z_][A-Za-z0-9_]*` and must be unique within a route.
+The deploy tool consumes the syntax exported by the router's
+[`internal/httppath` parser](../../internal/httppath/pattern.go), regenerated with
+`go generate ./internal/httppath`. A trailing slash is exact: `/media` and
+`/media/` are separate declarations. Catch-all parameters are not supported.
+Each parameter matches one non-empty segment of at most 1024 decoded bytes,
+excluding `/`, control characters, `.` and `..`. A profile permits at most 32
+routes, 2048 UTF-8 bytes per route, and eight parameters per route. Query strings
+and operator-supplied regular expressions are not route syntax. Routes cannot
+overlap `/.well-known/`, including templates whose first parameter could match
+that reserved prefix.
+
+Literal declarations keep `location =` rendering. A template produces one
+case-sensitive `location ~` with an anchored expression. Literal segments are
+regex-escaped, then the whole expression is quoted for nginx. Only the tool's
+fixed segment expression expands a parameter. Overlapping templates and literals
+are rejected in either declaration order, so nginx regex order cannot select a
+different upload policy. The ordinary `/` prefix keeps the default 25m limit.
+
+Nginx selects locations using its decoded, normalized URI. The generated server
+explicitly keeps `merge_slashes on`. Template locations require an origin-form
+target, `/path` with an optional `?query`, in the original `$request` line.
+The allow-list accepts ASCII letters, digits, `-._~!$&'()*+,;=:@`, slash separators
+and valid `%HH` triplets. Query values also allow `/` and `?`. Other characters,
+including non-ASCII text, must be percent-encoded. Raw `#`, backslash, spaces,
+NUL and control bytes are refused, as are absolute-form targets such as
+`http://example.test/path`. Checking `$request` preserves the target form that
+`$request_uri` can lose. HTTP 1.0, 1.1, 2.0 and 3.0 request lines are supported.
+
+Path segments additionally exclude encoded slashes and controls, doubled slashes
+and dot segments, including percent-encoded dots. A target that fails this check
+receives HTTP 400 if it selects a template location. Paths outside the template
+keep the default limit. Query values do not participate in path normalization or
+segment limits, but must satisfy the query allow-list. Literal locations keep
+their existing decoded path behavior. See nginx's
+[location rules](https://nginx.org/en/docs/http/ngx_http_core_module.html#location).
+
+The exported grammar declares `utf8_required: true` and
+`upload_ingress_utf8_enforced: false`. Ingress matches decoded bytes without a
+PCRE UTF-8 mode. The Go router's `validateParameterText` and `httppath.ValidText`
+reject invalid UTF-8, such as `%FF`, after ingress has admitted the request body.
+Such requests retain the same connection-slot, body-size and segment-length
+limits as a valid but nonexistent resource ID. Portable UTF-8 enforcement in
+nginx has not been verified across both supported Ubuntu releases.
+
+### Provision the upload filesystems
 
 Provision five distinct, writable ext4 or XFS filesystems at
 `/var/lib/foundry/uploads/<instance>/{proxy,request,attachment,staging,small}`.
 Use dedicated, fully allocated block volumes with capacity reserved underneath
-the filesystem. Shared thin storage without physical reserve cannot guarantee
-small-request service under exhaustion. This version supports sized volumes;
+the filesystem. Thin provisioning is not compliant: overcommit breaks the
+per-pool capacity guarantee, so one pool can exhaust storage promised to another.
+This version supports sized volumes;
 project-quota provisioning is not implemented. Separate directories or bind mounts
 on one filesystem do not qualify. Planning never formats, mounts, or resizes a
 volume, and it refuses missing, read-only, aliased, or oversized mounts.
@@ -1395,6 +1471,48 @@ the isolated instance account. All application service roles receive explicit
 identity, size, permissions, and service-identity writability before activation.
 A full large volume cannot borrow space from the small volume. Nothing sweeps
 retained files to make an unhealthy deployment pass.
+
+For one server with one HTTP role, one extra empty block volume of at least
+12 GiB can hold five thick LVM logical volumes. The sizes below match the example
+profile's pool maxima. They exceed `minimum_bytes`: 128 KiB for proxy, 2080 MiB
+for request, 1024 MiB for attachment, 2048 MiB for staging, and 2 MiB for small.
+Filesystem metadata and reserved blocks reduce writable capacity, which the
+planner checks after formatting. Increase attachment and staging allocations
+and profile maxima if the topology declares more roles.
+
+Use only a new, empty volume dedicated to this instance. Replace the device and
+instance placeholders, and confirm that the volume contains no existing data
+before running the formatting commands. These are administrator provisioning
+steps, not commands the deploy tool runs:
+
+```sh
+upload_device='/dev/disk/by-id/<new-empty-upload-volume>'
+upload_instance='<registered-instance-name>'
+upload_vg='foundry_uploads_example'
+sudo pvcreate "$upload_device"
+sudo vgcreate "$upload_vg" "$upload_device"
+for upload_spec in proxy:64M request:3G attachment:2G staging:3G small:256M; do
+	upload_pool=${upload_spec%%:*}
+	upload_size=${upload_spec#*:}
+	upload_lv="/dev/$upload_vg/$upload_pool"
+	upload_mount="/var/lib/foundry/uploads/$upload_instance/$upload_pool"
+	sudo lvcreate --type linear --size "$upload_size" --name "$upload_pool" "$upload_vg"
+	sudo mkfs.ext4 "$upload_lv"
+	sudo install -d -o root -g root -m 0755 "$upload_mount"
+	upload_uuid=$(sudo blkid -s UUID -o value "$upload_lv")
+	printf 'UUID=%s %s ext4 defaults,nodev,nosuid 0 2\n' "$upload_uuid" "$upload_mount" | sudo tee -a /etc/fstab
+	sudo mount "$upload_mount"
+done
+```
+
+Keep every parent directory root-owned and non-writable by group or others.
+Review `/etc/fstab` before rebooting. Planning uses `findmnt --mountpoint` to
+require each exact mount, a distinct device number, writable ext4 or XFS, and
+no bind alias. `statvfs` checks writable capacity above the admission budget and
+filesystem size at or below the profile maximum. Runtime checks also verify the
+mode-0700 `data` child and its service owner's ability to write. The tool does
+not inspect LVM's allocation type or the underlying provider's physical reserve;
+the administrator must establish the thick, non-overcommitted backing.
 
 Runtime configuration comes from one derivation in
 [`uploads.py`](../../tools/deploy/lib/uploads.py):
@@ -1435,7 +1553,7 @@ the container saturation and quota scenarios remain required. The shared R2
 conditional-write restriction remains independent of ingress configuration.
 
 The shared nginx zone limits aggregate uploads across workers and aliases for
-one instance, including concurrent HTTP/2 streams. Each exact location returns
+one instance, including concurrent HTTP/2 streams. Each upload location returns
 503 with `Retry-After: 1` on admission exhaustion. It sets
 `proxy_request_buffering off`, `proxy_http_version 1.1`, `proxy_buffering off`,
 and `proxy_next_upstream off`. Chunked bodies use the same unbuffered upstream

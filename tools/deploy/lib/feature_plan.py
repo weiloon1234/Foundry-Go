@@ -104,8 +104,8 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
             target_path = target
         topology = parse_topology(declaration.topology_json)
         from upgrades import check_feature_generation
-        check_feature_generation(registry, topology, entry)
         candidate_profile = parse_profile(release.target_declaration(host, entry, manifest)["profile"], topology)
+        check_feature_generation(registry, topology, entry, profile=candidate_profile.projection())
         import feature_maintenance
         feature_maintenance.stopped_roles(topology)
         application, changes = runtime_config.configuration_parts(configuration or {}, topology=topology)

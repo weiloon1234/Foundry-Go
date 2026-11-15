@@ -50,8 +50,10 @@ class ManagerTests(unittest.TestCase):
         self.host.write_registry(value)
         request = {**self.request, 'client': {**self.request['client'], 'generation': 9},
                    'archive': '/staged/app.tar.gz', 'archive_sha256': 'a' * 64}
-        with patch.object(release, 'activate', return_value={'ok': True}) as activate:
+        with patch.object(release, 'activate', return_value={'ok': True}) as activate, \
+                patch.object(release, 'unpack_archive', return_value={'schema': 1}) as inspect:
             self.assertEqual({'ok': True}, manager.execute(self.host, 'activate', request))
+            inspect.assert_called_once()
         activate.assert_called_once()
         self.assertEqual('/staged/app.tar.gz', activate.call_args.args[3])
 
@@ -67,7 +69,8 @@ class ManagerTests(unittest.TestCase):
                    "archive": "/staged/app.tar.gz", "archive_sha256": "a" * 64}
         for generation in (9, 10, 11):
             request["client"]["generation"] = generation
-            with patch.object(release, "activate", return_value={"ok": True}) as activate:
+            with patch.object(release, "activate", return_value={"ok": True}) as activate, \
+                    patch.object(release, "unpack_archive", return_value={"schema": 1}):
                 self.assertEqual({"ok": True}, manager.execute(self.host, "activate", request))
                 activate.assert_called_once()
             feature_request = {**self.request, "profile": feature["profile"],

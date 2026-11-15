@@ -111,8 +111,8 @@ func TestUploadRoutesReleaseCaptureAfterInvalidIdentity(t *testing.T) {
 	if err != nil || response.StatusCode != 200 || !strings.Contains(string(body), `"reserved":0`) {
 		t.Fatal(response.StatusCode, string(body), err)
 	}
-	for _, kind := range []string{"large", "short", "small", "multipart"} {
-		request, err := stdhttp.NewRequestWithContext(t.Context(), "POST", "http://"+address+"/acceptance/uploads/"+kind+"?id=invalid", strings.NewReader("--test\r\nContent-Disposition: form-data; name=\"file\"; filename=\"x.txt\"\r\n\r\nx\r\n--test--\r\n"))
+	for _, path := range []string{"/acceptance/uploads/large", "/acceptance/uploads/short", "/acceptance/uploads/small", "/acceptance/uploads/multipart", "/acceptance/resources/invalid/media"} {
+		request, err := stdhttp.NewRequestWithContext(t.Context(), "POST", "http://"+address+path+"?id=invalid", strings.NewReader("--test\r\nContent-Disposition: form-data; name=\"file\"; filename=\"x.txt\"\r\n\r\nx\r\n--test--\r\n"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -124,7 +124,7 @@ func TestUploadRoutesReleaseCaptureAfterInvalidIdentity(t *testing.T) {
 		_, _ = io.Copy(io.Discard, response.Body)
 		_ = response.Body.Close()
 		if response.StatusCode != 400 {
-			t.Fatal("invalid controller identity reached handler dependencies", kind, response.StatusCode)
+			t.Fatal("invalid controller identity reached handler dependencies", path, response.StatusCode)
 		}
 		if active, reserved := pool.Usage(); active != 0 || reserved != 0 {
 			t.Fatal("capture retained after rejection")

@@ -1,13 +1,17 @@
 """Upload policies exercise real render/runtime derivation and isolated mount evidence."""
 import copy
 import json
+import posixpath
 from pathlib import Path
+import re
+import shlex
 import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from urllib.parse import unquote_to_bytes
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import DeployError, validate_profile
@@ -16,6 +20,7 @@ from provision import _template
 from runtime_config import runtime_environment, validate_configuration_changes
 from test_contracts import fixture
 import uploads
+import upgrades
 
 TOOLS = Path(__file__).resolve().parents[1]
 
@@ -37,6 +42,204 @@ class UploadPolicyTests(unittest.TestCase):
     def setUp(self):
         self.project, self.profile, self.entry = fixture()
         self.profile["uploads"] = profile()
+
+    def test_router_template_syntax_and_policy_bounds(self):
+        for route in ("/api/{resource}/media", "/api/{_ID2}/media/", "/a.b+(x)/{id}", "/{root}",
+                      "/a/" + "/".join("{p" + str(i) + "}" for i in range(8))):
+            with self.subTest(route=route):
+                value = {**profile(), "routes": [route]}
+                uploads.validate(value)
+        for route in ("/api/{1id}", "/api/{i-d}", "/api/{é}", "/api/{}", "/api/{id}/{id}",
+                      "/api/{rest...}", "/api/x{id}", "/api/{id}//media", "/api/{id}/./media",
+                      "/api/{id}/../media", "/api/{id}/%2f", "/api/{id}?x=y", "/api/{id}/#x",
+                      "/api/{id}/a\\b", "/api/{id}/a\nb", "/api/{id}/a\x7fb", "/api/{id}/\ud800",
+                      "/.well-known/{x}", "/{root}/media", "/{root}/", "/x" * 1025, "/é" * 700 + "/{id}",
+                      "/a/" + "/".join("{p" + str(i) + "}" for i in range(9))):
+            with self.subTest(route=route), self.assertRaises(DeployError):
+                uploads.validate({**profile(), "routes": [route]})
+        with self.assertRaises(DeployError):
+            uploads.validate({**profile(), "routes": ["/a/" + str(i) for i in range(33)]})
+
+    def test_overlaps_are_rejected_independent_of_declaration_order(self):
+        for routes in (["/a/{id}/media", "/a/{other}/media"],
+                       ["/a/{id}/media", "/a/123/media"],
+                       ["/a/{id}/media", "/a/123/{kind}"], ["/a", "/a"]):
+            for ordered in (routes, routes[::-1]):
+                with self.subTest(routes=ordered), self.assertRaises(DeployError):
+                    uploads.validate({**profile(), "routes": ordered})
+        uploads.validate({**profile(), "routes": ["/a/{id}/media", "/a/{id}/media/",
+                                                  "/b/{id}/media", "/a/", "/a/{id}"]})
+
+    def template_patterns(self, route="/api/resources/{resource}/media", template="nginx-http.conf"):
+        self.profile["uploads"]["routes"] = ["/literal/upload", route]
+        rendered = _template(TOOLS, template, self.entry)
+        location = next(line.strip() for line in rendered.splitlines() if line.strip().startswith("location ~ "))
+        regex = shlex.split(location)[2]
+        raw = next(shlex.split(line)[0][1:] for line in rendered.splitlines() if line.strip().startswith('\"~'))
+        return rendered, regex, raw
+
+    def test_rendered_templates_match_only_safe_normalized_paths(self):
+        for template in ("nginx-http.conf", "nginx-https.conf"):
+            rendered, regex, raw = self.template_patterns(template=template)
+            self.assertIn("merge_slashes on;", rendered)
+            self.assertEqual(1, rendered.count("limit_conn_zone"))
+            self.assertIn("location = /literal/upload {", rendered)
+            self.assertIn("client_max_body_size 25m;", rendered)
+            self.assertIn("return 400;", rendered)
+            self.assertIn("map $request $", rendered)
+            self.assertNotIn("map $request_uri $", rendered)
+            self.assertIn("default 1;", rendered.split("map $request $", 1)[1])
+            self.assertIn(uploads.nginx_quote("~" + raw) + " 0;", rendered)
+            self.assertNotIn("@UPLOAD", rendered)
+            literal_policy = rendered.split("location = /literal/upload {", 1)[1].split("\n    }", 1)[0]
+            template_policy = rendered.split("location ~ ", 1)[1].split(" {\n", 1)[1].split("\n    }", 1)[0]
+            template_policy = "\n" + "\n".join(line for line in template_policy.splitlines() if "return 400;" not in line)
+            self.assertEqual(literal_policy, template_policy)
+            pattern = re.compile(regex.encode())  # nginx's PCRE matches URI bytes.
+            def admitted(path):
+                decoded = unquote_to_bytes(re.split(r"[?#]", path, maxsplit=1)[0])
+                normalized = posixpath.normpath(decoded)
+                if decoded.endswith(b"/") and not normalized.endswith(b"/"):
+                    normalized += b"/"
+                return bool(pattern.search(normalized)) and bool(re.search(raw, "POST " + path + " HTTP/1.1"))
+            for path in ("/api/resources/123/media", "/api/resources/a.b/media", "/api/resources/%E4%B8%AD/media",
+                         "/api/resources/%252F/media", "/api/resources/" + "x" * 1024 + "/media",
+                         "/api/resources/a%23b/media", "/api/resources/a%3Fb/media", "/api/resources/a%5Cb/media",
+                         "/api/resources/123/media?next=//../%2F", "/api/%72esources/abc/media"):
+                with self.subTest(template=template, path=path):
+                    self.assertTrue(admitted(path))
+            for path in ("/api/resources//media", "/api/resources/a/media/", "/api/resources/a/thumbnail",
+                         "/api/resources/a/b/media", "/api/resources/a%2Fb/media", "/api/resources/%2f/media",
+                         "/api%2Fresources/a/media", "/api/resources//a/media", "/api/resources/./a/media",
+                         "/api/resources/%2e/a/media", "/api/resources/x/../a/media",
+                         "/api/resources/x/.%2E/a/media", "/api/resources/x/%2e%2e/a/media",
+                         "/api/resources/./media", "/api/resources/../media", "/api/resources/%2E/media",
+                         "/api/resources/a/media%0a", "/api/resources/%0a/media", "/api/resources/%7f/media",
+                         "/api/resources/a/media#extra", "/api/resources/a/media#?extra",
+                         "/api/resources/a/media#" + "x" * 1024,
+                         "/api/resources/" + "x" * 1025 + "/media",
+                         "/api/resources/" + "%C3%A9" * 513 + "/media"):
+                with self.subTest(template=template, path=path):
+                    self.assertFalse(admitted(path))
+            # Controls, dot and empty segments are also excluded before any
+            # normalization; this guards against a later merge_slashes change.
+            for value in ("", ".", "..", "a/b", "\n", "\x7f"):
+                self.assertIsNone(pattern.search(("/api/resources/" + value + "/media").encode()))
+
+    def test_raw_request_allow_list_covers_every_byte_and_target_form(self):
+        for template in ("nginx-http.conf", "nginx-https.conf"):
+            _, _, raw = self.template_patterns(template=template)
+            pattern = re.compile(raw.encode())
+            allowed = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~!$&'()*+,;=:@/?"
+            for byte in range(256):
+                target = b"/api/resources/a" + bytes([byte]) + b"b/media"
+                with self.subTest(template=template, byte=byte):
+                    self.assertEqual(byte in allowed, bool(pattern.search(b"POST " + target + b" HTTP/1.1")))
+            for version in ("1.0", "1.1", "2.0", "3.0"):
+                for target in ("/api/resources/id/media", "/api/resources/id/media?",
+                               "/api/resources/id/media?next=/../%2F?x=%23", "/api/resources/%E4%B8%AD/media"):
+                    with self.subTest(version=version, target=target):
+                        self.assertIsNotNone(pattern.search(f"POST {target} HTTP/{version}".encode()))
+            for target in ("http://example.test/api/resources/id/media", "https://example.test/api/resources/id/media",
+                           "//example.test/api/resources/id/media", "example.test:443", "*",
+                           "/api/resources/id/media#fragment", "/api/resources/id/media?x=#fragment",
+                           "/api/resources/a\\b/media", "/api/resources/a b/media",
+                           "/api/resources/a%/media", "/api/resources/a%2/media", "/api/resources/a%GG/media",
+                           "/api/resources/%00/media", "/api/resources/%1f/media", "/api/resources/%7F/media",
+                           "/api/resources/%2F/media", "/api/resources/%2e/media", "/api/resources/.%2E/media",
+                           "/api/resources/../media", "/api/resources/id/media/..", "/api/resources/id/media/.?x=1"):
+                with self.subTest(target=target):
+                    self.assertIsNone(pattern.search(f"POST {target} HTTP/1.1".encode()))
+            for suffix in (b"\n", b"\r", b"\x00", b"\r\nGET / HTTP/1.1"):
+                self.assertIsNone(pattern.search(b"POST /api/resources/id/media HTTP/1.1" + suffix))
+
+    def test_raw_hash_cannot_hide_an_oversized_final_parameter(self):
+        for template in ("nginx-http.conf", "nginx-https.conf"):
+            _, regex, raw = self.template_patterns("/uploads/{resource}", template=template)
+            target = "/uploads/x#" + "a" * 1024
+            self.assertIsNotNone(re.search(regex, target.split("#", 1)[0]))
+            self.assertIsNone(re.search(regex, target))
+            self.assertIsNone(re.search(raw, f"POST {target} HTTP/1.1"))
+            # Encoding # preserves the segment instead of truncating nginx's URI.
+            self.assertIsNone(re.search(regex, unquote_to_bytes(target.replace("#", "%23")).decode()))
+
+    def test_utf8_is_explicitly_deferred_to_the_router_with_ingress_bounds(self):
+        self.assertTrue(uploads.PATH_SYNTAX["utf8_required"])
+        self.assertFalse(uploads.PATH_SYNTAX["upload_ingress_utf8_enforced"])
+        _, regex, raw = self.template_patterns()
+        for encoded in ("%FF", "%C0%AF", "%ED%A0%80", "%E4%B8"):
+            target = "/api/resources/" + encoded + "/media"
+            self.assertIsNotNone(re.search(raw, f"POST {target} HTTP/1.1"))
+            self.assertIsNotNone(re.search(regex.encode(), unquote_to_bytes(target)))
+        target = "/api/resources/" + "%FF" * 1025 + "/media"
+        self.assertIsNone(re.search(regex.encode(), unquote_to_bytes(target)))
+
+    def test_template_literals_are_escaped_through_the_nginx_lexer(self):
+        literal = 'a.b+(x)|^$"; return 200;@UPLOAD_PROXY@@PROXY@@VARIABLE@'
+        _, regex, _ = self.template_patterns("/" + literal + "/{id}/")
+        self.assertIsNotNone(re.search(regex, "/" + literal + "/123/"))
+        self.assertIsNone(re.search(regex, "/axbxxx/123/"))
+        self.assertIsNone(re.search(regex, "/" + literal + "/123"))
+
+    def test_upload_generation_floors_and_legacy_compatibility(self):
+        from topology import parse_topology
+        topology = parse_topology({"schema": 1, "roles": [{"name": "http"}]})
+        registry = {"tools": {"generation": 16}}
+        upgrades.check_upload_generation(registry, self.entry, client_generation=16)
+        upgrades.check_instance_capabilities(self.entry, 16)
+        self.profile["uploads"]["routes"] = ["/resources/{resource}/media"]
+        for host, client, code in ((16, 17, "host_upgrade_required"), (17, 16, "instance_capability_required")):
+            with self.subTest(host=host, client=client), self.assertRaises(DeployError) as raised:
+                upgrades.check_upload_generation({"tools": {"generation": host}}, self.entry, client_generation=client)
+            self.assertEqual(code, raised.exception.code)
+        upgrades.check_upload_generation({"tools": {"generation": 17}}, self.entry, client_generation=17)
+        with self.assertRaises(DeployError):
+            upgrades.check_instance_capabilities(self.entry, 16)
+        self.assertEqual(17, upgrades.feature_generation(topology, self.entry))
+        target = copy.deepcopy(self.profile)
+        del self.profile["uploads"]
+        self.assertEqual(17, upgrades.feature_generation(topology, self.entry, profile=target))
+        with self.assertRaises(DeployError):
+            upgrades.check_feature_generation(registry, topology, self.entry, profile=target)
+        # Feature selections retain the floor even after application rollback.
+        self.assertEqual(17, upgrades.feature_generation(topology, {"deployment_selection": {"minimum_generation": 17}}))
+        self.assertEqual(17, upgrades.protocol()["generation"])
+
+    def test_release_target_profile_and_recovery_require_generation_17(self):
+        import release
+        import recover
+        from topology import parse_topology
+        topology = parse_topology({"schema": 2, "roles": [{"name": "http", "kind": "builtin"}]})
+        target = {**self.profile, "schema": 3, "placement": {"http": 1}, "listeners": {}}
+        target["uploads"] = {**profile(), "routes": ["/resources/{resource}/media"]}
+        manifest = {"schema": 2, "deployment": {
+            "schema": 2, "topology": topology.projection(), "topology_sha256": topology.sha256,
+            "profile": target, "inventory": [{"path": "artisan", "sha256": "a" * 64,
+                                               "size": 1, "kind": "application"}],
+            "artifacts": [], "application_executables": {}}}
+        host = Mock()
+        host.require_identity.return_value = ({}, self.entry)
+        for installed, client, code in ((17, 16, "instance_capability_required"), (16, 17, "host_upgrade_required")):
+            host.read_registry.return_value = {"tools": {"generation": installed}}
+            request = {"client": {"generation": client}, "project": self.project, "profile": self.profile,
+                       "archive": "/staged/app.tar.gz", "archive_sha256": "a" * 64}
+            with patch.object(release, "unpack_archive", return_value=manifest), self.assertRaises(DeployError) as raised:
+                upgrades.check_target_capabilities(host, request, "release-plan")
+            self.assertEqual(code, raised.exception.code)
+            recovered = {"metadata": {"profile": target}, "feature": None}
+            with patch.object(recover, "read_archive", return_value={}), \
+                    patch.object(recover, "archive_configuration", return_value=recovered), \
+                    self.assertRaises(DeployError) as raised:
+                upgrades.check_target_capabilities(host, {**request, "recovery_archive": "/private/recovery"}, "recover-plan")
+            self.assertEqual(code, raised.exception.code)
+
+    def test_bootstrap_template_floor_applies_before_instance_registration(self):
+        self.profile["uploads"]["routes"] = ["/resources/{resource}/media"]
+        for installed, client, code in ((17, 16, "instance_capability_required"), (16, 17, "host_upgrade_required")):
+            registry = {"tools": {"generation": installed}, "instances": {}}
+            with self.assertRaises(DeployError) as raised:
+                upgrades._check_feature_request(registry, {"profile": self.profile, "client": {"generation": client}}, "bootstrap-plan")
+            self.assertEqual(code, raised.exception.code)
 
     def test_schema_bounds_and_deadlines(self):
         validate_profile(self.profile, self.project)

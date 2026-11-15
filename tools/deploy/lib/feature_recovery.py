@@ -85,7 +85,7 @@ def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_d
         topology = parse_topology(declaration.topology_json)
         from upgrades import check_feature_generation
         minimum_generation = check_feature_generation(registry, topology,
-            {"deployment_selection": {"minimum_generation": max(snapshot["selection"]["minimum_generation"],
+            {"profile": entry["profile"], "deployment_selection": {"minimum_generation": max(snapshot["selection"]["minimum_generation"],
                 entry.get("deployment_selection", {}).get("minimum_generation", 0))}})
         source = parse_profile(intent['source_profile'], topology)
         original = services.UnitInventory(entry['name'], topology, source,

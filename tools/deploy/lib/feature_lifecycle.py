@@ -441,7 +441,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
                names=None, configuration=None, launch=None, review=None, maintenance_request=None):
     import release
     from upgrades import check_feature_generation
-    minimum_generation = check_feature_generation(registry, inventory.topology, entry)
+    minimum_generation = check_feature_generation(registry, inventory.topology, entry, profile=inventory.profile.projection())
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
     old = entry.get("deployment_selection", {}).get("selected_resolution_id", inventory.resolution.id)
     previous = load(host, entry)[2] if "deployment_selection" in entry else inventory
