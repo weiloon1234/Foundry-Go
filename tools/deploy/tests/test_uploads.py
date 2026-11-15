@@ -86,6 +86,10 @@ class UploadPolicyTests(unittest.TestCase):
             self.assertIn("location = /literal/upload {", rendered)
             self.assertIn("client_max_body_size 25m;", rendered)
             self.assertIn("return 400;", rendered)
+            self.assertIn("map $request $", rendered)
+            self.assertNotIn("map $request_uri $", rendered)
+            self.assertIn("default 1;", rendered.split("map $request $", 1)[1])
+            self.assertIn(uploads.nginx_quote("~" + raw) + " 0;", rendered)
             self.assertNotIn("@UPLOAD", rendered)
             literal_policy = rendered.split("location = /literal/upload {", 1)[1].split("\n    }", 1)[0]
             template_policy = rendered.split("location ~ ", 1)[1].split(" {\n", 1)[1].split("\n    }", 1)[0]
@@ -93,13 +97,14 @@ class UploadPolicyTests(unittest.TestCase):
             self.assertEqual(literal_policy, template_policy)
             pattern = re.compile(regex.encode())  # nginx's PCRE matches URI bytes.
             def admitted(path):
-                decoded = unquote_to_bytes(path.split("?", 1)[0])
+                decoded = unquote_to_bytes(re.split(r"[?#]", path, maxsplit=1)[0])
                 normalized = posixpath.normpath(decoded)
                 if decoded.endswith(b"/") and not normalized.endswith(b"/"):
                     normalized += b"/"
-                return bool(pattern.search(normalized)) and not re.search(raw, path)
+                return bool(pattern.search(normalized)) and bool(re.search(raw, "POST " + path + " HTTP/1.1"))
             for path in ("/api/resources/123/media", "/api/resources/a.b/media", "/api/resources/%E4%B8%AD/media",
                          "/api/resources/%252F/media", "/api/resources/" + "x" * 1024 + "/media",
+                         "/api/resources/a%23b/media", "/api/resources/a%3Fb/media", "/api/resources/a%5Cb/media",
                          "/api/resources/123/media?next=//../%2F", "/api/%72esources/abc/media"):
                 with self.subTest(template=template, path=path):
                     self.assertTrue(admitted(path))
@@ -110,6 +115,8 @@ class UploadPolicyTests(unittest.TestCase):
                          "/api/resources/x/.%2E/a/media", "/api/resources/x/%2e%2e/a/media",
                          "/api/resources/./media", "/api/resources/../media", "/api/resources/%2E/media",
                          "/api/resources/a/media%0a", "/api/resources/%0a/media", "/api/resources/%7f/media",
+                         "/api/resources/a/media#extra", "/api/resources/a/media#?extra",
+                         "/api/resources/a/media#" + "x" * 1024,
                          "/api/resources/" + "x" * 1025 + "/media",
                          "/api/resources/" + "%C3%A9" * 513 + "/media"):
                 with self.subTest(template=template, path=path):
@@ -118,6 +125,54 @@ class UploadPolicyTests(unittest.TestCase):
             # normalization; this guards against a later merge_slashes change.
             for value in ("", ".", "..", "a/b", "\n", "\x7f"):
                 self.assertIsNone(pattern.search(("/api/resources/" + value + "/media").encode()))
+
+    def test_raw_request_allow_list_covers_every_byte_and_target_form(self):
+        for template in ("nginx-http.conf", "nginx-https.conf"):
+            _, _, raw = self.template_patterns(template=template)
+            pattern = re.compile(raw.encode())
+            allowed = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~!$&'()*+,;=:@/?"
+            for byte in range(256):
+                target = b"/api/resources/a" + bytes([byte]) + b"b/media"
+                with self.subTest(template=template, byte=byte):
+                    self.assertEqual(byte in allowed, bool(pattern.search(b"POST " + target + b" HTTP/1.1")))
+            for version in ("1.0", "1.1", "2.0", "3.0"):
+                for target in ("/api/resources/id/media", "/api/resources/id/media?",
+                               "/api/resources/id/media?next=/../%2F?x=%23", "/api/resources/%E4%B8%AD/media"):
+                    with self.subTest(version=version, target=target):
+                        self.assertIsNotNone(pattern.search(f"POST {target} HTTP/{version}".encode()))
+            for target in ("http://example.test/api/resources/id/media", "https://example.test/api/resources/id/media",
+                           "//example.test/api/resources/id/media", "example.test:443", "*",
+                           "/api/resources/id/media#fragment", "/api/resources/id/media?x=#fragment",
+                           "/api/resources/a\\b/media", "/api/resources/a b/media",
+                           "/api/resources/a%/media", "/api/resources/a%2/media", "/api/resources/a%GG/media",
+                           "/api/resources/%00/media", "/api/resources/%1f/media", "/api/resources/%7F/media",
+                           "/api/resources/%2F/media", "/api/resources/%2e/media", "/api/resources/.%2E/media",
+                           "/api/resources/../media", "/api/resources/id/media/..", "/api/resources/id/media/.?x=1"):
+                with self.subTest(target=target):
+                    self.assertIsNone(pattern.search(f"POST {target} HTTP/1.1".encode()))
+            for suffix in (b"\n", b"\r", b"\x00", b"\r\nGET / HTTP/1.1"):
+                self.assertIsNone(pattern.search(b"POST /api/resources/id/media HTTP/1.1" + suffix))
+
+    def test_raw_hash_cannot_hide_an_oversized_final_parameter(self):
+        for template in ("nginx-http.conf", "nginx-https.conf"):
+            _, regex, raw = self.template_patterns("/uploads/{resource}", template=template)
+            target = "/uploads/x#" + "a" * 1024
+            self.assertIsNotNone(re.search(regex, target.split("#", 1)[0]))
+            self.assertIsNone(re.search(regex, target))
+            self.assertIsNone(re.search(raw, f"POST {target} HTTP/1.1"))
+            # Encoding # preserves the segment instead of truncating nginx's URI.
+            self.assertIsNone(re.search(regex, unquote_to_bytes(target.replace("#", "%23")).decode()))
+
+    def test_utf8_is_explicitly_deferred_to_the_router_with_ingress_bounds(self):
+        self.assertTrue(uploads.PATH_SYNTAX["utf8_required"])
+        self.assertFalse(uploads.PATH_SYNTAX["upload_ingress_utf8_enforced"])
+        _, regex, raw = self.template_patterns()
+        for encoded in ("%FF", "%C0%AF", "%ED%A0%80", "%E4%B8"):
+            target = "/api/resources/" + encoded + "/media"
+            self.assertIsNotNone(re.search(raw, f"POST {target} HTTP/1.1"))
+            self.assertIsNotNone(re.search(regex.encode(), unquote_to_bytes(target)))
+        target = "/api/resources/" + "%FF" * 1025 + "/media"
+        self.assertIsNone(re.search(regex.encode(), unquote_to_bytes(target)))
 
     def test_template_literals_are_escaped_through_the_nginx_lexer(self):
         literal = 'a.b+(x)|^$"; return 200;@UPLOAD_PROXY@@PROXY@@VARIABLE@'

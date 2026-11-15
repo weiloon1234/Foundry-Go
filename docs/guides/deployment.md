@@ -1416,12 +1416,30 @@ are rejected in either declaration order, so nginx regex order cannot select a
 different upload policy. The ordinary `/` prefix keeps the default 25m limit.
 
 Nginx selects locations using its decoded, normalized URI. The generated server
-explicitly keeps `merge_slashes on`. Within a template location, a separate check
-of the original request path rejects encoded slashes, doubled slashes and dot
-segments, including percent-encoded dots, with HTTP 400. This prevents normalization
-from admitting an unintended path. The check ignores query values. Paths outside
-the template keep the default limit. Literal locations keep their existing decoded
-path behavior. See nginx's [location rules](https://nginx.org/en/docs/http/ngx_http_core_module.html#location).
+explicitly keeps `merge_slashes on`. Template locations require an origin-form
+target, `/path` with an optional `?query`, in the original `$request` line.
+The allow-list accepts ASCII letters, digits, `-._~!$&'()*+,;=:@`, slash separators
+and valid `%HH` triplets. Query values also allow `/` and `?`. Other characters,
+including non-ASCII text, must be percent-encoded. Raw `#`, backslash, spaces,
+NUL and control bytes are refused, as are absolute-form targets such as
+`http://example.test/path`. Checking `$request` preserves the target form that
+`$request_uri` can lose. HTTP 1.0, 1.1, 2.0 and 3.0 request lines are supported.
+
+Path segments additionally exclude encoded slashes and controls, doubled slashes
+and dot segments, including percent-encoded dots. A target that fails this check
+receives HTTP 400 if it selects a template location. Paths outside the template
+keep the default limit. Query values do not participate in path normalization or
+segment limits, but must satisfy the query allow-list. Literal locations keep
+their existing decoded path behavior. See nginx's
+[location rules](https://nginx.org/en/docs/http/ngx_http_core_module.html#location).
+
+The exported grammar declares `utf8_required: true` and
+`upload_ingress_utf8_enforced: false`. Ingress matches decoded bytes without a
+PCRE UTF-8 mode. The Go router's `validateParameterText` and `httppath.ValidText`
+reject invalid UTF-8, such as `%FF`, after ingress has admitted the request body.
+Such requests retain the same connection-slot, body-size and segment-length
+limits as a valid but nonexistent resource ID. Portable UTF-8 enforcement in
+nginx has not been verified across both supported Ubuntu releases.
 
 ### Provision the upload filesystems
 

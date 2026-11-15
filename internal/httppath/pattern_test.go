@@ -35,3 +35,17 @@ func TestPathGrammar(t *testing.T) {
 		t.Fatal("trailing slash must remain an exact empty final segment")
 	}
 }
+
+func TestExportedUTF8Rule(t *testing.T) {
+	if !Syntax().UTF8Required || Syntax().UploadIngressUTF8Enforced {
+		t.Fatal("UTF-8 validation must be declared as router-owned")
+	}
+	for _, text := range []string{"\xff", "\xc0\xaf", "\xed\xa0\x80", "\xe4\xb8"} {
+		if ValidText(text) {
+			t.Fatalf("invalid UTF-8 accepted: %x", text)
+		}
+	}
+	if !ValidText("中") {
+		t.Fatal("valid UTF-8 rejected")
+	}
+}

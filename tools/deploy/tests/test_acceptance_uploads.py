@@ -14,12 +14,13 @@ class UploadAcceptanceTests(unittest.TestCase):
     def test_template_phase_requires_large_body_success_and_sibling_refusal(self):
         host = Mock()
         host.paths.data.return_value = Path("/unused")
-        scenario = acceptance.Scenarios(host, {"name": "fixture"}, {})
+        scenario = acceptance.Scenarios(host, {"name": "fixture", "profile": {"domain": "fixture.test"}}, {})
         scenario.success, scenario.clean = Mock(), Mock()
         def refusal(entry, path):
             guarded = ("//resource/" in path or "%2fresources" in path or
                        "/./resource/" in path or "%2e/resource/" in path or
-                       "/other/../" in path or "/other/.%2e/" in path)
+                       "/other/../" in path or "/other/.%2e/" in path or
+                       "#" in path or "\\" in path or "://" in path)
             return 400 if guarded else 413
         with patch.object(acceptance, "Monitor"), patch.object(acceptance, "upload") as upload, \
                 patch.object(acceptance, "refused_upload", side_effect=refusal) as refuse:
@@ -30,6 +31,8 @@ class UploadAcceptanceTests(unittest.TestCase):
                 self.assertGreater(call.kwargs["size"], 25 * acceptance.MIB)
                 self.assertEqual("/acceptance/resources/" + call.args[1] + "/media", call.kwargs["path"])
             self.assertTrue(any(call.args[1].endswith("/thumbnail") for call in refuse.call_args_list))
+            self.assertTrue(any("#" in call.args[1] for call in refuse.call_args_list))
+            self.assertTrue(any(call.args[1].startswith("http://") for call in refuse.call_args_list))
         with patch.object(acceptance, "Monitor"), patch.object(acceptance, "upload"), \
                 patch.object(acceptance, "refused_upload", return_value=200):
             with self.assertRaisesRegex(AssertionError, "default body limit"):

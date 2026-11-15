@@ -28,7 +28,7 @@ var parameterName = regexp.MustCompile("^" + parameterNamePattern + "$")
 // Deploy policies add resource bounds and exclude catch-all parameters.
 func Syntax() Description {
 	return Description{parameterPrefix, parameterSuffix, tailSuffix, parameterNamePattern,
-		forbiddenLiteralCharacters, [2]string{dotSegment, parentSegment}, controlMax, controlDelete, "exact"}
+		forbiddenLiteralCharacters, [2]string{dotSegment, parentSegment}, controlMax, controlDelete, "exact", true, false}
 }
 
 // Description is the machine-readable grammar exported with the deploy tools.
@@ -42,6 +42,9 @@ type Description struct {
 	ControlMax                 int       `json:"control_max"`
 	ControlDelete              int       `json:"control_delete"`
 	TrailingSlash              string    `json:"trailing_slash"`
+	UTF8Required               bool      `json:"utf8_required"`
+	// Upload ingress bounds bytes; ValidText owns UTF-8 validation in the router.
+	UploadIngressUTF8Enforced bool `json:"upload_ingress_utf8_enforced"`
 }
 
 // Segment is a literal or named parameter in the shared route grammar.

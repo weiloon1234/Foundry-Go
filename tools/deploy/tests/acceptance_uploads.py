@@ -412,7 +412,9 @@ class Scenarios:
         # These normalize INTO the regex location; raw-path guards must refuse.
         for path in (prefix + "/resource/media", "/acceptance%2fresources/resource/media",
                      prefix + "./resource/media", prefix + "%2e/resource/media",
-                     prefix + "other/../resource/media", prefix + "other/.%2e/resource/media"):
+                     prefix + "other/../resource/media", prefix + "other/.%2e/resource/media",
+                     prefix + "resource/media#extra", prefix + "resource/media#" + "x" * 1024,
+                     prefix + "a\\b/media", "http://" + self.entry["profile"]["domain"] + prefix + "resource/media"):
             assert refused_upload(self.entry, path) == 400, "Normalized alias reached upload admission"
         for path in (prefix + "/media", prefix + "./media", prefix + "../media", prefix + "%2e%2e/media"):
             assert refused_upload(self.entry, path) in (400, 413)

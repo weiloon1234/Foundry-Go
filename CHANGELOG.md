@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed: upload template admission now requires an allow-listed origin-form
+  request target. Raw fragments cannot truncate nginx's matching URI to bypass
+  route or segment-length restrictions. Raw spaces, backslashes, controls and
+  absolute-form targets are refused. The exported grammar records that invalid
+  UTF-8 is rejected by the router after ingress admission.
 - Added: parameterized large-upload ingress routes using the HTTP router's
   exported `{name}` syntax. Templates render escaped, anchored nginx locations,
   reject overlaps and unsafe normalized aliases, and retain upload admission,

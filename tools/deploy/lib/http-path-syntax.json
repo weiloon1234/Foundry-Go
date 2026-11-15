@@ -10,5 +10,7 @@
   ],
   "control_max": 31,
   "control_delete": 127,
-  "trailing_slash": "exact"
+  "trailing_slash": "exact",
+  "utf8_required": true,
+  "upload_ingress_utf8_enforced": false
 }

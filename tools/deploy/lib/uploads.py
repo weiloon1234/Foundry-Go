@@ -41,9 +41,18 @@ MAX_SEGMENT_BYTES = 1024
 CONTROL_CHARACTERS = rf"\x00-\x{PATH_SYNTAX['control_max']:02x}\x{PATH_SYNTAX['control_delete']:02x}"
 STRUCTURAL_SEGMENTS = "|".join(re.escape(part) for part in PATH_SYNTAX["forbidden_segments"])
 PARAMETER_SEGMENT = rf"(?!(?:{STRUCTURAL_SEGMENTS})(?:/|$))[^/{CONTROL_CHARACTERS}]{{1,{MAX_SEGMENT_BYTES}}}"
-# Check only the raw path, not the query. Normalization must never grant admission
-# to an encoded slash, dot segment, or merged empty segment.
-UNSAFE_RAW_PATH = r"^[^?]*(?:%2[fF]|//)|^(?:[^?]*/)(?:\.|%2[eE]){1,2}(?:/|\?|$)"
+# Origin-form URI allow-list: RFC 3986 pchar, percent triplets, slash separators
+# and an optional query. Other characters must be percent-encoded. Path triplets
+# exclude decoded controls and slash; structural dot/empty segments are refused.
+RAW_PCHAR = r"[A-Za-z0-9._~!$&'()*+,;=:@-]"
+RAW_PATH_CHAR = rf"(?:{RAW_PCHAR}|%(?![01][0-9A-Fa-f]|7[fF]|2[fF])[0-9A-Fa-f]{{2}})"
+RAW_SEGMENT = rf"(?!(?:\.|%2[eE]){{1,2}}(?:/|\?| )){RAW_PATH_CHAR}+"
+RAW_QUERY = rf"(?:{RAW_PCHAR}|%[0-9A-Fa-f]{{2}}|[/?])*"
+RAW_TARGET = rf"/(?:{RAW_SEGMENT}(?:/{RAW_SEGMENT})*/?)?(?:\?{RAW_QUERY})?"
+# $request retains absolute-form targets which $request_uri can reduce to a path.
+# The final lookahead makes the anchor strict in both PCRE and Python, even for LF.
+SAFE_RAW_REQUEST = (r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+ " + RAW_TARGET
+                    + r" HTTP/(?:1\.[01]|2\.0|3\.0)$(?![\s\S])")
 
 
 def route_segments(route):
@@ -258,8 +267,8 @@ def nginx(entry, proxy, template):
     templated = has_templates(entry["profile"])
     unsafe = nginx_variable(entry, "upath")
     if templated:
-        admission += (f'\nmap $request_uri ${unsafe} {{\n    default 0;\n'
-                      f'    {nginx_quote("~" + UNSAFE_RAW_PATH)} 1;\n}}')
+        admission += (f'\nmap $request ${unsafe} {{\n    default 1;\n'
+                      f'    {nginx_quote("~" + SAFE_RAW_REQUEST)} 0;\n}}')
     # Post-response discard must not inherit nginx's 30-second lingering default.
     lingering = min(5, value["request_total_seconds"])
     replacements = {"@UPLOAD_ZONE@": zone, "@UPLOAD_SLOTS@": str(value["proxy_slots"]),
