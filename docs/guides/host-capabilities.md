@@ -1302,8 +1302,12 @@ Each admitted start uses the privileged preparation helper to create or verify
 the mount before the workload starts. Preparation serializes across the instance
 and checks the mount source, filesystem type, capacity, inode limit, owner, mode,
 and absence of symlinks. Existing files beneath an unmounted directory and foreign
-mounts cause refusal. Preparation, reports and cleanup also refuse a host parent
-that is not root-owned with mode `0700`, without changing it. The helper's
+mounts cause refusal. Systemd creates a missing `TemporaryFileSystem=` mount
+point with mode `0755` at unit start, before the privileged hooks run. Preparation
+and discard accept a host parent only when it is a real, nonsymlink directory
+owned by root:root with mode `0700` or exactly `0755`. They tighten `0755` to
+`0700` with `fchmod` on the opened directory and re-verify it before mounting or
+unmounting any cache. Other owners, types, and modes are refused unchanged. The helper's
 [`+` systemd prefix](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html#ExecStart=)
 performs this work outside the workload's filesystem namespace.
 
@@ -1316,7 +1320,10 @@ or lazy unmounts, and never recursively deletes an occupied directory.
 
 Reports include `shared_directories` with `state: "disposable"`, `backed_up: false`,
 `restored: false`, the configured limit, used bytes, and the observed mount status.
-An unverifiable mount produces `shared_directory_unverified`. Backup coverage
+Reports never change permissions. A root:root `0755` parent with no entries and
+no mounts reports `status: "not_prepared"`, without a finding or used-byte count.
+A `0755` parent with content or a mount, or any other unverifiable state, produces
+`shared_directory_unverified`. Backup coverage
 records the same exclusion. Backups retain declarations but never cache files;
 recovery prepares fresh caches. Run reports as root to verify the mounts and
 measure used bytes. Unprivileged reports retain the disposable coverage but mark

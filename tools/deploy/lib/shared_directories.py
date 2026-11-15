@@ -60,7 +60,8 @@ def _inode_limit(directory):
     return min(65536, directory.max_bytes // 4096)
 
 
-def _host_parent(host, instance, *, create=False):
+def _host_parent(host, instance, *, create=False, tighten=False):
+    """Return the verified mode, or None when the parent is absent."""
     from admission import protected_directory, protected_path
     path = host.paths.p(shared_directory_root(instance))
     if create:
@@ -68,18 +69,31 @@ def _host_parent(host, instance, *, create=False):
     else:
         protected_path(host, path, "directory")
         if not path.exists():
-            return path  # Cleanup also permits caches absent since reboot.
+            return None  # Cleanup also permits caches absent since reboot.
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         uid, gid = (0, 0) if host.paths.root == Path("/") else (os.geteuid(), os.getegid())
         info = os.fstat(fd)
-        require((info.st_uid, info.st_gid) == (uid, gid),
+        require(stat.S_ISDIR(info.st_mode) and (info.st_uid, info.st_gid) == (uid, gid),
                 "shared_directory_parent", "Shared directory host parent must belong to root.")
-        require(stat.S_IMODE(info.st_mode) == 0o700,
-                "shared_directory_parent", "Shared directory host parent must have mode 0700.")
+        mode = stat.S_IMODE(info.st_mode)
+        require(mode in (0o700, 0o755),
+                "shared_directory_parent", "Shared directory host parent must have mode 0700 or 0755.")
+        if mode == 0o755:
+            if create or tighten:
+                # systemd creates a missing TemporaryFileSystem mount point as
+                # 0755 at unit start, before our privileged preparation hooks.
+                os.fchmod(fd, 0o700)
+                info = os.fstat(fd)
+                mode = stat.S_IMODE(info.st_mode)
+                require(stat.S_ISDIR(info.st_mode) and (info.st_uid, info.st_gid) == (uid, gid) and mode == 0o700,
+                        "shared_directory_parent", "Shared directory host parent tightening could not be verified.")
+            else:
+                require(not os.listdir(fd) and _mount(host, path) is None,
+                        "shared_directory_parent", "An unprepared shared directory host parent must be empty and unmounted.")
+        return mode
     finally:
         os.close(fd)
-    return path
 
 
 def _verify_directory(path, directory, uid, gid):
@@ -143,7 +157,7 @@ def discard(host, topology, instance, uid, gid):
     closed. Interrupted cleanup is replayable against the empty underlying root.
     """
     from admission import protected_path
-    _host_parent(host, instance)
+    _host_parent(host, instance, tighten=True)
     for name, _ in topology.shared_directories:
         path = check_path(host.paths.p(shared_directory_path(instance, name)), "directory")
         if not path.exists():
@@ -164,7 +178,9 @@ def report(host, topology, instance, uid, gid):
     for item, (name, directory) in zip(result, topology.shared_directories):
         from contracts import DeployError
         try:
-            _host_parent(host, instance)
+            if _host_parent(host, instance) == 0o755:
+                item.update(status="not_prepared")
+                continue
             path = check_path(host.paths.p(item["path"]), "directory")
             _verify_mount(_mount(host, path), instance, name)
             capacity = _verify_directory(path, directory, uid, gid)
