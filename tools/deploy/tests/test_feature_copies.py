@@ -38,6 +38,35 @@ class FeatureCopiesTests(FeatureWiringFixture):
         _, entry = self.host.require_identity(self.project, self.profile)
         return entry, lifecycle.load(self.host, entry)[2]
 
+    def test_regrow_disabled_copy_stops_excluded_running_dependent(self):
+        _, inventory = self.deploy_copies(2)
+        second = inventory.identity("relay", 2)
+        dependent = inventory.identity("http")
+        self.host.run(["systemctl", "stop", inventory.units[second]])
+        self.host.run(["systemctl", "disable", inventory.units[second]])
+        request, review = self.review_copies(1, "20261115T000000Z-abcdef12")
+        _, shrunk = self.apply_copies(request, review)
+        self.assertIn(shrunk.units[dependent], self.host.running)
+        request, review = self.review_copies(2, "20261116T000000Z-abcdef12")
+        self.assertNotIn(dependent.record_key, review["running_roles"])
+        self.assertNotIn(dependent.record_key, review["enabled_roles"])
+        self.assertIn(dependent.record_key, review["unit_changes"])
+        stopped = services.stopped_unit
+        proofs = []
+        def prove_exit(host, unit):
+            stopped(host, unit)
+            proofs.append(unit)
+        with patch.object(services, "stopped_unit", side_effect=prove_exit):
+            entry, grown = self.apply_copies(request, review)
+        self.assertIn(grown.units[dependent], proofs)
+        self.assertNotIn(grown.units[dependent], self.host.running)
+        self.assertNotIn(grown.units[dependent], self.host.enabled)
+        self.assertNotIn(grown.units[second], self.host.enabled)
+        self.assertNotIn(grown.units[second], self.host.running)
+        evidence = c.ClosureEvidence.parse(c.read_json(admission.AdmissionStore(
+            self.host, grown.profile.instance_id).runtime / "boot.json"))
+        self.assertIn(dependent, evidence.units)
+
     def test_grow_and_shrink_preserve_survivors_and_remove_only_proven_stopped_views(self):
         entry, initial = self.deploy_copies()
         processes = {identity: self.host.running[unit][0] for identity, unit in initial.units.items()}
@@ -97,7 +126,7 @@ class FeatureCopiesTests(FeatureWiringFixture):
         for identity, path in state_files.items():
             self.assertEqual(path.read_text(), identity.record_key)
         self.assertEqual(shared_file.read_text(), "shared cache")
-        self.assertEqual(c.DeploymentSelection.parse(entry["deployment_selection"]).minimum_generation, 17)
+        self.assertEqual(c.DeploymentSelection.parse(entry["deployment_selection"]).minimum_generation, 18)
 
     def test_failed_removed_copy_exit_does_not_record_disable_or_unlink(self):
         _, inventory = self.deploy_copies()

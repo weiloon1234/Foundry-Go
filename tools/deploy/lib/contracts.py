@@ -596,7 +596,7 @@ FEATURE_DELIVERY_GENERATION = 14
 FEATURE_UNIX_GENERATION = 15
 FEATURE_CONFINEMENT_GENERATION = 16
 FEATURE_SHARED_DIRECTORY_GENERATION = 16
-FEATURE_COPIES_GENERATION = 17
+FEATURE_COPIES_GENERATION = 18
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
 MAX_ROLE_COPIES, MAX_UNITS = 128, 256
 MAX_ENDPOINTS = MAX_LISTENERS * MAX_ROLE_COPIES + 1  # Expanded custom listeners plus built-in HTTP.
@@ -770,17 +770,20 @@ class AllocatedEndpoint:
                    value["address"], contract_int(value["port"], 1024, 65535), value.get("ordinal", 1))
 
 
-def socket_name(value):
-    require(isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_@.-]{0,31}", value),
-            "invalid_contract", "Socket names require 1–32 ASCII letters, digits, dots, underscores, @ or hyphens, starting with a letter or digit.")
+def socket_name(value, *, ordinal=1):
+    contract_int(ordinal, 1, MAX_ROLE_COPIES)
+    require(isinstance(value, str), "invalid_contract", "Socket names must be strings.")
+    suffix = f"@{ordinal}" if ordinal > 1 else ""
+    require(value.endswith(suffix), "invalid_contract", "Unix socket suffix must match its copy ordinal.")
+    base = value[:-len(suffix)] if suffix else value
+    require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,31}", base),
+            "invalid_contract", "Declared socket names require 1–32 ASCII letters, digits, dots, underscores or hyphens; @ is reserved for copy ordinals.")
     return value
 
 
 def copy_socket_name(name, ordinal):
     """Preserve copy 1's path, independent of the role's current count."""
-    socket_name(name)
-    contract_int(ordinal, 1, MAX_ROLE_COPIES)
-    return copy_key(name, ordinal)
+    return socket_name(copy_key(socket_name(name), ordinal), ordinal=ordinal)
 
 
 def socket_directory(instance_id):
@@ -827,10 +830,7 @@ class UnixEndpoint:
         require(directory == socket_directory(Path(directory).parent.name),
                 "invalid_contract", "Unix endpoints belong to the instance socket directory.")
         ordinal = contract_int(value.get("ordinal", 1), 1, MAX_ROLE_COPIES)
-        name = contract_text(value["name"], limit=32 + len(str(MAX_ROLE_COPIES)) + 1)
-        suffix = f"@{ordinal}" if ordinal > 1 else ""
-        require(name.endswith(suffix), "invalid_contract", "Unix socket suffix must match its copy ordinal.")
-        socket_name(name[:-len(suffix)] if suffix else name)
+        name = socket_name(value["name"], ordinal=ordinal)
         require(value["path"] == directory + "/" + name and len(value["path"].encode()) <= 107,
                 "invalid_contract", "Invalid Unix endpoint path.")
         return cls(contract_name(value["role"]), contract_name(value["listener"]), directory, name, value["path"], ordinal)

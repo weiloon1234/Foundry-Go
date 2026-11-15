@@ -438,25 +438,32 @@ def start_units(host, entry, inventory, names, deadline):
     names = set(names)
     enabled = services.enabled_units(host, inventory.units)
     require(names <= set(enabled), "service_enablement", "Cannot start a deliberately disabled role.")
-    order = inventory.start_order(enabled)
+    inventory.start_order(enabled)
     if names:
         prepare_shared_directories(host, entry, inventory)
-    for prerequisite in inventory.prerequisites(names) - names:
-        require(services.wait_ready(host, inventory, prerequisite, deadline),
-                "service_prerequisite", "A retained prerequisite is unavailable.")
-    for name in order:
-        if name in names:
-            require(time.monotonic() < deadline, "service_deadline", "Startup exhausted its shared deadline.")
-            try:
-                host.run(["systemctl", "start", inventory.units[name]], timeout=max(.001, deadline - time.monotonic()))
-            except DeployError:
+    prerequisites = inventory.prerequisites(names) - names
+    require(not prerequisites or services.wait_ready_set(host, inventory, prerequisites, deadline),
+            "service_prerequisite", "A retained prerequisite is unavailable.")
+    def start(level, until):
+        selected = tuple(name for name in level if name in names)
+        if not selected:
+            return
+        try:
+            host.run(["systemctl", "start", *(inventory.units[name] for name in selected)],
+                     timeout=max(.001, until - time.monotonic()))
+        except DeployError:
+            for name in selected:
                 _require_namespace_ready(host, inventory.units[name])
-                raise
-            if not services.wait_ready(host, inventory, name, deadline):
-                # systemd 255 treats a 226 from ExecCondition as a skipped condition,
-                # so `systemctl start` succeeds and only readiness notices.
+            raise
+    def await_ready(level, until):
+        selected = tuple(name for name in level if name in names)
+        if selected and not services.wait_ready_set(host, inventory, selected, until):
+            # systemd 255 can report a skipped ExecCondition as a successful start.
+            for name in selected:
                 _require_namespace_ready(host, inventory.units[name])
-                require(False, "readiness_failed", "Selected role failed readiness.")
+            return False
+        return True
+    inventory.start_in_order(enabled, deadline, start, await_ready)
 
 
 def _require_namespace_ready(host, unit):
@@ -536,12 +543,13 @@ def named_selection(host, entry, inventory, selection, action, request):
     holds = feature_maintenance.active_holds(host, entry, inventory)
     deadline = time.monotonic() + release.READINESS_SECONDS
     prerequisites = inventory.prerequisites(selected) - set(selected) if action == "restart" else set()
-    states = {}
-    for identity, unit in inventory.units.items():
-        running = release.service(host, unit)["ActiveState"] == "active"
-        states[identity] = services.RoleState(identity in enabled, running, identity in holds,
-            selection.admission.disposition is not AdmissionDisposition.COMMITTED,
-            identity in prerequisites and identity in enabled and running and services.wait_ready(host, inventory, identity, deadline))
+    states = {identity: services.RoleState(identity in enabled,
+        release.service(host, unit)["ActiveState"] == "active", identity in holds,
+        selection.admission.disposition is not AdmissionDisposition.COMMITTED, False)
+        for identity, unit in inventory.units.items()}
+    observed = {identity for identity in prerequisites if states[identity].enabled and states[identity].running}
+    if observed and services.wait_ready_set(host, inventory, observed, deadline):
+        states = {identity: replace(state, ready=identity in observed) for identity, state in states.items()}
     return set(inventory.named_operation(action, selected, states))
 
 
@@ -591,6 +599,11 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
                 and sorted(unit_selection_names(running)) == review["maintenance_running_roles"],
                 "stale_plan", "Maintenance holds or restored running roles changed after review.")
     inventory.start_order(running)
+    if review is not None:
+        require(all(name in names or name in running or
+                    release.service(host, unit)["ActiveState"] == "inactive"
+                    for name, unit in previous.units.items()),
+                "stale_plan", "A running unit outside the stop scope would be excluded from the target selection.")
     attempt["running_roles"] = sorted(unit_selection_names(running))
     host.save_state(entry, state)
     selected = DeploymentSelection(inventory.profile.instance_id, minimum_generation, tuple(sorted(FEATURE_CAPABILITIES)),

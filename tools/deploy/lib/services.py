@@ -205,13 +205,18 @@ class UnitInventory:
     def start_in_order(self, selected, deadline, start, await_ready):
         """Lifecycle adapters share one deadline; a failed provider never starts a consumer.
 
+        Each callback receives one dependency level as a tuple of identities.
         These adapters belong to the framework executor, never to a declaration.
         They do not run on normal boot or automatic systemd restart.
         """
+        levels = {}
         for name in self.start_order(selected):
+            levels[name] = 1 + max((levels[dependency] for dependency in self.dependencies(name)), default=-1)
+        for level in sorted(set(levels.values())):
+            names = tuple(name for name, depth in levels.items() if depth == level)
             require(time.monotonic() < deadline, "service_deadline", "Startup exhausted its shared deadline.")
-            start(name, deadline)
-            require(await_ready(name, deadline) and time.monotonic() < deadline,
+            start(names, deadline)
+            require(await_ready(names, deadline) and time.monotonic() < deadline,
                     "readiness_failed", "Prerequisite identity, readiness or stability was not established.")
 
     def prerequisites(self, selected):

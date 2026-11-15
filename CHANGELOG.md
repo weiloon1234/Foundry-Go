@@ -2,14 +2,21 @@
 
 ## Unreleased
 
-- Added: generation-17 numbered custom service copies (0–128 per role, at most
+- Fixed: generation-16 hosts upgrade through an explicit, digest-bound runtime-v1
+  bridge that preserves singleton invocation pins and resumes interrupted upgrades.
+  Numbered-copy startup now shares stability windows by dependency level; regrowth
+  stops excluded dependents with exit proof. Socket declarations reserve `@` for
+  derived copy suffixes, retaining the 107-byte path limit. Numbered copies use
+  generation 18; generation 17 belongs to v0.36.0 parameterized upload routes.
+
+- Added: generation-18 numbered custom service copies (0–128 per role, at most
   256 units per instance), with per-copy units, private TCP and Unix listeners,
   config views, seed/state paths, admission, confinement proof, and `copy_number`
   resolution. Dependencies and readiness cover every copy under one deadline.
 - Changed: reviewed release plans identify added and removed copies, retain
   unchanged running copies, and require exit and network closure proof before
   removing units or runtime views. Persistent per-copy state is retained. Copy 1
-  keeps its existing paths and wire representation; generation 17 stays sticky.
+  keeps its existing paths and wire representation; generation 18 stays sticky.
 - Added: release 2a consumer contracts for copy-scoped secrets, ordered `copies`
   bindings and `deployment.Bindings.Copies`, with owned snapshots and optional
   secret-file paths. Each copy gets its own value, readable by every role of the

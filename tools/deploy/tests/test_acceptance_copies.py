@@ -83,7 +83,7 @@ class CopiesAcceptanceTests(unittest.TestCase):
         unix = [endpoint for endpoint in listeners.unix_endpoints(topology, profile) if endpoint.role == scenario.COPIES_ROLE]
         self.assertEqual([copy_socket_name('copies.sock', n) for n in range(1, 4)], [endpoint.name for endpoint in unix])
         self.assertEqual(3, len({services.ServicePaths.for_unit(identity, profile.instance_id).state for identity in identities}))
-        self.assertEqual(17, upgrades.feature_generation(topology, {}, profile=profile))
+        self.assertEqual(18, upgrades.feature_generation(topology, {}, profile=profile))
 
     def test_count_variants_preserve_declarations_and_source_payload(self):
         original = digest(self.source)

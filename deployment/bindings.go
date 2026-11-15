@@ -375,7 +375,7 @@ type featureDescriptor struct {
 	} `json:"bindings"`
 }
 
-var socketIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_@.-]{0,31}$`)
+var socketIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$`)
 var bindingIdentifier = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 var digestIdentifier = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var instanceIdentifier = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$`)

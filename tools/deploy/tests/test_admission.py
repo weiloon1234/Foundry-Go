@@ -98,7 +98,7 @@ class AdmissionTests(unittest.TestCase):
         endpoints = tuple(c.AllocatedEndpoint("relay", "control", "127.0.0.1", 8300 + n, n) for n in (1, 2))
         resolution = replace(self.resolution, roles=("http", "relay"), endpoints=self.resolution.endpoints + endpoints,
             environments=self.resolution.environments + (c.EffectiveEnvironment("relay", "runtime/" + CURRENT + "/relay/app.env", OTHER),))
-        selection = replace(self.selection, minimum_generation=17, enabled_roles=("http", "relay", "relay@2"))
+        selection = replace(self.selection, minimum_generation=18, enabled_roles=("http", "relay", "relay@2"))
         evidence = replace(self.closure, units=copies, endpoints=endpoints)
         permit = replace(self.permit, units=copies)
         self.store.begin(selection, resolution)

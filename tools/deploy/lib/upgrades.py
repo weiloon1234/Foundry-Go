@@ -63,8 +63,8 @@ GENERATION_13_FILES = REHEARSAL_FILES | frozenset({"lib/feature_plan.py", "lib/f
 GENERATION_14_FILES = frozenset({"lib/config_templates.py"})
 GENERATION_15_FILES = frozenset({"lib/unix_sockets.py"})
 GENERATION_16_FILES = frozenset({"lib/network_confinement.py", "lib/shared_directories.py"})
-GENERATION_17_FILES = frozenset({"lib/copy_enablement.py", "lib/operation_selection.py"})
-REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES | GENERATION_15_FILES | GENERATION_16_FILES | GENERATION_17_FILES
+GENERATION_18_FILES = frozenset({"lib/copy_enablement.py", "lib/operation_selection.py"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES | GENERATION_15_FILES | GENERATION_16_FILES | GENERATION_18_FILES
 
 
 def required_files(generation: int) -> frozenset[str]:
@@ -81,8 +81,8 @@ def required_files(generation: int) -> frozenset[str]:
         required |= GENERATION_15_FILES
     if generation >= 16:
         required |= GENERATION_16_FILES
-    if generation >= 17:
-        required |= GENERATION_17_FILES
+    if generation >= FEATURE_COPIES_GENERATION:
+        required |= GENERATION_18_FILES
     return required
 
 
@@ -596,6 +596,10 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
     source, _, digest = tool_bundle(tools_dir)
     target = protocol(source)
     require(target["generation"] >= current["generation"], "tools_downgrade", "Host tool generations cannot be downgraded.")
+    migration = None
+    if target["generation"] >= FEATURE_COPIES_GENERATION:
+        from operations import runtime_migration
+        migration = runtime_migration(host, source)
     _deletion_directory(host)
     retained_releases = []
     for instance_id, entry in registry["instances"].items():
@@ -635,7 +639,7 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
             "generation": target["generation"], "changed_paths": sorted(k for k in new if new[k] != old.get(k)),
             "removed_paths": sorted(old.keys() - new.keys()), "instances": sorted(registry["instances"]),
             "retained_releases": retained_releases,
-            "migration_steps": [], "service_effects": effects, "helper_architecture": None}
+            "migration_steps": [migration] if migration else [], "service_effects": effects, "helper_architecture": None}
 
 
 def verify_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = False) -> tuple[Path, list[Path], str]:
@@ -721,6 +725,10 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
         journal = {"schema": 1, "operation_id": operation, "host_id": registry["host_id"],
                    "bundle_sha256": digest, "previous_tools": copy.deepcopy(current), "phase": "intent",
                    "registry_sha256": _hash(registry)}
+        if protocol(source)["generation"] >= FEATURE_COPIES_GENERATION:
+            from operations import runtime_migration
+            migration = runtime_migration(host, source)
+            journal["migration_steps"] = [migration] if migration else []
         atomic_json(journal_dir / "registry-before.json", registry, 0o600)
         atomic_json(journal_path, journal, 0o600)
     if journal["phase"] == "complete":
@@ -770,6 +778,9 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
         require(check_path(report, "file").read_text() == report_wrapper,
                 "report_command_ownership", "The report command has unexpected content.")
     atomic_write(report, report_wrapper, 0o755)
+    if target_record["generation"] >= FEATURE_COPIES_GENERATION:
+        from operations import migrate_runtime
+        migrate_runtime(host, destination)
     _select(host, digest)
     registry["tools"] = target_record
     _save_registry(host, registry)

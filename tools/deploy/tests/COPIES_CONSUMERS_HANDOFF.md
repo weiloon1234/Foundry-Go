@@ -47,7 +47,7 @@ The sections below record the shared interfaces and historical lane verification
    in `requires`. TCP copy lists follow existing endpoint behavior: declarations
    use `requires` when startup must await the provider. Copy edges participate
    in cycle validation even without an explicit prerequisite.
-7. Extend the generation-17 predicate in `upgrades.feature_generation` to include
+7. Extend the generation-18 predicate in `upgrades.feature_generation` to include
    any `CopiesBinding` or `SecretDeclaration.scope == "copy"`, even at count one.
    `Topology.secrets` values are now frozen `SecretDeclaration(prompt, scope)`
    records; default scope is internally `role`. Existing shared secret names and

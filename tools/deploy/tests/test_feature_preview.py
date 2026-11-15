@@ -353,8 +353,6 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(self.host, "save_state"))
             stack.enter_context(patch.object(self.host, "run", side_effect=lambda argv, **kw: events.append(argv[1] + ":" + argv[2])))
             stack.enter_context(patch.object(services, "enabled_units", return_value=tuple(self.inventory.units)))
-            stack.enter_context(patch.object(services, "wait_ready", side_effect=lambda host, inv, name, deadline:
-                                            events.append("ready:" + name.role) or True))
             stack.enter_context(patch.object(lifecycle, "stop_units", side_effect=lambda *_: events.append("stopped")))
             stack.enter_context(patch.object(network, "withdraw", return_value=None))
             stack.enter_context(patch.object(network, "close", side_effect=lambda *_: (events.append("closed"), evidence)[1]))
@@ -364,8 +362,9 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(release, "app", side_effect=lambda *args, **kw: events.append(args[3])))
             stack.enter_context(patch.object(release, "switch_to", side_effect=lambda *_: events.append("switched")))
             stack.enter_context(patch.object(release, "finish", side_effect=finish))
-            stack.enter_context(patch.object(lifecycle, "ready", side_effect=lambda host, entry, inventory, name, deadline: (events.append("ready:" + name.role), True)[1]))
-            stack.enter_context(patch.object(services, "wait_ready_set", side_effect=lambda *args: (events.append("ready-set"), True)[1]))
+            stack.enter_context(patch.object(services, "wait_ready_set", side_effect=lambda host, inv, names, deadline:
+                (events.append("ready-set" if set(names) == set(inv.units) else
+                               "ready:" + ",".join(name.record_key for name in names)), True)[1]))
             lifecycle.transition(self.host, {"tools": {"generation": upgrades.protocol()["generation"]}},
                                  self.entry, self.inventory, state, running)
         status.assert_called_once_with(self.host, self.entry, release.release_path(self.host, self.entry, self.inventory.deployment.release), env_file=Path("/effective.env"))

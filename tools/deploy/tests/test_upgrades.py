@@ -106,6 +106,79 @@ class UpgradeTests(unittest.TestCase):
         with self.host.lock("host"):
             return upgrades.install_tools(self.host, self.host.read_registry(), self.source, **kwargs)
 
+    def generation_16_runtime(self):
+        import services
+        legacy = (Path(__file__).parent / "runtime_fixtures/v0_35_0/runtime_v1.py").read_bytes()
+        self.metadata["generation"] = 16
+        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+        (self.source / "server/runtime_v1.py").write_bytes(legacy)
+        self.host.registry["tools"] = upgrades._active_record(self.source, upgrades.tool_bundle(self.source)[2], None)
+        self.install()
+        runtime = self.host.paths.p(services.RUNTIME_ENTRY)
+        self.host.owned_write(runtime, legacy, mode=0o755)
+        candidate = self.root / "candidate"
+        import shutil
+        shutil.copytree(self.source, candidate)
+        (candidate / "protocol.json").write_text(json.dumps({**self.metadata, "generation": 18}))
+        (candidate / "server/runtime_v1.py").write_bytes(
+            (Path(__file__).resolve().parents[1] / "server/runtime_v1.py").read_bytes())
+        return runtime, candidate
+
+    def test_generation_16_runtime_bridge_preserves_pins_and_retained_boot(self):
+        import feature_network
+        import operations
+        runtime, candidate = self.generation_16_runtime()
+        old = self.host.registry["tools"].copy()
+        pinned = upgrades._installed(self.host, old)
+        boot = feature_network.boot_files(pinned, old["bundle_sha256"])
+        for name, content in boot.items():
+            self.host.owned_write(self.host.paths.p(name), content)
+        pin = self.host.paths.p("/run/foundry/runtime-pins/instance/relay/invocation.json")
+        self.host.owned_write(pin, b"retained invocation")
+        operation = str(uuid.uuid4())
+        # Pin inventories remain conservative during this migration.
+        with patch.object(upgrades, "_obsolete_bundles", return_value=[]):
+            plan = upgrades.plan_upgrade(self.host, candidate)
+            self.assertEqual(len(plan["upgrade"]["migration_steps"]), 1)
+            result = upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)
+            self.assertEqual(result["outcome"], "succeeded")
+            self.assertEqual(upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)["outcome"], "unchanged")
+        operations.check_runtime(self.host, candidate)
+        self.assertEqual(runtime.read_bytes(), (candidate / "server/runtime_v1.py").read_bytes())
+        self.assertEqual(pin.read_bytes(), b"retained invocation")
+        self.assertEqual(feature_network.checked_boot_files(self.host, candidate, self.host.registry["tools"]["bundle_sha256"]), boot)
+
+    def test_runtime_bridge_resumes_after_publication_before_tool_selection(self):
+        import operations
+        runtime, candidate = self.generation_16_runtime()
+        plan = upgrades.plan_upgrade(self.host, candidate)
+        operation = str(uuid.uuid4())
+        migrate = operations.migrate_runtime
+        def interrupted(host, source):
+            migrate(host, source)
+            raise OSError("interrupted after runtime publication")
+        with patch.object(operations, "migrate_runtime", side_effect=interrupted), self.assertRaises(OSError):
+            upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)
+        self.assertEqual(self.host.registry["tools"]["generation"], 16)
+        self.assertEqual(self.host.registry["tools"]["upgrade_operation"], operation)
+        self.assertEqual(runtime.read_bytes(), (candidate / "server/runtime_v1.py").read_bytes())
+        result = upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)
+        self.assertEqual(result["outcome"], "succeeded")
+        self.assertEqual(self.host.registry["tools"]["generation"], 18)
+        self.assertIsNone(self.host.registry["tools"]["upgrade_operation"])
+        journal = json.loads((self.host.paths.p(HOST_PATHS["upgrades"]) / operation / "intent.json").read_text())
+        self.assertEqual(journal["migration_steps"], plan["upgrade"]["migration_steps"])
+        operations.check_runtime(self.host, candidate)
+
+    def test_generation_16_runtime_bridge_refuses_unknown_installed_bytes(self):
+        runtime, candidate = self.generation_16_runtime()
+        runtime.write_bytes(runtime.read_bytes() + b"# unknown edit\n")
+        before = self.host.read_registry()
+        with self.assertRaises(DeployError) as caught:
+            upgrades.plan_upgrade(self.host, candidate)
+        self.assertEqual(caught.exception.code, "runtime_bridge_required")
+        self.assertEqual(self.host.read_registry(), before)
+
     def test_check_client_accepts_registered_and_unregistered_feature_topologies(self):
         from test_host_capabilities import declaration
         from topology import validate_topology
@@ -520,8 +593,8 @@ class UpgradeTests(unittest.TestCase):
 
     def test_inventory_requirements_are_cumulative_by_inspected_bundle_generation(self):
         additions = (upgrades.GENERATION_11_FILES | upgrades.GENERATION_12_FILES |
-                     upgrades.GENERATION_13_FILES | upgrades.GENERATION_14_FILES | upgrades.GENERATION_15_FILES | upgrades.GENERATION_16_FILES | upgrades.GENERATION_17_FILES)
-        for generation in (9, 10, 11, 12, 13, 14, 15, 16, 17):
+                     upgrades.GENERATION_13_FILES | upgrades.GENERATION_14_FILES | upgrades.GENERATION_15_FILES | upgrades.GENERATION_16_FILES | upgrades.GENERATION_18_FILES)
+        for generation in (9, 10, 11, 12, 13, 14, 15, 16, 17, 18):
             with self.subTest(generation=generation):
                 for name in additions:
                     (self.source / name).unlink(missing_ok=True)

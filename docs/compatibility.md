@@ -28,7 +28,7 @@ Like role secrets, copy-scoped secrets are readable by every role of the instanc
 because roles share one account. Console descriptors omit copy secret paths; this
 limits descriptor contents, not filesystem access. See
 [numbered copy consumers](guides/host-capabilities.md#numbered-copy-consumers).
-Generation 17 supports reviewed count changes, copy selection, backup and recovery.
+Generation 18 supports reviewed count changes, copy selection, backup and recovery.
 
 ## Loopback confinement — v0.35.0
 

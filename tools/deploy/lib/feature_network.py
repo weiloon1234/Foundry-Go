@@ -29,6 +29,7 @@ def checked_boot_files(host, tools_dir, bundle):
     import admission
     import services
     import upgrades
+    from operations import runtime_compatible
     from contracts import HOST_PATHS
     name = "/etc/systemd/system/" + BOOT_UNIT
     path = admission.protected_path(host, host.paths.p(name), "file")
@@ -40,7 +41,7 @@ def checked_boot_files(host, tools_dir, bundle):
         pinned = upgrades._installed(host, {"bundle_sha256": bundle,
                                     "active_path": HOST_PATHS["tools"] + "/tools/" + bundle})
         runtime = admission.protected_path(host, host.paths.p(services.RUNTIME_ENTRY), "file")
-        require(runtime.exists() and runtime.read_bytes() == (pinned / "server/runtime_v1.py").read_bytes(),
+        require(runtime.exists() and runtime_compatible(runtime.read_bytes(), (pinned / "server/runtime_v1.py").read_bytes()),
                 "runtime_bridge_required", "The retained boot coordinator requires its compatible fixed runtime.")
         tools_dir = pinned
     expected = boot_files(tools_dir, bundle)

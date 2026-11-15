@@ -95,7 +95,7 @@ class CopyFoundationTests(unittest.TestCase):
             self.assertIn(f'"{identity.role}" "{identity.ordinal}"', rendered)
         starts, deadlines = [], []
         def start(identity, deadline):
-            starts.append(identity)
+            starts.extend(identity)
             deadlines.append(deadline)
         def ready(identity, deadline):
             deadlines.append(deadline)
@@ -107,8 +107,56 @@ class CopyFoundationTests(unittest.TestCase):
         self.assertGreater(starts.index(worker), max(starts.index(identity) for identity in copies))
         starts.clear()
         with self.assertRaises(c.DeployError):
-            inventory.start_in_order(inventory.units, deadline, start, lambda identity, _: identity != copies[1])
+            inventory.start_in_order(inventory.units, deadline, start, lambda identities, _: copies[1] not in identities)
         self.assertNotIn(worker, starts)
+
+    def test_128_healthy_copies_share_the_readiness_budget(self):
+        import feature_lifecycle as lifecycle
+        import release
+        import tempfile
+        from host import Host, Paths
+        inventory, entry, _ = numbered_inventory(128)
+        clock = [0.0]
+        def advance(seconds):
+            clock[0] += max(seconds, 1.0)
+        timer = SimpleNamespace(monotonic=lambda: clock[0], sleep=advance)
+        started, probes, batches = set(), set(), []
+        def start(argv, **kwargs):
+            self.assertEqual(argv[:2], ["systemctl", "start"])
+            batches.append(tuple(argv[2:]))
+            started.update(argv[2:])
+        def observe(host, unit, **kwargs):
+            self.assertIn(unit, started)
+            return {"ActiveState": "active", "NRestarts": "0", "MainPID": str(list(inventory.units.values()).index(unit) + 1),
+                    "process": {"start": "42"}}
+        def probe(host, current, identity, deadline):
+            probes.add(identity)
+            return True
+        with tempfile.TemporaryDirectory() as root:
+            host = Host(Paths(Path(root).resolve()))
+            for identity, spec in inventory.specs.items():
+                executable = host.paths.p(spec.executable)
+                executable.parent.mkdir(parents=True, exist_ok=True)
+                executable.write_bytes(b"native")
+                executable.chmod(0o755)
+                inventory.specs[identity] = replace(spec, executable_sha256=c.digest(executable))
+            with patch.object(lifecycle, "time", timer), patch.object(services, "time", timer), \
+                    patch.object(lifecycle, "prepare_shared_directories"), \
+                    patch.object(services, "enabled_units", return_value=tuple(inventory.units)), \
+                    patch.object(host, "run", side_effect=start), \
+                    patch.object(host, "read_registry", return_value={"instances": {}}), \
+                    patch.object(release, "service", side_effect=observe), \
+                    patch.object(release, "_matches_executable", return_value=True), \
+                    patch.object(release, "STABILITY_SECONDS", 5), \
+                    patch.object(services, "readiness_probe", return_value=None), \
+                    patch.object(services, "probe", side_effect=probe):
+                lifecycle.start_units(host, entry, inventory, inventory.units, release.READINESS_SECONDS)
+                self.assertTrue(services.wait_ready_set(host, inventory, inventory.units, release.READINESS_SECONDS))
+        self.assertEqual(started, set(inventory.units.values()))
+        self.assertEqual(probes, set(inventory.units))
+        self.assertEqual([len(batch) for batch in batches], [1, 128, 1])
+        self.assertGreaterEqual(clock[0], 5)
+        self.assertLess(clock[0], release.READINESS_SECONDS)
 
     def test_identity_is_frozen_ordered_and_bounded(self):
         for ordinal in (1, 2, 128):
@@ -255,11 +303,21 @@ class CopyFoundationTests(unittest.TestCase):
         self.assertEqual([(e.name, e.ordinal) for e in endpoints], [("wl0", 1), ("wl0@2", 2)])
         self.assertEqual(c.UnixEndpoint.parse({key: value for key, value in vars(endpoints[0]).items() if key != "ordinal"}), endpoints[0])
         longest = c.UnixEndpoint.for_listener(INSTANCE, "relay", "control", "x" * 32, ordinal=128)
+        self.assertEqual(c.socket_name(longest.name, ordinal=128), longest.name)
+        self.assertEqual(len(longest.path.encode()), 103)
+        for bad in ("wl0@2", "wl0@128", "wl0@1", "wl0@02", "wl0@2@3"):
+            with self.subTest(name=bad), self.assertRaises(c.DeployError):
+                c.socket_name(bad)
+        for ordinal in range(1, 129):
+            name = c.copy_socket_name("x" * 32, ordinal)
+            self.assertEqual(c.socket_name(name, ordinal=ordinal), name)
+        with self.assertRaises(c.DeployError):
+            c.UnixEndpoint.parse({**c.record_document(longest), "path": longest.path + "x" * 6})
         self.assertLessEqual(len(longest.path.encode()), 107)
         other = {**copy.deepcopy(raw["roles"][1]), "name": "other"}
         other["listeners"]["control"]["socket"] = "wl0@2"
         raw["roles"].append(other)
-        with self.assertRaisesRegex(c.DeployError, "overlap"):
+        with self.assertRaisesRegex(c.DeployError, "@ is reserved"):
             t.expand_placement(t.parse_topology(raw), INSTANCE, placed.placement + (("other", 1),))
 
     def test_copy_references_paths_and_shared_grants(self):
@@ -297,18 +355,18 @@ class CopyFoundationTests(unittest.TestCase):
         value = services.resolve_argument(t.Argument.parse({"listener_port": "control"}), role, spec, resolution, paths, (), {})
         self.assertEqual(value, str(next(e.port for e in resolution.endpoints if e.role == "relay" and e.ordinal == 2)))
 
-    def test_generation_17_requires_both_peers_and_survives_rollback(self):
+    def test_generation_18_requires_both_peers_and_survives_rollback(self):
         topology = t.parse_topology(declaration())
         copies = {**profile(), "placement": {"http": 1, "relay": 2, "worker": 1}}
         self.assertEqual(upgrades.protocol()["generation"], c.FEATURE_COPIES_GENERATION)
-        self.assertEqual(upgrades.feature_generation(topology, {"profile": copies}), 17)
-        for host, client in ((16, 17), (17, 16)):
+        self.assertEqual(upgrades.feature_generation(topology, {"profile": copies}), 18)
+        for host, client in ((16, 18), (17, 18), (18, 16), (18, 17)):
             with self.subTest(host=host, client=client), self.assertRaises(c.DeployError):
                 upgrades.check_feature_generation({"tools": {"generation": host}}, topology, {},
                                                    client_generation=client, profile=copies)
-        entry = {"deployment_selection": {"minimum_generation": 17}}
-        self.assertEqual(upgrades.check_feature_generation({"tools": {"generation": 17}}, topology, entry,
-                                                          client_generation=17, profile=profile()), 17)
+        entry = {"deployment_selection": {"minimum_generation": 18}}
+        self.assertEqual(upgrades.check_feature_generation({"tools": {"generation": 18}}, topology, entry,
+                                                          client_generation=18, profile=profile()), 18)
         self.assertEqual(upgrades.feature_generation(topology, {}, profile=profile()), 13)
         for field in ("arguments", "environment", "configs"):
             raw = declaration()
@@ -325,14 +383,14 @@ class CopyFoundationTests(unittest.TestCase):
         raw = declaration()
         copies = {**profile(), "placement": {"http": 1, "relay": 2, "worker": 1}}
         request = {"topology": raw, "profile": copies, "client": {"generation": 16}}
-        with self.assertRaisesRegex(c.DeployError, "generation 17"):
+        with self.assertRaisesRegex(c.DeployError, "generation 18"):
             upgrades._check_feature_request(None, request, "bootstrap-plan")
         import recover
         host = Mock()
         host.read_registry.return_value = None
-        for metadata in ({"profile": copies}, {"profile": profile(), "deployment_selection": {"minimum_generation": 17}}):
+        for metadata in ({"profile": copies}, {"profile": profile(), "deployment_selection": {"minimum_generation": 18}}):
             recovered = {"feature": SimpleNamespace(topology=t.parse_topology(raw)), "metadata": metadata}
             with patch.object(recover, "read_archive", return_value={}), \
                     patch.object(recover, "archive_configuration", return_value=recovered), \
-                    self.assertRaisesRegex(c.DeployError, "generation 17"):
+                    self.assertRaisesRegex(c.DeployError, "generation 18"):
                 upgrades.check_target_capabilities(host, {**request, "project": {}, "recovery_archive": "/private/input"}, "recover-plan")

@@ -9,15 +9,15 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
-func copiesBindingDocument(unix, secret bool) string {
-	rows := make([]string, 0, 2)
-	for ordinal := 1; ordinal <= 2; ordinal++ {
+func copiesBindingDocument(count int, unix, secret bool) string {
+	rows := make([]string, 0, count)
+	for ordinal := 1; ordinal <= count; ordinal++ {
 		endpoint := fmt.Sprintf(`"address":"127.0.0.1","port":%d`, 8200+ordinal)
 		scheme := "http"
 		if unix {
 			name := "worker"
 			if ordinal > 1 {
-				name += "@2"
+				name += fmt.Sprintf("@%d", ordinal)
 			}
 			directory := "/run/foundry/services/00000000-0000-4000-8000-000000000001/sockets"
 			endpoint = fmt.Sprintf(`"directory":%q,"name":%q,"path":%q`, directory, name, directory+"/"+name)
@@ -35,7 +35,7 @@ func copiesBindingDocument(unix, secret bool) string {
 func TestCopiesAreOrderedOwnedSnapshots(t *testing.T) {
 	for _, unix := range []bool{false, true} {
 		for _, secret := range []bool{false, true} {
-			bindings, err := ReadBindings(writeBindingDocument(t, copiesBindingDocument(unix, secret)))
+			bindings, err := ReadBindings(writeBindingDocument(t, copiesBindingDocument(2, unix, secret)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -79,7 +79,7 @@ func TestCopiesAreOrderedOwnedSnapshots(t *testing.T) {
 }
 
 func TestCopiesRejectMalformedAndConflictingGrants(t *testing.T) {
-	valid := copiesBindingDocument(false, true)
+	valid := copiesBindingDocument(2, false, true)
 	for _, change := range [][2]string{
 		{`"name":"workers"`, `"name":"relay"`},
 		{`"ordinal":2`, `"ordinal":1`},
@@ -98,9 +98,34 @@ func TestCopiesRejectMalformedAndConflictingGrants(t *testing.T) {
 			t.Fatal("accepted invalid copies descriptor", change, err)
 		}
 	}
-	badUnix := strings.Replace(copiesBindingDocument(true, false), `worker@2`, `worker@3`, -1)
+	badUnix := strings.Replace(copiesBindingDocument(2, true, false), `worker@2`, `worker@3`, -1)
 	if _, err := ReadBindings(writeBindingDocument(t, badUnix)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("accepted socket for another ordinal", err)
+	}
+}
+
+func TestCopySocketNamesReserveSuffixAndBoundLongestPath(t *testing.T) {
+	valid := copiesBindingDocument(128, true, false)
+	longest := strings.Repeat("x", 32)
+	valid = strings.ReplaceAll(valid, "worker@128", longest+"@128")
+	bindings, err := ReadBindings(writeBindingDocument(t, valid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	copies, err := bindings.Copies("workers")
+	if err != nil || len(copies[127].Endpoint.Path) > 107 || copies[127].Endpoint.Name != longest+"@128" {
+		t.Fatal(copies, err)
+	}
+	for _, name := range []string{"worker@1", "worker@2@128", longest + "x@128"} {
+		bad := strings.ReplaceAll(valid, longest+"@128", name)
+		if _, err := ReadBindings(writeBindingDocument(t, bad)); !errors.Is(err, fault.Invalid) {
+			t.Fatal("accepted invalid derived socket name", name, err)
+		}
+	}
+	bad := strings.Replace(copiesBindingDocument(2, true, false), `"name":"worker"`, `"name":"worker@2"`, 1)
+	bad = strings.Replace(bad, `/sockets/worker"`, `/sockets/worker@2"`, 1)
+	if _, err := ReadBindings(writeBindingDocument(t, bad)); !errors.Is(err, fault.Invalid) {
+		t.Fatal("accepted reserved suffix in singleton socket name", err)
 	}
 }
 
@@ -140,7 +165,7 @@ func TestPublicListenerCopyPorts(t *testing.T) {
 func TestCopySecretFileRejectsExplicitNullAndMalformedValues(t *testing.T) {
 	for _, value := range []string{`null`, `false`, `42`, `[]`, `{}`, `""`} {
 		t.Run(value, func(t *testing.T) {
-			document := copiesBindingDocument(false, true)
+			document := copiesBindingDocument(2, false, true)
 			for ordinal := 1; ordinal <= 2; ordinal++ {
 				field := fmt.Sprintf(`"secret_file":"/etc/foundry/instances/app-1/copy-secrets/service-%d.secret"`, ordinal)
 				document = strings.Replace(document, field, `"secret_file":`+value, 1)

@@ -542,8 +542,13 @@ The following references work in argv and explicit nonsecret environment entries
 | `listener_socket_name` | `binding_socket_name` | Socket file name, such as `wl0` |
 | `listener_socket_path` | `binding_socket_path` | Full absolute socket path |
 
-Socket names contain 1–32 ASCII letters, digits, dots, underscores, hyphens or `@`,
-starting with a letter or digit. Names must be unique across the instance's roles.
+Declared socket names contain 1–32 ASCII letters, digits, dots, underscores or
+hyphens, starting with a letter or digit. `@` is reserved for derived copy suffixes;
+a declaration cannot use a name such as `wl0@2`. Names must be unique across the
+instance's roles. The same codec validates derived names against their ordinal.
+A 32-character name at ordinal 128 produces a 103-byte path, below the enforced
+107-byte Unix socket path limit. The suffix stays literal in systemd arguments;
+Unix listener inspection compares the full absolute path, including `@N`.
 Paths, abstract sockets, slashes, traversal and public Unix bindings are refused.
 Unix listeners allocate no TCP ports and create no firewall or nginx rules.
 `listener_address` and `listener_port` remain TCP-only.
@@ -791,7 +796,16 @@ Set a custom executable role's count in profile 3 `placement`:
 {"placement": {"http": 1, "relay": 3, "worker": 1}}
 ```
 
-Counts above one require generation 17 on both the client and host. The floor
+Generation 17 is reserved for v0.36.0 parameterized upload routes. Numbered copies
+use generation 18. The tools upgrade plan includes a runtime-v1 bridge when the
+installed helper matches the exact v0.35.0 bytes. The upgrade journal records the
+source and target digests, and the helper is atomically replaced before selecting
+the new bundle. Interrupted upgrades resume forward. Existing singleton invocation
+pins, cleanup and the retained network-boot coordinator remain compatible; unknown
+helper bytes are refused. This bridge is required because the old fixed helper
+rejects ordinals above one before importing its bundled library.
+
+Counts above one require generation 18 on both the client and host. The floor
 remains selected through rollback and recovery, including a later single-copy
 profile. A count of zero means unplaced. Wrappers remain outside release 2a.
 
@@ -814,9 +828,15 @@ environment references for the decimal ordinal; JSON field bindings receive an
 integer.
 
 Role-level network confinement and shared-directory grants apply to every copy.
+If regrowth restores a deliberately disabled copy, dependents that cannot remain
+in the running selection enter the reviewed stop scope. Their exit and network
+closure must be proved before the transition can complete.
+
 Readiness verifies each copy's process, listener ownership, stability, and BPF
 attachments where confinement is declared. Dependencies include every prerequisite
-copy. Startup and final readiness use one shared deadline.
+copy. Units at the same dependency level start together and share a stability
+window; consumers start only after their prerequisites pass. Startup and final
+readiness use one shared 90-second deadline, independent of the copy count.
 
 Build the changed profile into a release archive, then review and activate its
 release plan. The archived target profile owns the counts. The plan shows added,
@@ -1532,7 +1552,7 @@ these runtime-only caches.
 
 The release 2a consumer contract supports distinct secrets and endpoints for each
 placed executable copy. Ordinals are dense from 1 through the role's count.
-Builtins remain singletons. Generation 17 supports counts up to 128 per custom
+Builtins remain singletons. Generation 18 supports counts up to 128 per custom
 role, with at most 256 placed units per instance.
 
 ### Copy-scoped secrets

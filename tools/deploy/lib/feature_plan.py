@@ -159,6 +159,9 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
         observed = observations(host, registry, entry, topology, candidate_profile)
         enabled, running, removed = lifecycle.transition_enablement(host, entry, inventory, restoring=restoring)
         holds, maintenance_running, _ = feature_maintenance.selection(host, entry, inventory, enabled, running, None)
+        if previous:
+            changes.update(name for name in previous.units if name not in maintenance_running
+                           and observed["units"][name.record_key]["ActiveState"] != "inactive")
         # Values and credential-derived digests exist only in the private records.
         public = {"ok": True, "operation_id": operation_id, "archive_sha256": checksum,
                   "deployment_sha256": inventory.resolution.deployment_sha256,

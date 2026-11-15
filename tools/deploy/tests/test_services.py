@@ -99,11 +99,11 @@ class ServiceInventoryTests(unittest.TestCase):
         deadline = time.monotonic() + 10
         def start(name, until):
             self.assertEqual(until, deadline)
-            events.append(("start", name.role))
+            events.extend(("start", identity.role) for identity in name)
         def ready(name, until):
             self.assertEqual(until, deadline)
-            events.append(("ready", name.role))
-            return name.role != "relay"
+            events.extend(("ready", identity.role) for identity in name)
+            return all(identity.role != "relay" for identity in name)
         with self.assertRaises(c.DeployError):
             self.inventory.start_in_order(self.inventory.units, deadline, start, ready)
         self.assertEqual(events, [("start", "http"), ("ready", "http"), ("start", "relay"), ("ready", "relay")])
@@ -201,17 +201,18 @@ class ServiceInventoryTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("runtime_copy", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        invocation = replace(helper("relay"), unit=c.UnitIdentity(INSTANCE, "relay", 2))
-        pinned = {"helper": c.record_document(invocation), "launch_file": "/launch.json"}
-        with patch.dict(os.environ, {"INVOCATION_ID": invocation.process.invocation_id}), \
-                patch.object(module.os, "geteuid", return_value=1000), \
-                patch.object(module, "owned", side_effect=lambda path: path), \
-                patch.object(module, "read", side_effect=[pinned, {"launch": True}]) as read, \
-                patch.object(Path, "read_text", return_value=BOOT), \
-                patch.object(feature_runtime, "run", return_value=0) as run:
-            self.assertEqual(module.main(["dispatch", INSTANCE, "relay", "2", CURRENT, DIGEST, OTHER]), 0)
-        self.assertEqual(read.call_args_list[0].args[0], module.PINS / INSTANCE / "relay@2" / (invocation.process.invocation_id + ".json"))
-        self.assertEqual(run.call_args.args, ("dispatch", c.record_document(invocation), {"launch": True}))
+        for ordinal in (1, 2, 128):
+            invocation = replace(helper("relay"), unit=c.UnitIdentity(INSTANCE, "relay", ordinal))
+            pinned = {"helper": c.record_document(invocation), "launch_file": "/launch.json"}
+            with patch.dict(os.environ, {"INVOCATION_ID": invocation.process.invocation_id}), \
+                    patch.object(module.os, "geteuid", return_value=1000), \
+                    patch.object(module, "owned", side_effect=lambda path: path), \
+                    patch.object(module, "read", side_effect=[pinned, {"launch": True}]) as read, \
+                    patch.object(Path, "read_text", return_value=BOOT), \
+                    patch.object(feature_runtime, "run", return_value=0) as run:
+                self.assertEqual(module.main(["dispatch", INSTANCE, "relay", str(ordinal), CURRENT, DIGEST, OTHER]), 0)
+            self.assertEqual(read.call_args_list[0].args[0], module.PINS / INSTANCE / invocation.unit.record_key / (invocation.process.invocation_id + ".json"))
+            self.assertEqual(run.call_args.args, ("dispatch", c.record_document(invocation), {"launch": True}))
 
     def test_retained_dispatch_uses_prepared_view_without_private_admission_reads(self):
         import feature_runtime
@@ -338,6 +339,34 @@ class ServiceInventoryTests(unittest.TestCase):
                 inspect.side_effect = [observed, {**observed, "process": {"start": "43"}}]
                 with patch.object(release, "STABILITY_SECONDS", .2):
                     self.assertFalse(wait())
+
+    def test_numbered_unix_socket_remains_literal_in_argv_and_ss_readiness(self):
+        import release
+        from test_copies import numbered_inventory
+        inventory, _, _ = numbered_inventory(128)
+        identity = inventory.identity("relay", 128)
+        endpoint = c.UnixEndpoint.for_listener(INSTANCE, "relay", "control", "x" * 32, ordinal=128)
+        inventory.resolution = replace(inventory.resolution, unix_endpoints=(endpoint,), endpoints=())
+        inventory.roles["relay"] = replace(inventory.roles["relay"],
+            readiness=t.Probe.parse({"kind": "unix", "listener": "control"}))
+        self.assertEqual(services.command_line([endpoint.path]), '"' + endpoint.path + '"')
+        with tempfile.TemporaryDirectory() as root:
+            host = Host(Paths(Path(root).resolve()))
+            spec = inventory.specs[identity]
+            executable = host.paths.p(spec.executable)
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"native")
+            executable.chmod(0o755)
+            inventory.specs[identity] = replace(spec, executable_sha256=c.digest(executable))
+            observed = {"ActiveState": "active", "NRestarts": "0", "MainPID": "20", "process": {"start": "42"}}
+            with patch.object(release, "service", return_value=observed), \
+                    patch.object(release, "_matches_executable", return_value=True), \
+                    patch.object(release, "STABILITY_SECONDS", 0), \
+                    patch.object(services, "probe", return_value=True), \
+                    patch.object(host, "run", return_value=subprocess.CompletedProcess([], 0,
+                        'u_str LISTEN 0 128 ' + endpoint.path + ' 123 * 0 users:(("relay",pid=20,fd=3))', '')) as sockets:
+                self.assertTrue(services.wait_ready(host, inventory, identity, time.monotonic() + .5))
+            self.assertEqual(sockets.call_args.args[0], ["ss", "-Hxlpn"])
 
     def test_complete_readiness_set_rechecks_prerequisite_after_dependent_probe(self):
         import release
@@ -466,7 +495,7 @@ class ServicePreparationTests(unittest.TestCase):
         entry = {**entry, "profile": inventory.profile.projection(), "topology": t.validate_topology(inventory.topology.projection())}
         self.host.read_registry.return_value = {"instances": {INSTANCE: entry}}
         selected, _ = self.store._selection()
-        selected = replace(selected, minimum_generation=17,
+        selected = replace(selected, minimum_generation=18,
                            enabled_roles=unit_selection_names(inventory.units),
                            admission=replace(selected.admission, disposition=c.AdmissionDisposition.PENDING,
                                deployment_sha256=inventory.resolution.deployment_sha256))

@@ -236,7 +236,8 @@ class WiringHost(Host):
             elif action == "reload":
                 self.worker += 1
             elif action == "start" and unit.startswith("foundry-"):
-                self.start(unit)
+                for selected in args[2:]:
+                    self.start(selected)
             elif action == "stop":
                 self.shared_prepared.clear()
                 code = 0 if loaded else 5
@@ -938,7 +939,7 @@ class FeatureWiringTests(FeatureWiringFixture):
     def test_application_configuration_and_failed_applied_correction(self):
         import runtime_config
         self.test_service_secret_rotation_retains_http_and_private_values()
-        with patch.object(release.backup, "archive_keys"), patch.object(services, "wait_ready", return_value=False):
+        with patch.object(release.backup, "archive_keys"), patch.object(services, "wait_ready_set", return_value=False):
             with self.assertRaises(c.DeployError):
                 self.request("config-set", secrets={"configuration": {"APP__TEST__TOKEN": "new-app-canary"}}, confirm=True)
         _, entry = self.host.require_identity(self.project, self.profile)
@@ -958,7 +959,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         target = self.version
         self.build_archive(secrets=True, independent=True, version="20261115T000000Z-abcdef12")
         self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
-        with patch.object(release.backup, "archive_keys"), patch.object(services, "wait_ready", return_value=False):
+        with patch.object(release.backup, "archive_keys"), patch.object(services, "wait_ready_set", return_value=False):
             with self.assertRaises(c.DeployError):
                 self.request("config-set", secrets={"configuration": {"APP__TEST__TOKEN": "held-canary"}}, confirm=True)
         self.assertFalse(self.host.running)
@@ -990,7 +991,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, entry = self.host.require_identity(self.project, self.profile)
         store, _, _, _ = lifecycle.load(self.host, entry)
         before = c.read_json(store.durable / "configuration-hold.json")
-        with patch.object(services, "wait_ready", return_value=False), self.assertRaises(c.DeployError):
+        with patch.object(services, "wait_ready_set", return_value=False), self.assertRaises(c.DeployError):
             self.request("rollback", **arguments)
         self.assertEqual(c.read_json(store.durable / "configuration-hold.json"), before)
         self.assertEqual(lifecycle.load(self.host, entry)[1].admission.disposition, c.AdmissionDisposition.PENDING)

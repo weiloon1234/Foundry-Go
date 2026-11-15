@@ -106,7 +106,7 @@ class FeatureEnablementTests(unittest.TestCase):
             self.assertEqual(args[:2], ["systemctl", "start"])
             return subprocess.CompletedProcess(args, 0, "", "")
         with patch.object(services, "enabled_units", return_value=self.inventory.copies("http")), \
-                patch.object(services, "wait_ready", return_value=True), \
+                patch.object(services, "wait_ready_set", return_value=True), \
                 patch.object(admission.AdmissionStore, "_lock", lock), \
                 patch.object(shared_directories, "prepare", side_effect=prepare), patch.object(self.host, "run", side_effect=start):
             lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), time.monotonic() + 1)
@@ -133,7 +133,7 @@ class FeatureEnablementTests(unittest.TestCase):
             return subprocess.CompletedProcess(args, 0, "ExecCondition={ status=226/NAMESPACE ; }\n", "")
         with patch.object(lifecycle, "prepare_shared_directories"), \
                 patch.object(services, "enabled_units", return_value=self.inventory.copies("http")), \
-                patch.object(services, "wait_ready", return_value=False), \
+                patch.object(services, "wait_ready_set", return_value=False), \
                 patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
             lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), time.monotonic() + 1)
         self.assertEqual(caught.exception.code, "service_namespace")
@@ -143,7 +143,7 @@ class FeatureEnablementTests(unittest.TestCase):
             return subprocess.CompletedProcess(args, 0, "ExecMainStatus=1\n" if args[:2] == ["systemctl", "show"] else "", "")
         with patch.object(lifecycle, "prepare_shared_directories"), \
                 patch.object(services, "enabled_units", return_value=self.inventory.copies("http")), \
-                patch.object(services, "wait_ready", return_value=False), \
+                patch.object(services, "wait_ready_set", return_value=False), \
                 patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
             lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), time.monotonic() + 1)
         self.assertEqual(caught.exception.code, "readiness_failed")

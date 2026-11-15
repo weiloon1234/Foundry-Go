@@ -250,7 +250,7 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
         registry, entry = self.target()
         with self.host.lock('host'):
             self.prepare(registry, entry)
-            with patch.object(services, 'wait_ready', return_value=False), self.assertRaises(c.DeployError):
+            with patch.object(services, 'wait_ready_set', return_value=False), self.assertRaises(c.DeployError):
                 lifecycle.activate_recovery(self.host, registry, entry, self.journal)
             self.assertFalse(self.host.running)
             before = list(self.host.started)

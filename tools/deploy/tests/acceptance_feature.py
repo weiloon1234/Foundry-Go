@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in generation-17 numbered copies and host capabilities in the disposable harness.
+"""Opt-in generation-18 numbered copies and host capabilities in the disposable harness.
 
 Use the ordinary deploy-acceptance archive. The artifact is a second, pinned copy
 of that fixture's Linux artisan binary; no artifact network download is needed.
