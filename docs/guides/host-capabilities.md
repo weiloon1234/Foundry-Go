@@ -1222,11 +1222,13 @@ scheduler and `DirectoryReadOnly` for an OBS wrapper that uses Go bindings.
 `cache.MaxBytes` is the declared limit. Lookups for missing or ungranted names
 return `fault.Missing`. The descriptor omits `shared_directories` for roles with
 no grants. Older strict readers need an application upgrade before receiving a grant.
-Console calls and operator invocations never receive shared directories. Their
-descriptor retains the HTTP descriptor's other bindings and runtime fields but
-omits `shared_directories`, so the same lookup returns `fault.Missing`. This also
-applies to release checks, maintenance, recovery, and rehearsal console calls.
-The HTTP unit's own descriptor keeps its declared grants.
+Console calls that the deploy tool makes never receive shared directories. These
+are release checks and the maintenance, recovery and rehearsal commands. Their
+descriptor keeps the HTTP descriptor's other bindings and runtime fields but omits
+`shared_directories`, so the same lookup returns `fault.Missing`. The HTTP unit's
+own descriptor keeps its declared grants. Commands typed by hand in `ACTION=shell`
+run outside the deploy tool and receive no deployment bindings at all:
+`deployment.LoadBindings` reports `present=false`, as in earlier releases.
 
 The directory grant does not imply startup order or file readiness. Add
 `"requires": ["scheduler"]` to the reader when it must start after the scheduler.
