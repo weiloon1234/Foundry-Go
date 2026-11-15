@@ -53,9 +53,10 @@
   verification, and owned-only deletion passed
   [live certification](docs/evidence/v037-managed-dns-live-certification.md).
 - Fixed: disabling framework persistence features retains their migration history
-  and checksums. Pending disabled definitions report `pending_feature_disabled`
-  and run after re-enablement; unrelated migrations can proceed. Rollback refuses
-  selections containing disabled features before any reversal. Keep disabled
+  and checksums. Unrun disabled definitions appear in `disabled_pending` with
+  state `pending_feature_disabled`, preserving older deploy parsers. Applied
+  disabled history stays `applied`. Re-enablement makes pending definitions runnable.
+  Rollback refuses selections containing disabled features before any reversal. Keep disabled
   features' database and schema settings. PostgreSQL cache history also survives
   driver changes. The standard `App.Migrations()` and
   `migrate.New(target.Definitions...)` loop keeps working; new

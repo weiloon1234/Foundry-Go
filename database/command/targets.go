@@ -69,7 +69,7 @@ func (c Command) runTargets(ctx context.Context, resources Resources, output io.
 			if err != nil {
 				return err
 			}
-			reports = append(reports, targetReport{Schema: target.Schema, Report: report})
+			reports = append(reports, targetReport{Schema: target.Schema, StatusReport: report.StatusReport()})
 			conflicts = safeerror.Join("operation failed", conflicts, report.Check())
 		}
 		return safeerror.Join("operation failed", conflicts, c.writeTargetStatus(output, name, reports))

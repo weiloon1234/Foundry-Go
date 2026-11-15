@@ -326,7 +326,7 @@ class WiringHost(Host):
                 self.maintenance_down = "down" in args
                 output = json.dumps({"down": self.maintenance_down})
             elif "migrate:status" in args:
-                output = '{"targets":[{"problems":[],"migrations":[]}]}'
+                output = '{"targets":[{"schema":"public","problems":[],"migrations":[],"disabled_pending":[{"key":{"origin":"feature","id":"001"},"state":"pending_feature_disabled"}]}]}'
         elif args[0] == "journalctl":
             output = "fixture service log"
         elif len(args) > 3 and args[3] == "prune":
@@ -700,6 +700,7 @@ class FeatureWiringTests(FeatureWiringFixture):
                 patch('host.resolve_addresses', side_effect=socket.gaierror(-2, 'missing')):
             plan = self.request('release-plan', archive=str(self.archive), archive_sha256=c.digest(self.archive), operation_id=operation)
         self.assertTrue(plan['ok'])
+        self.assertEqual(plan['migrations'], {'pending': False, 'targets': [{'schema': 'public', 'disabled_pending': [{'key': {'origin': 'feature', 'id': '001'}, 'state': 'pending_feature_disabled'}]}]})
         self.assertEqual(plan['observations']['dns'][0]['state'], 'unresolved')
         self.assertEqual(plan['observations']['dns'][0]['instructions'],
                          [{'name': self.profile['listeners']['relay.api']['dns']['hostname'],
@@ -1222,11 +1223,14 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, time.monotonic() + 1))
         network = lifecycle.network_report(self.host, entry, report.claim_inventory(registry))
         self.assertNotIn("nginx_projection_unverified", [f["code"] for f in network["findings"]])
-        with patch.object(report, "readiness", autospec=True, return_value={"ready": True, "http_status": 200}), \
+        with patch.object(report, "os", SimpleNamespace(**{**vars(os), "geteuid": lambda: 0})), \
+                patch.object(report, "readiness", autospec=True, return_value={"ready": True, "http_status": 200}), \
                 patch.object(report, "certificate", autospec=True, return_value={"status": "valid", "expires_at": None}):
             result = self.request("report")
         reported = result["projects"][0]["instances"][0]
         self.assertEqual(reported["network"], network)
+        self.assertFalse(reported["migrations"]["pending"])
+        self.assertEqual(reported["migrations"]["targets"][0]["disabled_pending"][0]["key"], {"origin": "feature", "id": "001"})
         self.assertTrue(reported["metadata_consistent"])
         self.assertNotIn("running_release_mismatch", [p["code"] for p in result["problems"]])
         self.assertEqual(self.request("logs", role="relay")["logs"], "fixture service log")

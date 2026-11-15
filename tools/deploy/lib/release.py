@@ -519,16 +519,33 @@ def resume_terminal_obligations(host, registry, entry, state):
     return changed or pending
 
 
-def migration_status(host, entry, release, env_file=None):
-    report = parse_json(app(host, entry, release, "migrate:status", env_file=env_file, extra=("--database", "primary")).stdout)
+def migration_report(host, entry, release, env_file=None, timeout=90):
+    report = parse_json(app(host, entry, release, "migrate:status", env_file=env_file, extra=("--database", "primary"), timeout=timeout).stdout)
     require(isinstance(report, dict) and isinstance(report.get("targets"), list) and report["targets"], "migration_status", "Migration status did not return declared database targets.")
-    pending = False
+    pending, targets = False, []
     for target in report["targets"]:
         require(isinstance(target, dict) and isinstance(target.get("migrations"), list) and not target.get("problems"), "migration_reconciliation", "Migration history needs reconciliation; inspect artisan migrate:status on the host.")
         for migration in target["migrations"]:
             require(isinstance(migration, dict) and migration.get("state") in ("pending", "applied"), "migration_reconciliation", "Migration history is incomplete or changed; administrator reconciliation required.")
             pending |= migration["state"] == "pending"
-    return pending
+        disabled = target.get("disabled_pending", [])
+        require(isinstance(disabled, list), "migration_status", "Disabled migration status is invalid.")
+        rows = []
+        for item in disabled:
+            require(isinstance(item, dict) and item.get("state") == "pending_feature_disabled"
+                    and isinstance(item.get("key"), dict)
+                    and all(isinstance(item["key"].get(key), str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", item["key"][key])
+                            for key in ("origin", "id")), "migration_status", "Disabled migration status is invalid.")
+            rows.append({"key": {key: item["key"][key] for key in ("origin", "id")}, "state": item["state"]})
+        schema = target.get("schema")
+        require(isinstance(schema, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", schema),
+                "migration_status", "Migration target schema is invalid.")
+        targets.append({"schema": schema, "disabled_pending": rows})
+    return {"pending": pending, "targets": targets}
+
+
+def migration_status(host, entry, release, env_file=None):
+    return migration_report(host, entry, release, env_file)["pending"]
 
 
 def backup_database(host, entry, attempt_id):
@@ -1234,7 +1251,8 @@ def legacy_rollback_plan(host, project, profile, target, expected_current, opera
         value = {"ok": True, "operation_id": operation_id, "target": target, "expected_current": expected_current,
                  "host_revision": registry["revision"], "configuration_revision": entry["configuration_revision"],
                  "archive_sha256": declaration["archive_sha256"], "manifest_sha256": declaration["manifest_sha256"],
-                 "topology_sha256": declaration["topology_sha256"]}
+                 "topology_sha256": declaration["topology_sha256"],
+                 "migrations": migration_report(host, entry, release_path(host, entry, target))}
         value["plan_token"] = canonical_digest(value)
         path = host.paths.instance_state(entry["name"]) / "rollback-plans" / (operation_id + ".json")
         protected_directory(host, path.parent, 0o700)

@@ -3,6 +3,7 @@ package application_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"strings"
@@ -68,6 +69,36 @@ func TestRunDatabaseCommandMigratesEverySchemaOfOnlyTheSelectedDatabase(t *testi
 	output, err := run("migrate", "status")
 	if err != nil || !strings.Contains(output, "== default/"+schema+"\n") || !strings.Contains(output, "== default/"+tenant+"\n") || historyTables() != 0 {
 		t.Fatalf("read-only status: %q %v", output, err)
+	}
+	output, err = run("migrate", "status", "--format", "json")
+	var status struct {
+		Targets []struct {
+			Migrations      []migrate.Status `json:"migrations"`
+			DisabledPending []migrate.Status `json:"disabled_pending"`
+		} `json:"targets"`
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(output), &status); err != nil {
+		t.Fatal(err)
+	}
+	disabled := 0
+	for _, target := range status.Targets {
+		for _, item := range target.Migrations {
+			if item.State != migrate.Pending && item.State != migrate.Complete {
+				t.Fatalf("legacy parser would refuse: %s", output)
+			}
+		}
+		for _, item := range target.DisabledPending {
+			if item.State != migrate.PendingDisabled {
+				t.Fatalf("invalid disabled state: %s", output)
+			}
+			disabled++
+		}
+	}
+	if disabled == 0 {
+		t.Fatal("application fixture did not expose disabled framework history")
 	}
 	// The default schema also receives the framework's outbound capture table,
 	// which every application with a database registers.

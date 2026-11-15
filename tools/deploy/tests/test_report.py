@@ -45,6 +45,12 @@ class FixturePaths:
     def opt(self, name):
         return self.p(instance_paths(name)["application"])
 
+    def instance_config(self, name):
+        return self.p(instance_paths(name)["configuration"])
+
+    def data(self, name):
+        return self.p(instance_paths(name)["data"])
+
 
 class FixtureHost:
     def __init__(self, root):
@@ -67,6 +73,9 @@ class FixtureHost:
             raise self.failures[command[0]]
         defaults = {"systemctl": "", "ss": "", "ufw": "Status: inactive\n",
                     "sshd": "passwordauthentication no\npermitrootlogin prohibit-password\n"}
+        if "migrate:status" in command:
+            return subprocess.CompletedProcess(command, 0, json.dumps({"targets": [{"schema": "public", "migrations": [],
+                "disabled_pending": [{"key": {"origin": "feature", "id": "001"}, "state": "pending_feature_disabled"}]}]}), "")
         if command[:2] == ["systemctl", "is-enabled"]:
             return subprocess.CompletedProcess(command, 1, "disabled\n", "")
         output = self.outputs.get(command[0], defaults.get(command[0], ""))
@@ -276,6 +285,9 @@ class ReportTests(unittest.TestCase):
         self.assertIn({"code": "instance_state_inconsistent", "instance_id": INSTANCE_ID}, result["problems"])
 
     def test_live_maintenance_explains_not_ready_without_hiding_service_failure(self):
+        self.host.paths.instance_config("abc-production").mkdir(parents=True)
+        (self.host.paths.instance_config("abc-production") / "app.env").write_text("")
+        self.host.paths.data("abc-production").mkdir(parents=True)
         patch.object(report.os, "geteuid", return_value=0).start()
         live = {"down": True, "since": "2026-11-11T00:00:00Z"}
         probe = patch.object(report.maintenance, "status", return_value=live).start()

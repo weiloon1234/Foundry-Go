@@ -155,8 +155,9 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
         release.app(host, entry, target_path, "config:check", env_file=env)
         restoring = rollback or (manifest["version"] != release.current_version(host, entry) and
                                   manifest["version"] in lifecycle.selected_releases(host, entry, state))
+        migrations = release.migration_report(host, entry, target_path, env_file=env)
         if restoring:
-            require(not release.migration_status(host, entry, target_path, env_file=env),
+            require(not migrations["pending"],
                     "rollback_schema", "Target release is incompatible with the current database schema.")
         observed = observations(host, registry, entry, topology, candidate_profile, operation_id)
         managed_dns = dns.plan(host, entry, candidate_profile, operation_id)
@@ -177,7 +178,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                   "removed_units": sorted(unit_selection_names(removed_units)),
                   "changed_units": sorted(unit_selection_names(changes - added - removed_units)),
                   "retained_units": sorted(unit_selection_names(set(inventory.units) - changes)),
-                  "required_service_secrets": requirements,
+                  "required_service_secrets": requirements, "migrations": migrations,
                   "maintenance_policy": {name: "stop" if role.common.maintenance == "stop" else "continue"
                                          for name, role in inventory.roles.items()},
                   "restoring": restoring, "enabled_roles": list(unit_selection_names(enabled)), "running_roles": list(unit_selection_names(running)),

@@ -25,9 +25,12 @@ func (c Command) write(output io.Writer, value any, text *strings.Builder) error
 	return err
 }
 
-func statusText(text *strings.Builder, report migrate.Report) {
-	for _, item := range report.Statuses {
+func statusText(text *strings.Builder, report migrate.StatusReport) {
+	for _, item := range report.Migrations {
 		fmt.Fprintf(text, "%s\t%s\t%s\n", item.Key.Origin, item.Key.ID, item.State)
+	}
+	for _, item := range report.DisabledPending {
+		fmt.Fprintf(text, "Disabled: %s\t%s\t%s\n", item.Key.Origin, item.Key.ID, item.State)
 	}
 	for _, problem := range report.Problems {
 		fmt.Fprintf(text, "Conflict: %s\t%s\t%s", problem.Key.Origin, problem.Key.ID, problem.Code)
@@ -36,13 +39,17 @@ func statusText(text *strings.Builder, report migrate.Report) {
 		}
 		text.WriteByte('\n')
 	}
-	fmt.Fprintf(text, "%d migration(s); %d conflict(s).\n", len(report.Statuses), len(report.Problems))
+	fmt.Fprintf(text, "%d migration(s); %d conflict(s).\n", len(report.Migrations), len(report.Problems))
+	if len(report.DisabledPending) != 0 {
+		fmt.Fprintf(text, "%d pending migration(s) skipped because their features are disabled.\n", len(report.DisabledPending))
+	}
 }
 
 func (c Command) writeStatus(output io.Writer, report migrate.Report) error {
 	var text strings.Builder
-	statusText(&text, report)
-	return c.write(output, report, &text)
+	status := report.StatusReport()
+	statusText(&text, status)
+	return c.write(output, status, &text)
 }
 
 func migrationsText(text *strings.Builder, result migrate.RunResult) {
@@ -157,7 +164,7 @@ func (c Command) writePruneResult(output io.Writer, result prune.Result) error {
 // Target reports name the database connection and schema of each history.
 type targetReport struct {
 	Schema string `json:"schema"`
-	migrate.Report
+	migrate.StatusReport
 }
 
 type targetRun struct {
@@ -177,7 +184,7 @@ func (c Command) writeTargetStatus(output io.Writer, database string, reports []
 	var text strings.Builder
 	for _, item := range reports {
 		targetHeader(&text, database, item.Schema)
-		statusText(&text, item.Report)
+		statusText(&text, item.StatusReport)
 	}
 	return c.write(output, struct {
 		Database string         `json:"database,omitempty"`

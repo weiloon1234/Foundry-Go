@@ -66,6 +66,29 @@ type Report struct {
 	LastBatch int64     `json:"last_batch"`
 }
 
+// StatusReport is the console wire contract. Unrun disabled definitions are
+// separate so older deploy tools continue to recognize every healthy history row.
+// Conflicting or incomplete history remains in Migrations and Problems.
+type StatusReport struct {
+	Migrations      []Status  `json:"migrations"`
+	DisabledPending []Status  `json:"disabled_pending,omitempty"`
+	Problems        []Problem `json:"problems,omitempty"`
+	LastBatch       int64     `json:"last_batch"`
+}
+
+// StatusReport projects the complete inspection snapshot for status output.
+func (r Report) StatusReport() StatusReport {
+	result := StatusReport{Migrations: make([]Status, 0, len(r.Statuses)), Problems: r.Problems, LastBatch: r.LastBatch}
+	for _, status := range r.Statuses {
+		if status.State == PendingDisabled {
+			result.DisabledPending = append(result.DisabledPending, status)
+		} else {
+			result.Migrations = append(result.Migrations, status)
+		}
+	}
+	return result
+}
+
 // Check reports drift without formatting untrusted SQL or stored values.
 func (r Report) Check() error {
 	if len(r.Problems) != 0 {

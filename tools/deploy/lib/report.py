@@ -525,9 +525,13 @@ def instance_report(host, entry, deadline, problems, *, host_claims=(), host_con
                 item["enabled"] = role in enabled
     ready = None if recorded_status == "never_deployed" and not state.get("current") else checked(problems, "readiness_check_unavailable", instance_id, readiness, entry["allocations"]["http_port"], deadline)
     live_maintenance = None
+    migrations = None
     if os.geteuid() == 0:
         current_path = host.paths.opt(name) / "current"
         if current_path.is_symlink():
+            from release import migration_report
+            migrations = checked(problems, "migration_status_unavailable", instance_id,
+                                 migration_report, host, entry, current_path, None, remaining(deadline))
             live_maintenance = checked(problems, "maintenance_probe_unavailable", instance_id,
                                        maintenance.status, host, entry, current_path)
     elif ready is not None and not ready["ready"]:
@@ -643,7 +647,7 @@ def instance_report(host, entry, deadline, problems, *, host_claims=(), host_con
         "configuration_revision": integer(entry.get("configuration_revision")),
         "status": "unknown" if recorded_status in {"healthy", "rolled_back"} and not consistent else recorded_status,
         "recorded_status": recorded_status, "metadata_consistent": consistent,
-        "current_release": current, "previous_release": previous, "last_attempt": attempt(state.get("last_attempt")),
+        "current_release": current, "previous_release": previous, "migrations": migrations, "last_attempt": attempt(state.get("last_attempt")),
         "service": unit_status, "services": services_document(topology), "readiness": ready, "maintenance": live_maintenance, "certificate": cert, "backup": backup,
         "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),
     }
