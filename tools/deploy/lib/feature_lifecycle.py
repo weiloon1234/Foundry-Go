@@ -374,13 +374,21 @@ def start_units(host, entry, inventory, names, deadline):
             try:
                 host.run(["systemctl", "start", inventory.units[name]], timeout=max(.001, deadline - time.monotonic()))
             except DeployError:
-                observed = host.run(["systemctl", "show", inventory.units[name],
-                    "--property=ExecMainStatus,ExecCondition,ExecStartPre", "--no-pager"], check=False, timeout=5)
-                if observed.returncode == 0 and re.search(r"(?m)^ExecMainStatus=226$|status=226(?:/NAMESPACE)?(?:[ ;}]|$)", observed.stdout):
-                    raise DeployError("service_namespace", "Unit namespace setup failed (226/NAMESPACE). "
-                                      "Run the deploy action again to prepare host paths, or use reboot recovery.") from None
+                _require_namespace_ready(host, inventory.units[name])
                 raise
-            require(services.wait_ready(host, inventory, name, deadline), "readiness_failed", "Selected role failed readiness.")
+            if not services.wait_ready(host, inventory, name, deadline):
+                # systemd 255 treats a 226 from ExecCondition as a skipped condition,
+                # so `systemctl start` succeeds and only readiness notices.
+                _require_namespace_ready(host, inventory.units[name])
+                require(False, "readiness_failed", "Selected role failed readiness.")
+
+
+def _require_namespace_ready(host, unit):
+    observed = host.run(["systemctl", "show", unit, "--property=ExecMainStatus,ExecCondition,ExecStartPre", "--no-pager"],
+                        check=False, timeout=5)
+    if observed.returncode == 0 and re.search(r"(?m)^ExecMainStatus=226$|status=226(?:/NAMESPACE)?(?:[ ;}]|$)", observed.stdout):
+        raise DeployError("service_namespace", "Unit namespace setup failed (226/NAMESPACE). "
+                          "Run the deploy action again to prepare host paths, or use reboot recovery.")
 
 
 def ready(host, entry, inventory, name, deadline):

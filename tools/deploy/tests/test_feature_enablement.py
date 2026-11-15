@@ -126,6 +126,28 @@ class FeatureEnablementTests(unittest.TestCase):
             self.assertIn("again", caught.exception.detail)
             self.assertIn("reboot recovery", caught.exception.detail)
 
+    def test_skipped_condition_namespace_failure_explains_recovery_after_readiness(self):
+        def run(args, **kwargs):
+            if args[:2] == ["systemctl", "start"]:
+                return subprocess.CompletedProcess(args, 0, "", "")
+            return subprocess.CompletedProcess(args, 0, "ExecCondition={ status=226/NAMESPACE ; }\n", "")
+        with patch.object(lifecycle, "prepare_shared_directories"), \
+                patch.object(services, "enabled_units", return_value=("http",)), \
+                patch.object(services, "wait_ready", return_value=False), \
+                patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
+            lifecycle.start_units(self.host, self.entry, self.inventory, ("http",), time.monotonic() + 1)
+        self.assertEqual(caught.exception.code, "service_namespace")
+
+    def test_readiness_failure_without_namespace_status_stays_readiness_failed(self):
+        def run(args, **kwargs):
+            return subprocess.CompletedProcess(args, 0, "ExecMainStatus=1\n" if args[:2] == ["systemctl", "show"] else "", "")
+        with patch.object(lifecycle, "prepare_shared_directories"), \
+                patch.object(services, "enabled_units", return_value=("http",)), \
+                patch.object(services, "wait_ready", return_value=False), \
+                patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
+            lifecycle.start_units(self.host, self.entry, self.inventory, ("http",), time.monotonic() + 1)
+        self.assertEqual(caught.exception.code, "readiness_failed")
+
     def test_reported_enablement_ignores_stored_audit_projection(self):
         from topology import validate_topology
         self.entry["topology"] = validate_topology(self.inventory.topology.projection())
