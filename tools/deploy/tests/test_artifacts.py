@@ -1,14 +1,16 @@
-"""Supply-chain fixtures: no DNS, sockets, remote downloads or host services."""
-from dataclasses import replace
+"""Supply-chain fixtures: fake peers or loopback TLS, no external DNS or services."""
+from dataclasses import asdict, replace
 import gzip
 import hashlib
 import io
+import json
 import os
 from pathlib import Path
 import socket
 import sys
 import tarfile
 import tempfile
+import traceback
 import unittest
 from unittest.mock import Mock, patch
 
@@ -17,9 +19,7 @@ import artifacts as a
 from contracts import ArtifactPayload, DeployError
 from host import Host, OperationTimeout, Paths
 from topology import Artifact, ArtifactPlatform
-
-PUBLIC = "93.184.216.34"
-URL = "https://downloads.example.org/payload"
+from artifact_origin_fixture import https_origin, PUBLIC, SIGNED_TARGET, URL
 
 
 def checksum(content):
@@ -157,24 +157,89 @@ class DownloadTests(unittest.TestCase):
         self.assertFalse(self.destination.exists())
 
     def test_each_redirect_revalidates_origin_and_dns(self):
-        for target in ("http://downloads.example.org/other", "https://127.0.0.1/other",
-                       "https://downloads.example.org/other?secret=x", "https://user@downloads.example.org/other"):
+        for target in ("http://downloads.example.org/other?token=secret", "https://127.0.0.1/other?token=secret",
+                       "https://downloads.example.org/other?token=secret#fragment",
+                       "https://downloads.example.org/other?token=secret#",
+                       "https://downloads.example.org/other?token=secret\n",
+                       "https://downloads.example.org/other?token=secret value",
+                       "https://user@downloads.example.org/other?token=secret",
+                       "https://@downloads.example.org/other?token=secret"):
             self.responses = [Response(status=302, headers={"Location": target})]
             with self.subTest(target=target), self.assertRaises(DeployError):
                 self.download()
-        self.responses = [Response(status=307, headers={"Location": "https://other.example.org/p"})]
+        self.responses = [Response(status=307, headers={"Location": "https://other.example.org/p?token=secret"})]
         self.resolver.side_effect = [[PUBLIC], ["10.0.0.1"]]
         with self.assertRaises(DeployError):
             self.download()
         self.assertEqual(self.resolver.call_args[0][0], "other.example.org")
 
+    def test_local_https_origin_requires_exact_signed_query_and_returns_redacted_evidence(self):
+        with https_origin(self.root) as (factory, requests):
+            client = factory("downloads.example.org", PUBLIC, 5)
+            try:
+                client.request("GET", "/signed")
+                self.assertEqual(client.getresponse().status, 403)
+            finally:
+                client.close()
+            origins = a.download(self.pin, self.destination, resolver=self.resolver, connection_factory=factory)
+        self.assertEqual(requests, ["/signed", "/payload", SIGNED_TARGET])
+        self.assertEqual(self.destination.read_bytes(), b"payload")
+        self.assertEqual(origins, (a.DownloadOrigin(URL, PUBLIC),
+                                  a.DownloadOrigin("https://downloads.example.org/signed", PUBLIC)))
+        evidence = json.dumps([asdict(origin) for origin in origins]) + repr(origins)
+        self.assertNotIn("?", evidence)
+        self.assertNotIn("fixture-secret", evidence)
+
+    def test_relative_and_query_only_redirects_preserve_query_bytes(self):
+        for location, expected in ((SIGNED_TARGET, SIGNED_TARGET),
+                                   ("?token=fixture-secret%2F+value", "/payload?token=fixture-secret%2F+value"),
+                                   ("https://downloads.example.org?token=x", "/?token=x")):
+            with self.subTest(location=location):
+                self.responses = [Response(status=302, headers={"Location": location}), Response()]
+                self.download()
+                self.assertEqual(self.connections[-1].requests[0][0], ("GET", expected))
+                self.destination.unlink()
+
+    def test_download_origin_redacts_query_before_repr_or_serialization(self):
+        origin = a.DownloadOrigin("https://downloads.example.org" + SIGNED_TARGET, PUBLIC)
+        self.assertEqual(asdict(origin), {"url": "https://downloads.example.org/signed", "address": PUBLIC})
+        self.assertNotIn("fixture-secret", repr(origin))
+
+    def test_signed_redirect_errors_never_report_query(self):
+        signed = "https://downloads.example.org" + SIGNED_TARGET
+        for response in (Response(status=403), Response(body=b"wrong"),
+                         OSError(signed), a.http.client.BadStatusLine(signed),
+                         Response(status=302, headers={"Location": signed + "#fragment"})):
+            self.responses = [Response(status=302, headers={"Location": signed}), response, response]
+            with self.subTest(response=type(response).__name__), self.assertRaises(DeployError) as error:
+                self.download()
+            rendered = "".join(traceback.format_exception(error.exception))
+            self.assertNotIn("fixture-secret", rendered)
+            self.assertNotIn("?token=", rendered)
+            self.assertFalse(self.destination.exists())
+
+    def test_signed_redirect_rechecks_peer_before_request(self):
+        connections = [Connection(PUBLIC, Response(status=302, headers={"Location": SIGNED_TARGET})),
+                       Connection("127.0.0.1", Response())]
+        with self.assertRaises(DeployError) as error:
+            a.download(self.pin, self.destination, resolver=self.resolver,
+                       connection_factory=Mock(side_effect=connections))
+        self.assertEqual(error.exception.code, "artifact_origin")
+        self.assertEqual(connections[-1].requests, [])
+        self.assertTrue(all(connection.closed for connection in connections))
+
     def test_redirect_loops_and_limits_leave_no_output(self):
         self.responses = [Response(status=302, headers={"Location": URL})]
         with self.assertRaises(DeployError):
             self.download()
-        self.responses = [Response(status=302, headers={"Location": f"/next-{i}"}) for i in range(a.MAX_REDIRECTS + 1)]
-        with self.assertRaises(DeployError):
+        self.connections.clear()
+        self.responses = [Response(status=302, headers={"Location": f"/next?token=secret-{i}"})
+                          for i in range(a.MAX_REDIRECTS + 1)]
+        with self.assertRaises(DeployError) as error:
             self.download()
+        self.assertEqual(error.exception.code, "artifact_redirect")
+        self.assertEqual(len(self.connections), a.MAX_REDIRECTS + 1)
+        self.assertNotIn("secret", str(error.exception))
         self.assertEqual(list(self.root.iterdir()), [])
 
     def test_size_checksum_content_encoding_and_truncation_fail_before_use(self):

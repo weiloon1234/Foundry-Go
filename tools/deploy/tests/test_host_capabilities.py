@@ -380,7 +380,8 @@ class CapabilityTopologyTests(unittest.TestCase):
 
     def test_artifact_origin_and_architecture_boundary(self):
         for url in ("http://downloads.example.org/a", "https://user:pass@example.org/a",
-                    "https://example.org/a?token=x", "https://example.org/a#x", "https://127.0.0.1/a",
+                    "https://example.org/a?token=x", "https://example.org/a?", "https://example.org/a#x",
+                    "https://example.org/a#", "https://@example.org/a", "https://127.0.0.1/a",
                     "https://[::ffff:127.0.0.1]/a", "https://169.254.169.254/a", "https://example.org:bad/a"):
             with self.subTest(url=url), self.assertRaises(c.DeployError):
                 t.ArtifactPlatform.parse({"url": url, "sha256": DIGEST})
