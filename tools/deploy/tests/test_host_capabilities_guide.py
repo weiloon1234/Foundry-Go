@@ -10,6 +10,22 @@ from topology import ArtifactPlatform, ReleaseArtifactSource, parse_profile, par
 
 
 class HostCapabilitiesGuideTests(unittest.TestCase):
+    def test_scheduler_shared_directory_example_grants_only_declared_roles(self):
+        guide = Path(__file__).resolve().parents[3] / "docs/guides/host-capabilities.md"
+        documents = [json.loads(value) for value in re.findall(r"```json\n(.*?)\n```", guide.read_text(), re.S)]
+        topology = next(document for document in documents if document.get("schema") == 2)
+        shared = next(document["shared_directories"] for document in documents if "shared_directories" in document)
+        environment = next(document["environment"] for document in documents
+                           if "RENDER_CACHE" in document.get("environment", {}))
+        obs = {**topology["roles"][1], "name": "obs", "environment": environment, "requires": ["scheduler"]}
+        topology["roles"] = [{"name": "http", "kind": "builtin"}, {"name": "scheduler", "kind": "builtin"}, obs]
+        topology["shared_directories"] = shared
+        parsed = parse_topology(topology)
+        directory = dict(parsed.shared_directories)["render-cache"]
+        self.assertEqual(directory.access("scheduler"), "read-write")
+        self.assertEqual(directory.access("obs"), "read-only")
+        self.assertIsNone(directory.access("http"))
+
     def test_worked_example_has_placeable_roles_and_private_callback_bindings(self):
         guide = Path(__file__).resolve().parents[3] / "docs/guides/host-capabilities.md"
         documents = [json.loads(value) for value in re.findall(r"```json\n(.*?)\n```", guide.read_text(), re.S)]

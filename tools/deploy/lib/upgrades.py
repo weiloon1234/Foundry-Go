@@ -25,6 +25,7 @@ if __name__ == "__main__":
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
                        FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION, FEATURE_UNIX_GENERATION, FEATURE_CONFINEMENT_GENERATION,
+                       FEATURE_SHARED_DIRECTORY_GENERATION,
                        TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
@@ -61,8 +62,8 @@ GENERATION_13_FILES = REHEARSAL_FILES | frozenset({"lib/feature_plan.py", "lib/f
     "lib/recovery_rehearsal.py", "lib/operation_lock.py", "lib/feature_recovery.py"})
 GENERATION_14_FILES = frozenset({"lib/config_templates.py"})
 GENERATION_15_FILES = frozenset({"lib/unix_sockets.py"})
-GENERATION_16_FILES = frozenset({"lib/network_confinement.py"})
-REQUIRED_FILES = GENERATION_16_FILES | BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES | GENERATION_15_FILES
+GENERATION_16_FILES = frozenset({"lib/network_confinement.py", "lib/shared_directories.py"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES | GENERATION_15_FILES | GENERATION_16_FILES
 
 
 def required_files(generation: int) -> frozenset[str]:
@@ -437,6 +438,7 @@ def feature_generation(topology, entry):
     return max(FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION if templates or public_listeners else 0,
                FEATURE_UNIX_GENERATION if unix else 0,
                FEATURE_CONFINEMENT_GENERATION if confinement else 0,
+               FEATURE_SHARED_DIRECTORY_GENERATION if topology.shared_directories else 0,
                entry.get("deployment_selection", {}).get("minimum_generation", 0))
 
 
@@ -457,7 +459,8 @@ def check_target_capabilities(host, request, action):
     registry = host.read_registry(missing=True)
     installed = registry if registry is not None else {"tools": protocol()}
     generation = request.get("client", {}).get("generation", 0)
-    if type(generation) is int and generation >= FEATURE_CONFINEMENT_GENERATION and installed["tools"]["generation"] >= FEATURE_CONFINEMENT_GENERATION:
+    latest = max(FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION)
+    if type(generation) is int and generation >= latest and installed["tools"]["generation"] >= latest:
         return
     from topology import parse_topology
     if action in {"recover-plan", "recover-apply"}:

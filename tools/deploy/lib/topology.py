@@ -136,6 +136,7 @@ class ArgumentKind(str, Enum):
     BINDING = "binding"
     CONFIG_ROOT = "config_root"
     DATA_ROOT = "data_root"
+    SHARED_DIRECTORY_PATH = "shared_directory_path"
 
 
 LISTENER_SOCKET_ARGUMENTS = frozenset({ArgumentKind.LISTENER_SOCKET_DIRECTORY, ArgumentKind.LISTENER_SOCKET_NAME,
@@ -615,6 +616,29 @@ def _role(value):
 
 
 @dataclass(frozen=True)
+class SharedDirectory:
+    state: str
+    max_bytes: int
+    writers: tuple[str, ...]
+    readers: tuple[str, ...]
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("state", "max_bytes", "writers", "readers"))
+        require(value["state"] == "disposable", "invalid_topology", "Shared directories must be disposable.")
+        from contracts import shared_directory_limit
+        size = shared_directory_limit(value["max_bytes"])
+        writers = contract_list(value["writers"], contract_name, minimum=1, maximum=MAX_ROLES)
+        readers = contract_list(value["readers"], contract_name, maximum=MAX_ROLES)
+        require(len(set(writers + readers)) == len(writers + readers),
+                "invalid_topology", "Shared directory roles must be unique and have one access mode.")
+        return cls("disposable", size, writers, readers)
+
+    def access(self, role):
+        return "read-write" if role in self.writers else "read-only" if role in self.readers else None
+
+
+@dataclass(frozen=True)
 class Topology:
     schema: int
     roles: tuple[Role, ...]
@@ -623,6 +647,7 @@ class Topology:
     secrets: tuple[tuple[str, str], ...]
     sha256: str
     canonical_json: str
+    shared_directories: tuple[tuple[str, SharedDirectory], ...] = ()
 
     def projection(self):
         """Owned wire snapshot; the immutable parsed declaration remains authoritative."""
@@ -656,10 +681,16 @@ def parse_topology(document, *, registered=False) -> Topology:
         return Topology(1, roles, (), (), (), legacy["sha256"], json.dumps(projection, sort_keys=True, separators=(",", ":")))
     require(value["schema"] == TOPOLOGY_SCHEMA, "unsupported_schema", "Unsupported topology schema.")
     contract_object(value, ("schema", "roles", *(["sha256"] if registered else [])),
-                    ("artifacts", "application_executables", "secrets"))
+                    ("artifacts", "application_executables", "secrets", "shared_directories"))
     roles = contract_list(value["roles"], _role, maximum=MAX_ROLES, minimum=1)
     names = {r.common.name for r in roles}
     require(len(names) == len(roles) and "http" in names, "invalid_topology", "Roles must be unique and include HTTP.")
+    shared = contract_map(value.get("shared_directories", {}), SharedDirectory.parse, maximum=32)
+    require(all(set(directory.writers + directory.readers) <= names for _, directory in shared),
+            "invalid_topology", "Shared directories must reference declared roles.")
+    for role in roles:
+        require(not ({name for name, directory in shared if directory.access(role.common.name)} & dict(role.common.bindings).keys()),
+                "invalid_topology", "Shared directory names must not collide with role binding names.")
     artifacts = contract_map(value.get("artifacts", {}), Artifact.parse, maximum=MAX_ARTIFACTS)
     binaries = contract_map(value.get("application_executables", {}), ApplicationBinary.parse, maximum=64)
     def secret(v):
@@ -743,6 +774,7 @@ def parse_topology(document, *, registered=False) -> Topology:
                 require(argument.value in listeners and listeners[argument.value].transport == "tcp",
                         "invalid_topology", "Address and port references require a TCP listener.")
             targets = {ArgumentKind.CONFIG: configs, ArgumentKind.LISTENER_PORT: listeners,
+                       ArgumentKind.SHARED_DIRECTORY_PATH: {name for name, directory in shared if directory.access(role.common.name)},
                        ArgumentKind.LISTENER_ADDRESS: listeners, ArgumentKind.BUNDLE: mounts,
                        ArgumentKind.SECRET_FILE: dict(role.secret_files), ArgumentKind.BINDING: dict(role.common.bindings)}
             require(argument.kind not in targets or argument.value in targets[argument.kind],
@@ -754,7 +786,7 @@ def parse_topology(document, *, registered=False) -> Topology:
     checksum = canonical_digest(projection)
     require(not registered or value["sha256"] == checksum, "invalid_topology", "Topology checksum mismatch.")
     return Topology(TOPOLOGY_SCHEMA, roles, artifacts, binaries, secrets, checksum,
-                    json.dumps(projection, sort_keys=True, separators=(",", ":")))
+                    json.dumps(projection, sort_keys=True, separators=(",", ":")), shared)
 
 
 @dataclass(frozen=True)

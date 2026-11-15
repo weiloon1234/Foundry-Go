@@ -15,6 +15,19 @@
 - Added: opt-in live R2 multipart ranged-read certification and a matching TLS
   stand-in test, including the seekable reader used by attachments. The R2
   conditional-write size cap remains unchanged pending live certification.
+- Added: topology-level disposable shared directories with explicit writer and
+  reader roles, backed by individual size-limited tmpfs mounts under
+  `/run/foundry/services/<instance UUID>/shared/<name>`. Per-start preparation
+  verifies ownership, mode, mount identity and limits. Systemd grants writers
+  read/write access, readers read-only access, and hides the shared tree from
+  unlisted roles. Release/declaration transitions discard caches after all old
+  roles stop; reboot also clears them. Reports and backup coverage explicitly
+  mark them disposable, never backed up or restored.
+- Added: `shared_directory_path` argv/environment references and typed
+  `deployment.Bindings.SharedDirectory` bindings with path, access and byte limit.
+  This capability requires deploy-tool generation 16 on client and host; the
+  instance floor stays 16 after rollback. Existing descriptors omit the new
+  collection when no shared directory is granted.
 
 ## v0.34.0 — 2026-11-15
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in generation-16 confinement, Unix sockets, templates and bindings in the disposable harness.
+"""Opt-in generation-16 confinement, shared files, Unix sockets, templates and bindings in the disposable harness.
 
 Use the ordinary deploy-acceptance archive. The artifact is a second, pinned copy
 of that fixture's Linux artisan binary; no artifact network download is needed.
@@ -137,6 +137,51 @@ def assert_secret_template(host, inventory, entry, secret):
     return config.resolve()
 
 
+def assert_shared_files(host, inventory, entry, report):
+    import http.client
+    import backup
+    binding, = inventory.specs["relay"].bindings.shared_directories
+    assert binding.access == "read-only" and binding.max_bytes == 1048576
+    assert inventory.specs["http"].bindings.shared_directories[0].access == "read-write"
+    assert not inventory.specs["socket-provider"].bindings.shared_directories
+    assert Path(binding.path, "frame.txt").read_bytes() == b"prepared-media"
+    import socket
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(5)
+        connection.connect(inventory.resolution.unix_endpoints[0].path)
+        connection.sendall(b"deny")
+        assert connection.recv(32) == b"denied", "Unlisted running role could access the writer's existing file"
+    endpoint = next(e for e in inventory.resolution.endpoints if e.role == "relay")
+    connection = http.client.HTTPConnection(endpoint.address, endpoint.port, timeout=5)
+    try:
+        connection.request("GET", "/shared")
+        response = connection.getresponse()
+        assert response.status == 200 and response.read(128) == b"shared-read-only;writer-enospc"
+    finally:
+        connection.close()
+    # The evidence comes from the real reader process in its unit, not runuser
+    # outside the sandbox (all roles deliberately share the same UID).
+    info = Path(binding.path).lstat()
+    import stat
+    assert stat.S_IMODE(info.st_mode) == 0o700
+    assert (info.st_uid, info.st_gid) == (entry["allocations"]["uid"], entry["allocations"]["gid"])
+    capacity = __import__("os").statvfs(binding.path)
+    assert capacity.f_blocks * capacity.f_frsize == binding.max_bytes
+    coverage = backup.service_coverage(inventory)
+    cache, = coverage["shared_directories"]
+    assert cache["state"] == "disposable" and not cache["backed_up"] and not cache["restored"]
+    assert "shared_directories" not in coverage["supported_components"]
+    # Inspect the real encrypted-configuration input archive before encryption.
+    files, _ = backup._archive_files(host, entry)
+    assert not any("render-cache" in name or "/shared/" in name for name in files)
+    assert not any(Path(binding.path) == path or Path(binding.path) in path.parents for path in files.values())
+    instances = [instance for project in report["projects"] for instance in project["instances"]]
+    instance = next(instance for instance in instances if instance["name"] == entry["name"])
+    cache, = instance["shared_directories"]
+    assert cache["status"] == "verified" and cache["bound"] == "tmpfs"
+    assert cache["state"] == "disposable" and not cache["backed_up"] and not cache["restored"]
+
+
 def assert_unix_binding(host, inventory, entry):
     import stat
     import time
@@ -178,18 +223,20 @@ def feature_archive(source, destination, host_id, *, confined=False):
                 "public_addresses": list(network.ADDRESSES), "proxied": False}}}
     checksum = hashlib.sha256(files["artisan"]).hexdigest()
     platform = "linux-" + profile["architecture"]
-    topology = parse_topology({"schema": 2, "roles": [
+    topology = parse_topology({"schema": 2, "shared_directories": {
+        "render-cache": {"state": "disposable", "max_bytes": 1048576, "writers": ["http"], "readers": ["relay"]}}, "roles": [
         {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["jq"],
          "bindings": {"relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
                       "relay_public": {"public_listener": {"role": "relay", "listener": "control"}},
                       "checksum": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}}},
         {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
          "arguments": [{"literal": "feature:relay"}, {"listener_address": "control"}, {"listener_port": "control"},
-                       {"binding_socket_path": "socket"}],
+                       {"binding_socket_path": "socket"}, {"shared_directory_path": "render-cache"}],
          "requires": ["socket-provider"],
          "bindings": {"socket": {"endpoint": {"role": "socket-provider", "listener": "control", "scheme": "unix"}}},
          "environment": {"XDG_RUNTIME_DIR": {"binding_socket_directory": "socket"},
-                         "WAYLAND_DISPLAY": {"binding_socket_name": "socket"}},
+                         "WAYLAND_DISPLAY": {"binding_socket_name": "socket"},
+                         "RENDER_CACHE": {"shared_directory_path": "render-cache"}},
          "secret_files": {"TOKEN_FILE": "relay-template-token"},
          "configs": {"private": {"source": "deploy/files/relay.yaml", "mode": "rendered-template",
                                  "format": "yaml", "path": "relay.yaml", "directory_environment": "XDG_CONFIG_HOME"}},
@@ -341,6 +388,7 @@ def main():
         public_observation(host, topology, profile, inventory=inventory, opened=True)
         reported = json.loads(run([LAUNCHER, "report"], input=json.dumps(request(project, profile))).stdout)
         assert_listener_report(reported, entry)
+        assert_shared_files(host, inventory, entry, reported)
         first = run(["systemctl", "show", inventory.units["relay"], "-p", "InvocationID", "--value"]).stdout
         assert action("restart", request(project, profile, operation_id=str(uuid.uuid4())))["ok"]
         second = run(["systemctl", "show", inventory.units["relay"], "-p", "InvocationID", "--value"]).stdout
@@ -352,6 +400,8 @@ def main():
         assert_confined_wildcard(host, inventory)
         assert assert_secret_template(host, inventory, entry, secret) != first_config, "Restart reused a prepared template"
         assert_unix_binding(host, inventory, entry)
+        reported = json.loads(run([LAUNCHER, "report"], input=json.dumps(request(project, profile))).stdout)
+        assert_shared_files(host, inventory, entry, reported)
         assert Path(endpoint.path).stat().st_ino != old_inode, "Restart did not replace the stale provider socket"
         public_observation(host, topology, profile, inventory=inventory, opened=True)
         for operation in ("down", "up"):
@@ -365,7 +415,14 @@ def main():
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", "--quiet", unit], check=False).returncode != 0
         public_observation(host, topology, profile)
-        print("PASS host capabilities: package, artifact, admission, private template, private/public/Unix app bindings, verified wildcard confinement, stale-socket restart, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
+        # Use the same cleanup owner as release transitions after confirmed stop.
+        import shared_directories
+        from feature_lifecycle import stop_units
+        stop_units(host, inventory)
+        shared_directories.discard(host, inventory.topology, profile["instance_id"],
+                                   entry["allocations"]["uid"], entry["allocations"]["gid"])
+        assert not Path(inventory.specs["http"].bindings.shared_directories[0].path).exists()
+        print("PASS host capabilities: package, artifact, admission, templates, private/public/Unix app bindings, verified wildcard confinement, shared files with reader EROFS and writer ENOSPC, disposable backup exclusion, stale-socket restart, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
 
 
 if __name__ == "__main__":

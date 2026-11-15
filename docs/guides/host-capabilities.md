@@ -881,6 +881,8 @@ omits it when empty, preserving descriptors and digests for existing bindings.
 A v0.32.0 binary can read a new descriptor that has no public listener bindings.
 Upgrade the consuming binary before declaring a public listener binding.
 
+`SharedDirectory(name)` returns a disposable shared-file binding described below.
+
 `LoadBindings` returns `present == false` without error only when the environment
 selector is absent. An explicitly invalid selector or malformed descriptor is an
 error. The caller must choose any local-development alternative explicitly; it
@@ -1189,3 +1191,153 @@ Foundry's shared services. Such listeners create no firewall openings or nginx
 routes. Reports list them under `private_listeners` with their wildcard and
 confinement declarations, and show the live confinement proof separately. Failed
 proof or foreign ownership cannot hide a wildcard socket from exposure findings.
+
+## Shared file directories
+
+Topology 2 can grant roles access to named disposable caches. Both the client and
+host require deploy-tool generation 16. The instance keeps that minimum generation
+after rollback or recovery. A shared directory name also becomes its binding name
+for every listed role, so it cannot collide with another binding in those roles.
+
+Each directory has exactly four declaration fields: `state`, `max_bytes`,
+`writers`, and `readers`. Only `"disposable"` state is supported. At least one
+writer is required. Readers can be empty. Each role must exist in the topology
+and appear at most once across both lists. A topology can declare at most 32
+shared directories. `max_bytes` must be a multiple of 65,536, from 65,536 through
+1,099,511,627,776 bytes. The alignment prevents rounding above the requested limit
+on supported hosts with 4 KiB, 16 KiB, or 64 KiB pages.
+
+The host path is `/run/foundry/services/<instance UUID>/shared/<name>`. Each
+directory is a separate tmpfs mount owned by the instance account with mode
+`0700` and `nodev,nosuid,noexec`. Its ancestors remain root-owned. `/run` matches
+the existing per-instance socket and invocation ownership tree and gives the
+cache an explicit reboot lifetime.
+
+### Scheduler-to-OBS example
+
+An application's scheduler prepares media. An application-owned OBS wrapper reads
+the resulting files and configures OBS media sources with those paths. Add this
+field beside `roles` in `deploy/topology.json`:
+
+```json
+{
+	"shared_directories": {
+		"render-cache": {
+			"state": "disposable",
+			"max_bytes": 67108864,
+			"writers": ["scheduler"],
+			"readers": ["obs"]
+		}
+	}
+}
+```
+
+Declare `scheduler` as a builtin role and place both `scheduler` and `obs` in the
+profile. Keep the OBS wrapper's existing executable, listener, readiness, and
+resource declarations. Add this environment entry to its executable role:
+
+```json
+{
+	"environment": {
+		"RENDER_CACHE": {"shared_directory_path": "render-cache"}
+	}
+}
+```
+
+The wrapper reads `RENDER_CACHE` and opens `prepared.mp4` beneath it. If the wrapper
+takes the directory as a positional argument, add
+`{"shared_directory_path": "render-cache"}` to its `arguments` array instead.
+These are literal paths, with no shell expansion. OBS does not interpret the
+Foundry reference itself. The wrapper supplies the resolved file path to OBS.
+
+Load the scheduler's typed binding once during application assembly and inject
+the returned `deployment.SharedDirectory` into the media preparation handler:
+
+```go
+bindings, present, err := deployment.LoadBindings()
+if err != nil {
+	return err
+}
+if !present {
+	return fmt.Errorf("scheduler requires deployed file bindings")
+}
+cache, err := bindings.SharedDirectory("render-cache")
+if err != nil {
+	return err
+}
+if cache.Access != deployment.DirectoryReadWrite {
+	return fmt.Errorf("scheduler requires write access")
+}
+// Write the completed media to a temporary file in cache.Path, close it,
+// then rename it to prepared.mp4 so readers never see a partial replacement.
+```
+
+`cache.Path` is the shared path. `cache.Access` is `DirectoryReadWrite` for the
+scheduler and `DirectoryReadOnly` for an OBS wrapper that uses Go bindings.
+`cache.MaxBytes` is the declared limit. Lookups for missing or ungranted names
+return `fault.Missing`. The descriptor omits `shared_directories` for roles with
+no grants. Older strict readers need an application upgrade before receiving a grant.
+
+The directory grant does not imply startup order or file readiness. Add
+`"requires": ["scheduler"]` to the reader when it must start after the scheduler.
+The reader still needs to handle an empty cache until the first scheduled job
+publishes media. Files must be reproducible after every cache reset.
+
+The compiled [fixture consumer](../../tests/fixtures/deploy-acceptance/internal/app/feature.go)
+uses the same API with a builtin HTTP writer and a custom reader. Its container
+scenario checks actual reader writes inside the service sandbox, including an
+overwrite attempt, and checks that an unlisted role cannot read the cache.
+
+### Enforced limits and access
+
+Linux tmpfs enforces `max_bytes` against allocated file-data blocks. A write that
+exhausts the filesystem fails with `ENOSPC`. Foundry also limits the inode count
+to `min(65536, max_bytes / 4096)`. Empty-file floods therefore have a finite limit.
+The [kernel tmpfs documentation](https://docs.kernel.org/filesystems/tmpfs.html)
+describes these filesystem limits.
+
+The byte limit does not reserve RAM, limit sparse files' apparent lengths, or cap
+all filesystem metadata memory. Tmpfs consumes RAM and may use swap. Host or
+service memory pressure can fail work before the filesystem fills. Choose a cache
+size that fits the host and the writers' memory budgets. Applications remove
+obsolete files and handle `ENOSPC`. There is no timer that races applications to
+delete files, and no fallback to an unbounded ordinary directory.
+
+All roles share the instance account. Mode bits cannot distinguish a reader from
+a writer. Each workload gets a private empty view of the shared parent. Foundry
+binds only granted directories into that view and sets `ReadWritePaths` for writers
+or `ReadOnlyPaths` for readers. Readers also get a read-only bind mount. This
+policy applies to builtin app roles and custom roles under `ProtectSystem=strict`.
+Unlisted roles receive no directory binding or filesystem view of the cache.
+
+### Lifetime, reports, and cleanup
+
+Each admitted start uses the privileged preparation helper to create or verify
+the mount before the workload starts. Preparation serializes across the instance
+and checks the mount source, filesystem type, capacity, inode limit, owner, mode,
+and absence of symlinks. Existing files beneath an unmounted directory and foreign
+mounts cause refusal. The helper's
+[`+` systemd prefix](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html#ExecStart=)
+performs this work outside the workload's filesystem namespace.
+
+Ordinary restarts preserve the cache. Reboot clears it. A release change or shared
+directory declaration change discards the previous caches after every old role
+has stopped. Rollback can therefore start with an empty cache. Cleanup uses a
+normal unmount and removes only the empty underlying directory. A busy or foreign
+mount fails cleanup and remains available for inspection. It never uses forced
+or lazy unmounts, and never recursively deletes an occupied directory.
+
+Reports include `shared_directories` with `state: "disposable"`, `backed_up: false`,
+`restored: false`, the configured limit, used bytes, and the observed mount status.
+An unverifiable mount produces `shared_directory_unverified`. Backup coverage
+records the same exclusion. Backups retain declarations but never cache files;
+recovery prepares fresh caches.
+
+The deploy tool has no instance-removal action. During manual instance removal,
+stop and disable every role first and verify that all unit processes have exited.
+Inspect each declared mount with `findmnt --mountpoint <path>` and verify its
+`foundry-shared-<instance UUID>-<name>` source and tmpfs type. Unmount that exact
+path without force, then remove its empty underlying directory with `rmdir`.
+Retain any busy, foreign, or nonempty path for investigation. Never remove the
+shared parent recursively while mounts exist. A later host reboot also removes
+these runtime-only caches.

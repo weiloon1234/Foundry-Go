@@ -147,15 +147,47 @@ type BundleDirectory struct {
 	SHA256 SHA256
 }
 
+// DirectoryAccess is the filesystem access granted to this role by its sandbox.
+type DirectoryAccess string
+
+const (
+	// DirectoryReadOnly permits reading prepared files, but no filesystem writes.
+	DirectoryReadOnly DirectoryAccess = "read-only"
+	// DirectoryReadWrite permits creating, modifying and deleting cached files.
+	DirectoryReadWrite DirectoryAccess = "read-write"
+)
+
+// SharedDirectory is a disposable, size-bounded tmpfs shared by declared roles.
+// Contents are never backed up or restored and must be safe to recreate.
+type SharedDirectory struct {
+	// Path is the absolute directory path within the role's filesystem view.
+	Path string
+	// Access is enforced by the systemd sandbox, not by the shared account's mode bits.
+	Access DirectoryAccess
+	// MaxBytes limits allocated file data. It does not reserve memory or bound sparse file lengths.
+	MaxBytes int64
+}
+
 // Bindings is an immutable startup snapshot. Pass concrete values to business handlers.
 // Its zero value has no bindings; a missing name returns fault.Missing.
 type Bindings struct {
-	unit            Unit
-	deployment      SHA256
-	executables     map[BindingName]Executable
-	endpoints       map[BindingName]Endpoint
-	bundles         map[BindingName]BundleDirectory
-	publicListeners map[BindingName]PublicListener
+	unit              Unit
+	deployment        SHA256
+	executables       map[BindingName]Executable
+	endpoints         map[BindingName]Endpoint
+	bundles           map[BindingName]BundleDirectory
+	publicListeners   map[BindingName]PublicListener
+	sharedDirectories map[BindingName]SharedDirectory
+}
+
+// SharedDirectory returns a topology directory explicitly granted to this role.
+// A missing or ungranted name returns an error classified as fault.Missing.
+func (b Bindings) SharedDirectory(name BindingName) (SharedDirectory, error) {
+	value, ok := b.sharedDirectories[name]
+	if !ok {
+		return SharedDirectory{}, safeerror.NewFault(fault.Missing, "deployment shared directory binding is missing")
+	}
+	return value, nil
 }
 
 // Unit returns the identity of the role invocation that owns these bindings.
@@ -264,6 +296,12 @@ type publicListenerWire struct {
 	Transport       ListenerTransport `json:"transport"`
 	PublicAddresses []string          `json:"public_addresses"`
 }
+type sharedDirectoryWire struct {
+	Name     string          `json:"name"`
+	Path     string          `json:"path"`
+	Access   DirectoryAccess `json:"access"`
+	MaxBytes int64           `json:"max_bytes"`
+}
 type featureDescriptor struct {
 	Schema     int      `json:"schema"`
 	Instance   string   `json:"instance"`
@@ -274,12 +312,13 @@ type featureDescriptor struct {
 	Deployment string   `json:"deployment_sha256"`
 	Unit       unitWire `json:"unit"`
 	Bindings   struct {
-		Schema          int                  `json:"schema"`
-		Role            string               `json:"role"`
-		Executables     []executableWire     `json:"executables"`
-		Endpoints       []endpointWire       `json:"endpoints"`
-		Bundles         []bundleWire         `json:"bundles"`
-		PublicListeners []publicListenerWire `json:"public_listeners,omitempty"`
+		Schema            int                   `json:"schema"`
+		Role              string                `json:"role"`
+		Executables       []executableWire      `json:"executables"`
+		Endpoints         []endpointWire        `json:"endpoints"`
+		Bundles           []bundleWire          `json:"bundles"`
+		PublicListeners   []publicListenerWire  `json:"public_listeners,omitempty"`
+		SharedDirectories []sharedDirectoryWire `json:"shared_directories,omitempty"`
 	} `json:"bindings"`
 }
 
@@ -352,12 +391,12 @@ func (w featureDescriptor) bindings() (Bindings, error) {
 	if !digestIdentifier.MatchString(w.Deployment) || !instanceIdentifier.MatchString(w.Unit.Instance) ||
 		!bindingIdentifier.MatchString(w.Unit.Role) || w.Unit.Ordinal != 1 || w.Bindings.Schema != 1 ||
 		w.Bindings.Role != w.Unit.Role || len(w.Bindings.Executables) > 128 || len(w.Bindings.Endpoints) > 128 || len(w.Bindings.Bundles) > 64 ||
-		w.Bindings.Executables == nil || w.Bindings.Endpoints == nil || w.Bindings.Bundles == nil || len(w.Bindings.PublicListeners) > 128 {
+		w.Bindings.Executables == nil || w.Bindings.Endpoints == nil || w.Bindings.Bundles == nil || len(w.Bindings.PublicListeners) > 128 || len(w.Bindings.SharedDirectories) > 32 {
 		return Bindings{}, invalidBindings()
 	}
 	b := Bindings{unit: Unit{InstanceID(w.Unit.Instance), RoleName(w.Unit.Role), 1}, deployment: SHA256(w.Deployment),
 		executables: make(map[BindingName]Executable), endpoints: make(map[BindingName]Endpoint), bundles: make(map[BindingName]BundleDirectory),
-		publicListeners: make(map[BindingName]PublicListener)}
+		publicListeners: make(map[BindingName]PublicListener), sharedDirectories: make(map[BindingName]SharedDirectory)}
 	names := make(map[string]bool)
 	unique := func(name string) bool {
 		if !bindingIdentifier.MatchString(name) || names[name] {
@@ -421,6 +460,14 @@ func (w featureDescriptor) bindings() (Bindings, error) {
 		}
 		b.publicListeners[BindingName(v.Name)] = PublicListener{Role: RoleName(v.Role), Listener: ListenerName(v.Listener),
 			Hostname: v.Hostname, Port: uint16(v.Port), TLS: v.TLS, Transport: v.Transport, PublicAddresses: addresses}
+	}
+	for _, v := range w.Bindings.SharedDirectories {
+		if !unique(v.Name) || v.Path != "/run/foundry/services/"+w.Unit.Instance+"/shared/"+v.Name ||
+			(v.Access != DirectoryReadOnly && v.Access != DirectoryReadWrite) ||
+			v.MaxBytes < 65536 || v.MaxBytes > 1<<40 || v.MaxBytes%65536 != 0 {
+			return Bindings{}, invalidBindings()
+		}
+		b.sharedDirectories[BindingName(v.Name)] = SharedDirectory{Path: v.Path, Access: v.Access, MaxBytes: v.MaxBytes}
 	}
 	return b, nil
 }

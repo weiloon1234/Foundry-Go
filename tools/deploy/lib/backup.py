@@ -115,8 +115,12 @@ def service_coverage(inventory):
             if role.state.recovery_owner is None:
                 findings.append({"code": "service_state_external_owner_required", "role": name})
         states.append(state)
-    return {"supported_components": ["postgresql", "encrypted_configuration", "selected_deployment"],
-            "complete_instance_coverage": not findings, "service_state": states, "findings": findings}
+    import shared_directories
+    result = {"supported_components": ["postgresql", "encrypted_configuration", "selected_deployment"],
+              "complete_instance_coverage": not findings, "service_state": states, "findings": findings}
+    if inventory.topology.shared_directories:
+        result["shared_directories"] = shared_directories.coverage(inventory.topology, inventory.profile.instance_id)
+    return result
 
 
 def _feature_snapshot(host, entry, files):
