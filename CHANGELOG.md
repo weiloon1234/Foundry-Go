@@ -1,37 +1,44 @@
 # Changelog
 
-## Unreleased
+## v0.36.0 — 2026-11-15
 
-- Fixed: upload template admission now requires an allow-listed origin-form
-  request target. Raw fragments cannot truncate nginx's matching URI to bypass
-  route or segment-length restrictions. Raw spaces, backslashes, controls and
-  absolute-form targets are refused. The exported grammar records that invalid
-  UTF-8 is rejected by the router after ingress admission.
-- Added: parameterized large-upload ingress routes using the HTTP router's
-  exported `{name}` syntax. Templates render escaped, anchored nginx locations,
-  reject overlaps and unsafe normalized aliases, and retain upload admission,
-  buffering and timeout policies. Routes and parameter segments are bounded.
-- Added: deploy-tool generation 17 for upload templates, with client and host
-  floors retained through rollback and recovery. Literal-only profiles retain
-  their exact locations and generation-16 compatibility.
-- Added: a resource-scoped typed upload endpoint and above-25m/default-limit
-  scenarios in container acceptance. Documented thick LVM provisioning for all
-  five upload pools, R2's conditional pool requirement, and operator route
-  confirmation where release archives lack a complete route manifest.
-- Fixed: application rehearsal preserves R2's conditional create and replace
-  capabilities and each S3-compatible disk's declared capabilities. Multipart
-  conditions require certification tied to the pinned stand-in image. Until that
-  matrix passes, rehearsal refuses affected disks unless their binding explicitly
-  allows a reduced-fidelity cap at `PartBytes`. Evidence records every capped disk.
-- Added: container acceptance runs the existing conditional multipart matrix
-  against the pinned S3 stand-in through a Compatible-provider entry point.
-  `--s3-certification-only` runs that phase without an application archive and
-  retains digest-bound results and a bounded, sanitized first-failure message per
-  failed case. The pinned VersityGW v1.10.0 remains uncertified because its
-  multipart listing response omits `EncodingType=url`. Rehearsal of R2 policies
-  above `PartBytes` currently requires `allow_single_request_conditions` and
-  reports reduced fidelity. Production is unaffected. A future stand-in upgrade
-  must pass certification before the opt-in can be removed.
+- Added: parameterized large-upload routes. Upload ingress `routes` accept the
+  HTTP router's own `{name}` syntax, for example
+  `/api/admin/v1/profiles/{profile}/media`, so resource-scoped REST upload routes
+  receive the large-body limits instead of nginx's default. Each template renders
+  an escaped, anchored nginx regex location. A parameter matches exactly one
+  non-empty segment and never `.` or `..`. Only allow-listed origin-form request
+  targets are admitted: raw fragments, encoded slashes, dot segments, empty
+  segments, backslashes, spaces, control bytes and absolute-form targets are
+  refused, and sibling paths keep the default limits. Overlapping literal and
+  template declarations are rejected. Routes are bounded to 32, with at most eight
+  parameters and 2048 bytes each. The router rejects invalid UTF-8 parameters after
+  ingress admission, within the same connection-slot and body limits.
+- Changed: upload templates require deploy tool generation 17 on client and host,
+  kept as the instance floor through rollback and recovery. Literal-only upload
+  profiles keep their exact locations and work on generation 16. Release archives
+  carry no complete route manifest, so operators still confirm that profile routes
+  match the application's registered upload routes.
+- Added: a single-server recipe for the five dedicated upload filesystems in the
+  deployment guide. One extra block volume is carved into five thick LVM logical
+  volumes; thin provisioning is not compliant because overcommit breaks the
+  per-pool capacity guarantee.
+- Fixed: rehearsal preserves each external disk's certified capabilities. R2 disks
+  keep conditional create and replace, and S3-compatible disks keep their declared
+  capabilities. Multipart conditions in rehearsal require certification of the
+  pinned stand-in image. The pinned VersityGW v1.10.0 is uncertified because its
+  multipart listing omits `EncodingType=url`, so rehearsal of R2 policies above
+  `PartBytes` needs `"allow_single_request_conditions": ["<disk>"]` in the rehearsal
+  bindings and reports reduced fidelity. Without it, rehearsal refuses and names
+  the disk and the opt-in. Production is unaffected.
+- Added: `run_acceptance.sh --s3-certification-only` runs the conditional multipart
+  matrix against the pinned stand-in and keeps digest-bound evidence with a
+  bounded first-failure message per case. Ordinary acceptance runs no longer
+  depend on it.
+- Changed: update the application's Foundry-Go pin to v0.36.0. From a generation
+  9–16 host, run `ACTION=tools-plan make deploy`, then
+  `ACTION=tools-apply PLAN_TOKEN='<token>' OPERATION='<stable-uuid-v4>' make deploy`.
+  Fresh bootstrap installs generation 17. Existing declarations need no changes.
 
 ## v0.35.0 — 2026-11-15
 
