@@ -25,17 +25,28 @@ MAX_RESPONSE = 256 * 1024
 MAX_COMMENT = 100
 APPLY_SECONDS = 300
 API = "https://api.cloudflare.com/client/v4"
+# Evidence and deliberately excluded codes: host-capabilities.md, managed DNS failures.
+VALIDATION_REJECTIONS = {
+    9005: "Invalid IPv4 record content.",
+    9313: "DNS record comment exceeds the provider limit.",
+}
 
 
 class PublicAdmission(str, Enum):
     PENDING = "pending"
     COMMITTED = "committed"
+    FAILED = "failed"
 
 
 class ProviderRejected(DeployError):
-    """A coded HTTP rejection proves this request did not mutate the provider."""
-    def __init__(self, detail):
-        super().__init__("dns_provider_rejected", detail)
+    """An allow-listed validation rejection proves this request did not mutate DNS."""
+    def __init__(self, codes):
+        self.codes = tuple(codes)
+        super().__init__("dns_provider_rejected", "Cloudflare rejected DNS validation. " + error_detail(self.codes))
+
+
+def error_detail(codes):
+    return "; ".join(f"{code}: {VALIDATION_REJECTIONS.get(code, 'Provider error; outcome remains uncertain.')}" for code in codes[:3])
 
 
 def provider_id(value):
@@ -140,21 +151,12 @@ class Cloudflare:
         self._token = token
         self._opener = build_opener(NoRedirect(), ProxyHandler({}))
 
-    def _errors(self, value, zone):
+    def _errors(self, value):
         errors = value.get("errors") if isinstance(value, dict) else None
         if not isinstance(errors, list):
             return []
-        diagnostics = []
-        for error in errors[:3]:
-            if not isinstance(error, dict) or type(error.get("code")) is not int or not 0 <= error["code"] <= 2**31 - 1:
-                continue
-            message = error.get("message")
-            message = message if isinstance(message, str) else "Provider error"
-            for secret in (self._token, zone):
-                message = re.sub(re.escape(secret), "[redacted]", message, flags=re.IGNORECASE)
-            message = " ".join("".join(c if 32 <= ord(c) <= 126 else " " for c in message).split())
-            diagnostics.append(f"{error['code']}: {message[:160]}")
-        return diagnostics
+        return [error["code"] if isinstance(error, dict) and type(error.get("code")) is int
+                and 0 <= error["code"] <= 2**31 - 1 and not error.get("error_chain") else None for error in errors]
 
     def request(self, method, zone, suffix="", body=None):
         url = API + "/zones/" + provider_id(zone) + "/dns_records" + suffix
@@ -176,15 +178,16 @@ class Cloudflare:
                     raw = response.read(MAX_RESPONSE + 1)
                     require(len(raw) <= MAX_RESPONSE, "dns_response_bound", "DNS response exceeds its bound.")
                     value = json.loads(raw)
-                    diagnostics = self._errors(value, zone)
+                    errors = self._errors(value)
+                    codes = [code for code in errors[:3] if code is not None]
                     if not (200 <= status < 300 and isinstance(value, dict) and value.get("success") is True):
                         detail = f"Cloudflare HTTP {status}; no automatic retry was made."
-                        if diagnostics:
-                            detail += " " + "; ".join(diagnostics)
+                        if codes:
+                            detail += " " + error_detail(codes)
                         if method in ("POST", "PATCH", "DELETE") and 400 <= status < 500 \
                                 and status not in (408, 409, 429) and isinstance(value, dict) \
-                                and value.get("success") is False and diagnostics:
-                            raise ProviderRejected(detail)
+                                and value.get("success") is False and errors and all(code in VALIDATION_REJECTIONS for code in errors):
+                            raise ProviderRejected(codes)
                         raise DeployError("dns_rate_limited" if status == 429 else "dns_provider_error", detail)
                     return value, response.headers.get("ETag")
         except (URLError, OSError, ValueError, HTTPException) as error:
@@ -243,6 +246,17 @@ def provider_applied(item):
     return len(item["results"]) == len(item["changes"]) and set(item["results"].values()) <= {"applied"}
 
 
+def provider_rejected(item):
+    results = set(item["results"].values())
+    return (len(item["results"]) == len(item["changes"]) and "rejected" in results
+            and results <= {"applied", "rejected", "not_attempted"})
+
+
+def rejected_operation(host, entry, operation_id):
+    item = load(host, entry)["operations"].get(operation_id)
+    return item is not None and item.get("public_admission") == PublicAdmission.FAILED.value and provider_rejected(item)
+
+
 def parse_state(value, instance_id):
     contract_object(value, ("schema", "instance_id", "owned", "operations"))
     require(value["schema"] == 1 and value["instance_id"] == instance_id
@@ -261,14 +275,16 @@ def parse_state(value, instance_id):
         changes = contract_list(item["changes"], Change.parse, maximum=MAX_RECORDS)
         require(all(c.instance_id == instance_id for c in changes) and isinstance(item["results"], dict)
                 and set(item["results"]) <= {c.ownership_id for c in changes}
-                and all(s in ("pending", "applied", "prior", "conflict", "rejected") for s in item["results"].values()),
+                and all(s in ("pending", "applied", "prior", "conflict", "rejected", "not_attempted") for s in item["results"].values()),
                 "dns_state", "Invalid DNS operation identity or result.")
         rejections = item.get("rejections", {})
         require(isinstance(rejections, dict)
                 and set(rejections) == {key for key, result in item["results"].items() if result == "rejected"}
-                and all(isinstance(detail, str) and 0 < len(detail) <= 1024
-                        and all(32 <= ord(c) <= 126 for c in detail) for detail in rejections.values()),
+                and all(isinstance(codes, list) and 0 < len(codes) <= 3
+                        and all(type(code) is int and code in VALIDATION_REJECTIONS for code in codes) for codes in rejections.values()),
                 "dns_state", "Invalid DNS provider rejection.")
+        require(item.get("public_admission") != PublicAdmission.FAILED.value or provider_rejected(item),
+                "dns_state", "Failed DNS admission requires resolved provider outcomes.")
         require(item.get("public_admission") != PublicAdmission.COMMITTED.value or provider_applied(item),
                 "dns_state", "Committed DNS admission requires complete provider outcomes.")
     return value
@@ -430,9 +446,9 @@ def apply(host, entry, changes, operation_id, *, track_public_admission=False):
 
 def _apply(host, entry, changes, operation_id, *, track_public_admission):
     operation_id = contract_uuid(operation_id)
-    if not changes:
-        return {}
     state = load(host, entry)
+    if not changes and not state["operations"]:
+        return {}
     if operation_id in state["operations"]:
         require(state["operations"][operation_id]["changes"] == changes, "dns_intent", "DNS operation intent is immutable.")
         rejections = state["operations"][operation_id].get("rejections", {})
@@ -452,7 +468,7 @@ def _apply(host, entry, changes, operation_id, *, track_public_admission):
     clients = verify(host, entry, changes)
     # Retain only unresolved intents plus the latest completed operation; the
     # creation UUID stays with each owned record independently of journal retention.
-    state["operations"] = {operation_id: {"changes": changes, "results": {}}}
+    state["operations"] = {operation_id: {"changes": changes, "results": {c["ownership_id"]: "not_attempted" for c in changes}}}
     if track_public_admission:
         state["operations"][operation_id]["public_admission"] = PublicAdmission.PENDING.value
     save(host, entry, state)
@@ -472,9 +488,9 @@ def _apply(host, entry, changes, operation_id, *, track_public_admission):
                 client.write(change)
         except ProviderRejected as error:
             item["results"][change.ownership_id] = "rejected"
-            item.setdefault("rejections", {})[change.ownership_id] = error.detail
-            if set(item["results"].values()) == {"rejected"}:
-                item.pop("public_admission", None)
+            item.setdefault("rejections", {})[change.ownership_id] = list(error.codes)
+            if track_public_admission:
+                item["public_admission"] = PublicAdmission.FAILED.value
             save(host, entry, state)
             raise
         except DeployError as error:
@@ -554,7 +570,7 @@ def report(host, entry, profile):
             observed = {}
             for raw in item["changes"]:
                 change = Change.parse(raw)
-                if change.ownership_id not in item["results"]:
+                if item["results"].get(change.ownership_id, "not_attempted") == "not_attempted":
                     observed[change.ownership_id] = "not_attempted"
                     continue
                 if item["results"][change.ownership_id] == "rejected":

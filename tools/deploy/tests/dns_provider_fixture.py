@@ -60,7 +60,7 @@ class Provider:
                     return self.reply(429, {"success": False, "errors": [{"code": 1015, "message": "Rate limited"}],
                                             "private": "DO-NOT-PRINT-RESPONSE"})
                 if fault == "reject" and method != "GET":
-                    return self.reply(403, {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}]})
+                    return self.reply(400, {"success": False, "errors": [{"code": 9005, "message": "Invalid IPv4 content"}]})
                 if fault == "lost_before" and method != "GET":
                     return self.lose()
                 if method in ("POST", "PATCH"):

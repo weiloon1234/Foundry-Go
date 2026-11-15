@@ -16,7 +16,7 @@ from contracts import (Deployment, ReleaseDeclaration, RuntimeResolution, atomic
 from topology import parse_profile, parse_topology
 
 
-def observations(host, registry, entry, topology, profile):
+def observations(host, registry, entry, topology, profile, operation_id):
     import release
     import feature_maintenance
     package = packages.inspect(host, feature_network.package_topology(topology), profile)
@@ -25,7 +25,7 @@ def observations(host, registry, entry, topology, profile):
         _, _, current, _ = lifecycle.load(host, entry)
         enabled = list(services.enabled_units(host, current.units))
         units = {name: release.service(host, unit) for name, unit in current.units.items()}
-        network = feature_network.plan(host, current.topology, current.profile, package, entry=entry)
+        network = feature_network.plan(host, current.topology, current.profile, package, entry=entry, review_operation=operation_id)
     else:
         network = feature_network.plan(host, topology, profile, package, entry=entry)
     return {"host_revision": registry["revision"], "configuration_revision": entry["configuration_revision"],
@@ -137,7 +137,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
         if restoring:
             require(not release.migration_status(host, entry, target_path, env_file=env),
                     "rollback_schema", "Target release is incompatible with the current database schema.")
-        observed = observations(host, registry, entry, topology, candidate_profile)
+        observed = observations(host, registry, entry, topology, candidate_profile, operation_id)
         managed_dns = dns.plan(host, entry, candidate_profile, operation_id)
         enabled, running, removed = lifecycle.transition_enablement(host, entry, inventory, restoring=restoring)
         holds, maintenance_running, _ = feature_maintenance.selection(host, entry, inventory, enabled, running, None)
@@ -180,7 +180,7 @@ def reviewed(host, registry, entry, request, *, pin=None):
     topology = parse_topology(launch["topology"])
     profile = parse_profile(launch["profile"], topology)
     dns.verify(host, entry, public.get("managed_dns", []))
-    current = observations(host, registry, entry, topology, profile)
+    current = observations(host, registry, entry, topology, profile, request["operation_id"])
     expected = public["observations"]
     if pin is not None:
         operations.verify_executor(host, request, pin)

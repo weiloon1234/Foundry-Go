@@ -1029,14 +1029,34 @@ DNS application has a separate 300-second budget. Recovery, activation, and
 rollback give public opening a fresh readiness budget after DNS reconciliation.
 
 Each provider mutation has a durable intent before its single write attempt.
-An HTTP 4xx response with `success: false` and provider error codes proves rejection,
-except for HTTP 408, 409, and 429. A definite rejection records `rejected` and returns
-`dns_provider_rejected` with the provider diagnostics. Replaying that operation
-returns the rejection without another write; a corrected request needs a new plan
-and operation. Reports include `managed_dns_provider_rejected`. If earlier records
-in the batch changed, their pending admission and reconciliation identities remain.
+Only an HTTP 4xx write response with `success: false` and an entirely allow-listed
+set of validation error codes proves rejection. HTTP 408, 409, and 429 are always
+uncertain, regardless of their codes. The allow-list is deliberately limited to:
 
-HTTP 408, 409, 429, 5xx, incomplete or invalid error responses, timeouts, and lost
+| Code | Fixed diagnostic | Evidence for rejection before mutation |
+| --- | --- | --- |
+| 9005 | Invalid IPv4 record content. | Cloudflare's [SDK exception example](https://github.com/cloudflare/python-cloudflare/tree/2.19.0#exception-handling) documents this response to creating an A record with invalid IPv4 content. |
+| 9313 | DNS record comment exceeds the provider limit. | The owner's test-zone certification observed this validation rejection with no record created; Cloudflare documents the [comment limits](https://developers.cloudflare.com/dns/manage-dns-records/reference/record-attributes/). |
+
+These codes describe invalid record input, not authentication, service availability,
+or a conflicting operation. No other code is inferred from its numeric range or
+message. Legacy nested error chains, malformed entries, and mixed lists containing
+any other code remain uncertain. Cloudflare [removed the generic validation wrapper](https://developers.cloudflare.com/fundamentals/api/reference/deprecations/#2024-10-01);
+the deprecated wrapper code 1004 is not allow-listed.
+
+A definite rejection records `rejected`, with later changes marked `not_attempted`,
+and returns `dns_provider_rejected`. Earlier applied records retain their ownership
+IDs and provider snapshots. The DNS operation closes with `public_admission: "failed"`;
+it cannot commit admission or replay writes. Reports include
+`managed_dns_provider_rejected` with each record's result and numeric rejection codes.
+After cleanup proves workload exit and listener closure, a new reviewed release or
+rollback can proceed from fresh provider observations. For example, if A applied
+and B was rejected, the next plan binds A's owned ID and B's absence. Restart alone
+cannot reopen admission; a reviewed operation must fully succeed.
+The corrective plan includes the failed operation's intended running roles,
+subject to current enablement, dependencies, and maintenance holds.
+
+Unlisted coded 4xx, HTTP 408, 409, 429, 5xx, incomplete or invalid error responses, timeouts, and lost
 acknowledgements remain uncertain and trigger read-back rather than another write.
 A lost create acknowledgement is matched to its persisted creation
 identity. An absent unknown create remains unresolved and never triggers a second
@@ -1071,9 +1091,11 @@ still change a record between that read and the write. Serialize manual provider
 edits with deployments. Requests disable redirects and proxies, use a 10-second
 socket timeout and a 15-second wall budget, and cap responses at 256 KiB. Record
 inventories and operations are limited to 128 records. Diagnostics retain at most
-the first three provider error codes and messages, with each message limited to
-160 characters. Messages have control characters removed and the credential token
-and zone ID redacted before truncation. Errors never print complete API responses.
+three numeric provider error codes, with fixed framework-authored descriptions for
+known validation codes and a generic description for others. Provider free text is
+discarded: it never reaches CLI errors, persisted rejection details, or reports.
+The complete error-code list is checked before classifying a rejection, even when
+only the first three codes are displayed. Errors never print complete API responses.
 
 Replacement-host `RecoveryPublicBinding` uses `dns_cutover: "managed_pending"`
 when any listener uses managed DNS. Each managed listener includes

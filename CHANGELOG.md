@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+- Fixed: partially rejected DNS batches close as resolved failures, allowing a
+  new reviewed correction or rollback after proven cleanup while admission stays
+  closed. Only validation codes 9005 and 9313 prove rejection; other outcomes
+  require read-back. Diagnostics discard provider free text and retain codes with
+  fixed framework descriptions.
 - Fixed: managed DNS ownership comments fit Cloudflare's 100-character limit on
-  every plan. Provider errors retain bounded, redacted codes and messages;
+  every plan. Provider errors retain bounded codes and fixed descriptions;
   definite HTTP rejections are recorded separately from uncertain writes.
   The controlled provider enforces comment and DNS hostname limits.
 - Fixed: managed DNS application has its own total budget, and replacement-host

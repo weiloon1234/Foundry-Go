@@ -84,7 +84,7 @@ def package_topology(topology):
         if role.common.name == "http" else role for role in topology.roles))
 
 
-def plan(host, topology, profile, package_plan, *, entry=None):
+def plan(host, topology, profile, package_plan, *, entry=None, review_operation=None):
     import edge
     import firewall
     import listeners
@@ -98,15 +98,21 @@ def plan(host, topology, profile, package_plan, *, entry=None):
         if selected:
             from feature_lifecycle import load
             from contracts import AdmissionDisposition, record_document
-            _, selection, inventory, _ = load(host, entry)
+            store, selection, inventory, _ = load(host, entry)
+            import dns
+            rejected = (review_operation is not None and selection.admission.disposition is AdmissionDisposition.PENDING
+                        and dns.rejected_operation(host, entry, selection.admission.operation_id)
+                        and store._operations().get(selection.admission.operation_id, {}).get("outcome") == "failed")
+            if rejected:
+                store.require_cleanup_clear(review_operation)
             require(record_document(selection) == entry["deployment_selection"]
-                    and selection.admission.disposition is AdmissionDisposition.COMMITTED
+                    and (selection.admission.disposition is AdmissionDisposition.COMMITTED or rejected)
                     and inventory.topology == topology and inventory.profile == profile,
-                    "network_selection", "Bootstrap inspection requires the committed selected declarations.")
+                    "network_selection", "Network inspection requires committed declarations or a cleaned DNS rejection under release review.")
             import feature_maintenance
             import services
             held = feature_maintenance.active_holds(host, entry, inventory)
-            exposed = set(services.enabled_units(host, inventory.units)) - held
+            exposed = set() if rejected else set(services.enabled_units(host, inventory.units)) - held
             opened = tuple(c for c in claims if c.role in exposed)
             closed = tuple(c for c in claims if c.role not in exposed)
             observation = firewall.observe(host, profile.instance_id, closed or opened, integrated=True,

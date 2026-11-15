@@ -203,6 +203,15 @@ def cleanup(host, request, pin):
             root = directory(host, operation)
             initial = root / "initial-validation.json"
             reconciled = applied
+            import dns
+            if (attempt.get("operation_id") == operation and request["action"] in ("activate", "rollback")
+                    and dns.rejected_operation(host, entry, operation)):
+                state["status"] = "failed"
+                release.finish(host, entry, state, "failed", "dns_provider_rejected")
+                store.record_operation(state["last_attempt"])
+                entry["deployment_selection"] = record_document(store._selection()[0])
+                host.journal(registry, entry)
+                reconciled = True
             if (initial.exists() and not (root / "validated.json").exists()
                     and "deployment_selection" not in entry and release.current_version(host, entry) is None):
                 before = admission.read_owned(host, initial, lambda v: v)
