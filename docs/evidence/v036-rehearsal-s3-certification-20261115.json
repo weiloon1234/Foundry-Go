@@ -1,0 +1,23 @@
+{
+  "image": "versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316",
+  "platform": "linux/arm64",
+  "matrix": "TestRealCompatibleConditionalMultipart",
+  "status": "failed",
+  "image_id": "sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316",
+  "test_binary_sha256": "6d478c6e3d9812d7a53bd587be07f16cf4b15cdc3d6f34647533855ad9a4a866",
+  "exit_code": 1,
+  "cases": [
+    {
+      "test": "TestRealCompatibleConditionalMultipart",
+      "status": "fail"
+    },
+    {
+      "test": "TestRealCompatibleConditionalMultipart/5242880",
+      "status": "fail"
+    },
+    {
+      "test": "TestRealCompatibleConditionalMultipart/5242881",
+      "status": "fail"
+    }
+  ]
+}

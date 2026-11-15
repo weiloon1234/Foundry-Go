@@ -18,6 +18,20 @@
   scenarios in container acceptance. Documented thick LVM provisioning for all
   five upload pools, R2's conditional pool requirement, and operator route
   confirmation where release archives lack a complete route manifest.
+- Fixed: application rehearsal preserves R2's conditional create and replace
+  capabilities and each S3-compatible disk's declared capabilities. Multipart
+  conditions require certification tied to the pinned stand-in image. Until that
+  matrix passes, rehearsal refuses affected disks unless their binding explicitly
+  allows a reduced-fidelity cap at `PartBytes`. Evidence records every capped disk.
+- Added: container acceptance runs the existing conditional multipart matrix
+  against the pinned S3 stand-in through a Compatible-provider entry point.
+  `--s3-certification-only` runs that phase without an application archive and
+  retains digest-bound results and a bounded, sanitized first-failure message per
+  failed case. The pinned VersityGW v1.10.0 remains uncertified because its
+  multipart listing response omits `EncodingType=url`. Rehearsal of R2 policies
+  above `PartBytes` currently requires `allow_single_request_conditions` and
+  reports reduced fidelity. Production is unaffected. A future stand-in upgrade
+  must pass certification before the opt-in can be removed.
 
 ## v0.35.0 — 2026-11-15
 

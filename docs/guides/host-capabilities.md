@@ -1096,8 +1096,47 @@ the stand-in. Supply a private file, mode `0600`, with this shape:
 ```
 
 `storage_disks` names the application's declared R2 or S3-compatible disks.
-Rehearsal preserves their other settings and supplies isolated test buckets and
-credentials. `configuration` supplies literal application configuration values
+Rehearsal supplies isolated test buckets and credentials and preserves the disk's
+other settings. R2 maps to conditional create and replace, NFC keys, and no
+single-request cap, matching the certified R2 driver. S3-compatible disks retain
+their declared `cloud.compatible` block without gaining capabilities.
+
+Multipart conditions require a passing certification record for the exact pinned
+stand-in image. The pinned VersityGW v1.10.0 is uncertified: its
+`ListMultipartUploads` response omits the requested `EncodingType=url` and fails
+S3 listing conformance. Rehearsal of R2 policies above `PartBytes` currently
+requires the explicit `allow_single_request_conditions` opt-in below and reports
+reduced fidelity. Production R2 behavior is unaffected.
+
+Without the opt-in, rehearsal refuses any bound disk that declares multipart
+conditions before creating containers. The error names the disk, the listing
+conformance gap, and the exact opt-in to add. A future stand-in upgrade must pass
+the certification before the opt-in can be removed. See the
+[stand-in certification evidence and command](../evidence/v036-rehearsal-conditional-multipart.md).
+
+To accept reduced fidelity for specific disks, add this optional field to the
+private rehearsal binding file:
+
+```json
+{
+  "environment": "acceptance-local",
+  "configuration": {},
+  "storage_disks": ["uploads"],
+  "allow_single_request_conditions": ["uploads"]
+}
+```
+
+List only unique names already present in `storage_disks`. This permission applies
+only when the pinned stand-in lacks multipart certification. Rehearsal then sets
+`single_request_conditions: true` for those disks and reports a reduced-fidelity
+run on stderr and in `evidence.json.storage_fidelity`. Conditional writes are
+limited to the disk's `PartBytes`. Application policies and `MaxObjectBytes` stay
+unchanged, so a policy requiring larger conditional writes can still refuse
+startup. This opt-in does not prove that policy. It is a rehearsal input and is
+not accepted as production configuration. Once the image is certified, the same
+binding preserves multipart conditions without a cap.
+
+`configuration` supplies literal application configuration values
 through the production bootstrap interface. Use rehearsal-only values; host file
 references are refused. Missing cloud-disk bindings stop before container creation.
 Other external dependencies have no automatic stand-in: applications requiring

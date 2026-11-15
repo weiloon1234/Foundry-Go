@@ -412,9 +412,18 @@ func runConditionalMatrix(t *testing.T, disk *storage.Disk, b *Backend, gate *co
 }
 
 func TestRealR2ConditionalMultipart(t *testing.T) {
+	runRealConditionalMultipart(t, R2)
+}
+
+func TestRealCompatibleConditionalMultipart(t *testing.T) {
+	runRealConditionalMultipart(t, Compatible)
+}
+
+func runRealConditionalMultipart(t *testing.T, provider Provider) {
+	t.Helper()
 	// realConfig requires explicit test bucket/prefix and owner-supplied credentials.
 	// Exercise the shipping backend for single-request and multipart conditions.
-	cfg := realConfig(t, R2)
+	cfg := realConfig(t, provider)
 	cfg.MaxUploads = 4
 	cfg.PartAttempts = 1
 	gate := &conditionalGate{client: &http.Client{Timeout: 2 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
