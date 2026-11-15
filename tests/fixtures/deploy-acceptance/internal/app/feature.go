@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,17 +11,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/deployment"
+	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 // featureRelay is the disposable custom service embedded in the fixture artifact.
 func featureRelay(ctx context.Context, args []string) error {
-	if len(args) != 2 && len(args) != 3 {
+	if len(args) < 2 || len(args) > 4 {
 		return fmt.Errorf("feature relay requires an address, port and optional Unix path")
 	}
-	if len(args) == 3 {
+	if len(args) >= 3 {
 		if err := featureUnixBinding(ctx, args[2]); err != nil {
 			return err
 		}
@@ -30,6 +33,22 @@ func featureRelay(ctx context.Context, args []string) error {
 		return err
 	}
 	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/shared-proc" && r.Method == http.MethodPost && len(args) == 4 {
+			if err := featureProcDenied(r.Body); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			_, _ = io.WriteString(w, "proc-denied")
+			return
+		}
+		if r.URL.Path == "/shared" && len(args) == 4 {
+			if err := featureSharedReader(args[3]); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			_, _ = io.WriteString(w, "shared-read-only;writer-enospc")
+			return
+		}
 		if r.URL.Path != "/ready" {
 			http.NotFound(w, r)
 			return
@@ -59,6 +78,15 @@ func featureBindingProbe() (func(context.Context) error, error) {
 	}
 	if !present {
 		return func(context.Context) error { return nil }, nil
+	}
+	// Console calls retain the HTTP bindings but hold no shared-directory grant.
+	// Only processes with a grant run the writer probe.
+	if directory, err := bindings.SharedDirectory("render-cache"); err == nil {
+		if err := featureSharedWriter(directory); err != nil {
+			return nil, err
+		}
+	} else if !errors.Is(err, fault.Missing) {
+		return nil, err
 	}
 	endpoint, err := bindings.Endpoint("relay")
 	if err != nil {
@@ -99,6 +127,17 @@ func featureUnix(ctx context.Context, args []string) error {
 	if len(args) != 1 || filepath.Dir(args[0]) != os.Getenv("XDG_RUNTIME_DIR") {
 		return fmt.Errorf("Unix provider requires its delivered socket path and directory")
 	}
+	bindings, present, err := deployment.LoadBindings()
+	if err != nil || !present {
+		return fmt.Errorf("Unix provider requires bindings")
+	}
+	if _, err := bindings.SharedDirectory("render-cache"); !errors.Is(err, fault.Missing) {
+		return fmt.Errorf("unlisted role received shared directory")
+	}
+	forbidden := "/run/foundry/services/" + string(bindings.Unit().Instance) + "/shared/render-cache/frame.txt"
+	if _, err := os.ReadFile(forbidden); err == nil {
+		return fmt.Errorf("unlisted role could read shared directory")
+	}
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Net: "unix", Name: args[0]})
 	if err != nil {
 		return err
@@ -117,11 +156,152 @@ func featureUnix(ctx context.Context, args []string) error {
 		}
 		_ = connection.SetDeadline(time.Now().Add(2 * time.Second))
 		var request [4]byte
-		if _, err := io.ReadFull(connection, request[:]); err == nil && string(request[:]) == "ping" {
-			_, _ = io.WriteString(connection, "unix-ready")
+		if _, err := io.ReadFull(connection, request[:]); err == nil {
+			switch string(request[:]) {
+			case "ping":
+				_, _ = io.WriteString(connection, "unix-ready")
+			case "deny":
+				if _, err := os.ReadFile(forbidden); errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
+					_, _ = io.WriteString(connection, "denied")
+				}
+			case "proc":
+				if err := featureProcDenied(connection); err == nil {
+					_, _ = io.WriteString(connection, "proc-denied")
+				}
+			case "host":
+				if err := featureHostDenied(connection, forbidden); err == nil {
+					_, _ = io.WriteString(connection, "host-denied")
+				}
+			}
 		}
 		_ = connection.Close()
 	}
+}
+
+// featureHostDenied runs in the role with no grants. Its helper shares the host
+// user namespace, so the root-only parent must deny access beyond the proc link.
+func featureHostDenied(input io.Reader, forbidden string) error {
+	var pid int
+	if err := json.NewDecoder(io.LimitReader(input, 64)).Decode(&pid); err != nil {
+		return err
+	}
+	if pid <= 0 {
+		return fmt.Errorf("host probe requires a live helper PID")
+	}
+	root := fmt.Sprintf("/proc/%d/root", pid)
+	if target, err := os.Readlink(root); err != nil || target != "/" {
+		return fmt.Errorf("host helper proc root must be reachable: %v", err)
+	}
+	if err := featureFileDenied(root+forbidden, syscall.EACCES); err != nil {
+		return err
+	}
+	return featureFileDenied(forbidden, syscall.ENOENT, syscall.EACCES)
+}
+
+func featureFileDenied(path string, allowed ...error) error {
+	for _, mode := range []int{os.O_RDONLY, os.O_WRONLY} {
+		file, err := os.OpenFile(path, mode, 0)
+		if err == nil {
+			_ = file.Close()
+		}
+		denied := false
+		for _, code := range allowed {
+			denied = denied || errors.Is(err, code)
+		}
+		if !denied {
+			return fmt.Errorf("file access did not fail with an expected denial: %v", err)
+		}
+	}
+	return nil
+}
+
+// featureProcDenied runs in the real reader or unlisted service process. Only
+// permission failures prove isolation; ENOENT, EROFS and vanished PIDs do not.
+func featureProcDenied(input io.Reader) error {
+	var probe struct {
+		Paths []string `json:"paths"`
+		Links []string `json:"links"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(input, 8192))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&probe); err != nil {
+		return err
+	}
+	if len(probe.Paths) != 2 || len(probe.Links) != 3 {
+		return fmt.Errorf("proc probe requires root and cwd paths plus root, cwd and fd links")
+	}
+	denied := func(err error) bool { return errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) }
+	for _, path := range probe.Paths {
+		if !strings.HasPrefix(path, "/proc/") {
+			return fmt.Errorf("proc probe requires a procfs path")
+		}
+		if err := featureFileDenied(path, syscall.EACCES, syscall.EPERM); err != nil {
+			return err
+		}
+	}
+	for _, path := range probe.Links {
+		if !strings.HasPrefix(path, "/proc/") {
+			return fmt.Errorf("proc probe requires a procfs link")
+		}
+		if _, err := os.Readlink(path); !denied(err) {
+			return fmt.Errorf("proc link access did not fail with a permission error: %v", err)
+		}
+	}
+	return nil
+}
+
+func featureSharedWriter(directory deployment.SharedDirectory) error {
+	if directory.Access != deployment.DirectoryReadWrite || directory.MaxBytes != 1<<20 {
+		return fmt.Errorf("shared writer binding incorrect")
+	}
+	if err := os.WriteFile(filepath.Join(directory.Path, "frame.txt"), []byte("prepared-media"), 0600); err != nil {
+		return err
+	}
+	path := filepath.Join(directory.Path, "bound-probe")
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(path)
+	block := make([]byte, 65536)
+	var writeErr error
+	for written := int64(0); written <= directory.MaxBytes; written += int64(len(block)) {
+		if _, writeErr = file.Write(block); writeErr != nil {
+			break
+		}
+	}
+	closeErr := file.Close()
+	if !errors.Is(writeErr, syscall.ENOSPC) || closeErr != nil {
+		return fmt.Errorf("shared directory did not enforce ENOSPC: %v, %v", writeErr, closeErr)
+	}
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(directory.Path, "bound-proof"), []byte("ENOSPC"), 0600)
+}
+
+func featureSharedReader(path string) error {
+	bindings, present, err := deployment.LoadBindings()
+	if err != nil || !present {
+		return fmt.Errorf("shared reader requires bindings")
+	}
+	directory, err := bindings.SharedDirectory("render-cache")
+	if err != nil || directory.Access != deployment.DirectoryReadOnly || directory.Path != path ||
+		path != os.Getenv("RENDER_CACHE") {
+		return fmt.Errorf("shared descriptor, argv and environment disagree")
+	}
+	for name, expected := range map[string]string{"frame.txt": "prepared-media", "bound-proof": "ENOSPC"} {
+		data, err := os.ReadFile(filepath.Join(path, name))
+		if err != nil || string(data) != expected {
+			return fmt.Errorf("shared reader did not read writer output")
+		}
+	}
+	for _, name := range []string{"reader-write", "frame.txt"} {
+		if err := os.WriteFile(filepath.Join(path, name), []byte("forbidden"), 0600); !errors.Is(err, syscall.EROFS) {
+			return fmt.Errorf("reader write did not fail with EROFS: %v", err)
+		}
+	}
+	return nil
 }
 
 func featureUnixBinding(ctx context.Context, path string) error {

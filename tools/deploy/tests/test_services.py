@@ -120,7 +120,7 @@ class ServiceInventoryTests(unittest.TestCase):
         self.assertIn("User=abc-production", content)
 
     def test_scalar_unit_paths_are_unquoted_and_word_lists_remain_quoted(self):
-        list_directives = {"Environment", "ReadWritePaths", "BindReadOnlyPaths"}
+        list_directives = {"Environment", "ReadWritePaths", "ReadOnlyPaths", "BindPaths", "BindReadOnlyPaths", "TemporaryFileSystem"}
         for role in self.inventory.roles:
             content = services.render_unit(self.inventory, role, self.entry, DIGEST)
             directives = dict(line.split("=", 1) for line in content.splitlines() if "=" in line and not line.startswith("#"))

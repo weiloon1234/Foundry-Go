@@ -234,9 +234,8 @@ fails or an upload ID is lost. The transactional outbox remains the durable owne
 of required queued cleanup/variant work; after-commit callbacks only prompt it.
 
 Large SDK wire coverage and env-gated PostgreSQL regression sources exercise this
-path. Live R2 create **and** replace certification is still required before its
-shared conditional-write size restriction can be removed. No production override
-is added. Checksum-fallback reconciliation and explicit settlement stream the
+path. R2 conditional create and replace support multipart objects up to
+`MaxObjectBytes` after live certification on 2026-11-15. Checksum-fallback reconciliation and explicit settlement stream the
 pinned object through the shared fixed-buffer count/hash sink, using its persisted
 size even after the upload policy is lowered. Explicit settlement reads to EOF
 regardless of checksum metadata; automatic settlement retains the metadata
@@ -801,8 +800,8 @@ variant processing retain their bounded in-memory limits. Fallback reconciliatio
 and explicit settlement stream the original; cancellation or incomplete evidence
 must leave the intent unresolved.
 
-R2's shared conditional-write size cap remains in place until live certification
-passes for both create and replace. Large policies that exceed that capability
-fail validation. The local adapter and explicitly capable S3-compatible adapters
-do not establish R2 support. See the [resource and provider acceptance commands](../evidence/b26-resource-provider-acceptance.md)
-for required measurements, deployment gaps and live-provider evidence.
+R2 supports conditional multipart create and replace up to `MaxObjectBytes`.
+Attachment upload policies and disk object-size limits still apply. Live
+certification also passed ranged reads of a 96 MiB object through the attachment
+seek reader. See the [resource and provider acceptance record](../evidence/b26-resource-provider-acceptance.md)
+for measurements, deployment gaps and live-provider evidence.

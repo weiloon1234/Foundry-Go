@@ -2,8 +2,8 @@
 
 Status: B26 accepted for v0.30.0 on 2026-11-14. The resource matrix,
 Ubuntu 24.04 arm64 fresh container acceptance, and the race packages listed below
-passed. The live R2 matrix was not run because credentials were unavailable.
-Production R2 conditional-write restrictions remain unchanged.
+passed. The owner subsequently reported a live R2 matrix pass on 2026-11-15,
+certifying conditional multipart create and replace and large ranged reads.
 
 ## Recorded results (2026-11-14)
 
@@ -16,7 +16,7 @@ checks performed while preparing the release notes.
 | Resource matrix | Passed at 128 MiB and 512 MiB with fixed concurrency 1 and 2, including the near-64-MiB detection cells and the declared allocation and spool bounds |
 | Ubuntu 24.04, linux/arm64, fresh container | Passed all phases, including all 15 upload scenarios and recovery |
 | Race tests | Passed for `attachments`, `storage/local`, `http`, `internal/httpdeadline`, `application` and `infrastructure` |
-| Live R2 matrix | Not run: no credentials. Conditional create and replace above the existing cap remain uncertified |
+| Live R2 matrix | Not run on 2026-11-14: no credentials. Superseded by the 2026-11-15 live result below |
 
 The upload scenarios cover silent 150-second publication, known-length and chunked
 input, progressing, stalled, trickling and disconnected clients, four saturation
@@ -174,16 +174,41 @@ The tests generate random descendants and clean only their exact objects/uploads
 
 ```sh
 FOUNDRY_TEST_R2_REQUIRED=1 go test -timeout=30m -count=1 -v ./storage/s3 \
-  -run '^(TestRealR2StorageContract|TestRealR2ConditionalMultipartCandidate)$'
+  -run '^(TestRealR2StorageContract|TestRealR2ConditionalMultipart|TestRealR2RangedReads)$'
 ```
 
-The candidate matrix covers absent/existing and competing creates, matching/stale/
-missing-destination and competing replacements, destination mutation before
-completion, winner bytes, cancellation/abort, ambiguous completion and cleanup.
-It tests both single-request and multipart thresholds. The candidate is private
-to the test. Shipping R2 retains `ConditionalWriteMaxBytes` until live evidence
-certifies both create and replace. A passing local TLS S3 stand-in is not R2
-certification and does not authorize removal of that restriction.
+`TestRealR2RangedReads` uploads one multipart object with deterministic pseudorandom
+content and checks random ranges, EOF clamping, invalid ranges, and the
+`storage.Disk.OpenSeek` reader used by attachments. It verifies bytes and range
+metadata. `FOUNDRY_TEST_R2_LARGE_BYTES` sets the integer byte count (default
+100663296, or 96 MiB); it must exceed `PartBytes` and fit `MaxObjectBytes`.
+For a 500 MiB run, set it to `524288000`. The same sequence runs locally in
+`TestR2RangedReadsWire` against the TLS S3 stand-in.
+
+### Recorded live result (2026-11-15)
+
+The owner reported that the required live matrix passed in 81 seconds with
+`FOUNDRY_TEST_R2_REQUIRED=1`:
+
+- `TestRealR2StorageContract`: passed. `conditional-delete` skipped because R2
+  declares no conditional delete. `configured-public-read` skipped because no
+  public base was configured.
+- `TestRealR2ConditionalMultipartCandidate`: passed at 5242880 and 5242881 bytes.
+  Every create and replace scenario passed, including competing publications,
+  destination changes before completion, lost acknowledgement, cancellation,
+  lost upload ID, and part failure with and without a failed abort.
+- `TestRealR2RangedReads`: passed with a 96 MiB multipart object, 53 ranges,
+  invalid ranges, and the attachment seek reader.
+
+The certified candidate called production `Backend.put`; its only capability
+change was `ConditionalWriteMaxBytes = 0`. The shipping R2 profile now uses that
+capability. The wrapper has been removed and the test renamed to
+`TestRealR2ConditionalMultipart`, as shown in the command above. Both live and
+TLS matrices now exercise the production backend directly. Conditional create
+and replace support multipart objects above `PartBytes`, up to `MaxObjectBytes`.
+The ranged-read result certifies 96 MiB; it does not claim a separate 500 MiB run.
+Conditional deletion remains unsupported, and this run does not certify public
+reads. Generic Compatible profiles retain `SingleRequestConditions`.
 
 ## Independent consumers and fast checks
 
@@ -197,5 +222,4 @@ make fixture-check
 ```
 
 The recorded results above do not claim a new run of the full independent
-consumer checks or of additional container cells. The R2 restriction can be
-reconsidered only after both live conditional operations are certified.
+consumer checks or of additional container cells.

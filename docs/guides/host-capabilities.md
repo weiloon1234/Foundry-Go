@@ -18,7 +18,8 @@ and public listener bindings, added in v0.33.0, require generation 14 and set a
 sticky generation-14 client floor, including after rollback to a release without
 either capability. Unix listeners and endpoint bindings require generation 15 and
 set a sticky generation-15 floor. Upgrade both the host tools and deploy client
-before using them.
+before using them. Role loopback confinement and wildcard private listeners require
+generation 16 on both client and host, with the same sticky rollback/recovery floor.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
 
@@ -719,10 +720,10 @@ indicators, and Unicode in the private value cannot add YAML keys or lines.
 
 ### Release-carried artifacts
 
-Archive build and artifact verification support this source. Bundle activation
-is not yet complete: `services.bundle_views()` still requires a topology download
-pin. It needs to accept the release inventory digest before a release-carried
-bundle can be mounted by a service.
+Archive build, artifact verification and service bundle activation support this
+source. Service views use the verified release inventory digest for release-carried
+bundles, with the same platform, ABI, ownership and read-only mount checks as
+downloaded bundles.
 
 For an artifact that belongs to the application repository, replace the platform's
 `url` and `sha256` fields with a typed `source` object:
@@ -879,6 +880,8 @@ Role-binding schema 1 adds an optional `public_listeners` collection. The writer
 omits it when empty, preserving descriptors and digests for existing bindings.
 A v0.32.0 binary can read a new descriptor that has no public listener bindings.
 Upgrade the consuming binary before declaring a public listener binding.
+
+`SharedDirectory(name)` returns a disposable shared-file binding described below.
 
 `LoadBindings` returns `present == false` without error only when the environment
 selector is absent. An explicitly invalid selector or malformed descriptor is an
@@ -1125,3 +1128,289 @@ views as HTTPS artifacts.
 The framework acceptance runner uses the same shipped host images, CA setup and
 systemd container helpers; its fixture-specific scenarios and private module proxy
 remain separate from application rehearsal.
+
+## Loopback-confined roles and wildcard private listeners
+
+Some daemons accept a control port without accepting a listen address; obs-websocket
+is one example. Declare `"network": {"confinement": "loopback"}` on the role and
+`"wildcard": true` on each such private TCP listener. Upgrade client and host tools
+to generation 16 first. Activation, rollback and recovery retain that instance floor,
+even when the selected release no longer declares confinement.
+
+The following complete role is a small worked example of the same binding behavior.
+Add it alongside the required built-in `http` role in topology schema 2, and add
+`"control": 1` to profile schema 3's `placement`. This example uses Ubuntu 24.04's Python 3.12 packages; on another host, declare
+the versioned package that owns the resolved executable. It needs no public listener binding:
+
+```json
+{
+  "name": "control",
+  "kind": "executable",
+  "packages": ["python3.12", "python3.12-minimal"],
+  "executable": {"package": "python3.12-minimal", "path": "/usr/bin/python3.12"},
+  "network": {"confinement": "loopback"},
+  "arguments": [
+    {"literal": "-I"}, {"literal": "-m"}, {"literal": "http.server"},
+    {"listener_port": "api"}, {"literal": "--bind"}, {"literal": "0.0.0.0"}
+  ],
+  "listeners": {"api": {"transport": "tcp", "bind": "loopback", "wildcard": true}},
+  "readiness": {"kind": "tcp", "listener": "api", "timeout_seconds": 15},
+  "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
+  "limits": {"memory_bytes": 67108864, "cpu_percent": 100, "tasks": 16},
+  "state": {"kind": "disposable"}
+}
+```
+
+A consumer declares `requires: ["control"]` and an endpoint binding with role
+`control`, listener `api`, and scheme `http`. Its descriptor contains the allocated
+loopback address and port. For an OBS role, apply the same network/listener fields,
+use the pinned OBS executable and its service-local configuration, and populate
+the websocket server port setting through a typed `rendered-json` field binding
+to `{"listener_port": "api"}`. Keep daemon
+authentication enabled and pass its password through a declared secret file/template.
+A TCP readiness probe checks the listener; it does not authenticate a websocket session.
+
+Foundry renders `IPAddressDeny=any` and `IPAddressAllow=localhost` into the role's
+systemd unit. Every admitted start and readiness check verifies the effective IPv4
+and IPv6 policy and attached ingress/egress BPF programs on the live cgroup. Missing
+cgroup-v2/BPF support, an unobservable attachment or a policy override refuses the
+start or activation. The same verifier owns recovery rehearsal isolation.
+
+Confinement applies to the whole role, including outbound IP traffic: it can talk
+to loopback services and Unix sockets, but cannot connect to remote databases,
+remote APIs or external stream destinations. A role that streams off-host cannot
+use this confinement policy. Public listeners on confined roles and confinement of
+the public built-in HTTP role are rejected. A wildcard declaration without
+confinement is rejected even in recovery rehearsal.
+
+Readiness accepts `0.0.0.0`, `[::]` or `*` only on the allocated port, retaining
+process identity, ownership and stability checks. The port remains reserved across
+all host addresses and both IP families, including stopped historical allocations.
+A new allocation cannot collide with another instance, a public edge listener or
+Foundry's shared services. Such listeners create no firewall openings or nginx
+routes. Reports list them under `private_listeners` with their wildcard and
+confinement declarations, and show the live confinement proof separately. Failed
+proof or foreign ownership cannot hide a wildcard socket from exposure findings.
+
+## Shared file directories
+
+Topology 2 can grant roles access to named disposable caches. Both the client and
+host require deploy-tool generation 16. The instance keeps that minimum generation
+after rollback or recovery. A shared directory name also becomes its binding name
+for every listed role, so it cannot collide with another binding in those roles.
+
+Each directory has exactly four declaration fields: `state`, `max_bytes`,
+`writers`, and `readers`. Only `"disposable"` state is supported. At least one
+writer is required. Readers can be empty. Each role must exist in the topology
+and appear at most once across both lists. A topology can declare at most 32
+shared directories. `max_bytes` must be a multiple of 65,536, from 65,536 through
+1,099,511,627,776 bytes. The alignment prevents rounding above the requested limit
+on supported hosts with 4 KiB, 16 KiB, or 64 KiB pages.
+
+The host path is `/run/foundry/services/<instance UUID>/shared/<name>`. Each
+directory is a separate tmpfs mount owned by the instance account with mode
+`0700` and `nodev,nosuid,noexec`. The host-side `shared` parent is root-owned with
+mode `0700`; its ancestors remain root-owned. `/run` matches
+the existing per-instance socket and invocation ownership tree and gives the
+cache an explicit reboot lifetime.
+
+### Scheduler-to-OBS example
+
+An application's scheduler prepares media. An application-owned OBS wrapper reads
+the resulting files and configures OBS media sources with those paths. Add this
+field beside `roles` in `deploy/topology.json`:
+
+```json
+{
+	"shared_directories": {
+		"render-cache": {
+			"state": "disposable",
+			"max_bytes": 67108864,
+			"writers": ["scheduler"],
+			"readers": ["obs"]
+		}
+	}
+}
+```
+
+Declare `scheduler` as a builtin role and place both `scheduler` and `obs` in the
+profile. Keep the OBS wrapper's existing executable, listener, readiness, and
+resource declarations. Add this environment entry to its executable role:
+
+```json
+{
+	"environment": {
+		"RENDER_CACHE": {"shared_directory_path": "render-cache"}
+	}
+}
+```
+
+The wrapper reads `RENDER_CACHE` and opens `prepared.mp4` beneath it. If the wrapper
+takes the directory as a positional argument, add
+`{"shared_directory_path": "render-cache"}` to its `arguments` array instead.
+These are literal paths, with no shell expansion. OBS does not interpret the
+Foundry reference itself. The wrapper supplies the resolved file path to OBS.
+
+One application binary runs HTTP, worker, scheduler, and console processes.
+Load bindings once during assembly and register the media preparation handler
+only when this process holds the grant. For example:
+
+```go
+func mediaPreparationCache() (deployment.SharedDirectory, bool, error) {
+	bindings, present, err := deployment.LoadBindings()
+	if err != nil || !present {
+		return deployment.SharedDirectory{}, false, err
+	}
+	cache, err := bindings.SharedDirectory("render-cache")
+	if errors.Is(err, fault.Missing) {
+		// HTTP, worker, and console processes have no grant; assembly continues.
+		return deployment.SharedDirectory{}, false, nil
+	}
+	if err != nil {
+		return deployment.SharedDirectory{}, false, err
+	}
+	if cache.Access != deployment.DirectoryReadWrite {
+		return deployment.SharedDirectory{}, false, fmt.Errorf("media preparation requires write access")
+	}
+	return cache, true, nil
+}
+```
+
+When the returned boolean is true, inject the `deployment.SharedDirectory` into
+the media preparation handler. Otherwise, continue assembling the application
+without that handler. Write completed media to a temporary file in `cache.Path`,
+close it, then rename it to `prepared.mp4` so readers never see a partial replacement.
+
+`cache.Path` is the shared path. `cache.Access` is `DirectoryReadWrite` for the
+scheduler and `DirectoryReadOnly` for an OBS wrapper that uses Go bindings.
+`cache.MaxBytes` is the declared limit. Lookups for missing or ungranted names
+return `fault.Missing`. The descriptor omits `shared_directories` for roles with
+no grants. Older strict readers need an application upgrade before receiving a grant.
+Console calls that the deploy tool makes never receive shared directories. These
+are release checks and the maintenance, recovery and rehearsal commands. Their
+descriptor keeps the HTTP descriptor's other bindings and runtime fields but omits
+`shared_directories`, so the same lookup returns `fault.Missing`. The HTTP unit's
+own descriptor keeps its declared grants. Commands typed by hand in `ACTION=shell`
+run outside the deploy tool and receive no deployment bindings at all:
+`deployment.LoadBindings` reports `present=false`, as in earlier releases.
+
+The directory grant does not imply startup order or file readiness. Add
+`"requires": ["scheduler"]` to the reader when it must start after the scheduler.
+The reader still needs to handle an empty cache until the first scheduled job
+publishes media. Files must be reproducible after every cache reset.
+
+The compiled [fixture consumer](../../tests/fixtures/deploy-acceptance/internal/app/feature.go)
+uses the same API with a builtin HTTP writer and a custom reader. Its container
+scenario checks actual reader writes inside the service sandbox, including an
+overwrite attempt, and checks that an unlisted role cannot read the cache.
+
+### Enforced limits and access
+
+Linux tmpfs enforces `max_bytes` against allocated file-data blocks. A write that
+exhausts the filesystem fails with `ENOSPC`. Foundry also limits the inode count
+to `min(65536, max_bytes / 4096)`. Empty-file floods therefore have a finite limit.
+The [kernel tmpfs documentation](https://docs.kernel.org/filesystems/tmpfs.html)
+describes these filesystem limits.
+
+The byte limit does not reserve RAM, limit sparse files' apparent lengths, or cap
+all filesystem metadata memory. Tmpfs consumes RAM and may use swap. Host or
+service memory pressure can fail work before the filesystem fills. Choose a cache
+size that fits the host and the writers' memory budgets. Applications remove
+obsolete files and handle `ENOSPC`. There is no timer that races applications to
+delete files, and no fallback to an unbounded ordinary directory.
+
+All roles share the instance account. Mode bits cannot distinguish a reader from
+a writer. The host parent `/run/foundry/services/<instance UUID>/shared` is a
+root-owned directory with mode `0700`, verified without following symlinks.
+Instance-account processes outside units cannot traverse it, including readiness
+probes and operator invocations. Traversing such a process's `/proc/<pid>/root`
+still encounters this root-only parent and fails with `EACCES`.
+
+Each workload gets a private empty `TemporaryFileSystem` view of the shared parent.
+Foundry binds only granted directories into that view and sets `ReadWritePaths` for writers
+or `ReadOnlyPaths` for readers. Readers also get a read-only bind mount. This
+policy applies to builtin app roles and custom roles under `ProtectSystem=strict`.
+Unlisted roles receive no directory binding or filesystem view of the cache.
+Systemd resolves bind sources against the host root and sets up these mounts as
+root before changing to the unit's `User=`. The private parent view remains
+searchable by the instance account; its mode is independent of the host parent.
+See systemd's [bind mount setup](https://github.com/systemd/systemd/blob/v259/src/core/namespace.c)
+and [namespace and credential ordering](https://github.com/systemd/systemd/blob/v259/src/core/exec-invoke.c).
+
+Every role with a shared-directory grant also runs with `PrivateUsers=yes`,
+including builtin writers and custom readers. Systemd creates a separate,
+root-owned user namespace for each workload and maps root and the instance's UID
+and GID to themselves. File ownership and Unix socket peer credentials therefore
+retain their existing values. Roles without grants keep their existing policy.
+
+Linux gates `/proc/<pid>/root`, `cwd`, and `fd` traversal with
+`PTRACE_MODE_READ_FSCREDS`. Across user namespaces, the capability check requires
+`CAP_SYS_PTRACE` in the target namespace. Matching the instance UID is insufficient.
+Sibling roles and unprivileged instance-account processes outside the units cannot
+use those procfs links to enter a granted role's filesystem view. All workload
+units retain an empty `CapabilityBoundingSet`. A role cannot unmount its read-only
+view to expose the host's writable mount; inherited mounts are also locked when
+copied into a less privileged mount namespace. See the
+[kernel capability checks](https://github.com/torvalds/linux/blob/v6.18/security/commoncap.c),
+[procfs link checks](https://github.com/torvalds/linux/blob/v6.18/fs/proc/base.c), and
+[systemd user namespace policy](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#PrivateUsers=).
+
+Roles still share one instance account for everything outside shared directories.
+This policy does not give each role separate account-owned state or IPC authority.
+The privileged `+` per-start helper runs as root but still sees the unit's
+filesystem namespace, including its shared-directory mounts. It verifies that
+view; it does not create or mount caches.
+
+### Lifetime, reports, and cleanup
+
+Deploy operations prepare caches in the host mount namespace before loading or
+starting instance units. This covers activation, release transitions, rollback,
+recovery and rehearsal, maintenance up, and explicit start or restart. Preparation
+holds the instance's shared-directories lock and verifies that its mount namespace
+matches PID 1's. At reboot, the root admission boot coordinator prepares caches
+after network closure and before the instance units ordered after it start.
+The later boot opener checks readiness before reopening traffic.
+
+Host preparation checks the mount source, filesystem type, capacity, inode limit,
+owner, mode, and absence of symlinks. Existing files beneath an unmounted directory
+and foreign mounts cause refusal. Systemd creates a missing `TemporaryFileSystem=` mount
+point with mode `0755` at unit start, before the privileged hooks run. Preparation
+and discard accept a host parent only when it is a real, nonsymlink directory
+owned by root:root with mode `0700` or exactly `0755`. They tighten `0755` to
+`0700` with `fchmod` on the opened directory and re-verify it before mounting or
+unmounting any cache. Other owners, types, and modes are refused unchanged.
+
+Each admitted start uses its privileged hook only to verify granted views: each
+must be an exact tmpfs mount with its declared source, size and inode limits,
+instance owner, and mode. Readers must see a read-only mount. Ungranted roles
+verify no cache views. The `+` prefix does not move this hook into the host mount
+namespace. If a granted bind source is missing, systemd can fail with
+`226/NAMESPACE` before any hook runs. Run the deploy action again to prepare host
+paths, or use reboot recovery; no unit hook can repair a missing bind source.
+
+Ordinary restarts preserve the cache. Reboot clears it. A release change or shared
+directory declaration change discards the previous caches after every old role
+has stopped. Rollback can therefore start with an empty cache. Cleanup uses a
+normal unmount and removes only the empty underlying directory. A busy or foreign
+mount fails cleanup and remains available for inspection. It never uses forced
+or lazy unmounts, and never recursively deletes an occupied directory.
+
+Reports include `shared_directories` with `state: "disposable"`, `backed_up: false`,
+`restored: false`, the configured limit, used bytes, and the observed mount status.
+Reports never change permissions. A root:root `0755` parent with no entries and
+no mounts reports `status: "not_prepared"`, without a finding or used-byte count.
+A `0755` parent with content or a mount, or any other unverifiable state, produces
+`shared_directory_unverified`. Backup coverage
+records the same exclusion. Backups retain declarations but never cache files;
+recovery prepares fresh caches. Run reports as root to verify the mounts and
+measure used bytes. Unprivileged reports retain the disposable coverage but mark
+the inaccessible mounts unverified and omit used bytes.
+
+The deploy tool has no instance-removal action. During manual instance removal,
+stop and disable every role first and verify that all unit processes have exited.
+Inspect each declared mount with `findmnt --mountpoint <path>` and verify its
+`foundry-shared-<instance UUID>-<name>` source and tmpfs type. Unmount that exact
+path without force, then remove its empty underlying directory with `rmdir`.
+Retain any busy, foreign, or nonempty path for investigation. Never remove the
+shared parent recursively while mounts exist. A later host reboot also removes
+these runtime-only caches.

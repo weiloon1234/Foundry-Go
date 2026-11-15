@@ -120,6 +120,9 @@ class UnitInventory:
         require(set(resolution.unix_endpoints) == set(expected_unix),
                 "service_inventory", "Unix endpoints differ from their instance declarations.")
         for spec in self.specs.values():
+            import shared_directories
+            require(spec.bindings.shared_directories == shared_directories.bindings(topology, profile.instance_id, spec.identity.role),
+                    "service_inventory", "Shared directory bindings differ from their declarations.")
             for binding in spec.bindings.endpoints:
                 if binding.scheme == "unix":
                     require(binding.endpoint in expected_unix, "service_inventory", "Unix binding differs from its provider declaration.")
@@ -298,6 +301,10 @@ def resolve_argument(argument, role, spec, resolution, paths, views, secret_path
     if kind is ArgumentKind.CONFIG:
         config = dict(role.configs)[value]
         return paths.config(value, config.mode, config.path)
+    if kind is ArgumentKind.SHARED_DIRECTORY_PATH:
+        binding = next((b for b in spec.bindings.shared_directories if b.name == value), None)
+        require(binding is not None, "service_binding", "Shared directory is not granted to this role.")
+        return binding.path
     if kind in (ArgumentKind.LISTENER_PORT, ArgumentKind.LISTENER_ADDRESS):
         endpoint = next((e for e in resolution.endpoints if e.role == role.common.name and e.listener == value), None)
         require(endpoint is not None, "service_listener", "Declared listener has no selected allocation.")
@@ -362,6 +369,12 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     from unix_sockets import uses_sockets
     from contracts import socket_directory
     socket_paths = (socket_directory(spec.identity.instance_id),) if uses_sockets(role) else ()
+    import network_confinement
+    import recovery_rehearsal
+    confined = role.common.confinement == "loopback" or (recovery_rehearsal.active(entry) and
+                isinstance(role, ExecutableRole) and role.recovery_rehearsal_safe)
+    import shared_directories
+    shared_policy = shared_directories.sandbox(inventory.topology, spec.identity.instance_id, name)
     if isinstance(role, BuiltinRole):
         # Keep the existing built-in policies, including B26 upload write paths.
         from provision import _template
@@ -380,7 +393,9 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
             content = content.replace("[Service]\n", "[Service]\nReadWritePaths=" + systemd_word(socket_paths[0]) + "\n")
         if mounts:
             content = content.replace("[Service]\n", "[Service]\n" + mounts + "\n")
-        return content
+        if confined:
+            content = content.replace("[Service]\n", "[Service]\n" + network_confinement.FILTER)
+        return content.replace("[Service]\n", "[Service]\n" + shared_policy)
     secret_paths = secret_paths or {}
     arguments = tuple(resolve_argument(a, role, spec, inventory.resolution, paths, views, secret_paths) for a in role.arguments)
     require(arguments == spec.arguments, "service_arguments", "Frozen argv differs from the selected typed arguments.")
@@ -401,10 +416,9 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
                     "MOUNTS": mounts}
     content = (TEMPLATES / "custom.service").read_text()
     content = re.sub(r"@([A-Z]+)@", lambda match: replacements[match[1]], content).replace("[Unit]\n", "[Unit]\n" + condition)
-    import recovery_rehearsal
-    if recovery_rehearsal.active(entry) and role.recovery_rehearsal_safe:
-        content = content.replace("[Service]\n", "[Service]\n" + recovery_rehearsal.FILTER)
-    return content
+    if confined:
+        content = content.replace("[Service]\n", "[Service]\n" + network_confinement.FILTER)
+    return content.replace("[Service]\n", "[Service]\n" + shared_policy)
 
 
 def readiness_probe(role, paused=False):
@@ -536,12 +550,18 @@ def wait_ready_set(host, inventory, names, deadline):
                         return False
                     observed_tokens[name] = current
                     ready = _matches_executable(observed, executable)
+                    if ready and role.common.confinement == "loopback":
+                        import network_confinement
+                        network_confinement.isolation(host, inventory, name)
                     if ready and endpoint:
                         unix = readiness_probe(role).kind == "unix"
                         command = ["ss", "-Hxlpn"] if unix else ["ss", "-Hltpn", f"sport = :{endpoint.port}"]
                         listeners = host.run(command, check=False, timeout=min(5, deadline - time.monotonic()))
+                        local_addresses = {local}
+                        if isinstance(role, ExecutableRole) and dict(role.listeners)[endpoint.listener].wildcard:
+                            local_addresses.update(f"{address}:{endpoint.port}" for address in ("0.0.0.0", "[::]", "*"))
                         ready = listeners.returncode == 0 and any(
-                            len(line.split()) >= (8 if unix else 5) and line.split()[4 if unix else 3] == local and
+                            len(line.split()) >= (8 if unix else 5) and line.split()[4 if unix else 3] in local_addresses and
                             f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
                     healthy = ready and (probe(host, inventory, name, deadline, paused=True) if paused and name == "http"
                                          else probe(host, inventory, name, deadline)) and healthy

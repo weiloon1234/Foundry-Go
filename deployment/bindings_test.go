@@ -15,6 +15,48 @@ func bindingDocument() string {
 	return `{"schema":2,"instance":"app-1","user":"app-1","env_file":"/etc/foundry/app.env","work_dir":"/var/lib/foundry/app","release":"/opt/foundry/app/releases/one","deployment_sha256":"` + strings.Repeat("a", 64) + `","unit":{"instance_id":"00000000-0000-4000-8000-000000000001","role":"http","ordinal":1},"bindings":{"schema":1,"role":"http","executables":[{"name":"checksum","path":"/usr/bin/sha256sum","source_sha256":"` + strings.Repeat("b", 64) + `"}],"endpoints":[{"name":"relay","endpoint":{"role":"relay","listener":"control","address":"127.0.0.1","port":8201},"scheme":"http"}],"bundles":[{"name":"data","path":"/run/foundry/view/data","artifact_sha256":"` + strings.Repeat("c", 64) + `"}]}}`
 }
 
+func TestSharedDirectoryBindingAccessAndValidation(t *testing.T) {
+	const path = "/run/foundry/services/00000000-0000-4000-8000-000000000001/shared/render-cache"
+	valid := strings.Replace(bindingDocument(), `"bundles":[`, `"shared_directories":[{"name":"render-cache","path":"`+path+`","access":"read-only","max_bytes":1048576}],"bundles":[`, 1)
+	bindings, err := ReadBindings(writeBindingDocument(t, valid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory, err := bindings.SharedDirectory("render-cache")
+	if err != nil || directory.Path != path || directory.Access != DirectoryReadOnly || directory.MaxBytes != 1048576 {
+		t.Fatal(directory, err)
+	}
+	directory.Path = "/changed"
+	again, _ := bindings.SharedDirectory("render-cache")
+	if again.Path != path {
+		t.Fatal("caller changed snapshot")
+	}
+	if _, err := bindings.SharedDirectory("ungranted"); !errors.Is(err, fault.Missing) {
+		t.Fatal(err)
+	}
+	writer := strings.Replace(valid, `"read-only"`, `"read-write"`, 1)
+	bindings, err = ReadBindings(writeBindingDocument(t, writer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory, _ = bindings.SharedDirectory("render-cache")
+	if directory.Access != DirectoryReadWrite {
+		t.Fatal(directory)
+	}
+	for _, invalid := range []string{
+		strings.Replace(valid, path, "/tmp/render-cache", 1),
+		strings.Replace(valid, path, strings.Replace(path, "000000000001", "000000000002", 1), 1),
+		strings.Replace(valid, `"read-only"`, `"owner"`, 1),
+		strings.Replace(valid, `"max_bytes":1048576`, `"max_bytes":0`, 1),
+		strings.Replace(valid, `"max_bytes":1048576`, `"max_bytes":65537`, 1),
+		strings.Replace(valid, `"name":"render-cache"`, `"name":"checksum"`, 1),
+	} {
+		if _, err := ReadBindings(writeBindingDocument(t, invalid)); !errors.Is(err, fault.Invalid) {
+			t.Fatal("accepted invalid shared directory", err)
+		}
+	}
+}
+
 func writeBindingDocument(t *testing.T, data string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "runtime.json")
@@ -30,6 +72,9 @@ func TestBindingsConcreteValuesAndRuntimeSelection(t *testing.T) {
 	bindings, ok, err := LoadBindings()
 	if err != nil || !ok {
 		t.Fatal(ok, err)
+	}
+	if _, err := bindings.SharedDirectory("render-cache"); !errors.Is(err, fault.Missing) {
+		t.Fatal("descriptor without shared directories must return Missing", err)
 	}
 	executable, err := bindings.Executable("checksum")
 	if err != nil || executable.Path != "/usr/bin/sha256sum" {

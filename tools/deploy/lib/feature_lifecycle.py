@@ -3,6 +3,7 @@ from dataclasses import asdict, replace
 import json
 import os
 from pathlib import Path
+import re
 import time
 import uuid
 
@@ -102,20 +103,20 @@ def migrate_enablement(host, registry, entry):
     return result
 
 
-def network_report(host, entry, host_claims):
+def network_report(host, entry, host_claims, host_confinement=None):
     from contracts import ClosureEvidence
     from report import declared_network
     if "deployment_selection" not in entry:
         topology = parse_topology(entry["topology"], registered=True)
         return declared_network(host, parse_profile(entry["profile"], topology), topology=topology,
-                                entry=entry, host_claims=host_claims)
+                                entry=entry, host_claims=host_claims, host_confinement=host_confinement)
     store, selection, inventory, _ = load(host, entry)
     require(entry["deployment_selection"] == record_document(selection),
             "network_selection", "Registry and private network selection differ.")
     path = store.runtime / "boot.json"
     closure = admission.read_owned(host, path, ClosureEvidence.parse) if path.exists() else None
     return declared_network(host, inventory.profile, topology=inventory.topology, entry=entry,
-                            resolution=inventory.resolution, closure=closure, host_claims=host_claims)
+                            resolution=inventory.resolution, closure=closure, host_claims=host_claims, host_confinement=host_confinement)
 
 
 def selected_releases(host, entry, state):
@@ -236,7 +237,9 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
                 require(isinstance(binding, BundleDirectoryBinding), "service_binding", "Unknown binding kind.")
                 view = next(v for v in views if v.name == binding.mount)
                 bundle_bindings.append(ResolvedBundleBinding(binding_name, view.destination, view.artifact_sha256))
-        bindings = RoleBindings(name, tuple(executable_bindings), tuple(endpoint_bindings), tuple(bundle_bindings), tuple(public_listener_bindings))
+        import shared_directories
+        bindings = RoleBindings(name, tuple(executable_bindings), tuple(endpoint_bindings), tuple(bundle_bindings),
+                                tuple(public_listener_bindings), shared_directories.bindings(topology, profile.instance_id, name))
         if isinstance(role, BuiltinRole):
             path = release_path / "artisan"
             binary, checksum = absolute(host, path), digest(path)
@@ -279,6 +282,14 @@ def save_launch(host, entry, inventory, declaration, roots, secret_paths):
     return launch
 
 
+def prepare_shared_directories(host, entry, inventory):
+    import shared_directories
+    store = admission.AdmissionStore(host, inventory.profile.instance_id)
+    with store._lock("shared-directories"):
+        shared_directories.prepare(host, inventory.topology, inventory.profile.instance_id,
+                                   entry["allocations"]["uid"], entry["allocations"]["gid"])
+
+
 def install_units(host, registry, entry, inventory, launch, tools_dir):
     import provision
     import upgrades
@@ -288,6 +299,7 @@ def install_units(host, registry, entry, inventory, launch, tools_dir):
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
     from release import runtime_declaration
     provision._unit_checks(host, entry)
+    prepare_shared_directories(host, entry, inventory)
     origins = store._retained_records(inventory.resolution)
     generations = {}
     for name, spec in inventory.specs.items():
@@ -345,20 +357,38 @@ def stop_units(host, inventory, names=None):
         services.stopped_unit(host, unit)
 
 
-def start_units(host, inventory, names, deadline):
+def start_units(host, entry, inventory, names, deadline):
     """Takeover/lifecycle interface: start an explicit enabled graph without enabling it."""
     names = set(names)
     enabled = services.enabled_units(host, inventory.units)
     require(names <= set(enabled), "service_enablement", "Cannot start a deliberately disabled role.")
     order = inventory.start_order(enabled)
+    if names:
+        prepare_shared_directories(host, entry, inventory)
     for prerequisite in inventory.prerequisites(names) - names:
         require(services.wait_ready(host, inventory, prerequisite, deadline),
                 "service_prerequisite", "A retained prerequisite is unavailable.")
     for name in order:
         if name in names:
             require(time.monotonic() < deadline, "service_deadline", "Startup exhausted its shared deadline.")
-            host.run(["systemctl", "start", inventory.units[name]], timeout=max(.001, deadline - time.monotonic()))
-            require(services.wait_ready(host, inventory, name, deadline), "readiness_failed", "Selected role failed readiness.")
+            try:
+                host.run(["systemctl", "start", inventory.units[name]], timeout=max(.001, deadline - time.monotonic()))
+            except DeployError:
+                _require_namespace_ready(host, inventory.units[name])
+                raise
+            if not services.wait_ready(host, inventory, name, deadline):
+                # systemd 255 treats a 226 from ExecCondition as a skipped condition,
+                # so `systemctl start` succeeds and only readiness notices.
+                _require_namespace_ready(host, inventory.units[name])
+                require(False, "readiness_failed", "Selected role failed readiness.")
+
+
+def _require_namespace_ready(host, unit):
+    observed = host.run(["systemctl", "show", unit, "--property=ExecMainStatus,ExecCondition,ExecStartPre", "--no-pager"],
+                        check=False, timeout=5)
+    if observed.returncode == 0 and re.search(r"(?m)^ExecMainStatus=226$|status=226(?:/NAMESPACE)?(?:[ ;}]|$)", observed.stdout):
+        raise DeployError("service_namespace", "Unit namespace setup failed (226/NAMESPACE). "
+                          "Run the deploy action again to prepare host paths, or use reboot recovery.")
 
 
 def ready(host, entry, inventory, name, deadline):
@@ -416,6 +446,10 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     old = entry.get("deployment_selection", {}).get("selected_resolution_id", inventory.resolution.id)
     previous = load(host, entry)[2] if "deployment_selection" in entry else inventory
     names = set(names) if names is not None else set(previous.roles) | set(inventory.roles)
+    discard_shared = (previous.deployment.release != inventory.deployment.release or
+                      previous.topology.shared_directories != inventory.topology.shared_directories)
+    require(not discard_shared or not previous.topology.shared_directories or set(previous.roles) <= names,
+            "shared_directory_transition", "Changing shared caches requires a full instance transition.")
     retained = set(inventory.roles) - names
     if review is not None:
         enabled, running, removed = transition_enablement(host, entry, inventory, restoring=review["restoring"])
@@ -467,6 +501,10 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     units = {**previous.units, **inventory.units}
     feature_network.withdraw(host, entry, request, inventory.resolution, units)
     stop_units(host, previous, names & previous.roles.keys())
+    if discard_shared:
+        import shared_directories
+        shared_directories.discard(host, previous.topology, inventory.profile.instance_id,
+                                   entry["allocations"]["uid"], entry["allocations"]["gid"])
     evidence = feature_network.close(host, entry, request, inventory.resolution, units)
     store.record_boot_closure(evidence)
     store._write(store.durable / "transition.json", replace(request, closure_id=evidence.id))
@@ -541,7 +579,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
             store.issue_permit(permit, evidence)
             atomic_write(store.runtime / "active-permit", permit.id, mode=0o600)
         deadline = time.monotonic() + release.READINESS_SECONDS
-        start_units(host, inventory, starting, deadline)
+        start_units(host, entry, inventory, starting, deadline)
         require(not running or services.wait_ready_set(host, inventory, running, deadline),
                 "readiness_failed", "The selected running set did not remain ready before public opening.")
         if running:
@@ -571,7 +609,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
 
 
 def boot(host, entry, inventory):
-    """Boot only reconstructs closure; it never replays a pending operation."""
+    """Rebuild closure and host paths before workloads; never replay pending operations."""
     with host.lock("host"), host.lock(inventory.profile.instance_id):
         store = admission.AdmissionStore(host, inventory.profile.instance_id)
         selected, resolution = store._selection()
@@ -580,6 +618,7 @@ def boot(host, entry, inventory):
                                  canonical_digest(record_document(inventory.deployment)), None)
         evidence = feature_network.close(host, entry, request, resolution, inventory.units)
         store.record_boot_closure(evidence)
+        prepare_shared_directories(host, entry, inventory)
         origins = store._retained_records(resolution)
         for name, spec in inventory.specs.items():
             origin = origins.get(name, {}).get("resolution_id", resolution.id)

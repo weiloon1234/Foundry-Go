@@ -1,5 +1,62 @@
 # Changelog
 
+## v0.35.0 — 2026-11-15
+
+- Added: loopback network confinement for roles, declared with
+  `"network": {"confinement": "loopback"}`. The role's unit renders
+  `IPAddressDeny=any` and `IPAddressAllow=localhost`, so it can reach loopback
+  services and Unix sockets but no remote address. Every admitted start and
+  readiness check verifies the loaded IPv4 and IPv6 policy and the attached cgroup
+  ingress and egress BPF programs; missing support, an unobservable attachment or a
+  policy override refuses the start. Recovery rehearsal isolation uses the same
+  verifier. The public built-in HTTP role cannot be confined, and confined roles
+  cannot declare public listeners.
+- Added: wildcard private TCP listeners with `"wildcard": true`, for daemons that
+  cannot be told which address to bind. They are accepted only on confined roles.
+  Readiness accepts `0.0.0.0`, `[::]` or `*` on the allocated port while keeping
+  process identity and ownership checks. The port stays reserved across all host
+  addresses and both IP families, including historical allocations, and creates
+  no firewall opening or nginx route. Reports list these listeners with their
+  confinement and show the live confinement proof separately. Private port
+  allocation also skips the shared Redis port.
+- Added: disposable shared file directories between roles, declared at the
+  topology level under `shared_directories` with `state: "disposable"`,
+  `max_bytes`, `writers` and `readers`. Each directory is a size-limited tmpfs
+  mount at `/run/foundry/services/<instance UUID>/shared/<name>` with a bounded
+  inode count. Writers get read-write access, readers a read-only bind, and roles
+  without a grant see an empty view. Granted roles run in private user namespaces
+  and the host parent is root-only, so procfs traversal through other processes of
+  the instance account cannot reach a cache. Deploy operations and boot prepare the
+  mounts in the host namespace before units start; each start verifies the unit's
+  own view, and a missing cache fails the unit closed with `226/NAMESPACE`.
+  Release or declaration changes discard caches after every old role has stopped,
+  and reboot clears them. Reports and backup coverage mark them disposable; their
+  contents are never backed up or restored.
+- Added: `shared_directory_path` references for argv and environment entries, and
+  `deployment.Bindings.SharedDirectory(name)` returning the path, access mode and
+  byte limit. Processes without a grant, including console calls made by the deploy
+  tool, get `fault.Missing`; one application binary should treat that as "no grant".
+  Console calls otherwise keep the HTTP role's bindings. Commands typed in
+  `ACTION=shell` still receive no deployment bindings.
+- Changed: R2 conditional create and replace now use multipart completion for
+  objects above `PartBytes`, up to `MaxObjectBytes`. Live certification passed on
+  2026-11-15 for the full create and replace matrix and for ranged and seekable
+  reads of a 96 MiB object through the attachments seek reader. Large attachment
+  policies on R2 no longer fail validation. The live command and recorded results
+  are in [the provider evidence](docs/evidence/b26-resource-provider-acceptance.md#recorded-live-result-2026-11-15).
+- Changed: confinement, wildcard listeners and shared directories require deploy
+  tool generation 16 on both the client and host, and the instance keeps that floor
+  through rollback and recovery. Update the application's Foundry-Go pin to
+  v0.35.0. From a generation 9–15 host, run `ACTION=tools-plan make deploy`, then
+  `ACTION=tools-apply PLAN_TOKEN='<token>' OPERATION='<stable-uuid-v4>' make deploy`.
+  Use `ACTION=upgrade-resume` with the same operation UUID after interruption.
+  Fresh bootstrap installs generation 16.
+- Changed: existing applications and declarations require no changes. Listeners,
+  bindings and descriptors keep their behavior and shapes when the new
+  declarations are omitted.
+- Fixed: the host-capabilities guide now documents release-carried bundle
+  activation through the verified release inventory digest, matching the tool.
+
 ## v0.34.0 — 2026-11-15
 
 - Added: private Unix-socket listeners for custom roles, declared with

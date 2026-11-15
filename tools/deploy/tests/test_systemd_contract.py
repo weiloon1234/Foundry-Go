@@ -260,17 +260,17 @@ class SystemdContractTests(unittest.TestCase):
 
     def test_rehearsal_requires_effective_loopback_filters_and_attached_bpf(self):
         from types import SimpleNamespace
-        import recovery_rehearsal
-        unit = self.service('rehearsal-filter', options=recovery_rehearsal.FILTER)
+        import network_confinement
+        unit = self.service('rehearsal-filter', options=network_confinement.FILTER)
         self.host.run(['systemctl', 'start', unit])
         inventory = SimpleNamespace(units={'relay': unit})
-        proof = recovery_rehearsal.isolation(self.host, inventory, 'relay')
+        proof = network_confinement.isolation(self.host, inventory, 'relay')
         self.assertTrue(all(proof['programs']))
         unfiltered = self.service('rehearsal-unfiltered')
         self.host.run(['systemctl', 'start', unfiltered])
         with self.assertRaises(DeployError) as raised:
-            recovery_rehearsal.isolation(self.host, SimpleNamespace(units={'relay': unfiltered}), 'relay')
-        self.assertEqual(raised.exception.code, 'rehearsal_isolation')
+            network_confinement.isolation(self.host, SimpleNamespace(units={'relay': unfiltered}), 'relay')
+        self.assertEqual(raised.exception.code, 'network_confinement')
 
     def assert_code(self, code, action):
         with self.assertRaises(DeployError) as raised:

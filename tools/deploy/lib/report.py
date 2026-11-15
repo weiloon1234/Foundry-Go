@@ -130,8 +130,8 @@ def loopback(address):
     return parsed.is_loopback
 
 
-def network(host, problems, deadline, *, claims=()):
-    response = probe(host, ["ss", "-H", "-ltn"], deadline, problems, "network_unavailable")
+def network(host, problems, deadline, *, claims=(), confined=()):
+    response = probe(host, ["ss", "-H", "-ltnp"], deadline, problems, "network_unavailable")
     listeners = None
     if response is not None:
         ports, unexpected = set(), False
@@ -144,6 +144,11 @@ def network(host, problems, deadline, *, claims=()):
                 continue
             address, port = observed
             if loopback(address):
+                continue
+            pids = set(int(pid) for pid in re.findall(r"pid=(\d+)", line))
+            if pids and any(s.socket.port == port and pids <= set(s.pids) and
+                            (s.socket.address == address or address == "*" and
+                             ipaddress.ip_address(s.socket.address).is_unspecified) for s in confined):
                 continue
             ports.add(port)
             if port not in PUBLIC_PORTS and not any(c.socket.transport == "tcp" and c.socket.address == address
@@ -381,7 +386,7 @@ def backup_freshness(entry, problems, instance_id):
             "restore_drill_outcome": drill_outcome}
 
 
-def instance_report(host, entry, deadline, problems, *, host_claims=()):
+def instance_report(host, entry, deadline, problems, *, host_claims=(), host_confinement=None):
     name = entry.get("name")
     instance_id = identifier(entry.get("profile", {}).get("instance_id"))
     if not isinstance(name, str) or len(name) > 31 or not SLUG_PATTERN.fullmatch(name) or not instance_id:
@@ -550,9 +555,17 @@ def instance_report(host, entry, deadline, problems, *, host_claims=()):
         "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),
     }
     if profile.get("schema") == 3:
+        import shared_directories
+        from topology import parse_topology
+        result["shared_directories"] = checked(problems, "shared_directory_unavailable", instance_id,
+            shared_directories.report, host, parse_topology(entry["topology"], registered=True), instance_id,
+            entry["allocations"]["uid"], entry["allocations"]["gid"])
+        for directory in result["shared_directories"] or ():
+            if directory.get("finding"):
+                problem(problems, directory["finding"], instance_id)
         from feature_lifecycle import network_report
         result["network"] = checked(problems, "declared_network_unavailable", instance_id,
-                                    network_report, host, entry, host_claims)
+                                    network_report, host, entry, host_claims, host_confinement)
         if result["network"]:
             for finding in result["network"]["findings"]:
                 problem(problems, finding["code"], instance_id)
@@ -580,7 +593,51 @@ def claim_inventory(registry):
     return tuple(claims)
 
 
-def declared_network(host, profile, *, topology, entry=None, resolution=None, closure=None, dns_observations=(), host_claims=None):
+def confined_network(host, registry):
+    """Only fresh filter and cgroup ownership proof can hide a wildcard exposure."""
+    from release import service
+    import listeners
+    import network_confinement
+    from topology import parse_topology
+    roles, private = [], []
+    observed = None
+    for identity, entry in registry["instances"].items():
+        topology = parse_topology(entry["topology"], registered=True)
+        names = [role.common.name for role in topology.roles if role.common.confinement == "loopback"]
+        if not names:
+            continue
+        inventory = None
+        for name in names:
+            row = {"instance_id": identity, "role": name, "confinement": "loopback", "state": "unverified"}
+            roles.append(row)
+            try:
+                if "deployment_selection" not in entry:
+                    row["state"] = "not_started"
+                    continue
+                if inventory is None:
+                    inventory = listeners._feature_inventory(host, entry, entry["deployment_selection"]["selected_resolution_id"])
+                if name not in inventory.units:
+                    row["state"] = "not_placed"
+                    continue
+                if service(host, inventory.units[name])["ActiveState"] != "active":
+                    row["state"] = "inactive"
+                    continue
+                proof = network_confinement.isolation(host, inventory, name)
+                owners = listeners.process_members(host, inventory.units[name])
+                if observed is None:
+                    observed = listeners.observe_sockets(host)
+                claims = [c for c in listeners.private_claims(identity, inventory.resolution, inventory.topology) if c.role == name]
+                private.extend(s for s in observed if s.pids and set(s.pids) <= owners
+                               and any(listeners.matches(c, s.socket) for c in claims))
+                row.update(state="verified", proof=proof)
+            except ReportBudgetExceeded:
+                raise
+            except (DeployError, OSError, ValueError, KeyError):
+                pass
+    return {"roles": roles, "sockets": tuple(private)}
+
+
+def declared_network(host, profile, *, topology, entry=None, resolution=None, closure=None, dns_observations=(), host_claims=None, host_confinement=None):
     """Lane A may supply its selected resolution/closure; never read private envs.
 
     Without that selection a declared port is not silently accepted as owned.
@@ -622,7 +679,15 @@ def declared_network(host, profile, *, topology, entry=None, resolution=None, cl
             findings.append({"code": "nginx_projection_unverified"})
     else:
         findings.append({"code": "nginx_projection_unverified"})
-    for finding in listeners.ownership_findings(inventory, observed, owners, edge_verified=edge_verified):
+    confinement = host_confinement
+    if confinement is None:
+        confinement = confined_network(host, host.read_registry()) if any(
+            role.common.confinement for role in topology.roles) else {"roles": [], "sockets": ()}
+    confined = set(confinement["sockets"])
+    own_confinement = [row for row in confinement["roles"] if row["instance_id"] == profile.instance_id]
+    findings.extend({"code": "network_confinement_unverified", "role": row["role"]}
+                    for row in own_confinement if row["state"] == "unverified")
+    for finding in listeners.ownership_findings(inventory, tuple(s for s in observed if s not in confined), owners, edge_verified=edge_verified):
         # Unclaimed exposure belongs to the host scanner. Other instances' socket
         # ownership is assessed with their own selected projection, not this one.
         if finding.get("instance_id") == profile.instance_id:
@@ -689,6 +754,12 @@ def declared_network(host, profile, *, topology, entry=None, resolution=None, cl
                             "port": c.socket.port, "expected_owner": c.owner,
                             "tls": policies[c.role + "." + c.listener].tls,
                             "authentication": policies[c.role + "." + c.listener].authentication} for c in claims],
+            "confinement": own_confinement,
+            "private_listeners": [{"role": c.role, "listener": c.listener, "address": c.socket.address,
+                                   "port": c.socket.port, "transport": "tcp", "visibility": "private",
+                                   "wildcard": c.wildcard, "confinement": next(
+                                       r.common.confinement for r in topology.roles if r.common.name == c.role)}
+                                  for c in listeners.private_claims(profile.instance_id, resolution, topology)] if resolution else [],
             "firewall": policy, "dns": dns, "tls": tls, "admission": admission, "findings": findings,
             "unexpected_exposure": unexpected}
 
@@ -734,7 +805,10 @@ def collect_inventory(host, result, deadline):
         result["host"]["network"] = network(host, problems, deadline)
         return
     claims = checked(problems, "host_listener_inventory_unverified", None, claim_inventory, registry) or ()
-    result["host"]["network"] = network(host, problems, deadline, claims=claims)
+    confinement = checked(problems, "network_confinement_unverified", None, confined_network, host, registry) or {"roles": [], "sockets": ()}
+    if any(row["state"] == "unverified" for row in confinement["roles"]):
+        problem(problems, "network_confinement_unverified")
+    result["host"]["network"] = network(host, problems, deadline, claims=claims, confined=confinement["sockets"])
     result["host"].update({"host_id": registry["host_id"], "layout_version": registry["layout_version"], "registry_updated_at": string(registry.get("updated_at"))})
     for name in ("postgresql", "redis", "nginx"):
         unit = registry["shared"].get(name, {}).get("unit")
@@ -749,7 +823,7 @@ def collect_inventory(host, result, deadline):
         if not isinstance(entry, dict) or not identifier(entry.get("project_id")) or entry.get("host_id") != registry["host_id"]:
             problem(problems, "instance_identity_invalid")
             continue
-        item = instance_report(host, entry, deadline, problems, host_claims=claims)
+        item = instance_report(host, entry, deadline, problems, host_claims=claims, host_confinement=confinement)
         if item is None:
             continue
         project = projects.get(entry["project_id"])

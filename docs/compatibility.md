@@ -13,6 +13,16 @@ Generation leaves handwritten comments unchanged. Retired source-edit journals
 fail with a typed `generate.RetiredJournalError` and retain staging; reconcile them
 with the generator that created them before upgrading.
 
+## Loopback confinement — v0.35.0
+
+Role `network.confinement: "loopback"` and private TCP listener `wildcard: true`
+require client and host deploy-tool generation 16. The instance retains this floor
+through rollback and recovery. Existing endpoint wire records remain unchanged;
+consumers receive a loopback address and the allocated port. Confinement denies
+external inbound and outbound IP traffic for the entire role, while preserving
+loopback and Unix sockets. See the
+[confinement guide](guides/host-capabilities.md#loopback-confined-roles-and-wildcard-private-listeners).
+
 ## Unix endpoint bindings — v0.34.0
 
 Unix listeners require deploy-tool generation 15 on both client and host. The
@@ -27,6 +37,18 @@ struct literals when constructing endpoint values.
 Socket files are runtime-only. Recovery restores declarations and prepares new
 socket paths; it never restores sockets from backup. See the
 [Unix listener guide](guides/host-capabilities.md#unix-socket-listeners).
+
+## Shared directory bindings — v0.35.0
+
+Declared shared directories require deploy-tool generation 16 on client and host.
+The instance floor remains 16 after rollback or recovery. Role-binding schema 1
+adds `shared_directories` only for roles granted access. Upgrade those application
+binaries before declaring the directories: earlier strict descriptor readers
+reject the new field. Roles with no grant retain their previous descriptor shape.
+
+Only disposable state is supported. Recovery restores declarations, never cached
+files. Reboot, release changes and shared-directory declaration changes discard
+the contents. See the [shared directory guide](guides/host-capabilities.md#shared-file-directories).
 
 ## Maintenance commands and deploy tools
 

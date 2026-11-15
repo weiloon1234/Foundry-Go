@@ -386,6 +386,8 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     else:
         used = {e["allocations"]["http_port"] for e in registry["instances"].values()}
         used.update(snapshot["listeners"])
+        from listeners import reserved_wildcard_ports
+        used.update(reserved_wildcard_ports(host, registry))
         port = next((p for p in range(PORT_FIRST, PORT_LAST + 1) if p not in used), None)
         require(port is not None, "ports_exhausted", "No free HTTP allocation remains.")
         entry = new_entry(project, bound, topology, port, upgrades.protocol(tools_dir))

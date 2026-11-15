@@ -43,6 +43,7 @@ import provision
 import release
 import report
 import services
+import shared_directories
 from services import probe as actual_probe
 import upgrades
 import unix_sockets
@@ -65,6 +66,7 @@ class WiringHost(Host):
     def __init__(self, root):
         super().__init__(Paths(root))
         self.commands, self.started = [], []
+        self.shared_prepared = set()
         self.account, self.nginx = None, False
         self.account_sequence = 0
         self.worker = 90
@@ -98,6 +100,7 @@ class WiringHost(Host):
         registry = self.read_registry()
         entry = next(iter(registry["instances"].values()))
         _, selection, selected, _ = lifecycle.load(self, entry)
+        assert (selected.profile.instance_id, selected.topology.sha256) in self.shared_prepared, "Host caches were not prepared before unit start"
         role = next(role for role, name in selected.units.items() if name == unit)
         text = self.paths.p("/etc/systemd/system/" + unit).read_text()
         arguments = shlex.split(next(line.split("=", 1)[1].lstrip("+") for line in text.splitlines() if line.startswith("ExecCondition=")))
@@ -111,8 +114,12 @@ class WiringHost(Host):
         pin = c.HelperInvocation(admission.boot_id(self), inventory.specs[role].identity, process, bundle,
                                 c.canonical_digest(c.record_document(inventory.specs[role])), inventory.resolution.id, 1, None)
         self.owned_write(self.paths.p("/proc/self/cgroup"), "0::/system.slice/" + unit)
-        for action in ("admit", "prepare"):
-            feature_runtime.run(action, c.record_document(pin), launch)
+        with patch.object(shared_directories, "prepare", side_effect=AssertionError("Unit hooks must not prepare host caches")), \
+                patch.object(shared_directories, "verify", wraps=shared_directories.verify) as verified:
+            for action in ("admit", "prepare"):
+                feature_runtime.run(action, c.record_document(pin), launch)
+            verified.assert_called_once_with(self, inventory.topology, inventory.specs[role].identity.instance_id, role,
+                                             entry["allocations"]["uid"], entry["allocations"]["gid"])
         self.proc(process.pid, invocation, alive=False)
         main = self.proc(process.pid + 1, invocation, self.paths.p(inventory.specs[role].executable), unit)
         self.running[unit] = (main, inventory, role)
@@ -230,6 +237,7 @@ class WiringHost(Host):
             elif action == "start" and unit.startswith("foundry-"):
                 self.start(unit)
             elif action == "stop":
+                self.shared_prepared.clear()
                 code = 0 if loaded else 5
                 record = self.running.pop(unit, None)
                 if record:
@@ -272,7 +280,8 @@ class WiringHost(Host):
                 for process, inventory, role in self.running.values():
                     for endpoint in inventory.resolution.endpoints:
                         if endpoint.role == role and ipaddress.ip_address(endpoint.address).version == family:
-                            rows.append(f'LISTEN 0 128 {endpoint.address}:{endpoint.port} 0.0.0.0:* users:(("app",pid={process.pid},fd=3))')
+                            address = "0.0.0.0" if (role, endpoint.listener) in listeners.wildcard_listeners(inventory.topology) else endpoint.address
+                            rows.append(f'LISTEN 0 128 {address}:{endpoint.port} 0.0.0.0:* users:(("app",pid={process.pid},fd=3))')
             output = "\n".join(rows)
         elif args[0] == "runuser":
             if Path(args[4]).name == "python3":
@@ -318,6 +327,11 @@ class FeatureWiringFixture(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.enterContext(patch.object(listeners, "observe_dns", side_effect=lambda binding: c.DNSObservation(binding.hostname, tuple(binding.public_addresses), c.now(), "recursive")))
         self.host = WiringHost(Path(temporary.name))
+        prepare_shared = shared_directories.prepare
+        def prepare(host, topology, instance, uid, gid):
+            prepare_shared(host, topology, instance, uid, gid)
+            host.shared_prepared.add((instance, topology.sha256))
+        self.enterContext(patch.object(shared_directories, "prepare", side_effect=prepare))
         self.project, self.profile, _ = fixture()
         self.archive = self.host.paths.root / "feature.tar.gz"
         self.build_archive()
@@ -371,7 +385,7 @@ class FeatureWiringFixture(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, confined=False, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -396,6 +410,11 @@ class FeatureWiringFixture(unittest.TestCase):
             **({"secrets": {"relay-token": {"prompt": "Relay token"}}} if secrets else {}),
             "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
                 "platforms": {"linux-arm64": {"url": "https://example.invalid/relay", "sha256": checksum}}}}})
+        if confined:
+            raw = self.topology.projection()
+            raw["roles"][1]["network"] = {"confinement": "loopback"}
+            raw["roles"][1]["listeners"]["api"]["wildcard"] = True
+            self.topology = parse_topology(raw)
         if unix:
             raw = self.topology.projection()
             raw['roles'][0]['requires'] = ['relay']
@@ -448,6 +467,25 @@ class FeatureWiringFixture(unittest.TestCase):
 
 
 class FeatureWiringTests(FeatureWiringFixture):
+    def test_confined_wildcard_lifecycle_and_failed_proof_close_all_work(self):
+        import network_confinement
+        self.build_archive(confined=True)
+        plan = self.request('bootstrap-plan', topology=self.topology.projection())
+        self.request('bootstrap-apply', topology=self.topology.projection(), plan_token=plan['plan_token'], confirm=True)
+        with patch.object(network_confinement, 'isolation', return_value={'programs': [[17], [18]]}) as proof:
+            self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
+            _, entry = self.host.require_identity(self.project, self.profile)
+            _, selection, inventory, _ = lifecycle.load(self.host, entry)
+            self.assertEqual(selection.minimum_generation, 16)
+            self.assertTrue(proof.called)
+            text = self.host.paths.p('/etc/systemd/system/' + inventory.units['relay']).read_text()
+            self.assertIn(network_confinement.FILTER, text)
+            self.request('restart')
+        with patch.object(network_confinement, 'isolation', side_effect=c.DeployError('network_confinement', 'No BPF')):
+            with self.assertRaises(c.DeployError):
+                self.request('restart')
+        self.assertFalse(self.host.running)
+
     def test_unix_lifecycle_prepares_descriptors_and_builtin_write_access(self):
         self.build_archive(unix=True)
         plan = self.request('bootstrap-plan', topology=self.topology.projection())

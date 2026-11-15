@@ -66,10 +66,12 @@ def run(action, pin, launch):
         (boot if action == "boot" else open_boot)(host, entry, current)
         return 0
     import recovery_rehearsal
+    import network_confinement
     if recovery_rehearsal.active(entry) and isinstance(role, ExecutableRole):
         require(role.recovery_rehearsal_safe, "recovery_dependency",
                 f"Unsafe role {spec.identity.role} cannot run in a recovery rehearsal.")
-        recovery_rehearsal.isolation(host, inventory, spec.identity.role)
+    if role.common.confinement == "loopback" or (recovery_rehearsal.active(entry) and isinstance(role, ExecutableRole)):
+        network_confinement.isolation(host, inventory, spec.identity.role)
     store = admission.AdmissionStore(host, spec.identity.instance_id)
     selection, current_resolution = store._selection()
     permit_id = None
@@ -110,6 +112,9 @@ def run(action, pin, launch):
                                        views=views, secret_paths=launch["secret_paths"].get(spec.identity.role, {}),
                                        uid=entry["allocations"]["uid"], gid=entry["allocations"]["gid"], permit_id=permit_id, entry=entry)
     with store.preparation(invocation, permit_id=permit_id):
+        import shared_directories
+        shared_directories.verify(host, inventory.topology, spec.identity.instance_id, spec.identity.role,
+                                  entry["allocations"]["uid"], entry["allocations"]["gid"])
         import unix_sockets
         unix_sockets.prepare(host, role, spec.identity, entry["allocations"]["uid"], entry["allocations"]["gid"],
                              remove_stale=not dispatch.exists())

@@ -1126,6 +1126,20 @@ def maintenance_parameters(action):
     return values
 
 
+def check_release_tools(ssh, request, manifest, entry):
+    if manifest.get("schema") != 2:
+        return
+    from contracts import ReleaseDeclaration
+    from topology import parse_topology
+    from upgrades import check_feature_generation
+    topology = parse_topology(ReleaseDeclaration.parse(manifest["deployment"]).topology_json)
+    installed = ssh.request("hello", request)
+    try:
+        check_feature_generation({"tools": installed["tools"]}, topology, entry)
+    except DeployError as error:
+        raise LocalError(f"{error.code}: {error.detail}") from None
+
+
 def deploy(project, profile, settings):
     action = os.environ.get("ACTION") or ask("Action (" + " / ".join(ACTIONS) + ")", "deploy")
     if action not in ACTIONS:
@@ -1243,6 +1257,7 @@ def deploy(project, profile, settings):
             say(f"Build and activate {instance_name(project, profile)} on {profile['host']['address']}; pending forward migrations and seeders run during activation.")
             archive = select_archive(project, profile)
             manifest = read_json(archive.parent / "manifest.json")
+            check_release_tools(ssh, request, manifest, status.get("instance", {}))
             say(json.dumps({key: manifest[key] for key in ("version", "commit", "tree_state", "architecture", "instance")}, indent=2))
             with ssh.temporary() as remote:
                 destination = remote + "/app.tar.gz"

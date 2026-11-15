@@ -242,7 +242,22 @@ func (p *conditionalPeer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			reject(412, "PreconditionFailed")
 			return
 		}
-		w.Header().Set("Content-Length", strconv.FormatInt(object.size, 10))
+		offset, length := int64(0), object.size
+		partial := r.Method == "GET" && r.Header.Get("Range") != ""
+		if partial {
+			var end int64
+			if _, err := fmt.Sscanf(r.Header.Get("Range"), "bytes=%d-%d", &offset, &end); err != nil || offset < 0 || end < offset {
+				reject(400, "InvalidArgument")
+				return
+			}
+			if offset >= object.size {
+				reject(416, "InvalidRange")
+				return
+			}
+			length = min(end, object.size-1) - offset + 1
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", offset, offset+length-1, object.size))
+		}
+		w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
 		w.Header().Set("Content-Type", object.metadata.Get("Content-Type"))
 		w.Header().Set("ETag", object.tag)
 		w.Header().Set("Last-Modified", time.Unix(1700000000, 0).UTC().Format(http.TimeFormat))
@@ -257,7 +272,10 @@ func (p *conditionalPeer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				p.invalid = true
 				return
 			}
-			_, _ = io.Copy(w, f)
+			if partial {
+				w.WriteHeader(http.StatusPartialContent)
+			}
+			_, _ = io.Copy(w, io.NewSectionReader(f, offset, length))
 			_ = f.Close()
 		}
 	default:
@@ -300,9 +318,6 @@ func conditionalWireProfile(t *testing.T, provider Provider) (*storage.Disk, *Ba
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
-	if provider == R2 {
-		return candidateDisk(t, b), b, gate, peer
-	}
 	disk, err := storage.NewDisk("conditional-wire", b, storage.DefaultConfig())
 	if err != nil {
 		t.Fatal(err)
@@ -310,7 +325,7 @@ func conditionalWireProfile(t *testing.T, provider Provider) (*storage.Disk, *Ba
 	t.Cleanup(func() { _ = disk.Close(context.Background()) })
 	return disk, b, gate, peer
 }
-func TestR2ConditionalPublicationCandidateWireMatrix(t *testing.T) {
+func TestR2ConditionalPublicationWireMatrix(t *testing.T) {
 	for _, size := range []int64{8 << 20, (8 << 20) + 1} {
 		t.Run(strconv.FormatInt(size, 10), func(t *testing.T) {
 			disk, b, gate, peer := conditionalWire(t)
@@ -323,14 +338,18 @@ func TestR2ConditionalPublicationCandidateWireMatrix(t *testing.T) {
 		})
 	}
 }
-func TestR2ShippingProfileStillRejectsUncertifiedCreateAndReplace(t *testing.T) {
-	_, b, _, _ := conditionalWire(t)
+func TestCompatibleSingleRequestConditionsRejectMultipart(t *testing.T) {
+	_, b, _, _ := conditionalWireProfile(t, Compatible)
+	b.config.Compatible.SingleRequestConditions = true
+	if b.Capabilities().ConditionalWriteMaxBytes != b.config.PartBytes {
+		t.Fatal("compatible single-request bound missing")
+	}
 	key, _ := storage.ParseKey("restricted")
 	for _, condition := range []storage.WriteCondition{storage.IfAbsent(), conditionFor(t, `"old"`)} {
 		source := &conditionalCountReader{}
 		_, err := b.Put(t.Context(), key, source, conditionalOptions(b.config.PartBytes+1, 'a', condition))
 		if !errors.Is(err, storage.Unsupported) || source.read != 0 {
-			t.Fatal("uncertified multipart condition reached source", err)
+			t.Fatal("single-request-only condition reached source", err)
 		}
 	}
 }

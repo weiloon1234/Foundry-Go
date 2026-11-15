@@ -28,8 +28,8 @@ import acceptance_feature as feature
 import acceptance_host as shared
 import acceptance_network as network
 import backup
-from contracts import (DeployError, ReleaseDeclaration, atomic_json, canonical_digest,
-                       digest, read_json)
+from contracts import (DeployError, FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION,
+                       ReleaseDeclaration, atomic_json, canonical_digest, digest, read_json)
 import edge
 import feature_lifecycle
 from host import Host
@@ -87,7 +87,8 @@ def assert_coverage(receipt, *, protected):
     assert set(coverage["supported_components"]) == {"postgresql", "encrypted_configuration", "selected_deployment"}
     assert coverage["complete_instance_coverage"] is protected
     state = "disposable" if protected else "local-unprotected"
-    assert coverage["service_state"] == [{"role": "relay", "kind": state}, {"role": "socket-provider", "kind": "disposable"}]
+    assert coverage["service_state"] == [{"role": "relay", "kind": state}, {"role": "socket-provider", "kind": "disposable"},
+                                         {"role": "wildcard", "kind": "disposable"}]
     expected = [] if protected else [{"code": "service_state_unprotected", "role": "relay"}]
     assert coverage["findings"] == keys["coverage"]["findings"] == expected
 
@@ -176,8 +177,9 @@ def source():
             else:
                 selected = archive
         # Out-of-band systemd changes deliberately leave cached selection alone.
-        # HTTP depends on relay; retain relay and its Unix provider as the enabled graph.
-        run(["systemctl", "disable", inventory.units["http"]])
+        # HTTP depends on relay and the confined wildcard role; retain relay and its
+        # Unix provider as the enabled graph.
+        run(["systemctl", "disable", inventory.units["http"], inventory.units["wildcard"]])
         run(["systemctl", "enable", inventory.units["relay"], inventory.units["socket-provider"]])
         assert set(services.enabled_units(host, inventory.units)) == {"relay", "socket-provider"}
         run(["systemctl", "disable", "--now", "foundry-backup-full-cluster.timer", "foundry-backup-diff-cluster.timer"])
@@ -208,7 +210,8 @@ def source():
         assert archived["selection"]["maintenance_holds"] == [], "Fixture must not start with a maintenance hold"
         assert canonical_digest(archived["deployment"]) == receipt["deployment_sha256"]
         assert archived["declaration"] == read_manifest(selected)["deployment"]
-        assert archived["selection"]["minimum_generation"] == 15
+        assert archived["selection"]["minimum_generation"] == max(FEATURE_CONFINEMENT_GENERATION,
+                                                                  FEATURE_SHARED_DIRECTORY_GENERATION)
         assert archived["resolution"]["unix_endpoints"]
         assert not any("/run/" in name or name.endswith(".sock") for name in files), "Runtime sockets entered backup"
         shutil.copyfile(selected, EXPORT / "release.tar.gz")

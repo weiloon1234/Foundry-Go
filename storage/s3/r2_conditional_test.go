@@ -2,7 +2,7 @@ package s3_test
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -54,12 +54,12 @@ func r2WireBackend(t *testing.T, peer http.Handler, configure func(*s3.Config)) 
 		}
 	})
 }
-func TestR2ConditionalWritesRequireBoundedSingleRequest(t *testing.T) {
+func TestR2ConditionalSingleRequestWrites(t *testing.T) {
 	peer := &uploadPeer{}
 	disk := r2WireDisk(t, peer)
 	caps := disk.Capabilities()
-	if !caps.ConditionalCreate || !caps.ConditionalReplace || caps.ConditionalWriteMaxBytes != s3.MinPartBytes {
-		t.Fatal("R2 conditional bound missing")
+	if !caps.ConditionalCreate || !caps.ConditionalReplace || caps.ConditionalWriteMaxBytes != 0 {
+		t.Fatal("R2 conditional multipart capability missing")
 	}
 	if _, err := disk.PutBytes(t.Context(), objectKey(t), []byte("small"), storage.PutOptions{Condition: storage.IfAbsent()}); err != nil {
 		t.Fatal(err)
@@ -69,12 +69,6 @@ func TestR2ConditionalWritesRequireBoundedSingleRequest(t *testing.T) {
 		t.Error("conditional create was not encoded on PutObject")
 	}
 	peer.mu.Unlock()
-	// A declared oversupply is rejected before upload. The reader records whether
-	// any bytes were requested, independently of provider traffic.
-	source := &zeroSource{remaining: s3.MinPartBytes + 1}
-	if _, err := disk.Put(t.Context(), objectKey(t), source, storage.PutOptions{Size: value.Set(s3.MinPartBytes + 1), Condition: storage.IfAbsent()}); !errors.Is(err, storage.Unsupported) || source.read != 0 {
-		t.Fatal("conditional multipart consumed source", err)
-	}
 	condition, err := storage.IfMatch(`"published"`)
 	if err != nil {
 		t.Fatal(err)
@@ -87,6 +81,47 @@ func TestR2ConditionalWritesRequireBoundedSingleRequest(t *testing.T) {
 	if peer.puts != 2 || peer.creates != 0 || peer.metadata.Get("If-Match") != `"published"` {
 		t.Fatal("conditional replacement lost its header")
 	}
+}
+
+func TestR2ConditionalMultipartCompletion(t *testing.T) {
+	for _, replace := range []bool{false, true} {
+		for _, knownSize := range []bool{false, true} {
+			t.Run(fmt.Sprintf("replace=%t/known-size=%t", replace, knownSize), func(t *testing.T) {
+				peer := &uploadPeer{}
+				condition := storage.IfAbsent()
+				header, expected := "If-None-Match", "*"
+				if replace {
+					var err error
+					condition, err = storage.IfMatch(`"published"`)
+					if err != nil {
+						t.Fatal(err)
+					}
+					header, expected = "If-Match", `"published"`
+				}
+				disk := r2WireDisk(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "POST" && r.URL.Query().Has("uploadId") && r.Header.Get(header) != expected {
+						t.Error("multipart completion lost its condition")
+					}
+					peer.ServeHTTP(w, r)
+				}))
+				size := s3.MinPartBytes + 1
+				source := &zeroSource{remaining: size}
+				options := storage.PutOptions{Condition: condition}
+				if knownSize {
+					options.Size = value.Set(size)
+				}
+				if _, err := disk.Put(t.Context(), objectKey(t), source, options); err != nil {
+					t.Fatal(err)
+				}
+				peer.mu.Lock()
+				defer peer.mu.Unlock()
+				if peer.puts != 0 || peer.creates != 1 || peer.completes != 1 || peer.parts != 2 || peer.published != size || source.read != size {
+					t.Fatal("conditional write did not use multipart completion")
+				}
+			})
+		}
+	}
+
 }
 
 func TestR2ConditionalTransferHelpersInferKnownSize(t *testing.T) {

@@ -590,6 +590,8 @@ FEATURE_INTRODUCTION_GENERATION = 12
 FEATURE_LIFECYCLE_GENERATION = 13
 FEATURE_DELIVERY_GENERATION = 14
 FEATURE_UNIX_GENERATION = 15
+FEATURE_CONFINEMENT_GENERATION = 16
+FEATURE_SHARED_DIRECTORY_GENERATION = 16
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
 
 
@@ -717,6 +719,20 @@ def socket_name(value):
 
 def socket_directory(instance_id):
     return f"/run/foundry/services/{contract_uuid(instance_id)}/sockets"
+
+
+def shared_directory_root(instance_id):
+    return f"/run/foundry/services/{contract_uuid(instance_id)}/shared"
+
+
+def shared_directory_path(instance_id, name):
+    return shared_directory_root(instance_id) + "/" + contract_name(name)
+
+
+def shared_directory_limit(value):
+    size = contract_int(value, 65536, 1 << 40)
+    require(size % 65536 == 0, "invalid_contract", "Shared directory max_bytes must be a multiple of 65536.")
+    return size
 
 
 @dataclass(frozen=True)
@@ -1164,23 +1180,43 @@ class ResolvedPublicListenerBinding:
 
 
 @dataclass(frozen=True)
+class ResolvedSharedDirectory:
+    name: str
+    path: str
+    access: str
+    max_bytes: int
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("name", "path", "access", "max_bytes"))
+        require(value["access"] in ("read-only", "read-write"), "invalid_contract", "Invalid shared directory access.")
+        name = contract_name(value["name"])
+        path = contract_path(value["path"], absolute=True)
+        require(path == shared_directory_path(Path(path).parent.parent.name, name),
+                "invalid_contract", "Shared directory path is outside its instance.")
+        return cls(name, path, value["access"], shared_directory_limit(value["max_bytes"]))
+
+
+@dataclass(frozen=True)
 class RoleBindings:
     role: str
     executables: tuple[ResolvedExecutableBinding, ...]
     endpoints: tuple[ResolvedEndpointBinding, ...]
     bundles: tuple[ResolvedBundleBinding, ...]
     public_listeners: tuple[ResolvedPublicListenerBinding, ...] = ()
+    shared_directories: tuple[ResolvedSharedDirectory, ...] = ()
 
     @classmethod
     def parse(cls, value):
-        v = _record(value, ("role", "executables", "endpoints", "bundles"), ("public_listeners",))
+        v = _record(value, ("role", "executables", "endpoints", "bundles"), ("public_listeners", "shared_directories"))
         executables = contract_list(v["executables"], ResolvedExecutableBinding.parse, maximum=128)
         endpoints = contract_list(v["endpoints"], ResolvedEndpointBinding.parse, maximum=128)
         bundles = contract_list(v["bundles"], ResolvedBundleBinding.parse, maximum=64)
         public_listeners = contract_list(v.get("public_listeners", []), ResolvedPublicListenerBinding.parse, maximum=128)
-        names = [b.name for b in (*executables, *endpoints, *bundles, *public_listeners)]
+        shared = contract_list(v.get("shared_directories", []), ResolvedSharedDirectory.parse, maximum=32)
+        names = [b.name for b in (*executables, *endpoints, *bundles, *public_listeners, *shared)]
         require(len(set(names)) == len(names), "invalid_contract", "Binding names must be unique across kinds.")
-        return cls(contract_name(v["role"]), executables, endpoints, bundles, public_listeners)
+        return cls(contract_name(v["role"]), executables, endpoints, bundles, public_listeners, shared)
 
 
 @dataclass(frozen=True)
@@ -1205,6 +1241,8 @@ class UnitSpec:
         identity = UnitIdentity.parse(v["identity"])
         bindings = RoleBindings.parse(v["bindings"])
         require(identity.role == bindings.role, "invalid_contract", "Unit bindings belong to another role.")
+        require(all(b.path == shared_directory_path(identity.instance_id, b.name) for b in bindings.shared_directories),
+                "invalid_contract", "Shared directory bindings belong to another instance.")
         def argument(item):
             return "" if item == "" else contract_text(item, limit=4096)
         arguments = contract_list(v["arguments"], argument, maximum=128)
@@ -1420,7 +1458,7 @@ def record_document(record):
                  BundleReferences, DeploymentSelection, RecoveryPublicBinding, RoleBindings, UnitSpec,
                  HostTransition, Deployment, UnitGenerationReference, CleanupObligation)
     nested = (UnitIdentity, AllocatedEndpoint, UnixEndpoint, EffectiveEnvironment, ProcessIdentity, RecoveryListenerBinding, DNSObservation,
-              ResolvedExecutableBinding, ResolvedEndpointBinding, ResolvedBundleBinding, ResolvedPublicListenerBinding)
+              ResolvedExecutableBinding, ResolvedEndpointBinding, ResolvedBundleBinding, ResolvedPublicListenerBinding, ResolvedSharedDirectory)
     def encode(value):
         if type(value) in versioned + nested:
             result = {f.name: encode(getattr(value, f.name)) for f in dataclass_fields(value)}
@@ -1428,6 +1466,8 @@ def record_document(record):
                 result.pop("unix_endpoints")
             if isinstance(value, RoleBindings) and not value.public_listeners:
                 result.pop("public_listeners")  # Preserve descriptors and digests for existing binaries.
+            if isinstance(value, RoleBindings) and not value.shared_directories:
+                result.pop("shared_directories")
             if type(value) in versioned:
                 result = {"schema": RECORD_SCHEMA, **result}
             if isinstance(value, RecoveryListenerBinding):

@@ -258,6 +258,11 @@ is an immutable snapshot with typed `Executable(name)`, `Endpoint(name)` and
 `FOUNDRY_DEPLOY_RUNTIME_FILE` selects a schema-2 role descriptor containing the
 frozen schema-1 `RoleBindings`. An invalid explicit descriptor is an error, never
 an empty/default binding set. `deployment.Detect()` uses that same descriptor.
+Console calls made by the deploy tool use the HTTP descriptor with only
+`shared_directories` removed; they hold no shared-directory grants. Commands typed
+in `ACTION=shell` receive no deployment bindings. The HTTP unit
+continues to receive its full descriptor. Application assembly must treat
+`fault.Missing` as no grant and use shared files only in granted roles.
 The app-facing declarations and loader do not change when later tool hardening ships.
 
 The preview explicitly refuses with `capability_unavailable` naming the later

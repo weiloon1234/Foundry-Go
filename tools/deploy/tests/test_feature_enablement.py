@@ -80,9 +80,73 @@ class FeatureEnablementTests(unittest.TestCase):
     def test_takeover_start_cannot_override_disabled_unit(self):
         self.enabled = {self.inventory.units["http"]}
         with self.assertRaises(c.DeployError) as caught:
-            lifecycle.start_units(self.host, self.inventory, ("relay",), time.monotonic() + 1)
+            lifecycle.start_units(self.host, self.entry, self.inventory, ("relay",), time.monotonic() + 1)
         self.assertEqual(caught.exception.code, "service_enablement")
         self.assertFalse(any(args[1] == "start" for args in self.commands))
+
+    def test_start_prepares_under_shared_lock_before_systemctl(self):
+        from contextlib import contextmanager
+        from test_shared_directories import shared_inventory
+        import shared_directories
+        self.inventory, self.entry = shared_inventory()
+        events = []
+        @contextmanager
+        def lock(store, name):
+            self.assertEqual(name, "shared-directories")
+            events.append("locked")
+            yield
+            events.append("unlocked")
+        def prepare(*args):
+            self.assertEqual(events, ["locked"])
+            self.assertEqual(args, (self.host, self.inventory.topology, self.inventory.profile.instance_id,
+                                   self.entry["allocations"]["uid"], self.entry["allocations"]["gid"]))
+            events.append("prepared")
+        def start(args, **kwargs):
+            self.assertEqual(events, ["locked", "prepared", "unlocked"])
+            self.assertEqual(args[:2], ["systemctl", "start"])
+            return subprocess.CompletedProcess(args, 0, "", "")
+        with patch.object(services, "enabled_units", return_value=("http",)), \
+                patch.object(services, "wait_ready", return_value=True), \
+                patch.object(admission.AdmissionStore, "_lock", lock), \
+                patch.object(shared_directories, "prepare", side_effect=prepare), patch.object(self.host, "run", side_effect=start):
+            lifecycle.start_units(self.host, self.entry, self.inventory, ("http",), time.monotonic() + 1)
+
+    def test_namespace_start_failure_explains_host_preparation_recovery(self):
+        for status in ("ExecMainStatus=226\n", "ExecCondition={ status=226/NAMESPACE ; }\n",
+                       "ExecStartPre={ status=226 ; }\n"):
+            def run(args, **kwargs):
+                if args[:2] == ["systemctl", "start"]:
+                    raise c.DeployError("command_failed", "failed")
+                return subprocess.CompletedProcess(args, 0, status, "")
+            with self.subTest(status=status), patch.object(lifecycle, "prepare_shared_directories"), \
+                    patch.object(services, "enabled_units", return_value=("http",)), \
+                    patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
+                lifecycle.start_units(self.host, self.entry, self.inventory, ("http",), time.monotonic() + 1)
+            self.assertEqual(caught.exception.code, "service_namespace")
+            self.assertIn("again", caught.exception.detail)
+            self.assertIn("reboot recovery", caught.exception.detail)
+
+    def test_skipped_condition_namespace_failure_explains_recovery_after_readiness(self):
+        def run(args, **kwargs):
+            if args[:2] == ["systemctl", "start"]:
+                return subprocess.CompletedProcess(args, 0, "", "")
+            return subprocess.CompletedProcess(args, 0, "ExecCondition={ status=226/NAMESPACE ; }\n", "")
+        with patch.object(lifecycle, "prepare_shared_directories"), \
+                patch.object(services, "enabled_units", return_value=("http",)), \
+                patch.object(services, "wait_ready", return_value=False), \
+                patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
+            lifecycle.start_units(self.host, self.entry, self.inventory, ("http",), time.monotonic() + 1)
+        self.assertEqual(caught.exception.code, "service_namespace")
+
+    def test_readiness_failure_without_namespace_status_stays_readiness_failed(self):
+        def run(args, **kwargs):
+            return subprocess.CompletedProcess(args, 0, "ExecMainStatus=1\n" if args[:2] == ["systemctl", "show"] else "", "")
+        with patch.object(lifecycle, "prepare_shared_directories"), \
+                patch.object(services, "enabled_units", return_value=("http",)), \
+                patch.object(services, "wait_ready", return_value=False), \
+                patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
+            lifecycle.start_units(self.host, self.entry, self.inventory, ("http",), time.monotonic() + 1)
+        self.assertEqual(caught.exception.code, "readiness_failed")
 
     def test_reported_enablement_ignores_stored_audit_projection(self):
         from topology import validate_topology

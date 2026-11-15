@@ -136,6 +136,7 @@ class ArgumentKind(str, Enum):
     BINDING = "binding"
     CONFIG_ROOT = "config_root"
     DATA_ROOT = "data_root"
+    SHARED_DIRECTORY_PATH = "shared_directory_path"
 
 
 LISTENER_SOCKET_ARGUMENTS = frozenset({ArgumentKind.LISTENER_SOCKET_DIRECTORY, ArgumentKind.LISTENER_SOCKET_NAME,
@@ -275,6 +276,7 @@ class Listener:
     tls: str | None
     authentication: bool
     socket: str | None = None
+    wildcard: bool = False
 
     @classmethod
     def parse(cls, value):
@@ -283,16 +285,19 @@ class Listener:
         if isinstance(value, dict) and value.get("transport") == "unix":
             contract_object(value, ("transport", "socket"))
             return cls("unix", "private", None, False, socket_name(value["socket"]))
-        contract_object(value, ("transport", "bind"), ("tls", "authentication"))
+        contract_object(value, ("transport", "bind"), ("tls", "authentication", "wildcard"))
         require(value["transport"] == "tcp", "unsupported_capability", "UDP listeners require a later capability.")
         require(value["bind"] in ("loopback", "public"), "invalid_topology", "Invalid listener intent.")
+        wildcard = value.get("wildcard", False)
+        require(type(wildcard) is bool and (not wildcard or value["bind"] == "loopback"),
+                "invalid_topology", "Wildcard TCP listeners must be private and use an explicit boolean.")
         if value["bind"] == "public":
             require(value.get("tls") in ("edge", "none") and value.get("authentication") is True,
                     "unsupported_capability", "Public TCP requires tls edge or none and explicit application authentication acknowledgement.")
         else:
             require("tls" not in value and "authentication" not in value,
                     "invalid_topology", "Private listeners do not declare public edge policy.")
-        return cls("tcp", value["bind"], value.get("tls"), value.get("authentication", False))
+        return cls("tcp", value["bind"], value.get("tls"), value.get("authentication", False), wildcard=wildcard)
 
 
 @dataclass(frozen=True)
@@ -523,6 +528,7 @@ class RoleCommon:
     bindings: tuple[tuple[str, Binding], ...]
     maintenance: str
     artifact_mounts: tuple[tuple[str, ArtifactMount], ...]
+    confinement: str | None = None
 
 
 @dataclass(frozen=True)
@@ -553,7 +559,7 @@ def _role(value):
     require(isinstance(value, dict), "invalid_topology", "Role must be an object.")
     require(not set(value).intersection(("wrapper", "instances", "proxy_protocol")),
             "unsupported_capability", "Wrappers and numbered services require a later capability.")
-    common = ("packages", "requires", "bindings", "maintenance", "artifact_mounts")
+    common = ("packages", "requires", "bindings", "maintenance", "artifact_mounts", "network")
     custom = ("executable", "arguments", "configs", "secret_files", "listeners", "readiness", "restart", "limits", "state", "environment",
               "recovery_rehearsal_safe")
     contract_object(value, ("name", "kind"), common + custom)
@@ -566,8 +572,14 @@ def _role(value):
     requires = contract_names(value.get("requires", ["http"] if name in ("scheduler", "worker") else []))
     maintenance = value.get("maintenance", "serve" if name == "http" else "stop")
     require(maintenance in ("continue", "serve", "stop"), "invalid_topology", "Invalid maintenance policy.")
+    confinement = None
+    if "network" in value:
+        network = contract_object(value["network"], ("confinement",))
+        require(network["confinement"] == "loopback" and name != "http", "invalid_topology",
+                "Role confinement must be loopback; the public HTTP role cannot be confined.")
+        confinement = network["confinement"]
     shared = RoleCommon(name, packages, requires, contract_map(value.get("bindings", {}), parse_binding, maximum=128), maintenance,
-                        contract_map(value.get("artifact_mounts", {}), ArtifactMount.parse, maximum=64))
+                        contract_map(value.get("artifact_mounts", {}), ArtifactMount.parse, maximum=64), confinement)
     if builtin:
         require(not set(value).intersection(custom), "invalid_topology", "Built-in runtime commands cannot be overridden.")
         return BuiltinRole(shared)
@@ -576,6 +588,10 @@ def _role(value):
     require(type(rehearsal_safe) is bool, "invalid_topology", "Recovery rehearsal safety requires an explicit boolean.")
     configs = contract_map(value.get("configs", {}), ConfigFile.parse, maximum=64)
     listeners = contract_map(value.get("listeners", {}), Listener.parse, maximum=MAX_LISTENERS)
+    require(all(not listener.wildcard or confinement == "loopback" for _, listener in listeners),
+            "invalid_topology", "Wildcard listeners require role network confinement to loopback.")
+    require(confinement is None or all(listener.bind != "public" for _, listener in listeners),
+            "invalid_topology", "A loopback-confined role cannot declare a public listener.")
     args = contract_list(value.get("arguments", []), Argument.parse, maximum=128)
     require(sum(len(a.value.encode()) for a in args) <= 32768, "invalid_topology", "Argument vector is too large.")
     secrets = value.get("secret_files", {})
@@ -600,6 +616,29 @@ def _role(value):
 
 
 @dataclass(frozen=True)
+class SharedDirectory:
+    state: str
+    max_bytes: int
+    writers: tuple[str, ...]
+    readers: tuple[str, ...]
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("state", "max_bytes", "writers", "readers"))
+        require(value["state"] == "disposable", "invalid_topology", "Shared directories must be disposable.")
+        from contracts import shared_directory_limit
+        size = shared_directory_limit(value["max_bytes"])
+        writers = contract_list(value["writers"], contract_name, minimum=1, maximum=MAX_ROLES)
+        readers = contract_list(value["readers"], contract_name, maximum=MAX_ROLES)
+        require(len(set(writers + readers)) == len(writers + readers),
+                "invalid_topology", "Shared directory roles must be unique and have one access mode.")
+        return cls("disposable", size, writers, readers)
+
+    def access(self, role):
+        return "read-write" if role in self.writers else "read-only" if role in self.readers else None
+
+
+@dataclass(frozen=True)
 class Topology:
     schema: int
     roles: tuple[Role, ...]
@@ -608,6 +647,7 @@ class Topology:
     secrets: tuple[tuple[str, str], ...]
     sha256: str
     canonical_json: str
+    shared_directories: tuple[tuple[str, SharedDirectory], ...] = ()
 
     def projection(self):
         """Owned wire snapshot; the immutable parsed declaration remains authoritative."""
@@ -641,10 +681,16 @@ def parse_topology(document, *, registered=False) -> Topology:
         return Topology(1, roles, (), (), (), legacy["sha256"], json.dumps(projection, sort_keys=True, separators=(",", ":")))
     require(value["schema"] == TOPOLOGY_SCHEMA, "unsupported_schema", "Unsupported topology schema.")
     contract_object(value, ("schema", "roles", *(["sha256"] if registered else [])),
-                    ("artifacts", "application_executables", "secrets"))
+                    ("artifacts", "application_executables", "secrets", "shared_directories"))
     roles = contract_list(value["roles"], _role, maximum=MAX_ROLES, minimum=1)
     names = {r.common.name for r in roles}
     require(len(names) == len(roles) and "http" in names, "invalid_topology", "Roles must be unique and include HTTP.")
+    shared = contract_map(value.get("shared_directories", {}), SharedDirectory.parse, maximum=32)
+    require(all(set(directory.writers + directory.readers) <= names for _, directory in shared),
+            "invalid_topology", "Shared directories must reference declared roles.")
+    for role in roles:
+        require(not ({name for name, directory in shared if directory.access(role.common.name)} & dict(role.common.bindings).keys()),
+                "invalid_topology", "Shared directory names must not collide with role binding names.")
     artifacts = contract_map(value.get("artifacts", {}), Artifact.parse, maximum=MAX_ARTIFACTS)
     binaries = contract_map(value.get("application_executables", {}), ApplicationBinary.parse, maximum=64)
     def secret(v):
@@ -728,6 +774,7 @@ def parse_topology(document, *, registered=False) -> Topology:
                 require(argument.value in listeners and listeners[argument.value].transport == "tcp",
                         "invalid_topology", "Address and port references require a TCP listener.")
             targets = {ArgumentKind.CONFIG: configs, ArgumentKind.LISTENER_PORT: listeners,
+                       ArgumentKind.SHARED_DIRECTORY_PATH: {name for name, directory in shared if directory.access(role.common.name)},
                        ArgumentKind.LISTENER_ADDRESS: listeners, ArgumentKind.BUNDLE: mounts,
                        ArgumentKind.SECRET_FILE: dict(role.secret_files), ArgumentKind.BINDING: dict(role.common.bindings)}
             require(argument.kind not in targets or argument.value in targets[argument.kind],
@@ -739,7 +786,7 @@ def parse_topology(document, *, registered=False) -> Topology:
     checksum = canonical_digest(projection)
     require(not registered or value["sha256"] == checksum, "invalid_topology", "Topology checksum mismatch.")
     return Topology(TOPOLOGY_SCHEMA, roles, artifacts, binaries, secrets, checksum,
-                    json.dumps(projection, sort_keys=True, separators=(",", ":")))
+                    json.dumps(projection, sort_keys=True, separators=(",", ":")), shared)
 
 
 @dataclass(frozen=True)
