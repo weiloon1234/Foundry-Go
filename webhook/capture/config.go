@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/capturedisclosure"
 	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
@@ -26,6 +27,10 @@ type Config struct {
 	// ForceRedacted stores every prefix redacted, including prefixes declared
 	// with http.FullCaptureBody.
 	ForceRedacted bool
+	// MaskNames adds credential names for headers, query values and body
+	// fields, matched exactly and case-insensitively (at most 64, each 1 to
+	// 128 bytes).
+	MaskNames []string `config:",json"`
 	// Rate admits at most this many captures per second per process (1 to
 	// 10,000). Refused requests are served normally and counted as lost.
 	Rate int
@@ -51,13 +56,19 @@ func DefaultConfig() Config {
 	return Config{BodyBytes: r.BodyBytes, ValueBytes: 4 << 10, Rate: r.Rate, Burst: r.Burst, QueueRows: r.QueueSize, RetainedBytes: r.RetainedBytes, Retention: 30 * 24 * time.Hour, MaxRows: 100_000}
 }
 
-// Validate checks every limit against its hard cap.
+// Validate checks every limit and extra name against its hard cap.
 func (c Config) Validate() error {
 	if err := c.recorder().Validate(); err != nil {
 		return invalid("webhook capture admission limits are out of range")
 	}
 	if c.ValueBytes < 64 || c.ValueBytes > 1<<20 || c.Retention < time.Hour || c.Retention > 365*24*time.Hour || c.MaxRows < 1_000 || c.MaxRows > 10_000_000 {
 		return invalid("webhook capture limits are out of range")
+	}
+	switch capturedisclosure.ValidateNames(c.MaskNames) {
+	case capturedisclosure.ErrTooManyNames:
+		return invalid("webhook capture has too many mask names")
+	case capturedisclosure.ErrInvalidName:
+		return invalid("webhook capture has an invalid mask name")
 	}
 	return nil
 }

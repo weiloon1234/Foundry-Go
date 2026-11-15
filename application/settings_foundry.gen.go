@@ -1844,6 +1844,13 @@ type SettingsFeaturesWebhookCaptureConfigConfigKeySet struct {
 	// with http.FullCaptureBody.
 	//
 	ForceRedacted config.Key[Settings, bool]
+	// MaskNames selects features.webhook_capture.config.mask_names. Set accepts []string.
+	//
+	// MaskNames adds credential names for headers, query values and body
+	// fields, matched exactly and case-insensitively (at most 64, each 1 to
+	// 128 bytes).
+	//
+	MaskNames config.Key[Settings, []string]
 	// Rate selects features.webhook_capture.config.rate. Set accepts int.
 	//
 	// Rate admits at most this many captures per second per process (1 to
@@ -2710,6 +2717,7 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 					BodyBytes:     config.Scalar[Settings, int]("features.webhook_capture.config.body_bytes", func(settings *Settings) *int { return &settings.Features.WebhookCapture.Config.BodyBytes }),
 					ValueBytes:    config.Scalar[Settings, int]("features.webhook_capture.config.value_bytes", func(settings *Settings) *int { return &settings.Features.WebhookCapture.Config.ValueBytes }),
 					ForceRedacted: config.Scalar[Settings, bool]("features.webhook_capture.config.force_redacted", func(settings *Settings) *bool { return &settings.Features.WebhookCapture.Config.ForceRedacted }),
+					MaskNames:     config.JSON[Settings, []string]("features.webhook_capture.config.mask_names", func(settings *Settings) *[]string { return &settings.Features.WebhookCapture.Config.MaskNames }),
 					Rate:          config.Scalar[Settings, int]("features.webhook_capture.config.rate", func(settings *Settings) *int { return &settings.Features.WebhookCapture.Config.Rate }),
 					Burst:         config.Scalar[Settings, int]("features.webhook_capture.config.burst", func(settings *Settings) *int { return &settings.Features.WebhookCapture.Config.Burst }),
 					QueueRows:     config.Scalar[Settings, int]("features.webhook_capture.config.queue_rows", func(settings *Settings) *int { return &settings.Features.WebhookCapture.Config.QueueRows }),
@@ -3219,6 +3227,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Features.WebhookCapture.Config.BodyBytes,
 		keys.Features.WebhookCapture.Config.ValueBytes,
 		keys.Features.WebhookCapture.Config.ForceRedacted,
+		keys.Features.WebhookCapture.Config.MaskNames,
 		keys.Features.WebhookCapture.Config.Rate,
 		keys.Features.WebhookCapture.Config.Burst,
 		keys.Features.WebhookCapture.Config.QueueRows,
