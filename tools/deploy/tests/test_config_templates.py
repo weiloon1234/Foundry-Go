@@ -269,7 +269,7 @@ class TemplatePreparationTests(unittest.TestCase):
             ("tool", t.ExecutableBinding(t.PackageExecutable("jq", "/usr/bin/jq"))))))
         self.spec = replace(self.spec, bindings=c.RoleBindings("relay",
             (c.ResolvedExecutableBinding("tool", "/usr/bin/jq", "a" * 64),),
-            (c.ResolvedEndpointBinding("api", c.AllocatedEndpoint("relay", "control", "::1", 8201), "http"),), ()))
+            (c.ResolvedEndpointBinding("api", c.AllocatedEndpoint("relay", "control", "::1", 8201, 1), "http"),), ()))
         self.invocation = replace(self.invocation, unit_spec_sha256=c.canonical_digest(c.record_document(self.spec)))
         view = self.render()
         self.assertEqual(json.loads((view / "config/settings/.config/obs-studio/global.ini").read_text()),

@@ -126,9 +126,9 @@ def role_journals(host, entry):
             response = host.run(['journalctl', '--unit', unit, '--no-pager', '--quiet', '--output=json',
                                  '--output-fields=MESSAGE,__REALTIME_TIMESTAMP', '--lines=10',
                                  '--grep=^(?!.*HTTP request (?:completed|started))'], timeout=5)
-            result[role] = journal_summary(response.stdout)
+            result[role.role] = journal_summary(response.stdout)
         except Exception:
-            result[role] = 'unavailable'
+            result[role.role] = 'unavailable'
     return result
 
 

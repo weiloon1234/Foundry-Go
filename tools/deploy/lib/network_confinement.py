@@ -43,15 +43,15 @@ def attached_programs(host, group):
     return result
 
 
-def isolation(host, inventory, name):
+def isolation(host, inventory, identity):
     properties = 'IPAddressDeny,IPAddressAllow,ControlGroup,DropInPaths'
-    output = host.run(['systemctl', 'show', inventory.units[name], '--property=' + properties, '--no-pager'], timeout=5).stdout
+    output = host.run(['systemctl', 'show', inventory.units[identity], '--property=' + properties, '--no-pager'], timeout=5).stdout
     values = dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
     require(set(values.get('IPAddressDeny', '').split()) == {'0.0.0.0/0', '::/0'} and
             set(values.get('IPAddressAllow', '').split()) == {'127.0.0.0/8', '::1/128'} and
             values.get('DropInPaths') == '', 'network_confinement',
-            f'Role {name} lacks the exact loaded loopback-only IP filtering policy; start refused.')
-    require(values.get('ControlGroup', '').endswith('/' + inventory.units[name]),
-            'network_confinement', f'Role {name} has no matching live unit cgroup; start refused.')
+            f'Role {identity.role} lacks the exact loaded loopback-only IP filtering policy; start refused.')
+    require(values.get('ControlGroup', '').endswith('/' + inventory.units[identity]),
+            'network_confinement', f'Role {identity.role} has no matching live unit cgroup; start refused.')
     return {'properties': values, 'programs': attached_programs(host, values.get('ControlGroup', ''))}
 

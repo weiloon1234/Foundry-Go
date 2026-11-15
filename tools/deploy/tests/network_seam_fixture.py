@@ -9,6 +9,7 @@ from unittest.mock import patch
 import uuid
 
 import acceptance_network as preview
+from contracts import unit_selection_names
 from test_contracts import fixture
 from test_host_capabilities import BOOT, OPERATION, DIGEST
 
@@ -31,7 +32,7 @@ def attempt(outcome="running", phase="health"):
 
 
 def build(host, mode="none", *, ports=(18000, 18002), instance_id=None, name="abc-production"):
-    """Use the same launch, HostTransition and role->unit map as feature_lifecycle."""
+    """Use the same launch, HostTransition and identity->unit map as feature_lifecycle."""
     import admission
     import services
     instance_id = instance_id or str(uuid.uuid4())
@@ -44,8 +45,8 @@ def build(host, mode="none", *, ports=(18000, 18002), instance_id=None, name="ab
     entry["certificate"]["lineage"] = profile.projection()["domain"]
     inventories = []
     for port in ports:
-        endpoints = (c.AllocatedEndpoint("http", "http", "127.0.0.1", port),
-                     c.AllocatedEndpoint("relay", "ingress", "127.0.0.1", port + 1))
+        endpoints = (c.AllocatedEndpoint("http", "http", "127.0.0.1", port, 1),
+                     c.AllocatedEndpoint("relay", "ingress", "127.0.0.1", port + 1, 1))
         specs = tuple(c.UnitSpec(c.UnitIdentity(instance_id, raw["name"], 1), "/usr/bin/python3", DIGEST,
                         ("--fixture-port", str(next(e.port for e in endpoints if e.role == raw["name"]))),
                         c.canonical_digest(raw), c.RoleBindings(raw["name"], (), (), ()), DIGEST)
@@ -68,13 +69,14 @@ def build(host, mode="none", *, ports=(18000, 18002), instance_id=None, name="ab
     selected = c.DeploymentSelection(instance_id, 12, tuple(sorted(c.FEATURE_CAPABILITIES)), current.resolution.id,
                     None if old.resolution.id == current.resolution.id else old.resolution.id,
                     c.AdmissionRecord(instance_id, current.resolution.id, current.resolution.deployment_sha256,
-                                      1, OPERATION, c.AdmissionDisposition.PENDING), tuple(current.roles), ())
+                                      1, OPERATION, c.AdmissionDisposition.PENDING), unit_selection_names(current.units), ())
     transition = c.HostTransition(OPERATION, instance_id, old.resolution.id, current.resolution.id, 1,
                                  tuple(s.identity for s in current.specs.values()),
                                  c.canonical_digest(c.record_document(current.deployment)), None)
     store = admission.AdmissionStore(host, instance_id)
     store.record_operation(attempt())
-    store.begin(selected, current.resolution)
+    with patch.object(host, "read_registry", return_value={"instances": {instance_id: entry}}):
+        store.begin(selected, current.resolution)
     store._write(store.durable / "transition.json", transition)
     entry["deployment_selection"] = c.record_document(selected)
     return entry, old, current, transition, store

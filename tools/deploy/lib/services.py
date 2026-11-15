@@ -4,18 +4,23 @@ UnitSpec and RuntimeResolution are the handoff from artifact/package and listene
 owners. No package installation, listener allocation or lifecycle activation lives
 here. Production dispatch stays closed until the complete lifecycle is installed.
 """
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 import http.client
 from pathlib import Path
 import re
 import socket
 import time
+import threading
 
 from contracts import (Deployment, RuntimeResolution, UnitIdentity, canonical_digest,
                        contract_digest, contract_path, contract_uuid, instance_paths,
-                       marker, record_document, require)
+                       marker, record_document, require, MAX_UNITS, DeployError)
 from topology import (ArgumentKind, BuiltinRole, ExecutableRole, parse_profile,
-                      parse_topology)
+                      parse_topology, expand_placement, role_unit_name)
+
+READINESS_INSPECTIONS = 16
 
 RUNTIME_ENTRY = "/usr/local/lib/foundry/runtime-v1"
 TEMPLATES = Path(__file__).resolve().parents[1] / "server/templates"
@@ -91,6 +96,37 @@ class RoleState:
     ready: bool
 
 
+def expanded_unit_names(name, topology, profile):
+    instance_paths(name)
+    return {identity: role_unit_name(name, role, identity.ordinal)
+            for identity, role in expand_placement(topology, profile.instance_id, profile.placement).items()}
+
+
+def unit_specs(deployment):
+    """Index the validated persisted inventory by the same key as names and readiness."""
+    return {spec.identity: spec for spec in Deployment.parse(record_document(deployment)).units}
+
+
+def select_role_units(units, role="all", *, roles=None):
+    """Expand role selectors over any UnitIdentity-keyed inventory, preserving order."""
+    available = {identity.role for identity in units}
+    if roles is None:
+        require(isinstance(role, str) and (role == "all" or role in available),
+                "invalid_role", "Select a declared topology role.")
+        selected = available if role == "all" else {role}
+    else:
+        require(isinstance(roles, (list, tuple)) and all(isinstance(name, str) and name in available for name in roles)
+                and len(roles) == len(set(roles)), "invalid_role", "Select declared topology roles.")
+        selected = set(roles)
+    return tuple(identity for identity in units if identity.role in selected)
+
+
+
+def role_names(identities):
+    """Project a copy selection to distinct role policies in selection order."""
+    return tuple(dict.fromkeys(identity.role for identity in identities))
+
+
 class UnitInventory:
     def __init__(self, name, topology, profile, deployment, resolution):
         instance_paths(name)
@@ -103,20 +139,21 @@ class UnitInventory:
         require(deployment.instance_id == profile.instance_id and deployment.topology_sha256 == topology.sha256
                 and deployment.profile_sha256 == canonical_digest(profile.projection())
                 and resolution.deployment_sha256 == canonical_digest(record_document(deployment))
-                and {u.identity.role for u in deployment.units} == placed == set(resolution.roles),
+                and set(unit_specs(deployment)) == set(expand_placement(self.topology, profile.instance_id, profile.placement))
+                and placed == set(resolution.roles),
                 "service_inventory", "Unit inventory differs from the selected declaration or resolution.")
         self.roles = {role.common.name: role for role in self.topology.roles if role.common.name in placed}
-        self.specs = {spec.identity.role: spec for spec in self.deployment.units}
+        self.specs = unit_specs(self.deployment)
         declarations = {r["name"]: r for r in self.topology.projection()["roles"]}
-        require(all(spec.declaration_sha256 == canonical_digest(declarations[name])
+        require(all(spec.declaration_sha256 == canonical_digest(declarations[name.role])
                     for name, spec in self.specs.items()),
                 "service_inventory", "Resolved unit policy differs from its declared role.")
-        from topology import role_unit_name
-        self.units = {role: role_unit_name(name, value) for role, value in self.roles.items()}
-        from contracts import UnixEndpoint
-        expected_unix = tuple(UnixEndpoint.for_listener(profile.instance_id, role.common.name, listener_name, listener.socket)
-                              for role in self.roles.values() if isinstance(role, ExecutableRole)
-                              for listener_name, listener in role.listeners if listener.transport == "unix")
+        self.units = expanded_unit_names(name, self.topology, self.profile)
+        from listeners import private_listeners, unix_endpoints
+        require({(UnitIdentity(profile.instance_id, e.role, e.ordinal), e.listener) for e in resolution.endpoints}
+                == set(private_listeners(self.topology, self.profile)),
+                "service_inventory", "TCP endpoints differ from their placed declarations.")
+        expected_unix = unix_endpoints(self.topology, self.profile)
         require(set(resolution.unix_endpoints) == set(expected_unix),
                 "service_inventory", "Unix endpoints differ from their instance declarations.")
         for spec in self.specs.values():
@@ -126,46 +163,71 @@ class UnitInventory:
             for binding in spec.bindings.endpoints:
                 if binding.scheme == "unix":
                     require(binding.endpoint in expected_unix, "service_inventory", "Unix binding differs from its provider declaration.")
-        self.start_order(placed)
+        self.start_order(self.units)
+
+    def copies(self, role):
+        require(role in {decl.common.name for decl in self.topology.roles},
+                "service_selection", "Unknown selected role.")
+        return tuple(identity for identity in self.units if identity.role == role)
+
+    def identity(self, role, ordinal=1):
+        identity = UnitIdentity(self.profile.instance_id, role, ordinal)
+        require(identity in self.units, "service_selection", "Unknown selected copy.")
+        return identity
+
+    def select(self, role="all", *, roles=None, ordinal=None):
+        if ordinal is not None:
+            require(roles is None and role != "all", "service_selection", "Select a role before selecting a copy.")
+            return (self.identity(role, ordinal),)
+        return select_role_units(self.units, role, roles=roles)
+
+    def dependencies(self, identity):
+        require(identity in self.units, "service_selection", "Unknown selected copy.")
+        return tuple(copy for role in self.roles[identity.role].common.requires for copy in self.copies(role))
 
     def start_order(self, selected):
         selected = set(selected)
-        require(selected <= self.roles.keys(), "service_selection", "Unknown selected role.")
-        require(all(set(self.roles[name].common.requires) <= selected for name in selected),
+        require(selected <= self.units.keys(), "service_selection", "Unknown selected role.")
+        require(all(set(self.dependencies(name)) <= selected for name in selected),
                 "service_dependency", "Enabled roles must include every prerequisite; use plain restart.")
         ordered = []
         def visit(name):
             if name in ordered:
                 return
-            for dependency in self.roles[name].common.requires:
+            for dependency in self.dependencies(name):
                 visit(dependency)
             ordered.append(name)
-        for name in self.roles:
+        for name in self.units:
             if name in selected:
                 visit(name)
         return tuple(ordered)
 
     def stop_order(self, selected):
         selected = set(selected)
-        require(selected <= self.roles.keys(), "service_selection", "Unknown selected role.")
-        return tuple(name for name in reversed(self.start_order(self.roles)) if name in selected)
+        require(selected <= self.units.keys(), "service_selection", "Unknown selected role.")
+        return tuple(name for name in reversed(self.start_order(self.units)) if name in selected)
 
     def start_in_order(self, selected, deadline, start, await_ready):
         """Lifecycle adapters share one deadline; a failed provider never starts a consumer.
 
+        Each callback receives one dependency level as a tuple of identities.
         These adapters belong to the framework executor, never to a declaration.
         They do not run on normal boot or automatic systemd restart.
         """
+        levels = {}
         for name in self.start_order(selected):
+            levels[name] = 1 + max((levels[dependency] for dependency in self.dependencies(name)), default=-1)
+        for level in sorted(set(levels.values())):
+            names = tuple(name for name, depth in levels.items() if depth == level)
             require(time.monotonic() < deadline, "service_deadline", "Startup exhausted its shared deadline.")
-            start(name, deadline)
-            require(await_ready(name, deadline) and time.monotonic() < deadline,
+            start(names, deadline)
+            require(await_ready(names, deadline) and time.monotonic() < deadline,
                     "readiness_failed", "Prerequisite identity, readiness or stability was not established.")
 
     def prerequisites(self, selected):
         result = set()
         def visit(name):
-            for dependency in self.roles[name].common.requires:
+            for dependency in self.dependencies(name):
                 if dependency not in result:
                     result.add(dependency)
                     visit(dependency)
@@ -176,24 +238,24 @@ class UnitInventory:
     def named_operation(self, action, selected, states):
         """Consume bounded readiness observations; never expand or enable a selection."""
         selected = set(selected)
-        require(action in ("restart", "stop") and selected and selected <= self.roles.keys()
-                and set(states) == set(self.roles), "service_selection", "Incomplete named-operation observation.")
+        require(action in ("restart", "stop") and selected and selected <= self.units.keys()
+                and set(states) == set(self.units), "service_selection", "Incomplete named-operation observation.")
         enabled = {name for name, state in states.items() if state.enabled}
         self.start_order(enabled)
         dependents = {name for name, state in states.items() if (state.enabled or state.running)
                       and name not in selected and self.prerequisites({name}) & selected}
         require(not dependents, "service_dependents", "Include dependent roles: " +
-                ", ".join(sorted(selected | dependents)) + "; use plain restart/stop.")
+                ", ".join(identity.record_key for identity in sorted(selected | dependents)) + "; use plain restart/stop.")
         if action == "restart":
             prerequisites = self.prerequisites(selected) - selected
             rejected = {name for name in prerequisites if not states[name].enabled or
                         states[name].held or states[name].pending or not states[name].ready}
             require(not rejected, "service_prerequisite", "Prerequisites unavailable: " +
-                    ", ".join(sorted(rejected)) + "; use plain restart.")
+                    ", ".join(identity.record_key for identity in sorted(rejected)) + "; use plain restart.")
             require(not any(states[name].held or states[name].pending for name in selected),
                     "service_held", "Selected roles are held or pending reconciliation.")
         return self.stop_order(selected) if action == "stop" else tuple(
-            name for name in self.start_order(self.roles) if name in selected)
+            name for name in self.start_order(self.units) if name in selected)
 
 
 @dataclass(frozen=True)
@@ -206,8 +268,9 @@ class ServicePaths:
         from dataclasses import asdict
         UnitIdentity.parse(asdict(identity))
         contract_uuid(resolution_id)
-        return cls(f"/run/foundry/services/{identity.instance_id}/{resolution_id}/{identity.role}",
-                   f"/var/lib/foundry/service-state/{identity.instance_id}/{identity.role}")
+        name = identity.record_key
+        return cls(f"/run/foundry/services/{identity.instance_id}/{resolution_id}/{name}",
+                   f"/var/lib/foundry/service-state/{identity.instance_id}/{name}")
 
     def config(self, name, mode, path="value"):
         from contracts import contract_name
@@ -306,13 +369,15 @@ def resolve_argument(argument, role, spec, resolution, paths, views, secret_path
         require(binding is not None, "service_binding", "Shared directory is not granted to this role.")
         return binding.path
     if kind in (ArgumentKind.LISTENER_PORT, ArgumentKind.LISTENER_ADDRESS):
-        endpoint = next((e for e in resolution.endpoints if e.role == role.common.name and e.listener == value), None)
+        endpoint = next((e for e in resolution.endpoints if (e.role, e.ordinal, e.listener) ==
+                         (spec.identity.role, spec.identity.ordinal, value)), None)
         require(endpoint is not None, "service_listener", "Declared listener has no selected allocation.")
         return str(endpoint.port) if kind is ArgumentKind.LISTENER_PORT else endpoint.address
     from topology import LISTENER_SOCKET_ARGUMENTS, BINDING_SOCKET_ARGUMENTS
     if kind in LISTENER_SOCKET_ARGUMENTS | BINDING_SOCKET_ARGUMENTS:
         if kind in LISTENER_SOCKET_ARGUMENTS:
-            endpoint = next((e for e in resolution.unix_endpoints if e.role == role.common.name and e.listener == value), None)
+            endpoint = next((e for e in resolution.unix_endpoints if (e.role, e.ordinal, e.listener) ==
+                             (spec.identity.role, spec.identity.ordinal, value)), None)
         else:
             binding = next((b for b in spec.bindings.endpoints if b.name == value and b.scheme == "unix"), None)
             endpoint = binding.endpoint if binding else None
@@ -349,21 +414,22 @@ def resolve_argument(argument, role, spec, resolution, paths, views, secret_path
     return paths.base + "/view/data"
 
 
-def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths=None):
+def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths=None, dependency_units=None):
     """Render inert units. Installation and observed loaded-unit verification are lifecycle work."""
     require(entry["profile"]["instance_id"] == inventory.profile.instance_id and entry["name"] == inventory.name,
             "service_inventory", "Unit account belongs to another instance.")
     contract_digest(bundle_sha256)
-    role, spec = inventory.roles[name], inventory.specs[name]
+    role, spec = inventory.roles[name.role], inventory.specs[name]
     paths = ServicePaths.for_unit(spec.identity, inventory.resolution.id)
     validate_views(role, paths, views)
     helper = ["/usr/bin/python3", "-I", RUNTIME_ENTRY]
-    identity = [spec.identity.instance_id, name, "1", inventory.resolution.id,
+    identity = [spec.identity.instance_id, spec.identity.role, str(spec.identity.ordinal), inventory.resolution.id,
                 bundle_sha256, canonical_digest(record_document(spec))]
     hooks = {action: command_line([*helper, action, *identity]) for action in ("admit", "prepare", "dispatch", "running", "cleanup")}
     from feature_maintenance import marker_path
     condition = "ConditionPathExists=!" + marker_path(spec.identity) + "\n"
-    after = " ".join(inventory.units[n] for n in role.common.requires)
+    after = " ".join(dependency_units if dependency_units is not None else
+                     (inventory.units[n] for n in inventory.dependencies(name)))
     boot = f"foundry-admission-{spec.identity.instance_id}.service"
     mounts = "\n".join("BindReadOnlyPaths=" + systemd_word(view.source + ":" + view.destination) for view in views)
     from unix_sockets import uses_sockets
@@ -374,14 +440,14 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     confined = role.common.confinement == "loopback" or (recovery_rehearsal.active(entry) and
                 isinstance(role, ExecutableRole) and role.recovery_rehearsal_safe)
     import shared_directories
-    shared_policy = shared_directories.sandbox(inventory.topology, spec.identity.instance_id, name)
+    shared_policy = shared_directories.sandbox(inventory.topology, spec.identity.instance_id, name.role)
     if isinstance(role, BuiltinRole):
         # Keep the existing built-in policies, including B26 upload write paths.
         from provision import _template
         legacy = {**entry, "topology": {"schema": 1, "roles": [{"name": "http"}]}}
         from topology import validate_topology
         legacy["topology"] = validate_topology(legacy["topology"])
-        content = _template(TEMPLATES.parent.parent, f"foundry-{name}@.service", legacy)
+        content = _template(TEMPLATES.parent.parent, f"foundry-{name.role}@.service", legacy)
         content = re.sub(r"^ExecStart=.*$", "ExecStart=" + hooks["dispatch"], content, flags=re.M)
         # Worker connection is frozen in argv; a legacy worker.env is not an input.
         content = re.sub(r"^EnvironmentFile=.*\n", "", content, flags=re.M)
@@ -403,7 +469,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
                    for key, value in role.environment]
     environment += [(key, contract_path(secret_paths[key], absolute=True)) for key, _ in role.secret_files]
     environment += list(config_environment(role, paths).items())
-    replacements = {"MARKER": marker(entry), "ROLE": name, "ACCOUNT": inventory.name,
+    replacements = {"MARKER": marker(entry), "ROLE": name.role, "ACCOUNT": inventory.name,
                     "AFTER": f"{boot} {after}", "BASE": contract_path(paths.base, absolute=True),
                     "WRITABLE": " ".join(systemd_word(p) for p in (paths.state, paths.base + "/invocations", *socket_paths)),
                     "ADMIT": hooks["admit"], "PREPARE": hooks["prepare"], "DISPATCH": hooks["dispatch"],
@@ -429,8 +495,8 @@ def readiness_probe(role, paused=False):
 
 
 def probe(host, inventory, name, deadline, *, paused=False):
-    role = inventory.roles[name]
-    from host import OperationTimeout, wall_clock_budget
+    role = inventory.roles[name.role]
+    from host import OperationTimeout, wall_clock_budget, current_observation
     contract = readiness_probe(role, paused)
     if contract is None:
         return True
@@ -438,17 +504,40 @@ def probe(host, inventory, name, deadline, *, paused=False):
     if remaining <= 0:
         return False
     try:
-        with wall_clock_budget(remaining):
+        budget = current_observation()
+        # The scheduler cancels worker I/O at the absolute deadline. Signal-based
+        # budgets remain available for probes called on the main thread.
+        with budget.limit(remaining) if budget else wall_clock_budget(remaining):
             return _probe(host, inventory, name, deadline, paused=paused)
     except OperationTimeout:
         return False
 
 
+@contextmanager
+def _probe_socket(endpoint, timeout):
+    from host import current_observation
+    budget = current_observation()
+    sock = socket.socket(socket.AF_INET6 if ":" in endpoint.address else socket.AF_INET, socket.SOCK_STREAM)
+    def cancel():
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        sock.close()
+    try:
+        with budget.own(cancel) if budget else nullcontext():
+            sock.settimeout(timeout)
+            sock.connect((endpoint.address, endpoint.port))
+            yield sock
+    finally:
+        sock.close()
+
+
 def _probe(host, inventory, name, deadline, *, paused=False):
     """One bounded local probe. Identity/stability checks remain required around it."""
-    role, resolution = inventory.roles[name], inventory.resolution
+    role, resolution = inventory.roles[name.role], inventory.resolution
     contract = readiness_probe(role, paused)
-    endpoint = next((e for e in (*resolution.endpoints, *resolution.unix_endpoints) if e.role == role.common.name and
+    endpoint = next((e for e in (*resolution.endpoints, *resolution.unix_endpoints) if (e.role, e.ordinal) == (name.role, name.ordinal) and
                      e.listener == contract.listener), None)
     require(endpoint is not None, "service_listener", "Readiness allocation is missing.")
     remaining = min(contract.timeout_seconds, deadline - time.monotonic())
@@ -461,33 +550,35 @@ def _probe(host, inventory, name, deadline, *, paused=False):
             return unix_sockets.ready(host, endpoint, entry["allocations"]["uid"], entry["allocations"]["gid"],
                                       inventory.units[name], min(deadline, time.monotonic() + remaining))
         if contract.kind == "tcp":
-            with socket.create_connection((endpoint.address, endpoint.port), timeout=remaining):
+            with _probe_socket(endpoint, remaining):
                 return True
-        connection = http.client.HTTPConnection(endpoint.address, endpoint.port, timeout=remaining)
-        try:
-            connection.request("GET", contract.path, headers={"Connection": "close"})
-            response = connection.getresponse()
-            # A literal bounded response, no redirects, proxies or remote URLs.
-            body = response.read(65537)
-            if len(body) > 65536:
-                return False
-            if not isinstance(role, ExecutableRole):
-                from maintenance import classify_readiness
-                observed = classify_readiness({"ready": False, "http_status": response.status}, {"down": paused})
-                if observed.get("status") == "maintenance":
-                    return True
-            if response.status != contract.status:
-                return False
-            if not isinstance(role, ExecutableRole):
-                from release import readiness_body, liveness_body
-                import json
-                try:
-                    return (liveness_body if paused else readiness_body)(json.loads(body))
-                except (ValueError, UnicodeError):
+        with _probe_socket(endpoint, remaining) as sock:
+            connection = http.client.HTTPConnection(endpoint.address, endpoint.port, timeout=remaining)
+            connection.sock = sock
+            try:
+                connection.request("GET", contract.path, headers={"Connection": "close"})
+                response = connection.getresponse()
+                # A literal bounded response, no redirects, proxies or remote URLs.
+                body = response.read(65537)
+                if len(body) > 65536:
                     return False
-            return contract.body is None or contract.body.encode() in body
-        finally:
-            connection.close()
+                if not isinstance(role, ExecutableRole):
+                    from maintenance import classify_readiness
+                    observed = classify_readiness({"ready": False, "http_status": response.status}, {"down": paused})
+                    if observed.get("status") == "maintenance":
+                        return True
+                if response.status != contract.status:
+                    return False
+                if not isinstance(role, ExecutableRole):
+                    from release import readiness_body, liveness_body
+                    import json
+                    try:
+                        return (liveness_body if paused else readiness_body)(json.loads(body))
+                    except (ValueError, UnicodeError):
+                        return False
+                return contract.body is None or contract.body.encode() in body
+            finally:
+                connection.close()
     except (OSError, http.client.HTTPException):
         return False
 
@@ -496,16 +587,19 @@ def wait_ready(host, inventory, name, deadline):
     return wait_ready_set(host, inventory, (name,), deadline)
 
 
-def wait_ready_set(host, inventory, names, deadline):
-    """Observe every selected identity/probe in one shared stability window."""
+def wait_ready_set(host, inventory, names, deadline, *, starting=False):
+    """Prove each unit within its own budget, and keep proved peers healthy."""
     from contracts import digest
     from admission import protected_path
     from host import OperationTimeout, wall_clock_budget
     from release import STABILITY_SECONDS, _matches_executable, service
     names = tuple(names)
-    require(names and set(names) <= inventory.roles.keys(), "service_selection", "Select known readiness roles.")
+    require(names and len(names) == len(set(names)) and len(names) <= MAX_UNITS and set(names) <= inventory.units.keys(),
+            "service_selection", "Select unique, known readiness units within the instance cap.")
+    selected = set(names)
+    names = tuple(name for name in inventory.units if name in selected)
     paused = False
-    if "http" in names:
+    if inventory.identity("http") in names:
         import feature_maintenance
         entry = host.read_registry()["instances"].get(inventory.profile.instance_id)
         if deadline <= time.monotonic():
@@ -516,72 +610,166 @@ def wait_ready_set(host, inventory, names, deadline):
         except OperationTimeout:
             return False
         paused = observed is not None and observed["down"]
-    checks = {}
+    checks, limits = {}, {}
+    observation_start = time.monotonic()
     for name in names:
-        role, spec = inventory.roles[name], inventory.specs[name]
+        role, spec = inventory.roles[name.role], inventory.specs[name]
         contract = readiness_probe(role)
         executable = protected_path(host, host.paths.p(spec.executable), "file")
         require(executable.exists() and executable.stat().st_mode & 0o111 and digest(executable) == spec.executable_sha256,
                 "service_executable", "Selected executable fingerprint has drifted.")
         endpoint = next((e for e in (*inventory.resolution.endpoints, *inventory.resolution.unix_endpoints)
-                         if e.role == name and contract and e.listener == contract.listener), None)
+                         if (e.role, e.ordinal) == (name.role, name.ordinal) and contract and e.listener == contract.listener), None)
         local = None
         if endpoint:
             local = endpoint.path if contract.kind == "unix" else (
                 f"[{endpoint.address}]:{endpoint.port}" if ":" in endpoint.address else f"{endpoint.address}:{endpoint.port}")
         checks[name] = (role, executable, endpoint, local)
-        if contract:
-            deadline = min(deadline, time.monotonic() + contract.timeout_seconds)
-    tokens, stable_since = {}, None
-    if deadline <= time.monotonic():
-        return False
+        limits[name] = (contract.timeout_seconds if contract else None)
+    expires = {} if starting else {name: min(deadline, observation_start + seconds) if seconds else deadline
+                                    for name, seconds in limits.items()}
+    tokens, stable_since, proved = {}, {}, set()
+    from host import ObservationBudget
+    # A unit owns its observer for the entire group wait. Only short local
+    # commands share capacity; a slow network probe never occupies a peer's slot.
+    def observe(name, budget, final=False):
+        role, executable, endpoint, local = checks[name]
+        with budget:
+            budget.check()
+            observed = service(host, inventory.units[name], timeout=min(5, budget.deadline - time.monotonic()))
+            if observed["ActiveState"] == "failed" or observed["NRestarts"] != "0":
+                return False
+            if name not in expires:
+                start = observed.get("ExecMainStartTimestampMonotonic")
+                require(isinstance(start, str) and start.isdecimal(),
+                        "service_start_time", "Systemd did not provide the unit's monotonic start timestamp.")
+                if int(start) == 0:
+                    return True  # The queued start has not reached ExecStart yet.
+                started = int(start) / 1_000_000
+                require(started <= time.monotonic(), "service_start_time", "Unit start timestamp is in the future.")
+                expires[name] = min(deadline, started + limits[name]) if limits[name] else deadline
+            budget.deadline = deadline if name in proved else expires[name]
+            budget.check()
+            current = (observed["MainPID"], (observed.get("process") or {}).get("start"))
+            if name in tokens and current != tokens[name]:
+                return False
+            ready = _matches_executable(observed, executable)
+            if final:
+                budget.check()
+                return ready
+            if ready and role.common.confinement == "loopback":
+                import network_confinement
+                network_confinement.isolation(host, inventory, name)
+            if ready and endpoint:
+                unix = readiness_probe(role).kind == "unix"
+                command = ["ss", "-Hxlpn"] if unix else ["ss", "-Hltpn", f"sport = :{endpoint.port}"]
+                budget.check()
+                listeners = host.run(command, check=False, timeout=min(5, budget.deadline - time.monotonic()))
+                local_addresses = {local}
+                if isinstance(role, ExecutableRole) and dict(role.listeners)[endpoint.listener].wildcard:
+                    local_addresses.update(f"{address}:{endpoint.port}" for address in ("0.0.0.0", "[::]", "*"))
+                ready = listeners.returncode == 0 and any(
+                    len(line.split()) >= (8 if unix else 5) and line.split()[4 if unix else 3] in local_addresses and
+                    f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
+            ready = ready and (probe(host, inventory, name, budget.deadline, paused=True) if paused and name.role == "http"
+                               else probe(host, inventory, name, budget.deadline))
+            budget.check()
+            if not ready:
+                stable_since.pop(name, None)
+                return name not in proved
+            after = service(host, inventory.units[name], timeout=min(5, budget.deadline - time.monotonic()))
+            budget.check()
+            if (not _matches_executable(after, executable) or after["NRestarts"] != "0" or
+                    (after["MainPID"], (after.get("process") or {}).get("start")) != current):
+                return False
+            budget.check()
+            tokens[name] = current
+            stable_since.setdefault(name, time.monotonic())
+            if name not in proved and time.monotonic() - stable_since[name] >= STABILITY_SECONDS:
+                proved.add(name)
+                budget.deadline = deadline
+                changed.set()
+            return True
+
+    finish, recheck, changed = threading.Event(), threading.Event(), threading.Event()
+    drained = {name: threading.Event() for name in names}
+    inspections = threading.BoundedSemaphore(READINESS_INSPECTIONS)
+    budgets = {name: ObservationBudget(expires.get(name, deadline), inspections) for name in names}
+
+    def watch(name):
+        budget = budgets[name]
+        try:
+            while not finish.is_set():
+                if not observe(name, budget):
+                    return False
+                finish.wait(.1)
+            drained[name].set()
+            changed.set()
+            while not recheck.wait(.02):
+                budget.check()
+            return observe(name, budget, final=True)
+        except OperationTimeout:
+            return False
+
+    pool = ThreadPoolExecutor(max_workers=len(names), thread_name_prefix="foundry-ready")
+    futures, cancellation_errors = {}, {}
+    succeeded, coordinator_error = False, None
     try:
-        with wall_clock_budget(deadline - time.monotonic()):
-            while time.monotonic() < deadline:
-                healthy, observed_tokens = True, {}
-                for name, (role, executable, endpoint, local) in checks.items():
-                    if time.monotonic() >= deadline:
-                        return False
-                    observed = service(host, inventory.units[name], timeout=min(5, deadline - time.monotonic()))
-                    if observed["ActiveState"] == "failed" or observed["NRestarts"] != "0":
-                        return False
-                    current = (observed["MainPID"], (observed.get("process") or {}).get("start"))
-                    if name in tokens and current != tokens[name]:
-                        return False
-                    observed_tokens[name] = current
-                    ready = _matches_executable(observed, executable)
-                    if ready and role.common.confinement == "loopback":
-                        import network_confinement
-                        network_confinement.isolation(host, inventory, name)
-                    if ready and endpoint:
-                        unix = readiness_probe(role).kind == "unix"
-                        command = ["ss", "-Hxlpn"] if unix else ["ss", "-Hltpn", f"sport = :{endpoint.port}"]
-                        listeners = host.run(command, check=False, timeout=min(5, deadline - time.monotonic()))
-                        local_addresses = {local}
-                        if isinstance(role, ExecutableRole) and dict(role.listeners)[endpoint.listener].wildcard:
-                            local_addresses.update(f"{address}:{endpoint.port}" for address in ("0.0.0.0", "[::]", "*"))
-                        ready = listeners.returncode == 0 and any(
-                            len(line.split()) >= (8 if unix else 5) and line.split()[4 if unix else 3] in local_addresses and
-                            f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
-                    healthy = ready and (probe(host, inventory, name, deadline, paused=True) if paused and name == "http"
-                                         else probe(host, inventory, name, deadline)) and healthy
-                # Recheck the entire set after the last probe, including prerequisites
-                # observed before a slow dependent. A changed identity resets nothing.
-                if healthy:
-                    for name, (_, executable, _, _) in checks.items():
-                        if time.monotonic() >= deadline:
-                            return False
-                        after = service(host, inventory.units[name], timeout=min(5, deadline - time.monotonic()))
-                        if (not _matches_executable(after, executable) or after["NRestarts"] != "0" or
-                                (after["MainPID"], (after.get("process") or {}).get("start")) != observed_tokens[name]):
-                            return False
-                    if stable_since is None:
-                        tokens, stable_since = observed_tokens, time.monotonic()
-                    if time.monotonic() - stable_since >= STABILITY_SECONDS and time.monotonic() < deadline:
-                        return True
-                else:
-                    stable_since = None
-                time.sleep(max(0, min(.1, deadline - time.monotonic())))
+        for name in names:
+            futures[name] = pool.submit(watch, name)
+            futures[name].add_done_callback(lambda _: changed.set())
+        while time.monotonic() < deadline:
+            changed.clear()
+            completed = [future for future in futures.values() if future.done()]
+            if any(future.exception() is not None or not future.result() for future in completed):
+                break
+            if len(completed) == len(names):
+                succeeded = True
+                break
+            if any(time.monotonic() >= budget.deadline for budget in budgets.values()):
+                break
+            if len(proved) == len(names):
+                finish.set()
+            if all(event.is_set() for event in drained.values()):
+                recheck.set()
+            changed.wait(min(.02, max(0, deadline - time.monotonic())))
     except OperationTimeout:
-        return False
-    return False
+        pass
+    except BaseException as error:
+        coordinator_error = error
+    finally:
+        if not succeeded:
+            for name, budget in budgets.items():
+                try:
+                    budget.cancel()
+                except BaseException as error:
+                    cancellation_errors[name] = error
+        finish.set()
+        recheck.set()
+        pool.shutdown(wait=True)
+
+    # Inspect every result after joining, including errors raised during cleanup.
+    # Completion order must never choose the error reported to an operator.
+    failures = []
+    for name in names:
+        if name in cancellation_errors:
+            failures.append((name, cancellation_errors[name]))
+        if name in futures:
+            try:
+                succeeded = futures[name].result() and succeeded
+            except OperationTimeout:
+                succeeded = False
+            except BaseException as error:
+                failures.append((name, error))
+    if failures:
+        first = failures[0][1]
+        code = first.code if isinstance(first, DeployError) else "readiness_inspection"
+        detail = "; ".join(name.record_key + ": " + (error.code + ": " + error.detail if isinstance(error, DeployError)
+                         else "Readiness inspection failed; inspect the operation on the host.") for name, error in failures)
+        causes = [error for _, error in failures]
+        if coordinator_error is not None:
+            causes.append(coordinator_error)
+        raise DeployError(code, detail) from BaseExceptionGroup("Readiness observer failures", causes)
+    if coordinator_error is not None:
+        raise coordinator_error
+    return succeeded

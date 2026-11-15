@@ -93,7 +93,7 @@ class FeatureAdapterTests(unittest.TestCase):
                             c.canonical_digest(c.record_document(self.current.specs[role])), self.current.resolution.id, 1, None)
             self.store.admit(invocation, permit_id=None if committed else permit_id)
         self.running = True
-        private = tuple(listeners.ObservedSocket(cl.socket, (self.pid(self.current.units[cl.role]),))
+        private = tuple(listeners.ObservedSocket(cl.socket, (self.pid(self.current.units[self.current.identity(cl.role, cl.ordinal)]),))
                         for cl in listeners.private_claims(self.instance, self.current.resolution, self.current.topology))
         public = tuple(listeners.ObservedSocket(cl.socket, (91,)) for cl in listeners.public_claims(self.current.profile))
         # Unrelated host HTTP and other app sockets must not be mistaken for this instance's listeners.
@@ -130,7 +130,7 @@ class FeatureAdapterTests(unittest.TestCase):
             with self.assertRaises(c.DeployError):
                 self.seam.close(self.host, self.entry, request, self.current.resolution, self.current.units)
         with self.assertRaises(c.DeployError):
-            self.seam.close(self.host, self.entry, self.transition, self.current.resolution, {"http": "foreign.service"})
+            self.seam.close(self.host, self.entry, self.transition, self.current.resolution, {self.current.identity("http"): "foreign.service"})
         self.withdraw.assert_not_called()
 
     def test_pre_stop_withdrawal_then_repeated_closure_rechecks_exit_without_effects(self):

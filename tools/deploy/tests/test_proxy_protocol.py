@@ -81,7 +81,7 @@ class ProxyProtocolTests(unittest.TestCase):
             placed = network_profile().projection()
             placed["listeners"]["relay.plain"] = {**placed["listeners"]["relay.ingress"], "ports": [9444]}
             selected = runtime()
-            selected = replace(selected, endpoints=(*selected.endpoints, c.AllocatedEndpoint("relay", "plain", "127.0.0.1", 18002)))
+            selected = replace(selected, endpoints=(*selected.endpoints, c.AllocatedEndpoint("relay", "plain", "127.0.0.1", 18002, 1)))
             rendered = edge.stream_projection(t.parse_profile(placed, parsed), selected, "web.example.org", topology=parsed)
             enabled = rendered["stream-relay.ingress.conf"]
             self.assertIn("proxy_protocol on; # v1\n", enabled)
@@ -90,6 +90,39 @@ class ProxyProtocolTests(unittest.TestCase):
             self.assertTrue(all("proxy_protocol" not in line for line in enabled.splitlines() if line.strip().startswith("listen ")))
             self.assertEqual("ssl_certificate " in enabled, mode == "edge")
             self.assertNotIn("@", enabled)
+
+    def test_complete_config_combines_numbered_proxy_managed_dns_and_upload_templates(self):
+        from test_copies_consumers import copies_fixture
+        from test_contracts import fixture
+        from test_dns import managed_profile
+        from test_uploads import profile as upload_profile, TOOLS
+        from provision import _template
+        for mode in ("none", "edge"):
+            raw, _, placed, resolution = copies_fixture()
+            raw["roles"][1]["listeners"]["ingress"].update(tls=mode, proxy_protocol="v1")
+            topology = t.parse_topology(raw)
+            candidate = placed.projection()
+            candidate["listeners"]["relay.ingress"]["dns"] = managed_profile().projection()["listeners"]["relay.ingress"]["dns"]
+            candidate["uploads"] = upload_profile()
+            candidate["uploads"]["routes"] = ["/resources/{resource}/media"]
+            placed = t.parse_profile(candidate, topology)
+            entry = fixture()[2]
+            entry["profile"] = placed.projection()
+            rendered = edge.stream_projection(placed, resolution, "web.example.org", topology=topology)
+            http = edge.gate_http(placed.instance_id, _template(TOOLS, "nginx-https.conf", entry))
+            complete = "events {}\nhttp {\n" + http + "}\nstream {\n" + "\n".join(rendered.values()) + "}\n"
+            self.assertTrue(edge._directives(complete))
+            self.assertNotRegex(complete, r"@[A-Z_]+@")
+            self.assertIn("location ~", complete)
+            self.assertIn("client_max_body_size", complete)
+            self.assertEqual(complete.count("proxy_protocol on;"), 2)
+            for ordinal, port in enumerate((9443, 9444), 1):
+                key = "stream-relay.ingress" + ("@2" if ordinal == 2 else "") + ".conf"
+                endpoint = next(e for e in resolution.endpoints if (e.role, e.ordinal, e.listener) == ("relay", ordinal, "ingress"))
+                self.assertIn(f"listen 203.0.113.10:{port}" + (" ssl" if mode == "edge" else "") + ";", rendered[key])
+                self.assertIn(f"proxy_pass {endpoint.address}:{endpoint.port};", rendered[key])
+                self.assertFalse(any("proxy_protocol" in line for line in rendered[key].splitlines() if line.strip().startswith("listen ")))
+            self.assertEqual(upgrades.feature_generation(topology, {}, profile=placed), 18)
 
     def test_report_exposes_version_or_null(self):
         for raw, expected in ((proxy_topology(), "v1"), (declaration(), None)):

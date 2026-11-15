@@ -50,7 +50,11 @@ def read_credentials(host, entry, missing=False):
 
 
 def _json(value):
-    return json.dumps(value, separators=(",", ":"))
+    from contracts import MAX_JSON
+    encoded = json.dumps(value, separators=(",", ":"))
+    require(len(encoded.encode("utf-8")) + 1 <= MAX_JSON,
+            "invalid_configuration", "Configuration JSON exceeds the size limit.")
+    return encoded
 
 
 # Each key is declared once. Generic editing locks these generated values while
@@ -80,11 +84,70 @@ PIPELINE_KEYS = frozenset(_FIELDS) - {"PROJECT__NAME"} | {"DEVELOPER__RELEASE"} 
 MAX_CONFIGURATION_CHANGES = 16
 
 
+MAX_SERVICE_SECRET_PATHS = 32768
+
+
+def _copy_secret_name(role, ordinal, secret):
+    from contracts import copy_key, contract_name
+    return copy_key(contract_name(role), ordinal) + "." + contract_name(secret)
+
+
+def copy_secret_name(identity, secret):
+    """Stable private identity within an instance's configuration snapshot."""
+    return _copy_secret_name(identity.role, identity.ordinal, secret)
+
+
+def service_secret_keys(topology, profile=None):
+    """Reserved configuration keys, derived here rather than in lifecycle callers.
+
+    Without placement, accept any bounded ordinal of a declared provider; candidate
+    intake can therefore precede selecting its new profile. Requirements use only
+    the candidate's placed identities.
+    """
+    from contracts import MAX_ROLE_COPIES
+    from topology import ExecutableRole, SERVICE_SECRET_PREFIX, service_secret_component, service_secret_keys as shared_keys
+    declarations = dict(topology.secrets)
+    result = shared_keys({name: secret for name, secret in declarations.items() if secret.scope != "copy"})
+    counts = dict(profile.placement) if profile else None
+    for role in topology.roles:
+        if not isinstance(role, ExecutableRole):
+            continue
+        for secret in sorted(set(dict(role.secret_files).values())):
+            if declarations[secret].scope != "copy":
+                continue
+            for ordinal in range(1, (counts[role.common.name] if counts is not None else MAX_ROLE_COPIES) + 1):
+                name = _copy_secret_name(role.common.name, ordinal, secret)
+                key = (SERVICE_SECRET_PREFIX + "COPY__" + service_secret_component(role.common.name)
+                       + "__" + str(ordinal) + "__" + service_secret_component(secret))
+                require(key not in result and key + "_FILE" not in result and key.removesuffix("_FILE") not in result,
+                        "invalid_topology", "Copy secret names collide in the configuration namespace.")
+                result[key] = name
+    return result
+
+
+def _validate_service_secret_names(paths):
+    from topology import service_secret_keys as shared_keys
+    require(isinstance(paths, dict) and len(paths) <= MAX_SERVICE_SECRET_PATHS,
+            "service_secret", "Invalid private service secret snapshot.")
+    shared = []
+    for name in paths:
+        require(isinstance(name, str), "service_secret", "Invalid private service secret name.")
+        if "." not in name:
+            shared.append(name)
+            continue
+        parts = name.split(".")
+        from contracts import copy_key_parts, contract_name
+        require(len(parts) == 2, "service_secret", "Invalid private copy secret name.")
+        copy_key_parts(parts[0])
+        contract_name(parts[1])
+    shared_keys(shared)
+
+
 def configuration_parts(changes, entry=None, *, topology=None):
-    from topology import SERVICE_SECRET_PREFIX, parse_topology, service_secret_keys
+    from topology import SERVICE_SECRET_PREFIX, parse_topology
     topology = topology or (parse_topology(entry["topology"], registered="sha256" in entry["topology"])
                             if entry and "topology" in entry else None)
-    names = service_secret_keys(dict(topology.secrets)) if topology else {}
+    names = service_secret_keys(topology) if topology else {}
     application, service = {}, {}
     for key, value in changes.items():
         if isinstance(key, str) and key.startswith(SERVICE_SECRET_PREFIX):
@@ -136,20 +199,18 @@ def service_secret_snapshot(host, entry):
     value = read_owned(host, path, lambda value: value)
     require(isinstance(value, dict) and set(value) == {"schema", "instance_id", "paths"}
             and value["schema"] == 1 and value["instance_id"] == entry["profile"]["instance_id"]
-            and isinstance(value["paths"], dict) and len(value["paths"]) <= 128,
+            and isinstance(value["paths"], dict) and len(value["paths"]) <= MAX_SERVICE_SECRET_PATHS,
             "service_secret", "Invalid private service secret snapshot.")
-    from topology import service_secret_keys
-    service_secret_keys(value["paths"])
+    _validate_service_secret_names(value["paths"])
     for path in value["paths"].values():
         _read_value_file(host, entry, path)
     return dict(value["paths"])
 
 
-def stage_service_secrets(host, entry, topology, changes, *, required=True):
+def stage_service_secrets(host, entry, topology, changes, *, required=True, profile=None):
     """Snapshot inputs without selecting them; callers hold host then instance locks."""
-    from topology import service_secret_keys
     _, changes = configuration_parts(changes, topology=topology)
-    names = service_secret_keys(dict(topology.secrets))
+    names = service_secret_keys(topology)
     paths = service_secret_snapshot(host, entry)
     for key, value in changes.items():
         indirect = key not in names
@@ -162,38 +223,80 @@ def stage_service_secrets(host, entry, topology, changes, *, required=True):
                 and "\x00" not in content, "invalid_configuration", "Service secret value is invalid.")
         if name in paths and _read_value_file(host, entry, paths[name]) == content:
             continue
-        path = host.paths.instance_config(entry["name"]) / ("service-" + uuid.uuid4().hex + ".secret")
+        directory = host.paths.instance_config(entry["name"])
+        if "." in name:
+            from admission import protected_directory
+            directory /= "copy-secrets"
+            protected_directory(host, directory)
+        path = directory / ("service-" + uuid.uuid4().hex + ".secret")
         host.owned_write(path, content + "\n", 0o640, group=entry["name"])
         paths[name] = str(path)
+    _validate_service_secret_names(paths)
     if required:
-        service_secret_paths(host, entry, topology, paths=paths)
+        unit_secret_paths(host, entry, topology, paths=paths, profile=profile)
     return paths
 
 
 def select_service_secrets(host, entry, paths):
     """Publish the private selection as part of a configuration revision."""
+    _validate_service_secret_names(paths)
     for path in paths.values():
         _read_value_file(host, entry, path)
     host.owned_write(host.paths.instance_config(entry["name"]) / "service-secrets.json",
                      _json({"schema": 1, "instance_id": entry["profile"]["instance_id"], "paths": paths}) + "\n", 0o600)
 
 
-def service_secret_paths(host, entry, topology, *, paths=None, profile=None):
-    """Resolve only each placed service's declared file interfaces, never values."""
-    from topology import ExecutableRole
+
+def unit_secret_paths(host, entry, topology, *, paths=None, profile=None):
+    """Return UnitIdentity -> declared _FILE paths, never values.
+
+    The lifecycle owner passes each identity's map unchanged to argv, environment
+    and template preparation. Removed identities keep their private snapshots.
+    """
+    from topology import ExecutableRole, expand_placement, parse_placement
     paths = service_secret_snapshot(host, entry) if paths is None else paths
-    placement = dict(profile.placement) if profile else entry["profile"].get("placement", {})
+    placement = profile.placement if profile else parse_placement(entry["profile"]["placement"])
+    instance = profile.instance_id if profile else entry["profile"]["instance_id"]
+    declarations = dict(topology.secrets)
     result = {}
-    for role in topology.roles:
-        name = role.common.name
-        if not isinstance(role, ExecutableRole) or placement.get(name, 1) == 0:
+    for identity, role in expand_placement(topology, instance, placement).items():
+        if not isinstance(role, ExecutableRole):
             continue
-        result[name] = {}
+        result[identity] = {}
         for variable, secret in role.secret_files:
-            require(secret in paths, "service_secret_missing", "Supply required service secrets before reviewing the release plan.")
-            _read_value_file(host, entry, paths[secret])
-            result[name][variable] = paths[secret]
+            name = copy_secret_name(identity, secret) if declarations[secret].scope == "copy" else secret
+            require(name in paths, "service_secret_missing", "Supply required service secrets before reviewing the release plan.")
+            _read_value_file(host, entry, paths[name])
+            result[identity][variable] = paths[name]
     return result
+
+
+def resolve_copies_bindings(host, entry, topology, profile, role, resolution, *, paths=None):
+    """Freeze granted lists from placed identities; A1 supplies the candidate snapshot."""
+    from contracts import ResolvedCopy, ResolvedCopiesBinding
+    from topology import CopiesBinding, expand_placement
+    private = service_secret_snapshot(host, entry) if paths is None else paths
+    units = expand_placement(topology, profile.instance_id, profile.placement)
+    endpoints = {(e.role, e.ordinal, e.listener): e for e in (*resolution.endpoints, *resolution.unix_endpoints)}
+    result = []
+    for name, binding in role.common.bindings:
+        if not isinstance(binding, CopiesBinding):
+            continue
+        copies = []
+        for identity in units:
+            if identity.role != binding.role:
+                continue
+            endpoint = endpoints.get((identity.role, identity.ordinal, binding.listener))
+            require(endpoint is not None, "service_binding", "Declared copy endpoint is unallocated.")
+            secret = ""
+            if binding.secret is not None:
+                key = copy_secret_name(identity, binding.secret)
+                require(key in private, "service_secret_missing", "Supply required copy secrets before reviewing the release plan.")
+                secret = private[key]
+                _read_value_file(host, entry, secret)
+            copies.append(ResolvedCopy(identity.ordinal, endpoint, binding.scheme, secret))
+        result.append(ResolvedCopiesBinding(name, tuple(copies)))
+    return tuple(result)
 
 
 def service_secret_snapshot_paths(host, entry):
@@ -204,14 +307,20 @@ def service_secret_snapshot_paths(host, entry):
 
 
 def service_secret_requirements(topology, profile, paths):
-    from topology import ExecutableRole, service_secret_keys
-    placement = dict(profile.placement)
-    required = {secret for role in topology.roles if isinstance(role, ExecutableRole)
-                and placement[role.common.name] for _, secret in role.secret_files}
-    keys = service_secret_keys(dict(topology.secrets))
-    prompts = dict(topology.secrets)
-    return [{"key": key, "prompt": prompts[name], "present": name in paths, "redacted": True}
-            for key, name in keys.items() if name in required]
+    from topology import ExecutableRole, expand_placement
+    declarations = dict(topology.secrets)
+    required = {}
+    for identity, role in expand_placement(topology, profile.instance_id, profile.placement).items():
+        if isinstance(role, ExecutableRole):
+            for _, secret in role.secret_files:
+                declaration = declarations[secret]
+                name = copy_secret_name(identity, secret) if declaration.scope == "copy" else secret
+                prompt = declaration.prompt
+                if declaration.scope == "copy":
+                    prompt += f" ({identity.record_key})"
+                required[name] = prompt
+    return [{"key": key, "prompt": required[name], "present": name in paths, "redacted": True}
+            for key, name in service_secret_keys(topology, profile).items() if name in required]
 
 
 def stage_service_secret_intent(host, entry, topology, profile, changes):
@@ -219,7 +328,7 @@ def stage_service_secret_intent(host, entry, topology, profile, changes):
     from admission import protected_directory
     from contracts import digest
     paths = stage_service_secrets(host, entry, topology, changes, required=False)
-    service_secret_paths(host, entry, topology, paths=paths, profile=profile)
+    unit_secret_paths(host, entry, topology, paths=paths, profile=profile)
     root = host.paths.instance_config(entry["name"]) / "service-secret-intents"
     protected_directory(host, root, 0o700)
     require(len(list(root.iterdir())) < 128, "service_secret_intents", "Retained private intents require reconciliation.")
@@ -244,10 +353,11 @@ def read_service_secret_intent(host, entry, identifier, topology, profile):
             and record.get("topology_sha256") == topology.sha256,
             "stale_plan", "Private configuration intent no longer matches the reviewed transition.")
     paths = record["paths"]
-    require(isinstance(paths, dict) and len(paths) <= 128, "service_secret", "Invalid private snapshot paths.")
+    require(isinstance(paths, dict) and len(paths) <= MAX_SERVICE_SECRET_PATHS, "service_secret", "Invalid private snapshot paths.")
+    _validate_service_secret_names(paths)
     for value in paths.values():
         _read_value_file(host, entry, value)
-    service_secret_paths(host, entry, topology, paths=paths, profile=profile)
+    unit_secret_paths(host, entry, topology, paths=paths, profile=profile)
     require({name: digest(check_path(Path(value), "file")) for name, value in paths.items()} == record["sha256"],
             "stale_plan", "Private configuration snapshot changed after review.")
     return dict(paths)
@@ -261,7 +371,7 @@ def stage_configuration_revision(host, entry, changes, topology, profile):
     application, service = configuration_parts(changes, topology=topology)
     current = validate_runtime_environment(host, entry)
     values = candidate_values(host, entry, current, application)
-    paths = stage_service_secrets(host, entry, topology, service)
+    paths = stage_service_secrets(host, entry, topology, service, profile=profile)
     identifier = str(uuid.uuid4())
     directory = host.paths.instance_config(entry["name"])
     candidate = directory / ("revision-" + identifier + ".env")
@@ -916,9 +1026,11 @@ def effective_environments(host, entry, resolution_id, roles, endpoints, *, valu
     values["APP__HTTP__SERVER__ADDRESS"] = _http_address(http)
     values.pop(SCHEDULER_ENABLED + "_FILE", None)
     values.update(scheduler_environment(roles, rehearsal=recovery_rehearsal.active(entry)))
-    payload = dump_env(values)
+    from contracts import SERVICE_ROLES
     result = []
     for role in roles:
+        payload = dump_env(values if role in SERVICE_ROLES else
+                           {key: value for key, value in values.items() if key != "APP__HTTP__SERVER__ADDRESS"})
         relative = f"runtime/{resolution_id}/{role}/app.env"
         target = host.paths.instance_config(entry["name"]) / relative
         protected_directory(host, target.parent)
@@ -958,7 +1070,7 @@ def write_binding_descriptor(host, entry, deployment, resolution, spec, *, candi
             "runtime_resolution", "Bindings belong to another selected deployment.")
     env = effective_environment_path(host, entry, resolution, spec.identity.role, candidate=candidate)
     absolute = lambda path: "/" + path.relative_to(host.paths.root).as_posix()
-    path = host.paths.opt(entry["name"]) / "runtime" / resolution.id / (spec.identity.role + ".json")
+    path = host.paths.opt(entry["name"]) / "runtime" / resolution.id / (spec.identity.record_key + ".json")
     descriptor = {"schema": 2, "instance": entry["name"], "user": entry["name"],
                   "env_file": absolute(env), "work_dir": entry["allocations"]["paths"]["data"],
                   "release": entry["allocations"]["paths"]["application"] + "/releases/" + deployment.release,
@@ -972,7 +1084,7 @@ def write_binding_descriptor(host, entry, deployment, resolution, spec, *, candi
 
 
 def console_binding_descriptor(host, entry, resolution_id):
-    """Console invocations retain HTTP bindings except unit-only shared directories.
+    """Console invocations retain HTTP bindings but omit secret paths and shared directories.
 
     Derive from the immutable HTTP descriptor so existing resolutions also work;
     never alter the descriptor delivered to the HTTP unit itself.
@@ -983,6 +1095,9 @@ def console_binding_descriptor(host, entry, resolution_id):
     descriptor = read_owned(host, root / "http.json", lambda value: value)
     if "bindings" in descriptor:
         descriptor["bindings"].pop("shared_directories", None)
+        for binding in descriptor["bindings"].get("copies", []):
+            for copy in binding["copies"]:
+                copy.pop("secret_file", None)
     # A subdirectory cannot collide with a custom role named console.
     path = root / "console" / "http.json"
     _write_binding_descriptor(host, path, descriptor)

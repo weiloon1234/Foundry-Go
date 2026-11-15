@@ -159,8 +159,8 @@ def target(mode):
         host_report = report.collect_report(host)
         assert not [problem for problem in host_report["problems"]
                     if problem.get("instance_id") == profile["instance_id"]], host_report["problems"]
-        for role, unit in instance_units(entry).items():
-            if role != "http":
+        for identity, unit in instance_units(entry).items():
+            if identity.role != "http":
                 assert not Path("/etc/systemd/system", unit).exists(), "Rehearsal installed a background role"
         assert not list(Path("/etc/systemd/system").glob("foundry-backup-*.timer"))
         assert not Path("/etc/foundry/letsencrypt").exists()

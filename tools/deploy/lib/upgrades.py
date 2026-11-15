@@ -24,9 +24,9 @@ if __name__ == "__main__":
 
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
-                       FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION, FEATURE_UNIX_GENERATION, FEATURE_CONFINEMENT_GENERATION,
+                       FEATURE_CAPABILITIES, FEATURE_INTRODUCTION_GENERATION, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION, FEATURE_UNIX_GENERATION, FEATURE_CONFINEMENT_GENERATION,
                        FEATURE_SHARED_DIRECTORY_GENERATION, UPLOAD_TEMPLATE_GENERATION, FEATURE_PROXY_PROTOCOL_GENERATION,
-                       FEATURE_MANAGED_DNS_GENERATION,
+                       FEATURE_MANAGED_DNS_GENERATION, FEATURE_COPIES_GENERATION,
                        TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
@@ -65,7 +65,7 @@ GENERATION_14_FILES = frozenset({"lib/config_templates.py"})
 GENERATION_15_FILES = frozenset({"lib/unix_sockets.py"})
 GENERATION_16_FILES = frozenset({"lib/network_confinement.py", "lib/shared_directories.py"})
 GENERATION_17_FILES = frozenset({"lib/http-path-syntax.json"})
-GENERATION_18_FILES = frozenset({"lib/dns.py"})
+GENERATION_18_FILES = frozenset({"lib/dns.py", "lib/copy_enablement.py", "lib/operation_selection.py"})
 REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES | GENERATION_15_FILES | GENERATION_16_FILES | GENERATION_17_FILES | GENERATION_18_FILES
 
 
@@ -73,7 +73,7 @@ def required_files(generation: int) -> frozenset[str]:
     required = BASE_REQUIRED_FILES
     if generation >= 11:
         required |= GENERATION_11_FILES
-    if generation >= 12:
+    if generation >= FEATURE_INTRODUCTION_GENERATION:
         required |= GENERATION_12_FILES
     if generation >= 13:
         required |= GENERATION_13_FILES
@@ -85,7 +85,7 @@ def required_files(generation: int) -> frozenset[str]:
         required |= GENERATION_16_FILES
     if generation >= 17:
         required |= GENERATION_17_FILES
-    if generation >= FEATURE_MANAGED_DNS_GENERATION:
+    if generation >= 18:
         required |= GENERATION_18_FILES
     return required
 
@@ -472,6 +472,15 @@ def feature_generation(topology, entry, *, profile=None):
     confinement = any(r.common.confinement for r in topology.roles) or any(
         "wildcard" in listener for role in topology.projection()["roles"]
         for listener in role.get("listeners", {}).values())
+    from topology import DeploymentProfile, parse_placement
+    profile = entry.get("profile", {}) if profile is None else profile
+    if isinstance(profile, DeploymentProfile):
+        profile = profile.projection()
+    placement = parse_placement(profile.get("placement", {}))
+    from topology import CopiesBinding
+    copies = (any(count > 1 for _, count in placement)
+              or any(secret.scope == "copy" for _, secret in topology.secrets)
+              or any(isinstance(binding, CopiesBinding) for role in topology.roles for _, binding in role.common.bindings))
     return max(FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION if templates or public_listeners else 0,
                FEATURE_MANAGED_DNS_GENERATION if any(managed_dns_profile(p) for p in (entry.get("profile"), profile)) else 0,
                FEATURE_UNIX_GENERATION if unix else 0,
@@ -480,6 +489,7 @@ def feature_generation(topology, entry, *, profile=None):
                upload_generation(entry),
                upload_generation({"profile": profile or {}}),
                FEATURE_PROXY_PROTOCOL_GENERATION if proxy_protocol else 0,
+               FEATURE_COPIES_GENERATION if copies else 0,
                entry.get("deployment_selection", {}).get("minimum_generation", 0))
 
 
@@ -501,7 +511,7 @@ def check_target_capabilities(host, request, action):
     installed = registry if registry is not None else {"tools": protocol()}
     generation = request.get("client", {}).get("generation", 0)
     latest = max(FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION, UPLOAD_TEMPLATE_GENERATION,
-                 FEATURE_PROXY_PROTOCOL_GENERATION, FEATURE_MANAGED_DNS_GENERATION)
+                 FEATURE_PROXY_PROTOCOL_GENERATION, FEATURE_MANAGED_DNS_GENERATION, FEATURE_COPIES_GENERATION)
     if type(generation) is int and generation >= latest and installed["tools"]["generation"] >= latest:
         return
     from topology import parse_topology
@@ -516,6 +526,7 @@ def check_target_capabilities(host, request, action):
             return
         topology = recovered["feature"].topology
         entry = recovered["metadata"]
+        target_profile = entry.get("profile", {})
     else:
         import release
         _, entry = host.require_identity(request["project"], request["profile"])
@@ -626,6 +637,22 @@ def check_upgrade_generation(installed: dict, tools_dir: Path | None = None) -> 
             "tools_upgrade_floor", "The host must already run generation 9 tools before this upgrade.")
 
 
+def tool_migrations(host, source, bundle):
+    migrations = []
+    generation = protocol(source)["generation"]
+    if generation >= FEATURE_COPIES_GENERATION:
+        from operations import runtime_migration
+        migration = runtime_migration(host, source)
+        if migration:
+            migrations.append(migration)
+    if generation >= FEATURE_INTRODUCTION_GENERATION:
+        from feature_network import boot_migration
+        migration = boot_migration(host, source, bundle)
+        if migration:
+            migrations.append(migration)
+    return migrations
+
+
 def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
     """Describe changed/removed paths and compatibility impact without mutating the host."""
     for entry in registry["instances"].values():
@@ -635,6 +662,7 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
     source, _, digest = tool_bundle(tools_dir)
     target = protocol(source)
     require(target["generation"] >= current["generation"], "tools_downgrade", "Host tool generations cannot be downgraded.")
+    migrations = tool_migrations(host, source, digest)
     _deletion_directory(host)
     retained_releases = []
     for instance_id, entry in registry["instances"].items():
@@ -674,7 +702,7 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
             "generation": target["generation"], "changed_paths": sorted(k for k in new if new[k] != old.get(k)),
             "removed_paths": sorted(old.keys() - new.keys()), "instances": sorted(registry["instances"]),
             "retained_releases": retained_releases,
-            "migration_steps": [], "service_effects": effects, "helper_architecture": None}
+            "migration_steps": migrations, "service_effects": effects, "helper_architecture": None}
 
 
 def verify_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = False) -> tuple[Path, list[Path], str]:
@@ -760,6 +788,7 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
         journal = {"schema": 1, "operation_id": operation, "host_id": registry["host_id"],
                    "bundle_sha256": digest, "previous_tools": copy.deepcopy(current), "phase": "intent",
                    "registry_sha256": _hash(registry)}
+        journal["migration_steps"] = tool_migrations(host, source, digest)
         atomic_json(journal_dir / "registry-before.json", registry, 0o600)
         atomic_json(journal_path, journal, 0o600)
     if journal["phase"] == "complete":
@@ -809,6 +838,12 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
         require(check_path(report, "file").read_text() == report_wrapper,
                 "report_command_ownership", "The report command has unexpected content.")
     atomic_write(report, report_wrapper, 0o755)
+    if target_record["generation"] >= FEATURE_COPIES_GENERATION:
+        from operations import migrate_runtime
+        migrate_runtime(host, destination)
+    if target_record["generation"] >= FEATURE_INTRODUCTION_GENERATION:
+        from feature_network import advance_boot
+        advance_boot(host, destination, digest)
     _select(host, digest)
     registry["tools"] = target_record
     _save_registry(host, registry)

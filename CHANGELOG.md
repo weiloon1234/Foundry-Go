@@ -2,6 +2,65 @@
 
 ## Unreleased
 
+### Numbered copies
+
+- Fixed: numbered listeners compose with PROXY and managed DNS. Every copy gets
+  its declared PROXY policy and a separate readiness endpoint. Copy count and
+  port changes do not write DNS; recovery retains DNS cutover and fresh public
+  readiness budgets. Boot-pin admission covers every generation-18 state shape.
+
+- Fixed: every unit now has an independent readiness observer, bounded by the
+  256-unit cap. Only short local inspections share 16 command slots, so slow
+  probes cannot consume healthy peers' deadlines. Worker errors are collected
+  after cancellation and reported in inventory order. Concurrent command
+  failures preserve journal entries under thread and file locks.
+
+- Fixed: grouped readiness observes units concurrently with independent
+  stability proofs.
+  Failure and deadline cancellation close probe sockets, reap command processes,
+  and join workers before the lifecycle operation continues.
+
+- Fixed: tools upgrades now advance and verify the network-boot coordinator's
+  bundle pin before selecting tools that can write newer registry/profile shapes.
+  Interrupted pin publication resumes, and stale coordinators block application
+  registry writes. Grouped startup tracks each unit's own readiness timeout from
+  its systemd process-start timestamp and keeps completed peers under observation.
+
+- Fixed: generation-16 hosts upgrade through an explicit, digest-bound runtime-v1
+  bridge that preserves singleton invocation pins and resumes interrupted upgrades.
+  Numbered-copy startup now observes readiness by dependency level; regrowth
+  stops excluded dependents with exit proof. Socket declarations reserve `@` for
+  derived copy suffixes, retaining the 107-byte path limit. Numbered copies use
+  generation 18; generation 17 belongs to v0.36.0 parameterized upload routes.
+
+- Added: generation-18 numbered custom service copies (0–128 per role, at most
+  256 units per instance), with per-copy units, private TCP and Unix listeners,
+  config views, seed/state paths, admission, confinement proof, and `copy_number`
+  resolution. Dependencies and readiness cover every copy under one deadline.
+- Changed: reviewed release plans identify added and removed copies, retain
+  unchanged running copies, and require exit and network closure proof before
+  removing units or runtime views. Persistent per-copy state is retained. Copy 1
+  keeps its existing paths and wire representation; generation 18 stays sticky.
+- Added: release 2a consumer contracts for copy-scoped secrets, ordered `copies`
+  bindings and `deployment.Bindings.Copies`, with owned snapshots and optional
+  secret-file paths. Each copy gets its own value, readable by every role of the
+  instance through their shared account. Shrinking retains private values for
+  regrowth and rollback. Console descriptors retain HTTP copy endpoints but omit
+  secret paths.
+- Added: explicit public port lists ordered by copy ordinal, separate nginx routes
+  and firewall claims, and typed `PublicListener.Ports`. Empty copy collections
+  and singleton port extensions are omitted from descriptor wire records.
+- Fixed: Go binding decoding rejects explicit null and malformed `secret_file`
+  and public `ports` fields; compatibility defaults apply only to omitted fields.
+- Added: numbered-copy operations with `ROLE` and `COPY` selection for stop,
+  restart, and logs; per-copy report and backup coverage; persistent maintenance
+  holds; rollback enablement evidence; and exact copy selections for recovery.
+  Selections, descriptors, secret snapshot identities and new paths share the
+  canonical `role@N` suffix. Singleton records keep their existing shapes.
+  Multi-copy reports group rows under `services[role].copies`.
+
+### PROXY protocol
+
 - Added: public TCP stream listeners can declare topology-level
   `"proxy_protocol": "v1"` on the listener so nginx sends the client's address and
   port to a PROXY-aware backend. Both plaintext and edge TLS are supported; the
@@ -12,6 +71,9 @@
   HTTP sites keep forwarded headers; inbound PROXY and outbound v2 are unsupported.
   The opt-in nginx stream acceptance now checks real client addresses and ports
   over IPv4/IPv6 for both TLS modes.
+
+### Framework migration history
+
 - Fixed: disabling a framework persistence feature retains its migration
   definitions, so applied history stays valid and unrelated migrations can
   proceed. Pending disabled migrations report `pending_feature_disabled` and run
@@ -28,6 +90,9 @@
   order no longer causes false conflicts. The PostgreSQL application testkit uses
   complete history for owned namespaces, including disabled-only targets extended
   by explicit domain migrations.
+
+### Managed DNS
+
 - Fixed: partially rejected DNS batches close as resolved failures, allowing a
   new reviewed correction or rollback after proven cleanup while admission stays
   closed. Only validation codes 9005 and 9313 prove rejection; other outcomes

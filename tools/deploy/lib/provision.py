@@ -17,7 +17,7 @@ import uuid
 from contracts import (DeployError, HOST_ROOTS, PREFIX, REDIS_UNIT, REGISTRY_SCHEMA, LAYOUT_VERSION, PORT_FIRST, PORT_LAST,
     atomic_json, check_path, dump_env, identity, instance_paths, marker, now, read_json, require,
     validate_profile, validate_project, reserve_runtime_storage, select_runtime_storage)
-from topology import instance_units, validate_topology
+from topology import selected_units, instance_units, validate_topology
 from runtime_config import (CREDENTIAL_KEYS, read_credentials as _credentials, runtime_environment,
     validate_runtime_environment, initialize_bootstrap_secrets, _instance_group, _read_value_file)
 from edge import edge_findings, edge_template, nginx_variable
@@ -279,7 +279,7 @@ def _template(tools_dir, name, entry, *, postgres_unit=""):
     replacements["@REDIS_UNIT@"] = REDIS_UNIT
     replacements["@STATE_DIRECTORY@"] = f"{PREFIX}/apps/{entry['name']}"
     replacements["@RUNTIME_DIRECTORY@"] = f"{PREFIX}/{entry['profile']['instance_id']}"
-    replacements["@HTTP_UNIT@"] = instance_units(entry)["http"]
+    replacements["@HTTP_UNIT@"] = next(iter(selected_units(entry, "http").values()))
     replacements.update({"@" + key.upper() + "@": value for key, value in instance_paths(entry["name"]).items()})
     proxy = (Path(tools_dir) / "server/templates/nginx-proxy.conf").read_text().rstrip()
     if "@UPLOAD_LOCATIONS@" in content:
@@ -308,10 +308,10 @@ def _install_unit(host, registry, entry, tools_dir, *, http_only=False):
     changed = False
     units = instance_units(entry)
     if http_only:
-        units = {"http": units["http"]}
+        units = selected_units(entry, "http")
     for role, name in units.items():
         unit = host.paths.p(f"/etc/systemd/system/{name}")
-        content = _template(tools_dir, f"foundry-{role}@.service", entry, postgres_unit=postgres_unit)
+        content = _template(tools_dir, f"foundry-{role.role}@.service", entry, postgres_unit=postgres_unit)
         changed = _owned_write(host, unit, content) or changed
     if changed:
         host.run(["systemctl", "daemon-reload"])
@@ -457,7 +457,7 @@ def _ready_configuration(host, registry, entry, tools_dir):
     unit = registry["shared"].get("postgresql", {}).get("unit", "")
     for role, name in instance_units(entry).items():
         path = host.paths.p(f"/etc/systemd/system/{name}")
-        if not path.exists() or path.read_text() != _template(tools_dir, f"foundry-{role}@.service", entry, postgres_unit=unit):
+        if not path.exists() or path.read_text() != _template(tools_dir, f"foundry-{role.role}@.service", entry, postgres_unit=unit):
             return False
     site = host.paths.p(f"/etc/nginx/sites-available/{PREFIX}-{entry['name']}.conf")
     enabled = host.paths.p(f"/etc/nginx/sites-enabled/{PREFIX}-{entry['name']}.conf")

@@ -57,14 +57,14 @@ def observe(host, entry, inventory):
         if service(host, unit)['ActiveState'] != 'active':
             continue
         owners = listeners.process_members(host, unit)
-        role = inventory.roles[name]
+        role = inventory.roles[name.role]
         if role.common.confinement == "loopback":
             network_confinement.isolation(host, inventory, name)
         require(all(ipaddress.ip_address(s.socket.address).is_loopback or
                     (role.common.confinement == "loopback" and set(s.pids) <= owners and
-                     any(c.role == name and c.wildcard and listeners.matches(c, s.socket) for c in claims))
+                     any(c.identity == name and c.wildcard and listeners.matches(c, s.socket) for c in claims))
                     for s in sockets if owners & set(s.pids)),
-                'rehearsal_exposure', f'Rehearsal role {name} has a non-loopback listener.')
+                'rehearsal_exposure', f'Rehearsal role {name.record_key} has a non-loopback listener.')
     return canonical_digest({'projection': projection(entry, inventory.resolution.endpoints), 'references': [asdict(r) for r in references]})
 
 

@@ -18,7 +18,7 @@ import services
 import upgrades
 from host import Host, Paths
 from test_services import inventory_fixture
-from test_host_capabilities import CURRENT, OPERATION, closure
+from test_host_capabilities import CURRENT, INSTANCE, OPERATION, closure
 
 
 class FeaturePreviewTests(unittest.TestCase):
@@ -34,7 +34,7 @@ class FeaturePreviewTests(unittest.TestCase):
         root.mkdir(parents=True)
         original = 'APP__HTTP__SERVER__ADDRESS=127.0.0.1:8100\nPRIVATE=keep-current\nKEY_FILE=/etc/secret\nAPP__SCHEDULER__ENABLED=true\nAPP__SCHEDULER__ENABLED_FILE=/old/scheduler\n'
         (root / "app.env").write_text(original)
-        endpoints = (c.AllocatedEndpoint("http", "http", "127.0.0.1", 8200),)
+        endpoints = (c.AllocatedEndpoint("http", "http", "127.0.0.1", 8200, 1),)
         with patch.object(runtime_config, "validate_runtime_environment"):
             environments = runtime_config.effective_environments(self.host, self.entry, CURRENT, ("http",), endpoints)
         resolution = replace(self.inventory.resolution, environments=environments)
@@ -52,21 +52,39 @@ class FeaturePreviewTests(unittest.TestCase):
             runtime_config.effective_environment_path(self.host, self.entry, resolution)
 
     def test_descriptor_contains_final_frozen_bindings_but_no_environment_hash_or_values(self):
-        spec = self.inventory.specs["http"]
+        spec = self.inventory.specs[self.inventory.identity("http")]
         root = self.host.paths.instance_config(self.entry["name"])
         env = root / ("runtime/" + CURRENT + "/http/app.env")
         with patch.object(runtime_config, "effective_environment_path", return_value=env):
             location = runtime_config.write_binding_descriptor(self.host, self.entry, self.inventory.deployment,
                                                                self.inventory.resolution, spec)
         value = json.loads(self.host.paths.p(location).read_text())
+        self.assertEqual(self.host.paths.p(location), self.host.paths.opt(self.entry["name"]) / "runtime" / CURRENT / "http.json")
         self.assertEqual(value["schema"], 2)
         self.assertEqual(value["bindings"], c.record_document(spec.bindings))
         self.assertEqual(value["unit"], {"instance_id": spec.identity.instance_id, "role": "http", "ordinal": 1})
         self.assertNotIn("environments", value)
         self.assertNotIn("private_revision", value)
 
+    def test_numbered_descriptor_keeps_copy_one_bytes_and_uses_a_distinct_path(self):
+        from test_copies import numbered_inventory
+        inventory, entry, _ = numbered_inventory(2)
+        env = self.host.paths.instance_config(entry["name"]) / "runtime" / CURRENT / "relay/app.env"
+        root = self.host.paths.opt(entry["name"]) / "runtime" / CURRENT
+        with patch.object(runtime_config, "effective_environment_path", return_value=env):
+            first = runtime_config.write_binding_descriptor(self.host, entry, inventory.deployment,
+                inventory.resolution, inventory.specs[inventory.identity("relay", 1)])
+            self.assertEqual(self.host.paths.p(first), root / "relay.json")
+            original, checksum = (root / "relay.json").read_bytes(), c.digest(root / "relay.json")
+            second = runtime_config.write_binding_descriptor(self.host, entry, inventory.deployment,
+                inventory.resolution, inventory.specs[inventory.identity("relay", 2)])
+            self.assertEqual(self.host.paths.p(second), root / "relay@2.json")
+        self.assertEqual((root / "relay.json").read_bytes(), original)
+        self.assertEqual(c.digest(root / "relay.json"), checksum)
+        self.assertEqual(c.read_json(root / "relay@2.json")["unit"]["ordinal"], 2)
+
     def console_source(self, *, grants=True, archive_schema=2):
-        spec = self.inventory.specs["http"]
+        spec = self.inventory.specs[self.inventory.identity("http")]
         bindings = replace(spec.bindings,
             executables=(c.ResolvedExecutableBinding("checksum", "/usr/bin/jq", "a" * 64),),
             endpoints=(c.ResolvedEndpointBinding("relay", self.inventory.resolution.endpoints[1], "http"),),
@@ -95,6 +113,8 @@ class FeaturePreviewTests(unittest.TestCase):
         sibling = source.with_name("console.json")
         sibling.write_text("custom role descriptor")
         path = runtime_config.console_binding_descriptor(self.host, self.entry, CURRENT)
+        self.assertEqual(source, self.host.paths.opt(self.entry["name"]) / "runtime" / CURRENT / "http.json")
+        self.assertEqual(path, source.parent / "console/http.json")
         self.assertEqual(c.read_json(path), expected)
         self.assertEqual(path.stat().st_mode & 0o777, 0o644)
         self.assertEqual(source.read_bytes(), original)
@@ -154,7 +174,7 @@ class FeaturePreviewTests(unittest.TestCase):
 
     def test_closure_cannot_be_synthesized_from_partial_network_observations(self):
         evidence = c.ClosureEvidence.parse(closure())
-        transition = Mock(operation_id=OPERATION, affected_units=evidence.units)
+        transition = Mock(instance_id=INSTANCE, operation_id=OPERATION, affected_units=evidence.units)
         resolution = Mock(id=CURRENT, endpoints=evidence.endpoints)
         owner = Mock()
         owner.feature_close.return_value = replace(evidence, units=())
@@ -332,9 +352,7 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(self.host, "journal"))
             stack.enter_context(patch.object(self.host, "save_state"))
             stack.enter_context(patch.object(self.host, "run", side_effect=lambda argv, **kw: events.append(argv[1] + ":" + argv[2])))
-            stack.enter_context(patch.object(services, "enabled_units", return_value=tuple(self.inventory.roles)))
-            stack.enter_context(patch.object(services, "wait_ready", side_effect=lambda host, inv, name, deadline:
-                                            events.append("ready:" + name) or True))
+            stack.enter_context(patch.object(services, "enabled_units", return_value=tuple(self.inventory.units)))
             stack.enter_context(patch.object(lifecycle, "stop_units", side_effect=lambda *_: events.append("stopped")))
             stack.enter_context(patch.object(network, "withdraw", return_value=None))
             stack.enter_context(patch.object(network, "close", side_effect=lambda *_: (events.append("closed"), evidence)[1]))
@@ -344,8 +362,9 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(release, "app", side_effect=lambda *args, **kw: events.append(args[3])))
             stack.enter_context(patch.object(release, "switch_to", side_effect=lambda *_: events.append("switched")))
             stack.enter_context(patch.object(release, "finish", side_effect=finish))
-            stack.enter_context(patch.object(lifecycle, "ready", side_effect=lambda host, entry, inventory, name, deadline: (events.append("ready:" + name), True)[1]))
-            stack.enter_context(patch.object(services, "wait_ready_set", side_effect=lambda *args: (events.append("ready-set"), True)[1]))
+            stack.enter_context(patch.object(services, "wait_ready_set", side_effect=lambda host, inv, names, deadline, **kwargs:
+                (events.append("ready-set" if set(names) == set(inv.units) else
+                               "ready:" + ",".join(name.record_key for name in names)), True)[1]))
             lifecycle.transition(self.host, {"tools": {"generation": upgrades.protocol()["generation"]}},
                                  self.entry, self.inventory, state, running)
         status.assert_called_once_with(self.host, self.entry, release.release_path(self.host, self.entry, self.inventory.deployment.release), env_file=Path("/effective.env"))
@@ -353,7 +372,7 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertEqual(ordered, [event for event in events if event in ordered])
 
     def test_feature_worker_uses_frozen_arguments_without_legacy_worker_environment(self):
-        content = services.render_unit(self.inventory, "worker", self.entry, "a" * 64)
+        content = services.render_unit(self.inventory, self.inventory.identity("worker"), self.entry, "a" * 64)
         self.assertNotIn("EnvironmentFile=", content)
         self.assertIn("runtime-v1", content)
         self.assertIn("ExecCondition=+", content)

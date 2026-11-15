@@ -19,11 +19,14 @@ import sys
 import tarfile
 import tempfile
 import time
+import threading
+from contextlib import nullcontext
 import unittest
 from unittest.mock import Mock, patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from contracts import unit_selection_names
 import admission
 from listeners import observe_dns as actual_observe_dns
 import artifacts
@@ -47,7 +50,7 @@ import shared_directories
 from services import probe as actual_probe
 import upgrades
 import unix_sockets
-from topology import parse_profile, parse_topology
+from topology import parse_profile, parse_topology, validate_topology
 from test_artifacts import elf
 from test_contracts import fixture
 from test_manage import manager
@@ -66,12 +69,14 @@ class WiringHost(Host):
     def __init__(self, root):
         super().__init__(Paths(root))
         self.commands, self.started = [], []
+        self.loaded_boot = None
         self.shared_prepared = set()
         self.account, self.nginx = None, False
         self.account_sequence = 0
         self.worker = 90
         self.sequence = 100
         self.running = {}
+        self.start_times = {}
         self.enabled = set()
         self.failed = set()
         self.public_profile = None
@@ -106,7 +111,7 @@ class WiringHost(Host):
         arguments = shlex.split(next(line.split("=", 1)[1].lstrip("+") for line in text.splitlines() if line.startswith("ExecCondition=")))
         phase, instance, declared_role, ordinal, resolution, bundle, spec = arguments[-7:]
         generation = c.read_json(admission.AdmissionStore(self, instance).durable / "generations" / (spec + "-" + bundle + ".json"))
-        assert generation["resolution_id"] == resolution and generation["unit"] == {"instance_id": instance, "role": role, "ordinal": 1}
+        assert generation["resolution_id"] == resolution and generation["unit"] == {"instance_id": instance, "role": role.role, "ordinal": role.ordinal}
         inventory, launch = lifecycle.load_resolution(self, entry, resolution)
         self.sequence += 2
         invocation = format(self.sequence, "032x")
@@ -118,15 +123,16 @@ class WiringHost(Host):
                 patch.object(shared_directories, "verify", wraps=shared_directories.verify) as verified:
             for action in ("admit", "prepare"):
                 feature_runtime.run(action, c.record_document(pin), launch)
-            verified.assert_called_once_with(self, inventory.topology, inventory.specs[role].identity.instance_id, role,
+            verified.assert_called_once_with(self, inventory.topology, inventory.specs[role].identity.instance_id, role.role,
                                              entry["allocations"]["uid"], entry["allocations"]["gid"])
         self.proc(process.pid, invocation, alive=False)
         main = self.proc(process.pid + 1, invocation, self.paths.p(inventory.specs[role].executable), unit)
         self.running[unit] = (main, inventory, role)
+        self.start_times[unit] = str(int(time.monotonic() * 1_000_000))
         self.starting = unit
         feature_runtime.run("running", c.record_document(pin), launch)
         self.starting = None
-        self.started.append(role)
+        self.started.append(role.role)
 
     def nginx_config(self):
         paths = [self.paths.p("/etc/nginx/nginx.conf"), self.paths.p(edge.STREAM_INCLUDE)]
@@ -235,7 +241,9 @@ class WiringHost(Host):
             elif action == "reload":
                 self.worker += 1
             elif action == "start" and unit.startswith("foundry-"):
-                self.start(unit)
+                for selected in args[2:]:
+                    if not selected.startswith("--"):
+                        self.start(selected)
             elif action == "stop":
                 self.shared_prepared.clear()
                 code = 0 if loaded else 5
@@ -243,8 +251,15 @@ class WiringHost(Host):
                 if record:
                     self.proc(record[0].pid, record[0].invocation_id, alive=False)
                     self.owned_write(self.paths.p("/sys/fs/cgroup/system.slice/" + unit + "/cgroup.procs"), "")
+            elif action == "daemon-reload":
+                boot = self.paths.p(feature_network.BOOT_PATH)
+                self.loaded_boot = boot.read_text() if boot.exists() else None
             elif action == "show":
-                if unit.startswith("foundry-operation-"):
+                if unit == feature_network.BOOT_UNIT:
+                    command = next(line.split("=", 1)[1] for line in self.loaded_boot.splitlines() if line.startswith("ExecStart="))
+                    values = {"LoadState": "loaded", "FragmentPath": feature_network.BOOT_PATH, "DropInPaths": "",
+                              "NeedDaemonReload": "no", "ExecStart": "{ argv[]=" + " ".join(shlex.split(command)) + " ; }"}
+                elif unit.startswith("foundry-operation-"):
                     pin = self.operation_pin
                     values = {"Type": "exec", "KillMode": "control-group", "Restart": "no", "Transient": "yes", "DropInPaths": ""}
                     for directive, phase in (("ExecStart", "operation"), ("ExecStopPost", "operation-cleanup")):
@@ -254,7 +269,8 @@ class WiringHost(Host):
                     values = {"Id": unit, "LoadState": "loaded" if loaded else "not-found", "ActiveState": "active" if current else "inactive",
                               "SubState": "running" if current else "dead", "MainPID": str(current[0].pid) if current else "0",
                               "ControlPID": "0", "Job": "0", "ControlGroup": "/system.slice/" + unit if current else "",
-                              "NRestarts": "0", "InvocationID": current[0].invocation_id if current else ""}
+                              "NRestarts": "0", "InvocationID": current[0].invocation_id if current else "",
+                              "ExecMainStartTimestampMonotonic": self.start_times[unit] if current else "0"}
                     if unit == self.starting:
                         values.update(ActiveState="activating", SubState="start-post")
                 output = "\n".join(k + "=" + v for k, v in values.items())
@@ -268,19 +284,19 @@ class WiringHost(Host):
             if "-Hxlpn" in args:
                 for process, inventory, role in self.running.values():
                     for endpoint in inventory.resolution.unix_endpoints:
-                        if endpoint.role == role:
+                        if (endpoint.role, endpoint.ordinal) == (role.role, role.ordinal):
                             rows.append(f'u_str LISTEN 0 128 {endpoint.path} 123 * 0 users:(("app",pid={process.pid},fd=3))')
             elif "-u" not in args:
                 family = 6 if "-6" in args else 4
                 if self.public_profile:
                     for claim in listeners.public_claims(self.public_profile):
-                        path = self.paths.p(edge.RUNTIME + "/" + claim.instance_id + "/stream-" + claim.role + "." + claim.listener + ".conf")
+                        path = self.paths.p(edge.RUNTIME + "/" + claim.instance_id + "/stream-" + c.copy_key(claim.role + "." + claim.listener, claim.ordinal) + ".conf")
                         if path.exists() and claim.socket.family == family:
                             rows.append(f'LISTEN 0 128 {claim.socket.address}:{claim.socket.port} 0.0.0.0:* users:(("nginx",pid={self.worker},fd=3))')
                 for process, inventory, role in self.running.values():
                     for endpoint in inventory.resolution.endpoints:
-                        if endpoint.role == role and ipaddress.ip_address(endpoint.address).version == family:
-                            address = "0.0.0.0" if (role, endpoint.listener) in listeners.wildcard_listeners(inventory.topology) else endpoint.address
+                        if (endpoint.role, endpoint.ordinal) == (role.role, role.ordinal) and ipaddress.ip_address(endpoint.address).version == family:
+                            address = "0.0.0.0" if (role.role, endpoint.listener) in listeners.wildcard_listeners(inventory.topology) else endpoint.address
                             rows.append(f'LISTEN 0 128 {address}:{endpoint.port} 0.0.0.0:* users:(("app",pid={process.pid},fd=3))')
             output = "\n".join(rows)
         elif args[0] == "runuser":
@@ -296,7 +312,7 @@ class WiringHost(Host):
                     entry = next(entry for entry in self.read_registry()["instances"].values() if entry["name"] == args[2])
                     assert (int(uid), int(gid)) == (entry["allocations"]["uid"], entry["allocations"]["gid"])
                     code = unix_sockets.Result.READY if any(
-                        group == "/system.slice/" + unit and endpoint.role == role and endpoint.name == name
+                        group == "/system.slice/" + unit and (endpoint.role, endpoint.ordinal) == (role.role, role.ordinal) and endpoint.name == name
                         and str(self.paths.p(endpoint.directory)) == directory
                         for unit, (_, inventory, role) in self.running.items()
                         for endpoint in inventory.resolution.unix_endpoints) else unix_sockets.Result.UNSAFE
@@ -360,18 +376,25 @@ class FeatureWiringFixture(unittest.TestCase):
             (feature_runtime, "Host", {"return_value": self.host}),
         ):
             self.enterContext(patch.object(module, name, autospec=True, **options))
+        self.probe_context = threading.local()
+        self.enterContext(patch.object(services, "_probe_socket", side_effect=lambda *args: nullcontext(Mock())))
+        probe_http = SimpleNamespace(client=SimpleNamespace(**vars(services.http.client)))
+        probe_http.client.HTTPConnection = lambda *args, **kwargs: self.probe_context.connection
+        self.enterContext(patch.object(services, "http", probe_http))
+        getpwuid = unix_sockets.pwd.getpwuid
+        self.enterContext(patch.object(unix_sockets.pwd, "getpwuid", side_effect=lambda uid:
+            self.probe_context.account if hasattr(self.probe_context, "account") else getpwuid(uid)))
         self.enterContext(patch.object(release, "STABILITY_SECONDS", 0))
         runtime_os = Mock(wraps=os)
         runtime_os.geteuid.return_value = 0
         self.enterContext(patch.object(feature_runtime, "os", runtime_os))
 
     def probe(self, host, inventory, name, deadline, *, paused=False):
-        role = inventory.roles[name]
+        role = inventory.roles[name.role]
         if services.readiness_probe(role) and services.readiness_probe(role).kind == "unix":
             entry = host.read_registry()["instances"][inventory.profile.instance_id]
-            account = SimpleNamespace(pw_name=entry["name"], pw_gid=entry["allocations"]["gid"])
-            with patch.object(unix_sockets.pwd, "getpwuid", return_value=account):
-                return actual_probe(host, inventory, name, deadline, paused=paused)
+            self.probe_context.account = SimpleNamespace(pw_name=entry["name"], pw_gid=entry["allocations"]["gid"])
+            return actual_probe(host, inventory, name, deadline, paused=paused)
         down = getattr(self.host, "maintenance_down", False)
         response = Mock()
         response.status = 503 if down and role.common.name == "http" else 200
@@ -379,13 +402,30 @@ class FeatureWiringFixture(unittest.TestCase):
                                       b'{"status":"ok"}' if paused else b'{"ready":true}')
         connection = Mock()
         connection.getresponse.return_value = response
-        with patch.object(services.http.client, "HTTPConnection", return_value=connection):
+        self.probe_context.connection = connection
+        try:
             return actual_probe(host, inventory, name, deadline, paused=paused)
+        finally:
+            del self.probe_context.connection
 
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, confined=False, unix=False, public=False, proxy_protocol=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, managed_dns=None, version="20261114T000000Z-abcdef12"):
+    def configure_firewall(self):
+        from network_firewall_fixture import ROOT, rule_file, live_rules
+        placed = parse_profile(self.profile, self.topology)
+        self.host.public_profile = placed
+        self.host.firewall_live = {family: live_rules(placed.instance_id, family) for family in (4, 6)}
+        self.host.owned_write(self.host.paths.p("/etc/default/ufw"),
+                              'IPV6=yes\nDEFAULT_INPUT_POLICY="DROP"\nDEFAULT_FORWARD_POLICY="DROP"\nDEFAULT_OUTPUT_POLICY="ACCEPT"\nMANAGE_BUILTINS=no\n')
+        self.host.owned_write(self.host.paths.p("/etc/ufw/ufw.conf"), "ENABLED=yes\n")
+        for family, suffix in ((4, ""), (6, "6")):
+            for stem in ("before", "user", "after"):
+                self.host.owned_write(self.host.paths.p(f"/etc/ufw/{stem}{suffix}.rules"), rule_file(stem, family=family))
+        for name in ("ufw-init", "ufw-init-functions"):
+            self.host.owned_write(self.host.paths.p("/usr/lib/ufw/" + name), (ROOT / name).read_text())
+
+    def build_archive(self, *, confined=False, unix=False, public=False, proxy_protocol=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, managed_dns=None, copies=1, copies_binding=False, application_content=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -417,6 +457,12 @@ class FeatureWiringFixture(unittest.TestCase):
             relay["listeners"]["health"] = {"transport": "tcp", "bind": "loopback"}
             relay["readiness"]["listener"] = "health"
             self.topology = parse_topology(raw)
+        if copies_binding:
+            raw = self.topology.projection()
+            raw["secrets"] = {"copy-token": {"scope": "copy", "prompt": "Copy token"}}
+            raw["roles"][1]["secret_files"] = {"TOKEN_FILE": {"secret": "copy-token", "scope": "copy"}}
+            raw["roles"][0]["bindings"]["copies"] = {"copies": {"role": "relay", "listener": "api", "scheme": "http", "secret": "copy-token"}}
+            self.topology = parse_topology(raw)
         if confined:
             raw = self.topology.projection()
             raw["roles"][1]["network"] = {"confinement": "loopback"}
@@ -430,20 +476,22 @@ class FeatureWiringFixture(unittest.TestCase):
                 readiness={'kind': 'unix', 'listener': 'api'}, arguments=[{'listener_socket_path': 'api'}],
                 environment={'XDG_RUNTIME_DIR': {'listener_socket_directory': 'api'}}, maintenance='continue')
             self.topology = parse_topology(raw)
-        self.profile.update(schema=3, placement={"http": 1, "relay": 1, **({"worker": 1} if worker else {}),
+        self.profile.update(schema=3, placement={"http": 1, "relay": copies, **({"worker": 1} if worker else {}),
                                               **({"scheduler": 1} if scheduler else {})}, listeners={})
         if public:
             from test_host_capabilities import profile
             self.profile["listeners"] = {"relay.api": profile()["listeners"]["relay.ingress"]}
             if managed_dns is not None:
                 self.profile["listeners"]["relay.api"]["dns"].update(managed_dns)
+            first = self.profile["listeners"]["relay.api"]["ports"][0]
+            self.profile["listeners"]["relay.api"]["ports"] = list(range(first, first + copies))
         self.profile = parse_profile(self.profile, self.topology).projection()
         payload = self.host.paths.root / "relay.bin"
         payload.write_bytes(binary)
         members = artifacts.inspect_payload(dict(self.topology.artifacts)["relay"], "linux-arm64", payload, artifacts.ExpansionBudget())
         path = "deploy/artifacts/relay.bin"
         self.version = version
-        files = {"artisan": binary, "config/deploy.toml": b'[project]\n[app.worker]\nconnection = "target-queue"\n', "public/index.html": b"fixture",
+        files = {"artisan": binary, "config/deploy.toml": b'[project]\n[app.worker]\nconnection = "target-queue"\n', "public/index.html": application_content if application_content is not None else b"fixture",
                  "private-source-maps/" + self.version + "/a.map": b"{}", path: binary}
         if templates:
             files["deploy/files/private.yaml"] = b"token: {{secret.TOKEN_FILE}}\n"
@@ -487,7 +535,7 @@ class FeatureWiringTests(FeatureWiringFixture):
             _, selection, inventory, _ = lifecycle.load(self.host, entry)
             self.assertEqual(selection.minimum_generation, 16)
             self.assertTrue(proof.called)
-            text = self.host.paths.p('/etc/systemd/system/' + inventory.units['relay']).read_text()
+            text = self.host.paths.p('/etc/systemd/system/' + inventory.units[inventory.identity('relay')]).read_text()
             self.assertIn(network_confinement.FILTER, text)
             self.request('restart')
         with patch.object(network_confinement, 'isolation', side_effect=c.DeployError('network_confinement', 'No BPF')):
@@ -506,12 +554,13 @@ class FeatureWiringTests(FeatureWiringFixture):
         endpoint, = inventory.resolution.unix_endpoints
         self.assertEqual([e.role for e in inventory.resolution.endpoints], ['http'])
         descriptor = c.read_json(self.host.paths.p(launch['descriptors']['http']))
-        self.assertEqual(descriptor['bindings']['endpoints'][0]['endpoint'], asdict(endpoint))
+        self.assertEqual(descriptor['bindings']['endpoints'][0]['endpoint'],
+                         {key: value for key, value in asdict(endpoint).items() if key != 'ordinal'})
         self.assertEqual(descriptor['bindings']['endpoints'][0]['scheme'], 'unix')
         directory = self.host.paths.p(endpoint.directory)
         self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
         self.assertEqual(directory.stat().st_uid, entry['allocations']['uid'])
-        for name in inventory.roles:
+        for name in inventory.units:
             text = self.host.paths.p('/etc/systemd/system/' + inventory.units[name]).read_text()
             self.assertIn(endpoint.directory, text)
         self.request('restart')
@@ -675,7 +724,7 @@ class FeatureWiringTests(FeatureWiringFixture):
             _, entry = self.host.require_identity(self.project, self.profile)
             _, selected, inventory, launch = lifecycle.load(self.host, entry)
             self.assertEqual(selected.minimum_generation, 14)
-            paths = services.ServicePaths.for_unit(inventory.specs["relay"].identity, inventory.resolution.id)
+            paths = services.ServicePaths.for_unit(inventory.specs[inventory.identity("relay")].identity, inventory.resolution.id)
             path = self.host.paths.p(paths.config("private", "rendered-template", "relay.yaml"))
             self.assertEqual(json.loads(path.read_text().removeprefix("token: ")), expected)
             self.assertEqual(path.stat().st_mode & 0o777, 0o640)
@@ -684,18 +733,18 @@ class FeatureWiringTests(FeatureWiringFixture):
             self.assertEqual(dispatch["environment"]["XDG_CONFIG_HOME"], paths.base + "/current/config/private")
             for public in (json.dumps(dispatch), json.dumps(launch), json.dumps(self.host.read_registry()),
                            json.dumps(self.request("status")), json.dumps(self.host.commands),
-                           self.host.paths.p("/etc/systemd/system/" + inventory.units["relay"]).read_text()):
+                           self.host.paths.p("/etc/systemd/system/" + inventory.units[inventory.identity("relay")]).read_text()):
                 self.assertNotIn(expected, public)
             return path.resolve(), inventory
         first, before = selected_template("initial-canary")
-        http = self.host.running[before.units["http"]]
+        http = self.host.running[before.units[before.identity("http")]]
         self.host.started.clear()
         with patch.object(release.backup, "archive_keys"):
             self.request("config-set", secrets={"configuration": {key: 'replacement-canary"#;]雪'}}, confirm=True)
         second, _ = selected_template('replacement-canary"#;]雪')
         self.assertNotEqual(first, second)
         self.assertEqual(self.host.started, ["relay"])
-        self.assertEqual(self.host.running[before.units["http"]], http)
+        self.assertEqual(self.host.running[before.units[before.identity("http")]], http)
         self.request("restart", operation_id=str(uuid.uuid4()))
         third, _ = selected_template('replacement-canary"#;]雪')
         self.assertNotEqual(second, third)
@@ -716,7 +765,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
         _, entry = self.host.require_identity(self.project, self.profile)
         _, _, before, before_launch = lifecycle.load(self.host, entry)
-        http = self.host.running[before.units["http"]]
+        http = self.host.running[before.units[before.identity("http")]]
         self.host.started.clear()
         with patch.object(release.backup, "archive_keys") as archive:
             self.request("config-set", secrets={"configuration": {key: "replacement-canary"}}, confirm=True)
@@ -724,8 +773,8 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, entry = self.host.require_identity(self.project, self.profile)
         _, selected, after, launch = lifecycle.load(self.host, entry)
         self.assertEqual(self.host.started, ["relay"])
-        self.assertEqual(self.host.running[before.units["http"]], http)
-        self.assertEqual(before.specs["http"], after.specs["http"])
+        self.assertEqual(self.host.running[before.units[before.identity("http")]], http)
+        self.assertEqual(before.specs[before.identity("http")], after.specs[after.identity("http")])
         self.assertEqual(selected.admission.disposition, c.AdmissionDisposition.COMMITTED)
         self.assertEqual(entry["configuration_revision"], 2)
         self.assertNotEqual(before_launch["secret_paths"]["relay"], launch["secret_paths"]["relay"])
@@ -742,7 +791,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         runtime = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(runtime)
         content = self.host.paths.p("/etc/systemd/system/" + unit).read_text()
-        arguments = shlex.split(next(line.split("=", 1)[1] for line in content.splitlines() if line.startswith("ExecStart=")))[-7:]
+        arguments = shlex.split(next(line.split("=", 1)[1] for line in content.splitlines() if line.startswith("ExecStart=")))[3:]
         self.host.owned_write(self.host.paths.p("/proc/self/cgroup"), "0::/system.slice/" + unit)
         self.host.owned_write(self.host.paths.p("/proc/self/stat"), "22 (coordinator) " + " ".join(["S"] + ["0"] * 18 + ["42"]))
         def mapped(value):
@@ -755,7 +804,8 @@ class FeatureWiringTests(FeatureWiringFixture):
                 patch.object(runtime, "owned", side_effect=lambda path: admission.protected_path(self.host, path, "file" if path.is_file() else "directory")), \
                 patch.object(runtime, "pin_directory", side_effect=lambda path: admission.protected_directory(self.host, path)), \
                 patch.object(runtime, "os", SimpleNamespace(**{**vars(os), "geteuid": lambda: 0})), \
-                patch.dict(os.environ, INVOCATION_ID=uuid.uuid4().hex):
+                patch.dict(os.environ, INVOCATION_ID=uuid.uuid4().hex), \
+                patch("host.Host", return_value=self.host):
             self.assertEqual(runtime.main(arguments), 0)
 
     def test_reboot_after_selective_rotation_uses_per_role_generations(self):
@@ -770,7 +820,7 @@ class FeatureWiringTests(FeatureWiringFixture):
             self.host.start(inventory.units[name])
         self.run_coordinator("foundry-admission-open-" + self.profile["instance_id"] + ".service")
         self.assertEqual(set(self.host.running), set(inventory.units.values()))
-        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.roles, time.monotonic() + 1))
+        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, time.monotonic() + 1))
 
     def test_retained_automatic_restart_is_refused_during_pending_rotation(self):
         self.test_service_secret_rotation_retains_http_and_private_values()
@@ -780,10 +830,10 @@ class FeatureWiringTests(FeatureWiringFixture):
         attempted = []
         def observe_pending(*args, **kwargs):
             result = withdraw(*args, **kwargs)
-            before = self.host.running[inventory.units["http"]]
+            before = self.host.running[inventory.units[inventory.identity("http")]]
             with self.assertRaises(c.DeployError):
-                self.host.start(inventory.units["http"])
-            self.assertEqual(self.host.running[inventory.units["http"]], before)
+                self.host.start(inventory.units[inventory.identity("http")])
+            self.assertEqual(self.host.running[inventory.units[inventory.identity("http")]], before)
             attempted.append(True)
             return result
         with patch.object(feature_network, "withdraw", side_effect=observe_pending), patch.object(release.backup, "archive_keys"):
@@ -829,7 +879,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         reviewed = self.request("release-plan", **arguments)
         _, entry = self.host.require_identity(self.project, self.profile)
         _, _, inventory, _ = lifecycle.load(self.host, entry)
-        self.host.enabled.remove(inventory.units["http"])
+        self.host.enabled.remove(inventory.units[inventory.identity("http")])
         before = dict(self.host.running)
         with self.assertRaises(c.DeployError) as error:
             self.request("activate", **arguments, plan_token=reviewed["plan_token"])
@@ -905,7 +955,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, _, restored, _ = lifecycle.load(self.host, entry)
         self.assertEqual(set(restored.roles), {"http", "relay"})
         self.assertEqual(runtime_config.service_secret_snapshot(self.host, entry), secret)
-        self.assertIn(restored.units["relay"], self.host.enabled)
+        self.assertIn(restored.units[restored.identity("relay")], self.host.enabled)
 
 
     def test_reactivating_previous_archive_uses_current_configuration(self):
@@ -923,7 +973,7 @@ class FeatureWiringTests(FeatureWiringFixture):
     def test_application_configuration_and_failed_applied_correction(self):
         import runtime_config
         self.test_service_secret_rotation_retains_http_and_private_values()
-        with patch.object(release.backup, "archive_keys"), patch.object(services, "wait_ready", return_value=False):
+        with patch.object(release.backup, "archive_keys"), patch.object(services, "wait_ready_set", return_value=False):
             with self.assertRaises(c.DeployError):
                 self.request("config-set", secrets={"configuration": {"APP__TEST__TOKEN": "new-app-canary"}}, confirm=True)
         _, entry = self.host.require_identity(self.project, self.profile)
@@ -943,7 +993,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         target = self.version
         self.build_archive(secrets=True, independent=True, version="20261115T000000Z-abcdef12")
         self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
-        with patch.object(release.backup, "archive_keys"), patch.object(services, "wait_ready", return_value=False):
+        with patch.object(release.backup, "archive_keys"), patch.object(services, "wait_ready_set", return_value=False):
             with self.assertRaises(c.DeployError):
                 self.request("config-set", secrets={"configuration": {"APP__TEST__TOKEN": "held-canary"}}, confirm=True)
         self.assertFalse(self.host.running)
@@ -961,13 +1011,13 @@ class FeatureWiringTests(FeatureWiringFixture):
         ready = services.wait_ready_set
         def check(*args, **kwargs):
             self.assertTrue(hold.exists())
-            observed.append(set(args[2]))
+            observed.append(set(unit_selection_names(args[2])))
             return ready(*args, **kwargs)
         with patch.object(services, "wait_ready_set", side_effect=check):
             self.request("rollback", **arguments)
         self.assertIn({"http", "relay"}, observed)
         self.assertFalse(hold.exists())
-        self.assertEqual(set(role for _, _, role in self.host.running.values()), {"http", "relay"})
+        self.assertEqual(set(role.role for _, _, role in self.host.running.values()), {"http", "relay"})
         self.assertEqual(lifecycle.load(self.host, entry)[1].admission.disposition, c.AdmissionDisposition.COMMITTED)
 
     def test_reviewed_rollback_readiness_failure_keeps_configuration_hold(self):
@@ -975,7 +1025,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, entry = self.host.require_identity(self.project, self.profile)
         store, _, _, _ = lifecycle.load(self.host, entry)
         before = c.read_json(store.durable / "configuration-hold.json")
-        with patch.object(services, "wait_ready", return_value=False), self.assertRaises(c.DeployError):
+        with patch.object(services, "wait_ready_set", return_value=False), self.assertRaises(c.DeployError):
             self.request("rollback", **arguments)
         self.assertEqual(c.read_json(store.durable / "configuration-hold.json"), before)
         self.assertEqual(lifecycle.load(self.host, entry)[1].admission.disposition, c.AdmissionDisposition.PENDING)
@@ -996,22 +1046,22 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.rollback_target(target)
         _, entry = self.host.require_identity(self.project, self.profile)
         _, _, inventory, _ = lifecycle.load(self.host, entry)
-        self.assertIn(inventory.units["worker"], self.host.enabled)
-        self.assertIn(inventory.units["worker"], self.host.running)
-        args = inventory.specs["worker"].arguments
+        self.assertIn(inventory.units[inventory.identity("worker")], self.host.enabled)
+        self.assertIn(inventory.units[inventory.identity("worker")], self.host.running)
+        args = inventory.specs[inventory.identity("worker")].arguments
         self.assertEqual(args[args.index("--connection") + 1], "target-queue")
 
     def test_rotation_preserves_enabled_but_stopped_service(self):
         self.test_service_secret_rotation_retains_http_and_private_values()
         _, entry = self.host.require_identity(self.project, self.profile)
         _, _, inventory, _ = lifecycle.load(self.host, entry)
-        self.host.run(["systemctl", "stop", inventory.units["relay"]])
+        self.host.run(["systemctl", "stop", inventory.units[inventory.identity("relay")]])
         self.host.started.clear()
         with patch.object(release.backup, "archive_keys"):
             result = self.request("config-set", secrets={"configuration": {"FOUNDRY_SERVICE_SECRET__RELAY_TOKEN": "next-canary"}}, confirm=True)
         self.assertEqual(self.host.started, [])
         self.assertEqual(result["status"], "degraded")
-        self.assertIn(inventory.units["relay"], self.host.enabled)
+        self.assertIn(inventory.units[inventory.identity("relay")], self.host.enabled)
 
     def test_maintenance_holds_retain_http_and_honor_disable_on_up(self):
         import feature_maintenance
@@ -1021,24 +1071,24 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
         _, entry = self.host.require_identity(self.project, self.profile)
         _, _, inventory, _ = lifecycle.load(self.host, entry)
-        before = self.host.running[inventory.units["http"]]
+        before = self.host.running[inventory.units[inventory.identity("http")]]
         self.request("down", confirm=True)
         _, entry = self.host.require_identity(self.project, self.profile)
         store, selection, inventory, _ = lifecycle.load(self.host, entry)
-        marker = self.host.paths.p(feature_maintenance.marker_path(inventory.specs["relay"].identity))
+        marker = self.host.paths.p(feature_maintenance.marker_path(inventory.specs[inventory.identity("relay")].identity))
         self.assertTrue(marker.is_file())
         self.assertEqual(selection.maintenance_holds, ("relay",))
-        self.assertIn(inventory.units["relay"], self.host.enabled)
-        self.assertNotIn(inventory.units["relay"], self.host.running)
-        self.assertEqual(self.host.running[inventory.units["http"]], before)
-        content = self.host.paths.p("/etc/systemd/system/" + inventory.units["relay"]).read_text()
-        self.assertIn("ConditionPathExists=!" + feature_maintenance.marker_path(inventory.specs["relay"].identity), content)
-        self.host.run(["systemctl", "disable", inventory.units["relay"]])
+        self.assertIn(inventory.units[inventory.identity("relay")], self.host.enabled)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.running)
+        self.assertEqual(self.host.running[inventory.units[inventory.identity("http")]], before)
+        content = self.host.paths.p("/etc/systemd/system/" + inventory.units[inventory.identity("relay")]).read_text()
+        self.assertIn("ConditionPathExists=!" + feature_maintenance.marker_path(inventory.specs[inventory.identity("relay")].identity), content)
+        self.host.run(["systemctl", "disable", inventory.units[inventory.identity("relay")]])
         self.request("up", confirm=True)
         self.assertFalse(marker.exists())
-        self.assertNotIn(inventory.units["relay"], self.host.running)
-        self.assertNotIn(inventory.units["relay"], self.host.enabled)
-        self.assertEqual(self.host.running[inventory.units["http"]], before)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.running)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.enabled)
+        self.assertEqual(self.host.running[inventory.units[inventory.identity("http")]], before)
         store.require_cleanup_clear()
 
     def test_direct_artisan_pause_reconciles_on_status_and_unavailable_store_retains_holds(self):
@@ -1054,10 +1104,10 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, _, inventory, _ = lifecycle.load(self.host, entry)
         with patch("maintenance.status", return_value=None):
             self.request("status")
-        self.assertNotIn(inventory.units["relay"], self.host.running)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.running)
         self.host.maintenance_down = False
         self.request("status")
-        self.assertIn(inventory.units["relay"], self.host.running)
+        self.assertIn(inventory.units[inventory.identity("relay")], self.host.running)
         self.assertEqual(feature_maintenance.record(self.host, entry)["holds"], [])
 
     def test_failed_up_keeps_shared_pause_off_and_allows_explicit_retry_after_cleanup(self):
@@ -1072,10 +1122,10 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, entry = self.host.require_identity(self.project, self.profile)
         store, _, inventory, _ = lifecycle.load(self.host, entry)
         store.require_cleanup_clear()
-        self.assertNotIn(inventory.units["relay"], self.host.running)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.running)
         self.assertEqual(self.host.load_state(entry)["last_attempt"]["outcome"], "failed")
         self.request("up", confirm=True)
-        self.assertIn(inventory.units["relay"], self.host.running)
+        self.assertIn(inventory.units[inventory.identity("relay")], self.host.running)
 
     def test_deploy_during_maintenance_keeps_hold_and_up_restores_new_release(self):
         self.build_archive(independent=True)
@@ -1088,9 +1138,9 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, entry = self.host.require_identity(self.project, self.profile)
         _, selection, inventory, _ = lifecycle.load(self.host, entry)
         self.assertEqual(selection.maintenance_holds, ("relay",))
-        self.assertNotIn(inventory.units["relay"], self.host.running)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.running)
         self.request("up", confirm=True)
-        self.assertEqual(self.host.running[inventory.units["relay"]][1].deployment.release, self.version)
+        self.assertEqual(self.host.running[inventory.units[inventory.identity("relay")]][1].deployment.release, self.version)
 
     def test_maintenance_without_stopped_roles_retains_entire_graph(self):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())
@@ -1169,7 +1219,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertEqual(selected.admission.disposition, c.AdmissionDisposition.COMMITTED)
         self.assertEqual(self.host.started, ["relay", "http"])
         self.assertTrue(provision._ready_configuration(self.host, registry, entry, TOOLS))
-        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.roles, time.monotonic() + 1))
+        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, time.monotonic() + 1))
         network = lifecycle.network_report(self.host, entry, report.claim_inventory(registry))
         self.assertNotIn("nginx_projection_unverified", [f["code"] for f in network["findings"]])
         with patch.object(report, "readiness", autospec=True, return_value={"ready": True, "http_status": 200}), \
@@ -1180,7 +1230,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertTrue(reported["metadata_consistent"])
         self.assertNotIn("running_release_mismatch", [p["code"] for p in result["problems"]])
         self.assertEqual(self.request("logs", role="relay")["logs"], "fixture service log")
-        self.assertIn(inventory.units["relay"], self.host.commands[-1])
+        self.assertIn(inventory.units[inventory.identity("relay")], self.host.commands[-1])
         descriptor = c.read_json(self.host.paths.opt(entry["name"]) / "runtime" / inventory.resolution.id / "http.json")
         self.assertEqual(descriptor["bindings"]["endpoints"][0]["name"], "relay")
         self.assertTrue(self.request("restart", operation_id=str(uuid.uuid4()))["ok"])
@@ -1210,20 +1260,6 @@ class FeatureWiringTests(FeatureWiringFixture):
         (store.durable / "selection.json").unlink()
         feature_network.prepare_boot(self.host)
         self.assertFalse(list(self.host.paths.p(edge.RUNTIME + "/" + self.profile["instance_id"]).glob("*.conf")))
-
-    def configure_firewall(self):
-        from network_firewall_fixture import ROOT, rule_file, live_rules
-        placed = parse_profile(self.profile, self.topology)
-        self.host.public_profile = placed
-        self.host.firewall_live = {family: live_rules(placed.instance_id, family) for family in (4, 6)}
-        self.host.owned_write(self.host.paths.p("/etc/default/ufw"),
-                              'IPV6=yes\nDEFAULT_INPUT_POLICY="DROP"\nDEFAULT_FORWARD_POLICY="DROP"\nDEFAULT_OUTPUT_POLICY="ACCEPT"\nMANAGE_BUILTINS=no\n')
-        self.host.owned_write(self.host.paths.p("/etc/ufw/ufw.conf"), "ENABLED=yes\n")
-        for family, suffix in ((4, ""), (6, "6")):
-            for stem in ("before", "user", "after"):
-                self.host.owned_write(self.host.paths.p(f"/etc/ufw/{stem}{suffix}.rules"), rule_file(stem, family=family))
-        for name in ("ufw-init", "ufw-init-functions"):
-            self.host.owned_write(self.host.paths.p("/usr/lib/ufw/" + name), (ROOT / name).read_text())
 
     def test_running_public_instance_rebootstrap_is_unchanged(self):
         self.build_archive(public=True)
@@ -1305,7 +1341,73 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertEqual(values[runtime_config.SCHEDULER_ENABLED], 'false')
         self.assertEqual(values['APP__TEST__TOKEN'], 'preview-upgrade')
 
-    def test_second_bootstrap_after_tool_upgrade_retains_verified_boot_pin(self):
+    def test_v035_boot_pin_refuses_generation_18_shapes_until_upgrade_then_reboots(self):
+        self.build_archive(public=True)
+        self.configure_firewall()
+        old_source = self.host.paths.root / "generation-16"
+        shutil.copytree(TOOLS, old_source, ignore=shutil.ignore_patterns("__pycache__"))
+        c.atomic_json(old_source / "protocol.json", {**upgrades.protocol(old_source), "generation": 16})
+        legacy = (Path(__file__).parent / "runtime_fixtures/v0_35_0/runtime_v1.py").read_bytes()
+        (old_source / "server/runtime_v1.py").write_bytes(legacy)
+        self.envelope = upgrades.protocol_metadata(old_source)
+        with patch.object(manager, "__file__", str(old_source / "server/manage.py")), \
+                patch.object(provision, "__file__", str(old_source / "lib/provision.py")):
+            plan = self.request("bootstrap-plan", topology=self.topology.projection())
+            self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.envelope = upgrades.protocol_metadata(TOOLS)
+        registry = self.host.read_registry()
+        before = self.host.paths.registry.read_bytes()
+        from test_dns import managed_profile
+        candidates = []
+        candidate = json.loads(before)
+        placed = candidate["instances"][self.profile["instance_id"]]["profile"]
+        placed["placement"]["relay"] = 2
+        placed["listeners"]["relay.api"]["ports"].append(9444)
+        candidates.append(candidate)
+        candidate = json.loads(before)
+        candidate["instances"][self.profile["instance_id"]]["profile"]["listeners"]["relay.api"]["dns"] = (
+            managed_profile().projection()["listeners"]["relay.ingress"]["dns"])
+        candidates.append(candidate)
+        candidate = json.loads(before)
+        topology = self.topology.projection()
+        relay = topology["roles"][1]
+        relay["listeners"]["api"]["proxy_protocol"] = "v1"
+        relay["listeners"]["health"] = {"transport": "tcp", "bind": "loopback"}
+        relay["readiness"]["listener"] = "health"
+        candidate["instances"][self.profile["instance_id"]]["topology"] = validate_topology(topology)
+        candidates.append(candidate)
+        for candidate in candidates:
+            for tools in (registry["tools"], upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)):
+                for pending in (None, str(uuid.uuid4())):
+                    candidate["tools"] = {**tools, "upgrade_operation": pending}
+                    with self.assertRaises(c.DeployError) as caught:
+                        self.host.write_registry(candidate)
+                    self.assertEqual(caught.exception.code, "boot_coordinator_upgrade_required")
+                    self.assertEqual(self.host.paths.registry.read_bytes(), before)
+        upgrade = upgrades.plan_upgrade(self.host, TOOLS)
+        self.assertEqual(upgrades.apply_upgrade(self.host, TOOLS, upgrade["plan_token"], str(uuid.uuid4()))["outcome"], "succeeded")
+        selected = self.host.read_registry()["tools"]["bundle_sha256"]
+        self.assertIn(selected, self.host.loaded_boot)
+        original_profile = self.profile.copy()
+        self.build_archive(copies=2, public=True)
+        self.host.public_profile = parse_profile(self.profile, self.topology)
+        self.profile = original_profile
+        result = self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        self.profile = result["profile_update"]
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, inventory, _ = lifecycle.load(self.host, entry)
+        self.assertEqual(len(inventory.copies("relay")), 2)
+        lifecycle.stop_units(self.host, inventory)
+        self.host.owned_write(self.host.paths.p("/proc/sys/kernel/random/boot_id"), str(uuid.uuid4()))
+        self.run_coordinator(feature_network.BOOT_UNIT)
+        self.run_coordinator("foundry-admission-" + self.profile["instance_id"] + ".service")
+        for identity in inventory.start_order(inventory.units):
+            self.host.start(inventory.units[identity])
+        self.run_coordinator("foundry-admission-open-" + self.profile["instance_id"] + ".service")
+        self.assertEqual(set(self.host.running), set(inventory.units.values()))
+        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, time.monotonic() + 1))
+
+    def test_second_bootstrap_after_tool_upgrade_uses_advanced_verified_boot_pin(self):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())
         self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
         pin = self.host.read_registry()["tools"]["bundle_sha256"]
@@ -1327,7 +1429,8 @@ class FeatureWiringTests(FeatureWiringFixture):
         plan = provision.bootstrap_plan(self.host, self.project, self.profile, source, topology=self.topology.projection())
         self.assertTrue(provision.bootstrap_apply(self.host, self.project, self.profile, source,
                          plan_token=plan["plan_token"], topology=self.topology.projection())["ok"])
-        self.assertEqual(boot.read_bytes(), before)
+        self.assertNotEqual(boot.read_bytes(), before)
+        self.assertIn(self.host.read_registry()["tools"]["bundle_sha256"], boot.read_text())
         self.assertTrue((self.host.paths.tools / "tools" / pin / "manifest.json").exists())
 
     def test_network_preparation_checks_owners_before_any_network_mutation(self):

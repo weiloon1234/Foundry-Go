@@ -250,14 +250,14 @@ class RecoveryTests(unittest.TestCase):
 
     def test_rehearsal_selects_only_http_and_rejects_public_cutover_binding(self):
         inventory, metadata = self.feature(public=True)
-        self.assertEqual(recover.rehearsal_roles(inventory), ("http",))
+        self.assertEqual(recover.rehearsal_roles(inventory), inventory.copies("http"))
         with self.assertRaises(DeployError) as error:
             self.plan(recovery_public_binding=self.binding(metadata))
         self.assertEqual(error.exception.code, "recovery_public_binding")
 
     def test_safe_http_dependency_is_selected_but_still_requires_lane_a_isolation(self):
         inventory, _ = self.feature(http_dependency=True, rehearsal_safe=True, public=True)
-        self.assertEqual(recover.rehearsal_roles(inventory), ("relay", "http"))
+        self.assertEqual(recover.rehearsal_roles(inventory), (inventory.identity("relay"), inventory.identity("http")))
         with patch("feature_lifecycle.prepare_recovery", None), patch.object(self.host, "run") as run, self.assertRaises(DeployError) as error:
             self.plan()
         self.assertEqual(error.exception.code, "capability_unavailable")
@@ -275,7 +275,7 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(error.exception.code, "recovery_rehearsal_dependency")
         self.assertIn("worker", error.exception.detail)
         inventory, _, _ = feature_fixture(rehearsal_safe=True)
-        self.assertEqual(recover.rehearsal_roles(inventory), ("http",))
+        self.assertEqual(recover.rehearsal_roles(inventory), inventory.copies("http"))
         inventory, _, _ = feature_fixture(http_dependency=True, rehearsal_safe=False)
         with self.assertRaises(DeployError) as error:
             recover.rehearsal_roles(inventory)
@@ -339,7 +339,7 @@ class RecoveryTests(unittest.TestCase):
         def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_dir):
             self.assertEqual(snapshot, metadata["feature_recovery"])
             self.assertIn("old_server_stopped_confirmed_at", journal)
-            self.assertEqual(journal["intent"]["recovery_roles"], list(inventory.start_order(inventory.roles)))
+            self.assertEqual(journal["intent"]["recovery_roles"], list(recover.unit_selection_names(inventory.start_order(inventory.select()))))
             events.append("prepare")
         def activate(host, registry, entry, journal):
             self.assertIn("application", journal["completed"])

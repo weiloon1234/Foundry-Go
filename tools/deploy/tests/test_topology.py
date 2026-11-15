@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import DeployError, atomic_json, atomic_write
+from contracts import UnitIdentity, DeployError, atomic_json, atomic_write
 from topology import load_topology, validate_topology, instance_units
 from test_contracts import fixture
 
@@ -19,7 +19,7 @@ class TopologyTests(unittest.TestCase):
         _, _, entry = fixture()
         for names in (("http",), ("http", "scheduler"), ("http", "worker", "scheduler")):
             entry["topology"] = validate_topology({"schema": 1, "roles": [{"name": n} for n in names]})
-            self.assertEqual(instance_units(entry), {n: f"foundry-{n}@abc-production.service" for n in names})
+            self.assertEqual(instance_units(entry), {UnitIdentity(entry["profile"]["instance_id"], n, 1): f"foundry-{n}@abc-production.service" for n in names})
 
     def test_invalid_and_duplicate_roles_are_rejected(self):
         for roles in ([], [{"name": "worker"}], [{"name": "http"}, {"name": "http"}], [{"name": "http", "command": "sh"}], [{"name": "other"}]):

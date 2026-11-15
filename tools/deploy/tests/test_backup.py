@@ -58,6 +58,9 @@ def feature_fixture(*, state="disposable", secret=False, http_dependency=False, 
                          units=tuple(replace(unit, declaration_sha256=c.canonical_digest(role))
                                      for unit, role in zip(inventory.deployment.units, topology.projection()["roles"])))
     resolution = replace(inventory.resolution, deployment_sha256=c.canonical_digest(c.record_document(deployment)))
+    if public:
+        resolution = replace(resolution, endpoints=resolution.endpoints +
+                             (c.AllocatedEndpoint("relay", "ingress", "127.0.0.1", 8202, 1),))
     if http_port is not None:
         resolution = replace(resolution, endpoints=tuple(
             replace(e, port=http_port) if e.role == "http" and e.listener == "http" else e for e in resolution.endpoints))
@@ -133,7 +136,7 @@ class BackupTests(unittest.TestCase):
         self.host.run = command
         loaded = (None, c.DeploymentSelection.parse(snapshot["selection"]), inventory, snapshot)
         with patch.object(feature_lifecycle, "load", return_value=loaded), patch.object(backup, "_record"), \
-                patch.object(backup.services, "enabled_units", return_value=("http",), create=True) as enabled, \
+                patch.object(backup.services, "enabled_units", return_value=inventory.copies("http"), create=True) as enabled, \
                 patch.object(backup.runtime_config, "service_secret_snapshot_paths", return_value=(index, secret, retained), create=True) as secret_files, \
                 patch.object(self.host, "load_state", return_value={"current": {"version": inventory.deployment.release, "commit": "a" * 40}}):
             receipt = backup.archive_keys(self.host, entry)
@@ -172,7 +175,7 @@ class BackupTests(unittest.TestCase):
         entry.update(profile=profile, host_id=profile["host"]["host_id"], deployment_selection=snapshot["selection"])
         selected = c.DeploymentSelection.parse(snapshot["selection"])
         with patch.object(feature_lifecycle, "load", return_value=(None, selected, inventory, snapshot)), \
-                patch.object(services, "enabled_units", return_value=tuple(inventory.roles)), \
+                patch.object(services, "enabled_units", return_value=inventory.select()), \
                 patch.object(backup.runtime_config, "service_secret_snapshot_paths", return_value=()), \
                 patch.object(self.host, "load_state", return_value={"current": {"version": deployment.release}}):
             saved = backup._feature_snapshot(self.host, entry, {})
@@ -550,6 +553,27 @@ class BackupTests(unittest.TestCase):
         self.assertFalse(verification["custom_services_started"])
         self.assertFalse(verification["network_listeners"])
         self.assertFalse(verification["complete_instance_coverage"])
+
+    def test_numbered_copy_drill_retains_each_state_path_without_claiming_restoration(self):
+        from test_copies_ops import expanded_inventory
+        inventory, _ = expanded_inventory()
+        coverage = backup.service_coverage(inventory)
+        write = backup._write_private
+        def with_coverage(host, path, value):
+            if "pgbackrest_label" in value:
+                value = {**value, "coverage": coverage}
+            return write(host, path, value)
+        paths = []
+        for row in coverage["service_state"]:
+            path = self.host.paths.p(row["persistent_state_paths"][0]) / "drill-sentinel"
+            path.parent.mkdir(parents=True)
+            path.write_text(str(row["ordinal"]))
+            paths.append(path)
+        with patch.object(backup, "_write_private", side_effect=with_coverage):
+            self.test_restore_is_new_private_cluster_and_records_timing()
+        verification = self.host.load_state(self.entry)["backup"]["restore_drill"]["verification"]
+        self.assertEqual(verification["service_state"], [{**row, "restored": False} for row in coverage["service_state"]])
+        self.assertEqual([path.read_text() for path in paths], ["1", "2"])
 
     def test_drill_reports_an_exited_postgresql_at_once(self):
         cluster = self.cluster()

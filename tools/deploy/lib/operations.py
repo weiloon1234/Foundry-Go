@@ -1,4 +1,5 @@
 """Pinned operation execution and independent systemd ExecStopPost cleanup."""
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -20,6 +21,40 @@ def directory(host, operation):
 def staging(host, entry, operation):
     # Same filesystem as releases for atomic publication; never in release inventory.
     return host.paths.opt(entry["name"]) / "operations" / contract_uuid(operation)
+
+
+# The only approved runtime-v1 bridge: v0.35.0 to numbered copies. Both
+# revisions retain format-1 singleton, operation and network-boot invocation pins.
+RUNTIME_V16_SHA256 = "52b7afcc99ea4237fd80b7071d39d5f210c44518f204d324b271364fd2805295"
+RUNTIME_COPIES_SHA256 = "d74a742b08ab6006fdeb58d4908227b428285cfbe251c74d106e08a4e26fbf15"
+
+
+def runtime_compatible(installed, expected):
+    return installed == expected or (
+        hashlib.sha256(installed).hexdigest(), hashlib.sha256(expected).hexdigest()
+    ) == (RUNTIME_COPIES_SHA256, RUNTIME_V16_SHA256)
+
+
+def runtime_migration(host, tools_dir):
+    destination = admission.protected_path(host, host.paths.p(services.RUNTIME_ENTRY), "file")
+    if not destination.exists():
+        return None
+    content = (Path(tools_dir) / "server/runtime_v1.py").read_bytes()
+    installed = destination.read_bytes()
+    if installed == content:
+        return None
+    before, after = hashlib.sha256(installed).hexdigest(), hashlib.sha256(content).hexdigest()
+    require((before, after) == (RUNTIME_V16_SHA256, RUNTIME_COPIES_SHA256),
+            "runtime_bridge_required", "Installed runtime-v1 has no approved bridge to the candidate helper.")
+    return {"path": services.RUNTIME_ENTRY, "from_sha256": before, "to_sha256": after}
+
+
+def migrate_runtime(host, tools_dir):
+    """Publish only the approved bridge, under the tools upgrade's durable intent."""
+    require(host.host_lock_fd is not None, "tools_lock_required", "Runtime migration requires the host lock.")
+    if runtime_migration(host, tools_dir):
+        host.owned_write(host.paths.p(services.RUNTIME_ENTRY),
+                         (Path(tools_dir) / "server/runtime_v1.py").read_bytes(), mode=0o755)
 
 
 def check_runtime(host, tools_dir):
@@ -168,7 +203,7 @@ def cleanup(host, request, pin):
         topology = parse_topology(value["topology"])
         inventory = services.UnitInventory(entry["name"], topology, parse_profile(value["profile"], topology),
                                            Deployment.parse(value["deployment"]), RuntimeResolution.parse(value["resolution"]))
-        affected = {unit.role for unit in transition.affected_units}
+        affected = set(transition.affected_units)
         require(transition.operation_id == operation and transition.instance_id == pin["instance_id"] and
                 transition.candidate_resolution_id == inventory.resolution.id and
                 all(unit.instance_id == pin["instance_id"] for unit in transition.affected_units),
@@ -185,11 +220,11 @@ def cleanup(host, request, pin):
         except Exception:
             pass  # Still stop every workload; only the final close can prove closure.
         stopped = True
-        order = tuple(dict.fromkeys((*inventory.stop_order(affected & inventory.roles.keys()),
-                                    *old.stop_order(affected & old.roles.keys()))))
+        order = tuple(dict.fromkeys((*inventory.stop_order(affected & inventory.units.keys()),
+                                    *old.stop_order(affected & old.units.keys()))))
         for name in order:
             try:
-                feature_lifecycle.stop_units(host, inventory if name in inventory.roles else old, (name,))
+                feature_lifecycle.stop_units(host, inventory if name in inventory.units else old, (name,))
             except Exception:
                 stopped = False
         try:

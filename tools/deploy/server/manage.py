@@ -14,6 +14,7 @@ from topology import instance_units, selected_units
 from host import Host
 import journal
 import maintenance
+import operation_selection
 
 ACTIONS = ("capacity-plan", "capacity-apply", "hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect",
            "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "release-plan", "activate", "status", "rollback", "restart",
@@ -31,13 +32,15 @@ def execute(host, action, request):
     require(isinstance(request, dict), "invalid_request", "Request must be a JSON object.")
     require("follow" not in request and (action == "logs" or "lines" not in request),
             "invalid_request", "Only logs accepts lines; follow is local-only.")
+    operation_selection.validate(action, request.get("role"), request.get("copy"))
+    require("copy" not in request or request["copy"] is not None, "invalid_copy", "COPY must be a placed positive integer.")
     if action == "hello":
         return upgrades.hello(host)
     common = {"protocol", "client", "project", "profile", "operation_id", "confirm"}
     recovery_fields = {"topology", "mode", "recovery_archive", "archive_sha256", "target_time", "recovery_public_binding"}
     arguments = {"recover-plan": recovery_fields,
                  "recover-apply": recovery_fields | {"archive", "plan_token", "old_server_gone"}, "bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
-                 "restart": {"role"}, "stop": {"role"}, "logs": {"role", "lines"}, "down": maintenance.FIELDS,
+                 "restart": {"role", "copy"}, "stop": {"role", "copy"}, "logs": {"role", "copy", "lines"}, "down": maintenance.FIELDS,
                  "activate": {"archive", "archive_sha256", "plan_token"}, "release-plan": {"archive", "archive_sha256", "secrets", "target", "expected_current", "topology"}, "config-set": {"values", "secrets"},
                  "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current", "plan_token"},
                  "backup-keys-rotate": {"secrets"}, "backup-recipients-rotate": {"secrets"},
@@ -100,6 +103,8 @@ def execute(host, action, request):
         require(entry is not None and entry["project_id"] == project["id"], "identity_mismatch", "Unknown project/instance UUID.")
         return {"profile": entry["profile"], "topology": entry["topology"]}
     _, entry = host.require_identity(project, profile)
+    if "copy" in request:
+        operation_selection.units(entry, request["role"], request["copy"])
     import feature_lifecycle
     enablement_migration = None
     if feature_lifecycle.is_feature(entry) and request.get("client", {}).get("generation", 0) >= FEATURE_LIFECYCLE_GENERATION:
@@ -124,7 +129,7 @@ def execute(host, action, request):
                                  expected_current=request.get("expected_current"), supplied_topology=request.get("topology"))
     if feature_lifecycle.is_feature(entry) and action in ("activate", "rollback", "restart", "stop", "down", "up"):
         feature_lifecycle.check_operation(action)
-        arguments = {key: request[key] for key in ("archive", "archive_sha256", "plan_token", "role", "target", "expected_current") if key in request}
+        arguments = {key: request[key] for key in ("archive", "archive_sha256", "plan_token", "role", "copy", "target", "expected_current") if key in request}
         if action in ("down", "up"):
             require(request.get("confirm") is True, "confirmation_required", "Confirm the maintenance change.")
             arguments["maintenance"] = {key: request[key] for key in maintenance.FIELDS if key in request}
@@ -207,12 +212,14 @@ def execute(host, action, request):
     if action == "config-keys":
         values = parse_env(check_path(host.paths.instance_config(entry["name"]) / "app.env", "file").read_text())
         if feature_lifecycle.is_feature(entry):
-            from topology import parse_topology, service_secret_keys
-            values.update({key: "[redacted]" for key in service_secret_keys(dict(parse_topology(entry["topology"], registered=True).secrets))})
+            from topology import parse_topology, parse_profile
+            from runtime_config import service_secret_keys
+            topology = parse_topology(entry["topology"], registered=True)
+            values.update({key: "[redacted]" for key in service_secret_keys(topology, parse_profile(entry["profile"], topology))})
         return {"keys": sorted(values), "locked_keys": sorted(release.pipeline_keys(entry)), "configuration_revision": entry["configuration_revision"]}
     if action == "logs":
         # Explicit operator action. Logs are never included in the host report.
-        argv = journal.arguments(entry, request.get("role", "all"), request.get("lines", journal.DEFAULT_LINES))
+        argv = journal.arguments(entry, request.get("role", "all"), request.get("lines", journal.DEFAULT_LINES), ordinal=request.get("copy"))
         result = host.run(argv, timeout=15)
         response = {"instance": entry["name"], "logs": result.stdout}
         # Count JSON escaping and main's trailing newline, including oversized single entries.
@@ -223,8 +230,10 @@ def execute(host, action, request):
         state = release.public_state(host.load_state(entry))
         version = release.current_version(host, entry)
         live = maintenance.status(host, entry, release.release_path(host, entry, version)) if version else None
+        from report import services_document
+        observations = release.services(host, entry)
         return {"instance": entry, "state": state, "maintenance": live,
-                "live_version": version, "services": release.services(host, entry),
+                "live_version": version, "services": services_document(observations),
                 **({"enablement_migration": enablement_migration} if enablement_migration else {})}
     if action in ("down", "up"):
         require(request.get("confirm") is True, "confirmation_required", "Confirm the maintenance change.")
@@ -277,7 +286,7 @@ def execute(host, action, request):
                 state["status"] = "degraded" if role != "all" or action == "stop" else "failed"
                 release.finish(host, entry, state, "failed", error.code if isinstance(error, DeployError) else "filesystem_failed")
                 raise
-            return {"ok": True, "instance": entry["name"]}
+            return {"ok": True, "instance": entry["name"], "status": state["status"], "degraded": state["status"] == "degraded"}
     raise DeployError("unknown_action", "Unknown deployment action.")
 
 

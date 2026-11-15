@@ -6,6 +6,7 @@ results, process inspection, cgroups, and all property parsers remain real.
 """
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import signal
 import socket
 import sys
@@ -18,12 +19,13 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
 import backup
 import capacity
-from contracts import DeployError
+from contracts import DeployError, UnitIdentity
 from host import Host
 import packages
 import redis_acl
 import release
 import report
+import services
 
 
 TEMPLATES = Path(__file__).resolve().parents[1] / 'server/templates'
@@ -86,6 +88,9 @@ def probe(mode, directory):
         counter.write_text(str(count))
         if count == 1:
             raise SystemExit(23)
+    if mode == 'numbered':
+        root.mkdir(exist_ok=True)
+        (root / 'identity').write_text(root.name)
     if mode == 'wait':
         (root / 'waiting').touch()
         while not (root / 'continue').exists():
@@ -147,6 +152,7 @@ class SystemdContractTests(unittest.TestCase):
 
     def setUp(self):
         self.host = ProbeHost()
+        self.identity = UnitIdentity(str(uuid.uuid4()), 'http', 1)
         self.prefix = 'foundry-contract-probe-' + uuid.uuid4().hex[:12]
         self.units, self.files, self.slices = [], [], set()
         temporary = tempfile.TemporaryDirectory(prefix=self.prefix + '-', dir='/run')
@@ -263,13 +269,14 @@ class SystemdContractTests(unittest.TestCase):
         import network_confinement
         unit = self.service('rehearsal-filter', options=network_confinement.FILTER)
         self.host.run(['systemctl', 'start', unit])
-        inventory = SimpleNamespace(units={'relay': unit})
-        proof = network_confinement.isolation(self.host, inventory, 'relay')
+        identity = UnitIdentity(str(uuid.uuid4()), 'relay', 1)
+        inventory = SimpleNamespace(units={identity: unit})
+        proof = network_confinement.isolation(self.host, inventory, identity)
         self.assertTrue(all(proof['programs']))
         unfiltered = self.service('rehearsal-unfiltered')
         self.host.run(['systemctl', 'start', unfiltered])
         with self.assertRaises(DeployError) as raised:
-            network_confinement.isolation(self.host, SimpleNamespace(units={'relay': unfiltered}), 'relay')
+            network_confinement.isolation(self.host, SimpleNamespace(units={identity: unfiltered}), identity)
         self.assertEqual(raised.exception.code, 'network_confinement')
 
     def assert_code(self, code, action):
@@ -288,14 +295,14 @@ class SystemdContractTests(unittest.TestCase):
         (self.root / 'proc').symlink_to('/proc')
         host = Host(Paths(self.root))
         from test_contracts import fixture, registry
-        from topology import instance_units
+        from topology import selected_units
         from contracts import identity
         project, _, entry = fixture(project_slug='probe-' + self.prefix[-12:])
         entry['profile']['instance_id'] = INSTANCE
         # Database and Redis allocations derive from the instance ID.
         entry['allocations'].update(identity(project, entry['profile'])['allocations'])
         host.write_registry(registry(entry))
-        self.admission_unit = instance_units(entry)['http'].removesuffix('.service')
+        self.admission_unit = next(iter(selected_units(entry, 'http').values())).removesuffix('.service')
         store = admission.AdmissionStore(host, INSTANCE)
         store.record_operation(attempt())
         store.begin(DeploymentSelection.parse(selection()), RuntimeResolution.parse(resolution()))
@@ -384,13 +391,69 @@ class SystemdContractTests(unittest.TestCase):
                 self.assertEqual(live['MainPID'], packages._service(self.host, unit)['MainPID'])
                 self.host.run(['systemctl', 'restart', unit])
                 self.assertNotEqual(invocation, self.show(unit, 'InvocationID')['InvocationID'])
-                with patch.object(release, 'selected_units', return_value={'http': unit}):
-                    release.stop(self.host, {}, role='http')
+                with patch.object(release, 'selected_units', return_value={self.identity: unit}):
+                    release.stop(self.host, {'profile': {'instance_id': self.identity.instance_id}}, role='http')
                 stopped = self.show(unit)
                 self.assertEqual(('inactive', 'dead', '0', '0', '', 'success'),
                                  tuple(stopped[key] for key in ('ActiveState', 'SubState', 'MainPID',
                                                                'ControlPID', 'ControlGroup', 'Result')))
                 self.assertIn(stopped['Job'], ('', '0'))
+
+    def test_numbered_instances_grow_and_shrink_with_exit_proof(self):
+        units = {}
+        for ordinal in range(1, 5):
+            unit = self.write_unit(self.prefix + f'-copies@{ordinal}.service',
+                '[Service]\nType=exec\nRestart=no\nKillMode=control-group\nTimeoutStopSec=1s\n'
+                f'ExecStart={self.command("numbered", self.root / "%i")}\n')
+            units[ordinal] = unit
+            self.host.run(['systemctl', 'start', unit], timeout=10)
+            self.wait_for(lambda: (self.root / str(ordinal) / 'ready').exists())
+            if ordinal == 3:
+                original = {n: release.service(self.host, value) for n, value in units.items()}
+        for ordinal, before in original.items():
+            live = release.service(self.host, units[ordinal])
+            self.assertEqual(before['MainPID'], live['MainPID'])
+            self.assertEqual(before['process'], live['process'])
+        groups = {self.show(unit)['ControlGroup'] for unit in units.values()}
+        self.assertEqual(4, len(groups))
+        self.assertEqual(1, len({self.show(unit)['Slice'] for unit in units.values()}))
+        for ordinal in (4, 3):
+            unit = units[ordinal]
+            with self.assertRaises(DeployError):
+                services.stopped_unit(self.host, unit)
+            self.host.run(['systemctl', 'stop', unit], timeout=10)
+            proof = services.stopped_unit(self.host, unit)
+            self.assertEqual(('0', '0', ''), tuple(proof[key] for key in ('MainPID', 'ControlPID', 'ControlGroup')))
+            path = Path('/run/systemd/system') / unit
+            path.unlink()
+            self.files.remove(path)
+            self.host.run(['systemctl', 'daemon-reload'], timeout=10)
+            self.assertEqual('not-found', services.stopped_unit(self.host, unit)['LoadState'])
+            self.assertEqual(str(ordinal), (self.root / str(ordinal) / 'identity').read_text())
+        for ordinal in (1, 2):
+            live = release.service(self.host, units[ordinal])
+            self.assertEqual(original[ordinal]['MainPID'], live['MainPID'])
+            self.assertEqual(original[ordinal]['process'], live['process'])
+
+    def test_numbered_readiness_uses_one_real_stability_deadline(self):
+        from contracts import digest
+        identities = [UnitIdentity(self.identity.instance_id, 'copies', n) for n in range(1, 4)]
+        units = {identity: self.service('copies', name=self.prefix + f'-copies@{identity.ordinal}')
+                 for identity in identities}
+        for unit in units.values():
+            self.host.run(['systemctl', 'start', unit], timeout=10)
+        executable = str(Path('/usr/bin/sleep').resolve())
+        spec = SimpleNamespace(executable=executable, executable_sha256=digest(Path(executable)))
+        inventory = SimpleNamespace(units=units, specs=dict.fromkeys(identities, spec),
+            roles={'copies': SimpleNamespace(common=SimpleNamespace(name='copies', confinement='none'))},
+            resolution=SimpleNamespace(endpoints=(), unix_endpoints=()),
+            identity=lambda role: UnitIdentity(self.identity.instance_id, role, 1))
+        started = time.monotonic()
+        self.assertFalse(services.wait_ready_set(self.host, inventory, identities, started + .75))
+        self.assertLess(time.monotonic() - started, 1.5, 'Each copy received a separate readiness budget')
+        self.assertTrue(services.wait_ready_set(self.host, inventory, identities, time.monotonic() + 8))
+        self.host.run(['systemctl', 'stop', units[identities[-1]]], timeout=10)
+        self.assertFalse(services.wait_ready_set(self.host, inventory, identities, time.monotonic() + .75))
 
     def test_loaded_fragment_dropins_reload_and_enablement(self):
         unit = self.service('metadata', template=True)
@@ -424,11 +487,12 @@ class SystemdContractTests(unittest.TestCase):
         self.assertEqual('Foundry contract edited', self.show(unit, 'Description')['Description'])
         self.host.run(['systemctl', 'enable', '--runtime', unit])
         self.assertEqual('enabled-runtime', self.host.run(['systemctl', 'is-enabled', unit]).stdout.strip())
-        with patch.object(release, 'instance_units', return_value={'http': unit}):
-            self.assertEqual(['http'], release.enabled_roles(self.host, {}))
+        with patch.object(release, 'instance_units', return_value={self.identity: unit}):
+            self.assertEqual([self.identity],
+                             release.enabled_roles(self.host, {}))
         self.host.run(['systemctl', 'disable', '--runtime', unit])
         self.assertNotEqual(0, self.host.run(['systemctl', 'is-enabled', unit], check=False).returncode)
-        with patch.object(release, 'instance_units', return_value={'http': unit}):
+        with patch.object(release, 'instance_units', return_value={self.identity: unit}):
             self.assertEqual([], release.enabled_roles(self.host, {}))
         missing = self.prefix + '-missing.service'
         self.assertEqual('not-found', packages._service(self.host, missing)['LoadState'])

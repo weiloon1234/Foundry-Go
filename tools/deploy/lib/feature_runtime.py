@@ -13,7 +13,7 @@ import services
 from topology import ExecutableRole, parse_profile, parse_topology
 
 
-def selected(host, pin, launch):
+def selected(host, pin, launch, *, dispatch=False):
     invocation = HelperInvocation.parse(pin)
     deployment = Deployment.parse(launch["deployment"])
     resolution = RuntimeResolution.parse(launch["resolution"])
@@ -22,21 +22,26 @@ def selected(host, pin, launch):
     registry = host.read_registry()
     entry = registry["instances"][invocation.unit.instance_id]
     inventory = services.UnitInventory(entry["name"], topology, profile, deployment, resolution)
-    spec = inventory.specs[invocation.unit.role]
+    spec = inventory.specs[invocation.unit]
+    selected_profile = entry["profile"] == profile.projection()
+    if not selected_profile and not dispatch:
+        store = admission.AdmissionStore(host, invocation.unit.instance_id)
+        _, current = store._selection()
+        selected_profile = store.retained_origin(invocation, current) is not None
     require(canonical_digest(record_document(spec)) == invocation.unit_spec_sha256 and
-            resolution.id == invocation.resolution_id and entry["profile"] == profile.projection(),
+            resolution.id == invocation.resolution_id and (selected_profile or dispatch),
             "feature_runtime_selection", "Pinned unit differs from its immutable launch record.")
     return invocation, entry, inventory, spec
 
 
 def run(action, pin, launch):
     host = Host()
-    invocation, entry, inventory, spec = selected(host, pin, launch)
+    invocation, entry, inventory, spec = selected(host, pin, launch, dispatch=action == "dispatch")
     role = inventory.roles[spec.identity.role]
     paths = services.ServicePaths.for_unit(spec.identity, invocation.resolution_id)
     view = host.paths.p(paths.base) / "invocations" / invocation.process.invocation_id
     dispatch = view / "dispatch.json"
-    expected_unit = f"foundry-admission-{spec.identity.instance_id}.service" if action == "boot" else inventory.units[spec.identity.role]
+    expected_unit = f"foundry-admission-{spec.identity.instance_id}.service" if action == "boot" else inventory.units[spec.identity]
     if action == "open":
         expected_unit = f"foundry-admission-open-{spec.identity.instance_id}.service"
     groups = host.paths.p("/proc/self/cgroup").read_text().splitlines()
@@ -59,7 +64,7 @@ def run(action, pin, launch):
     if action in ("boot", "open"):
         from feature_lifecycle import boot, open_boot, load
         store, _, current, _ = load(host, entry)
-        require(current.specs[spec.identity.role] == spec and
+        require(current.specs[spec.identity] == spec and
                 (invocation.resolution_id == current.resolution.id or
                  store.retained_origin(invocation, current.resolution) is not None),
                 "feature_runtime_selection", "Coordinator generation differs from the selected role origin.")
@@ -71,7 +76,7 @@ def run(action, pin, launch):
         require(role.recovery_rehearsal_safe, "recovery_dependency",
                 f"Unsafe role {spec.identity.role} cannot run in a recovery rehearsal.")
     if role.common.confinement == "loopback" or (recovery_rehearsal.active(entry) and isinstance(role, ExecutableRole)):
-        network_confinement.isolation(host, inventory, spec.identity.role)
+        network_confinement.isolation(host, inventory, spec.identity)
     store = admission.AdmissionStore(host, spec.identity.instance_id)
     selection, current_resolution = store._selection()
     permit_id = None
@@ -87,7 +92,7 @@ def run(action, pin, launch):
         from release import service, _matches_executable
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
-            observed = service(host, inventory.units[spec.identity.role], timeout=min(5, deadline - time.monotonic()))
+            observed = service(host, inventory.units[spec.identity], timeout=min(5, deadline - time.monotonic()))
             if (observed["ActiveState"] in ("active", "activating") and
                     _matches_executable({**observed, "ActiveState": "active"}, host.paths.p(spec.executable))):
                 process = ProcessIdentity(int(observed["MainPID"]), int(observed["process"]["start"]),
@@ -105,11 +110,15 @@ def run(action, pin, launch):
     views = services.bundle_views(role, paths, topology=inventory.topology,
                                   architecture=inventory.profile.architecture, artifact_roots=roots, payloads=declaration.artifacts)
     release = host.paths.opt(entry["name"]) / "releases" / inventory.deployment.release
+    for binding in spec.bindings.copies:
+        for copy in binding.copies:
+            if copy.secret_file:
+                runtime_config._read_value_file(host, entry, copy.secret_file)
     if isinstance(role, ExecutableRole):
-        for path in launch["secret_paths"].get(spec.identity.role, {}).values():
+        for path in launch["secret_paths"].get(spec.identity.record_key, {}).values():
             runtime_config._read_value_file(host, entry, path)
         runtime_config.prepare_service(host, store, invocation, role, spec, release, declaration.inventory,
-                                       views=views, secret_paths=launch["secret_paths"].get(spec.identity.role, {}),
+                                       views=views, secret_paths=launch["secret_paths"].get(spec.identity.record_key, {}),
                                        uid=entry["allocations"]["uid"], gid=entry["allocations"]["gid"], permit_id=permit_id, entry=entry)
     with store.preparation(invocation, permit_id=permit_id):
         import shared_directories
@@ -125,9 +134,9 @@ def run(action, pin, launch):
         environment = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
                        "INVOCATION_ID": invocation.process.invocation_id,
                        "WEB__PUBLIC_DIR": str(release / "public"),
-                       "FOUNDRY_DEPLOY_RUNTIME_FILE": launch["descriptors"][spec.identity.role]}
+                       "FOUNDRY_DEPLOY_RUNTIME_FILE": launch["descriptors"][spec.identity.record_key]}
         if isinstance(role, ExecutableRole):
-            secrets = launch["secret_paths"].get(spec.identity.role, {})
+            secrets = launch["secret_paths"].get(spec.identity.record_key, {})
             for key, value in role.environment:
                 require(key not in environment and not key.startswith("FOUNDRY_"),
                         "service_environment", "Custom environment cannot override framework runtime identity.")

@@ -11,7 +11,7 @@ from unittest.mock import patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
-from contracts import DeployError, HOST_PATHS
+from contracts import DeployError, HOST_PATHS, UnitIdentity
 from host import Host, Paths
 import operation_lock
 import network_confinement
@@ -22,14 +22,15 @@ class RecoveryIsolationTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(prefix='b24-', dir='/tmp')
         self.addCleanup(temporary.cleanup)
         self.host = Host(Paths(Path(temporary.name)))
-        self.inventory = SimpleNamespace(units={'relay': 'foundry-fixture-relay.service'})
+        self.identity = UnitIdentity(str(uuid.uuid4()), 'relay', 1)
+        self.inventory = SimpleNamespace(units={self.identity: 'foundry-fixture-relay.service'})
         self.properties = {'IPAddressDeny': '0.0.0.0/0 ::/0', 'IPAddressAllow': '127.0.0.0/8 ::1/128',
                            'ControlGroup': '/system.slice/foundry-fixture-relay.service', 'DropInPaths': ''}
 
     def observe(self):
         output = '\n'.join(k + '=' + v for k, v in self.properties.items())
         with patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, output, '')):
-            return network_confinement.isolation(self.host, self.inventory, 'relay')
+            return network_confinement.isolation(self.host, self.inventory, self.identity)
 
     def test_loaded_loopback_policy_requires_attached_ingress_and_egress(self):
         with patch.object(network_confinement, 'attached_programs', return_value=[[17], [18]]) as query:

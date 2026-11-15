@@ -11,6 +11,7 @@ import operations
 import packages
 import runtime_config
 import services
+from contracts import unit_selection_names
 from contracts import (Deployment, ReleaseDeclaration, RuntimeResolution, atomic_json,
                        canonical_digest, contract_uuid, digest, record_document, read_json, require)
 from topology import parse_profile, parse_topology
@@ -23,8 +24,8 @@ def observations(host, registry, entry, topology, profile, operation_id):
     enabled, units = [], {}
     if "deployment_selection" in entry:
         _, _, current, _ = lifecycle.load(host, entry)
-        enabled = list(services.enabled_units(host, current.units))
-        units = {name: release.service(host, unit) for name, unit in current.units.items()}
+        enabled = list(unit_selection_names(services.enabled_units(host, current.units)))
+        units = {name.record_key: release.service(host, unit) for name, unit in current.units.items()}
         network = feature_network.plan(host, current.topology, current.profile, package, entry=entry, review_operation=operation_id)
     else:
         network = feature_network.plan(host, topology, profile, package, entry=entry)
@@ -106,8 +107,9 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
             target_path = target
         topology = parse_topology(declaration.topology_json)
         from upgrades import check_feature_generation
-        candidate_profile = parse_profile(release.target_declaration(host, entry, manifest)["profile"], topology)
-        check_feature_generation(registry, topology, entry, profile=candidate_profile.projection())
+        target_profile = release.target_declaration(host, entry, manifest)["profile"]
+        check_feature_generation(registry, topology, entry, profile=target_profile)
+        candidate_profile = parse_profile(target_profile, topology)
         import feature_maintenance
         feature_maintenance.stopped_roles(topology)
         application, changes = runtime_config.configuration_parts(configuration or {}, topology=topology)
@@ -126,9 +128,28 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
             paths = config["paths"]
         else:
             values = runtime_config.validate_runtime_environment(host, entry)
+        previous, affected = None, None
+        if "deployment_selection" in entry:
+            _, selection, previous, prior_launch = lifecycle.load(host, entry)
+            if previous.profile.placement != candidate_profile.placement:
+                affected = lifecycle.changed_release_units(host, entry, previous, prior_launch, declaration,
+                    target_path, roots, candidate_profile, paths)
+            else:
+                affected = set(previous.units)
+            from contracts import AdmissionDisposition
+            if (selection.admission.disposition is not AdmissionDisposition.COMMITTED
+                    or previous.topology.shared_directories and affected & previous.units.keys() &
+                    set(lifecycle.expand_placement(topology, candidate_profile.instance_id, candidate_profile.placement))):
+                affected.update(previous.units)
+                affected.update(lifecycle.expand_placement(topology, candidate_profile.instance_id, candidate_profile.placement))
         inventory, secret_paths = lifecycle.resolve(host, entry, manifest, declaration, target_path, roots, operation_id,
             private_paths=paths, values=values, profile=candidate_profile.projection(),
-            revision=entry["configuration_revision"] + bool(configuration_intent))
+            revision=entry["configuration_revision"] + bool(configuration_intent), previous=previous, affected=affected)
+        changes = lifecycle.changed_units(previous, inventory) if previous else set(inventory.units)
+        if affected is not None:
+            changes.update(affected)
+        added = set(inventory.units) - (set(previous.units) if previous else set())
+        removed_units = set(previous.units) - set(inventory.units) if previous else set()
         launch = lifecycle.save_launch(host, entry, inventory, declaration, roots, secret_paths)
         env = runtime_config.effective_environment_path(host, entry, inventory.resolution, candidate=True)
         release.app(host, entry, target_path, "config:check", env_file=env)
@@ -141,6 +162,9 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
         managed_dns = dns.plan(host, entry, candidate_profile, operation_id)
         enabled, running, removed = lifecycle.transition_enablement(host, entry, inventory, restoring=restoring)
         holds, maintenance_running, _ = feature_maintenance.selection(host, entry, inventory, enabled, running, None)
+        if previous:
+            changes.update(name for name in previous.units if name not in maintenance_running
+                           and observed["units"][name.record_key]["ActiveState"] != "inactive")
         # Values and credential-derived digests exist only in the private records.
         public = {"ok": True, "operation_id": operation_id, "archive_sha256": checksum,
                   "deployment_sha256": inventory.resolution.deployment_sha256,
@@ -148,12 +172,22 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                   "action": "rollback" if rollback else "activate", "expected_current": expected_current,
                   "private_intent_id": intent, "configuration_intent_id": configuration_intent,
                   "observations": observed, "endpoints": [asdict(e) for e in inventory.resolution.endpoints],
-                  "unit_changes": list(inventory.units), "required_service_secrets": requirements,
+                  "unit_changes": sorted(unit_selection_names(changes)),
+                  "added_units": sorted(unit_selection_names(added)),
+                  "removed_units": sorted(unit_selection_names(removed_units)),
+                  "changed_units": sorted(unit_selection_names(changes - added - removed_units)),
+                  "retained_units": sorted(unit_selection_names(set(inventory.units) - changes)),
+                  "required_service_secrets": requirements,
                   "maintenance_policy": {name: "stop" if role.common.maintenance == "stop" else "continue"
                                          for name, role in inventory.roles.items()},
-                  "restoring": restoring, "enabled_roles": list(enabled), "running_roles": list(running),
-                  "maintenance_holds": sorted(holds), "maintenance_running_roles": sorted(maintenance_running),
-                  "removed_enablement": removed}
+                  "restoring": restoring, "enabled_roles": list(unit_selection_names(enabled)), "running_roles": list(unit_selection_names(running)),
+                  "maintenance_holds": sorted(unit_selection_names(holds)), "maintenance_running_roles": sorted(unit_selection_names(maintenance_running)),
+                  "removed_enablement": dict(zip(unit_selection_names(removed), removed.values()))}
+        if restoring and "deployment_selection" in entry:
+            from copy_enablement import restoration_plan
+            restored = restoration_plan(host, entry, lifecycle.load(host, entry)[2], inventory)
+            if restored:
+                public["restored_copies"] = restored
         public["managed_dns"] = managed_dns
         public["plan_token"] = canonical_digest(public)
         admission.protected_directory(host, path.parent, 0o700)

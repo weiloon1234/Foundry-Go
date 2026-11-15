@@ -605,6 +605,51 @@ class DNSLifecycleTests(FeatureWiringFixture):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())
         self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
 
+    def test_numbered_proxy_count_changes_and_rollback_never_write_dns(self):
+        import feature_lifecycle
+        import edge
+        raw = managed_profile().projection()["listeners"]["relay.ingress"]["dns"]
+        options = dict(public=True, proxy_protocol=True, managed_dns=raw,
+                       independent=True, maintenance="continue")
+        self.build_archive(copies=2, **options)
+        self.bootstrap()
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        original = self.version
+        owned = copy.deepcopy(self.provider.records)
+        for count, version in ((3, "20261116T000000Z-abcdef12"), (1, "20261117T000000Z-abcdef12")):
+            current = copy.deepcopy(self.profile)
+            self.build_archive(copies=count, version=version, **options)
+            self.host.public_profile = t.parse_profile(self.profile, self.topology)
+            self.profile = current
+            with patch.object(dns.Cloudflare, "write", side_effect=AssertionError("Count changes must not write DNS")):
+                result = self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+            self.profile = result["profile_update"]
+            self.assertEqual(self.provider.records, owned)
+            _, entry = self.host.require_identity(self.project, self.profile)
+            inventory = feature_lifecycle.load(self.host, entry)[2]
+            self.assertEqual(len(inventory.copies("relay")), count)
+            self.assertEqual(inventory.roles["relay"].readiness.listener, "health")
+            for identity in inventory.copies("relay"):
+                self.assertIn(inventory.units[identity], self.host.running)
+                endpoint = next(e for e in inventory.resolution.endpoints
+                                if e.role == "relay" and e.ordinal == identity.ordinal and e.listener == "api")
+                leaf = "stream-relay.api" + ("@" + str(identity.ordinal) if identity.ordinal > 1 else "") + ".conf"
+                content = (self.host.paths.p(edge.RUNTIME) / self.profile["instance_id"] / leaf).read_text()
+                self.assertEqual(content.count("proxy_protocol on;"), 1)
+                self.assertIn(f"proxy_pass {endpoint.address}:{endpoint.port};", content)
+            full = self.host.nginx_config()
+            self.assertNotRegex(full, r"@[A-Z_]+@")
+            self.assertTrue(edge._expanded_configuration(full))
+            self.assertIn(["nginx", "-t", "-q"], self.host.commands)
+        target_profile = copy.deepcopy(self.profile)
+        target_profile["placement"]["relay"] = 2
+        target_profile["listeners"]["relay.api"]["ports"] = [9443, 9444]
+        self.host.public_profile = t.parse_profile(target_profile, self.topology)
+        with patch.object(dns.Cloudflare, "write", side_effect=AssertionError("Copy rollback must not write DNS")):
+            from test_feature_wiring import FeatureWiringTests
+            FeatureWiringTests.rollback_target(self, original)
+        self.assertEqual(self.provider.records, owned)
+
     def failed_dns_batch(self, *, cleanup_closes=True):
         import feature_lifecycle
         import feature_network

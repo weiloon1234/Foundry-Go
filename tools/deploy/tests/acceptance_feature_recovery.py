@@ -179,9 +179,9 @@ def source():
         # Out-of-band systemd changes deliberately leave cached selection alone.
         # HTTP depends on relay and the confined wildcard role; retain relay and its
         # Unix provider as the enabled graph.
-        run(["systemctl", "disable", inventory.units["http"], inventory.units["wildcard"]])
-        run(["systemctl", "enable", inventory.units["relay"], inventory.units["socket-provider"]])
-        assert set(services.enabled_units(host, inventory.units)) == {"relay", "socket-provider"}
+        run(["systemctl", "disable", inventory.units[inventory.identity("http")], inventory.units[inventory.identity("wildcard")]])
+        run(["systemctl", "enable", inventory.units[inventory.identity("relay")], inventory.units[inventory.identity("socket-provider")]])
+        assert set(services.enabled_units(host, inventory.units)) == set(inventory.select(roles=("relay", "socket-provider")))
         run(["systemctl", "disable", "--now", "foundry-backup-full-cluster.timer", "foundry-backup-diff-cluster.timer"])
         for unit in ("foundry-backup-full-cluster.service", "foundry-backup-diff-cluster.service"):
             assert run(["systemctl", "show", unit, "-p", "ActiveState", "--value"]).stdout.strip() == "inactive"
@@ -312,7 +312,7 @@ def takeover():
                 (directory / name).chmod(0o600)
             result = prepare(host, registry, entry, journal, snapshot, *args)
             stopped_units(archived_inventory)
-            assert set(services.enabled_units(host, archived_inventory.units)) == {"relay", "socket-provider"}
+            assert set(services.enabled_units(host, archived_inventory.units)) == set(archived_inventory.select(roles=("relay", "socket-provider")))
             probe_target(host, opened=False)
             prepared.append(True)
             return result
@@ -334,9 +334,9 @@ def takeover():
         _, selection, inventory, launch = feature_lifecycle.load(host, entry)
         assert launch["declaration"] == metadata["feature_recovery"]["declaration"]
         assert read_json(Path(recover.JOURNAL).with_name("source-deployment.json")) == metadata["feature_recovery"]
-        assert set(services.enabled_units(host, inventory.units)) == {"relay", "socket-provider"} and selection.maintenance_holds == ()
-        assert run(["systemctl", "is-active", inventory.units["relay"]]).stdout.strip() == "active"
-        disabled = run(["systemctl", "show", inventory.units["http"], "-p", "ActiveState", "-p", "MainPID",
+        assert set(services.enabled_units(host, inventory.units)) == set(inventory.select(roles=("relay", "socket-provider"))) and selection.maintenance_holds == ()
+        assert run(["systemctl", "is-active", inventory.units[inventory.identity("relay")]]).stdout.strip() == "active"
+        disabled = run(["systemctl", "show", inventory.units[inventory.identity("http")], "-p", "ActiveState", "-p", "MainPID",
                         "-p", "ExecMainStartTimestampMonotonic"]).stdout
         assert dict(line.split("=", 1) for line in disabled.splitlines()) == {
             "ActiveState": "inactive", "MainPID": "0", "ExecMainStartTimestampMonotonic": "0"}, "Disabled HTTP started during recovery"
@@ -346,8 +346,8 @@ def takeover():
             path = Path(spec.executable)
             assert path.is_file() and path.stat().st_mode & 0o111 and digest(path) == spec.executable_sha256, "Selected executable was not restored exactly"
         relay = next(unit for unit in metadata["feature_recovery"]["deployment"]["units"] if unit["identity"]["role"] == "relay")
-        assert inventory.specs["relay"].executable_sha256 == relay["executable_sha256"]
-        assert services.wait_ready(host, inventory, "relay", time.monotonic() + 90)
+        assert inventory.specs[inventory.identity("relay")].executable_sha256 == relay["executable_sha256"]
+        assert services.wait_ready(host, inventory, inventory.identity("relay"), time.monotonic() + 90)
         feature.assert_unix_binding(host, inventory, entry)
         placed = parse_profile(profile, inventory.topology)
         expected = edge.stream_projection(placed, inventory.resolution, None, topology=inventory.topology)

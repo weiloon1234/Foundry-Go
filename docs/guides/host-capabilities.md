@@ -25,6 +25,9 @@ it sets a sticky generation-18 floor, retained after rollback and recovery even
 when the selected release no longer declares it.
 Managed Cloudflare DNS requires generation 18 on both client and host. Selecting
 managed mode keeps that floor after rollback or removal of the last managed listener.
+Numbered copies, copy bindings, and copy-scoped secrets share generation 18.
+Tools upgrades advance and verify the boot coordinator before publishing any of
+these new registry or profile shapes. A stale pin refuses application-state writes.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
 
@@ -136,7 +139,7 @@ launch origin does not grant permission to start.
 
 | Declaration outside release 1 | Later capability |
 | --- | --- |
-| Wrappers, role instance counts above one, ordinals other than one | B24 release 2 |
+| Supervising wrappers | B24 release 3 |
 | Outbound PROXY v2 and inbound PROXY to nginx | Unsupported; outbound v1 is available with generation 18 |
 | UDP listeners | Planned for B24 release 2; unsupported in release 1 |
 | Artifact formats other than `file` and `tar.gz` | Unsupported format; no later numbered release is promised |
@@ -450,8 +453,9 @@ paths under `deploy/bin/`.
   binding and supplies an executable path, bundle path, TCP/HTTP endpoint URL or Unix
   socket path. `config`
   names a declared configuration. `state_path` and `runtime_path` contain relative
-  paths; `config_root`, `data_root` and `copy_number` use the value `self` (the
-  only copy is 1). `secret_file` supplies a private file path, never secret bytes.
+  paths; `config_root`, `data_root` and `copy_number` use the value `self`
+  (the only deployable copy is currently 1).
+  `secret_file` supplies a private file path, never secret bytes.
   Maximum 128 arguments, 32 KiB combined values, 4096 bytes per literal.
 - **Listeners:** TCP uses `bind: "loopback"` or `"public"`. Loopback listeners
   omit `tls` and `authentication`. Public listeners require `tls: "edge"` or
@@ -586,8 +590,13 @@ The following references work in argv and explicit nonsecret environment entries
 | `listener_socket_name` | `binding_socket_name` | Socket file name, such as `wl0` |
 | `listener_socket_path` | `binding_socket_path` | Full absolute socket path |
 
-Socket names contain 1–32 ASCII letters, digits, dots, underscores or hyphens,
-starting with a letter or digit. Names must be unique across the instance's roles.
+Declared socket names contain 1–32 ASCII letters, digits, dots, underscores or
+hyphens, starting with a letter or digit. `@` is reserved for derived copy suffixes;
+a declaration cannot use a name such as `wl0@2`. Names must be unique across the
+instance's roles. The same codec validates derived names against their ordinal.
+A 32-character name at ordinal 128 produces a 103-byte path, below the enforced
+107-byte Unix socket path limit. The suffix stays literal in systemd arguments;
+Unix listener inspection compares the full absolute path, including `@N`.
 Paths, abstract sockets, slashes, traversal and public Unix bindings are refused.
 Unix listeners allocate no TCP ports and create no firewall or nginx rules.
 `listener_address` and `listener_port` remain TCP-only.
@@ -827,18 +836,105 @@ Build with the application's usual entry point:
 ENVIRONMENT=acceptance-local ACTION=build make release
 ```
 
+### Numbered copies
+
+Set a custom executable role's count in profile 3 `placement`:
+
+```json
+{"placement": {"http": 1, "relay": 3, "worker": 1}}
+```
+
+Generation 17 is reserved for v0.36.0 parameterized upload routes. Numbered copies
+use generation 18. The tools upgrade plan includes a runtime-v1 bridge when the
+installed helper matches the exact v0.35.0 bytes. The upgrade journal records the
+source and target digests, and the helper is atomically replaced before selecting
+the new bundle. Interrupted upgrades resume forward. Existing singleton invocation
+pins and cleanup remain compatible; unknown helper bytes are refused. This bridge
+is required because the old fixed helper rejects ordinals above one before
+importing its bundled library.
+
+Every tools upgrade also advances an installed network-boot coordinator to the
+candidate bundle. Its pin change is recorded in the upgrade journal, atomically
+published, reloaded and checked against systemd's loaded command before tools
+selection. Resume repeats the reload and verification even if the file already
+has the new pin. Application registry writes refuse a stale coordinator or a
+capability above its parser generation. This protects new declarations at
+generation 14 (templates and public-listener bindings), 15 (Unix bindings),
+16 (confinement and shared directories), and subsequent generations, including
+17's separately delivered upload-route changes. Tools-upgrade intent writes may
+precede the advance only while application state remains unchanged.
+
+Counts above one require generation 18 on both the client and host. The floor
+remains selected through rollback and recovery, including a later single-copy
+profile. A count of zero means unplaced. Wrappers remain outside release 2a.
+
+Copies have stable ordinals from 1 through the count. `ROLE=relay` selects every
+placed relay copy. Each copy gets its own systemd unit, private TCP allocation,
+config view, seed files, and persistent state directory. Copy 1 keeps the existing
+paths; later copies use `relay@2`, `relay@3`, and so on under the instance's service
+runtime and state trees. Unix listeners keep the declared socket name for copy 1
+and append `@2`, `@3`, and so on for later copies. Shrinking and growing never
+renames surviving copies. Persisted selections, descriptor leaves, reports and
+copy displays use the same `role` or `role@N` key. Private snapshot keys append
+`.secret` to that key. Socket leaves apply the same suffix to the declared name.
+Systemd custom units retain `foundry-app-<instance>-<role>@<ordinal>.service`,
+including `@1`, because the ordinal is the template instance. Environment variable
+keys retain uppercase underscore components required by the configuration interface.
+Existing copy-1 maintenance markers retain `<role>-1.hold`; new copies use
+`<role>@N.hold`. These exceptions preserve deployed singleton contracts.
+Use `{"copy_number": "self"}` in typed arguments or
+environment references for the decimal ordinal; JSON field bindings receive an
+integer.
+
+Role-level network confinement and shared-directory grants apply to every copy.
+If regrowth restores a deliberately disabled copy, dependents that cannot remain
+in the running selection enter the reviewed stop scope. Their exit and network
+closure must be proved before the transition can complete.
+
+Readiness verifies each copy's process, listener ownership, stability, and BPF
+attachments where confinement is declared. Dependencies include every prerequisite
+copy. Units at the same dependency level are queued together without blocking.
+Each unit's readiness timeout starts at its own systemd monotonic process-start
+timestamp and includes its stability proof. Each selected unit has its own
+observer thread and at most one open probe socket, bounded by the 256-unit
+instance cap. Network probes never wait for another unit's observer. Only short
+local inspections (`systemctl show`, `ss`, and related status commands) share a
+16-slot semaphore; their existing timeouts include time waiting for a slot.
+Each unit has its own probe cadence and stability window. A unit that finishes
+early remains under observation while slower peers finish; a lost probe or changed process invalidates
+its proof. Failure or deadline expiry closes active probe sockets, kills and
+reaps owned command groups, and joins every worker before returning. Every worker
+outcome is collected. Specific inspection or confinement errors take precedence
+over generic readiness failure, in inventory order, including errors raised
+during cancellation. Concurrent command failures append to the private journal
+under thread and file locks. Consumers start only after their prerequisites pass.
+Startup and final readiness still share one overall 90-second deadline.
+
+Build the changed profile into a release archive, then review and activate its
+release plan. The archived target profile owns the counts. The plan shows added,
+removed, changed, and retained copy identities. Growing allocates and starts the added
+copies; copies with unchanged effective specifications keep their process and
+allocations. Shrinking stops the highest ordinals first, proves their cgroup,
+main PID, control PID, jobs, and children have exited, then removes their unit
+files and runtime views. Private reservations remain protected by the existing
+network closure and old-reference rules. Persistent state and seed files are
+retained, including when a copy is later added again. An uncertain stop leaves
+resources retained for reconciliation.
+
 ### Profile field reference
 
 Profile 3 retains the existing profile fields, adding `placement` and `listeners`.
-`placement` must name every role, with HTTP exactly 1 and others 0 or 1. All
-prerequisites of an enabled role must also be enabled. The builder validates the
+`placement` must name every role. HTTP is exactly 1; other built-ins are 0 or 1.
+Custom executable roles accept 0–128, with at most 256 concrete units per instance.
+All prerequisites of a placed role must also be placed. The builder validates the
 profile architecture against artifact platform coverage.
 
 The profile `listeners` map uses `<role>.<listener>` keys for exactly the enabled
 public custom listeners. Loopback listeners have no profile entry. Each has:
 
-- `ports`: exactly one port, 1–65535, unique across the profile; 22, 80 and 443 are
-  reserved. This is the public port, not a service's allocated private port.
+- `ports`: one explicit port per placed copy, ordered by ordinal, 1–65535 and
+  unique across the profile; 22, 80 and 443 are reserved. These are public ports,
+  not allocated private ports. See [numbered ports](#one-public-port-per-copy).
 - `source_cidrs`: 1–64 unique canonical CIDRs. Each address family must have a
   corresponding public bound address. Choose the actual permitted clients;
   `0.0.0.0/0` is an intentional allow-all IPv4 policy, not a safe default.
@@ -908,7 +1004,7 @@ execute it with an argument vector when the application needs jq for JSON proces
 with its service-local `Path` and `SHA256`.
 
 `PublicListener(name)` returns the declared role and listener, profile-owned
-`Hostname`, public `Port`, and `PublicAddresses`, plus topology-owned `TLS` and
+`Hostname`, public `Port`, ordered `Ports`, and `PublicAddresses`, plus topology-owned `TLS` and
 `Transport`. TLS is `deployment.TLSEdge` or `deployment.TLSNone`; transport is
 `deployment.TCPTransport`. The application chooses its protocol scheme, such as
 `rtsp`, and constructs a URL with `net.JoinHostPort` and `net/url`.
@@ -1006,6 +1102,12 @@ address determines its family. All records require `proxied: false`, including
 plain TCP listeners. Use a separate hostname from a proxied HTTP site.
 DNS-only records disclose the origin address and do not provide Cloudflare HTTP
 WAF or authentication.
+
+Managed records describe the hostname and addresses, independent of the number
+of role copies or their public ports. Count changes and port changes leave DNS
+records unchanged. Each numbered stream server inherits the listener's PROXY
+setting and uses its own separate non-PROXY readiness listener. Recovery restores
+the selected copies before DNS cutover, then uses a fresh public-readiness budget.
 
 Each managed listener declares the following `dns` object:
 
@@ -1172,6 +1274,64 @@ Ordinary application rehearsal continues to use external local DNS.
 
 The [Managed DNS live certification](../evidence/v037-managed-dns-live-certification.md)
 records the 2026-11-15 test-zone results and reproduction command.
+### Select and inspect numbered copies
+
+For a placed numbered role, `ROLE=relay` selects every copy. Add `COPY=2` to
+select only its second copy for stop, restart, or logs:
+
+```sh
+ENVIRONMENT=production ACTION=stop ROLE=relay COPY=2 make deploy
+ENVIRONMENT=production ACTION=restart ROLE=relay COPY=2 make deploy
+ENVIRONMENT=production ACTION=logs ROLE=relay COPY=2 LINES=200 make deploy
+ENVIRONMENT=production ACTION=logs ROLE=relay COPY=2 FOLLOW=yes make deploy
+```
+
+The CLI also accepts `--role relay --copy 2`. `COPY` requires an explicit `ROLE`
+and a placed ordinal. Other actions reject `COPY`. Selecting a role without
+`COPY` keeps its whole-role meaning. A successful individual operation returns
+`status: "degraded"` when the complete required set is not healthy. Stopping a
+copy does not stop or disable its siblings. Dependency checks still apply across
+all required copies; a partial selection cannot bypass an enabled dependent.
+
+Reports preserve the existing `services[role]` entry for a singleton role. A
+multi-copy role has `services[role].copies`, ordered by `ordinal`. Each row carries
+its unit state, enablement, admission, maintenance hold, process identity,
+readiness, listeners, confinement proof, shared-directory grants, and persistent
+state paths. Private listener and confinement rows identify the ordinal for
+multi-copy roles. Unavailable observations remain null or unverified, and all
+copies share the existing report deadline. Held copies have readiness status
+`held`; they do not run readiness probes or count as failed copies.
+
+### Roll back a release with removed copies
+
+Rollback uses the retained target's placement. Surviving copies keep their current
+systemd enablement. A removed copy uses the enablement recorded before its removal.
+The host retains that evidence for later rollback, including recorded disabled
+copies. Missing evidence leaves the copy disabled and the instance degraded.
+
+A rollback plan lists absent target copies in `restored_copies`, with `role`,
+`ordinal`, `enabled`, and `evidence` set to `recorded` or `missing`. The plan's
+`enabled_roles` and `running_roles` show the effective dependency-checked
+selection. Persisted copy selections keep `role` for copy 1 and use `role@N` for
+later copies. This encoding also applies to maintenance and recovery records;
+it does not change the meaning of the public `ROLE` selector.
+
+### Back up and recover numbered copies
+
+Backup `service_state` coverage has one entry per custom copy. Multi-copy entries
+add `ordinal` and `persistent_state_paths`; singleton entries keep their existing
+shape. Each copy receives its role's state policy. `local-unprotected` remains
+unprotected, and external state still requires its declared recovery owner.
+
+Takeover plans preserve each copy's enablement and holds. Recovery starts copies
+in dependency order, after every required prerequisite copy is ready. A held
+prerequisite also holds its dependent copies. Rehearsal includes all copies of
+its selected safe prerequisite roles and keeps public exposure closed.
+
+Restore drills report each numbered copy's state paths from the selected backup
+with `restored: false`. Database PITR does not restore local service files or start
+custom services. Disposable caches remain disposable; the drill does not claim
+complete instance coverage.
 
 ### External DNS and Docker-host NAT
 
@@ -1241,6 +1401,11 @@ Restore drills, backups, logs, configuration-key inspection, release planning an
 stop may reconcile toward down or do nothing; they never restore held workloads
 or open their listeners as a reconciliation side effect. After an external
 `artisan up`, use deploy `up` or `status` to restore those copies separately.
+
+Each copy has its own root-owned persistent hold marker beneath the instance
+control directory. A hold preserves systemd enablement. `up` restores only copies
+that remain enabled and declared; stopping one copy during maintenance keeps that
+copy disabled after `up`, without changing its siblings.
 
 Held copies are reported separately from failed or unexpectedly inactive services.
 HTTP uses its maintenance liveness contract while paused. Deploy, configuration,
@@ -1673,3 +1838,177 @@ path without force, then remove its empty underlying directory with `rmdir`.
 Retain any busy, foreign, or nonempty path for investigation. Never remove the
 shared parent recursively while mounts exist. A later host reboot also removes
 these runtime-only caches.
+
+## Numbered copy consumers
+
+The release 2a consumer contract supports distinct secrets and endpoints for each
+placed executable copy. Ordinals are dense from 1 through the role's count.
+Builtins remain singletons. Generation 18 supports counts up to 128 per custom
+role, with at most 256 placed units per instance.
+
+### Copy-scoped secrets
+
+Declare scope at the topology's existing secret owner:
+
+```json
+{
+	"secrets": {
+		"worker-password": {"scope": "copy", "prompt": "Worker control password"},
+		"license": {"prompt": "Shared worker license"}
+	}
+}
+```
+
+The executable role references those names through its file interface:
+
+```json
+{
+	"secret_files": {
+		"PASSWORD_FILE": {"secret": "worker-password", "scope": "copy"},
+		"LICENSE_FILE": "license"
+	},
+	"configs": {
+		"settings": {
+			"source": "deploy/files/worker.ini",
+			"mode": "recreate",
+			"format": "ini"
+		}
+	}
+}
+```
+
+The short reference `"PASSWORD_FILE": "worker-password"` inherits the declaration's
+scope. An explicit reference scope must match that declaration. Omitting scope
+preserves the existing shared secret behavior and configuration key names.
+
+For a role named `renderer`, the configuration owner derives
+`FOUNDRY_SERVICE_SECRET__COPY__RENDERER__1__WORKER_PASSWORD` for copy 1 and the
+corresponding `__2__` key for copy 2. Names are uppercase with hyphens replaced by
+underscores. Collisions are rejected. Use the returned requirement keys with the
+existing hidden prompts or `FOUNDRY_SECRET_CONFIG_FILE` configuration input. The
+`_FILE` input alias remains available; never supply both forms for one key.
+
+Bootstrap and release-plan review request only missing values for placed copies.
+Growth from two copies to three requests only copy 3's password. Shrinking to one
+keeps copies 2 and 3's private snapshots. Regrowth and rollback reuse those values.
+Shrinking does not erase credentials. The existing encrypted configuration backup
+includes retained snapshots.
+
+Each unit receives its own `PASSWORD_FILE` path. Its explicit `secret_file`
+arguments and template references use the same selected path. For example,
+`deploy/files/worker.ini` can contain:
+
+```ini
+[control]
+password={{secret.PASSWORD_FILE}}
+```
+
+`recreate` renders the copy's current value on each start. Private snapshots keep
+root ownership, instance-group access, mode 0640, and no-follow reads.
+Copy-scoped secrets give each copy its own value. Like role secrets, they are
+readable by every role of the instance because roles share one account. Rendered
+baselines and recreated configs do not isolate secret values between roles either.
+Secret bytes stay out of argv, unit files, descriptors, public plans, and framework
+diagnostics. Applications remain responsible for their own logging.
+
+### Lists of placed copies
+
+A scheduler can consume every renderer's control endpoint and password file:
+
+```json
+{
+	"name": "scheduler",
+	"kind": "builtin",
+	"requires": ["renderer"],
+	"bindings": {
+		"renderers": {
+			"copies": {
+				"role": "renderer",
+				"listener": "control",
+				"scheme": "http",
+				"secret": "worker-password"
+			}
+		}
+	}
+}
+```
+
+The target must be an executable role with the named listener. `scheme` is `http`
+or `tcp` for TCP listeners, and `unix` for Unix listeners. An optional `secret`
+must name a copy-scoped secret used by that provider's `secret_files`. Copy binding
+edges and explicit `requires` edges must not form a cycle. Declare `requires` when
+startup must wait for the provider; Unix consumers require their provider.
+
+`Bindings.Copies(name)` returns `[]deployment.Copy` ordered by `Ordinal`:
+
+```go
+copies, err := bindings.Copies("renderers")
+if err != nil {
+	return err
+}
+for _, copy := range copies {
+	// Pass these concrete values to the application-owned worker client.
+	client := NewWorkerClient(copy.Ordinal, copy.Endpoint, copy.SecretFile)
+	workers = append(workers, client)
+}
+```
+
+Each `Copy` contains `Ordinal int`, `Endpoint deployment.Endpoint`, and
+`SecretFile string`. TCP endpoints have an address and private port. Unix endpoints
+have `Directory`, `Name`, and `Path`, including the copy suffix. `SecretFile` is
+empty when no secret path is included. The files use the instance's ordinary
+secret-file permissions; a binding supplies paths, not additional isolation.
+Each lookup returns an owned slice of values, so caller mutations cannot change
+the startup snapshot. Unknown or ungranted names return
+`fault.Missing`. Shrinking removes those ordinals from the list. A declared list
+can be empty when its provider is unplaced and no prerequisite requires it.
+
+The descriptor adds `bindings.copies` only for consumers that declare a list.
+Each entry has `name` and `copies`; each item has `ordinal`, `endpoint`, `scheme`,
+and an optional `secret_file`. Empty outer collections are omitted. Existing
+roles without list bindings retain their descriptor shape and digests. Upgrade a
+consuming binary before declaring a list, because older strict readers reject
+new fields. Lists are available through the descriptor, not scalar arguments or
+template binding placeholders.
+
+Console calls retain the HTTP descriptor's copy endpoints, as they retain other
+HTTP bindings. They omit every `secret_file`, along with `shared_directories`.
+This keeps secret paths out of console descriptors while preserving the v0.35.0
+HTTP selection rule. The omission limits descriptor contents; it does not restrict
+file access for processes using the shared instance account.
+
+### One public port per copy
+
+For two placed `renderer` copies with a topology-declared public TCP listener
+named `ingress`, the profile can bind:
+
+```json
+{
+	"listeners": {
+		"renderer.ingress": {
+			"ports": [9551, 9552],
+			"source_cidrs": ["203.0.113.0/24"],
+			"dns": {
+				"mode": "external",
+				"hostname": "render.example.org",
+				"public_addresses": ["203.0.113.10"],
+				"proxied": false
+			}
+		}
+	}
+}
+```
+
+List position selects the ordinal: port 9551 routes to copy 1's private backend,
+and port 9552 routes to copy 2's. The list length must equal the placed count.
+Ports are unique across the profile, with the existing reserved-port rules.
+Each copy gets its own nginx stream server and firewall opening for the selected
+addresses and permitted source CIDRs. No shared-port load balancing is inferred.
+The topology still owns TLS and authentication policy.
+
+A `public_listener` binding exposes `PublicListener.Ports []deployment.PublicPort`.
+Each entry contains `Ordinal int` and `Port uint16`. The slice is ordered and
+caller-owned. `PublicListener.Port` remains the first copy's port for existing
+singleton callers. Singleton wire records stay unchanged; numbered records add
+`ports: [{"ordinal": 1, "port": 9551}, {"ordinal": 2, "port": 9552}]`.
+The Go reader also supplies a one-entry `Ports` slice for legacy singleton records.

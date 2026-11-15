@@ -37,8 +37,8 @@ def redis(host, entry, *args, admin=False):
 
 
 def scheduler(host, entry):
-    from topology import instance_units
-    unit = instance_units(entry)["scheduler"]
+    from topology import selected_units, instance_units
+    unit = next(iter(selected_units(entry, "scheduler").values()))
     service(unit)
     grants = entry["redis_grants"]["keys"]
     # literal inventory prefixes include a named coordination child
@@ -97,8 +97,11 @@ def scheduler(host, entry):
     print("PASS scheduler occurrence, expiring coordination lease, portal-cache commands and empty ACL LOG")
 
 
+from topology import selected_units
+
+
 def running(entry):
-    from topology import instance_units
+    from topology import selected_units, instance_units
     result = {}
     for role, unit in instance_units(entry).items():
         process = service(unit)
@@ -297,7 +300,7 @@ def main(archive):
     assert repeated.get("unchanged") is True
     assert (host.load_state(entry), prove_running(host, entry), host.paths.registry.read_bytes()) == before
     print("PASS explicit-target rollback and identical replay preserve release, state, registry and PIDs")
-    old_http = before[1]["http"]
+    old_http = before[1][next(iter(selected_units(entry, "http")))]
     activate["operation_id"] = str(uuid.uuid4())
     def observe():
         assert selected(host, entry).name == version
@@ -306,7 +309,7 @@ def main(archive):
     action("reconcile", request(project, profile))
     assert selected(host, entry).name == version
     recovered = prove_running(host, entry)
-    assert recovered["http"]["pid"] != old_http["pid"]
+    assert recovered[next(iter(selected_units(entry, "http")))]["pid"] != old_http["pid"]
     print("PASS SIGKILL after current switch; reconcile runs every role from the selected release")
 
 

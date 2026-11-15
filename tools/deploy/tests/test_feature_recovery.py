@@ -30,11 +30,14 @@ from topology import parse_profile
 class FeatureRecoveryTests(wiring.FeatureWiringFixture):
     def test_dns_cutover_does_not_consume_public_opening_readiness(self):
         import dns
-        registry, entry = self.target(running=('relay',), public=True)
+        registry, entry = self.target(running=('relay', 'relay@2'), public=True, copies=2)
         monotonic = time.monotonic
         elapsed = [0]
 
         def slow_cutover(*args, **kwargs):
+            self.assertTrue(kwargs["private_healthy"])
+            self.assertEqual({identity.record_key for _, _, identity in self.host.running.values()},
+                             {"relay", "relay@2"})
             elapsed[0] += release.READINESS_SECONDS + 1
 
         with self.host.lock('host'):
@@ -96,9 +99,9 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
         self.assertEqual(base.read_bytes(), original)
 
 
-    def target(self, *, unix=False, running=('http', 'relay'), holds=(), mode='takeover', public=False, public_binding=False, scheduler=False):
+    def target(self, *, unix=False, running=('http', 'relay'), holds=(), mode='takeover', public=False, public_binding=False, scheduler=False, copies=1):
         self.build_archive(unix=unix, independent=True, secrets=True, public=public, public_binding=public_binding,
-                           rehearsal_safe=mode == 'rehearsal', scheduler=scheduler)
+                           rehearsal_safe=mode == 'rehearsal', scheduler=scheduler, copies=copies)
         if mode == 'rehearsal':
             self.build_archive(secrets=True, rehearsal_safe=True, scheduler=scheduler)
         if public:
@@ -211,7 +214,7 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
             self.prepare(registry, entry)
             _, selection, inventory, _ = lifecycle.load(self.host, entry)
             self.assertEqual(selection.minimum_generation, 14)
-            binding, = inventory.specs['http'].bindings.public_listeners
+            binding, = inventory.specs[inventory.identity('http')].bindings.public_listeners
             self.assertEqual(binding.public_addresses, ('203.0.113.11', '2001:db8:42::11'))
 
     def test_takeover_exact_release_enablement_private_health_and_fresh_replay(self):
@@ -219,18 +222,18 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
         with self.host.lock('host'):
             self.prepare(registry, entry)
             _, selection, inventory, launch = lifecycle.load(self.host, entry)
-            self.assertEqual(services.enabled_units(self.host, inventory.units), ('relay',))
+            self.assertEqual(services.enabled_units(self.host, inventory.units), inventory.copies('relay'))
             self.assertFalse(self.host.running)
             self.assertEqual(launch['declaration'], self.snapshot['declaration'])
             self.assertNotEqual(launch['profile'], launch['declaration']['profile'])
             result = lifecycle.activate_recovery(self.host, registry, entry, self.journal)
             self.assertEqual(result, {'version': inventory.deployment.release})
-            self.assertEqual(set(self.host.running), {inventory.units['relay']})
+            self.assertEqual(set(self.host.running), {inventory.units[inventory.identity('relay')]})
             self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
             before = list(self.host.started)
             self.assertEqual(lifecycle.activate_recovery(self.host, registry, entry, self.journal), result)
             self.assertEqual(self.host.started, before)
-            self.host.run(['systemctl', 'stop', inventory.units['relay']])
+            self.host.run(['systemctl', 'stop', inventory.units[inventory.identity('relay')]])
             with self.assertRaises(c.DeployError):
                 lifecycle.recovery_ready(self.host, entry, self.journal)
         self.assertFalse(any('migrate' in command or 'db:seed' in command for command in self.host.commands))
@@ -253,7 +256,7 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
             self.assertEqual(lifecycle.load(self.host, entry)[1], selected)
             lifecycle.activate_recovery(self.host, registry, entry, self.journal)
             self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
-            self.assertEqual(set(self.host.running), {inventory.units['http']})
+            self.assertEqual(set(self.host.running), {inventory.units[inventory.identity('http')]})
 
     def test_wrong_source_release_refuses_before_packages_or_units(self):
         registry, entry = self.target()
@@ -268,7 +271,7 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
         registry, entry = self.target()
         with self.host.lock('host'):
             self.prepare(registry, entry)
-            with patch.object(services, 'wait_ready', return_value=False), self.assertRaises(c.DeployError):
+            with patch.object(services, 'wait_ready_set', return_value=False), self.assertRaises(c.DeployError):
                 lifecycle.activate_recovery(self.host, registry, entry, self.journal)
             self.assertFalse(self.host.running)
             before = list(self.host.started)
@@ -284,7 +287,7 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
             self.prepare(registry, entry)
             _, _, inventory, _ = lifecycle.load(self.host, entry)
             for role in ('http', 'relay'):
-                content = self.host.paths.p('/etc/systemd/system/' + inventory.units[role]).read_text()
+                content = self.host.paths.p('/etc/systemd/system/' + inventory.units[inventory.identity(role)]).read_text()
                 self.assertEqual('IPAddressDeny=any' in content, role == 'relay')
                 self.assertEqual('IPAddressAllow=localhost' in content, role == 'relay')
             with patch.object(network_confinement, 'isolation', return_value={'proven': True}):
@@ -328,5 +331,5 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
             with patch.object(network_confinement, 'isolation', return_value={'proven': True}):
                 lifecycle.activate_recovery(self.host, registry, entry, self.journal)
                 self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
-            self.assertNotIn(inventory.units['scheduler'], self.host.running)
-            self.assertNotIn(inventory.units['scheduler'], self.host.enabled)
+            self.assertNotIn(inventory.units[inventory.identity('scheduler')], self.host.running)
+            self.assertNotIn(inventory.units[inventory.identity('scheduler')], self.host.enabled)

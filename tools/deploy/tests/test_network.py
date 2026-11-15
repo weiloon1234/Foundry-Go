@@ -110,7 +110,7 @@ class SocketTests(unittest.TestCase):
         a = runtime(OLD)
         reserved = listeners.private_claims(INSTANCE, a, network_topology())
         observed = (listeners.ObservedSocket(listeners.SocketIdentity("tcp", 4, "0.0.0.0", 18002), (23,)),)
-        allocated = listeners.allocate_private(INSTANCE, (("http", "http"), ("relay", "ingress")), reserved, observed,
+        allocated = listeners.allocate_private(INSTANCE, ((c.UnitIdentity(INSTANCE, "http", 1), "http"), (c.UnitIdentity(INSTANCE, "relay", 1), "ingress")), reserved, observed,
                                                 first=18000, last=18005)
         self.assertEqual([e.port for e in allocated], [18003, 18004])
         with self.assertRaises(c.DeployError):

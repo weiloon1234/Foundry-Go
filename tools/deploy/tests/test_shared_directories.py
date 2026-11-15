@@ -32,9 +32,9 @@ def shared_inventory(*, writers=("http",), readers=("relay",)):
     raw["roles"][1]["arguments"] = [{"shared_directory_path": "render-cache"}]
     raw["roles"][1]["environment"] = {"RENDER_CACHE": {"shared_directory_path": "render-cache"}}
     topology = t.parse_topology(raw)
-    units = tuple(replace(old.specs[role.common.name], declaration_sha256=c.canonical_digest(document),
+    units = tuple(replace(old.specs[old.identity(role.common.name)], declaration_sha256=c.canonical_digest(document),
                           arguments=(c.shared_directory_path(INSTANCE, "render-cache"),) if role.common.name == "relay" else (),
-                          bindings=replace(old.specs[role.common.name].bindings,
+                          bindings=replace(old.specs[old.identity(role.common.name)].bindings,
                                            shared_directories=shared.bindings(topology, INSTANCE, role.common.name)))
                   for role, document in zip(topology.roles, raw["roles"]))
     deployment = replace(old.deployment, topology_sha256=topology.sha256, units=units)
@@ -46,10 +46,10 @@ class SharedDeclarationTests(unittest.TestCase):
     def test_typed_roundtrip_access_and_generation(self):
         inventory, _ = shared_inventory()
         self.assertEqual(c.Deployment.parse(c.record_document(inventory.deployment)), inventory.deployment)
-        self.assertEqual(inventory.specs["http"].bindings.shared_directories[0].access, "read-write")
-        self.assertEqual(inventory.specs["relay"].bindings.shared_directories[0].access, "read-only")
-        self.assertEqual(inventory.specs["worker"].bindings.shared_directories, ())
-        self.assertNotIn("shared_directories", c.record_document(inventory.specs["worker"].bindings))
+        self.assertEqual(inventory.specs[inventory.identity("http")].bindings.shared_directories[0].access, "read-write")
+        self.assertEqual(inventory.specs[inventory.identity("relay")].bindings.shared_directories[0].access, "read-only")
+        self.assertEqual(inventory.specs[inventory.identity("worker")].bindings.shared_directories, ())
+        self.assertNotIn("shared_directories", c.record_document(inventory.specs[inventory.identity("worker")].bindings))
         self.assertEqual(upgrades.feature_generation(inventory.topology, {}), 16)
         with self.assertRaises(c.DeployError):
             upgrades.check_feature_generation({"tools": {"generation": 15}}, inventory.topology, {}, client_generation=16)
@@ -85,7 +85,7 @@ class SharedDeclarationTests(unittest.TestCase):
         inventory, entry = shared_inventory()
         path = c.shared_directory_path(INSTANCE, "render-cache")
         for role, directive in (("http", "ReadWritePaths"), ("relay", "ReadOnlyPaths"), ("worker", None)):
-            unit = services.render_unit(inventory, role, entry, DIGEST)
+            unit = services.render_unit(inventory, inventory.identity(role), entry, DIGEST)
             self.assertIn('TemporaryFileSystem="' + c.shared_directory_root(INSTANCE) + ':ro"', unit)
             self.assertIn("ProtectSystem=strict", unit)
             if directive:
@@ -97,21 +97,21 @@ class SharedDeclarationTests(unittest.TestCase):
                 self.assertNotIn(path, unit)
             if role == "relay":
                 self.assertIn('Environment="RENDER_CACHE=' + path + '"', unit)
-        self.assertNotIn("render-cache", c.record_document(inventory.specs["worker"].bindings))
+        self.assertNotIn("render-cache", c.record_document(inventory.specs[inventory.identity("worker")].bindings))
 
     def test_user_namespace_policy_covers_both_access_modes_and_role_kinds(self):
         for writers, readers in ((["http"], ["relay"]), (["relay"], ["http"])):
             inventory, entry = shared_inventory(writers=writers, readers=readers)
             for name in ("http", "relay"):
                 with self.subTest(writer=writers[0], role=name):
-                    unit = services.render_unit(inventory, name, entry, DIGEST)
+                    unit = services.render_unit(inventory, inventory.identity(name), entry, DIGEST)
                     self.assertEqual(unit.count("PrivateUsers=yes\n"), 1)
                     self.assertIn("CapabilityBoundingSet=\n", unit)
                     self.assertIn("ExecStartPre=+", unit)
                     self.assertNotIn("ExecStart=+", unit)
-            self.assertNotIn("PrivateUsers=", services.render_unit(inventory, "worker", entry, DIGEST))
+            self.assertNotIn("PrivateUsers=", services.render_unit(inventory, inventory.identity("worker"), entry, DIGEST))
         old, entry, _ = inventory_fixture()
-        for name in old.roles:
+        for name in old.units:
             self.assertNotIn("PrivateUsers=", services.render_unit(old, name, entry, DIGEST))
 
     def test_backup_excludes_disposable_files_and_inventory_rejects_tampering(self):
@@ -121,7 +121,7 @@ class SharedDeclarationTests(unittest.TestCase):
         self.assertEqual(directory["state"], "disposable")
         self.assertFalse(directory["backed_up"] or directory["restored"])
         self.assertNotIn("shared_directories", coverage["supported_components"])
-        spec = inventory.specs["relay"]
+        spec = inventory.specs[inventory.identity("relay")]
         bad = replace(spec, bindings=replace(spec.bindings, shared_directories=()))
         deployment = replace(inventory.deployment, units=tuple(bad if u == spec else u for u in inventory.deployment.units))
         resolution = replace(inventory.resolution, deployment_sha256=c.canonical_digest(c.record_document(deployment)))
@@ -134,7 +134,7 @@ class SharedDeclarationTests(unittest.TestCase):
         inventory, entry = shared_inventory()
         inventory.roles["relay"] = replace(inventory.roles["relay"], recovery_rehearsal_safe=True)
         with patch.object(recovery_rehearsal, "active", return_value=True):
-            unit = services.render_unit(inventory, "relay", entry, DIGEST)
+            unit = services.render_unit(inventory, inventory.identity("relay"), entry, DIGEST)
         self.assertIn("PrivateUsers=yes\n", unit)
         self.assertIn(network_confinement.FILTER, unit)
         self.assertIn("ExecStartPre=+", unit)

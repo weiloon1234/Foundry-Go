@@ -27,7 +27,7 @@ import uuid
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from topology import instance_units, validate_topology
+from topology import selected_units, instance_units, validate_topology
 from contracts import PROFILE_SCHEMA, atomic_json, atomic_write, check_path, digest, identity, read_json
 from host import Host
 from provision import bootstrap_plan
@@ -379,7 +379,7 @@ def report(host):
             item, state = reported[instance_id], states[instance_id]
             if entry["provisioning"]["state"] == "ready":
                 assert item["service"] is not None and item["service"]["load"] == "loaded"
-                assert set(item["services"]) == set(instance_units(entry))
+                assert set(item["services"]) == {identity.role for identity in instance_units(entry)}
                 assert all(role["state"] and role["state"]["load"] == "loaded" for role in item["services"].values())
             status = state["status"]
             if status in {"healthy", "rolled_back"}:

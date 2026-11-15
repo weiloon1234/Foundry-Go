@@ -3,6 +3,7 @@ import copy
 import hashlib
 import json
 import os
+import shlex
 import subprocess
 from pathlib import Path
 import sys
@@ -66,6 +67,7 @@ class UpgradeHost(Host):
     def __init__(self, root, registry):
         super().__init__(Paths(root))
         self.registry = copy.deepcopy(registry)
+        self.loaded_boot = None
 
     def read_registry(self, missing=False):
         return copy.deepcopy(self.registry)
@@ -74,6 +76,15 @@ class UpgradeHost(Host):
         self.registry = copy.deepcopy(registry)
 
     def run(self, args, **kwargs):
+        import feature_network
+        if args == ["systemctl", "daemon-reload"]:
+            self.loaded_boot = self.paths.p(feature_network.BOOT_PATH).read_text()
+            return subprocess.CompletedProcess(args, 0, "", "")
+        if args[:3] == ["systemctl", "show", feature_network.BOOT_UNIT]:
+            command = next(line.split("=", 1)[1] for line in self.loaded_boot.splitlines() if line.startswith("ExecStart="))
+            fields = {"LoadState": "loaded", "FragmentPath": feature_network.BOOT_PATH, "DropInPaths": "",
+                      "NeedDaemonReload": "no", "ExecStart": "{ argv[]=" + " ".join(shlex.split(command)) + " ; }"}
+            return subprocess.CompletedProcess(args, 0, "\n".join(key + "=" + value for key, value in fields.items()), "")
         if len(args) > 3 and args[3] == 'prune':
             assert args[2] == str(self.paths.tools / 'tools' / self.registry['tools']['bundle_sha256'] / 'lib/upgrades.py')
             assert kwargs['pass_fds'] == (self.host_lock_fd,)
@@ -105,6 +116,151 @@ class UpgradeTests(unittest.TestCase):
     def install(self, **kwargs):
         with self.host.lock("host"):
             return upgrades.install_tools(self.host, self.host.read_registry(), self.source, **kwargs)
+
+    def generation_16_runtime(self):
+        import services
+        legacy = (Path(__file__).parent / "runtime_fixtures/v0_35_0/runtime_v1.py").read_bytes()
+        self.metadata["generation"] = 16
+        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+        (self.source / "server/runtime_v1.py").write_bytes(legacy)
+        self.host.registry["tools"] = upgrades._active_record(self.source, upgrades.tool_bundle(self.source)[2], None)
+        self.install()
+        runtime = self.host.paths.p(services.RUNTIME_ENTRY)
+        self.host.owned_write(runtime, legacy, mode=0o755)
+        candidate = self.root / "candidate"
+        import shutil
+        shutil.copytree(self.source, candidate)
+        (candidate / "protocol.json").write_text(json.dumps({**self.metadata, "generation": 18}))
+        (candidate / "server/runtime_v1.py").write_bytes(
+            (Path(__file__).resolve().parents[1] / "server/runtime_v1.py").read_bytes())
+        return runtime, candidate
+
+    def test_generation_16_runtime_bridge_preserves_invocation_pins_and_advances_boot(self):
+        import feature_network
+        import operations
+        runtime, candidate = self.generation_16_runtime()
+        old = self.host.registry["tools"].copy()
+        pinned = upgrades._installed(self.host, old)
+        boot = feature_network.boot_files(pinned, old["bundle_sha256"])
+        for name, content in boot.items():
+            self.host.owned_write(self.host.paths.p(name), content)
+        pin = self.host.paths.p("/run/foundry/runtime-pins/instance/relay/invocation.json")
+        self.host.owned_write(pin, b"retained invocation")
+        operation = str(uuid.uuid4())
+        # Pin inventories remain conservative during this migration.
+        with patch.object(upgrades, "_obsolete_bundles", return_value=[]):
+            plan = upgrades.plan_upgrade(self.host, candidate)
+            self.assertEqual(len(plan["upgrade"]["migration_steps"]), 2)
+            result = upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)
+            self.assertEqual(result["outcome"], "succeeded")
+            self.assertEqual(upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)["outcome"], "unchanged")
+        operations.check_runtime(self.host, candidate)
+        self.assertEqual(runtime.read_bytes(), (candidate / "server/runtime_v1.py").read_bytes())
+        self.assertEqual(pin.read_bytes(), b"retained invocation")
+        self.assertEqual(feature_network.checked_boot_files(self.host, candidate, self.host.registry["tools"]["bundle_sha256"]),
+                         feature_network.boot_files(candidate, self.host.registry["tools"]["bundle_sha256"]))
+        self.assertNotEqual(self.host.paths.p(feature_network.BOOT_PATH).read_text(), boot[feature_network.BOOT_PATH])
+
+    def test_every_generation_14_through_18_advances_boot_before_selection(self):
+        import feature_network
+        import services
+        self.metadata["generation"] = 13
+        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+        self.host.registry["tools"] = upgrades._active_record(self.source, upgrades.tool_bundle(self.source)[2], None)
+        self.install()
+        old = self.host.registry["tools"]["bundle_sha256"]
+        for name, content in feature_network.boot_files(self.source, old).items():
+            self.host.owned_write(self.host.paths.p(name), content)
+        self.host.owned_write(self.host.paths.p(services.RUNTIME_ENTRY), (self.source / "server/runtime_v1.py").read_bytes())
+        select = upgrades._select
+        for revision, generation in enumerate((14, 15, 16, 17, 18, 18)):
+            with self.subTest(generation=generation, revision=revision):
+                (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": generation,
+                    "framework_version": f"integration-{revision}"}))
+                target = upgrades.tool_bundle(self.source)[2]
+                plan = upgrades.plan_upgrade(self.host, self.source)
+                self.assertIn({"path": feature_network.BOOT_PATH, "from_bundle": old, "to_bundle": target},
+                              plan["upgrade"]["migration_steps"])
+                def select_after_proof(host, bundle):
+                    self.assertIn(bundle, host.loaded_boot)
+                    self.assertIn(bundle, host.paths.p(feature_network.BOOT_PATH).read_text())
+                    select(host, bundle)
+                with patch.object(upgrades, "_select", side_effect=select_after_proof):
+                    self.assertEqual(upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))["outcome"], "succeeded")
+                old = target
+
+    def test_boot_advance_resumes_before_and_after_atomic_publication_and_reload(self):
+        import feature_network
+        runtime, candidate = self.generation_16_runtime()
+        old = self.host.registry["tools"].copy()
+        pinned = upgrades._installed(self.host, old)
+        for name, content in feature_network.boot_files(pinned, old["bundle_sha256"]).items():
+            self.host.owned_write(self.host.paths.p(name), content)
+        plan = upgrades.plan_upgrade(self.host, candidate)
+        operation = str(uuid.uuid4())
+        write = self.host.owned_write
+        def interrupted(path, content, **kwargs):
+            if str(path).endswith(feature_network.BOOT_PATH):
+                raise OSError("interrupted before publication")
+            return write(path, content, **kwargs)
+        with patch.object(self.host, "owned_write", side_effect=interrupted), self.assertRaises(OSError):
+            upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)
+        self.assertIn(old["bundle_sha256"], self.host.paths.p(feature_network.BOOT_PATH).read_text())
+        run = self.host.run
+        def interrupted_reload(args, **kwargs):
+            if args == ["systemctl", "daemon-reload"]:
+                raise OSError("interrupted after publication")
+            return run(args, **kwargs)
+        with patch.object(self.host, "run", side_effect=interrupted_reload), self.assertRaises(OSError):
+            upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)
+        target = upgrades.tool_bundle(candidate)[2]
+        self.assertIn(target, self.host.paths.p(feature_network.BOOT_PATH).read_text())
+        self.assertEqual(self.host.registry["tools"]["bundle_sha256"], old["bundle_sha256"])
+        def wrong_loaded(args, **kwargs):
+            result = run(args, **kwargs)
+            if args[:3] == ["systemctl", "show", feature_network.BOOT_UNIT]:
+                return subprocess.CompletedProcess(args, 0, result.stdout.replace(target, old["bundle_sha256"]), "")
+            return result
+        with patch.object(self.host, "run", side_effect=wrong_loaded), self.assertRaises(DeployError) as caught:
+            upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)
+        self.assertEqual(caught.exception.code, "boot_coordinator_unverified")
+        self.assertEqual(self.host.registry["tools"]["bundle_sha256"], old["bundle_sha256"])
+        self.assertEqual(upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)["outcome"], "succeeded")
+        self.assertIn(target, self.host.loaded_boot)
+        self.assertEqual(self.host.registry["tools"]["bundle_sha256"], target)
+        journal = json.loads((self.host.paths.p(HOST_PATHS["upgrades"]) / operation / "intent.json").read_text())
+        self.assertEqual(journal["migration_steps"], plan["upgrade"]["migration_steps"])
+
+    def test_runtime_bridge_resumes_after_publication_before_tool_selection(self):
+        import operations
+        runtime, candidate = self.generation_16_runtime()
+        plan = upgrades.plan_upgrade(self.host, candidate)
+        operation = str(uuid.uuid4())
+        migrate = operations.migrate_runtime
+        def interrupted(host, source):
+            migrate(host, source)
+            raise OSError("interrupted after runtime publication")
+        with patch.object(operations, "migrate_runtime", side_effect=interrupted), self.assertRaises(OSError):
+            upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)
+        self.assertEqual(self.host.registry["tools"]["generation"], 16)
+        self.assertEqual(self.host.registry["tools"]["upgrade_operation"], operation)
+        self.assertEqual(runtime.read_bytes(), (candidate / "server/runtime_v1.py").read_bytes())
+        result = upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)
+        self.assertEqual(result["outcome"], "succeeded")
+        self.assertEqual(self.host.registry["tools"]["generation"], 18)
+        self.assertIsNone(self.host.registry["tools"]["upgrade_operation"])
+        journal = json.loads((self.host.paths.p(HOST_PATHS["upgrades"]) / operation / "intent.json").read_text())
+        self.assertEqual(journal["migration_steps"], plan["upgrade"]["migration_steps"])
+        operations.check_runtime(self.host, candidate)
+
+    def test_generation_16_runtime_bridge_refuses_unknown_installed_bytes(self):
+        runtime, candidate = self.generation_16_runtime()
+        runtime.write_bytes(runtime.read_bytes() + b"# unknown edit\n")
+        before = self.host.read_registry()
+        with self.assertRaises(DeployError) as caught:
+            upgrades.plan_upgrade(self.host, candidate)
+        self.assertEqual(caught.exception.code, "runtime_bridge_required")
+        self.assertEqual(self.host.read_registry(), before)
 
     def test_check_client_accepts_registered_and_unregistered_feature_topologies(self):
         from test_host_capabilities import declaration
@@ -491,7 +647,7 @@ class UpgradeTests(unittest.TestCase):
         source = Path(__file__).resolve().parents[1]
         _, files, _ = upgrades.tool_bundle(source)
         expected = {name for name in upgrades.REQUIRED_FILES | upgrades.REHEARSAL_FILES if name.endswith('.py')}
-        expected.add('lib/unix_socket_probe.py')
+        expected.update({'lib/unix_socket_probe.py', 'lib/copy_enablement.py', 'lib/operation_selection.py'})
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
     def test_generation_fifteen_before_socket_probe_helper_can_upgrade(self):

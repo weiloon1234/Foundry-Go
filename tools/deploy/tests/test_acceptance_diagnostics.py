@@ -107,7 +107,9 @@ class ActivationDiagnosticsTests(unittest.TestCase):
                          [event['message'] for event in lifecycle])
         host = Mock()
         host.run.return_value.stdout = ''
-        with patch.object(diagnostics, 'instance_units', return_value={'http': 'owned.service'}):
+        from contracts import UnitIdentity
+        from test_host_capabilities import INSTANCE
+        with patch.object(diagnostics, 'instance_units', return_value={UnitIdentity(INSTANCE, 'http', 1): 'owned.service'}):
             self.assertEqual({'http': []}, diagnostics.role_journals(host, {}))
         args = host.run.call_args.args[0]
         self.assertIn('--lines=10', args)

@@ -143,12 +143,12 @@ class PublicListenerDeliveryTests(wiring.FeatureWiringFixture):
         self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
         _, entry = self.host.require_identity(self.project, self.profile)
         _, _, before, launch = lifecycle.load(self.host, entry)
-        public, = before.specs["http"].bindings.public_listeners
+        public, = before.specs[before.identity("http")].bindings.public_listeners
         self.assertEqual((public.hostname, public.port, public.tls, public.transport, public.public_addresses),
                          ("relay.example.org", 9443, "none", "tcp", ("203.0.113.10",)))
         descriptor = self.host.paths.opt(entry["name"]) / "runtime" / before.resolution.id / "http.json"
         wire = c.read_json(descriptor)
-        self.assertEqual(wire["bindings"], c.record_document(before.specs["http"].bindings))
+        self.assertEqual(wire["bindings"], c.record_document(before.specs[before.identity("http")].bindings))
         self.assertEqual(descriptor.stat().st_mode & 0o777, 0o644)
         self.assertEqual(descriptor.stat().st_uid, os.geteuid())
         relay_descriptor = descriptor.with_name("relay.json")
@@ -162,9 +162,9 @@ class PublicListenerDeliveryTests(wiring.FeatureWiringFixture):
         # Retained roles still need replacement when their profile-owned public binding changes.
         after, _ = lifecycle.resolve(self.host, entry, manifest, declaration, release_path, launch["artifact_roots"],
             "00000000-0000-4000-8000-000000000099", previous=before, affected=set(), profile=changed)
-        updated, = after.specs["http"].bindings.public_listeners
+        updated, = after.specs[after.identity("http")].bindings.public_listeners
         self.assertEqual((updated.hostname, updated.port, updated.public_addresses),
                          ("new.example.org", 8554, ("203.0.113.11",)))
-        self.assertNotEqual(after.specs["http"], before.specs["http"])
+        self.assertNotEqual(after.specs[after.identity("http")], before.specs[before.identity("http")])
         self.assertEqual(c.read_json(descriptor), wire)
         self.assertEqual(public.port, 9443)

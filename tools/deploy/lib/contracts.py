@@ -130,8 +130,12 @@ def validate_attempt(value):
             and value["phase"] in ("validation", "redis", "backup", "migration", "seed", "switch", "health", "configuration")
             and (value["error"] is None or isinstance(value["error"], str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", value["error"]) is not None), code, detail)
     require(value["finished_at"] is None if value["outcome"] == "running" else valid_timestamp(value["finished_at"]), code, detail)
-    require("role" not in value or value["action"] in ("restart", "stop")
-            and value["role"] in ("all", *SERVICE_ROLES), code, detail)
+    if "role" in value:
+        require(value["action"] in ("restart", "stop"), code, detail)
+        contract_name(value["role"])
+    if "copy" in value:
+        require(value["action"] in ("restart", "stop") and value.get("role") not in (None, "all")
+                and type(value["copy"]) is int and 1 <= value["copy"] <= MAX_ROLE_COPIES, code, detail)
     if "roles" in value:
         roles = value["roles"]
         require(value["action"] in ("config", "rollback", "deploy") and isinstance(roles, list)
@@ -598,7 +602,10 @@ FEATURE_SHARED_DIRECTORY_GENERATION = 16
 UPLOAD_TEMPLATE_GENERATION = 17
 FEATURE_PROXY_PROTOCOL_GENERATION = 18
 FEATURE_MANAGED_DNS_GENERATION = 18
+FEATURE_COPIES_GENERATION = 18
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
+MAX_ROLE_COPIES, MAX_UNITS = 128, 256
+MAX_ENDPOINTS = MAX_LISTENERS * MAX_ROLE_COPIES + 1  # Expanded custom listeners plus built-in HTTP.
 
 
 def contract_object(value, required, optional=()):
@@ -688,19 +695,67 @@ def _record(value, names, optional=()):
     return value
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class UnitIdentity:
     instance_id: str
     role: str
     ordinal: int
 
+    def __post_init__(self):
+        contract_uuid(self.instance_id)
+        contract_name(self.role)
+        contract_int(self.ordinal, 1, MAX_ROLE_COPIES)
+
     @classmethod
     def parse(cls, value):
         contract_object(value, ("instance_id", "role", "ordinal"))
-        ordinal = contract_int(value["ordinal"])
-        require(ordinal == 1, "unsupported_capability", "Numbered services require a later capability.")
-        return cls(contract_uuid(value["instance_id"]), contract_name(value["role"]), ordinal)
+        return cls(value["instance_id"], value["role"], value["ordinal"])
 
+    @property
+    def record_key(self):
+        """Instance-local wire/path key; retain the original singleton spelling."""
+        return copy_key(self.role, self.ordinal)
+
+    @classmethod
+    def from_record_key(cls, instance_id, value):
+        return cls(instance_id, *copy_key_parts(value))
+
+
+def copy_key(name, ordinal):
+    """Stable copy suffix shared by records, files and socket leaves."""
+    contract_int(ordinal, 1, MAX_ROLE_COPIES)
+    return name if ordinal == 1 else f"{name}@{ordinal}"
+
+
+def copy_key_parts(value):
+    require(isinstance(value, str), "invalid_contract", "Invalid copy identifier.")
+    role, separator, suffix = value.partition("@")
+    contract_name(role)
+    require(not separator or re.fullmatch(r"[1-9][0-9]{0,2}", suffix),
+            "invalid_contract", "Invalid copy ordinal.")
+    ordinal = int(suffix) if separator else 1
+    require(copy_key(role, ordinal) == value, "invalid_contract", "Copy identifiers must use their canonical spelling.")
+    return role, ordinal
+
+
+def contract_unit_keys(instance_id, values):
+    identities = contract_list(values, lambda value: UnitIdentity.from_record_key(instance_id, value), maximum=MAX_UNITS)
+    require(len(set(identities)) == len(identities), "invalid_contract", "Duplicate copy identifiers.")
+    return tuple(identity.record_key for identity in identities)
+
+
+def unit_selection_names(identities):
+    identities = tuple(identities)
+    require(all(isinstance(identity, UnitIdentity) for identity in identities)
+            and len({identity.instance_id for identity in identities}) <= 1
+            and len(identities) <= MAX_UNITS and len(set(identities)) == len(identities),
+            "service_selection", "Copy selections require unique identities from one instance.")
+    return tuple(identity.record_key for identity in identities)
+
+
+def unit_selection_identities(instance_id, selection):
+    return tuple(UnitIdentity.from_record_key(instance_id, key)
+                 for key in contract_unit_keys(instance_id, list(selection)))
 
 @dataclass(frozen=True)
 class AllocatedEndpoint:
@@ -708,19 +763,33 @@ class AllocatedEndpoint:
     listener: str
     address: str
     port: int
+    ordinal: int
+
+    def __post_init__(self):
+        contract_int(self.ordinal, 1, MAX_ROLE_COPIES)
 
     @classmethod
     def parse(cls, value):
-        contract_object(value, ("role", "listener", "address", "port"))
+        contract_object(value, ("role", "listener", "address", "port"), ("ordinal",))
         require(value["address"] in ("127.0.0.1", "::1"), "invalid_contract", "Private backends require loopback.")
         return cls(contract_name(value["role"]), contract_name(value["listener"]),
-                   value["address"], contract_int(value["port"], 1024, 65535))
+                   value["address"], contract_int(value["port"], 1024, 65535), value.get("ordinal", 1))
 
 
-def socket_name(value):
-    require(isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,31}", value),
-            "invalid_contract", "Socket names require 1–32 ASCII letters, digits, dots, underscores or hyphens, starting with a letter or digit.")
+def socket_name(value, *, ordinal=1):
+    contract_int(ordinal, 1, MAX_ROLE_COPIES)
+    require(isinstance(value, str), "invalid_contract", "Socket names must be strings.")
+    suffix = f"@{ordinal}" if ordinal > 1 else ""
+    require(value.endswith(suffix), "invalid_contract", "Unix socket suffix must match its copy ordinal.")
+    base = value[:-len(suffix)] if suffix else value
+    require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,31}", base),
+            "invalid_contract", "Declared socket names require 1–32 ASCII letters, digits, dots, underscores or hyphens; @ is reserved for copy ordinals.")
     return value
+
+
+def copy_socket_name(name, ordinal):
+    """Preserve copy 1's path, independent of the role's current count."""
+    return socket_name(copy_key(socket_name(name), ordinal), ordinal=ordinal)
 
 
 def socket_directory(instance_id):
@@ -748,23 +817,29 @@ class UnixEndpoint:
     directory: str
     name: str
     path: str
+    ordinal: int
+
+    def __post_init__(self):
+        contract_int(self.ordinal, 1, MAX_ROLE_COPIES)
 
     @classmethod
-    def for_listener(cls, instance_id, role, listener, name):
+    def for_listener(cls, instance_id, role, listener, name, *, ordinal):
         directory = socket_directory(instance_id)
+        name = copy_socket_name(name, ordinal)
         return cls.parse({"role": role, "listener": listener, "directory": directory,
-                          "name": name, "path": directory + "/" + name})
+                          "name": name, "path": directory + "/" + name, "ordinal": ordinal})
 
     @classmethod
     def parse(cls, value):
-        contract_object(value, ("role", "listener", "directory", "name", "path"))
+        contract_object(value, ("role", "listener", "directory", "name", "path"), ("ordinal",))
         directory = contract_path(value["directory"], absolute=True)
         require(directory == socket_directory(Path(directory).parent.name),
                 "invalid_contract", "Unix endpoints belong to the instance socket directory.")
-        name = socket_name(value["name"])
+        ordinal = contract_int(value.get("ordinal", 1), 1, MAX_ROLE_COPIES)
+        name = socket_name(value["name"], ordinal=ordinal)
         require(value["path"] == directory + "/" + name and len(value["path"].encode()) <= 107,
                 "invalid_contract", "Invalid Unix endpoint path.")
-        return cls(contract_name(value["role"]), contract_name(value["listener"]), directory, name, value["path"])
+        return cls(contract_name(value["role"]), contract_name(value["listener"]), directory, name, value["path"], ordinal)
 
 
 @dataclass(frozen=True)
@@ -806,18 +881,18 @@ class RuntimeResolution:
                             "environments", "bindings_sha256", "readiness_sha256", "nginx_sha256"), ("unix_endpoints",))
         roles = contract_names(v["roles"])
         require("http" in roles, "invalid_contract", "HTTP remains required.")
-        endpoints = contract_list(v["endpoints"], AllocatedEndpoint.parse, maximum=MAX_LISTENERS)
-        unix = contract_list(v.get("unix_endpoints", []), UnixEndpoint.parse, maximum=MAX_LISTENERS)
+        endpoints = contract_list(v["endpoints"], AllocatedEndpoint.parse, maximum=MAX_ENDPOINTS)
+        unix = contract_list(v.get("unix_endpoints", []), UnixEndpoint.parse, maximum=MAX_ENDPOINTS)
         require(all(e.role in roles for e in unix) and len({e.path for e in unix}) == len(unix)
-                and len({(e.role, e.listener) for e in (*endpoints, *unix)}) == len(endpoints) + len(unix)
+                and len({(e.role, e.ordinal, e.listener) for e in (*endpoints, *unix)}) == len(endpoints) + len(unix)
                 and len({e.directory for e in unix}) <= 1,
                 "invalid_contract", "Unix endpoints must have unique names and listeners in one instance directory.")
         envs = contract_list(v["environments"], EffectiveEnvironment.parse, maximum=MAX_ROLES)
         require(all(e.role in roles for e in endpoints) and {e.role for e in envs} == set(roles)
                 and len(envs) == len(roles) and len({e.path for e in envs}) == len(envs)
-                and len({(e.role, e.listener) for e in endpoints}) == len(endpoints)
+                and len({(e.role, e.ordinal, e.listener) for e in endpoints}) == len(endpoints)
                 and len({(e.address, e.port) for e in endpoints}) == len(endpoints)
-                and any(e.role == "http" and e.listener == "http" for e in endpoints),
+                and any(e.role == "http" and e.ordinal == 1 and e.listener == "http" for e in endpoints),
                 "invalid_contract", "Resolution endpoints/environments must cover unique selected roles.")
         identity = contract_uuid(v["id"])
         require(all(e.path.startswith("runtime/" + identity + "/") for e in envs),
@@ -886,10 +961,10 @@ class ClosureEvidence:
                             "backend_exit_sha256", "old_reference_isolation_sha256", "observed_at", "stage"))
         require(v["stage"] in tuple(s.value for s in ClosureStage) and valid_timestamp(v["observed_at"]),
                 "invalid_contract", "Invalid closure observation.")
-        units = contract_list(v["units"], UnitIdentity.parse, maximum=MAX_ROLES, minimum=1)
-        endpoints = contract_list(v["endpoints"], AllocatedEndpoint.parse)
+        units = contract_list(v["units"], UnitIdentity.parse, maximum=MAX_UNITS, minimum=1)
+        endpoints = contract_list(v["endpoints"], AllocatedEndpoint.parse, maximum=2 * MAX_ENDPOINTS)
         require(len(set(units)) == len(units) and len({u.instance_id for u in units}) == 1
-                and all(e.role in {u.role for u in units} for e in endpoints),
+                and all((e.role, e.ordinal) in {(u.role, u.ordinal) for u in units} for e in endpoints),
                 "invalid_contract", "Invalid closure scope.")
         proofs = tuple(None if v[k] is None else contract_digest(v[k]) for k in
                        ("backend_exit_sha256", "old_reference_isolation_sha256"))
@@ -930,7 +1005,7 @@ class ValidationPermit:
     @classmethod
     def parse(cls, value):
         v = _record(value, ("id", "operation_id", "boot_id", "resolution_id", "closure_id", "executor", "units"))
-        units = contract_list(v["units"], UnitIdentity.parse, minimum=1, maximum=MAX_ROLES)
+        units = contract_list(v["units"], UnitIdentity.parse, minimum=1, maximum=MAX_UNITS)
         require(len(set(units)) == len(units), "invalid_contract", "Duplicate permit allowances.")
         return cls(*(contract_uuid(v[k]) for k in ("id", "operation_id", "boot_id", "resolution_id", "closure_id")),
                    ProcessIdentity.parse(v["executor"]), units)
@@ -942,7 +1017,8 @@ class ValidationPermit:
                 and set(self.units) <= set(evidence.units)
                 and resolution.id == self.resolution_id
                 and {u.role for u in self.units} <= set(resolution.roles)
-                and {e for e in resolution.endpoints if e.role in {u.role for u in self.units}} <= set(evidence.endpoints),
+                and {e for e in resolution.endpoints if (e.role, e.ordinal) in
+                     {(u.role, u.ordinal) for u in self.units}} <= set(evidence.endpoints),
                 "admission_closed_required",
                 "Validation requires complete closure for the exact operation, boot, resolution and unit set.")
 
@@ -1024,7 +1100,7 @@ class DeploymentSelection:
                 "invalid_contract", "Selection and admission identities differ.")
         return cls(instance, contract_int(v["minimum_generation"], FEATURE_INTRODUCTION_GENERATION), capabilities, resolution,
                    None if v["previous_resolution_id"] is None else contract_uuid(v["previous_resolution_id"]),
-                   admission, contract_names(v["enabled_roles"]), contract_names(v["maintenance_holds"]))
+                   admission, contract_unit_keys(instance, v["enabled_roles"]), contract_unit_keys(instance, v["maintenance_holds"]))
 
 
 def public_address(value):
@@ -1174,6 +1250,50 @@ class ResolvedBundleBinding:
 
 
 @dataclass(frozen=True)
+class ResolvedCopy:
+    ordinal: int
+    endpoint: AllocatedEndpoint | UnixEndpoint
+    scheme: str
+    secret_file: str = ""
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("ordinal", "endpoint", "scheme"), ("secret_file",))
+        ordinal = contract_int(value["ordinal"], 1, MAX_ROLE_COPIES)
+        endpoint = ResolvedEndpointBinding.parse({"name": "copy", "endpoint": value["endpoint"], "scheme": value["scheme"]})
+        require(endpoint.endpoint.ordinal == ordinal, "invalid_contract", "Copy endpoint ordinal differs.")
+        secret = contract_path(value["secret_file"], absolute=True) if "secret_file" in value else ""
+        return cls(ordinal, endpoint.endpoint, endpoint.scheme, secret)
+
+
+@dataclass(frozen=True)
+class ResolvedCopiesBinding:
+    name: str
+    copies: tuple[ResolvedCopy, ...]
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("name", "copies"))
+        copies = contract_list(value["copies"], ResolvedCopy.parse, maximum=MAX_ROLE_COPIES)
+        require([c.ordinal for c in copies] == list(range(1, len(copies) + 1)),
+                "invalid_contract", "Copies must be dense and ordered by ordinal.")
+        require(len({(c.endpoint.role, c.endpoint.listener, c.scheme, bool(c.secret_file)) for c in copies}) <= 1,
+                "invalid_contract", "Copy binding providers and secret grants must agree.")
+        return cls(contract_name(value["name"]), copies)
+
+
+@dataclass(frozen=True)
+class ResolvedPublicPort:
+    ordinal: int
+    port: int
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("ordinal", "port"))
+        return cls(contract_int(value["ordinal"], 1, MAX_ROLE_COPIES), contract_int(value["port"], 1, 65535))
+
+
+@dataclass(frozen=True)
 class ResolvedPublicListenerBinding:
     name: str
     role: str
@@ -1183,16 +1303,21 @@ class ResolvedPublicListenerBinding:
     tls: str
     transport: str
     public_addresses: tuple[str, ...]
+    ports: tuple[ResolvedPublicPort, ...] = ()
 
     @classmethod
     def parse(cls, value):
-        contract_object(value, ("name", "role", "listener", "hostname", "port", "tls", "transport", "public_addresses"))
+        contract_object(value, ("name", "role", "listener", "hostname", "port", "tls", "transport", "public_addresses"), ("ports",))
+        ports = contract_list(value["ports"], ResolvedPublicPort.parse, minimum=2, maximum=MAX_ROLE_COPIES) if "ports" in value else ()
+        require(not ports or ([p.ordinal for p in ports] == list(range(1, len(ports) + 1))
+                              and ports[0].port == value["port"] and len({p.port for p in ports}) == len(ports)),
+                "invalid_contract", "Public ports must be unique and ordered by ordinal.")
         require(value["tls"] in ("edge", "none") and value["transport"] == "tcp",
                 "invalid_contract", "Invalid public listener protocol.")
         addresses = contract_list(value["public_addresses"], public_address, minimum=1, maximum=16)
         require(len(set(addresses)) == len(addresses), "invalid_contract", "Duplicate public listener addresses.")
         return cls(contract_name(value["name"]), contract_name(value["role"]), contract_name(value["listener"]),
-                   dns_hostname(value["hostname"]), contract_int(value["port"], 1, 65535), value["tls"], value["transport"], addresses)
+                   dns_hostname(value["hostname"]), contract_int(value["port"], 1, 65535), value["tls"], value["transport"], addresses, ports)
 
 
 @dataclass(frozen=True)
@@ -1221,18 +1346,20 @@ class RoleBindings:
     bundles: tuple[ResolvedBundleBinding, ...]
     public_listeners: tuple[ResolvedPublicListenerBinding, ...] = ()
     shared_directories: tuple[ResolvedSharedDirectory, ...] = ()
+    copies: tuple[ResolvedCopiesBinding, ...] = ()
 
     @classmethod
     def parse(cls, value):
-        v = _record(value, ("role", "executables", "endpoints", "bundles"), ("public_listeners", "shared_directories"))
+        v = _record(value, ("role", "executables", "endpoints", "bundles"), ("public_listeners", "shared_directories", "copies"))
         executables = contract_list(v["executables"], ResolvedExecutableBinding.parse, maximum=128)
         endpoints = contract_list(v["endpoints"], ResolvedEndpointBinding.parse, maximum=128)
         bundles = contract_list(v["bundles"], ResolvedBundleBinding.parse, maximum=64)
         public_listeners = contract_list(v.get("public_listeners", []), ResolvedPublicListenerBinding.parse, maximum=128)
         shared = contract_list(v.get("shared_directories", []), ResolvedSharedDirectory.parse, maximum=32)
-        names = [b.name for b in (*executables, *endpoints, *bundles, *public_listeners, *shared)]
+        copies = contract_list(v.get("copies", []), ResolvedCopiesBinding.parse, maximum=128)
+        names = [b.name for b in (*executables, *endpoints, *bundles, *public_listeners, *shared, *copies)]
         require(len(set(names)) == len(names), "invalid_contract", "Binding names must be unique across kinds.")
-        return cls(contract_name(v["role"]), executables, endpoints, bundles, public_listeners, shared)
+        return cls(contract_name(v["role"]), executables, endpoints, bundles, public_listeners, shared, copies)
 
 
 @dataclass(frozen=True)
@@ -1385,7 +1512,7 @@ class HostTransition:
         v = _record(value, ("operation_id", "instance_id", "old_resolution_id", "candidate_resolution_id",
                             "current_private_revision", "affected_units", "plan_sha256", "closure_id"))
         instance = contract_uuid(v["instance_id"])
-        units = contract_list(v["affected_units"], UnitIdentity.parse, maximum=MAX_ROLES, minimum=1)
+        units = contract_list(v["affected_units"], UnitIdentity.parse, maximum=MAX_UNITS, minimum=1)
         require(len(set(units)) == len(units) and all(u.instance_id == instance for u in units),
                 "invalid_contract", "Transition units belong to one instance.")
         return cls(contract_uuid(v["operation_id"]), instance, contract_uuid(v["old_resolution_id"]),
@@ -1409,10 +1536,16 @@ class Deployment:
                 and type(v["archive_schema"]) is int and v["archive_schema"] in (1, ARCHIVE_SCHEMA),
                 "invalid_contract", "Invalid selected release identity/schema.")
         instance = contract_uuid(v["instance_id"])
-        units = contract_list(v["units"], UnitSpec.parse, maximum=MAX_ROLES, minimum=1)
+        units = contract_list(v["units"], UnitSpec.parse, maximum=MAX_UNITS, minimum=1)
+        ordinals = {}
+        for spec in units:
+            ordinals.setdefault(spec.identity.role, []).append(spec.identity.ordinal)
         require(len({u.identity for u in units}) == len(units)
                 and all(u.identity.instance_id == instance for u in units)
-                and any(u.identity.role == "http" for u in units), "invalid_contract", "Invalid deployment unit inventory.")
+                and ordinals.get("http") == [1]
+                and all(sorted(copies) == list(range(1, len(copies) + 1))
+                        and (role not in SERVICE_ROLES or copies == [1]) for role, copies in ordinals.items()),
+                "invalid_contract", "Deployment units must be dense, with single-copy built-ins and required HTTP.")
         return cls(instance, v["release"], v["archive_schema"], contract_digest(v["topology_sha256"]),
                    contract_digest(v["profile_sha256"]), units)
 
@@ -1474,7 +1607,7 @@ def record_document(record):
                  BundleReferences, DeploymentSelection, RecoveryPublicBinding, RoleBindings, UnitSpec,
                  HostTransition, Deployment, UnitGenerationReference, CleanupObligation)
     nested = (UnitIdentity, AllocatedEndpoint, UnixEndpoint, EffectiveEnvironment, ProcessIdentity, RecoveryListenerBinding, DNSObservation,
-              ResolvedExecutableBinding, ResolvedEndpointBinding, ResolvedBundleBinding, ResolvedPublicListenerBinding, ResolvedSharedDirectory)
+              ResolvedExecutableBinding, ResolvedEndpointBinding, ResolvedBundleBinding, ResolvedPublicListenerBinding, ResolvedSharedDirectory, ResolvedCopy, ResolvedCopiesBinding, ResolvedPublicPort)
     def encode(value):
         from dns import Change, ProviderState, Value
         if isinstance(value, (Change, ProviderState, Value)):
@@ -1482,10 +1615,18 @@ def record_document(record):
             return asdict(value)
         if type(value) in versioned + nested:
             result = {f.name: encode(getattr(value, f.name)) for f in dataclass_fields(value)}
+            if isinstance(value, (AllocatedEndpoint, UnixEndpoint)) and value.ordinal == 1:
+                result.pop("ordinal")  # Preserve existing descriptor and resolution digests.
             if isinstance(value, RuntimeResolution) and not value.unix_endpoints:
                 result.pop("unix_endpoints")
             if isinstance(value, RoleBindings) and not value.public_listeners:
                 result.pop("public_listeners")  # Preserve descriptors and digests for existing binaries.
+            if isinstance(value, RoleBindings) and not value.copies:
+                result.pop("copies")
+            if isinstance(value, ResolvedCopy) and not value.secret_file:
+                result.pop("secret_file")
+            if isinstance(value, ResolvedPublicListenerBinding) and not value.ports:
+                result.pop("ports")
             if isinstance(value, RoleBindings) and not value.shared_directories:
                 result.pop("shared_directories")
             if type(value) in versioned:

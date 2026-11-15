@@ -15,8 +15,8 @@ with the generator that created them before upgrading.
 
 ## Managed Cloudflare DNS — unreleased
 
-Managed DNS and outbound PROXY protocol share deploy-tool generation 18 in
-v0.37.0. Upgrade both client and host before selecting either feature. Each
+Managed DNS, outbound PROXY protocol, and numbered copies share deploy-tool generation 18 in
+v0.37.0. Upgrade both client and host before selecting these features. Each
 capability retains its own sticky generation floor through rollback and recovery.
 Upload templates keep their generation-17 floor. Existing external DNS profiles
 remain external and do not authorize provider writes.
@@ -36,6 +36,29 @@ the application backend to parse v1 before opting in, and provide a separate
 non-PROXY readiness listener. HTTP sites and runtime binding records retain their
 existing contracts. See the
 [PROXY protocol guide](guides/host-capabilities.md#outbound-proxy-protocol).
+
+## Numbered copy consumers — release 2a
+
+Role-binding schema 1 adds `copies` only when a consumer declares a list binding.
+Numbered public listener records add an ordered `ports` collection; singleton
+records retain their existing wire shape. Upgrade affected consumer binaries
+before adding either declaration. Older strict readers reject these new fields.
+`deployment.Bindings.Copies` returns owned values, and `PublicListener.Ports`
+returns owned ordinal/port entries while `Port` retains the first copy's port.
+
+Copy-scoped secret snapshots use a separate private namespace. Existing shared
+keys and files remain valid. Shrinking retains values for rollback and regrowth.
+Like role secrets, copy-scoped secrets are readable by every role of the instance
+because roles share one account. Console descriptors omit copy secret paths; this
+limits descriptor contents, not filesystem access. See
+[numbered copy consumers](guides/host-capabilities.md#numbered-copy-consumers).
+Generation 18 supports reviewed count changes, copy selection, backup and recovery.
+Tools upgrades must advance the network-boot coordinator as well as the fixed
+helper. Older coordinators cannot parse numbered placement, managed DNS, or
+PROXY listener declarations. The upgrade
+journals, publishes and verifies that pin before selecting the new tools. Registry
+writes require the selected bundle's coordinator and its capability floor.
+The pin must advance for a changed bundle even when both bundles report generation 18.
 
 ## Loopback confinement — v0.35.0
 

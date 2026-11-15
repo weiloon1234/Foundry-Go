@@ -197,7 +197,7 @@ class CapabilityTopologyTests(unittest.TestCase):
         self.assertEqual(result.projection(), before)
         self.assertEqual(result.sha256, t.validate_topology(raw)["sha256"])
         self.assertEqual(dict(t.parse_profile(p, result).placement), {"http": 1, "worker": 1})
-        self.assertEqual(t.instance_units(entry)["worker"], "foundry-worker@abc-production.service")
+        self.assertEqual(next(iter(t.selected_units(entry, "worker").values())), "foundry-worker@abc-production.service")
         raw["roles"].clear()
         self.assertEqual(len(result.roles), 2)
 
@@ -229,8 +229,8 @@ class CapabilityTopologyTests(unittest.TestCase):
         self.assertEqual((raw, placed), original)
         with self.assertRaises(c.DeployError):
             t.validate_topology({**registered, "sha256": OTHER}, registered=True)
-        with self.assertRaises(c.DeployError):
-            c.validate_profile({**placed, "placement": {**placed["placement"], "relay": 2}})
+        numbered = {**placed, "placement": {**placed["placement"], "relay": 2}}
+        self.assertEqual(c.validate_profile(numbered), numbered)
         self.assertEqual(upgrades.contract_versions()["archive"], (1, 2))
 
     def test_registry_checks_feature_profile_against_topology_and_units(self):
@@ -241,9 +241,9 @@ class CapabilityTopologyTests(unittest.TestCase):
         host_registry = registry(entry)
         self.assertEqual(c.validate_registry(host_registry), host_registry)
         units = t.instance_units(entry)
-        self.assertEqual(units["relay"], "foundry-app-" + entry["name"] + "-relay@1.service")
+        self.assertEqual(units[c.UnitIdentity(entry["profile"]["instance_id"], "relay", 1)], "foundry-app-" + entry["name"] + "-relay@1.service")
         entry["profile"]["placement"]["worker"] = 0
-        self.assertNotIn("worker", t.instance_units(entry))
+        self.assertNotIn(c.UnitIdentity(entry["profile"]["instance_id"], "worker", 1), t.instance_units(entry))
         for placement in ({"http": 1, "relay": 1}, {"http": 1, "relay": 0, "worker": 1}):
             candidate = copy.deepcopy(entry)
             candidate["profile"]["placement"] = placement
@@ -301,12 +301,13 @@ class CapabilityTopologyTests(unittest.TestCase):
             with self.assertRaises(c.DeployError) as caught:
                 t.parse_topology(value)
             self.assertEqual(caught.exception.code, "unsupported_capability")
-        for mutate in (lambda v: v["placement"].update(relay=2),):
+        for mutate in (lambda v: v["placement"].update(relay=2),
+                       lambda v: v["listeners"]["relay.ingress"]["dns"].update(mode="managed")):
             value = profile()
             mutate(value)
             with self.assertRaises(c.DeployError) as caught:
                 t.parse_profile(value, t.parse_topology(declaration()))
-            self.assertEqual(caught.exception.code, "unsupported_capability")
+            self.assertEqual(caught.exception.code, "invalid_profile")
 
     def test_public_tcp_modes_require_service_authentication(self):
         for mode in ("edge", "none"):
