@@ -86,7 +86,7 @@ def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_d
         from upgrades import check_feature_generation
         minimum_generation = check_feature_generation(registry, topology,
             {"deployment_selection": {"minimum_generation": max(snapshot["selection"]["minimum_generation"],
-                entry.get("deployment_selection", {}).get("minimum_generation", 0))}})
+                entry.get("deployment_selection", {}).get("minimum_generation", 0))}}, profile=intent['effective_profile'])
         source = parse_profile(intent['source_profile'], topology)
         original = services.UnitInventory(entry['name'], topology, source,
             Deployment.parse(snapshot['deployment']), RuntimeResolution.parse(snapshot['resolution']))
@@ -254,6 +254,9 @@ def execute(host, request, pin):
         lifecycle.start_units(host, entry, inventory, running, deadline)
         require(not running or services.wait_ready_set(host, inventory, running, deadline),
                 'readiness_failed', 'Recovered graph did not pass private readiness.')
+        import dns
+        dns.recovery_apply(host, entry, journal['intent'], old_server_stopped=request['old_server_stopped_confirmed_at'],
+                           private_healthy=True)
         if running:
             feature_network.open_public(host, entry, resolution, closure, deadline=deadline)
         state['status'] = 'stopped' if not running else 'healthy' if running | holds == set(inventory.roles) else 'degraded'

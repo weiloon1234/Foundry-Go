@@ -3,6 +3,7 @@ from pathlib import Path
 from dataclasses import asdict
 
 import admission
+import dns
 import feature_lifecycle as lifecycle
 import feature_network
 import listeners
@@ -32,7 +33,8 @@ def observations(host, registry, entry, topology, profile):
             "maintenance": feature_maintenance.live(host, entry), "maintenance_hold": feature_maintenance.record(host, entry),
             "current_resolution": entry.get("deployment_selection", {}).get("selected_resolution_id"),
             "packages": package, "network": network, "enabled": enabled, "units": units,
-            "dns": [listeners.external_dns(binding, listeners.observe_dns(binding)) for _, binding in profile.listeners]}
+            "dns": [listeners.external_dns(binding, listeners.observe_dns(binding)) for _, binding in profile.listeners
+                    if binding.dns_mode == "external"]}
 
 
 
@@ -104,8 +106,8 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
             target_path = target
         topology = parse_topology(declaration.topology_json)
         from upgrades import check_feature_generation
-        check_feature_generation(registry, topology, entry)
         candidate_profile = parse_profile(release.target_declaration(host, entry, manifest)["profile"], topology)
+        check_feature_generation(registry, topology, entry, profile=candidate_profile.projection())
         import feature_maintenance
         feature_maintenance.stopped_roles(topology)
         application, changes = runtime_config.configuration_parts(configuration or {}, topology=topology)
@@ -136,6 +138,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
             require(not release.migration_status(host, entry, target_path, env_file=env),
                     "rollback_schema", "Target release is incompatible with the current database schema.")
         observed = observations(host, registry, entry, topology, candidate_profile)
+        managed_dns = dns.plan(host, entry, candidate_profile, operation_id)
         enabled, running, removed = lifecycle.transition_enablement(host, entry, inventory, restoring=restoring)
         holds, maintenance_running, _ = feature_maintenance.selection(host, entry, inventory, enabled, running, None)
         # Values and credential-derived digests exist only in the private records.
@@ -151,6 +154,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                   "restoring": restoring, "enabled_roles": list(enabled), "running_roles": list(running),
                   "maintenance_holds": sorted(holds), "maintenance_running_roles": sorted(maintenance_running),
                   "removed_enablement": removed}
+        public["managed_dns"] = managed_dns
         public["plan_token"] = canonical_digest(public)
         admission.protected_directory(host, path.parent, 0o700)
         atomic_json(path, {"public": public, "manifest": manifest, "launch": launch}, mode=0o600)
@@ -175,6 +179,7 @@ def reviewed(host, registry, entry, request, *, pin=None):
                 "stale_plan", "Release archive changed after review.")
     topology = parse_topology(launch["topology"])
     profile = parse_profile(launch["profile"], topology)
+    dns.verify(host, entry, public.get("managed_dns", []))
     current = observations(host, registry, entry, topology, profile)
     expected = public["observations"]
     if pin is not None:

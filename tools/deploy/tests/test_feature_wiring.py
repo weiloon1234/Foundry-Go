@@ -385,7 +385,7 @@ class FeatureWiringFixture(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, confined=False, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, confined=False, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, managed_dns=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -428,6 +428,8 @@ class FeatureWiringFixture(unittest.TestCase):
         if public:
             from test_host_capabilities import profile
             self.profile["listeners"] = {"relay.api": profile()["listeners"]["relay.ingress"]}
+            if managed_dns is not None:
+                self.profile["listeners"]["relay.api"]["dns"].update(managed_dns)
         self.profile = parse_profile(self.profile, self.topology).projection()
         payload = self.host.paths.root / "relay.bin"
         payload.write_bytes(binary)

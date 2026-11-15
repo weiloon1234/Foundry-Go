@@ -500,6 +500,8 @@ def main():
     parser.add_argument("--archive", required=True, type=Path)
     args = parser.parse_args()
     guard()
+    import acceptance_dns
+    acceptance_dns.run()
     host = Host()
     assert host.read_registry(missing=True) is None, "Feature scenario requires a fresh disposable host"
     shared.WORK.mkdir(mode=0o700, exist_ok=True)

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Added: managed Cloudflare DNS for public TCP listener hostnames. Profiles declare
+  the zone, explicit addresses, TTLs, and stable per-record ownership UUIDs.
+  Release plans bind fresh provider state; activation and rollback compare it
+  again and mutate only owned records after closure and private health. Listener
+  removal deletes only owned IDs. Tokens reuse the certificate owner's scoped
+  custody and rotation. Records remain DNS-only.
+- Added: durable DNS mutation intents, read-back reconciliation after lost create,
+  update, or delete acknowledgements, provider drift reports, and typed replacement
+  host cutover with archived ownership evidence. Unknown outcomes never authorize
+  public admission or automatic retries. Managed profiles retain client and host
+  generation floor 20, pending final release number assignment.
+- Added: a local controlled Cloudflare adapter, lifecycle and container fault
+  scenarios, and an opt-in live test restricted to random test names. See the
+  [managed DNS guide](docs/guides/host-capabilities.md#managed-cloudflare-dns)
+  for token permissions and recovery limits.
+
 ## v0.35.0 — 2026-11-15
 
 - Added: loopback network confinement for roles, declared with

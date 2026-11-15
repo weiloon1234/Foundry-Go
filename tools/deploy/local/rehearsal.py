@@ -83,6 +83,8 @@ def peer_address(subnet, cidrs, used, allowed):
 
 def network_plan(topology, profile):
     parsed = parse_profile(profile, topology)
+    require(all(binding.dns_mode == "external" for _, binding in parsed.listeners), "rehearsal_network",
+            "Application rehearsal uses external local DNS; run managed DNS faults through the controlled provider scenario.")
     addresses = {address for _, binding in parsed.listeners for address in binding.public_addresses}
     require(all(any(ipaddress.ip_address(a) in n for n in DOCUMENTATION if n.version == ipaddress.ip_address(a).version)
                 for a in addresses), "rehearsal_network", "Public test listeners require documentation-range addresses.")

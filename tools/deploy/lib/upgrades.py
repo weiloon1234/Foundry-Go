@@ -25,7 +25,7 @@ if __name__ == "__main__":
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
                        FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION, FEATURE_UNIX_GENERATION, FEATURE_CONFINEMENT_GENERATION,
-                       FEATURE_SHARED_DIRECTORY_GENERATION,
+                       FEATURE_SHARED_DIRECTORY_GENERATION, FEATURE_MANAGED_DNS_GENERATION,
                        TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
@@ -63,7 +63,8 @@ GENERATION_13_FILES = REHEARSAL_FILES | frozenset({"lib/feature_plan.py", "lib/f
 GENERATION_14_FILES = frozenset({"lib/config_templates.py"})
 GENERATION_15_FILES = frozenset({"lib/unix_sockets.py"})
 GENERATION_16_FILES = frozenset({"lib/network_confinement.py", "lib/shared_directories.py"})
-REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES | GENERATION_15_FILES | GENERATION_16_FILES
+GENERATION_20_FILES = frozenset({"lib/dns.py"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES | GENERATION_15_FILES | GENERATION_16_FILES | GENERATION_20_FILES
 
 
 def required_files(generation: int) -> frozenset[str]:
@@ -80,6 +81,8 @@ def required_files(generation: int) -> frozenset[str]:
         required |= GENERATION_15_FILES
     if generation >= 16:
         required |= GENERATION_16_FILES
+    if generation >= FEATURE_MANAGED_DNS_GENERATION:
+        required |= GENERATION_20_FILES
     return required
 
 
@@ -416,14 +419,23 @@ def contract_versions() -> dict:
 
 def check_instance_capabilities(entry: dict, client_generation: int) -> None:
     """Target-local sticky admission; rolling back application code cannot clear it."""
-    if "deployment_selection" not in entry:
+    minimum = FEATURE_MANAGED_DNS_GENERATION if managed_dns_profile(entry.get("profile")) else 0
+    if "deployment_selection" in entry:
+        minimum = max(minimum, DeploymentSelection.parse(entry["deployment_selection"]).minimum_generation)
+    if not minimum:
         return
-    selection = DeploymentSelection.parse(entry["deployment_selection"])
-    require(type(client_generation) is int and client_generation >= selection.minimum_generation,
-            "instance_capability_required", f"This instance requires deploy client generation {selection.minimum_generation}; upgrade the tools.")
+    require(type(client_generation) is int and client_generation >= minimum,
+            "instance_capability_required", f"This instance requires deploy client generation {minimum}; upgrade the tools.")
 
 
-def feature_generation(topology, entry):
+def managed_dns_profile(profile):
+    if not isinstance(profile, dict) or not isinstance(profile.get("listeners", {}), dict):
+        return False
+    return any(isinstance(v, dict) and isinstance(v.get("dns"), dict) and v["dns"].get("mode") == "managed"
+               for v in profile.get("listeners", {}).values())
+
+
+def feature_generation(topology, entry, *, profile=None):
     """Application rollback cannot lower a selected capability floor."""
     from topology import ExecutableRole, PublicListenerReference
     templates = any(config.format is not None for role in topology.roles if isinstance(role, ExecutableRole)
@@ -436,14 +448,15 @@ def feature_generation(topology, entry):
         "wildcard" in listener for role in topology.projection()["roles"]
         for listener in role.get("listeners", {}).values())
     return max(FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION if templates or public_listeners else 0,
+               FEATURE_MANAGED_DNS_GENERATION if any(managed_dns_profile(p) for p in (entry.get("profile"), profile)) else 0,
                FEATURE_UNIX_GENERATION if unix else 0,
                FEATURE_CONFINEMENT_GENERATION if confinement else 0,
                FEATURE_SHARED_DIRECTORY_GENERATION if topology.shared_directories else 0,
                entry.get("deployment_selection", {}).get("minimum_generation", 0))
 
 
-def check_feature_generation(registry, topology, entry, *, client_generation=None):
-    minimum = feature_generation(topology, entry)
+def check_feature_generation(registry, topology, entry, *, client_generation=None, profile=None):
+    minimum = feature_generation(topology, entry, profile=profile)
     if client_generation is not None:
         require(type(client_generation) is int and client_generation >= minimum,
                 "instance_capability_required", f"These declarations require deploy client generation {minimum}.")
@@ -459,7 +472,7 @@ def check_target_capabilities(host, request, action):
     registry = host.read_registry(missing=True)
     installed = registry if registry is not None else {"tools": protocol()}
     generation = request.get("client", {}).get("generation", 0)
-    latest = max(FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION)
+    latest = max(FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION, FEATURE_MANAGED_DNS_GENERATION)
     if type(generation) is int and generation >= latest and installed["tools"]["generation"] >= latest:
         return
     from topology import parse_topology
@@ -488,7 +501,9 @@ def check_target_capabilities(host, request, action):
             return
         from contracts import ReleaseDeclaration
         topology = parse_topology(ReleaseDeclaration.parse(manifest["deployment"]).topology_json)
-    check_feature_generation(installed, topology, entry, client_generation=generation)
+    candidate = (release.target_declaration(host, entry, manifest)["profile"]
+                 if action not in {"recover-plan", "recover-apply"} else recovered["metadata"]["profile"])
+    check_feature_generation(installed, topology, entry, client_generation=generation, profile=candidate)
 
 
 def _check_feature_request(registry, request, action):
@@ -502,6 +517,11 @@ def _check_feature_request(registry, request, action):
         and (profile is None or entry["profile"]["instance_id"] == profile.get("instance_id"))
         for entry in registry["instances"].values())
     if feature and action in (supported - READ_ACTIONS) | {"recover-plan"}:
+        if managed_dns_profile(profile):
+            require(request.get("client", {}).get("generation", 0) >= FEATURE_MANAGED_DNS_GENERATION,
+                    "instance_capability_required", f"Managed DNS requires deploy client generation {FEATURE_MANAGED_DNS_GENERATION}.")
+            require(registry is None or registry["tools"]["generation"] >= FEATURE_MANAGED_DNS_GENERATION,
+                    "host_upgrade_required", f"Managed DNS requires host generation {FEATURE_MANAGED_DNS_GENERATION}.")
         require(request.get("client", {}).get("generation", 0) >= FEATURE_LIFECYCLE_GENERATION,
                 "instance_capability_required", "B24 release 1 operations require deploy client generation 13.")
         require(registry is None or registry["tools"]["generation"] >= FEATURE_LIFECYCLE_GENERATION,
@@ -509,11 +529,11 @@ def _check_feature_request(registry, request, action):
         if isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA:
             from topology import parse_topology
             parsed_topology = parse_topology(topology, registered="sha256" in topology)
-            minimum = feature_generation(parsed_topology, {})
+            minimum = feature_generation(parsed_topology, {}, profile=profile)
             require(request.get("client", {}).get("generation", 0) >= minimum,
                     "instance_capability_required", f"These declarations require deploy client generation {minimum}.")
             if registry is not None:
-                check_feature_generation(registry, parsed_topology, {})
+                check_feature_generation(registry, parsed_topology, {}, profile=profile)
     if requested and action not in supported | UPGRADE_ACTIONS | {"tools-plan"}:
         from feature_lifecycle import refuse
         refuse(action)

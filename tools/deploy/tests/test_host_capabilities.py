@@ -301,8 +301,7 @@ class CapabilityTopologyTests(unittest.TestCase):
             with self.assertRaises(c.DeployError) as caught:
                 t.parse_topology(value)
             self.assertEqual(caught.exception.code, "unsupported_capability")
-        for mutate in (lambda v: v["placement"].update(relay=2),
-                       lambda v: v["listeners"]["relay.ingress"]["dns"].update(mode="managed")):
+        for mutate in (lambda v: v["placement"].update(relay=2),):
             value = profile()
             mutate(value)
             with self.assertRaises(c.DeployError) as caught:

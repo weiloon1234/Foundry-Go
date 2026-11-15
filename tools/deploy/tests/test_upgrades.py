@@ -520,8 +520,8 @@ class UpgradeTests(unittest.TestCase):
 
     def test_inventory_requirements_are_cumulative_by_inspected_bundle_generation(self):
         additions = (upgrades.GENERATION_11_FILES | upgrades.GENERATION_12_FILES |
-                     upgrades.GENERATION_13_FILES | upgrades.GENERATION_14_FILES | upgrades.GENERATION_15_FILES | upgrades.GENERATION_16_FILES)
-        for generation in (9, 10, 11, 12, 13, 14, 15, 16):
+                     upgrades.GENERATION_13_FILES | upgrades.GENERATION_14_FILES | upgrades.GENERATION_15_FILES | upgrades.GENERATION_16_FILES | upgrades.GENERATION_20_FILES)
+        for generation in (9, 10, 11, 12, 13, 14, 15, 16, 20):
             with self.subTest(generation=generation):
                 for name in additions:
                     (self.source / name).unlink(missing_ok=True)

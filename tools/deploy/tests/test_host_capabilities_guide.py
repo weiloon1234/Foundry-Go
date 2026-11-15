@@ -10,6 +10,15 @@ from topology import ArtifactPlatform, ReleaseArtifactSource, parse_profile, par
 
 
 class HostCapabilitiesGuideTests(unittest.TestCase):
+    def test_managed_dns_example_uses_the_profile_record_owner(self):
+        from topology import PublicListenerBinding
+        guide = Path(__file__).resolve().parents[3] / "docs/guides/host-capabilities.md"
+        documents = [json.loads(value) for value in re.findall(r"```json\n(.*?)\n```", guide.read_text(), re.S)]
+        dns, = (document for document in documents if document.get("mode") == "managed")
+        binding = PublicListenerBinding.parse({"ports": [9443], "source_cidrs": ["203.0.113.0/24"], "dns": dns})
+        self.assertEqual(binding.dns_mode, "managed")
+        self.assertEqual({r.address for r in binding.records}, set(binding.public_addresses))
+
     def test_scheduler_shared_directory_example_grants_only_declared_roles(self):
         guide = Path(__file__).resolve().parents[3] / "docs/guides/host-capabilities.md"
         documents = [json.loads(value) for value in re.findall(r"```json\n(.*?)\n```", guide.read_text(), re.S)]

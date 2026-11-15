@@ -6,6 +6,9 @@ belong to Go; these contracts describe deployment resources, not application DTO
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from dns import Change
 from enum import Enum
 import ipaddress
 import grp
@@ -592,6 +595,7 @@ FEATURE_DELIVERY_GENERATION = 14
 FEATURE_UNIX_GENERATION = 15
 FEATURE_CONFINEMENT_GENERATION = 16
 FEATURE_SHARED_DIRECTORY_GENERATION = 16
+FEATURE_MANAGED_DNS_GENERATION = 20
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
 
 
@@ -1040,13 +1044,15 @@ class RecoveryListenerBinding:
     old_addresses: tuple[str, ...]
     replacement_addresses: tuple[str, ...]
     source_binding_sha256: str
+    dns_mode: str = "external"
+    managed_records: tuple[Change, ...] = ()
 
     @classmethod
     def parse(cls, value):
         contract_object(value, ("name", "hostname", "transport", "ports", "dns_mode", "old_addresses",
-                                "replacement_addresses", "source_binding_sha256"))
-        require(value["transport"] == "tcp" and value["dns_mode"] == "external",
-                "unsupported_capability", "Release 1 recovery supports external DNS for TCP listeners only.")
+                                "replacement_addresses", "source_binding_sha256"), ("managed_records",))
+        require(value["transport"] == "tcp" and value["dns_mode"] in ("external", "managed"),
+                "unsupported_capability", "Recovery supports DNS-only TCP listeners.")
         require(isinstance(value["name"], str) and len(value["name"].split(".")) == 2,
                 "invalid_contract", "Recovery requires a qualified listener name.")
         name = ".".join(contract_name(n) for n in value["name"].split("."))
@@ -1056,7 +1062,13 @@ class RecoveryListenerBinding:
         require(len(set(old)) == len(old) and len(set(new)) == len(new)
                 and {ipaddress.ip_address(a).version for a in old} == {ipaddress.ip_address(a).version for a in new},
                 "invalid_contract", "Recovery must preserve address families without duplicate addresses.")
-        return cls(name, dns_hostname(value["hostname"]), ports, old, new, contract_digest(value["source_binding_sha256"]))
+        from dns import Change
+        managed = contract_list(value.get("managed_records", []), Change.parse, maximum=16)
+        require(bool(managed) == (value["dns_mode"] == "managed")
+                and all(c.prior is not None and c.desired is not None for c in managed),
+                "invalid_contract", "Managed recovery requires owned record updates with both prior and replacement state.")
+        return cls(name, dns_hostname(value["hostname"]), ports, old, new, contract_digest(value["source_binding_sha256"]),
+                   value["dns_mode"], managed)
 
 
 def dns_hostname(value):
@@ -1102,9 +1114,11 @@ class RecoveryPublicBinding:
     def parse(cls, value):
         v = _record(value, ("operation_id", "source_instance_id", "source_host_id", "target_host_id",
                             "deployment_sha256", "listeners", "dns_cutover", "observations"))
-        require(v["dns_cutover"] in ("external_pending", "external_observed"),
-                "unsupported_capability", "Managed DNS cutover requires a later capability.")
+        require(v["dns_cutover"] in ("external_pending", "external_observed", "managed_pending", "managed_applied"),
+                "invalid_contract", "Invalid DNS cutover state.")
         listeners = contract_list(v["listeners"], RecoveryListenerBinding.parse, minimum=1)
+        require(any(l.dns_mode == "managed" for l in listeners) == v["dns_cutover"].startswith("managed_"),
+                "invalid_contract", "DNS cutover state differs from listener modes.")
         require(len({l.name for l in listeners}) == len(listeners)
                 and v["source_host_id"] != v["target_host_id"], "invalid_contract", "Invalid recovery binding identity.")
         observations = contract_list(v["observations"], DNSObservation.parse)
@@ -1460,6 +1474,10 @@ def record_document(record):
     nested = (UnitIdentity, AllocatedEndpoint, UnixEndpoint, EffectiveEnvironment, ProcessIdentity, RecoveryListenerBinding, DNSObservation,
               ResolvedExecutableBinding, ResolvedEndpointBinding, ResolvedBundleBinding, ResolvedPublicListenerBinding, ResolvedSharedDirectory)
     def encode(value):
+        from dns import Change, ProviderState, Value
+        if isinstance(value, (Change, ProviderState, Value)):
+            from dataclasses import asdict
+            return asdict(value)
         if type(value) in versioned + nested:
             result = {f.name: encode(getattr(value, f.name)) for f in dataclass_fields(value)}
             if isinstance(value, RuntimeResolution) and not value.unix_endpoints:
@@ -1471,7 +1489,9 @@ def record_document(record):
             if type(value) in versioned:
                 result = {"schema": RECORD_SCHEMA, **result}
             if isinstance(value, RecoveryListenerBinding):
-                result.update(transport="tcp", dns_mode="external")
+                result.update(transport="tcp")
+                if value.dns_mode == "external":
+                    result.pop("managed_records")
             if isinstance(value, DNSObservation) and value.state == "resolved":
                 result.pop("state")  # Preserve existing resolved-observation wire records.
             return result

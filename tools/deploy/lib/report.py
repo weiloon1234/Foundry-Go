@@ -707,6 +707,8 @@ def declared_network(host, profile, *, topology, entry=None, resolution=None, cl
                 findings.append({"code": "firewall_policy_unverified"})
     answers = {o.hostname: o for o in dns_observations}
     for _, binding in profile.listeners:
+        if binding.dns_mode == "managed":
+            continue
         if binding.hostname not in answers:
             try:
                 answers[binding.hostname] = listeners.observe_dns(binding)
@@ -714,7 +716,8 @@ def declared_network(host, profile, *, topology, entry=None, resolution=None, cl
                 raise
             except (DeployError, OSError, ValueError):
                 findings.append({"code": "external_dns_observation_unavailable", "hostname": binding.hostname})
-    dns = [listeners.external_dns(binding, answers.get(binding.hostname)) for _, binding in profile.listeners]
+    dns = [listeners.external_dns(binding, answers.get(binding.hostname)) for _, binding in profile.listeners
+           if binding.dns_mode == "external"]
     for value in dns:
         findings.append({"code": "external_dns_proxy_mode_unverified", "hostname": value["hostname"]})
         if value["state"] != "resolved":
@@ -723,6 +726,12 @@ def declared_network(host, profile, *, topology, entry=None, resolution=None, cl
                 findings.append(finding)
         if value["addresses_match"] is False:
             findings.append({"code": "external_dns_drift", "hostname": value["hostname"]})
+    if entry:
+        import dns as managed_dns
+        managed = managed_dns.report(host, entry, profile)
+        dns.extend(managed)
+        findings.extend({"code": "managed_dns_" + value["state"], **({"hostname": value["hostname"]} if "hostname" in value else {})}
+                        for value in managed if value["state"] != "verified")
     for name, binding in profile.listeners:
         if any(ipaddress.ip_network(cidr).prefixlen == 0 for cidr in binding.source_cidrs):
             findings.append({"code": "listener_broad_sources", "listener": name})
