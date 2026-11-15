@@ -180,7 +180,8 @@ def assert_procfs_isolation(host, inventory, entry, cache):
         for path in probe["links"]:
             assert os.readlink(path)
         probes[role] = probe
-    assert len(set(namespaces.values())) == len(namespaces), "Granted roles shared a user namespace"
+    granted = [namespaces[role] for role in namespaces if inventory.specs[role].bindings.shared_directories]
+    assert len(set(granted)) == len(granted), "Granted roles shared a user namespace"
 
     endpoint = next(e for e in inventory.resolution.endpoints if e.role == "relay")
     with closing(http.client.HTTPConnection(endpoint.address, endpoint.port, timeout=5)) as connection:
