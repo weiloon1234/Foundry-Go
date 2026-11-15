@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added: numbered-copy operations with `ROLE` and `COPY` selection for stop,
+  restart, and logs; per-copy report and backup coverage; persistent maintenance
+  holds; rollback enablement evidence; and exact copy selections for recovery.
+  Singleton records keep their existing shapes. Multi-copy reports group rows
+  under `services[role].copies`; persisted selections use `role.N` after copy 1.
+  Container assertions are available in `acceptance_copies_ops.py` for merged-lane
+  acceptance.
+
 - Added: generation-17 foundations for numbered custom service copies: bounded
   unit identities, placement expansion, per-copy endpoint allocations and stable
   socket paths, and per-copy resolution of the existing `copy_number` reference. Counts above one remain rejected

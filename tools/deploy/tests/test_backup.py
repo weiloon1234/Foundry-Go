@@ -554,6 +554,27 @@ class BackupTests(unittest.TestCase):
         self.assertFalse(verification["network_listeners"])
         self.assertFalse(verification["complete_instance_coverage"])
 
+    def test_numbered_copy_drill_retains_each_state_path_without_claiming_restoration(self):
+        from test_copies_ops import expanded_inventory
+        inventory, _ = expanded_inventory()
+        coverage = backup.service_coverage(inventory)
+        write = backup._write_private
+        def with_coverage(host, path, value):
+            if "pgbackrest_label" in value:
+                value = {**value, "coverage": coverage}
+            return write(host, path, value)
+        paths = []
+        for row in coverage["service_state"]:
+            path = self.host.paths.p(row["persistent_state_paths"][0]) / "drill-sentinel"
+            path.parent.mkdir(parents=True)
+            path.write_text(str(row["ordinal"]))
+            paths.append(path)
+        with patch.object(backup, "_write_private", side_effect=with_coverage):
+            self.test_restore_is_new_private_cluster_and_records_timing()
+        verification = self.host.load_state(self.entry)["backup"]["restore_drill"]["verification"]
+        self.assertEqual(verification["service_state"], [{**row, "restored": False} for row in coverage["service_state"]])
+        self.assertEqual([path.read_text() for path in paths], ["1", "2"])
+
     def test_drill_reports_an_exited_postgresql_at_once(self):
         cluster = self.cluster()
         operation = str(uuid.uuid4())

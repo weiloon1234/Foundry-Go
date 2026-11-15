@@ -396,8 +396,8 @@ class SSH:
         result = subprocess.run(self.base[:-1] + options + [self.base[-1], command], check=False)
         check_ssh_exit(result.returncode, mutation=False)
 
-    def follow_logs(self, entry, role, lines):
-        command = shlex.join(journal.arguments(entry, role, lines, follow=True))
+    def follow_logs(self, entry, role, lines, ordinal=None):
+        command = shlex.join(journal.arguments(entry, role, lines, follow=True, ordinal=ordinal))
         try:
             # Without a remote terminal, Ctrl-C stops the local session instead of
             # killing the remote journalctl, which SSH would report as exit 255.
@@ -1079,6 +1079,22 @@ def declared_role(role):
     return role
 
 
+def copy_parameter(action):
+    """Parse COPY once, before SSH or any action-specific side effects."""
+    if "COPY" not in os.environ:
+        return None
+    import operation_selection
+    value = os.environ["COPY"]
+    if not re.fullmatch(r"[0-9]{1,3}", value):
+        raise LocalError("COPY must be a placed positive integer")
+    ordinal = int(value)
+    try:
+        operation_selection.validate(action, os.environ.get("ROLE"), ordinal)
+    except DeployError as error:
+        raise LocalError(error.detail) from None
+    return ordinal
+
+
 def log_parameters(action):
     if action != "logs":
         if "LINES" in os.environ or "FOLLOW" in os.environ:
@@ -1145,6 +1161,13 @@ def deploy(project, profile, settings):
     if action not in ACTIONS:
         raise LocalError("unsupported deployment action")
     logs = log_parameters(action)
+    ordinal = copy_parameter(action)
+    if ordinal is not None:
+        import operation_selection
+        try:
+            operation_selection.units({"name": instance_name(project, profile), "topology": load_topology(ROOT), "profile": profile}, os.environ["ROLE"], ordinal)
+        except DeployError as error:
+            raise LocalError(error.detail) from None
     if not profile["host"]["host_id"]:
         raise LocalError("environment is not bound to a bootstrapped host; run make bootstrap")
     if action == "shell":
@@ -1159,7 +1182,7 @@ def deploy(project, profile, settings):
         if logs["follow"]:
             entry = {"name": instance_name(project, profile), "topology": load_topology(ROOT), "profile": profile}
             with closing(SSH(profile, settings, interactive=True)) as ssh:
-                ssh.follow_logs(entry, role, logs["lines"])
+                ssh.follow_logs(entry, role, logs["lines"], ordinal=ordinal)
             return
     parameters = maintenance_parameters(action) if action in ("down", "up") else {}
     with closing(SSH(profile, settings)) as ssh:
@@ -1348,7 +1371,7 @@ def deploy(project, profile, settings):
                 request["profile"] = result["profile_update"]
             remember_releases(profile, ssh.request("status", request))
         elif action == "logs":
-            result = ssh.request("logs", {**request, "role": role, "lines": logs["lines"]})
+            result = ssh.request("logs", {**request, "role": role, "lines": logs["lines"], **({"copy": ordinal} if ordinal is not None else {})})
             if sys.stdin.isatty():
                 print(result["logs"])
             else:
@@ -1357,9 +1380,9 @@ def deploy(project, profile, settings):
             if action in ("restart", "stop") and "ROLE" in os.environ:
                 request["role"] = declared_role(os.environ["ROLE"])
             say(json.dumps(status, indent=2))
-            scope = request.get("role", "all roles")
+            scope = request.get("role", "all roles") + (f" copy {ordinal}" if ordinal is not None else "")
             confirm(f"{action.capitalize()} {scope} for {instance_name(project, profile)}")
-            display(ssh.request(action, {**request, "confirm": True}))
+            display(ssh.request(action, {**request, "confirm": True, **({"copy": ordinal} if ordinal is not None else {})}))
             remember_releases(profile, ssh.request("status", request))
 
 
@@ -1377,7 +1400,7 @@ def main():
     global ROOT
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app-root", help="application directory")
-    for option in ("environment", "action", "role", "lines", "follow", "target", "expected-current", "operation"):
+    for option in ("environment", "action", "role", "copy", "lines", "follow", "target", "expected-current", "operation"):
         parser.add_argument("--" + option)
     parser.add_argument("--archive", type=Path)
     parser.add_argument("--ubuntu", choices=("24.04", "26.04"))
@@ -1394,12 +1417,14 @@ def main():
         print("Actions: " + ", ".join(ACTIONS))
         print("ENVIRONMENT and ACTION select the operation.")
         return
-    for option in ("environment", "action", "role", "lines", "follow", "target", "expected_current", "operation"):
+    for option in ("environment", "action", "role", "copy", "lines", "follow", "target", "expected_current", "operation"):
         value = getattr(arguments, option)
         if value is not None:
             os.environ[option.upper()] = value
     ROOT = resolve_app_root(arguments.app_root)
     mode = arguments.command
+    if mode != "deploy":
+        copy_parameter(mode)
     if mode == "rehearse":
         from rehearsal import rehearse
         with lock(ROOT / ".deploy" / "operation.lock"):

@@ -701,6 +701,41 @@ class UnitIdentity:
         return cls(value["instance_id"], value["role"], value["ordinal"])
 
 
+def copy_selection_parts(value):
+    """Canonical persisted copy key: role for copy 1, role.N for later copies."""
+    require(isinstance(value, str), "invalid_contract", "Invalid copy selection.")
+    parts = value.split(".")
+    role = contract_name(parts[0])
+    if len(parts) == 1:
+        return role, 1
+    require(len(parts) == 2 and re.fullmatch(r"[1-9][0-9]{0,2}", parts[1]),
+            "invalid_contract", "Invalid copy ordinal.")
+    return role, contract_int(int(parts[1]), 2, MAX_ROLE_COPIES)
+
+
+def copy_selection(value):
+    def parse(item):
+        copy_selection_parts(item)
+        return item
+    result = contract_list(value, parse, maximum=MAX_UNITS)
+    require(len(result) == len(set(result)), "invalid_contract", "Duplicate copy selection.")
+    return result
+
+
+def unit_selection_names(identities):
+    identities = tuple(identities)
+    require(all(isinstance(identity, UnitIdentity) for identity in identities)
+            and len({identity.instance_id for identity in identities}) <= 1,
+            "service_selection", "Copy selections require identities from one instance.")
+    return copy_selection([identity.role + (f".{identity.ordinal}" if identity.ordinal != 1 else "")
+                           for identity in identities])
+
+
+def unit_selection_identities(instance_id, selection):
+    return tuple(UnitIdentity(instance_id, *copy_selection_parts(value))
+                 for value in copy_selection(list(selection)))
+
+
 @dataclass(frozen=True)
 class AllocatedEndpoint:
     role: str
@@ -1043,7 +1078,7 @@ class DeploymentSelection:
                 "invalid_contract", "Selection and admission identities differ.")
         return cls(instance, contract_int(v["minimum_generation"], FEATURE_INTRODUCTION_GENERATION), capabilities, resolution,
                    None if v["previous_resolution_id"] is None else contract_uuid(v["previous_resolution_id"]),
-                   admission, contract_names(v["enabled_roles"]), contract_names(v["maintenance_holds"]))
+                   admission, copy_selection(v["enabled_roles"]), copy_selection(v["maintenance_holds"]))
 
 
 def public_address(value):

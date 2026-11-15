@@ -28,7 +28,7 @@ from contracts import (DeployError, HOST_PATHS, LAYOUT_VERSION, SCHEMA, VERSION_
 from runtime_config import (ENCRYPTION_KEYS, MAX_CONFIGURATION_CHANGES, PIPELINE_KEYS, pipeline_keys, validate_runtime_environment,
                             candidate_values, rotation_changes, validate_configuration_changes, _read_value_file)
 from topology import instance_units, selected_units
-from services import unit_identities, unit_role_names
+from contracts import unit_selection_identities as unit_identities, unit_selection_names as unit_role_names
 from contracts import UnitIdentity
 from host import OperationTimeout, wall_clock_budget
 from redis_acl import (granted_redis_patterns, granted_redis_channels, reconcile_redis_grants,

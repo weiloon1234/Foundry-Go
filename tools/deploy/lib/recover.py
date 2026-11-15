@@ -21,6 +21,7 @@ import redis_acl
 import release
 import runtime_config
 import services
+from contracts import unit_selection_names, unit_selection_identities
 import upgrades
 from contracts import (DeployError, DeploymentSelection, PORT_FIRST, PORT_LAST, POSTGRES_PORT, RecoveryPublicBinding,
                        canonical_digest, record_document,
@@ -83,8 +84,8 @@ def rehearsal_roles(inventory):
 
 def takeover_selection(inventory, snapshot):
     selection = DeploymentSelection.parse(snapshot["selection"])
-    enabled = set(services.unit_identities(inventory.profile.instance_id, selection.enabled_roles)) & inventory.units.keys()
-    held = set(services.unit_identities(inventory.profile.instance_id, selection.maintenance_holds))
+    enabled = set(unit_selection_identities(inventory.profile.instance_id, selection.enabled_roles)) & inventory.units.keys()
+    held = set(unit_selection_identities(inventory.profile.instance_id, selection.maintenance_holds))
     holds = held & inventory.units.keys()
     holds.update(identity for identity in enabled if inventory.prerequisites({identity}) & held)
     return inventory.start_order(enabled), tuple(sorted(holds)), inventory.start_order(enabled - holds)
@@ -339,7 +340,8 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
     if feature is not None:
         binding = replacement_binding(recovery_public_binding, recovered["metadata"], profile, operation_id, mode)
         coverage = backup.service_coverage(feature)
-        unprotected = [s["role"] for s in coverage["service_state"] if s["kind"] == "local-unprotected"]
+        unprotected = [s["role"] + (f" copy {s['ordinal']}" if "ordinal" in s else "")
+                       for s in coverage["service_state"] if s["kind"] == "local-unprotected"]
         require(mode != "takeover" or not unprotected, "service_state_unprotected",
                 "Takeover requires explicit restoration evidence for local state: " + ", ".join(unprotected))
         if mode == "rehearsal":
@@ -361,8 +363,8 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
               "major": major, "bundle": upgrades.tool_bundle(tools_dir)[2]}
     if feature is not None:
         intent.update(source_profile=copy.deepcopy(recovered["metadata"]["profile"]), recovery_public_binding=record_document(binding) if binding else None,
-                      effective_profile=effective_profile(profile, binding), recovery_roles=list(services.unit_role_names(roles)),
-                      recovery_enabled_roles=list(services.unit_role_names(enabled)), recovery_maintenance_holds=list(services.unit_role_names(holds)),
+                      effective_profile=effective_profile(profile, binding), recovery_roles=list(unit_selection_names(roles)),
+                      recovery_enabled_roles=list(unit_selection_names(enabled)), recovery_maintenance_holds=list(unit_selection_names(holds)),
                       deployment_sha256=canonical_digest(recovered["metadata"]["feature_recovery"]["deployment"]))
     journal = _load(host)
     if not journal:
@@ -398,8 +400,8 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
             "remaining_manual_steps": ["Point DNS at the new server."] if mode == "takeover" else [],
             "_intent": intent, "_recovered": recovered}
     if feature is not None:
-        result.update(coverage=coverage, recovery_roles=list(services.unit_role_names(roles)),
-                      recovery_enabled_roles=list(services.unit_role_names(enabled)), recovery_maintenance_holds=list(services.unit_role_names(holds)),
+        result.update(coverage=coverage, recovery_roles=list(unit_selection_names(roles)),
+                      recovery_enabled_roles=list(unit_selection_names(enabled)), recovery_maintenance_holds=list(unit_selection_names(holds)),
                       recovery_public_binding=intent["recovery_public_binding"],
                       remaining_manual_steps=["DNS instructions follow confirmed old-server stop and private takeover health."]
                       if binding else [])

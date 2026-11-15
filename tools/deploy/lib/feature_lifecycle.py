@@ -15,6 +15,7 @@ import packages
 import operations
 import runtime_config
 import services
+from contracts import unit_selection_names, unit_selection_identities
 from contracts import (AdmissionDisposition, AdmissionRecord, Deployment,
                        DeploymentSelection, DeployError, FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, HostTransition,
                        ProcessIdentity, ReleaseDeclaration, ResolvedBundleBinding, ResolvedEndpointBinding,
@@ -91,14 +92,14 @@ def migrate_enablement(host, registry, entry):
             require(release._matches_executable(observed, host.paths.p(inventory.specs[name].executable)),
                     "service_enablement", "Running preview unit differs from its selected executable.")
             running.append(name)
-    intent = {"schema": 1, "authority": "systemd", "state": "prepared", "enabled": sorted(services.unit_role_names(enabled)),
-              "adopt_running": sorted(services.unit_role_names(set(running) - enabled)), "starts": []}
+    intent = {"schema": 1, "authority": "systemd", "state": "prepared", "enabled": sorted(unit_selection_names(enabled)),
+              "adopt_running": sorted(unit_selection_names(set(running) - enabled)), "starts": []}
     admission.protected_directory(host, path.parent, 0o700)
     atomic_json(path.with_name("enablement-intent.json"), intent, mode=0o600)
     install_units(host, registry, entry, inventory, launch, Path(__file__).resolve().parents[1])
     if intent["adopt_running"]:
         host.run(["systemctl", "enable", *(inventory.units[name] for name in inventory.select(roles=intent["adopt_running"]))])
-    result = {**intent, "state": "complete", "enabled": list(services.unit_role_names(services.enabled_units(host, inventory.units)))}
+    result = {**intent, "state": "complete", "enabled": list(unit_selection_names(services.enabled_units(host, inventory.units)))}
     atomic_json(path, result, mode=0o600)
     return result
 
@@ -407,7 +408,7 @@ def configuration_hold_running(host, entry):
     held = admission.read_owned(host, path, lambda value: value)
     require(held["private_revision"] == entry["configuration_revision"],
             "configuration_reconciliation", "Configuration hold revision differs.")
-    return set(services.unit_identities(entry["profile"]["instance_id"], held["running_roles"]))
+    return set(unit_selection_identities(entry["profile"]["instance_id"], held["running_roles"]))
 
 
 def transition_enablement(host, entry, inventory, *, restoring=False):
@@ -416,11 +417,8 @@ def transition_enablement(host, entry, inventory, *, restoring=False):
         return tuple(inventory.units), tuple(inventory.units), {}
     _, _, previous, _ = load(host, entry)
     enabled = set(services.enabled_units(host, previous.units))
-    path = admission.AdmissionStore(host, inventory.profile.instance_id).durable / "removed-enablement.json"
-    removed = admission.read_owned(host, path, lambda v: v) if path.exists() else {}
-    require(isinstance(removed, dict) and all(isinstance(k, str) and type(v) is bool for k, v in removed.items()),
-            "service_enablement", "Invalid removed-copy enablement evidence.")
-    removed = dict(zip(services.unit_identities(inventory.profile.instance_id, removed), removed.values()))
+    from copy_enablement import removed_enablement
+    removed = removed_enablement(host, entry)
     desired = {name for name in inventory.units if name in enabled or name not in previous.units and
                (removed.get(name, False) if restoring or name in removed else True)}
     held_running = configuration_hold_running(host, entry)
@@ -452,7 +450,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     retained = set(inventory.units) - names
     if review is not None:
         enabled, running, removed = transition_enablement(host, entry, inventory, restoring=review["restoring"])
-        require(list(services.unit_role_names(enabled)) == review["enabled_roles"] and list(services.unit_role_names(running)) == review["running_roles"],
+        require(list(unit_selection_names(enabled)) == review["enabled_roles"] and list(unit_selection_names(running)) == review["running_roles"],
                 "stale_plan", "Enablement or running selection changed after review.")
     else:
         enabled = services.enabled_units(host, previous.units) if "deployment_selection" in entry else tuple(inventory.units)
@@ -470,26 +468,25 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     maintenance_intent["operation_id"] = attempt["operation_id"]
     running = set(running)
     if review is not None:
-        require(sorted(services.unit_role_names(holds)) == review["maintenance_holds"]
-                and sorted(services.unit_role_names(running)) == review["maintenance_running_roles"],
+        require(sorted(unit_selection_names(holds)) == review["maintenance_holds"]
+                and sorted(unit_selection_names(running)) == review["maintenance_running_roles"],
                 "stale_plan", "Maintenance holds or restored running roles changed after review.")
     inventory.start_order(running)
-    attempt["running_roles"] = sorted(services.unit_role_names(running))
+    attempt["running_roles"] = sorted(unit_selection_names(running))
     host.save_state(entry, state)
     selected = DeploymentSelection(inventory.profile.instance_id, minimum_generation, tuple(sorted(FEATURE_CAPABILITIES)),
                  inventory.resolution.id, None if old == inventory.resolution.id else old,
                  AdmissionRecord(inventory.profile.instance_id, inventory.resolution.id, inventory.resolution.deployment_sha256,
                                  inventory.resolution.private_revision, attempt["operation_id"], AdmissionDisposition.PENDING),
-                 services.unit_role_names(enabled), tuple(sorted(services.unit_role_names(holds))))
+                 unit_selection_names(enabled), tuple(sorted(unit_selection_names(holds))))
     request = transition_request(entry, inventory, attempt["operation_id"], names=names, previous=previous)
     if retained:
         store.retain_units(previous, inventory, retained, attempt["operation_id"])
     operations.bind_transition(host, entry, inventory, request)
     store.record_operation(attempt)
     if removed:
-        removed_path = store.durable / "removed-enablement.json"
-        prior = admission.read_owned(host, removed_path, lambda v: v) if removed_path.exists() else {}
-        atomic_json(removed_path, {**prior, **dict(zip(services.unit_role_names(removed), removed.values()))}, mode=0o600)
+        from copy_enablement import record_removed
+        record_removed(host, entry, removed)
     # Intent precedes the shared command, marker publication and every stop.
     atomic_json(operations.directory(host, attempt["operation_id"]) / "maintenance-intent.json", maintenance_intent, mode=0o600)
     maintenance_result = feature_maintenance.shared_change(host, entry, maintenance_request) if maintenance_request else {}
@@ -509,7 +506,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     store.record_boot_closure(evidence)
     store._write(store.durable / "transition.json", replace(request, closure_id=evidence.id))
     atomic_json(operations.directory(host, attempt["operation_id"]) / "validated.json", {"operation_id": attempt["operation_id"]}, mode=0o600)
-    retained_holds = services.unit_identities(inventory.profile.instance_id, maintenance_intent["holds"])
+    retained_holds = unit_selection_identities(inventory.profile.instance_id, maintenance_intent["holds"])
     feature_maintenance.clear_markers(host, inventory, retained_holds)
     feature_maintenance.clear_markers(host, previous, retained_holds)
     http = next(e for e in inventory.resolution.endpoints if e.role == "http" and e.listener == "http")
@@ -585,7 +582,9 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
                 "readiness_failed", "The selected running set did not remain ready before public opening.")
         if running:
             feature_network.open_public(host, entry, inventory.resolution, evidence)
-    state["status"] = "stopped" if stop_only or not enabled else (
+    missing_enablement = review is not None and any(
+        copy["evidence"] == "missing" for copy in review.get("restored_copies", ()))
+    state["status"] = "degraded" if missing_enablement else "stopped" if stop_only or not enabled else (
         "healthy" if running | holds == set(inventory.units) else "degraded")
     if attempt.get("redis_inventory") is not None:
         release.queue_redis_narrowing(state, attempt["redis_inventory"])
@@ -644,7 +643,7 @@ def open_boot(host, entry, inventory):
                 "admission_pending", "A pending operation requires reconciliation before boot startup.")
         store.require_cleanup_clear()
         store._completed(selection)
-        enabled = tuple(sorted(set(services.enabled_units(host, inventory.units)) - set(services.unit_identities(inventory.profile.instance_id, selection.maintenance_holds))))
+        enabled = tuple(sorted(set(services.enabled_units(host, inventory.units)) - set(unit_selection_identities(inventory.profile.instance_id, selection.maintenance_holds))))
         inventory.start_order(enabled)
         if not enabled:
             return

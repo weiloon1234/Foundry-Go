@@ -42,6 +42,7 @@ import packages
 import postgres
 import runtime_config
 import services
+from contracts import unit_selection_names, unit_selection_identities
 from topology import ExecutableRole, parse_profile, parse_topology
 
 STANZA = "foundry"
@@ -75,15 +76,16 @@ def parse_feature_snapshot(value, entry):
             and selection.admission.deployment_sha256 == canonical_digest(value["deployment"])
             and selection.admission.private_revision == inventory.resolution.private_revision == entry["configuration_revision"]
             and value["selection"] == entry.get("deployment_selection")
-            and set(services.unit_identities(profile.instance_id, selection.enabled_roles)) <= inventory.units.keys()
-            and set(services.unit_identities(profile.instance_id, selection.maintenance_holds)) <= inventory.units.keys(),
+            and set(unit_selection_identities(profile.instance_id, selection.enabled_roles)) <= inventory.units.keys()
+            and set(unit_selection_identities(profile.instance_id, selection.maintenance_holds)) <= inventory.units.keys(),
             "backup_deployment_mismatch", "Recovery descriptor differs from the selected deployment or configuration.")
-    inventory.start_order(inventory.select(roles=selection.enabled_roles))
+    inventory.start_order(unit_selection_identities(inventory.profile.instance_id, selection.enabled_roles))
     http = next(e for e in inventory.resolution.endpoints if e.role == "http" and e.listener == "http")
     require(entry["allocations"].get("http_port") == http.port,
             "backup_deployment_mismatch", "Recovery HTTP allocation differs from the selected runtime resolution.")
     paths = value["secret_paths"]
-    roles = {name: role for name, role in inventory.roles.items() if isinstance(role, ExecutableRole)}
+    roles = {unit_selection_names((identity,))[0]: inventory.roles[identity.role]
+             for identity in inventory.units if isinstance(inventory.roles[identity.role], ExecutableRole)}
     require(isinstance(paths, dict) and set(paths) == set(roles),
             "backup_service_secrets", "Recovery requires the selected role secret snapshot paths from lane A.")
     configuration = instance_paths(entry["name"])["configuration"] + "/"
@@ -104,16 +106,22 @@ def parse_feature_snapshot(value, entry):
 
 def service_coverage(inventory):
     states, findings = [], []
-    for name, role in inventory.roles.items():
+    for identity in inventory.units:
+        name, role = identity.role, inventory.roles[identity.role]
         if not isinstance(role, ExecutableRole):
             continue
-        state = {"role": name, "kind": role.state.kind}
+        scope = {"role": name}
+        state = {**scope, "kind": role.state.kind}
+        if len(inventory.copies(name)) > 1:
+            scope["ordinal"] = identity.ordinal
+            state.update(ordinal=identity.ordinal,
+                         persistent_state_paths=[services.ServicePaths.for_unit(identity, inventory.resolution.id).state])
         if role.state.kind == "local-unprotected":
-            findings.append({"code": "service_state_unprotected", "role": name})
+            findings.append({"code": "service_state_unprotected", **scope})
         elif role.state.kind == "external":
             state["recovery_owner"] = role.state.recovery_owner
             if role.state.recovery_owner is None:
-                findings.append({"code": "service_state_external_owner_required", "role": name})
+                findings.append({"code": "service_state_external_owner_required", **scope})
         states.append(state)
     import shared_directories
     result = {"supported_components": ["postgresql", "encrypted_configuration", "selected_deployment"],
@@ -134,7 +142,7 @@ def _feature_snapshot(host, entry, files):
             "backup_deployment_mismatch", "Registry and selected deployment differ.")
     enabled_units = getattr(services, "enabled_units", None)
     require(callable(enabled_units), "capability_unavailable", "Feature backup requires lane A services.enabled_units.")
-    selection = replace(selection, enabled_roles=services.unit_role_names(enabled_units(host, inventory.units)))
+    selection = replace(selection, enabled_roles=unit_selection_names(enabled_units(host, inventory.units)))
     value = {"deployment": record_document(inventory.deployment), "resolution": record_document(inventory.resolution),
              "selection": record_document(selection), "declaration": launch["declaration"],
              "secret_paths": launch["secret_paths"]}
@@ -886,6 +894,9 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
                       retained=retain,
                       postgres={"host": str(socket), "port": 55433, "user": postgres.cluster_owner(),
                                 "database": entry["allocations"]["database"], "sslmode": "disable"})
+        copies = [state for state in receipt.get("coverage", {}).get("service_state", ()) if "ordinal" in state]
+        if copies:
+            result["verification"]["service_state"] = [{**state, "restored": False} for state in copies]
         save_phase("verified")
         if retain:
             save_phase("complete")

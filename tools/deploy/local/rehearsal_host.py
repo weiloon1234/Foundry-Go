@@ -87,7 +87,7 @@ def prepare(context):
 def observe(context, *, stopped=False):
     from report import collect_report
     from topology import instance_units
-    from services import unit_role_names
+    from contracts import unit_selection_names as unit_role_names, unit_selection_identities
     host = Host()
     _, entry = host.require_identity(context["project"], context["profile"])
     units = instance_units(entry)
@@ -101,7 +101,7 @@ def observe(context, *, stopped=False):
         from feature_lifecycle import load
         from services import wait_ready_set
         _, selection, inventory, _ = load(host, entry)
-        require(wait_ready_set(host, inventory, inventory.select(roles=selection.enabled_roles), time.monotonic() + 120),
+        require(wait_ready_set(host, inventory, unit_selection_identities(inventory.profile.instance_id, selection.enabled_roles), time.monotonic() + 120),
                 "readiness_failed", "Selected services did not pass production readiness.")
     else:
         from release import ready

@@ -6,6 +6,7 @@
 # Maintenance: ENVIRONMENT=staging ACTION=down CONFIRM=yes make deploy (or ACTION=up).
 # down options: MESSAGE / RETRY / ALLOW / EXCEPT / BYPASS=yes; up rejects all of them.
 # Logs: make deploy ACTION=logs ROLE=http LINES=500 FOLLOW=yes (Ctrl-C stops streaming).
+# Copies: make deploy ACTION=logs ROLE=relay COPY=2 (also supported for stop/restart).
 # LINES defaults to 100, range 1..2000; FOLLOW accepts only yes. Both are logs-only.
 # Rollback: make deploy ACTION=rollback TARGET=<release> EXPECTED_CURRENT=<release>
 # Resume: add OPERATION=<UUID printed before the original request>.

@@ -955,6 +955,65 @@ instance through admission. Report lists the listener under its instance with
 exposure and DNS observations. Read status after a lost SSH connection; a lost
 reply does not establish whether the operation completed.
 
+### Select and inspect numbered copies
+
+For a placed numbered role, `ROLE=relay` selects every copy. Add `COPY=2` to
+select only its second copy for stop, restart, or logs:
+
+```sh
+ENVIRONMENT=production ACTION=stop ROLE=relay COPY=2 make deploy
+ENVIRONMENT=production ACTION=restart ROLE=relay COPY=2 make deploy
+ENVIRONMENT=production ACTION=logs ROLE=relay COPY=2 LINES=200 make deploy
+ENVIRONMENT=production ACTION=logs ROLE=relay COPY=2 FOLLOW=yes make deploy
+```
+
+The CLI also accepts `--role relay --copy 2`. `COPY` requires an explicit `ROLE`
+and a placed ordinal. Other actions reject `COPY`. Selecting a role without
+`COPY` keeps its whole-role meaning. A successful individual operation returns
+`status: "degraded"` when the complete required set is not healthy. Stopping a
+copy does not stop or disable its siblings. Dependency checks still apply across
+all required copies; a partial selection cannot bypass an enabled dependent.
+
+Reports preserve the existing `services[role]` entry for a singleton role. A
+multi-copy role has `services[role].copies`, ordered by `ordinal`. Each row carries
+its unit state, enablement, admission, maintenance hold, process identity,
+readiness, listeners, confinement proof, shared-directory grants, and persistent
+state paths. Private listener and confinement rows identify the ordinal for
+multi-copy roles. Unavailable observations remain null or unverified, and all
+copies share the existing report deadline. Held copies have readiness status
+`held`; they do not run readiness probes or count as failed copies.
+
+### Roll back a release with removed copies
+
+Rollback uses the retained target's placement. Surviving copies keep their current
+systemd enablement. A removed copy uses the enablement recorded before its removal.
+The host retains that evidence for later rollback, including recorded disabled
+copies. Missing evidence leaves the copy disabled and the instance degraded.
+
+A rollback plan lists absent target copies in `restored_copies`, with `role`,
+`ordinal`, `enabled`, and `evidence` set to `recorded` or `missing`. The plan's
+`enabled_roles` and `running_roles` show the effective dependency-checked
+selection. Persisted copy selections keep `role` for copy 1 and use `role.N` for
+later copies. This encoding also applies to maintenance and recovery records;
+it does not change the meaning of the public `ROLE` selector.
+
+### Back up and recover numbered copies
+
+Backup `service_state` coverage has one entry per custom copy. Multi-copy entries
+add `ordinal` and `persistent_state_paths`; singleton entries keep their existing
+shape. Each copy receives its role's state policy. `local-unprotected` remains
+unprotected, and external state still requires its declared recovery owner.
+
+Takeover plans preserve each copy's enablement and holds. Recovery starts copies
+in dependency order, after every required prerequisite copy is ready. A held
+prerequisite also holds its dependent copies. Rehearsal includes all copies of
+its selected safe prerequisite roles and keeps public exposure closed.
+
+Restore drills report each numbered copy's state paths from the selected backup
+with `restored: false`. Database PITR does not restore local service files or start
+custom services. Disposable caches remain disposable; the drill does not claim
+complete instance coverage.
+
 ### External DNS and Docker-host NAT
 
 Create external DNS-only A/AAAA records for the listener hostname, pointing at the
@@ -1023,6 +1082,11 @@ Restore drills, backups, logs, configuration-key inspection, release planning an
 stop may reconcile toward down or do nothing; they never restore held workloads
 or open their listeners as a reconciliation side effect. After an external
 `artisan up`, use deploy `up` or `status` to restore those copies separately.
+
+Each copy has its own root-owned persistent hold marker beneath the instance
+control directory. A hold preserves systemd enablement. `up` restores only copies
+that remain enabled and declared; stopping one copy during maintenance keeps that
+copy disabled after `up`, without changing its siblings.
 
 Held copies are reported separately from failed or unexpectedly inactive services.
 HTTP uses its maintenance liveness contract while paused. Deploy, configuration,

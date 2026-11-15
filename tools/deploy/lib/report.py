@@ -16,7 +16,7 @@ import maintenance
 
 from contracts import BACKUP_FRESH_SECONDS, BACKUP_POLICY, DeployError, INSTANCE_STATUSES, PREFIX, SCHEMA, SLUG_PATTERN, check_path, instance_paths, now, parse_json, valid_uuid
 from topology import instance_units, selected_units
-from services import unit_identities, unit_role_names
+from contracts import unit_selection_identities as unit_identities
 from release import enabled_roles, readiness_body, service as role_service
 from host import OperationTimeout as ReportBudgetExceeded, wall_clock_budget
 
@@ -211,6 +211,96 @@ def certificate_problems(problems, instance_id, value):
         return
     if expires - dt.datetime.now(dt.timezone.utc) < dt.timedelta(seconds=CERTIFICATE_EXPIRING_SECONDS):
         problem(problems, "certificate_expiring", instance_id)
+
+
+def services_document(observations):
+    """Keep singleton service rows; group numbered copies below their role."""
+    grouped = {}
+    for identity, observation in observations.items():
+        grouped.setdefault(identity.role, []).append((identity, observation))
+    return {role: rows[0][1] if len(rows) == 1 and rows[0][0].ordinal == 1 else
+            {"copies": [{"ordinal": identity.ordinal, **observation} for identity, observation in
+                        sorted(rows, key=lambda row: row[0].ordinal)]}
+            for role, rows in grouped.items()}
+
+
+def copy_runtime(host, inventory, identity, item, deadline):
+    """Observe one copy under the report's shared deadline; never probe a hold."""
+    import admission
+    import services
+    from contracts import HelperInvocation, canonical_digest, record_document, require
+    observed = role_service(host, inventory.units[identity], timeout=remaining(deadline))
+    process = observed.get("process")
+    result = {"process": {"pid": integer(int(observed["MainPID"])) if str(observed.get("MainPID", "")).isdigit() else None,
+                          "start_ticks": int(process["start"]) if process and str(process.get("start", "")).isdigit() else None,
+                          "invocation_id": string(observed.get("InvocationID"), 32),
+                          "executable": string(observed.get("exe"), 4096)},
+              "admission": "unverified", "readiness": {"status": "unverified", "ready": None}}
+    if item.get("held"):
+        result.update(admission="held", readiness={"status": "held", "ready": None})
+        return result
+    if observed.get("ActiveState") != "active":
+        result.update(admission="inactive", readiness={"status": "inactive", "ready": False})
+        return result
+    try:
+        store = admission.AdmissionStore(host, identity.instance_id)
+        invocation_id = observed.get("InvocationID")
+        require(isinstance(invocation_id, str) and re.fullmatch(r"[a-f0-9]{32}", invocation_id),
+                "admission_invocation", "Missing copy invocation identity.")
+        invocation = admission.read_owned(host, store.runtime / "admitted" / identity.role / (invocation_id + ".json"), HelperInvocation.parse)
+        require(invocation.unit == identity and str(invocation.process.pid) == observed.get("MainPID")
+                and admission.executor_alive(host, invocation.process)
+                and invocation.unit_spec_sha256 == canonical_digest(record_document(inventory.specs[identity])),
+                "admission_invocation", "Copy admission differs from its process.")
+        with store.preparation(invocation):
+            result["admission"] = "admitted"
+    except (DeployError, OSError):
+        pass
+    from release import _matches_executable
+    if services.readiness_probe(inventory.roles[identity.role]) is None:
+        result["readiness"] = {"status": "missing_probe", "ready": None}
+    else:
+        ready = (result["admission"] == "admitted" and
+                 _matches_executable(observed, host.paths.p(inventory.specs[identity].executable)) and
+                 services.probe(host, inventory, identity, min(deadline, time.monotonic() + CHECK_TIMEOUT)))
+        result["readiness"] = {"status": "ready" if ready else "failed", "ready": ready}
+    return result
+
+
+def copy_report_details(host, entry, observations, selected, network, problems, deadline):
+    import services
+    from dataclasses import asdict
+    multi = {identity.role for identity in observations if identity.ordinal > 1}
+    inventory = selected[2] if selected else None
+    for identity, item in observations.items():
+        if identity.role not in multi:
+            continue
+        item.update(enabled=item.get("enabled"), held=item.get("held"), admission=None, process=None,
+                    readiness=None, listeners=None, confinement=None, shared_directories=None, persistent_state_paths=None)
+        if inventory is None:
+            continue
+        role = inventory.roles[identity.role]
+        paths = services.ServicePaths.for_unit(identity, inventory.resolution.id)
+        item["persistent_state_paths"] = [paths.state]
+        item["shared_directories"] = [asdict(grant) for grant in inventory.specs[identity].bindings.shared_directories]
+        item["resource_limits"] = asdict(role.limits) if hasattr(role, "limits") else None
+        if network is not None:
+            item["listeners"] = [row for row in (*network.get("listeners", ()), *network.get("private_listeners", ()))
+                                 if row["role"] == identity.role and row.get("ordinal", 1) == identity.ordinal]
+            item["listeners"].extend({"role": endpoint.role, "ordinal": endpoint.ordinal,
+                                      "listener": endpoint.listener, "transport": "unix", "path": endpoint.path,
+                                      "visibility": "private"}
+                                     for endpoint in inventory.resolution.unix_endpoints
+                                     if (endpoint.role, endpoint.ordinal) == (identity.role, identity.ordinal))
+            item["confinement"] = next((row for row in network.get("confinement", ())
+                                        if row["role"] == identity.role and row.get("ordinal", 1) == identity.ordinal), None)
+        runtime = checked(problems, "copy_runtime_unverified", identity.instance_id, copy_runtime,
+                          host, inventory, identity, item, deadline)
+        if runtime:
+            item.update(runtime)
+            if runtime["readiness"]["status"] in ("failed", "missing_probe", "unverified"):
+                problem(problems, "copy_readiness_unverified", identity.instance_id,
+                        detail=f"{identity.role} copy {identity.ordinal} is not verified ready.")
 
 
 def service(host, unit, deadline):
@@ -414,13 +504,17 @@ def instance_report(host, entry, deadline, problems, *, host_claims=(), host_con
     http, expected_unit = next(iter(selected_units(entry, "http").items()))
     unit_status = checked(problems, "service_check_unavailable", instance_id, service, host, expected_unit, deadline)
     topology = {role: {"unit": unit, "state": checked(problems, "service_check_unavailable", instance_id, service, host, unit, deadline)}
-                for role, unit in instance_units(entry).items() if role != http and not rehearsal}
+                for role, unit in instance_units(entry).items() if role != http and (not rehearsal or profile.get("schema") == 3)}
     topology[http] = {"unit": expected_unit, "state": unit_status}
     held = set()
+    selected = None
     if "deployment_selection" in entry:
-        from feature_maintenance import record
-        holds = checked(problems, "maintenance_hold_unavailable", instance_id, record, host, entry)
-        held = set(unit_identities(instance_id, holds["holds"])) if holds else set()
+        from feature_maintenance import active_holds
+        from feature_lifecycle import load
+        selected = checked(problems, "runtime_selection_unavailable", instance_id, load, host, entry)
+        observed_holds = checked(problems, "maintenance_hold_unavailable", instance_id,
+                                 active_holds, host, entry, selected[2]) if selected else None
+        held = set(observed_holds or unit_identities(instance_id, entry["deployment_selection"].get("maintenance_holds", ())))
         enabled = checked(problems, "service_enablement_unavailable", instance_id,
                           enabled_roles, host, entry, remaining(deadline))
         for role, item in topology.items():
@@ -512,8 +606,6 @@ def instance_report(host, entry, deadline, problems, *, host_claims=(), host_con
         consistent = False
     expected_executables = {role: expected_executable for role in topology}
     if "deployment_selection" in entry:
-        from feature_lifecycle import load
-        selected = checked(problems, "runtime_selection_unavailable", instance_id, load, host, entry)
         expected_executables = ({role: str(host.paths.p(spec.executable)) for role, spec in selected[2].specs.items()}
                                 if selected else {})
     for role, item in topology.items():
@@ -552,7 +644,7 @@ def instance_report(host, entry, deadline, problems, *, host_claims=(), host_con
         "status": "unknown" if recorded_status in {"healthy", "rolled_back"} and not consistent else recorded_status,
         "recorded_status": recorded_status, "metadata_consistent": consistent,
         "current_release": current, "previous_release": previous, "last_attempt": attempt(state.get("last_attempt")),
-        "service": unit_status, "services": dict(zip(unit_role_names(topology), topology.values())), "readiness": ready, "maintenance": live_maintenance, "certificate": cert, "backup": backup,
+        "service": unit_status, "services": services_document(topology), "readiness": ready, "maintenance": live_maintenance, "certificate": cert, "backup": backup,
         "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),
     }
     if profile.get("schema") == 3:
@@ -572,6 +664,13 @@ def instance_report(host, entry, deadline, problems, *, host_claims=(), host_con
                 problem(problems, finding["code"], instance_id)
             if result["network"]["unexpected_exposure"]:
                 problem(problems, "unexpected_public_listener")
+    copy_report_details(host, entry, topology, selected, result.get("network"), problems, deadline)
+    result["services"] = services_document(topology)
+    if not rehearsal and result["status"] != "stopped" and any(
+            "readiness" in item and not item.get("held") and
+            (not item.get("enabled") or not (item.get("readiness") or {}).get("ready")) for item in topology.values()):
+        result["status"] = "degraded"
+        problem(problems, "instance_degraded", instance_id)
     return result
 
 
@@ -625,6 +724,8 @@ def confined_network(host, registry):
                     if index:
                         row = {"instance_id": instance_id, "role": name, "confinement": "loopback", "state": "unverified"}
                         rows.append(row)
+                    if len(copies) > 1:
+                        row["ordinal"] = identity.ordinal
                     if service(host, inventory.units[identity])["ActiveState"] != "active":
                         row["state"] = "inactive"
                         continue
@@ -763,6 +864,7 @@ def declared_network(host, profile, *, topology, entry=None, resolution=None, cl
                             "authentication": policies[c.role + "." + c.listener].authentication} for c in claims],
             "confinement": own_confinement,
             "private_listeners": [{"role": c.role, "listener": c.listener, "address": c.socket.address,
+                                   **({"ordinal": c.ordinal} if dict(profile.placement).get(c.role, 1) > 1 else {}),
                                    "port": c.socket.port, "transport": "tcp", "visibility": "private",
                                    "wildcard": c.wildcard, "confinement": next(
                                        r.common.confinement for r in topology.roles if r.common.name == c.role)}

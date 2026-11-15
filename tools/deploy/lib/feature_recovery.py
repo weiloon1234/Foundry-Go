@@ -16,6 +16,7 @@ import network_confinement
 import release
 import runtime_config
 import services
+from contracts import unit_selection_names, unit_selection_identities
 from contracts import (AdmissionDisposition, AdmissionRecord, Deployment,
                        DeploymentSelection, FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION,
                        HelperInvocation, ReleaseDeclaration, RuntimeResolution, ValidationPermit,
@@ -51,7 +52,7 @@ def prepared(host, entry, journal):
 
 
 def selected_roles(intent, inventory):
-    enabled, holds, running = (set(services.unit_identities(inventory.profile.instance_id, intent[key]))
+    enabled, holds, running = (set(unit_selection_identities(inventory.profile.instance_id, intent[key]))
                                for key in ('recovery_enabled_roles', 'recovery_maintenance_holds', 'recovery_roles'))
     require(enabled <= inventory.units.keys() and holds <= inventory.units.keys() and running == enabled - holds,
             'recovery_selection', 'Recovery must retain its exact reviewed enablement and holds.')
@@ -133,7 +134,7 @@ def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_d
         attempt = state.get('last_attempt')
         if attempt is None:
             attempt = release.begin(host, entry, state, 'restart', inventory.deployment.release,
-                metadata={'operation_id': intent['operation_id'], 'recovery_mode': intent['mode'], 'running_roles': list(services.unit_role_names(sorted(running)))})
+                metadata={'operation_id': intent['operation_id'], 'recovery_mode': intent['mode'], 'running_roles': list(unit_selection_names(sorted(running)))})
         require(attempt.get('operation_id') == intent['operation_id'] and attempt['outcome'] == 'running',
                 'recovery_reconciliation', 'Recovery preparation has an unresolved prior operation.')
         store = admission.AdmissionStore(host, inventory.profile.instance_id)
@@ -142,7 +143,7 @@ def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_d
             tuple(sorted(FEATURE_CAPABILITIES)), inventory.resolution.id, None,
             AdmissionRecord(inventory.profile.instance_id, inventory.resolution.id, inventory.resolution.deployment_sha256,
                             inventory.resolution.private_revision, intent['operation_id'], AdmissionDisposition.PENDING),
-            services.unit_role_names(sorted(enabled)), services.unit_role_names(sorted(holds)))
+            unit_selection_names(sorted(enabled)), unit_selection_names(sorted(holds)))
         transition = lifecycle.transition_request(entry, inventory, intent['operation_id'])
         operations.bind_transition(host, entry, inventory, transition)
         store.begin(selection, inventory.resolution)
@@ -171,8 +172,8 @@ def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_d
             host.run(['systemctl', 'enable' if name in enabled else 'disable', unit])
         require(set(services.enabled_units(host, inventory.units)) == enabled,
                 'recovery_selection', 'Systemd enablement differs from the recovery plan.')
-        atomic_json(store.durable / 'maintenance.json', {'operation_id': intent['operation_id'], 'holds': list(services.unit_role_names(sorted(holds))),
-                    'enabled': list(services.unit_role_names(sorted(enabled))), 'running': list(services.unit_role_names(sorted(enabled)))}, mode=0o600)
+        atomic_json(store.durable / 'maintenance.json', {'operation_id': intent['operation_id'], 'holds': list(unit_selection_names(sorted(holds))),
+                    'enabled': list(unit_selection_names(sorted(enabled))), 'running': list(unit_selection_names(sorted(enabled)))}, mode=0o600)
         atomic_json(store.durable / 'enablement.json', {'schema': 1, 'authority': 'systemd', 'state': 'complete'}, mode=0o600)
         atomic_json(root / 'recovery-prepared.json', {'resolution_id': inventory.resolution.id, 'closure_id': closure.id}, mode=0o600)
 
@@ -283,7 +284,7 @@ def _ready(host, entry, journal):
     store, selection, current, _ = lifecycle.load(host, entry)
     require(selection.admission.disposition is AdmissionDisposition.COMMITTED and current.resolution == inventory.resolution
             and entry['deployment_selection'] == record_document(selection)
-            and set(inventory.select(roles=selection.maintenance_holds)) == holds and set(services.enabled_units(host, inventory.units)) == enabled,
+            and set(unit_selection_identities(inventory.profile.instance_id, selection.maintenance_holds)) == holds and set(services.enabled_units(host, inventory.units)) == enabled,
             'recovery_readiness', 'Recovered selection, holds or systemd enablement changed.')
     store.require_cleanup_clear()
     store._completed(selection)

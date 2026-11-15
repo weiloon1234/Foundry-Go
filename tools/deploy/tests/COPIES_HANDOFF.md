@@ -107,3 +107,80 @@ records in `contracts.py`, and public claims in `listeners.py`. Lane A2 owns its
 enablement record changes in `contracts.py` and rollback enablement logic in
 `feature_lifecycle.py`. Keep allocation, identity, and socket naming in the shared
 helpers above.
+
+## A2 operations records (release 2a)
+
+A2 adds `contracts.unit_selection_names(identities)` and
+`unit_selection_identities(instance_id, selection)`. These serialize a concrete
+copy as `role` for ordinal 1 and `role.N` for ordinals 2–128. Role identifiers
+cannot contain dots, so this is unambiguous; explicit `.1`, leading zeroes,
+duplicates and mixed-instance selections are rejected. `DeploymentSelection`
+accepts these keys in `enabled_roles` and `maintenance_holds`, bounded by
+`MAX_UNITS`. Use these codecs for persisted **copy selections**, including
+operation intents/plans; retain role names for role policies and resolution.roles.
+A2 leaves the old singleton helpers in services unchanged.
+
+A2's provisional removal hook is
+`copy_enablement.record_removed(host, entry, removed)` where `removed` maps
+`UnitIdentity` to bool. Call under host/instance locks, before disabling/removing
+units. A1 may publish its required signature here; A2 will match it. Evidence stays
+in the existing root-owned `removed-enablement.json`, keyed by the codec above.
+`removed_enablement(host, entry)` reads identity-keyed evidence;
+`restoration_plan(host, entry, previous, inventory)` explains absent target copies
+with `role`, `ordinal`, `enabled`, and `evidence: recorded|missing`.
+
+A2 integration notes:
+
+- Manager forwards JSON `copy` (integer) with `role` for stop/restart. A1's executor
+  must select with `inventory.select(role, ordinal=request.get("copy"))`; this
+  branch still rejects named feature operations until A1 lands its lifecycle.
+- A2 migrated enablement record boundaries in `feature_lifecycle.py` and
+  `feature_plan.py` to the new codecs, delegated the existing removal-write block
+  to `record_removed`, and added `restored_copies` to rollback plans. Keep those
+  changes when merging A1's lifecycle work. The `release.py` codec import also
+  changes so status can read numbered maintenance holds.
+- A1 still owns migrating admission selection/subset checks, retained invocation
+  records, listener transition fingerprints and open-set selections. In
+  `admission.py`, resolution.roles is role policy: compare selected identities
+  against deployment units, not strings against resolution.roles or copy 1 only.
+  In `listeners.py`, separate concrete-copy record keys from role-level edge APIs.
+- Lane C's archived `launch.secret_paths` must contain one entry per placed custom
+  copy, keyed by the same `role` / `role.N` codec. A2 validates that exact coverage.
+  The nested secret-name-to-path shape stays unchanged. Coordinate C's effective
+  environment lookup signature with `feature_recovery._ready`, which still calls
+  the base role-scoped API until C publishes its per-copy interface.
+- At merge, call
+  `acceptance_copies_ops.assert_copies_operations(host, project, profile, role="relay", backup_id=None)`
+  after activating a disposable two-copy fixture whose selected role has
+  `maintenance: stop` and no enabled dependents. Supply a completed backup ID from
+  that placement to include the PITR drill and per-copy state sentinel assertions.
+  The function leaves the selected role enabled and running. A2 did not edit
+  `acceptance_feature.py` or execute containers.
+- A2's two new runtime modules are included by the existing bundle inventory.
+  Its exact-inventory unit now lists both alongside the existing optional socket
+  probe helper. A1 owns deciding generation-17 required-file enforcement when
+  finalizing the count-capable bundle.
+
+### A2 files and verification
+
+- Selectors: `local/cli.py`, `local/Makefile.example`, `server/manage.py`,
+  `lib/journal.py`, `lib/operation_selection.py`.
+- Records, rollback and holds: `lib/contracts.py`, `lib/copy_enablement.py`,
+  `lib/feature_lifecycle.py`, `lib/feature_plan.py`, `lib/feature_maintenance.py`,
+  `lib/release.py`. A rollback with missing evidence remains degraded even when
+  maintenance holds otherwise cover every required copy.
+- Reports and recovery: `lib/report.py`, `lib/backup.py`, `lib/recover.py`,
+  `lib/feature_recovery.py`, `lib/recovery_rehearsal.py`, `local/rehearsal_host.py`.
+- Tests: `tests/test_copies_ops.py`, `tests/acceptance_copies_ops.py`,
+  `tests/test_acceptance_copies_ops.py`, `tests/test_backup.py`,
+  `tests/test_upgrades.py`.
+- Documentation: this handoff, `docs/guides/host-capabilities.md`, and
+  `CHANGELOG.md` (the last two paths are repository-relative).
+
+Verification was segmented: `make deploy-tools-check` ran 1,258 tests with 15
+skips. Two new-module integration failures were corrected; all 44
+`test_acceptance_*` units and the exact package-inventory test then passed.
+Five temporary Unix-socket tests blocked by the sandbox passed with the required
+permission. Copy/report/package checks passed in a 67-test rerun. Final
+local/report/held-rollback checks passed in a 131-test rerun, and the expanded
+copy operations checks passed separately. No container scenario was executed.
