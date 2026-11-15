@@ -168,7 +168,7 @@ def cleanup(host, request, pin):
         topology = parse_topology(value["topology"])
         inventory = services.UnitInventory(entry["name"], topology, parse_profile(value["profile"], topology),
                                            Deployment.parse(value["deployment"]), RuntimeResolution.parse(value["resolution"]))
-        affected = {unit.role for unit in transition.affected_units}
+        affected = set(transition.affected_units)
         require(transition.operation_id == operation and transition.instance_id == pin["instance_id"] and
                 transition.candidate_resolution_id == inventory.resolution.id and
                 all(unit.instance_id == pin["instance_id"] for unit in transition.affected_units),
@@ -185,11 +185,11 @@ def cleanup(host, request, pin):
         except Exception:
             pass  # Still stop every workload; only the final close can prove closure.
         stopped = True
-        order = tuple(dict.fromkeys((*inventory.stop_order(affected & inventory.roles.keys()),
-                                    *old.stop_order(affected & old.roles.keys()))))
+        order = tuple(dict.fromkeys((*inventory.stop_order(affected & inventory.units.keys()),
+                                    *old.stop_order(affected & old.units.keys()))))
         for name in order:
             try:
-                feature_lifecycle.stop_units(host, inventory if name in inventory.roles else old, (name,))
+                feature_lifecycle.stop_units(host, inventory if name in inventory.units else old, (name,))
             except Exception:
                 stopped = False
         try:

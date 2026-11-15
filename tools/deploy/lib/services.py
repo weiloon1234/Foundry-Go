@@ -116,6 +116,20 @@ def select_role_units(units, role="all", *, roles=None):
     return tuple(identity for identity in units if identity.role in selected)
 
 
+def unit_role_names(identities):
+    """Serialize existing singleton role records without changing their wire shape."""
+    identities = tuple(identities)
+    require(all(isinstance(identity, UnitIdentity) and identity.ordinal == 1 for identity in identities)
+            and len({identity.instance_id for identity in identities}) <= 1,
+            "service_selection", "Role records require singleton identities from one instance.")
+    return tuple(identity.role for identity in identities)
+
+
+def unit_identities(instance_id, roles):
+    """Parse singleton role records, including identities absent from a retained target."""
+    return tuple(UnitIdentity(instance_id, role, 1) for role in roles)
+
+
 class UnitInventory:
     def __init__(self, name, topology, profile, deployment, resolution):
         instance_paths(name)
@@ -132,12 +146,12 @@ class UnitInventory:
                 and placed == set(resolution.roles),
                 "service_inventory", "Unit inventory differs from the selected declaration or resolution.")
         self.roles = {role.common.name: role for role in self.topology.roles if role.common.name in placed}
-        self.specs = {spec.identity.role: spec for spec in self.deployment.units}
+        self.specs = unit_specs(self.deployment)
         declarations = {r["name"]: r for r in self.topology.projection()["roles"]}
-        require(all(spec.declaration_sha256 == canonical_digest(declarations[name])
+        require(all(spec.declaration_sha256 == canonical_digest(declarations[name.role])
                     for name, spec in self.specs.items()),
                 "service_inventory", "Resolved unit policy differs from its declared role.")
-        self.units = {identity.role: unit for identity, unit in expanded_unit_names(name, self.topology, self.profile).items()}
+        self.units = expanded_unit_names(name, self.topology, self.profile)
         from listeners import private_listeners, unix_endpoints
         require({(UnitIdentity(profile.instance_id, e.role, e.ordinal), e.listener) for e in resolution.endpoints}
                 == set(private_listeners(self.topology, self.profile)),
@@ -152,29 +166,49 @@ class UnitInventory:
             for binding in spec.bindings.endpoints:
                 if binding.scheme == "unix":
                     require(binding.endpoint in expected_unix, "service_inventory", "Unix binding differs from its provider declaration.")
-        self.start_order(placed)
+        self.start_order(self.units)
+
+    def copies(self, role):
+        require(role in {decl.common.name for decl in self.topology.roles},
+                "service_selection", "Unknown selected role.")
+        return tuple(identity for identity in self.units if identity.role == role)
+
+    def identity(self, role, ordinal=1):
+        identity = UnitIdentity(self.profile.instance_id, role, ordinal)
+        require(identity in self.units, "service_selection", "Unknown selected copy.")
+        return identity
+
+    def select(self, role="all", *, roles=None, ordinal=None):
+        if ordinal is not None:
+            require(roles is None and role != "all", "service_selection", "Select a role before selecting a copy.")
+            return (self.identity(role, ordinal),)
+        return select_role_units(self.units, role, roles=roles)
+
+    def dependencies(self, identity):
+        require(identity in self.units, "service_selection", "Unknown selected copy.")
+        return tuple(copy for role in self.roles[identity.role].common.requires for copy in self.copies(role))
 
     def start_order(self, selected):
         selected = set(selected)
-        require(selected <= self.roles.keys(), "service_selection", "Unknown selected role.")
-        require(all(set(self.roles[name].common.requires) <= selected for name in selected),
+        require(selected <= self.units.keys(), "service_selection", "Unknown selected role.")
+        require(all(set(self.dependencies(name)) <= selected for name in selected),
                 "service_dependency", "Enabled roles must include every prerequisite; use plain restart.")
         ordered = []
         def visit(name):
             if name in ordered:
                 return
-            for dependency in self.roles[name].common.requires:
+            for dependency in self.dependencies(name):
                 visit(dependency)
             ordered.append(name)
-        for name in self.roles:
+        for name in self.units:
             if name in selected:
                 visit(name)
         return tuple(ordered)
 
     def stop_order(self, selected):
         selected = set(selected)
-        require(selected <= self.roles.keys(), "service_selection", "Unknown selected role.")
-        return tuple(name for name in reversed(self.start_order(self.roles)) if name in selected)
+        require(selected <= self.units.keys(), "service_selection", "Unknown selected role.")
+        return tuple(name for name in reversed(self.start_order(self.units)) if name in selected)
 
     def start_in_order(self, selected, deadline, start, await_ready):
         """Lifecycle adapters share one deadline; a failed provider never starts a consumer.
@@ -191,7 +225,7 @@ class UnitInventory:
     def prerequisites(self, selected):
         result = set()
         def visit(name):
-            for dependency in self.roles[name].common.requires:
+            for dependency in self.dependencies(name):
                 if dependency not in result:
                     result.add(dependency)
                     visit(dependency)
@@ -202,24 +236,24 @@ class UnitInventory:
     def named_operation(self, action, selected, states):
         """Consume bounded readiness observations; never expand or enable a selection."""
         selected = set(selected)
-        require(action in ("restart", "stop") and selected and selected <= self.roles.keys()
-                and set(states) == set(self.roles), "service_selection", "Incomplete named-operation observation.")
+        require(action in ("restart", "stop") and selected and selected <= self.units.keys()
+                and set(states) == set(self.units), "service_selection", "Incomplete named-operation observation.")
         enabled = {name for name, state in states.items() if state.enabled}
         self.start_order(enabled)
         dependents = {name for name, state in states.items() if (state.enabled or state.running)
                       and name not in selected and self.prerequisites({name}) & selected}
         require(not dependents, "service_dependents", "Include dependent roles: " +
-                ", ".join(sorted(selected | dependents)) + "; use plain restart/stop.")
+                ", ".join(identity.role for identity in sorted(selected | dependents)) + "; use plain restart/stop.")
         if action == "restart":
             prerequisites = self.prerequisites(selected) - selected
             rejected = {name for name in prerequisites if not states[name].enabled or
                         states[name].held or states[name].pending or not states[name].ready}
             require(not rejected, "service_prerequisite", "Prerequisites unavailable: " +
-                    ", ".join(sorted(rejected)) + "; use plain restart.")
+                    ", ".join(identity.role for identity in sorted(rejected)) + "; use plain restart.")
             require(not any(states[name].held or states[name].pending for name in selected),
                     "service_held", "Selected roles are held or pending reconciliation.")
         return self.stop_order(selected) if action == "stop" else tuple(
-            name for name in self.start_order(self.roles) if name in selected)
+            name for name in self.start_order(self.units) if name in selected)
 
 
 @dataclass(frozen=True)
@@ -366,7 +400,7 @@ def resolve_argument(argument, role, spec, resolution, paths, views, secret_path
             return endpoint.endpoint.path
         address = endpoint.endpoint.address
         return f"{endpoint.scheme}://{'[' + address + ']' if ':' in address else address}:{endpoint.endpoint.port}"
-    if kind in (ArgumentKind.COPY_NUMBER, ArgumentKind.COPY_ORDINAL):
+    if kind is ArgumentKind.COPY_NUMBER:
         return str(spec.identity.ordinal)
     if kind is ArgumentKind.STATE_PATH:
         return paths.state + "/data/" + value
@@ -383,7 +417,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     require(entry["profile"]["instance_id"] == inventory.profile.instance_id and entry["name"] == inventory.name,
             "service_inventory", "Unit account belongs to another instance.")
     contract_digest(bundle_sha256)
-    role, spec = inventory.roles[name], inventory.specs[name]
+    role, spec = inventory.roles[name.role], inventory.specs[name]
     paths = ServicePaths.for_unit(spec.identity, inventory.resolution.id)
     validate_views(role, paths, views)
     helper = ["/usr/bin/python3", "-I", RUNTIME_ENTRY]
@@ -392,7 +426,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     hooks = {action: command_line([*helper, action, *identity]) for action in ("admit", "prepare", "dispatch", "running", "cleanup")}
     from feature_maintenance import marker_path
     condition = "ConditionPathExists=!" + marker_path(spec.identity) + "\n"
-    after = " ".join(inventory.units[n] for n in role.common.requires)
+    after = " ".join(inventory.units[n] for n in inventory.dependencies(name))
     boot = f"foundry-admission-{spec.identity.instance_id}.service"
     mounts = "\n".join("BindReadOnlyPaths=" + systemd_word(view.source + ":" + view.destination) for view in views)
     from unix_sockets import uses_sockets
@@ -403,14 +437,14 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     confined = role.common.confinement == "loopback" or (recovery_rehearsal.active(entry) and
                 isinstance(role, ExecutableRole) and role.recovery_rehearsal_safe)
     import shared_directories
-    shared_policy = shared_directories.sandbox(inventory.topology, spec.identity.instance_id, name)
+    shared_policy = shared_directories.sandbox(inventory.topology, spec.identity.instance_id, name.role)
     if isinstance(role, BuiltinRole):
         # Keep the existing built-in policies, including B26 upload write paths.
         from provision import _template
         legacy = {**entry, "topology": {"schema": 1, "roles": [{"name": "http"}]}}
         from topology import validate_topology
         legacy["topology"] = validate_topology(legacy["topology"])
-        content = _template(TEMPLATES.parent.parent, f"foundry-{name}@.service", legacy)
+        content = _template(TEMPLATES.parent.parent, f"foundry-{name.role}@.service", legacy)
         content = re.sub(r"^ExecStart=.*$", "ExecStart=" + hooks["dispatch"], content, flags=re.M)
         # Worker connection is frozen in argv; a legacy worker.env is not an input.
         content = re.sub(r"^EnvironmentFile=.*\n", "", content, flags=re.M)
@@ -432,7 +466,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
                    for key, value in role.environment]
     environment += [(key, contract_path(secret_paths[key], absolute=True)) for key, _ in role.secret_files]
     environment += list(config_environment(role, paths).items())
-    replacements = {"MARKER": marker(entry), "ROLE": name, "ACCOUNT": inventory.name,
+    replacements = {"MARKER": marker(entry), "ROLE": name.role, "ACCOUNT": inventory.name,
                     "AFTER": f"{boot} {after}", "BASE": contract_path(paths.base, absolute=True),
                     "WRITABLE": " ".join(systemd_word(p) for p in (paths.state, paths.base + "/invocations", *socket_paths)),
                     "ADMIT": hooks["admit"], "PREPARE": hooks["prepare"], "DISPATCH": hooks["dispatch"],
@@ -458,7 +492,7 @@ def readiness_probe(role, paused=False):
 
 
 def probe(host, inventory, name, deadline, *, paused=False):
-    role = inventory.roles[name]
+    role = inventory.roles[name.role]
     from host import OperationTimeout, wall_clock_budget
     contract = readiness_probe(role, paused)
     if contract is None:
@@ -475,9 +509,9 @@ def probe(host, inventory, name, deadline, *, paused=False):
 
 def _probe(host, inventory, name, deadline, *, paused=False):
     """One bounded local probe. Identity/stability checks remain required around it."""
-    role, resolution = inventory.roles[name], inventory.resolution
+    role, resolution = inventory.roles[name.role], inventory.resolution
     contract = readiness_probe(role, paused)
-    endpoint = next((e for e in (*resolution.endpoints, *resolution.unix_endpoints) if e.role == role.common.name and
+    endpoint = next((e for e in (*resolution.endpoints, *resolution.unix_endpoints) if (e.role, e.ordinal) == (name.role, name.ordinal) and
                      e.listener == contract.listener), None)
     require(endpoint is not None, "service_listener", "Readiness allocation is missing.")
     remaining = min(contract.timeout_seconds, deadline - time.monotonic())
@@ -532,9 +566,9 @@ def wait_ready_set(host, inventory, names, deadline):
     from host import OperationTimeout, wall_clock_budget
     from release import STABILITY_SECONDS, _matches_executable, service
     names = tuple(names)
-    require(names and set(names) <= inventory.roles.keys(), "service_selection", "Select known readiness roles.")
+    require(names and set(names) <= inventory.units.keys(), "service_selection", "Select known readiness roles.")
     paused = False
-    if "http" in names:
+    if inventory.identity("http") in names:
         import feature_maintenance
         entry = host.read_registry()["instances"].get(inventory.profile.instance_id)
         if deadline <= time.monotonic():
@@ -547,13 +581,13 @@ def wait_ready_set(host, inventory, names, deadline):
         paused = observed is not None and observed["down"]
     checks = {}
     for name in names:
-        role, spec = inventory.roles[name], inventory.specs[name]
+        role, spec = inventory.roles[name.role], inventory.specs[name]
         contract = readiness_probe(role)
         executable = protected_path(host, host.paths.p(spec.executable), "file")
         require(executable.exists() and executable.stat().st_mode & 0o111 and digest(executable) == spec.executable_sha256,
                 "service_executable", "Selected executable fingerprint has drifted.")
         endpoint = next((e for e in (*inventory.resolution.endpoints, *inventory.resolution.unix_endpoints)
-                         if e.role == name and contract and e.listener == contract.listener), None)
+                         if (e.role, e.ordinal) == (name.role, name.ordinal) and contract and e.listener == contract.listener), None)
         local = None
         if endpoint:
             local = endpoint.path if contract.kind == "unix" else (
@@ -592,7 +626,7 @@ def wait_ready_set(host, inventory, names, deadline):
                         ready = listeners.returncode == 0 and any(
                             len(line.split()) >= (8 if unix else 5) and line.split()[4 if unix else 3] in local_addresses and
                             f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
-                    healthy = ready and (probe(host, inventory, name, deadline, paused=True) if paused and name == "http"
+                    healthy = ready and (probe(host, inventory, name, deadline, paused=True) if paused and name.role == "http"
                                          else probe(host, inventory, name, deadline)) and healthy
                 # Recheck the entire set after the last probe, including prerequisites
                 # observed before a slow dependent. A changed identity resets nothing.

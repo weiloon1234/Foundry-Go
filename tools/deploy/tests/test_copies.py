@@ -26,6 +26,27 @@ def copy_fixture(count=2):
 
 
 class CopyFoundationTests(unittest.TestCase):
+    def test_inventory_selection_uses_only_copy_identities(self):
+        inventory, _, _ = copy_fixture()
+        relay = inventory.identity("relay")
+        self.assertEqual(inventory.copies("relay"), (relay,))
+        self.assertEqual(inventory.select("relay", ordinal=1), (relay,))
+        self.assertEqual(inventory.select(roles=["relay"]), (relay,))
+        self.assertEqual(set(inventory.specs), set(inventory.units))
+        self.assertEqual(services.unit_identities(INSTANCE, services.unit_role_names(inventory.select())), inventory.select())
+        for role, ordinal in (("relay", 2), ("absent", 1), ("relay", True)):
+            with self.subTest(role=role, ordinal=ordinal), self.assertRaises(c.DeployError):
+                inventory.identity(role, ordinal)
+        with self.assertRaises(c.DeployError):
+            inventory.select(ordinal=1)
+        with self.assertRaises(c.DeployError):
+            services.unit_role_names((c.UnitIdentity(INSTANCE, "relay", 2),))
+        old_role = "relay"
+        with self.assertRaises(KeyError):
+            inventory.units[old_role]
+        with self.assertRaises(c.DeployError):
+            t.Argument.parse({"copy_ordinal": "self"})
+
     def test_identity_is_frozen_ordered_and_bounded(self):
         for ordinal in (1, 2, 128):
             identity = c.UnitIdentity(INSTANCE, "relay", ordinal)
@@ -67,7 +88,7 @@ class CopyFoundationTests(unittest.TestCase):
         counts = {"http": 1, "relay": 128, "other": 127, "worker": 0}
         units = t.expand_placement(topology, INSTANCE, t.parse_placement(counts))
         self.assertEqual(len(units), 256)
-        specs = tuple(replace(inventory.specs["http" if key.role == "http" else "relay"], identity=key,
+        specs = tuple(replace(inventory.specs[inventory.identity("http" if key.role == "http" else "relay")], identity=key,
                               bindings=c.RoleBindings(key.role, (), (), ())) for key in units)
         deployment = replace(inventory.deployment, units=specs)
         self.assertEqual(len(services.unit_specs(deployment)), 256)
@@ -103,7 +124,7 @@ class CopyFoundationTests(unittest.TestCase):
                 parse()
             self.assertEqual(caught.exception.code, "unsupported_capability")
         inventory, entry, _ = copy_fixture()
-        extra = replace(inventory.specs["relay"], identity=c.UnitIdentity(INSTANCE, "relay", 2))
+        extra = replace(inventory.specs[inventory.identity("relay")], identity=c.UnitIdentity(INSTANCE, "relay", 2))
         deployment = replace(inventory.deployment, units=inventory.deployment.units + (extra,))
         resolution = replace(inventory.resolution, deployment_sha256=c.canonical_digest(c.record_document(deployment)))
         with self.assertRaises(c.DeployError):
@@ -170,16 +191,16 @@ class CopyFoundationTests(unittest.TestCase):
         raw = inventory.topology.projection()
         raw["shared_directories"] = {"cache": {"state": "disposable", "max_bytes": 65536,
                                                 "writers": ["relay"], "readers": ["worker"]}}
-        raw["roles"][1]["arguments"] = [{"copy_ordinal": "self"}]
-        raw["roles"][1]["environment"] = {"COPY": {"copy_ordinal": "self"}}
+        raw["roles"][1]["arguments"] = [{"copy_number": "self"}]
+        raw["roles"][1]["environment"] = {"COPY": {"copy_number": "self"}}
         topology = t.parse_topology(raw)
         import shared_directories
         for key, role in t.expand_placement(topology, INSTANCE, placed.placement).items():
             if key.role != "relay":
                 continue
-            spec = replace(inventory.specs["relay"], identity=key)
+            spec = replace(inventory.specs[inventory.identity("relay")], identity=key)
             paths = services.ServicePaths.for_unit(key, CURRENT)
-            for argument in (*role.arguments, *(value for _, value in role.environment), t.Argument.parse({"copy_number": "self"})):
+            for argument in (*role.arguments, *(value for _, value in role.environment)):
                 self.assertEqual(services.resolve_argument(argument, role, spec, inventory.resolution, paths, (), {}), str(key.ordinal))
             rendered = runtime_config._render_service_json(b'{"copy": 0}', (("/copy", role.arguments[0]),),
                                                            lambda argument: str(key.ordinal))
@@ -188,14 +209,14 @@ class CopyFoundationTests(unittest.TestCase):
             grants = shared_directories.bindings(topology, INSTANCE, key.role)
             self.assertEqual([(grant.name, grant.access) for grant in grants], [("cache", "read-write")])
         with self.assertRaises(c.DeployError):
-            t.Argument.parse({"copy_ordinal": "2"})
+            t.Argument.parse({"copy_number": "2"})
 
     def test_listener_arguments_resolve_the_selected_copy(self):
         inventory, _, placed = copy_fixture()
         role = inventory.roles["relay"]
         resolution = replace(inventory.resolution, endpoints=listeners.allocate_private(INSTANCE,
             listeners.private_listeners(inventory.topology, placed), (), ()))
-        spec = replace(inventory.specs["relay"], identity=c.UnitIdentity(INSTANCE, "relay", 2))
+        spec = replace(inventory.specs[inventory.identity("relay")], identity=c.UnitIdentity(INSTANCE, "relay", 2))
         paths = services.ServicePaths.for_unit(spec.identity, CURRENT)
         value = services.resolve_argument(t.Argument.parse({"listener_port": "control"}), role, spec, resolution, paths, (), {})
         self.assertEqual(value, str(next(e.port for e in resolution.endpoints if e.role == "relay" and e.ordinal == 2)))
@@ -216,13 +237,13 @@ class CopyFoundationTests(unittest.TestCase):
         for field in ("arguments", "environment", "configs"):
             raw = declaration()
             if field == "arguments":
-                raw["roles"][1][field] = [{"copy_ordinal": "self"}]
+                raw["roles"][1][field] = [{"copy_number": "self"}]
             elif field == "environment":
-                raw["roles"][1][field] = {"COPY": {"copy_ordinal": "self"}}
+                raw["roles"][1][field] = {"COPY": {"copy_number": "self"}}
             else:
-                raw["roles"][1][field]["settings"]["bindings"]["/copy"] = {"copy_ordinal": "self"}
+                raw["roles"][1][field]["settings"]["bindings"]["/copy"] = {"copy_number": "self"}
             with self.subTest(field=field):
-                self.assertEqual(upgrades.feature_generation(t.parse_topology(raw), {}, profile=profile()), 17)
+                self.assertEqual(upgrades.feature_generation(t.parse_topology(raw), {}, profile=profile()), 13)
 
     def test_generation_preflight_checks_new_profiles_and_recovery_evidence(self):
         raw = declaration()

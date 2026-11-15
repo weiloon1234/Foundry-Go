@@ -107,8 +107,8 @@ def plan(host, topology, profile, package_plan, *, entry=None):
             import services
             held = feature_maintenance.active_holds(host, entry, inventory)
             exposed = set(services.enabled_units(host, inventory.units)) - held
-            opened = tuple(c for c in claims if c.role in exposed)
-            closed = tuple(c for c in claims if c.role not in exposed)
+            opened = tuple(c for c in claims if c.identity in exposed)
+            closed = tuple(c for c in claims if c.identity not in exposed)
             observation = firewall.observe(host, profile.instance_id, closed or opened, integrated=True,
                                            bindings=inventory.profile.listeners, opened=not closed,
                                            retained_claims=opened if closed else ())
@@ -206,13 +206,13 @@ def allocate(host, entry, topology, profile, operation_id, *, retained=None):
 
 def close(host, entry, transition, resolution, units):
     """Observe complete application closure for the exact transition's units/addresses."""
-    from contracts import record_document
+    from contracts import record_document, UnitIdentity
     evidence = capability().feature_close(host, entry, transition, resolution, units)
     evidence = ClosureEvidence.parse(record_document(evidence))
     require(evidence.stage is ClosureStage.APPLICATION_CLOSED and evidence.operation_id == transition.operation_id
             and evidence.candidate_resolution_id == resolution.id
             and set(transition.affected_units) == set(evidence.units)
-            and {e for e in resolution.endpoints if e.role in {u.role for u in transition.affected_units}} <= set(evidence.endpoints),
+            and {e for e in resolution.endpoints if UnitIdentity(transition.instance_id, e.role, e.ordinal) in transition.affected_units} <= set(evidence.endpoints),
             "admission_closed_required", "Network owner did not prove complete closure for this transition.")
     return evidence
 

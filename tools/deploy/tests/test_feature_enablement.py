@@ -48,11 +48,11 @@ class FeatureEnablementTests(unittest.TestCase):
                 patch.object(lifecycle, "install_units") as install, \
                 patch.object(release, "_matches_executable", return_value=True), \
                 patch.object(release, "service", side_effect=lambda host, unit:
-                    {"ActiveState": "active" if unit in {self.inventory.units[n] for n in self.running} else "inactive"}):
+                    {"ActiveState": "active" if unit in {self.inventory.units[n] for n in self.inventory.select(roles=tuple(self.running))} else "inactive"}):
             result = lifecycle.migrate_enablement(self.host, {"tools": {"generation": 13}}, self.entry)
             self.assertEqual(result["adopt_running"], ["http", "relay"])
             self.assertEqual(result["starts"], [])
-            self.assertEqual(self.enabled, {self.inventory.units[n] for n in self.running})
+            self.assertEqual(self.enabled, {self.inventory.units[n] for n in self.inventory.select(roles=tuple(self.running))})
             install.assert_called_once()
             count = len(self.commands)
             self.assertEqual(lifecycle.migrate_enablement(self.host, {"tools": {"generation": 13}}, self.entry), result)
@@ -78,9 +78,9 @@ class FeatureEnablementTests(unittest.TestCase):
         self.assertEqual(self.commands, [])
 
     def test_takeover_start_cannot_override_disabled_unit(self):
-        self.enabled = {self.inventory.units["http"]}
+        self.enabled = {self.inventory.units[self.inventory.identity("http")]}
         with self.assertRaises(c.DeployError) as caught:
-            lifecycle.start_units(self.host, self.entry, self.inventory, ("relay",), time.monotonic() + 1)
+            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("relay"), time.monotonic() + 1)
         self.assertEqual(caught.exception.code, "service_enablement")
         self.assertFalse(any(args[1] == "start" for args in self.commands))
 
@@ -105,11 +105,11 @@ class FeatureEnablementTests(unittest.TestCase):
             self.assertEqual(events, ["locked", "prepared", "unlocked"])
             self.assertEqual(args[:2], ["systemctl", "start"])
             return subprocess.CompletedProcess(args, 0, "", "")
-        with patch.object(services, "enabled_units", return_value=("http",)), \
+        with patch.object(services, "enabled_units", return_value=self.inventory.copies("http")), \
                 patch.object(services, "wait_ready", return_value=True), \
                 patch.object(admission.AdmissionStore, "_lock", lock), \
                 patch.object(shared_directories, "prepare", side_effect=prepare), patch.object(self.host, "run", side_effect=start):
-            lifecycle.start_units(self.host, self.entry, self.inventory, ("http",), time.monotonic() + 1)
+            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), time.monotonic() + 1)
 
     def test_namespace_start_failure_explains_host_preparation_recovery(self):
         for status in ("ExecMainStatus=226\n", "ExecCondition={ status=226/NAMESPACE ; }\n",
@@ -119,9 +119,9 @@ class FeatureEnablementTests(unittest.TestCase):
                     raise c.DeployError("command_failed", "failed")
                 return subprocess.CompletedProcess(args, 0, status, "")
             with self.subTest(status=status), patch.object(lifecycle, "prepare_shared_directories"), \
-                    patch.object(services, "enabled_units", return_value=("http",)), \
+                    patch.object(services, "enabled_units", return_value=self.inventory.copies("http")), \
                     patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
-                lifecycle.start_units(self.host, self.entry, self.inventory, ("http",), time.monotonic() + 1)
+                lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), time.monotonic() + 1)
             self.assertEqual(caught.exception.code, "service_namespace")
             self.assertIn("again", caught.exception.detail)
             self.assertIn("reboot recovery", caught.exception.detail)
@@ -132,28 +132,28 @@ class FeatureEnablementTests(unittest.TestCase):
                 return subprocess.CompletedProcess(args, 0, "", "")
             return subprocess.CompletedProcess(args, 0, "ExecCondition={ status=226/NAMESPACE ; }\n", "")
         with patch.object(lifecycle, "prepare_shared_directories"), \
-                patch.object(services, "enabled_units", return_value=("http",)), \
+                patch.object(services, "enabled_units", return_value=self.inventory.copies("http")), \
                 patch.object(services, "wait_ready", return_value=False), \
                 patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
-            lifecycle.start_units(self.host, self.entry, self.inventory, ("http",), time.monotonic() + 1)
+            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), time.monotonic() + 1)
         self.assertEqual(caught.exception.code, "service_namespace")
 
     def test_readiness_failure_without_namespace_status_stays_readiness_failed(self):
         def run(args, **kwargs):
             return subprocess.CompletedProcess(args, 0, "ExecMainStatus=1\n" if args[:2] == ["systemctl", "show"] else "", "")
         with patch.object(lifecycle, "prepare_shared_directories"), \
-                patch.object(services, "enabled_units", return_value=("http",)), \
+                patch.object(services, "enabled_units", return_value=self.inventory.copies("http")), \
                 patch.object(services, "wait_ready", return_value=False), \
                 patch.object(self.host, "run", side_effect=run), self.assertRaises(c.DeployError) as caught:
-            lifecycle.start_units(self.host, self.entry, self.inventory, ("http",), time.monotonic() + 1)
+            lifecycle.start_units(self.host, self.entry, self.inventory, self.inventory.copies("http"), time.monotonic() + 1)
         self.assertEqual(caught.exception.code, "readiness_failed")
 
     def test_reported_enablement_ignores_stored_audit_projection(self):
         from topology import validate_topology
         self.entry["topology"] = validate_topology(self.inventory.topology.projection())
         self.entry["profile"] = self.inventory.profile.projection()
-        self.enabled = {self.inventory.units["http"]}
-        self.assertEqual(release.enabled_roles(self.host, self.entry), ["http"])
+        self.enabled = {self.inventory.units[self.inventory.identity("http")]}
+        self.assertEqual(release.enabled_roles(self.host, self.entry), [self.inventory.identity("http")])
 
 
 if __name__ == "__main__":

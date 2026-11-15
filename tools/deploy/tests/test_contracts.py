@@ -20,7 +20,7 @@ from contracts import (DeployError, HOST_ROOTS, MAX_JSON, atomic_json, atomic_wr
                        identity, parse_json, read_json, validate_profile, storage_bindings, bind_storage,
                        runtime_storage, reserve_runtime_storage, select_runtime_storage,
                        validate_project, validate_registry, valid_timestamp, instance_paths)
-from topology import instance_units
+from topology import selected_units, instance_units
 from host import Host, Paths
 
 
@@ -73,7 +73,7 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertIs(validate_registry(value), value)
         for key in ("database", "redis_user", "http_port"):
             self.assertEqual(len({item["allocations"][key] for item in value["instances"].values()}), 3)
-        self.assertEqual(instance_units(self.entry)["http"], "foundry-http@abc-production.service")
+        self.assertEqual(next(iter(selected_units(self.entry, "http").values())), "foundry-http@abc-production.service")
         self.assertEqual(self.entry["allocations"]["database"], "f_" + uuid.UUID(self.profile["instance_id"]).hex)
         self.assertEqual(staging["allocations"]["namespace"], {"application": "abc", "environment": "staging"})
 

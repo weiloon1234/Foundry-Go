@@ -223,8 +223,10 @@ def execute(host, action, request):
         state = release.public_state(host.load_state(entry))
         version = release.current_version(host, entry)
         live = maintenance.status(host, entry, release.release_path(host, entry, version)) if version else None
+        from services import unit_role_names
+        observations = release.services(host, entry)
         return {"instance": entry, "state": state, "maintenance": live,
-                "live_version": version, "services": release.services(host, entry),
+                "live_version": version, "services": dict(zip(unit_role_names(observations), observations.values())),
                 **({"enablement_migration": enablement_migration} if enablement_migration else {})}
     if action in ("down", "up"):
         require(request.get("confirm") is True, "confirmation_required", "Confirm the maintenance change.")

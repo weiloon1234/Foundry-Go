@@ -65,50 +65,50 @@ class ServiceInventoryTests(unittest.TestCase):
         self.inventory, self.entry, self.members = inventory_fixture()
 
     def test_inventory_and_orders_include_builtins_and_custom_singleton(self):
-        self.assertEqual(self.inventory.units, {"http": "foundry-http@abc-production.service",
-                         "relay": "foundry-app-abc-production-relay@1.service", "worker": "foundry-worker@abc-production.service"})
-        self.assertEqual(self.inventory.start_order({"http", "relay", "worker"}), ("http", "relay", "worker"))
-        self.assertEqual(self.inventory.stop_order({"http", "relay", "worker"}), ("worker", "relay", "http"))
+        self.assertEqual(self.inventory.units, {self.inventory.identity("http"): "foundry-http@abc-production.service",
+                         self.inventory.identity("relay"): "foundry-app-abc-production-relay@1.service", self.inventory.identity("worker"): "foundry-worker@abc-production.service"})
+        self.assertEqual(self.inventory.start_order(self.inventory.select(roles=['http', 'relay', 'worker'])), self.inventory.select(roles=["http", "relay", "worker"]))
+        self.assertEqual(self.inventory.stop_order(self.inventory.select(roles=['http', 'relay', 'worker'])), tuple(reversed(self.inventory.select(roles=["http", "relay", "worker"]))))
         with self.assertRaises(c.DeployError):
-            self.inventory.start_order({"worker"})
+            self.inventory.start_order(self.inventory.select(roles=['worker']))
 
     def test_named_operations_reject_transitive_dependents_and_unready_prerequisites(self):
         active = services.RoleState(True, True, False, False, True)
-        states = {name: active for name in self.inventory.roles}
+        states = {name: active for name in self.inventory.units}
         for action in ("stop", "restart"):
             with self.assertRaisesRegex(c.DeployError, "worker"):
-                self.inventory.named_operation(action, {"relay"}, states)
+                self.inventory.named_operation(action, self.inventory.select(roles=['relay']), states)
             with self.assertRaisesRegex(c.DeployError, "relay, worker"):
-                self.inventory.named_operation(action, {"http"}, states)
-        self.assertEqual(self.inventory.named_operation("stop", {"worker"}, states), ("worker",))
+                self.inventory.named_operation(action, self.inventory.select(roles=['http']), states)
+        self.assertEqual(self.inventory.named_operation("stop", self.inventory.select(roles=['worker']), states), self.inventory.copies("worker"))
         for bad in (replace(active, ready=False), replace(active, held=True), replace(active, pending=True),
                     replace(active, enabled=False)):
             with self.subTest(bad=bad), self.assertRaises(c.DeployError):
-                self.inventory.named_operation("restart", {"worker"}, {**states, "relay": bad})
-        self.assertEqual(self.inventory.named_operation("restart", {"worker"}, states), ("worker",))
+                self.inventory.named_operation("restart", self.inventory.select(roles=['worker']), {**states, self.inventory.identity("relay"): bad})
+        self.assertEqual(self.inventory.named_operation("restart", self.inventory.select(roles=['worker']), states), self.inventory.copies("worker"))
         # Running dependents remain relevant even after external disablement.
-        states["worker"] = replace(active, enabled=False)
+        states[self.inventory.identity("worker")] = replace(active, enabled=False)
         with self.assertRaises(c.DeployError):
-            self.inventory.named_operation("stop", {"relay"}, states)
-        states["worker"] = replace(active, enabled=False, running=False)
-        self.assertEqual(self.inventory.named_operation("stop", {"relay"}, states), ("relay",))
+            self.inventory.named_operation("stop", self.inventory.select(roles=['relay']), states)
+        states[self.inventory.identity("worker")] = replace(active, enabled=False, running=False)
+        self.assertEqual(self.inventory.named_operation("stop", self.inventory.select(roles=['relay']), states), self.inventory.copies("relay"))
 
     def test_tool_start_waits_for_each_prerequisite_under_one_deadline(self):
         events = []
         deadline = time.monotonic() + 10
         def start(name, until):
             self.assertEqual(until, deadline)
-            events.append(("start", name))
+            events.append(("start", name.role))
         def ready(name, until):
             self.assertEqual(until, deadline)
-            events.append(("ready", name))
-            return name != "relay"
+            events.append(("ready", name.role))
+            return name.role != "relay"
         with self.assertRaises(c.DeployError):
-            self.inventory.start_in_order(self.inventory.roles, deadline, start, ready)
+            self.inventory.start_in_order(self.inventory.units, deadline, start, ready)
         self.assertEqual(events, [("start", "http"), ("ready", "http"), ("start", "relay"), ("ready", "relay")])
 
     def test_custom_render_has_only_fixed_helpers_hardening_limits_and_ordering(self):
-        content = services.render_unit(self.inventory, "relay", self.entry, DIGEST)
+        content = services.render_unit(self.inventory, self.inventory.identity("relay"), self.entry, DIGEST)
         for expected in ("Type=exec", "KillMode=control-group", "NoNewPrivileges=yes", "ProtectSystem=strict",
                          "PrivateTmp=yes", "PrivateDevices=yes", "CapabilityBoundingSet=\n", "MemoryMax=268435456",
                          "CPUQuota=100%", "TasksMax=64", "LimitNOFILE=1024", "ExecCondition=+",
@@ -121,14 +121,14 @@ class ServiceInventoryTests(unittest.TestCase):
 
     def test_scalar_unit_paths_are_unquoted_and_word_lists_remain_quoted(self):
         list_directives = {"Environment", "ReadWritePaths", "ReadOnlyPaths", "BindPaths", "BindReadOnlyPaths", "TemporaryFileSystem"}
-        for role in self.inventory.roles:
+        for role in self.inventory.units:
             content = services.render_unit(self.inventory, role, self.entry, DIGEST)
             directives = dict(line.split("=", 1) for line in content.splitlines() if "=" in line and not line.startswith("#"))
             for name, value in directives.items():
                 if name not in list_directives and not name.startswith("Exec"):
                     self.assertFalse(value.startswith('"'), name)
             self.assertTrue(directives["WorkingDirectory"].startswith("/"))
-            if role == "relay":
+            if role.role == "relay":
                 expected = services.ServicePaths.for_unit(self.inventory.specs[role].identity, CURRENT).base
                 self.assertEqual(directives["WorkingDirectory"], expected)
                 self.assertTrue(directives["ReadWritePaths"].startswith('"'))
@@ -154,7 +154,7 @@ class ServiceInventoryTests(unittest.TestCase):
             self.assertTrue(all(call.args[1:] == (0, 0) for call in owner.call_args_list))
 
     def test_builtin_guards_reuse_existing_policy(self):
-        content = services.render_unit(self.inventory, "http", self.entry, DIGEST)
+        content = services.render_unit(self.inventory, self.inventory.identity("http"), self.entry, DIGEST)
         self.assertIn("TimeoutStopSec=45s", content)
         self.assertIn("SuccessExitStatus=130", content)
         self.assertIn("ExecCondition=+", content)
@@ -168,10 +168,10 @@ class ServiceInventoryTests(unittest.TestCase):
         self.assertEqual(services.systemd_word("X=$HOME %n"), '"X=$HOME %%n"')
         with self.assertRaises(c.DeployError):
             services.systemd_word("bad\nExecStart=/bin/false")
-        spec = self.inventory.specs["relay"]
-        self.inventory.specs["relay"] = replace(spec, arguments=("wrong",))
+        spec = self.inventory.specs[self.inventory.identity("relay")]
+        self.inventory.specs[self.inventory.identity("relay")] = replace(spec, arguments=("wrong",))
         with self.assertRaises(c.DeployError):
-            services.render_unit(self.inventory, "relay", self.entry, DIGEST)
+            services.render_unit(self.inventory, self.inventory.identity("relay"), self.entry, DIGEST)
 
     def test_copies_remain_gated_while_identity_accepts_numbered_ordinals(self):
         raw = self.inventory.topology.projection()
@@ -202,14 +202,14 @@ class ServiceInventoryTests(unittest.TestCase):
         response = connection.getresponse.return_value
         response.status = 302
         with patch.object(services.http.client, "HTTPConnection", return_value=connection) as client:
-            self.assertFalse(services.probe(Host(), self.inventory, role.common.name, time.monotonic() + 1))
+            self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1))
             self.assertEqual(client.call_args.args, ("127.0.0.1", 8201))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/ready"))
             response.status, response.read.return_value = 200, b"ok"
-            self.assertTrue(services.probe(Host(), self.inventory, role.common.name, time.monotonic() + 1))
+            self.assertTrue(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1))
             response.read.return_value = b"x" * 65537
-            self.assertFalse(services.probe(Host(), self.inventory, role.common.name, time.monotonic() + 1))
-        self.assertFalse(services.probe(Host(), self.inventory, role.common.name, time.monotonic() - 1))
+            self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1))
+        self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() - 1))
 
     def test_paused_http_uses_liveness_without_weakening_normal_readiness(self):
         role = self.inventory.roles["http"]
@@ -217,9 +217,9 @@ class ServiceInventoryTests(unittest.TestCase):
         response = connection.getresponse.return_value
         response.status, response.read.return_value = 200, b'{"status":"ok"}'
         with patch.object(services.http.client, "HTTPConnection", return_value=connection):
-            self.assertTrue(services.probe(Host(), self.inventory, role.common.name, time.monotonic() + 1, paused=True))
+            self.assertTrue(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1, paused=True))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/live"))
-            self.assertFalse(services.probe(Host(), self.inventory, role.common.name, time.monotonic() + 1))
+            self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/ready"))
 
     def test_maintenance_response_requires_shared_pause_and_builtin_http(self):
@@ -229,10 +229,10 @@ class ServiceInventoryTests(unittest.TestCase):
         with patch.object(services.http.client, "HTTPConnection", return_value=connection):
             for status in (503, 500, 302):
                 response.status = status
-                self.assertEqual(services.probe(Host(), self.inventory, "http",
+                self.assertEqual(services.probe(Host(), self.inventory, self.inventory.identity("http"),
                                                time.monotonic() + 1, paused=True), status == 503)
-                self.assertFalse(services.probe(Host(), self.inventory, "http", time.monotonic() + 1))
-                self.assertFalse(services.probe(Host(), self.inventory, "relay",
+                self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity("http"), time.monotonic() + 1))
+                self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity("relay"),
                                                 time.monotonic() + 1, paused=True))
 
     def test_release_carried_bundle_keeps_payload_digest_and_platform_checks(self):
@@ -277,16 +277,16 @@ class ServiceInventoryTests(unittest.TestCase):
         import release
         with tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve()) as root:
             host = Host(Paths(root))
-            spec = self.inventory.specs["relay"]
+            spec = self.inventory.specs[self.inventory.identity("relay")]
             executable = host.paths.p(spec.executable)
             executable.parent.mkdir(parents=True)
             executable.write_bytes(b"native")
             executable.chmod(0o755)
-            self.inventory.specs["relay"] = replace(spec, executable_sha256=hashlib.sha256(b"native").hexdigest())
+            self.inventory.specs[self.inventory.identity("relay")] = replace(spec, executable_sha256=hashlib.sha256(b"native").hexdigest())
             observed = {"LoadState": "loaded", "ActiveState": "active", "NRestarts": "0", "MainPID": "20",
                         "ControlGroup": "/unit", "process": {"start": "42"}}
             def wait():
-                return services.wait_ready(host, self.inventory, "relay", time.monotonic() + .5)
+                return services.wait_ready(host, self.inventory, self.inventory.identity("relay"), time.monotonic() + .5)
             with patch.object(release, "service", return_value=observed) as inspect, \
                     patch.object(release, "_matches_executable", return_value=True), \
                     patch.object(release, "STABILITY_SECONDS", 0), \
@@ -321,14 +321,14 @@ class ServiceInventoryTests(unittest.TestCase):
                     observed = {"ActiveState": "active", "NRestarts": "0", "MainPID": "20", "process": {"start": "42"}}
                     dependent_probed = False
                     def inspect(host, unit, **kwargs):
-                        if unit == self.inventory.units["http"] and dependent_probed:
+                        if unit == self.inventory.units[self.inventory.identity("http")] and dependent_probed:
                             if failure == "identity":
                                 return {**observed, "MainPID": "21"}
                             if failure == "restart":
                                 return {**observed, "NRestarts": "1"}
                         return observed
                     def probe(host, inventory, name, deadline):
-                        role = inventory.roles[name]
+                        role = inventory.roles[name.role]
                         nonlocal dependent_probed
                         if role.common.name == "worker":
                             dependent_probed = True
@@ -339,7 +339,7 @@ class ServiceInventoryTests(unittest.TestCase):
                             patch.object(release, "STABILITY_SECONDS", .02), \
                             patch.object(services, "readiness_probe", return_value=None), \
                             patch.object(services, "probe", side_effect=probe):
-                        result = services.wait_ready_set(host, self.inventory, self.inventory.roles, time.monotonic() + .25)
+                        result = services.wait_ready_set(host, self.inventory, self.inventory.units, time.monotonic() + .25)
                     self.assertEqual(result, failure is None)
                     self.assertTrue(dependent_probed)
 
@@ -375,7 +375,7 @@ class ServicePreparationTests(unittest.TestCase):
         self.store.record_boot_closure(c.ClosureEvidence.parse(evidence))
         self.store.record_operation(attempt("succeeded"))
         self.store.commit()
-        self.role, self.spec = self.inventory.roles["relay"], self.inventory.specs["relay"]
+        self.role, self.spec = self.inventory.roles["relay"], self.inventory.specs[self.inventory.identity("relay")]
         self.paths = services.ServicePaths.for_unit(self.spec.identity, CURRENT)
         self.root = self.host.paths.p("/opt/foundry/release")
         for name, data in (("relay.json", CONFIG), ("seed.txt", b"seed"), ("fixed.txt", b"fixed")):

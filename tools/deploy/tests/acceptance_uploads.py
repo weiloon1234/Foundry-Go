@@ -27,7 +27,7 @@ from acceptance_support import WORK, fixture, guard, run, service, wait_for
 from contracts import atomic_write, check_path
 from provision import _template
 import release
-from topology import instance_units
+from topology import selected_units, instance_units
 import uploads
 
 MIB = 1 << 20
@@ -204,7 +204,7 @@ def configured_fixture():
     entry["profile"]["uploads"] = policy()
     uploads.validate(policy())
     paths = uploads.volume_paths(entry)
-    unit = instance_units(entry)["http"]
+    unit = next(iter(selected_units(entry, "http").values()))
     fragment = Path(run(["systemctl", "show", unit, "-p", "FragmentPath", "--value"]).stdout.strip())
     assert fragment.parent == Path("/etc/systemd/system") and fragment.name == unit
     site = Path("/etc/nginx/sites-available") / ("foundry-" + entry["name"] + ".conf")

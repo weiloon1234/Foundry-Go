@@ -698,7 +698,7 @@ def _render_service_json(data, bindings, resolve):
             if index == len(tokens) - 1:
                 resolved = resolve(argument)
                 from topology import ArgumentKind
-                target[key] = int(resolved) if argument.kind in (ArgumentKind.LISTENER_PORT, ArgumentKind.COPY_NUMBER, ArgumentKind.COPY_ORDINAL) else resolved
+                target[key] = int(resolved) if argument.kind in (ArgumentKind.LISTENER_PORT, ArgumentKind.COPY_NUMBER) else resolved
             else:
                 target = target[key]
     result = (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode()

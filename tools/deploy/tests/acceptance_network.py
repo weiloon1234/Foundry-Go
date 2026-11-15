@@ -687,7 +687,7 @@ class NetworkPreviewAcceptance(unittest.TestCase):
             for role, unit in old.units.items():
                 path = Path("/etc/systemd/system") / unit
                 self.assertFalse(path.exists())
-                endpoint = next(e for e in old.resolution.endpoints if e.role == role)
+                endpoint = next(e for e in old.resolution.endpoints if (e.role, e.ordinal) == (role.role, role.ordinal))
                 host.owned_write(path, "[Service]\nType=simple\nRestart=no\nKillMode=control-group\n"
                     "Environment=FOUNDRY_DISPOSABLE_HOST=1\n"
                     f"ExecStart=/usr/bin/python3 -I {Path(__file__).resolve()} --echo {endpoint.address} {endpoint.port}\n")

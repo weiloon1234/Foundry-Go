@@ -31,7 +31,7 @@ def attempt(outcome="running", phase="health"):
 
 
 def build(host, mode="none", *, ports=(18000, 18002), instance_id=None, name="abc-production"):
-    """Use the same launch, HostTransition and role->unit map as feature_lifecycle."""
+    """Use the same launch, HostTransition and identity->unit map as feature_lifecycle."""
     import admission
     import services
     instance_id = instance_id or str(uuid.uuid4())
@@ -68,7 +68,7 @@ def build(host, mode="none", *, ports=(18000, 18002), instance_id=None, name="ab
     selected = c.DeploymentSelection(instance_id, 12, tuple(sorted(c.FEATURE_CAPABILITIES)), current.resolution.id,
                     None if old.resolution.id == current.resolution.id else old.resolution.id,
                     c.AdmissionRecord(instance_id, current.resolution.id, current.resolution.deployment_sha256,
-                                      1, OPERATION, c.AdmissionDisposition.PENDING), tuple(current.roles), ())
+                                      1, OPERATION, c.AdmissionDisposition.PENDING), services.unit_role_names(current.units), ())
     transition = c.HostTransition(OPERATION, instance_id, old.resolution.id, current.resolution.id, 1,
                                  tuple(s.identity for s in current.specs.values()),
                                  c.canonical_digest(c.record_document(current.deployment)), None)

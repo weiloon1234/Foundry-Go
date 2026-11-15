@@ -87,6 +87,7 @@ def prepare(context):
 def observe(context, *, stopped=False):
     from report import collect_report
     from topology import instance_units
+    from services import unit_role_names
     host = Host()
     _, entry = host.require_identity(context["project"], context["profile"])
     units = instance_units(entry)
@@ -100,14 +101,14 @@ def observe(context, *, stopped=False):
         from feature_lifecycle import load
         from services import wait_ready_set
         _, selection, inventory, _ = load(host, entry)
-        require(wait_ready_set(host, inventory, selection.enabled_roles, time.monotonic() + 120),
+        require(wait_ready_set(host, inventory, inventory.select(roles=selection.enabled_roles), time.monotonic() + 120),
                 "readiness_failed", "Selected services did not pass production readiness.")
     else:
         from release import ready
         require(ready(host, entry, timeout=120), "readiness_failed", "Application did not pass production readiness.")
     from listeners import observe_sockets
     sockets = observe_sockets(host)
-    return {"ok": True, "ready": not stopped, "units": units, "report": collect_report(host),
+    return {"ok": True, "ready": not stopped, "units": dict(zip(unit_role_names(units), units.values())), "report": collect_report(host),
             "udp_sockets": [{"address": row.socket.address, "port": row.socket.port}
                             for row in sockets if row.socket.transport == "udp"],
             "public_udp": "unavailable"}

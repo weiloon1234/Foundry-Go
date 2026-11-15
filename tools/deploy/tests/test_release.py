@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import (DeployError, atomic_json, atomic_write, bind_storage, digest, dump_env, identity,
+from contracts import (DeployError, UnitIdentity, atomic_json, atomic_write, bind_storage, digest, dump_env, identity,
                        now, parse_env, runtime_storage, storage_bindings)
 from host import Host, Paths
 import release
@@ -28,6 +28,7 @@ from runtime_config import (CREDENTIAL_KEYS, ENCRYPTION_KEYS, runtime_environmen
                             initialize_bootstrap_secrets, candidate_values, rotation_changes,
                             validate_keyring_change)
 from topology import instance_units
+from services import unit_identities
 from test_contracts import fixture, registry, storage_fixture
 
 CHECK_READY = release.ready
@@ -95,6 +96,8 @@ class ReleaseTests(unittest.TestCase):
         self.root = Path(temporary.name).resolve()
         self.host = ProcessHost(self.root)
         self.project, self.profile, self.entry = fixture()
+        self.http_identity, self.worker_identity, self.scheduler_identity = unit_identities(
+            self.profile["instance_id"], ("http", "worker", "scheduler"))
         self.profile["retention"] = {"server_releases": 1, "local_releases": 1, "pre_migration_dumps": 1}
         self.registry = registry(self.entry)
         self.host.write_registry(self.registry)
@@ -363,7 +366,7 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual('unknown', recorded['status'])
                 self.assertEqual(manifest['version'], release.current_version(fresh, self.entry))
             return run(args, **kwargs)
-        self.health.side_effect = lambda *args, **kwargs: self.host.role_states.get(instance_units(self.entry)['http']) == 'active'
+        self.health.side_effect = lambda *args, **kwargs: self.host.role_states.get(instance_units(self.entry)[self.http_identity]) == 'active'
         with patch.object(self.host, 'run', side_effect=recorded_before_start):
             yield archive, manifest
 
@@ -564,22 +567,22 @@ class ReleaseTests(unittest.TestCase):
         second, _ = self.bundle(2)
         self.deploy(first)
         units = instance_units(self.entry)
-        self.host.role_states[units["scheduler"]] = "active"
-        self.host.role_states[units["worker"]] = "inactive"
+        self.host.role_states[units[self.scheduler_identity]] = "active"
+        self.host.role_states[units[self.worker_identity]] = "inactive"
         self.host.pending, self.host.fail = True, "recovery_point"
         self.host.commands.clear()
         with self.assertRaises(DeployError):
             self.deploy(second)
-        self.assertEqual("active", self.host.role_states[units["scheduler"]])
+        self.assertEqual("active", self.host.role_states[units[self.scheduler_identity]])
         self.assertFalse(self.state()["last_attempt"]["role_recovery_pending"])
-        self.assertEqual("inactive", self.host.role_states[units["worker"]])
+        self.assertEqual("inactive", self.host.role_states[units[self.worker_identity]])
         self.assertFalse(any(args[:2] == ["systemctl", "restart"] for args, _ in self.host.commands))
 
     def test_pre_migration_exit_and_failed_role_recovery_remain_reconcilable(self):
         first, _ = self.bundle(1)
         second, _ = self.bundle(2)
         self.deploy(first)
-        scheduler = instance_units(self.entry)["scheduler"]
+        scheduler = instance_units(self.entry)[self.scheduler_identity]
         self.host.role_states[scheduler] = "active"
         self.host.pending = True
         self.stop_after_persist(self.host, "save_state", lambda entry, state:
@@ -674,7 +677,7 @@ class ReleaseTests(unittest.TestCase):
         first, _ = self.bundle(1)
         second, _ = self.bundle(2)
         self.deploy(first)
-        scheduler = instance_units(self.entry)["scheduler"]
+        scheduler = instance_units(self.entry)[self.scheduler_identity]
         self.host.role_states[scheduler] = "active"
         self.host.pending, self.host.fail = True, "start"
         with patch.object(release.backup, "recovery_point", side_effect=DeployError("backup_failed", "fixture")):
@@ -715,7 +718,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual("healthy", self.state()["status"])
         for args, kwargs in self.host.commands:
             if "restart" in args:
-                self.assertEqual(["systemctl", "restart", instance_units(self.entry)["http"]], args)
+                self.assertEqual(["systemctl", "restart", instance_units(self.entry)[self.http_identity]], args)
             if args[0] == "runuser" and Path(args[4]).name == "artisan":
                 self.assertEqual(self.host.paths.data(self.entry["name"]), kwargs["cwd"])
             self.assertNotIn(args[0], ("go", "gcc", "make", "apt-get", "npm"))
@@ -733,10 +736,10 @@ class ReleaseTests(unittest.TestCase):
         self.health.return_value = True
         release.restart(self.host, self.entry)
         calls = [args for args, _ in self.host.commands]
-        self.assertLess(calls.index(["systemctl", "restart", units["http"]]), calls.index(["systemctl", "start", units["worker"]]))
+        self.assertLess(calls.index(["systemctl", "restart", units[self.http_identity]]), calls.index(["systemctl", "start", units[self.worker_identity]]))
         release.stop(self.host, self.entry)
-        self.assertEqual(self.host.commands[-2][0], ["systemctl", "stop", units["scheduler"], units["worker"]])
-        self.assertEqual(self.host.commands[-1][0], ["systemctl", "stop", units["http"]])
+        self.assertEqual(self.host.commands[-2][0], ["systemctl", "stop", units[self.scheduler_identity], units[self.worker_identity]])
+        self.assertEqual(self.host.commands[-1][0], ["systemctl", "stop", units[self.http_identity]])
 
     def select_running_roles(self, roles):
         from test_manage import manager
@@ -750,18 +753,18 @@ class ReleaseTests(unittest.TestCase):
 
     def assert_preserved_roles(self, roles):
         units = instance_units(self.entry)
-        self.assertEqual({units[role] for role in roles}, self.host.enabled_roles)
+        self.assertEqual({units[UnitIdentity(self.profile["instance_id"], role, 1)] for role in roles}, self.host.enabled_roles)
         mutations = [args for args, _ in self.host.commands
                      if args[:1] == ["systemctl"] and args[1] in {"start", "restart", "stop", "enable", "disable", "reset-failed"}]
         touched = {arg for args in mutations for arg in args[2:] if arg in units.values()}
-        self.assertLessEqual(touched, {units[role] for role in roles})
+        self.assertLessEqual(touched, {units[UnitIdentity(self.profile["instance_id"], role, 1)] for role in roles})
         self.assertFalse(any(args[1] in {"enable", "disable"} for args in mutations))
         self.assertEqual("degraded" if roles else "stopped", self.state()["status"])
         self.assertEqual(roles, self.state()["last_attempt"]["roles"])
         if not roles:
             self.health.assert_not_called()
         for call in self.health.call_args_list:
-            self.assertTrue(call.kwargs.get("include_background") is False or call.kwargs.get("roles") == roles)
+            self.assertTrue(call.kwargs.get("include_background") is False or call.kwargs.get("roles") == list(unit_identities(self.entry["profile"]["instance_id"], roles)))
 
     def test_config_rotation_and_rollback_preserve_enablement_and_replay(self):
         self.encryption_configuration()
@@ -849,7 +852,7 @@ class ReleaseTests(unittest.TestCase):
                         else:
                             release.rollback(self.host, self.project, self.profile, first["version"], second["version"], str(uuid.uuid4()))
                     self.assertEqual(roles, self.state()["last_attempt"]["roles"])
-                    self.assertEqual({instance_units(self.entry)[role] for role in roles}, self.host.enabled_roles)
+                    self.assertEqual({instance_units(self.entry)[UnitIdentity(self.profile["instance_id"], role, 1)] for role in roles}, self.host.enabled_roles)
                     with patch.object(release, "prepare_worker", side_effect=AssertionError("disabled worker prepared")):
                         release.reconcile(self.host, self.project, self.profile)
                     self.assert_preserved_roles(roles)
@@ -879,7 +882,7 @@ class ReleaseTests(unittest.TestCase):
         state = self.state()
         state["status"] = "failed"
         self.host.save_state(self.entry, state)
-        self.assertEqual(["http"], release.enabled_roles(self.host, self.entry))
+        self.assertEqual([self.http_identity], release.enabled_roles(self.host, self.entry))
         release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Repaired"})
         self.assert_preserved_roles(["http"])
         for output, code in (("unknown", 1), ("masked", 1), ("static", 0), ("", 1), ("enabled", 1)):
@@ -948,7 +951,7 @@ class ReleaseTests(unittest.TestCase):
                     self.deploy(two)
                 self.host.fail = None
                 self.health.side_effect = None
-                self.assertEqual({instance_units(self.entry)["http"]}, self.host.enabled_roles)
+                self.assertEqual({instance_units(self.entry)[self.http_identity]}, self.host.enabled_roles)
                 self.assertEqual("degraded", self.state()["status"])
                 self.assertEqual(first, self.state()["current"])
                 self.host.commands.clear()
@@ -987,13 +990,13 @@ class ReleaseTests(unittest.TestCase):
                 reached = failure in ("after_switch", "health")
                 release.reconcile(self.host, self.project, self.profile)
                 units = instance_units(self.entry)
-                self.assertEqual(set(units.values()) if reached else {units["http"]}, self.host.enabled_roles)
+                self.assertEqual(set(units.values()) if reached else {units[self.http_identity]}, self.host.enabled_roles)
                 self.assertEqual("healthy" if reached else "degraded", self.state()["status"])
                 self.assertEqual(target if reached else first, self.state()["current"])
                 if not reached:
                     mutations = [args for args, _ in self.host.commands
                                  if args[:2] in (["systemctl", "start"], ["systemctl", "restart"], ["systemctl", "enable"])]
-                    self.assertFalse(any(unit in args for args in mutations for unit in (units["worker"], units["scheduler"])))
+                    self.assertFalse(any(unit in args for args in mutations for unit in (units[self.worker_identity], units[self.scheduler_identity])))
                     self.assertFalse(any(args[:2] == ["systemctl", "enable"] for args in mutations))
                 else:
                     self.deploy(one)
@@ -1031,7 +1034,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(first, self.state()["current"])
         self.assertEqual("rolled_back", self.state()["status"])
         self.assertEqual(set(instance_units(self.entry).values()), self.host.enabled_roles)
-        self.assertFalse(any(args[:2] == ["systemctl", "stop"] and instance_units(self.entry)["http"] in args
+        self.assertFalse(any(args[:2] == ["systemctl", "stop"] and instance_units(self.entry)[self.http_identity] in args
                              for args, _ in self.host.commands))
 
     def test_failed_all_role_restart_reconcile_allows_operator_recovery(self):
@@ -1091,7 +1094,7 @@ class ReleaseTests(unittest.TestCase):
             result = release.reconcile(self.host, self.project, self.profile)
             self.assertEqual("degraded" if role != "all" else "healthy" if action == "restart" else "stopped", result["status"])
             touched = {arg for args, _ in self.host.commands for arg in args if arg in units.values()}
-            self.assertEqual({units[role]} if role != "all" else set(units.values()), touched)
+            self.assertEqual({units[UnitIdentity(self.profile["instance_id"], role, 1)]} if role != "all" else set(units.values()), touched)
             self.assertEqual("reconciled", self.state()["last_attempt"]["outcome"])
 
     def test_failed_named_restart_keeps_stopped_roles_protected(self):
@@ -1107,7 +1110,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual("degraded", self.state()["status"])
         self.health.return_value = True
         release.config_set(self.host, self.project, self.profile, {"DEVELOPER__ENABLED": "true"})
-        self.assertNotIn(instance_units(self.entry)["worker"], self.host.enabled_roles)
+        self.assertNotIn(instance_units(self.entry)[self.worker_identity], self.host.enabled_roles)
         self.health.return_value = False
         self.host.interrupt = "restart"
         with self.assertRaises(KeyboardInterrupt):
@@ -1120,8 +1123,8 @@ class ReleaseTests(unittest.TestCase):
         self.health.return_value = True
         self.host.commands.clear()
         manager.execute(self.host, "restart", {**request, "role": "http"})
-        self.assertNotIn(instance_units(self.entry)["worker"], self.host.enabled_roles)
-        self.assertFalse(any(instance_units(self.entry)["worker"] in args for args, _ in self.host.commands))
+        self.assertNotIn(instance_units(self.entry)[self.worker_identity], self.host.enabled_roles)
+        self.assertFalse(any(instance_units(self.entry)[self.worker_identity] in args for args, _ in self.host.commands))
 
     def test_stop_survives_reboot_bootstrap_and_selected_restart(self):
         from test_manage import manager
@@ -1132,15 +1135,15 @@ class ReleaseTests(unittest.TestCase):
         units = instance_units(self.entry)
         request = {**upgrades.protocol_metadata(), "project": self.project, "profile": self.profile}
         manager.execute(self.host, "stop", {**request, "role": "worker"})
-        self.assertEqual(set(units.values()) - {units["worker"]}, self.host.enabled_roles)
+        self.assertEqual(set(units.values()) - {units[self.worker_identity]}, self.host.enabled_roles)
         with patch.object(provision, "_unit_checks"):
             provision._install_unit(self.host, {"shared": {"postgresql": {"unit": "postgresql@16-foundry.service"}}},
                                     self.entry, Path(__file__).resolve().parents[1])
-        self.assertNotIn(units["worker"], self.host.enabled_roles)
+        self.assertNotIn(units[self.worker_identity], self.host.enabled_roles)
         self.host.role_states = {unit: "active" for unit in self.host.enabled_roles}
-        self.assertNotIn(units["worker"], self.host.role_states)
+        self.assertNotIn(units[self.worker_identity], self.host.role_states)
         manager.execute(self.host, "restart", {**request, "role": "http"})
-        self.assertNotIn(units["worker"], self.host.enabled_roles)
+        self.assertNotIn(units[self.worker_identity], self.host.enabled_roles)
         manager.execute(self.host, "restart", request)
         self.assertEqual(set(units.values()), self.host.enabled_roles)
         manager.execute(self.host, "stop", request)
@@ -1148,7 +1151,7 @@ class ReleaseTests(unittest.TestCase):
         self.host.role_states = {unit: "active" for unit in self.host.enabled_roles}
         self.assertEqual({}, self.host.role_states)
         manager.execute(self.host, "restart", {**request, "role": "worker"})
-        self.assertEqual({units["worker"]}, self.host.enabled_roles)
+        self.assertEqual({units[self.worker_identity]}, self.host.enabled_roles)
         self.deploy(archive)
         self.assertEqual(set(units.values()), self.host.enabled_roles)
 
@@ -1167,12 +1170,13 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(set(units.values()), set(self.host.role_states))
             self.assertEqual(set(), self.host.enabled_roles)
             release.restart(self.host, self.entry, role="worker")
-            self.assertEqual({units["worker"]}, self.host.enabled_roles)
+            self.assertEqual({units[self.worker_identity]}, self.host.enabled_roles)
 
     def test_named_roles_only_touch_selected_unit_and_wait_for_it(self):
         self.select_fixture_release()
         units = instance_units(self.entry)
-        for role, unit in units.items():
+        for selected, unit in units.items():
+            role = selected.role
             self.host.commands.clear()
             with patch.object(release, "prepare_worker") as worker:
                 release.restart(self.host, self.entry, role=role)
@@ -1193,7 +1197,7 @@ class ReleaseTests(unittest.TestCase):
         def command(args, **kwargs):
             if "maintenance:status" in args:
                 return subprocess.CompletedProcess(args, 0, '{"down":false}', "")
-            self.assertEqual(["systemctl", "show", units["worker"]], args[:3])
+            self.assertEqual(["systemctl", "show", units[self.worker_identity]], args[:3])
             return subprocess.CompletedProcess(args, 0, observations[args[2]], "")
         with patch.object(self.host, "run", side_effect=command), \
                 patch.object(release.urllib.request, "build_opener") as opener, \
@@ -1304,7 +1308,7 @@ class ReleaseTests(unittest.TestCase):
         backup = next(i for i, args in enumerate(commands) if args[0] == "recovery_point")
         migration = next(i for i, args in enumerate(commands) if "migrate" in args)
         units = instance_units(self.entry)
-        self.assertLess(commands.index(["systemctl", "stop", units["scheduler"], units["worker"]]), backup)
+        self.assertLess(commands.index(["systemctl", "stop", units[self.scheduler_identity], units[self.worker_identity]]), backup)
         self.assertLess(backup, migration)
         self.assertEqual("needs_reconciliation", self.state()["last_attempt"]["outcome"])
         self.assertEqual("migration", self.state()["last_attempt"]["phase"])
@@ -2016,7 +2020,7 @@ class ReleaseTests(unittest.TestCase):
 
         def command(args, **kwargs):
             if args[0] == "ss":
-                output = f'LISTEN 0 4096 127.0.0.1:8100 0.0.0.0:* users:(("artisan",pid={pids[units["http"]]},fd=5))'
+                output = f'LISTEN 0 4096 127.0.0.1:8100 0.0.0.0:* users:(("artisan",pid={pids[units[self.http_identity]]},fd=5))'
                 return subprocess.CompletedProcess(args, 0, output, "")
             return original_run(args, **kwargs)
 
@@ -2280,7 +2284,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(two["version"], result["version"])
         self.assertEqual("healthy", self.state()["status"])
         self.assertEqual("rollback_not_applied", self.state()["last_attempt"]["error"])
-        self.assertIn(["systemctl", "restart", instance_units(self.entry)["http"]],
+        self.assertIn(["systemctl", "restart", instance_units(self.entry)[self.http_identity]],
                       [args for args, _ in self.host.commands])
         with self.assertRaises(DeployError) as repeat:
             release.rollback(self.host, self.project, self.profile, one["version"], two["version"], operation)
@@ -2296,7 +2300,7 @@ class ReleaseTests(unittest.TestCase):
         def fail_selection(source, destination):
             if Path(destination) == self.env_file:
                 units = instance_units(self.entry)
-                self.assertIn(["systemctl", "stop", units["http"]], [args for args, _ in self.host.commands])
+                self.assertIn(["systemctl", "stop", units[self.http_identity]], [args for args, _ in self.host.commands])
                 raise OSError("simulated configuration selection failure")
             return original(source, destination)
         with patch.object(release.os, "replace", side_effect=fail_selection):
@@ -2308,7 +2312,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual("healthy", self.state()["status"])
         self.assertEqual(2, self.health.call_count)
         commands = [args for args, _ in self.host.commands]
-        http = instance_units(self.entry)["http"]
+        http = instance_units(self.entry)[self.http_identity]
         self.assertLess(commands.index(["systemctl", "stop", http]), commands.index(["systemctl", "restart", http]))
 
     def test_repeated_completed_reconciliation_has_no_side_effects(self):
@@ -2347,7 +2351,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertLessEqual(final.kwargs["timeout"], initial.kwargs["timeout"])
         self.assertLessEqual(initial.kwargs["timeout"], release.READINESS_SECONDS)
         units = instance_units(self.entry)
-        self.assertIn(["systemctl", "start", units["scheduler"]], [args for args, _ in self.host.commands])
+        self.assertIn(["systemctl", "start", units[self.scheduler_identity]], [args for args, _ in self.host.commands])
 
     def test_undeclared_worker_is_never_started(self):
         self.select_fixture_release()
@@ -2367,16 +2371,16 @@ class ReleaseTests(unittest.TestCase):
             current = release.services(self.host, self.entry)
             self.assertEqual(set(instance_units(self.entry)), set(current))
             self.assertTrue(all(role["executable_matches"] for role in current.values()))
-            self.assertEqual("42", current["http"]["MainPID"])
-            self.assertEqual("0", current["http"]["NRestarts"])
+            self.assertEqual("42", current[self.http_identity]["MainPID"])
+            self.assertEqual("0", current[self.http_identity]["NRestarts"])
             old = self.root / "old-artisan"
             old.write_bytes(b"old process")
             executable = self.host.paths.p("/proc/42/exe")
             executable.unlink()
             executable.symlink_to(old)
             changed = release.services(self.host, self.entry)
-            self.assertEqual(str(old), changed["http"]["exe"])
-            self.assertFalse(changed["http"]["executable_matches"])
+            self.assertEqual(str(old), changed[self.http_identity]["exe"])
+            self.assertFalse(changed[self.http_identity]["executable_matches"])
             with patch.object(release, "STABILITY_SECONDS", 0):
                 self.assertFalse(CHECK_READY(self.host, self.entry, timeout=0.01))
 

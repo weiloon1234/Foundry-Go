@@ -15,7 +15,8 @@ import urllib.request
 import maintenance
 
 from contracts import BACKUP_FRESH_SECONDS, BACKUP_POLICY, DeployError, INSTANCE_STATUSES, PREFIX, SCHEMA, SLUG_PATTERN, check_path, instance_paths, now, parse_json, valid_uuid
-from topology import instance_units
+from topology import instance_units, selected_units
+from services import unit_identities, unit_role_names
 from release import enabled_roles, readiness_body, service as role_service
 from host import OperationTimeout as ReportBudgetExceeded, wall_clock_budget
 
@@ -410,22 +411,22 @@ def instance_report(host, entry, deadline, problems, *, host_claims=(), host_con
         recorded_status = "unknown"
         problem(problems, "instance_status_unknown", instance_id)
     rehearsal = provisioning.get("state") == "rehearsal"
-    expected_unit = instance_units(entry)["http"]
+    http, expected_unit = next(iter(selected_units(entry, "http").items()))
     unit_status = checked(problems, "service_check_unavailable", instance_id, service, host, expected_unit, deadline)
     topology = {role: {"unit": unit, "state": checked(problems, "service_check_unavailable", instance_id, service, host, unit, deadline)}
-                for role, unit in instance_units(entry).items() if role != "http" and not rehearsal}
-    topology["http"] = {"unit": expected_unit, "state": unit_status}
+                for role, unit in instance_units(entry).items() if role != http and not rehearsal}
+    topology[http] = {"unit": expected_unit, "state": unit_status}
     held = set()
     if "deployment_selection" in entry:
         from feature_maintenance import record
         holds = checked(problems, "maintenance_hold_unavailable", instance_id, record, host, entry)
-        held = set(holds["holds"]) if holds else set()
+        held = set(unit_identities(instance_id, holds["holds"])) if holds else set()
         enabled = checked(problems, "service_enablement_unavailable", instance_id,
                           enabled_roles, host, entry, remaining(deadline))
         for role, item in topology.items():
             item["held"] = role in held
-            item["maintenance"] = next(value.get("maintenance", "serve" if role == "http" else "stop")
-                                       for value in entry["topology"]["roles"] if value["name"] == role)
+            item["maintenance"] = next(value.get("maintenance", "serve" if role == http else "stop")
+                                       for value in entry["topology"]["roles"] if value["name"] == role.role)
             if enabled is not None:
                 item["enabled"] = role in enabled
     ready = None if recorded_status == "never_deployed" and not state.get("current") else checked(problems, "readiness_check_unavailable", instance_id, readiness, entry["allocations"]["http_port"], deadline)
@@ -443,7 +444,7 @@ def instance_report(host, entry, deadline, problems, *, host_claims=(), host_con
         for role, item in topology.items():
             if item.get("maintenance") == "stop" and item["state"] and item["state"]["active"] == "active":
                 problem(problems, "maintenance_still_admitting", instance_id,
-                        detail=f"{role} still runs while the shared record is down; use deploy down for immediate fencing.")
+                        detail=f"{role.role} still runs while the shared record is down; use deploy down for immediate fencing.")
     cert = None
     if not rehearsal:
         cert = checked(problems, "certificate_check_unavailable", instance_id, certificate, profile.get("domain"), deadline)
@@ -468,9 +469,9 @@ def instance_report(host, entry, deadline, problems, *, host_claims=(), host_con
             for role, item in topology.items():
                 item["enabled"] = role in enabled
                 if role in enabled and role not in held and item["state"] and item["state"]["active"] == "inactive":
-                    action = f"ACTION=stop ROLE={role}" if recorded_status == "degraded" else "ACTION=stop"
+                    action = f"ACTION=stop ROLE={role.role}" if recorded_status == "degraded" else "ACTION=stop"
                     problem(problems, "stopped_role_enabled", instance_id,
-                            detail=f"{role} ({item['unit']}) is inactive but enabled and will start on reboot. Run {action} again to keep it stopped.")
+                            detail=f"{role.role} ({item['unit']}) is inactive but enabled and will start on reboot. Run {action} again to keep it stopped.")
     if recorded_status == "degraded":
         problem(problems, "instance_degraded", instance_id)
     if state.get("current") and not rehearsal and recorded_status != "stopped":
@@ -551,7 +552,7 @@ def instance_report(host, entry, deadline, problems, *, host_claims=(), host_con
         "status": "unknown" if recorded_status in {"healthy", "rolled_back"} and not consistent else recorded_status,
         "recorded_status": recorded_status, "metadata_consistent": consistent,
         "current_release": current, "previous_release": previous, "last_attempt": attempt(state.get("last_attempt")),
-        "service": unit_status, "services": topology, "readiness": ready, "maintenance": live_maintenance, "certificate": cert, "backup": backup,
+        "service": unit_status, "services": dict(zip(unit_role_names(topology), topology.values())), "readiness": ready, "maintenance": live_maintenance, "certificate": cert, "backup": backup,
         "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),
     }
     if profile.get("schema") == 3:
@@ -599,42 +600,48 @@ def confined_network(host, registry):
     import listeners
     import network_confinement
     from topology import parse_topology
-    roles, private = [], []
+    rows, private = [], []
     observed = None
-    for identity, entry in registry["instances"].items():
+    for instance_id, entry in registry["instances"].items():
         topology = parse_topology(entry["topology"], registered=True)
         names = [role.common.name for role in topology.roles if role.common.confinement == "loopback"]
         if not names:
             continue
         inventory = None
         for name in names:
-            row = {"instance_id": identity, "role": name, "confinement": "loopback", "state": "unverified"}
-            roles.append(row)
+            row = {"instance_id": instance_id, "role": name, "confinement": "loopback", "state": "unverified"}
+            rows.append(row)
             try:
                 if "deployment_selection" not in entry:
                     row["state"] = "not_started"
                     continue
                 if inventory is None:
                     inventory = listeners._feature_inventory(host, entry, entry["deployment_selection"]["selected_resolution_id"])
-                if name not in inventory.units:
+                copies = inventory.copies(name)
+                if not copies:
                     row["state"] = "not_placed"
                     continue
-                if service(host, inventory.units[name])["ActiveState"] != "active":
-                    row["state"] = "inactive"
-                    continue
-                proof = network_confinement.isolation(host, inventory, name)
-                owners = listeners.process_members(host, inventory.units[name])
-                if observed is None:
-                    observed = listeners.observe_sockets(host)
-                claims = [c for c in listeners.private_claims(identity, inventory.resolution, inventory.topology) if c.role == name]
-                private.extend(s for s in observed if s.pids and set(s.pids) <= owners
-                               and any(listeners.matches(c, s.socket) for c in claims))
-                row.update(state="verified", proof=proof)
+                for index, identity in enumerate(copies):
+                    if index:
+                        row = {"instance_id": instance_id, "role": name, "confinement": "loopback", "state": "unverified"}
+                        rows.append(row)
+                    if service(host, inventory.units[identity])["ActiveState"] != "active":
+                        row["state"] = "inactive"
+                        continue
+                    proof = network_confinement.isolation(host, inventory, identity)
+                    owners = listeners.process_members(host, inventory.units[identity])
+                    if observed is None:
+                        observed = listeners.observe_sockets(host)
+                    claims = [claim for claim in listeners.private_claims(instance_id, inventory.resolution, inventory.topology)
+                              if claim.identity == identity]
+                    private.extend(socket for socket in observed if socket.pids and set(socket.pids) <= owners
+                                   and any(listeners.matches(claim, socket.socket) for claim in claims))
+                    row.update(state="verified", proof=proof)
             except ReportBudgetExceeded:
                 raise
             except (DeployError, OSError, ValueError, KeyError):
                 pass
-    return {"roles": roles, "sockets": tuple(private)}
+    return {"roles": rows, "sockets": tuple(private)}
 
 
 def declared_network(host, profile, *, topology, entry=None, resolution=None, closure=None, dns_observations=(), host_claims=None, host_confinement=None):

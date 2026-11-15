@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import (CLEANUP_GRACE_KEY, DEFAULT_CLEANUP_GRACE, DeployError, instance_paths, parse_env,
                        validate_registry, bind_storage, runtime_storage, storage_bindings)
 from host import Host, Paths
-from topology import instance_units
+from topology import selected_units, instance_units
 import provision
 from test_contracts import fixture, storage_fixture
 
@@ -95,7 +95,7 @@ class FoundationProvisionTests(unittest.TestCase):
         self.assertEqual("f_" + uuid.UUID(self.profile["instance_id"]).hex, entry["allocations"]["database"])
         self.assertEqual("foundry-" + self.profile["instance_id"], entry["allocations"]["redis_user"])
         self.assertEqual(instance_paths(entry["name"]), entry["allocations"]["paths"])
-        self.assertEqual({"http", "scheduler"}, set(instance_units(entry)))
+        self.assertEqual({"http", "scheduler"}, {identity.role for identity in instance_units(entry)})
         self.assertEqual([], self.host.writes)
         self.assertEqual([], entry["redis_grants"]["keys"])
         self.register(plan)
@@ -183,7 +183,7 @@ class FoundationProvisionTests(unittest.TestCase):
 
     def test_foreign_unit_template_and_dropin_refuse_before_install(self):
         entry = self.plan()["entry"]
-        unit = instance_units(entry)["http"]
+        unit = next(iter(selected_units(entry, "http").values()))
         paths = [f"/etc/systemd/system/{unit}", "/etc/systemd/system/foundry-http@.service",
                  f"/run/systemd/system/{unit}", f"/etc/systemd/system/{unit}.d"]
         for relative in paths:

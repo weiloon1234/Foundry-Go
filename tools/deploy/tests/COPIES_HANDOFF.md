@@ -1,8 +1,8 @@
 # Numbered service copies: shared interface
 
-Release 2a, lane A1, turn 1 supplies the foundation. Counts above one still fail
+Release 2a, lane A1, turn 2a migrates inventory callers to copy identities. Counts above one still fail
 with `unsupported_capability` in `topology.validate_feature_profile`. A1 removes
-that gate only after migrating lifecycle callers together in turn 2. Wrappers
+that gate only in a later count-enablement turn. Wrappers
 belong to release 3.
 
 ## Identity and expansion
@@ -29,11 +29,38 @@ The shared helpers are:
   `listeners.allocate_private(instance_id, roles, reserved, observed, ...)`.
 - `listeners.unix_endpoints(topology, profile)` returns every placed Unix endpoint.
 
-Turn 1 keeps `UnitInventory`'s existing role-keyed callers behind the singleton
-gate. Turn 2 replaces their keys with `UnitIdentity`; it must not add an extras
-map or retain a second runtime inventory. Role declarations remain role policy.
-Dependency edges expand to every prerequisite copy. Every copy must pass its own
-readiness and stability checks under one shared deadline.
+`UnitInventory.units` and `.specs` are ordinary dictionaries keyed only by
+`UnitIdentity`. `.roles` contains role-name-keyed policy. There is no extras map.
+Selections, readiness observations, enablement, maintenance holds, and affected
+sets use identities internally. Dependency edges expand to every prerequisite
+copy under one shared readiness deadline.
+
+## Selection API for A2
+
+- `inventory.copies(role)` returns that role's placed identities in ordinal order.
+  An unplaced declared role returns `()`; an unknown role is rejected.
+- `inventory.identity(role, ordinal=1)` selects one placed copy; absent copies fail.
+- `inventory.select(role="all", *, roles=None, ordinal=None)` returns identities
+  in inventory order. `roles` selects a sequence of placed role names. `ordinal`
+  requires a single explicit `role` and selects only that copy.
+- `inventory.dependencies(identity)` returns direct prerequisite copies.
+  `prerequisites(selected)` returns their transitive closure.
+- `start_order`, `stop_order`, `start_in_order`, and `named_operation` consume
+  identity selections. `named_operation` observations are identity-keyed.
+  `render_unit`, `probe`, `wait_ready`, and `network_confinement.isolation` take
+  an identity; `wait_ready_set` takes an identity selection.
+
+`topology.instance_units` and `selected_units` also return identity-keyed maps for
+legacy profiles. `selected_units(..., role=...)` expands a role selector;
+`roles=` accepts an internal identity selection. `services.enabled_units` and
+`release.enabled_roles` preserve identity keys.
+
+Existing singleton wire records remain unchanged. At their boundaries,
+`services.unit_identities(instance_id, roles)` parses role names, including removed
+historical roles. `services.unit_role_names(identities)` emits role names and
+refuses non-singleton or mixed-instance identities. Lane A2 extends its record
+schemas before persisting selections with higher ordinals. Role-scoped environment
+and secret-path records remain role-scoped until lane C changes their owners.
 
 ## Endpoints and references
 
@@ -54,12 +81,11 @@ Wildcard reservations apply to every copy of the declaring role.
 use `<role>.<ordinal>` for runtime and persistent state directories. Shared-directory
 grants and network confinement remain role policies inherited by every copy.
 
-Arguments and environment accept `{"copy_ordinal": "self"}`, resolved as the
-decimal ordinal. The existing `copy_number` spelling remains supported. Rendered
-JSON field bindings resolve either spelling to an integer.
+Arguments and environment use only `{"copy_number": "self"}`, resolved as the
+decimal ordinal. Rendered JSON field bindings resolve it to an integer.
 
-`FEATURE_COPIES_GENERATION = 17` is the client and host floor for counts above one
-or the new `copy_ordinal` spelling. Older hosts can still use `copy_number`.
+`FEATURE_COPIES_GENERATION = 17` is the client and host floor for counts above one.
+The existing `copy_number` reference does not raise the floor.
 `upgrades.feature_generation` and `check_feature_generation` accept `profile=` for
 the candidate profile; without it they inspect `entry["profile"]`. Both preserve
 the selected floor through rollback and recovery. Protocol generation is 17.

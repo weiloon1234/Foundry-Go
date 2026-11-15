@@ -4,8 +4,9 @@
 
 - Added: generation-17 foundations for numbered custom service copies: bounded
   unit identities, placement expansion, per-copy endpoint allocations and stable
-  socket paths, and `copy_ordinal` references. Counts above one remain rejected
-  until lifecycle migration is complete. Existing copy-1 record digests stay unchanged.
+  socket paths, and per-copy resolution of the existing `copy_number` reference. Counts above one remain rejected
+  until count changes are enabled. Inventory callers now use `UnitIdentity` keys
+  and explicit copy selection; existing copy-1 wire shapes and digests stay unchanged.
 - Added: role-level loopback network confinement with verified systemd IP policy
   and live ingress/egress BPF attachments, shared with recovery rehearsal. Private
   TCP listeners may declare wildcard binding only on confined roles. Readiness

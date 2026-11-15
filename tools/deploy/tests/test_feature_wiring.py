@@ -106,7 +106,7 @@ class WiringHost(Host):
         arguments = shlex.split(next(line.split("=", 1)[1].lstrip("+") for line in text.splitlines() if line.startswith("ExecCondition=")))
         phase, instance, declared_role, ordinal, resolution, bundle, spec = arguments[-7:]
         generation = c.read_json(admission.AdmissionStore(self, instance).durable / "generations" / (spec + "-" + bundle + ".json"))
-        assert generation["resolution_id"] == resolution and generation["unit"] == {"instance_id": instance, "role": role, "ordinal": 1}
+        assert generation["resolution_id"] == resolution and generation["unit"] == {"instance_id": instance, "role": role.role, "ordinal": role.ordinal}
         inventory, launch = lifecycle.load_resolution(self, entry, resolution)
         self.sequence += 2
         invocation = format(self.sequence, "032x")
@@ -118,7 +118,7 @@ class WiringHost(Host):
                 patch.object(shared_directories, "verify", wraps=shared_directories.verify) as verified:
             for action in ("admit", "prepare"):
                 feature_runtime.run(action, c.record_document(pin), launch)
-            verified.assert_called_once_with(self, inventory.topology, inventory.specs[role].identity.instance_id, role,
+            verified.assert_called_once_with(self, inventory.topology, inventory.specs[role].identity.instance_id, role.role,
                                              entry["allocations"]["uid"], entry["allocations"]["gid"])
         self.proc(process.pid, invocation, alive=False)
         main = self.proc(process.pid + 1, invocation, self.paths.p(inventory.specs[role].executable), unit)
@@ -126,7 +126,7 @@ class WiringHost(Host):
         self.starting = unit
         feature_runtime.run("running", c.record_document(pin), launch)
         self.starting = None
-        self.started.append(role)
+        self.started.append(role.role)
 
     def nginx_config(self):
         paths = [self.paths.p("/etc/nginx/nginx.conf"), self.paths.p(edge.STREAM_INCLUDE)]
@@ -268,7 +268,7 @@ class WiringHost(Host):
             if "-Hxlpn" in args:
                 for process, inventory, role in self.running.values():
                     for endpoint in inventory.resolution.unix_endpoints:
-                        if endpoint.role == role:
+                        if (endpoint.role, endpoint.ordinal) == (role.role, role.ordinal):
                             rows.append(f'u_str LISTEN 0 128 {endpoint.path} 123 * 0 users:(("app",pid={process.pid},fd=3))')
             elif "-u" not in args:
                 family = 6 if "-6" in args else 4
@@ -279,8 +279,8 @@ class WiringHost(Host):
                             rows.append(f'LISTEN 0 128 {claim.socket.address}:{claim.socket.port} 0.0.0.0:* users:(("nginx",pid={self.worker},fd=3))')
                 for process, inventory, role in self.running.values():
                     for endpoint in inventory.resolution.endpoints:
-                        if endpoint.role == role and ipaddress.ip_address(endpoint.address).version == family:
-                            address = "0.0.0.0" if (role, endpoint.listener) in listeners.wildcard_listeners(inventory.topology) else endpoint.address
+                        if (endpoint.role, endpoint.ordinal) == (role.role, role.ordinal) and ipaddress.ip_address(endpoint.address).version == family:
+                            address = "0.0.0.0" if (role.role, endpoint.listener) in listeners.wildcard_listeners(inventory.topology) else endpoint.address
                             rows.append(f'LISTEN 0 128 {address}:{endpoint.port} 0.0.0.0:* users:(("app",pid={process.pid},fd=3))')
             output = "\n".join(rows)
         elif args[0] == "runuser":
@@ -296,7 +296,7 @@ class WiringHost(Host):
                     entry = next(entry for entry in self.read_registry()["instances"].values() if entry["name"] == args[2])
                     assert (int(uid), int(gid)) == (entry["allocations"]["uid"], entry["allocations"]["gid"])
                     code = unix_sockets.Result.READY if any(
-                        group == "/system.slice/" + unit and endpoint.role == role and endpoint.name == name
+                        group == "/system.slice/" + unit and (endpoint.role, endpoint.ordinal) == (role.role, role.ordinal) and endpoint.name == name
                         and str(self.paths.p(endpoint.directory)) == directory
                         for unit, (_, inventory, role) in self.running.items()
                         for endpoint in inventory.resolution.unix_endpoints) else unix_sockets.Result.UNSAFE
@@ -366,7 +366,7 @@ class FeatureWiringFixture(unittest.TestCase):
         self.enterContext(patch.object(feature_runtime, "os", runtime_os))
 
     def probe(self, host, inventory, name, deadline, *, paused=False):
-        role = inventory.roles[name]
+        role = inventory.roles[name.role]
         if services.readiness_probe(role) and services.readiness_probe(role).kind == "unix":
             entry = host.read_registry()["instances"][inventory.profile.instance_id]
             account = SimpleNamespace(pw_name=entry["name"], pw_gid=entry["allocations"]["gid"])
@@ -478,7 +478,7 @@ class FeatureWiringTests(FeatureWiringFixture):
             _, selection, inventory, _ = lifecycle.load(self.host, entry)
             self.assertEqual(selection.minimum_generation, 16)
             self.assertTrue(proof.called)
-            text = self.host.paths.p('/etc/systemd/system/' + inventory.units['relay']).read_text()
+            text = self.host.paths.p('/etc/systemd/system/' + inventory.units[inventory.identity('relay')]).read_text()
             self.assertIn(network_confinement.FILTER, text)
             self.request('restart')
         with patch.object(network_confinement, 'isolation', side_effect=c.DeployError('network_confinement', 'No BPF')):
@@ -503,7 +503,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         directory = self.host.paths.p(endpoint.directory)
         self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
         self.assertEqual(directory.stat().st_uid, entry['allocations']['uid'])
-        for name in inventory.roles:
+        for name in inventory.units:
             text = self.host.paths.p('/etc/systemd/system/' + inventory.units[name]).read_text()
             self.assertIn(endpoint.directory, text)
         self.request('restart')
@@ -667,7 +667,7 @@ class FeatureWiringTests(FeatureWiringFixture):
             _, entry = self.host.require_identity(self.project, self.profile)
             _, selected, inventory, launch = lifecycle.load(self.host, entry)
             self.assertEqual(selected.minimum_generation, 14)
-            paths = services.ServicePaths.for_unit(inventory.specs["relay"].identity, inventory.resolution.id)
+            paths = services.ServicePaths.for_unit(inventory.specs[inventory.identity("relay")].identity, inventory.resolution.id)
             path = self.host.paths.p(paths.config("private", "rendered-template", "relay.yaml"))
             self.assertEqual(json.loads(path.read_text().removeprefix("token: ")), expected)
             self.assertEqual(path.stat().st_mode & 0o777, 0o640)
@@ -676,18 +676,18 @@ class FeatureWiringTests(FeatureWiringFixture):
             self.assertEqual(dispatch["environment"]["XDG_CONFIG_HOME"], paths.base + "/current/config/private")
             for public in (json.dumps(dispatch), json.dumps(launch), json.dumps(self.host.read_registry()),
                            json.dumps(self.request("status")), json.dumps(self.host.commands),
-                           self.host.paths.p("/etc/systemd/system/" + inventory.units["relay"]).read_text()):
+                           self.host.paths.p("/etc/systemd/system/" + inventory.units[inventory.identity("relay")]).read_text()):
                 self.assertNotIn(expected, public)
             return path.resolve(), inventory
         first, before = selected_template("initial-canary")
-        http = self.host.running[before.units["http"]]
+        http = self.host.running[before.units[before.identity("http")]]
         self.host.started.clear()
         with patch.object(release.backup, "archive_keys"):
             self.request("config-set", secrets={"configuration": {key: 'replacement-canary"#;]雪'}}, confirm=True)
         second, _ = selected_template('replacement-canary"#;]雪')
         self.assertNotEqual(first, second)
         self.assertEqual(self.host.started, ["relay"])
-        self.assertEqual(self.host.running[before.units["http"]], http)
+        self.assertEqual(self.host.running[before.units[before.identity("http")]], http)
         self.request("restart", operation_id=str(uuid.uuid4()))
         third, _ = selected_template('replacement-canary"#;]雪')
         self.assertNotEqual(second, third)
@@ -708,7 +708,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
         _, entry = self.host.require_identity(self.project, self.profile)
         _, _, before, before_launch = lifecycle.load(self.host, entry)
-        http = self.host.running[before.units["http"]]
+        http = self.host.running[before.units[before.identity("http")]]
         self.host.started.clear()
         with patch.object(release.backup, "archive_keys") as archive:
             self.request("config-set", secrets={"configuration": {key: "replacement-canary"}}, confirm=True)
@@ -716,8 +716,8 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, entry = self.host.require_identity(self.project, self.profile)
         _, selected, after, launch = lifecycle.load(self.host, entry)
         self.assertEqual(self.host.started, ["relay"])
-        self.assertEqual(self.host.running[before.units["http"]], http)
-        self.assertEqual(before.specs["http"], after.specs["http"])
+        self.assertEqual(self.host.running[before.units[before.identity("http")]], http)
+        self.assertEqual(before.specs[before.identity("http")], after.specs[after.identity("http")])
         self.assertEqual(selected.admission.disposition, c.AdmissionDisposition.COMMITTED)
         self.assertEqual(entry["configuration_revision"], 2)
         self.assertNotEqual(before_launch["secret_paths"]["relay"], launch["secret_paths"]["relay"])
@@ -762,7 +762,7 @@ class FeatureWiringTests(FeatureWiringFixture):
             self.host.start(inventory.units[name])
         self.run_coordinator("foundry-admission-open-" + self.profile["instance_id"] + ".service")
         self.assertEqual(set(self.host.running), set(inventory.units.values()))
-        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.roles, time.monotonic() + 1))
+        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, time.monotonic() + 1))
 
     def test_retained_automatic_restart_is_refused_during_pending_rotation(self):
         self.test_service_secret_rotation_retains_http_and_private_values()
@@ -772,10 +772,10 @@ class FeatureWiringTests(FeatureWiringFixture):
         attempted = []
         def observe_pending(*args, **kwargs):
             result = withdraw(*args, **kwargs)
-            before = self.host.running[inventory.units["http"]]
+            before = self.host.running[inventory.units[inventory.identity("http")]]
             with self.assertRaises(c.DeployError):
-                self.host.start(inventory.units["http"])
-            self.assertEqual(self.host.running[inventory.units["http"]], before)
+                self.host.start(inventory.units[inventory.identity("http")])
+            self.assertEqual(self.host.running[inventory.units[inventory.identity("http")]], before)
             attempted.append(True)
             return result
         with patch.object(feature_network, "withdraw", side_effect=observe_pending), patch.object(release.backup, "archive_keys"):
@@ -821,7 +821,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         reviewed = self.request("release-plan", **arguments)
         _, entry = self.host.require_identity(self.project, self.profile)
         _, _, inventory, _ = lifecycle.load(self.host, entry)
-        self.host.enabled.remove(inventory.units["http"])
+        self.host.enabled.remove(inventory.units[inventory.identity("http")])
         before = dict(self.host.running)
         with self.assertRaises(c.DeployError) as error:
             self.request("activate", **arguments, plan_token=reviewed["plan_token"])
@@ -897,7 +897,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, _, restored, _ = lifecycle.load(self.host, entry)
         self.assertEqual(set(restored.roles), {"http", "relay"})
         self.assertEqual(runtime_config.service_secret_snapshot(self.host, entry), secret)
-        self.assertIn(restored.units["relay"], self.host.enabled)
+        self.assertIn(restored.units[restored.identity("relay")], self.host.enabled)
 
 
     def test_reactivating_previous_archive_uses_current_configuration(self):
@@ -953,13 +953,13 @@ class FeatureWiringTests(FeatureWiringFixture):
         ready = services.wait_ready_set
         def check(*args, **kwargs):
             self.assertTrue(hold.exists())
-            observed.append(set(args[2]))
+            observed.append(set(services.unit_role_names(args[2])))
             return ready(*args, **kwargs)
         with patch.object(services, "wait_ready_set", side_effect=check):
             self.request("rollback", **arguments)
         self.assertIn({"http", "relay"}, observed)
         self.assertFalse(hold.exists())
-        self.assertEqual(set(role for _, _, role in self.host.running.values()), {"http", "relay"})
+        self.assertEqual(set(role.role for _, _, role in self.host.running.values()), {"http", "relay"})
         self.assertEqual(lifecycle.load(self.host, entry)[1].admission.disposition, c.AdmissionDisposition.COMMITTED)
 
     def test_reviewed_rollback_readiness_failure_keeps_configuration_hold(self):
@@ -988,22 +988,22 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.rollback_target(target)
         _, entry = self.host.require_identity(self.project, self.profile)
         _, _, inventory, _ = lifecycle.load(self.host, entry)
-        self.assertIn(inventory.units["worker"], self.host.enabled)
-        self.assertIn(inventory.units["worker"], self.host.running)
-        args = inventory.specs["worker"].arguments
+        self.assertIn(inventory.units[inventory.identity("worker")], self.host.enabled)
+        self.assertIn(inventory.units[inventory.identity("worker")], self.host.running)
+        args = inventory.specs[inventory.identity("worker")].arguments
         self.assertEqual(args[args.index("--connection") + 1], "target-queue")
 
     def test_rotation_preserves_enabled_but_stopped_service(self):
         self.test_service_secret_rotation_retains_http_and_private_values()
         _, entry = self.host.require_identity(self.project, self.profile)
         _, _, inventory, _ = lifecycle.load(self.host, entry)
-        self.host.run(["systemctl", "stop", inventory.units["relay"]])
+        self.host.run(["systemctl", "stop", inventory.units[inventory.identity("relay")]])
         self.host.started.clear()
         with patch.object(release.backup, "archive_keys"):
             result = self.request("config-set", secrets={"configuration": {"FOUNDRY_SERVICE_SECRET__RELAY_TOKEN": "next-canary"}}, confirm=True)
         self.assertEqual(self.host.started, [])
         self.assertEqual(result["status"], "degraded")
-        self.assertIn(inventory.units["relay"], self.host.enabled)
+        self.assertIn(inventory.units[inventory.identity("relay")], self.host.enabled)
 
     def test_maintenance_holds_retain_http_and_honor_disable_on_up(self):
         import feature_maintenance
@@ -1013,24 +1013,24 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
         _, entry = self.host.require_identity(self.project, self.profile)
         _, _, inventory, _ = lifecycle.load(self.host, entry)
-        before = self.host.running[inventory.units["http"]]
+        before = self.host.running[inventory.units[inventory.identity("http")]]
         self.request("down", confirm=True)
         _, entry = self.host.require_identity(self.project, self.profile)
         store, selection, inventory, _ = lifecycle.load(self.host, entry)
-        marker = self.host.paths.p(feature_maintenance.marker_path(inventory.specs["relay"].identity))
+        marker = self.host.paths.p(feature_maintenance.marker_path(inventory.specs[inventory.identity("relay")].identity))
         self.assertTrue(marker.is_file())
         self.assertEqual(selection.maintenance_holds, ("relay",))
-        self.assertIn(inventory.units["relay"], self.host.enabled)
-        self.assertNotIn(inventory.units["relay"], self.host.running)
-        self.assertEqual(self.host.running[inventory.units["http"]], before)
-        content = self.host.paths.p("/etc/systemd/system/" + inventory.units["relay"]).read_text()
-        self.assertIn("ConditionPathExists=!" + feature_maintenance.marker_path(inventory.specs["relay"].identity), content)
-        self.host.run(["systemctl", "disable", inventory.units["relay"]])
+        self.assertIn(inventory.units[inventory.identity("relay")], self.host.enabled)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.running)
+        self.assertEqual(self.host.running[inventory.units[inventory.identity("http")]], before)
+        content = self.host.paths.p("/etc/systemd/system/" + inventory.units[inventory.identity("relay")]).read_text()
+        self.assertIn("ConditionPathExists=!" + feature_maintenance.marker_path(inventory.specs[inventory.identity("relay")].identity), content)
+        self.host.run(["systemctl", "disable", inventory.units[inventory.identity("relay")]])
         self.request("up", confirm=True)
         self.assertFalse(marker.exists())
-        self.assertNotIn(inventory.units["relay"], self.host.running)
-        self.assertNotIn(inventory.units["relay"], self.host.enabled)
-        self.assertEqual(self.host.running[inventory.units["http"]], before)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.running)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.enabled)
+        self.assertEqual(self.host.running[inventory.units[inventory.identity("http")]], before)
         store.require_cleanup_clear()
 
     def test_direct_artisan_pause_reconciles_on_status_and_unavailable_store_retains_holds(self):
@@ -1046,10 +1046,10 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, _, inventory, _ = lifecycle.load(self.host, entry)
         with patch("maintenance.status", return_value=None):
             self.request("status")
-        self.assertNotIn(inventory.units["relay"], self.host.running)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.running)
         self.host.maintenance_down = False
         self.request("status")
-        self.assertIn(inventory.units["relay"], self.host.running)
+        self.assertIn(inventory.units[inventory.identity("relay")], self.host.running)
         self.assertEqual(feature_maintenance.record(self.host, entry)["holds"], [])
 
     def test_failed_up_keeps_shared_pause_off_and_allows_explicit_retry_after_cleanup(self):
@@ -1064,10 +1064,10 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, entry = self.host.require_identity(self.project, self.profile)
         store, _, inventory, _ = lifecycle.load(self.host, entry)
         store.require_cleanup_clear()
-        self.assertNotIn(inventory.units["relay"], self.host.running)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.running)
         self.assertEqual(self.host.load_state(entry)["last_attempt"]["outcome"], "failed")
         self.request("up", confirm=True)
-        self.assertIn(inventory.units["relay"], self.host.running)
+        self.assertIn(inventory.units[inventory.identity("relay")], self.host.running)
 
     def test_deploy_during_maintenance_keeps_hold_and_up_restores_new_release(self):
         self.build_archive(independent=True)
@@ -1080,9 +1080,9 @@ class FeatureWiringTests(FeatureWiringFixture):
         _, entry = self.host.require_identity(self.project, self.profile)
         _, selection, inventory, _ = lifecycle.load(self.host, entry)
         self.assertEqual(selection.maintenance_holds, ("relay",))
-        self.assertNotIn(inventory.units["relay"], self.host.running)
+        self.assertNotIn(inventory.units[inventory.identity("relay")], self.host.running)
         self.request("up", confirm=True)
-        self.assertEqual(self.host.running[inventory.units["relay"]][1].deployment.release, self.version)
+        self.assertEqual(self.host.running[inventory.units[inventory.identity("relay")]][1].deployment.release, self.version)
 
     def test_maintenance_without_stopped_roles_retains_entire_graph(self):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())
@@ -1161,7 +1161,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertEqual(selected.admission.disposition, c.AdmissionDisposition.COMMITTED)
         self.assertEqual(self.host.started, ["relay", "http"])
         self.assertTrue(provision._ready_configuration(self.host, registry, entry, TOOLS))
-        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.roles, time.monotonic() + 1))
+        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, time.monotonic() + 1))
         network = lifecycle.network_report(self.host, entry, report.claim_inventory(registry))
         self.assertNotIn("nginx_projection_unverified", [f["code"] for f in network["findings"]])
         with patch.object(report, "readiness", autospec=True, return_value={"ready": True, "http_status": 200}), \
@@ -1172,7 +1172,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertTrue(reported["metadata_consistent"])
         self.assertNotIn("running_release_mismatch", [p["code"] for p in result["problems"]])
         self.assertEqual(self.request("logs", role="relay")["logs"], "fixture service log")
-        self.assertIn(inventory.units["relay"], self.host.commands[-1])
+        self.assertIn(inventory.units[inventory.identity("relay")], self.host.commands[-1])
         descriptor = c.read_json(self.host.paths.opt(entry["name"]) / "runtime" / inventory.resolution.id / "http.json")
         self.assertEqual(descriptor["bindings"]["endpoints"][0]["name"], "relay")
         self.assertTrue(self.request("restart", operation_id=str(uuid.uuid4()))["ok"])

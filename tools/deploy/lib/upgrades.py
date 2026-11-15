@@ -425,7 +425,7 @@ def check_instance_capabilities(entry: dict, client_generation: int) -> None:
 
 def feature_generation(topology, entry, *, profile=None):
     """Application rollback cannot lower a selected capability floor."""
-    from topology import ArgumentKind, ExecutableRole, PublicListenerReference
+    from topology import ExecutableRole, PublicListenerReference
     templates = any(config.format is not None for role in topology.roles if isinstance(role, ExecutableRole)
                     for _, config in role.configs)
     public_listeners = any(isinstance(binding, PublicListenerReference) for role in topology.roles
@@ -439,15 +439,11 @@ def feature_generation(topology, entry, *, profile=None):
     profile = entry.get("profile", {}) if profile is None else profile
     placement = profile.placement if isinstance(profile, DeploymentProfile) else parse_placement(profile.get("placement", {}))
     copies = any(count > 1 for _, count in placement)
-    copy_references = any(argument.kind is ArgumentKind.COPY_ORDINAL
-                          for role in topology.roles if isinstance(role, ExecutableRole)
-                          for argument in (*role.arguments, *(value for _, value in role.environment),
-                                           *(value for _, config in role.configs for _, value in config.bindings)))
     return max(FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION if templates or public_listeners else 0,
                FEATURE_UNIX_GENERATION if unix else 0,
                FEATURE_CONFINEMENT_GENERATION if confinement else 0,
                FEATURE_SHARED_DIRECTORY_GENERATION if topology.shared_directories else 0,
-               FEATURE_COPIES_GENERATION if copies or copy_references else 0,
+               FEATURE_COPIES_GENERATION if copies else 0,
                entry.get("deployment_selection", {}).get("minimum_generation", 0))
 
 

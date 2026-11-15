@@ -45,6 +45,7 @@ class AdmissionTests(unittest.TestCase):
         self.host = Host(Paths(temporary.name))
         from test_contracts import fixture
         entry = fixture()[2]
+        entry["profile"]["instance_id"] = INSTANCE
         self.enabled = True
         registry = patch.object(self.host, "read_registry", return_value={"instances": {INSTANCE: entry}})
         registry.start()
@@ -73,7 +74,7 @@ class AdmissionTests(unittest.TestCase):
         record = {"resolution_id": invocation.resolution_id, "unit_spec_sha256": invocation.unit_spec_sha256,
                   "invocation": c.record_document(invocation), "closure": c.record_document(self.closure)}
         self.store._write(self.store._receipt(invocation), invocation)
-        with patch.object(self.store, "_retained_records", return_value={"http": record}):
+        with patch.object(self.store, "_retained_records", return_value={invocation.unit: record}):
             self.assertEqual(self.store.retained_invocation(invocation, self.resolution), self.closure)
             other = replace(invocation, process=replace(self.executor, invocation_id="e" * 32))
             self.assertIsNone(self.store.retained_invocation(other, self.resolution))

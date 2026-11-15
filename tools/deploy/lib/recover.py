@@ -20,6 +20,7 @@ import provision
 import redis_acl
 import release
 import runtime_config
+import services
 import upgrades
 from contracts import (DeployError, DeploymentSelection, PORT_FIRST, PORT_LAST, POSTGRES_PORT, RecoveryPublicBinding,
                        canonical_digest, record_document,
@@ -77,14 +78,15 @@ def effective_profile(profile, binding):
 def rehearsal_roles(inventory):
     from recovery_rehearsal import roles
     selected = roles(inventory.topology, inventory.roles)
-    return inventory.start_order(selected)
+    return inventory.start_order(inventory.select(roles=tuple(selected)))
 
 
 def takeover_selection(inventory, snapshot):
     selection = DeploymentSelection.parse(snapshot["selection"])
-    enabled = set(selection.enabled_roles) & inventory.roles.keys()
-    holds = set(selection.maintenance_holds) & inventory.roles.keys()
-    holds.update(name for name in enabled if inventory.prerequisites({name}) & set(selection.maintenance_holds))
+    enabled = set(services.unit_identities(inventory.profile.instance_id, selection.enabled_roles)) & inventory.units.keys()
+    held = set(services.unit_identities(inventory.profile.instance_id, selection.maintenance_holds))
+    holds = held & inventory.units.keys()
+    holds.update(identity for identity in enabled if inventory.prerequisites({identity}) & held)
     return inventory.start_order(enabled), tuple(sorted(holds)), inventory.start_order(enabled - holds)
 
 
@@ -359,8 +361,8 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
               "major": major, "bundle": upgrades.tool_bundle(tools_dir)[2]}
     if feature is not None:
         intent.update(source_profile=copy.deepcopy(recovered["metadata"]["profile"]), recovery_public_binding=record_document(binding) if binding else None,
-                      effective_profile=effective_profile(profile, binding), recovery_roles=list(roles),
-                      recovery_enabled_roles=list(enabled), recovery_maintenance_holds=list(holds),
+                      effective_profile=effective_profile(profile, binding), recovery_roles=list(services.unit_role_names(roles)),
+                      recovery_enabled_roles=list(services.unit_role_names(enabled)), recovery_maintenance_holds=list(services.unit_role_names(holds)),
                       deployment_sha256=canonical_digest(recovered["metadata"]["feature_recovery"]["deployment"]))
     journal = _load(host)
     if not journal:
@@ -396,8 +398,8 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
             "remaining_manual_steps": ["Point DNS at the new server."] if mode == "takeover" else [],
             "_intent": intent, "_recovered": recovered}
     if feature is not None:
-        result.update(coverage=coverage, recovery_roles=list(roles),
-                      recovery_enabled_roles=list(enabled), recovery_maintenance_holds=list(holds),
+        result.update(coverage=coverage, recovery_roles=list(services.unit_role_names(roles)),
+                      recovery_enabled_roles=list(services.unit_role_names(enabled)), recovery_maintenance_holds=list(services.unit_role_names(holds)),
                       recovery_public_binding=intent["recovery_public_binding"],
                       remaining_manual_steps=["DNS instructions follow confirmed old-server stop and private takeover health."]
                       if binding else [])

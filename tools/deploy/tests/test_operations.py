@@ -77,7 +77,7 @@ class OperationTests(unittest.TestCase):
         with ExitStack() as stack:
             self.cleanup_dependencies(stack)
             stack.enter_context(patch.object(network, "withdraw", side_effect=withdraw))
-            stack.enter_context(patch.object(lifecycle, "stop_units", side_effect=lambda h, inv, names: events.extend(names)))
+            stack.enter_context(patch.object(lifecycle, "stop_units", side_effect=lambda h, inv, names: events.extend(name.role for name in names)))
             stack.enter_context(patch.object(network, "close", side_effect=lambda *a: (events.append("prove-closed"), c.ClosureEvidence.parse(closure()))[1]))
             self.assertEqual(operations.cleanup(self.host, self.request, self.pin), 0)
         self.assertEqual(events, ["withdraw", "worker", "relay", "http", "prove-closed"])
@@ -92,8 +92,8 @@ class OperationTests(unittest.TestCase):
         stage = self.context()
         stopped = []
         def stop(host, inventory, names):
-            stopped.extend(names)
-            if names == ("worker",):
+            stopped.extend(name.role for name in names)
+            if names == inventory.copies("worker"):
                 raise c.DeployError("feature_stop_unverified", "synthetic")
         with ExitStack() as stack:
             self.cleanup_dependencies(stack)
@@ -110,16 +110,16 @@ class OperationTests(unittest.TestCase):
         group = self.host.paths.p("/sys/fs/cgroup/unit/child")
         group.mkdir(parents=True)
         (group / "cgroup.procs").write_text("23\n")
-        observed = "Id=" + self.inventory.units["relay"] + "\nLoadState=loaded\nMainPID=0\nControlPID=0\nControlGroup=/unit\nActiveState=inactive\nJob=0\n"
+        observed = "Id=" + self.inventory.units[self.inventory.identity("relay")] + "\nLoadState=loaded\nMainPID=0\nControlPID=0\nControlGroup=/unit\nActiveState=inactive\nJob=0\n"
         with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, observed, "")):
             with self.assertRaises(c.DeployError) as raised:
-                lifecycle.stop_units(self.host, self.inventory, ("relay",))
+                lifecycle.stop_units(self.host, self.inventory, self.inventory.copies("relay"))
             self.assertEqual(raised.exception.code, "feature_stop_unverified")
             (group / "cgroup.procs").write_text("")
-            lifecycle.stop_units(self.host, self.inventory, ("relay",))
+            lifecycle.stop_units(self.host, self.inventory, self.inventory.copies("relay"))
 
     def stop_removed_unit(self, *, cleanup=False):
-        names = self.inventory.stop_order(self.inventory.roles) if cleanup else ("relay",)
+        names = self.inventory.stop_order(self.inventory.units) if cleanup else self.inventory.copies("relay")
         running = {self.inventory.units[name] for name in names}
         stopped = []
         def command(args, **kwargs):
@@ -158,7 +158,7 @@ class OperationTests(unittest.TestCase):
         self.stop_removed_unit(cleanup=True)
 
     def test_missing_unit_requires_complete_empty_runtime_evidence(self):
-        unit = self.inventory.units["relay"]
+        unit = self.inventory.units[self.inventory.identity("relay")]
         empty = {"Id": unit, "LoadState": "not-found", "ActiveState": "inactive", "MainPID": "0",
                  "ControlPID": "0", "ControlGroup": "", "Job": "0"}
         for change in ({"MainPID": "12"}, {"ControlPID": "12"}, {"Job": "12"},
@@ -168,10 +168,10 @@ class OperationTests(unittest.TestCase):
             output = "\n".join(k + "=" + v for k, v in values.items() if v is not None)
             with self.subTest(change=change), patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, output, "")), \
                     self.assertRaises(c.DeployError):
-                lifecycle.stop_units(self.host, self.inventory, ("relay",))
+                lifecycle.stop_units(self.host, self.inventory, self.inventory.copies("relay"))
         output = "\n".join(k + "=" + v for k, v in empty.items())
         with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, output, "")) as run:
-            lifecycle.stop_units(self.host, self.inventory, ("relay",))
+            lifecycle.stop_units(self.host, self.inventory, self.inventory.copies("relay"))
         self.assertTrue(all(call.args[0][:2] == ["systemctl", "show"] for call in run.call_args_list))
 
     def test_success_requires_all_durable_completion_records_and_removes_only_its_staging(self):
@@ -291,12 +291,12 @@ class OperationTests(unittest.TestCase):
         self.store._write(self.store.runtime / "boot.json", c.ClosureEvidence.parse(closure()))
         with patch.object(admission.AdmissionStore, "_selection", return_value=(selected, self.inventory.resolution)), \
                 patch.object(admission.AdmissionStore, "_completed"), patch.object(self.host, "run") as commands, \
-                patch.object(services, "enabled_units", return_value=tuple(self.inventory.roles)), \
+                patch.object(services, "enabled_units", return_value=tuple(self.inventory.units)), \
                 patch.object(services, "wait_ready_set", return_value=False) as whole, \
                 patch.object(network, "open_public") as opening:
             with self.assertRaises(c.DeployError) as raised:
                 lifecycle.open_boot(self.host, self.entry, self.inventory)
             self.assertEqual(raised.exception.code, "readiness_failed")
             opening.assert_not_called()
-            self.assertEqual(whole.call_args.args[2], selected.enabled_roles)
+            self.assertEqual(services.unit_role_names(whole.call_args.args[2]), selected.enabled_roles)
             commands.assert_not_called()

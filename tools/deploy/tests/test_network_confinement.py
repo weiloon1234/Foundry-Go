@@ -91,7 +91,7 @@ class ConfinementTests(unittest.TestCase):
         topology = t.parse_topology(confined_topology())
         resolution = replace(runtime(), endpoints=(c.AllocatedEndpoint("relay", "control", "127.0.0.1", 18000, 1),))
         claim, = listeners.private_claims(INSTANCE, resolution, topology)
-        owners = {(INSTANCE, "relay"): {10}}
+        owners = {c.UnitIdentity(INSTANCE, "relay", 1): {10}}
         for family, address in ((4, "0.0.0.0"), (6, "::"), (4, "127.0.0.1")):
             observed = listeners.ObservedSocket(listeners.SocketIdentity("tcp", family, address, 18000), (10,))
             self.assertEqual(listeners.ownership_findings((claim,), (observed,), owners), [])
@@ -105,9 +105,21 @@ class ConfinementTests(unittest.TestCase):
         for name in ("relay", "worker"):
             role = inventory.roles[name]
             inventory.roles[name] = replace(role, common=replace(role.common, confinement="loopback"))
-            text = services.render_unit(inventory, name, entry, "a" * 64)
+            text = services.render_unit(inventory, inventory.identity(name), entry, "a" * 64)
             self.assertEqual(text.count(network_confinement.FILTER), 1)
             self.assertIn("AF_UNIX", text)
+
+    def test_private_socket_owner_is_the_exact_copy(self):
+        first = c.UnitIdentity(INSTANCE, "relay", 1)
+        second = c.UnitIdentity(INSTANCE, "relay", 2)
+        claim = listeners.ListenerClaim(INSTANCE, "relay", "control", 2,
+            listeners.SocketIdentity("tcp", 4, "127.0.0.1", 18001), "application")
+        owners = {first: {10}, second: {11}}
+        self.assertEqual(listeners.ownership_findings((claim,),
+            (listeners.ObservedSocket(claim.socket, (11,)),), owners), [])
+        findings = listeners.ownership_findings((claim,),
+            (listeners.ObservedSocket(claim.socket, (10,)),), owners)
+        self.assertEqual([finding["code"] for finding in findings], ["listener_owner_unverified"])
 
     def test_readiness_accepts_only_declared_wildcards_with_fresh_filter_proof(self):
         import tempfile
@@ -116,12 +128,12 @@ class ConfinementTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve()) as root:
             host = Host(Paths(root))
             inventory, _, _ = inventory_fixture()
-            spec = inventory.specs["relay"]
+            spec = inventory.specs[inventory.identity("relay")]
             executable = host.paths.p(spec.executable)
             executable.parent.mkdir(parents=True)
             executable.write_bytes(b"native")
             executable.chmod(0o755)
-            inventory.specs["relay"] = replace(spec, executable_sha256=c.digest(executable))
+            inventory.specs[inventory.identity("relay")] = replace(spec, executable_sha256=c.digest(executable))
             original = inventory.roles["relay"]
             confined = replace(original, common=replace(original.common, confinement="loopback"),
                                listeners=tuple((name, replace(listener, wildcard=True)) for name, listener in original.listeners))
@@ -139,14 +151,14 @@ class ConfinementTests(unittest.TestCase):
                             ("203.0.113.1", 8201, 20, False)):
                         sockets.return_value = subprocess.CompletedProcess([], 0,
                             f'LISTEN 0 128 {address}:{port} 0.0.0.0:* users:(("app",pid={pid},fd=3))', '')
-                        self.assertEqual(services.wait_ready(host, inventory, "relay", time.monotonic() + .03), expected)
+                        self.assertEqual(services.wait_ready(host, inventory, inventory.identity("relay"), time.monotonic() + .03), expected)
                 sockets.return_value = subprocess.CompletedProcess([], 0,
                     'LISTEN 0 128 *:8201 0.0.0.0:* users:(("app",pid=20,fd=3))', '')
                 proof.side_effect = c.DeployError("network_confinement", "No BPF")
                 with self.assertRaises(c.DeployError):
-                    services.wait_ready(host, inventory, "relay", time.monotonic() + .1)
+                    services.wait_ready(host, inventory, inventory.identity("relay"), time.monotonic() + .1)
                 inventory.roles["relay"] = original
-                self.assertFalse(services.wait_ready(host, inventory, "relay", time.monotonic() + .03))
+                self.assertFalse(services.wait_ready(host, inventory, inventory.identity("relay"), time.monotonic() + .03))
 
     def test_reports_require_live_confinement_and_owned_pid_before_hiding_wildcard(self):
         from types import SimpleNamespace
@@ -154,7 +166,9 @@ class ConfinementTests(unittest.TestCase):
         import release
         topology = t.parse_topology(confined_topology())
         resolution = replace(runtime(), endpoints=(c.AllocatedEndpoint("relay", "control", "127.0.0.1", 18000, 1),))
-        inventory = SimpleNamespace(topology=topology, resolution=resolution, units={"relay": "relay.service"})
+        inventory = SimpleNamespace(topology=topology, resolution=resolution, units={c.UnitIdentity(INSTANCE, "relay", 1): "relay.service"},
+            copies=lambda role: (c.UnitIdentity(INSTANCE, role, 1),),
+            identity=lambda role, ordinal=1: c.UnitIdentity(INSTANCE, role, ordinal))
         entry = {"topology": t.validate_topology(topology.projection()),
                  "deployment_selection": {"selected_resolution_id": resolution.id}}
         registry = {"instances": {INSTANCE: entry}}
@@ -232,7 +246,9 @@ class ConfinementTests(unittest.TestCase):
         topology = t.parse_topology(confined_topology())
         endpoint = c.AllocatedEndpoint("relay", "control", "127.0.0.1", 18000, 1)
         inventory = SimpleNamespace(topology=topology, resolution=replace(runtime(), endpoints=(endpoint,)),
-            profile=SimpleNamespace(instance_id=INSTANCE), roles={"relay": topology.roles[1]}, units={"relay": "relay.service"})
+            profile=SimpleNamespace(instance_id=INSTANCE), roles={"relay": topology.roles[1]}, units={c.UnitIdentity(INSTANCE, "relay", 1): "relay.service"},
+            copies=lambda role: (c.UnitIdentity(INSTANCE, role, 1),),
+            identity=lambda role, ordinal=1: c.UnitIdentity(INSTANCE, role, ordinal))
         observed = listeners.ObservedSocket(listeners.SocketIdentity("tcp", 4, "0.0.0.0", 18000), (10,))
         entry = {"name": "fixture", "profile": {"instance_id": INSTANCE}}
         with tempfile.TemporaryDirectory() as root, patch.object(edge, "observe_projection"), \

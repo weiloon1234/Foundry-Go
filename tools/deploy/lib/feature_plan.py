@@ -22,8 +22,8 @@ def observations(host, registry, entry, topology, profile):
     enabled, units = [], {}
     if "deployment_selection" in entry:
         _, _, current, _ = lifecycle.load(host, entry)
-        enabled = list(services.enabled_units(host, current.units))
-        units = {name: release.service(host, unit) for name, unit in current.units.items()}
+        enabled = list(services.unit_role_names(services.enabled_units(host, current.units)))
+        units = {name.role: release.service(host, unit) for name, unit in current.units.items()}
         network = feature_network.plan(host, current.topology, current.profile, package, entry=entry)
     else:
         network = feature_network.plan(host, topology, profile, package, entry=entry)
@@ -146,12 +146,12 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                   "action": "rollback" if rollback else "activate", "expected_current": expected_current,
                   "private_intent_id": intent, "configuration_intent_id": configuration_intent,
                   "observations": observed, "endpoints": [asdict(e) for e in inventory.resolution.endpoints],
-                  "unit_changes": list(inventory.units), "required_service_secrets": requirements,
+                  "unit_changes": list(services.unit_role_names(inventory.units)), "required_service_secrets": requirements,
                   "maintenance_policy": {name: "stop" if role.common.maintenance == "stop" else "continue"
                                          for name, role in inventory.roles.items()},
-                  "restoring": restoring, "enabled_roles": list(enabled), "running_roles": list(running),
-                  "maintenance_holds": sorted(holds), "maintenance_running_roles": sorted(maintenance_running),
-                  "removed_enablement": removed}
+                  "restoring": restoring, "enabled_roles": list(services.unit_role_names(enabled)), "running_roles": list(services.unit_role_names(running)),
+                  "maintenance_holds": sorted(services.unit_role_names(holds)), "maintenance_running_roles": sorted(services.unit_role_names(maintenance_running)),
+                  "removed_enablement": dict(zip(services.unit_role_names(removed), removed.values()))}
         public["plan_token"] = canonical_digest(public)
         admission.protected_directory(host, path.parent, 0o700)
         atomic_json(path, {"public": public, "manifest": manifest, "launch": launch}, mode=0o600)

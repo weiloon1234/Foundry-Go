@@ -136,7 +136,7 @@ class BackupTests(unittest.TestCase):
         self.host.run = command
         loaded = (None, c.DeploymentSelection.parse(snapshot["selection"]), inventory, snapshot)
         with patch.object(feature_lifecycle, "load", return_value=loaded), patch.object(backup, "_record"), \
-                patch.object(backup.services, "enabled_units", return_value=("http",), create=True) as enabled, \
+                patch.object(backup.services, "enabled_units", return_value=inventory.copies("http"), create=True) as enabled, \
                 patch.object(backup.runtime_config, "service_secret_snapshot_paths", return_value=(index, secret, retained), create=True) as secret_files, \
                 patch.object(self.host, "load_state", return_value={"current": {"version": inventory.deployment.release, "commit": "a" * 40}}):
             receipt = backup.archive_keys(self.host, entry)
@@ -175,7 +175,7 @@ class BackupTests(unittest.TestCase):
         entry.update(profile=profile, host_id=profile["host"]["host_id"], deployment_selection=snapshot["selection"])
         selected = c.DeploymentSelection.parse(snapshot["selection"])
         with patch.object(feature_lifecycle, "load", return_value=(None, selected, inventory, snapshot)), \
-                patch.object(services, "enabled_units", return_value=tuple(inventory.roles)), \
+                patch.object(services, "enabled_units", return_value=inventory.select()), \
                 patch.object(backup.runtime_config, "service_secret_snapshot_paths", return_value=()), \
                 patch.object(self.host, "load_state", return_value={"current": {"version": deployment.release}}):
             saved = backup._feature_snapshot(self.host, entry, {})

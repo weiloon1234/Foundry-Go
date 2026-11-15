@@ -131,7 +131,7 @@ launch origin does not grant permission to start.
 
 | Declaration outside release 1 | Later capability |
 | --- | --- |
-| Role instance counts above one | B24 release 2a; foundation present, lifecycle migration pending |
+| Role instance counts above one | B24 release 2a; identity migration complete, count changes pending |
 | Supervising wrappers | B24 release 3 |
 | PROXY protocol | B24 release 2 |
 | Managed application DNS records | B24 release 2; release 1 DNS is external only |
@@ -408,10 +408,8 @@ paths under `deploy/bin/`.
   binding and supplies an executable path, bundle path, TCP/HTTP endpoint URL or Unix
   socket path. `config`
   names a declared configuration. `state_path` and `runtime_path` contain relative
-  paths; `config_root`, `data_root`, `copy_ordinal` and the existing `copy_number`
-  spelling use the value `self` (the only deployable copy is currently 1).
-  `copy_ordinal` requires generation 17 on client and host; `copy_number` keeps
-  its existing generation requirement.
+  paths; `config_root`, `data_root` and `copy_number` use the value `self`
+  (the only deployable copy is currently 1).
   `secret_file` supplies a private file path, never secret bytes.
   Maximum 128 arguments, 32 KiB combined values, 4096 bytes per literal.
 - **Listeners:** TCP uses `bind: "loopback"` or `"public"`. Loopback listeners

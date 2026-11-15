@@ -28,6 +28,8 @@ from contracts import (DeployError, HOST_PATHS, LAYOUT_VERSION, SCHEMA, VERSION_
 from runtime_config import (ENCRYPTION_KEYS, MAX_CONFIGURATION_CHANGES, PIPELINE_KEYS, pipeline_keys, validate_runtime_environment,
                             candidate_values, rotation_changes, validate_configuration_changes, _read_value_file)
 from topology import instance_units, selected_units
+from services import unit_identities, unit_role_names
+from contracts import UnitIdentity
 from host import OperationTimeout, wall_clock_budget
 from redis_acl import (granted_redis_patterns, granted_redis_channels, reconcile_redis_grants,
                        redis_grant_patterns, redis_channel_patterns)
@@ -466,13 +468,15 @@ def record_background_recovery(host, entry, state):
     selected = state["last_attempt"].get("roles")
     if selected is None:
         selected = enabled_roles(host, entry)
+    else:
+        selected = unit_identities(entry["profile"]["instance_id"], selected)
     for role, unit in selected_units(entry, roles=selected).items():
-        if role == "http":
+        if role.role == "http":
             continue
         observed = service(host, unit)["ActiveState"]
         require(observed in ("active", "inactive", "failed"), "service_inspection",
                 "Background role state is not stable; retry after it settles.")
-        prior[role] = observed
+        prior[role.role] = observed
     state["last_attempt"].update(prior_background=prior, role_recovery_pending=True)
     host.save_state(entry, state)
 
@@ -483,7 +487,8 @@ def resume_background_recovery(host, entry, state):
         return False
     ensure_key_archive(host, entry, state)
     units = instance_units(entry)
-    for role, prior in attempt["prior_background"].items():
+    for name, prior in attempt["prior_background"].items():
+        role = UnitIdentity(entry["profile"]["instance_id"], name, 1)
         if prior == "active":
             host.run(["systemctl", "start", units[role]], timeout=60)
             require(service(host, units[role])["ActiveState"] == "active", "role_recovery",
@@ -529,7 +534,8 @@ STABILITY_SECONDS = 5
 
 def stop_background(host, entry, timeout=100, *, roles=None):
     units = selected_units(entry, roles=roles)
-    background = [units[role] for role in ("scheduler", "worker") if role in units]
+    background = [units[identity] for role in ("scheduler", "worker")
+                  for identity in units if identity.role == role]
     if background:
         host.run(["systemctl", "stop", *background], timeout=timeout)
 
@@ -561,7 +567,7 @@ def worker_connection(host, entry, candidate, *, env_file=None):
 
 
 def prepare_worker(host, entry, candidate=None):
-    if "worker" not in instance_units(entry):
+    if not any(identity.role == "worker" for identity in instance_units(entry)):
         return
     if candidate is None:
         version = current_version(host, entry)
@@ -601,11 +607,12 @@ def _prepare_units(host, units, deadline, enable):
 def start_roles(host, entry, *, http_only=False, role="all", roles=None, enable=True):
     """Start selected roles under one deadline, with HTTP ready before backgrounds."""
     units = selected_units(entry, role, roles=roles)
+    http = UnitIdentity(entry["profile"]["instance_id"], "http", 1)
     if http_only:
-        units = {"http": units["http"]}
+        units = {http: units[http]}
     if not units:
         return
-    if "worker" in units:
+    if any(identity.role == "worker" for identity in units):
         prepare_worker(host, entry)
     if role != "all":
         try:
@@ -623,13 +630,14 @@ def start_roles(host, entry, *, http_only=False, role="all", roles=None, enable=
         with wall_clock_budget(READINESS_SECONDS):
             deadline = time.monotonic() + READINESS_SECONDS
             _prepare_units(host, units, deadline, enable)
-            if "http" in units:
-                host.run(["systemctl", "restart", units["http"]], timeout=_remaining(deadline, 60))
+            if http in units:
+                host.run(["systemctl", "restart", units[http]], timeout=_remaining(deadline, 60))
                 require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS), include_background=False),
                         "readiness_failed", "HTTP did not become ready; selected background roles remain stopped.")
             for name in ("worker", "scheduler"):
-                if name in units:
-                    host.run(["systemctl", "start", units[name]], timeout=_remaining(deadline, 60))
+                for identity in units:
+                    if identity.role == name:
+                        host.run(["systemctl", "start", units[identity]], timeout=_remaining(deadline, 60))
             require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS),
                           include_background=not http_only, roles=list(units)),
                     "readiness_failed", "Required roles did not become ready within the activation deadline.")
@@ -639,6 +647,7 @@ def start_roles(host, entry, *, http_only=False, role="all", roles=None, enable=
 
 def stop(host, entry, *, role="all", roles=None, disable=False):
     units = selected_units(entry, role, roles=roles)
+    http = UnitIdentity(entry["profile"]["instance_id"], "http", 1)
     if not units:
         return
     if disable:
@@ -647,8 +656,8 @@ def stop(host, entry, *, role="all", roles=None, disable=False):
         host.run(["systemctl", "stop", *units.values()], timeout=100)
         return
     stop_background(host, entry, roles=list(units))
-    if "http" in units:
-        host.run(["systemctl", "stop", units["http"]], timeout=60)
+    if http in units:
+        host.run(["systemctl", "stop", units[http]], timeout=60)
 
 
 def _process(host, pid):
@@ -705,7 +714,7 @@ def services(host, entry):
     if "deployment_selection" in entry:
         from feature_lifecycle import load
         _, selection, inventory, _ = load(host, entry)
-        held = set(selection.maintenance_holds)
+        held = set(unit_identities(inventory.profile.instance_id, selection.maintenance_holds))
         enabled = set(enabled_roles(host, entry))
     for role, unit in instance_units(entry).items():
         if inventory is not None:
@@ -747,10 +756,11 @@ def _ready(host, entry, deadline, include_background=True, role="all", roles=Non
     path = release_path(host, entry, version)
     verified_release(host, entry, read_json(path / "manifest.json"))
     units = selected_units(entry, role, roles=roles)
+    http = UnitIdentity(entry["profile"]["instance_id"], "http", 1)
     if not units:
         return True
     if not include_background:
-        units = {"http": units["http"]}
+        units = {http: units[http]}
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     paused = (maintenance.status(host, entry, path) or {}).get("down") is True
     endpoint, accepts = ("/health/live", liveness_body) if paused else ("/health/ready", readiness_body)
@@ -760,7 +770,7 @@ def _ready(host, entry, deadline, include_background=True, role="all", roles=Non
         if any(item["ActiveState"] == "failed" or item["NRestarts"] != "0" for item in live.values()):
             return False
         healthy = all(_matches_executable(item, path / "artisan") for item in live.values())
-        if healthy and "http" in units:
+        if healthy and http in units:
             try:
                 try:
                     with opener.open(f"http://127.0.0.1:{entry['allocations']['http_port']}{endpoint}", timeout=_remaining(deadline, 3)) as response:
@@ -774,7 +784,7 @@ def _ready(host, entry, deadline, include_background=True, role="all", roles=Non
                 listeners = host.run(["ss", "-Hltpn", f"sport = :{entry['allocations']['http_port']}"],
                                      check=False, timeout=_remaining(deadline))
                 healthy = (healthy and listeners.returncode == 0
-                           and any(f"pid={live['http']['MainPID']}," in line
+                           and any(f"pid={live[http]['MainPID']}," in line
                                    and f"127.0.0.1:{entry['allocations']['http_port']}" in line
                                    for line in listeners.stdout.splitlines()))
             except (OSError, ValueError):
@@ -1093,7 +1103,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                             **pruned_tools}
             release = publish_release(host, entry, staging, manifest)
             attempt = begin(host, entry, state, "deploy", version,
-                            metadata={"recovery_operation_id": operation_id or str(uuid.uuid4()), "roles": prior_roles})
+                            metadata={"recovery_operation_id": operation_id or str(uuid.uuid4()), "roles": list(unit_role_names(prior_roles))})
             prior_current, prior_previous = state["current"], state["previous"]
             switched = False
             enabling_roles = False
@@ -1281,7 +1291,7 @@ def rollback(host, project, profile, target, expected_current, operation_id, pla
         resume_terminal_obligations(host, registry, entry, state)
         app(host, entry, release, "config:check")
         attempt = begin(host, entry, state, "rollback", target,
-                        metadata={"operation_id": operation_id, "expected_current": expected_current, "roles": roles})
+                        metadata={"operation_id": operation_id, "expected_current": expected_current, "roles": list(unit_role_names(roles))})
         _save_operation(host, entry, attempt)
         if target == expected_current:
             state["status"] = role_status(entry, roles)
@@ -1365,7 +1375,7 @@ def reconcile(host, project, profile):
         if attempt["action"] == "deploy" and attempt["phase"] in ("validation", "redis", "backup"):
             resume_background_recovery(host, entry, state)
             resume_redis_transition(host, registry, entry, state)
-            state["status"] = role_status(entry, attempt["roles"], "failed") if active and "roles" in attempt else "failed"
+            state["status"] = role_status(entry, unit_identities(entry["profile"]["instance_id"], attempt["roles"]), "failed") if active and "roles" in attempt else "failed"
             finish(host, entry, state, "failed", "deployment_not_applied")
             return {"ok": True, "status": state["status"], "version": active, "outcome": "failed"}
         applied = False
@@ -1397,10 +1407,11 @@ def reconcile(host, project, profile):
                 deploy_reached_target = (attempt["action"] == "deploy"
                                          and attempt["phase"] in ("switch", "health")
                                          and active == attempt["release"])
-                roles = attempt.get("roles") if attempt["action"] in ("config", "rollback") else None
+                roles = (list(unit_identities(entry["profile"]["instance_id"], attempt["roles"]))
+                         if attempt["action"] in ("config", "rollback") and "roles" in attempt else None)
                 if attempt["action"] == "deploy":
                     roles = (list(instance_units(entry)) if deploy_reached_target else
-                             attempt.get("roles", list(instance_units(entry))))
+                             list(unit_identities(entry["profile"]["instance_id"], attempt["roles"])) if "roles" in attempt else list(instance_units(entry)))
                 restart(host, entry, state, roles=roles)
                 if deploy_reached_target:
                     host.run(["systemctl", "enable", *instance_units(entry).values()])
@@ -1410,7 +1421,8 @@ def reconcile(host, project, profile):
             else:
                 state["status"] = "failed" if attempt["action"] == "deploy" else "never_deployed"
         except (DeployError, OSError) as error:
-            retained = attempt.get("roles") if attempt["action"] in ("config", "rollback") else None
+            retained = (list(unit_identities(entry["profile"]["instance_id"], attempt["roles"]))
+                        if attempt["action"] in ("config", "rollback") and "roles" in attempt else None)
             state["status"] = role_status(entry, retained, "failed") if retained is not None else "failed"
             outcome = ("failed_applied" if attempt["action"] == "config" and applied else
                        "failed" if attempt["action"] == "restart" else "needs_reconciliation")
@@ -1551,7 +1563,7 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
         "configuration_revision": entry["configuration_revision"] + 1,
         "configuration_sha256": hashlib.sha256(payload.encode()).hexdigest(),
         "previous_configuration_sha256": digest(path),
-        "rotation_operation_id": rotation_operation_id, "roles": roles})
+        "rotation_operation_id": rotation_operation_id, "roles": list(unit_role_names(roles))})
     try:
         host.owned_write(candidate, payload, 0o640, group=entry["name"])
         app(host, entry, live, "config:check", candidate)

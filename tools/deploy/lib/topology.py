@@ -45,15 +45,13 @@ def load_topology(app_root: Path) -> dict:
     return validate_topology(read_json(Path(app_root) / "deploy/topology.json"))
 
 
-def instance_units(entry: dict) -> dict[str, str]:
-    """Map every declared role to its canonical concrete systemd unit."""
-    topology = validate_topology(entry["topology"], registered=True)
-    if topology["schema"] == TOPOLOGY_SCHEMA:
-        parsed = parse_topology(topology, registered=True)
-        profile = parse_profile(entry["profile"], parsed)
-        placed = dict(profile.placement)
-        return {role.common.name: role_unit_name(entry["name"], role) for role in parsed.roles if placed[role.common.name]}
-    return {role["name"]: unit_name(entry["name"], role["name"]) for role in topology["roles"]}
+def instance_units(entry: dict) -> dict[UnitIdentity, str]:
+    """Expand all placed roles to canonical concrete systemd units."""
+    topology = parse_topology(entry["topology"], registered=True)
+    placement = (parse_profile(entry["profile"], topology).placement if topology.schema == TOPOLOGY_SCHEMA
+                 else tuple((role.common.name, 1) for role in topology.roles))
+    return {identity: role_unit_name(entry["name"], role, identity.ordinal)
+            for identity, role in expand_placement(topology, entry["profile"]["instance_id"], placement).items()}
 
 
 def role_unit_name(name, role, ordinal=1):
@@ -62,15 +60,16 @@ def role_unit_name(name, role, ordinal=1):
     return unit_name(name, role.common.name) if isinstance(role, BuiltinRole) else f"foundry-app-{name}-{role.common.name}@{ordinal}.service"
 
 
-def selected_units(entry: dict, role="all", *, roles=None) -> dict[str, str]:
+def selected_units(entry: dict, role="all", *, roles=None) -> dict[UnitIdentity, str]:
     units = instance_units(entry)
     if roles is not None:
-        require(isinstance(roles, list) and all(isinstance(item, str) and item in units for item in roles)
-                and len(roles) == len(set(roles)), "invalid_role", "Select declared topology roles.")
-        return {name: unit for name, unit in units.items() if name in roles}
-    require(isinstance(role, str) and (role == "all" or role in units),
-            "invalid_role", "Select a declared topology role.")
-    return units if role == "all" else {role: units[role]}
+        require(isinstance(roles, (list, tuple, set, frozenset)) and all(item in units for item in roles)
+                and len(roles) == len(set(roles)), "invalid_role", "Select declared unit identities.")
+        selected = set(roles)
+    else:
+        from services import select_role_units
+        selected = set(select_role_units(units, role))
+    return {identity: unit for identity, unit in units.items() if identity in selected}
 
 
 # The frozen parsers are also the validation owners for shared lifecycle readers.
@@ -133,7 +132,6 @@ class ArgumentKind(str, Enum):
     BINDING_SOCKET_PATH = "binding_socket_path"
     BUNDLE = "bundle"
     COPY_NUMBER = "copy_number"
-    COPY_ORDINAL = "copy_ordinal"
     STATE_PATH = "state_path"
     RUNTIME_PATH = "runtime_path"
     SECRET_FILE = "secret_file"
@@ -173,7 +171,7 @@ class Argument:
             require(isinstance(item, str) and len(item.encode("utf-8", errors="surrogatepass")) <= 4096
                     and not any(0xD800 <= ord(c) <= 0xDFFF for c in item)
                     and all(ord(c) >= 32 and ord(c) != 127 for c in item), "invalid_topology", "Invalid literal argument.")
-        elif tag in ("copy_number", "copy_ordinal", "config_root", "data_root"):
+        elif tag in ("copy_number", "config_root", "data_root"):
             require(item == "self", "invalid_topology", "Copy ordinal reference must select self.")
         elif tag in ("state_path", "runtime_path"):
             contract_path(item)
@@ -263,7 +261,7 @@ class ConfigFile:
                     "invalid_topology", "Invalid JSON pointer.")
             argument = Argument.parse(raw)
             require(argument.kind in (ArgumentKind.LISTENER_ADDRESS, ArgumentKind.LISTENER_PORT,
-                                      ArgumentKind.BUNDLE, ArgumentKind.BINDING, ArgumentKind.COPY_NUMBER, ArgumentKind.COPY_ORDINAL,
+                                      ArgumentKind.BUNDLE, ArgumentKind.BINDING, ArgumentKind.COPY_NUMBER,
                                       ArgumentKind.SECRET_FILE),
                     "invalid_topology", "Config fields require typed nonsecret bindings.")
             result.append((pointer, argument))

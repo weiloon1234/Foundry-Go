@@ -75,10 +75,10 @@ def parse_feature_snapshot(value, entry):
             and selection.admission.deployment_sha256 == canonical_digest(value["deployment"])
             and selection.admission.private_revision == inventory.resolution.private_revision == entry["configuration_revision"]
             and value["selection"] == entry.get("deployment_selection")
-            and set(selection.enabled_roles) <= inventory.roles.keys()
-            and set(selection.maintenance_holds) <= inventory.roles.keys(),
+            and set(services.unit_identities(profile.instance_id, selection.enabled_roles)) <= inventory.units.keys()
+            and set(services.unit_identities(profile.instance_id, selection.maintenance_holds)) <= inventory.units.keys(),
             "backup_deployment_mismatch", "Recovery descriptor differs from the selected deployment or configuration.")
-    inventory.start_order(selection.enabled_roles)
+    inventory.start_order(inventory.select(roles=selection.enabled_roles))
     http = next(e for e in inventory.resolution.endpoints if e.role == "http" and e.listener == "http")
     require(entry["allocations"].get("http_port") == http.port,
             "backup_deployment_mismatch", "Recovery HTTP allocation differs from the selected runtime resolution.")
@@ -134,7 +134,7 @@ def _feature_snapshot(host, entry, files):
             "backup_deployment_mismatch", "Registry and selected deployment differ.")
     enabled_units = getattr(services, "enabled_units", None)
     require(callable(enabled_units), "capability_unavailable", "Feature backup requires lane A services.enabled_units.")
-    selection = replace(selection, enabled_roles=enabled_units(host, inventory.units))
+    selection = replace(selection, enabled_roles=services.unit_role_names(enabled_units(host, inventory.units)))
     value = {"deployment": record_document(inventory.deployment), "resolution": record_document(inventory.resolution),
              "selection": record_document(selection), "declaration": launch["declaration"],
              "secret_paths": launch["secret_paths"]}

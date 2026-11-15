@@ -107,9 +107,9 @@ class ReportTests(unittest.TestCase):
         self.assertEqual("Staging unreachable", problem["detail"])
 
     def test_inactive_enabled_roles_warn_that_they_will_start_on_reboot(self):
-        from topology import instance_units
+        from topology import selected_units
         entry = self.host.registry["instances"][INSTANCE_ID]
-        unit = instance_units(entry)["http"]
+        unit = next(iter(selected_units(entry, "http").values()))
         original = self.host.run
         def run(args, **kwargs):
             if args == ["systemctl", "is-enabled", unit]:
@@ -336,7 +336,7 @@ class ReportTests(unittest.TestCase):
         healthy = {"load": "loaded", "active": "active", "substate": "running",
                    "main_pid": 42, "exe": str(release_dir / "artisan")}
         missing = {"load": "not-found", "active": "inactive", "substate": "dead"}
-        self.service.side_effect = lambda host, unit, deadline: healthy if unit == report.instance_units(entry)["http"] else missing
+        self.service.side_effect = lambda host, unit, deadline: healthy if unit == next(iter(report.selected_units(entry, "http").values())) else missing
         self.cert.side_effect = OSError("no certificate")
         entry["provisioning"]["state"] = "rehearsal"
         result = report.collect_report(self.host)
@@ -352,7 +352,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual("unknown", self.item(result)["status"])
         self.assertIn({"code": "instance_state_inconsistent", "instance_id": INSTANCE_ID}, result["problems"])
         entry["provisioning"]["state"] = "ready"
-        self.service.side_effect = lambda host, unit, deadline: healthy if unit == report.instance_units(entry)["http"] else missing
+        self.service.side_effect = lambda host, unit, deadline: healthy if unit == next(iter(report.selected_units(entry, "http").values())) else missing
         result = report.collect_report(self.host)
         self.assertIn({"code": "instance_state_inconsistent", "instance_id": INSTANCE_ID}, result["problems"])
         self.assertIn({"code": "certificate_check_unavailable", "instance_id": INSTANCE_ID}, result["problems"])

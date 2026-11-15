@@ -42,7 +42,7 @@ def unix_inventory():
     endpoint = c.UnixEndpoint.for_listener(INSTANCE, 'relay', 'control', 'wl0', ordinal=1)
     specs = []
     for role, document in zip(topology.roles, raw['roles']):
-        spec = old.specs[role.common.name]
+        spec = old.specs[old.identity(role.common.name)]
         binding = c.ResolvedEndpointBinding('compositor', endpoint, 'unix')
         bindings = c.RoleBindings(role.common.name, (), () if role.common.name == 'relay' else (binding,), ())
         specs.append(replace(spec, declaration_sha256=c.canonical_digest(document), bindings=bindings,
@@ -61,20 +61,20 @@ class UnixDeclarationsTests(unittest.TestCase):
         self.assertEqual(dict(role.listeners)['control'].transport, 'unix')
         self.assertEqual(c.RuntimeResolution.parse(c.record_document(inventory.resolution)), inventory.resolution)
         self.assertEqual(c.Deployment.parse(c.record_document(inventory.deployment)), inventory.deployment)
-        self.assertEqual(inventory.start_order(inventory.roles)[0], 'relay')
+        self.assertEqual(inventory.start_order(inventory.units)[0], inventory.identity('relay'))
         self.assertEqual(len(inventory.resolution.endpoints), 1)
         self.assertEqual(inventory.profile.listeners, ())
-        paths = services.ServicePaths.for_unit(inventory.specs['relay'].identity, CURRENT)
+        paths = services.ServicePaths.for_unit(inventory.specs[inventory.identity('relay')].identity, CURRENT)
         endpoint = inventory.resolution.unix_endpoints[0]
         for field in ('directory', 'name', 'path'):
             argument = t.Argument.parse({'listener_socket_' + field: 'control'})
-            self.assertEqual(services.resolve_argument(argument, role, inventory.specs['relay'], inventory.resolution,
+            self.assertEqual(services.resolve_argument(argument, role, inventory.specs[inventory.identity('relay')], inventory.resolution,
                                                      paths, (), {}), getattr(endpoint, field))
             argument = t.Argument.parse({'binding_socket_' + field: 'compositor'})
-            self.assertEqual(services.resolve_argument(argument, inventory.roles['http'], inventory.specs['http'],
+            self.assertEqual(services.resolve_argument(argument, inventory.roles['http'], inventory.specs[inventory.identity('http')],
                                                      inventory.resolution, paths, (), {}), getattr(endpoint, field))
         self.assertEqual(services.resolve_argument(t.Argument.parse({'binding': 'compositor'}), inventory.roles['http'],
-            inventory.specs['http'], inventory.resolution, paths, (), {}), endpoint.path)
+            inventory.specs[inventory.identity('http')], inventory.resolution, paths, (), {}), endpoint.path)
 
     def test_transport_mismatch_unsafe_names_and_missing_dependency_refuse(self):
         inventory, _ = unix_inventory()
@@ -147,14 +147,14 @@ class UnixDeclarationsTests(unittest.TestCase):
     def test_provider_and_builtin_consumers_receive_only_socket_write_access(self):
         inventory, entry = unix_inventory()
         directory = inventory.resolution.unix_endpoints[0].directory
-        for name in inventory.roles:
+        for name in inventory.units:
             rendered = services.render_unit(inventory, name, entry, DIGEST)
             writes = [line for line in rendered.splitlines() if line.startswith('ReadWritePaths=')]
             self.assertTrue(any(directory in line for line in writes))
             self.assertIn('ProtectSystem=strict', rendered)
             self.assertIn('PrivateTmp=yes', rendered)
-            self.assertNotIn('Wants=' + inventory.units['relay'], rendered)
-        self.assertIn('XDG_RUNTIME_DIR=' + directory, services.render_unit(inventory, 'relay', entry, DIGEST))
+            self.assertNotIn('Wants=' + inventory.units[inventory.identity('relay')], rendered)
+        self.assertIn('XDG_RUNTIME_DIR=' + directory, services.render_unit(inventory, inventory.identity('relay'), entry, DIGEST))
 
 
 class UnixProbeLaunchTests(unittest.TestCase):
@@ -216,7 +216,7 @@ class UnixPreparationTests(unittest.TestCase):
         self.host = Host(Paths(Path(temporary.name)))
         self.inventory, self.entry = unix_inventory()
         self.role = self.inventory.roles['relay']
-        self.identity = self.inventory.specs['relay'].identity
+        self.identity = self.inventory.specs[self.inventory.identity('relay')].identity
         self.directory = self.host.paths.p(c.socket_directory(INSTANCE))
         self.path = self.directory / 'wl0'
         self.prepare()
@@ -309,7 +309,7 @@ class UnixPreparationTests(unittest.TestCase):
         self.socket(listening=True)
         self.path.unlink()
         self.path.symlink_to(other_directory / 'victim')
-        self.assertFalse(services.probe(self.host, self.inventory, "relay", time.monotonic() + 1))
+        self.assertFalse(services.probe(self.host, self.inventory, self.inventory.identity("relay"), time.monotonic() + 1))
         other.settimeout(.05)
         with self.assertRaises(TimeoutError):
             other.accept()
@@ -317,13 +317,13 @@ class UnixPreparationTests(unittest.TestCase):
     def test_readiness_uses_bounded_account_helper_and_fails_closed(self):
         for result, ready in ((Result.READY, True), (Result.UNSAFE, False), (Result.STALE, False), (Result.LIVE, False)):
             with patch.object(unix_sockets, '_run_probe', return_value=result) as probe:
-                self.assertEqual(services.probe(self.host, self.inventory, 'relay', time.monotonic() + 1), ready)
+                self.assertEqual(services.probe(self.host, self.inventory, self.inventory.identity('relay'), time.monotonic() + 1), ready)
                 args = probe.call_args.args
                 self.assertEqual(args[:5], (self.host, self.directory, 'wl0', os.getuid(), os.getgid()))
                 self.assertTrue(0 < args[5] <= 1)
                 self.assertEqual(probe.call_args.kwargs['group'], '/system.slice/provider.service')
         with patch.object(unix_sockets, '_run_probe') as probe:
-            self.assertFalse(services.probe(self.host, self.inventory, 'relay', time.monotonic() - 1))
+            self.assertFalse(services.probe(self.host, self.inventory, self.inventory.identity('relay'), time.monotonic() - 1))
             probe.assert_not_called()
 
     def test_stale_cleanup_refuses_foreign_symlink_before_probe_and_after_liveness(self):

@@ -18,7 +18,7 @@ import services
 import upgrades
 from host import Host, Paths
 from test_services import inventory_fixture
-from test_host_capabilities import CURRENT, OPERATION, closure
+from test_host_capabilities import CURRENT, INSTANCE, OPERATION, closure
 
 
 class FeaturePreviewTests(unittest.TestCase):
@@ -52,7 +52,7 @@ class FeaturePreviewTests(unittest.TestCase):
             runtime_config.effective_environment_path(self.host, self.entry, resolution)
 
     def test_descriptor_contains_final_frozen_bindings_but_no_environment_hash_or_values(self):
-        spec = self.inventory.specs["http"]
+        spec = self.inventory.specs[self.inventory.identity("http")]
         root = self.host.paths.instance_config(self.entry["name"])
         env = root / ("runtime/" + CURRENT + "/http/app.env")
         with patch.object(runtime_config, "effective_environment_path", return_value=env):
@@ -66,7 +66,7 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertNotIn("private_revision", value)
 
     def console_source(self, *, grants=True, archive_schema=2):
-        spec = self.inventory.specs["http"]
+        spec = self.inventory.specs[self.inventory.identity("http")]
         bindings = replace(spec.bindings,
             executables=(c.ResolvedExecutableBinding("checksum", "/usr/bin/jq", "a" * 64),),
             endpoints=(c.ResolvedEndpointBinding("relay", self.inventory.resolution.endpoints[1], "http"),),
@@ -154,7 +154,7 @@ class FeaturePreviewTests(unittest.TestCase):
 
     def test_closure_cannot_be_synthesized_from_partial_network_observations(self):
         evidence = c.ClosureEvidence.parse(closure())
-        transition = Mock(operation_id=OPERATION, affected_units=evidence.units)
+        transition = Mock(instance_id=INSTANCE, operation_id=OPERATION, affected_units=evidence.units)
         resolution = Mock(id=CURRENT, endpoints=evidence.endpoints)
         owner = Mock()
         owner.feature_close.return_value = replace(evidence, units=())
@@ -332,9 +332,9 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(self.host, "journal"))
             stack.enter_context(patch.object(self.host, "save_state"))
             stack.enter_context(patch.object(self.host, "run", side_effect=lambda argv, **kw: events.append(argv[1] + ":" + argv[2])))
-            stack.enter_context(patch.object(services, "enabled_units", return_value=tuple(self.inventory.roles)))
+            stack.enter_context(patch.object(services, "enabled_units", return_value=tuple(self.inventory.units)))
             stack.enter_context(patch.object(services, "wait_ready", side_effect=lambda host, inv, name, deadline:
-                                            events.append("ready:" + name) or True))
+                                            events.append("ready:" + name.role) or True))
             stack.enter_context(patch.object(lifecycle, "stop_units", side_effect=lambda *_: events.append("stopped")))
             stack.enter_context(patch.object(network, "withdraw", return_value=None))
             stack.enter_context(patch.object(network, "close", side_effect=lambda *_: (events.append("closed"), evidence)[1]))
@@ -344,7 +344,7 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(release, "app", side_effect=lambda *args, **kw: events.append(args[3])))
             stack.enter_context(patch.object(release, "switch_to", side_effect=lambda *_: events.append("switched")))
             stack.enter_context(patch.object(release, "finish", side_effect=finish))
-            stack.enter_context(patch.object(lifecycle, "ready", side_effect=lambda host, entry, inventory, name, deadline: (events.append("ready:" + name), True)[1]))
+            stack.enter_context(patch.object(lifecycle, "ready", side_effect=lambda host, entry, inventory, name, deadline: (events.append("ready:" + name.role), True)[1]))
             stack.enter_context(patch.object(services, "wait_ready_set", side_effect=lambda *args: (events.append("ready-set"), True)[1]))
             lifecycle.transition(self.host, {"tools": {"generation": upgrades.protocol()["generation"]}},
                                  self.entry, self.inventory, state, running)
@@ -353,7 +353,7 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertEqual(ordered, [event for event in events if event in ordered])
 
     def test_feature_worker_uses_frozen_arguments_without_legacy_worker_environment(self):
-        content = services.render_unit(self.inventory, "worker", self.entry, "a" * 64)
+        content = services.render_unit(self.inventory, self.inventory.identity("worker"), self.entry, "a" * 64)
         self.assertNotIn("EnvironmentFile=", content)
         self.assertIn("runtime-v1", content)
         self.assertIn("ExecCondition=+", content)

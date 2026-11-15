@@ -18,7 +18,7 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
 import backup
 import capacity
-from contracts import DeployError
+from contracts import DeployError, UnitIdentity
 from host import Host
 import packages
 import redis_acl
@@ -147,6 +147,7 @@ class SystemdContractTests(unittest.TestCase):
 
     def setUp(self):
         self.host = ProbeHost()
+        self.identity = UnitIdentity(str(uuid.uuid4()), 'http', 1)
         self.prefix = 'foundry-contract-probe-' + uuid.uuid4().hex[:12]
         self.units, self.files, self.slices = [], [], set()
         temporary = tempfile.TemporaryDirectory(prefix=self.prefix + '-', dir='/run')
@@ -263,13 +264,14 @@ class SystemdContractTests(unittest.TestCase):
         import network_confinement
         unit = self.service('rehearsal-filter', options=network_confinement.FILTER)
         self.host.run(['systemctl', 'start', unit])
-        inventory = SimpleNamespace(units={'relay': unit})
-        proof = network_confinement.isolation(self.host, inventory, 'relay')
+        identity = UnitIdentity(str(uuid.uuid4()), 'relay', 1)
+        inventory = SimpleNamespace(units={identity: unit})
+        proof = network_confinement.isolation(self.host, inventory, identity)
         self.assertTrue(all(proof['programs']))
         unfiltered = self.service('rehearsal-unfiltered')
         self.host.run(['systemctl', 'start', unfiltered])
         with self.assertRaises(DeployError) as raised:
-            network_confinement.isolation(self.host, SimpleNamespace(units={'relay': unfiltered}), 'relay')
+            network_confinement.isolation(self.host, SimpleNamespace(units={identity: unfiltered}), identity)
         self.assertEqual(raised.exception.code, 'network_confinement')
 
     def assert_code(self, code, action):
@@ -288,14 +290,14 @@ class SystemdContractTests(unittest.TestCase):
         (self.root / 'proc').symlink_to('/proc')
         host = Host(Paths(self.root))
         from test_contracts import fixture, registry
-        from topology import instance_units
+        from topology import selected_units
         from contracts import identity
         project, _, entry = fixture(project_slug='probe-' + self.prefix[-12:])
         entry['profile']['instance_id'] = INSTANCE
         # Database and Redis allocations derive from the instance ID.
         entry['allocations'].update(identity(project, entry['profile'])['allocations'])
         host.write_registry(registry(entry))
-        self.admission_unit = instance_units(entry)['http'].removesuffix('.service')
+        self.admission_unit = next(iter(selected_units(entry, 'http').values())).removesuffix('.service')
         store = admission.AdmissionStore(host, INSTANCE)
         store.record_operation(attempt())
         store.begin(DeploymentSelection.parse(selection()), RuntimeResolution.parse(resolution()))
@@ -384,8 +386,8 @@ class SystemdContractTests(unittest.TestCase):
                 self.assertEqual(live['MainPID'], packages._service(self.host, unit)['MainPID'])
                 self.host.run(['systemctl', 'restart', unit])
                 self.assertNotEqual(invocation, self.show(unit, 'InvocationID')['InvocationID'])
-                with patch.object(release, 'selected_units', return_value={'http': unit}):
-                    release.stop(self.host, {}, role='http')
+                with patch.object(release, 'selected_units', return_value={self.identity: unit}):
+                    release.stop(self.host, {'profile': {'instance_id': self.identity.instance_id}}, role='http')
                 stopped = self.show(unit)
                 self.assertEqual(('inactive', 'dead', '0', '0', '', 'success'),
                                  tuple(stopped[key] for key in ('ActiveState', 'SubState', 'MainPID',
@@ -424,11 +426,12 @@ class SystemdContractTests(unittest.TestCase):
         self.assertEqual('Foundry contract edited', self.show(unit, 'Description')['Description'])
         self.host.run(['systemctl', 'enable', '--runtime', unit])
         self.assertEqual('enabled-runtime', self.host.run(['systemctl', 'is-enabled', unit]).stdout.strip())
-        with patch.object(release, 'instance_units', return_value={'http': unit}):
-            self.assertEqual(['http'], release.enabled_roles(self.host, {}))
+        with patch.object(release, 'instance_units', return_value={self.identity: unit}):
+            self.assertEqual([self.identity],
+                             release.enabled_roles(self.host, {}))
         self.host.run(['systemctl', 'disable', '--runtime', unit])
         self.assertNotEqual(0, self.host.run(['systemctl', 'is-enabled', unit], check=False).returncode)
-        with patch.object(release, 'instance_units', return_value={'http': unit}):
+        with patch.object(release, 'instance_units', return_value={self.identity: unit}):
             self.assertEqual([], release.enabled_roles(self.host, {}))
         missing = self.prefix + '-missing.service'
         self.assertEqual('not-found', packages._service(self.host, missing)['LoadState'])

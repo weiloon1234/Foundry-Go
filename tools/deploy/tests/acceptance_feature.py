@@ -167,14 +167,14 @@ def assert_procfs_isolation(host, inventory, entry, cache):
         assert set(status["Uid"].split()) == {str(entry["allocations"]["uid"])}
         assert set(status["Gid"].split()) == {str(entry["allocations"]["gid"])}
         assert int(status["CapEff"].strip(), 16) == int(status["CapBnd"].strip(), 16) == 0
-        if role not in ("http", "relay"):
+        if role.role not in ("http", "relay"):
             continue
         probe = procfs_targets(pid, cache, os.readlink(f"/proc/{pid}/cwd"))
         # Positive controls reject bogus paths and vanished targets. Preserve '..'
         # in the cwd route: it must resolve through the peer's procfs link first.
         for path in probe["paths"]:
             assert Path(path).read_bytes() == b"prepared-media"
-            if role == "http":
+            if role.role == "http":
                 fd = os.open(path, os.O_WRONLY)
                 os.close(fd)
         for path in probe["links"]:
@@ -185,11 +185,11 @@ def assert_procfs_isolation(host, inventory, entry, cache):
 
     endpoint = next(e for e in inventory.resolution.endpoints if e.role == "relay")
     with closing(http.client.HTTPConnection(endpoint.address, endpoint.port, timeout=5)) as connection:
-        connection.request("POST", "/shared-proc", body=json.dumps(probes["http"]),
+        connection.request("POST", "/shared-proc", body=json.dumps(probes[inventory.identity("http")]),
                            headers={"Content-Type": "application/json"})
         response = connection.getresponse()
         assert response.status == 200 and response.read(128) == b"proc-denied", "Reader bypassed writer sandbox via procfs"
-    with host_account_helper(inventory, entry, cache, probes["http"]) as pid:
+    with host_account_helper(inventory, entry, cache, probes[inventory.identity("http")]) as pid:
         host_path = f"/proc/{pid}/root{cache}/frame.txt"
         assert Path(host_path).read_bytes() == b"prepared-media"
         fd = os.open(host_path, os.O_WRONLY)
@@ -202,7 +202,7 @@ def assert_procfs_isolation(host, inventory, entry, cache):
     with socket.socket(socket.AF_UNIX) as connection:
         connection.settimeout(5)
         connection.connect(inventory.resolution.unix_endpoints[0].path)
-        connection.sendall(b"proc" + json.dumps(probes["relay"]).encode())
+        connection.sendall(b"proc" + json.dumps(probes[inventory.identity("relay")]).encode())
         assert connection.recv(32) == b"proc-denied", "Unlisted role bypassed reader sandbox via procfs"
     for name, before in observed.items():
         after = release.service(host, inventory.units[name])
@@ -259,14 +259,14 @@ def assert_listener_report(result, entry):
 
 
 def assert_public_listener_binding(inventory, profile):
-    public, = inventory.specs["http"].bindings.public_listeners
+    public, = inventory.specs[inventory.identity("http")].bindings.public_listeners
     assert (public.name, public.role, public.listener, public.hostname, public.port, public.tls, public.transport,
             public.public_addresses) == ("relay_public", "relay", "control", "relay." + profile["domain"],
                                          PORT, "none", "tcp", tuple(network.ADDRESSES))
 
 
 def assert_secret_template(host, inventory, entry, secret):
-    paths = services.ServicePaths.for_unit(inventory.specs["relay"].identity, inventory.resolution.id)
+    paths = services.ServicePaths.for_unit(inventory.specs[inventory.identity("relay")].identity, inventory.resolution.id)
     config = Path(paths.config("private", "rendered-template", "relay.yaml"))
     account = pwd.getpwnam(entry["name"])
     assert config.is_file(), "Prepared secret template is missing"
@@ -293,10 +293,10 @@ def assert_secret_template(host, inventory, entry, secret):
 def assert_shared_files(host, inventory, entry, report):
     import http.client
     import backup
-    binding, = inventory.specs["relay"].bindings.shared_directories
+    binding, = inventory.specs[inventory.identity("relay")].bindings.shared_directories
     assert binding.access == "read-only" and binding.max_bytes == 1048576
-    assert inventory.specs["http"].bindings.shared_directories[0].access == "read-write"
-    assert not inventory.specs["socket-provider"].bindings.shared_directories
+    assert inventory.specs[inventory.identity("http")].bindings.shared_directories[0].access == "read-write"
+    assert not inventory.specs[inventory.identity("socket-provider")].bindings.shared_directories
     assert Path(binding.path, "frame.txt").read_bytes() == b"prepared-media"
     import socket
     with socket.socket(socket.AF_UNIX) as connection:
@@ -342,21 +342,21 @@ def assert_shared_files(host, inventory, entry, report):
 def assert_unix_binding(host, inventory, entry):
     import stat
     import time
-    endpoint = inventory.specs["relay"].bindings.endpoints[0].endpoint
+    endpoint = inventory.specs[inventory.identity("relay")].bindings.endpoints[0].endpoint
     info = Path(endpoint.directory).lstat()
     assert stat.S_ISDIR(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o700
     assert (info.st_uid, info.st_gid) == (entry["allocations"]["uid"], entry["allocations"]["gid"])
     assert stat.S_ISSOCK(Path(endpoint.path).lstat().st_mode)
-    assert services.wait_ready(host, inventory, "socket-provider", time.monotonic() + 15)
+    assert services.wait_ready(host, inventory, inventory.identity("socket-provider"), time.monotonic() + 15)
     # Run as the consumer account using its delivered descriptor, not a guessed path.
     from runtime_config import write_binding_descriptor
-    descriptor = write_binding_descriptor(host, entry, inventory.deployment, inventory.resolution, inventory.specs["relay"])
+    descriptor = write_binding_descriptor(host, entry, inventory.deployment, inventory.resolution, inventory.specs[inventory.identity("relay")])
     probe = ("import json,socket,sys; d=json.load(open(sys.argv[1])); "
              "b=next(b for b in d['bindings']['endpoints'] if b['name']=='socket'); "
              "s=socket.socket(socket.AF_UNIX); s.settimeout(3); s.connect(b['endpoint']['path']); "
              "s.sendall(b'ping'); assert s.recv(32)==b'unix-ready'")
     host.run(["runuser", "-u", entry["name"], "--", "python3", "-I", "-c", probe, str(descriptor)])
-    for role in ("relay", "socket-provider"):
+    for role in inventory.select(roles=["relay", "socket-provider"]):
         unit = run(["systemctl", "cat", inventory.units[role]]).stdout
         assert endpoint.directory in next(line for line in unit.splitlines() if line.startswith("ReadWritePaths="))
         assert "PrivateTmp=yes" in unit and "ProtectSystem=strict" in unit
@@ -470,10 +470,10 @@ def feature_archive(source, destination, host_id, *, confined=False):
 def assert_confined_wildcard(host, inventory):
     import time
     endpoint = next(e for e in inventory.resolution.endpoints if e.role == "wildcard")
-    assert services.wait_ready(host, inventory, "wildcard", time.monotonic() + 15)
-    proof = network_confinement.isolation(host, inventory, "wildcard")
+    assert services.wait_ready(host, inventory, inventory.identity("wildcard"), time.monotonic() + 15)
+    proof = network_confinement.isolation(host, inventory, inventory.identity("wildcard"))
     assert len(proof["programs"]) == 2 and all(proof["programs"])
-    owners = listeners.process_members(host, inventory.units["wildcard"])
+    owners = listeners.process_members(host, inventory.units[inventory.identity("wildcard")])
     sockets = [s for s in listeners.observe_sockets(host) if s.socket.port == endpoint.port]
     assert sockets and all(ipaddress.ip_address(s.socket.address).is_unspecified and s.pids
                            and set(s.pids) <= owners for s in sockets)
@@ -541,16 +541,16 @@ def main():
         first_config = assert_secret_template(host, inventory, entry, secret)
         # The fixture loads both private and public bindings before HTTP readiness.
         import time
-        assert services.wait_ready(host, inventory, "http", time.monotonic() + 90)
+        assert services.wait_ready(host, inventory, inventory.identity("http"), time.monotonic() + 90)
         public_observation(host, topology, profile, inventory=inventory, opened=True)
         reported = json.loads(run([LAUNCHER, "report"], input=json.dumps(request(project, profile))).stdout)
         assert_listener_report(reported, entry)
         assert_shared_files(host, inventory, entry, reported)
-        first = run(["systemctl", "show", inventory.units["relay"], "-p", "InvocationID", "--value"]).stdout
+        first = run(["systemctl", "show", inventory.units[inventory.identity("relay")], "-p", "InvocationID", "--value"]).stdout
         assert action("restart", request(project, profile, operation_id=str(uuid.uuid4())))["ok"]
-        second = run(["systemctl", "show", inventory.units["relay"], "-p", "InvocationID", "--value"]).stdout
+        second = run(["systemctl", "show", inventory.units[inventory.identity("relay")], "-p", "InvocationID", "--value"]).stdout
         assert first.strip() and second.strip() and first != second
-        assert services.wait_ready(host, inventory, "http", time.monotonic() + 90)
+        assert services.wait_ready(host, inventory, inventory.identity("http"), time.monotonic() + 90)
         _, entry = host.require_identity(project, profile)
         _, _, inventory, _ = load(host, entry)
         assert_public_listener_binding(inventory, profile)
@@ -568,7 +568,7 @@ def main():
         feature_lifecycle.stop_units(host, inventory)
         shared_directories.discard(host, inventory.topology, profile["instance_id"],
                                    entry["allocations"]["uid"], entry["allocations"]["gid"])
-        cache = Path(inventory.specs["http"].bindings.shared_directories[0].path)
+        cache = Path(inventory.specs[inventory.identity("http")].bindings.shared_directories[0].path)
         cache.parent.rmdir()
         feature_network.prepare_boot(host)
         feature_lifecycle.boot(host, entry, inventory)
@@ -579,13 +579,13 @@ def main():
         reported = json.loads(run([LAUNCHER, "report"], input=json.dumps(request(project, profile))).stdout)
         assert_shared_files(host, inventory, entry, reported)
         public_observation(host, topology, profile, inventory=inventory, opened=True)
-        second = run(["systemctl", "show", inventory.units["relay"], "-p", "InvocationID", "--value"]).stdout
+        second = run(["systemctl", "show", inventory.units[inventory.identity("relay")], "-p", "InvocationID", "--value"]).stdout
         for operation in ("down", "up"):
             changed = action(operation, request(project, profile, confirm=True, operation_id=str(uuid.uuid4())))
             assert changed["maintenance"]["down"] is (operation == "down")
             for unit in inventory.units.values():
                 assert run(["systemctl", "is-active", unit]).stdout.strip() == "active"
-            assert run(["systemctl", "show", inventory.units["relay"], "-p", "InvocationID", "--value"]).stdout == second
+            assert run(["systemctl", "show", inventory.units[inventory.identity("relay")], "-p", "InvocationID", "--value"]).stdout == second
         public_observation(host, topology, profile, inventory=inventory, opened=True)
         assert action("stop", request(project, profile, operation_id=str(uuid.uuid4())))["ok"]
         for unit in inventory.units.values():
@@ -597,7 +597,7 @@ def main():
         stop_units(host, inventory)
         shared_directories.discard(host, inventory.topology, profile["instance_id"],
                                    entry["allocations"]["uid"], entry["allocations"]["gid"])
-        assert not Path(inventory.specs["http"].bindings.shared_directories[0].path).exists()
+        assert not Path(inventory.specs[inventory.identity("http")].bindings.shared_directories[0].path).exists()
         print("PASS host capabilities: package, artifact, admission, templates, private/public/Unix app bindings, verified wildcard confinement, shared files with reader EROFS and writer ENOSPC, disposable backup exclusion, stale-socket restart, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
 
 
