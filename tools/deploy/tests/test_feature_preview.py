@@ -148,6 +148,11 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertEqual(placed["schema"], 3)
         self.assertEqual([p.artifact for p in declaration.artifacts], ["relay"])
         self.assertEqual(dict(topology.roles[0].common.bindings)["relay"].role, "relay")
+        directories = dict(topology.shared_directories)
+        self.assertEqual(directories["render-cache"].access("http"), "read-write")
+        self.assertEqual(directories["render-cache"].access("relay"), "read-only")
+        self.assertIsNone(directories["render-cache"].access("socket-provider"))
+        self.assertEqual(directories["probe-cache"].access("socket-provider"), "read-write")
         public = dict(topology.roles[0].common.bindings)["relay_public"]
         self.assertEqual((public.role, public.listener), ("relay", "control"))
         from topology import parse_profile
