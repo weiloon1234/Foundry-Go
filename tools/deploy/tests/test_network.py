@@ -108,7 +108,7 @@ class SocketTests(unittest.TestCase):
 
     def test_reservation_prevents_a_b_a_reuse_and_live_socket_collision(self):
         a = runtime(OLD)
-        reserved = listeners.private_claims(INSTANCE, a)
+        reserved = listeners.private_claims(INSTANCE, a, network_topology())
         observed = (listeners.ObservedSocket(listeners.SocketIdentity("tcp", 4, "0.0.0.0", 18002), (23,)),)
         allocated = listeners.allocate_private(INSTANCE, (("http", "http"), ("relay", "ingress")), reserved, observed,
                                                 first=18000, last=18005)

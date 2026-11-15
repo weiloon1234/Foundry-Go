@@ -12,6 +12,7 @@ import operation_lock
 import operations
 import packages
 import recovery_rehearsal
+import network_confinement
 import release
 import runtime_config
 import services
@@ -310,7 +311,7 @@ def _ready(host, entry, journal):
         with store.preparation(invocation) as authorized:
             require(authorized == inventory.resolution, 'recovery_readiness', 'Recovered process admission changed.')
         if recovery_rehearsal.active(entry) and isinstance(inventory.roles[name], ExecutableRole):
-            recovery_rehearsal.isolation(host, inventory, name)
+            network_confinement.isolation(host, inventory, name)
     require(not running or services.wait_ready_set(host, inventory, running, time.monotonic() + release.READINESS_SECONDS),
             'readiness_failed', 'Recovered services no longer pass private readiness.')
     if recovery_rehearsal.active(entry):

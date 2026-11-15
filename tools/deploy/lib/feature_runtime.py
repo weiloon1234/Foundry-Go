@@ -66,10 +66,12 @@ def run(action, pin, launch):
         (boot if action == "boot" else open_boot)(host, entry, current)
         return 0
     import recovery_rehearsal
+    import network_confinement
     if recovery_rehearsal.active(entry) and isinstance(role, ExecutableRole):
         require(role.recovery_rehearsal_safe, "recovery_dependency",
                 f"Unsafe role {spec.identity.role} cannot run in a recovery rehearsal.")
-        recovery_rehearsal.isolation(host, inventory, spec.identity.role)
+    if role.common.confinement == "loopback" or (recovery_rehearsal.active(entry) and isinstance(role, ExecutableRole)):
+        network_confinement.isolation(host, inventory, spec.identity.role)
     store = admission.AdmissionStore(host, spec.identity.instance_id)
     selection, current_resolution = store._selection()
     permit_id = None

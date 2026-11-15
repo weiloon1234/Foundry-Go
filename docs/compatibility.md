@@ -13,6 +13,16 @@ Generation leaves handwritten comments unchanged. Retired source-edit journals
 fail with a typed `generate.RetiredJournalError` and retain staging; reconcile them
 with the generator that created them before upgrading.
 
+## Loopback confinement — v0.35.0
+
+Role `network.confinement: "loopback"` and private TCP listener `wildcard: true`
+require client and host deploy-tool generation 16. The instance retains this floor
+through rollback and recovery. Existing endpoint wire records remain unchanged;
+consumers receive a loopback address and the allocated port. Confinement denies
+external inbound and outbound IP traffic for the entire role, while preserving
+loopback and Unix sockets. See the
+[confinement guide](guides/host-capabilities.md#loopback-confined-roles-and-wildcard-private-listeners).
+
 ## Unix endpoint bindings — v0.34.0
 
 Unix listeners require deploy-tool generation 15 on both client and host. The

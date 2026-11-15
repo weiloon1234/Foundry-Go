@@ -16,7 +16,7 @@ evidence, never permission to start a process or commit admission.
    Keep each selected/retained/pending profile paired with its own topology.
    `listeners.public_policies(profile, topology)` validates that pairing and resolves
    public modes from the declaration; address bindings never imply a TLS mode.
-   `listeners.public_claims(profile)` and `private_claims(instance_id, resolution)`
+   `listeners.public_claims(profile)` and `private_claims(instance_id, resolution, topology)`
    produce concrete TCP/family/address/role/copy claims. Check new claims with
    `require_available`; allocate private `(role, listener)` pairs with
    `allocate_private`. Supply every instance's current/pending/retained reservations,

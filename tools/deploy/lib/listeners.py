@@ -36,6 +36,7 @@ class ListenerClaim:
     ordinal: int
     socket: SocketIdentity
     owner: str
+    wildcard: bool = False
 
 
 @dataclass(frozen=True)
@@ -74,10 +75,29 @@ def public_claims(profile):
                  for name, binding in profile.listeners for address in binding.public_addresses for port in binding.ports)
 
 
-def private_claims(instance_id, resolution):
+def wildcard_listeners(topology):
+    from topology import ExecutableRole
+    return frozenset((role.common.name, name) for role in topology.roles if isinstance(role, ExecutableRole)
+                     for name, listener in role.listeners if listener.wildcard)
+
+
+def reservation_socket(claim):
+    if isinstance(claim, ListenerClaim) and claim.wildcard:
+        return SocketIdentity("tcp", 6, "::", claim.socket.port)
+    return claim.socket
+
+
+def matches(claim, socket):
+    return claim.socket == socket or (claim.wildcard and socket.transport == "tcp"
+        and socket.port == claim.socket.port and ipaddress.ip_address(socket.address).is_unspecified)
+
+
+def private_claims(instance_id, resolution, topology):
+    wildcards = wildcard_listeners(topology)
     return tuple(ListenerClaim(instance_id, endpoint.role, endpoint.listener, 1,
                                SocketIdentity("tcp", ipaddress.ip_address(endpoint.address).version,
-                                              endpoint.address, endpoint.port), "application")
+                                              endpoint.address, endpoint.port), "application",
+                               (endpoint.role, endpoint.listener) in wildcards)
                  for endpoint in resolution.endpoints)
 
 
@@ -85,19 +105,23 @@ def require_available(requested, reserved, observed):
     """New allocations cannot reuse even an identical historical claim."""
     requested, reserved, observed = tuple(requested), tuple(reserved), tuple(observed)
     for index, claim in enumerate(requested):
-        require(not any(conflicts(claim.socket, other.socket) for other in (*reserved, *requested[:index], *observed)),
+        require(not any(conflicts(reservation_socket(claim), reservation_socket(other)) for other in (*reserved, *requested[:index], *observed)),
                 "listener_conflict", "A requested socket overlaps a reservation or a live socket.")
 
 
-def allocate_private(instance_id, roles, reserved, observed, *, first=18000, last=60999):
+def allocate_private(instance_id, roles, reserved, observed, *, first=18000, last=60999, wildcards=()):
     """Resolve (role, listener) pairs once; lane A owns the resulting resolution."""
     contract_uuid(instance_id)
     result, claims = [], list(reserved)
+    from contracts import REDIS_PORT
     for role, name in roles:
         for port in range(first, last + 1):
+            if port == REDIS_PORT:
+                continue
             endpoint = AllocatedEndpoint.parse({"role": role, "listener": name, "address": "127.0.0.1", "port": port})
-            claim = ListenerClaim(instance_id, role, name, 1, SocketIdentity("tcp", 4, endpoint.address, port), "application")
-            if any(conflicts(claim.socket, other.socket) for other in (*claims, *observed)):
+            claim = ListenerClaim(instance_id, role, name, 1, SocketIdentity("tcp", 4, endpoint.address, port), "application",
+                                  (role, name) in wildcards)
+            if any(conflicts(reservation_socket(claim), reservation_socket(other)) for other in (*claims, *observed)):
                 continue
             result.append(endpoint)
             claims.append(claim)
@@ -154,7 +178,7 @@ def ownership_findings(claims, observed, owners, *, edge_verified=False):
     findings = []
     for observed_socket in observed:
         identity = observed_socket.socket
-        matching = [c for c in claims if c.socket == identity]
+        matching = [c for c in claims if matches(c, identity)]
         if not matching:
             if not ipaddress.ip_address(identity.address).is_loopback:
                 findings.append({"code": "unexpected_public_listener", **asdict(identity)})
@@ -166,7 +190,7 @@ def ownership_findings(claims, observed, owners, *, edge_verified=False):
                 findings.append({"code": "listener_owner_unverified", "instance_id": claim.instance_id,
                                  "role": claim.role, "listener": claim.listener, **asdict(identity)})
     for claim in claims:
-        if not any(s.socket == claim.socket for s in observed):
+        if not any(matches(claim, s.socket) for s in observed):
             findings.append({"code": "declared_listener_absent", "instance_id": claim.instance_id,
                              "role": claim.role, "listener": claim.listener, **asdict(claim.socket)})
     return findings
@@ -192,7 +216,7 @@ def ingress_evidence(operation_id, boot_id, old, candidate, units, retained_unit
     return evidence
 
 
-def complete_closure(evidence, candidate, *, backend_exit_sha256, reserved, old_references):
+def complete_closure(evidence, candidate, *, backend_exit_sha256, reserved, old_references, wildcards=()):
     """Lane A supplies fresh cgroup/job/control-process exit proof for this scope.
 
     Reference inventory includes HTTP, all old workers and unaffected upstreams.
@@ -206,7 +230,8 @@ def complete_closure(evidence, candidate, *, backend_exit_sha256, reserved, old_
     require(set(endpoints) <= set(reserved) and set(endpoints) <= set(evidence.endpoints),
             "backend_reservation_required", "Candidate backends must retain their exact reservations.")
     references = {(e.address, e.port) for e in old_references}
-    require(not any(conflicts(SocketIdentity("tcp", ipaddress.ip_address(e.address).version, e.address, e.port),
+    require(not any(conflicts(SocketIdentity("tcp", 6, "::", e.port) if (e.role, e.listener) in wildcards else
+                              SocketIdentity("tcp", ipaddress.ip_address(e.address).version, e.address, e.port),
                               SocketIdentity("tcp", ipaddress.ip_address(address).version, address, port))
                     for e in endpoints for address, port in references),
             "old_backend_reference", "An old nginx reference can still reach a candidate backend.")
@@ -280,10 +305,10 @@ def _feature_inventory(host, entry, resolution_id):
     return services.UnitInventory(entry["name"], topology, profile, Deployment.parse(launch["deployment"]), resolution)
 
 
-def _feature_history(host):
+def _feature_history(host, registry=None):
     """All immutable launch records remain reservations, including failed candidates."""
     admission, _ = _feature_owners()
-    registry = host.read_registry()
+    registry = host.read_registry() if registry is None else registry
     result = []
     for identity, entry in registry["instances"].items():
         require(identity == entry["profile"]["instance_id"], "network_inventory", "Invalid host instance inventory.")
@@ -296,6 +321,11 @@ def _feature_history(host):
             contract_uuid(path.name)
             result.append((entry, _feature_inventory(host, entry, path.name)))
     return registry, tuple(result)
+
+
+def reserved_wildcard_ports(host, registry):
+    return {c.socket.port for _, inventory in _feature_history(host, registry)[1]
+            for c in private_claims(inventory.profile.instance_id, inventory.resolution, inventory.topology) if c.wildcard}
 
 
 def _feature_projection(entry, topology, profile, endpoints):
@@ -368,11 +398,16 @@ def feature_allocate(host, entry, topology, profile, operation_id, *, retained=N
     owned = {c.socket for _, inv in history if inv.profile.instance_id == profile.instance_id for c in public_claims(inv.profile)}
     nginx = process_members(host, "nginx.service") if owned else frozenset()
     unknown = tuple(s for s in observed if not (s.socket in owned and s.pids and set(s.pids) <= nginx))
-    require_available(requested, other, unknown)
-    reserved = tuple(c for _, inv in history for c in private_claims(inv.profile.instance_id, inv.resolution))
+    reserved = tuple(c for _, inv in history for c in private_claims(inv.profile.instance_id, inv.resolution, inv.topology))
     reserved += tuple(ListenerClaim(identity, "http", "http", 1,
                       SocketIdentity("tcp", 4, "127.0.0.1", owner["allocations"]["http_port"]), "application")
                       for identity, owner in registry["instances"].items())
+    shared_postgres = registry.get("shared", {}).get("postgresql", {})
+    if shared_postgres.get("port"):
+        reserved += (ListenerClaim(profile.instance_id, "postgresql", "postgresql", 1,
+                     SocketIdentity("tcp", 6, "::", shared_postgres["port"]), "postgresql"),)
+    require_available(requested, (*other, *reserved), unknown)
+    reserved += (*other, *requested, *(c for _, inv in history for c in public_claims(inv.profile)))
     # Reading the effective inventory is deliberately different from retain_global_references (which reloads/writes).
     references = edge.upstream_references(host)
     from contracts import check_path
@@ -396,7 +431,7 @@ def feature_allocate(host, entry, topology, profile, operation_id, *, retained=N
             "network_scope", "Retained endpoints must belong to the candidate declaration.")
     roles = [pair for pair in roles if pair not in {(e.role, e.listener) for e in retained}]
     endpoints = retained + allocate_private(profile.instance_id, roles, reserved,
-                                 (*observed, *(ObservedSocket(s, ()) for s in references)))
+                                 (*observed, *(ObservedSocket(s, ()) for s in references)), wildcards=wildcard_listeners(topology))
     return endpoints, canonical_digest(_feature_projection(entry, topology, profile, endpoints))
 
 
@@ -585,13 +620,14 @@ def feature_close(host, entry, transition, resolution, units):
         # Old workers may keep serving retained roles. Their affected old addresses
         # stay reserved and cannot reach any freshly allocated candidate backend.
         references = (*references, *historical, *edge.retained_references(host, transition.instance_id))
-    require(not any(conflicts(c.socket, s.socket) for c in private_claims(transition.instance_id, resolution) if c.role in scoped
+    require(not any(conflicts(reservation_socket(c), s.socket) for c in private_claims(transition.instance_id, resolution, inventory.topology) if c.role in scoped
                     for s in observe_sockets(host)), "network_backend_alive", "An affected candidate endpoint is already listening.")
     require(canonical_digest(_retained_state(host, inventory, retained)) == evidence.retained_units_sha256,
             "network_retained_changed", "Retained workloads changed before complete closure.")
     proof = canonical_digest({"transition": record_document(replace(transition, closure_id=None)), "boot_id": evidence.boot_id,
                               "units": exits, "retired_workers": sorted(previous_workers) if reuse else []})
-    return complete_closure(evidence, resolution, backend_exit_sha256=proof, reserved=candidate, old_references=references)
+    return complete_closure(evidence, resolution, backend_exit_sha256=proof, reserved=candidate, old_references=references,
+                            wildcards=wildcard_listeners(inventory.topology))
 
 
 def feature_open(host, entry, resolution, evidence, *, deadline=None):
@@ -663,8 +699,8 @@ def feature_open(host, entry, resolution, evidence, *, deadline=None):
             owners[inventory.profile.instance_id, role] = process_members(host, unit)
         require(not enabled or services.wait_ready_set(host, inventory, enabled, deadline),
                 "network_readiness", "The complete enabled set did not remain ready.")
-        private = tuple(c for c in private_claims(inventory.profile.instance_id, resolution) if c.role in enabled)
-        observed = tuple(s for s in observe_sockets(host) if any(conflicts(s.socket, claim.socket) for claim in private))
+        private = tuple(c for c in private_claims(inventory.profile.instance_id, resolution, inventory.topology) if c.role in enabled)
+        observed = tuple(s for s in observe_sockets(host) if any(conflicts(s.socket, reservation_socket(claim)) for claim in private))
         require(not ownership_findings(private, observed, owners), "network_readiness", "Private listener ownership is unverified.")
         return True
     try:

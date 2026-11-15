@@ -263,7 +263,8 @@ def inspect(host: Host, registry: dict, *, capacity_target=None) -> dict:
                 "postgres_ownership", "An unclaimed Foundry PostgreSQL log exists.")
         require(not host.paths.p(SOCKET).exists(),
                 "postgres_ownership", "An unclaimed Foundry PostgreSQL runtime path exists.")
-        ports = _listeners(host) | {item["port"] for item in clusters}
+        from listeners import reserved_wildcard_ports
+        ports = _listeners(host) | {item["port"] for item in clusters} | reserved_wildcard_ports(host, registry)
         port = next((number for number in range(POSTGRES_PORT, POSTGRES_PORT + 100) if number not in ports), None)
         require(port is not None, "postgres_ports_exhausted", "No free port in the Foundry PostgreSQL range.")
         return {"state": "absent", "major": major, "port": port, "cluster": "foundry", "owner": "foundry"}
