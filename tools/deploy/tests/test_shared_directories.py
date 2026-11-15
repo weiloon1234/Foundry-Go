@@ -4,6 +4,7 @@ import copy
 import errno
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import tempfile
@@ -162,10 +163,54 @@ class SharedPreparationTests(unittest.TestCase):
             command = self.host.run.call_args.args[0]
             self.assertEqual(command[:3], ["mount", "-t", "tmpfs"])
             self.assertIn("size=1048576,nr_inodes=256", command[4])
+            parent = self.path.parent.lstat()
+            self.assertEqual((parent.st_uid, parent.st_gid, stat.S_IMODE(parent.st_mode)),
+                             (self.uid, self.gid, 0o700))
         with patch.object(shared, "_mount", return_value=self.record), patch.object(self.host, "run") as run, \
                 patch.object(os, "statvfs", return_value=self.capacity), patch.object(os, "fstatvfs", return_value=self.capacity):
             self.prepare()
             run.assert_not_called()
+
+    def test_preparation_tightens_legacy_parent_without_changing_cache(self):
+        self.path.mkdir(parents=True, mode=0o700)
+        self.path.parent.chmod(0o755)
+        (self.path / "keep").write_text("retained")
+        with patch.object(shared, "_mount", return_value=self.record), patch.object(self.host, "run") as run, \
+                patch.object(os, "statvfs", return_value=self.capacity), patch.object(os, "fstatvfs", return_value=self.capacity):
+            self.prepare()
+        run.assert_not_called()
+        self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o700)
+        self.assertEqual((self.path / "keep").read_text(), "retained")
+
+    def test_parent_symlink_and_foreign_owner_are_not_adopted(self):
+        self.path.parent.parent.mkdir(parents=True)
+        self.path.parent.symlink_to(self.temp.name)
+        with patch.object(self.host, "run") as run, patch.object(os, "fchmod") as chmod, self.assertRaises(c.DeployError):
+            self.prepare()
+        run.assert_not_called()
+        chmod.assert_not_called()
+        self.path.parent.unlink()
+        self.path.parent.mkdir(mode=0o700)
+        for uid, gid in ((self.uid + 1, self.gid), (self.uid, self.gid + 1)):
+            info = SimpleNamespace(st_uid=uid, st_gid=gid, st_mode=stat.S_IFDIR | 0o700)
+            with self.subTest(uid=uid, gid=gid), patch.object(os, "fstat", return_value=info), \
+                    patch.object(os, "fchmod") as chmod, patch.object(self.host, "run") as run, self.assertRaises(c.DeployError):
+                self.prepare()
+            run.assert_not_called()
+            chmod.assert_not_called()
+
+    def test_parent_drift_is_reported_and_cleanup_refuses_it(self):
+        self.path.mkdir(parents=True, mode=0o700)
+        self.path.parent.chmod(0o755)
+        (self.path / "keep").write_text("retained")
+        with patch.object(self.host, "run") as run:
+            report, = shared.report(self.host, self.topology, INSTANCE, self.uid, self.gid)
+            self.assertEqual(report["finding"], "shared_directory_unverified")
+            with self.assertRaises(c.DeployError):
+                shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid)
+        run.assert_not_called()
+        self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o755)
+        self.assertEqual((self.path / "keep").read_text(), "retained")
 
     def test_symlink_occupied_and_foreign_mount_refuse(self):
         self.path.parent.mkdir(parents=True)
@@ -186,6 +231,7 @@ class SharedPreparationTests(unittest.TestCase):
 
     def test_report_checks_actual_limits_and_permissions(self):
         self.path.mkdir(parents=True, mode=0o700)
+        self.path.parent.chmod(0o700)
         with patch.object(shared, "_mount", return_value=self.record), patch.object(os, "fstatvfs", return_value=self.capacity):
             report, = shared.report(self.host, self.topology, INSTANCE, self.uid, self.gid)
             self.assertEqual((report["status"], report["used_bytes"]), ("verified", 4096))
@@ -197,8 +243,21 @@ class SharedPreparationTests(unittest.TestCase):
             report, = shared.report(self.host, self.topology, INSTANCE, self.uid, self.gid)
             self.assertEqual(report["finding"], "shared_directory_unverified")
 
+    def test_unprivileged_report_keeps_coverage_without_claiming_usage(self):
+        self.path.mkdir(parents=True, mode=0o700)
+        self.path.parent.chmod(0o700)
+        with patch.object(os, "open", side_effect=PermissionError(errno.EACCES, "root-only parent")), \
+                patch.object(self.host, "run") as run:
+            report, = shared.report(self.host, self.topology, INSTANCE, self.uid, self.gid)
+        run.assert_not_called()
+        self.assertEqual(report["finding"], "shared_directory_unverified")
+        self.assertEqual(report["state"], "disposable")
+        self.assertFalse(report["backed_up"] or report["restored"])
+        self.assertNotIn("used_bytes", report)
+
     def test_discard_busy_mount_retains_files_and_replays_empty_cleanup(self):
         self.path.mkdir(parents=True, mode=0o700)
+        self.path.parent.chmod(0o700)
         (self.path / "keep").write_text("retained")
         with patch.object(shared, "_mount", return_value=self.record), \
                 patch.object(self.host, "run", side_effect=c.DeployError("busy", "busy")), self.assertRaises(c.DeployError):
@@ -210,6 +269,12 @@ class SharedPreparationTests(unittest.TestCase):
             shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid)
         self.assertFalse(self.path.exists())
 
+    def test_discard_after_reboot_does_not_create_a_parent(self):
+        with patch.object(self.host, "run") as run:
+            shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid)
+        run.assert_not_called()
+        self.assertFalse(self.path.parent.exists())
+
 
 class ProcfsAcceptanceTests(unittest.TestCase):
     def setUp(self):
@@ -217,6 +282,21 @@ class ProcfsAcceptanceTests(unittest.TestCase):
         self.scope = {"__name__": "procfs_acceptance_test"}
         exec(compile(acceptance_feature.PROCFS_PROBE, "procfs-acceptance", "exec"), self.scope)
         self.probe = acceptance_feature.procfs_targets(42, "/run/foundry/cache", "/var/lib/foundry/apps/example")
+
+    def test_host_path_requires_eacces_for_both_modes(self):
+        with patch.object(os, "open", side_effect=PermissionError(errno.EACCES, "denied")) as opened:
+            self.scope["assert_host_denied"]("/run/foundry/cache")
+        self.assertEqual([call.args for call in opened.call_args_list],
+                         [("/run/foundry/cache/frame.txt", mode) for mode in (os.O_RDONLY, os.O_WRONLY)])
+        for code in (errno.ENOENT, errno.ESRCH, errno.EROFS, errno.EPERM):
+            with self.subTest(code=code), patch.object(os, "open", side_effect=OSError(code, "wrong denial")), \
+                    self.assertRaises(AssertionError):
+                self.scope["assert_host_denied"]("/run/foundry/cache")
+        for sequence in ([11], [PermissionError(errno.EACCES, "denied"), 11]):
+            with patch.object(os, "open", side_effect=sequence), patch.object(os, "close") as closed, \
+                    self.assertRaises(AssertionError):
+                self.scope["assert_host_denied"]("/run/foundry/cache")
+            closed.assert_called_once_with(11)
 
     def test_probe_keeps_procfs_cwd_traversal_and_checks_both_open_modes(self):
         self.assertEqual(self.probe["paths"], ["/proc/42/root/run/foundry/cache/frame.txt",

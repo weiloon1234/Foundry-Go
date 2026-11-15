@@ -5,7 +5,7 @@ Use the ordinary deploy-acceptance archive. The artifact is a second, pinned cop
 of that fixture's Linux artisan binary; no artifact network download is needed.
 Lane B's archive verification and publication remain production code paths.
 """
-from contextlib import ExitStack, closing
+from contextlib import ExitStack, closing, contextmanager
 from dataclasses import asdict
 import argparse
 import copy
@@ -17,6 +17,9 @@ import os
 from pathlib import Path
 import pwd
 import secrets
+import select
+import signal
+import subprocess
 import sys
 import tarfile
 import tomllib
@@ -79,16 +82,58 @@ def assert_denied(probe):
         else:
             raise AssertionError(('procfs link traversal succeeded', path))
 
+def assert_host_denied(cache):
+    for mode in (os.O_RDONLY, os.O_WRONLY):
+        try:
+            fd = os.open(cache + '/frame.txt', mode)
+        except OSError as error:
+            assert error.errno == errno.EACCES, (mode, error.errno)
+        else:
+            os.close(fd)
+            raise AssertionError(('host cache access succeeded', mode))
+
 if __name__ == '__main__':
-    uid, namespace, units, probe = sys.argv[1:]
+    uid, namespace, mount_namespace, units, probe, cache = sys.argv[1:]
     assert os.geteuid() == int(uid) > 0
     assert os.readlink('/proc/self/ns/user') == namespace
+    assert os.readlink('/proc/self/ns/mnt') == mount_namespace
     status = dict(line.split(':', 1) for line in Path('/proc/self/status').read_text().splitlines() if ':' in line)
     assert int(status['CapEff'].strip(), 16) == 0
     group = Path('/proc/self/cgroup').read_text()
     assert not any(unit in group for unit in json.loads(units)), 'Probe must run outside workload units'
     assert_denied(json.loads(probe))
+    assert_host_denied(cache)
+    print(os.getpid(), flush=True)
+    assert sys.stdin.readline() == 'stop\n'
 '''
+
+
+@contextmanager
+def host_account_helper(inventory, entry, cache, probe):
+    """Keep the tested same-account host process alive until the unit probes finish."""
+    process = subprocess.Popen(["runuser", "-u", entry["name"], "--", "python3", "-I", "-c", PROCFS_PROBE,
+        str(entry["allocations"]["uid"]), os.readlink("/proc/self/ns/user"), os.readlink("/proc/self/ns/mnt"),
+        json.dumps(list(inventory.units.values())), json.dumps(probe), cache],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
+    try:
+        assert select.select([process.stdout], [], [], 10)[0], "Host helper did not become ready"
+        ready = os.read(process.stdout.fileno(), 64)
+        assert ready.endswith(b"\n") and ready.strip().isdigit(), "Host helper failed its isolation checks"
+        pid = int(ready)
+        assert pid > 0
+        yield pid
+        assert process.poll() is None, "Host helper exited during the probes"
+    finally:
+        try:
+            process.communicate(b"stop\n", timeout=5)
+        except BaseException:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.communicate(timeout=5)
+            raise
+    assert process.returncode == 0, "Host helper failed to exit cleanly"
 
 
 def procfs_targets(pid, cache, cwd):
@@ -111,10 +156,13 @@ def assert_procfs_isolation(host, inventory, entry, cache):
         assert pid > 0 and state["process"] and pid in listeners.process_members(host, inventory.units[role])
         namespace = f"/proc/{pid}/ns/user"
         namespaces[role] = os.readlink(namespace)
-        assert namespaces[role] != os.readlink("/proc/self/ns/user")
-        # NS_GET_OWNER_UID: systemd, not the instance UID, must own the namespace.
-        with open(namespace, "rb") as file:
-            assert struct.unpack("I", fcntl.ioctl(file.fileno(), 0xb704, struct.pack("I", 0)))[0] == 0
+        if inventory.specs[role].bindings.shared_directories:
+            assert namespaces[role] != os.readlink("/proc/self/ns/user")
+            # NS_GET_OWNER_UID: systemd, not the instance UID, must own the namespace.
+            with open(namespace, "rb") as file:
+                assert struct.unpack("I", fcntl.ioctl(file.fileno(), 0xb704, struct.pack("I", 0)))[0] == 0
+        else:
+            assert namespaces[role] == os.readlink("/proc/self/ns/user"), "Ungranted role must retain the host user namespace"
         status = dict(line.split(":", 1) for line in Path(f"/proc/{pid}/status").read_text().splitlines() if ":" in line)
         assert set(status["Uid"].split()) == {str(entry["allocations"]["uid"])}
         assert set(status["Gid"].split()) == {str(entry["allocations"]["gid"])}
@@ -140,9 +188,16 @@ def assert_procfs_isolation(host, inventory, entry, cache):
                            headers={"Content-Type": "application/json"})
         response = connection.getresponse()
         assert response.status == 200 and response.read(128) == b"proc-denied", "Reader bypassed writer sandbox via procfs"
-    host.run(["runuser", "-u", entry["name"], "--", "python3", "-I", "-c", PROCFS_PROBE,
-              str(entry["allocations"]["uid"]), os.readlink("/proc/self/ns/user"),
-              json.dumps(list(inventory.units.values())), json.dumps(probes["http"])], timeout=10)
+    with host_account_helper(inventory, entry, cache, probes["http"]) as pid:
+        host_path = f"/proc/{pid}/root{cache}/frame.txt"
+        assert Path(host_path).read_bytes() == b"prepared-media"
+        fd = os.open(host_path, os.O_WRONLY)
+        os.close(fd)
+        with socket.socket(socket.AF_UNIX) as connection:
+            connection.settimeout(5)
+            connection.connect(inventory.resolution.unix_endpoints[0].path)
+            connection.sendall(b"host" + json.dumps(pid).encode() + b"\n")
+            assert connection.recv(32) == b"host-denied", "Ungranted role bypassed the host parent via a helper"
     with socket.socket(socket.AF_UNIX) as connection:
         connection.settimeout(5)
         connection.connect(inventory.resolution.unix_endpoints[0].path)
@@ -240,7 +295,7 @@ def assert_shared_files(host, inventory, entry, report):
     binding, = inventory.specs["relay"].bindings.shared_directories
     assert binding.access == "read-only" and binding.max_bytes == 1048576
     assert inventory.specs["http"].bindings.shared_directories[0].access == "read-write"
-    assert all(b.name != "render-cache" for b in inventory.specs["socket-provider"].bindings.shared_directories)
+    assert not inventory.specs["socket-provider"].bindings.shared_directories
     assert Path(binding.path, "frame.txt").read_bytes() == b"prepared-media"
     import socket
     with socket.socket(socket.AF_UNIX) as connection:
@@ -261,6 +316,9 @@ def assert_shared_files(host, inventory, entry, report):
     # outside the sandbox (all roles deliberately share the same UID).
     info = Path(binding.path).lstat()
     import stat
+    parent = Path(binding.path).parent.lstat()
+    assert stat.S_ISDIR(parent.st_mode) and stat.S_IMODE(parent.st_mode) == 0o700
+    assert (parent.st_uid, parent.st_gid) == (0, 0)
     assert stat.S_IMODE(info.st_mode) == 0o700
     assert (info.st_uid, info.st_gid) == (entry["allocations"]["uid"], entry["allocations"]["gid"])
     capacity = __import__("os").statvfs(binding.path)
@@ -322,10 +380,7 @@ def feature_archive(source, destination, host_id, *, confined=False):
     checksum = hashlib.sha256(files["artisan"]).hexdigest()
     platform = "linux-" + profile["architecture"]
     topology = parse_topology({"schema": 2, "shared_directories": {
-        "render-cache": {"state": "disposable", "max_bytes": 1048576, "writers": ["http"], "readers": ["relay"]},
-        # Exercise Unix readiness and stale cleanup for a namespaced provider,
-        # which remains unlisted for the media cache.
-        "probe-cache": {"state": "disposable", "max_bytes": 65536, "writers": ["socket-provider"], "readers": []}}, "roles": [
+        "render-cache": {"state": "disposable", "max_bytes": 1048576, "writers": ["http"], "readers": ["relay"]}}, "roles": [
         {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["jq"],
          "bindings": {"relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
                       "relay_public": {"public_listener": {"role": "relay", "listener": "control"}},

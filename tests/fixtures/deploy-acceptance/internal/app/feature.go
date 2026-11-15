@@ -166,10 +166,51 @@ func featureUnix(ctx context.Context, args []string) error {
 				if err := featureProcDenied(connection); err == nil {
 					_, _ = io.WriteString(connection, "proc-denied")
 				}
+			case "host":
+				if err := featureHostDenied(connection, forbidden); err == nil {
+					_, _ = io.WriteString(connection, "host-denied")
+				}
 			}
 		}
 		_ = connection.Close()
 	}
+}
+
+// featureHostDenied runs in the role with no grants. Its helper shares the host
+// user namespace, so the root-only parent must deny access beyond the proc link.
+func featureHostDenied(input io.Reader, forbidden string) error {
+	var pid int
+	if err := json.NewDecoder(io.LimitReader(input, 64)).Decode(&pid); err != nil {
+		return err
+	}
+	if pid <= 0 {
+		return fmt.Errorf("host probe requires a live helper PID")
+	}
+	root := fmt.Sprintf("/proc/%d/root", pid)
+	if target, err := os.Readlink(root); err != nil || target != "/" {
+		return fmt.Errorf("host helper proc root must be reachable: %v", err)
+	}
+	if err := featureFileDenied(root+forbidden, syscall.EACCES); err != nil {
+		return err
+	}
+	return featureFileDenied(forbidden, syscall.ENOENT, syscall.EACCES)
+}
+
+func featureFileDenied(path string, allowed ...error) error {
+	for _, mode := range []int{os.O_RDONLY, os.O_WRONLY} {
+		file, err := os.OpenFile(path, mode, 0)
+		if err == nil {
+			_ = file.Close()
+		}
+		denied := false
+		for _, code := range allowed {
+			denied = denied || errors.Is(err, code)
+		}
+		if !denied {
+			return fmt.Errorf("file access did not fail with an expected denial: %v", err)
+		}
+	}
+	return nil
 }
 
 // featureProcDenied runs in the real reader or unlisted service process. Only
@@ -192,14 +233,8 @@ func featureProcDenied(input io.Reader) error {
 		if !strings.HasPrefix(path, "/proc/") {
 			return fmt.Errorf("proc probe requires a procfs path")
 		}
-		for _, mode := range []int{os.O_RDONLY, os.O_WRONLY} {
-			file, err := os.OpenFile(path, mode, 0)
-			if err == nil {
-				_ = file.Close()
-			}
-			if !denied(err) {
-				return fmt.Errorf("proc file access did not fail with a permission error: %v", err)
-			}
+		if err := featureFileDenied(path, syscall.EACCES, syscall.EPERM); err != nil {
+			return err
 		}
 	}
 	for _, path := range probe.Links {
