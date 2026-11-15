@@ -146,6 +146,28 @@ class ServiceInventoryTests(unittest.TestCase):
                 self.assertTrue(directives["ReadWritePaths"].startswith('"'))
             self.assertTrue(directives["ExecStart"].startswith('"'))
 
+    def test_artifact_view_binds_quote_source_and_destination_separately(self):
+        from test_copies import numbered_inventory
+        inventory, entry, _ = numbered_inventory(count=2)
+        mounts = (("extension", t.ArtifactMount.parse({"artifact": "extension", "bundle": "plugin",
+                   "area": "config", "path": "plugins/extension"})),
+                  ("assets", t.ArtifactMount.parse({"artifact": "extension", "bundle": "assets",
+                   "area": "data", "path": 'asset pack "quoted" %n'})))
+        for identity in (inventory.identity("http"), *inventory.copies("relay")):
+            with self.subTest(identity=identity):
+                role = inventory.roles[identity.role]
+                inventory.roles[identity.role] = replace(role, common=replace(role.common, artifact_mounts=mounts))
+                paths = services.ServicePaths.for_unit(identity, inventory.resolution.id)
+                views = tuple(services.BundleView(name, source, paths.bundle(mount), DIGEST, ())
+                              for (name, mount), source in zip(mounts, (
+                                  "/opt/foundry/artifacts/plugin", '/opt/foundry/artifacts/asset pack "quoted" %n')))
+                content = services.render_unit(inventory, identity, entry, DIGEST, views=views)
+                self.assertEqual([line for line in content.splitlines() if line.startswith("BindReadOnlyPaths=")], [
+                    'BindReadOnlyPaths="/opt/foundry/artifacts/plugin":"' + paths.base + '/view/config/plugins/extension"',
+                    'BindReadOnlyPaths="/opt/foundry/artifacts/asset pack \\"quoted\\" %%n":"' + paths.base
+                    + '/view/data/asset pack \\"quoted\\" %%n"',
+                ])
+
     def test_fixed_runtime_pin_ancestry_is_searchable_under_service_umask(self):
         import importlib.util
         path = Path(__file__).resolve().parents[1] / "server/runtime_v1.py"

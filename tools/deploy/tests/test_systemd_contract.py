@@ -82,6 +82,11 @@ def probe(mode, directory):
             raise SystemExit(25)
         (root / 'bundle-checked').touch()
         return
+    if mode == 'artifact-view':
+        plugin = root / 'view/config/plugin pack'
+        assert (plugin / 'data.txt').read_bytes() == b'artifact content'
+        (root / 'artifact-checked').touch()
+        return
     if mode == 'restart':
         counter = root / 'starts'
         count = int(counter.read_text()) + 1 if counter.exists() else 1
@@ -389,6 +394,40 @@ class SystemdContractTests(unittest.TestCase):
         self.wait_for(lambda: self.show(unit)['SubState'] == 'exited')
         self.assertTrue((self.root / 'bundle-checked').exists())
         self.assertEqual(b'module', (source / 'module.so').read_bytes())
+
+    def test_rendered_artifact_view_bind_exposes_content_to_service(self):
+        from dataclasses import replace
+        from test_services import inventory_fixture
+        from test_host_capabilities import DIGEST
+        from topology import ArtifactMount
+        inventory, entry, _ = inventory_fixture()
+        identity = inventory.identity('relay')
+        role = inventory.roles[identity.role]
+        mount = ArtifactMount.parse({'artifact': 'extension', 'bundle': 'plugin',
+                                     'area': 'config', 'path': 'plugin pack'})
+        inventory.roles[identity.role] = replace(role, common=replace(role.common, artifact_mounts=(('plugin', mount),)))
+        paths = services.ServicePaths(str(self.root), str(self.root / 'state'))
+        source, target = self.root / 'artifact pack', Path(paths.bundle(mount))
+        source.mkdir()
+        target.mkdir(parents=True)
+        (source / 'data.txt').write_bytes(b'artifact content')
+        view = services.BundleView('plugin', str(source), str(target), DIGEST, ())
+        spec = inventory.specs[identity]
+        inventory.specs[identity] = replace(spec, arguments=('--config', paths.config('settings', 'recreate')))
+        with patch.object(services.ServicePaths, 'for_unit', return_value=paths):
+            rendered = services.render_unit(inventory, identity, entry, DIGEST, views=(view,))
+        # Keep the production bind text verbatim; isolate account/admission setup
+        # in a probe-owned unit while systemd and the mount namespace remain real.
+        binds = '\n'.join(line for line in rendered.splitlines() if line.startswith('BindReadOnlyPaths='))
+        self.assertTrue(binds)
+        unit = self.service('artifact-view', command=self.command('artifact-view'), options=
+                            binds + '\nExecCondition=+/usr/bin/true\nExecStartPre=+/usr/bin/true\n'
+                            'NoNewPrivileges=yes\nPrivateDevices=yes\nProtectSystem=strict\n'
+                            f'ReadWritePaths={self.root}\nRemainAfterExit=yes')
+        self.host.run(['systemctl', 'start', unit])
+        self.wait_for(lambda: self.show(unit)['SubState'] == 'exited')
+        self.assertTrue((self.root / 'artifact-checked').exists())
+        self.assertFalse((target / 'data.txt').exists())
 
     def test_template_and_plain_cgroups_running_and_stopped(self):
         self.assertGreater(capacity.memory_mib(self.host), 0)

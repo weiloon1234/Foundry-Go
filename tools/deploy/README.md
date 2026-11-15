@@ -13,7 +13,7 @@ confirmation rules, host prerequisites, and recovery procedures.
 | `lib/backup.py` | PostgreSQL and encrypted key/config backups |
 | `protocol.json` | Wire protocol and tool generation |
 
-The bundle uses protocol 2.0 and generation 12. Tool upgrades require an installed
+The bundle uses protocol 2.0 and generation 18. Tool upgrades require an installed
 host generation of at least 9. The local command checks the installed host's
 `hello` response before staging any bundle; the candidate checks again before
 planning or installation. Older hosts receive `tools_upgrade_floor`: the host
@@ -32,6 +32,13 @@ baseline can activate the candidate archive during foreign-upgrade acceptance.
 Use `tools-plan`, confirmed `tools-apply`, then an ordinary deploy. Ready instances
 receive current unit templates followed by a daemon reload; enablement is preserved
 and roles are not restarted by the tool upgrade.
+
+Artifact views render each bind endpoint separately as `BindReadOnlyPaths="SRC":"DST"`.
+The same upgrade path rewrites existing artifact-view units with this quoting fix;
+protocol 2.0 and generation 18 are unchanged. Configuration digests and immutable
+launch records describe the declarations and views, not rendered unit text, so the
+quoting change does not invalidate them. The corrected binds take effect on the
+next service start.
 
 Plans list superseded bundle digests in `prune_bundles`. After selection, registry
 publication and journal completion, installation runs the selected bundle's pruning

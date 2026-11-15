@@ -431,7 +431,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     after = " ".join(dependency_units if dependency_units is not None else
                      (inventory.units[n] for n in inventory.dependencies(name)))
     boot = f"foundry-admission-{spec.identity.instance_id}.service"
-    mounts = "\n".join("BindReadOnlyPaths=" + systemd_word(view.source + ":" + view.destination) for view in views)
+    mounts = "\n".join("BindReadOnlyPaths=" + systemd_word(view.source) + ":" + systemd_word(view.destination) for view in views)
     from unix_sockets import uses_sockets
     from contracts import socket_directory
     socket_paths = (socket_directory(spec.identity.instance_id),) if uses_sockets(role) else ()
