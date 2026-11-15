@@ -16,6 +16,7 @@ import tarfile
 import time
 import uuid
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from acceptance_support import (LAUNCHER, ROOTS, WORK, action, fixture, guard, postgres_denial,
                                 postgres_settings, private_json, request, run, service, wait_for)
 
