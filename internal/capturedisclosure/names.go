@@ -34,7 +34,7 @@ func ValidateNames(names []string) error {
 }
 
 // Names are extra credential names from deployment settings, matched exactly
-// and case-insensitively.
+// under Unicode case folding, as strings.EqualFold compares.
 type Names map[string]struct{}
 
 // NewNames builds the extra-name set. Settings validation bounds the input.
@@ -44,9 +44,21 @@ func NewNames(names []string) Names {
 	}
 	set := make(Names, len(names))
 	for _, name := range names {
-		set[strings.ToLower(name)] = struct{}{}
+		set[foldName(name)] = struct{}{}
 	}
 	return set
+}
+
+// foldName maps each rune to the smallest member of its simple-fold orbit, so
+// "user", "USER" and "uſer" share one key where ToLower would keep ſ.
+func foldName(name string) string {
+	return strings.Map(func(r rune) rune {
+		folded := r
+		for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+			folded = min(folded, f)
+		}
+		return folded
+	}, name)
 }
 
 // keyCompounds are joined names that end in the word key and hold a secret.
@@ -65,11 +77,10 @@ func CredentialName(name string, extra Names) bool {
 	if record.SensitiveName(name) {
 		return true
 	}
-	lower := strings.ToLower(name)
-	if _, ok := extra[lower]; ok {
+	if _, ok := extra[foldName(name)]; ok {
 		return true
 	}
-	return keyName(lower) || hasWord(name, "auth")
+	return keyName(strings.ToLower(name)) || hasWord(name, "auth")
 }
 
 // CredentialQueryName adds the framework's own bearer parameters (a ticket or
