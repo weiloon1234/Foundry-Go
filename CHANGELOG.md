@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.38.0 — 2026-11-16
+
+- Added: `http.ExcludeFromCapture()` declares a webhook capture prefix that is
+  never recorded. The kernel skips the snapshot, capacity reservation and body
+  preread, so the handler runs exactly as without capture and no loss is counted.
+  The most specific declaration decides, so a deeper prefix can capture again.
+  A request is also skipped when the most specific declaration for its cleaned
+  path is an exclusion, covering non-canonical paths that the router redirects or
+  rejects. Build rejects an exclusion without a capturing ancestor, an exclusion
+  combined with `FullCaptureBody`, and a set with no capturing declaration. Use it
+  for callbacks that carry credentials, such as media-server authentication hooks.
+- Added: `features.webhook_capture.config.mask_names` adds exact,
+  case-insensitive credential names for request headers, query values and
+  redacted JSON, form and multipart fields under every prefix, matching outbound
+  capture's setting (at most 64 names, each 1 to 128 bytes without control
+  characters). Full-mode bodies stay exact; headers and query values use the
+  names in both modes. Both capture directions now share one name validator.
+
 ## v0.37.0 — 2026-11-15
 
 - Added: numbered custom service copies through profile `placement` counts of
