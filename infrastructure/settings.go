@@ -257,6 +257,9 @@ func (p *Plan) validate() error {
 	}
 	for _, name := range keys(s.Storage.Disks) {
 		disk := s.Storage.Disks[name]
+		if err := disk.validateRehearsal(); err != nil {
+			return err
+		}
 		if err := disk.Config.Validate(); err != nil {
 			return err
 		}

@@ -388,3 +388,29 @@ func TestLargeConditionalMultipartStreamsDefaultParts(t *testing.T) {
 		t.Fatal("invalid default-part transfer or retained staging")
 	}
 }
+
+func TestCompatibleRehearsalCapRequiresIdentityAndRefusesBeforeIO(t *testing.T) {
+	_, b, _, _ := conditionalWireProfile(t, Compatible)
+	b.config.Compatible.SingleRequestConditions = true
+	b.config.ConditionalWriteMode = storage.RehearsalRuntime
+	t.Setenv("FOUNDRY_REHEARSAL_RUN_ID", "")
+	if err := b.config.Validate(); !errors.Is(err, storage.Invalid) {
+		t.Fatal("production accepted marker", err)
+	}
+	t.Setenv("FOUNDRY_REHEARSAL_RUN_ID", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if err := b.config.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	key, _ := storage.ParseKey("restricted")
+	for _, condition := range []storage.WriteCondition{storage.IfAbsent(), conditionFor(t, `"old"`)} {
+		source := &conditionalCountReader{}
+		_, err := b.Put(t.Context(), key, source, conditionalOptions(b.config.PartBytes+1, 'a', condition))
+		if !errors.Is(err, storage.RehearsalLimitExceeded) || source.read != 0 {
+			t.Fatal("rehearsal condition reached source", err)
+		}
+	}
+	b.config.Provider = R2
+	if err := b.config.Validate(); !errors.Is(err, storage.Invalid) {
+		t.Fatal("R2 accepted marker", err)
+	}
+}

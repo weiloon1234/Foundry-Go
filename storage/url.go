@@ -447,7 +447,7 @@ func (d *Disk) TemporaryUploadURL(ctx context.Context, key ObjectKey, options Up
 	if err := options.Validate(d.config.MaxObjectBytes); err != nil {
 		return UploadLink{}, err
 	}
-	if err := d.capabilities.ValidatePut(PutOptions{ContentType: options.ContentType, Size: value.Set(options.Size), Checksum: options.Checksum, Condition: options.Condition}); err != nil {
+	if err := d.validatePut(PutOptions{ContentType: options.ContentType, Size: value.Set(options.Size), Checksum: options.Checksum, Condition: options.Condition}); err != nil {
 		return UploadLink{}, err
 	}
 	provider, ok := d.backend.(SignedUploadProvider)

@@ -23,8 +23,10 @@ certifies the source driver, not VersityGW. A source S3-compatible declaration i
 preserved. When multipart conditions lack stand-in certification, the
 [rehearsal binding opt-in](../guides/host-capabilities.md#rehearse-locally) permits
 only named disks to use a conditional-write cap at `PartBytes`. Evidence marks
-that run as reduced fidelity. Large-object application policy validation remains
-in force.
+that run as reduced fidelity. The typed `storage.RehearsalRuntime` mode now
+allows larger attachment policies at startup and rejects actual conditional
+writes above the cap with `storage.RehearsalLimitExceeded`. Normal disk and
+policy limits still apply.
 
 ## Recorded container result (2026-11-15)
 
@@ -50,8 +52,8 @@ conformance.
 
 Rehearsal of R2 policies above `PartBytes` currently requires the explicit
 `allow_single_request_conditions` opt-in and is reported as reduced fidelity.
-The opt-in caps conditional writes; it does not make a larger application policy
-valid. Production R2 behavior is unaffected. A future stand-in upgrade must pass
+The opt-in caps actual conditional writes at runtime while allowing larger
+policies at startup. Production R2 behavior is unaffected. A future stand-in upgrade must pass
 the complete certification before the opt-in can be removed.
 
 ## Run the stand-in certification
@@ -133,3 +135,64 @@ record, first-failure attribution across parent and child result ordering, and
 bounded sanitization of URLs, headers, credentials, and unknown diagnostic text.
 The strict storage listing check and production behavior are unchanged. No Go
 source changed, and the agent ran no containers.
+
+
+## Runtime cap implementation (v0.37.0)
+
+`storage.Capabilities.ConditionalWriteMode` distinguishes strict startup
+validation (the zero value) from `storage.RehearsalRuntime`.
+`ValidatePutPolicy` defers only the latter's conditional size restriction.
+Attachments are the only startup caller; runtime put, copy, and signed-upload
+checks retain the cap. Unknown-size conditional writes also fail before I/O.
+The refusal retains `storage.Unchanged` and names reduced-fidelity rehearsal
+through attachment error wrapping.
+
+The deploy-generated `cloud.conditional_write_mode` marker is independent of
+the process's `FOUNDRY_REHEARSAL_RUN_ID`. Configuration decoding, infrastructure
+validation, S3 configuration, and disk construction reject a marker without the
+identity. The deploy tool checks the matching disposable host context and
+acceptance profile before passing the identity to transient operation units,
+application units, sanitized feature dispatch, and console commands. Archives and generic configuration
+updates cannot issue the marker, including JSON and `_FILE` overrides.
+
+One startup JSON notice per affected disk records the cap and exceeding declared
+attachment maxima. Runtime refusal records contain only disk names, caps, and
+counts. The disk API and optional metrics collector expose process totals;
+rehearsal evidence and observation reports retain only allowlisted public fields
+from a bounded journal window. See the [reporting contract](../guides/host-capabilities.md#rehearse-locally).
+
+Native verification on 2026-11-15:
+
+- `go build` and `go vet` passed for `./storage/...`, `./attachments/...`,
+  `./infrastructure`, and `./application`.
+- `go test -count=1 -timeout=20m` passed for those nine packages. PostgreSQL,
+  Redis, and live-provider tests remained unconfigured and skipped their opt-in
+  cases. A subsequent database-free attachment-manager regression and its vet
+  check passed. It proves that a 500 MiB policy starts in rehearsal, strict mode
+  still refuses it, inspection snapshots are owned, and `MaxObjectBytes` remains
+  enforced. The PostgreSQL upload regression is present but was not executed.
+- Runtime tests prove both conditional create and replace refusal before reading
+  input, unknown-size refusal, at-cap success, unchanged unconditional writes,
+  typed unchanged outcomes, and refusal counts. The application startup test
+  proves one redacted notice per disk and a redacted runtime refusal record.
+- Infrastructure parsing tests prove missing/malformed run identity refusal,
+  invalid provider/mode refusal, and that identity alone grants no capability.
+  The infrastructure configuration schema and ownership manifest were regenerated.
+- Focused Python checks passed: 230 tests in the initial available modules,
+  91 tests in the corrected selection, and 86 tests in the final affected rerun.
+  The first invocation also named two nonexistent modules; these were invocation
+  errors, replaced with the modules that own runtime configuration and dispatch.
+- `make deploy-tools-check` ran 1,412 tests with 18 skips. Its sole failure was
+  the explicit candidate Python inventory missing `lib/rehearsal_storage.py`.
+  The inventory was corrected. The final 86-test rerun includes that check,
+  operation launch/cleanup, rehearsal orchestration, certification mapping, and
+  marker guards. This is a segmented verification result, not a second full run.
+- Source review found and corrected transient systemd operation identity loss.
+  A regression proves the guarded identity reaches the operation executor and
+  its cleanup through `--setenv`; built-in and custom workload units are covered
+  separately. Production defaults emit neither the marker nor the identity.
+- Documentation/local-link and whitespace checks passed.
+
+No containers, database services, commits, or live provider certification were
+run. The optional container fixture assertion was not added; native startup and
+runtime regressions cover the behavior without a container dependency.

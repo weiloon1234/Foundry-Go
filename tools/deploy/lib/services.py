@@ -469,6 +469,8 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
                    for key, value in role.environment]
     environment += [(key, contract_path(secret_paths[key], absolute=True)) for key, _ in role.secret_files]
     environment += list(config_environment(role, paths).items())
+    from rehearsal_storage import environment as rehearsal_environment
+    environment += list(rehearsal_environment(entry).items())
     replacements = {"MARKER": marker(entry), "ROLE": name.role, "ACCOUNT": inventory.name,
                     "AFTER": f"{boot} {after}", "BASE": contract_path(paths.base, absolute=True),
                     "WRITABLE": " ".join(systemd_word(p) for p in (paths.state, paths.base + "/invocations", *socket_paths)),

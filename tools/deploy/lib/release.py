@@ -243,6 +243,13 @@ def unpack_archive(host, archive, destination, entry, checksum, *, expansion_bud
             if feature:
                 require(manifest["schema"] == 2 and all(name == "." or any(file.startswith(name + "/") for file in actual)
                         for item, name in members if item.isdir()), "release_inventory", "Feature archive has undeclared directories.")
+            from rehearsal_storage import reject_marker
+            config_member = bundle.getmember("config/deploy.toml")
+            require(config_member.size <= 4 * 1024 * 1024, "invalid_release", "Deployment configuration exceeds its bound.")
+            try:
+                reject_marker(tomllib.loads(bundle.extractfile(config_member).read().decode()))
+            except (ValueError, UnicodeError):
+                raise DeployError("invalid_release", "Deployment configuration is invalid TOML.") from None
             if manifest_check is not None:
                 manifest_check(manifest)
             if destination is None:
@@ -319,7 +326,8 @@ def switch_to(host, entry, version):
 
 
 def app(host, entry, release, command, env_file=None, extra=(), timeout=90, check=True):
-    environment = {"WEB__PUBLIC_DIR": str(release / "public")}
+    from rehearsal_storage import environment as rehearsal_environment
+    environment = {"WEB__PUBLIC_DIR": str(release / "public"), **rehearsal_environment(entry)}
     if entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry:
         from feature_lifecycle import load
         from runtime_config import console_binding_descriptor, effective_environment_path

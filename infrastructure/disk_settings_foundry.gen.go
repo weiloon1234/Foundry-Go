@@ -93,6 +93,8 @@ type DiskSettingsCloudConfigKeySet struct {
 	//
 	AllowHTTP  config.Key[DiskSettings, bool]
 	Compatible DiskSettingsCloudCompatibleConfigKeySet
+	// ConditionalWriteMode selects cloud.conditional_write_mode. Set accepts storage.ConditionalWriteMode.
+	ConditionalWriteMode config.Key[DiskSettings, storage.ConditionalWriteMode]
 }
 
 // DiskSettingsCloudCompatibleConfigKeySet exposes compiler-checked configuration overrides.
@@ -168,6 +170,9 @@ var foundryDiskSettingsConfigKeys = sync.OnceValue(func() DiskSettingsConfigKeyS
 				ListingPathEncoding:     config.Scalar[DiskSettings, bool]("cloud.compatible.listing_path_encoding", func(settings *DiskSettings) *bool { return &settings.Cloud.Compatible.ListingPathEncoding }),
 				FormUploads:             config.Scalar[DiskSettings, bool]("cloud.compatible.form_uploads", func(settings *DiskSettings) *bool { return &settings.Cloud.Compatible.FormUploads }),
 			},
+			ConditionalWriteMode: config.Text[DiskSettings, storage.ConditionalWriteMode, *storage.ConditionalWriteMode]("cloud.conditional_write_mode", func(settings *DiskSettings) *storage.ConditionalWriteMode {
+				return &settings.Cloud.ConditionalWriteMode
+			}),
 		},
 	}
 })
@@ -213,5 +218,6 @@ func DiskSettingsConfigSchema() (*config.Schema[DiskSettings], error) {
 		keys1.Cloud.Compatible.ServerCopy,
 		keys1.Cloud.Compatible.ListingPathEncoding,
 		keys1.Cloud.Compatible.FormUploads,
+		keys1.Cloud.ConditionalWriteMode,
 	)
 }

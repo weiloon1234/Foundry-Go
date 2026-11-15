@@ -135,6 +135,8 @@ def run(action, pin, launch):
                        "INVOCATION_ID": invocation.process.invocation_id,
                        "WEB__PUBLIC_DIR": str(release / "public"),
                        "FOUNDRY_DEPLOY_RUNTIME_FILE": launch["descriptors"][spec.identity.record_key]}
+        from rehearsal_storage import environment as rehearsal_environment
+        environment.update(rehearsal_environment(entry))
         if isinstance(role, ExecutableRole):
             secrets = launch["secret_paths"].get(spec.identity.record_key, {})
             for key, value in role.environment:

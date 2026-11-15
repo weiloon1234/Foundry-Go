@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Rehearsal storage runtime caps
+
+- Reduced-fidelity rehearsal accepts attachment policies above the stand-in's
+  single-request cap at startup. Actual oversized conditional writes fail with
+  `storage.RehearsalLimitExceeded`, preserving the unchanged mutation outcome.
+- The typed per-disk `rehearsal_runtime` marker requires the deploy rehearsal
+  process identity. Production, archive, and generic configuration paths refuse
+  the marker. Reports include caps, exceeding policy maxima, and observed runtime
+  refusals; startup notices and counters contain no object data.
+- Production R2 behavior, declared S3-compatible guarantees, and strict listing
+  checks remain unchanged.
+
 ### Numbered copies
 
 - Fixed: numbered listeners compose with PROXY and managed DNS. Every copy gets

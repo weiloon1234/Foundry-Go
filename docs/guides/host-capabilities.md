@@ -1513,13 +1513,38 @@ private rehearsal binding file:
 
 List only unique names already present in `storage_disks`. This permission applies
 only when the pinned stand-in lacks multipart certification. Rehearsal then sets
-`single_request_conditions: true` for those disks and reports a reduced-fidelity
-run on stderr and in `evidence.json.storage_fidelity`. Conditional writes are
-limited to the disk's `PartBytes`. Application policies and `MaxObjectBytes` stay
-unchanged, so a policy requiring larger conditional writes can still refuse
-startup. This opt-in does not prove that policy. It is a rehearsal input and is
-not accepted as production configuration. Once the image is certified, the same
-binding preserves multipart conditions without a cap.
+`single_request_conditions: true` and the typed
+`cloud.conditional_write_mode: "rehearsal_runtime"` marker for those disks.
+Attachment policies above `PartBytes` pass startup capability validation.
+Application policy maxima and `MaxObjectBytes` remain unchanged. Actual
+conditional creates and replacements require a declared size at or below
+`PartBytes`; larger or unknown-size writes fail before storage I/O with
+`storage.RehearsalLimitExceeded` (`storage_rehearsal_limit_exceeded`). Attachments
+retain that typed error and its message naming reduced-fidelity rehearsal.
+Unconditional writes retain their normal limits.
+
+Both the generated disk marker and the deploy tool's process-level
+`FOUNDRY_REHEARSAL_RUN_ID` are required. Parsing or constructing a marked disk
+without a valid run identity returns `storage.Invalid`. The deploy tool issues
+that identity only for the matching disposable acceptance host and passes it to
+application units and console commands. Production profiles, application
+archives, and generic configuration changes cannot supply the marker.
+
+The application emits one redacted JSON startup notice per affected disk per
+process. It lists the runtime cap, `MaxObjectBytes`, and declared attachment
+`MaxStoredBytes` values above the cap. Refusals emit disk-only JSON counters;
+`Disk.RehearsalRefusals()` and the optional
+`foundry_storage_rehearsal_refusals_total` metric expose the process count.
+No object keys, upload names, contents, or credentials appear in these records.
+Rehearsal collects the public fields into
+`evidence.json.storage_fidelity.reduced_disks` and each observation's report.
+`runtime_refusals_observed` counts refusal events in the bounded journal window
+(last 4096 records per unit); `policy_observation: "pending"` means the startup
+notice has not been observed. Process counters reset on restart.
+
+This opt-in does not certify large conditional writes. Once the image is
+certified, the same binding preserves multipart conditions without a cap.
+Production R2 capabilities and strict S3 listing checks are unchanged.
 
 `configuration` supplies literal application configuration values
 through the production bootstrap interface. Use rehearsal-only values; host file

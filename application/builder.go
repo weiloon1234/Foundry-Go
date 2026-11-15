@@ -351,6 +351,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	}
 	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, stickyReadsConfigured(s.Services.Database), routes, spas, fallbacks, middleware, observers, collector, captureOption)
 	registerWebhookCapture(builder, s.Features.WebhookCapture, captureRecorder)
+	registerRehearsalStorage(builder, s)
 	registerMetricsCollectors(builder, recorder, channels, s.Realtime.Enabled)
 	if err := registerTelemetry(ctx, builder, s.Features.Telemetry, collector, readiness); err != nil {
 		return nil, err

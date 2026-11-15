@@ -14,6 +14,7 @@ import stat
 import uuid
 import uploads
 import recovery_rehearsal
+import rehearsal_storage
 
 from contracts import (CLEANUP_GRACE_KEY, DEFAULT_CLEANUP_GRACE, DeployError, POSTGRES_PORT, REDIS_PORT, check_path,
                        dump_env, instance_paths, normalize_backup_repository, normalize_storage_disks, parse_env,
@@ -177,6 +178,7 @@ def pipeline_keys(entry=None):
 def validate_configuration_changes(changes, entry=None):
     require(isinstance(changes, dict) and 0 < len(changes) <= MAX_CONFIGURATION_CHANGES,
             "invalid_configuration", "Name between one and sixteen configuration keys to change together.")
+    rehearsal_storage.reject_marker(changes)
     application, _ = configuration_parts(changes, entry)
     for key in application:
         require(isinstance(key, str) and re.fullmatch(r"[A-Z][A-Z0-9_]*", key),
@@ -431,10 +433,12 @@ def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
         values[ENCRYPTION_KEYS[2]] = "{}"
     storage = credentials.get("app_storage")
     if storage:
+        rehearsal_storage.validate_disks(storage["disks"], entry)
         values["APP__SERVICES__CREDENTIALS"] = _json(storage["credentials"])
         values["APP__SERVICES__STORAGE__DISKS"] = _json(storage["disks"])
         values[CLEANUP_GRACE_KEY] = DEFAULT_CLEANUP_GRACE
     # Initial application settings (such as first-deploy seed credentials) apply last.
+    rehearsal_storage.reject_marker(credentials.get("configuration") or {})
     application, _ = configuration_parts(credentials.get("configuration") or {}, entry)
     values.update(application)
     if entry["profile"].get("schema") == 3:
@@ -541,6 +545,7 @@ def initialize_bootstrap_secrets(host, entry, private_secrets=None):
                 except ValueError:
                     raise DeployError("invalid_secrets", "App storage JSON is invalid.") from None
             require(isinstance(storage[key], dict) and storage[key], "invalid_secrets", "App storage JSON must be a nonempty object.")
+        rehearsal_storage.validate_disks(storage["disks"], entry)
         storage["disks"] = normalize_storage_disks(storage["disks"])
         storage_bindings(storage)
         supplied["app_storage"] = storage
@@ -637,6 +642,7 @@ def candidate_values(host, entry, existing, changes):
     for key in changes:
         if key.endswith("_FILE") and key in values:
             content = _read_value_file(host, entry, values[key])
+            rehearsal_storage.reject_marker({key.removesuffix("_FILE"): content})
             destination = host.paths.instance_config(entry["name"]) / ("value-" + uuid.uuid4().hex + ".secret")
             host.owned_write(destination, content + "\n", 0o640, group=entry["name"])
             values[key] = str(destination)

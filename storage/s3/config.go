@@ -86,10 +86,11 @@ type Config struct {
 	PartAttempts   int
 	AbortTimeout   time.Duration
 	// PartConcurrency bounds concurrent multipart part uploads per object.
-	PartConcurrency   int
-	VerifyPublication bool
-	AllowHTTP         bool
-	Compatible        CompatibleCapabilities
+	PartConcurrency      int
+	VerifyPublication    bool
+	AllowHTTP            bool
+	Compatible           CompatibleCapabilities
+	ConditionalWriteMode storage.ConditionalWriteMode
 }
 
 // DefaultConfig returns an AWS profile with bounded multipart uploads, retries and
@@ -123,8 +124,14 @@ func R2Config(bucket, endpoint string, credentials aws.CredentialsProvider) Conf
 // Validate rejects invalid provider, bucket, namespace, credentials, endpoint and
 // resource settings without provider I/O.
 func (c Config) Validate() error {
+	if err := c.ConditionalWriteMode.Validate(); err != nil {
+		return err
+	}
 	invalid := func() error {
 		return newFailure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
+	}
+	if c.ConditionalWriteMode != "" && (c.Provider != Compatible || !c.Compatible.SingleRequestConditions || !(c.Compatible.ConditionalCreate || c.Compatible.ConditionalReplace)) {
+		return invalid()
 	}
 	if c.Provider != AWS && c.Provider != R2 && c.Provider != Compatible || len(c.Bucket) < 3 || len(c.Bucket) > 63 || c.Region == "" || len(c.Region) > 128 || c.PartBytes < MinPartBytes || c.PartBytes > MaxPartBytes || c.MaxUploads < 1 || c.MaxUploads > 64 || c.MaxObjectBytes < 1 || c.MaxObjectBytes > c.PartBytes*MaxParts || c.ReadAttempts < 1 || c.ReadAttempts > 5 || c.PartAttempts < 1 || c.PartAttempts > 5 || c.AbortTimeout <= 0 || c.AbortTimeout > time.Minute || c.PartConcurrency < 1 || c.PartConcurrency > 16 {
 		return invalid()

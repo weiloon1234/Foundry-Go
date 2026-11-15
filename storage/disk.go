@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -26,21 +27,23 @@ var streamTimeout = safeerror.WrapFault(fault.Timeout, "storage stream made no p
 // actual release. Close the backend only afterward. Construction performs no
 // storage I/O.
 type Disk struct {
-	id           DiskID
-	backend      Backend
-	config       Config
-	capabilities Capabilities
-	operations   *admission.Semaphore
-	streams      *admission.Semaphore
-	ctx          context.Context
-	cancel       context.CancelFunc
-	mu           sync.Mutex
-	active       int
-	streaming    int
-	closing      bool
-	readers      map[*ownedReader]struct{}
-	done         chan struct{}
-	closeErr     error
+	id                DiskID
+	backend           Backend
+	config            Config
+	capabilities      Capabilities
+	operations        *admission.Semaphore
+	streams           *admission.Semaphore
+	ctx               context.Context
+	cancel            context.CancelFunc
+	mu                sync.Mutex
+	active            int
+	streaming         int
+	closing           bool
+	readers           map[*ownedReader]struct{}
+	done              chan struct{}
+	closeErr          error
+	rehearsalNotice   sync.Once
+	rehearsalRefusals atomic.Uint64
 }
 
 // NewDisk validates configuration and snapshots capabilities while borrowing backend;
@@ -60,7 +63,10 @@ func NewDisk(id DiskID, backend Backend, config Config) (*Disk, error) {
 	if err := callback.Isolated("storage capabilities", func() error { capabilities = backend.Capabilities(); return nil }); err != nil {
 		return nil, newFailure(Invalid, OpenOperation, NotApplicable, err)
 	}
-	if capabilities.ConditionalWriteMaxBytes < 0 {
+	if err := capabilities.ConditionalWriteMode.Validate(); err != nil {
+		return nil, err
+	}
+	if capabilities.ConditionalWriteMaxBytes < 0 || capabilities.ConditionalWriteMode == RehearsalRuntime && capabilities.ConditionalWriteMaxBytes == 0 {
 		return nil, newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -239,7 +245,7 @@ func (d *Disk) writeOptions(o PutOptions) error {
 	if err := o.Validate(d.config.MaxObjectBytes); err != nil {
 		return err
 	}
-	return d.capabilities.ValidatePut(o)
+	return d.validatePut(o)
 }
 func (d *Disk) readOptions(o ReadOptions) error {
 	if err := o.Validate(); err != nil {

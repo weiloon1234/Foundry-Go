@@ -35,6 +35,8 @@ type Capabilities struct {
 	// ConditionalWriteMaxBytes, when positive, requires a declared Size within
 	// this bound for conditional creates/replacements. Zero adds no size limit.
 	ConditionalWriteMaxBytes int64
+	// ConditionalWriteMode defers this size check at startup only in rehearsal.
+	ConditionalWriteMode ConditionalWriteMode
 }
 
 // Backend implementations stream with bounded buffers and preserve cancellation.
@@ -81,6 +83,9 @@ func (c Capabilities) ValidatePut(options PutOptions) error {
 	if conditional && c.ConditionalWriteMaxBytes > 0 {
 		size, supplied := options.Size.Get()
 		if !supplied || size > c.ConditionalWriteMaxBytes {
+			if c.ConditionalWriteMode == RehearsalRuntime {
+				return newFailure(RehearsalLimitExceeded, PutOperation, Unchanged, nil)
+			}
 			return newFailure(Unsupported, PutOperation, Unchanged, nil)
 		}
 	}

@@ -297,10 +297,12 @@ def launch(host, request, owner):
     store = admission.AdmissionStore(host, request["profile"]["instance_id"])
     unit = "foundry-operation-" + operation_id
     cleanup = services.command_line(command("operation-cleanup", operation_id, owner["bundle_sha256"]))
+    from rehearsal_storage import environment as rehearsal_environment
+    rehearsal = ["--setenv=" + key + "=" + value for key, value in rehearsal_environment({"profile": request["profile"]}).items()]
     result = host.run(["systemd-run", "--quiet", "--wait", "--collect", "--unit", unit,
               "--property=Type=exec", "--property=Restart=no", "--property=KillMode=control-group",
               "--property=TimeoutStopSec=3600", "--property=RuntimeMaxSec=1800", "--property=ExecStopPost=" + cleanup,
-              *command("operation", operation_id, owner["bundle_sha256"])], timeout=5400, check=False)
+              *rehearsal, *command("operation", operation_id, owner["bundle_sha256"])], timeout=5400, check=False)
     receipt = admission.read_owned(host, root / "result.json", lambda value: value)
     if "error" in receipt:
         raise DeployError(receipt["error"]["code"], receipt["error"]["detail"])

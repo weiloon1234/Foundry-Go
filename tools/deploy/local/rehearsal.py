@@ -14,6 +14,7 @@ import tempfile
 import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+import rehearsal_storage
 from contracts import (DeployError, MAX_JSON, canonical_digest, check_path, digest, identity,
                        read_json, require, slug, validate_project)
 from topology import parse_profile, parse_topology, validate_topology
@@ -146,7 +147,10 @@ def test_bindings(path, environment, config, token):
         certification = s3_certification()
     except ContainerError as error:
         raise DeployError("rehearsal_storage_certification", str(error)) from None
+    rehearsal_storage.reject_marker(config)
+    rehearsal_storage.reject_marker(value["configuration"])
     reduced = []
+    reduced_disks = []
     access, secret = "rehearsal-" + token, secrets.token_hex(32)
     settings = {"backup_s3": {"endpoint": "https://s3:9000", "region": "us-east-1", "bucket": "backup-" + token,
                              "access_key_id": access, "secret_access_key": secret}}
@@ -174,7 +178,11 @@ def test_bindings(path, environment, config, token):
                         + " to the rehearsal binding input for a reduced-fidelity rehearsal capped at PartBytes, "
                         "or use a stand-in with passing certification.")
                 compatible["single_request_conditions"] = True
+                cloud["conditional_write_mode"] = rehearsal_storage.MODE
                 reduced.append(name)
+                reduced_disks.append({"disk": name, "runtime_cap_bytes": cloud.get("part_bytes", 8 << 20),
+                                      "max_object_bytes": disk.get("config", {}).get("max_object_bytes", 1 << 30),
+                                      "exceeding_policy_maxima": [], "policy_observation": "pending", "runtime_refusals_observed": 0})
             disk["driver"] = "s3_compatible"
             cloud.update(endpoint="https://s3:9000", region="us-east-1", bucket=bucket,
                          credentials="rehearsal", path_style=True, compatible=compatible)
@@ -182,7 +190,7 @@ def test_bindings(path, environment, config, token):
                                    "disks": selected}
     return settings, buckets, {"status": "reduced" if reduced else "preserved",
                               "conditional_writes_capped_at_part_bytes": reduced,
-                              "s3_certification": certification}
+                              "reduced_disks": reduced_disks, "s3_certification": certification}
 
 
 def phase(host, name, token):
@@ -341,6 +349,11 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
                 result = {"ok": all(p["status"] != "failed" for p in probes), "probes": probes}
             else:
                 result = phase(host, name, resources.token)
+            if name == "observe" and "storage_fidelity" in result:
+                observed = {row["disk"]: row for row in result["storage_fidelity"]}
+                for row in fidelity["reduced_disks"]:
+                    if row["disk"] in observed:
+                        row.update(observed[row["disk"]])
             evidence["phases"].append({"phase": name, **result})
             (directory / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
             require(result.get("ok", True), "rehearsal_phase", "Rehearsal phase refused: " + name + "; see evidence.json.")
