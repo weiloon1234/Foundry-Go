@@ -847,9 +847,15 @@ Readiness verifies each copy's process, listener ownership, stability, and BPF
 attachments where confinement is declared. Dependencies include every prerequisite
 copy. Units at the same dependency level are queued together without blocking.
 Each unit's readiness timeout starts at its own systemd monotonic process-start
-timestamp and includes its stability proof. A unit that finishes early remains
-under observation while slower peers finish; a lost probe or changed process
-invalidates its proof. Consumers start only after their prerequisites pass.
+timestamp and includes its stability proof. A FIFO scheduler runs at most 16
+observations concurrently. Each completed observation yields its worker, so a
+unit's stability wait does not occupy a slot and large groups receive turns.
+Each unit has its own probe cadence and stability window; a slow probe does not
+hold up observations in other workers. A unit that finishes early remains under
+observation while slower peers finish; a lost probe or changed process invalidates
+its proof. Failure or deadline expiry closes active probe sockets, kills and
+reaps owned command groups, and joins every worker before returning. Consumers
+start only after their prerequisites pass.
 Startup and final readiness still share one overall 90-second deadline.
 
 Build the changed profile into a release archive, then review and activate its

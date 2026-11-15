@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed: grouped readiness now observes units concurrently through a bounded,
+  fair worker queue. Slow probes no longer delay a healthy peer's stability proof.
+  Failure and deadline cancellation close probe sockets, reap command processes,
+  and join workers before the lifecycle operation continues.
+
 - Fixed: tools upgrades now advance and verify the network-boot coordinator's
   bundle pin before selecting tools that can write newer registry/profile shapes.
   Interrupted pin publication resumes, and stale coordinators block application

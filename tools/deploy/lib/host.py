@@ -1,7 +1,7 @@
 """Host filesystem/process boundary; test hosts inject paths and process results."""
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import fcntl
 import os
 import re
@@ -12,6 +12,7 @@ import subprocess
 import socket
 import sys
 import time
+import threading
 
 from contracts import (DeployError, INSTANCE_STATUSES, PREFIX, SCHEMA, HOST_PATHS, atomic_write, atomic_json, check_path,
                        identity, instance_paths, now, parse_json, read_json, require, validate_attempt,
@@ -24,6 +25,64 @@ LOCK_WAIT_SECONDS = 600
 
 class OperationTimeout(TimeoutError):
     """Interrupt blocking reads as well as checks between probes."""
+
+
+_observation = threading.local()
+
+
+def current_observation():
+    return getattr(_observation, "budget", None)
+
+
+class ObservationBudget:
+    """A worker owns blocking I/O until cancellation and cleanup have finished."""
+
+    def __init__(self, deadline):
+        self.deadline = deadline
+        self.cancelled = threading.Event()
+        self.lock = threading.Lock()
+        self.resources = set()
+
+    def check(self):
+        if self.cancelled.is_set() or time.monotonic() >= self.deadline:
+            raise OperationTimeout("observation budget exhausted")
+
+    def cancel(self):
+        with self.lock:
+            self.cancelled.set()
+            for cancel in self.resources:
+                cancel()
+
+    @contextmanager
+    def limit(self, seconds):
+        previous = self.deadline
+        self.deadline = min(previous, time.monotonic() + seconds)
+        try:
+            self.check()
+            yield
+            self.check()
+        finally:
+            self.deadline = previous
+
+    @contextmanager
+    def own(self, cancel):
+        with self.lock:
+            self.check()
+            self.resources.add(cancel)
+        try:
+            yield
+            self.check()
+        finally:
+            with self.lock:
+                self.resources.remove(cancel)
+
+    def __enter__(self):
+        self.previous = current_observation()
+        _observation.budget = self
+        return self
+
+    def __exit__(self, *exception):
+        _observation.budget = self.previous
 
 
 def resolve_addresses(hostname, timeout):
@@ -131,20 +190,33 @@ class Host:
         environment = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
         if env:
             environment.update(env)
+        budget = current_observation()
+        if budget:
+            budget.check()
         try:
             process = subprocess.Popen([str(a) for a in args], text=True,
                                        stdin=subprocess.PIPE if input is not None else None,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                        env=environment, cwd=cwd, start_new_session=True, pass_fds=pass_fds)
+            cancel_lock, cancelled = threading.Lock(), False
+            def cancel():
+                nonlocal cancelled
+                with cancel_lock:
+                    if cancelled:
+                        return
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    cancelled = True
             try:
-                stdout, stderr = process.communicate(input=input, timeout=timeout)
+                with budget.own(cancel) if budget else nullcontext():
+                    remaining = min(timeout, budget.deadline - time.monotonic()) if budget else timeout
+                    stdout, stderr = process.communicate(input=input, timeout=max(.001, remaining))
             except BaseException:
                 # A killed runuser/shell parent does not stop its descendants.
                 # Own the session until cancellation has killed the whole group.
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                cancel()
                 process.wait()
                 process.stdout.close()
                 process.stderr.close()

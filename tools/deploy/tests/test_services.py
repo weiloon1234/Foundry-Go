@@ -235,7 +235,7 @@ class ServiceInventoryTests(unittest.TestCase):
         connection = MagicMock()
         response = connection.getresponse.return_value
         response.status = 302
-        with patch.object(services.http.client, "HTTPConnection", return_value=connection) as client:
+        with patch.object(services, "_probe_socket"), patch.object(services.http.client, "HTTPConnection", return_value=connection) as client:
             self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1))
             self.assertEqual(client.call_args.args, ("127.0.0.1", 8201))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/ready"))
@@ -250,7 +250,7 @@ class ServiceInventoryTests(unittest.TestCase):
         connection = MagicMock()
         response = connection.getresponse.return_value
         response.status, response.read.return_value = 200, b'{"status":"ok"}'
-        with patch.object(services.http.client, "HTTPConnection", return_value=connection):
+        with patch.object(services, "_probe_socket"), patch.object(services.http.client, "HTTPConnection", return_value=connection):
             self.assertTrue(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1, paused=True))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/live"))
             self.assertFalse(services.probe(Host(), self.inventory, self.inventory.identity(role.common.name), time.monotonic() + 1))
@@ -260,7 +260,7 @@ class ServiceInventoryTests(unittest.TestCase):
         connection = MagicMock()
         response = connection.getresponse.return_value
         response.read.return_value = b'{"outcome":"rejected"}'
-        with patch.object(services.http.client, "HTTPConnection", return_value=connection):
+        with patch.object(services, "_probe_socket"), patch.object(services.http.client, "HTTPConnection", return_value=connection):
             for status in (503, 500, 302):
                 response.status = status
                 self.assertEqual(services.probe(Host(), self.inventory, self.inventory.identity("http"),
@@ -385,40 +385,36 @@ class ServiceInventoryTests(unittest.TestCase):
                 path.write_bytes(b"native")
                 path.chmod(0o755)
                 inventory.specs[identity] = replace(spec, executable_sha256=c.digest(path))
-            for slow_start, slow_ready, failure in ((100, 115, None), (120, 144, None),
-                    (100, 131, "timeout"), (100, 115, "peer_identity"), (100, 115, "peer_probe")):
+            for slow_start, slow_ready, failure in ((0, .45, None), (.6, 1.25, None),
+                    (0, 1.3, "timeout"), (0, .45, "peer_identity"), (0, .45, "peer_probe")):
                 with self.subTest(slow_start=slow_start, slow_ready=slow_ready, failure=failure):
-                    clock, observed = [100.0], set()
-                    def advance(seconds):
-                        clock[0] += max(1, seconds)
-                    timer = SimpleNamespace(monotonic=lambda: clock[0], sleep=advance)
+                    began, observed = time.monotonic(), set()
                     def inspect(host, unit, **kwargs):
-                        start = 100 if unit == inventory.units[short] else slow_start
-                        pid = "99" if failure == "peer_identity" and unit == inventory.units[short] and clock[0] >= 111 else "20"
+                        start = began + (0 if unit == inventory.units[short] else slow_start)
+                        pid = "99" if failure == "peer_identity" and unit == inventory.units[short] and time.monotonic() - began >= .35 else "20"
                         return {"ActiveState": "active", "NRestarts": "0", "MainPID": pid,
                                 "process": {"start": "42"},
-                                "ExecMainStartTimestampMonotonic": str(start * 1_000_000) if clock[0] >= start else "0"}
+                                "ExecMainStartTimestampMonotonic": str(int(start * 1_000_000)) if time.monotonic() >= start else "0"}
                     def probe(host, inventory, identity, deadline):
                         observed.add(identity)
-                        return (clock[0] < 111 if failure == "peer_probe" else True) if identity == short else clock[0] >= slow_ready
+                        return (time.monotonic() - began < .35 if failure == "peer_probe" else True) if identity == short else time.monotonic() - began >= slow_ready
                     def contract(role):
-                        return SimpleNamespace(timeout_seconds=10 if role.common.name == "http" else 30, listener="unused")
-                    with patch.object(lifecycle, "time", timer), patch.object(services, "time", timer), \
-                            patch.object(lifecycle, "prepare_shared_directories"), \
+                        return SimpleNamespace(timeout_seconds=.4 if role.common.name == "http" else 1.2, listener="unused")
+                    with patch.object(lifecycle, "prepare_shared_directories"), \
                             patch.object(services, "enabled_units", return_value=tuple(inventory.units)), \
                             patch.object(host, "read_registry", return_value={"instances": {}}), \
                             patch.object(host, "run", return_value=subprocess.CompletedProcess([], 0, "", "")) as commands, \
                             patch.object(release, "service", side_effect=inspect), \
                             patch.object(release, "_matches_executable", return_value=True), \
-                            patch.object(release, "STABILITY_SECONDS", 5), \
+                            patch.object(release, "STABILITY_SECONDS", .1), \
                             patch.object(services, "readiness_probe", side_effect=contract), \
                             patch.object(services, "probe", side_effect=probe):
                         if failure:
                             with self.assertRaises(c.DeployError):
-                                lifecycle.start_units(host, self.entry, inventory, (short, slow), 190)
+                                lifecycle.start_units(host, self.entry, inventory, (short, slow), began + 3)
                         else:
-                            lifecycle.start_units(host, self.entry, inventory, (short, slow), 190)
-                            self.assertEqual(clock[0], slow_ready + 5)
+                            lifecycle.start_units(host, self.entry, inventory, (short, slow), began + 3)
+                            self.assertGreaterEqual(time.monotonic() - began, slow_ready + .1)
                         self.assertEqual(commands.call_args_list[0].args[0],
                             ["systemctl", "start", "--no-block", inventory.units[short], inventory.units[slow]])
                         self.assertEqual(observed, {short, slow})

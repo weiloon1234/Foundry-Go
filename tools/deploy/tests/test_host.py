@@ -100,6 +100,22 @@ class HostCommandTests(unittest.TestCase):
         kill.assert_called_once_with(process.pid, signal.SIGKILL)
         process.wait.assert_called_once_with()
 
+    def test_worker_cancellation_kills_once_then_reaps_and_closes_pipes(self):
+        import time
+        process = self.process()
+        budget = host_module.ObservationBudget(time.monotonic() + 5)
+        def communicate(**kwargs):
+            budget.cancel()
+            raise host_module.OperationTimeout("cancelled while communicating")
+        process.communicate.side_effect = communicate
+        with patch("host.subprocess.Popen", return_value=process), patch("host.os.killpg") as kill, budget:
+            with self.assertRaises(DeployError):
+                Host().run(["/usr/bin/runuser"])
+        kill.assert_called_once_with(process.pid, signal.SIGKILL)
+        process.wait.assert_called_once_with()
+        self.assertTrue(process.stdout.closed)
+        self.assertTrue(process.stderr.closed)
+
     def test_success_retains_result_and_explicit_environment(self):
         process = self.process()
         process.communicate.return_value = ("result\n", "")

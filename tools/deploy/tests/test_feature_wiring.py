@@ -19,6 +19,8 @@ import sys
 import tarfile
 import tempfile
 import time
+import threading
+from contextlib import nullcontext
 import unittest
 from unittest.mock import Mock, patch
 import uuid
@@ -374,6 +376,12 @@ class FeatureWiringFixture(unittest.TestCase):
             (feature_runtime, "Host", {"return_value": self.host}),
         ):
             self.enterContext(patch.object(module, name, autospec=True, **options))
+        self.probe_context = threading.local()
+        self.enterContext(patch.object(services, "_probe_socket", side_effect=lambda *args: nullcontext(Mock())))
+        self.enterContext(patch.object(services.http.client, "HTTPConnection", side_effect=lambda *args, **kwargs: self.probe_context.connection))
+        getpwuid = unix_sockets.pwd.getpwuid
+        self.enterContext(patch.object(unix_sockets.pwd, "getpwuid", side_effect=lambda uid:
+            self.probe_context.account if hasattr(self.probe_context, "account") else getpwuid(uid)))
         self.enterContext(patch.object(release, "STABILITY_SECONDS", 0))
         runtime_os = Mock(wraps=os)
         runtime_os.geteuid.return_value = 0
@@ -383,9 +391,8 @@ class FeatureWiringFixture(unittest.TestCase):
         role = inventory.roles[name.role]
         if services.readiness_probe(role) and services.readiness_probe(role).kind == "unix":
             entry = host.read_registry()["instances"][inventory.profile.instance_id]
-            account = SimpleNamespace(pw_name=entry["name"], pw_gid=entry["allocations"]["gid"])
-            with patch.object(unix_sockets.pwd, "getpwuid", return_value=account):
-                return actual_probe(host, inventory, name, deadline, paused=paused)
+            self.probe_context.account = SimpleNamespace(pw_name=entry["name"], pw_gid=entry["allocations"]["gid"])
+            return actual_probe(host, inventory, name, deadline, paused=paused)
         down = getattr(self.host, "maintenance_down", False)
         response = Mock()
         response.status = 503 if down and role.common.name == "http" else 200
@@ -393,8 +400,8 @@ class FeatureWiringFixture(unittest.TestCase):
                                       b'{"status":"ok"}' if paused else b'{"ready":true}')
         connection = Mock()
         connection.getresponse.return_value = response
-        with patch.object(services.http.client, "HTTPConnection", return_value=connection):
-            return actual_probe(host, inventory, name, deadline, paused=paused)
+        self.probe_context.connection = connection
+        return actual_probe(host, inventory, name, deadline, paused=paused)
 
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}

@@ -4,6 +4,9 @@ UnitSpec and RuntimeResolution are the handoff from artifact/package and listene
 owners. No package installation, listener allocation or lifecycle activation lives
 here. Production dispatch stays closed until the complete lifecycle is installed.
 """
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 import http.client
 from pathlib import Path
@@ -16,6 +19,8 @@ from contracts import (Deployment, RuntimeResolution, UnitIdentity, canonical_di
                        marker, record_document, require)
 from topology import (ArgumentKind, BuiltinRole, ExecutableRole, parse_profile,
                       parse_topology, expand_placement, role_unit_name)
+
+READINESS_WORKERS = 16
 
 RUNTIME_ENTRY = "/usr/local/lib/foundry/runtime-v1"
 TEMPLATES = Path(__file__).resolve().parents[1] / "server/templates"
@@ -491,7 +496,7 @@ def readiness_probe(role, paused=False):
 
 def probe(host, inventory, name, deadline, *, paused=False):
     role = inventory.roles[name.role]
-    from host import OperationTimeout, wall_clock_budget
+    from host import OperationTimeout, wall_clock_budget, current_observation
     contract = readiness_probe(role, paused)
     if contract is None:
         return True
@@ -499,10 +504,33 @@ def probe(host, inventory, name, deadline, *, paused=False):
     if remaining <= 0:
         return False
     try:
-        with wall_clock_budget(remaining):
+        budget = current_observation()
+        # The scheduler cancels worker I/O at the absolute deadline. Signal-based
+        # budgets remain available for probes called on the main thread.
+        with budget.limit(remaining) if budget else wall_clock_budget(remaining):
             return _probe(host, inventory, name, deadline, paused=paused)
     except OperationTimeout:
         return False
+
+
+@contextmanager
+def _probe_socket(endpoint, timeout):
+    from host import current_observation
+    budget = current_observation()
+    sock = socket.socket(socket.AF_INET6 if ":" in endpoint.address else socket.AF_INET, socket.SOCK_STREAM)
+    def cancel():
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        sock.close()
+    try:
+        with budget.own(cancel) if budget else nullcontext():
+            sock.settimeout(timeout)
+            sock.connect((endpoint.address, endpoint.port))
+            yield sock
+    finally:
+        sock.close()
 
 
 def _probe(host, inventory, name, deadline, *, paused=False):
@@ -522,33 +550,35 @@ def _probe(host, inventory, name, deadline, *, paused=False):
             return unix_sockets.ready(host, endpoint, entry["allocations"]["uid"], entry["allocations"]["gid"],
                                       inventory.units[name], min(deadline, time.monotonic() + remaining))
         if contract.kind == "tcp":
-            with socket.create_connection((endpoint.address, endpoint.port), timeout=remaining):
+            with _probe_socket(endpoint, remaining):
                 return True
-        connection = http.client.HTTPConnection(endpoint.address, endpoint.port, timeout=remaining)
-        try:
-            connection.request("GET", contract.path, headers={"Connection": "close"})
-            response = connection.getresponse()
-            # A literal bounded response, no redirects, proxies or remote URLs.
-            body = response.read(65537)
-            if len(body) > 65536:
-                return False
-            if not isinstance(role, ExecutableRole):
-                from maintenance import classify_readiness
-                observed = classify_readiness({"ready": False, "http_status": response.status}, {"down": paused})
-                if observed.get("status") == "maintenance":
-                    return True
-            if response.status != contract.status:
-                return False
-            if not isinstance(role, ExecutableRole):
-                from release import readiness_body, liveness_body
-                import json
-                try:
-                    return (liveness_body if paused else readiness_body)(json.loads(body))
-                except (ValueError, UnicodeError):
+        with _probe_socket(endpoint, remaining) as sock:
+            connection = http.client.HTTPConnection(endpoint.address, endpoint.port, timeout=remaining)
+            connection.sock = sock
+            try:
+                connection.request("GET", contract.path, headers={"Connection": "close"})
+                response = connection.getresponse()
+                # A literal bounded response, no redirects, proxies or remote URLs.
+                body = response.read(65537)
+                if len(body) > 65536:
                     return False
-            return contract.body is None or contract.body.encode() in body
-        finally:
-            connection.close()
+                if not isinstance(role, ExecutableRole):
+                    from maintenance import classify_readiness
+                    observed = classify_readiness({"ready": False, "http_status": response.status}, {"down": paused})
+                    if observed.get("status") == "maintenance":
+                        return True
+                if response.status != contract.status:
+                    return False
+                if not isinstance(role, ExecutableRole):
+                    from release import readiness_body, liveness_body
+                    import json
+                    try:
+                        return (liveness_body if paused else readiness_body)(json.loads(body))
+                    except (ValueError, UnicodeError):
+                        return False
+                return contract.body is None or contract.body.encode() in body
+            finally:
+                connection.close()
     except (OSError, http.client.HTTPException):
         return False
 
@@ -596,74 +626,117 @@ def wait_ready_set(host, inventory, names, deadline, *, starting=False):
     expires = {} if starting else {name: min(deadline, observation_start + seconds) if seconds else deadline
                                     for name, seconds in limits.items()}
     tokens, stable_since, proved = {}, {}, set()
-    if deadline <= time.monotonic():
-        return False
+    from host import ObservationBudget
+    # At most one job owns a unit's state. Completed jobs return to the tail,
+    # allowing large groups to share workers without holding slots during stability.
+    def observe(name, budget, final=False):
+        role, executable, endpoint, local = checks[name]
+        with budget:
+            budget.check()
+            observed = service(host, inventory.units[name], timeout=min(5, budget.deadline - time.monotonic()))
+            if observed["ActiveState"] == "failed" or observed["NRestarts"] != "0":
+                return False
+            if name not in expires:
+                start = observed.get("ExecMainStartTimestampMonotonic")
+                require(isinstance(start, str) and start.isdecimal(),
+                        "service_start_time", "Systemd did not provide the unit's monotonic start timestamp.")
+                if int(start) == 0:
+                    return True  # The queued start has not reached ExecStart yet.
+                started = int(start) / 1_000_000
+                require(started <= time.monotonic(), "service_start_time", "Unit start timestamp is in the future.")
+                expires[name] = min(deadline, started + limits[name]) if limits[name] else deadline
+            budget.deadline = deadline if name in proved else expires[name]
+            budget.check()
+            current = (observed["MainPID"], (observed.get("process") or {}).get("start"))
+            if name in tokens and current != tokens[name]:
+                return False
+            ready = _matches_executable(observed, executable)
+            if final:
+                budget.check()
+                return ready
+            if ready and role.common.confinement == "loopback":
+                import network_confinement
+                network_confinement.isolation(host, inventory, name)
+            if ready and endpoint:
+                unix = readiness_probe(role).kind == "unix"
+                command = ["ss", "-Hxlpn"] if unix else ["ss", "-Hltpn", f"sport = :{endpoint.port}"]
+                budget.check()
+                listeners = host.run(command, check=False, timeout=min(5, budget.deadline - time.monotonic()))
+                local_addresses = {local}
+                if isinstance(role, ExecutableRole) and dict(role.listeners)[endpoint.listener].wildcard:
+                    local_addresses.update(f"{address}:{endpoint.port}" for address in ("0.0.0.0", "[::]", "*"))
+                ready = listeners.returncode == 0 and any(
+                    len(line.split()) >= (8 if unix else 5) and line.split()[4 if unix else 3] in local_addresses and
+                    f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
+            ready = ready and (probe(host, inventory, name, budget.deadline, paused=True) if paused and name.role == "http"
+                               else probe(host, inventory, name, budget.deadline))
+            budget.check()
+            if not ready:
+                stable_since.pop(name, None)
+                return name not in proved
+            after = service(host, inventory.units[name], timeout=min(5, budget.deadline - time.monotonic()))
+            budget.check()
+            if (not _matches_executable(after, executable) or after["NRestarts"] != "0" or
+                    (after["MainPID"], (after.get("process") or {}).get("start")) != current):
+                return False
+            budget.check()
+            tokens[name] = current
+            stable_since.setdefault(name, time.monotonic())
+            if time.monotonic() - stable_since[name] >= STABILITY_SECONDS:
+                proved.add(name)
+                budget.deadline = deadline
+            return True
+
+    pending, active = deque(names), {}
+    due = dict.fromkeys(names, observation_start)
+    phase = "observing"
+    pool = ThreadPoolExecutor(max_workers=READINESS_WORKERS, thread_name_prefix="foundry-ready")
     try:
-        with wall_clock_budget(deadline - time.monotonic()):
-            while time.monotonic() < deadline:
-                healthy, observed_tokens = set(), {}
-                for name, (role, executable, endpoint, local) in checks.items():
-                    if time.monotonic() >= deadline:
+        while time.monotonic() < deadline:
+            for future in tuple(active):
+                if future.done():
+                    name, budget = active.pop(future)
+                    if not future.result():
                         return False
-                    observed = service(host, inventory.units[name], timeout=min(5, deadline - time.monotonic()))
-                    if observed["ActiveState"] == "failed" or observed["NRestarts"] != "0":
-                        return False
-                    if name not in expires:
-                        start = observed.get("ExecMainStartTimestampMonotonic")
-                        require(isinstance(start, str) and start.isdecimal(),
-                                "service_start_time", "Systemd did not provide the unit's monotonic start timestamp.")
-                        if int(start) == 0:
-                            continue  # The queued start has not reached ExecStart yet.
-                        started = int(start) / 1_000_000
-                        require(started <= time.monotonic(), "service_start_time", "Unit start timestamp is in the future.")
-                        expires[name] = min(deadline, started + limits[name]) if limits[name] else deadline
-                    until = deadline if name in proved else expires[name]
-                    if time.monotonic() >= until:
-                        return False
-                    current = (observed["MainPID"], (observed.get("process") or {}).get("start"))
-                    if name in tokens and current != tokens[name]:
-                        return False
-                    observed_tokens[name] = current
-                    ready = _matches_executable(observed, executable)
-                    if ready and role.common.confinement == "loopback":
-                        import network_confinement
-                        network_confinement.isolation(host, inventory, name)
-                    if ready and endpoint:
-                        unix = readiness_probe(role).kind == "unix"
-                        command = ["ss", "-Hxlpn"] if unix else ["ss", "-Hltpn", f"sport = :{endpoint.port}"]
-                        listeners = host.run(command, check=False, timeout=min(5, until - time.monotonic()))
-                        local_addresses = {local}
-                        if isinstance(role, ExecutableRole) and dict(role.listeners)[endpoint.listener].wildcard:
-                            local_addresses.update(f"{address}:{endpoint.port}" for address in ("0.0.0.0", "[::]", "*"))
-                        ready = listeners.returncode == 0 and any(
-                            len(line.split()) >= (8 if unix else 5) and line.split()[4 if unix else 3] in local_addresses and
-                            f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
-                    ready = ready and (probe(host, inventory, name, until, paused=True) if paused and name.role == "http"
-                                       else probe(host, inventory, name, until))
-                    if not ready:
-                        if name in proved:
-                            return False
-                        stable_since.pop(name, None)
-                    else:
-                        healthy.add(name)
-                # Recheck peers after the last probe, including one proved before
-                # a slow sibling. A changed process never inherits a stability proof.
-                for name in healthy:
-                    _, executable, _, _ = checks[name]
-                    until = deadline if name in proved else expires[name]
-                    if time.monotonic() >= until:
-                        return False
-                    after = service(host, inventory.units[name], timeout=min(5, until - time.monotonic()))
-                    if (not _matches_executable(after, executable) or after["NRestarts"] != "0" or
-                            (after["MainPID"], (after.get("process") or {}).get("start")) != observed_tokens[name]):
-                        return False
-                    tokens[name] = observed_tokens[name]
-                    stable_since.setdefault(name, time.monotonic())
-                    if time.monotonic() - stable_since[name] >= STABILITY_SECONDS:
-                        proved.add(name)
-                if len(proved) == len(names) and time.monotonic() < deadline:
-                    return True
-                time.sleep(max(0, min(.1, deadline - time.monotonic())))
+                    if phase == "observing":
+                        due[name] = time.monotonic() + .1
+                        pending.append(name)
+            if phase == "observing" and len(proved) == len(names):
+                phase = "draining"
+                pending.clear()
+            if phase == "draining" and not active:
+                # All probes have returned. Recheck every process, including a
+                # fast peer whose last probe preceded the slowest completion.
+                phase = "checking"
+                pending.extend(names)
+            if phase == "checking" and not pending and not active:
+                return True
+            now = time.monotonic()
+            if any(now >= budget.deadline for _, budget in active.values()):
+                return False
+            if any(name not in proved and now >= expires.get(name, deadline) for name in pending):
+                return False
+            for _ in range(len(pending)):
+                if len(active) >= READINESS_WORKERS:
+                    break
+                name = pending.popleft()
+                if phase == "observing" and due[name] > now:
+                    pending.append(name)
+                    continue
+                until = deadline if name in proved else expires.get(name, deadline)
+                if now >= until:
+                    return False
+                budget = ObservationBudget(until)
+                active[pool.submit(observe, name, budget, phase == "checking")] = (name, budget)
+            pause = min(.02, max(0, deadline - time.monotonic()))
+            if active:
+                wait(active, timeout=pause, return_when=FIRST_COMPLETED)
+            else:
+                time.sleep(pause)
     except OperationTimeout:
         return False
+    finally:
+        for _, budget in active.values():
+            budget.cancel()
+        pool.shutdown(wait=True, cancel_futures=True)
     return False

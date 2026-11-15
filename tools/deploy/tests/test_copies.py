@@ -116,10 +116,9 @@ class CopyFoundationTests(unittest.TestCase):
         import tempfile
         from host import Host, Paths
         inventory, entry, _ = numbered_inventory(128)
-        clock = [1.0]
-        def advance(seconds):
-            clock[0] += max(seconds, 1.0)
-        timer = SimpleNamespace(monotonic=lambda: clock[0], sleep=advance)
+        import time
+        began = time.monotonic()
+        deadline = began + release.READINESS_SECONDS
         started, probes, batches = set(), set(), []
         def start(argv, **kwargs):
             self.assertEqual(argv[:2], ["systemctl", "start"])
@@ -129,7 +128,7 @@ class CopyFoundationTests(unittest.TestCase):
         def observe(host, unit, **kwargs):
             self.assertIn(unit, started)
             return {"ActiveState": "active", "NRestarts": "0", "MainPID": str(list(inventory.units.values()).index(unit) + 1),
-                    "process": {"start": "42"}, "ExecMainStartTimestampMonotonic": str(int(clock[0] * 1_000_000))}
+                    "process": {"start": "42"}, "ExecMainStartTimestampMonotonic": str(int(began * 1_000_000))}
         def probe(host, current, identity, deadline):
             probes.add(identity)
             return True
@@ -141,23 +140,22 @@ class CopyFoundationTests(unittest.TestCase):
                 executable.write_bytes(b"native")
                 executable.chmod(0o755)
                 inventory.specs[identity] = replace(spec, executable_sha256=c.digest(executable))
-            with patch.object(lifecycle, "time", timer), patch.object(services, "time", timer), \
-                    patch.object(lifecycle, "prepare_shared_directories"), \
+            with patch.object(lifecycle, "prepare_shared_directories"), \
                     patch.object(services, "enabled_units", return_value=tuple(inventory.units)), \
                     patch.object(host, "run", side_effect=start), \
                     patch.object(host, "read_registry", return_value={"instances": {}}), \
                     patch.object(release, "service", side_effect=observe), \
                     patch.object(release, "_matches_executable", return_value=True), \
-                    patch.object(release, "STABILITY_SECONDS", 5), \
+                    patch.object(release, "STABILITY_SECONDS", .15), \
                     patch.object(services, "readiness_probe", return_value=None), \
                     patch.object(services, "probe", side_effect=probe):
-                lifecycle.start_units(host, entry, inventory, inventory.units, release.READINESS_SECONDS)
-                self.assertTrue(services.wait_ready_set(host, inventory, inventory.units, release.READINESS_SECONDS))
+                lifecycle.start_units(host, entry, inventory, inventory.units, deadline)
+                self.assertTrue(services.wait_ready_set(host, inventory, inventory.units, deadline))
         self.assertEqual(started, set(inventory.units.values()))
         self.assertEqual(probes, set(inventory.units))
         self.assertEqual([len(batch) for batch in batches], [1, 128, 1])
-        self.assertGreaterEqual(clock[0], 5)
-        self.assertLess(clock[0], release.READINESS_SECONDS)
+        self.assertGreaterEqual(time.monotonic() - began, .6)
+        self.assertLess(time.monotonic(), deadline)
 
     def test_identity_is_frozen_ordered_and_bounded(self):
         for ordinal in (1, 2, 128):
