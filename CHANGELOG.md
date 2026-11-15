@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: application rehearsal preserves R2's conditional create and replace
+  capabilities and each S3-compatible disk's declared capabilities. Multipart
+  conditions require certification tied to the pinned stand-in image. Until that
+  matrix passes, rehearsal refuses affected disks unless their binding explicitly
+  allows a reduced-fidelity cap at `PartBytes`. Evidence records every capped disk.
+- Added: container acceptance runs the existing conditional multipart matrix
+  against the pinned S3 stand-in through a Compatible-provider entry point.
+  `--s3-certification-only` runs that phase without an application archive and
+  retains digest-bound results. Container certification is pending.
+
 ## v0.35.0 — 2026-11-15
 
 - Added: loopback network confinement for roles, declared with

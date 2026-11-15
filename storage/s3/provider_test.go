@@ -27,11 +27,30 @@ import (
 // Cleanup checks every full key, and never provisions/resets/deletes a bucket.
 func TestRealAWSStorageContract(t *testing.T) { runRealProvider(t, AWS) }
 func TestRealR2StorageContract(t *testing.T)  { runRealProvider(t, R2) }
+
+func TestCompatibleConditionalCertificationProfile(t *testing.T) {
+	for name, value := range map[string]string{
+		"BUCKET": "test-bucket", "PREFIX": "certification/", "REGION": "us-east-1",
+		"ENDPOINT": "https://s3:9000", "ACCESS_KEY_ID": "test", "SECRET_ACCESS_KEY": "test",
+		"REQUIRED": "1", "PUBLIC_BASE": "", "PROFILE": "", "SESSION_TOKEN": "",
+	} {
+		t.Setenv("FOUNDRY_TEST_COMPATIBLE_"+name, value)
+	}
+	cfg := realConfig(t, Compatible)
+	compatible := (&Backend{config: cfg}).Capabilities()
+	r2 := (&Backend{config: Config{Provider: R2, PartBytes: cfg.PartBytes}}).Capabilities()
+	if compatible != r2 || compatible.ConditionalWriteMaxBytes != 0 || !cfg.PathStyle || cfg.AllowHTTP {
+		t.Fatal("stand-in certification must exercise the R2 capability profile over path-style HTTPS")
+	}
+}
+
 func realConfig(t *testing.T, provider Provider) Config {
 	t.Helper()
 	name := "S3"
 	if provider == R2 {
 		name = "R2"
+	} else if provider == Compatible {
+		name = "COMPATIBLE"
 	}
 	env := "FOUNDRY_TEST_" + name + "_"
 	bucket := os.Getenv(env + "BUCKET")
@@ -51,12 +70,18 @@ func realConfig(t *testing.T, provider Provider) Config {
 	}
 	cfg := DefaultConfig(bucket, os.Getenv(env+"REGION"))
 	cfg.Profile = os.Getenv(env + "PROFILE")
-	if provider == R2 {
+	if provider == R2 || provider == Compatible {
 		access, secret := os.Getenv(env+"ACCESS_KEY_ID"), os.Getenv(env+"SECRET_ACCESS_KEY")
 		if access == "" || secret == "" {
-			t.Fatal("real R2 certification requires explicit test credentials")
+			t.Fatal("real provider certification requires explicit test credentials")
 		}
 		cfg = R2Config(bucket, os.Getenv(env+"ENDPOINT"), credentials.NewStaticCredentialsProvider(access, secret, os.Getenv(env+"SESSION_TOKEN")))
+		if provider == Compatible {
+			cfg.Provider = Compatible
+			cfg.Region = os.Getenv(env + "REGION")
+			cfg.PathStyle = true
+			cfg.Compatible = CompatibleCapabilities{RequiresNFCKeys: true, ConditionalCreate: true, ConditionalReplace: true}
+		}
 	}
 	if address := os.Getenv(env + "PUBLIC_BASE"); address != "" {
 		public, err := storage.ParsePublicBase(address)

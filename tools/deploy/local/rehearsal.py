@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import (DeployError, MAX_JSON, canonical_digest, check_path, digest, identity,
                        read_json, require, slug, validate_project)
 from topology import parse_profile, parse_topology, validate_topology
-from containers import ASSETS, S3_IMAGE, Resources, boot_host, create_ca, create_host, run
+from containers import ASSETS, S3_IMAGE, ContainerError, Resources, boot_host, create_ca, create_host, run, s3_certification
 
 DOCUMENTATION = tuple(ipaddress.ip_network(value) for value in
                       ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24", "2001:db8::/32"))
@@ -122,7 +122,9 @@ def test_bindings(path, environment, config, token):
         require(path.is_file() and path.stat().st_mode & 0o077 == 0,
                 "rehearsal_bindings", "Test binding files must be private (0600).")
         value = read_json(path)
-        require(isinstance(value, dict) and set(value) == {"environment", "configuration", "storage_disks"}
+        required = {"environment", "configuration", "storage_disks"}
+        require(isinstance(value, dict) and required <= set(value)
+                and set(value) <= required | {"allow_single_request_conditions"}
                 and value["environment"] == environment, "rehearsal_bindings", "Test bindings must name the selected acceptance environment.")
     require(isinstance(value["configuration"], dict) and all(isinstance(k, str) and isinstance(v, str)
             and not k.endswith("_FILE") for k, v in value["configuration"].items()),
@@ -133,6 +135,16 @@ def test_bindings(path, environment, config, token):
     disks = config.get("app", {}).get("services", {}).get("storage", {}).get("disks", {})
     external = {name for name, disk in disks.items() if disk.get("driver") in ("r2", "s3", "s3_compatible")}
     require(set(names) == external, "rehearsal_bindings", "Explicitly bind every external storage disk to the test object store.")
+    capped = value.get("allow_single_request_conditions", [])
+    require(isinstance(capped, list) and len(capped) <= len(names)
+            and all(isinstance(n, str) for n in capped) and len(capped) == len(set(capped))
+            and set(capped) <= set(names), "rehearsal_bindings",
+            "allow_single_request_conditions must list unique, explicitly bound disk names.")
+    try:
+        certification = s3_certification()
+    except ContainerError as error:
+        raise DeployError("rehearsal_storage_certification", str(error)) from None
+    reduced = []
     access, secret = "rehearsal-" + token, secrets.token_hex(32)
     settings = {"backup_s3": {"endpoint": "https://s3:9000", "region": "us-east-1", "bucket": "backup-" + token,
                              "access_key_id": access, "secret_access_key": secret}}
@@ -146,13 +158,28 @@ def test_bindings(path, environment, config, token):
             require(disk["driver"] in ("r2", "s3_compatible"), "rehearsal_bindings", "This storage driver has no compatible test binding.")
             bucket = "app-" + token + "-" + str(len(buckets))
             buckets.append(bucket)
+            cloud = disk.setdefault("cloud", {})
+            # Matches storage/s3.Backend.Capabilities for the certified R2 profile.
+            compatible = ({"requires_nfc_keys": True, "conditional_create": True,
+                           "conditional_replace": True, "single_request_conditions": False}
+                          if disk["driver"] == "r2" else cloud.get("compatible", {}))
+            multipart = ((compatible.get("conditional_create") or compatible.get("conditional_replace"))
+                         and not compatible.get("single_request_conditions", False))
+            if multipart and certification["status"] != "passed":
+                require(name in capped, "rehearsal_storage_capability",
+                        "Disk " + name + ": stand-in lacks certified conditional CompleteMultipartUpload. "
+                        "Certify the pinned S3 image or explicitly list this disk in rehearsal bindings "
+                        "allow_single_request_conditions for a reduced-fidelity rehearsal capped at PartBytes.")
+                compatible["single_request_conditions"] = True
+                reduced.append(name)
             disk["driver"] = "s3_compatible"
-            disk.setdefault("cloud", {}).update(endpoint="https://s3:9000", region="us-east-1", bucket=bucket,
-                credentials="rehearsal", path_style=True, compatible={"requires_nfc_keys": True,
-                "conditional_create": True, "conditional_replace": True, "single_request_conditions": True})
+            cloud.update(endpoint="https://s3:9000", region="us-east-1", bucket=bucket,
+                         credentials="rehearsal", path_style=True, compatible=compatible)
         settings["app_storage"] = {"credentials": {"rehearsal": {"mode": "static", "access_key": access, "secret_key": secret}},
                                    "disks": selected}
-    return settings, buckets
+    return settings, buckets, {"status": "reduced" if reduced else "preserved",
+                              "conditional_writes_capped_at_part_bytes": reduced,
+                              "s3_certification": certification}
 
 
 def phase(host, name, token):
@@ -207,7 +234,10 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
         project, profile, topology, manifest, config = inputs(root, environment, archive)
     archive = Path(archive).absolute()
     # Validate all private inputs before contacting Docker or creating resources.
-    settings, buckets = test_bindings(bindings, environment, config, secrets.token_hex(8))
+    settings, buckets, fidelity = test_bindings(bindings, environment, config, secrets.token_hex(8))
+    if fidelity["status"] == "reduced":
+        print("Reduced-fidelity rehearsal: conditional writes capped at PartBytes for disks: "
+              + ", ".join(fidelity["conditional_writes_capped_at_part_bytes"]), file=sys.stderr)
     architecture = run(["docker", "info", "--format", "{{.Architecture}}"], timeout=30).stdout.strip()
     require({"aarch64": "arm64", "arm64": "arm64", "x86_64": "amd64", "amd64": "amd64"}.get(architecture)
             == profile["architecture"], "rehearsal_architecture", "Use a native Docker engine matching the archive architecture.")
@@ -221,6 +251,7 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
     evidence = {"run_id": resources.token, "status": "failed", "archive_sha256": digest(archive), "environment": environment,
         "profile_sha256": canonical_digest(profile), "topology_sha256": topology.sha256, "ubuntu": ubuntu,
         "architecture": profile["architecture"], "cpus": cpus, "memory_gib": memory_gib, "network": plan,
+        "storage_fidelity": fidelity,
         "phases": [], "external_checks": {"production_dns_acme": "unavailable", "cloud_firewalls": "unavailable",
         "global_dns_cutover": "manual", "public_udp": "unavailable"}}
     platform, failed = "linux/" + profile["architecture"], True

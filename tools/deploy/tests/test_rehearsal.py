@@ -50,7 +50,8 @@ class RehearsalTests(unittest.TestCase):
         path.write_bytes((root / "deploy/acceptance-lab-bindings.json").read_bytes())
         path.chmod(0o600)
         config = tomllib.loads((root / "config/deploy.toml").read_text())
-        settings, buckets = rehearsal.test_bindings(path, "acceptance-lab", config, "fixture")
+        with patch.object(containers, "S3_CONDITIONAL_MULTIPART", {"image": containers.S3_IMAGE, "status": "passed", "evidence": "test"}):
+            settings, buckets, fidelity = rehearsal.test_bindings(path, "acceptance-lab", config, "fixture")
         self.assertEqual(set(settings["app_storage"]["disks"]), {"attachments"})
         binding = settings["app_storage"]["disks"]["attachments"]["cloud"]
         self.assertEqual(binding["endpoint"], "https://s3:9000")
@@ -129,7 +130,8 @@ class RehearsalTests(unittest.TestCase):
         with self.assertRaises(DeployError):
             rehearsal.test_bindings(path, "acceptance-local", config, "a" * 16)
         path.chmod(0o600)
-        settings, buckets = rehearsal.test_bindings(path, "acceptance-local", config, "a" * 16)
+        with patch.object(containers, "S3_CONDITIONAL_MULTIPART", {"image": containers.S3_IMAGE, "status": "passed", "evidence": "test"}):
+            settings, buckets, fidelity = rehearsal.test_bindings(path, "acceptance-local", config, "a" * 16)
         disk = settings["app_storage"]["disks"]["uploads"]
         self.assertEqual(disk["cloud"]["endpoint"], "https://s3:9000")
         self.assertEqual(disk["cloud"]["bucket"], buckets[0])
@@ -178,6 +180,7 @@ class RehearsalTests(unittest.TestCase):
                                   "restart", "observe", "stop"])
         evidence = read_json(output / "evidence.json")
         self.assertEqual(evidence["status"], "passed")
+        self.assertEqual(evidence["storage_fidelity"]["status"], "preserved")
         self.assertEqual(evidence["archive_sha256"], digest(archive))
         self.assertEqual(evidence["profile_sha256"], canonical_digest(profile))
         self.assertFalse((output / "private").exists())

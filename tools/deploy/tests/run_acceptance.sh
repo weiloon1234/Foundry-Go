@@ -8,6 +8,9 @@ usage() {
 Usage: run_acceptance.sh --ubuntu 24.04|26.04 --platform linux/arm64|linux/amd64 \
   --archive /absolute/app.tar.gz --framework-root /absolute/Foundry-Go --foreign|--fresh [--upgrade --tools-root /absolute/module-cache/previous-release/tools/deploy]
 
+--s3-certification-only runs the conditional multipart matrix against the pinned
+S3 image and exits before app acceptance. Omit --archive and select --fresh.
+
 Run each OS/architecture/mode separately with a matching Linux app archive.
 The archive must declare HTTP + scheduler (worker optional), private R2 disks,
 coordination and portal-cache Redis children, and a <=60s successful schedule.
@@ -30,7 +33,7 @@ seed passwords; each receives a random bootstrap value).
 EOF
 }
 
-ubuntu= platform= archive= framework= mode= upgrade=0 feature_preview=0 old_tools=
+ubuntu= platform= archive= framework= mode= upgrade=0 feature_preview=0 old_tools= s3_only=0
 while (($#)); do
   case "$1" in
     --ubuntu|--platform|--archive|--framework-root|--tools-root)
@@ -45,18 +48,24 @@ while (($#)); do
       mode=${1#--}; shift ;;
     --upgrade) upgrade=1; shift ;;
     --feature-preview) feature_preview=1; shift ;;
+    --s3-certification-only) s3_only=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
 done
 [[ "$ubuntu" == 24.04 || "$ubuntu" == 26.04 ]] || { usage >&2; exit 2; }
 [[ "$platform" == linux/arm64 || "$platform" == linux/amd64 ]] || { usage >&2; exit 2; }
-[[ -n "$mode" && -f "$archive" && -d "$framework" ]] || { usage >&2; exit 2; }
+[[ -n "$mode" && -d "$framework" ]] || { usage >&2; exit 2; }
+if ((s3_only)); then
+  [[ "$mode" == fresh && "$upgrade" == 0 && "$feature_preview" == 0 ]] || { usage >&2; exit 2; }
+else
+  [[ -f "$archive" ]] || { usage >&2; exit 2; }
+  archive=$(cd "$(dirname "$archive")" && pwd -P)/$(basename "$archive")
+fi
 if ((feature_preview)); then
   [[ "$mode" == fresh && "$upgrade" == 0 ]] || { echo '--feature-preview requires --fresh and excludes --upgrade' >&2; exit 2; }
 fi
 framework=$(cd "$framework" && pwd -P)
-archive=$(cd "$(dirname "$archive")" && pwd -P)/$(basename "$archive")
 tests="$framework/tools/deploy/tests"
 local_tools="$framework/tools/deploy/local"
 containers="$local_tools/containers.py"
@@ -190,7 +199,6 @@ python3 "$containers" create-host --platform "$platform" --name "$host" --networ
 host_created=1
 python3 "$containers" boot "$host" "$certs" >"$logs/host-start.log" 2>&1
 docker exec "$host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a
-docker cp "$archive" "$host:/var/lib/foundry-acceptance-f4a/input.tar.gz" >"$logs/archive-copy.log" 2>&1
 docker exec --env-file "$env_file" -i "$host" python3 - >"$logs/s3-ready.log" 2>&1 <<'PY'
 import sys, time
 sys.path.insert(0, "/verification/deploy/tests")
@@ -208,6 +216,14 @@ while time.monotonic() < deadline:
 else:
     raise SystemExit('S3 stand-in readiness deadline exceeded')
 PY
+
+python3 -B "$tests/certify_s3.py" --host "$host" --store "$s3" --platform "$platform" \
+  --env-file "$env_file" --output "$logs/s3-certification.json" >"$logs/s3-certification.log" 2>&1
+if ((s3_only)); then
+  echo 'PASS pinned S3 conditional multipart certification; see s3-certification.json'
+  exit 0
+fi
+docker cp "$archive" "$host:/var/lib/foundry-acceptance-f4a/input.tar.gz" >"$logs/archive-copy.log" 2>&1
 
 phase_on() {
   local target=$1 name=$2 result
