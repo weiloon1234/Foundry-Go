@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.38.2 — 2026-11-16
+
+- Fixed: a rehearsal storage grant applies only to disks the current runtime
+  configures. Reduced CLI runtimes that build from defaults plus one database
+  pool, such as `db:seed` and admin recovery commands, no longer fail with
+  `storage_invalid: open` when the instance's grant names a disk they do not
+  open. A configured granted disk must still be `s3_compatible` with a cap equal
+  to `PartBytes`, single-request conditions and conditional create or replace.
+  Production, which has no grant, is unaffected.
+
 ## v0.38.1 — 2026-11-16
 
 - Fixed: a plain `ACTION=restart` of a stopped feature (schema 2) instance now
