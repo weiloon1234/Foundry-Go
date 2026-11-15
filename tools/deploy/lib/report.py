@@ -753,6 +753,7 @@ def declared_network(host, profile, *, topology, entry=None, resolution=None, cl
                             "transport": c.socket.transport, "family": c.socket.family, "address": c.socket.address,
                             "port": c.socket.port, "expected_owner": c.owner,
                             "tls": policies[c.role + "." + c.listener].tls,
+                            "proxy_protocol": policies[c.role + "." + c.listener].proxy_protocol,
                             "authentication": policies[c.role + "." + c.listener].authentication} for c in claims],
             "confinement": own_confinement,
             "private_listeners": [{"role": c.role, "listener": c.listener, "address": c.socket.address,

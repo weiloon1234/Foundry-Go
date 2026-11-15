@@ -115,6 +115,26 @@ class EchoBackend:
             raise RuntimeError("Test-owned backend did not exit")
 
 
+class ProxyBackend(EchoBackend):
+    """Fixture receiver: report the exact bounded v1 header nginx sent."""
+    def serve(self, connection):
+        with connection:
+            connection.settimeout(2)
+            try:
+                with connection.makefile("rb") as reader:
+                    header = reader.readline(108)
+                    if not header.startswith(b"PROXY ") or not header.endswith(b"\r\n"):
+                        return
+                    payload = reader.readline(256)
+                    if payload != b"peer\n":
+                        return
+                    result = {"header": header.decode("ascii").strip().split(),
+                              "peer": list(connection.getpeername()[:2]), "payload": payload.decode("ascii")}
+                    connection.sendall(json.dumps(result).encode() + b"\n")
+            except (OSError, UnicodeError):
+                return
+
+
 @unittest.skipUnless(os.environ.get("FOUNDRY_UFW_OBSERVATION_ACCEPTANCE") == "1", "Live UFW observation is opt-in")
 class UFWObservationAcceptance(unittest.TestCase):
     """Read-only observation of the enabled UFW layout in a disposable container.
@@ -296,7 +316,22 @@ with stream:
 '''
 
 
-def preview_documents(mode, instance_id, *, selective=False):
+PROXY_PEER_PROBE = r'''
+import json, socket, ssl, sys
+address, port, mode, hostname, certificate = sys.argv[1:]
+raw = socket.create_connection((address, int(port)), timeout=2)
+source = list(raw.getsockname()[:2])
+stream = ssl.create_default_context(cafile=certificate).wrap_socket(raw, server_hostname=hostname) if mode == "edge" else raw
+with stream:
+    stream.settimeout(3)
+    stream.sendall(b"peer\n")
+    with stream.makefile("rb") as reader:
+        observed = json.loads(reader.readline(4096))
+    print(json.dumps({"source": source, "observed": observed}))
+'''
+
+
+def preview_documents(mode, instance_id, *, selective=False, proxy_protocol=False):
     """Fixture declarations only: no release, admission or lane A implementation."""
     topology = t.parse_topology({"schema": 2, "roles": [
         {"name": "http", "kind": "builtin"},
@@ -307,6 +342,13 @@ def preview_documents(mode, instance_id, *, selective=False):
          "limits": {"memory_bytes": 67108864, "cpu_percent": 100, "tasks": 64},
          "state": {"kind": "disposable"}}],
         "application_executables": {"echo": {"go_package": "./cmd/echo"}}})
+    if proxy_protocol:
+        raw = topology.projection()
+        relay = raw["roles"][1]
+        relay["listeners"]["ingress"]["proxy_protocol"] = "v1"
+        relay["listeners"]["health"] = {"transport": "tcp", "bind": "loopback"}
+        relay["readiness"]["listener"] = "health"
+        topology = t.parse_topology(raw)
     profile = t.parse_profile({"schema": 3, "environment": "acceptance", "runtime_environment": "testing",
         "instance_id": instance_id, "host": {"address": "preview.acceptance.invalid", "port": 22, "host_id": instance_id},
         "domain": "preview.acceptance.invalid", "certbot_email": "ops@acceptance.invalid", "architecture": "amd64",
@@ -390,7 +432,9 @@ class NetworkPreviewAcceptance(unittest.TestCase):
     def setUp(self):
         self.instance_id = str(uuid.uuid4())
         self.mode = "edge" if self._testMethodName.endswith("tls") else "none"
-        self.topology, self.profile = preview_documents(self.mode, self.instance_id, selective="selective" in self._testMethodName)
+        self.proxy_protocol = "proxy_protocol" in self._testMethodName
+        self.topology, self.profile = preview_documents(self.mode, self.instance_id,
+            selective="selective" in self._testMethodName, proxy_protocol=self.proxy_protocol)
         self.claims = listeners.public_claims(self.profile)
         self.backends, self.probes = [], []
         self.selected = None
@@ -425,19 +469,25 @@ class NetworkPreviewAcceptance(unittest.TestCase):
         references = edge.retain_global_references(self.host)
         reserved_claims = tuple(listeners.ListenerClaim(self.instance_id, e.role, e.listener, 1,
                                listeners.SocketIdentity("tcp", 4, e.address, e.port), "application") for e in reserved)
-        endpoints = listeners.allocate_private(self.instance_id, (("http", "http"), *((name, "ingress") for name, count in self.profile.placement if count and name != "http")),
+        endpoints = listeners.allocate_private(self.instance_id, (("http", "http"), *(
+                     (role.common.name, name) for role in self.topology.roles if isinstance(role, t.ExecutableRole)
+                     and dict(self.profile.placement)[role.common.name] for name, _ in role.listeners)),
                      reserved_claims, (*listeners.observe_sockets(self.host), *(listeners.ObservedSocket(s, ()) for s in references)))
         return preview_resolution(self.topology, self.profile, endpoints)
 
     def backend(self, resolution, role="relay"):
-        endpoint = next(e for e in resolution.endpoints if e.role == role)
-        backend = EchoBackend(endpoint, None)
+        endpoint = next(e for e in resolution.endpoints if e.role == role and e.listener == "ingress")
+        backend = (ProxyBackend if self.proxy_protocol else EchoBackend)(endpoint, None)
         self.backends.append(backend)
+        if self.proxy_protocol:
+            health = next(e for e in resolution.endpoints if e.role == role and e.listener == "health")
+            self.backends.append(EchoBackend(health, None))
         return backend
 
     def authority(self, resolution):
         # This proves only fixture health, never admission or a start permit.
-        endpoint = next(e for e in resolution.endpoints if e.role == "relay")
+        readiness = next(role.readiness for role in self.topology.roles if role.common.name == "relay")
+        endpoint = next(e for e in resolution.endpoints if e.role == "relay" and e.listener == readiness.listener)
         with socket.create_connection((endpoint.address, endpoint.port), timeout=2) as stream:
             stream.settimeout(2)
             stream.sendall(b"fixture-health\n")
@@ -505,6 +555,29 @@ class NetworkPreviewAcceptance(unittest.TestCase):
 
     def test_default_deny_open_and_withdraw_tls(self):
         self.opening_case()
+
+    def proxy_protocol_case(self):
+        self.reachable(False)
+        self.backend(self.candidate)
+        self.assertTrue(self.authority(self.candidate))
+        self.assertFalse(self.expose(self.candidate).closed)
+        for family, address, peer in zip(("TCP4", "TCP6"), ADDRESSES, PEER_ADDRESSES):
+            response = self.host.run(["ip", "netns", "exec", PEER, "python3", "-I", "-c", PROXY_PEER_PROBE,
+                address, "8554", self.mode, self.lineage, str(self.certificate)], timeout=8)
+            result = json.loads(response.stdout)
+            self.assertEqual(result["source"][0], peer)
+            self.assertEqual(result["observed"]["header"],
+                ["PROXY", family, peer, address, str(result["source"][1]), "8554"])
+            self.assertEqual(result["observed"]["peer"][0], "127.0.0.1")
+            self.assertEqual(result["observed"]["payload"], "peer\n")
+        self.closed_evidence()
+        self.reachable(False)
+
+    def test_proxy_protocol_real_client_plain(self):
+        self.proxy_protocol_case()
+
+    def test_proxy_protocol_real_client_tls(self):
+        self.proxy_protocol_case()
 
     def test_selective_withdrawal_preserves_live_service_and_exposure(self):
         self.backend(self.old)

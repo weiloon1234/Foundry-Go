@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Added: public TCP stream listeners can declare topology-level
+  `"proxy_protocol": "v1"` on the listener so nginx sends the client's address and
+  port to a PROXY-aware backend. Both plaintext and edge TLS are supported; the
+  field is rejected on private/Unix listeners, roles and profile bindings. The
+  backend requires a separate non-PROXY readiness listener. Reports expose the
+  selected version per public listener. Declaring the capability requires deploy
+  client and host generation 19 and retains that floor through rollback/recovery.
+  HTTP sites keep forwarded headers; inbound PROXY and outbound v2 are unsupported.
+  The opt-in nginx stream acceptance now checks real client addresses and ports
+  over IPv4/IPv6 for both TLS modes.
+
 ## v0.35.0 — 2026-11-15
 
 - Added: loopback network confinement for roles, declared with

@@ -20,6 +20,9 @@ either capability. Unix listeners and endpoint bindings require generation 15 an
 set a sticky generation-15 floor. Upgrade both the host tools and deploy client
 before using them. Role loopback confinement and wildcard private listeners require
 generation 16 on both client and host, with the same sticky rollback/recovery floor.
+Outbound PROXY protocol requires generation 19 on both client and host. Declaring
+it sets a sticky generation-19 floor, retained after rollback and recovery even
+when the selected release no longer declares it.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
 
@@ -132,7 +135,7 @@ launch origin does not grant permission to start.
 | Declaration outside release 1 | Later capability |
 | --- | --- |
 | Wrappers, role instance counts above one, ordinals other than one | B24 release 2 |
-| PROXY protocol | B24 release 2 |
+| Outbound PROXY v2 and inbound PROXY to nginx | Unsupported; outbound v1 is available with generation 19 |
 | Managed application DNS records | B24 release 2; release 1 DNS is external only |
 | UDP listeners | Planned for B24 release 2; unsupported in release 1 |
 | Artifact formats other than `file` and `tar.gz` | Unsupported format; no later numbered release is promised |
@@ -244,7 +247,7 @@ paths into either declaration.
 
 This example defines an HTTP app plus a generic relay. Supply a Linux relay binary
 that implements the argument interface below: a loopback HTTP control server with
-`GET /ready`, a plain TCP media server, and an HTTP authorization callback client.
+`GET /ready`, a PROXY-v1-aware TCP media server, and an HTTP authorization callback client.
 The artifact URL, checksum, UUIDs, hostnames, addresses and CIDRs below are
 **documentation placeholders**. Replace them with your published artifact and
 actual deployment values. This is not a downloadable product configuration.
@@ -295,7 +298,7 @@ callback, because the app starts after the relay.
       ],
       "listeners": {
         "control": {"transport": "tcp", "bind": "loopback"},
-        "ingress": {"transport": "tcp", "bind": "public", "tls": "none", "authentication": true}
+        "ingress": {"transport": "tcp", "bind": "public", "tls": "none", "authentication": true, "proxy_protocol": "v1"}
       },
       "readiness": {"kind": "http", "listener": "control", "path": "/ready", "status": 200, "timeout_seconds": 30},
       "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5, "window_seconds": 60, "stop_seconds": 30},
@@ -365,8 +368,46 @@ client authorization. `tls: "none"` adds no encryption: use it only where the
 protocol/network's confidentiality properties are acceptable. To terminate TLS
 at nginx instead, use `tls: "edge"`; the profile still supplies the hostname and
 DNS-only addresses, and the existing certificate owner provisions its certificate.
-Edge TLS still requires service authentication. PROXY protocol is unavailable, so
-do not depend on the relay seeing the original client IP through the proxy.
+Edge TLS still requires service authentication.
+
+### Outbound PROXY protocol
+
+The example opts its `ingress` listener into `"proxy_protocol": "v1"`. This is a
+topology fact: the backend must parse a PROXY header before application bytes.
+The profile still owns only the public ports, addresses and source policy. Omit
+the field for an ordinary backend; the default sends no header and the backend
+sees nginx's connection identity. Role-level, private TCP, Unix and profile-level
+listener declarations reject the field. The built-in HTTP role keeps its
+forwarded headers; HTTP sites and inbound PROXY from an upstream load balancer
+to nginx are outside this capability.
+
+Both `tls: "none"` and `tls: "edge"` support the opt-in. The owned stream server
+renders `proxy_protocol on; # v1` only for that listener and still validates the
+complete nginx configuration before reload. Nginx sends the client address and
+port in a plaintext v1 header to the private backend, after terminating TLS when
+enabled. The public client sends its normal protocol, with no PROXY header.
+Only v1 is accepted: [nginx's stream directive](https://nginx.org/en/docs/stream/ngx_stream_proxy_module.html#proxy_protocol)
+uses `on` for v1; sending v2 requires nginx 1.31.4, beyond the supported Ubuntu
+distribution packages. There is no version negotiation or silent downgrade.
+
+Readiness must target a **separate non-PROXY listener**. The example's `control`
+listener serves ordinary HTTP readiness. Validation rejects both TCP and HTTP
+readiness on a PROXY-enabled listener because local probes do not send the
+header. This keeps application health independent of edge framing; a successful
+local probe does not prove remote client identity delivery. The opt-in container
+acceptance checks that separately for IPv4/IPv6 and plaintext/edge TLS. Reports
+include `proxy_protocol` per public listener (`"v1"` or `null`).
+
+Foundry's built-in Go HTTP server does not serve these custom stream backends.
+For an application-owned Go TCP server, use an existing parser such as
+[`pires/go-proxyproto`](https://github.com/pires/go-proxyproto) at the application's
+listener boundary. Require a header, set a finite header-read timeout, and enforce
+bounded header parsing. Bind the backend to its allocated loopback endpoint and
+trust headers only from the local edge, based on the underlying socket peer,
+never the advertised source. Loopback access alone does not authenticate a local
+process: untrusted local processes must not be able to reach this backend. Client
+addresses remain metadata, not application authentication or authorization. Keep
+the control/readiness listener outside the PROXY wrapper.
 
 ### Topology field reference
 
@@ -413,14 +454,16 @@ paths under `deploy/bin/`.
 - **Listeners:** TCP uses `bind: "loopback"` or `"public"`. Loopback listeners
   omit `tls` and `authentication`. Public listeners require `tls: "edge"` or
   `"none"` and `authentication: true`. A public declaration still uses a private
-  service backend. Its public address is owned by the profile and nginx. Unix
-  listeners use `{"transport":"unix","socket":"wl0"}` and are always private;
+  service backend. Its public address is owned by the profile and nginx.
+  Public TCP listeners may opt into `proxy_protocol: "v1"` as described above.
+  Unix listeners use `{"transport":"unix","socket":"wl0"}` and are always private;
   they have no `bind`, `tls` or `authentication` fields or profile listener entry.
 - **Readiness:** one local `tcp`, `http` or `unix` probe naming a declared listener
   of the matching transport. Unix readiness connects to its declared path socket.
   `timeout_seconds` is 1–300 (default 30). HTTP requires a local `path` without
   query/fragment and a 200–299 `status`; optional `body` is at most 1024 bytes.
   TCP and Unix probes have no HTTP fields. Command and remote probes are not supported.
+  A PROXY-enabled public listener requires readiness on a separate non-PROXY listener.
   Opening also checks the complete enabled set's identities, probes and stability.
 - **Restart:** required `policy` (`on-failure`, `always`, `no`), `delay_seconds`
   (1–300), and `burst` (1–20). Optional `window_seconds` is 1–3600 (default 60);
