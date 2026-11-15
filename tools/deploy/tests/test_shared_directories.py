@@ -129,13 +129,14 @@ class SharedDeclarationTests(unittest.TestCase):
             services.UnitInventory(inventory.name, inventory.topology, inventory.profile, deployment, resolution)
 
     def test_user_namespace_keeps_cgroup_ip_filters_and_privileged_preparation(self):
+        import network_confinement
         import recovery_rehearsal
         inventory, entry = shared_inventory()
         inventory.roles["relay"] = replace(inventory.roles["relay"], recovery_rehearsal_safe=True)
         with patch.object(recovery_rehearsal, "active", return_value=True):
             unit = services.render_unit(inventory, "relay", entry, DIGEST)
         self.assertIn("PrivateUsers=yes\n", unit)
-        self.assertIn(recovery_rehearsal.FILTER, unit)
+        self.assertIn(network_confinement.FILTER, unit)
         self.assertIn("ExecStartPre=+", unit)
         self.assertIn("ExecCondition=+", unit)
 
