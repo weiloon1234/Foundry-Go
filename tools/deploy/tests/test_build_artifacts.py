@@ -1,5 +1,6 @@
 """Schema-2 archives, using local payload bytes and fake compiler provenance."""
 from dataclasses import asdict
+from functools import partial
 import json
 import hashlib
 import os
@@ -13,6 +14,7 @@ from test_build_inputs import BuildInputTests
 from test_local import metadata
 from test_host_capabilities import declaration, profile
 from test_artifacts import bundle_fixture, elf, PUBLIC, URL
+from artifact_origin_fixture import https_origin, SIGNED_TARGET
 import artifacts
 from contracts import DeployError, ReleaseDeclaration
 from topology import ArtifactPlatform, parse_topology
@@ -89,6 +91,34 @@ class FeatureBuildTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.package(request, stage, content, self.root / "output")
         self.assertFalse((self.root / "output/app.tar.gz").exists())
+
+    def test_signed_queries_never_enter_build_evidence_or_artifact_identity(self):
+        request, stage, content = self.feature()
+        archives = []
+        for index, token in enumerate(("first-secret", "refreshed-secret")):
+            target = SIGNED_TARGET.replace("fixture-secret", token)
+            staged = self.root / f"stage-{index}"
+            shutil.copytree(stage, staged)
+            with https_origin(self.root, content, target=target) as (factory, requests):
+                acquire = partial(artifacts.download, resolver=Mock(return_value=[PUBLIC]), connection_factory=factory)
+                with patch.object(metadata, "collect_build_inputs", return_value={"fixture": "offline"}), \
+                        patch.object(metadata.artifacts, "download", side_effect=acquire):
+                    archive = metadata.package(request, staged, self.root / f"output-{index}")
+            self.assertEqual(requests, ["/payload", target])
+            evidence = (archive.parent / "manifest.json").read_bytes()
+            self.assertNotIn(token.encode(), evidence)
+            self.assertNotIn(b"?token=", evidence)
+            manifest = json.loads(evidence)
+            self.assertEqual(manifest["artifact_origins"]["extension"], [
+                {"url": URL, "address": PUBLIC},
+                {"url": "https://downloads.example.org/signed", "address": PUBLIC}])
+            payload, = manifest["deployment"]["artifacts"]
+            self.assertEqual(payload["path"], f"deploy/artifacts/extension/{hashlib.sha256(content).hexdigest()}.tar.gz")
+            with metadata.tarfile.open(archive) as tar:
+                self.assertEqual(tar.extractfile("manifest.json").read(), evidence)
+                self.assertEqual(tar.extractfile(payload["path"]).read(), content)
+            archives.append(archive.read_bytes())
+        self.assertEqual(*archives)
 
     def test_profile_and_topology_drift_cannot_be_packaged_as_legacy(self):
         request, stage, content = self.feature()

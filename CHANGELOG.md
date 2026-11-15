@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- Artifact downloads now follow signed HTTPS redirects, including GitHub release
+  assets, with the exact path and query. Declared pins still reject queries,
+  credentials and fragments. Redirects retain public-address and peer checks,
+  the hop limit and SHA-256 verification. Signed queries never enter origin
+  evidence or errors, and artifact paths remain digest-based.
+
 ### Numbered copies
 
 - Fixed: numbered listeners compose with PROXY and managed DNS. Every copy gets

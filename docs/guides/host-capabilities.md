@@ -434,7 +434,14 @@ paths under `deploy/bin/`.
   package defaults remain fenced unless their owner explicitly hands them off.
 - **Artifacts:** `version` is a single path component. `platforms` maps
   `linux-amd64` and/or `linux-arm64` to an HTTPS `url` and 64-hex `sha256` of the
-  download, or a [release source](#release-carried-artifacts). URLs cannot carry credentials, query strings or fragments. Declare
+  download, or a [release source](#release-carried-artifacts). Declared URLs cannot
+  carry credentials, query strings or fragments. Redirect targets may carry signed
+  queries, as GitHub release downloads require. Each request preserves the target's
+  path and query; every hop still requires public HTTPS, public resolved addresses,
+  a verified peer, and no credentials or fragments. Downloads allow at most five
+  redirects and verify the payload against the declared SHA-256. Signed queries
+  are excluded from origin evidence and errors. Artifact paths use the declared
+  digest, so expiring queries do not change artifact identity. Declare
   the selected profile platform for every artifact. An artifact version cannot
   be reused with changed bytes. `executables` maps export names to relative
   members. `file` exports exactly one executable; `tar.gz` can also export

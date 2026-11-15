@@ -452,7 +452,7 @@ class ArtifactPlatform:
         try:
             parsed = urlsplit(url)
             valid = (parsed.scheme == "https" and parsed.hostname and not parsed.username
-                     and not parsed.password and not parsed.query and not parsed.fragment
+                     and not parsed.password and "?" not in url and "#" not in url and "@" not in parsed.netloc
                      and parsed.port in (None, 443) and not any(c in url for c in "\\ %"))
             if valid:
                 try:

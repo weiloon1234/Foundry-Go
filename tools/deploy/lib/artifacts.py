@@ -37,7 +37,7 @@ from urllib.parse import urljoin, urlsplit
 
 from contracts import (ArtifactPayload, DeployError, PayloadMember, ReleaseDeclaration,
                        check_path, contract_digest, contract_name, contract_path,
-                       digest, require)
+                       contract_text, digest, require)
 from topology import Artifact, ArtifactPlatform, ExecutableRole, parse_profile, parse_topology
 
 CHUNK = 1024 * 1024
@@ -124,11 +124,15 @@ def _public_address(value):
     return address
 
 
-def _url(value):
-    ArtifactPlatform.parse({"url": value, "sha256": "0" * 64})
-    require("?" not in value and "#" not in value and "@" not in urlsplit(value).netloc,
-            "artifact_origin", "Download URLs cannot contain credentials, queries or fragments.")
+def _url(value, *, redirect=False):
+    contract_text(value, limit=2048)
+    require("#" not in value and not any(c in value for c in "\\ ")
+            and (redirect or "?" not in value),
+            "artifact_origin", "Invalid download URL; only redirects may contain queries.")
+    # Reuse the declaration's origin policy without treating a signed query as a pin.
+    ArtifactPlatform.parse({"url": value.partition("?")[0] if redirect else value, "sha256": "0" * 64})
     parsed = urlsplit(value)
+    require("@" not in parsed.netloc, "artifact_origin", "Download URLs cannot contain credentials.")
     hostname = parsed.hostname
     try:
         address = ipaddress.ip_address(hostname)
@@ -172,6 +176,10 @@ class DownloadOrigin:
     url: str
     address: str
 
+    def __post_init__(self):
+        # Evidence and dataclass serialization must never retain a signed query.
+        object.__setattr__(self, "url", self.url.partition("?")[0])
+
 
 def download(pin: ArtifactPlatform, destination: Path, *, max_bytes=None, seconds=DOWNLOAD_SECONDS,
              resolver=None, connection_factory=None, budget=None, budget_path=None) -> tuple[DownloadOrigin, ...]:
@@ -206,8 +214,8 @@ def _download(pin, destination, *, max_bytes, seconds, resolver, connection_fact
     url, seen, origins = pin.url, set(), []
     temporary = None
     try:
-        for _ in range(MAX_REDIRECTS + 1):
-            parsed = _url(url)
+        for hop in range(MAX_REDIRECTS + 1):
+            parsed = _url(url, redirect=hop > 0)
             require(url not in seen, "artifact_redirect", "Artifact redirect loop.")
             seen.add(url)
             redirected = False
@@ -225,15 +233,20 @@ def _download(pin, destination, *, max_bytes, seconds, resolver, connection_fact
                     require(str(_public_address(peer_socket.getpeername()[0])) == address,
                             "artifact_peer", "Download connected to an unapproved peer.")
                     peer_socket.settimeout(_remaining(deadline))
-                    connection.request("GET", parsed.path or "/", headers={"Accept-Encoding": "identity"})
+                    target = parsed.path or "/"
+                    if "?" in url:
+                        target += "?" + parsed.query
+                    connection.request("GET", target, headers={"Accept-Encoding": "identity"})
                     response = connection.getresponse()
                     origins.append(DownloadOrigin(url, address))
                     if response.status in (301, 302, 303, 307, 308):
                         location = response.getheader("Location")
-                        require(isinstance(location, str) and 0 < len(location) <= 2048,
+                        require(isinstance(location, str) and 0 < len(location) <= 2048
+                                and "#" not in location and not any(c in location for c in "\\ "),
                                 "artifact_redirect", "Invalid artifact redirect.")
+                        contract_text(location, limit=2048)
                         url = urljoin(url, location)
-                        _url(url)
+                        _url(url, redirect=True)
                         redirected = True
                         break
                     require(response.status == 200 and response.getheader("Content-Encoding", "identity") == "identity",
