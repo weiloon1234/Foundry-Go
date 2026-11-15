@@ -5,7 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"os"
-	"regexp"
+
+	"github.com/weiloon1234/Foundry-Go/internal/deployrehearsal"
 )
 
 // ConditionalWriteMode distinguishes a startup guarantee from a rehearsal-only
@@ -14,33 +15,33 @@ type ConditionalWriteMode string
 
 const RehearsalRuntime ConditionalWriteMode = "rehearsal_runtime"
 
-var rehearsalRunID = regexp.MustCompile(`^[a-f0-9]{32}$`)
+// Rehearsal is a sealed, immutable grant issued by deployment.LoadBindings.
+// Its zero value grants nothing; environment or configuration values cannot create it.
+type Rehearsal = deployrehearsal.Grant[DiskID]
 
-// Validate refuses rehearsal configuration outside a deploy rehearsal process.
-func (m ConditionalWriteMode) Validate() error {
-	if m == "" {
-		return nil
+// WithRehearsal applies a validated descriptor grant only to its exact disk and cap.
+func (c Capabilities) WithRehearsal(id DiskID, grant Rehearsal) Capabilities {
+	if cap, ok := grant.Cap(id); ok && cap > 0 && cap == c.ConditionalWriteMaxBytes {
+		c.ConditionalWriteMode, c.rehearsal, c.rehearsalDisk = RehearsalRuntime, grant, id
 	}
-	if m != RehearsalRuntime || !rehearsalRunID.MatchString(os.Getenv("FOUNDRY_REHEARSAL_RUN_ID")) {
-		return newFailure(Invalid, OpenOperation, NotApplicable, nil)
-	}
-	return nil
+	return c
 }
 
-// UnmarshalText validates the marker at the configuration parsing boundary.
-func (m *ConditionalWriteMode) UnmarshalText(data []byte) error {
-	next := ConditionalWriteMode(data)
-	if err := next.Validate(); err != nil {
-		return err
+func (c Capabilities) validateRehearsal() error {
+	if c.ConditionalWriteMode == "" {
+		return nil
 	}
-	*m = next
+	cap, ok := c.rehearsal.Cap(c.rehearsalDisk)
+	if c.ConditionalWriteMode != RehearsalRuntime || !ok || cap <= 0 || cap != c.ConditionalWriteMaxBytes {
+		return newFailure(Invalid, OpenOperation, NotApplicable, nil)
+	}
 	return nil
 }
 
 // ValidatePutPolicy checks startup requirements. Only the explicit rehearsal
 // mode defers the conditional size restriction until a real write.
 func (c Capabilities) ValidatePutPolicy(options PutOptions) error {
-	if err := c.ConditionalWriteMode.Validate(); err != nil {
+	if err := c.validateRehearsal(); err != nil {
 		return err
 	}
 	if c.ConditionalWriteMode == RehearsalRuntime {

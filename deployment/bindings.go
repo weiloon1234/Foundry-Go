@@ -17,6 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
 // BindingsEnvironment selects the root-owned descriptor for this role invocation.
@@ -193,6 +194,7 @@ type SharedDirectory struct {
 // Bindings is an immutable startup snapshot. Pass concrete values to business handlers.
 // Its zero value has no bindings; a missing name returns fault.Missing.
 type Bindings struct {
+	rehearsal         storage.Rehearsal
 	unit              Unit
 	deployment        SHA256
 	executables       map[BindingName]Executable
@@ -286,11 +288,15 @@ func LoadBindings() (Bindings, bool, error) {
 // ReadBindings loads a bounded, nonsecret descriptor. Host-side executable and
 // artifact verification remains the deployment owner's responsibility.
 func ReadBindings(path string) (Bindings, error) {
-	wire, err := readFeatureDescriptor(path)
+	return readBindingsOwned(path, rootOwnedDescriptor)
+}
+
+func readBindingsOwned(path string, owned func(os.FileInfo) bool) (Bindings, error) {
+	wire, err := readFeatureDescriptorOwned(path, owned)
 	if err != nil {
 		return Bindings{}, err
 	}
-	return wire.bindings()
+	return wire.bindings(os.Getenv(RehearsalRunEnvironment))
 }
 
 type unitWire struct {
@@ -355,14 +361,15 @@ type sharedDirectoryWire struct {
 	MaxBytes int64           `json:"max_bytes"`
 }
 type featureDescriptor struct {
-	Schema     int      `json:"schema"`
-	Instance   string   `json:"instance"`
-	User       string   `json:"user"`
-	EnvFile    string   `json:"env_file"`
-	WorkDir    string   `json:"work_dir"`
-	Release    string   `json:"release"`
-	Deployment string   `json:"deployment_sha256"`
-	Unit       unitWire `json:"unit"`
+	Rehearsal  *rehearsalWire `json:"rehearsal,omitempty"`
+	Schema     int            `json:"schema"`
+	Instance   string         `json:"instance"`
+	User       string         `json:"user"`
+	EnvFile    string         `json:"env_file"`
+	WorkDir    string         `json:"work_dir"`
+	Release    string         `json:"release"`
+	Deployment string         `json:"deployment_sha256"`
+	Unit       unitWire       `json:"unit"`
 	Bindings   struct {
 		Schema            int                   `json:"schema"`
 		Role              string                `json:"role"`
@@ -404,6 +411,10 @@ func invalidBindings() error {
 }
 
 func readFeatureDescriptor(path string) (featureDescriptor, error) {
+	return readFeatureDescriptorOwned(path, rootOwnedDescriptor)
+}
+
+func readFeatureDescriptorOwned(path string, owned func(os.FileInfo) bool) (featureDescriptor, error) {
 	var wire featureDescriptor
 	if !absolutePath(path) {
 		return wire, invalidBindings()
@@ -434,7 +445,10 @@ func readFeatureDescriptor(path string) (featureDescriptor, error) {
 		!absolutePath(wire.EnvFile) || !absolutePath(wire.WorkDir) || !absolutePath(wire.Release) {
 		return featureDescriptor{}, invalidBindings()
 	}
-	if _, err := wire.bindings(); err != nil {
+	if wire.Rehearsal != nil && !owned(info) {
+		return featureDescriptor{}, invalidBindings()
+	}
+	if _, err := wire.bindings(""); err != nil {
 		return featureDescriptor{}, err
 	}
 	return wire, nil
@@ -479,14 +493,18 @@ func resolveEndpoint(v endpointWire, instance string) (Endpoint, error) {
 	return endpoint, nil
 }
 
-func (w featureDescriptor) bindings() (Bindings, error) {
+func (w featureDescriptor) bindings(runID string) (Bindings, error) {
+	rehearsal, err := w.Rehearsal.grant(runID)
+	if err != nil {
+		return Bindings{}, err
+	}
 	if !digestIdentifier.MatchString(w.Deployment) || !instanceIdentifier.MatchString(w.Unit.Instance) ||
 		!bindingIdentifier.MatchString(w.Unit.Role) || (w.Unit.Ordinal < 1 || w.Unit.Ordinal > maxRoleCopies) || w.Bindings.Schema != 1 ||
 		w.Bindings.Role != w.Unit.Role || len(w.Bindings.Executables) > 128 || len(w.Bindings.Endpoints) > 128 || len(w.Bindings.Bundles) > 64 ||
 		w.Bindings.Executables == nil || w.Bindings.Endpoints == nil || w.Bindings.Bundles == nil || len(w.Bindings.PublicListeners) > 128 || len(w.Bindings.SharedDirectories) > 32 || len(w.Bindings.Copies) > 128 {
 		return Bindings{}, invalidBindings()
 	}
-	b := Bindings{unit: Unit{InstanceID(w.Unit.Instance), RoleName(w.Unit.Role), uint16(w.Unit.Ordinal)}, deployment: SHA256(w.Deployment),
+	b := Bindings{rehearsal: rehearsal, unit: Unit{InstanceID(w.Unit.Instance), RoleName(w.Unit.Role), uint16(w.Unit.Ordinal)}, deployment: SHA256(w.Deployment),
 		executables: make(map[BindingName]Executable), endpoints: make(map[BindingName]Endpoint), bundles: make(map[BindingName]BundleDirectory),
 		publicListeners: make(map[BindingName]PublicListener), sharedDirectories: make(map[BindingName]SharedDirectory), copies: make(map[BindingName][]Copy)}
 	names := make(map[string]bool)

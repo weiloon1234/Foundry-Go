@@ -26,6 +26,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/logging"
+	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/storage/local"
 )
 
@@ -54,6 +55,7 @@ func DefaultSettings() Settings {
 }
 
 type options struct {
+	rehearsal         storage.Rehearsal
 	clock             clock.Clock
 	logger            *slog.Logger
 	mailDrivers       map[MailDriver]email.Driver
@@ -255,11 +257,14 @@ func (p *Plan) validate() error {
 			return safeerror.NewFault(fault.Duplicate, "cloud credential source is duplicated")
 		}
 	}
+	for name := range p.options.rehearsal.Disks() {
+		disk, ok := s.Storage.Disks[name]
+		if !ok || disk.Driver != CompatibleDisk {
+			return storage.Failure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
+		}
+	}
 	for _, name := range keys(s.Storage.Disks) {
 		disk := s.Storage.Disks[name]
-		if err := disk.validateRehearsal(); err != nil {
-			return err
-		}
 		if err := disk.Config.Validate(); err != nil {
 			return err
 		}
@@ -294,7 +299,11 @@ func (p *Plan) validate() error {
 					return credentials.Value{}, safeerror.NewFault(fault.Internal, "validation-only credentials")
 				})
 			}
-			if _, err := disk.cloudConfig(provider); err != nil {
+			config, err := disk.cloudConfig(provider)
+			if err != nil {
+				return err
+			}
+			if err := config.WithRehearsal(name, p.options.rehearsal).Validate(); err != nil {
 				return err
 			}
 		default:
@@ -450,4 +459,9 @@ func WithQueryObserver(observer database.QueryObserver) Option {
 		o.queryObserver = observer
 		return nil
 	}
+}
+
+// WithRehearsal applies only the immutable disk grants read by deployment.LoadBindings.
+func WithRehearsal(grant storage.Rehearsal) Option {
+	return func(o *options) error { o.rehearsal = grant; return nil }
 }

@@ -147,13 +147,23 @@ checks retain the cap. Unknown-size conditional writes also fail before I/O.
 The refusal retains `storage.Unchanged` and names reduced-fidelity rehearsal
 through attachment error wrapping.
 
-The deploy-generated `cloud.conditional_write_mode` marker is independent of
-the process's `FOUNDRY_REHEARSAL_RUN_ID`. Configuration decoding, infrastructure
-validation, S3 configuration, and disk construction reject a marker without the
-identity. The deploy tool checks the matching disposable host context and
-acceptance profile before passing the identity to transient operation units,
-application units, sanitized feature dispatch, and console commands. Archives and generic configuration
-updates cannot issue the marker, including JSON and `_FILE` overrides.
+The security correction replaces the general configuration marker with a typed
+`rehearsal` block in the deploy-generated schema-2 runtime descriptor. It contains
+`run_id` and exact `{disk, runtime_cap_bytes}` grants. `deployment.LoadBindings`
+validates descriptor shape and requires a regular root-owned file with no
+group/world write permission before accepting a block. A matching
+`FOUNDRY_REHEARSAL_RUN_ID` yields an immutable grant, passed through application
+and infrastructure assembly to the S3 adapter and attachment policy validation.
+Missing descriptors/blocks or mismatched IDs grant nothing. Invalid descriptors
+fail closed. No mutable application-global state is introduced.
+
+The handwritten disk declaration no longer exposes `conditional_write_mode`;
+the generated schema rejects that retired key even with an operator-set run ID.
+The deploy writer accepts blocks only from its private disposable-host context,
+with the matching testing acceptance profile, and preserves the block in console
+descriptors. Production, archive, and generic configuration paths cannot issue
+one. The existing guarded identity propagation to units and console commands
+remains in place.
 
 One startup JSON notice per affected disk records the cap and exceeding declared
 attachment maxima. Runtime refusal records contain only disk names, caps, and
@@ -161,7 +171,7 @@ counts. The disk API and optional metrics collector expose process totals;
 rehearsal evidence and observation reports retain only allowlisted public fields
 from a bounded journal window. See the [reporting contract](../guides/host-capabilities.md#rehearse-locally).
 
-Native verification on 2026-11-15:
+Initial implementation verification on 2026-11-15 (before the security correction):
 
 - `go build` and `go vet` passed for `./storage/...`, `./attachments/...`,
   `./infrastructure`, and `./application`.
@@ -196,3 +206,57 @@ Native verification on 2026-11-15:
 No containers, database services, commits, or live provider certification were
 run. The optional container fixture assertion was not added; native startup and
 runtime regressions cover the behavior without a container dependency.
+
+
+## Descriptor gate security correction (round 1)
+
+Regression sources cover the retired config key with an operator-set ID, no
+descriptor, no block, absent/mismatched IDs, unlisted disks, invalid ownership,
+malformed grants, and the full descriptor-to-storage/attachments assembly path.
+The 500 MiB startup regression is retained, including oversized typed refusal
+before provider I/O. Native positive reader tests model root ownership at the
+private filesystem boundary; actual operator-owned files are refused by the
+public reader. Python coverage follows rehearsal mapping through descriptor
+publication and console derivation, and refuses publication outside rehearsal.
+
+Native verification on 2026-11-15 used the existing warm Go cache and no
+containers. The package scope was `./storage/... ./attachments/...
+./infrastructure ./application ./deployment ./internal/deployrehearsal`.
+
+- `GOFLAGS=-trimpath go run ./cmd/foundry generate --recursive --dir infrastructure`
+  regenerated the disk schema and ownership manifest. The first attempt caught
+  a missing storage import; it was corrected before the successful generation.
+- `GOFLAGS=-trimpath go build` and `GOFLAGS=-trimpath go vet` passed for that scope.
+- `GOFLAGS=-trimpath go test -count=1 -timeout=20m` passed for all ten test-bearing
+  packages; the internal grant package has no standalone tests and is exercised
+  by its consumers. The run loaded the existing private `.env.test` from
+  `/Users/weiloon/Projects/rust-go/Foundry-Go` without recording its contents,
+  with `FOUNDRY_TEST_POSTGRES_REQUIRED=1`, `FOUNDRY_TEST_REDIS_REQUIRED=1`, and
+  `FOUNDRY_TEST_REDIS_ADDR=127.0.0.1:6379`. The PostgreSQL attachment startup/upload
+  regression executed successfully. Live storage-provider tests remain opt-in.
+- `make generate-check` passed for every Makefile-declared generation directory,
+  the HTTP-path export, and rendered documentation.
+- Focused Python modules `test_rehearsal_storage`, `test_feature_preview`,
+  `test_s3_certification`, and `test_rehearsal` ran 96 tests. One new fixture used
+  macOS's symlinked temporary path; resolving that path fixed the failure, and
+  the targeted regression then passed. No runtime security check was weakened.
+- `make deploy-tools-check` completed 1,415 tests with 18 skips. Its only failure
+  was the existing
+  `test_readiness.ReadinessTests.test_sixteen_slow_probes_cannot_queue_112_short_deadlines`
+  timing assertion. That exact test passed on an isolated rerun with unchanged
+  source. This is a segmented result, not a clean initial full-suite pass.
+  Opt-in live Cloudflare/systemd and Linux-only socket cases remain skipped.
+- Final review strengthened the reader regressions to exercise the actual process
+  environment lookup while substituting only the filesystem ownership predicate.
+  Build, vet, and `go test -count=1 -timeout=20m ./deployment ./application` then
+  passed again with the same required database and Redis configuration.
+- `make docs-check` and `git diff --check` passed.
+
+Source baseline: `8700ea28`. The final touched-source fingerprint covers 28
+Go/Python/generated-ownership files, sorted by relative path, hashing each path,
+NUL, contents, and NUL with SHA-256:
+`1c9f5801a2f6220c11cb069f71655b8a78e5caaa7db39a8a8fa6c8fc46134df6`.
+Documentation is excluded from this fingerprint.
+
+No containers, commits, or live storage-provider certification were run. Existing
+PostgreSQL and Redis services were used; no services were started or reset.

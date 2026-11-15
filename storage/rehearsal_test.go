@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/weiloon1234/Foundry-Go/internal/deployrehearsal"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/storage/local"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -13,13 +14,13 @@ import (
 
 type rehearsalBackend struct {
 	storage.Backend
-	mode storage.ConditionalWriteMode
+	grant storage.Rehearsal
 }
 
 func (b rehearsalBackend) Capabilities() storage.Capabilities {
 	c := b.Backend.Capabilities()
-	c.ConditionalWriteMaxBytes, c.ConditionalWriteMode = 8, b.mode
-	return c
+	c.ConditionalWriteMaxBytes = 8
+	return c.WithRehearsal("streams", b.grant)
 }
 
 type unreadRehearsalSource struct{ reads int }
@@ -27,17 +28,20 @@ type unreadRehearsalSource struct{ reads int }
 func (r *unreadRehearsalSource) Read([]byte) (int, error) { r.reads++; return 0, io.EOF }
 
 func TestRehearsalRuntimeCap(t *testing.T) {
-	t.Setenv("FOUNDRY_REHEARSAL_RUN_ID", strings.Repeat("a", 32))
 	backend, err := local.Open(t.Context(), local.DefaultConfig(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = backend.Close() })
-	disk := streamDisk(t, rehearsalBackend{backend, storage.RehearsalRuntime}, func(*storage.Config) {})
+	disk := streamDisk(t, rehearsalBackend{backend, deployrehearsal.New(map[storage.DiskID]int64{"streams": 8})}, func(*storage.Config) {})
 	caps := disk.Capabilities()
 	policy := storage.PutOptions{Size: value.Set[int64](500 << 20), Condition: storage.IfAbsent()}
 	if err := caps.ValidatePutPolicy(policy); err != nil {
 		t.Fatal("rehearsal startup policy refused", err)
+	}
+	forged := storage.Capabilities{ConditionalCreate: true, ConditionalWriteMaxBytes: 8, ConditionalWriteMode: storage.RehearsalRuntime}
+	if err := forged.ValidatePutPolicy(policy); !errors.Is(err, storage.Invalid) {
+		t.Fatal("unsealed mode bypass", err)
 	}
 	caps.ConditionalWriteMode = ""
 	if err := caps.ValidatePutPolicy(policy); !errors.Is(err, storage.Unsupported) {
@@ -66,9 +70,8 @@ func TestRehearsalRuntimeCap(t *testing.T) {
 	if disk.RehearsalRefusals() != 4 {
 		t.Fatal("successful writes counted as refusals")
 	}
-	t.Setenv("FOUNDRY_REHEARSAL_RUN_ID", "")
-	if _, err := storage.NewDisk("production", rehearsalBackend{backend, storage.RehearsalRuntime}, storage.DefaultConfig()); !errors.Is(err, storage.Invalid) {
-		t.Fatal("marker accepted outside rehearsal", err)
+	if _, err := storage.NewDisk("production", rehearsalBackend{backend, deployrehearsal.New(map[storage.DiskID]int64{"streams": 8})}, storage.DefaultConfig()); !errors.Is(err, storage.Invalid) {
+		t.Fatal("grant reused for another disk", err)
 	}
 }
 

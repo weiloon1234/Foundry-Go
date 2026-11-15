@@ -20,31 +20,32 @@ class RehearsalStorageTests(unittest.TestCase):
                         "domain": "app.acceptance.invalid"}
         self.entry = {"profile": self.profile}
         self.token = "a" * 32
+        self.caps = [{"disk": "uploads", "runtime_cap_bytes": 8 << 20}]
         self.disks = {"uploads": {"driver": "s3_compatible", "cloud": {
             "conditional_write_mode": storage.MODE, "compatible": {"single_request_conditions": True}}}}
 
     def guard(self):
-        return patch.multiple(storage, read_json=Mock(return_value={"run_id": self.token, "profile": self.profile}),
+        return patch.multiple(storage, read_json=Mock(return_value={"run_id": self.token, "profile": self.profile, "storage_runtime_caps": self.caps}),
                               check_path=Mock(return_value=storage.CONTEXT))
 
     def test_marker_requires_run_identity_and_acceptance_profile(self):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(DeployError) as raised:
-                storage.validate_disks(self.disks, self.entry)
+                runtime_config._write_binding_descriptor(Mock(), Path("/unused"), {"rehearsal": {"run_id": self.token, "disks": self.caps}}, entry=self.entry)
             self.assertEqual(raised.exception.code, "rehearsal_storage_configuration")
             self.assertEqual(storage.environment(self.entry), {})
         with patch.dict(os.environ, {storage.RUN_ID: self.token}), self.guard(), patch.object(Path, "is_file", return_value=True):
-            storage.validate_disks(self.disks, self.entry)
+            self.assertEqual(storage.descriptor(self.entry), {"run_id": self.token, "disks": self.caps})
             self.assertEqual(storage.environment(self.entry), {storage.RUN_ID: self.token})
             self.assertEqual(storage.unit_environment(self.entry), f"Environment={storage.RUN_ID}={self.token}\n")
             for field, value in (("runtime_environment", "production"), ("environment", "production"), ("domain", "app.example.com")):
                 entry = copy.deepcopy(self.entry)
                 entry["profile"][field] = value
                 with self.subTest(field=field), self.assertRaises(DeployError):
-                    storage.validate_disks(self.disks, entry)
+                    storage.descriptor(entry)
         with patch.dict(os.environ, {storage.RUN_ID: self.token}), self.guard(), patch.object(Path, "is_file", return_value=False):
             with self.assertRaises(DeployError):
-                storage.validate_disks(self.disks, self.entry)
+                storage.descriptor(self.entry)
 
     def test_bootstrap_intake_refuses_marker_without_rehearsal(self):
         with patch.dict(os.environ, {}, clear=True), patch.object(runtime_config, "read_credentials", return_value={}):
@@ -95,7 +96,7 @@ class RehearsalStorageTests(unittest.TestCase):
         disks = {"uploads": {"driver": "r2"}}
         original = copy.deepcopy(disks)
         with patch.dict(os.environ, {storage.RUN_ID: self.token}):
-            storage.validate_disks(disks, self.entry)
+            storage.reject_marker(disks)
         self.assertEqual(disks, original)
 
     def test_generic_configuration_and_archive_reject_markers_even_in_rehearsal(self):

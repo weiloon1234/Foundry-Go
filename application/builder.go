@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/config"
+	"github.com/weiloon1234/Foundry-Go/deployment"
 	"github.com/weiloon1234/Foundry-Go/diagnostics"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -80,6 +81,13 @@ func New(settings Settings, opts ...Option) *Builder {
 			break
 		}
 		b.state.err = option(&b.state.options)
+	}
+	if b.state.err == nil {
+		bindings, _, err := deployment.LoadBindings()
+		b.state.err = err
+		if err == nil {
+			b.state.options.infrastructure = append(b.state.options.infrastructure, infrastructure.WithRehearsal(bindings.Rehearsal()))
+		}
 	}
 	return b
 }

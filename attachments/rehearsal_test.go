@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/extensions"
+	"github.com/weiloon1234/Foundry-Go/internal/deployrehearsal"
 	"github.com/weiloon1234/Foundry-Go/internal/extensiontest"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -35,7 +36,10 @@ func TestRehearsalManagerAcceptsPolicyAboveCapWithoutDatabaseIO(t *testing.T) {
 	policy.MaxBytes, policy.MaxStoredBytes = 500<<20, 500<<20
 	collection := Define(extensiontest.Members, "rehearsal", policy)
 	for _, mode := range []storage.ConditionalWriteMode{"", storage.RehearsalRuntime} {
-		caps := storage.Capabilities{ConditionalCreate: true, ConditionalRead: true, ConditionalWriteMaxBytes: 8, ConditionalWriteMode: mode}
+		caps := storage.Capabilities{ConditionalCreate: true, ConditionalRead: true, ConditionalWriteMaxBytes: 8}
+		if mode == storage.RehearsalRuntime {
+			caps = caps.WithRehearsal(testDisk.ID(), deployrehearsal.New(map[storage.DiskID]int64{testDisk.ID(): 8}))
+		}
 		disk, err := testDisk.Bind(policyCapBackend{capabilities: caps}, storage.DefaultConfig())
 		if err != nil {
 			t.Fatal(err)

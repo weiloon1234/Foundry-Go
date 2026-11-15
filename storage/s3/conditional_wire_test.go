@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/weiloon1234/Foundry-Go/internal/deployrehearsal"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -389,15 +390,10 @@ func TestLargeConditionalMultipartStreamsDefaultParts(t *testing.T) {
 	}
 }
 
-func TestCompatibleRehearsalCapRequiresIdentityAndRefusesBeforeIO(t *testing.T) {
+func TestCompatibleRehearsalGrantRefusesBeforeIO(t *testing.T) {
 	_, b, _, _ := conditionalWireProfile(t, Compatible)
 	b.config.Compatible.SingleRequestConditions = true
-	b.config.ConditionalWriteMode = storage.RehearsalRuntime
-	t.Setenv("FOUNDRY_REHEARSAL_RUN_ID", "")
-	if err := b.config.Validate(); !errors.Is(err, storage.Invalid) {
-		t.Fatal("production accepted marker", err)
-	}
-	t.Setenv("FOUNDRY_REHEARSAL_RUN_ID", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	b.config = b.config.WithRehearsal("uploads", deployrehearsal.New(map[storage.DiskID]int64{"uploads": b.config.PartBytes}))
 	if err := b.config.Validate(); err != nil {
 		t.Fatal(err)
 	}

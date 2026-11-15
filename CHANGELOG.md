@@ -7,10 +7,13 @@
 - Reduced-fidelity rehearsal accepts attachment policies above the stand-in's
   single-request cap at startup. Actual oversized conditional writes fail with
   `storage.RehearsalLimitExceeded`, preserving the unchanged mutation outcome.
-- The typed per-disk `rehearsal_runtime` marker requires the deploy rehearsal
-  process identity. Production, archive, and generic configuration paths refuse
-  the marker. Reports include caps, exceeding policy maxima, and observed runtime
-  refusals; startup notices and counters contain no object data.
+- Fixed: reduced fidelity is granted only by a validated, root-owned deploy
+  runtime descriptor with exact disk caps and a matching rehearsal process ID.
+  Removed the general disk configuration marker; environment variables alone
+  cannot enable the mode. Production descriptor generation never emits the block.
+  Missing or mismatched grants retain strict production capabilities.
+- Reports include caps, exceeding policy maxima, and observed runtime refusals;
+  startup notices and counters contain no object data.
 - Production R2 behavior, declared S3-compatible guarantees, and strict listing
   checks remain unchanged.
 

@@ -37,6 +37,8 @@ type Capabilities struct {
 	ConditionalWriteMaxBytes int64
 	// ConditionalWriteMode defers this size check at startup only in rehearsal.
 	ConditionalWriteMode ConditionalWriteMode
+	rehearsal            Rehearsal
+	rehearsalDisk        DiskID
 }
 
 // Backend implementations stream with bounded buffers and preserve cancellation.

@@ -41,9 +41,8 @@ type CloudDiskSettings struct {
 	PartConcurrency                                 int
 	VerifyPublication                               bool
 	// AllowHTTP and Compatible apply only to the s3_compatible driver.
-	AllowHTTP            bool
-	Compatible           s3.CompatibleCapabilities
-	ConditionalWriteMode storage.ConditionalWriteMode
+	AllowHTTP  bool
+	Compatible s3.CompatibleCapabilities
 }
 
 // DiskSettings owns one driver selection and the common storage limits.
@@ -84,7 +83,6 @@ func (s DiskSettings) cloudConfig(provider credentials.Provider) (s3.Config, err
 			return c, err
 		}
 	}
-	c.ConditionalWriteMode = s.Cloud.ConditionalWriteMode
 	c.PathStyle = c.PathStyle || s.Cloud.PathStyle
 	c.PartBytes = s.Cloud.PartBytes
 	c.MaxUploads = s.Cloud.MaxUploads
@@ -111,11 +109,6 @@ func (m *Disks) UnmarshalText(data []byte) error {
 	values, err := config.DecodeTable(string(data), schema, func(storage.DiskID) DiskSettings { return DefaultDiskSettings() }, nil)
 	if err != nil {
 		return err
-	}
-	for _, disk := range values {
-		if err := disk.validateRehearsal(); err != nil {
-			return err
-		}
 	}
 	*m = values
 	return nil
@@ -144,15 +137,5 @@ func (m *CredentialSources) UnmarshalText(data []byte) error {
 		return err
 	}
 	*m = values
-	return nil
-}
-
-func (s DiskSettings) validateRehearsal() error {
-	if err := s.Cloud.ConditionalWriteMode.Validate(); err != nil {
-		return err
-	}
-	if s.Cloud.ConditionalWriteMode != "" && (s.Driver != CompatibleDisk || !s.Cloud.Compatible.SingleRequestConditions || !(s.Cloud.Compatible.ConditionalCreate || s.Cloud.Compatible.ConditionalReplace)) {
-		return storage.Failure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
-	}
 	return nil
 }

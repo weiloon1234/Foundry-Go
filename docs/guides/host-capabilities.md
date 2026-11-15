@@ -1513,8 +1513,8 @@ private rehearsal binding file:
 
 List only unique names already present in `storage_disks`. This permission applies
 only when the pinned stand-in lacks multipart certification. Rehearsal then sets
-`single_request_conditions: true` and the typed
-`cloud.conditional_write_mode: "rehearsal_runtime"` marker for those disks.
+`single_request_conditions: true` and records those disks and their exact caps in
+the deploy-owned runtime descriptor's typed `rehearsal` block.
 Attachment policies above `PartBytes` pass startup capability validation.
 Application policy maxima and `MaxObjectBytes` remain unchanged. Actual
 conditional creates and replacements require a declared size at or below
@@ -1523,12 +1523,21 @@ conditional creates and replacements require a declared size at or below
 retain that typed error and its message naming reduced-fidelity rehearsal.
 Unconditional writes retain their normal limits.
 
-Both the generated disk marker and the deploy tool's process-level
-`FOUNDRY_REHEARSAL_RUN_ID` are required. Parsing or constructing a marked disk
-without a valid run identity returns `storage.Invalid`. The deploy tool issues
-that identity only for the matching disposable acceptance host and passes it to
-application units and console commands. Production profiles, application
-archives, and generic configuration changes cannot supply the marker.
+The application reads this block only through `deployment.LoadBindings` from
+`FOUNDRY_DEPLOY_RUNTIME_FILE`. A descriptor containing the block must be a regular,
+root-owned file with no group/world write permission; invalid ownership or shape
+returns `fault.Invalid`. Its run identity must exactly match the process's
+`FOUNDRY_REHEARSAL_RUN_ID`. An absent descriptor, absent block, or mismatched
+identity retains normal production capabilities and strict startup limits.
+The validated descriptor supplies an immutable, per-disk grant to storage and
+attachment assembly; a run-ID environment variable alone grants nothing.
+
+No application configuration key enables this mode. The retired
+`cloud.conditional_write_mode` key is rejected, even with a run identity.
+The deploy tool generates the block only from its private disposable-host context
+after verifying the matching acceptance profile. Production profiles, archives,
+and generic configuration changes cannot issue it. Rehearsal application units
+and console commands receive the matching identity and descriptor.
 
 The application emits one redacted JSON startup notice per affected disk per
 process. It lists the runtime cap, `MaxObjectBytes`, and declared attachment

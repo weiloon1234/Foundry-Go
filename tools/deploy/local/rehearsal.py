@@ -178,7 +178,6 @@ def test_bindings(path, environment, config, token):
                         + " to the rehearsal binding input for a reduced-fidelity rehearsal capped at PartBytes, "
                         "or use a stand-in with passing certification.")
                 compatible["single_request_conditions"] = True
-                cloud["conditional_write_mode"] = rehearsal_storage.MODE
                 reduced.append(name)
                 reduced_disks.append({"disk": name, "runtime_cap_bytes": cloud.get("part_bytes", 8 << 20),
                                       "max_object_bytes": disk.get("config", {}).get("max_object_bytes", 1 << 30),
@@ -329,7 +328,9 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
         boot_host(host, certs)
         run(["docker", "exec", host, "mkdir", "-m", "700", WORK])
         context = {"run_id": resources.token, "project": project, "profile": profile, "topology": topology.projection(),
-                   "archive_sha256": evidence["archive_sha256"], "storage_buckets": buckets}
+                   "archive_sha256": evidence["archive_sha256"], "storage_buckets": buckets,
+                   "storage_runtime_caps": [{"disk": row["disk"], "runtime_cap_bytes": row["runtime_cap_bytes"]}
+                                            for row in fidelity["reduced_disks"]]}
         for name, value in (("context.json", context), ("secrets.json", settings)):
             path = private / name
             path.write_text(json.dumps(value))

@@ -2,6 +2,7 @@
 from dataclasses import replace
 import copy
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,6 +10,8 @@ from unittest.mock import patch, Mock
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "local"))
+import rehearsal_storage
 import contracts as c
 import feature_lifecycle as lifecycle
 import feature_network as network
@@ -65,6 +68,36 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertEqual(value["unit"], {"instance_id": spec.identity.instance_id, "role": "http", "ordinal": 1})
         self.assertNotIn("environments", value)
         self.assertNotIn("private_revision", value)
+
+    def test_rehearsal_path_writes_exact_caps_only_into_runtime_descriptor(self):
+        import rehearsal
+        profile = self.entry["profile"]
+        profile.update(runtime_environment="testing", environment="acceptance-local", domain="app.acceptance.invalid")
+        path = Path(self.temporary.name).resolve() / "bindings.json"
+        path.write_text(json.dumps({"environment": "acceptance-local", "configuration": {},
+                                  "storage_disks": ["uploads"], "allow_single_request_conditions": ["uploads"]}))
+        path.chmod(0o600)
+        settings, _, fidelity = rehearsal.test_bindings(path, "acceptance-local", {"app": {"services": {
+            "storage": {"disks": {"uploads": {"driver": "r2", "cloud": {"part_bytes": 8 << 20}}}}}}}, "test")
+        self.assertNotIn("conditional_write_mode", json.dumps(settings))
+        caps = [{"disk": row["disk"], "runtime_cap_bytes": row["runtime_cap_bytes"]} for row in fidelity["reduced_disks"]]
+        token = "a" * 32
+        context = {"run_id": token, "profile": profile, "storage_runtime_caps": caps}
+        with patch.dict(os.environ, {rehearsal_storage.RUN_ID: token}), \
+                patch.object(rehearsal_storage, "read_json", return_value=context), \
+                patch.object(rehearsal_storage, "check_path", return_value=rehearsal_storage.CONTEXT), \
+                patch.object(Path, "is_file", return_value=True):
+            source, _ = self.console_source()
+            descriptor = c.read_json(source)
+            expected = {"run_id": token, "disks": [{"disk": "uploads", "runtime_cap_bytes": 8 << 20}]}
+            self.assertEqual(descriptor["rehearsal"], expected)
+            self.assertEqual(c.read_json(runtime_config.console_binding_descriptor(self.host, self.entry, CURRENT))["rehearsal"], expected)
+            self.assertEqual(source.stat().st_mode & 0o777, 0o644)
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(c.DeployError) as raised:
+                runtime_config._write_binding_descriptor(self.host, source.parent / "forged.json", descriptor, entry=self.entry)
+            self.assertEqual(raised.exception.code, "rehearsal_storage_configuration")
+            self.assertFalse((source.parent / "forged.json").exists())
 
     def test_numbered_descriptor_keeps_copy_one_bytes_and_uses_a_distinct_path(self):
         from test_copies import numbered_inventory

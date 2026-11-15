@@ -63,10 +63,10 @@ func NewDisk(id DiskID, backend Backend, config Config) (*Disk, error) {
 	if err := callback.Isolated("storage capabilities", func() error { capabilities = backend.Capabilities(); return nil }); err != nil {
 		return nil, newFailure(Invalid, OpenOperation, NotApplicable, err)
 	}
-	if err := capabilities.ConditionalWriteMode.Validate(); err != nil {
+	if err := capabilities.validateRehearsal(); err != nil {
 		return nil, err
 	}
-	if capabilities.ConditionalWriteMaxBytes < 0 || capabilities.ConditionalWriteMode == RehearsalRuntime && capabilities.ConditionalWriteMaxBytes == 0 {
+	if capabilities.ConditionalWriteMaxBytes < 0 || capabilities.ConditionalWriteMode == RehearsalRuntime && capabilities.rehearsalDisk != id {
 		return nil, newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	ctx, cancel := context.WithCancel(context.Background())

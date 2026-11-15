@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/weiloon1234/Foundry-Go/internal/deployrehearsal"
 	"github.com/weiloon1234/Foundry-Go/internal/extensiontest"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
@@ -13,8 +14,8 @@ type rehearsalCapBackend struct{ storage.Backend }
 
 func (b rehearsalCapBackend) Capabilities() storage.Capabilities {
 	c := b.Backend.Capabilities()
-	c.ConditionalWriteMaxBytes, c.ConditionalWriteMode = 8, storage.RehearsalRuntime
-	return c
+	c.ConditionalWriteMaxBytes = 8
+	return c.WithRehearsal(testDisk.ID(), deployrehearsal.New(map[storage.DiskID]int64{testDisk.ID(): 8}))
 }
 
 func TestPostgresRehearsalStartsWithLargePolicyAndSurfacesRuntimeRefusal(t *testing.T) {

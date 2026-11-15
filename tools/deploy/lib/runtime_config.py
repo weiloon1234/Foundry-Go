@@ -433,7 +433,7 @@ def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
         values[ENCRYPTION_KEYS[2]] = "{}"
     storage = credentials.get("app_storage")
     if storage:
-        rehearsal_storage.validate_disks(storage["disks"], entry)
+        rehearsal_storage.reject_marker(storage["disks"])
         values["APP__SERVICES__CREDENTIALS"] = _json(storage["credentials"])
         values["APP__SERVICES__STORAGE__DISKS"] = _json(storage["disks"])
         values[CLEANUP_GRACE_KEY] = DEFAULT_CLEANUP_GRACE
@@ -545,7 +545,7 @@ def initialize_bootstrap_secrets(host, entry, private_secrets=None):
                 except ValueError:
                     raise DeployError("invalid_secrets", "App storage JSON is invalid.") from None
             require(isinstance(storage[key], dict) and storage[key], "invalid_secrets", "App storage JSON must be a nonempty object.")
-        rehearsal_storage.validate_disks(storage["disks"], entry)
+        rehearsal_storage.reject_marker(storage["disks"])
         storage["disks"] = normalize_storage_disks(storage["disks"])
         storage_bindings(storage)
         supplied["app_storage"] = storage
@@ -1082,10 +1082,14 @@ def write_binding_descriptor(host, entry, deployment, resolution, spec, *, candi
                   "release": entry["allocations"]["paths"]["application"] + "/releases/" + deployment.release,
                   "deployment_sha256": resolution.deployment_sha256, "unit": asdict(spec.identity),
                   "bindings": record_document(spec.bindings)}
+    rehearsal = rehearsal_storage.descriptor(entry)
+    if rehearsal is not None:
+        require(deployment.archive_schema == 2, "rehearsal_storage_configuration", "Reduced-fidelity storage requires a feature runtime descriptor.")
+        descriptor["rehearsal"] = rehearsal
     if deployment.archive_schema == 1:
         descriptor = {key: descriptor[key] for key in ("instance", "user", "env_file", "work_dir")}
         descriptor["schema"] = 1
-    _write_binding_descriptor(host, path, descriptor)
+    _write_binding_descriptor(host, path, descriptor, entry=entry)
     return absolute(path)
 
 
@@ -1106,11 +1110,15 @@ def console_binding_descriptor(host, entry, resolution_id):
                 copy.pop("secret_file", None)
     # A subdirectory cannot collide with a custom role named console.
     path = root / "console" / "http.json"
-    _write_binding_descriptor(host, path, descriptor)
+    _write_binding_descriptor(host, path, descriptor, entry=entry)
     return path
 
 
-def _write_binding_descriptor(host, path, descriptor):
+def _write_binding_descriptor(host, path, descriptor, *, entry=None):
+    if "rehearsal" in descriptor:
+        require(entry is not None and descriptor["rehearsal"] == rehearsal_storage.descriptor(entry)
+                and descriptor["rehearsal"] is not None,
+                "rehearsal_storage_configuration", "Only the guarded rehearsal path may publish storage grants.")
     from admission import protected_directory, protected_path
     from contracts import atomic_json
     protected_directory(host, path.parent)

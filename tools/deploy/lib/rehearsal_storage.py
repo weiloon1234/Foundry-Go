@@ -11,7 +11,7 @@ MODE = "rehearsal_runtime"
 CONTEXT = Path("/var/lib/foundry-rehearsal/context.json")
 
 
-def run_identity(entry):
+def _context(entry):
     token = os.environ.get(RUN_ID, "")
     if not token:
         return None
@@ -24,7 +24,12 @@ def run_identity(entry):
             and profile.get("environment", "").startswith("acceptance")
             and profile.get("domain", "").endswith(".acceptance.invalid"),
             "rehearsal_storage_identity", "Storage rehearsal identity differs from the disposable acceptance profile.")
-    return token
+    return context
+
+
+def run_identity(entry):
+    context = _context(entry)
+    return context["run_id"] if context else None
 
 
 def environment(entry):
@@ -55,16 +60,23 @@ def reject_marker(value):
             reject_marker(item)
 
 
-def validate_disks(disks, entry):
-    for disk in disks.values():
-        cloud = disk.get("cloud", {}) if isinstance(disk, dict) else {}
-        mode = cloud.get("conditional_write_mode")
-        if not mode:
-            continue
-        require(mode == MODE and disk.get("driver") == "s3_compatible"
-                and cloud.get("compatible", {}).get("single_request_conditions") is True
-                and run_identity(entry) is not None,
-                "rehearsal_storage_configuration", "Reduced-fidelity storage requires the deploy rehearsal path.")
+def descriptor(entry):
+    """Issue a descriptor block from private deploy-owned rehearsal state only."""
+    context = _context(entry)
+    if context is None:
+        return None
+    disks = context.get("storage_runtime_caps", [])
+    require(isinstance(disks, list) and len(disks) <= 64, "rehearsal_storage_configuration", "Invalid rehearsal storage grants.")
+    names, caps = set(), []
+    for disk in disks:
+        require(isinstance(disk, dict) and set(disk) == {"disk", "runtime_cap_bytes"}
+                and isinstance(disk["disk"], str) and re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,127}", disk["disk"])
+                and disk["disk"] not in names and type(disk["runtime_cap_bytes"]) is int
+                and 5 << 20 <= disk["runtime_cap_bytes"] <= 64 << 20,
+                "rehearsal_storage_configuration", "Invalid rehearsal storage grant.")
+        names.add(disk["disk"])
+        caps.append(dict(disk))
+    return {"run_id": context["run_id"], "disks": caps} if caps else None
 
 
 def collect(host, units):

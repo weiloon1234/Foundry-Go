@@ -8,13 +8,6 @@ import (
 )
 
 func registerRehearsalStorage(builder *foundation.Builder, settings Settings) {
-	reduced := false
-	for _, disk := range settings.Services.Storage.Disks {
-		reduced = reduced || disk.Cloud.ConditionalWriteMode == storage.RehearsalRuntime
-	}
-	if !reduced {
-		return
-	}
 	attachmentsEnabled := settings.Features.Attachments.Enabled
 	requires := []foundation.ProviderID{Provider}
 	if attachmentsEnabled {
