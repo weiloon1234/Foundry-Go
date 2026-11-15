@@ -595,6 +595,7 @@ FEATURE_SHARED_DIRECTORY_GENERATION = 16
 FEATURE_COPIES_GENERATION = 17
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
 MAX_ROLE_COPIES, MAX_UNITS = 128, 256
+MAX_ENDPOINTS = MAX_LISTENERS * MAX_ROLE_COPIES + 1  # Expanded custom listeners plus built-in HTTP.
 
 
 def contract_object(value, required, optional=()):
@@ -699,6 +700,27 @@ class UnitIdentity:
     def parse(cls, value):
         contract_object(value, ("instance_id", "role", "ordinal"))
         return cls(value["instance_id"], value["role"], value["ordinal"])
+
+    @property
+    def record_key(self):
+        """Instance-local wire/path key; retain the original singleton spelling."""
+        return self.role if self.ordinal == 1 else f"{self.role}@{self.ordinal}"
+
+    @classmethod
+    def from_record_key(cls, instance_id, value):
+        require(isinstance(value, str), "invalid_contract", "Invalid copy identifier.")
+        role, separator, ordinal = value.partition("@")
+        require(not separator or re.fullmatch(r"[1-9][0-9]{0,2}", ordinal),
+                "invalid_contract", "Invalid copy ordinal.")
+        identity = cls(instance_id, role, int(ordinal) if separator else 1)
+        require(identity.record_key == value, "invalid_contract", "Copy identifiers must use their canonical spelling.")
+        return identity
+
+
+def contract_unit_keys(instance_id, values):
+    identities = contract_list(values, lambda value: UnitIdentity.from_record_key(instance_id, value), maximum=MAX_UNITS)
+    require(len(set(identities)) == len(identities), "invalid_contract", "Duplicate copy identifiers.")
+    return tuple(identity.record_key for identity in identities)
 
 
 @dataclass(frozen=True)
@@ -825,8 +847,8 @@ class RuntimeResolution:
                             "environments", "bindings_sha256", "readiness_sha256", "nginx_sha256"), ("unix_endpoints",))
         roles = contract_names(v["roles"])
         require("http" in roles, "invalid_contract", "HTTP remains required.")
-        endpoints = contract_list(v["endpoints"], AllocatedEndpoint.parse, maximum=MAX_LISTENERS)
-        unix = contract_list(v.get("unix_endpoints", []), UnixEndpoint.parse, maximum=MAX_LISTENERS)
+        endpoints = contract_list(v["endpoints"], AllocatedEndpoint.parse, maximum=MAX_ENDPOINTS)
+        unix = contract_list(v.get("unix_endpoints", []), UnixEndpoint.parse, maximum=MAX_ENDPOINTS)
         require(all(e.role in roles for e in unix) and len({e.path for e in unix}) == len(unix)
                 and len({(e.role, e.ordinal, e.listener) for e in (*endpoints, *unix)}) == len(endpoints) + len(unix)
                 and len({e.directory for e in unix}) <= 1,
@@ -906,9 +928,9 @@ class ClosureEvidence:
         require(v["stage"] in tuple(s.value for s in ClosureStage) and valid_timestamp(v["observed_at"]),
                 "invalid_contract", "Invalid closure observation.")
         units = contract_list(v["units"], UnitIdentity.parse, maximum=MAX_UNITS, minimum=1)
-        endpoints = contract_list(v["endpoints"], AllocatedEndpoint.parse)
+        endpoints = contract_list(v["endpoints"], AllocatedEndpoint.parse, maximum=2 * MAX_ENDPOINTS)
         require(len(set(units)) == len(units) and len({u.instance_id for u in units}) == 1
-                and all(e.role in {u.role for u in units} for e in endpoints),
+                and all((e.role, e.ordinal) in {(u.role, u.ordinal) for u in units} for e in endpoints),
                 "invalid_contract", "Invalid closure scope.")
         proofs = tuple(None if v[k] is None else contract_digest(v[k]) for k in
                        ("backend_exit_sha256", "old_reference_isolation_sha256"))
@@ -961,7 +983,8 @@ class ValidationPermit:
                 and set(self.units) <= set(evidence.units)
                 and resolution.id == self.resolution_id
                 and {u.role for u in self.units} <= set(resolution.roles)
-                and {e for e in resolution.endpoints if e.role in {u.role for u in self.units}} <= set(evidence.endpoints),
+                and {e for e in resolution.endpoints if (e.role, e.ordinal) in
+                     {(u.role, u.ordinal) for u in self.units}} <= set(evidence.endpoints),
                 "admission_closed_required",
                 "Validation requires complete closure for the exact operation, boot, resolution and unit set.")
 
@@ -1043,7 +1066,7 @@ class DeploymentSelection:
                 "invalid_contract", "Selection and admission identities differ.")
         return cls(instance, contract_int(v["minimum_generation"], FEATURE_INTRODUCTION_GENERATION), capabilities, resolution,
                    None if v["previous_resolution_id"] is None else contract_uuid(v["previous_resolution_id"]),
-                   admission, contract_names(v["enabled_roles"]), contract_names(v["maintenance_holds"]))
+                   admission, contract_unit_keys(instance, v["enabled_roles"]), contract_unit_keys(instance, v["maintenance_holds"]))
 
 
 def public_address(value):

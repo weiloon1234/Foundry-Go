@@ -117,17 +117,22 @@ def select_role_units(units, role="all", *, roles=None):
 
 
 def unit_role_names(identities):
-    """Serialize existing singleton role records without changing their wire shape."""
+    """Serialize copy selections without changing singleton record bytes."""
     identities = tuple(identities)
-    require(all(isinstance(identity, UnitIdentity) and identity.ordinal == 1 for identity in identities)
+    require(all(isinstance(identity, UnitIdentity) for identity in identities)
             and len({identity.instance_id for identity in identities}) <= 1,
-            "service_selection", "Role records require singleton identities from one instance.")
-    return tuple(identity.role for identity in identities)
+            "service_selection", "Copy records require identities from one instance.")
+    return tuple(identity.record_key for identity in identities)
 
 
 def unit_identities(instance_id, roles):
-    """Parse singleton role records, including identities absent from a retained target."""
-    return tuple(UnitIdentity(instance_id, role, 1) for role in roles)
+    """Parse copy records, including identities absent from a retained target."""
+    return tuple(UnitIdentity.from_record_key(instance_id, role) for role in roles)
+
+
+def role_names(identities):
+    """Project a copy selection to distinct role policies in selection order."""
+    return tuple(dict.fromkeys(identity.role for identity in identities))
 
 
 class UnitInventory:
@@ -412,7 +417,7 @@ def resolve_argument(argument, role, spec, resolution, paths, views, secret_path
     return paths.base + "/view/data"
 
 
-def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths=None):
+def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths=None, dependency_units=None):
     """Render inert units. Installation and observed loaded-unit verification are lifecycle work."""
     require(entry["profile"]["instance_id"] == inventory.profile.instance_id and entry["name"] == inventory.name,
             "service_inventory", "Unit account belongs to another instance.")
@@ -426,7 +431,8 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     hooks = {action: command_line([*helper, action, *identity]) for action in ("admit", "prepare", "dispatch", "running", "cleanup")}
     from feature_maintenance import marker_path
     condition = "ConditionPathExists=!" + marker_path(spec.identity) + "\n"
-    after = " ".join(inventory.units[n] for n in inventory.dependencies(name))
+    after = " ".join(dependency_units if dependency_units is not None else
+                     (inventory.units[n] for n in inventory.dependencies(name)))
     boot = f"foundry-admission-{spec.identity.instance_id}.service"
     mounts = "\n".join("BindReadOnlyPaths=" + systemd_word(view.source + ":" + view.destination) for view in views)
     from unix_sockets import uses_sockets

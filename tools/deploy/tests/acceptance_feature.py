@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in generation-16 confinement, shared files, Unix sockets, templates and bindings in the disposable harness.
+"""Opt-in generation-17 numbered copies and host capabilities in the disposable harness.
 
 Use the ordinary deploy-acceptance archive. The artifact is a second, pinned copy
 of that fixture's Linux artisan binary; no artifact network download is needed.
@@ -41,6 +41,55 @@ import services
 
 PORT = 8554
 RELAY_BODY = "feature-relay-ready"
+COPIES_ROLE = "copies"
+COPIES_PROGRAM = '''import errno,http.server,json,os,socket,sys,threading
+from pathlib import Path
+port,unix_path,cache,state,provider,ordinal=sys.argv[1:]
+ordinal=int(ordinal)
+state=Path(state)
+state.mkdir(parents=True,exist_ok=True)
+marker=state/'identity.json'
+if not marker.exists():
+ marker.write_text(json.dumps({'ordinal':ordinal,'created_pid':os.getpid()}))
+assert json.loads(marker.read_text())['ordinal']==ordinal
+unix=socket.socket(socket.AF_UNIX)
+unix.bind(unix_path)
+unix.listen()
+def serve_unix():
+ while True:
+  connection,_=unix.accept()
+  with connection:
+   try: connection.sendall(str(ordinal).encode())
+   except BrokenPipeError: pass
+threading.Thread(target=serve_unix,daemon=True).start()
+class Handler(http.server.BaseHTTPRequestHandler):
+ def do_GET(self):
+  shared=Path(cache)/'frame.txt'
+  ready=shared.exists() and shared.read_bytes()==b'prepared-media'
+  try:
+   descriptor=os.open(shared,os.O_WRONLY)
+  except OSError as error:
+   ready=ready and error.errno==errno.EROFS
+  else:
+   os.close(descriptor)
+   ready=False
+  with socket.socket(socket.AF_UNIX) as connection:
+   connection.settimeout(3)
+   connection.connect(provider)
+   connection.sendall(b'ping')
+   provider_ready=connection.recv(32)==b'unix-ready'
+  body=json.dumps({'ordinal':ordinal,'pid':os.getpid(),'state':str(state),'unix':unix_path,'shared_read_only':ready,'provider_ready':provider_ready}).encode()
+  self.send_response(200 if ready and provider_ready else 503)
+  self.end_headers()
+  self.wfile.write(body)
+ def log_message(self,*args): pass
+class Server(http.server.HTTPServer):
+ address_family=socket.AF_INET6
+ def server_bind(self):
+  self.socket.setsockopt(socket.IPPROTO_IPV6,socket.IPV6_V6ONLY,0)
+  super().server_bind()
+Server(('::',int(port)),Handler).serve_forever()
+'''
 PEER_PROBE = r'''
 import http.client, socket, sys
 address, port, opened = sys.argv[1:]
@@ -363,10 +412,15 @@ def assert_unix_binding(host, inventory, entry):
     return endpoint
 
 
-def feature_archive(source, destination, host_id, *, confined=False):
+def feature_archive(source, destination, host_id, *, confined=False, copies=0, version=None):
     with tarfile.open(source, "r:gz") as incoming:
         files = {item.name: incoming.extractfile(item).read() for item in incoming if item.isfile()}
     manifest = json.loads(files.pop("manifest.json"))
+    if version is not None:
+        prefix = "private-source-maps/" + manifest["version"] + "/"
+        files = {"private-source-maps/" + version + "/" + name[len(prefix):] if name.startswith(prefix) else name: data
+                 for name, data in files.items()}
+        manifest["version"] = version
     project = {"schema": 1, "id": manifest["project_id"], "slug": manifest["instance"].removesuffix("-" + manifest["environment"])}
     profile = read_json(Path("/verification/foundry-go/tests/fixtures/deploy-acceptance/deploy/environments/acceptance.json"))
     profile.update(schema=3, architecture=manifest["architecture"], instance_id=manifest["instance_id"],
@@ -440,6 +494,28 @@ def feature_archive(source, destination, host_id, *, confined=False):
             assert error.code == "invalid_topology" and "confinement" in error.detail
         else:
             raise AssertionError("Unconfined wildcard declaration was accepted")
+    if copies:
+        python = f"python{sys.version_info.major}.{sys.version_info.minor}"
+        profile["placement"][COPIES_ROLE] = copies
+        raw = topology.projection()
+        raw["shared_directories"]["render-cache"]["readers"].append(COPIES_ROLE)
+        raw["roles"].append({
+            "name": COPIES_ROLE, "kind": "executable", "packages": [python, python + "-minimal"],
+            "executable": {"package": python + "-minimal", "path": "/usr/bin/" + python},
+            "network": {"confinement": "loopback"},
+            "requires": ["socket-provider"],
+            "bindings": {"socket": {"endpoint": {"role": "socket-provider", "listener": "control", "scheme": "unix"}}},
+            "arguments": [{"literal": "-I"}, {"literal": "-c"}, {"literal": "exec(" + repr(COPIES_PROGRAM) + ")"},
+                          {"listener_port": "control"}, {"listener_socket_path": "control-unix"},
+                          {"shared_directory_path": "render-cache"}, {"state_path": "probe"},
+                          {"binding_socket_path": "socket"}, {"copy_number": "self"}],
+            "listeners": {"control": {"transport": "tcp", "bind": "loopback", "wildcard": True},
+                          "control-unix": {"transport": "unix", "socket": "copies.sock"}},
+            "readiness": {"kind": "http", "listener": "control", "path": "/ready", "status": 200, "timeout_seconds": 15},
+            "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
+            "limits": {"memory_bytes": 67108864, "cpu_percent": 100, "tasks": 16},
+            "maintenance": "continue", "state": {"kind": "local-unprotected", "acknowledged": True}})
+        topology = parse_topology(raw)
     profile = parse_profile(profile, topology).projection()
     payload_path = "deploy/artifacts/relay/" + checksum + ".bin"
     files[payload_path] = files["artisan"]
@@ -495,6 +571,127 @@ def assert_confined_wildcard(host, inventory):
     return endpoint
 
 
+def assert_numbered_copies(host, inventory, entry, count):
+    """Inspect each real copy, using one readiness budget for the complete set."""
+    import http.client
+    import socket
+    import time
+    import release
+    import unix_sockets
+    from contracts import copy_socket_name
+    selected = inventory.copies(COPIES_ROLE)
+    assert tuple(identity.ordinal for identity in selected) == tuple(range(1, count + 1))
+    assert services.wait_ready_set(host, inventory, selected, time.monotonic() + 30)
+    claims = listeners.private_claims(inventory.profile.instance_id, inventory.resolution, inventory.topology)
+    observed = listeners.observe_sockets(host)
+    snapshot = {}
+    for identity in selected:
+        unit, spec = inventory.units[identity], inventory.specs[identity]
+        tcp, = [e for e in inventory.resolution.endpoints if (e.role, e.ordinal) == (identity.role, identity.ordinal)]
+        unix, = [e for e in inventory.resolution.unix_endpoints if (e.role, e.ordinal) == (identity.role, identity.ordinal)]
+        assert unix.name == copy_socket_name("copies.sock", identity.ordinal)
+        assert unit.endswith(f"-{COPIES_ROLE}@{identity.ordinal}.service")
+        assert spec.arguments[-1] == str(identity.ordinal)
+        live = release.service(host, unit)
+        assert live["ActiveState"] == "active" and live["NRestarts"] == "0" and live["process"]
+        members = listeners.process_members(host, unit)
+        sockets = [row for row in observed if row.socket.port == tcp.port]
+        assert sockets and all(ipaddress.ip_address(row.socket.address).is_unspecified and row.pids
+                               and set(row.pids) <= members for row in sockets)
+        claim, = [claim for claim in claims if claim.identity == identity]
+        assert claim.wildcard and not listeners.ownership_findings((claim,), sockets, {identity: members})
+        proof = network_confinement.isolation(host, inventory, identity)
+        assert len(proof["programs"]) == 2 and all(proof["programs"])
+        assert unix_sockets.ready(host, unix, entry["allocations"]["uid"], entry["allocations"]["gid"],
+                                  unit, time.monotonic() + 5)
+        with socket.socket(socket.AF_UNIX) as connection:
+            connection.settimeout(3)
+            connection.connect(unix.path)
+            assert connection.recv(32) == str(identity.ordinal).encode()
+        with closing(http.client.HTTPConnection(tcp.address, tcp.port, timeout=3)) as connection:
+            connection.request("GET", "/ready")
+            response = connection.getresponse()
+            assert response.status == 200
+            delivered = json.loads(response.read(4096))
+        paths = services.ServicePaths.for_unit(identity, inventory.resolution.id)
+        state = Path(paths.state) / "data/probe"
+        assert delivered == {"ordinal": identity.ordinal, "pid": int(live["MainPID"]), "state": str(state),
+                             "unix": unix.path, "shared_read_only": True, "provider_ready": True}
+        provider, = spec.bindings.endpoints
+        assert provider.name == "socket" and provider.endpoint.role == "socket-provider"
+        grant, = spec.bindings.shared_directories
+        assert grant.name == "render-cache" and grant.access == "read-only"
+        marker = state / "identity.json"
+        assert json.loads(marker.read_text())["ordinal"] == identity.ordinal
+        snapshot[identity] = {"unit": unit, "pid": live["MainPID"], "start": live["process"]["start"],
+                              "port": tcp.port, "socket": unix.path, "socket_inode": Path(unix.path).stat().st_ino,
+                              "state": str(state), "marker": marker.read_bytes()}
+    assert len({item["port"] for item in snapshot.values()}) == count
+    assert len({item["socket"] for item in snapshot.values()}) == count
+    assert len({item["state"] for item in snapshot.values()}) == count
+    assert not inventory.specs[inventory.identity("socket-provider")].bindings.shared_directories
+    return snapshot
+
+
+def check_copy_consumers(host, entry, inventory, *, phase):
+    """Lane C merge point: its optional assertions own secrets, Copies and public ports."""
+    try:
+        import acceptance_copies_consumers
+    except ModuleNotFoundError as error:
+        if error.name != "acceptance_copies_consumers":
+            raise
+        print("SKIP lane C copy-consumer checks: acceptance_copies_consumers is not merged", flush=True)
+        return
+    acceptance_copies_consumers.check(host, entry, inventory, phase=phase)
+
+
+def numbered_count_changes(host, project, profile, inventory, entry, source):
+    import admission
+    from contracts import ClosureEvidence, ClosureStage
+    from feature_lifecycle import load
+    previous = assert_numbered_copies(host, inventory, entry, 3)
+    check_copy_consumers(host, entry, inventory, phase="initial")
+    for count in (4, 2):
+        archive = shared.WORK / f"feature-copies-{count}.tar.gz"
+        stamp = inventory.deployment.release.split("-", 1)[0]
+        version = stamp + "-" + hashlib.sha256((inventory.deployment.release + str(count)).encode()).hexdigest()[:40]
+        _, target, _, _ = feature_archive(source, archive, profile["host"]["host_id"],
+                                          confined=True, copies=count, version=version)
+        activation = request(project, profile, archive=str(archive), archive_sha256=digest(archive), operation_id=str(uuid.uuid4()))
+        before_units = set(inventory.copies(COPIES_ROLE))
+        from contracts import UnitIdentity
+        after_units = {UnitIdentity(profile["instance_id"], COPIES_ROLE, ordinal) for ordinal in range(1, count + 1)}
+        added, removed = after_units - before_units, before_units - after_units
+        plan = action("release-plan", activation)
+        assert set(plan["added_units"]) == set(services.unit_role_names(sorted(added)))
+        assert set(plan["removed_units"]) == set(services.unit_role_names(sorted(removed)))
+        assert set(services.unit_role_names(sorted(before_units & after_units))) <= set(plan["retained_units"])
+        assert action("activate", {**activation, "plan_token": plan["plan_token"]})["ok"]
+        profile = target
+        _, entry = host.require_identity(project, profile)
+        _, _, inventory, _ = load(host, entry)
+        current = assert_numbered_copies(host, inventory, entry, count)
+        for identity in before_units & after_units:
+            assert current[identity] == previous[identity], "Count change disturbed a surviving copy"
+        if removed:
+            store = admission.AdmissionStore(host, profile["instance_id"])
+            closure = admission.read_owned(host, store.runtime / "boot.json", ClosureEvidence.parse)
+            assert closure.stage is ClosureStage.APPLICATION_CLOSED and removed <= set(closure.units)
+            assert closure.backend_exit_sha256 and closure.old_reference_isolation_sha256
+        for identity in removed:
+            old = previous[identity]
+            services.stopped_unit(host, old["unit"])
+            assert not Path("/etc/systemd/system", old["unit"]).exists(), "Removed copy unit was retained"
+            runtime = host.paths.p("/run/foundry/services/" + identity.instance_id)
+            name = identity.role if identity.ordinal == 1 else f"{identity.role}.{identity.ordinal}"
+            assert not any((resolution / name).exists() for resolution in runtime.iterdir() if resolution.is_dir()), \
+                "Removed copy runtime view was retained"
+            assert Path(old["state"], "identity.json").read_bytes() == old["marker"], "Shrink deleted persistent copy data"
+        check_copy_consumers(host, entry, inventory, phase="grow" if added else "shrink")
+        previous = current
+    return profile, inventory, entry
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", required=True, type=Path)
@@ -504,7 +701,7 @@ def main():
     assert host.read_registry(missing=True) is None, "Feature scenario requires a fresh disposable host"
     shared.WORK.mkdir(mode=0o700, exist_ok=True)
     archive = shared.WORK / "feature.tar.gz"
-    project, profile, topology, disks = feature_archive(args.archive, archive, shared.HOST_ID, confined=True)
+    project, profile, topology, disks = feature_archive(args.archive, archive, shared.HOST_ID, confined=True, copies=3)
     shared.private_json(shared.WORK / "topology.json", {**topology.projection(), "sha256": topology.sha256})
     private = shared.bootstrap_secrets(disks)
     secret = secrets.token_urlsafe(32) + '"#;]雪'
@@ -587,6 +784,7 @@ def main():
                 assert run(["systemctl", "is-active", unit]).stdout.strip() == "active"
             assert run(["systemctl", "show", inventory.units[inventory.identity("relay")], "-p", "InvocationID", "--value"]).stdout == second
         public_observation(host, topology, profile, inventory=inventory, opened=True)
+        profile, inventory, entry = numbered_count_changes(host, project, profile, inventory, entry, args.archive)
         assert action("stop", request(project, profile, operation_id=str(uuid.uuid4())))["ok"]
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", "--quiet", unit], check=False).returncode != 0
@@ -598,7 +796,7 @@ def main():
         shared_directories.discard(host, inventory.topology, profile["instance_id"],
                                    entry["allocations"]["uid"], entry["allocations"]["gid"])
         assert not Path(inventory.specs[inventory.identity("http")].bindings.shared_directories[0].path).exists()
-        print("PASS host capabilities: package, artifact, admission, templates, private/public/Unix app bindings, verified wildcard confinement, shared files with reader EROFS and writer ENOSPC, disposable backup exclusion, stale-socket restart, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
+        print("PASS host capabilities: package, artifact, admission, templates, private/public/Unix app bindings, verified wildcard confinement, shared files with reader EROFS and writer ENOSPC, disposable backup exclusion, stale-socket restart, public TCP via nginx stream, numbered copies 3->4->2 with retained survivors and state, report, restart, maintenance continuity and stop closure")
 
 
 if __name__ == "__main__":

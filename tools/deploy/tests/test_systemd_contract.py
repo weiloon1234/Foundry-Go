@@ -6,6 +6,7 @@ results, process inspection, cgroups, and all property parsers remain real.
 """
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import signal
 import socket
 import sys
@@ -24,6 +25,7 @@ import packages
 import redis_acl
 import release
 import report
+import services
 
 
 TEMPLATES = Path(__file__).resolve().parents[1] / 'server/templates'
@@ -86,6 +88,9 @@ def probe(mode, directory):
         counter.write_text(str(count))
         if count == 1:
             raise SystemExit(23)
+    if mode == 'numbered':
+        root.mkdir(exist_ok=True)
+        (root / 'identity').write_text(root.name)
     if mode == 'wait':
         (root / 'waiting').touch()
         while not (root / 'continue').exists():
@@ -393,6 +398,62 @@ class SystemdContractTests(unittest.TestCase):
                                  tuple(stopped[key] for key in ('ActiveState', 'SubState', 'MainPID',
                                                                'ControlPID', 'ControlGroup', 'Result')))
                 self.assertIn(stopped['Job'], ('', '0'))
+
+    def test_numbered_instances_grow_and_shrink_with_exit_proof(self):
+        units = {}
+        for ordinal in range(1, 5):
+            unit = self.write_unit(self.prefix + f'-copies@{ordinal}.service',
+                '[Service]\nType=exec\nRestart=no\nKillMode=control-group\nTimeoutStopSec=1s\n'
+                f'ExecStart={self.command("numbered", self.root / "%i")}\n')
+            units[ordinal] = unit
+            self.host.run(['systemctl', 'start', unit], timeout=10)
+            self.wait_for(lambda: (self.root / str(ordinal) / 'ready').exists())
+            if ordinal == 3:
+                original = {n: release.service(self.host, value) for n, value in units.items()}
+        for ordinal, before in original.items():
+            live = release.service(self.host, units[ordinal])
+            self.assertEqual(before['MainPID'], live['MainPID'])
+            self.assertEqual(before['process'], live['process'])
+        groups = {self.show(unit)['ControlGroup'] for unit in units.values()}
+        self.assertEqual(4, len(groups))
+        self.assertEqual(1, len({self.show(unit)['Slice'] for unit in units.values()}))
+        for ordinal in (4, 3):
+            unit = units[ordinal]
+            with self.assertRaises(DeployError):
+                services.stopped_unit(self.host, unit)
+            self.host.run(['systemctl', 'stop', unit], timeout=10)
+            proof = services.stopped_unit(self.host, unit)
+            self.assertEqual(('0', '0', ''), tuple(proof[key] for key in ('MainPID', 'ControlPID', 'ControlGroup')))
+            path = Path('/run/systemd/system') / unit
+            path.unlink()
+            self.files.remove(path)
+            self.host.run(['systemctl', 'daemon-reload'], timeout=10)
+            self.assertEqual('not-found', services.stopped_unit(self.host, unit)['LoadState'])
+            self.assertEqual(str(ordinal), (self.root / str(ordinal) / 'identity').read_text())
+        for ordinal in (1, 2):
+            live = release.service(self.host, units[ordinal])
+            self.assertEqual(original[ordinal]['MainPID'], live['MainPID'])
+            self.assertEqual(original[ordinal]['process'], live['process'])
+
+    def test_numbered_readiness_uses_one_real_stability_deadline(self):
+        from contracts import digest
+        identities = [UnitIdentity(self.identity.instance_id, 'copies', n) for n in range(1, 4)]
+        units = {identity: self.service('copies', name=self.prefix + f'-copies@{identity.ordinal}')
+                 for identity in identities}
+        for unit in units.values():
+            self.host.run(['systemctl', 'start', unit], timeout=10)
+        executable = str(Path('/usr/bin/sleep').resolve())
+        spec = SimpleNamespace(executable=executable, executable_sha256=digest(Path(executable)))
+        inventory = SimpleNamespace(units=units, specs=dict.fromkeys(identities, spec),
+            roles={'copies': SimpleNamespace(common=SimpleNamespace(name='copies', confinement='none'))},
+            resolution=SimpleNamespace(endpoints=(), unix_endpoints=()),
+            identity=lambda role: UnitIdentity(self.identity.instance_id, role, 1))
+        started = time.monotonic()
+        self.assertFalse(services.wait_ready_set(self.host, inventory, identities, started + .75))
+        self.assertLess(time.monotonic() - started, 1.5, 'Each copy received a separate readiness budget')
+        self.assertTrue(services.wait_ready_set(self.host, inventory, identities, time.monotonic() + 8))
+        self.host.run(['systemctl', 'stop', units[identities[-1]]], timeout=10)
+        self.assertFalse(services.wait_ready_set(self.host, inventory, identities, time.monotonic() + .75))
 
     def test_loaded_fragment_dropins_reload_and_enablement(self):
         unit = self.service('metadata', template=True)

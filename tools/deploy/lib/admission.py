@@ -176,12 +176,13 @@ class AdmissionStore:
                     "operation_cleanup_pending", "An independent cleanup owner remains unresolved; starts are blocked.")
 
     def _matching(self, selection, resolution):
+        from services import role_names, unit_identities
         a = selection.admission
         require(selection.instance_id == self.instance_id and a.resolution_id == resolution.id
                 and a.deployment_sha256 == resolution.deployment_sha256
                 and a.private_revision == resolution.private_revision
-                and set(selection.enabled_roles) <= set(resolution.roles)
-                and set(selection.maintenance_holds) <= set(resolution.roles),
+                and set(role_names(unit_identities(self.instance_id, selection.enabled_roles))) <= set(resolution.roles)
+                and set(role_names(unit_identities(self.instance_id, selection.maintenance_holds))) <= set(resolution.roles),
                 "admission_selection", "Admission does not match the selected runtime resolution.")
 
     def begin(self, selection, resolution):
@@ -248,7 +249,7 @@ class AdmissionStore:
             invocation = None
             if observed["ActiveState"] == "active":
                 invocation_id = observed.get("InvocationID", "")
-                receipt = self.runtime / "admitted" / name.role / (invocation_id + ".json")
+                receipt = self.runtime / "admitted" / name.record_key / (invocation_id + ".json")
                 current = read_owned(self.host, receipt, HelperInvocation.parse)
                 require(current.unit == old.specs[name].identity
                         and current.unit_spec_sha256 == canonical_digest(record_document(old.specs[name]))
@@ -269,8 +270,9 @@ class AdmissionStore:
         if not path.exists():
             return {}
         record = read_owned(self.host, path, lambda value: value)
+        from services import role_names, unit_identities
         require(record.get("deployment_sha256") == resolution.deployment_sha256
-                and isinstance(record.get("roles"), dict) and set(record["roles"]) <= set(resolution.roles),
+                and isinstance(record.get("roles"), dict) and set(role_names(unit_identities(self.instance_id, record["roles"]))) <= set(resolution.roles),
                 "admission_retained", "Retained origins differ from the selected deployment.")
         from services import unit_identities
         return dict(zip(unit_identities(self.instance_id, record["roles"]), record["roles"].values()))
@@ -365,10 +367,13 @@ class AdmissionStore:
         self.require_cleanup_clear(selection.admission.operation_id if permit_id is not None or retained is not None else None)
         unit = invocation.unit
         from services import unit_identities
+        from topology import instance_units
         from feature_maintenance import marker_path
+        entry = self.host.read_registry()["instances"][self.instance_id]
+        units = instance_units(entry)
         require(not self.host.paths.p(marker_path(unit)).exists(), "maintenance_held", "This copy is held for maintenance.")
         require(invocation.boot_id == boot_id(self.host) and unit.instance_id == self.instance_id and
-                (invocation.resolution_id == resolution.id or origin is not None) and unit in unit_identities(self.instance_id, resolution.roles) and
+                (invocation.resolution_id == resolution.id or origin is not None) and unit in units and unit.role in resolution.roles and
                 unit not in unit_identities(self.instance_id, selection.maintenance_holds),
                 "admission_denied", "Start identity is stale, unselected or held.")
         evidence = read_owned(self.host, self.runtime / "boot.json", ClosureEvidence.parse)
@@ -381,9 +386,6 @@ class AdmissionStore:
                 "admission_boot_required", "Scoped boot preparation is missing or stale.")
         if selection.admission.disposition is AdmissionDisposition.COMMITTED or retained is not None:
             from services import enabled_units
-            from topology import instance_units
-            entry = self.host.read_registry()["instances"][unit.instance_id]
-            units = instance_units(entry)
             require(permit_id is None and unit in enabled_units(self.host, {unit: units[unit]}),
                     "admission_denied", "Committed starts must be enabled.")
             if selection.admission.disposition is AdmissionDisposition.COMMITTED:
@@ -399,11 +401,11 @@ class AdmissionStore:
 
     def admit(self, invocation, *, permit_id=None):
         invocation = HelperInvocation.parse(record_document(invocation))
-        with self._lock(shared=True), self._lock("unit-" + invocation.unit.role):
+        with self._lock(shared=True), self._lock("unit-" + invocation.unit.record_key):
             resolution = self._authorize(invocation, permit_id)
             if permit_id is not None:
                 claim = protected_path(self.host, self.runtime / "permits" / permit_id /
-                                       (invocation.unit.role + ".claim"), "file")
+                                       (invocation.unit.record_key + ".claim"), "file")
                 if claim.exists():
                     require(claim.read_text() == invocation.process.invocation_id,
                             "admission_allowance_used", "Validation allowance belongs to an earlier invocation.")
@@ -420,7 +422,7 @@ class AdmissionStore:
             return resolution
 
     def _receipt(self, invocation):
-        return self.runtime / "admitted" / invocation.unit.role / (invocation.process.invocation_id + ".json")
+        return self.runtime / "admitted" / invocation.unit.record_key / (invocation.process.invocation_id + ".json")
 
     def bind_workload(self, invocation, process, *, permit_id=None):
         """Transfer the admitted helper receipt to its observed systemd MainPID."""
@@ -433,13 +435,13 @@ class AdmissionStore:
     def preparation(self, invocation, *, permit_id=None):
         """Recheck a granted invocation without claiming another start allowance."""
         invocation = HelperInvocation.parse(record_document(invocation))
-        with self._lock(shared=True), self._lock("unit-" + invocation.unit.role):
+        with self._lock(shared=True), self._lock("unit-" + invocation.unit.record_key):
             resolution = self._authorize(invocation, permit_id)
             require(read_owned(self.host, self._receipt(invocation), HelperInvocation.parse) == invocation,
                     "admission_invocation", "Preparation requires the admitted invocation.")
             if permit_id is not None:
                 claim = protected_path(self.host, self.runtime / "permits" / permit_id /
-                                       (invocation.unit.role + ".claim"), "file")
+                                       (invocation.unit.record_key + ".claim"), "file")
                 require(claim.exists() and claim.read_text() == invocation.process.invocation_id,
                         "admission_allowance_used", "Preparation must use its already-claimed allowance.")
             yield resolution

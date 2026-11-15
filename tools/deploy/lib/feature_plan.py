@@ -23,7 +23,7 @@ def observations(host, registry, entry, topology, profile):
     if "deployment_selection" in entry:
         _, _, current, _ = lifecycle.load(host, entry)
         enabled = list(services.unit_role_names(services.enabled_units(host, current.units)))
-        units = {name.role: release.service(host, unit) for name, unit in current.units.items()}
+        units = {name.record_key: release.service(host, unit) for name, unit in current.units.items()}
         network = feature_network.plan(host, current.topology, current.profile, package, entry=entry)
     else:
         network = feature_network.plan(host, topology, profile, package, entry=entry)
@@ -125,9 +125,28 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
             paths = config["paths"]
         else:
             values = runtime_config.validate_runtime_environment(host, entry)
+        previous, affected = None, None
+        if "deployment_selection" in entry:
+            _, selection, previous, prior_launch = lifecycle.load(host, entry)
+            if previous.profile.placement != candidate_profile.placement:
+                affected = lifecycle.changed_release_units(host, entry, previous, prior_launch, declaration,
+                    target_path, roots, candidate_profile, paths)
+            else:
+                affected = set(previous.units)
+            from contracts import AdmissionDisposition
+            if (selection.admission.disposition is not AdmissionDisposition.COMMITTED
+                    or previous.topology.shared_directories and affected & previous.units.keys() &
+                    set(lifecycle.expand_placement(topology, candidate_profile.instance_id, candidate_profile.placement))):
+                affected.update(previous.units)
+                affected.update(lifecycle.expand_placement(topology, candidate_profile.instance_id, candidate_profile.placement))
         inventory, secret_paths = lifecycle.resolve(host, entry, manifest, declaration, target_path, roots, operation_id,
             private_paths=paths, values=values, profile=candidate_profile.projection(),
-            revision=entry["configuration_revision"] + bool(configuration_intent))
+            revision=entry["configuration_revision"] + bool(configuration_intent), previous=previous, affected=affected)
+        changes = lifecycle.changed_units(previous, inventory) if previous else set(inventory.units)
+        if affected is not None:
+            changes.update(affected)
+        added = set(inventory.units) - (set(previous.units) if previous else set())
+        removed_units = set(previous.units) - set(inventory.units) if previous else set()
         launch = lifecycle.save_launch(host, entry, inventory, declaration, roots, secret_paths)
         env = runtime_config.effective_environment_path(host, entry, inventory.resolution, candidate=True)
         release.app(host, entry, target_path, "config:check", env_file=env)
@@ -146,7 +165,12 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                   "action": "rollback" if rollback else "activate", "expected_current": expected_current,
                   "private_intent_id": intent, "configuration_intent_id": configuration_intent,
                   "observations": observed, "endpoints": [asdict(e) for e in inventory.resolution.endpoints],
-                  "unit_changes": list(services.unit_role_names(inventory.units)), "required_service_secrets": requirements,
+                  "unit_changes": sorted(services.unit_role_names(changes)),
+                  "added_units": sorted(services.unit_role_names(added)),
+                  "removed_units": sorted(services.unit_role_names(removed_units)),
+                  "changed_units": sorted(services.unit_role_names(changes - added - removed_units)),
+                  "retained_units": sorted(services.unit_role_names(set(inventory.units) - changes)),
+                  "required_service_secrets": requirements,
                   "maintenance_policy": {name: "stop" if role.common.maintenance == "stop" else "continue"
                                          for name, role in inventory.roles.items()},
                   "restoring": restoring, "enabled_roles": list(services.unit_role_names(enabled)), "running_roles": list(services.unit_role_names(running)),

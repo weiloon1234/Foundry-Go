@@ -121,6 +121,29 @@ class ConfinementTests(unittest.TestCase):
             (listeners.ObservedSocket(claim.socket, (10,)),), owners)
         self.assertEqual([finding["code"] for finding in findings], ["listener_owner_unverified"])
 
+    def test_bpf_proof_is_required_for_each_numbered_copy_cgroup(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        identities = tuple(c.UnitIdentity(INSTANCE, "relay", n) for n in (1, 2, 3))
+        inventory = SimpleNamespace(units={i: f"foundry-app-fixture-relay@{i.ordinal}.service" for i in identities})
+        host = Mock()
+        for identity in identities:
+            unit = inventory.units[identity]
+            group = "/system.slice/" + unit
+            host.run.return_value = subprocess.CompletedProcess([], 0,
+                "IPAddressDeny=0.0.0.0/0 ::/0\nIPAddressAllow=127.0.0.0/8 ::1/128\n"
+                "DropInPaths=\nControlGroup=" + group, "")
+            with patch.object(network_confinement, "attached_programs", return_value=[[1], [2]]) as attached:
+                self.assertEqual(network_confinement.isolation(host, inventory, identity)["programs"], [[1], [2]])
+                attached.assert_called_once_with(host, group)
+                self.assertEqual(host.run.call_args.args[0][2], unit)
+            if identity.ordinal > 1:
+                host.run.return_value.stdout = host.run.return_value.stdout.replace(group,
+                    "/system.slice/" + inventory.units[identities[0]])
+                with patch.object(network_confinement, "attached_programs") as attached, self.assertRaises(c.DeployError):
+                    network_confinement.isolation(host, inventory, identity)
+                attached.assert_not_called()
+
     def test_readiness_accepts_only_declared_wildcards_with_fresh_filter_proof(self):
         import tempfile
         import release

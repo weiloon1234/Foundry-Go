@@ -1,4 +1,4 @@
-"""Numbered-copy foundation; production profiles stay gated until lifecycle migration."""
+"""Numbered-copy identities, materialization, and compatibility boundaries."""
 import copy
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
@@ -25,6 +25,26 @@ def copy_fixture(count=2):
     return inventory, entry, placed
 
 
+def numbered_inventory(count=3):
+    original, entry, members = inventory_fixture()
+    raw = original.profile.projection()
+    raw["placement"]["relay"] = count
+    placed = t.parse_profile(raw, original.topology)
+    resolution = replace(original.resolution, endpoints=listeners.allocate_private(INSTANCE,
+        listeners.private_listeners(original.topology, placed), (), ()))
+    specs = []
+    for identity, role in t.expand_placement(original.topology, INSTANCE, placed.placement).items():
+        spec = replace(original.specs[original.identity(identity.role)], identity=identity)
+        if isinstance(role, t.ExecutableRole):
+            paths = services.ServicePaths.for_unit(identity, resolution.id)
+            spec = replace(spec, arguments=tuple(services.resolve_argument(argument, role, spec, resolution, paths, (), {})
+                                               for argument in role.arguments))
+        specs.append(spec)
+    deployment = replace(original.deployment, profile_sha256=c.canonical_digest(raw), units=tuple(specs))
+    resolution = replace(resolution, deployment_sha256=c.canonical_digest(c.record_document(deployment)))
+    return services.UnitInventory(entry["name"], original.topology, placed, deployment, resolution), entry, members
+
+
 class CopyFoundationTests(unittest.TestCase):
     def test_inventory_selection_uses_only_copy_identities(self):
         inventory, _, _ = copy_fixture()
@@ -39,13 +59,55 @@ class CopyFoundationTests(unittest.TestCase):
                 inventory.identity(role, ordinal)
         with self.assertRaises(c.DeployError):
             inventory.select(ordinal=1)
-        with self.assertRaises(c.DeployError):
-            services.unit_role_names((c.UnitIdentity(INSTANCE, "relay", 2),))
+        numbered = c.UnitIdentity(INSTANCE, "relay", 2)
+        self.assertEqual(services.unit_role_names((numbered,)), ("relay@2",))
+        self.assertEqual(services.unit_identities(INSTANCE, ("relay@2",)), (numbered,))
         old_role = "relay"
         with self.assertRaises(KeyError):
             inventory.units[old_role]
         with self.assertRaises(c.DeployError):
             t.Argument.parse({"copy_ordinal": "self"})
+
+
+    def test_copy_record_keys_are_unambiguous_and_preserve_singletons(self):
+        for ordinal in (1, 2, 128):
+            identity = c.UnitIdentity(INSTANCE, "relay", ordinal)
+            self.assertEqual(c.UnitIdentity.from_record_key(INSTANCE, identity.record_key), identity)
+        for value in ("relay@1", "relay@02", "relay@0", "relay@129", "relay@2@3", "relay@", "relay.2", None):
+            with self.subTest(value=value), self.assertRaises(c.DeployError):
+                c.UnitIdentity.from_record_key(INSTANCE, value)
+        units = (c.UnitIdentity(INSTANCE, "relay", 1), c.UnitIdentity(INSTANCE, "relay", 2))
+        self.assertEqual(services.role_names(units), ("relay",))
+        self.assertEqual(services.unit_role_names(units), ("relay", "relay@2"))
+
+    def test_numbered_inventory_expands_dependencies_and_rendered_units(self):
+        inventory, entry, _ = numbered_inventory()
+        copies = inventory.copies("relay")
+        worker = inventory.identity("worker")
+        self.assertEqual([unit.ordinal for unit in copies], [1, 2, 3])
+        self.assertTrue(set(copies) <= set(inventory.dependencies(worker)))
+        content = services.render_unit(inventory, worker, entry, "a" * 64)
+        for identity in copies:
+            self.assertIn(inventory.units[identity], content)
+            rendered = services.render_unit(inventory, identity, entry, "a" * 64)
+            self.assertIn(services.ServicePaths.for_unit(identity, inventory.resolution.id).base, rendered)
+            self.assertIn(f'"{identity.role}" "{identity.ordinal}"', rendered)
+        starts, deadlines = [], []
+        def start(identity, deadline):
+            starts.append(identity)
+            deadlines.append(deadline)
+        def ready(identity, deadline):
+            deadlines.append(deadline)
+            return True
+        import time
+        deadline = time.monotonic() + 5
+        inventory.start_in_order(inventory.units, deadline, start, ready)
+        self.assertTrue(all(value == deadline for value in deadlines))
+        self.assertGreater(starts.index(worker), max(starts.index(identity) for identity in copies))
+        starts.clear()
+        with self.assertRaises(c.DeployError):
+            inventory.start_in_order(inventory.units, deadline, start, lambda identity, _: identity != copies[1])
+        self.assertNotIn(worker, starts)
 
     def test_identity_is_frozen_ordered_and_bounded(self):
         for ordinal in (1, 2, 128):
@@ -116,13 +178,11 @@ class CopyFoundationTests(unittest.TestCase):
             with self.assertRaises(c.DeployError):
                 services.select_role_units(names, roles=selection)
 
-    def test_production_profiles_and_inventory_remain_single_copy(self):
+    def test_production_profiles_accept_copies_but_inventory_must_match(self):
         raw = profile()
         raw["placement"]["relay"] = 2
         for parse in (lambda: c.validate_profile(raw), lambda: t.parse_profile(raw, t.parse_topology(declaration()))):
-            with self.assertRaises(c.DeployError) as caught:
-                parse()
-            self.assertEqual(caught.exception.code, "unsupported_capability")
+            parse()
         inventory, entry, _ = copy_fixture()
         extra = replace(inventory.specs[inventory.identity("relay")], identity=c.UnitIdentity(INSTANCE, "relay", 2))
         deployment = replace(inventory.deployment, units=inventory.deployment.units + (extra,))
@@ -168,6 +228,20 @@ class CopyFoundationTests(unittest.TestCase):
         self.assertEqual(c.RuntimeResolution.parse(encoded), resolution)
         with self.assertRaises(c.DeployError):
             c.record_document(replace(resolution, endpoints=resolution.endpoints + (replace(second, port=18001),)))
+
+    def test_expanded_listener_records_are_not_limited_to_declaration_count(self):
+        inventory, _, _ = copy_fixture()
+        endpoints = (inventory.resolution.endpoints[0],) + tuple(
+            c.AllocatedEndpoint("relay", name, "127.0.0.1", 18000 + 2 * ordinal + offset, ordinal)
+            for ordinal in range(1, 129) for offset, name in enumerate(("control", "metrics")))
+        resolution = replace(inventory.resolution, endpoints=endpoints)
+        self.assertEqual(len(c.RuntimeResolution.parse(c.record_document(resolution)).endpoints), 257)
+        from test_host_capabilities import closure
+        evidence = c.ClosureEvidence.parse(closure())
+        identities = (inventory.identity("http"),) + tuple(c.UnitIdentity(INSTANCE, "relay", n) for n in range(1, 129))
+        old = tuple(replace(endpoint, port=endpoint.port + 1000) for endpoint in endpoints)
+        evidence = replace(evidence, units=identities, endpoints=endpoints + old)
+        self.assertEqual(len(c.ClosureEvidence.parse(c.record_document(evidence)).endpoints), 514)
 
     def test_unix_names_are_stable_bounded_and_collisions_are_rejected(self):
         inventory, _, placed = copy_fixture()

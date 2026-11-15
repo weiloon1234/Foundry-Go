@@ -10,7 +10,7 @@ import re
 import subprocess
 import uuid
 
-from services import unit_identities, unit_role_names
+from services import role_names, unit_identities, unit_role_names
 
 from contracts import (AllocatedEndpoint, UnixEndpoint, UnitIdentity, ClosureEvidence, ClosureStage, DNSObservation, DeployError,
                        canonical_digest, contract_uuid, now, record_document, require)
@@ -229,7 +229,7 @@ def ingress_evidence(operation_id, boot_id, old, candidate, units, retained_unit
     require(firewall.closed and edge.closed and firewall.boot_id == edge.boot_id == boot_id,
             "ingress_unverified", "Fresh closed firewall and edge observations are required.")
     units = tuple(units)
-    roles = set(unit_role_names(units))
+    roles = set(role_names(units))
     require(roles and roles == set(edge.roles) and len({u.instance_id for u in units}) == 1
             and {u.instance_id for u in units} == {edge.instance_id, firewall.instance_id},
             "ingress_unverified", "Network observations must cover the exact affected instance and roles.")
@@ -514,6 +514,10 @@ def _transition_scope(host, entry, transition, resolution, units):
     retained = set(all_units) - affected
     require(retained <= old.units.keys() & inventory.units.keys(),
             "network_scope", "Added and removed roles must be affected by the transition.")
+    public_roles = {name.split(".")[0] for profile in (old.profile, inventory.profile)
+                    for name, _ in profile.listeners}
+    require(not (set(role_names(scoped)) & set(role_names(retained)) & public_roles),
+            "network_scope", "Public listener changes require all copies of the role until per-copy public routing is available.")
     for name in retained:
         require(old.specs[name] == inventory.specs[name]
                 and tuple(e for e in old.resolution.endpoints if (e.role, e.ordinal) == (name.role, name.ordinal)) == tuple(e for e in resolution.endpoints if (e.role, e.ordinal) == (name.role, name.ordinal))
@@ -532,7 +536,7 @@ def _transition_scope(host, entry, transition, resolution, units):
 
 
 def _retained_state(host, inventory, names):
-    """Observe concrete units, then serialize the existing singleton evidence map."""
+    """Observe concrete units, retaining the original keys for singleton evidence."""
     from release import service
     import edge
     admission, _ = _feature_owners()
@@ -565,8 +569,9 @@ def feature_withdraw(host, entry, transition, resolution, units):
     claims = tuple(dict.fromkeys(c for inv in (old, inventory) for c in public_claims(inv.profile) if c.identity in scoped))
     # Runtime exposure, not enablement alone, determines what must be preserved.
     before = _retained_state(host, old, retained)
-    exposed = {name for name, observation in before.items() if observation["exposure"]}
-    retained_claims = tuple(c for c in public_claims(old.profile) if c.role in exposed)
+    exposed = set(unit_identities(transition.instance_id,
+                  (name for name, observation in before.items() if observation["exposure"])))
+    retained_claims = tuple(c for c in public_claims(old.profile) if c.identity in exposed)
     request = record_document(replace(transition, closure_id=None))
     context = canonical_digest({"transition": request, "units": dict(zip(unit_role_names(scoped), scoped.values())),
                                 "old": record_document(old.resolution), "candidate": record_document(resolution)})
@@ -588,7 +593,7 @@ def feature_withdraw(host, entry, transition, resolution, units):
             if inventory.identity("http") in scoped:
                 _feature_http(host, entry, inventory, history, closed=True, write=False)
             firewall.observe(host, transition.instance_id, claims, retained_claims=retained_claims, bindings=old.profile.listeners)
-            edge.observe_projection(host, transition.instance_id, unit_role_names(scoped))
+            edge.observe_projection(host, transition.instance_id, role_names(scoped))
             withdrawn = True
         except DeployError as error:
             if error.code not in ("network_not_withdrawn", "firewall_drift", "nginx_projection_drift"):
@@ -607,12 +612,12 @@ def feature_withdraw(host, entry, transition, resolution, units):
         record("in_progress")
         if inventory.identity("http") in scoped:
             _feature_http(host, entry, inventory, history, closed=True)
-        edge.withdraw(host, transition.instance_id, unit_role_names(scoped))
+        edge.withdraw(host, transition.instance_id, role_names(scoped))
         record("complete")
     require(_retained_state(host, inventory, retained) == before,
             "network_retained_changed", "Withdrawal changed a retained unit or route.")
     fw = firewall.observe(host, transition.instance_id, claims, retained_claims=retained_claims, bindings=old.profile.listeners)
-    ng = edge.observe_projection(host, transition.instance_id, unit_role_names(scoped))
+    ng = edge.observe_projection(host, transition.instance_id, role_names(scoped))
     return ingress_evidence(transition.operation_id, boot, old.resolution, resolution,
                             transition.affected_units, canonical_digest(before), fw, ng, claims=claims)
 
@@ -696,8 +701,9 @@ def feature_open(host, entry, resolution, evidence, *, deadline=None):
     registry, history = _feature_history(host)
     projection = _feature_projection(entry, inventory.topology, inventory.profile, resolution.endpoints)
     require(canonical_digest(projection) == resolution.nginx_sha256, "network_projection", "Selected nginx projection digest differs.")
-    exposed = {name for name, state in retained.items() if state["exposure"]}
-    retained_claims = tuple(c for c in public_claims(inventory.profile) if c.role in exposed)
+    exposed = set(unit_identities(inventory.profile.instance_id,
+                  (name for name, state in retained.items() if state["exposure"])))
+    retained_claims = tuple(c for c in public_claims(inventory.profile) if c.identity in exposed)
     claims = tuple(c for c in public_claims(inventory.profile) if c.identity in opening)
     def authorize():
         selection, selected = store._selection()
@@ -713,7 +719,7 @@ def feature_open(host, entry, resolution, evidence, *, deadline=None):
             values = dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
             invocation_id = values.get("InvocationID", "")
             require(re.fullmatch(r"[a-f0-9]{32}", invocation_id) is not None, "network_invocation", "Missing service invocation.")
-            invocation = admission.read_owned(host, store.runtime / "admitted" / role.role / (invocation_id + ".json"), HelperInvocation.parse)
+            invocation = admission.read_owned(host, store.runtime / "admitted" / role.record_key / (invocation_id + ".json"), HelperInvocation.parse)
             require(invocation.unit == inventory.specs[role].identity
                     and invocation.unit_spec_sha256 == canonical_digest(record_document(inventory.specs[role]))
                     and str(invocation.process.pid) == values.get("MainPID") and admission.executor_alive(host, invocation.process),
@@ -739,10 +745,10 @@ def feature_open(host, entry, resolution, evidence, *, deadline=None):
             _feature_http(host, entry, inventory, tuple((entry, inv) for inv in history), closed=False)
         closed = firewall.observe(host, inventory.profile.instance_id, claims,
                                   retained_claims=retained_claims, bindings=inventory.profile.listeners)
-        edge.open_runtime(host, inventory.profile, resolution, entry["certificate"]["lineage"], unit_role_names(opening),
+        edge.open_runtime(host, inventory.profile, resolution, entry["certificate"]["lineage"], role_names(opening),
                           topology=inventory.topology, authorize=authorize)
         if any(policy.tls == "edge" for name, policy in public_policies(inventory.profile, inventory.topology).items()
-               if name.split(".")[0] in unit_role_names(opening)):
+               if name.split(".")[0] in role_names(opening)):
             certificates.verify_network_postcondition(host, entry)
         firewall.open_runtime(host, inventory.profile.instance_id, claims, inventory.profile.listeners,
                               closed_sha256=closed.sha256, authorize=authorize, retained_claims=retained_claims)
@@ -751,7 +757,7 @@ def feature_open(host, entry, resolution, evidence, *, deadline=None):
                     and any(name.startswith("stream-" + role.role + ".") for role in opening)}
         if inventory.identity("http") in opening:
             expected["http-open.conf"] = '\"\" 1;\n'
-        edge.observe_projection(host, inventory.profile.instance_id, unit_role_names(opening), expected=expected)
+        edge.observe_projection(host, inventory.profile.instance_id, role_names(opening), expected=expected)
         observed = tuple(s for s in observe_sockets(host) if any(conflicts(s.socket, claim.socket) for claim in claims))
         require(not ownership_findings(claims, observed, {"nginx": process_members(host, "nginx.service")}, edge_verified=True),
                 "public_opening_unverified", "Public sockets do not belong to the selected nginx projection.")
@@ -763,7 +769,7 @@ def feature_open(host, entry, resolution, evidence, *, deadline=None):
             firewall.withdraw(host, inventory.profile.instance_id, claims,
                               retained_claims=retained_claims, bindings=inventory.profile.listeners)
         finally:
-            edge.withdraw(host, inventory.profile.instance_id, unit_role_names(opening))
+            edge.withdraw(host, inventory.profile.instance_id, role_names(opening))
         raise
 
 
@@ -779,7 +785,7 @@ def feature_observe_open(host, entry, inventory, running):
                 and any(name.startswith('stream-' + role.role + '.') for role in running)}
     if inventory.identity('http') in running:
         expected['http-open.conf'] = '"" 1;\n'
-    edge.observe_projection(host, inventory.profile.instance_id, unit_role_names(inventory.units), expected=expected)
+    edge.observe_projection(host, inventory.profile.instance_id, role_names(inventory.units), expected=expected)
     _feature_http(host, entry, inventory, (), closed=inventory.identity('http') not in running, write=False)
     claims = public_claims(inventory.profile)
     opened = tuple(c for c in claims if c.identity in running)

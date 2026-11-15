@@ -880,8 +880,6 @@ def validate_feature_profile(value, project=None):
     legacy["schema"] = PROFILE_SCHEMA
     validate_profile(legacy, project)
     placement = parse_placement(value["placement"])
-    require(all(count <= 1 for _, count in placement), "unsupported_capability",
-            "Numbered services require the complete copy lifecycle migration.")
     raw = value["listeners"]
     require(isinstance(raw, dict) and len(raw) <= MAX_LISTENERS, "invalid_profile", "Invalid public listener bindings.")
     listeners = tuple((n, PublicListenerBinding.parse(v)) for n, v in sorted(raw.items()))

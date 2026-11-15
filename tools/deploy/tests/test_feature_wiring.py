@@ -385,7 +385,7 @@ class FeatureWiringFixture(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, confined=False, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, confined=False, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, copies=1, application_content=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -423,7 +423,7 @@ class FeatureWiringFixture(unittest.TestCase):
                 readiness={'kind': 'unix', 'listener': 'api'}, arguments=[{'listener_socket_path': 'api'}],
                 environment={'XDG_RUNTIME_DIR': {'listener_socket_directory': 'api'}}, maintenance='continue')
             self.topology = parse_topology(raw)
-        self.profile.update(schema=3, placement={"http": 1, "relay": 1, **({"worker": 1} if worker else {}),
+        self.profile.update(schema=3, placement={"http": 1, "relay": copies, **({"worker": 1} if worker else {}),
                                               **({"scheduler": 1} if scheduler else {})}, listeners={})
         if public:
             from test_host_capabilities import profile
@@ -434,7 +434,7 @@ class FeatureWiringFixture(unittest.TestCase):
         members = artifacts.inspect_payload(dict(self.topology.artifacts)["relay"], "linux-arm64", payload, artifacts.ExpansionBudget())
         path = "deploy/artifacts/relay.bin"
         self.version = version
-        files = {"artisan": binary, "config/deploy.toml": b'[project]\n[app.worker]\nconnection = "target-queue"\n', "public/index.html": b"fixture",
+        files = {"artisan": binary, "config/deploy.toml": b'[project]\n[app.worker]\nconnection = "target-queue"\n', "public/index.html": application_content if application_content is not None else b"fixture",
                  "private-source-maps/" + self.version + "/a.map": b"{}", path: binary}
         if templates:
             files["deploy/files/private.yaml"] = b"token: {{secret.TOKEN_FILE}}\n"

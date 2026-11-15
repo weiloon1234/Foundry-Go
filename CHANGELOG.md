@@ -2,11 +2,14 @@
 
 ## Unreleased
 
-- Added: generation-17 foundations for numbered custom service copies: bounded
-  unit identities, placement expansion, per-copy endpoint allocations and stable
-  socket paths, and per-copy resolution of the existing `copy_number` reference. Counts above one remain rejected
-  until count changes are enabled. Inventory callers now use `UnitIdentity` keys
-  and explicit copy selection; existing copy-1 wire shapes and digests stay unchanged.
+- Added: generation-17 numbered custom service copies (0–128 per role, at most
+  256 units per instance), with per-copy units, private TCP and Unix listeners,
+  config views, seed/state paths, admission, confinement proof, and `copy_number`
+  resolution. Dependencies and readiness cover every copy under one deadline.
+- Changed: reviewed release plans identify added and removed copies, retain
+  unchanged running copies, and require exit and network closure proof before
+  removing units or runtime views. Persistent per-copy state is retained. Copy 1
+  keeps its existing paths and wire representation; generation 17 stays sticky.
 - Added: role-level loopback network confinement with verified systemd IP policy
   and live ingress/egress BPF attachments, shared with recovery rehearsal. Private
   TCP listeners may declare wildcard binding only on confined roles. Readiness

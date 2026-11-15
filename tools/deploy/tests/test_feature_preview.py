@@ -59,11 +59,29 @@ class FeaturePreviewTests(unittest.TestCase):
             location = runtime_config.write_binding_descriptor(self.host, self.entry, self.inventory.deployment,
                                                                self.inventory.resolution, spec)
         value = json.loads(self.host.paths.p(location).read_text())
+        self.assertEqual(self.host.paths.p(location), self.host.paths.opt(self.entry["name"]) / "runtime" / CURRENT / "http.json")
         self.assertEqual(value["schema"], 2)
         self.assertEqual(value["bindings"], c.record_document(spec.bindings))
         self.assertEqual(value["unit"], {"instance_id": spec.identity.instance_id, "role": "http", "ordinal": 1})
         self.assertNotIn("environments", value)
         self.assertNotIn("private_revision", value)
+
+    def test_numbered_descriptor_keeps_copy_one_bytes_and_uses_a_distinct_path(self):
+        from test_copies import numbered_inventory
+        inventory, entry, _ = numbered_inventory(2)
+        env = self.host.paths.instance_config(entry["name"]) / "runtime" / CURRENT / "relay/app.env"
+        root = self.host.paths.opt(entry["name"]) / "runtime" / CURRENT
+        with patch.object(runtime_config, "effective_environment_path", return_value=env):
+            first = runtime_config.write_binding_descriptor(self.host, entry, inventory.deployment,
+                inventory.resolution, inventory.specs[inventory.identity("relay", 1)])
+            self.assertEqual(self.host.paths.p(first), root / "relay.json")
+            original, checksum = (root / "relay.json").read_bytes(), c.digest(root / "relay.json")
+            second = runtime_config.write_binding_descriptor(self.host, entry, inventory.deployment,
+                inventory.resolution, inventory.specs[inventory.identity("relay", 2)])
+            self.assertEqual(self.host.paths.p(second), root / "relay@2.json")
+        self.assertEqual((root / "relay.json").read_bytes(), original)
+        self.assertEqual(c.digest(root / "relay.json"), checksum)
+        self.assertEqual(c.read_json(root / "relay@2.json")["unit"]["ordinal"], 2)
 
     def console_source(self, *, grants=True, archive_schema=2):
         spec = self.inventory.specs[self.inventory.identity("http")]
@@ -95,6 +113,8 @@ class FeaturePreviewTests(unittest.TestCase):
         sibling = source.with_name("console.json")
         sibling.write_text("custom role descriptor")
         path = runtime_config.console_binding_descriptor(self.host, self.entry, CURRENT)
+        self.assertEqual(source, self.host.paths.opt(self.entry["name"]) / "runtime" / CURRENT / "http.json")
+        self.assertEqual(path, source.parent / "console/http.json")
         self.assertEqual(c.read_json(path), expected)
         self.assertEqual(path.stat().st_mode & 0o777, 0o644)
         self.assertEqual(source.read_bytes(), original)

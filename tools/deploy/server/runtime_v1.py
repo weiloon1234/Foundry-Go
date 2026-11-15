@@ -163,14 +163,15 @@ def main(arguments):
         if len(arguments) != 7 or arguments[0] not in ("admit", "prepare", "dispatch", "running", "cleanup", "boot", "open"):
             return 1
         action, instance, role, ordinal, resolution, bundle, spec = arguments
-        if (not all(identifier(v) for v in (instance, resolution)) or ordinal != "1" or
+        if (not all(identifier(v) for v in (instance, resolution)) or not re.fullmatch(r"[1-9][0-9]{0,2}", ordinal) or
                 not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", role) or
                 any(not re.fullmatch(r"[a-f0-9]{64}", v) for v in (bundle, spec))):
             return 1
         invocation = os.environ.get("INVOCATION_ID", "")
         if not re.fullmatch(r"[a-f0-9]{32}", invocation) or (action == "dispatch") == (os.geteuid() == 0):
             return 1
-        key = PINS / instance / role / (invocation + ".json")
+        copy_key = role if ordinal == "1" else role + "@" + ordinal
+        key = PINS / instance / copy_key / (invocation + ".json")
         if action == "cleanup" and not key.exists():
             return 0
         if os.geteuid() == 0:
@@ -182,7 +183,7 @@ def main(arguments):
                     if action not in ("admit", "boot", "open"):
                         return 1
                     generation = read(STATE / instance / "generations" / (spec + "-" + bundle + ".json"))
-                    if generation["unit"] != {"instance_id": instance, "role": role, "ordinal": 1} or generation["resolution_id"] != resolution:
+                    if generation["unit"] != {"instance_id": instance, "role": role, "ordinal": int(ordinal)} or generation["resolution_id"] != resolution:
                         return 1
                     proc = Path("/proc/self/stat").read_text().rsplit(") ", 1)[1].split()
                     pin = {"schema": 1, "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
@@ -194,7 +195,7 @@ def main(arguments):
                 os.close(fd)
         pinned = read(key)
         pin = pinned["helper"]
-        if (pin["unit"] != {"instance_id": instance, "role": role, "ordinal": 1} or
+        if (pin["unit"] != {"instance_id": instance, "role": role, "ordinal": int(ordinal)} or
                 pin["boot_id"] != Path("/proc/sys/kernel/random/boot_id").read_text().strip() or
                 pin["process"]["invocation_id"] != invocation or pin["helper_format"] != 1):
             return 1

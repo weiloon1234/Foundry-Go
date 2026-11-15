@@ -1,9 +1,7 @@
 # Numbered service copies: shared interface
 
-Release 2a, lane A1, turn 2a migrates inventory callers to copy identities. Counts above one still fail
-with `unsupported_capability` in `topology.validate_feature_profile`. A1 removes
-that gate only in a later count-enablement turn. Wrappers
-belong to release 3.
+Release 2a, lane A1, turn 2b enables numbered custom copies through reviewed
+release plans under generation 17. Wrappers belong to release 3.
 
 ## Identity and expansion
 
@@ -56,11 +54,60 @@ legacy profiles. `selected_units(..., role=...)` expands a role selector;
 `release.enabled_roles` preserve identity keys.
 
 Existing singleton wire records remain unchanged. At their boundaries,
-`services.unit_identities(instance_id, roles)` parses role names, including removed
-historical roles. `services.unit_role_names(identities)` emits role names and
-refuses non-singleton or mixed-instance identities. Lane A2 extends its record
-schemas before persisting selections with higher ordinals. Role-scoped environment
+`services.unit_identities(instance_id, roles)` parses instance-local copy keys,
+including removed historical copies. `services.unit_role_names(identities)` emits
+`identity.record_key`: the role name for ordinal 1 and `role@N` for later copies.
+Explicit `role@1`, leading zeroes, and mixed-instance selections are rejected.
+`UnitIdentity.from_record_key(instance_id, key)` owns parsing.
+`services.role_names(identities)` projects distinct role policies, preserving order;
+use that projection for role-level edge APIs, never for persisted copy selections.
+Role-scoped environment
 and secret-path records remain role-scoped until lane C changes their owners.
+
+## Removal hook for A2
+
+`feature_lifecycle.record_removed_copy_enablement(host, entry,
+identity: UnitIdentity, enabled: bool) -> None` is called once for each removed
+copy in descending stop order, after stopped-unit and network closure proof and
+before disabling or removing its unit file/runtime views. `enabled` is the
+pre-stop observation frozen by the reviewed plan. Failure aborts removal.
+A2 owns the hook's record contents, retention, and rollback restoration. A1 owns
+the call point and never removes persistent `ServicePaths.state` directories.
+
+Admission receipts, validation claims, helper pins, and launch descriptor keys
+use `identity.record_key`, so copy 1 keeps its existing location. Runtime and
+persistent service directories continue to use the separate `ServicePaths` layout
+below. Immutable retained origins allow surviving copies to keep their process,
+configuration view, and allocations when a reviewed count change affects others.
+
+### Cross-lane integration points
+
+The approved shared change in `runtime_config.write_binding_descriptor` uses
+`spec.identity.record_key + ".json"` for the descriptor filename, matching the
+launch descriptor map. Lane C must preserve this path change when merging its
+runtime configuration changes. Copy 1 keeps `<role>.json`, including HTTP's
+`runtime/<id>/http.json`; the console descriptor stays `console/http.json`.
+
+A2 should parse serialized selections with `unit_identities`, including
+`backup`'s selected enablement graph. Failed maintenance restoration must intersect
+holds with `inventory.units`, not expand the role-policy `resolution.roles` as
+singleton records. Recovery invocation lookups must use `identity.record_key`
+beneath the admission receipts directory.
+
+## Count-transition plan fields
+
+`feature_plan.plan` returns `unit_changes`, `added_units`, `removed_units`,
+`changed_units`, and `retained_units` as copy record keys. `unit_changes` is the
+union of additions, removals, and changed copies. The archived target profile owns
+the placement. A changed placement enables effective-input comparison and retained
+origins; ordinary activation and rollback keep their existing fresh-resolution
+behavior. The plan token covers the copy delta and observations, and activation
+rechecks enablement, running selection, and maintenance state before mutation.
+
+Lane C's optional acceptance entry point is
+`acceptance_copies_consumers.check(host, entry, inventory, phase=...)`.
+`phase` is `initial`, `grow`, or `shrink`. The scenario reports a missing module
+and continues; errors inside an installed module are not suppressed.
 
 ## Endpoints and references
 

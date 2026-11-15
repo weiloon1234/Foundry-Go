@@ -83,6 +83,41 @@ class AdmissionTests(unittest.TestCase):
             self.assertIsNone(self.store.retained_invocation(invocation, self.resolution))
             self.assertEqual(self.store.retained_origin(invocation, self.resolution), self.closure)
 
+    def test_validation_claims_are_per_copy_and_do_not_cover_sibling_endpoints(self):
+        from test_copies import numbered_inventory
+        import topology
+        inventory, entry, _ = numbered_inventory(2)
+        entry = {**entry, "topology": topology.validate_topology(inventory.topology.projection()),
+                 "profile": inventory.profile.projection()}
+        self.host.read_registry.return_value = {"instances": {INSTANCE: entry}}
+        copies = tuple(c.UnitIdentity(INSTANCE, "relay", n) for n in (1, 2))
+        endpoints = tuple(c.AllocatedEndpoint("relay", "control", "127.0.0.1", 8300 + n, n) for n in (1, 2))
+        resolution = replace(self.resolution, roles=("http", "relay"), endpoints=self.resolution.endpoints + endpoints,
+            environments=self.resolution.environments + (c.EffectiveEnvironment("relay", "runtime/" + CURRENT + "/relay/app.env", OTHER),))
+        selection = replace(self.selection, minimum_generation=17, enabled_roles=("http", "relay", "relay@2"))
+        evidence = replace(self.closure, units=copies, endpoints=endpoints)
+        permit = replace(self.permit, units=copies)
+        self.store.begin(selection, resolution)
+        self.store.record_boot_closure(evidence)
+        self.store.issue_permit(permit, evidence)
+        invocations = tuple(replace(helper("relay", invocation=str(n) * 32), unit=identity)
+                            for n, identity in enumerate(copies, 1))
+        for invocation in invocations:
+            self.store.admit(invocation, permit_id=permit.id)
+            with self.store.preparation(invocation, permit_id=permit.id):
+                pass
+        self.assertTrue((self.store.runtime / "permits" / permit.id / "relay.claim").exists())
+        self.assertTrue((self.store.runtime / "permits" / permit.id / "relay@2.claim").exists())
+        with self.assertRaises(c.DeployError):
+            self.store.admit(replace(invocations[1], process=replace(invocations[1].process, invocation_id="e" * 32)), permit_id=permit.id)
+        single = replace(permit, units=(copies[1],))
+        single.require_closure(replace(evidence, units=(copies[1],), endpoints=(endpoints[1],)), resolution)
+        with self.assertRaises(c.DeployError):
+            single.require_closure(replace(evidence, units=(copies[1],), endpoints=(endpoints[0],)), resolution)
+        # Matching permit, closure and receipt cannot admit an unplaced ordinal.
+        entry["profile"]["placement"]["relay"] = 1
+        self.assert_denied(lambda: self.store.admit(invocations[1], permit_id=permit.id), "admission_denied")
+
     def test_protected_directories_have_explicit_modes_despite_private_umask(self):
         target = self.host.paths.p("/run/prepared/nested/config")
         private = self.host.paths.p("/run/evidence/private")

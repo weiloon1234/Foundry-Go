@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import time
 import uuid
 
@@ -170,6 +171,65 @@ def executable(host, reference, declaration, release_path, roots):
     return absolute(host, path), digest(path)
 
 
+def changed_release_units(host, entry, previous, prior_launch, declaration, release_path, roots,
+                          profile, private_paths):
+    """Compare effective inputs before assigning a new runtime generation."""
+    import release
+    topology = parse_topology(declaration.topology_json)
+    expanded = expand_placement(topology, profile.instance_id, profile.placement)
+    prior_declaration = release.runtime_declaration(prior_launch["declaration"])
+    secrets = runtime_config.service_secret_paths(host, entry, topology, paths=private_paths, profile=profile)
+    old_members = {member.path: member for member in prior_declaration.inventory}
+    members = {member.path: member for member in declaration.inventory}
+    def application_members(inventory):
+        return {name: member for name, member in inventory.items()
+                if name in ("artisan", "config/deploy.toml") or name.startswith("public/")}
+    application_changed = application_members(old_members) != application_members(members)
+    old_public, public = dict(previous.profile.listeners), dict(profile.listeners)
+    changed = set(expanded) ^ set(previous.units)
+    for identity in set(expanded) & previous.units.keys():
+        role = expanded[identity]
+        if (role != previous.roles[identity.role] or profile.architecture != previous.profile.architecture
+                or topology.shared_directories != previous.topology.shared_directories
+                or {key: value for key, value in old_public.items() if key.startswith(identity.role + ".")} !=
+                   {key: value for key, value in public.items() if key.startswith(identity.role + ".")}):
+            changed.add(identity)
+            continue
+        spec = previous.specs[identity]
+        paths = services.ServicePaths.for_unit(identity, previous.resolution.id)
+        views = services.bundle_views(role, paths, topology, profile.architecture, roots, declaration.artifacts)
+        old_views = services.bundle_views(role, paths, previous.topology, previous.profile.architecture,
+                                        prior_launch["artifact_roots"], prior_declaration.artifacts)
+        if views != old_views:
+            changed.add(identity)
+        if isinstance(role, BuiltinRole):
+            if application_changed or spec.executable_sha256 != digest(release_path / "artisan"):
+                changed.add(identity)
+        else:
+            if (executable(host, role.executable, declaration, release_path, roots)[1] != spec.executable_sha256
+                    or any(members.get(config.source) != old_members.get(config.source) for _, config in role.configs)
+                    or secrets.get(identity.role, {}) != prior_launch["secret_paths"].get(identity.role, {})):
+                changed.add(identity)
+        for name, binding in role.common.bindings:
+            if isinstance(binding, ExecutableBinding):
+                prior = next(value for value in spec.bindings.executables if value.name == name)
+                path, checksum = executable(host, binding.executable, declaration, release_path, roots)
+                if checksum != prior.source_sha256 or (not isinstance(binding.executable, ApplicationExecutable) and path != prior.path):
+                    changed.add(identity)
+    return changed
+
+
+def changed_units(previous, inventory):
+    """Return additions, removals and changed effective specs in one identity set."""
+    changed = set(previous.units) ^ set(inventory.units)
+    old_environments = {value.role: value.sha256 for value in previous.resolution.environments}
+    environments = {value.role: value.sha256 for value in inventory.resolution.environments}
+    changed.update(identity for identity in set(previous.units) & inventory.units.keys()
+                   if previous.specs[identity] != inventory.specs[identity]
+                   or old_environments[identity.role] != environments[identity.role])
+    return changed
+
+
 def resolve(host, entry, manifest, declaration, release_path, roots, operation_id, *,
             private_paths=None, values=None, revision=None, previous=None, affected=None, profile=None):
     topology = parse_topology(declaration.topology_json)
@@ -187,17 +247,29 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
         while True:
             consumers = {unit for unit, role in expanded.items() for _, binding in role.common.bindings
                          if isinstance(binding, (EndpointBinding, PublicListenerReference))
-                         and any(provider.role == binding.role for provider in affected)}
+                         and UnitIdentity(profile.instance_id, binding.role, 1) in affected}
             if consumers <= affected:
                 break
             affected.update(consumers)
-    retained = set(previous.units) - affected if previous else set()
+    retained = (set(previous.units) & expanded.keys()) - affected if previous else set()
     endpoints, nginx = feature_network.allocate(host, entry, topology, profile, operation_id,
         retained=tuple(e for e in previous.resolution.endpoints if UnitIdentity(profile.instance_id, e.role, e.ordinal) in retained) if previous else None)
     resolution_id = str(uuid.uuid4())
     roles = tuple(role.common.name for role in topology.roles if dict(profile.placement)[role.common.name])
     environments = runtime_config.effective_environments(host, entry, resolution_id,
                    roles, endpoints, values=values)
+    if previous:
+        prior_environments = {value.role: value for value in previous.resolution.environments}
+        changed_environment_roles = {value.role for value in environments
+                                     if value.role in prior_environments and value.sha256 != prior_environments[value.role].sha256}
+        changed_retained = {identity for identity in retained if identity.role in changed_environment_roles}
+        retained = {identity for identity in retained if identity.role not in changed_environment_roles}
+        if changed_retained:
+            endpoints, nginx = feature_network.allocate(host, entry, topology, profile, operation_id,
+                retained=tuple(endpoint for endpoint in previous.resolution.endpoints
+                               if UnitIdentity(profile.instance_id, endpoint.role, endpoint.ordinal) in retained))
+            resolution_id = str(uuid.uuid4())
+            environments = runtime_config.effective_environments(host, entry, resolution_id, roles, endpoints, values=values)
     # Resolution-independent placeholders are replaced before any record is published.
     from listeners import unix_endpoints
     unix = unix_endpoints(topology, profile)
@@ -266,7 +338,7 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
 
 
 def save_launch(host, entry, inventory, declaration, roots, secret_paths):
-    descriptors = {name.role: runtime_config.write_binding_descriptor(host, entry, inventory.deployment,
+    descriptors = {name.record_key: runtime_config.write_binding_descriptor(host, entry, inventory.deployment,
                    inventory.resolution, spec, candidate=True) for name, spec in inventory.specs.items()}
     launch = {"schema": 1, "topology": inventory.topology.projection(), "profile": inventory.profile.projection(),
               "deployment": record_document(inventory.deployment), "resolution": record_document(inventory.resolution),
@@ -317,7 +389,8 @@ def install_units(host, registry, entry, inventory, launch, tools_dir):
         runtime_config.prepare_unit_paths(host, role, spec, source.resolution, views=views,
                                           socket_account=(entry["allocations"]["uid"], entry["allocations"]["gid"]))
         content = services.render_unit(source, name, entry, checksum, views=views,
-                                       secret_paths=source_launch["secret_paths"].get(name.role, {}))
+                                       secret_paths=source_launch["secret_paths"].get(name.role, {}),
+                                       dependency_units=tuple(inventory.units[value] for value in inventory.dependencies(name)))
         provision._owned_write(host, host.paths.p("/etc/systemd/system/" + inventory.units[name]), content)
     http = inventory.identity("http")
     spec = inventory.specs[http]
@@ -436,6 +509,32 @@ def transition_enablement(host, entry, inventory, *, restoring=False):
     inventory.start_order(running)
     return tuple(sorted(desired)), tuple(sorted(running)), {name: name in enabled for name in previous.units if name not in inventory.units}
 
+
+def record_removed_copy_enablement(host, entry, identity: UnitIdentity, enabled: bool) -> None:
+    """A2 extension point, called only after this copy's exit and closure proofs."""
+    require(identity.instance_id == entry["profile"]["instance_id"] and type(enabled) is bool,
+            "service_enablement", "Removed enablement belongs to this copy.")
+    path = admission.AdmissionStore(host, identity.instance_id).durable / "removed-enablement.json"
+    prior = admission.read_owned(host, path, lambda value: value) if path.exists() else {}
+    atomic_json(path, {**prior, identity.record_key: enabled}, mode=0o600)
+
+
+def remove_copy_runtime(host, identity):
+    """Drop proven-stopped invocation views, never the copy's persistent state."""
+    root = admission.protected_path(host, host.paths.p("/run/foundry/services/" + identity.instance_id), "directory")
+    if not root.exists():
+        return
+    resolutions = [path for path in root.iterdir() if path.name not in ("shared", "sockets")]
+    require(len(resolutions) <= 256, "service_history", "Runtime resolution history exceeds its bound.")
+    for resolution in resolutions:
+        identifier = contract_uuid(resolution.name)
+        admission.protected_path(host, resolution, "directory")
+        paths = services.ServicePaths.for_unit(identity, identifier)
+        base = admission.protected_path(host, host.paths.p(paths.base), "directory")
+        if base.exists():
+            shutil.rmtree(base)
+
+
 def transition(host, registry, entry, inventory, state, attempt, *, stop_only=False,
                names=None, configuration=None, launch=None, review=None, maintenance_request=None):
     import release
@@ -445,7 +544,8 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     old = entry.get("deployment_selection", {}).get("selected_resolution_id", inventory.resolution.id)
     previous = load(host, entry)[2] if "deployment_selection" in entry else inventory
     names = set(names) if names is not None else set(previous.units) | set(inventory.units)
-    discard_shared = (previous.deployment.release != inventory.deployment.release or
+    discard_shared = (previous.deployment.release != inventory.deployment.release and
+                      bool(changed_units(previous, inventory) & previous.units.keys() & inventory.units.keys()) or
                       previous.topology.shared_directories != inventory.topology.shared_directories)
     require(not discard_shared or not previous.topology.shared_directories or set(previous.units) <= names,
             "shared_directory_transition", "Changing shared caches requires a full instance transition.")
@@ -486,10 +586,6 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
         store.retain_units(previous, inventory, retained, attempt["operation_id"])
     operations.bind_transition(host, entry, inventory, request)
     store.record_operation(attempt)
-    if removed:
-        removed_path = store.durable / "removed-enablement.json"
-        prior = admission.read_owned(host, removed_path, lambda v: v) if removed_path.exists() else {}
-        atomic_json(removed_path, {**prior, **dict(zip(services.unit_role_names(removed), removed.values()))}, mode=0o600)
     # Intent precedes the shared command, marker publication and every stop.
     atomic_json(operations.directory(host, attempt["operation_id"]) / "maintenance-intent.json", maintenance_intent, mode=0o600)
     maintenance_result = feature_maintenance.shared_change(host, entry, maintenance_request) if maintenance_request else {}
@@ -535,8 +631,17 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
         select_runtime_storage(registry, entry, runtime_config.validate_runtime_environment(host, entry),
                                lambda value: runtime_config._read_value_file(host, entry, value))
     host.journal(registry, entry)
-    for name in set(previous.units) - set(inventory.units):
+    for name in previous.stop_order(set(previous.units) - set(inventory.units)):
+        require(name in evidence.units, "admission_closed_required", "Removed copy lacks complete closure evidence.")
+        record_removed_copy_enablement(host, entry, name, removed[name])
         host.run(["systemctl", "disable", previous.units[name]])
+        path = admission.protected_path(host, host.paths.p("/etc/systemd/system/" + previous.units[name]), "file")
+        if path.exists():
+            require(marker(entry) in path.read_text(), "unit_ownership", "Removed unit differs from its owned instance.")
+            path.unlink()
+        remove_copy_runtime(host, name)
+    if removed:
+        host.run(["systemctl", "daemon-reload"])
     if launch is not None:
         install_units(host, registry, entry, inventory, launch, Path(__file__).resolve().parents[1])
     path = release.release_path(host, entry, inventory.deployment.release)
@@ -820,6 +925,7 @@ def execute(host, request, *, pin=None):
             else:
                 import feature_plan
                 manifest, inventory, launch, configuration, review = feature_plan.reviewed(host, registry, entry, request, pin=pin)
+                names = set(services.unit_identities(inventory.profile.instance_id, review["unit_changes"]))
                 request = {**request, "configuration_intent": configuration}
                 release_path = release.release_path(host, entry, manifest["version"])
                 env = runtime_config.effective_environment_path(host, entry, inventory.resolution, candidate=True)

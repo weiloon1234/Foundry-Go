@@ -13,7 +13,7 @@ import services
 from topology import ExecutableRole, parse_profile, parse_topology
 
 
-def selected(host, pin, launch):
+def selected(host, pin, launch, *, dispatch=False):
     invocation = HelperInvocation.parse(pin)
     deployment = Deployment.parse(launch["deployment"])
     resolution = RuntimeResolution.parse(launch["resolution"])
@@ -23,15 +23,20 @@ def selected(host, pin, launch):
     entry = registry["instances"][invocation.unit.instance_id]
     inventory = services.UnitInventory(entry["name"], topology, profile, deployment, resolution)
     spec = inventory.specs[invocation.unit]
+    selected_profile = entry["profile"] == profile.projection()
+    if not selected_profile and not dispatch:
+        store = admission.AdmissionStore(host, invocation.unit.instance_id)
+        _, current = store._selection()
+        selected_profile = store.retained_origin(invocation, current) is not None
     require(canonical_digest(record_document(spec)) == invocation.unit_spec_sha256 and
-            resolution.id == invocation.resolution_id and entry["profile"] == profile.projection(),
+            resolution.id == invocation.resolution_id and (selected_profile or dispatch),
             "feature_runtime_selection", "Pinned unit differs from its immutable launch record.")
     return invocation, entry, inventory, spec
 
 
 def run(action, pin, launch):
     host = Host()
-    invocation, entry, inventory, spec = selected(host, pin, launch)
+    invocation, entry, inventory, spec = selected(host, pin, launch, dispatch=action == "dispatch")
     role = inventory.roles[spec.identity.role]
     paths = services.ServicePaths.for_unit(spec.identity, invocation.resolution_id)
     view = host.paths.p(paths.base) / "invocations" / invocation.process.invocation_id
@@ -125,7 +130,7 @@ def run(action, pin, launch):
         environment = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
                        "INVOCATION_ID": invocation.process.invocation_id,
                        "WEB__PUBLIC_DIR": str(release / "public"),
-                       "FOUNDRY_DEPLOY_RUNTIME_FILE": launch["descriptors"][spec.identity.role]}
+                       "FOUNDRY_DEPLOY_RUNTIME_FILE": launch["descriptors"][spec.identity.record_key]}
         if isinstance(role, ExecutableRole):
             secrets = launch["secret_paths"].get(spec.identity.role, {})
             for key, value in role.environment:

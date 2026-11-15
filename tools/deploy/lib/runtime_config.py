@@ -958,7 +958,7 @@ def write_binding_descriptor(host, entry, deployment, resolution, spec, *, candi
             "runtime_resolution", "Bindings belong to another selected deployment.")
     env = effective_environment_path(host, entry, resolution, spec.identity.role, candidate=candidate)
     absolute = lambda path: "/" + path.relative_to(host.paths.root).as_posix()
-    path = host.paths.opt(entry["name"]) / "runtime" / resolution.id / (spec.identity.role + ".json")
+    path = host.paths.opt(entry["name"]) / "runtime" / resolution.id / (spec.identity.record_key + ".json")
     descriptor = {"schema": 2, "instance": entry["name"], "user": entry["name"],
                   "env_file": absolute(env), "work_dir": entry["allocations"]["paths"]["data"],
                   "release": entry["allocations"]["paths"]["application"] + "/releases/" + deployment.release,

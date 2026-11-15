@@ -131,7 +131,6 @@ launch origin does not grant permission to start.
 
 | Declaration outside release 1 | Later capability |
 | --- | --- |
-| Role instance counts above one | B24 release 2a; identity migration complete, count changes pending |
 | Supervising wrappers | B24 release 3 |
 | PROXY protocol | B24 release 2 |
 | Managed application DNS records | B24 release 2; release 1 DNS is external only |
@@ -784,11 +783,50 @@ Build with the application's usual entry point:
 ENVIRONMENT=acceptance-local ACTION=build make release
 ```
 
+### Numbered copies
+
+Set a custom executable role's count in profile 3 `placement`:
+
+```json
+{"placement": {"http": 1, "relay": 3, "worker": 1}}
+```
+
+Counts above one require generation 17 on both the client and host. The floor
+remains selected through rollback and recovery, including a later single-copy
+profile. A count of zero means unplaced. Wrappers remain outside release 2a.
+
+Copies have stable ordinals from 1 through the count. `ROLE=relay` selects every
+placed relay copy. Each copy gets its own systemd unit, private TCP allocation,
+config view, seed files, and persistent state directory. Copy 1 keeps the existing
+paths; later copies use `relay.2`, `relay.3`, and so on under the instance's service
+runtime and state trees. Unix listeners keep the declared socket name for copy 1
+and append `.2`, `.3`, and so on for later copies. Shrinking and growing never
+renames surviving copies. Use `{"copy_number": "self"}` in typed arguments or
+environment references for the decimal ordinal; JSON field bindings receive an
+integer.
+
+Role-level network confinement and shared-directory grants apply to every copy.
+Readiness verifies each copy's process, listener ownership, stability, and BPF
+attachments where confinement is declared. Dependencies include every prerequisite
+copy. Startup and final readiness use one shared deadline.
+
+Build the changed profile into a release archive, then review and activate its
+release plan. The archived target profile owns the counts. The plan shows added,
+removed, changed, and retained copy identities. Growing allocates and starts the added
+copies; copies with unchanged effective specifications keep their process and
+allocations. Shrinking stops the highest ordinals first, proves their cgroup,
+main PID, control PID, jobs, and children have exited, then removes their unit
+files and runtime views. Private reservations remain protected by the existing
+network closure and old-reference rules. Persistent state and seed files are
+retained, including when a copy is later added again. An uncertain stop leaves
+resources retained for reconciliation.
+
 ### Profile field reference
 
 Profile 3 retains the existing profile fields, adding `placement` and `listeners`.
-`placement` must name every role, with HTTP exactly 1 and others 0 or 1. All
-prerequisites of an enabled role must also be enabled. The builder validates the
+`placement` must name every role. HTTP is exactly 1; other built-ins are 0 or 1.
+Custom executable roles accept 0–128, with at most 256 concrete units per instance.
+All prerequisites of a placed role must also be placed. The builder validates the
 profile architecture against artifact platform coverage.
 
 The profile `listeners` map uses `<role>.<listener>` keys for exactly the enabled

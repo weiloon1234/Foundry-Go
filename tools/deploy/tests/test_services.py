@@ -173,7 +173,7 @@ class ServiceInventoryTests(unittest.TestCase):
         with self.assertRaises(c.DeployError):
             services.render_unit(self.inventory, self.inventory.identity("relay"), self.entry, DIGEST)
 
-    def test_copies_remain_gated_while_identity_accepts_numbered_ordinals(self):
+    def test_copies_are_profile_placement_while_wrapper_and_instances_remain_invalid(self):
         raw = self.inventory.topology.projection()
         for field in ("wrapper", "instances"):
             with self.assertRaises(c.DeployError) as error:
@@ -181,9 +181,7 @@ class ServiceInventoryTests(unittest.TestCase):
             self.assertEqual(error.exception.code, "unsupported_capability")
         profile = self.inventory.profile.projection()
         profile["placement"]["relay"] = 2
-        with self.assertRaises(c.DeployError) as error:
-            t.parse_profile(profile, self.inventory.topology)
-        self.assertEqual(error.exception.code, "unsupported_capability")
+        self.assertEqual(dict(t.parse_profile(profile, self.inventory.topology).placement)["relay"], 2)
         self.assertEqual(c.UnitIdentity.parse({"instance_id": INSTANCE, "role": "relay", "ordinal": 2}).ordinal, 2)
 
     def test_runtime_entry_refuses_every_action_without_importing_bundle(self):
@@ -195,6 +193,40 @@ class ServiceInventoryTests(unittest.TestCase):
             with patch.object(module.sys, "stderr"):
                 self.assertNotEqual(0, module.main([action, INSTANCE, "relay", "1", CURRENT, DIGEST, OTHER]))
         self.assertNotEqual(0, module.main([]))
+
+    def test_runtime_entry_dispatches_the_pinned_numbered_copy(self):
+        import feature_runtime
+        path = Path(__file__).resolve().parents[1] / "server/runtime_v1.py"
+        spec = importlib.util.spec_from_file_location("runtime_copy", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        invocation = replace(helper("relay"), unit=c.UnitIdentity(INSTANCE, "relay", 2))
+        pinned = {"helper": c.record_document(invocation), "launch_file": "/launch.json"}
+        with patch.dict(os.environ, {"INVOCATION_ID": invocation.process.invocation_id}), \
+                patch.object(module.os, "geteuid", return_value=1000), \
+                patch.object(module, "owned", side_effect=lambda path: path), \
+                patch.object(module, "read", side_effect=[pinned, {"launch": True}]) as read, \
+                patch.object(Path, "read_text", return_value=BOOT), \
+                patch.object(feature_runtime, "run", return_value=0) as run:
+            self.assertEqual(module.main(["dispatch", INSTANCE, "relay", "2", CURRENT, DIGEST, OTHER]), 0)
+        self.assertEqual(read.call_args_list[0].args[0], module.PINS / INSTANCE / "relay@2" / (invocation.process.invocation_id + ".json"))
+        self.assertEqual(run.call_args.args, ("dispatch", c.record_document(invocation), {"launch": True}))
+
+    def test_retained_dispatch_uses_prepared_view_without_private_admission_reads(self):
+        import feature_runtime
+        invocation = helper("relay", spec=c.canonical_digest(c.record_document(self.inventory.specs[self.inventory.identity("relay")])))
+        launch = {"deployment": c.record_document(self.inventory.deployment),
+                  "resolution": c.record_document(self.inventory.resolution),
+                  "topology": self.inventory.topology.projection(), "profile": self.inventory.profile.projection()}
+        entry = {**self.entry, "profile": self.inventory.profile.projection()}
+        entry["profile"]["placement"]["relay"] = 3
+        host = MagicMock()
+        host.read_registry.return_value = {"instances": {INSTANCE: entry}}
+        with patch.object(admission, "AdmissionStore", side_effect=PermissionError("private")):
+            selected = feature_runtime.selected(host, c.record_document(invocation), launch, dispatch=True)
+            self.assertEqual(selected[3], self.inventory.specs[invocation.unit])
+            with self.assertRaises(PermissionError):
+                feature_runtime.selected(host, c.record_document(invocation), launch)
 
     def test_probe_is_local_bounded_and_never_follows_redirects(self):
         role = self.inventory.roles["relay"]
@@ -424,6 +456,41 @@ class ServicePreparationTests(unittest.TestCase):
         self.assertEqual((second / "config/settings/value").stat().st_mode & 0o777, 0o600)
         self.assertEqual(os.readlink(self.host.paths.p(self.paths.base) / "current"), "invocations/" + "e" * 32)
         self.assertEqual(self.prepare(next_start), second)
+
+    def test_numbered_copies_have_independent_config_views_seeds_and_admission(self):
+        from test_copies import numbered_inventory
+        inventory, entry, members = numbered_inventory()
+        entry = {**entry, "profile": inventory.profile.projection(), "topology": t.validate_topology(inventory.topology.projection())}
+        self.host.read_registry.return_value = {"instances": {INSTANCE: entry}}
+        selected, _ = self.store._selection()
+        selected = replace(selected, minimum_generation=17,
+                           enabled_roles=services.unit_role_names(inventory.units),
+                           admission=replace(selected.admission, disposition=c.AdmissionDisposition.PENDING,
+                               deployment_sha256=inventory.resolution.deployment_sha256))
+        self.store.record_operation(attempt())
+        self.store.begin(selected, inventory.resolution)
+        evidence = c.ClosureEvidence.parse(closure())
+        self.store.record_boot_closure(replace(evidence, units=tuple(inventory.units), endpoints=inventory.resolution.endpoints))
+        self.store.record_operation(attempt("succeeded"))
+        self.store.commit()
+        seeds, views, receipts = [], [], []
+        for identity in inventory.copies("relay"):
+            spec = inventory.specs[identity]
+            invocation = replace(helper("relay", spec=c.canonical_digest(c.record_document(spec))), unit=identity)
+            paths = services.ServicePaths.for_unit(identity, inventory.resolution.id)
+            self.store.admit(invocation)
+            view = runtime_config.prepare_service(self.host, self.store, invocation, inventory.roles[identity.role], spec,
+                self.root, members, uid=os.geteuid(), gid=os.getegid())
+            port = next(e.port for e in inventory.resolution.endpoints if (e.role, e.ordinal) == (identity.role, identity.ordinal))
+            self.assertEqual(json.loads((view / "config/settings/value").read_text())["listen"]["port"], port)
+            seed = self.host.paths.p(paths.config("seed", "seed-once"))
+            seed.write_text(str(identity.ordinal))
+            seeds.append(seed)
+            views.append(view)
+            receipts.append(self.store._receipt(invocation))
+        self.assertEqual(len(set(views)), 3)
+        self.assertEqual(len(set(receipts)), 3)
+        self.assertEqual([seed.read_text() for seed in seeds], ["1", "2", "3"])
 
     def test_denied_start_does_not_prepare_any_files(self):
         self.store.record_operation(attempt(operation=OPERATION))

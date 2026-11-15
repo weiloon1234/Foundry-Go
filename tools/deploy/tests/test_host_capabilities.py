@@ -229,8 +229,8 @@ class CapabilityTopologyTests(unittest.TestCase):
         self.assertEqual((raw, placed), original)
         with self.assertRaises(c.DeployError):
             t.validate_topology({**registered, "sha256": OTHER}, registered=True)
-        with self.assertRaises(c.DeployError):
-            c.validate_profile({**placed, "placement": {**placed["placement"], "relay": 2}})
+        numbered = {**placed, "placement": {**placed["placement"], "relay": 2}}
+        self.assertEqual(c.validate_profile(numbered), numbered)
         self.assertEqual(upgrades.contract_versions()["archive"], (1, 2))
 
     def test_registry_checks_feature_profile_against_topology_and_units(self):
@@ -301,8 +301,7 @@ class CapabilityTopologyTests(unittest.TestCase):
             with self.assertRaises(c.DeployError) as caught:
                 t.parse_topology(value)
             self.assertEqual(caught.exception.code, "unsupported_capability")
-        for mutate in (lambda v: v["placement"].update(relay=2),
-                       lambda v: v["listeners"]["relay.ingress"]["dns"].update(mode="managed")):
+        for mutate in (lambda v: v["listeners"]["relay.ingress"]["dns"].update(mode="managed"),):
             value = profile()
             mutate(value)
             with self.assertRaises(c.DeployError) as caught:

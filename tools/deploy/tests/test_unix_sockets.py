@@ -247,6 +247,17 @@ class UnixPreparationTests(unittest.TestCase):
             server.listen(16)
         return server
 
+    def test_numbered_provider_removes_only_its_own_stale_socket(self):
+        self.socket().close()
+        self.socket('wl0.2').close()
+        self.socket('wl0.3').close()
+        identity = c.UnitIdentity(INSTANCE, 'relay', 2)
+        with patch.object(unix_sockets, "_run_probe", return_value=unix_sockets.Result.STALE):
+            unix_sockets.prepare(self.host, self.role, identity, os.getuid(), os.getgid(), remove_stale=True)
+        self.assertTrue(self.path.exists())
+        self.assertFalse((self.directory / 'wl0.2').exists())
+        self.assertTrue((self.directory / 'wl0.3').exists())
+
     def test_directory_creation_verification_and_exact_stale_cleanup(self):
         info = self.directory.lstat()
         self.assertEqual((stat.S_IMODE(info.st_mode), info.st_uid, info.st_gid), (0o700, os.getuid(), os.getgid()))
