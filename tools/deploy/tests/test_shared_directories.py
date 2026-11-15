@@ -172,43 +172,120 @@ class SharedPreparationTests(unittest.TestCase):
             self.prepare()
             run.assert_not_called()
 
-    def test_preparation_refuses_a_parent_with_another_mode_without_changing_it(self):
+    def test_preparation_tightens_systemd_parent_before_mounting(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.parent.chmod(0o755)
+        def mount(args, **kwargs):
+            self.assertEqual(args[:3], ["mount", "-t", "tmpfs"])
+            self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o700)
+            return subprocess.CompletedProcess(args, 0)
+        with patch.object(shared, "_mount", side_effect=[None, self.record]), \
+                patch.object(self.host, "run", side_effect=mount) as run, \
+                patch.object(os, "fstatvfs", return_value=self.capacity):
+            self.prepare()
+        run.assert_called_once()
+        self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o700)
+
+    def test_discard_tightens_empty_systemd_parent_after_refused_admission(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.parent.chmod(0o755)
+        with patch.object(self.host, "run") as run:
+            shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid)
+        run.assert_not_called()
+        self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o700)
+        self.assertFalse(self.path.exists())
+
+    def test_discard_tightens_parent_before_unmounting(self):
         self.path.mkdir(parents=True, mode=0o700)
         self.path.parent.chmod(0o755)
-        (self.path / "keep").write_text("retained")
-        with patch.object(self.host, "run") as run, self.assertRaises(c.DeployError) as raised:
-            self.prepare()
-        self.assertEqual(raised.exception.code, "shared_directory_parent")
-        run.assert_not_called()
-        self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o755)
-        self.assertEqual((self.path / "keep").read_text(), "retained")
+        def unmount(args, **kwargs):
+            self.assertEqual(args, ["umount", str(self.path)])
+            self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o700)
+            return subprocess.CompletedProcess(args, 0)
+        with patch.object(shared, "_mount", side_effect=[self.record, None]), \
+                patch.object(self.host, "run", side_effect=unmount) as run:
+            shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid)
+        run.assert_called_once()
+        self.assertFalse(self.path.exists())
+
+    def test_tightening_is_reverified_before_any_mount_operation(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.parent.chmod(0o755)
+        for action in (self.prepare, lambda: shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid)):
+            with patch.object(os, "fchmod"), patch.object(self.host, "run") as run, self.assertRaises(c.DeployError):
+                action()
+            run.assert_not_called()
 
     def test_parent_symlink_and_foreign_owner_are_not_adopted(self):
         self.path.parent.parent.mkdir(parents=True)
         self.path.parent.symlink_to(self.temp.name)
-        with patch.object(self.host, "run") as run, patch.object(os, "fchmod") as chmod, self.assertRaises(c.DeployError):
-            self.prepare()
-        run.assert_not_called()
-        chmod.assert_not_called()
+        actions = (self.prepare, lambda: shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid))
+        for action in actions:
+            with patch.object(self.host, "run") as run, patch.object(os, "fchmod") as chmod, self.assertRaises(c.DeployError):
+                action()
+            run.assert_not_called()
+            chmod.assert_not_called()
         self.path.parent.unlink()
         self.path.parent.mkdir(mode=0o700)
         for uid, gid in ((self.uid + 1, self.gid), (self.uid, self.gid + 1)):
-            info = SimpleNamespace(st_uid=uid, st_gid=gid, st_mode=stat.S_IFDIR | 0o700)
-            with self.subTest(uid=uid, gid=gid), patch.object(os, "fstat", return_value=info), \
-                    patch.object(os, "fchmod") as chmod, patch.object(self.host, "run") as run, self.assertRaises(c.DeployError):
-                self.prepare()
-            run.assert_not_called()
-            chmod.assert_not_called()
+            info = SimpleNamespace(st_uid=uid, st_gid=gid, st_mode=stat.S_IFDIR | 0o755)
+            for action in actions:
+                with self.subTest(uid=uid, gid=gid), patch.object(os, "fstat", return_value=info), \
+                        patch.object(os, "fchmod") as chmod, patch.object(self.host, "run") as run, self.assertRaises(c.DeployError):
+                    action()
+                run.assert_not_called()
+                chmod.assert_not_called()
 
-    def test_parent_drift_is_reported_and_cleanup_refuses_it(self):
+    def test_other_parent_modes_and_file_type_are_refused(self):
+        self.path.parent.mkdir(parents=True)
+        for mode in (0o775, 0o750, 0o711):
+            self.path.parent.chmod(mode)
+            for action in (self.prepare, lambda: shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid)):
+                with self.subTest(mode=mode), patch.object(os, "fchmod") as chmod, \
+                        patch.object(self.host, "run") as run, self.assertRaises(c.DeployError):
+                    action()
+                run.assert_not_called()
+                chmod.assert_not_called()
+            report, = shared.report(self.host, self.topology, INSTANCE, self.uid, self.gid)
+            self.assertEqual(report["finding"], "shared_directory_unverified")
+            self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), mode)
+        self.path.parent.rmdir()
+        self.path.parent.write_text("not a directory")
+        for action in (self.prepare, lambda: shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid)):
+            with patch.object(self.host, "run") as run, self.assertRaises(c.DeployError):
+                action()
+            run.assert_not_called()
+        self.assertEqual(self.path.parent.read_text(), "not a directory")
+
+    def test_empty_systemd_parent_reports_not_prepared_without_modification(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.parent.chmod(0o755)
+        with patch.object(shared, "_mount", return_value=None) as mount, patch.object(os, "fchmod") as chmod:
+            report, = shared.report(self.host, self.topology, INSTANCE, self.uid, self.gid)
+        mount.assert_called_once_with(self.host, self.path.parent)
+        chmod.assert_not_called()
+        self.assertEqual(report["status"], "not_prepared")
+        self.assertNotIn("finding", report)
+        self.assertNotIn("used_bytes", report)
+        self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o755)
+        self.assertEqual(list(self.path.parent.iterdir()), [])
+
+    def test_empty_systemd_parent_with_a_mount_is_unverified(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.parent.chmod(0o755)
+        with patch.object(shared, "_mount", return_value={"fstype": "tmpfs"}), patch.object(os, "fchmod") as chmod:
+            report, = shared.report(self.host, self.topology, INSTANCE, self.uid, self.gid)
+        chmod.assert_not_called()
+        self.assertEqual(report["finding"], "shared_directory_unverified")
+        self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o755)
+
+    def test_systemd_parent_with_content_is_reported_unverified(self):
         self.path.mkdir(parents=True, mode=0o700)
         self.path.parent.chmod(0o755)
         (self.path / "keep").write_text("retained")
         with patch.object(self.host, "run") as run:
             report, = shared.report(self.host, self.topology, INSTANCE, self.uid, self.gid)
             self.assertEqual(report["finding"], "shared_directory_unverified")
-            with self.assertRaises(c.DeployError):
-                shared.discard(self.host, self.topology, INSTANCE, self.uid, self.gid)
         run.assert_not_called()
         self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o755)
         self.assertEqual((self.path / "keep").read_text(), "retained")

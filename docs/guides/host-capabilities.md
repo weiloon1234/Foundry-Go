@@ -1286,11 +1286,13 @@ scheduler and `DirectoryReadOnly` for an OBS wrapper that uses Go bindings.
 `cache.MaxBytes` is the declared limit. Lookups for missing or ungranted names
 return `fault.Missing`. The descriptor omits `shared_directories` for roles with
 no grants. Older strict readers need an application upgrade before receiving a grant.
-Console calls and operator invocations never receive shared directories. Their
-descriptor retains the HTTP descriptor's other bindings and runtime fields but
-omits `shared_directories`, so the same lookup returns `fault.Missing`. This also
-applies to release checks, maintenance, recovery, and rehearsal console calls.
-The HTTP unit's own descriptor keeps its declared grants.
+Console calls that the deploy tool makes never receive shared directories. These
+are release checks and the maintenance, recovery and rehearsal commands. Their
+descriptor keeps the HTTP descriptor's other bindings and runtime fields but omits
+`shared_directories`, so the same lookup returns `fault.Missing`. The HTTP unit's
+own descriptor keeps its declared grants. Commands typed by hand in `ACTION=shell`
+run outside the deploy tool and receive no deployment bindings at all:
+`deployment.LoadBindings` reports `present=false`, as in earlier releases.
 
 The directory grant does not imply startup order or file readiness. Add
 `"requires": ["scheduler"]` to the reader when it must start after the scheduler.
@@ -1364,8 +1366,12 @@ Each admitted start uses the privileged preparation helper to create or verify
 the mount before the workload starts. Preparation serializes across the instance
 and checks the mount source, filesystem type, capacity, inode limit, owner, mode,
 and absence of symlinks. Existing files beneath an unmounted directory and foreign
-mounts cause refusal. Preparation, reports and cleanup also refuse a host parent
-that is not root-owned with mode `0700`, without changing it. The helper's
+mounts cause refusal. Systemd creates a missing `TemporaryFileSystem=` mount
+point with mode `0755` at unit start, before the privileged hooks run. Preparation
+and discard accept a host parent only when it is a real, nonsymlink directory
+owned by root:root with mode `0700` or exactly `0755`. They tighten `0755` to
+`0700` with `fchmod` on the opened directory and re-verify it before mounting or
+unmounting any cache. Other owners, types, and modes are refused unchanged. The helper's
 [`+` systemd prefix](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html#ExecStart=)
 performs this work outside the workload's filesystem namespace.
 
@@ -1378,7 +1384,10 @@ or lazy unmounts, and never recursively deletes an occupied directory.
 
 Reports include `shared_directories` with `state: "disposable"`, `backed_up: false`,
 `restored: false`, the configured limit, used bytes, and the observed mount status.
-An unverifiable mount produces `shared_directory_unverified`. Backup coverage
+Reports never change permissions. A root:root `0755` parent with no entries and
+no mounts reports `status: "not_prepared"`, without a finding or used-byte count.
+A `0755` parent with content or a mount, or any other unverifiable state, produces
+`shared_directory_unverified`. Backup coverage
 records the same exclusion. Backups retain declarations but never cache files;
 recovery prepares fresh caches. Run reports as root to verify the mounts and
 measure used bytes. Unprivileged reports retain the disposable coverage but mark

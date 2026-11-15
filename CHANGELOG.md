@@ -25,7 +25,13 @@
   mark them disposable, never backed up or restored.
   A root-only host parent and granted roles' private user namespaces block
   same-account procfs bypasses through host helpers and other roles' views.
-  Console calls and operator invocations retain HTTP bindings except shared
+  Preparation and discard accept root:root parents with mode `0700` or exactly
+  `0755`, which systemd creates for missing mount points before startup hooks;
+  they tighten `0755` to `0700` through an opened directory fd and re-verify before
+  mount operations. Other ownership, types, or modes are refused. Reports never
+  modify permissions and mark an empty, unmounted `0755` parent `not_prepared`
+  without a finding; content, mounts, or other drift remain unverified.
+  Console calls made by the deploy tool retain HTTP bindings except shared
   directories; their shared-directory lookups return `fault.Missing`.
 - Added: `shared_directory_path` argv/environment references and typed
   `deployment.Bindings.SharedDirectory` bindings with path, access and byte limit.
