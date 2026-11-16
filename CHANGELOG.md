@@ -10,8 +10,10 @@
   independently managed services. Foundry's own units, including another
   operation's transient unit, stay exact, so a concurrent operation still
   invalidates the review.
-- Upgrade: run `ACTION=tools-plan`/`ACTION=tools-apply` (generation 19, no
-  migration), then review and confirm the deploy or rollback again.
+- Upgrade: run `ACTION=tools-plan`/`ACTION=tools-apply` (generation 19), then
+  review and confirm the deploy or rollback again. On a feature host every bundle
+  change also re-pins `foundry-edge-boot.service` to the new bundle; the plan lists
+  it as its one migration step.
 
 ## v0.39.1 — 2026-11-16
 
