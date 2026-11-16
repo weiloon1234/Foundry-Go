@@ -1,4 +1,5 @@
 """Local VM harness contracts; these tests never boot or provision a guest."""
+import copy
 import io
 import json
 import os
@@ -316,6 +317,152 @@ raise SystemExit(vm.cli_entry(["unused-snapshot", "unused-proxy", "release"]))
                 self.assertIn(expected, (root / "s3.ext").read_text())
 
 
+class ArtifactRecoveryTests(unittest.TestCase):
+    def source(self, mode):
+        path = Path(__file__).parent / "vm_fixtures/43957665491" / (mode + "-source.json")
+        return json.loads(path.read_text())
+
+    def full_receipt(self, source):
+        # backup.run_backup(..., 'full') uses the same _complete receipt shape.
+        # These later receipts are modeled; CI stopped before explicit backup-run.
+        receipt = copy.deepcopy(source["status"]["state"]["backup"]["database"])
+        receipt.update(kind="full", backup_id="11111111-1111-4111-8111-111111111111")
+        receipt.pop("restore_point", None)
+        return receipt
+
+    def test_actual_source_artifacts_pass_every_assertion_through_backup_run(self):
+        class ReachedExport(Exception):
+            pass
+        for mode in ("standard", "feature"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                source = self.source(mode)
+                status, entry = source["status"], source["status"]["instance"]
+                profile = entry["profile"]
+                version = status["state"]["current"]["version"]
+                full = self.full_receipt(source)
+                root = Path(directory).resolve()
+                snapshot, guest = root / "fixture", root / "vm"
+                (snapshot / "config").mkdir(parents=True)
+                (snapshot / "deploy/environments").mkdir(parents=True)
+                shutil.copyfile(vm.FIXTURE / "config/deploy.toml", snapshot / "config/deploy.toml")
+                guest.mkdir()
+                profile_path = snapshot / "deploy/environments/acceptance.json"
+                profile_path.write_text(json.dumps(profile))
+                run = vm.Run(root, root, "recovery")
+                run.mode, run.project_id = mode, entry["project_id"]
+                run.active = vm.Guest(guest, profile["host"]["port"], guest / "ssh_config", "127.0.0.1", [])
+                project = json.loads((vm.FIXTURE / "deploy/project.json").read_text())
+                project["id"] = entry["project_id"]
+                visited, marker = [], None
+
+                def command(name, argv, **kwargs):
+                    visited.append(name)
+                    if name == "build-recovery":
+                        path = snapshot / "dist/releases" / run.project_id / profile["instance_id"] / version / "manifest.json"
+                        path.parent.mkdir(parents=True)
+                        path.write_text(json.dumps(status["state"]["current"]))
+                    if name == "deploy-source":
+                        return 0, "\n".join(json.dumps(doc, indent=2) for doc in source["deploy"])
+                    if name == "status-source":
+                        return 0, json.dumps(status)
+                    if name == "report-source":
+                        return 0, json.dumps(source["reports"][name])
+                    if name == "backup-run":
+                        self.assertEqual(kwargs["env"]["BACKUP_KIND"], "full")
+                        return 0, json.dumps(full)
+                    self.assertIn(name, ("inspect", "prepare", "build-recovery", "logs-source"))
+                    return 0, ""
+
+                def remote(name, command, **kwargs):
+                    nonlocal marker
+                    visited.append(name)
+                    if name.startswith("role-source-"):
+                        return 0, source["units"][name.removeprefix("role-source-")]
+                    if name == "report-root-source":
+                        return 0, json.dumps(source["reports"][name])
+                    if name == "registry":
+                        return 0, json.dumps({"http_port": entry["allocations"]["http_port"]})
+                    if name == "marker-write":
+                        marker = json.loads(kwargs["input"])["status"]
+                        self.assertIn(marker, run.values)
+                        return 0, ""
+                    if name == "marker-read":
+                        self.assertIsNotNone(marker)
+                        return 0, json.dumps({"status": marker})
+                    self.fail("Unexpected source command: " + name)
+
+                def export(settings, action, object_path, *args):
+                    self.assertEqual(action, "copyto")
+                    self.assertTrue(object_path.endswith(full["key_archive"]["object_key"]))
+                    raise ReachedExport
+
+                with patch.object(vm, "fixture_declarations", return_value=(project, profile, entry["topology"])), \
+                        patch.object(run, "command", side_effect=command), patch.object(run, "remote", side_effect=remote), \
+                        patch.object(run, "note"), patch("acceptance_host.storage_secrets", return_value={}), \
+                        patch("acceptance_backup.rclone", side_effect=export):
+                    with self.assertRaises(ReachedExport):
+                        run.operator(snapshot, root / "proxy", root / "key", {"recipient": "recipient"},
+                                     repository={"backup_bucket": "backup"}, certs=root)
+                for name in ("status-source", "report-source", "report-root-source", "marker-write", "marker-read", "backup-run"):
+                    self.assertIn(name, visited)
+                self.assertEqual(set(name.removeprefix("role-source-") for name in visited if name.startswith("role-source-")),
+                                 set(source["units"]))
+
+    def test_initial_linkage_and_feature_bundle_coverage_are_required(self):
+        for mode in ("standard", "feature"):
+            state = self.source(mode)["status"]["state"]
+            self.assertIs(vm.initial_full_backup(state, mode), state["backup"]["database"])
+            broken = copy.deepcopy(state)
+            broken["backup"]["last_complete_id"] = "other"
+            with self.assertRaises(vm.Failure):
+                vm.initial_full_backup(broken, mode)
+            broken = copy.deepcopy(state)
+            if mode == "feature":
+                broken["backup"].pop("initial_operation_id")
+            else:
+                broken["last_attempt"].pop("recovery_operation_id")
+            with self.assertRaises(vm.Failure):
+                vm.initial_full_backup(broken, mode)
+        receipt = self.full_receipt(self.source("feature"))
+        for path, value in ((["coverage", "complete_instance_coverage"], False),
+                            (["key_archive", "coverage", "complete_instance_coverage"], True),
+                            (["coverage", "findings"], [{"code": "service_state_unprotected"}]),
+                            (["coverage", "supported_components"], ["encrypted_configuration", "selected_deployment"]),
+                            (["key_archive", "deployment_sha256"], "0" * 64),
+                            (["key_archive", "coverage", "service_state"], []),
+                            (["key_archive", "object_key"], "")):
+            broken = copy.deepcopy(receipt)
+            owner = broken
+            for key in path[:-1]:
+                owner = owner[key]
+            owner[path[-1]] = value
+            with self.subTest(path=path), self.assertRaises(vm.Failure):
+                vm.completed_full_backup(broken, "full", mode="feature")
+
+    def test_later_full_backup_and_recovery_results_follow_product_shapes(self):
+        for topology_mode in ("standard", "feature"):
+            source = self.source(topology_mode)
+            profile = source["status"]["instance"]["profile"]
+            receipt = self.full_receipt(source)
+            vm.completed_full_backup(receipt, "full", mode=topology_mode)
+            for mode in ("rehearsal", "takeover"):
+                plan = {"ok": True, "plan_token": "reviewed", "mode": mode, "host_id": "replacement"}
+                result = {"ok": True, "mode": mode, "host_id": "replacement", "operation_id": "operation",
+                          "backup": receipt if mode == "takeover" else None,
+                          "profile_update": "Local profile unchanged; recreate this server to take over."}
+                if mode == "takeover":
+                    result["profile_update"] = "Commit the updated local host.address and host.host_id."
+                    if topology_mode == "feature":
+                        result["profile_update"] = copy.deepcopy(profile)
+                        result["profile_update"]["host"].update(address="127.0.0.3", host_id="replacement")
+                output = "Recovery operation: operation\n" + json.dumps(plan, indent=2) + "\n" + json.dumps(result, indent=2)
+                self.assertEqual(vm.recovery_result(output, mode, topology_mode=topology_mode), result)
+                observed = {"host_id": "replacement", "state": "rehearsal" if mode == "rehearsal" else "ready",
+                            "recovered_from": {"host_id": profile["host"]["host_id"], "instance_id": profile["instance_id"],
+                                               "operation_id": "operation", "mode": mode}}
+                vm.Run.check_recovered(observed, result, profile, mode)
+
+
 class RecoveryTests(unittest.TestCase):
     def test_both_scenarios_refuse_an_unclean_privileged_source_report(self):
         for scenario in ("operator", "recovery"):
@@ -466,24 +613,24 @@ class RecoveryTests(unittest.TestCase):
         for kind in ("recovery", "full"):
             receipt = self.receipt(kind)
             with self.subTest(kind=kind):
-                self.assertIs(vm.completed_full_backup(receipt, kind), receipt)
+                self.assertIs(vm.completed_full_backup(receipt, kind, mode="standard"), receipt)
             for unexpected in ({"recovery", "full", "diff", "scheduled"} - {kind}):
                 with self.subTest(kind=kind, unexpected=unexpected), self.assertRaises(vm.Failure):
-                    vm.completed_full_backup(receipt, unexpected)
+                    vm.completed_full_backup(receipt, unexpected, mode="standard")
             for point in (None, "", "foundry_1ace44d82ccf4c6dbf0e624f9da55d93"):
                 if kind == "recovery" and point:
                     continue
                 invalid = {**receipt, "restore_point": point}
                 with self.subTest(kind=kind, point=point), self.assertRaises(vm.Failure):
-                    vm.completed_full_backup(invalid, kind)
+                    vm.completed_full_backup(invalid, kind, mode="standard")
         receipt = self.receipt("recovery")
         del receipt["restore_point"]
         with self.assertRaises(vm.Failure):
-            vm.completed_full_backup(receipt, "recovery")
+            vm.completed_full_backup(receipt, "recovery", mode="standard")
 
     def test_full_backup_requires_both_components_and_matching_label(self):
         receipt = self.receipt()
-        self.assertIs(vm.completed_full_backup(receipt, "full"), receipt)
+        self.assertIs(vm.completed_full_backup(receipt, "full", mode="standard"), receipt)
         for owner, key, value in ((None, "backup_id", ""), (None, "status", "running"),
                 (None, "kind", "diff"), ("database_point", "status", "unknown"),
                 ("database_point", "pgbackrest_label", "other"),
@@ -491,15 +638,15 @@ class RecoveryTests(unittest.TestCase):
             receipt = self.receipt()
             (receipt[owner] if owner else receipt)[key] = value
             with self.subTest(owner=owner, key=key), self.assertRaises(vm.Failure):
-                vm.completed_full_backup(receipt, "full")
+                vm.completed_full_backup(receipt, "full", mode="standard")
         for receipt in (None, {}, {"database_point": None, "key_archive": None}):
             with self.assertRaises(vm.Failure):
-                vm.completed_full_backup(receipt, "full")
+                vm.completed_full_backup(receipt, "full", mode="standard")
         for label in ("invalidF", "20261117-010203F_20261117-020304D"):
             receipt = self.receipt()
             receipt["pgbackrest_label"] = receipt["database_point"]["pgbackrest_label"] = label
             with self.assertRaises(vm.Failure):
-                vm.completed_full_backup(receipt, "full")
+                vm.completed_full_backup(receipt, "full", mode="standard")
 
     def output(self, mode):
         return [{"ok": True, "plan_token": "reviewed", "host_id": "replacement", "mode": mode},
@@ -513,22 +660,22 @@ class RecoveryTests(unittest.TestCase):
         for mode in ("rehearsal", "takeover"):
             documents = self.output(mode)
             self.assertEqual(vm.json_documents(self.render(documents)), documents)
-            self.assertEqual(vm.recovery_result(self.render(documents), mode), documents[-1])
+            self.assertEqual(vm.recovery_result(self.render(documents), mode, topology_mode="standard"), documents[-1])
             for index, key, value in ((0, "plan_token", ""), (0, "ok", False), (0, "host_id", "other"),
                     (0, "mode", "wrong"), (1, "mode", "wrong"), (1, "operation_id", ""), (1, "ok", False)):
                 documents = self.output(mode)
                 documents[index][key] = value
                 with self.subTest(mode=mode, index=index, key=key), self.assertRaises(vm.Failure):
-                    vm.recovery_result(self.render(documents), mode)
+                    vm.recovery_result(self.render(documents), mode, topology_mode="standard")
         for documents in ([], self.output("takeover")[:1], self.output("takeover") * 2):
             with self.assertRaises(vm.Failure):
-                vm.recovery_result(self.render(documents), "takeover")
+                vm.recovery_result(self.render(documents), "takeover", topology_mode="standard")
         with self.assertRaises(vm.Failure):
             vm.json_documents('progress\n{"ok":')
         documents = self.output("rehearsal")
         documents[1]["backup"] = self.receipt()
         with self.assertRaises(vm.Failure):
-            vm.recovery_result(self.render(documents), "rehearsal")
+            vm.recovery_result(self.render(documents), "rehearsal", topology_mode="standard")
 
     def test_recovered_registry_binds_source_and_new_host(self):
         profile = {"host": {"host_id": "source"}, "instance_id": "instance"}

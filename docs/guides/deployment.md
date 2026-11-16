@@ -1469,6 +1469,13 @@ destroys B and stops A before C takes over. C must preserve the marker, record
 `recovered_from`, pass status and report checks, complete a new full backup and key
 archive, enable backup timers, and update the local profile to C.
 
+Standard's first deploy records a pre-migration `recovery` bundle with a named
+restore point; feature's first deploy records a `full` bundle. Both must reference
+a full pgBackRest backup and a completed encrypted key archive. Feature bundles
+must claim complete coverage; their key archives alone exclude PostgreSQL and do
+not claim complete instance coverage. Explicit and post-takeover backups use
+`full` receipts in both modes.
+
 Both scenarios require a clean privileged report after each healthy deployment or
 rollback. The CLI report must contain only the exact expected unprivileged findings. For
 standard instances, Linux may prevent executable-link inspection, producing

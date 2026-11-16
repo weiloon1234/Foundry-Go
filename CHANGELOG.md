@@ -14,8 +14,10 @@
   recovery uses 75-minute step and 90-minute job budgets, while operator keeps 50/60 minutes.
   Keep the recovery marker endpoint in the CLI's build snapshot and publish only
   redacted CLI refusal lines when builds fail.
-  Validate the initial backup's `recovery` receipt and named restore point separately
-  from explicit and post-takeover `full` receipts.
+  Validate standard's initial pre-migration `recovery` receipt and feature's initial
+  `full` receipt using their recorded operation identities. Check complete feature
+  bundle coverage separately from key-archive coverage, including explicit and
+  post-takeover backups; replay recorded VM-A receipts in harness tests.
 - Allow only the acceptance CA directory and its regular certificate/key files on
   explicitly disposable recovery targets. Reject symlinked container markers and
   hard-linked CA files. Production recovery preflight remains unchanged.

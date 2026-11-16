@@ -1,0 +1,328 @@
+{
+  "status": {
+    "instance": {
+      "name": "deployacceptance-acceptance",
+      "profile": {
+        "architecture": "amd64",
+        "backup_policy": {
+          "full_retention_days": 35,
+          "interval_hours": 24,
+          "pitr_days": 28
+        },
+        "certbot_email": "acceptance@example.invalid",
+        "domain": "deploy-vm.acceptance.invalid",
+        "edge_origin_lockdown": false,
+        "environment": "acceptance",
+        "host": {
+          "address": "127.0.0.1",
+          "host_id": "68090523-5b69-4cb6-b8dd-92fc40823a9e",
+          "port": 42735
+        },
+        "instance_id": "c194348a-5a74-4366-8da0-8cfc22ce3795",
+        "public_env": {},
+        "retention": {
+          "local_releases": 3,
+          "pre_migration_dumps": 7,
+          "server_releases": 5
+        },
+        "runtime_environment": "testing",
+        "schema": 2
+      },
+      "project_id": "da93f529-b968-4ba2-ac6a-3fdff9083905",
+      "host_id": "68090523-5b69-4cb6-b8dd-92fc40823a9e",
+      "allocations": {
+        "account": "deployacceptance-acceptance",
+        "database": "f_c194348a5a7443668da08cfc22ce3795",
+        "database_role": "f_c194348a5a7443668da08cfc22ce3795",
+        "gid": 986,
+        "http_port": 8100,
+        "namespace": {
+          "application": "deployacceptance",
+          "environment": "acceptance"
+        },
+        "paths": {
+          "application": "/opt/foundry/deployacceptance-acceptance",
+          "configuration": "/etc/foundry/instances/deployacceptance-acceptance",
+          "data": "/var/lib/foundry/apps/deployacceptance-acceptance",
+          "private": "/var/lib/foundry/private/instances/deployacceptance-acceptance",
+          "state": "/var/lib/foundry/instances/deployacceptance-acceptance"
+        },
+        "redis_user": "foundry-c194348a-5a74-4366-8da0-8cfc22ce3795",
+        "uid": 995
+      },
+      "topology": {
+        "roles": [
+          {
+            "name": "http"
+          },
+          {
+            "name": "scheduler"
+          },
+          {
+            "name": "worker"
+          }
+        ],
+        "schema": 1,
+        "sha256": "ef2a454fd56bc9a4009803870bd1ed196b44d0969f03dc9d397b481022022260"
+      }
+    },
+    "live_version": "20261116T212934Z-9d74c3bea518",
+    "maintenance": {
+      "down": false
+    },
+    "services": {
+      "http": {
+        "ActiveState": "active",
+        "ControlGroup": "/system.slice/system-foundry\\x2dhttp.slice/foundry-http@deployacceptance-acceptance.service",
+        "ExecMainStartTimestampMonotonic": "318780090",
+        "InvocationID": "8d62cdb7fb324bc6b7caa56ceff943bc",
+        "LoadState": "loaded",
+        "MainPID": "9698",
+        "NRestarts": "0",
+        "SubState": "running",
+        "exe": "/opt/foundry/deployacceptance-acceptance/releases/20261116T212934Z-9d74c3bea518/artisan",
+        "executable_matches": true,
+        "unit": "foundry-http@deployacceptance-acceptance.service"
+      },
+      "scheduler": {
+        "ActiveState": "active",
+        "ControlGroup": "/system.slice/system-foundry\\x2dscheduler.slice/foundry-scheduler@deployacceptance-acceptance.service",
+        "ExecMainStartTimestampMonotonic": "324107340",
+        "InvocationID": "06849653922740959bf560a96fed8dba",
+        "LoadState": "loaded",
+        "MainPID": "9817",
+        "NRestarts": "0",
+        "SubState": "running",
+        "exe": "/opt/foundry/deployacceptance-acceptance/releases/20261116T212934Z-9d74c3bea518/artisan",
+        "executable_matches": true,
+        "unit": "foundry-scheduler@deployacceptance-acceptance.service"
+      },
+      "worker": {
+        "ActiveState": "active",
+        "ControlGroup": "/system.slice/system-foundry\\x2dworker.slice/foundry-worker@deployacceptance-acceptance.service",
+        "ExecMainStartTimestampMonotonic": "324074086",
+        "InvocationID": "62b770312e534e0faa1265e5fdcbb02d",
+        "LoadState": "loaded",
+        "MainPID": "9810",
+        "NRestarts": "0",
+        "SubState": "running",
+        "exe": "/opt/foundry/deployacceptance-acceptance/releases/20261116T212934Z-9d74c3bea518/artisan",
+        "executable_matches": true,
+        "unit": "foundry-worker@deployacceptance-acceptance.service"
+      }
+    },
+    "state": {
+      "status": "healthy",
+      "current": {
+        "architecture": "amd64",
+        "build_inputs": {
+          "cc": "x86_64-linux-gnu-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+          "go": "go version go1.27.1 linux/amd64",
+          "images": {
+            "go": "sha256:162be5298a40ed317005c8339c6de4d10d3eef336d66dc8e9259b03ab9d3a6d2",
+            "node": "sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c",
+            "ubuntu": "sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852"
+          },
+          "node": "v24.22.2",
+          "npm": "11.19.1",
+          "packages_sha256": "a26dd344871aa24307e50a23d6bfe8218efc06f152782b832bbbf049b182c0b2"
+        },
+        "builder_image_id": "sha256:0e0d5fe114a94133545820ee7788fc734dfd5ce03b2cb23620f89918c4074268",
+        "built_at": "2026-11-16T21:29:34Z",
+        "commit": "6a1fe4ea7de90600462602d6b5176c0cda030047",
+        "environment": "acceptance",
+        "files": {
+          "artisan": "3d2c3800bde401b32345584766c57912508bcc97852c8b9b257282889413d549",
+          "config/deploy.toml": "9cf39aa5eb727c7583c211e6c3461d748d853e06600c9dbbd336f215ba4e2f97",
+          "private-source-maps/20261116T212934Z-9d74c3bea518/assets/portal.js.map": "87e7c3089d58190a089edbc47e595f9535d63321eec8bdb68204ba21419933d0",
+          "public/assets/portal.js": "c399384714fd99012af7a979a4b40b8ee0ece0ed3e6a899ab1c5391c41be5b3c",
+          "public/index.html": "758083abc26cabd6b157c83d42d6adc0d41606b8ef92ef6bd65c7d50d5bbc27a"
+        },
+        "instance": "deployacceptance-acceptance",
+        "instance_id": "c194348a-5a74-4366-8da0-8cfc22ce3795",
+        "layout_version": 2,
+        "native_imaging": false,
+        "project_id": "da93f529-b968-4ba2-ac6a-3fdff9083905",
+        "schema": 1,
+        "source_kind": "working_tree",
+        "source_sha256": "d456c44bd58cdb34bdd8d55314e452aa3c5a424841f5a9fb3fc4f7c3a8f51018",
+        "topology_sha256": "ef2a454fd56bc9a4009803870bd1ed196b44d0969f03dc9d397b481022022260",
+        "tree_state": "clean",
+        "version": "20261116T212934Z-9d74c3bea518"
+      },
+      "instance_id": "c194348a-5a74-4366-8da0-8cfc22ce3795",
+      "backup": {
+        "attempt": {
+          "at": "2026-11-16T21:33:35Z",
+          "outcome": "complete"
+        },
+        "database": {
+          "backup_id": "9970815c-2983-4c62-b9b5-f62bd1789207",
+          "completed_at": "2026-11-16T21:33:35Z",
+          "configuration_revision": 1,
+          "database_point": {
+            "completed_at": "2026-11-16T21:33:34Z",
+            "pgbackrest_label": "20261116-213323F",
+            "status": "complete"
+          },
+          "fresh_at": "2026-11-16T21:33:34Z",
+          "instance_id": "c194348a-5a74-4366-8da0-8cfc22ce3795",
+          "key_archive": {
+            "completed_at": "2026-11-16T21:33:35Z",
+            "object_key": "keys/c194348a-5a74-4366-8da0-8cfc22ce3795/34dbae2d25194c68bb6d1dd17d531e3d.tar.age",
+            "status": "complete"
+          },
+          "kind": "recovery",
+          "pgbackrest_label": "20261116-213323F",
+          "restore_point": "foundry_9970815c29834c62b9b5f62bd1789207",
+          "status": "complete"
+        },
+        "destination_ref": "/etc/foundry/pgbackrest/foundry.conf",
+        "keys": {
+          "completed_at": "2026-11-16T21:33:35Z",
+          "object_key": "keys/c194348a-5a74-4366-8da0-8cfc22ce3795/34dbae2d25194c68bb6d1dd17d531e3d.tar.age",
+          "status": "complete"
+        },
+        "last_attempt_outcome": "complete",
+        "last_complete_at": "2026-11-16T21:33:34Z",
+        "last_complete_id": "9970815c-2983-4c62-b9b5-f62bd1789207",
+        "policy": {
+          "full_retention_days": 35,
+          "interval_hours": 24,
+          "pitr_days": 28
+        }
+      },
+      "last_attempt": {
+        "action": "deploy",
+        "backup": {
+          "backup_id": "9970815c-2983-4c62-b9b5-f62bd1789207",
+          "completed_at": "2026-11-16T21:33:35Z",
+          "configuration_revision": 1,
+          "database_point": {
+            "completed_at": "2026-11-16T21:33:34Z",
+            "pgbackrest_label": "20261116-213323F",
+            "status": "complete"
+          },
+          "fresh_at": "2026-11-16T21:33:34Z",
+          "instance_id": "c194348a-5a74-4366-8da0-8cfc22ce3795",
+          "key_archive": {
+            "completed_at": "2026-11-16T21:33:35Z",
+            "object_key": "keys/c194348a-5a74-4366-8da0-8cfc22ce3795/34dbae2d25194c68bb6d1dd17d531e3d.tar.age",
+            "status": "complete"
+          },
+          "kind": "recovery",
+          "pgbackrest_label": "20261116-213323F",
+          "restore_point": "foundry_9970815c29834c62b9b5f62bd1789207",
+          "status": "complete"
+        },
+        "outcome": "succeeded",
+        "recovery_operation_id": "9970815c-2983-4c62-b9b5-f62bd1789207",
+        "release": "20261116T212934Z-9d74c3bea518"
+      }
+    }
+  },
+  "reports": {
+    "report-source": {
+      "complete": false,
+      "problems": [
+        {
+          "code": "running_release_unverified",
+          "instance_id": "c194348a-5a74-4366-8da0-8cfc22ce3795"
+        },
+        {
+          "code": "instance_state_inconsistent",
+          "instance_id": "c194348a-5a74-4366-8da0-8cfc22ce3795"
+        }
+      ],
+      "host": {
+        "failed_units": [],
+        "host_id": "68090523-5b69-4cb6-b8dd-92fc40823a9e",
+        "hostname": "foundry-acceptance",
+        "layout_version": 2,
+        "network": {
+          "firewall": null,
+          "public_listeners": [
+            22,
+            80,
+            443
+          ]
+        },
+        "registry_updated_at": "2026-11-16T21:33:22Z",
+        "resources": {
+          "cpu_count": 2,
+          "disk_available_bytes": 29538406400,
+          "disk_total_bytes": 32162967552,
+          "load_average": [
+            0.35595703125,
+            0.19384765625,
+            0.0986328125
+          ],
+          "memory_available_bytes": 3539578880,
+          "memory_total_bytes": 4105052160,
+          "uptime_seconds": 336
+        },
+        "ssh": {
+          "password_authentication": null,
+          "root_login": null
+        }
+      }
+    },
+    "report-root-source": {
+      "complete": true,
+      "problems": [],
+      "host": {
+        "host_id": "68090523-5b69-4cb6-b8dd-92fc40823a9e",
+        "hostname": "foundry-acceptance",
+        "layout_version": 2,
+        "registry_updated_at": "2026-11-16T21:33:22Z",
+        "failed_units": [],
+        "network": {
+          "public_listeners": [
+            22,
+            80,
+            443
+          ],
+          "firewall": "inactive"
+        },
+        "ssh": {
+          "password_authentication": false,
+          "root_login": "without-password"
+        },
+        "resources": {
+          "cpu_count": 2,
+          "load_average": [
+            0.3271484375,
+            0.1904296875,
+            0.09765625
+          ],
+          "memory_total_bytes": 4105052160,
+          "memory_available_bytes": 3555127296,
+          "disk_total_bytes": 32162967552,
+          "disk_available_bytes": 29538406400,
+          "uptime_seconds": 343
+        }
+      }
+    }
+  },
+  "units": {
+    "foundry-http@deployacceptance-acceptance.service": "MainPID=9698\nActiveState=active\nSubState=running\n",
+    "foundry-scheduler@deployacceptance-acceptance.service": "MainPID=9817\nActiveState=active\nSubState=running\n",
+    "foundry-worker@deployacceptance-acceptance.service": "MainPID=9810\nActiveState=active\nSubState=running\n"
+  },
+  "deploy": [
+    {
+      "instance": "deployacceptance-acceptance",
+      "ok": true,
+      "removed_bundles": [],
+      "removed_upgrade_journals": [],
+      "version": "20261116T212934Z-9d74c3bea518"
+    },
+    {
+      "version": "20261116T212934Z-9d74c3bea518",
+      "commit": "6a1fe4ea7de90600462602d6b5176c0cda030047",
+      "tree_state": "clean",
+      "architecture": "amd64",
+      "instance": "deployacceptance-acceptance"
+    }
+  ]
+}

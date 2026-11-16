@@ -1,0 +1,753 @@
+{
+  "status": {
+    "instance": {
+      "name": "deployacceptance-acceptance",
+      "profile": {
+        "architecture": "amd64",
+        "backup_policy": {
+          "full_retention_days": 35,
+          "interval_hours": 24,
+          "pitr_days": 28
+        },
+        "certbot_email": "acceptance@example.invalid",
+        "domain": "deploy-vm.acceptance.invalid",
+        "edge_origin_lockdown": false,
+        "environment": "acceptance",
+        "host": {
+          "address": "127.0.0.1",
+          "host_id": "603f91cb-3187-4c97-89c2-a3b94e85b831",
+          "port": 59843
+        },
+        "instance_id": "579a9e3b-619b-4dd4-904d-c2b7677eb0c1",
+        "listeners": {},
+        "placement": {
+          "http": 1,
+          "relay": 2
+        },
+        "public_env": {},
+        "retention": {
+          "local_releases": 3,
+          "pre_migration_dumps": 7,
+          "server_releases": 5
+        },
+        "runtime_environment": "testing",
+        "schema": 3
+      },
+      "project_id": "86635d48-df67-4473-9b31-8ff0e2fde0f6",
+      "host_id": "603f91cb-3187-4c97-89c2-a3b94e85b831",
+      "allocations": {
+        "account": "deployacceptance-acceptance",
+        "database": "f_579a9e3b619b4dd4904dc2b7677eb0c1",
+        "database_role": "f_579a9e3b619b4dd4904dc2b7677eb0c1",
+        "gid": 986,
+        "http_port": 18000,
+        "namespace": {
+          "application": "deployacceptance",
+          "environment": "acceptance"
+        },
+        "paths": {
+          "application": "/opt/foundry/deployacceptance-acceptance",
+          "configuration": "/etc/foundry/instances/deployacceptance-acceptance",
+          "data": "/var/lib/foundry/apps/deployacceptance-acceptance",
+          "private": "/var/lib/foundry/private/instances/deployacceptance-acceptance",
+          "state": "/var/lib/foundry/instances/deployacceptance-acceptance"
+        },
+        "redis_user": "foundry-579a9e3b-619b-4dd4-904d-c2b7677eb0c1",
+        "uid": 995
+      },
+      "topology": {
+        "application_executables": {
+          "rehearsal-relay": {
+            "go_package": "./cmd/artisan"
+          }
+        },
+        "roles": [
+          {
+            "bindings": {
+              "rehearsal": {
+                "copies": {
+                  "listener": "control",
+                  "role": "relay",
+                  "scheme": "http",
+                  "secret": "copy-token"
+                }
+              }
+            },
+            "kind": "builtin",
+            "name": "http",
+            "requires": [
+              "relay"
+            ]
+          },
+          {
+            "arguments": [
+              {
+                "literal": "feature:relay"
+              },
+              {
+                "listener_address": "control"
+              },
+              {
+                "listener_port": "control"
+              }
+            ],
+            "configs": {
+              "fixture-home": {
+                "directory_environment": "HOME",
+                "files": {
+                  ".config/fixture/global.json": {
+                    "format": "json",
+                    "mode": "recreate",
+                    "source": "deploy/files/config-tree/global.json"
+                  },
+                  ".config/fixture/profiles/stream/basic.ini": {
+                    "format": "ini",
+                    "mode": "recreate",
+                    "source": "deploy/files/config-tree/basic.ini"
+                  },
+                  ".config/fixture/profiles/stream/streamEncoder.json": {
+                    "format": "json",
+                    "mode": "recreate",
+                    "source": "deploy/files/config-tree/streamEncoder.json"
+                  }
+                }
+              }
+            },
+            "executable": {
+              "application": "rehearsal-relay"
+            },
+            "kind": "executable",
+            "limits": {
+              "cpu_percent": 100,
+              "memory_bytes": 134217728,
+              "tasks": 32
+            },
+            "listeners": {
+              "control": {
+                "bind": "loopback",
+                "transport": "tcp"
+              }
+            },
+            "maintenance": "continue",
+            "name": "relay",
+            "readiness": {
+              "body": "feature-relay-ready",
+              "kind": "http",
+              "listener": "control",
+              "path": "/ready",
+              "status": 200
+            },
+            "recovery_rehearsal_safe": true,
+            "restart": {
+              "burst": 5,
+              "delay_seconds": 5,
+              "policy": "on-failure"
+            },
+            "secret_files": {
+              "TOKEN_FILE": {
+                "scope": "copy",
+                "secret": "copy-token"
+              }
+            },
+            "state": {
+              "kind": "disposable"
+            }
+          }
+        ],
+        "schema": 2,
+        "secrets": {
+          "copy-token": {
+            "prompt": "Rehearsal copy token",
+            "scope": "copy"
+          }
+        },
+        "sha256": "efc5327eb0efd360d988608d19a5e328974ff8aac4477d05990dc9c3d76a4193"
+      }
+    },
+    "live_version": "20261116T212854Z-4bda077c63a9",
+    "maintenance": {
+      "down": false
+    },
+    "services": {
+      "http": {
+        "ActiveState": "active",
+        "ControlGroup": "/system.slice/system-foundry\\x2dhttp.slice/foundry-http@deployacceptance-acceptance.service",
+        "ExecMainStartTimestampMonotonic": "249173063",
+        "InvocationID": "05fe5a6170264fcaace5296a153f1c04",
+        "LoadState": "loaded",
+        "MainPID": "10651",
+        "NRestarts": "0",
+        "SubState": "running",
+        "enabled": true,
+        "exe": "/opt/foundry/deployacceptance-acceptance/releases/20261116T212854Z-4bda077c63a9/artisan",
+        "executable_matches": true,
+        "maintenance_held": false,
+        "unit": "foundry-http@deployacceptance-acceptance.service"
+      },
+      "relay": {
+        "copies": [
+          {
+            "ActiveState": "active",
+            "ControlGroup": "/system.slice/system-foundry\\x2dapp\\x2ddeployacceptance\\x2dacceptance\\x2drelay.slice/foundry-app-deployacceptance-acceptance-relay@1.service",
+            "ExecMainStartTimestampMonotonic": "243096077",
+            "InvocationID": "9c4b21cb955b46508a24791ca7472c36",
+            "LoadState": "loaded",
+            "MainPID": "10312",
+            "NRestarts": "0",
+            "SubState": "running",
+            "enabled": true,
+            "exe": "/opt/foundry/deployacceptance-acceptance/releases/20261116T212854Z-4bda077c63a9/deploy/bin/rehearsal-relay",
+            "executable_matches": true,
+            "maintenance_held": false,
+            "ordinal": 1,
+            "unit": "foundry-app-deployacceptance-acceptance-relay@1.service"
+          },
+          {
+            "ActiveState": "active",
+            "ControlGroup": "/system.slice/system-foundry\\x2dapp\\x2ddeployacceptance\\x2dacceptance\\x2drelay.slice/foundry-app-deployacceptance-acceptance-relay@2.service",
+            "ExecMainStartTimestampMonotonic": "243195078",
+            "InvocationID": "5a10b6e8d47f4c84bc672bff309f8fef",
+            "LoadState": "loaded",
+            "MainPID": "10316",
+            "NRestarts": "0",
+            "SubState": "running",
+            "enabled": true,
+            "exe": "/opt/foundry/deployacceptance-acceptance/releases/20261116T212854Z-4bda077c63a9/deploy/bin/rehearsal-relay",
+            "executable_matches": true,
+            "maintenance_held": false,
+            "ordinal": 2,
+            "unit": "foundry-app-deployacceptance-acceptance-relay@2.service"
+          }
+        ]
+      }
+    },
+    "state": {
+      "status": "healthy",
+      "current": {
+        "architecture": "amd64",
+        "artifact_origins": {},
+        "build_inputs": {
+          "cc": "x86_64-linux-gnu-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+          "go": "go version go1.27.1 linux/amd64",
+          "images": {
+            "go": "sha256:162be5298a40ed317005c8339c6de4d10d3eef336d66dc8e9259b03ab9d3a6d2",
+            "node": "sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c",
+            "ubuntu": "sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852"
+          },
+          "node": "v24.22.2",
+          "npm": "11.19.1",
+          "packages_sha256": "a26dd344871aa24307e50a23d6bfe8218efc06f152782b832bbbf049b182c0b2"
+        },
+        "builder_image_id": "sha256:50570d84240492157ae3bbe161bbb3a9357d372f1b05e828d0651e36cc40ed78",
+        "built_at": "2026-11-16T21:28:54Z",
+        "commit": "6a1fe4ea7de90600462602d6b5176c0cda030047",
+        "deployment": {
+          "application_executables": {
+            "rehearsal-relay": "deploy/bin/rehearsal-relay"
+          },
+          "artifacts": [],
+          "inventory": [
+            {
+              "kind": "application",
+              "path": "artisan",
+              "sha256": "a62dd99197f29378775ba02a302cfc19384c36a83393e3660729b12e8d254f70",
+              "size": 100166176
+            },
+            {
+              "kind": "config",
+              "path": "config/deploy.toml",
+              "sha256": "9cf39aa5eb727c7583c211e6c3461d748d853e06600c9dbbd336f215ba4e2f97",
+              "size": 1689
+            },
+            {
+              "kind": "application",
+              "path": "deploy/bin/rehearsal-relay",
+              "sha256": "f3210af7f5f87cca94b38bcbbfe8f0abf50fde9336d34bd0c2f3a85070d5a111",
+              "size": 100166096
+            },
+            {
+              "kind": "config",
+              "path": "deploy/files/config-tree/basic.ini",
+              "sha256": "d7f200378dcb175a09e73463838037721aebc0fd15cac95e4912cad9714eb9e2",
+              "size": 23
+            },
+            {
+              "kind": "config",
+              "path": "deploy/files/config-tree/global.json",
+              "sha256": "c59d97c342afd01f31a6af317be81850714c52f0894493b2d6b6c0ab4125bdd7",
+              "size": 34
+            },
+            {
+              "kind": "config",
+              "path": "deploy/files/config-tree/streamEncoder.json",
+              "sha256": "d229339e0961a4cf0d252e8d817fe0a561b5e590f38b48b0df872ca4bbb88500",
+              "size": 17
+            },
+            {
+              "kind": "source-map",
+              "path": "private-source-maps/20261116T212854Z-4bda077c63a9/assets/portal.js.map",
+              "sha256": "87e7c3089d58190a089edbc47e595f9535d63321eec8bdb68204ba21419933d0",
+              "size": 699
+            },
+            {
+              "kind": "asset",
+              "path": "public/assets/portal.js",
+              "sha256": "c399384714fd99012af7a979a4b40b8ee0ece0ed3e6a899ab1c5391c41be5b3c",
+              "size": 489
+            },
+            {
+              "kind": "asset",
+              "path": "public/index.html",
+              "sha256": "758083abc26cabd6b157c83d42d6adc0d41606b8ef92ef6bd65c7d50d5bbc27a",
+              "size": 437
+            }
+          ],
+          "profile": {
+            "architecture": "amd64",
+            "backup_policy": {
+              "full_retention_days": 35,
+              "interval_hours": 24,
+              "pitr_days": 28
+            },
+            "certbot_email": "acceptance@example.invalid",
+            "domain": "deploy-vm.acceptance.invalid",
+            "edge_origin_lockdown": false,
+            "environment": "acceptance",
+            "host": {
+              "address": "127.0.0.1",
+              "host_id": "603f91cb-3187-4c97-89c2-a3b94e85b831",
+              "port": 59843
+            },
+            "instance_id": "579a9e3b-619b-4dd4-904d-c2b7677eb0c1",
+            "listeners": {},
+            "placement": {
+              "http": 1,
+              "relay": 2
+            },
+            "public_env": {},
+            "retention": {
+              "local_releases": 3,
+              "pre_migration_dumps": 7,
+              "server_releases": 5
+            },
+            "runtime_environment": "testing",
+            "schema": 3
+          },
+          "schema": 2,
+          "topology": {
+            "application_executables": {
+              "rehearsal-relay": {
+                "go_package": "./cmd/artisan"
+              }
+            },
+            "roles": [
+              {
+                "bindings": {
+                  "rehearsal": {
+                    "copies": {
+                      "listener": "control",
+                      "role": "relay",
+                      "scheme": "http",
+                      "secret": "copy-token"
+                    }
+                  }
+                },
+                "kind": "builtin",
+                "name": "http",
+                "requires": [
+                  "relay"
+                ]
+              },
+              {
+                "arguments": [
+                  {
+                    "literal": "feature:relay"
+                  },
+                  {
+                    "listener_address": "control"
+                  },
+                  {
+                    "listener_port": "control"
+                  }
+                ],
+                "configs": {
+                  "fixture-home": {
+                    "directory_environment": "HOME",
+                    "files": {
+                      ".config/fixture/global.json": {
+                        "format": "json",
+                        "mode": "recreate",
+                        "source": "deploy/files/config-tree/global.json"
+                      },
+                      ".config/fixture/profiles/stream/basic.ini": {
+                        "format": "ini",
+                        "mode": "recreate",
+                        "source": "deploy/files/config-tree/basic.ini"
+                      },
+                      ".config/fixture/profiles/stream/streamEncoder.json": {
+                        "format": "json",
+                        "mode": "recreate",
+                        "source": "deploy/files/config-tree/streamEncoder.json"
+                      }
+                    }
+                  }
+                },
+                "executable": {
+                  "application": "rehearsal-relay"
+                },
+                "kind": "executable",
+                "limits": {
+                  "cpu_percent": 100,
+                  "memory_bytes": 134217728,
+                  "tasks": 32
+                },
+                "listeners": {
+                  "control": {
+                    "bind": "loopback",
+                    "transport": "tcp"
+                  }
+                },
+                "maintenance": "continue",
+                "name": "relay",
+                "readiness": {
+                  "body": "feature-relay-ready",
+                  "kind": "http",
+                  "listener": "control",
+                  "path": "/ready",
+                  "status": 200
+                },
+                "recovery_rehearsal_safe": true,
+                "restart": {
+                  "burst": 5,
+                  "delay_seconds": 5,
+                  "policy": "on-failure"
+                },
+                "secret_files": {
+                  "TOKEN_FILE": {
+                    "scope": "copy",
+                    "secret": "copy-token"
+                  }
+                },
+                "state": {
+                  "kind": "disposable"
+                }
+              }
+            ],
+            "schema": 2,
+            "secrets": {
+              "copy-token": {
+                "prompt": "Rehearsal copy token",
+                "scope": "copy"
+              }
+            }
+          },
+          "topology_sha256": "efc5327eb0efd360d988608d19a5e328974ff8aac4477d05990dc9c3d76a4193"
+        },
+        "environment": "acceptance",
+        "files": {
+          "artisan": "a62dd99197f29378775ba02a302cfc19384c36a83393e3660729b12e8d254f70",
+          "config/deploy.toml": "9cf39aa5eb727c7583c211e6c3461d748d853e06600c9dbbd336f215ba4e2f97",
+          "deploy/bin/rehearsal-relay": "f3210af7f5f87cca94b38bcbbfe8f0abf50fde9336d34bd0c2f3a85070d5a111",
+          "deploy/files/config-tree/basic.ini": "d7f200378dcb175a09e73463838037721aebc0fd15cac95e4912cad9714eb9e2",
+          "deploy/files/config-tree/global.json": "c59d97c342afd01f31a6af317be81850714c52f0894493b2d6b6c0ab4125bdd7",
+          "deploy/files/config-tree/streamEncoder.json": "d229339e0961a4cf0d252e8d817fe0a561b5e590f38b48b0df872ca4bbb88500",
+          "private-source-maps/20261116T212854Z-4bda077c63a9/assets/portal.js.map": "87e7c3089d58190a089edbc47e595f9535d63321eec8bdb68204ba21419933d0",
+          "public/assets/portal.js": "c399384714fd99012af7a979a4b40b8ee0ece0ed3e6a899ab1c5391c41be5b3c",
+          "public/index.html": "758083abc26cabd6b157c83d42d6adc0d41606b8ef92ef6bd65c7d50d5bbc27a"
+        },
+        "instance": "deployacceptance-acceptance",
+        "instance_id": "579a9e3b-619b-4dd4-904d-c2b7677eb0c1",
+        "layout_version": 2,
+        "native_imaging": false,
+        "project_id": "86635d48-df67-4473-9b31-8ff0e2fde0f6",
+        "schema": 2,
+        "source_kind": "working_tree",
+        "source_sha256": "e2bf991acf9e0920d082657300c4cf64bad49ff78c488b5eacfb4fb5c0125571",
+        "topology_sha256": "efc5327eb0efd360d988608d19a5e328974ff8aac4477d05990dc9c3d76a4193",
+        "tree_state": "clean",
+        "version": "20261116T212854Z-4bda077c63a9"
+      },
+      "instance_id": "579a9e3b-619b-4dd4-904d-c2b7677eb0c1",
+      "backup": {
+        "attempt": {
+          "at": "2026-11-16T21:32:40Z",
+          "outcome": "complete"
+        },
+        "database": {
+          "backup_id": "128295cb-49a8-4204-9a6e-4ba77a779d72",
+          "completed_at": "2026-11-16T21:32:40Z",
+          "configuration_revision": 1,
+          "coverage": {
+            "complete_instance_coverage": true,
+            "findings": [],
+            "service_state": [
+              {
+                "kind": "disposable",
+                "ordinal": 1,
+                "persistent_state_paths": [
+                  "/var/lib/foundry/service-state/579a9e3b-619b-4dd4-904d-c2b7677eb0c1/relay"
+                ],
+                "role": "relay"
+              },
+              {
+                "kind": "disposable",
+                "ordinal": 2,
+                "persistent_state_paths": [
+                  "/var/lib/foundry/service-state/579a9e3b-619b-4dd4-904d-c2b7677eb0c1/relay@2"
+                ],
+                "role": "relay"
+              }
+            ],
+            "supported_components": [
+              "postgresql",
+              "encrypted_configuration",
+              "selected_deployment"
+            ]
+          },
+          "database_point": {
+            "completed_at": "2026-11-16T21:32:38+00:00",
+            "pgbackrest_label": "20261116-213233F",
+            "status": "complete"
+          },
+          "deployment_sha256": "717119083d8571bea405cb547eb120a8a9d76b6cc153417a23c25a5b91913fbe",
+          "fresh_at": "2026-11-16T21:32:38+00:00",
+          "instance_id": "579a9e3b-619b-4dd4-904d-c2b7677eb0c1",
+          "key_archive": {
+            "completed_at": "2026-11-16T21:32:40Z",
+            "coverage": {
+              "complete_instance_coverage": false,
+              "findings": [],
+              "service_state": [
+                {
+                  "kind": "disposable",
+                  "ordinal": 1,
+                  "persistent_state_paths": [
+                    "/var/lib/foundry/service-state/579a9e3b-619b-4dd4-904d-c2b7677eb0c1/relay"
+                  ],
+                  "role": "relay"
+                },
+                {
+                  "kind": "disposable",
+                  "ordinal": 2,
+                  "persistent_state_paths": [
+                    "/var/lib/foundry/service-state/579a9e3b-619b-4dd4-904d-c2b7677eb0c1/relay@2"
+                  ],
+                  "role": "relay"
+                }
+              ],
+              "supported_components": [
+                "encrypted_configuration",
+                "selected_deployment"
+              ]
+            },
+            "deployment_sha256": "717119083d8571bea405cb547eb120a8a9d76b6cc153417a23c25a5b91913fbe",
+            "object_key": "keys/579a9e3b-619b-4dd4-904d-c2b7677eb0c1/8e2e1fa207f24b61b73fcffecf0ee017.tar.age",
+            "status": "complete"
+          },
+          "kind": "full",
+          "pgbackrest_label": "20261116-213233F",
+          "status": "complete"
+        },
+        "destination_ref": "/etc/foundry/pgbackrest/foundry.conf",
+        "initial_operation_id": "128295cb-49a8-4204-9a6e-4ba77a779d72",
+        "keys": {
+          "completed_at": "2026-11-16T21:32:40Z",
+          "coverage": {
+            "complete_instance_coverage": false,
+            "findings": [],
+            "service_state": [
+              {
+                "kind": "disposable",
+                "ordinal": 1,
+                "persistent_state_paths": [
+                  "/var/lib/foundry/service-state/579a9e3b-619b-4dd4-904d-c2b7677eb0c1/relay"
+                ],
+                "role": "relay"
+              },
+              {
+                "kind": "disposable",
+                "ordinal": 2,
+                "persistent_state_paths": [
+                  "/var/lib/foundry/service-state/579a9e3b-619b-4dd4-904d-c2b7677eb0c1/relay@2"
+                ],
+                "role": "relay"
+              }
+            ],
+            "supported_components": [
+              "encrypted_configuration",
+              "selected_deployment"
+            ]
+          },
+          "deployment_sha256": "717119083d8571bea405cb547eb120a8a9d76b6cc153417a23c25a5b91913fbe",
+          "object_key": "keys/579a9e3b-619b-4dd4-904d-c2b7677eb0c1/8e2e1fa207f24b61b73fcffecf0ee017.tar.age",
+          "status": "complete"
+        },
+        "last_attempt_outcome": "complete",
+        "last_complete_at": "2026-11-16T21:32:38+00:00",
+        "last_complete_id": "128295cb-49a8-4204-9a6e-4ba77a779d72",
+        "policy": {
+          "full_retention_days": 35,
+          "interval_hours": 24,
+          "pitr_days": 28
+        }
+      },
+      "last_attempt": {
+        "action": "deploy",
+        "outcome": "succeeded",
+        "release": "20261116T212854Z-4bda077c63a9"
+      }
+    }
+  },
+  "reports": {
+    "report-source": {
+      "complete": false,
+      "problems": [
+        {
+          "code": "runtime_selection_unavailable",
+          "instance_id": "579a9e3b-619b-4dd4-904d-c2b7677eb0c1"
+        },
+        {
+          "code": "running_release_mismatch",
+          "instance_id": "579a9e3b-619b-4dd4-904d-c2b7677eb0c1"
+        },
+        {
+          "code": "instance_state_inconsistent",
+          "instance_id": "579a9e3b-619b-4dd4-904d-c2b7677eb0c1"
+        },
+        {
+          "code": "declared_network_unavailable",
+          "instance_id": "579a9e3b-619b-4dd4-904d-c2b7677eb0c1"
+        },
+        {
+          "code": "instance_degraded",
+          "instance_id": "579a9e3b-619b-4dd4-904d-c2b7677eb0c1"
+        }
+      ],
+      "host": {
+        "failed_units": [],
+        "host_id": "603f91cb-3187-4c97-89c2-a3b94e85b831",
+        "hostname": "foundry-acceptance",
+        "layout_version": 2,
+        "network": {
+          "firewall": null,
+          "public_listeners": [
+            22,
+            80,
+            443
+          ]
+        },
+        "registry_updated_at": "2026-11-16T21:32:30Z",
+        "resources": {
+          "cpu_count": 2,
+          "disk_available_bytes": 29418500096,
+          "disk_total_bytes": 32162967552,
+          "load_average": [
+            0.591796875,
+            0.27490234375,
+            0.11474609375
+          ],
+          "memory_available_bytes": 3562516480,
+          "memory_total_bytes": 4106080256,
+          "uptime_seconds": 300
+        },
+        "ssh": {
+          "password_authentication": null,
+          "root_login": null
+        }
+      }
+    },
+    "report-root-source": {
+      "complete": true,
+      "problems": [],
+      "host": {
+        "host_id": "603f91cb-3187-4c97-89c2-a3b94e85b831",
+        "hostname": "foundry-acceptance",
+        "layout_version": 2,
+        "registry_updated_at": "2026-11-16T21:32:30Z",
+        "failed_units": [],
+        "network": {
+          "public_listeners": [
+            22,
+            80,
+            443
+          ],
+          "firewall": "inactive"
+        },
+        "ssh": {
+          "password_authentication": false,
+          "root_login": "without-password"
+        },
+        "resources": {
+          "cpu_count": 2,
+          "load_average": [
+            0.5439453125,
+            0.27001953125,
+            0.11376953125
+          ],
+          "memory_total_bytes": 4106080256,
+          "memory_available_bytes": 3540557824,
+          "disk_total_bytes": 32162967552,
+          "disk_available_bytes": 29418500096,
+          "uptime_seconds": 307
+        }
+      }
+    }
+  },
+  "units": {
+    "foundry-app-deployacceptance-acceptance-relay@1.service": "MainPID=10312\nActiveState=active\nSubState=running\n",
+    "foundry-app-deployacceptance-acceptance-relay@2.service": "MainPID=10316\nActiveState=active\nSubState=running\n",
+    "foundry-http@deployacceptance-acceptance.service": "MainPID=10651\nActiveState=active\nSubState=running\n"
+  },
+  "deploy": [
+    {
+      "instance": "deployacceptance-acceptance",
+      "ok": true,
+      "profile_update": {
+        "architecture": "amd64",
+        "backup_policy": {
+          "full_retention_days": 35,
+          "interval_hours": 24,
+          "pitr_days": 28
+        },
+        "certbot_email": "acceptance@example.invalid",
+        "domain": "deploy-vm.acceptance.invalid",
+        "edge_origin_lockdown": false,
+        "environment": "acceptance",
+        "host": {
+          "address": "127.0.0.1",
+          "host_id": "603f91cb-3187-4c97-89c2-a3b94e85b831",
+          "port": 59843
+        },
+        "instance_id": "579a9e3b-619b-4dd4-904d-c2b7677eb0c1",
+        "listeners": {},
+        "placement": {
+          "http": 1,
+          "relay": 2
+        },
+        "public_env": {},
+        "retention": {
+          "local_releases": 3,
+          "pre_migration_dumps": 7,
+          "server_releases": 5
+        },
+        "runtime_environment": "testing",
+        "schema": 3
+      },
+      "retention": {
+        "error": {
+          "code": "capability_unavailable",
+          "detail": "Feature helper bundle pruning is unsupported. Feature boot and runtime references require retained helper bundles; retain them and use ACTION=tools-plan to review an upgrade."
+        }
+      },
+      "status": "healthy",
+      "version": "20261116T212854Z-4bda077c63a9"
+    },
+    {
+      "version": "20261116T212854Z-4bda077c63a9",
+      "commit": "6a1fe4ea7de90600462602d6b5176c0cda030047",
+      "tree_state": "clean",
+      "architecture": "amd64",
+      "instance": "deployacceptance-acceptance"
+    }
+  ]
+}
