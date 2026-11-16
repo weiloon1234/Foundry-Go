@@ -4,10 +4,12 @@
 
 - Fixed: `make bootstrap ACTION=prepare` no longer refuses package installation
   because stock Ubuntu activates static D-Bus services such as fwupd and
-  PackageKit, triggered units run, or SSH sessions cycle the root user manager.
-  Plan approval, payload acquisition and installation completion use the same
-  activation comparison. Configuration changes and independent service runtime
-  changes still refuse installation. Session (`user@N`, `user-runtime-dir@N`)
+  PackageKit, timer-triggered services run, or SSH sessions cycle the root user
+  manager. Plan approval, payload acquisition and installation completion use
+  the same activation comparison. Configuration changes and independent service
+  runtime changes still refuse installation. Socket- or path-triggered daemons
+  such as `ssh.service` and `dbus.service` may start from inactive, but stopping,
+  failing or restarting them still refuses installation. Session (`user@N`, `user-runtime-dir@N`)
   and transient units that appear or disappear no longer count as activation
   changes or unowned activation.
 - Fixed: pending v0.38.4 package journals retain their snapshot format and supply

@@ -750,6 +750,34 @@ class ActivationComparisonTests(unittest.TestCase):
                 self.host.activation_classification = {name: kind}
                 packages._finish_activation(self.host, {"activation_before": before, "activation_units": {}})
 
+    def test_socket_triggered_daemons_may_start_but_never_stop_or_restart(self):
+        for name, trigger in (("ssh.service", "ssh.socket"), ("dbus.service", "dbus.socket"), ("watch.service", "watch.path")):
+            kind = {"TriggeredBy": trigger, "Type": "notify", "UnitFileState": "enabled"}
+            for change, refused in (({"MainPID": "8400"}, True),
+                                    ({"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}, True),
+                                    ({"ActiveState": "failed", "SubState": "failed", "MainPID": "0"}, True),
+                                    ({}, False)):
+                with self.subTest(name=name, change=change):
+                    before = {name: self.record(name)}
+                    self.host.activation = {name: {**self.record(name), **change}}
+                    self.host.activation_classification = {name: kind}
+                    journal = {"activation_before": before, "activation_units": {}}
+                    if refused:
+                        with self.assertRaises(DeployError) as error:
+                            packages._finish_activation(self.host, journal)
+                        self.assertEqual(error.exception.code, "package_service_changed")
+                    else:
+                        packages._finish_activation(self.host, journal)
+
+    def test_timer_only_triggered_runs_may_finish_or_restart(self):
+        name, kind = "apt-daily.service", {"TriggeredBy": "apt-daily.timer"}
+        for change in ({"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}, {"MainPID": "8400"}):
+            with self.subTest(change=change):
+                self.host.activation = {name: {**self.record(name, state="static"), **change}}
+                self.host.activation_classification = {name: kind}
+                packages._finish_activation(self.host, {"activation_before": {name: self.record(name, state="static")},
+                                                        "activation_units": {}})
+
     def test_timer_path_target_ignore_only_substate(self):
         for suffix in ("timer", "path", "target"):
             name = "foreign." + suffix

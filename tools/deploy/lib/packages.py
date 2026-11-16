@@ -575,30 +575,45 @@ def _ephemeral_activation(name, record, kind):
                 or str(record.get("FragmentPath", "")).startswith("/run/systemd/transient/"))
 
 
-def _activation_matches(before, current, classification, *, allow_new=False):
-    # Normalize copies only: old journals and reviewed supply digests retain the
-    # original snapshot shape. Both sides use the current host's classification.
-    def normalized(snapshot):
-        records = {}
-        for name, record in snapshot.items():
-            kind = classification.get(name, {})
-            ignored = set()
-            if (_ephemeral_activation(name, record, kind) or kind.get("TriggeredBy")
-                    or (name.endswith(".service") and kind.get("Type") == "dbus"
-                        and kind.get("UnitFileState") == "static")):
-                ignored.update(("ActiveState", "SubState", "MainPID"))
-            elif name.endswith((".timer", ".path", ".target")):
-                ignored.add("SubState")
-            records[name] = {key: value for key, value in record.items() if key not in ignored}
-        return records
+RUNTIME = ("ActiveState", "SubState", "MainPID")
 
+
+def _runtime_policy(name, record, kind):
+    triggers = kind.get("TriggeredBy", "").split()
+    if (_ephemeral_activation(name, record, kind) or (triggers and all(t.endswith(".timer") for t in triggers))
+            or (name.endswith(".service") and kind.get("Type") == "dbus" and kind.get("UnitFileState") == "static")):
+        return "ignore"  # Sessions, scheduled runs and bus-activated helpers start and exit on their own.
+    if triggers:
+        return "start"  # Socket/path activation may start an idle unit; a running one must not stop or restart.
+    return "substate" if name.endswith((".timer", ".path", ".target")) else "exact"
+
+
+def _activation_matches(before, current, classification, *, allow_new=False):
+    # Compare copies only: old journals and reviewed supply digests retain the
+    # original snapshot shape. Both sides use the current host's classification.
     if not isinstance(before, dict):
         return False
     before = {name: record for name, record in before.items()
               if name in current or not _ephemeral_activation(name, record, {})}
     current = {name: record for name, record in current.items()
                if name in before or not (allow_new or _ephemeral_activation(name, record, classification.get(name, {})))}
-    return normalized(before) == normalized(current)
+    if before.keys() != current.keys():
+        return False
+    for name, old in before.items():
+        new = current[name]
+        if {k: v for k, v in old.items() if k not in RUNTIME} != {k: v for k, v in new.items() if k not in RUNTIME}:
+            return False
+        policy = _runtime_policy(name, new, classification.get(name, {}))
+        runtime = [k for k in RUNTIME if k in old or k in new]
+        if policy == "ignore":
+            continue
+        if policy == "start" and old.get("ActiveState") == "inactive" and new.get("ActiveState") in ("activating", "active"):
+            continue
+        if policy == "substate":
+            runtime = [k for k in runtime if k != "SubState"]
+        if any(old.get(k) != new.get(k) for k in runtime):
+            return False
+    return True
 
 
 _DEB_UNITS = r'''

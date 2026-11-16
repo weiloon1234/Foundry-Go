@@ -465,11 +465,13 @@ paths under `deploy/bin/`.
   Package installation refuses configuration changes to any preexisting unit and
   runtime changes to independently managed services, including starts, stops,
   failures and restarts. It ignores runtime changes to numeric `user@` and
-  `user-runtime-dir@` session services, static `Type=dbus` services and units with
-  a nonempty `TriggeredBy`. Timer, path and target units ignore only `SubState`
-  changes and still compare `ActiveState`. New transient and session units are
-  ignored by the unowned-activation check. These rules also apply when resuming
-  an interrupted package installation.
+  `user-runtime-dir@` session services, transient units, static `Type=dbus`
+  services and services triggered only by timers. A service triggered by a socket
+  or path, such as `ssh.service` or `dbus.service`, may start from inactive, but
+  stopping, failing or restarting it still refuses installation. Timer, path and
+  target units ignore only `SubState` changes and still compare `ActiveState`.
+  Session and transient units that appear or disappear are ignored. These rules
+  also apply when resuming an interrupted package installation.
 - **Artifacts:** `version` is a single path component. `platforms` maps
   `linux-amd64` and/or `linux-arm64` to an HTTPS `url` and 64-hex `sha256` of the
   download, or a [release source](#release-carried-artifacts). Declared URLs cannot
