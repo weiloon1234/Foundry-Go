@@ -259,8 +259,9 @@ class Run:
                 # Read-only repository reachability: endpoint lines only, never keys or cipher settings.
                 self.remote("backup-repository", "sudo -n grep -E '^repo1-(s3-endpoint|storage-port|s3-bucket|s3-uri-style)=' "
                             "/etc/foundry/pgbackrest/foundry.conf; "
-                            "sudo -n runuser -u postgres -- pgbackrest --config=/etc/foundry/pgbackrest/foundry.conf "
-                            "--stanza=foundry --log-level-console=info info; "
+                            "sudo -n runuser -u foundry-postgres -- pgbackrest --config=/etc/foundry/pgbackrest/foundry.conf "
+                            "--stanza=foundry --log-level-console=detail info; "
+                            "sudo -n ls -la /etc/foundry/pgbackrest /var/lib/foundry/backup 2>&1 | head -20; "
                             "port=$(sudo -n sed -n 's/^repo1-storage-port=//p' /etc/foundry/pgbackrest/foundry.conf); "
                             "curl -sS -o /dev/null -w 'curl %{http_code} %{ssl_verify_result}\\n' \"https://10.0.2.2:$port/\"",
                             timeout=90, publish=True, check=False)
