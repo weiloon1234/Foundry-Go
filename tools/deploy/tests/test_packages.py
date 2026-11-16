@@ -702,6 +702,29 @@ class ActivationComparisonTests(unittest.TestCase):
             packages.install_missing(self.host, ["new"])
         self.assertEqual(packages._load(self.host)["state"], "complete")
 
+    def test_daemon_started_during_acquisition_is_the_install_baseline(self):
+        name = "ssh.service"
+        self.host.activation[name] = self.record(name, active="inactive", pid="0")
+        self.host.activation_classification[name] = {"TriggeredBy": "ssh.socket", "Type": "notify"}
+        prepare, run = packages._prepare_payloads, self.host.run
+
+        def acquire(*args):
+            result = prepare(*args)
+            self.host.activation[name].update(ActiveState="active", SubState="running", MainPID="900")
+            return result
+
+        def command(args, **kwargs):
+            result = run(args, **kwargs)
+            if args[:2] == ["apt-get", "-y"] and "--download-only" not in args:
+                self.host.activation[name].update(ActiveState="inactive", SubState="dead", MainPID="0")
+            return result
+
+        with patch.object(packages, "_prepare_payloads", side_effect=acquire), \
+                patch.object(self.host, "run", side_effect=command), self.assertRaises(DeployError) as error:
+            packages.install_missing(self.host, ["new"])
+        self.assertEqual(error.exception.code, "package_service_changed")
+        self.assertEqual(packages._load(self.host)["activation_before"][name]["MainPID"], "900")
+
     def test_independent_service_runtime_changes_still_refuse(self):
         cases = [("cron.service", "enabled", "simple", {"MainPID": "8400"}),
                  ("dbus.service", "static", "notify", {"MainPID": "8400"}),

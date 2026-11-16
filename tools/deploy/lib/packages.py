@@ -1169,9 +1169,11 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
         prepared = True
         operation = str(uuid.uuid4())
         retained_activation = journal.get("default_activation", {}) if journal else {}
+        # The accepted post-acquisition state is the baseline: a daemon that started
+        # on demand meanwhile must not be stopped or restarted by the installation.
         journal = {"schema": 1, "operation_id": operation, "state": "installing", "requested": missing,
                    "before": inventory, "defaults": _defaults(host), "transaction": approved,
-                   "evidence": evidence, "activation_before": activation, "activation_units": units,
+                   "evidence": evidence, "activation_before": current, "activation_units": units,
                    "cron_defaults": cron, "default_activation": retained_activation,
                    "transaction_sha256": _digest(approved), "policy_state": "intent",
                    "policy": f"#!/bin/sh\n# Foundry package transaction {operation}\nexit 101\n"}
