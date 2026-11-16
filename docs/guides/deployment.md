@@ -1435,19 +1435,41 @@ requirements of the CI amd64 and lead's arm64 container matrices before producti
 
 ## VM acceptance
 
-The `deploy-vm-amd64 (24.04)` job in `.github/workflows/verify.yml` runs on pushes
-and manual dispatches, with a 60-minute job deadline. It boots the official Ubuntu
+The `deploy-vm-amd64` jobs in `.github/workflows/verify.yml` run on pushes
+and manual dispatches. One `operator` job covers both topologies, and one `recovery`
+job runs per topology. Each has a 60-minute job deadline and a 50-minute acceptance step. They boot the official Ubuntu
 server cloud image with QEMU/KVM. [VM image inputs](../../tools/deploy/docker/vm-inputs.json)
 pin its release serial, immutable URL and SHA-256; the runner checks the digest
 before boot. Ubuntu 26.04 remains a follow-up after 24.04 is stable.
 
-Each run uses fresh overlays for the deploy-acceptance fixture's schema-2 topology
+Both scenarios use fresh overlays for the deploy-acceptance fixture's schema-2 topology
 (HTTP and two relay copies) and standard topology (HTTP, scheduler and worker).
-The normal `cli.py` entry point uses real SSH and a passwordless sudo administrator:
-bootstrap inspect/prepare, release build, deploy, status/logs/report, a second
-release build and deploy, then tools-plan and tools-apply when needed. Both
-releases must be healthy with every placed unit running. The existing candidate
-fixture builder supplies the checkout's module proxy; the transport is not mocked.
+The normal `cli.py` entry point uses real SSH and a passwordless sudo administrator.
+The operator scenario bootstraps A and builds three releases. The first two must
+be healthy with every placed unit running. The third fails readiness, followed
+by reconciliation and rollback to a healthy release. The second deploy and feature
+rollback are confirmed after all CLI SSH sessions expire. The sequence checks
+status, logs and report, then tools-plan and tools-apply when needed. The existing
+candidate fixture builder supplies the checkout's module proxy; the transport is not mocked.
+
+Each recovery job runs its topology through three fresh guests. On A, it
+checks the first deploy's initial full backup, writes a unique database marker
+through HTTP, and requests another full backup through the CLI. The runner uses
+`rclone` and `age` to download and decrypt the recovery archive into a private
+`FOUNDRY_RECOVERY_DIR`. B rehearses recovery while A stays alive, reads the marker
+on localhost, and refuses deployment in the `rehearsal` registry state. The runner
+destroys B and stops A before C takes over. C must preserve the marker, record
+`recovered_from`, pass status and report checks, complete a new full backup and key
+archive, enable backup timers, and update the local profile to C.
+
+Every guest uses the same pinned image, cloud-init, package upgrade and required
+reboot, and CA trust. At most two 4 GiB guests run together. Each has its own SSH
+port, known-hosts file, overlay and serial log. The private fixture copy adds the
+marker endpoint and declares its loopback relay prerequisites safe for rehearsal.
+The tracked fixture is unchanged. Disposable recovery targets may retain only the
+acceptance CA directory and its regular certificate and key files under `/etc/foundry`.
+Production preflight retains its empty-host requirement. Recovery reuses one retained
+release per topology; it does not repeat the operator scenario's delayed confirmations.
 
 Stock logind sessions, apt hooks/timers and D-Bus activation remain enabled.
 Cloud-init reports whether fwupd and PackageKit are present and installs missing
@@ -1474,6 +1496,8 @@ tools/deploy/tests/run_vm_acceptance.sh --ubuntu 24.04
 ```
 
 Use `--topology feature` or `--topology standard` for a focused CI follow-up.
+Use `--scenario recovery` for backup and replacement-server acceptance. The default
+`--scenario operator` retains the operator lifecycle sequence.
 The [documented KVM udev rule](https://github.com/ReactiveCircus/android-emulator-runner#running-hardware-accelerated-emulators-on-linux-runners)
 is installed by the workflow. There is no software-emulation fallback on macOS.
 Set `ACCEPTANCE_LOG_DIR` to a new directory to select the evidence destination.

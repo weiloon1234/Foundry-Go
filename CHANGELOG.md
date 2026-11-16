@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add a separate real-VM recovery acceptance job for both topology modes, covering
+  initial and explicit full backups, local age decryption, rehearsal while the source
+  stays alive, and takeover with restored application data, backup timers and profile updates.
+- Allow only the acceptance CA directory and its regular certificate/key files on
+  explicitly disposable recovery targets. Production recovery preflight remains unchanged.
+
 ## v0.41.0 — 2026-11-17
 
 - Reviewed plans survive operator delay on stock Ubuntu cloud servers. Every host

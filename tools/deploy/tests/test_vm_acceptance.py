@@ -6,8 +6,9 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import tarfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import vm_acceptance as vm
 from contracts import validate_profile
@@ -158,7 +159,11 @@ class VMAcceptanceTests(unittest.TestCase):
         self.assertFalse(seed["ssh_pwauth"])
         self.assertTrue(seed["disable_root"])
         self.assertEqual(seed["users"][0]["sudo"], "ALL=(ALL) NOPASSWD:ALL")
+        self.assertEqual(seed["users"][0]["name"], "acceptance-operator")
         files = {row["path"]: row for row in seed["write_files"]}
+        sudoers = files["/etc/sudoers.d/acceptance-operator-env"]
+        self.assertIn("Defaults:acceptance-operator env_keep", sudoers["content"])
+        self.assertFalse(any(path.startswith("/etc/sudoers.d/foundry") for path in files))
         marker = files[vm.VM_MARKER]
         self.assertEqual((marker["owner"], marker["permissions"]), ("root:root", "0600"))
         self.assertNotIn("packages", seed)
@@ -188,6 +193,20 @@ class VMAcceptanceTests(unittest.TestCase):
                 else:
                     self.assertEqual(topology["schema"], 1)
                     self.assertTrue(any("worker" in unit for unit in units.values()))
+
+    def test_trust_uses_shared_ca_path_and_non_foundry_trust_filename(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("ca.crt", "ca.key"):
+                (root / name).write_text("private-fixture")
+            run = vm.Run(root, root)
+            with patch.object(run, "remote") as remote:
+                run.trust(root)
+            commands = {call.args[0]: call.args[1] for call in remote.call_args_list}
+            self.assertEqual(commands["ca-directory"], "sudo -n install -d -m 0700 " + vm.ACCEPTANCE_CA)
+            self.assertIn(vm.ACCEPTANCE_CA + "/ca.crt", commands["trust-ca"])
+            self.assertIn("/usr/local/share/ca-certificates/acceptance-ca.crt", commands["trust-ca"])
+            self.assertNotIn("/usr/local/share/ca-certificates/foundry", commands["trust-ca"])
 
     def test_private_material_is_removed_from_public_diagnostics(self):
         original = ("boot ready\nssh-ed25519 public-key\n"
@@ -221,7 +240,7 @@ class VMAcceptanceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             run = vm.Run(Path(directory), Path(directory))
             with patch.object(run, "diagnostics"), \
-                    patch.object(run, "stop_vm", side_effect=OSError("log disk full")), \
+                    patch.object(run, "stop_vms", side_effect=OSError("log disk full")), \
                     patch.object(run, "cleanup_builders", return_value=[]) as builders, \
                     patch.object(run.resources, "cleanup", return_value=[]) as storage:
                 self.assertEqual(run.cleanup(), ["QEMU/serial"])
@@ -248,3 +267,172 @@ class VMAcceptanceTests(unittest.TestCase):
                 with patch.object(vm.containers, "run", side_effect=openssl):
                     vm.containers.create_ca(root, addresses=addresses)
                 self.assertIn(expected, (root / "s3.ext").read_text())
+
+
+class RecoveryTests(unittest.TestCase):
+    def receipt(self):
+        return {"backup_id": "backup-id", "status": "complete", "completed_at": "now",
+                "kind": "full", "pgbackrest_label": "20261117-010203F", "database_point": {
+                    "status": "complete", "pgbackrest_label": "20261117-010203F"},
+                "key_archive": {"status": "complete", "object_key": "keys/fixture.age"}}
+
+    def test_full_backup_requires_both_components_and_matching_label(self):
+        receipt = self.receipt()
+        self.assertIs(vm.completed_full_backup(receipt), receipt)
+        for owner, key, value in ((None, "backup_id", ""), (None, "status", "running"),
+                (None, "kind", "diff"), ("database_point", "status", "unknown"),
+                ("database_point", "pgbackrest_label", "other"),
+                ("key_archive", "status", "running"), ("key_archive", "object_key", "")):
+            receipt = self.receipt()
+            (receipt[owner] if owner else receipt)[key] = value
+            with self.subTest(owner=owner, key=key), self.assertRaises(vm.Failure):
+                vm.completed_full_backup(receipt)
+        for receipt in (None, {}, {"database_point": None, "key_archive": None}):
+            with self.assertRaises(vm.Failure):
+                vm.completed_full_backup(receipt)
+        for label in ("invalidF", "20261117-010203F_20261117-020304D"):
+            receipt = self.receipt()
+            receipt["pgbackrest_label"] = receipt["database_point"]["pgbackrest_label"] = label
+            with self.assertRaises(vm.Failure):
+                vm.completed_full_backup(receipt)
+
+    def output(self, mode):
+        return [{"ok": True, "plan_token": "reviewed", "host_id": "replacement", "mode": mode},
+                {"ok": True, "mode": mode, "host_id": "replacement", "operation_id": "operation",
+                 "backup": self.receipt() if mode == "takeover" else None}]
+
+    def render(self, documents):
+        return "Recovery operation: operation\n" + "\nprogress\n".join(json.dumps(d, indent=2) for d in documents)
+
+    def test_recovery_requires_review_and_complete_result(self):
+        for mode in ("rehearsal", "takeover"):
+            documents = self.output(mode)
+            self.assertEqual(vm.json_documents(self.render(documents)), documents)
+            self.assertEqual(vm.recovery_result(self.render(documents), mode), documents[-1])
+            for index, key, value in ((0, "plan_token", ""), (0, "ok", False), (0, "host_id", "other"),
+                    (0, "mode", "wrong"), (1, "mode", "wrong"), (1, "operation_id", ""), (1, "ok", False)):
+                documents = self.output(mode)
+                documents[index][key] = value
+                with self.subTest(mode=mode, index=index, key=key), self.assertRaises(vm.Failure):
+                    vm.recovery_result(self.render(documents), mode)
+        for documents in ([], self.output("takeover")[:1], self.output("takeover") * 2):
+            with self.assertRaises(vm.Failure):
+                vm.recovery_result(self.render(documents), "takeover")
+        with self.assertRaises(vm.Failure):
+            vm.json_documents('progress\n{"ok":')
+        documents = self.output("rehearsal")
+        documents[1]["backup"] = self.receipt()
+        with self.assertRaises(vm.Failure):
+            vm.recovery_result(self.render(documents), "rehearsal")
+
+    def test_recovered_registry_binds_source_and_new_host(self):
+        profile = {"host": {"host_id": "source"}, "instance_id": "instance"}
+        result = {"host_id": "replacement", "operation_id": "operation"}
+        for mode in ("rehearsal", "takeover"):
+            observed = {"state": "rehearsal" if mode == "rehearsal" else "ready", "host_id": "replacement",
+                        "recovered_from": {"host_id": "source", "instance_id": "instance",
+                                           "operation_id": "operation", "mode": mode}}
+            vm.Run.check_recovered(observed, result, profile, mode)
+            for owner, key in ((None, "state"), (None, "host_id"), ("recovered_from", "host_id"),
+                               ("recovered_from", "instance_id"), ("recovered_from", "operation_id"),
+                               ("recovered_from", "mode")):
+                broken = json.loads(json.dumps(observed))
+                (broken[owner] if owner else broken)[key] = "wrong"
+                with self.subTest(mode=mode, owner=owner, key=key), self.assertRaises(vm.Failure):
+                    vm.Run.check_recovered(broken, result, profile, mode)
+
+    def test_extract_is_private_and_redacts_individual_secret_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            archive = root / "recovery.tar"
+            contents = {"instances/example/secrets.json": b'{"nested": {"password": "json-secret-canary"}}',
+                        "instances/example/app.env": b'TOKEN="env-secret-canary"\n',
+                        "files/etc/key.pem": b"-----BEGIN PRIVATE KEY-----\nprivate-canary\n-----END PRIVATE KEY-----"}
+            with tarfile.open(archive, "w") as output:
+                for name, data in contents.items():
+                    item = tarfile.TarInfo(name)
+                    item.size, item.mode = len(data), 0o777
+                    output.addfile(item, io.BytesIO(data))
+            values = []
+            destination = root / "decrypted"
+            self.assertEqual(vm.unpack_recovery(archive, destination, values), contents)
+            for path in [destination, *destination.rglob("*")]:
+                self.assertEqual(path.stat().st_mode & 0o777, 0o700 if path.is_dir() else 0o600)
+            for name, data in contents.items():
+                self.assertEqual((destination / name).read_bytes(), data)
+            self.assertEqual(vm.redact("json-secret-canary env-secret-canary", values),
+                             "[private value withheld] [private value withheld]")
+
+    def test_extract_refuses_traversal_and_links_before_writing(self):
+        from contracts import DeployError
+        for name, link in (("../outside", False), ("safe", True)):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                archive = root / "recovery.tar"
+                with tarfile.open(archive, "w") as output:
+                    item = tarfile.TarInfo(name)
+                    if link:
+                        item.type, item.linkname = tarfile.SYMTYPE, "../outside"
+                    output.addfile(item)
+                with self.assertRaises(DeployError):
+                    vm.unpack_recovery(archive, root / "decrypted", [])
+                self.assertFalse((root / "decrypted").exists())
+                self.assertFalse((root / "outside").exists())
+
+    def test_fixture_changes_only_private_copy_and_recovery_topology(self):
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = Path(directory).resolve()
+            shutil.copytree(vm.FIXTURE / "internal/app", snapshot / "internal/app")
+            shutil.copytree(vm.FIXTURE / "deploy", snapshot / "deploy")
+            original = (vm.FIXTURE / "internal/app/builder.go").read_bytes()
+            builder, marker = vm.recovery_fixture(snapshot)
+            self.assertIn("HTTP(healthRoutes, recoveryMarkerRoutes)", builder.read_text())
+            self.assertIn("database.ScanOne", marker.read_text())
+            self.assertIn("http.BodyLimit(256)", marker.read_text())
+            self.assertEqual((vm.FIXTURE / "internal/app/builder.go").read_bytes(), original)
+            for enabled in (False, True):
+                _, _, topology = vm.fixture_declarations(snapshot, "feature", 23456, recovery=enabled)
+                relay = next(role for role in topology["roles"] if role["name"] == "relay")
+                self.assertEqual(relay.get("recovery_rehearsal_safe", False), enabled)
+
+    def test_guest_limit_and_cleanup_keep_both_processes_owned(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = vm.Run(root, root, "recovery")
+            processes = []
+            for name in ("feature-a", "feature-b"):
+                guest_dir = root / name
+                guest_dir.mkdir()
+                process = Mock()
+                processes.append(process)
+                run.guests.append(vm.Guest(guest_dir, 22, guest_dir / "ssh_config", "127.0.0.1", [], process))
+            run.active = run.guests[-1]
+            with self.assertRaisesRegex(vm.Failure, "more than two"), patch.object(vm.subprocess, "Popen") as start:
+                run.boot(root / "base.img", root / "key", "feature", name="c")
+            start.assert_not_called()
+            with patch.object(run, "diagnostics"), patch.object(run, "cleanup_builders", return_value=[]), \
+                    patch.object(run.resources, "cleanup", return_value=[]):
+                self.assertEqual(run.cleanup(), [])
+            for process in processes:
+                process.terminate.assert_called_once()
+                process.wait.assert_called_once()
+            self.assertEqual(run.guests, [])
+            self.assertIsNone(run.active)
+
+    def test_serial_failure_still_stops_other_guest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = vm.Run(root, root / "missing-logs", "recovery")
+            processes = []
+            for name in ("feature-a", "feature-b"):
+                guest_dir = root / name
+                guest_dir.mkdir()
+                (guest_dir / "serial.log").write_text("boot")
+                process = Mock()
+                processes.append(process)
+                run.guests.append(vm.Guest(guest_dir, 22, guest_dir / "ssh_config", "127.0.0.1", [], process))
+            with patch.object(run, "diagnostics"):
+                self.assertEqual(run.stop_vms(), ["QEMU/serial", "QEMU/serial"])
+            for process in processes:
+                process.wait.assert_called_once()
+            self.assertEqual(run.guests, [])

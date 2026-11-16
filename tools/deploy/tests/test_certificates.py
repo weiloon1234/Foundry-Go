@@ -225,7 +225,7 @@ class CertificateTests(unittest.TestCase):
                                      domain="app.acceptance.invalid")
         self.entry["certificate"].update(zone_ref=None, lineage="app.acceptance.invalid")
         self.host.paths.p("/.dockerenv").touch()
-        directory = self.host.paths.p("/etc/foundry/acceptance-ca")
+        directory = self.host.paths.p(certificates.ACCEPTANCE_CA)
         directory.mkdir(mode=0o700, parents=True)
         self.host.owned_write(directory / "ca.key", "fixture-private-ca", mode=0o600)
         self.host.owned_write(directory / "ca.crt", "fixture-ca", mode=0o600)

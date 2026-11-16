@@ -15,6 +15,7 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import backup
 import certificates
+import disposable
 import postgres
 import capacity
 import recover
@@ -456,6 +457,110 @@ class RecoveryTests(unittest.TestCase):
                 self.host.run = self.command
                 self.host.owned_write(self.host.paths.p("/etc/os-release"), 'ID=ubuntu\nVERSION_ID="24.04"\n')
                 self.host.owned_write(self.host.paths.p(path), "owned elsewhere")
+                with self.assertRaises(DeployError) as error:
+                    self.plan()
+                self.assertEqual(error.exception.code, "recovery_not_empty")
+
+    def stage_acceptance_ca(self, host=None, *, disposable_host=True):
+        host = host or self.host
+        ca = host.paths.p(disposable.ACCEPTANCE_CA)
+        ca.mkdir(parents=True, mode=0o700)
+        for name in ("ca.crt", "ca.key"):
+            host.owned_write(ca / name, "acceptance-ca-fixture", mode=0o600)
+        if disposable_host:
+            host.paths.p("/.dockerenv").touch()
+        return ca
+
+    def test_disposable_ca_only_target_passes_read_only_preflight(self):
+        self.stage_acceptance_ca()
+        before = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        approved = self.plan()
+        self.assertTrue(approved["ok"])
+        self.assertTrue(approved["plan_token"])
+        self.assertEqual(before, {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()})
+        self.assertIsNone(self.host.read_registry(missing=True))
+
+    def test_ca_only_target_without_disposable_identity_refuses(self):
+        self.stage_acceptance_ca(disposable_host=False)
+        with self.assertRaises(DeployError) as error:
+            self.plan()
+        self.assertEqual(error.exception.code, "recovery_not_empty")
+
+    def test_vm_seed_and_ca_pass_preflight_with_existing_disposable_gate(self):
+        from test_disposable import marker_owner
+        from vm_acceptance import cloud_config
+        seed = cloud_config("ssh-ed25519 public-fixture")
+        self.stage_acceptance_ca(disposable_host=False)
+        for file in seed["write_files"]:
+            self.host.owned_write(self.host.paths.p(file["path"]), file["content"],
+                                  mode=int(file.get("permissions", "0644"), 8))
+        self.host.owned_write(self.host.paths.p("/usr/local/share/ca-certificates/acceptance-ca.crt"), "fixture-ca")
+        def command(args, **kwargs):
+            if args[0] == "getent":
+                return subprocess.CompletedProcess(args, 0, seed["users"][0]["name"] + ":x:1000:1000::/home/acceptance-operator:/bin/bash\n", "")
+            return self.command(args, **kwargs)
+        marker = self.host.paths.p(disposable.VM_MARKER)
+        with patch.dict(disposable.os.environ, {"FOUNDRY_DISPOSABLE_HOST": "1"}), \
+                marker_owner(marker, 0), patch.object(self.host, "run", side_effect=command):
+            self.assertTrue(self.plan()["ok"])
+
+    def test_disposable_ca_does_not_allow_other_foundry_resources(self):
+        paths = ("/etc/foundry/orphan", disposable.ACCEPTANCE_CA + "/extra.crt",
+                 "/var/lib/foundry/orphan", "/var/log/foundry/orphan", "/opt/foundry/orphan",
+                 "/run/foundry/orphan", "/run/lock/foundry/host.lock", "/usr/local/lib/foundry/orphan",
+                 "/usr/local/sbin/foundry-host", "/usr/local/bin/foundry-host-report",
+                 "/etc/postgresql/16/foundry", "/var/log/postgresql/foundry.log",
+                 "/usr/local/share/ca-certificates/foundry-old.crt", "/etc/nginx/foundry.conf",
+                 "/etc/sudoers.d/foundry-operator", "/etc/systemd/system/foundry-extra.service")
+        for index, path in enumerate(paths):
+            with self.subTest(path=path):
+                host = Host(Paths(self.root / ("disposable-extra-" + str(index))))
+                host.run = self.command
+                self.stage_acceptance_ca(host)
+                host.owned_write(host.paths.p(path), "foreign-resource")
+                with self.assertRaises(DeployError) as error:
+                    recover._empty(host, self.entry["name"])
+                self.assertEqual(error.exception.code, "recovery_not_empty")
+
+    def test_disposable_ca_symlinked_key_refuses(self):
+        ca = self.stage_acceptance_ca()
+        (ca / "ca.key").unlink()
+        (ca / "ca.key").symlink_to(ca / "ca.crt")
+        with self.assertRaises(DeployError) as error:
+            self.plan()
+        self.assertEqual(error.exception.code, "recovery_not_empty")
+
+    def test_disposable_ca_paths_require_exact_file_types(self):
+        for index, (relative, directory) in enumerate((("/etc/foundry", True),
+                (disposable.ACCEPTANCE_CA, True), (disposable.ACCEPTANCE_CA + "/ca.crt", False),
+                (disposable.ACCEPTANCE_CA + "/ca.key", False))):
+            for symlink in (False, True):
+                with self.subTest(path=relative, symlink=symlink):
+                    host = Host(Paths(self.root / f"ca-type-{index}-{symlink}"))
+                    host.run = self.command
+                    path = host.paths.p(relative)
+                    path.parent.mkdir(parents=True)
+                    host.paths.p("/.dockerenv").touch()
+                    if symlink:
+                        target = host.paths.p("/target")
+                        target.mkdir() if directory else target.touch()
+                        path.symlink_to(target)
+                    elif directory:
+                        path.touch()
+                    else:
+                        path.mkdir()
+                    with self.assertRaises(DeployError) as error:
+                        recover._empty(host, self.entry["name"])
+                    self.assertEqual(error.exception.code, "unsafe_path" if relative == "/etc/foundry" else "recovery_not_empty")
+
+    def test_disposable_ca_does_not_allow_foundry_accounts(self):
+        self.stage_acceptance_ca()
+        for database in ("passwd", "group"):
+            def command(args, **kwargs):
+                if args == ["getent", database]:
+                    return subprocess.CompletedProcess(args, 0, "foundry-orphan:x:1000:1000::/home/foundry-orphan:/bin/sh\n", "")
+                return self.command(args, **kwargs)
+            with self.subTest(database=database), patch.object(self.host, "run", side_effect=command):
                 with self.assertRaises(DeployError) as error:
                     self.plan()
                 self.assertEqual(error.exception.code, "recovery_not_empty")

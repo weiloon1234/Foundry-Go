@@ -30,7 +30,7 @@ from contracts import (DeployError, HOST_PATHS, RENEWAL_WARNING, check_path, con
                        contract_name, dns_hostname, instance_paths, now, read_json, require, valid_uuid)
 from host import Host, wall_clock_budget
 import packages
-from disposable import disposable_host
+from disposable import ACCEPTANCE_CA, disposable_host
 
 STAGING_DIRECTORY = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
@@ -56,7 +56,7 @@ def _synthetic(host, entry):
             and profile["domain"].endswith(".acceptance.invalid")
             and disposable_host(host.paths.root),
             "certificate_fixture_forbidden", "Synthetic certificates require the explicit disposable acceptance host and testing profile.")
-    directory = _private(host, host.paths.p("/etc/foundry/acceptance-ca"), directory=True)
+    directory = _private(host, host.paths.p(ACCEPTANCE_CA), directory=True)
     _private(host, directory / "ca.key")
     _private(host, directory / "ca.crt")
     return True
@@ -65,7 +65,7 @@ def _synthetic(host, entry):
 def _synthetic_issue(host, entry):
     require(_synthetic(host, entry), "certificate_fixture_forbidden", "Synthetic issuance is acceptance-only.")
     lineage = _lineage(entry)
-    ca = host.paths.p("/etc/foundry/acceptance-ca")
+    ca = host.paths.p(ACCEPTANCE_CA)
     archive = check_path(host.paths.p(CONFIG_DIR + "/archive/" + lineage), "directory")
     live = check_path(host.paths.p(CONFIG_DIR + "/live/" + lineage), "directory")
     archive.mkdir(parents=True, mode=0o700, exist_ok=True)

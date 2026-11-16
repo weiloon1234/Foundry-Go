@@ -4,6 +4,7 @@ from pathlib import Path
 import stat
 
 VM_MARKER = "/etc/foundry-disposable-acceptance-vm"
+ACCEPTANCE_CA = "/etc/foundry/acceptance-ca"
 
 
 def disposable_host(root=Path("/")):

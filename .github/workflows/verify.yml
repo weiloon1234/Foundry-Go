@@ -79,14 +79,19 @@ jobs:
           retention-days: 14
 
   deploy-vm-amd64:
-    name: deploy-vm-amd64 (${{ matrix.ubuntu }})
+    name: deploy-vm-amd64 (${{ matrix.ubuntu }}, ${{ matrix.scenario }}, ${{ matrix.topology }})
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        ubuntu: ['24.04']
+        # Recovery boots two or three VMs per topology; one job per topology keeps
+        # each inside the step budget.
+        include:
+          - {ubuntu: '24.04', scenario: operator, topology: both}
+          - {ubuntu: '24.04', scenario: recovery, topology: feature}
+          - {ubuntu: '24.04', scenario: recovery, topology: standard}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -108,20 +113,20 @@ jobs:
           test -r /dev/kvm && test -w /dev/kvm
           sudo apt-get update -qq
           sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils age rclone
-      - name: Real SSH operator acceptance on Ubuntu VM
+      - name: Real SSH ${{ matrix.scenario }} acceptance on Ubuntu VMs
         id: acceptance
         # Leave time for cleanup/artifact upload before the job deadline.
         timeout-minutes: 50
         env:
-          ACCEPTANCE_LOG_DIR: ${{ runner.temp }}/deploy-vm-logs
+          ACCEPTANCE_LOG_DIR: ${{ runner.temp }}/deploy-vm-${{ matrix.scenario }}-${{ matrix.topology }}-logs
         run: |
           echo "logs=$ACCEPTANCE_LOG_DIR" >> "$GITHUB_OUTPUT"
-          tools/deploy/tests/run_vm_acceptance.sh --ubuntu '${{ matrix.ubuntu }}'
+          tools/deploy/tests/run_vm_acceptance.sh --ubuntu '${{ matrix.ubuntu }}' --scenario '${{ matrix.scenario }}' --topology '${{ matrix.topology }}'
       - name: Retain non-private VM failure logs
         if: ${{ failure() && steps.acceptance.outputs.logs != '' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: deploy-vm-amd64-${{ matrix.ubuntu }}
+          name: deploy-vm-amd64-${{ matrix.ubuntu }}-${{ matrix.scenario }}-${{ matrix.topology }}
           # Only explicitly public diagnostics; no guest disks, seed, keys,
           # private CLI/build output, environment or recovery material.
           path: |
@@ -145,6 +150,10 @@ jobs:
             ${{ steps.acceptance.outputs.logs }}/*-host-upgrade.log
             ${{ steps.acceptance.outputs.logs }}/*-reboot-required.log
             ${{ steps.acceptance.outputs.logs }}/*-settle.log
+            ${{ steps.acceptance.outputs.logs }}/*-recover-rehearsal.log
+            ${{ steps.acceptance.outputs.logs }}/*-recover-takeover.log
+            ${{ steps.acceptance.outputs.logs }}/*-backup-run.log
+            ${{ steps.acceptance.outputs.logs }}/*-timer-*.log
           include-hidden-files: false
           if-no-files-found: warn
           retention-days: 14

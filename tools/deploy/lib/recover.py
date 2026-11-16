@@ -15,6 +15,7 @@ import tarfile
 import uuid
 
 import backup
+import disposable
 import packages
 import postgres
 import provision
@@ -330,6 +331,11 @@ def _save(host, journal):
 def _empty(host, name, *, resume_preflight=False, applying=False):
     require(host.read_registry(missing=True) is None, "recovery_not_empty", "Recovery requires an empty target without a Foundry registry.")
     allowed = set()
+    acceptance_directories, acceptance_files = set(), set()
+    if disposable.disposable_host(host.paths.root):
+        ca = host.paths.p(disposable.ACCEPTANCE_CA)
+        acceptance_directories = {ca.parent, ca}
+        acceptance_files = {ca / "ca.crt", ca / "ca.key"}
     if applying or resume_preflight:
         allowed.add(host.paths.p("/run/lock/foundry/host.lock"))
     if resume_preflight:
@@ -340,7 +346,9 @@ def _empty(host, name, *, resume_preflight=False, applying=False):
         path = host.paths.p(root)
         if path.exists() or path.is_symlink():
             for item in [path, *path.rglob("*")] if path.is_dir() and not path.is_symlink() else [path]:
-                require(not item.is_symlink() and (item in allowed or any(item in value.parents for value in allowed)),
+                acceptance = (item in acceptance_directories and item.is_dir()
+                              or item in acceptance_files and item.is_file())
+                require(not item.is_symlink() and (acceptance or item in allowed or any(item in value.parents for value in allowed)),
                         "recovery_not_empty", "Target has Foundry resources; recreate an empty server.")
     for root, pattern in (("/etc/postgresql", "*/foundry"), ("/var/log/postgresql", "*foundry*"),
                           ("/usr/local/share/ca-certificates", "foundry*"),
