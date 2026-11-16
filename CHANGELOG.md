@@ -1,33 +1,27 @@
 # Changelog
 
-## Unreleased
+## v0.42.0 — 2026-11-17
 
-- Keep network reports available for interface-scoped IPv6 listeners in `ss` output.
-- Fix host reports falsely marking numbered service copies unready when their
-  admission receipts are present under the copy's identity.
-- Recognize verified OS DHCP clients in host reports while continuing to flag
-  unknown listeners on DHCP ports. Unexpected-listener findings now identify the
-  protocol, address, port and owning process names.
-  Verify socket-inode ownership across process inspection to reject reused PIDs,
-  and report each canonical socket once across host and feature scans.
-- Add a separate real-VM recovery acceptance job per topology, covering
-  initial and explicit full backups, local age decryption, rehearsal while the source
-  stays alive with verified repository isolation, and takeover with restored application
-  data, privileged reports, backup timers and profile updates. Record phase timings;
-  recovery uses 75-minute step and 90-minute job budgets, while operator keeps 50/60 minutes.
-  Keep the recovery marker endpoint in the CLI's build snapshot and publish only
-  redacted CLI refusal lines when builds fail.
-  Validate standard's initial pre-migration `recovery` receipt and feature's initial
-  `full` receipt using their recorded operation identities. Check complete feature
-  bundle coverage separately from key-archive coverage, including explicit and
-  post-takeover backups; replay recorded VM-A receipts in harness tests.
-  Preserve A's release declarations for replacement guests by using distinct
-  loopback addresses with the source profile's SSH port.
-  Check feature's local deployment refusal separately from both topologies'
-  server-side rehearsal backup refusal, then restore A's profile for takeover.
-- Allow only the acceptance CA directory and its regular certificate/key files on
-  explicitly disposable recovery targets. Reject symlinked container markers and
-  hard-linked CA files. Production recovery preflight remains unchanged.
+- Backup and replacement-server recovery are now proven on real Ubuntu VMs on every
+  push, one CI job per topology: the first deploy's initial full backup, an explicit
+  `ACTION=backup-run`, local decryption of the recovery archive, a rehearsal on a
+  fresh server while the source stays alive (archiving off, backup repository
+  unchanged, deploys and backups refused), and takeover on another fresh server with
+  the application data intact, a clean privileged report, a new full backup, backup
+  timers enabled and the local profile updated.
+- Fix `ACTION=report` marking numbered service copies after the first as
+  `copy_readiness_unverified` (and the instance `degraded`) while they were running:
+  copy admission receipts are now read under the copy's own identity.
+- `ACTION=report` no longer flags the server's own verified DHCP client (UDP 68/546,
+  owned by systemd-networkd, NetworkManager or dhclient and holding that exact socket)
+  as an unexpected public listener. Unknown owners are still flagged.
+  `unexpected_public_listener` now names the protocol, address, port and owning
+  process, reports each socket once, and parses interface-scoped IPv6 addresses.
+- The real-VM operator acceptance now also requires a clean privileged report after
+  every healthy deploy, rollback and recovery.
+- Recovery preflight on explicitly disposable acceptance hosts tolerates only the
+  acceptance CA directory and its regular, singly linked certificate and key; container
+  markers must be regular files. Production recovery preflight is unchanged.
 
 ## v0.41.0 — 2026-11-17
 
