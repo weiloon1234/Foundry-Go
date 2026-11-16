@@ -159,18 +159,24 @@ class AdmissionStore:
                         "operation_cleanup", "Cleanup invocation cannot change.")
             atomic_json(path, {"schema": 1, "operation_id": operation, "invocation_id": invocation, "status": status}, mode=0o600)
 
-    def require_cleanup_clear(self, validation_operation=None):
+    def cleanup_records(self):
         directory = protected_path(self.host, self.durable / "cleanup", "directory")
         if not directory.exists():
-            return
+            return {}
         paths = list(directory.iterdir())
         require(len(paths) <= 1024, "operation_cleanup", "Reconcile retained cleanup owners before starting.")
+        records = {}
         for path in paths:
             value = read_owned(self.host, path, lambda v: v)
             require(path.name == contract_uuid(value["operation_id"]) + ".json" and value.get("schema") == 1 and
                     value.get("status") in ("reserved", "armed", "pending", "closed", "complete") and
                     isinstance(value.get("invocation_id"), str) and re.fullmatch(r"[a-f0-9]{32}", value["invocation_id"]),
                     "operation_cleanup", "Invalid cleanup evidence.")
+            records[value["operation_id"]] = value
+        return records
+
+    def require_cleanup_clear(self, validation_operation=None):
+        for value in self.cleanup_records().values():
             require(value["status"] == "complete" or
                     value["status"] in ("reserved", "armed") and value["operation_id"] == validation_operation,
                     "operation_cleanup_pending", "An independent cleanup owner remains unresolved; starts are blocked.")

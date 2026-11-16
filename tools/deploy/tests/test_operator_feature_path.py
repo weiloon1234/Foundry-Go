@@ -98,11 +98,11 @@ class OperatorFeaturePathTests(FeatureWiringFixture):
 
     def test_every_server_action_has_an_explicit_feature_gate_disposition(self):
         supported = {"hello", "inspect", "bootstrap-plan", "bootstrap-apply", "release-plan", "activate",
-                     "rollback", "restart", "stop", "down", "up", "status", "logs", "report", "sync",
+                     "reconcile", "rollback", "restart", "stop", "down", "up", "status", "logs", "report", "sync",
                      "config-keys", "config-set", "backup-configure", "backup-run", "restore-drill",
                      "recover-plan", "recover-apply", "tools-plan", "tools-apply", "upgrade-resume"}
         refused = {"capacity-plan", "capacity-apply", "keys-rotate", "backup-keys-rotate",
-                   "backup-recipients-rotate", "dns-token-rotate", "reconcile"}
+                   "backup-recipients-rotate", "dns-token-rotate"}
         self.assertEqual(set(manager.ACTIONS), supported | refused)
         for prepared in (False, True):
             if prepared:
@@ -114,7 +114,7 @@ class OperatorFeaturePathTests(FeatureWiringFixture):
 
     def test_unsupported_actions_refuse_before_mutation_fresh_and_existing(self):
         actions = ("capacity-plan", "capacity-apply", "keys-rotate", "backup-keys-rotate",
-                   "backup-recipients-rotate", "dns-token-rotate", "reconcile")
+                   "backup-recipients-rotate", "dns-token-rotate")
         for prepared in (False, True):
             if prepared:
                 self.bootstrap("prepare")

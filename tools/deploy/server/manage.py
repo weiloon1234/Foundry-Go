@@ -111,7 +111,7 @@ def execute(host, action, request):
         with host.lock("host"), host.lock(profile["instance_id"]):
             registry, entry = host.require_identity(project, profile)
             enablement_migration = feature_lifecycle.migrate_enablement(host, registry, entry)
-        if action not in ("down", "up", "activate", "rollback"):
+        if action not in ("down", "up", "activate", "rollback", "reconcile"):
             import feature_maintenance
             feature_maintenance.reconcile(host, project, profile,
                 allow_start=action in ("status", "restart", "config-set", "keys-rotate"))

@@ -1,5 +1,7 @@
 """Reviewed numbered-copy transitions through the real lifecycle without systemd."""
 from pathlib import Path
+from contextlib import redirect_stderr
+import io
 import sys
 import unittest
 from unittest.mock import patch
@@ -62,18 +64,19 @@ class FeatureCopiesTests(FeatureWiringFixture):
 
     def test_deselected_start_hooks_and_invalid_cleanup_still_refuse(self):
         pin, launch = self.removed_invocation()
+        def refused(action, value, code):
+            output = io.StringIO()
+            with redirect_stderr(output):
+                self.assertEqual(feature_runtime.run(action, value, launch), 1)
+            self.assertEqual(output.getvalue(), f"feature_runtime_refused: {action}: {code}\n")
         for action in ("admit", "prepare", "running"):
-            with self.subTest(action=action), self.assertRaises(c.DeployError) as raised:
-                feature_runtime.run(action, pin, launch)
-            self.assertEqual("feature_runtime_selection", raised.exception.code)
+            with self.subTest(action=action):
+                refused(action, pin, "feature_runtime_selection")
         for field, value in (("unit_spec_sha256", "a" * 64), ("resolution_id", str(uuid.uuid4()))):
-            with self.subTest(field=field), self.assertRaises(c.DeployError) as raised:
-                feature_runtime.run("cleanup", {**pin, field: value}, launch)
-            self.assertEqual("feature_runtime_selection", raised.exception.code)
+            with self.subTest(field=field):
+                refused("cleanup", {**pin, field: value}, "feature_runtime_selection")
         self.host.owned_write(self.host.paths.p("/proc/self/cgroup"), "0::/system.slice/unrelated.service")
-        with self.assertRaises(c.DeployError) as raised:
-            feature_runtime.run("cleanup", pin, launch)
-        self.assertEqual("feature_runtime_identity", raised.exception.code)
+        refused("cleanup", pin, "feature_runtime_identity")
 
     def test_shrink_records_failed_removed_unit_before_reset_and_leaves_it_inactive(self):
         _, inventory = self.deploy_copies()
