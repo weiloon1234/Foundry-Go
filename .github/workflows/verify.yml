@@ -78,6 +78,77 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  deploy-vm-amd64:
+    name: deploy-vm-amd64 (${{ matrix.ubuntu }})
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ['24.04']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Enable KVM and install runner tools
+        run: |
+          if [ ! -c /dev/kvm ]; then
+            echo 'KVM is absent: deploy VM acceptance requires /dev/kvm; no emulation fallback.' >&2
+            exit 1
+          fi
+          # Documented Linux runner rule: ReactiveCircus/android-emulator-runner.
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -r /dev/kvm && test -w /dev/kvm
+          sudo apt-get update -qq
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils age rclone
+      - name: Real SSH operator acceptance on Ubuntu VM
+        id: acceptance
+        # Leave time for cleanup/artifact upload before the job deadline.
+        timeout-minutes: 50
+        env:
+          ACCEPTANCE_LOG_DIR: ${{ runner.temp }}/deploy-vm-logs
+        run: |
+          echo "logs=$ACCEPTANCE_LOG_DIR" >> "$GITHUB_OUTPUT"
+          tools/deploy/tests/run_vm_acceptance.sh --ubuntu '${{ matrix.ubuntu }}'
+      - name: Retain non-private VM failure logs
+        if: ${{ failure() && steps.acceptance.outputs.logs != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deploy-vm-amd64-${{ matrix.ubuntu }}
+          # Only explicitly public diagnostics; no guest disks, seed, keys,
+          # private CLI/build output, environment or recovery material.
+          path: |
+            ${{ steps.acceptance.outputs.logs }}/steps.log
+            ${{ steps.acceptance.outputs.logs }}/image.txt
+            ${{ steps.acceptance.outputs.logs }}/setup-download.log
+            ${{ steps.acceptance.outputs.logs }}/*-serial.log
+            ${{ steps.acceptance.outputs.logs }}/*-cloud-init.log
+            ${{ steps.acceptance.outputs.logs }}/*-stock-packages.log
+            ${{ steps.acceptance.outputs.logs }}/*-inspect.log
+            ${{ steps.acceptance.outputs.logs }}/*-prepare.log
+            ${{ steps.acceptance.outputs.logs }}/*-deploy-*.log
+            ${{ steps.acceptance.outputs.logs }}/*-status-*.log
+            ${{ steps.acceptance.outputs.logs }}/*-report-*.log
+            ${{ steps.acceptance.outputs.logs }}/*-tools-*.log
+            ${{ steps.acceptance.outputs.logs }}/*-role-*.log
+            ${{ steps.acceptance.outputs.logs }}/*-units.log
+            ${{ steps.acceptance.outputs.logs }}/*-apt-activity.log
+            ${{ steps.acceptance.outputs.logs }}/*-host-failure.log
+            ${{ steps.acceptance.outputs.logs }}/*-backup-repository.log
+            ${{ steps.acceptance.outputs.logs }}/*-host-upgrade.log
+            ${{ steps.acceptance.outputs.logs }}/*-reboot-required.log
+            ${{ steps.acceptance.outputs.logs }}/*-settle.log
+          include-hidden-files: false
+          if-no-files-found: warn
+          retention-days: 14
+
   verify:
     runs-on: macos-15
     timeout-minutes: 120

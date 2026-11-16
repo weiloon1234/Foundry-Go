@@ -717,7 +717,7 @@ class ActivationComparisonTests(unittest.TestCase):
         def command(args, **kwargs):
             result = run(args, **kwargs)
             if args[:2] == ["apt-get", "-y"] and "--download-only" not in args:
-                self.host.activation[name].update(ActiveState="inactive", SubState="dead", MainPID="0")
+                self.host.activation[name].update(MainPID="901")  # restarted while running
             return result
 
         with patch.object(packages, "_prepare_payloads", side_effect=acquire), \
@@ -774,11 +774,12 @@ class ActivationComparisonTests(unittest.TestCase):
                 self.host.activation_classification = {name: kind}
                 packages._finish_activation(self.host, {"activation_before": before, "activation_units": {}})
 
-    def test_socket_triggered_daemons_may_start_but_never_stop_or_restart(self):
-        for name, trigger in (("ssh.service", "ssh.socket"), ("dbus.service", "dbus.socket"), ("watch.service", "watch.path")):
+    def test_socket_triggered_daemons_may_start_or_idle_exit_but_never_restart_or_fail(self):
+        for name, trigger in (("ssh.service", "ssh.socket"), ("dbus.service", "dbus.socket"), ("watch.service", "watch.path"),
+                              ("systemd-fsckd.service", "systemd-fsckd.socket")):
             kind = {"TriggeredBy": trigger, "Type": "notify", "UnitFileState": "enabled"}
             for change, refused in (({"MainPID": "8400"}, True),
-                                    ({"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}, True),
+                                    ({"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}, False),
                                     ({"ActiveState": "failed", "SubState": "failed", "MainPID": "0"}, True),
                                     ({}, False)):
                 with self.subTest(name=name, change=change):
@@ -792,6 +793,21 @@ class ActivationComparisonTests(unittest.TestCase):
                         self.assertEqual(error.exception.code, "package_service_changed")
                     else:
                         packages._finish_activation(self.host, journal)
+
+    def test_sockets_ignore_listening_running_flip_but_not_stopping(self):
+        name = "systemd-fsckd.socket"
+        before = {name: {**self.record(name, state="static"), "SubState": "running", "MainPID": "0"}}
+        for change, refused in (({"SubState": "listening"}, False),
+                                ({"ActiveState": "inactive", "SubState": "dead"}, True)):
+            with self.subTest(change=change):
+                self.host.activation = {name: {**before[name], **change}}
+                self.host.activation_classification = {}
+                journal = {"activation_before": before, "activation_units": {}}
+                if refused:
+                    with self.assertRaises(DeployError):
+                        packages._finish_activation(self.host, journal)
+                else:
+                    packages._finish_activation(self.host, journal)
 
     def test_static_helpers_started_by_hooks_may_run_but_static_daemons_stay_guarded(self):
         running = {"ActiveState": "activating", "SubState": "start", "MainPID": "7311"}
@@ -859,6 +875,39 @@ class ActivationComparisonTests(unittest.TestCase):
         self.host.activation_classification = {"fresh@a.service": {"Type": "oneshot"}}
         with self.assertRaises(DeployError):
             packages._finish_activation(self.host, {"activation_before": {}, "activation_units": {}})
+
+    def test_plan_token_projection_ignores_churn_but_binds_independent_services(self):
+        self.host.activation_classification = {"packagekit.service": {"Type": "dbus", "UnitFileState": "static"},
+                                               "ssh.service": {"TriggeredBy": "ssh.socket"},
+                                               "run-u9.service": {"Transient": "yes"}}
+        base = {"cron.service": self.record("cron.service"), "user@0.service": self.record("user@0.service", state="static"),
+                "packagekit.service": self.record("packagekit.service", state="static", active="inactive", pid="0"),
+                "ssh.service": self.record("ssh.service", active="inactive", pid="0")}
+        churned = copy.deepcopy(base)
+        churned["user@0.service"]["MainPID"] = "8400"
+        churned["packagekit.service"].update(ActiveState="active", SubState="running", MainPID="77")
+        churned["ssh.service"].update(ActiveState="active", SubState="running", MainPID="78")
+        churned["run-u9.service"] = self.record("run-u9.service", state="transient")
+        self.host.activation = churned
+        self.assertEqual(packages.stable_activation(self.host, base), packages.stable_activation(self.host, churned))
+        restarted = copy.deepcopy(base)
+        restarted["cron.service"]["MainPID"] = "9999"
+        self.assertNotEqual(packages.stable_activation(self.host, base), packages.stable_activation(self.host, restarted))
+        reconfigured = copy.deepcopy(base)
+        reconfigured["packagekit.service"]["UnitFileState"] = "masked"
+        self.assertNotEqual(packages.stable_activation(self.host, base), packages.stable_activation(self.host, reconfigured))
+
+    def test_refusals_name_the_changed_units_and_fields(self):
+        before = {"cron.service": self.record("cron.service"), "gone.service": self.record("gone.service")}
+        current = {"cron.service": {**self.record("cron.service"), "MainPID": "8400", "UnitFileState": "disabled"}}
+        differences = packages._activation_differences(before, current, {})
+        self.assertEqual(differences, [("gone.service", "removed"), ("cron.service", "UnitFileState/MainPID")])
+        detail = packages._difference_detail([(f"u{i}.service", "MainPID") for i in range(10)])
+        self.assertTrue(detail.endswith("u7.service (MainPID) and 2 more"))
+        self.host.activation = current
+        with self.assertRaises(DeployError) as error:
+            packages._finish_activation(self.host, {"activation_before": before, "activation_units": {}})
+        self.assertIn("cron.service (UnitFileState/MainPID)", error.exception.detail)
 
     def test_timer_only_triggered_runs_may_finish_or_restart(self):
         name, kind = "apt-daily.service", {"TriggeredBy": "apt-daily.timer"}

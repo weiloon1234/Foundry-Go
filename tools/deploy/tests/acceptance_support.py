@@ -5,8 +5,12 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import sys
 import time
 import uuid
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from disposable import disposable_host
 
 WORK = Path("/var/lib/foundry-acceptance-f4a")
 LAUNCHER = "/usr/local/sbin/foundry-host"
@@ -15,8 +19,8 @@ ROOTS = "/etc/ssl/certs/ca-certificates.crt"
 
 def guard():
     if (os.geteuid() != 0 or os.environ.get("FOUNDRY_DISPOSABLE_HOST") != "1"
-            or not Path("/.dockerenv").is_file()):
-        raise RuntimeError("Requires an explicitly disposable root Docker host")
+            or not disposable_host()):
+        raise RuntimeError("Requires an explicitly disposable root acceptance host")
     if __debug__ is False:
         raise RuntimeError("Assertions must be enabled")
     WORK.mkdir(mode=0o700, exist_ok=True)

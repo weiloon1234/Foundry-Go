@@ -590,37 +590,65 @@ def _runtime_policy(name, record, kind):
     if (_ephemeral_activation(name, record, kind) or (triggers and all(t.endswith(".timer") for t in triggers))
             or (static_service and (kind.get("Type") == "dbus" or _run_to_completion(kind)))):
         return "ignore"  # Sessions, scheduled runs and bus- or hook-started helpers start and exit on their own.
-    if triggers or static_service:
+    if triggers:
+        # Socket/path activation may start the unit or let it exit while idle (systemd-fsckd after boot);
+        # its socket's ActiveState stays compared. A restart or failure still refuses.
+        return "trigger"
+    if static_service:
         return "start"  # An idle on-demand unit may run; a running one must not stop, fail or restart.
-    return "substate" if name.endswith((".timer", ".path", ".target")) else "exact"
+    return "substate" if name.endswith((".timer", ".path", ".target", ".socket")) else "exact"
 
 
-def _activation_matches(before, current, classification, *, allow_new=False):
+def _activation_differences(before, current, classification, *, allow_new=False):
+    """Return (unit, changed fields) pairs; unit names and field names are not secret."""
     # Compare copies only: old journals and reviewed supply digests retain the
     # original snapshot shape. Both sides use the current host's classification.
     if not isinstance(before, dict):
-        return False
+        return [("activation", "missing")]
     before = {name: record for name, record in before.items()
               if name in current or not _ephemeral_activation(name, record, {})}
     current = {name: record for name, record in current.items()
                if name in before or not (allow_new or _ephemeral_activation(name, record, classification.get(name, {})))}
-    if before.keys() != current.keys():
-        return False
-    for name, old in before.items():
-        new = current[name]
-        if {k: v for k, v in old.items() if k not in RUNTIME} != {k: v for k, v in new.items() if k not in RUNTIME}:
-            return False
+    differences = [(name, "removed") for name in sorted(before.keys() - current.keys())]
+    differences += [(name, "added") for name in sorted(current.keys() - before.keys())]
+    for name in sorted(before.keys() & current.keys()):
+        old, new = before[name], current[name]
+        changed = sorted(k for k in old.keys() | new.keys() if k not in RUNTIME and old.get(k) != new.get(k))
         policy = _runtime_policy(name, new, classification.get(name, {}))
         runtime = [k for k in RUNTIME if k in old or k in new]
-        if policy == "ignore":
-            continue
-        if policy == "start" and old.get("ActiveState") == "inactive":
-            continue
-        if policy == "substate":
+        idle_exit = new.get("ActiveState") == "inactive" and new.get("SubState") == "dead"
+        if (policy == "ignore" or (policy in ("start", "trigger") and old.get("ActiveState") == "inactive")
+                or (policy == "trigger" and idle_exit)):
+            runtime = []
+        elif policy == "substate":
             runtime = [k for k in runtime if k != "SubState"]
-        if any(old.get(k) != new.get(k) for k in runtime):
-            return False
-    return True
+        changed += [k for k in runtime if old.get(k) != new.get(k)]
+        if changed:
+            differences.append((name, "/".join(changed)))
+    return differences
+
+
+def _activation_matches(before, current, classification, *, allow_new=False):
+    return not _activation_differences(before, current, classification, allow_new=allow_new)
+
+
+def _difference_detail(differences, limit=8):
+    shown = ", ".join(f"{name} ({fields})" for name, fields in differences[:limit])
+    return shown + (f" and {len(differences) - limit} more" if len(differences) > limit else "")
+
+
+def stable_activation(host, snapshot):
+    """Project an activation snapshot for plan tokens: the same churn the comparison ignores never changes it."""
+    classification = _activation_classification(host, snapshot)
+    stable = {}
+    for name, record in snapshot.items():
+        kind = classification.get(name, {})
+        if _ephemeral_activation(name, record, kind):
+            continue
+        policy = _runtime_policy(name, record, kind)
+        runtime = RUNTIME if policy == "exact" else ("ActiveState", "MainPID") if policy == "substate" else ()
+        stable[name] = {k: v for k, v in record.items() if k not in RUNTIME or k in runtime}
+    return stable
 
 
 _DEB_UNITS = r'''
@@ -836,8 +864,9 @@ def _mask_defaults(host, journal):
 def _finish_activation(host, journal):
     before, current = journal["activation_before"], _activation_snapshot(host)
     classification = _activation_classification(host, current)
-    require(_activation_matches(before, current, classification, allow_new=True),
-            "package_service_changed", "Preexisting host activation changed during installation; operator review required.")
+    differences = _activation_differences(before, current, classification, allow_new=True)
+    require(not differences, "package_service_changed",
+            "Preexisting host activation changed during installation; operator review required: " + _difference_detail(differences))
     for name, record in current.items():
         if name in before:
             continue
@@ -1165,10 +1194,14 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
         evidence = _candidate_evidence(host, approved)
         activation = _activation_snapshot(host)
         if reviewed is not None:
-            require(reviewed.get("transaction") == approved and reviewed.get("evidence") == evidence
-                    and reviewed.get("installed") == inventory
-                    and _activation_matches(reviewed.get("activation"), activation, _activation_classification(host, activation)),
-                    "package_plan_changed", "Package transaction, origin or activation changed after approval.")
+            changed = [part for part, same in (("transaction", reviewed.get("transaction") == approved),
+                                               ("origin", reviewed.get("evidence") == evidence),
+                                               ("installed packages", reviewed.get("installed") == inventory)) if not same]
+            differences = _activation_differences(reviewed.get("activation"), activation, _activation_classification(host, activation))
+            if differences:
+                changed.append("activation: " + _difference_detail(differences))
+            require(not changed, "package_plan_changed",
+                    "Package transaction, origin or activation changed after approval: " + "; ".join(changed))
         units, cron = _prepare_payloads(host, approved, evidence)
         for location in cron:
             path = check_path(host.paths.p(location), "file")
@@ -1176,9 +1209,11 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
             require(not path.exists() and not preserved.exists(),
                     "package_activation", "Preexisting cron configuration cannot be claimed by package installation.")
         current = _activation_snapshot(host)
-        require(_inventory(host) == inventory
-                and _activation_matches(activation, current, _activation_classification(host, current)),
-                "package_plan_changed", "Host changed while acquiring inert package payloads.")
+        differences = _activation_differences(activation, current, _activation_classification(host, current))
+        if _inventory(host) != inventory:
+            differences.insert(0, ("installed packages", "changed"))
+        require(not differences, "package_plan_changed",
+                "Host changed while acquiring inert package payloads: " + _difference_detail(differences))
         prepared = True
         operation = str(uuid.uuid4())
         retained_activation = journal.get("default_activation", {}) if journal else {}

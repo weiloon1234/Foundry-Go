@@ -249,6 +249,41 @@ class CertificateTests(unittest.TestCase):
                 certificates.provision(self.host, self.registry, self.entry)
         self.assertEqual(self.calls, [])
 
+    def test_synthetic_vm_marker_and_environment_do_not_bypass_profile_guards(self):
+        from disposable import VM_MARKER
+        from test_disposable import marker_owner
+        self.synthetic_fixture()
+        self.host.paths.p("/.dockerenv").unlink()
+        marker = self.host.paths.p(VM_MARKER)
+        with patch.dict(certificates.os.environ, {"FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT": "1",
+                                                  "FOUNDRY_DISPOSABLE_HOST": "1"}):
+            with self.assertRaises(DeployError):
+                certificates._synthetic(self.host, self.entry)
+            marker.touch(mode=0o600)
+            with marker_owner(marker, 0):
+                self.assertTrue(certificates._synthetic(self.host, self.entry))
+                for field, value in (("runtime_environment", "production"),
+                                     ("environment", "production"), ("domain", "app.example.com")):
+                    original = self.entry["profile"][field]
+                    self.entry["profile"][field] = value
+                    with self.assertRaises(DeployError):
+                        certificates._synthetic(self.host, self.entry)
+                    self.entry["profile"][field] = original
+                for flag in ("FOUNDRY_DISPOSABLE_HOST", "FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT"):
+                    with patch.dict(certificates.os.environ, {flag: "0"}):
+                        if flag == "FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT":
+                            self.entry["certificate"]["zone_ref"] = "acceptance-synthetic"
+                        with self.assertRaises(DeployError):
+                            certificates._synthetic(self.host, self.entry)
+                marker.chmod(0o666)
+                with self.assertRaises(DeployError):
+                    certificates._synthetic(self.host, self.entry)
+            marker.chmod(0o600)
+            with marker_owner(marker, 1000):
+                with self.assertRaises(DeployError):
+                    certificates._synthetic(self.host, self.entry)
+        self.assertEqual(self.calls, [])
+
     def test_synthetic_certificates_use_owned_lineage_renewal_and_reload_checks(self):
         self.synthetic_fixture()
         def command(args, **kwargs):

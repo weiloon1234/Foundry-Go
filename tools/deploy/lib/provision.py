@@ -442,8 +442,15 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     upgrade = upgrades.tools_upgrade(host, registry, tools_dir)
     if upgrade and upgrade["from_digest"] is not None:
         findings.append({"kind": "stop", "code": "host_upgrade_required", "detail": "Apply a separate reviewed tool upgrade first."})
+    # Session, on-demand and scheduled unit churn between review and apply must not
+    # invalidate the plan; independently managed services still bind it exactly.
+    package_observation = observations["packages"]
+    if "activation" in package_observation:
+        package_observation = {**package_observation,
+                               "activation": packages.stable_activation(host, package_observation["activation"])}
     digest_input = {"host": snapshot, "profile": bound, "topology": topology, "project": project,
-                    "revision": registry["revision"], "observations": observations, "bundle": upgrades.tool_bundle(tools_dir)[2]}
+                    "revision": registry["revision"], "observations": {**observations, "packages": package_observation},
+                    "bundle": upgrades.tool_bundle(tools_dir)[2]}
     token = hashlib.sha256(json.dumps(digest_input, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     if feature:
         import listeners

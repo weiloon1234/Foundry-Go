@@ -13,6 +13,26 @@
   persisted-state migration is required.
 - Added an OBS config-tree recipe with writable global and Advanced output profile
   settings, including a one-second x264 keyframe interval.
+- Added: Ubuntu 24.04 amd64 KVM deployment acceptance in GitHub Actions, using a
+  checksum-pinned official cloud image and the real operator CLI over SSH/sudo.
+  Fresh feature and standard topology guests cover bootstrap inspect/prepare,
+  two release builds/deployments, healthy placed units, status/logs/report and
+  tool planning/application while retaining stock host services and apt hooks.
+- Added: explicitly marked disposable acceptance VMs may use the shared acceptance
+  helpers and synthetic certificates. The VM path requires an environment opt-in
+  and a root-owned, mode-0600 regular marker; production profile restrictions remain.
+- Fixed (found by the VM acceptance): a bootstrap plan was invalidated by harmless
+  unit churn between review and apply, refusing with `plan_changed`. The plan token
+  now binds a stable activation projection: configuration of every unit and runtime
+  of independently managed services only. A socket-triggered helper exiting while
+  idle after boot (`systemd-fsckd.service`) no longer refuses installation, and
+  socket units ignore their listening/running `SubState` flip. A restart or failure
+  of a socket-triggered daemon, or its socket stopping, still refuses.
+- Changed: package plan and activation refusals now name the changed package part
+  (transaction, origin, installed packages) or the first changed units and fields.
+- Upgrade: hosts need `ACTION=tools-plan` then `ACTION=tools-apply` (generation 19)
+  before using config trees; the plan-token and activation fixes reach a host the
+  same way. Fresh bootstraps stage the new tools automatically.
 
 ## v0.38.6 — 2026-11-16
 

@@ -71,7 +71,7 @@ def create_host(name, image, network, platform, mounts, *, cpus=2, memory_gib=4,
     return run([*arguments, image]).stdout.strip()
 
 
-def create_ca(directory):
+def create_ca(directory, *, addresses=()):
     directory = Path(directory)
     directory.mkdir(mode=0o700, exist_ok=True)
     (directory / "ca.cnf").write_text("""[req]
@@ -91,10 +91,12 @@ authorityKeyIdentifier = keyid:always
     (directory / "ca.key").chmod(0o600)
     run(["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=s3",
          "-keyout", directory / "private.key", "-out", directory / "s3.csr"])
+    import ipaddress
+    names = "DNS:s3" + "".join(",IP:" + str(ipaddress.ip_address(address)) for address in addresses)
     (directory / "s3.ext").write_text("""basicConstraints=critical,CA:FALSE
 keyUsage=critical,digitalSignature,keyEncipherment
 extendedKeyUsage=serverAuth
-subjectAltName=DNS:s3
+subjectAltName=""" + names + """
 subjectKeyIdentifier=hash
 authorityKeyIdentifier=keyid,issuer
 """)
