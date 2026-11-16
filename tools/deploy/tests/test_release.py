@@ -30,6 +30,7 @@ from runtime_config import (CREDENTIAL_KEYS, ENCRYPTION_KEYS, runtime_environmen
 from topology import instance_units
 from contracts import unit_selection_identities
 from test_contracts import fixture, registry, storage_fixture
+from timing_support import SteppingClock, readiness_clock
 
 CHECK_READY = release.ready
 
@@ -2094,7 +2095,9 @@ class ReleaseTests(unittest.TestCase):
             with self.subTest(status=status, body=body, pid=pid), patch.object(self.host, "run", side_effect=command), \
                     patch.object(release.urllib.request, "build_opener", return_value=opener), \
                     patch.object(release, "STABILITY_SECONDS", 0), \
-                    patch.object(release.maintenance, "status", return_value={"down": True}) as probe:
+                    patch.object(release.maintenance, "status", return_value={"down": True}) as probe, \
+                    readiness_clock(SteppingClock()):
+                # Fake time: a slow runner must still reach the probe before the short deadline.
                 self.assertEqual(expected, CHECK_READY(self.host, self.entry, timeout=30 if expected else 0.01))
             probe.assert_called_once()
             self.assertTrue(opener.open.called)
