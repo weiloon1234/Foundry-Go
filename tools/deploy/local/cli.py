@@ -845,7 +845,10 @@ def source_snapshot(project, profile, request, directory):
 
 def recover_build_containers(project):
     """Client death is not container exit. Refuse any surviving writer."""
-    for name in (f"{PREFIX}-build-{project['id']}", f"{PREFIX}-cache-clean-{project['id']}"):
+    # Check legacy names as well as both architectures before admitting a writer.
+    names = [f"{PREFIX}-{kind}-{project['id']}{suffix}"
+             for suffix in ("", "-amd64", "-arm64") for kind in ("build", "cache-clean")]
+    for name in names:
         found = execute(["docker", "ps", "--all", "--filter", "name=^/" + name + "$", "--format", "{{.ID}}"], timeout=30).splitlines()
         if not found:
             continue
@@ -873,7 +876,7 @@ def recover_build_containers(project):
 def refuse_orphan_builder(project):
     builder = f"{PREFIX}-{project['id']}"
     builders = execute(["docker", "buildx", "ls", "--format", "{{.Name}}"], timeout=30).splitlines()
-    if builder in (name.rstrip(" *") for name in builders):
+    if {builder, builder + "-amd64", builder + "-arm64"}.intersection(name.rstrip(" *") for name in builders):
         raise LocalError("project BuildKit builder survives a previous client; inspect its completion before removing it and retrying; cache retained")
 
 
@@ -899,7 +902,33 @@ def prune_releases(directory, keep, current, entry, protected=()):
             shutil.rmtree(path)
 
 
-def builder_inputs(snapshot):
+def builder_architecture(profile):
+    selected = os.environ.get("DEPLOY_BUILDER_ARCHITECTURE", "native")
+    if selected not in {"native", "target", "amd64", "arm64"}:
+        raise LocalError("DEPLOY_BUILDER_ARCHITECTURE must be native, target, amd64 or arm64")
+    server = execute(["docker", "version", "--format", "{{.Server.Arch}}"], timeout=30).strip()
+    server = {"x86_64": "amd64", "aarch64": "arm64"}.get(server, server)
+    if server not in {"amd64", "arm64"}:
+        raise LocalError("Docker server architecture must be amd64 or arm64")
+    architecture = server if selected == "native" else profile["architecture"] if selected == "target" else selected
+    return architecture, server
+
+
+def preflight_builder(architecture, server, inputs):
+    if architecture == server:
+        return
+    message = (f"Cannot run a linux/{architecture} release builder on the {server} Docker server; "
+               "enable Rosetta/binfmt emulation or use a native builder")
+    try:
+        observed = execute(["docker", "run", "--rm", "--platform", "linux/" + architecture,
+                            "ubuntu:24.04@" + inputs["ubuntu"], "dpkg", "--print-architecture"], timeout=120).strip()
+    except LocalError as error:
+        raise LocalError(message) from error
+    if observed != architecture:
+        raise LocalError(message + "; dpkg did not report the requested architecture")
+
+
+def builder_inputs(snapshot, architecture):
     go = re.search(r"^go ([0-9.]+)$", (snapshot / "go.mod").read_text(), re.MULTILINE)
     node = re.search(r"[0-9]+", read_json(snapshot / "web" / "package.json")["engines"]["node"])
     if not go or not node:
@@ -919,7 +948,7 @@ def builder_inputs(snapshot):
         images[name] = checksum
     dockerfile = TOOLS_ROOT / "docker" / "builder.Dockerfile"
     fingerprint = hashlib.sha256(dockerfile.read_bytes() + json.dumps(
-        {"versions": versions, "images": images}, sort_keys=True).encode()).hexdigest()[:12]
+        {"versions": versions, "images": images, "architecture": architecture}, sort_keys=True).encode()).hexdigest()[:12]
     return versions, images, fingerprint
 
 
@@ -954,29 +983,33 @@ def build(project, profile):
         check_path(workspace, "directory")
         workspace.mkdir(parents=True, mode=0o700)
         record_path = records / (operation + ".json")
-        build_name = f"{PREFIX}-build-{project['id']}"
-        cleanup_name = f"{PREFIX}-cache-clean-{project['id']}"
         record = {"operation_id": operation, "project_id": project["id"],
                   "instance_id": profile["instance_id"], "version": version,
-                  "containers": [build_name, cleanup_name], "phase": "snapshot"}
+                  "containers": [], "phase": "snapshot"}
         atomic_json(record_path, record, mode=0o600)
         snapshot = source_snapshot(project, profile, request, workspace)
-        versions, inputs, fingerprint = builder_inputs(snapshot)
+        architecture, server = builder_architecture(profile)
+        platform = "linux/" + architecture
+        build_name = f"{PREFIX}-build-{project['id']}-{architecture}"
+        cleanup_name = f"{PREFIX}-cache-clean-{project['id']}-{architecture}"
+        versions, inputs, fingerprint = builder_inputs(snapshot, architecture)
         request["images"] = inputs
         request["source_date_epoch"] = build_source_epoch(request["manifest"], profile)
         dockerfile = TOOLS_ROOT / "docker" / "builder.Dockerfile"
         image_name = f"{PREFIX}-builder-{project['id']}"
-        image = f"{image_name}:{fingerprint}"
+        image = f"{image_name}:{architecture}-{fingerprint}"
         label = f"{PREFIX}.project={project['id']}"
         operation_label = f"{PREFIX}.operation={operation}"
-        builder = f"{PREFIX}-{project['id']}"
-        record.update(phase="builder", builder=builder, image=image)
+        builder = f"{PREFIX}-{project['id']}-{architecture}"
+        record.update(phase="builder", builder=builder, image=image, builder_architecture=architecture,
+                      containers=[build_name, cleanup_name])
         atomic_json(record_path, record, mode=0o600)
+        preflight_builder(architecture, server, inputs)
         images = execute(["docker", "image", "ls", "--format", "{{.Repository}}:{{.Tag}}", image_name]).splitlines()
         if image not in images:
             execute(["docker", "buildx", "create", "--name", builder, "--driver", "docker-container"])
             # An interrupted command deliberately retains its builder and journal.
-            execute(["docker", "buildx", "build", "--builder", builder, "--load", "--label", label,
+            execute(["docker", "buildx", "build", "--platform", platform, "--builder", builder, "--load", "--label", label,
                      "--build-arg", f"GO_VERSION={versions['go']}", "--build-arg", f"NODE_MAJOR={versions['node']}",
                      "--build-arg", f"UBUNTU_DIGEST={inputs['ubuntu']}",
                      "--build-arg", f"GO_DIGEST={inputs['go']}", "--build-arg", f"NODE_DIGEST={inputs['node']}",
@@ -991,8 +1024,8 @@ def build(project, profile):
         atomic_json(request_file, request, mode=0o600)
         record["phase"] = "building"
         atomic_json(record_path, record, mode=0o600)
-        cache = f"{PREFIX}-cache-{project['id']}"
-        execute(["docker", "run", "--rm", "--name", build_name, "--label", label, "--label", operation_label,
+        cache = f"{PREFIX}-cache-{project['id']}-{architecture}"
+        execute(["docker", "run", "--rm", "--platform", platform, "--name", build_name, "--label", label, "--label", operation_label,
                  "--mount", f"type=bind,src={snapshot},dst=/src,readonly",
                  "--mount", f"type=bind,src={TOOLS_ROOT},dst=/foundry-deploy,readonly",
                  "--mount", f"type=bind,src={request_file},dst=/request.json,readonly",
@@ -1007,14 +1040,16 @@ def build(project, profile):
         validate_manifest(read_json(release / "manifest.json"), {**identity(project, profile), "profile": profile})
         record["phase"] = "cache_cleanup"
         atomic_json(record_path, record, mode=0o600)
-        execute(["docker", "run", "--rm", "--name", cleanup_name, "--label", label, "--label", operation_label,
+        execute(["docker", "run", "--rm", "--platform", platform, "--name", cleanup_name, "--label", label, "--label", operation_label,
                  "--mount", f"type=volume,src={cache},dst=/cache",
                  "-e", f"CACHE_LIMIT_MB={limit}", image, "bash", "-c",
                  'if [ "$(du -sm /cache | cut -f1)" -gt "$CACHE_LIMIT_MB" ]; then go clean -cache -modcache; npm cache clean --force --loglevel=error; fi'], capture=False)
         recover_build_containers(project)
         images = execute(["docker", "image", "ls", "--filter", f"label={label}", "--format", "{{.Repository}}:{{.Tag}}"]).splitlines()
         for old in set(images):
-            if old.startswith(image_name + ":") and old != image:
+            tag = old[len(image_name) + 1:] if old.startswith(image_name + ":") else ""
+            # Tags before v0.38.4 carried no architecture; every such image is superseded.
+            if old != image and (tag.startswith(architecture + "-") or re.fullmatch(r"[0-9a-f]{12}", tag)):
                 execute(["docker", "image", "rm", old])
         record["phase"] = "completed"
         atomic_json(record_path, record, mode=0o600)

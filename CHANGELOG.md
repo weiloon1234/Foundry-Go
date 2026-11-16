@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.38.4 — 2026-11-16
+
+- Added: `DEPLOY_BUILDER_ARCHITECTURE=native|target|amd64|arm64` selects release
+  builder userland explicitly. The default follows the Docker server;
+  `DOCKER_DEFAULT_PLATFORM` no longer decides it. Non-native builders must pass
+  a pinned Ubuntu architecture preflight. The local build record retains the
+  selected builder architecture without changing the host release manifest.
+- Fixed: builder fingerprints, image tags, BuildKit/container names and cache
+  volumes are isolated per architecture. Caches now use
+  `foundry-cache-<project-id>-<architecture>`. Existing unsuffixed volumes are
+  never removed automatically; after confirming no old builder uses one, remove
+  it explicitly with `docker volume rm foundry-cache-<project-id>`.
+  Builder images tagged before this release (no architecture prefix) are pruned
+  after the next successful build.
+- Fixed: rehearsal and acceptance host containers no longer remove the Docker
+  engine's amd64/arm64 emulators. Their systemd ran `systemd-binfmt`, which
+  unregisters every binary format in the shared engine kernel when a container
+  stops. Afterwards an emulated builder failed with `exec format error` until
+  the Docker engine restarted. The host image now masks `systemd-binfmt`. If an
+  older rehearsal already removed Rosetta, restart Docker Desktop once.
+
 ## v0.38.3 — 2026-11-16
 
 - Fixed: units for roles with release-carried artifact views rendered

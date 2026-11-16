@@ -252,6 +252,35 @@ present. Existing `client` and `web` packages use their declared build scripts.
 The module's build tools are mounted read-only separately from the app source.
 No compiler runs on the server.
 
+`DEPLOY_BUILDER_ARCHITECTURE` selects the builder's Linux userland:
+
+- `native` (default) uses the Docker **server** architecture.
+- `target` uses the environment profile's `architecture`.
+- `amd64` or `arm64` selects that architecture explicitly.
+
+Every image build and builder run passes `--platform linux/<architecture>`;
+`DOCKER_DEFAULT_PLATFORM` does not select the builder. The target Go architecture
+still comes from the profile. Builder fingerprints, image tags, BuildKit names,
+containers and cache volumes are scoped by builder architecture. The local
+`.deploy/builds/<operation>.json` records `builder_architecture`; the host release
+manifest retains its existing contract and target `architecture`.
+When the builder differs from the Docker server, a preflight runs the pinned
+Ubuntu base and checks `dpkg --print-architecture`. A failure refuses the build
+with instructions to enable Rosetta/binfmt or use a native builder.
+
+Emulated target builders are supported for release builds when the Docker engine
+can run `linux/<architecture>`, as checked by that preflight. They are slower than
+native builders. On an Apple-silicon Mac with Docker Desktop's Rosetta, the
+deploy-acceptance fixture release took 511 seconds with an emulated amd64 builder.
+A native arm64 build of the same input took 111 seconds, including building its
+builder image. Both started with an empty Go build cache. Expect roughly five times
+the native build time. Acceptance and rehearsal host runs still require native
+platforms; this support applies to compiling and packaging releases.
+
+Caches now use `foundry-cache-<project-id>-<architecture>`. The old unsuffixed
+volume is left untouched. After confirming no old builder uses it, an operator
+can remove it with `docker volume rm foundry-cache-<project-id>`.
+
 The release builder pins Ubuntu, Go, and Node images by multi-architecture index
 digest in `tools/deploy/docker/build-inputs.json`. To add a Go version or Node
 major, add its reviewed digest there before building. Apt packages float within
