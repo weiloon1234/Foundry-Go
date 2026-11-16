@@ -99,7 +99,10 @@ if [ -n "$missing" ]; then DEBIAN_FRONTEND=noninteractive apt-get install -y $mi
              "content": 'Defaults:foundry-operator env_keep += "FOUNDRY_DISPOSABLE_HOST FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT"\n'},
             {"path": "/etc/systemd/system.conf.d/foundry-acceptance.conf", "content":
              "[Manager]\nDefaultEnvironment=FOUNDRY_DISPOSABLE_HOST=1\n"},
+            # pgBackRest verifies only DNS names, so the runner's S3 stand-in needs one.
+            {"path": "/etc/hosts", "append": True, "content": "\n10.0.2.2 s3\n"},
         ],
+        "manage_etc_hosts": False,
         "runcmd": [["systemctl", "daemon-reexec"], ["sh", "-c", 'missing=""\n' + stock]],
     }
 
@@ -263,7 +266,7 @@ class Run:
                             "--stanza=foundry --log-level-console=detail info; "
                             "sudo -n ls -la /etc/foundry/pgbackrest /var/lib/foundry/backup 2>&1 | head -20; "
                             "port=$(sudo -n sed -n 's/^repo1-storage-port=//p' /etc/foundry/pgbackrest/foundry.conf); "
-                            "curl -sS -o /dev/null -w 'curl %{http_code} %{ssl_verify_result}\\n' \"https://10.0.2.2:$port/\"",
+                            "curl -sS -o /dev/null -w 'curl %{http_code} %{ssl_verify_result}\\n' \"https://s3:$port/\"",
                             timeout=90, publish=True, check=False)
             except Exception:
                 self.note("Systemd diagnostic collector unavailable")
@@ -501,7 +504,7 @@ def main():
                 guest, ssh_port, config = run.boot(private / "base.img", key, mode)
                 run.trust(certs)
                 run.operator(snapshot, proxy, guest, ssh_port, config, key,
-                             {**storage, "endpoint": f"https://10.0.2.2:{port}", "recipient": recipient.strip()})
+                             {**storage, "endpoint": f"https://s3:{port}", "recipient": recipient.strip()})
                 run.stop_vm()
                 shutil.rmtree(guest)
         finally:
