@@ -68,12 +68,15 @@ def json_documents(output):
     return documents
 
 
-def completed_full_backup(receipt):
+def completed_full_backup(receipt, expected_kind):
     from backup import BACKUP_LABEL
     try:
         point, keys = receipt["database_point"], receipt["key_archive"]
-        if (receipt["status"], point["status"], keys["status"], receipt["kind"]) != (
-                "complete", "complete", "complete", "full"):
+        if (expected_kind not in ("full", "recovery")
+                or (receipt["status"], point["status"], keys["status"], receipt["kind"]) != (
+                    "complete", "complete", "complete", expected_kind)
+                or ("restore_point" in receipt) != (expected_kind == "recovery")
+                or expected_kind == "recovery" and not receipt["restore_point"]):
             raise ValueError
         if not all(receipt.get(key) for key in ("backup_id", "pgbackrest_label", "completed_at")) or (
                 point["pgbackrest_label"] != receipt["pgbackrest_label"] or not keys["object_key"]
@@ -142,7 +145,7 @@ def recovery_result(output, mode):
             or not result.get("host_id") or not result.get("operation_id")):
         raise Failure("Recovery plan token or completed identity is missing")
     if mode == "takeover":
-        completed_full_backup(result.get("backup"))
+        completed_full_backup(result.get("backup"), "full")
     elif result.get("backup") is not None:
         raise Failure("Rehearsal unexpectedly produced a backup")
     return result
@@ -830,18 +833,17 @@ class Run:
                     raise Failure("Placed role is not running: " + unit)
             invoke("deploy", "logs", label="logs-" + label, LINES="10")
             report = json.loads(invoke("deploy", "report", label="report-" + label))
-            if self.scenario == "recovery":
-                privileged = json.loads(self.remote("report-root-" + label,
-                    "sudo -n /usr/local/bin/foundry-host-report --pretty", timeout=240, publish=True)[1])
-                current_profile = json.loads((snapshot / "deploy/environments/acceptance.json").read_text())
-                check_reports(report, privileged, self.mode, profile["instance_id"], current_profile["host"]["host_id"])
+            privileged = json.loads(self.remote("report-root-" + label,
+                "sudo -n /usr/local/bin/foundry-host-report --pretty", timeout=240, publish=True)[1])
+            current_profile = json.loads((snapshot / "deploy/environments/acceptance.json").read_text())
+            check_reports(report, privileged, self.mode, profile["instance_id"], current_profile["host"]["host_id"])
             return status
 
         if self.scenario == "recovery":
             version = build("recovery")
             invoke("deploy", "deploy", label="deploy-source", RELEASE=version)
             state = healthy("source", version)["state"]
-            initial = completed_full_backup(state.get("backup", {}).get("database"))
+            initial = completed_full_backup(state.get("backup", {}).get("database"), "recovery")
             if (state["backup"].get("last_complete_id") != initial["backup_id"]
                     or state["backup"].get("initial_operation_id") != initial["backup_id"]):
                 raise Failure("Initial deploy did not record its full backup")
@@ -957,7 +959,7 @@ class Run:
         self.remote("marker-write", "curl --fail --silent --show-error --max-time 15 --header 'Content-Type: application/json' --data-binary @- "
                     f"http://127.0.0.1:{port}/acceptance/recovery-marker", input=json.dumps({"status": marker}))
         marker_read(marker)
-        receipt = completed_full_backup(json.loads(invoke("deploy", "backup-run", BACKUP_KIND="full")))
+        receipt = completed_full_backup(json.loads(invoke("deploy", "backup-run", BACKUP_KIND="full")), "full")
         if receipt["backup_id"] == initial["backup_id"]:
             raise Failure("Explicit full backup reused the initial deploy backup")
         self.note(f"PASS recovery/{self.mode}: A initial full backup, unique application write, explicit full/key backup")
@@ -1066,7 +1068,7 @@ class Run:
             raise Failure("Takeover did not update the local profile to C")
         marker_read(marker)
         state = healthy("takeover", version)["state"]
-        final_backup = completed_full_backup(state.get("backup", {}).get("database"))
+        final_backup = completed_full_backup(state.get("backup", {}).get("database"), "full")
         if (final_backup["backup_id"] != result["backup"]["backup_id"]
                 or final_backup["backup_id"] in (initial["backup_id"], receipt["backup_id"])
                 or state["backup"].get("last_complete_id") != final_backup["backup_id"]):

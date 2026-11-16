@@ -1,5 +1,6 @@
 """Private copy allocation and retained endpoint stability without host effects."""
 from dataclasses import replace
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -15,6 +16,82 @@ import topology as t
 from host import Host, Paths
 from test_host_capabilities import INSTANCE, OPERATION
 from test_services import inventory_fixture
+
+
+class NetworkClientTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.host = Host(Paths(Path(temporary.name).resolve()))
+        self.installed = {}
+        original_stat = Path.stat
+
+        def root_owned(path, *args, **kwargs):
+            info = original_stat(path, *args, **kwargs)
+            if path in self.installed:
+                fields = list(info)
+                fields[4] = self.installed[path]
+                return os.stat_result(fields)
+            return info
+        self.enterContext(patch.object(Path, "stat", root_owned))
+
+    def process(self, executable, group, *, pid=42, installed=True):
+        path = self.host.paths.p(executable)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("fixture executable")
+        path.chmod(0o755)
+        if installed:
+            self.installed[path] = 0
+        proc = self.host.paths.p(f"/proc/{pid}")
+        proc.mkdir(parents=True, exist_ok=True)
+        (proc / "exe").symlink_to(path)
+        (proc / "stat").write_text(f"{pid} (systemd-networkd) " + " ".join(["S"] + ["0"] * 18 + ["42"]))
+        (proc / "cgroup").write_text("0::" + group + "\n")
+        return path
+
+    def findings(self, *, transport="udp", family=4, port=68, pids=(42,)):
+        address = "10.0.2.15" if family == 4 else "fe80::1234"
+        observed = listeners.ObservedSocket(listeners.SocketIdentity(transport, family, address, port), pids)
+        return listeners.ownership_findings((), (observed,), {}, host=self.host)
+
+    def test_dhcp_clients_require_installed_executable_and_service_ownership(self):
+        for executable, groups in listeners.NETWORK_CLIENTS.items():
+            for group in groups:
+                with self.subTest(executable=executable, group=group):
+                    link = self.host.paths.p("/proc/42/exe")
+                    link.unlink(missing_ok=True)
+                    self.process(executable, group)
+                    self.assertEqual(self.findings(), [])
+                    self.assertEqual(self.findings(family=6, port=546), [])
+                    for kwargs in ({"transport": "tcp"}, {"port": 67}, {"family": 6, "port": 68},
+                                   {"port": 546}, {"family": 6, "port": 547}, {"pids": ()}, {"pids": (42, 99)}):
+                        self.assertEqual(self.findings(**kwargs)[0]["code"], "unexpected_public_listener")
+                    self.host.paths.p("/proc/42/cgroup").write_text("0::/user.slice/session.scope\n")
+                    self.assertTrue(self.findings(), "A manually launched namesake must not count as an OS client")
+
+    def test_unknown_or_unprotected_dhcp_owner_is_reported_with_safe_details(self):
+        executable = self.process("/tmp/private/systemd-networkd", "/system.slice/systemd-networkd.service", installed=False)
+        finding = self.findings()[0]
+        self.assertEqual(finding, {"code": "unexpected_public_listener", "transport": "udp", "family": 4,
+                                  "address": "10.0.2.15", "port": 68, "processes": ["systemd-networkd"]})
+        self.assertNotIn(str(executable.parent), str(finding))
+        self.host.paths.p("/proc/42/exe").unlink()
+        executable = self.process("/usr/lib/systemd/systemd-networkd", "/system.slice/systemd-networkd.service")
+        executable.chmod(0o777)
+        self.assertTrue(self.findings())
+        executable.chmod(0o755)
+        self.host.paths.p("/proc/42/stat").unlink()
+        self.assertEqual(self.findings()[0]["processes"], ["unknown"])
+
+    def test_dhcp_rejects_nonroot_or_mismatched_executable_inode(self):
+        import release
+        executable = self.process("/usr/lib/systemd/systemd-networkd", "/system.slice/systemd-networkd.service")
+        self.installed[executable] = 1000
+        self.assertTrue(self.findings())
+        self.installed[executable] = 0
+        process = release._process(self.host, "42")
+        with patch.object(release, "_process", return_value={**process, "inode": process["inode"] + 1}):
+            self.assertTrue(self.findings())
 
 
 class CopyListenerTests(unittest.TestCase):

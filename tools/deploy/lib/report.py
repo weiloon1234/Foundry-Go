@@ -131,11 +131,18 @@ def loopback(address):
     return parsed.is_loopback
 
 
+def listener_problem(problems, finding):
+    problem(problems, "unexpected_public_listener",
+            detail=f"{finding['transport']} [{finding['address']}]:{finding['port']}; processes: "
+                   + ", ".join(finding.get("processes", ["unknown"])))
+
+
 def network(host, problems, deadline, *, claims=(), confined=()):
+    import listeners as socket_owners
     response = probe(host, ["ss", "-H", "-ltnp"], deadline, problems, "network_unavailable")
     listeners = None
     if response is not None:
-        ports, unexpected = set(), False
+        ports = set()
         for line in response.stdout.splitlines():
             columns = line.split()
             if len(columns) < 4:
@@ -154,10 +161,9 @@ def network(host, problems, deadline, *, claims=(), confined=()):
             ports.add(port)
             if port not in PUBLIC_PORTS and not any(c.socket.transport == "tcp" and c.socket.address == address
                                                     and c.socket.port == port for c in claims):
-                unexpected = True
+                listener_problem(problems, {"transport": "tcp", "address": address, "port": port,
+                    "processes": socket_owners.process_names(socket_owners.socket_processes(host, pids))})
         listeners = sorted(ports)
-        if unexpected:
-            problem(problems, "unexpected_public_listener")
     firewall = None
     if os.geteuid() == 0:
         status = probe(host, ["ufw", "status"], deadline, problems, None, check=False)
@@ -247,7 +253,7 @@ def copy_runtime(host, inventory, identity, item, deadline):
         invocation_id = observed.get("InvocationID")
         require(isinstance(invocation_id, str) and re.fullmatch(r"[a-f0-9]{32}", invocation_id),
                 "admission_invocation", "Missing copy invocation identity.")
-        invocation = admission.read_owned(host, store.runtime / "admitted" / identity.role / (invocation_id + ".json"), HelperInvocation.parse)
+        invocation = admission.read_owned(host, store.runtime / "admitted" / identity.record_key / (invocation_id + ".json"), HelperInvocation.parse)
         require(invocation.unit == identity and str(invocation.process.pid) == observed.get("MainPID")
                 and admission.executor_alive(host, invocation.process)
                 and invocation.unit_spec_sha256 == canonical_digest(record_document(inventory.specs[identity])),
@@ -669,8 +675,8 @@ def instance_report(host, entry, deadline, problems, *, host_claims=(), host_con
         if result["network"]:
             for finding in result["network"]["findings"]:
                 problem(problems, finding["code"], instance_id)
-            if result["network"]["unexpected_exposure"]:
-                problem(problems, "unexpected_public_listener")
+            for finding in result["network"]["unexpected_exposure"]:
+                listener_problem(problems, finding)
     copy_report_details(host, entry, topology, selected, result.get("network"), problems, deadline)
     result["services"] = services_document(topology)
     if not rehearsal and result["status"] != "stopped" and any(
@@ -802,7 +808,8 @@ def declared_network(host, profile, *, topology, entry=None, resolution=None, cl
     own_confinement = [row for row in confinement["roles"] if row["instance_id"] == profile.instance_id]
     findings.extend({"code": "network_confinement_unverified", "role": row["role"]}
                     for row in own_confinement if row["state"] == "unverified")
-    for finding in listeners.ownership_findings(inventory, tuple(s for s in observed if s not in confined), owners, edge_verified=edge_verified):
+    for finding in listeners.ownership_findings(inventory, tuple(s for s in observed if s not in confined), owners,
+                                               edge_verified=edge_verified, host=host):
         # Unclaimed exposure belongs to the host scanner. Other instances' socket
         # ownership is assessed with their own selected projection, not this one.
         if finding.get("instance_id") == profile.instance_id:

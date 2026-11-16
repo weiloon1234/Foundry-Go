@@ -6,7 +6,9 @@ This module does not select deployments, grant permits or write admission state.
 """
 from dataclasses import asdict, dataclass, replace
 import ipaddress
+from pathlib import Path
 import re
+import stat
 import subprocess
 import time
 import uuid
@@ -200,7 +202,56 @@ def process_members(host, unit):
     return frozenset(members)
 
 
-def ownership_findings(claims, observed, owners, *, edge_verified=False):
+# Executable identity, not a process's mutable comm/argv, identifies OS clients.
+NETWORK_CLIENTS = {
+    "/usr/lib/systemd/systemd-networkd": ("/system.slice/systemd-networkd.service",),
+    "/usr/sbin/NetworkManager": ("/system.slice/NetworkManager.service",),
+    "/usr/sbin/dhclient": ("/system.slice/NetworkManager.service", "/system.slice/networking.service"),
+}
+
+
+def _network_client(host, observed, processes):
+    from admission import protected_path
+    identity = observed.socket
+    if (identity.transport != "udp" or (identity.family, identity.port) not in ((4, 68), (6, 546))
+            or not processes or any(process is None for process in processes.values())):
+        return False
+    for process in processes.values():
+        verified = False
+        for executable, groups in NETWORK_CLIENTS.items():
+            path = host.paths.p(executable)
+            try:
+                resolved = path.resolve(strict=True)
+                protected_path(host, resolved, "file")
+                info = resolved.stat()
+                if (process["exe"] == str(resolved) and stat.S_ISREG(info.st_mode)
+                        and info.st_uid == 0 and not info.st_mode & 0o022
+                        and (process["device"], process["inode"]) == (info.st_dev, info.st_ino)
+                        and any(group == allowed or group.startswith(allowed + "/")
+                                for group in process["groups"] for allowed in groups)):
+                    verified = True
+                    break
+            except (DeployError, OSError):
+                continue
+        if not verified:
+            return False
+    return True
+
+
+def socket_processes(host, pids):
+    from release import _process
+    return {pid: _process(host, str(pid)) for pid in pids}
+
+
+def process_names(processes):
+    names = set()
+    for process in processes.values():
+        name = Path(process["exe"]).name if process else "unknown"
+        names.add(name if re.fullmatch(r"[a-zA-Z0-9_.+-]{1,64}", name) else "unknown")
+    return sorted(names or {"unknown"})
+
+
+def ownership_findings(claims, observed, owners, *, edge_verified=False, host=None):
     """owners maps UnitIdentity and 'nginx' to freshly observed cgroup PIDs."""
     findings = []
     for observed_socket in observed:
@@ -208,7 +259,11 @@ def ownership_findings(claims, observed, owners, *, edge_verified=False):
         matching = [c for c in claims if matches(c, identity)]
         if not matching:
             if not ipaddress.ip_address(identity.address).is_loopback:
-                findings.append({"code": "unexpected_public_listener", **asdict(identity)})
+                processes = socket_processes(host, observed_socket.pids) if host is not None else {}
+                if host is not None and _network_client(host, observed_socket, processes):
+                    continue
+                findings.append({"code": "unexpected_public_listener", **asdict(identity),
+                                 "processes": process_names(processes)})
             continue
         for claim in matching:
             expected = owners.get("nginx" if claim.owner == "nginx" else claim.identity, frozenset())

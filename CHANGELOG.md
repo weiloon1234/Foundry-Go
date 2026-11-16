@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fix host reports falsely marking numbered service copies unready when their
+  admission receipts are present under the copy's identity.
+- Recognize verified OS DHCP clients in host reports while continuing to flag
+  unknown listeners on DHCP ports. Unexpected-listener findings now identify the
+  protocol, address, port and owning process names.
 - Add a separate real-VM recovery acceptance job per topology, covering
   initial and explicit full backups, local age decryption, rehearsal while the source
   stays alive with verified repository isolation, and takeover with restored application
@@ -9,6 +14,8 @@
   recovery uses 75-minute step and 90-minute job budgets, while operator keeps 50/60 minutes.
   Keep the recovery marker endpoint in the CLI's build snapshot and publish only
   redacted CLI refusal lines when builds fail.
+  Validate the initial backup's `recovery` receipt and named restore point separately
+  from explicit and post-takeover `full` receipts.
 - Allow only the acceptance CA directory and its regular certificate/key files on
   explicitly disposable recovery targets. Reject symlinked container markers and
   hard-linked CA files. Production recovery preflight remains unchanged.

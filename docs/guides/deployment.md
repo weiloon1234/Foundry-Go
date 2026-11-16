@@ -1469,7 +1469,8 @@ destroys B and stops A before C takes over. C must preserve the marker, record
 `recovered_from`, pass status and report checks, complete a new full backup and key
 archive, enable backup timers, and update the local profile to C.
 
-The CLI report must contain only the exact expected unprivileged findings. For
+Both scenarios require a clean privileged report after each healthy deployment or
+rollback. The CLI report must contain only the exact expected unprivileged findings. For
 standard instances, Linux may prevent executable-link inspection, producing
 `running_release_unverified` and `instance_state_inconsistent`. Feature instances
 cannot read private selection records, producing `runtime_selection_unavailable`,

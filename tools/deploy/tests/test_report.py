@@ -1,6 +1,8 @@
 """Public host-report contract and privacy regression fixtures; no services."""
 
 import copy
+from contextlib import nullcontext
+from dataclasses import replace
 import json
 import shutil
 import signal
@@ -102,6 +104,76 @@ class ReportTests(unittest.TestCase):
 
     def item(self, result):
         return result["projects"][0]["instances"][0]
+
+    def test_two_copy_readiness_uses_owned_receipts_and_reports_missing_copy(self):
+        import admission
+        import contracts as c
+        import release
+        import services
+        from test_admission import helper
+        from test_copies_ops import expanded_inventory
+        inventory, entry = expanded_inventory()
+        identities = inventory.copies("relay")
+        host = Host(Paths(self.host.paths.root))
+        store = admission.AdmissionStore(host, inventory.profile.instance_id)
+        invocations = {identity: replace(helper("relay", invocation=str(identity.ordinal) * 32,
+                          spec=c.canonical_digest(c.record_document(inventory.specs[identity]))), unit=identity)
+                       for identity in identities}
+        for invocation in invocations.values():
+            path = store._receipt(invocation)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_json(path, c.record_document(invocation), mode=0o600)
+
+        def service(host, unit, **kwargs):
+            identity = next(identity for identity in identities if inventory.units[identity] == unit)
+            invocation = invocations[identity]
+            return {"ActiveState": "active", "MainPID": str(invocation.process.pid),
+                    "InvocationID": invocation.process.invocation_id}
+
+        with patch.object(report, "role_service", side_effect=service), \
+                patch.object(admission, "executor_alive", return_value=True), \
+                patch.object(admission.AdmissionStore, "preparation", side_effect=lambda _: nullcontext()), \
+                patch.object(release, "_matches_executable", return_value=True), \
+                patch.object(services, "probe", return_value=True) as probe:
+            for missing in (False, True):
+                with self.subTest(missing=missing):
+                    if missing:
+                        store._receipt(invocations[identities[1]]).unlink()
+                    observations = {identity: {"held": False, "enabled": True} for identity in identities}
+                    problems = []
+                    report.copy_report_details(host, entry, observations, (None, None, inventory),
+                                               None, problems, time.monotonic() + 5)
+                    self.assertEqual(observations[identities[0]]["readiness"], {"status": "ready", "ready": True})
+                    if missing:
+                        self.assertEqual(problems, [{"code": "copy_readiness_unverified",
+                            "instance_id": inventory.profile.instance_id, "detail": "relay@2 is not verified ready."}])
+                        self.assertEqual(observations[identities[1]]["admission"], "unverified")
+                    else:
+                        self.assertEqual(problems, [])
+                        self.assertEqual(observations[identities[1]]["readiness"], {"status": "ready", "ready": True})
+                        self.assertEqual(probe.call_count, 2)
+
+    def test_declared_network_reports_unknown_dhcp_owner_with_actionable_details(self):
+        import listeners
+        import release
+        from test_services import inventory_fixture
+        inventory, _, _ = inventory_fixture()
+        socket = listeners.ObservedSocket(listeners.SocketIdentity("udp", 4, "10.0.2.15", 68), (42,))
+        with patch.object(listeners, "observe_sockets", return_value=(socket,)), \
+                patch.object(listeners, "process_members", return_value=frozenset()), \
+                patch.object(release, "_process", return_value={"exe": "/private/secret/impostor"}), \
+                patch.object(listeners, "_network_client") as verified:
+            for known in (True, False):
+                verified.return_value = known
+                network = report.declared_network(self.host, inventory.profile, topology=inventory.topology,
+                    host_claims=(), host_confinement={"sockets": (), "roles": []})
+                self.assertEqual(len(network["unexpected_exposure"]), 0 if known else 1)
+                if not known:
+                    problems = []
+                    report.listener_problem(problems, network["unexpected_exposure"][0])
+                    self.assertEqual(problems, [{"code": "unexpected_public_listener",
+                        "detail": "udp [10.0.2.15]:68; processes: impostor"}])
+                    self.assertNotIn("/private/secret", json.dumps(network))
 
     def test_deferred_renewal_is_a_problem_with_detail(self):
         entry = self.host.registry["instances"][INSTANCE_ID]
@@ -524,7 +596,8 @@ class ReportTests(unittest.TestCase):
         ))
         result = report.collect_report(self.host)
         self.assertEqual([22, 443, 8100], result["host"]["network"]["public_listeners"])
-        self.assertIn({"code": "unexpected_public_listener"}, result["problems"])
+        self.assertIn({"code": "unexpected_public_listener",
+                       "detail": "tcp [0.0.0.0]:8100; processes: unknown"}, result["problems"])
 
     def test_scoped_loopback_listener_is_ignored(self):
         self.host.outputs["ss"] = "LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*\nLISTEN 0 4096 0.0.0.0:22 0.0.0.0:*\n"

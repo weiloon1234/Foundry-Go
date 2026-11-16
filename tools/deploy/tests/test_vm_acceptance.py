@@ -317,6 +317,51 @@ raise SystemExit(vm.cli_entry(["unused-snapshot", "unused-proxy", "release"]))
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_both_scenarios_refuse_an_unclean_privileged_source_report(self):
+        for scenario in ("operator", "recovery"):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                snapshot, guest = root / "fixture", root / "vm"
+                shutil.copytree(vm.FIXTURE / "deploy", snapshot / "deploy")
+                (snapshot / "config").mkdir()
+                shutil.copyfile(vm.FIXTURE / "config/deploy.toml", snapshot / "config/deploy.toml")
+                guest.mkdir()
+                run = vm.Run(root, root, scenario)
+                run.mode = "standard"
+                run.project_id = "20000000-0000-4000-8000-000000000002"
+                run.active = vm.Guest(guest, 2222, guest / "ssh_config", "127.0.0.1", [])
+                profile_path = snapshot / "deploy/environments/acceptance.json"
+                clean = {"complete": True, "problems": [], "host": {"host_id": "host"}}
+
+                def command(name, argv, **kwargs):
+                    if name == "prepare":
+                        profile = json.loads(profile_path.read_text())
+                        profile["host"]["host_id"] = "host"
+                        profile_path.write_text(json.dumps(profile))
+                    if name.startswith("build-"):
+                        profile = json.loads(profile_path.read_text())
+                        path = snapshot / "dist/releases" / run.project_id / profile["instance_id"] / "version/manifest.json"
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_text('{"version": "version"}')
+                    if name.startswith("status-"):
+                        return 0, '{"state": {"status": "healthy", "current": {"version": "version"}}}'
+                    if name.startswith("report-"):
+                        return 0, json.dumps(clean)
+                    return 0, ""
+
+                def remote(name, command, **kwargs):
+                    if name.startswith("report-root-"):
+                        self.assertEqual(command, "sudo -n /usr/local/bin/foundry-host-report --pretty")
+                        return 0, json.dumps({**clean, "complete": False,
+                                             "problems": [{"code": "copy_readiness_unverified"}]})
+                    return 0, "ActiveState=active\nSubState=running\nMainPID=42\n"
+
+                with patch.object(run, "command", side_effect=command), \
+                        patch.object(run, "remote", side_effect=remote), patch.object(run, "note"), \
+                        patch("acceptance_host.storage_secrets", return_value={}):
+                    with self.assertRaisesRegex(vm.Failure, "Privileged report is incomplete"):
+                        run.operator(snapshot, root / "proxy", root / "key", {"recipient": "recipient"})
+
     def test_reports_accept_only_exact_unprivileged_findings_and_clean_root_report(self):
         clean = {"complete": True, "problems": [], "host": {"host_id": "host"}}
         for mode, codes in (("standard", {"running_release_unverified", "instance_state_inconsistent"}),
@@ -395,15 +440,50 @@ class RecoveryTests(unittest.TestCase):
             self.assertIn("TIMING recovery/standard: standard/backup: completed elapsed_seconds=2.5", log)
             self.assertIn("TIMING recovery/standard: standard/takeover: failed elapsed_seconds=3.0", log)
 
-    def receipt(self):
-        return {"backup_id": "backup-id", "status": "complete", "completed_at": "now",
-                "kind": "full", "pgbackrest_label": "20261117-010203F", "database_point": {
-                    "status": "complete", "pgbackrest_label": "20261117-010203F"},
-                "key_archive": {"status": "complete", "object_key": "keys/fixture.age"}}
+    def receipt(self, kind="full"):
+        # Public standard-a-status-source.log from CI run 43950141441,
+        # state.backup.database (lines 175-195): initial deployment receipt.
+        receipt = {
+            "backup_id": "1ace44d8-2ccf-4c6d-bf0e-624f9da55d93",
+            "completed_at": "2026-11-16T20:34:55Z",
+            "configuration_revision": 1,
+            "database_point": {"completed_at": "2026-11-16T20:34:54Z",
+                               "pgbackrest_label": "20261116-203446F", "status": "complete"},
+            "fresh_at": "2026-11-16T20:34:54Z",
+            "instance_id": "be0ba49a-a52f-4fcd-96c1-d5e83a0d111c",
+            "key_archive": {"completed_at": "2026-11-16T20:34:55Z",
+                            "object_key": "keys/be0ba49a-a52f-4fcd-96c1-d5e83a0d111c/b52c16400e094f3d8c0f6de08355ec84.tar.age",
+                            "status": "complete"},
+            "kind": "recovery", "pgbackrest_label": "20261116-203446F",
+            "restore_point": "foundry_1ace44d82ccf4c6dbf0e624f9da55d93", "status": "complete",
+        }
+        if kind == "full":
+            receipt["kind"] = kind
+            del receipt["restore_point"]
+        return receipt
+
+    def test_full_backup_checks_expected_kind_and_restore_point(self):
+        for kind in ("recovery", "full"):
+            receipt = self.receipt(kind)
+            with self.subTest(kind=kind):
+                self.assertIs(vm.completed_full_backup(receipt, kind), receipt)
+            for unexpected in ({"recovery", "full", "diff", "scheduled"} - {kind}):
+                with self.subTest(kind=kind, unexpected=unexpected), self.assertRaises(vm.Failure):
+                    vm.completed_full_backup(receipt, unexpected)
+            for point in (None, "", "foundry_1ace44d82ccf4c6dbf0e624f9da55d93"):
+                if kind == "recovery" and point:
+                    continue
+                invalid = {**receipt, "restore_point": point}
+                with self.subTest(kind=kind, point=point), self.assertRaises(vm.Failure):
+                    vm.completed_full_backup(invalid, kind)
+        receipt = self.receipt("recovery")
+        del receipt["restore_point"]
+        with self.assertRaises(vm.Failure):
+            vm.completed_full_backup(receipt, "recovery")
 
     def test_full_backup_requires_both_components_and_matching_label(self):
         receipt = self.receipt()
-        self.assertIs(vm.completed_full_backup(receipt), receipt)
+        self.assertIs(vm.completed_full_backup(receipt, "full"), receipt)
         for owner, key, value in ((None, "backup_id", ""), (None, "status", "running"),
                 (None, "kind", "diff"), ("database_point", "status", "unknown"),
                 ("database_point", "pgbackrest_label", "other"),
@@ -411,15 +491,15 @@ class RecoveryTests(unittest.TestCase):
             receipt = self.receipt()
             (receipt[owner] if owner else receipt)[key] = value
             with self.subTest(owner=owner, key=key), self.assertRaises(vm.Failure):
-                vm.completed_full_backup(receipt)
+                vm.completed_full_backup(receipt, "full")
         for receipt in (None, {}, {"database_point": None, "key_archive": None}):
             with self.assertRaises(vm.Failure):
-                vm.completed_full_backup(receipt)
+                vm.completed_full_backup(receipt, "full")
         for label in ("invalidF", "20261117-010203F_20261117-020304D"):
             receipt = self.receipt()
             receipt["pgbackrest_label"] = receipt["database_point"]["pgbackrest_label"] = label
             with self.assertRaises(vm.Failure):
-                vm.completed_full_backup(receipt)
+                vm.completed_full_backup(receipt, "full")
 
     def output(self, mode):
         return [{"ok": True, "plan_token": "reviewed", "host_id": "replacement", "mode": mode},
