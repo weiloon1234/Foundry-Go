@@ -306,7 +306,10 @@ class Run:
         (binary / "ssh").write_text("#!/bin/sh\nexec " + shlex.join([shutil.which("ssh"), "-F", str(config)]) + ' "$@"\n')
         (binary / "ssh").chmod(0o700)
         env = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"],
-               "ENVIRONMENT": "acceptance", "CONFIRM": "yes", "LINES": "10"}
+               "ENVIRONMENT": "acceptance", "CONFIRM": "yes"}
+        # The CLI refuses LINES/FOLLOW outside logs, as it would for an operator's shell.
+        for name in ("LINES", "FOLLOW"):
+            env.pop(name, None)
         from acceptance_host import storage_secrets
         from runtime_config import service_secret_requirements
         disks = tomllib.loads((snapshot / "config/deploy.toml").read_text())["app"]["services"]["storage"]["disks"]
@@ -361,7 +364,7 @@ class Run:
                 state = dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
                 if state.get("ActiveState") != "active" or state.get("SubState") != "running" or int(state.get("MainPID", "0")) <= 0:
                     raise Failure("Placed role is not running: " + unit)
-            invoke("deploy", "logs", label=f"logs-{number}")
+            invoke("deploy", "logs", label=f"logs-{number}", LINES="10")
             invoke("deploy", "report", label=f"report-{number}")
             self.diagnostics()
             previous = version
