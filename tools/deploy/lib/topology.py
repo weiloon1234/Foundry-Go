@@ -248,6 +248,9 @@ class ConfigFile:
     path: str = "value"
     directory_environment: str | None = None
 
+    def iter_files(self):
+        return (self,)
+
     @classmethod
     def parse(cls, value):
         contract_object(value, ("source", "mode"), ("bindings", "format", "path", "directory_environment"))
@@ -285,6 +288,40 @@ class ConfigFile:
         require(not any(b.startswith(a + "/") for a in pointers for b in pointers if a != b),
                 "invalid_topology", "Configuration pointers overlap.")
         return cls(source, value["mode"], tuple(result), format, path, directory_environment)
+
+
+@dataclass(frozen=True)
+class ConfigTree:
+    files: tuple[ConfigFile, ...]
+    directory_environment: str | None = None
+
+    def iter_files(self):
+        return self.files
+
+    @classmethod
+    def parse(cls, value):
+        from dataclasses import replace
+        contract_object(value, ("files",), ("directory_environment",))
+        files = value["files"]
+        require(isinstance(files, dict) and 1 <= len(files) <= 32,
+                "invalid_topology", "Configuration trees require 1 to 32 files.")
+        paths = [contract_path(path) for path in files]
+        require(all(len(path.split("/")) <= 8 for path in paths)
+                and not any(b.startswith(a + "/") for a in paths for b in paths if a != b),
+                "invalid_topology", "Configuration tree paths exceed depth 8 or overlap.")
+        result = []
+        for path in sorted(paths):
+            declaration = contract_object(files[path], ("source", "mode"), ("format", "bindings"))
+            result.append(replace(ConfigFile.parse(declaration), path=path))
+        environment = value.get("directory_environment")
+        require("directory_environment" not in value or
+                environment in ("HOME", "XDG_CONFIG_HOME") and any(file.format is not None for file in result),
+                "invalid_topology", "Template directories may supply only HOME or XDG_CONFIG_HOME.")
+        return cls(tuple(result), environment)
+
+
+def parse_config(value):
+    return ConfigTree.parse(value) if isinstance(value, dict) and "files" in value else ConfigFile.parse(value)
 
 
 class ProxyProtocol(str, Enum):
@@ -570,7 +607,7 @@ class ExecutableRole:
     common: RoleCommon
     executable: Executable
     arguments: tuple[Argument, ...]
-    configs: tuple[tuple[str, ConfigFile], ...]
+    configs: tuple[tuple[str, ConfigFile | ConfigTree], ...]
     secret_files: tuple[tuple[str, str], ...]
     listeners: tuple[tuple[str, Listener], ...]
     readiness: Probe
@@ -617,7 +654,7 @@ def _role(value):
     contract_object(value, ("name", "kind", "executable", "readiness", "restart", "limits", "state"), common + custom)
     rehearsal_safe = value.get("recovery_rehearsal_safe", False)
     require(type(rehearsal_safe) is bool, "invalid_topology", "Recovery rehearsal safety requires an explicit boolean.")
-    configs = contract_map(value.get("configs", {}), ConfigFile.parse, maximum=64)
+    configs = contract_map(value.get("configs", {}), parse_config, maximum=64)
     listeners = contract_map(value.get("listeners", {}), Listener.parse, maximum=MAX_LISTENERS)
     require(all(not listener.wildcard or confinement == "loopback" for _, listener in listeners),
             "invalid_topology", "Wildcard listeners require role network confinement to loopback.")
@@ -827,7 +864,8 @@ def parse_topology(document, *, registered=False) -> Topology:
         require((role.readiness.kind == "unix") == (listeners[role.readiness.listener].transport == "unix"),
                 "invalid_topology", "Readiness kind must match the listener transport.")
         require(all(secret in dict(secrets) for _, secret in role.secret_files), "invalid_topology", "Unknown secret reference.")
-        references = list(role.arguments) + [a for _, a in role.environment] + [a for c in configs.values() for _, a in c.bindings]
+        references = list(role.arguments) + [a for _, a in role.environment] + [
+            a for config in configs.values() for file in config.iter_files() for _, a in file.bindings]
         for argument in references:
             if argument.kind in LISTENER_SOCKET_ARGUMENTS:
                 require(argument.value in listeners and listeners[argument.value].transport == "unix",

@@ -163,15 +163,16 @@ def validate_declarations(root: Path, environment: str | None = None, bindings: 
             if not isinstance(role, ExecutableRole):
                 continue
             total = 0
-            for _, declaration in role.configs:
-                item = check("service_configuration", declaration.source, role=role.common.name)
+            for _, entry_config in role.configs:
+                for declaration in entry_config.iter_files():
+                    item = check("service_configuration", declaration.source, role=role.common.name)
 
-                def render():
-                    nonlocal total
-                    total += _render(root, role, declaration)
-                    require(total <= MAX_SERVICE_CONFIG_BYTES, "service_config_size", "Service configuration view exceeds its bound.")
+                    def render():
+                        nonlocal total
+                        total += _render(root, role, declaration)
+                        require(total <= MAX_SERVICE_CONFIG_BYTES, "service_config_size", "Service configuration view exceeds its bound.")
 
-                item.run(render)
+                    item.run(render)
     profiles_checked = [item for item in checks if item.kind == "profile"]
     minimum = (max(item.minimum_generation for item in profiles_checked)
                if profiles_checked and all(item.minimum_generation is not None for item in profiles_checked) else None)

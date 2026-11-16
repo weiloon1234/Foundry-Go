@@ -26,7 +26,7 @@ from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_wr
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
                        FEATURE_CAPABILITIES, FEATURE_INTRODUCTION_GENERATION, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION, FEATURE_UNIX_GENERATION, FEATURE_CONFINEMENT_GENERATION,
                        FEATURE_SHARED_DIRECTORY_GENERATION, UPLOAD_TEMPLATE_GENERATION, FEATURE_PROXY_PROTOCOL_GENERATION,
-                       FEATURE_MANAGED_DNS_GENERATION, FEATURE_COPIES_GENERATION,
+                       FEATURE_MANAGED_DNS_GENERATION, FEATURE_COPIES_GENERATION, FEATURE_CONFIG_TREE_GENERATION,
                        TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
@@ -460,9 +460,11 @@ def managed_dns_profile(profile):
 
 def feature_generation(topology, entry, *, profile=None):
     """Application rollback cannot lower a selected capability floor."""
-    from topology import ExecutableRole, PublicListenerReference
+    from topology import ConfigTree, ExecutableRole, PublicListenerReference
+    trees = any(isinstance(config, ConfigTree) for role in topology.roles if isinstance(role, ExecutableRole)
+                for _, config in role.configs)
     templates = any(config.format is not None for role in topology.roles if isinstance(role, ExecutableRole)
-                    for _, config in role.configs)
+                    for _, entry_config in role.configs for config in entry_config.iter_files())
     public_listeners = any(isinstance(binding, PublicListenerReference) for role in topology.roles
                            for _, binding in role.common.bindings)
     unix = any(listener.transport == "unix" for role in topology.roles if isinstance(role, ExecutableRole)
@@ -490,6 +492,7 @@ def feature_generation(topology, entry, *, profile=None):
                upload_generation({"profile": profile or {}}),
                FEATURE_PROXY_PROTOCOL_GENERATION if proxy_protocol else 0,
                FEATURE_COPIES_GENERATION if copies else 0,
+               FEATURE_CONFIG_TREE_GENERATION if trees else 0,
                entry.get("deployment_selection", {}).get("minimum_generation", 0))
 
 
@@ -511,7 +514,8 @@ def check_target_capabilities(host, request, action):
     installed = registry if registry is not None else {"tools": protocol()}
     generation = request.get("client", {}).get("generation", 0)
     latest = max(FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION, UPLOAD_TEMPLATE_GENERATION,
-                 FEATURE_PROXY_PROTOCOL_GENERATION, FEATURE_MANAGED_DNS_GENERATION, FEATURE_COPIES_GENERATION)
+                 FEATURE_PROXY_PROTOCOL_GENERATION, FEATURE_MANAGED_DNS_GENERATION, FEATURE_COPIES_GENERATION,
+                 FEATURE_CONFIG_TREE_GENERATION)
     if type(generation) is int and generation >= latest and installed["tools"]["generation"] >= latest:
         return
     from topology import parse_topology

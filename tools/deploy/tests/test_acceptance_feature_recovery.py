@@ -58,7 +58,7 @@ class FeatureRecoveryAcceptanceTests(unittest.TestCase):
         self.assertTrue(role.executable.package.endswith("-minimal"))
         self.assertIn(role.executable.path.removeprefix("/usr/bin/"), role.executable.package)
         compile(role.arguments[2].value, "wildcard-fixture", "exec")
-        self.assertEqual(upgrades.feature_generation(declaration, {}), 16)
+        self.assertEqual(upgrades.feature_generation(declaration, {}), 19)
 
     def test_state_variants_remain_valid_and_preserve_payload_and_source(self):
         original = digest(self.archive)

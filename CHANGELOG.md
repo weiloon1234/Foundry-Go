@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.39.0 — 2026-11-16
+
+- Added: executable-role config trees declare up to 32 files under one directory,
+  with nested paths and a shared `HOME` or `XDG_CONFIG_HOME`. Each file reuses the
+  existing modes, typed bindings, template rendering, secret handling, and limits.
+  Numbered copies receive independent trees. Release review fingerprints every
+  file; rollback and recovery prepare the selected release's tree.
+- Deploy-tool generation 19 gates config trees on both client and host. Existing
+  declarations keep their minimum generation. The tools upgrade advances the
+  runtime helper and boot coordinator through the existing upgrade path; no new
+  persisted-state migration is required.
+- Added an OBS config-tree recipe with writable global and Advanced output profile
+  settings, including a one-second x264 keyframe interval.
+
 ## v0.38.6 — 2026-11-16
 
 - Fixed: package installation on stock Ubuntu cloud hosts still refused finishing

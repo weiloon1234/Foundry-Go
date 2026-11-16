@@ -153,6 +153,38 @@ class OfflineValidationTests(unittest.TestCase):
                             if item["kind"] in {"profile", "release"}))
         self.assertEqual(self.read("deploy/topology.json"), topology)
 
+    def test_config_tree_validates_every_source_and_builds_from_snapshot(self):
+        raw = self.feature()
+        tree = self.read("deploy/rehearsal/topology.json")["roles"][1]["configs"]["fixture-home"]
+        raw["roles"][1]["configs"] = {"settings": tree}
+        raw["roles"][1]["secret_files"] = {"TOKEN_FILE": "token"}
+        raw["secrets"] = {"token": {}}
+        # Use an existing package executable so this source inventory test needs no compiler.
+        raw["roles"][1]["packages"] = ["coreutils"]
+        raw["roles"][1]["executable"] = {"package": "coreutils", "path": "/usr/bin/sha256sum"}
+        raw.pop("application_executables")
+        self.write("deploy/topology.json", raw)
+        status, result = self.invoke()
+        self.assertEqual(status, 0, result)
+        self.assertEqual(result["minimum_generation"], 19)
+        sources = {file["source"] for file in tree["files"].values()}
+        checked = {item["path"] for item in result["checks"] if item["kind"] == "service_configuration"}
+        self.assertEqual(checked, sources)
+        request = {"profile": self.read("deploy/environments/acceptance.json")}
+        stage = self.root / "stage"
+        metadata.prepare(request, self.root, stage)
+        self.assertEqual({path.relative_to(stage).as_posix() for path in stage.rglob("*") if path.is_file()}, sources)
+        for source in sorted(sources):
+            path = self.root / source
+            self.assertEqual(path.read_bytes(), (stage / source).read_bytes())
+            data = path.read_bytes()
+            path.unlink()
+            self.failed("service_configuration", "declaration_file")
+            with self.assertRaises(cli.DeployError) as caught:
+                metadata.prepare(request, self.root, self.root / ("missing-" + path.name))
+            self.assertEqual(caught.exception.code, "build_source")
+            path.write_bytes(data)
+
     def test_every_action_selector_dispatches_before_local_or_remote_state(self):
         for options in ({}, {"action": None, "menu": "validate"}, {"action": "", "menu": "validate"},
                         {"action": None, "flags": ("--action", "validate")},

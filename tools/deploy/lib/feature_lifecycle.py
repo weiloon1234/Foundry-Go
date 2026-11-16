@@ -229,7 +229,8 @@ def changed_release_units(host, entry, previous, prior_launch, declaration, rele
                 changed.add(identity)
         else:
             if (executable(host, role.executable, declaration, release_path, roots)[1] != spec.executable_sha256
-                    or any(members.get(config.source) != old_members.get(config.source) for _, config in role.configs)
+                    or any(members.get(config.source) != old_members.get(config.source)
+                           for _, entry_config in role.configs for config in entry_config.iter_files())
                     or secrets.get(identity, {}) != prior_launch["secret_paths"].get(identity.record_key, {})):
                 changed.add(identity)
         for name, binding in role.common.bindings:

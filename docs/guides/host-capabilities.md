@@ -26,6 +26,7 @@ when the selected release no longer declares it.
 Managed Cloudflare DNS requires generation 18 on both client and host. Selecting
 managed mode keeps that floor after rollback or removal of the last managed listener.
 Numbered copies, copy bindings, and copy-scoped secrets share generation 18.
+Config trees require generation 19 on both peers, with the same sticky floor.
 Tools upgrades advance and verify the boot coordinator before publishing any of
 these new registry or profile shapes. A stale pin refuses application-state writes.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
@@ -568,13 +569,17 @@ paths under `deploy/bin/`.
   public listener record through the runtime descriptor. It has no implicit argv
   or environment conversion and requires generation 14.
 
-Custom `configs` map names to `source` under `deploy/files/` and `mode`:
+Custom `configs` map names to either a single-file declaration or a `files` map
+under one config directory. Each file declares `source` under `deploy/files/` and `mode`:
 `immutable`, `seed-once`, `recreate`, `rendered-json`, or `rendered-template`. Per-start preparation
 rebuilds `recreate` files; `seed-once` retains the initial seed across starts.
 Only `recreate` and `rendered-json` accept `bindings`, a map from JSON pointers to
 typed listener address/port, bundle, binding or copy-number values. Do not insert
 secrets here. Custom `environment` is an explicit map of nonsecret typed argv
 values; reserved process/application names and `_FILE` names are rejected.
+See [secret configuration templates](#secret-configuration-templates) for tree
+limits and shared directory environments, and the [OBS config tree](#obs-config-tree)
+for a complete example.
 
 <a id="recipe-unix-sockets"></a>
 ### Unix socket listeners
@@ -698,6 +703,33 @@ workload environment. Duplicate claims and conflicts with explicit role
 environment entries refuse. Existing `{"config_root":"self"}` still names the
 bundle config view, not this invocation directory.
 
+A config entry can instead declare a `files` map for a program that reads a whole
+configuration tree. The only entry fields are `files` and optional
+`directory_environment`. Each map key is a relative POSIX destination inside
+`current/config/<name>`. Each value requires `source` and `mode`, and accepts
+`format` and `bindings` under the same rules as a single-file config. Entry-level
+`source`, `mode`, `format`, `path`, and `bindings` cannot be combined with `files`.
+Per-file `path` and `directory_environment` are not accepted.
+
+A tree contains 1 to 32 files. Each path has at most 8 components. Absolute paths,
+backslashes, empty components, `.` and `..` components, duplicate keys, and files
+that are parents of other files are refused. `directory_environment` requires at
+least one file with a template `format`. All files share that directory environment;
+an argv reference such as `{"config":"settings"}` resolves the tree directory.
+
+Each file retains its mode, rendering, size limit, and permissions. Intermediate
+directories for `recreate` files are private and writable by the instance account.
+Preparation rejects symlink ancestry. A `seed-once` member uses a framework-created
+link to its persistent service-owned seed. Its edits survive starts, as with a
+single-file seed. Other files are prepared afresh from the selected release.
+Each numbered copy receives its own tree and seeds.
+
+Release review includes every member's declaration and source digest. Rollback
+prepares the target release's tree. Backup retains the selected release and private
+secret snapshots; recovery renders a fresh tree. Runtime edits and local seed state
+remain outside backup coverage. Config trees require client and host deploy-tool
+generation 19. Existing single-file declarations retain their previous minimum.
+
 Placeholders have these forms:
 
 | Placeholder | Value |
@@ -745,7 +777,7 @@ enabled, running consumers, which render again. Framework argv, units, release
 files, diagnostics, reports, and public state contain no rendered secret values.
 Applications remain responsible for what they write to their own logs.
 
-#### OBS-style writable INI
+#### OBS config tree
 
 Declare a top-level secret:
 
@@ -757,33 +789,72 @@ Add these fields to the OBS executable role:
 
 ```json
 {
-	"secret_files": {"OBS_PASSWORD_FILE": "obs-password"},
+	"secret_files": {"WS_PASSWORD_FILE": "obs-password"},
 	"configs": {
-		"obs": {
-			"source": "deploy/files/obs-global.ini",
-			"mode": "recreate",
-			"format": "ini",
-			"path": ".config/obs-studio/global.ini",
-			"directory_environment": "HOME"
+		"obs-home": {
+			"directory_environment": "HOME",
+			"files": {
+				".config/obs-studio/global.ini": {
+					"source": "deploy/files/obs/global.ini",
+					"mode": "recreate",
+					"format": "ini"
+				},
+				".config/obs-studio/basic/profiles/stream/basic.ini": {
+					"source": "deploy/files/obs/basic.ini",
+					"mode": "recreate",
+					"format": "ini"
+				},
+				".config/obs-studio/basic/profiles/stream/streamEncoder.json": {
+					"source": "deploy/files/obs/streamEncoder.json",
+					"mode": "recreate",
+					"format": "json"
+				}
+			}
 		}
 	}
 }
 ```
 
-Put this nonsecret template in `deploy/files/obs-global.ini`:
+Put this nonsecret template in `deploy/files/obs/global.ini`:
 
 ```ini
+[Basic]
+Profile=stream
+ProfileDir=stream
+
 [OBSWebSocket]
-ServerPassword={{secret.OBS_PASSWORD_FILE}}
+ServerPassword={{secret.WS_PASSWORD_FILE}}
 ```
+
+Put the profile in `deploy/files/obs/basic.ini`:
+
+```ini
+[General]
+Name=stream
+
+[Output]
+Mode=Advanced
+
+[AdvOut]
+Encoder=obs_x264
+```
+
+Put the encoder settings in `deploy/files/obs/streamEncoder.json`:
+
+```json
+{"keyint_sec": 1}
+```
+
+Advanced output uses the profile's encoder settings. Simple output's default
+keyint of 250 delays HLS segments and RTSP joins. The example sets a one-second
+keyframe interval for the x264 encoder.
 
 Supply `FOUNDRY_SERVICE_SECRET__OBS_PASSWORD` through the existing hidden
 configuration intake or private `FOUNDRY_SECRET_CONFIG_FILE`. Choose a password
-representable by the INI rules above. The daemon finds the working copy at
-`$HOME/.config/obs-studio/global.ini` and can rewrite it. Each new invocation starts
-from the release template with the current password. To use `XDG_CONFIG_HOME`
-instead, set `directory_environment` to that name and `path` to
-`obs-studio/global.ini`.
+representable by the INI rules above. OBS finds all three writable files beneath
+`$HOME/.config/obs-studio/`. Each invocation starts from the release templates
+with the current password. To use `XDG_CONFIG_HOME`, set `directory_environment`
+to that name and remove `.config/` from all three destination keys.
 
 #### MediaMTX-style YAML
 

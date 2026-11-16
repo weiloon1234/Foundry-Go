@@ -780,6 +780,26 @@ def _service_directory(host, path):
     return protected_directory(host, path)
 
 
+def _service_seed(host, directory, content, uid, gid):
+    from admission import protected_directory
+    from contracts import atomic_write, open_directory
+    directory = check_path(directory, "directory")
+    if directory.exists():
+        with open_directory(directory) as fd:
+            info = os.fstat(fd)
+            require(info.st_uid == uid and not info.st_mode & 0o077,
+                    "service_config_seed", "Existing seed directory has foreign ownership.")
+            info = os.stat("value", dir_fd=fd, follow_symlinks=False)
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == uid and info.st_nlink == 1
+                    and not info.st_mode & 0o077,
+                    "service_config_seed", "Existing seed is not an owned private regular file.")
+    else:
+        protected_directory(host, directory, 0o700)
+        atomic_write(directory / "value", content, mode=0o600, owner=uid, group=gid)
+        os.chown(directory, uid, gid)
+    return directory / "value"
+
+
 def _service_source(host, root, member):
     """Read only an inventoried, protected regular file, with bounded allocation."""
     import hashlib
@@ -963,45 +983,50 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
         template_value = lambda reference: resolve_reference(role, reference, secret_value, binding_value)
         require(tuple(resolve(a) for a in role.arguments) == spec.arguments,
                 "service_arguments", "Prepared bindings differ from frozen argv.")
+        from topology import ConfigTree
+        import hashlib
         total = 0
-        for name, config in role.configs:
-            member = inventory.get(config.source)
-            require(member is not None and member.kind == "config", "service_config_source", "Configuration is not inventoried.")
-            content = _service_source(host, release_root, member)
-            content = render_service_config(content, config, resolve, template_value)
-            total += len(content)
-            require(total <= MAX_SERVICE_CONFIG_BYTES, "service_config_size", "Service configuration view exceeds its bound.")
-            atomic_write(baselines / name, content, mode=0o640 if config.format else 0o444, group=gid)
-            if config.mode == "seed-once":
-                directory = check_path(seeds / name, "directory")
-                if directory.exists():
-                    require(directory.stat().st_uid == uid and not directory.stat().st_mode & 0o077,
-                            "service_config_seed", "Existing seed directory has foreign ownership.")
-                    fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-                    try:
-                        info = os.stat("value", dir_fd=fd, follow_symlinks=False)
-                    finally:
-                        os.close(fd)
-                    require(stat.S_ISREG(info.st_mode) and info.st_uid == uid and info.st_nlink == 1
-                            and not info.st_mode & 0o077,
-                            "service_config_seed", "Existing seed is not an owned private regular file.")
-                else:
-                    protected_directory(host, directory, 0o700)
-                    atomic_write(directory / "value", content, mode=0o600, owner=uid, group=gid)
-                    os.chown(directory, uid, gid)
-            else:
+        writable_directories = set()
+        for name, declaration in role.configs:
+            tree = isinstance(declaration, ConfigTree)
+            for config in declaration.iter_files():
+                member = inventory.get(config.source)
+                require(member is not None and member.kind == "config", "service_config_source", "Configuration is not inventoried.")
+                content = _service_source(host, release_root, member)
+                content = render_service_config(content, config, resolve, template_value)
+                total += len(content)
+                require(total <= MAX_SERVICE_CONFIG_BYTES, "service_config_size", "Service configuration view exceeds its bound.")
+                baseline = baselines / name / config.path if tree else baselines / name
+                _service_directory(host, baseline.parent)
+                atomic_write(baseline, content, mode=0o640 if config.format else 0o444, group=gid)
+                seed = None
+                if config.mode == "seed-once":
+                    if tree:
+                        # Each persistent leaf has the same private ownership contract as a single-file seed.
+                        seed_root = _service_directory(host, state / "tree-seeds" / name)
+                        seed_directory = seed_root / hashlib.sha256(config.path.encode()).hexdigest()
+                    else:
+                        seed_directory = seeds / name
+                    seed = _service_seed(host, seed_directory, content, uid, gid)
+                    if not tree:
+                        continue
                 directory = _service_directory(host, configs / name)
-                destination = directory / config.path
+                destination = check_path(directory / config.path, "file")
                 parents = [directory]
                 for part in Path(config.path).parts[:-1]:
                     parents.append(_service_directory(host, parents[-1] / part))
-                if config.mode == "recreate":
+                if seed is not None:
+                    # This framework-created link exposes the persistent leaf in the invocation tree.
+                    destination.symlink_to(os.path.relpath(seed, destination.parent))
+                elif config.mode == "recreate":
                     atomic_write(destination, content, mode=0o600, owner=uid, group=gid)
-                    for parent in reversed(parents):
-                        os.chmod(parent, 0o700)
-                        os.chown(parent, uid, gid)
+                    writable_directories.update(parents)
                 else:
                     atomic_write(destination, content, mode=0o640 if config.format else 0o444, group=gid)
+        # Keep all ancestors protected until every sibling has been prepared.
+        for parent in sorted(writable_directories, key=lambda path: len(path.parts), reverse=True):
+            os.chmod(parent, 0o700)
+            os.chown(parent, uid, gid)
         # Only a framework-created relative link may be replaced, under this lock.
         if current.exists() or current.is_symlink():
             info = current.lstat()

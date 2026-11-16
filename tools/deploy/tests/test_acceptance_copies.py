@@ -18,7 +18,7 @@ import unittest
 from unittest.mock import MagicMock, Mock, patch
 
 import acceptance_feature as scenario
-from contracts import ReleaseDeclaration, UnitIdentity, copy_socket_name, digest
+from contracts import DeployError, ReleaseDeclaration, UnitIdentity, copy_socket_name, digest
 import listeners
 import services
 from test_artifacts import elf
@@ -93,7 +93,21 @@ class CopiesAcceptanceTests(unittest.TestCase):
         unix = [endpoint for endpoint in listeners.unix_endpoints(topology, profile) if endpoint.role == scenario.COPIES_ROLE]
         self.assertEqual([copy_socket_name('copies.sock', n) for n in range(1, 4)], [endpoint.name for endpoint in unix])
         self.assertEqual(3, len({services.ServicePaths.for_unit(identity, profile.instance_id).state for identity in identities}))
-        self.assertEqual(18, upgrades.feature_generation(topology, {}, profile=profile))
+        self.assertEqual(19, upgrades.feature_generation(topology, {}, profile=profile))
+
+    def test_release_inventory_requires_every_tree_member(self):
+        archive_path, _, _, topology = self.build(0)
+        tree = dict(next(role for role in topology.roles if role.common.name == "relay").configs)["fixture-home"]
+        with tarfile.open(archive_path, "r:gz") as archive:
+            declaration = json.load(archive.extractfile("manifest.json"))["deployment"]
+            for file in tree.files:
+                self.assertEqual(archive.extractfile(file.source).read(),
+                                 (Path(__file__).resolve().parents[3] / "tests/fixtures/deploy-acceptance" / file.source).read_bytes())
+                missing = copy.deepcopy(declaration)
+                missing["inventory"] = [member for member in missing["inventory"] if member["path"] != file.source]
+                with self.assertRaises(DeployError) as caught:
+                    ReleaseDeclaration.parse(missing)
+                self.assertEqual(caught.exception.code, "invalid_contract")
 
     def test_count_variants_preserve_declarations_and_source_payload(self):
         original = digest(self.source)
@@ -124,7 +138,7 @@ class CopiesAcceptanceTests(unittest.TestCase):
     def test_default_fixture_retains_singleton_recovery_contract(self):
         _, _, profile, topology = self.build(0)
         self.assertNotIn(scenario.COPIES_ROLE, dict(profile.placement))
-        self.assertEqual(16, upgrades.feature_generation(topology, {}, profile=profile))
+        self.assertEqual(19, upgrades.feature_generation(topology, {}, profile=profile))
 
     def test_lane_c_hook_is_required_and_preserves_failures(self):
         inventory = Mock()

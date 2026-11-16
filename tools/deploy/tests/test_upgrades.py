@@ -130,7 +130,7 @@ class UpgradeTests(unittest.TestCase):
         candidate = self.root / "candidate"
         import shutil
         shutil.copytree(self.source, candidate)
-        (candidate / "protocol.json").write_text(json.dumps({**self.metadata, "generation": 18}))
+        (candidate / "protocol.json").write_text(json.dumps({**self.metadata, "generation": 19}))
         (candidate / "server/runtime_v1.py").write_bytes(
             (Path(__file__).resolve().parents[1] / "server/runtime_v1.py").read_bytes())
         return runtime, candidate
@@ -161,7 +161,7 @@ class UpgradeTests(unittest.TestCase):
                          feature_network.boot_files(candidate, self.host.registry["tools"]["bundle_sha256"]))
         self.assertNotEqual(self.host.paths.p(feature_network.BOOT_PATH).read_text(), boot[feature_network.BOOT_PATH])
 
-    def test_every_generation_14_through_18_advances_boot_before_selection(self):
+    def test_every_generation_14_through_19_advances_boot_before_selection(self):
         import feature_network
         import services
         self.metadata["generation"] = 13
@@ -173,7 +173,7 @@ class UpgradeTests(unittest.TestCase):
             self.host.owned_write(self.host.paths.p(name), content)
         self.host.owned_write(self.host.paths.p(services.RUNTIME_ENTRY), (self.source / "server/runtime_v1.py").read_bytes())
         select = upgrades._select
-        for revision, generation in enumerate((14, 15, 16, 17, 18, 18)):
+        for revision, generation in enumerate((14, 15, 16, 17, 18, 19, 19)):
             with self.subTest(generation=generation, revision=revision):
                 (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": generation,
                     "framework_version": f"integration-{revision}"}))
@@ -247,7 +247,7 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(runtime.read_bytes(), (candidate / "server/runtime_v1.py").read_bytes())
         result = upgrades.apply_upgrade(self.host, candidate, plan["plan_token"], operation)
         self.assertEqual(result["outcome"], "succeeded")
-        self.assertEqual(self.host.registry["tools"]["generation"], 18)
+        self.assertEqual(self.host.registry["tools"]["generation"], 19)
         self.assertIsNone(self.host.registry["tools"]["upgrade_operation"])
         journal = json.loads((self.host.paths.p(HOST_PATHS["upgrades"]) / operation / "intent.json").read_text())
         self.assertEqual(journal["migration_steps"], plan["upgrade"]["migration_steps"])
@@ -678,7 +678,7 @@ class UpgradeTests(unittest.TestCase):
     def test_inventory_requirements_are_cumulative_by_inspected_bundle_generation(self):
         additions = (upgrades.GENERATION_11_FILES | upgrades.GENERATION_12_FILES |
                      upgrades.GENERATION_13_FILES | upgrades.GENERATION_14_FILES | upgrades.GENERATION_15_FILES | upgrades.GENERATION_16_FILES | upgrades.GENERATION_17_FILES | upgrades.GENERATION_18_FILES)
-        for generation in (9, 10, 11, 12, 13, 14, 15, 16, 17, 18):
+        for generation in (9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19):
             with self.subTest(generation=generation):
                 for name in additions:
                     (self.source / name).unlink(missing_ok=True)

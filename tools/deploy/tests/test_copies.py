@@ -373,7 +373,7 @@ class CopyFoundationTests(unittest.TestCase):
     def test_generation_18_requires_both_peers_and_survives_rollback(self):
         topology = t.parse_topology(declaration())
         copies = {**profile(), "placement": {"http": 1, "relay": 2, "worker": 1}}
-        self.assertEqual(upgrades.protocol()["generation"], c.FEATURE_COPIES_GENERATION)
+        self.assertGreaterEqual(upgrades.protocol()["generation"], c.FEATURE_COPIES_GENERATION)
         self.assertEqual(upgrades.feature_generation(topology, {"profile": copies}), 18)
         for host, client in ((16, 18), (17, 18), (18, 16), (18, 17)):
             with self.subTest(host=host, client=client), self.assertRaises(c.DeployError):

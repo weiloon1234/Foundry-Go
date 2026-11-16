@@ -277,7 +277,12 @@ class ServicePaths:
         contract_name(name)
         contract_path(path)
         return (self.state + "/seeds/" + name if mode == "seed-once"
-                else self.base + "/current/config/" + name) + "/" + path
+                else self.config_directory(name)) + "/" + path
+
+    def config_directory(self, name):
+        from contracts import contract_name
+        contract_name(name)
+        return self.base + "/current/config/" + name
 
     def bundle(self, mount):
         return self.base + "/view/" + mount.area + "/" + mount.path
@@ -318,7 +323,8 @@ def configuration_digest(role, members, views=(), secret_paths=None):
     """Nonsecret configuration identity shared by resolution and preparation."""
     from dataclasses import asdict
     sources = {m.path: m for m in members}
-    require(all(c.source in sources for _, c in role.configs),
+    from topology import ConfigTree
+    require(all(file.source in sources for _, config in role.configs for file in config.iter_files()),
             "service_config_source", "Configuration inventory is incomplete.")
     def declaration(config):
         value = asdict(config)
@@ -326,8 +332,13 @@ def configuration_digest(role, members, views=(), secret_paths=None):
             for key in ("format", "path", "directory_environment"):
                 value.pop(key)
         return value
-    return canonical_digest({"configs": [(name, declaration(config), asdict(sources[config.source]))
-                                          for name, config in role.configs],
+    def config_identity(name, config):
+        if isinstance(config, ConfigTree):
+            return (name, {"directory_environment": config.directory_environment,
+                           "files": [(file.path, declaration(file), asdict(sources[file.source]))
+                                     for file in config.files]})
+        return (name, declaration(config), asdict(sources[config.source]))
+    return canonical_digest({"configs": [config_identity(name, config) for name, config in role.configs],
                              "bundles": [asdict(view) for view in views],
                              "secret_paths": secret_paths or {}})
 
@@ -341,7 +352,7 @@ def config_environment(role, paths):
             if key is not None:
                 require(key not in result and key not in dict(role.environment),
                         "service_environment", "A configuration directory environment has conflicting declarations.")
-                result[key] = paths.base + "/current/config/" + name
+                result[key] = paths.config_directory(name)
     return result
 
 
@@ -362,7 +373,10 @@ def resolve_argument(argument, role, spec, resolution, paths, views, secret_path
     if kind is ArgumentKind.LITERAL:
         return value
     if kind is ArgumentKind.CONFIG:
+        from topology import ConfigTree
         config = dict(role.configs)[value]
+        if isinstance(config, ConfigTree):
+            return paths.config_directory(value)
         return paths.config(value, config.mode, config.path)
     if kind is ArgumentKind.SHARED_DIRECTORY_PATH:
         binding = next((b for b in spec.bindings.shared_directories if b.name == value), None)

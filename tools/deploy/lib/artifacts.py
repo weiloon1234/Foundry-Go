@@ -520,7 +520,7 @@ def declared_release_files(topology, application_executables, payload_paths):
     declared = {"artisan": "application", "config/deploy.toml": "config"}
     for role in topology.roles:
         if isinstance(role, ExecutableRole):
-            declared.update({config.source: "config" for _, config in role.configs})
+            declared.update({config.source: "config" for _, entry in role.configs for config in entry.iter_files()})
     for path in application_executables:
         require(path not in declared, "artifact_inventory", "Application export overlaps another declaration.")
         declared[path] = "application"

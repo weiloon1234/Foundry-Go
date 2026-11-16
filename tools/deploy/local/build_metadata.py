@@ -98,8 +98,9 @@ def prepare(request, work, stage):
     declarations = {}
     for role in topology.roles:
         if isinstance(role, ExecutableRole):
-            for _, config in role.configs:
-                declarations[config.source] = config.source
+            for _, entry_config in role.configs:
+                for config in entry_config.iter_files():
+                    declarations[config.source] = config.source
     for name, binary in topology.application_executables:
         if binary.go_package is not None:
             destination = stage / "deploy/bin" / name

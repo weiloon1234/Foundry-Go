@@ -67,6 +67,28 @@
       "maintenance": "continue",
       "state": {
         "kind": "disposable"
+      },
+      "configs": {
+        "fixture-home": {
+          "directory_environment": "HOME",
+          "files": {
+            ".config/fixture/global.json": {
+              "source": "deploy/files/config-tree/global.json",
+              "mode": "recreate",
+              "format": "json"
+            },
+            ".config/fixture/profiles/stream/basic.ini": {
+              "source": "deploy/files/config-tree/basic.ini",
+              "mode": "recreate",
+              "format": "ini"
+            },
+            ".config/fixture/profiles/stream/streamEncoder.json": {
+              "source": "deploy/files/config-tree/streamEncoder.json",
+              "mode": "recreate",
+              "format": "json"
+            }
+          }
+        }
       }
     }
   ],

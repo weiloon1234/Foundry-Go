@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in generation-18 numbered copies and host capabilities in the disposable harness.
+"""Opt-in generation-19 numbered copies and host capabilities in the disposable harness.
 
 Use the ordinary deploy-acceptance archive. The artifact is a second, pinned copy
 of that fixture's Linux artisan binary; no artifact network download is needed.
@@ -339,6 +339,21 @@ def assert_secret_template(host, inventory, entry, secret):
     assert baseline.read_bytes() == config.read_bytes()
     assert (baseline.stat().st_uid, baseline.stat().st_gid, baseline.stat().st_mode & 0o777) == (0, account.pw_gid, 0o640)
     assert run(["runuser", "-u", entry["name"], "--", "test", "-r", str(config)], check=False).returncode == 0
+    home = Path(paths.base) / "current/config/fixture-home"
+    tree = home / ".config/fixture"
+    assert services.config_environment(inventory.roles["relay"], paths)["HOME"] == str(home)
+    assert json.loads((tree / "global.json").read_text()) == {"token": secret}
+    assert (tree / "profiles/stream/basic.ini").read_text() == "[Output]\nMode=Advanced\n"
+    assert json.loads((tree / "profiles/stream/streamEncoder.json").read_text()) == {"keyint_sec": 1}
+    for path in tree.rglob("*"):
+        assert not path.is_symlink()
+        assert path.stat().st_uid == account.pw_uid
+        assert path.stat().st_mode & 0o777 == (0o700 if path.is_dir() else 0o600)
+    assert run(["runuser", "-u", entry["name"], "--", "test", "-w", str(tree / "global.json")], check=False).returncode == 0
+    relay_unit = inventory.units[inventory.identity("relay")]
+    assert "HOME=" + str(home) in run(["systemctl", "cat", relay_unit]).stdout
+    for pid in listeners.process_members(host, relay_unit):
+        assert ("HOME=" + str(home)).encode() in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
     # Check every workload process, not merely MainPID, without printing bytes.
     for unit in inventory.units.values():
         members = listeners.process_members(host, unit)
@@ -448,6 +463,8 @@ def feature_archive(source, destination, host_id, *, confined=False, copies=0, v
                 "public_addresses": list(network.ADDRESSES), "proxied": False}}}
     checksum = hashlib.sha256(files["artisan"]).hexdigest()
     platform = "linux-" + profile["architecture"]
+    fixture = Path(__file__).resolve().parents[3] / "tests/fixtures/deploy-acceptance"
+    tree_configs = json.loads((fixture / "deploy/rehearsal/topology.json").read_text())["roles"][1]["configs"]
     topology = parse_topology({"schema": 2, "shared_directories": {
         "render-cache": {"state": "disposable", "max_bytes": 1048576, "writers": ["http"], "readers": ["relay"]}}, "roles": [
         {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["jq"],
@@ -463,7 +480,7 @@ def feature_archive(source, destination, host_id, *, confined=False, copies=0, v
                          "WAYLAND_DISPLAY": {"binding_socket_name": "socket"},
                          "RENDER_CACHE": {"shared_directory_path": "render-cache"}},
          "secret_files": {"TOKEN_FILE": "relay-template-token"},
-         "configs": {"private": {"source": "deploy/files/relay.yaml", "mode": "rendered-template",
+         "configs": {**tree_configs, "private": {"source": "deploy/files/relay.yaml", "mode": "rendered-template",
                                  "format": "yaml", "path": "relay.yaml", "directory_environment": "XDG_CONFIG_HOME"}},
          "listeners": {"control": {"transport": "tcp", "bind": "public", "tls": "none", "authentication": True}},
          "readiness": {"kind": "http", "listener": "control", "path": "/ready", "status": 200, "body": "feature-relay-ready"},
@@ -538,6 +555,9 @@ def feature_archive(source, destination, host_id, *, confined=False, copies=0, v
     payload_path = "deploy/artifacts/relay/" + checksum + ".bin"
     files[payload_path] = files["artisan"]
     files["deploy/files/relay.yaml"] = b"token: {{secret.TOKEN_FILE}}\n"
+    for config in tree_configs.values():
+        for file in config["files"].values():
+            files[file["source"]] = (fixture / file["source"]).read_bytes()
     payload = destination.parent / "relay-fixture.bin"
     payload.write_bytes(files["artisan"])
     members = artifacts.inspect_payload(dict(topology.artifacts)["relay"], platform, payload, artifacts.ExpansionBudget())

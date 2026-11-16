@@ -638,6 +638,7 @@ UPLOAD_TEMPLATE_GENERATION = 17
 FEATURE_PROXY_PROTOCOL_GENERATION = 18
 FEATURE_MANAGED_DNS_GENERATION = 18
 FEATURE_COPIES_GENERATION = 18
+FEATURE_CONFIG_TREE_GENERATION = 19
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
 MAX_ROLE_COPIES, MAX_UNITS = 128, 256
 MAX_ENDPOINTS = MAX_LISTENERS * MAX_ROLE_COPIES + 1  # Expanded custom listeners plus built-in HTTP.
@@ -1506,7 +1507,8 @@ class ReleaseDeclaration:
                 "invalid_contract", "Archive inventories must be unique and cover all declared artifacts.")
         for role in topology.roles:
             if isinstance(role, ExecutableRole):
-                require(all(c.source in files and files[c.source].kind == "config" for _, c in role.configs),
+                require(all(c.source in files and files[c.source].kind == "config"
+                            for _, config in role.configs for c in config.iter_files()),
                         "invalid_contract", "Archive lacks a declared configuration file.")
         for payload in artifacts:
             artifact = dict(topology.artifacts)[payload.artifact]
