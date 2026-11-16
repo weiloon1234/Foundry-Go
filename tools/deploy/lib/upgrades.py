@@ -366,9 +366,9 @@ def prune_tools(host, digest: str) -> dict:
     require(host.host_lock_fd is not None, "tools_lock_required", "Tool pruning requires the host lock.")
     registry = host.read_registry()
     if any(e.get("topology", {}).get("schema") == 2 or "deployment_selection" in e for e in registry["instances"].values()):
-        from feature_lifecycle import LATER
+        from feature_lifecycle import unsupported_detail
         return {"removed_bundles": [], "removed_upgrade_journals": [],
-                "pruning_error": {"code": "capability_unavailable", "detail": f"Feature helper pruning requires {LATER}; all bundles retained."}}
+                "pruning_error": {"code": "capability_unavailable", "detail": unsupported_detail("helper bundle pruning")}}
     selected = _bundle_path(host, digest)
     # Preserve the ledger diagnostic at the caller boundary; child failures are redacted.
     _retired_bundles(host)
@@ -555,7 +555,7 @@ def _check_feature_request(registry, request, action):
                                 client_generation=request.get("client", {}).get("generation", 0))
     requested = (isinstance(profile, dict) and profile.get("schema") == FEATURE_PROFILE_SCHEMA
                  or isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA)
-    supported = {"backup-configure", "backup-run", "restore-drill", "recover-plan", "recover-apply", "down", "up", "rollback", "release-plan", "config-set", "bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "status", "logs", "sync", "config-keys", "report"}
+    supported = {"inspect", "backup-configure", "backup-run", "restore-drill", "recover-plan", "recover-apply", "down", "up", "rollback", "release-plan", "config-set", "bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "status", "logs", "sync", "config-keys", "report"}
     feature = requested or registry is not None and any(
         (entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry)
         and (profile is None or entry["profile"]["instance_id"] == profile.get("instance_id"))

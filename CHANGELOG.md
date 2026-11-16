@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.38.4 — 2026-11-16
+
+- Fixed: feature projects (topology schema 2/profile schema 3) can run host
+  inspection through the real operator bootstrap path on fresh and prepared
+  hosts. Staged candidate tools carry the fix; tool generation remains 18.
+- Clarified: unsupported feature operations now explain their current limitation
+  and available next step instead of referring to a future B24 release. The host
+  capabilities guide records the complete operator action matrix.
+- Added: CLI-to-server regressions and a separate fresh-container operator phase
+  in feature acceptance cover inspect/prepare, reviewed deployment, status, logs
+  and report while retaining the direct-request scenarios.
+
 ## v0.38.3 — 2026-11-16
 
 - Fixed: units for roles with release-carried artifact views rendered

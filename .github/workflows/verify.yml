@@ -43,6 +43,9 @@ jobs:
       matrix:
         ubuntu: ['24.04', '26.04']
         mode: [fresh, foreign-upgrade]
+        include:
+          - ubuntu: '24.04'
+            mode: feature
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

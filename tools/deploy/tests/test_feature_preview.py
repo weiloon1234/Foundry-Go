@@ -241,14 +241,17 @@ class FeaturePreviewTests(unittest.TestCase):
         run.assert_not_called()
         self.assertEqual(value["removed_bundles"], [])
         self.assertEqual(value["pruning_error"]["code"], "capability_unavailable")
-        self.assertIn("post-preview", value["pruning_error"]["detail"])
+        self.assertIn("retained helper bundles", value["pruning_error"]["detail"])
+        self.assertIn("ACTION=tools-plan", value["pruning_error"]["detail"])
 
-    def test_preview_refusals_name_later_release(self):
+    def test_feature_refusals_name_current_limitation_and_alternative(self):
         for action in ("keys-rotate", "backup-keys-rotate"):
             with self.subTest(action=action), self.assertRaises(c.DeployError) as raised:
                 upgrades._check_feature_request(None, {"profile": {"schema": 3}}, action)
             self.assertEqual(raised.exception.code, "capability_unavailable")
-            self.assertIn("post-preview", raised.exception.detail)
+            self.assertNotIn("post-preview", raised.exception.detail)
+            self.assertIn("transition", raised.exception.detail)
+            self.assertIn("ACTION=", raised.exception.detail)
 
     def test_recovery_and_backup_dispatch_require_generation_13(self):
         for action in ("backup-configure", "backup-run", "restore-drill", "recover-plan", "recover-apply"):

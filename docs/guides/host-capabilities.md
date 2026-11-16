@@ -56,18 +56,47 @@ following limitations remain; unsupported lifecycle operations return
 | Encryption key rotation | The dedicated `keys rotate` action remains unsupported for feature instances. Generic edits cannot change the keyring contract. |
 | Changed reprovisioning of a selected instance | Changes to its profile, package requirements or owned network/boot files refuse. Unchanged re-bootstrap is supported. |
 | Newly required packages at activation | Bootstrap installs packages; deployment cannot silently add missing packages. |
-| Named lifecycle operations | Start/restart/stop the complete enabled instance. Selecting a role for logs is supported. |
+| Named lifecycle operations | `ROLE`/`COPY` scope restart, stop and logs; dependency and maintenance checks still apply. |
 | Automatic reconciliation of interrupted lifecycle operations | Do not assume an interrupted operation rolled back. Inspect status and retained cleanup evidence. Unresolved cleanup blocks later starts. |
 | Bundle ABI without package-version evidence | Bundle consumers must use package executables with one matching observed service package version. An artifact executable cannot supply this ABI proof. |
 | Feature release/artifact pruning and helper-bundle pruning | Explicit feature pruning refuses. Automatic helper retention keeps every helper bundle and upgrade journal with a capability diagnostic. Invocation/view limits still apply; reaching a limit refuses further starts. |
 | Host capacity changes involving features | Capacity changes are unsupported for feature instances. Legacy neighbors retain their existing supported operations. |
 
-The server feature-operation allowlist is `bootstrap-plan`, `bootstrap-apply`,
-`release-plan`, `activate`, `rollback`, `restart`, `stop`, `status`, `logs`, `sync`, `config-keys`,
-`config-set`, `down`, `up`, `backup-configure`, `backup-run`, `restore-drill`,
-`recover-plan`, `recover-apply` and `report`. Backup credential rotation remains unsupported.
-Host tool upgrades have their own upgrade protocol. Other feature mutations are
-not implied by a command appearing in the legacy deployment guide.
+### Operator commands
+
+`make bootstrap ACTION=inspect` reads the host through staged candidate tools,
+including before its first registry exists. `ACTION=prepare` then reviews and
+applies bootstrap. `make release` builds locally; `ACTION=deploy` reviews and
+activates that archive. Tool generation remains 18.
+
+“Supported” below means the feature owner handles the operation; ordinary identity,
+plan, readiness and capability-generation checks still apply. On a fresh host,
+instance operations require `ACTION=prepare` first; release-dependent operations
+also require a selected deployment. Tool upgrades require an installed registry.
+Recovery uses its separate empty replacement-host contract, not an existing live
+instance. `hello` returns before the client capability gate.
+
+| Server actions (local operator path) | Fresh host | Existing feature instance | Evidence in `tools/deploy/tests` |
+| --- | --- | --- | --- |
+| `hello`, `inspect` | Supported; no registry required | Supported, read-only | `test_operator_feature_path.py` |
+| `bootstrap-plan`, `bootstrap-apply` | Supported | Unchanged preparation supported; changed selected declarations refuse | `test_operator_feature_path.py`, `test_feature_wiring.py` |
+| `release-plan`, `activate` (`deploy`) | Prepare first | Supported, reviewed feature transition | `test_operator_feature_path.py`, `acceptance_operator.py` |
+| `status`, `logs`, `report`, `sync`, `config-keys` | Prepare first (`report` can inspect an empty host directly) | Supported | `test_operator_feature_path.py`, `test_feature_wiring.py`, `acceptance_operator.py` |
+| `rollback`, `restart`, `stop`, `down`, `up`, `config-set` | Prepare/deploy first | Supported, scoped lifecycle/configuration owners | `test_feature_wiring.py`, `test_feature_copies.py`, `test_feature_maintenance.py` |
+| `backup-configure`, `backup-run`, `restore-drill` | Prepare first; backup/drill need a deployment/backup | Supported by feature backup/recovery owners | `test_feature_recovery.py`, `acceptance_feature_recovery.py` |
+| `recover-plan`, `recover-apply` | Supported with recovery material | Replacement-host recovery only | `test_feature_recovery.py`, `acceptance_feature_recovery.py` |
+| `tools-plan`, `tools-apply`, `upgrade-resume` | Prepare first | Supported by upgrade protocol | `test_feature_wiring.py` |
+| `capacity-plan`, `capacity-apply` | Refused | No feature admission transition for resizing; retain allocation, inspect `status` | `test_operator_feature_path.py` |
+| `keys-rotate` | Refused | No feature keyring transition; retain keyring, use `config` for service secrets only | `test_operator_feature_path.py` |
+| `backup-keys-rotate`, `backup-recipients-rotate` | Refused | No reviewed feature recovery-archive rotation; retain credentials/recipients, use `backup-run` with current settings | `test_operator_feature_path.py` |
+| `dns-token-rotate` | Refused | No coordinated managed-record credential rotation; retain token, inspect DNS evidence in `status` | `test_operator_feature_path.py` |
+| `reconcile` | Refused | No automatic interrupted-operation reconciliation; inspect `status`/`report` and retained cleanup evidence before recovery | `test_operator_feature_path.py` |
+
+Deliberate refusals return `capability_unavailable` before mutation. The exhaustive
+server-action regression checks both fresh and registered feature gates; the
+operator acceptance phase runs bootstrap inspect/prepare, reviewed deployment,
+status, logs and report through the real CLI and installed launcher, on its own
+fresh container. Existing direct-request acceptance phases remain separate.
 
 Service secrets use the existing private configuration intake. Declare names in
 `secrets` and map service `_FILE` variables through `secret_files`; explicit
@@ -1163,7 +1192,8 @@ Addresses always come from the profile, never SSH or a provider lookup.
 The certificate owner supplies the token from its root-only
 `/etc/foundry/cloudflare/zones/<zone-id>.ini`. The zone must match the instance's
 certificate `zone_ref`. Bootstrap takes `secrets.cloudflare_dns_token` through
-private SSH stdin. Use the existing `ACTION=dns-token-rotate` path for rotation.
+private SSH stdin. Feature instances currently retain that token: `ACTION=dns-token-rotate`
+refuses until a coordinated managed-record credential rotation exists.
 There is no DNS token field in a profile and no service access to this token.
 
 For the shared certificate and managed-DNS token, create these Cloudflare API

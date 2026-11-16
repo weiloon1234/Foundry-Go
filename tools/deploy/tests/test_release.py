@@ -1271,7 +1271,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(set(self.root.rglob("*")), before)
         def reject(value):
             self.assertEqual(value, manifest)
-            raise DeployError("capability_unavailable", "Feature rollback requires the post-preview B24 lifecycle release.")
+            raise DeployError("capability_unavailable", "Fixture manifest policy rejects this release.")
         destination = self.root / "extract"
         with self.assertRaises(DeployError):
             release.unpack_archive(self.host, archive, destination, self.entry, digest(archive), manifest_check=reject)

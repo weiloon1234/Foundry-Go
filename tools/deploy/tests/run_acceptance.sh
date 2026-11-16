@@ -25,8 +25,8 @@ prove every running role matches its selected release.
 and the candidate. Supply the baseline tag's Go module-cache bundle through
 --tools-root. It bootstraps and deploys with that bundle, then upgrades through
 tools-plan/tools-apply and proves the candidate deployment and installed units.
---feature-preview runs only the generation-12 feature scenario on --fresh.
-It requires lane C preview integration and a newly built deploy-acceptance archive.
+--feature-preview runs the operator CLI and direct feature scenarios on separate
+fresh hosts. It requires a newly built deploy-acceptance archive.
 Optional: ACCEPTANCE_LOG_DIR, ACCEPTANCE_SCHEDULE_MESSAGE (see acceptance_roles.py),
 ACCEPTANCE_SECRET_CONFIG_KEYS (comma-separated keys the first deploy needs, such as
 seed passwords; each receives a random bootstrap value).
@@ -92,6 +92,7 @@ image=foundry-acceptance-host:$token
 base_image=foundry-acceptance-base:$token
 s3_image=$(python3 "$containers" s3-image)
 env_file=$logs/.private-env
+operator_env=$logs/.private-operator-env
 certs=$logs/.private-tls
 mkdir -m 700 "$certs"
 baseline_done=0
@@ -129,7 +130,7 @@ cleanup() {
   if ((network_created)); then docker network rm "$network" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((image_created)); then docker image rm "$image" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((base_created)); then docker image rm "$base_image" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
-  rm -f "$env_file"
+  rm -f "$env_file" "$operator_env"
   rm -rf "$logs/.private-recovery"
   rm -rf "$certs"  # Task-owned private CA and S3 stand-in key material only.
   ((cleanup_failed == 0)) || result=1
@@ -282,6 +283,26 @@ recovery_target() {
 }
 
 if ((feature_preview)); then
+  operator_host=foundry-operator-$token
+  # Each fresh host owns a distinct backup repository and application bucket.
+  sed -e '/^ACCEPTANCE_APP_BUCKET=/s/$/-operator/' \
+      -e '/^ACCEPTANCE_BACKUP_BUCKET=/s/$/-operator/' "$env_file" > "$operator_env"
+  chmod 600 "$operator_env"
+  python3 "$containers" create-host --platform "$platform" --name "$operator_host" --network "$network" \
+    --mount "type=bind,source=$framework/tools/deploy,target=/verification/deploy,readonly" \
+    --mount "type=bind,source=$framework,target=/verification/foundry-go,readonly" \
+    --image "$image" >"$logs/operator-create.log" 2>&1
+  recovery_hosts+=("$operator_host")
+  python3 "$containers" boot "$operator_host" "$certs" >"$logs/operator-start.log" 2>&1
+  docker exec "$operator_host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a
+  docker cp "$archive" "$operator_host:/var/lib/foundry-acceptance-f4a/input.tar.gz" >"$logs/operator-archive.log" 2>&1
+  docker exec "$operator_host" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade' >"$logs/operator-packages.log" 2>&1
+  docker exec --env-file "$operator_env" "$operator_host" python3 -B \
+    /verification/deploy/tests/acceptance_phase.py /verification/deploy/tests/acceptance_operator.py \
+    --prepare-fixture >"$logs/operator-fixture.log" 2>&1
+  echo 'Running operator CLI path'
+  python3 -B "$tests/acceptance_operator.py" --host "$operator_host" --env-file "$operator_env" >"$logs/operator-cli.log" 2>&1
+  docker stop --time 150 "$operator_host" >"$logs/operator-stop.log" 2>&1
   phase feature-preview /verification/deploy/tests/acceptance_feature.py --archive /var/lib/foundry-acceptance-f4a/input.tar.gz
   phase feature-recovery-source /verification/deploy/tests/acceptance_feature_recovery.py source
   foreign_verified=1

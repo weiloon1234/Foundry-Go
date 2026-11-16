@@ -3,7 +3,7 @@
 set -euo pipefail
 umask 077
 
-[[ $# == 2 ]] || { echo 'Expected Ubuntu version and fresh|foreign-upgrade mode' >&2; exit 2; }
+[[ $# == 2 ]] || { echo 'Expected Ubuntu version and fresh|foreign-upgrade|feature mode' >&2; exit 2; }
 ubuntu=$1
 mode=$2
 case "$ubuntu" in
@@ -13,7 +13,9 @@ esac
 case "$mode" in
   fresh) flags=(--fresh) ;;
   foreign-upgrade) flags=(--foreign --upgrade) ;;
-  *) echo 'Expected fresh or foreign-upgrade mode' >&2; exit 2 ;;
+  # Feature roles through the operator CLI and the direct lifecycle scenarios.
+  feature) flags=(--fresh --feature-preview) ;;
+  *) echo 'Expected fresh, foreign-upgrade or feature mode' >&2; exit 2 ;;
 esac
 : "${ACCEPTANCE_LOG_DIR:?Set ACCEPTANCE_LOG_DIR to a new directory}"
 [[ ! -e "$ACCEPTANCE_LOG_DIR" && ! -L "$ACCEPTANCE_LOG_DIR" ]] || {

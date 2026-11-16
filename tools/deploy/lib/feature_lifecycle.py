@@ -28,19 +28,39 @@ from contracts import (AdmissionDisposition, AdmissionRecord, Deployment,
 from topology import (ApplicationExecutable, ArtifactExecutable, BuiltinRole, BundleDirectoryBinding,
                       CopiesBinding, EndpointBinding, ExecutableBinding, ExecutableRole, PackageExecutable, PublicListenerReference, parse_profile, parse_topology, expand_placement)
 
-LATER = "the post-preview B24 lifecycle release"
+UNSUPPORTED = {
+    "capacity-plan": "Host resizing has no feature admission transition; retain the current allocation and use ACTION=status to inspect it.",
+    "keys-rotate": "Encryption keyring rotation has no feature lifecycle transition; retain the current keyring. Use ACTION=config for service secrets only.",
+    "backup-keys-rotate": "Backup credential rotation has no reviewed feature recovery-archive transition; retain the configured credentials and use ACTION=backup-run with the current repository.",
+    "backup-recipients-rotate": "Recipient rotation has no reviewed feature recovery-archive transition; retain the configured recipients and use ACTION=backup-run with them.",
+    "dns-token-rotate": "DNS token rotation does not coordinate feature managed-record credentials; retain the configured token and use ACTION=status to inspect DNS evidence.",
+    "reconcile": "Automatic interrupted feature-operation reconciliation is unavailable; use ACTION=status and ACTION=report to inspect retained cleanup evidence before recovery.",
+    "reprovisioning a selected feature instance": "Changed reprovisioning cannot replace a selected feature deployment; use a reviewed ACTION=deploy for supported declaration changes. Unchanged ACTION=prepare is supported.",
+    "release and artifact pruning": "Feature release and artifact references are retained for recovery; retain them and use ACTION=status to inspect selected releases.",
+    "helper bundle pruning": "Feature boot and runtime references require retained helper bundles; retain them and use ACTION=tools-plan to review an upgrade.",
+}
+UNSUPPORTED["capacity-apply"] = UNSUPPORTED["capacity-plan"]
+UNSUPPORTED["key rotation"] = UNSUPPORTED["keys-rotate"]
+UNSUPPORTED["reconciliation"] = UNSUPPORTED["reconcile"]
+UNSUPPORTED["interrupted-operation reconciliation"] = UNSUPPORTED["reconcile"]
 
 
 def is_feature(entry):
     return entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry
 
 
+def unsupported_detail(action):
+    reason = UNSUPPORTED.get(action, "No feature lifecycle handler implements this operation; use ACTION=status or ACTION=report to inspect the instance.")
+    return f"Feature {action} is unsupported. {reason}"
+
+
 def refuse(action):
-    raise DeployError("capability_unavailable", f"Feature {action} requires {LATER}.")
+    raise DeployError("capability_unavailable", unsupported_detail(action))
 
 
 def check_operation(action):
-    require(action in ("activate", "rollback", "restart", "stop", "config-set", "down", "up"), "capability_unavailable", f"Feature operation requires {LATER}.")
+    if action not in ("activate", "rollback", "restart", "stop", "config-set", "down", "up"):
+        refuse(action)
 
 
 def absolute(host, path):
@@ -888,7 +908,7 @@ def prepare_release(host, entry, state, request, *, recovery_declaration=None):
             "release_identity", "Reviewed releases cannot change the instance host or infrastructure profile.")
     release.persist_declaration(host, entry, manifest, topology.projection(), profile_record.projection(), request["archive_sha256"])
     plan = packages.inspect(host, feature_network.package_topology(topology), profile_record)
-    require(not plan["missing"], "capability_unavailable", f"New package requirements after bootstrap need {LATER}; rebuild this preview host.")
+    require(not plan["missing"], "capability_unavailable", "Activation cannot install newly required packages; prepare a replacement host with the required topology before deployment.")
     prepared = artifacts.verify_release_tree(declaration, staging, budget,
                  artifact_staging=stage_root / "artifacts", outer_charged=True)
     store = admission.AdmissionStore(host, entry["profile"]["instance_id"])
@@ -908,7 +928,7 @@ def prepare_release(host, entry, state, request, *, recovery_declaration=None):
             versions = {packages.executable_evidence(host, role.executable)["version"] for role in consumers
                         if isinstance(role.executable, PackageExecutable)}
             require(len(versions) == 1 and len(consumers) == sum(isinstance(r.executable, PackageExecutable) for r in consumers),
-                    "capability_unavailable", f"Unverified service bundle ABI requires {LATER}.")
+                    "capability_unavailable", "Service bundle ABI lacks matching package-version evidence; use a package executable with verified version evidence.")
             abi = next(iter(versions))
         tree = artifacts.publish(host, entry["name"], prepared_artifact, history=history, observed_service_abi=abi)
         reference = next(ref for ref in refs if ref.artifact == prepared_artifact.payload.artifact)
@@ -1032,7 +1052,7 @@ def execute(host, request, *, pin=None):
                     **({"bypass_path": maintenance_result["bypass_path"]}
                        if "bypass_path" in maintenance_result else {})} if action in ("down", "up") else {}),
                 "status": state["status"], "profile_update": entry["profile"],
-                "retention": {"error": {"code": "capability_unavailable", "detail": f"Feature helper pruning requires {LATER}; all bundles retained."}}}
+                "retention": {"error": {"code": "capability_unavailable", "detail": unsupported_detail("helper bundle pruning")}}}
 
 
 def request_operation(host, action, project, profile, *, operation_id=None, **arguments):
