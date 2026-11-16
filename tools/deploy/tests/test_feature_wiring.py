@@ -812,6 +812,26 @@ class FeatureWiringTests(FeatureWiringFixture):
     def test_review_ignores_root_session_churn_between_review_and_confirm(self):
         self.executor_review(session_churn=True)
 
+    def test_tools_plan_accepts_retained_releases_from_an_earlier_reviewed_topology(self):
+        # Production 2026-11-16: releases built before a reviewed topology change stay
+        # retained, and tools-plan refused them with release_identity.
+        self.build_archive(public=True)
+        self.configure_firewall()
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.assertTrue(self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))["ok"])
+        _, entry = self.host.require_identity(self.project, self.profile)
+        earlier = next((self.host.paths.opt(entry["name"]) / "releases").iterdir())
+        manifest = c.read_json(earlier / "manifest.json")
+        declaration = manifest["deployment"]
+        relay = next(role for role in declaration["topology"]["roles"] if role["name"] == "relay")
+        relay["restart"]["delay_seconds"] += 1
+        declaration["topology_sha256"] = parse_topology(declaration["topology"]).sha256
+        manifest.pop("topology_sha256", None)
+        c.atomic_json(earlier / "manifest.json", manifest)
+        self.assertNotEqual(declaration["topology_sha256"], entry["topology"]["sha256"])
+        upgrades.tools_upgrade(self.host, self.host.read_registry(), TOOLS)
+
     def test_running_hook_waits_through_the_execve_environment_window(self):
         # Production 2026-11-16: /proc/<pid>/exe already named the workload while its
         # environment still read empty, so the first identity check failed the start.

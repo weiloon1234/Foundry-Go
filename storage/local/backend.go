@@ -164,6 +164,8 @@ func initialize(ctx context.Context, config Config) (result *Backend, err error)
 		}
 	}()
 	// Reject unrelated directories before creating even the control lock file.
+	// A concurrent first opener publishes the marker before any other entry, so an
+	// unexpected entry rejects the root only while the marker is still absent.
 	if _, e := root.Lstat(markerName); errors.Is(e, fs.ErrNotExist) {
 		directory, e := root.Open(".")
 		if e != nil {
@@ -175,9 +177,15 @@ func initialize(ctx context.Context, config Config) (result *Backend, err error)
 			return nil, failure(storage.Unavailable, storage.OpenOperation, storage.Unchanged, safeerror.Join("operation failed", readErr, closeErr))
 		}
 		for _, entry := range entries {
-			if entry.Name() != lockName {
-				return nil, failure(storage.Invalid, storage.OpenOperation, storage.Unchanged, nil)
+			if entry.Name() == lockName {
+				continue
 			}
+			if _, e := root.Lstat(markerName); errors.Is(e, fs.ErrNotExist) {
+				return nil, failure(storage.Invalid, storage.OpenOperation, storage.Unchanged, nil)
+			} else if e != nil {
+				return nil, failure(storage.Unavailable, storage.OpenOperation, storage.Unchanged, e)
+			}
+			break
 		}
 	} else if e != nil {
 		return nil, failure(storage.Unavailable, storage.OpenOperation, storage.Unchanged, e)

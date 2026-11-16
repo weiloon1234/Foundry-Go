@@ -685,10 +685,13 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
         # the actual caller on every mutation. Never treat registration as a pin.
         releases = check_path(host.paths.opt(entry["name"]) / "releases", "directory")
         if releases.exists():
+            from feature_lifecycle import is_feature
             from release import validate_manifest
             for release in sorted(releases.iterdir()):
                 check_path(release, "directory")
-                manifest = validate_manifest(read_json(release / "manifest.json"), entry)
+                # A retained feature release keeps the reviewed declaration it was built
+                # with; a later reviewed topology change must not strand tool upgrades.
+                manifest = validate_manifest(read_json(release / "manifest.json"), entry, reviewed=is_feature(entry))
                 retained_releases.append({"instance_id": instance_id, "release": manifest["version"], "schema": manifest["schema"]})
     installed = _bundle_path(host, current["bundle_sha256"])
     fresh = not installed.exists() and not registry["instances"] and not current["upgrade_operation"]

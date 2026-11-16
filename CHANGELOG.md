@@ -2,13 +2,7 @@
 
 ## v0.40.0 — 2026-11-16
 
-- Fixed: a feature role start could intermittently refuse with `feature_runtime_refused: running:
-  feature_runtime_identity`, after which cleanup stopped the instance. `execve` switches
-  `/proc/<pid>/exe` before it builds the new stack, so the workload's environment briefly
-  reads empty and the `INVOCATION_ID` identity check failed on that transient observation.
-  The running hook now keeps observing until the existing deadline; a workload that never
-  proves its invocation identity still refuses. Hosts take the fix through
-  `tools-plan`/`tools-apply`.
+- Includes the v0.39.3 and v0.39.4 fixes below.
 - Breaking: removed `jobs.Module`. Register `jobs.ConnectionModule` and
   `jobs.WorkerModule` separately. Removed `cache.Namespace`, `cache.KeyCodec`,
   `cache.NewKeyCodec`, `cache.StringKeys`, `cache.SignedKeys`, `cache.UnsignedKeys`,
@@ -46,6 +40,27 @@
   because persisted topologies can contain it.
 - Updated storage, audit, upload and rollback guidance. Clarified that rendered
   configuration formats re-serialize files and JSON output is compact.
+
+## v0.39.4 — 2026-11-16
+
+- Fixed: `ACTION=tools-plan` refused a feature host with `release_identity` when a retained
+  release was built before a reviewed topology or profile change. Retained feature releases
+  keep the reviewed declaration they were built with, so tool upgrades now validate them by
+  release identity (project, instance, environment, architecture, provenance, inventory)
+  instead of requiring the current registered topology. Deploy and rollback reviews are unchanged.
+- Fixed: `local.Open` could reject a fresh store with `storage_invalid` when another process
+  created the same store concurrently. The unlocked foreign-directory probe now rejects an
+  unexpected entry only while the store marker is still absent.
+
+## v0.39.3 — 2026-11-16
+
+- Fixed: a feature role start could intermittently refuse with `feature_runtime_refused: running:
+  feature_runtime_identity`, after which cleanup stopped the instance. `execve` switches
+  `/proc/<pid>/exe` before it builds the new stack, so the workload's environment briefly
+  reads empty and the `INVOCATION_ID` identity check failed on that transient observation.
+  The running hook now keeps observing until the existing deadline; a workload that never
+  proves its invocation identity still refuses. Install with `ACTION=tools-plan` and
+  `ACTION=tools-apply`.
 
 ## v0.39.2 — 2026-11-16
 
