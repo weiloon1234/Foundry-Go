@@ -2,15 +2,41 @@
 
 ## v0.38.4 — 2026-11-16
 
-- Fixed: feature projects (topology schema 2/profile schema 3) can run host
-  inspection through the real operator bootstrap path on fresh and prepared
-  hosts. Staged candidate tools carry the fix; tool generation remains 18.
+- Fixed: feature projects (topology schema 2/profile schema 3) could not start
+  the operator path. `make bootstrap` with `ACTION=inspect` or `ACTION=prepare`
+  was refused with `capability_unavailable` before any planning, so a fresh
+  production host could not be prepared. Host inspection is now allowed on fresh
+  and prepared hosts. Bootstrap stages the candidate tools, so no tools upgrade is
+  needed first; tool generation remains 18.
 - Clarified: unsupported feature operations now explain their current limitation
   and available next step instead of referring to a future B24 release. The host
   capabilities guide records the complete operator action matrix.
 - Added: CLI-to-server regressions and a separate fresh-container operator phase
   in feature acceptance cover inspect/prepare, reviewed deployment, status, logs
-  and report while retaining the direct-request scenarios.
+  and report while retaining the direct-request scenarios. CI now runs the
+  feature acceptance (`feature` mode, Ubuntu 24.04) on every push.
+- Added: `DEPLOY_BUILDER_ARCHITECTURE=native|target|amd64|arm64` selects release
+  builder userland explicitly. The default follows the Docker server;
+  `DOCKER_DEFAULT_PLATFORM` no longer decides it. Non-native builders must pass
+  a pinned Ubuntu architecture preflight. The local build record retains the
+  selected builder architecture without changing the host release manifest.
+  Emulated builders are supported for release builds, for example an amd64
+  builder on an Apple-silicon Mac when a release-built artifact needs amd64
+  packages. Expect roughly five times the native build time (measured on the
+  deploy-acceptance fixture: 511 s emulated amd64 against 111 s native arm64).
+- Fixed: builder fingerprints, image tags, BuildKit/container names and cache
+  volumes are isolated per architecture. Caches now use
+  `foundry-cache-<project-id>-<architecture>`. Existing unsuffixed volumes are
+  never removed automatically; after confirming no old builder uses one, remove
+  it explicitly with `docker volume rm foundry-cache-<project-id>`.
+  Builder images tagged before this release (no architecture prefix) are pruned
+  after the next successful build.
+- Fixed: rehearsal and acceptance host containers no longer remove the Docker
+  engine's amd64/arm64 emulators. Their systemd ran `systemd-binfmt`, which
+  unregisters every binary format in the shared engine kernel when a container
+  stops. Afterwards an emulated builder failed with `exec format error` until
+  the Docker engine restarted. The host image now masks `systemd-binfmt`. If an
+  older rehearsal already removed Rosetta, restart Docker Desktop once.
 
 ## v0.38.3 — 2026-11-16
 

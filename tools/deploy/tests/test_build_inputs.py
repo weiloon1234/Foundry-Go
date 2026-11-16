@@ -32,22 +32,163 @@ class BuildInputTests(unittest.TestCase):
     def test_unknown_go_version_refuses_without_floating_fallback(self):
         (self.root / "go.mod").write_text("module example.com/app\ngo 1.28.0\n")
         with self.assertRaisesRegex(cli.LocalError, r"go 1\.28\.0 needs a reviewed pin in Foundry-Go: tools/deploy/docker/build-inputs\.json"):
-            cli.builder_inputs(self.root)
+            cli.builder_inputs(self.root, "arm64")
 
     def test_unknown_node_version_refuses_without_floating_fallback(self):
         (self.root / "web" / "package.json").write_text('{"engines":{"node":">=26"}}')
         with self.assertRaisesRegex(cli.LocalError, r"node 26 needs a reviewed pin in Foundry-Go: tools/deploy/docker/build-inputs\.json"):
-            cli.builder_inputs(self.root)
+            cli.builder_inputs(self.root, "arm64")
 
     def test_each_digest_changes_builder_fingerprint(self):
-        versions, images, fingerprint = cli.builder_inputs(self.root)
+        versions, images, fingerprint = cli.builder_inputs(self.root, "arm64")
         self.assertEqual(images, {name: self.pins[name][version] for name, version in versions.items()})
         for name, version in versions.items():
             changed = json.loads(json.dumps(self.pins))
             changed[name][version] = "sha256:" + "0" * 64
             with self.subTest(name=name), patch.object(cli, "read_json", side_effect=lambda path:
                     changed if path.name == "build-inputs.json" else {"engines": {"node": ">=24"}}):
-                self.assertNotEqual(cli.builder_inputs(self.root)[2], fingerprint)
+                self.assertNotEqual(cli.builder_inputs(self.root, "arm64")[2], fingerprint)
+
+    def test_builder_architecture_resolution_ignores_docker_default_platform(self):
+        _, profile = fixture()
+        for server, native in (("x86_64", "amd64"), ("aarch64", "arm64"), ("amd64", "amd64"), ("arm64", "arm64")):
+            for selection, expected in ((None, native), ("native", native), ("target", "amd64"),
+                                        ("amd64", "amd64"), ("arm64", "arm64")):
+                for default in ("linux/amd64", "linux/arm64"):
+                    environment = {"DOCKER_DEFAULT_PLATFORM": default}
+                    if selection is not None:
+                        environment["DEPLOY_BUILDER_ARCHITECTURE"] = selection
+                    with self.subTest(server=server, selection=selection, default=default), \
+                            patch.dict(os.environ, environment, clear=True), \
+                            patch.object(cli, "execute", return_value=server + "\n") as execute:
+                        self.assertEqual(cli.builder_architecture(profile), (expected, native))
+                        execute.assert_called_once_with(["docker", "version", "--format", "{{.Server.Arch}}"], timeout=30)
+        profile["architecture"] = "arm64"
+        with patch.dict(os.environ, {"DEPLOY_BUILDER_ARCHITECTURE": "target"}), \
+                patch.object(cli, "execute", return_value="amd64"):
+            self.assertEqual(cli.builder_architecture(profile), ("arm64", "amd64"))
+
+    def test_invalid_builder_architecture_refuses(self):
+        _, profile = fixture()
+        for selection in ("", "x86_64", "aarch64", "linux/amd64", "AMD64", "other"):
+            with self.subTest(selection=selection), patch.dict(os.environ, {"DEPLOY_BUILDER_ARCHITECTURE": selection}), \
+                    patch.object(cli, "execute") as execute, self.assertRaisesRegex(cli.LocalError, "DEPLOY_BUILDER_ARCHITECTURE"):
+                cli.builder_architecture(profile)
+            execute.assert_not_called()
+        with patch.dict(os.environ, {}, clear=True), patch.object(cli, "execute", return_value="riscv64"), \
+                self.assertRaisesRegex(cli.LocalError, "Docker server architecture"):
+            cli.builder_architecture(profile)
+
+    def test_emulation_preflight_requires_requested_userland(self):
+        inputs = {"ubuntu": self.pins["ubuntu"]["24.04"]}
+        with patch.object(cli, "execute") as execute:
+            cli.preflight_builder("arm64", "arm64", inputs)
+            execute.assert_not_called()
+        for result in ("amd64\n", "arm64\n", "", cli.LocalError("exec format error")):
+            with self.subTest(result=result), patch.object(cli, "execute") as execute:
+                if isinstance(result, Exception):
+                    execute.side_effect = result
+                else:
+                    execute.return_value = result
+                if result == "amd64\n":
+                    cli.preflight_builder("amd64", "arm64", inputs)
+                else:
+                    with self.assertRaisesRegex(cli.LocalError, "enable Rosetta/binfmt emulation or use a native builder"):
+                        cli.preflight_builder("amd64", "arm64", inputs)
+                execute.assert_called_once_with(["docker", "run", "--rm", "--platform", "linux/amd64",
+                                                "ubuntu:24.04@" + inputs["ubuntu"], "dpkg", "--print-architecture"], timeout=120)
+
+    def mocked_build(self, architecture, *, cached=False, preflight_failure=False):
+        project, profile = fixture()
+        request, _, _ = self.request_and_stage()
+        request["manifest"]["version"] = "20261116T000000Z-aaaaaaaaaaaa"
+        calls = []
+        image_name = "foundry-builder-" + project["id"]
+        image = image_name + ":" + architecture + "-" + cli.builder_inputs(self.root, architecture)[2]
+        other = image_name + ":" + ("arm64" if architecture == "amd64" else "amd64") + "-other"
+        old = image_name + ":" + architecture + "-old"
+        legacy = image_name + ":legacy"
+        self.superseded = image_name + ":" + "c" * 12
+
+        def execute(args, **kwargs):
+            calls.append(args)
+            if args[1] == "version":
+                return "arm64\n"
+            if args[1:3] == ["image", "ls"]:
+                return "\n".join([other, old, legacy, self.superseded] + ([image] if cached else []))
+            if args[1:3] == ["image", "inspect"]:
+                return "sha256:" + "b" * 64
+            if args[1] == "run":
+                if args[-2:] == ["dpkg", "--print-architecture"]:
+                    return "arm64" if preflight_failure else architecture
+                if args[-1] == "/foundry-deploy/local/build.sh":
+                    output = self.root / "dist/releases" / project["id"] / profile["instance_id"] / request["manifest"]["version"]
+                    (output / "app.tar.gz").write_bytes(b"fixture archive")
+                    (output / "manifest.json").write_text("{}")
+            return ""
+
+        with patch.object(cli, "ROOT", self.root), patch.dict(os.environ, {
+                "DEPLOY_BUILDER_ARCHITECTURE": architecture,
+                "DOCKER_DEFAULT_PLATFORM": "linux/" + ("arm64" if architecture == "amd64" else "amd64")}), \
+                patch.object(cli, "execute", side_effect=execute), \
+                patch.object(cli, "build_request", return_value=request), \
+                patch.object(cli, "source_snapshot", return_value=self.root), \
+                patch.object(cli, "build_source_epoch", return_value=0), \
+                patch.object(cli, "validate_manifest"), patch.object(cli, "prune_releases"), \
+                patch.object(cli.tempfile, "gettempdir", return_value=str(self.root)):
+            if preflight_failure:
+                with self.assertRaisesRegex(cli.LocalError, "Rosetta/binfmt"):
+                    cli.build(project, profile)
+            else:
+                cli.build(project, profile)
+        records = list((self.root / ".deploy/builds").glob("*.json"))
+        record, = [value for path in records if (value := json.loads(path.read_text()))["project_id"] == project["id"]]
+        self.assertNotIn("builder_architecture", request["manifest"])
+        return calls, record, image, other, old, legacy
+
+    def test_build_isolates_images_caches_and_all_platform_flags(self):
+        fingerprints = {arch: cli.builder_inputs(self.root, arch)[2] for arch in ("amd64", "arm64")}
+        self.assertNotEqual(fingerprints["amd64"], fingerprints["arm64"])
+        for arch in ("amd64", "arm64"):
+            for cached in (False, True):
+                with self.subTest(architecture=arch, cached=cached):
+                    calls, record, image, other, old, legacy = self.mocked_build(arch, cached=cached)
+                    self.assertEqual(record["builder_architecture"], arch)
+                    self.assertEqual(record["image"], image)
+                    self.assertEqual(record["phase"], "completed")
+                    self.assertTrue(record["builder"].endswith("-" + arch))
+                    self.assertTrue(all(name.endswith("-" + arch) for name in record["containers"]))
+                    builds = [args for args in calls if args[1:3] == ["buildx", "build"]]
+                    self.assertEqual(len(builds), 0 if cached else 1)
+                    runs = [args for args in calls if args[1] == "run"]
+                    self.assertEqual(len(runs), 3 if arch == "amd64" else 2)
+                    for args in builds + runs:
+                        self.assertEqual(args[args.index("--platform") + 1], "linux/" + arch)
+                    for args in runs:
+                        if image in args:
+                            self.assertIn("type=volume,src=foundry-cache-" + record["project_id"] + "-" + arch + ",dst=/cache", args)
+                    self.assertIn(["docker", "image", "rm", old], calls)
+                    self.assertNotIn(["docker", "image", "rm", other], calls)
+                    self.assertNotIn(["docker", "image", "rm", legacy], calls)
+                    self.assertIn(["docker", "image", "rm", self.superseded], calls)
+                    self.assertFalse(any(args[1] == "volume" for args in calls))
+
+    def test_build_preflight_refuses_before_image_build_or_cache_mount(self):
+        calls, record, *_ = self.mocked_build("amd64", preflight_failure=True)
+        self.assertEqual(record["builder_architecture"], "amd64")
+        self.assertFalse(any(args[1:3] == ["buildx", "create"] or "--mount" in args for args in calls))
+
+    def test_orphan_checks_cover_legacy_and_both_architectures(self):
+        project, _ = fixture()
+        for suffix in ("", "-arm64", "-amd64"):
+            with self.subTest(suffix=suffix), patch.object(cli, "execute", return_value="foundry-" + project["id"] + suffix + " *\n"), \
+                    self.assertRaisesRegex(cli.LocalError, "survives a previous client"):
+                cli.refuse_orphan_builder(project)
+        with patch.object(cli, "execute", return_value="") as execute:
+            cli.recover_build_containers(project)
+        names = {call.args[0][call.args[0].index("--filter") + 1] for call in execute.call_args_list}
+        self.assertEqual(names, {"name=^/foundry-" + kind + "-" + project["id"] + suffix + "$"
+                                for kind in ("build", "cache-clean") for suffix in ("", "-amd64", "-arm64")})
 
     def test_epoch_uses_snapshot_commit_for_clean_and_dirty_builds(self):
         _, profile = fixture()
@@ -81,7 +222,7 @@ class BuildInputTests(unittest.TestCase):
                     "built_at": "2026-10-13T12:00:00Z", "native_imaging": False,
                     "source_kind": "git_archive", "source_sha256": "e" * 64}
         return {"manifest": manifest, "source_date_epoch": 1790000000,
-                "images": cli.builder_inputs(self.root)[1]}, stage, entry
+                "images": cli.builder_inputs(self.root, "arm64")[1]}, stage, entry
 
     def command(self, args, **kwargs):
         self.assertEqual(kwargs["timeout"], 30)

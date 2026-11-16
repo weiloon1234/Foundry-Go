@@ -278,8 +278,11 @@ class FeatureBuildTests(unittest.TestCase):
             self.assertEqual(cwd, work)
             self.assertEqual(environment["ARCHITECTURE"], "amd64")
             self.assertEqual(environment["GOARCH"], "amd64")
+            self.assertEqual(environment["GOOS"], "linux")
+            self.assertEqual(environment["CC"], "x86_64-linux-gnu-gcc")
             path.write_bytes(content)
-        with patch.object(metadata.subprocess, "run", side_effect=self.compiler), \
+        with patch.dict(os.environ, {"CC": "x86_64-linux-gnu-gcc"}), \
+                patch.object(metadata.subprocess, "run", side_effect=self.compiler), \
                 patch.object(metadata, "build_artifact", side_effect=build):
             prepared = metadata.prepare(request, work, stage)
         self.assertEqual(prepared["release_artifacts"]["extension"]["sha256"], hashlib.sha256(content).hexdigest())

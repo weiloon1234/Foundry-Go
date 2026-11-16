@@ -856,6 +856,27 @@ The output must not exist before this command runs. A nonzero exit, missing file
 symlink, hard link, duplicate source path, or source change during copying fails
 the build. The builder does not search directories or expand globs.
 
+The default `DEPLOY_BUILDER_ARCHITECTURE=native` uses the Docker server's
+architecture and cross-compiles Go for the profile's target. An artifact that
+links against target-architecture userland, such as apt `libobs-dev`, can select
+`DEPLOY_BUILDER_ARCHITECTURE=target` so its command runs in that architecture's
+Linux userland. Explicit `amd64` and `arm64` are also accepted. Builder images
+and caches are isolated per architecture, and `DOCKER_DEFAULT_PLATFORM` has no
+effect on this selection. A non-native builder must pass the pinned Ubuntu
+`dpkg --print-architecture` preflight before building.
+
+Emulated target builders are supported for release builds when the Docker engine
+can run `linux/<architecture>`, as checked by that preflight. Expect roughly five
+times the native build time; see the
+[deployment guide](deployment.md#invocation) for the measurement.
+Use one when a release-built artifact needs target-architecture packages, such as
+an OBS plugin linked against the target's `libobs-dev`. Acceptance and rehearsal
+host runs still require native platforms.
+
+```sh
+DEPLOY_BUILDER_ARCHITECTURE=target ENVIRONMENT=acceptance-local ACTION=build make release
+```
+
 Keep the artifact's existing `format`, exports, modules, and provenance fields.
 For example, package an OBS shared library and shader beneath a bundle directory
 in a `tar.gz` file, declare the library in `modules`, and export that directory
