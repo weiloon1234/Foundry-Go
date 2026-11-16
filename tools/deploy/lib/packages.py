@@ -631,6 +631,20 @@ def _difference_detail(differences, limit=8):
     return shown + (f" and {len(differences) - limit} more" if len(differences) > limit else "")
 
 
+def stable_activation(host, snapshot):
+    """Project an activation snapshot for plan tokens: the same churn the comparison ignores never changes it."""
+    classification = _activation_classification(host, snapshot)
+    stable = {}
+    for name, record in snapshot.items():
+        kind = classification.get(name, {})
+        if _ephemeral_activation(name, record, kind):
+            continue
+        policy = _runtime_policy(name, record, kind)
+        runtime = RUNTIME if policy == "exact" else ("ActiveState", "MainPID") if policy == "substate" else ()
+        stable[name] = {k: v for k, v in record.items() if k not in RUNTIME or k in runtime}
+    return stable
+
+
 _DEB_UNITS = r'''
 import hashlib,json,pathlib,subprocess,sys,tarfile,tempfile
 process = subprocess.Popen(["dpkg-deb", "--fsys-tarfile", sys.argv[1]], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)

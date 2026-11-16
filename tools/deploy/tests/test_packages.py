@@ -860,6 +860,27 @@ class ActivationComparisonTests(unittest.TestCase):
         with self.assertRaises(DeployError):
             packages._finish_activation(self.host, {"activation_before": {}, "activation_units": {}})
 
+    def test_plan_token_projection_ignores_churn_but_binds_independent_services(self):
+        self.host.activation_classification = {"packagekit.service": {"Type": "dbus", "UnitFileState": "static"},
+                                               "ssh.service": {"TriggeredBy": "ssh.socket"},
+                                               "run-u9.service": {"Transient": "yes"}}
+        base = {"cron.service": self.record("cron.service"), "user@0.service": self.record("user@0.service", state="static"),
+                "packagekit.service": self.record("packagekit.service", state="static", active="inactive", pid="0"),
+                "ssh.service": self.record("ssh.service", active="inactive", pid="0")}
+        churned = copy.deepcopy(base)
+        churned["user@0.service"]["MainPID"] = "8400"
+        churned["packagekit.service"].update(ActiveState="active", SubState="running", MainPID="77")
+        churned["ssh.service"].update(ActiveState="active", SubState="running", MainPID="78")
+        churned["run-u9.service"] = self.record("run-u9.service", state="transient")
+        self.host.activation = churned
+        self.assertEqual(packages.stable_activation(self.host, base), packages.stable_activation(self.host, churned))
+        restarted = copy.deepcopy(base)
+        restarted["cron.service"]["MainPID"] = "9999"
+        self.assertNotEqual(packages.stable_activation(self.host, base), packages.stable_activation(self.host, restarted))
+        reconfigured = copy.deepcopy(base)
+        reconfigured["packagekit.service"]["UnitFileState"] = "masked"
+        self.assertNotEqual(packages.stable_activation(self.host, base), packages.stable_activation(self.host, reconfigured))
+
     def test_refusals_name_the_changed_units_and_fields(self):
         before = {"cron.service": self.record("cron.service"), "gone.service": self.record("gone.service")}
         current = {"cron.service": {**self.record("cron.service"), "MainPID": "8400", "UnitFileState": "disabled"}}

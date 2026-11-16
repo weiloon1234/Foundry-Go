@@ -139,6 +139,10 @@ jobs:
             ${{ steps.acceptance.outputs.logs }}/*-tools-*.log
             ${{ steps.acceptance.outputs.logs }}/*-role-*.log
             ${{ steps.acceptance.outputs.logs }}/*-units.log
+            ${{ steps.acceptance.outputs.logs }}/*-apt-activity.log
+            ${{ steps.acceptance.outputs.logs }}/*-host-upgrade.log
+            ${{ steps.acceptance.outputs.logs }}/*-reboot-required.log
+            ${{ steps.acceptance.outputs.logs }}/*-settle.log
           include-hidden-files: false
           if-no-files-found: warn
           retention-days: 14

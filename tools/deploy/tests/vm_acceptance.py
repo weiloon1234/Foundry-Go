@@ -240,6 +240,12 @@ class Run:
             try:
                 self.remote("units", "systemctl list-units --state=running --no-pager; "
                             "systemctl list-units --failed --no-pager", timeout=30, publish=True, check=False)
+                # Package-manager activity explains plan drift on a fresh cloud host.
+                self.remote("apt-activity", "ps -eo pid,etime,cmd | grep -E '[a]pt|[d]pkg|[u]nattended|[p]ackagekit|[f]wupd'; "
+                            "sudo -n tail -n 60 /var/log/apt/history.log; "
+                            "sudo -n journalctl --no-pager -n 80 -u apt-daily.service -u apt-daily-upgrade.service "
+                            "-u unattended-upgrades.service -u packagekit.service -u fwupd.service",
+                            timeout=60, publish=True, check=False)
             except Exception:
                 self.note("Systemd diagnostic collector unavailable")
 
@@ -254,18 +260,36 @@ class Run:
         self.command("seed", ["cloud-localds", guest / "seed.img", guest / "user-data", guest / "meta-data"])
         self.command("overlay", ["qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-b", image, guest / "disk.qcow2", "32G"])
         self.serial = guest / "serial.log"
-        with self.serial.open("w") as console:
+        config = guest / "ssh_config"
+        config.write_text(f"Host *\n  UserKnownHostsFile {guest / 'known_hosts'}\n  GlobalKnownHostsFile /dev/null\n")
+        self.ssh = [shutil.which("ssh"), "-F", str(config), "-o", "StrictHostKeyChecking=accept-new",
+                    "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ConnectTimeout=5",
+                    "-i", str(key), "-p", str(port), "foundry-operator@127.0.0.1"]
+        self.launch(guest, port)
+        self.remote("cloud-init", "sudo -n cloud-init status --wait --long", timeout=900, publish=True)
+        # Prepare the host as the deployment guide tells operators: current packages, then reboot if required.
+        self.remote("host-upgrade", "sudo -n env DEBIAN_FRONTEND=noninteractive sh -c "
+                    "'apt-get -o DPkg::Lock::Timeout=600 update && apt-get -o DPkg::Lock::Timeout=600 -y upgrade'",
+                    timeout=1500, publish=True)
+        if self.remote("reboot-required", "test -e /var/run/reboot-required && echo yes || echo no",
+                       publish=True)[1].strip() == "yes":
+            subprocess.run([*self.ssh, "sudo -n systemctl reboot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+            self.qemu.wait(timeout=300)  # -no-reboot turns the guest reboot into a QEMU exit.
+            self.launch(guest, port)
+            self.remote("settle", "systemctl is-system-running --wait || true", timeout=600, publish=True)
+        self.remote("stock-packages", "sudo -n grep '^STOCK ' /var/log/cloud-init-output.log; "
+                    "dpkg-query -W fwupd packagekit ubuntu-pro-client; "
+                    "systemctl list-timers --all --no-pager", publish=True)
+        return guest, port, config
+
+    def launch(self, guest, port):
+        with self.serial.open("a") as console:
             self.qemu = subprocess.Popen(["qemu-system-x86_64", "-enable-kvm", "-cpu", "host", "-smp", "2", "-m", "4096",
                 "-display", "none", "-monitor", "none", "-serial", "stdio", "-no-reboot",
                 "-drive", f"file={guest / 'disk.qcow2'},if=virtio,format=qcow2",
                 "-drive", f"file={guest / 'seed.img'},if=virtio,format=raw,readonly=on",
                 "-netdev", f"user,id=net0,hostfwd=tcp:127.0.0.1:{port}-:22", "-device", "virtio-net-pci,netdev=net0"],
                 stdin=subprocess.DEVNULL, stdout=console, stderr=console)
-        config = guest / "ssh_config"
-        config.write_text(f"Host *\n  UserKnownHostsFile {guest / 'known_hosts'}\n  GlobalKnownHostsFile /dev/null\n")
-        self.ssh = [shutil.which("ssh"), "-F", str(config), "-o", "StrictHostKeyChecking=accept-new",
-                    "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ConnectTimeout=5",
-                    "-i", str(key), "-p", str(port), "foundry-operator@127.0.0.1"]
         self.note("Waiting up to 300s for guest SSH (readiness only)")
         deadline = time.monotonic() + 300
         while time.monotonic() < deadline:
@@ -273,15 +297,9 @@ class Run:
                 raise Failure(f"QEMU exited before SSH: exit={self.qemu.returncode}")
             result = subprocess.run([*self.ssh, "true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
             if result.returncode == 0:
-                break
+                return
             time.sleep(2)
-        else:
-            raise Failure("Guest SSH readiness deadline exceeded")
-        self.remote("cloud-init", "sudo -n cloud-init status --wait --long", timeout=900, publish=True)
-        self.remote("stock-packages", "sudo -n grep '^STOCK ' /var/log/cloud-init-output.log; "
-                    "dpkg-query -W fwupd packagekit ubuntu-pro-client; "
-                    "systemctl list-timers --all --no-pager", publish=True)
-        return guest, port, config
+        raise Failure("Guest SSH readiness deadline exceeded")
 
     def trust(self, certs):
         # Stage via private SSH stdin; no CA keys in cloud-init or serial output.
