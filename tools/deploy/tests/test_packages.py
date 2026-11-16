@@ -717,7 +717,7 @@ class ActivationComparisonTests(unittest.TestCase):
         def command(args, **kwargs):
             result = run(args, **kwargs)
             if args[:2] == ["apt-get", "-y"] and "--download-only" not in args:
-                self.host.activation[name].update(ActiveState="inactive", SubState="dead", MainPID="0")
+                self.host.activation[name].update(MainPID="901")  # restarted while running
             return result
 
         with patch.object(packages, "_prepare_payloads", side_effect=acquire), \
@@ -774,11 +774,12 @@ class ActivationComparisonTests(unittest.TestCase):
                 self.host.activation_classification = {name: kind}
                 packages._finish_activation(self.host, {"activation_before": before, "activation_units": {}})
 
-    def test_socket_triggered_daemons_may_start_but_never_stop_or_restart(self):
-        for name, trigger in (("ssh.service", "ssh.socket"), ("dbus.service", "dbus.socket"), ("watch.service", "watch.path")):
+    def test_socket_triggered_daemons_may_start_or_idle_exit_but_never_restart_or_fail(self):
+        for name, trigger in (("ssh.service", "ssh.socket"), ("dbus.service", "dbus.socket"), ("watch.service", "watch.path"),
+                              ("systemd-fsckd.service", "systemd-fsckd.socket")):
             kind = {"TriggeredBy": trigger, "Type": "notify", "UnitFileState": "enabled"}
             for change, refused in (({"MainPID": "8400"}, True),
-                                    ({"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}, True),
+                                    ({"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}, False),
                                     ({"ActiveState": "failed", "SubState": "failed", "MainPID": "0"}, True),
                                     ({}, False)):
                 with self.subTest(name=name, change=change):
@@ -792,6 +793,21 @@ class ActivationComparisonTests(unittest.TestCase):
                         self.assertEqual(error.exception.code, "package_service_changed")
                     else:
                         packages._finish_activation(self.host, journal)
+
+    def test_sockets_ignore_listening_running_flip_but_not_stopping(self):
+        name = "systemd-fsckd.socket"
+        before = {name: {**self.record(name, state="static"), "SubState": "running", "MainPID": "0"}}
+        for change, refused in (({"SubState": "listening"}, False),
+                                ({"ActiveState": "inactive", "SubState": "dead"}, True)):
+            with self.subTest(change=change):
+                self.host.activation = {name: {**before[name], **change}}
+                self.host.activation_classification = {}
+                journal = {"activation_before": before, "activation_units": {}}
+                if refused:
+                    with self.assertRaises(DeployError):
+                        packages._finish_activation(self.host, journal)
+                else:
+                    packages._finish_activation(self.host, journal)
 
     def test_static_helpers_started_by_hooks_may_run_but_static_daemons_stay_guarded(self):
         running = {"ActiveState": "activating", "SubState": "start", "MainPID": "7311"}

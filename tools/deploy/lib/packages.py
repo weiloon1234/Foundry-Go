@@ -590,9 +590,13 @@ def _runtime_policy(name, record, kind):
     if (_ephemeral_activation(name, record, kind) or (triggers and all(t.endswith(".timer") for t in triggers))
             or (static_service and (kind.get("Type") == "dbus" or _run_to_completion(kind)))):
         return "ignore"  # Sessions, scheduled runs and bus- or hook-started helpers start and exit on their own.
-    if triggers or static_service:
+    if triggers:
+        # Socket/path activation may start the unit or let it exit while idle (systemd-fsckd after boot);
+        # its socket's ActiveState stays compared. A restart or failure still refuses.
+        return "trigger"
+    if static_service:
         return "start"  # An idle on-demand unit may run; a running one must not stop, fail or restart.
-    return "substate" if name.endswith((".timer", ".path", ".target")) else "exact"
+    return "substate" if name.endswith((".timer", ".path", ".target", ".socket")) else "exact"
 
 
 def _activation_differences(before, current, classification, *, allow_new=False):
@@ -612,7 +616,9 @@ def _activation_differences(before, current, classification, *, allow_new=False)
         changed = sorted(k for k in old.keys() | new.keys() if k not in RUNTIME and old.get(k) != new.get(k))
         policy = _runtime_policy(name, new, classification.get(name, {}))
         runtime = [k for k in RUNTIME if k in old or k in new]
-        if policy == "ignore" or (policy == "start" and old.get("ActiveState") == "inactive"):
+        idle_exit = new.get("ActiveState") == "inactive" and new.get("SubState") == "dead"
+        if (policy == "ignore" or (policy in ("start", "trigger") and old.get("ActiveState") == "inactive")
+                or (policy == "trigger" and idle_exit)):
             runtime = []
         elif policy == "substate":
             runtime = [k for k in runtime if k != "SubState"]
