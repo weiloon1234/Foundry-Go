@@ -16,7 +16,7 @@ require (
 	github.com/disintegration/gift v1.2.1
 	github.com/gen2brain/gav1d v0.2.5
 	github.com/gen2brain/vpx v0.2.1
-	github.com/jackc/pgx/v5 v5.12.0
+	github.com/jackc/pgx/v5 v5.13.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/nyaruka/phonenumbers/v2 v2.0.16
 	github.com/pelletier/go-toml/v2 v2.4.3
