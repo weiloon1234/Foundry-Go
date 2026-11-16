@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "ubuntu": {
+    "24.04": {
+      "serial": "20261017",
+      "architecture": "amd64",
+      "url": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img",
+      "sha256": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94",
+      "checksums": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/SHA256SUMS"
+    }
+  }
+}

@@ -1393,7 +1393,7 @@ restore drill. Completed temporary drills must leave no failed `foundry-restore-
 unit or journal entry containing `abnormal database system shutdown`.
 
 Synthetic certificates require `FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT=1`, the Docker
-marker, runtime environment `testing`, an `acceptance*` profile environment,
+marker (or the guarded VM marker described below), runtime environment `testing`, an `acceptance*` profile environment,
 a `.acceptance.invalid` hostname, and private CA files under
 `/etc/foundry/acceptance-ca/`. Production profiles refuse the switch.
 The fixture exercises owned lineage files, renewal
@@ -1405,6 +1405,56 @@ Python unit tests cover state machines and fault paths. Release-tool tests cover
 source packaging. Neither proves Ubuntu package side effects, live TLS/service
 behavior, restore correctness, or the application console contract. Those remain
 requirements of the CI amd64 and lead's arm64 container matrices before production use.
+
+## VM acceptance
+
+The `deploy-vm-amd64 (24.04)` job in `.github/workflows/verify.yml` runs on pushes
+and manual dispatches, with a 60-minute job deadline. It boots the official Ubuntu
+server cloud image with QEMU/KVM. [VM image inputs](../../tools/deploy/docker/vm-inputs.json)
+pin its release serial, immutable URL and SHA-256; the runner checks the digest
+before boot. Ubuntu 26.04 remains a follow-up after 24.04 is stable.
+
+Each run uses fresh overlays for the deploy-acceptance fixture's schema-2 topology
+(HTTP and two relay copies) and standard topology (HTTP, scheduler and worker).
+The normal `cli.py` entry point uses real SSH and a passwordless sudo administrator:
+bootstrap inspect/prepare, release build, deploy, status/logs/report, a second
+release build and deploy, then tools-plan and tools-apply when needed. Both
+releases must be healthy with every placed unit running. The existing candidate
+fixture builder supplies the checkout's module proxy; the transport is not mocked.
+
+Stock logind sessions, apt hooks/timers and D-Bus activation remain enabled.
+Cloud-init reports whether fwupd and PackageKit are present and installs missing
+Ubuntu packages to mirror droplet activity. It does not disable services or
+preinstall the framework's dependencies. No real Cloudflare, R2 or managed DNS is
+used. The existing pinned S3 stand-in runs on the runner, published only on
+loopback; QEMU user networking exposes it to the guest through `10.0.2.2`.
+SSH uses a random loopback port and private per-run OpenSSH configuration and keys.
+
+Acceptance-only behavior on a VM requires `FOUNDRY_DISPOSABLE_HOST=1` and a regular,
+root-owned, mode-0600 `/etc/foundry-disposable-acceptance-vm` marker. Symlinks and
+missing, writable or non-root-owned markers are refused. Cloud-init installs this
+marker and the acceptance environment for SSH/sudo and synthetic renewal services.
+Synthetic certificates still require the testing profile, acceptance environment,
+reserved hostname and private CA. Other container-only rehearsal guards are not
+extended to VMs.
+
+On an amd64 Linux developer machine with Docker, the repository's Go toolchain,
+Python 3.11+, OpenSSH, curl, OpenSSL, age, rclone, QEMU and cloud-image-utils installed,
+and read/write access to `/dev/kvm`, run:
+
+```sh
+tools/deploy/tests/run_vm_acceptance.sh --ubuntu 24.04
+```
+
+Use `--topology feature` or `--topology standard` for a focused CI follow-up.
+The [documented KVM udev rule](https://github.com/ReactiveCircus/android-emulator-runner#running-hardware-accelerated-emulators-on-linux-runners)
+is installed by the workflow. There is no software-emulation fallback on macOS.
+Set `ACCEPTANCE_LOG_DIR` to a new directory to select the evidence destination.
+The runner prints step names and exit codes, collects running/failed units, and
+saves redacted serial logs. CI uploads only its explicit public log allowlist on
+failure. Raw app/build output, keys, private inputs, seed and disk overlays are
+removed along with QEMU and task-owned Docker resources on exit or cancellation.
+VM execution is a separate acceptance gate; Python tests do not prove it passes.
 
 ## Bundle interfaces
 

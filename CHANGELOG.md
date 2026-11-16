@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Added: Ubuntu 24.04 amd64 KVM deployment acceptance in GitHub Actions, using a
+  checksum-pinned official cloud image and the real operator CLI over SSH/sudo.
+  Fresh feature and standard topology guests cover bootstrap inspect/prepare,
+  two release builds/deployments, healthy placed units, status/logs/report and
+  tool planning/application while retaining stock host services and apt hooks.
+- Added: explicitly marked disposable acceptance VMs may use the shared acceptance
+  helpers and synthetic certificates. The VM path requires an environment opt-in
+  and a root-owned, mode-0600 regular marker; production profile restrictions remain.
+
 ## v0.38.6 — 2026-11-16
 
 - Fixed: package installation on stock Ubuntu cloud hosts still refused finishing

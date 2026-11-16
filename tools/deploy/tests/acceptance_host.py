@@ -83,6 +83,11 @@ def bootstrap_secrets(disks, *, reuse_identity=False):
     else:
         run(["age-keygen", "-o", str(identity_file)])
     recipient = run(["age-keygen", "-y", str(identity_file)]).stdout.strip()
+    return storage_secrets(disks, settings, recipient)
+
+
+def storage_secrets(disks, settings, recipient):
+    """Shared private S3/backup intake for container and VM acceptance."""
     for disk in disks.values():
         assert disk["driver"] == "r2", "Acceptance archive must select the R2 attachment contract"
         # The framework accepts only real R2 endpoints for the r2 driver, so the
