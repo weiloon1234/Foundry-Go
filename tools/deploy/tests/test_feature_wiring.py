@@ -812,6 +812,25 @@ class FeatureWiringTests(FeatureWiringFixture):
     def test_review_ignores_root_session_churn_between_review_and_confirm(self):
         self.executor_review(session_churn=True)
 
+    def test_running_hook_waits_through_the_execve_environment_window(self):
+        # Production 2026-11-16: /proc/<pid>/exe already named the workload while its
+        # environment still read empty, so the first identity check failed the start.
+        self.build_archive(public=True)
+        self.configure_firewall()
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        real, missed = admission.executor_alive, set()
+
+        def alive(host, expected):
+            if self.host.starting and self.host.starting not in missed:
+                missed.add(self.host.starting)
+                return False
+            return real(host, expected)
+
+        with patch.object(admission, "executor_alive", side_effect=alive):
+            self.assertTrue(self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))["ok"])
+        self.assertTrue(missed)
+
     def test_first_public_release_plans_without_dns_and_dns_changes_do_not_gate_apply(self):
         import socket
         self.build_archive(public=True)

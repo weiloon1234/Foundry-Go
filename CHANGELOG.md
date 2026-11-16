@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.39.3 — 2026-11-16
+
+- Fixed: a feature role start could intermittently refuse with `feature_runtime_refused: running:
+  feature_runtime_identity`, after which cleanup stopped the instance. `execve` switches
+  `/proc/<pid>/exe` before it builds the new stack, so the workload's environment briefly
+  reads empty and the `INVOCATION_ID` identity check failed on that transient observation.
+  The running hook now keeps observing until the existing deadline; a workload that never
+  proves its invocation identity still refuses. Install with `ACTION=tools-plan` and
+  `ACTION=tools-apply` (generation 19; feature hosts also re-pin the edge boot coordinator).
+
 ## v0.39.2 — 2026-11-16
 
 - Fixed: a reviewed feature deploy or rollback confirmed minutes after review
