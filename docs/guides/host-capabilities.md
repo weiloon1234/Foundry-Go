@@ -465,13 +465,18 @@ paths under `deploy/bin/`.
   Package installation refuses configuration changes to any preexisting unit and
   runtime changes to independently managed services, including starts, stops,
   failures and restarts. It ignores runtime changes to numeric `user@` and
-  `user-runtime-dir@` session services, transient units, static `Type=dbus`
-  services and services triggered only by timers. A service triggered by a socket
-  or path, such as `ssh.service` or `dbus.service`, may start from inactive, but
-  stopping, failing or restarting it still refuses installation. Timer, path and
+  `user-runtime-dir@` session services, transient units, static `Type=dbus` and
+  `Type=oneshot` services (bus- or hook-started helpers such as Ubuntu Pro's
+  `esm-cache.service`) and services triggered only by timers. Other static
+  services and services triggered by a socket or path, such as `ssh.service` or
+  `dbus.service`, may change freely while they were inactive. Once running,
+  stopping, failing or restarting them still refuses installation. Timer, path and
   target units ignore only `SubState` changes and still compare `ActiveState`.
-  Session and transient units that appear or disappear are ignored. These rules
-  also apply when resuming an interrupted package installation.
+  Session and transient units that appear or disappear are ignored. A new
+  instance of a template that existed before installation, such as
+  `modprobe@sd_mod.service`, is not unowned activation when the template is
+  static or the instance is not running. These rules also apply when resuming an
+  interrupted package installation.
 - **Artifacts:** `version` is a single path component. `platforms` maps
   `linux-amd64` and/or `linux-arm64` to an HTTPS `url` and 64-hex `sha256` of the
   download, or a [release source](#release-carried-artifacts). Declared URLs cannot

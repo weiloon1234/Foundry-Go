@@ -591,7 +591,8 @@ class PayloadPackageHost(PackageHost):
                     destination.write_bytes(content)
                 self.inventory[name] = installed()
         elif args[0] == "systemctl" and args[1] in ("list-unit-files", "list-units"):
-            output = "\n".join(name + " disabled" for name in sorted(self.units()))
+            output = "\n".join(name + " " + self.activation.get(name, {}).get("UnitFileState", "disabled")
+                               for name in sorted(self.units()))
         elif args[:3] == ["systemctl", "enable", "--now"]:
             unit = args[3] if args[3].endswith(".service") else args[3] + ".service"
             if self.paths.p("/etc/systemd/system/" + unit).is_symlink():
@@ -791,6 +792,59 @@ class ActivationComparisonTests(unittest.TestCase):
                         self.assertEqual(error.exception.code, "package_service_changed")
                     else:
                         packages._finish_activation(self.host, journal)
+
+    def test_static_helpers_started_by_hooks_may_run_but_static_daemons_stay_guarded(self):
+        running = {"ActiveState": "activating", "SubState": "start", "MainPID": "7311"}
+        finished = {"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}
+        cases = [  # name, Type, UnitFileState, before change, after change, refused
+            ("esm-cache.service", "oneshot", "static", finished, running, False),
+            ("apt-news.service", "oneshot", "static", running, finished, False),
+            ("helper.service", "simple", "static", finished, {"ActiveState": "active", "SubState": "running", "MainPID": "88"}, False),
+            ("helper.service", "simple", "static", finished, {"ActiveState": "failed", "SubState": "failed", "MainPID": "0"}, False),
+            ("helper.service", "simple", "static", {}, {"MainPID": "8400"}, True),
+            ("helper.service", "simple", "static", {}, finished, True),
+            ("job.service", "oneshot", "enabled", finished, running, True),
+        ]
+        for name, kind_type, state, old, new, refused in cases:
+            with self.subTest(name=name, state=state, new=new):
+                before = {name: {**self.record(name, state=state), **old}}
+                self.host.activation = {name: {**self.record(name, state=state), **new}}
+                self.host.activation_classification = {name: {"Type": kind_type, "UnitFileState": state}}
+                journal = {"activation_before": before, "activation_units": {}}
+                if refused:
+                    with self.assertRaises(DeployError) as error:
+                        packages._finish_activation(self.host, journal)
+                    self.assertEqual(error.exception.code, "package_service_changed")
+                else:
+                    packages._finish_activation(self.host, journal)
+
+    def test_instances_of_preexisting_foreign_templates_are_not_unowned(self):
+        cases = [  # template state, instance runtime, accepted
+            ("static", {"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}, True),
+            ("static", {"ActiveState": "active", "SubState": "running", "MainPID": "77"}, True),
+            ("enabled", {"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}, True),
+            ("enabled", {"ActiveState": "active", "SubState": "running", "MainPID": "77"}, False),
+        ]
+        for template_state, runtime, accepted in cases:
+            with self.subTest(template_state=template_state, runtime=runtime):
+                name = "modprobe@sd_mod.service"
+                self.host.activation = {"modprobe@.service": {"UnitFileState": template_state},
+                                        name: {**self.record(name, state="static"), **runtime}}
+                self.host.activation_classification = {name: {"Type": "oneshot", "UnitFileState": "static"}}
+                self.host.commands.clear()
+                journal = {"activation_before": {"modprobe@.service": {"template_state": template_state}}, "activation_units": {}}
+                if accepted:
+                    packages._finish_activation(self.host, journal)
+                    self.assertFalse(any(args[1:3] == ["disable", name] for args, _ in self.host.commands))
+                else:
+                    with self.assertRaises(DeployError) as error:
+                        packages._finish_activation(self.host, journal)
+                    self.assertEqual(error.exception.code, "package_activation")
+        # An instance of a template that did not exist before remains unowned activation.
+        self.host.activation = {"fresh@a.service": self.record("fresh@a.service", state="static", active="inactive", pid="0")}
+        self.host.activation_classification = {"fresh@a.service": {"Type": "oneshot"}}
+        with self.assertRaises(DeployError):
+            packages._finish_activation(self.host, {"activation_before": {}, "activation_units": {}})
 
     def test_timer_only_triggered_runs_may_finish_or_restart(self):
         name, kind = "apt-daily.service", {"TriggeredBy": "apt-daily.timer"}

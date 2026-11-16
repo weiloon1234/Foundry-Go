@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.38.6 — 2026-11-16
+
+- Fixed: package installation on stock Ubuntu cloud hosts still refused finishing
+  when stock helpers raced the final activation snapshot. Two cases on a
+  DigitalOcean 24.04 droplet: Ubuntu Pro's apt hook starts the static oneshots
+  `apt-news.service` and `esm-cache.service` during any `apt-get update`, and
+  bus-activated `fwupd.service` pulls in `modprobe@sd_mod.service`. Static
+  `Type=oneshot` services now ignore runtime state, like static D-Bus services.
+  Other static services may change freely while they were inactive, but stopping,
+  failing or restarting a running one still refuses. A new instance of a template
+  that existed before installation is not unowned activation when the template
+  is static or the instance is not running.
+- Recovery for a host whose v0.38.5 prepare stopped on these: pin v0.38.6, run
+  `ACTION=tools-plan make deploy` and apply it with `ACTION=tools-apply`, then
+  rerun `ACTION=prepare`. The pending package journal resumes unchanged.
+
 ## v0.38.5 — 2026-11-16
 
 - Fixed: `make bootstrap ACTION=prepare` no longer refuses package installation
