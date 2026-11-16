@@ -432,7 +432,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"typed-job-retry", "background/operations.go", "WelcomeJob.", "Retry", []string{"Retry", "Inspect", "Cancel"}, []string{"Welcome", "RetryToken"}, "/jobs/retry.go"},
 		{"configured-job-middleware", "background/operations.go", "application.", "JobWith", []string{"Job", "JobWith"}, []string{"HandlerOptions", "JobDeclaration"}, "/application/declarations.go"},
 		{"typed-job-workflow-step", "background/module.go", "first.", "Step", []string{"Step", "Dispatch", "Enqueue"}, []string{"Step"}, "/jobs/workflow.go"},
-		{"typed-job-module", "background/module.go", "jobs.", "Module", []string{"Module", "NewWorker", "NewDispatcher"}, []string{"Dispatcher", "foundation", "Module"}, "/jobs/module.go"},
+		{"typed-job-module", "background/module.go", "jobs.", "ConnectionModule", []string{"ConnectionModule", "WorkerModule", "NewDispatcher"}, []string{"Dispatcher", "foundation", "Module"}, "/jobs/module.go"},
 
 		{"typed-storage-put", "storing/files.go", "disk.", "Put", []string{"Put", "Open", "List"}, []string{"ObjectKey", "io.Reader", "PutOptions", "StoredObject"}, "/storage/disk.go"},
 		{"typed-storage-download", "storing/files.go", "storagehttp.", "Download", []string{"Download", "Stream", "StoreUpload"}, []string{"ObjectKey", "ReadOptions", "Download"}, "/storage/http/download.go"},
