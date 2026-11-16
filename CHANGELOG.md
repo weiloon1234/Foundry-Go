@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Extend real-VM operator acceptance in both topology modes with delayed interactive
+  deployment confirmation after SSH expiry and failed deployment, reconciliation,
+  and healthy rollback recovery, including delayed feature rollback confirmation.
+
 ## v0.40.0 — 2026-11-16
 
 - Includes the v0.39.3 and v0.39.4 fixes below.

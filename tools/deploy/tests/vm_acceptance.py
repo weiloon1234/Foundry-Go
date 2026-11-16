@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Real operator CLI acceptance on a checksum-pinned, disposable KVM guest."""
 import argparse
+import errno
 import hashlib
 import importlib.util
 import json
@@ -8,10 +9,12 @@ import os
 from pathlib import Path
 import re
 import secrets
+import select
 import shlex
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -69,6 +72,113 @@ def redact(value, private_values):
         if secret:
             value = value.replace(secret, "[private value withheld]")
     return value
+
+
+def reviewed_prompt(output, feature):
+    """Require a complete printed review before accepting the terminal prompt."""
+    if not output.rstrip().endswith("(type yes):"):
+        return False
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"(?m)^\{", output):
+        try:
+            value, _ = decoder.raw_decode(output[match.start():])
+        except ValueError:
+            continue
+        if feature:
+            if value.get("ok") is True and isinstance(value.get("plan_token"), str) and value["plan_token"]:
+                return True
+        elif {"version", "commit", "tree_state", "architecture", "instance"} <= value.keys():
+            return True
+    return False
+
+
+def wait_control_socket(path, *, alive, timeout=240, margin=30, minimum=150):
+    """Observe natural ControlPersist exit locally, then leave logind a margin."""
+    started = time.monotonic()
+    absent_since = None
+    while True:
+        now = time.monotonic()
+        if not alive():
+            raise Failure("Interactive CLI exited during the SSH idle pause")
+        if path.exists() or path.is_symlink():
+            absent_since = None
+        elif absent_since is None:
+            absent_since = now
+        if absent_since is not None and now - absent_since >= margin and now - started >= minimum:
+            return
+        if now - started >= timeout:
+            raise Failure("SSH control socket did not disappear with the required idle margin")
+        time.sleep(0.2)
+
+
+def interactive_command(argv, *, env, stream, feature, before_confirm, timeout):
+    """Run the unmodified CLI on a PTY; retain output privately for Run.command."""
+    master, slave = os.openpty()
+    process = None
+    try:
+        process = subprocess.Popen(argv, stdin=slave, stdout=slave, stderr=slave,
+                                   env=env, start_new_session=True)
+        os.close(slave)
+        slave = None
+        deadline = time.monotonic() + timeout
+        output = bytearray()
+        confirmed = False
+        while True:
+            if time.monotonic() >= deadline:
+                raise Failure("Interactive CLI deadline exceeded")
+            readable, _, _ = select.select([master], [], [], 0.2)
+            if readable:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError as error:
+                    if error.errno != errno.EIO:
+                        raise
+                    chunk = b""  # Linux PTY EOF after the slave closes.
+                if not chunk:
+                    break
+                stream.write(chunk.decode("utf-8", errors="replace"))
+                output.extend(chunk)
+                if len(output) > 4 * 1024 * 1024:
+                    raise Failure("Interactive CLI output limit exceeded")
+                if not confirmed and reviewed_prompt(output.decode("utf-8", errors="replace"), feature):
+                    before_confirm(lambda: process.poll() is None)
+                    if time.monotonic() >= deadline:
+                        raise Failure("Interactive CLI deadline exceeded before confirmation")
+                    os.write(master, b"yes\n")
+                    confirmed = True
+        process.wait(timeout=max(0.1, deadline - time.monotonic()))
+        if not confirmed:
+            raise Failure("Interactive CLI exited without a complete review and confirmation prompt")
+        return process.returncode
+    finally:
+        if process is not None:
+            # Retain ownership of the entire child group even on timeout/EOF.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait()
+        os.close(master)
+        if slave is not None:
+            os.close(slave)
+
+
+def failed_deploy_state(output, mode, failed, good, operation):
+    """Reject unrelated failures, ambiguous identities and unproven recovery."""
+    try:
+        state = json.loads(output)["state"]
+        attempt = state["last_attempt"]
+        current = state["current"]["version"]
+        expected = ("unknown", "needs_reconciliation", "operation_cleanup_pending", failed) if mode == "feature" else (
+            "rolled_back", "failed", "readiness_failed", good)
+        if (state["status"], attempt["outcome"], attempt["error"], current) != expected or (
+                attempt["action"], attempt["phase"], attempt["release"]) != ("deploy", "health", failed):
+            raise ValueError
+        if mode == "feature" and attempt["operation_id"] != operation:
+            raise ValueError
+        return current
+    except (ValueError, KeyError, TypeError):
+        raise Failure("Failed deploy status does not prove the expected health failure/recovery") from None
 
 
 def cloud_config(public_key):
@@ -145,37 +255,50 @@ class Run:
         with (self.logs / "steps.log").open("a") as stream:
             stream.write(message + "\n")
 
-    def command(self, name, argv, *, timeout=600, input=None, env=None, publish=False, check=True):
+    def command(self, name, argv, *, timeout=600, input=None, env=None, publish=False, check=True,
+                delayed=None, combined=False):
         self.note(f"== {self.mode}: {name} ==")
         output = self.private / "command-output"
         with output.open("w+") as stream, (self.private / "command-error").open("w+") as errors:
-            process = subprocess.Popen([str(x) for x in argv], stdin=subprocess.PIPE,
-                                       stdout=stream, stderr=errors, text=True,
-                                       env=env, start_new_session=True)
+            process = None
             try:
-                process.communicate(input, timeout=timeout)
-            except BaseException:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                process.wait()
-                self.note(f"FAIL {name}: interrupted/deadline; exit={process.returncode}")
+                if delayed is not None:
+                    code = interactive_command([str(x) for x in argv], env=env, stream=stream,
+                        feature=self.mode == "feature", before_confirm=delayed, timeout=timeout)
+                else:
+                    process = subprocess.Popen([str(x) for x in argv], stdin=subprocess.PIPE,
+                                               stdout=stream, stderr=errors, text=True,
+                                               env=env, start_new_session=True)
+                    process.communicate(input, timeout=timeout)
+                    code = process.returncode
+            except BaseException as error:
+                if process is not None:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait()
+                if publish:
+                    stream.seek(0)
+                    errors.seek(0)
+                    (self.logs / f"{self.mode}-{name}.log").write_text(redact(stream.read() + errors.read(), self.values))
+                reason = str(error) if isinstance(error, Failure) else "interrupted/deadline"
+                self.note(f"FAIL {self.mode}: {name}: {reason}")
                 raise
             stream.seek(0)
             value = stream.read()
             errors.seek(0)
             diagnostics = errors.read()
-        self.note(f"{name}: exit={process.returncode}")
+        self.note(f"{name}: exit={code}")
         if publish:
             (self.logs / f"{self.mode}-{name}.log").write_text(redact(value + diagnostics, self.values))
-        if check and process.returncode:
+        if check and code:
             # Only CLI designed-safe diagnostics and public boot/install output
             # opt into publishing. Never emit raw argv, private stdin or app logs.
             if publish:
                 print(redact((value + diagnostics)[-12000:], self.values), file=sys.stderr)
-            raise Failure(f"{name}: exit={process.returncode}")
-        return process.returncode, value
+            raise Failure(f"{name}: exit={code}")
+        return code, value + diagnostics if combined else value
 
     def remote(self, name, command, **kwargs):
         return self.command(name, [*self.ssh, command], **kwargs)
@@ -372,46 +495,119 @@ class Run:
                 self.values.extend(value.values())
             env["FOUNDRY_SECRET_" + name.upper() + "_FILE"] = str(path)
 
-        def invoke(command, action, *, label=None, **extra):
+        def invoke(command, action, *, label=None, delay=False, fails=False, **extra):
             # Entry point and normal process exit are exercised, including CLI
             # validation, plans, upload and every real SSH/sudo request.
-            _, output = self.command(label or action,
+            name = label or action
+            environment = {**env, "ACTION": action, **extra}
+            paused = None
+            if delay:
+                environment.pop("CONFIRM", None)
+                controls = cli.control_directory()
+                existing = set(controls.iterdir())
+
+                def paused(alive):
+                    sockets = set(controls.iterdir()) - existing
+                    if len(sockets) != 1 or not stat.S_ISSOCK(next(iter(sockets)).lstat().st_mode):
+                        raise Failure("Expected exactly one live CLI SSH control socket at review")
+                    self.note(f"== {self.mode}: {name}-reviewed-pause ==")
+                    self.note("Waiting for natural SSH ControlPersist exit plus 30s; no SSH probes during pause")
+                    started = time.monotonic()
+                    wait_control_socket(next(iter(sockets)), alive=alive)
+                    if set(controls.iterdir()) - existing:
+                        raise Failure("CLI SSH control socket reappeared before confirmation")
+                    self.note(f"== {self.mode}: {name}-confirm-after-idle ==")
+                    self.note(f"SSH control socket absent; confirming after {time.monotonic() - started:.1f}s")
+
+            code, output = self.command(name,
                 [sys.executable, "-B", __file__, "--cli", snapshot, proxy, command],
-                env={**env, "ACTION": action, **extra}, timeout=1800,
+                env=environment, timeout=1800, delayed=paused, check=not fails, combined=fails,
                 publish=action not in ("logs", "build"))
+            if fails and (code != 1 or not re.search(r"(?m)^Deployment stopped: readiness_failed: ", output)
+                          or "Traceback (most recent call last)" in output):
+                raise Failure("Bad release did not exit with the designed readiness_failed refusal")
             return output
 
         invoke("bootstrap", "inspect")
         invoke("bootstrap", "prepare")
         profile = cli.read_json(snapshot / "deploy/environments/acceptance.json")
         units = instance_units({"name": instance_name(project, profile), "profile": profile, "topology": topology})
-        previous = None
-        for number in (1, 2):
-            invoke("release", "build", label=f"build-{number}")
+        versions = []
+
+        def build(label):
+            invoke("release", "build", label="build-" + label)
             releases = snapshot / "dist/releases" / project["id"] / profile["instance_id"]
             manifests = sorted(releases.glob("*/manifest.json"), key=lambda p: p.parent.name)
             manifest = json.loads(manifests[-1].read_text())
             version = manifest["version"]
-            if version == previous:
-                raise Failure("Second build did not produce a distinct release")
-            invoke("deploy", "deploy", label=f"deploy-{number}", RELEASE=version)
-            status = json.loads(invoke("deploy", "status", label=f"status-{number}"))
-            if status["state"]["status"] != "healthy" or status["state"]["current"]["version"] != version:
+            if version in versions:
+                raise Failure("Build did not produce a distinct release")
+            versions.append(version)
+            return version
+
+        def healthy(label, version, *, expected="healthy"):
+            status = json.loads(invoke("deploy", "status", label="status-" + label))
+            if status["state"]["status"] != expected or status["state"]["current"]["version"] != version:
                 raise Failure("Deployed release is not healthy/current")
             for unit in units.values():
-                _, output = self.remote("role-" + unit, "systemctl show " + shlex.quote(unit)
+                _, output = self.remote("role-" + label + "-" + unit, "systemctl show " + shlex.quote(unit)
                     + " -p ActiveState -p SubState -p MainPID", publish=True)
                 state = dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
                 if state.get("ActiveState") != "active" or state.get("SubState") != "running" or int(state.get("MainPID", "0")) <= 0:
                     raise Failure("Placed role is not running: " + unit)
-            invoke("deploy", "logs", label=f"logs-{number}", LINES="10")
-            invoke("deploy", "report", label=f"report-{number}")
+            invoke("deploy", "logs", label="logs-" + label, LINES="10")
+            invoke("deploy", "report", label="report-" + label)
+
+        for number in (1, 2):
+            version = build(str(number))
+            invoke("deploy", "deploy", label=f"deploy-{number}", RELEASE=version, delay=number == 2)
+            healthy(str(number), version)
             self.diagnostics()
-            previous = version
+        self.note(f"PASS {self.mode}: delayed interactive deploy after all CLI SSH sessions expired")
+
+        # A supported fixture configuration fails HTTP readiness in both modes.
+        # Only the private build copy changes; retained good releases keep healthy config.
+        configuration = snapshot / "config/deploy.toml"
+        original = configuration.read_text()
+        if tomllib.loads(original)["fixture"]["readiness"] != "healthy" or original.count('readiness = "healthy"') != 1:
+            raise Failure("Fixture readiness input no longer matches the failure recipe")
+        self.note(f"== {self.mode}: prepare-readiness-failure ==")
+        try:
+            configuration.write_text(original.replace('readiness = "healthy"', 'readiness = "fail"'))
+            failed = build("unready")
+        finally:
+            configuration.write_text(original)
+        operation = str(uuid.uuid4())
+        invoke("deploy", "deploy", label="deploy-unready", RELEASE=failed, OPERATION=operation, fails=True)
+        observed = invoke("deploy", "status", label="status-failed")
+        current = failed_deploy_state(observed, self.mode, failed, versions[1], operation)
+        self.note(f"== {self.mode}: reconcile-failed-deploy ==")
+        reconciled = json.loads(invoke("deploy", "reconcile"))
+        expected = "stopped" if self.mode == "feature" else "rolled_back"
+        if reconciled.get("ok") is not True or reconciled.get("status") != expected or reconciled.get("version") != current:
+            raise Failure("Reconcile did not preserve the expected release/state")
+        if self.mode == "feature":
+            if reconciled.get("cleanup_reconciled") is not True:
+                raise Failure("Feature cleanup was not reconciled")
+        elif reconciled.get("unchanged") is not True:
+            raise Failure("Reconcile after automatic code restoration was not a no-op")
+        status = json.loads(invoke("deploy", "status", label="status-reconciled"))["state"]
+        if status["status"] != expected or status["current"]["version"] != current:
+            raise Failure("Status disagrees with reconciliation")
+        # Standard deploy auto-restores the second release; explicitly roll back
+        # one further good release. Feature cleanup retains the failed selection.
+        target = versions[1] if self.mode == "feature" else versions[0]
+        invoke("deploy", "rollback", label="rollback-recovery", TARGET=target,
+               EXPECTED_CURRENT=status["current"]["version"], OPERATION=str(uuid.uuid4()),
+               delay=self.mode == "feature")
+        healthy("recovered", target, expected="healthy" if self.mode == "feature" else "rolled_back")
+        if self.mode == "feature":
+            self.note(f"PASS {self.mode}: delayed interactive recovery rollback after all CLI SSH sessions expired")
+        self.note(f"PASS {self.mode}: failed deploy, reconcile, rollback, healthy roles, logs and report")
         plan = json.loads(invoke("deploy", "tools-plan"))
         if plan["upgrade"] is not None or plan["prune_bundles"] or plan["prune_upgrade_journals"]:
             invoke("deploy", "tools-apply", PLAN_TOKEN=plan["plan_token"], OPERATION=str(uuid.uuid4()))
-        self.note("PASS real CLI bootstrap, two rebuilt deployments, healthy roles, logs, report and tools plan")
+        self.note(f"PASS {self.mode}: real CLI bootstrap, three rebuilt releases, recovery and tools plan")
 
 
 def image_pin(ubuntu):
@@ -507,6 +703,9 @@ def main():
                              {**storage, "endpoint": f"https://s3:{port}", "recipient": recipient.strip()})
                 run.stop_vm()
                 shutil.rmtree(guest)
+        except Failure as error:
+            run.note(f"FAIL {run.mode}: {error}")
+            raise
         finally:
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
             signal.signal(signal.SIGINT, signal.SIG_IGN)
