@@ -141,6 +141,7 @@ jobs:
             ${{ steps.acceptance.outputs.logs }}/*-units.log
             ${{ steps.acceptance.outputs.logs }}/*-apt-activity.log
             ${{ steps.acceptance.outputs.logs }}/*-host-failure.log
+            ${{ steps.acceptance.outputs.logs }}/*-backup-repository.log
             ${{ steps.acceptance.outputs.logs }}/*-host-upgrade.log
             ${{ steps.acceptance.outputs.logs }}/*-reboot-required.log
             ${{ steps.acceptance.outputs.logs }}/*-settle.log

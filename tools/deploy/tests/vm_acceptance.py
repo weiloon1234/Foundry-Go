@@ -256,6 +256,14 @@ class Run:
                             + "; sudo -n journalctl --no-pager -p warning -n 120; "
                             "sudo -n sh -c 'tail -n 80 /var/log/pgbackrest/*.log /var/log/postgresql/*.log 2>/dev/null'",
                             timeout=60, publish=True, check=False)
+                # Read-only repository reachability: endpoint lines only, never keys or cipher settings.
+                self.remote("backup-repository", "sudo -n grep -E '^repo1-(s3-endpoint|storage-port|s3-bucket|s3-uri-style)=' "
+                            "/etc/foundry/pgbackrest/foundry.conf; "
+                            "sudo -n runuser -u postgres -- pgbackrest --config=/etc/foundry/pgbackrest/foundry.conf "
+                            "--stanza=foundry --log-level-console=info info; "
+                            "port=$(sudo -n sed -n 's/^repo1-storage-port=//p' /etc/foundry/pgbackrest/foundry.conf); "
+                            "curl -sS -o /dev/null -w 'curl %{http_code} %{ssl_verify_result}\\n' \"https://10.0.2.2:$port/\"",
+                            timeout=90, publish=True, check=False)
             except Exception:
                 self.note("Systemd diagnostic collector unavailable")
 
