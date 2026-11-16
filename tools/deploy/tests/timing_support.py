@@ -26,6 +26,13 @@ class ManualClock:
         return getattr(time, name)
 
 
+class SteppingClock(ManualClock):
+    """A polling loop's own sleeps advance time, so deadlines end without real waits."""
+
+    def sleep(self, seconds):
+        self.advance(max(0, seconds))
+
+
 @contextmanager
 def readiness_clock(clock):
     """Keep deadlines, observations and fake process timestamps in one time domain."""
