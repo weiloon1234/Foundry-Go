@@ -194,6 +194,21 @@ class ReportTests(unittest.TestCase):
         self.assertIn({"code": "backup_stale", "instance_id": INSTANCE_ID}, result["problems"])
         self.assertIn({"code": "backup_failed", "instance_id": INSTANCE_ID}, result["problems"])
 
+    def test_missing_backup_reports_operator_full_backup_command(self):
+        self.host.registry["instances"][INSTANCE_ID]["backup"] = {"destination_ref": "configured"}
+        result = report.collect_report(self.host)
+        self.assertIsNone(self.item(result)["backup"]["last_complete_id"])
+        self.assertIn({"code": "backup_missing", "instance_id": INSTANCE_ID,
+                       "detail": "No completed backup. Run ACTION=backup-run BACKUP_KIND=full make deploy."},
+                      result["problems"])
+
+    def test_missing_backup_finding_requires_configured_repository_and_no_receipt(self):
+        for value in ({}, {"destination_ref": "configured", "last_complete_id": "completed-bundle"}):
+            with self.subTest(backup=value):
+                problems = []
+                report.backup_freshness({"backup": value}, problems, INSTANCE_ID)
+                self.assertNotIn("backup_missing", [item["code"] for item in problems])
+
     def test_invalid_backup_timestamp_cannot_claim_freshness(self):
         for timestamp in ("2026-01-01T00:00:00", "not-a-timestamp", "9999-01-01T00:00:00Z"):
             with self.subTest(timestamp=timestamp):

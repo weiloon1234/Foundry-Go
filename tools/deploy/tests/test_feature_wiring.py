@@ -19,6 +19,7 @@ import sys
 import tarfile
 import tempfile
 import threading
+import time
 from contextlib import nullcontext
 import unittest
 from unittest.mock import Mock, patch
@@ -529,6 +530,71 @@ class FeatureWiringFixture(unittest.TestCase):
 
 
 class FeatureWiringTests(FeatureWiringFixture):
+    def configure_initial_backup(self):
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        registry, entry = self.host.require_identity(self.project, self.profile)
+        entry["backup"]["destination_ref"] = release.backup.CONFIG
+        self.host.journal(registry, entry)
+        return entry
+
+    def test_first_feature_activation_takes_one_full_backup_after_selection_commits(self):
+        entry = self.configure_initial_backup()
+        label = "20261116-020000F"
+        def archive(host, selected_entry):
+            state = host.load_state(selected_entry)
+            self.assertEqual(state["last_attempt"]["outcome"], "succeeded")
+            self.assertEqual(state["status"], "healthy")
+            self.assertTrue(state["backup"]["initial_operation_id"])
+            _, selection, inventory, _ = lifecycle.load(host, selected_entry)
+            self.assertEqual(selection.admission.disposition, c.AdmissionDisposition.COMMITTED)
+            return {"status": "complete", "coverage": release.backup.service_coverage(inventory),
+                    "deployment_sha256": c.canonical_digest(c.record_document(inventory.deployment))}
+        with patch.object(release.backup, "_info", return_value=[
+                {"label": label, "type": "full", "timestamp": {"stop": int(time.time())}}]), \
+                patch.object(release.backup, "_database_backup", return_value=label) as database, \
+                patch.object(release.backup, "_backrest"), \
+                patch.object(release.backup, "archive_keys", side_effect=archive) as keys:
+            first = self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+            self.assertTrue(first["ok"])
+            self.profile = first["profile_update"]
+            state = self.host.load_state(entry)
+            self.assertEqual(state["backup"]["last_complete_id"], state["backup"]["initial_operation_id"])
+            self.build_archive(version="20261116T000000Z-abcdef12")
+            second = self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+            self.assertTrue(second["ok"])
+            self.profile = second["profile_update"]
+            self.rollback_target(first["version"])
+        database.assert_called_once_with(self.host, "full")
+        keys.assert_called_once()
+
+    def test_feature_initial_backup_failure_keeps_activation_successful_and_uuid(self):
+        entry = self.configure_initial_backup()
+        with patch.object(release.backup, "_info", return_value=[]), \
+                patch.object(release.backup, "_database_backup", side_effect=c.DeployError("command_failed", "private-canary")) as database, \
+                patch.object(release.backup, "run_backup", wraps=release.backup.run_backup) as run:
+            result = self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+            self.profile = result["profile_update"]
+            operation = self.host.load_state(entry)["backup"]["initial_operation_id"]
+            self.build_archive(version="20261116T000000Z-abcdef12")
+            second = self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+            self.profile = second["profile_update"]
+        self.assertTrue(result["ok"])
+        self.assertTrue(second["ok"])
+        self.assertIn("backup_missing", result["warnings"])
+        self.assertIn("backup_missing", second["warnings"])
+        state = self.host.load_state(entry)
+        self.assertEqual(state["status"], "healthy")
+        self.assertEqual(state["last_attempt"]["outcome"], "succeeded")
+        self.assertEqual(state["backup"]["initial_operation_id"], operation)
+        self.assertEqual(state["backup"]["attempt"]["operation_id"], operation)
+        self.assertEqual([call.args[2:] for call in run.call_args_list], [(operation, "full"), (operation, "full")])
+        database.assert_called_once_with(self.host, "full")
+        self.assertNotIn("private-canary", json.dumps(state))
+        result = report.collect_report(self.host)
+        finding = next(item for item in result["problems"] if item["code"] == "backup_missing")
+        self.assertIn("ACTION=backup-run BACKUP_KIND=full", finding["detail"])
+
     def test_bootstrap_resumes_unchanged_invalid_registered_graph_but_cannot_activate(self):
         self.build_archive(maintenance="stop")
         topology = self.topology.projection()

@@ -1048,7 +1048,9 @@ def execute(host, request, *, pin=None):
             store.record_operation(state["last_attempt"])
             # Cleanup must still prove exit and closure before corrective configuration.
             raise
+        warnings = release.backup.initial_backup(host, entry) if action == "activate" else []
         return {"ok": True, "instance": entry["name"], "version": inventory.deployment.release,
+                **({"warnings": warnings} if warnings else {}),
                 **({"maintenance": {"down": action == "down"},
                     **({"bypass_path": maintenance_result["bypass_path"]}
                        if "bypass_path" in maintenance_result else {})} if action in ("down", "up") else {}),

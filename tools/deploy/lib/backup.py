@@ -665,6 +665,34 @@ def run_backup(host: Host, entry: dict, backup_id: str, kind: str = "full") -> d
     return _run_bundle(host, entry, backup_id, kind)
 
 
+def initial_backup(host: Host, entry: dict) -> list[str]:
+    """Complete the first deployment's backup without changing its outcome."""
+    operation = None
+    try:
+        state = host.load_state(entry)
+        value = {**entry.get("backup", {}), **state.get("backup", {})}
+        if not value.get("destination_ref") or value.get("last_complete_id"):
+            return []
+        operation = value.get("initial_operation_id")
+        if operation is None:
+            operation = str(uuid.uuid4())
+            value["initial_operation_id"] = operation
+            state["backup"] = value
+            host.save_state(entry, state)
+        run_backup(host, entry, operation, "full")
+        return []
+    except (DeployError, OSError, ValueError) as error:
+        # The deploy is already committed. Preserve the backup identity and
+        # unknown outcome for explicit reconciliation, without retrying it here.
+        try:
+            _record(host, entry, "attempt", {"outcome": "unknown", "at": now(),
+                "operation_id": operation,
+                "error": error.code if isinstance(error, DeployError) else "backup_failed"})
+        except (DeployError, OSError, ValueError):
+            pass
+        return ["backup_missing"]
+
+
 def reconcile_backup(host: Host, entry: dict, operation: str, database_label=None) -> dict:
     path = _operation_path(host, entry, operation)
     journal = read_json(_private(host, path))

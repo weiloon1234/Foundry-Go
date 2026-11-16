@@ -1022,6 +1022,27 @@ credentials from `/etc/foundry/pgbackrest/foundry.conf`, owned by `foundry-postg
 mode 0600. Every instance sharing
 the cluster must use the same repository and preserve its passphrase.
 
+The first successful deploy takes an initial full database backup and an encrypted
+key/config archive when backups are configured and no backup has completed. This
+runs after activation succeeds, for both standard and feature instances. Bootstrap
+only configures backups and schedules. Feature archives include the selected
+deployment.
+
+The backup owner saves its operation UUID as `state.backup.initial_operation_id`
+before starting. Retried deployments reuse that UUID. An uncertain outcome requires
+explicit reconciliation as described below. A failed initial backup leaves the
+deployment successful, records the backup attempt, and returns a `backup_missing`
+warning. Once any backup completes, later deployments skip this initial backup.
+Rollback does not trigger it.
+Use `ACTION=status make deploy` and check `state.backup.last_complete_id` to verify
+completion.
+
+For hosts deployed before v0.39.1, run
+`ACTION=backup-run BACKUP_KIND=full make deploy` now. `ACTION=report make deploy`
+reports `backup_missing` when backups are configured but no completed backup is
+recorded, with the command to create one. Recovery and rehearsal behavior is
+unchanged.
+
 The installed schedule runs a full database backup on Sunday at 02:00 UTC and
 a differential backup daily at 05:00 UTC. If no base backup exists, the first
 differential request takes a full backup. Each database run also archives each
@@ -1270,7 +1291,7 @@ values are `null`, never zero or false.
 | `host.ssh` | `sshd -T`, root only: password login and root login settings | `ssh_password_login` |
 | `host.resources` | Memory and disk | `memory_low` under 10% available; `disk_low` under 10% or 2 GiB available |
 | instance `certificate` | TLS handshake on 443 | `certificate_expiring` under 14 days; `certificate_invalid`, `certificate_renewal_unverified` |
-| instance `backup` | Backup receipts | `backup_stale`, `backup_failed` |
+| instance `backup` | Backup receipts | `backup_missing`, `backup_stale`, `backup_failed` |
 | instance `maintenance` | Live application status, root only | `maintenance_probe_unavailable` |
 
 The root-only fields are `null` for a nonroot reader. Only maintenance adds a
