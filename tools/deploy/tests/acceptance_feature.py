@@ -463,7 +463,10 @@ def feature_archive(source, destination, host_id, *, confined=False, copies=0, v
                 "public_addresses": list(network.ADDRESSES), "proxied": False}}}
     checksum = hashlib.sha256(files["artisan"]).hexdigest()
     platform = "linux-" + profile["architecture"]
-    fixture = Path(__file__).resolve().parents[3] / "tests/fixtures/deploy-acceptance"
+    # Containers mount the framework at /verification/foundry-go; unit tests run from the repository.
+    fixture = next(root for root in (Path("/verification/foundry-go/tests/fixtures/deploy-acceptance"),
+                                     Path(__file__).resolve().parents[3] / "tests/fixtures/deploy-acceptance")
+                   if (root / "deploy/rehearsal/topology.json").is_file())
     tree_configs = json.loads((fixture / "deploy/rehearsal/topology.json").read_text())["roles"][1]["configs"]
     topology = parse_topology({"schema": 2, "shared_directories": {
         "render-cache": {"state": "disposable", "max_bytes": 1048576, "writers": ["http"], "readers": ["relay"]}}, "roles": [
