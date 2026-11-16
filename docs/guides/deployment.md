@@ -1437,7 +1437,9 @@ requirements of the CI amd64 and lead's arm64 container matrices before producti
 
 The `deploy-vm-amd64` jobs in `.github/workflows/verify.yml` run on pushes
 and manual dispatches. One `operator` job covers both topologies, and one `recovery`
-job runs per topology. Each has a 60-minute job deadline and a 50-minute acceptance step. They boot the official Ubuntu
+job runs per topology. Recovery has a 90-minute job deadline and a 75-minute
+acceptance step. Operator retains its 60-minute job deadline and 50-minute step.
+They boot the official Ubuntu
 server cloud image with QEMU/KVM. [VM image inputs](../../tools/deploy/docker/vm-inputs.json)
 pin its release serial, immutable URL and SHA-256; the runner checks the digest
 before boot. Ubuntu 26.04 remains a follow-up after 24.04 is stable.
@@ -1458,14 +1460,32 @@ through HTTP, and requests another full backup through the CLI. The runner uses
 `rclone` and `age` to download and decrypt the recovery archive into a private
 `FOUNDRY_RECOVERY_DIR`. B rehearses recovery while A stays alive, reads the marker
 on localhost, and refuses deployment in the `rehearsal` registry state. The runner
+queries B's PostgreSQL server to prove `archive_mode=off`. It compares repository
+object hashes, sizes and modification times before and after rehearsal. Existing
+objects must remain unchanged; new objects must be WAL from A's observed archive ID
+and timeline. A's scheduled backup timers are paused during this comparison, while
+A stays live and continues WAL archiving. The runner
 destroys B and stops A before C takes over. C must preserve the marker, record
 `recovered_from`, pass status and report checks, complete a new full backup and key
 archive, enable backup timers, and update the local profile to C.
 
+The CLI report must contain only the exact expected unprivileged findings. For
+standard instances, Linux may prevent executable-link inspection, producing
+`running_release_unverified` and `instance_state_inconsistent`. Feature instances
+cannot read private selection records, producing `runtime_selection_unavailable`,
+`running_release_mismatch`, `instance_state_inconsistent`,
+`declared_network_unavailable`, and `instance_degraded`. The installed report also
+runs under sudo and must return `complete=true` with no problems. Admission files
+remain private. `steps.log` records elapsed seconds for boot, cloud-init and upgrade,
+bootstrap, deploy, backup, rehearsal and takeover, including failed phases.
+Failed builds publish only the CLI's final designed refusal line, with secrets
+redacted; raw Docker, npm and Go output stays private.
+
 Every guest uses the same pinned image, cloud-init, package upgrade and required
 reboot, and CA trust. At most two 4 GiB guests run together. Each has its own SSH
 port, known-hosts file, overlay and serial log. The private fixture copy adds the
-marker endpoint and declares its loopback relay prerequisites safe for rehearsal.
+marker endpoint in existing inventoried source files so it survives the CLI build
+snapshot, and declares its loopback relay prerequisites safe for rehearsal.
 The tracked fixture is unchanged. Disposable recovery targets may retain only the
 acceptance CA directory and its regular certificate and key files under `/etc/foundry`.
 Production preflight retains its empty-host requirement. Recovery reuses one retained

@@ -82,7 +82,7 @@ jobs:
     name: deploy-vm-amd64 (${{ matrix.ubuntu }}, ${{ matrix.scenario }}, ${{ matrix.topology }})
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: ${{ matrix.scenario == 'recovery' && 90 || 60 }}
     strategy:
       fail-fast: false
       matrix:
@@ -116,7 +116,7 @@ jobs:
       - name: Real SSH ${{ matrix.scenario }} acceptance on Ubuntu VMs
         id: acceptance
         # Leave time for cleanup/artifact upload before the job deadline.
-        timeout-minutes: 50
+        timeout-minutes: ${{ matrix.scenario == 'recovery' && 75 || 50 }}
         env:
           ACCEPTANCE_LOG_DIR: ${{ runner.temp }}/deploy-vm-${{ matrix.scenario }}-${{ matrix.topology }}-logs
         run: |
@@ -139,6 +139,7 @@ jobs:
             ${{ steps.acceptance.outputs.logs }}/*-inspect.log
             ${{ steps.acceptance.outputs.logs }}/*-prepare.log
             ${{ steps.acceptance.outputs.logs }}/*-deploy-*.log
+            ${{ steps.acceptance.outputs.logs }}/*-build-*-refusal.log
             ${{ steps.acceptance.outputs.logs }}/*-status-*.log
             ${{ steps.acceptance.outputs.logs }}/*-report-*.log
             ${{ steps.acceptance.outputs.logs }}/*-tools-*.log

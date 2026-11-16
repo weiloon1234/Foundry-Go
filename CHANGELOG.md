@@ -2,11 +2,16 @@
 
 ## Unreleased
 
-- Add a separate real-VM recovery acceptance job for both topology modes, covering
+- Add a separate real-VM recovery acceptance job per topology, covering
   initial and explicit full backups, local age decryption, rehearsal while the source
-  stays alive, and takeover with restored application data, backup timers and profile updates.
+  stays alive with verified repository isolation, and takeover with restored application
+  data, privileged reports, backup timers and profile updates. Record phase timings;
+  recovery uses 75-minute step and 90-minute job budgets, while operator keeps 50/60 minutes.
+  Keep the recovery marker endpoint in the CLI's build snapshot and publish only
+  redacted CLI refusal lines when builds fail.
 - Allow only the acceptance CA directory and its regular certificate/key files on
-  explicitly disposable recovery targets. Production recovery preflight remains unchanged.
+  explicitly disposable recovery targets. Reject symlinked container markers and
+  hard-linked CA files. Production recovery preflight remains unchanged.
 
 ## v0.41.0 — 2026-11-17
 

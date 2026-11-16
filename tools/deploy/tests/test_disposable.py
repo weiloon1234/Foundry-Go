@@ -94,3 +94,15 @@ class DisposableHostTests(unittest.TestCase):
         (self.root / ".dockerenv").touch()
         with patch.dict(os.environ, {"FOUNDRY_DISPOSABLE_HOST": "0"}):
             self.assertTrue(disposable.disposable_host(self.root))
+
+    def test_symlinked_container_marker_does_not_grant_disposable_identity(self):
+        target = self.root / "container-marker"
+        target.touch()
+        (self.root / ".dockerenv").symlink_to(target)
+        self.assertFalse(disposable.disposable_host(self.root))
+        with patch.dict(os.environ, {"FOUNDRY_DISPOSABLE_HOST": "0"}):
+            self.assertFalse(disposable.disposable_host(self.root))
+        # An invalid container marker does not suppress a separately valid VM identity.
+        self.marker.touch(mode=0o600)
+        with marker_owner(self.marker, 0):
+            self.assertTrue(disposable.disposable_host(self.root))

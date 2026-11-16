@@ -11,6 +11,7 @@ from pathlib import Path
 from contracts import copy_key
 import re
 import secrets
+import stat
 import tarfile
 import uuid
 
@@ -346,8 +347,11 @@ def _empty(host, name, *, resume_preflight=False, applying=False):
         path = host.paths.p(root)
         if path.exists() or path.is_symlink():
             for item in [path, *path.rglob("*")] if path.is_dir() and not path.is_symlink() else [path]:
-                acceptance = (item in acceptance_directories and item.is_dir()
-                              or item in acceptance_files and item.is_file())
+                acceptance = False
+                if item in acceptance_directories or item in acceptance_files:
+                    info = item.lstat()
+                    acceptance = (item in acceptance_directories and stat.S_ISDIR(info.st_mode)
+                                  or item in acceptance_files and stat.S_ISREG(info.st_mode) and info.st_nlink == 1)
                 require(not item.is_symlink() and (acceptance or item in allowed or any(item in value.parents for value in allowed)),
                         "recovery_not_empty", "Target has Foundry resources; recreate an empty server.")
     for root, pattern in (("/etc/postgresql", "*/foundry"), ("/var/log/postgresql", "*foundry*"),

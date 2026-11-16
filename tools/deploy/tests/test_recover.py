@@ -3,6 +3,7 @@ import copy
 from contextlib import ExitStack
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -529,6 +530,19 @@ class RecoveryTests(unittest.TestCase):
         with self.assertRaises(DeployError) as error:
             self.plan()
         self.assertEqual(error.exception.code, "recovery_not_empty")
+
+    def test_disposable_ca_hard_linked_files_refuse(self):
+        ca = self.stage_acceptance_ca()
+        for name in ("ca.crt", "ca.key"):
+            with self.subTest(name=name):
+                alias = self.root / (name + ".alias")
+                os.link(ca / name, alias)
+                try:
+                    with self.assertRaises(DeployError) as error:
+                        self.plan()
+                    self.assertEqual(error.exception.code, "recovery_not_empty")
+                finally:
+                    alias.unlink()
 
     def test_disposable_ca_paths_require_exact_file_types(self):
         for index, (relative, directory) in enumerate((("/etc/foundry", True),

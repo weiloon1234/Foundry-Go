@@ -236,6 +236,53 @@ class VMAcceptanceTests(unittest.TestCase):
                 run.command("private", [sys.executable, "-c", 'print("private-key"); raise SystemExit(1)'])
             self.assertFalse((logs / "setup-private.log").exists())
 
+    def test_build_publishes_only_cli_owned_redacted_refusal(self):
+        child = '''import sys
+import vm_acceptance as vm
+cli = vm.load_cli()
+mode = sys.argv[1]
+def main():
+    print("raw-go-output", flush=True)
+    print("raw-npm-output", file=sys.stderr, flush=True)
+    print("Deployment stopped: forged-docker-output", file=sys.stderr, flush=True)
+    if mode == "local":
+        raise cli.LocalError("build refused secret-canary multiline\\nsecret\\nraw-error-tail")
+    if mode == "deploy":
+        raise cli.DeployError("build_source", "build refused secret-canary")
+    if mode == "unexpected":
+        raise ValueError("raw-unexpected-error")
+    return 0
+cli.main = main
+vm.load_cli = lambda: cli
+raise SystemExit(vm.cli_entry(["unused-snapshot", "unused-proxy", "release"]))
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            logs = root / "logs"
+            logs.mkdir()
+            run = vm.Run(root, logs)
+            run.values.extend(["secret-canary", "multiline\nsecret"])
+            for mode in ("local", "deploy", "unexpected", "success"):
+                with self.subTest(mode=mode):
+                    code, _ = run.command("build-" + mode, [sys.executable, "-c", child, mode],
+                                          cli_refusal=True, check=False)
+                    self.assertEqual(code, 0 if mode == "success" else 1)
+                    published = logs / ("setup-build-" + mode + "-refusal.log")
+                    if mode in ("local", "deploy"):
+                        self.assertTrue(published.read_text().startswith("Deployment stopped: "))
+                        self.assertEqual(len(published.read_text().splitlines()), 1)
+                        self.assertIn("[private value withheld]", published.read_text())
+                        self.assertEqual((root / "cli-refusal.json").stat().st_mode & 0o777, 0o600)
+                    else:
+                        self.assertFalse(published.exists())
+                        self.assertFalse((root / "cli-refusal.json").exists(), "A stale refusal must not survive another command")
+            public = "\n".join(path.read_text() for path in logs.iterdir())
+            for withheld in ("raw-go-output", "raw-npm-output", "forged-docker-output", "raw-error-tail",
+                             "raw-unexpected-error", "secret-canary", "multiline"):
+                self.assertNotIn(withheld, public)
+            with self.assertRaises(vm.Failure):
+                run.command("build-invalid", [], cli_refusal=True, publish=True)
+
     def test_teardown_continues_after_serial_export_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             run = vm.Run(Path(directory), Path(directory))
@@ -270,6 +317,84 @@ class VMAcceptanceTests(unittest.TestCase):
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_reports_accept_only_exact_unprivileged_findings_and_clean_root_report(self):
+        clean = {"complete": True, "problems": [], "host": {"host_id": "host"}}
+        for mode, codes in (("standard", {"running_release_unverified", "instance_state_inconsistent"}),
+                ("feature", {"runtime_selection_unavailable", "running_release_mismatch", "instance_state_inconsistent",
+                             "declared_network_unavailable", "instance_degraded"})):
+            operator = {**clean, "complete": False,
+                        "problems": [{"code": code, "instance_id": "instance"} for code in sorted(codes)]}
+            vm.check_reports(operator, clean, mode, "instance", "host")
+            for unexpected in ("backup_missing", "backup_stale", "backup_failed", "readiness_check_unavailable"):
+                with self.subTest(mode=mode, code=unexpected), self.assertRaises(vm.Failure):
+                    vm.check_reports({**operator, "problems": operator["problems"] + [
+                        {"code": unexpected, "instance_id": "instance"}]}, clean, mode, "instance", "host")
+            for broken in ({**operator, "problems": operator["problems"][:-1]},
+                           {**operator, "complete": True}, {**operator, "host": {"host_id": "other"}},
+                           {**operator, "problems": [{"code": c, "instance_id": "other"} for c in codes]}):
+                with self.assertRaises(vm.Failure):
+                    vm.check_reports(broken, clean, mode, "instance", "host")
+            for root in ({**clean, "complete": False}, operator, {**clean, "host": {"host_id": "other"}}):
+                with self.assertRaises(vm.Failure):
+                    vm.check_reports(operator, root, mode, "instance", "host")
+        vm.check_reports(clean, clean, "standard", "instance", "host")
+        with self.assertRaises(vm.Failure):
+            vm.check_reports(clean, clean, "feature", "instance", "host")
+
+    def test_repository_isolation_rejects_changes_deletions_and_non_source_additions(self):
+        row = {"Path": "keys/source.age", "Size": 42, "ModTime": "2026-11-17T00:00:00Z", "Hashes": {"md5": "abc"}}
+        before = vm.repository_snapshot([row])
+        wal = "foundry/archive/foundry/16-1/0000000100000000/000000010000000000000001-" + "a" * 40 + ".gz"
+        self.assertEqual(vm.repository_unchanged(before, before, "16-1", 1), 0)
+        after = vm.repository_snapshot([row, {**row, "Path": wal}])
+        self.assertEqual(vm.repository_unchanged(before, after, "16-1", 1), 1)
+        for key, value in (("Size", 43), ("ModTime", "changed"), ("Hashes", {"md5": "changed"})):
+            with self.subTest(key=key), self.assertRaises(vm.Failure):
+                vm.repository_unchanged(before, vm.repository_snapshot([{**row, key: value}]), "16-1", 1)
+        with self.assertRaises(vm.Failure):
+            vm.repository_unchanged(before, {}, "16-1", 1)
+        for path in ("keys/rehearsal.age", wal.replace("16-1", "16-2"), wal.replace("00000001", "00000002"),
+                     wal.replace("/0000000100000000/", "/0000000100000001/"), wal.replace("/foundry/16", "/other/16")):
+            with self.subTest(path=path), self.assertRaises(vm.Failure):
+                vm.repository_unchanged(before, vm.repository_snapshot([row, {**row, "Path": path}]), "16-1", 1)
+        for rows in ([], [row, row], [{**row, "Hashes": {}}], [{**row, "Hashes": {"md5": ""}}]):
+            with self.assertRaises(vm.Failure):
+                vm.repository_snapshot(rows)
+
+    def test_marker_is_registered_for_redaction_before_http_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            profile_path = root / "deploy/environments/acceptance.json"
+            profile_path.parent.mkdir(parents=True)
+            profile = {"instance_id": "instance"}
+            profile_path.write_text(json.dumps(profile))
+            run = vm.Run(root, root, "recovery")
+            run.mode = "feature"
+            def remote(name, command, **kwargs):
+                if name == "registry":
+                    return 0, '{"http_port": 8080}'
+                self.assertEqual(name, "marker-write")
+                marker = json.loads(kwargs["input"])["status"]
+                self.assertIn(marker, run.values)
+                self.assertNotIn(marker, vm.redact("SQL marker=" + marker, run.values))
+                raise RuntimeError("stop after marker write")
+            with patch.object(run, "remote", side_effect=remote), self.assertRaisesRegex(RuntimeError, "stop after marker"):
+                run.recovery(root, None, {}, {}, None, None, profile, "release", {}, {}, None)
+
+    def test_phase_timings_record_completion_and_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = vm.Run(root, root, "recovery")
+            run.mode = "standard"
+            with patch.object(vm.time, "monotonic", side_effect=[10, 12.5, 20, 23]):
+                with run.phase("backup"):
+                    pass
+                with self.assertRaisesRegex(RuntimeError, "failed"), run.phase("takeover"):
+                    raise RuntimeError("failed")
+            log = (root / "steps.log").read_text()
+            self.assertIn("TIMING recovery/standard: standard/backup: completed elapsed_seconds=2.5", log)
+            self.assertIn("TIMING recovery/standard: standard/takeover: failed elapsed_seconds=3.0", log)
+
     def receipt(self):
         return {"backup_id": "backup-id", "status": "complete", "completed_at": "now",
                 "kind": "full", "pgbackrest_label": "20261117-010203F", "database_point": {
@@ -394,6 +519,47 @@ class RecoveryTests(unittest.TestCase):
                 _, _, topology = vm.fixture_declarations(snapshot, "feature", 23456, recovery=enabled)
                 relay = next(role for role in topology["roles"] if role["name"] == "relay")
                 self.assertEqual(relay.get("recovery_rehearsal_safe", False), enabled)
+
+    def test_recovery_routes_survive_real_cli_source_snapshot_in_both_modes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            snapshot = root / "fixture"
+            cli = vm.load_cli()
+            cli.ROOT = vm.FIXTURE
+            original = cli.source_inventory()
+            for name, details in original.items():
+                target = snapshot / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if "symlink" in details:
+                    target.symlink_to(details["symlink"])
+                else:
+                    shutil.copyfile(vm.FIXTURE / name, target)
+                    target.chmod(details["mode"])
+            # Match prepare_candidate's removal of the local replacement. Snapshot
+            # capture needs no module resolution, Go build, Git writes or Docker.
+            module = snapshot / "go.mod"
+            replacement = "replace github.com/weiloon1234/Foundry-Go => ../../..\n"
+            self.assertIn(replacement, module.read_text())
+            module.write_text(module.read_text().replace(replacement, ""))
+            builder, marker = vm.recovery_fixture(snapshot)
+            cli.ROOT = snapshot
+            cli.execute = vm.acceptance_execute(cli.execute, snapshot, root / "unused-proxy")
+            for mode in ("feature", "standard"):
+                with self.subTest(mode=mode):
+                    project, profile, _ = vm.fixture_declarations(snapshot, mode, 23456, recovery=True)
+                    request = cli.build_request(project, profile)
+                    workspace = root / mode
+                    workspace.mkdir()
+                    frozen = cli.source_snapshot(project, profile, request, workspace)
+                    self.assertIn("HTTP(healthRoutes, recoveryMarkerRoutes)",
+                                  (frozen / builder.relative_to(snapshot)).read_text())
+                    definition = frozen / marker.relative_to(snapshot)
+                    self.assertTrue(definition.is_file(), "CLI snapshot dropped the private recovery route definition")
+                    self.assertIn("func recoveryMarkerRoutes(", definition.read_text())
+                    self.assertEqual(definition.read_bytes(), marker.read_bytes())
+                    self.assertEqual(request["manifest"]["source_kind"], "working_tree")
+            cli.ROOT = vm.FIXTURE
+            self.assertEqual(cli.source_inventory(), original, "Tracked fixture changed")
 
     def test_guest_limit_and_cleanup_keep_both_processes_owned(self):
         with tempfile.TemporaryDirectory() as directory:

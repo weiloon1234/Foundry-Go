@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Real operator CLI acceptance on a checksum-pinned, disposable KVM guest."""
 import argparse
+from contextlib import contextmanager
 from dataclasses import dataclass
 import errno
 import hashlib
@@ -84,6 +85,52 @@ def completed_full_backup(receipt):
         raise Failure("Full database backup and encrypted key archive did not both complete") from None
 
 
+def check_reports(operator, privileged, mode, instance, host_id):
+    # report.instance derives these findings from an unreadable feature selection;
+    # standard instances can instead lack permission to read /proc/<pid>/exe.
+    expected = ({"runtime_selection_unavailable", "running_release_mismatch", "instance_state_inconsistent",
+                 "declared_network_unavailable", "instance_degraded"} if mode == "feature" else
+                {"running_release_unverified", "instance_state_inconsistent"})
+    problems = operator.get("problems")
+    if not isinstance(problems, list):
+        raise Failure("CLI report lacks structured problems")
+    codes = {item.get("code") for item in problems}
+    if (codes != expected and not (mode == "standard" and not codes)
+            or any(item.get("instance_id") != instance for item in problems)
+            or operator.get("complete") is not (not problems)):
+        raise Failure("CLI report differs from the exact unprivileged limitations")
+    if (privileged.get("complete") is not True or privileged.get("problems") != []
+            or any(report.get("host", {}).get("host_id") != host_id for report in (operator, privileged))):
+        raise Failure("Privileged report is incomplete, has problems, or reports a different host")
+
+
+def repository_snapshot(rows):
+    result = {}
+    for row in rows:
+        if (not isinstance(row.get("Path"), str) or row["Path"] in result
+                or not row.get("Hashes") or not any(row["Hashes"].values())
+                or not isinstance(row.get("Size"), int) or not row.get("ModTime")):
+            raise Failure("Repository listing lacks unique paths or object fingerprints")
+        result[row["Path"]] = {key: row[key] for key in ("Path", "Size", "ModTime", "Hashes")}
+    if not result:
+        raise Failure("Backup repository listing is empty")
+    return result
+
+
+def repository_unchanged(before, after, archive_id, timeline):
+    from backup import STANZA
+    if not re.fullmatch(r"\d+-\d+", archive_id) or type(timeline) is not int or not 0 < timeline <= 0xffffffff:
+        raise Failure("Source archive identity or timeline is invalid")
+    if any(after.get(path) != row for path, row in before.items()):
+        raise Failure("Rehearsal changed or removed an existing repository object")
+    prefix = re.escape(f"foundry/archive/{STANZA}/{archive_id}/")
+    source_wal = re.compile(prefix + rf"(?P<segment>{timeline:08X}[0-9A-F]{{8}})/(?P=segment)[0-9A-F]{{8}}-[0-9a-f]{{40}}\.gz")
+    added = after.keys() - before.keys()
+    if any(not source_wal.fullmatch(path) for path in added):
+        raise Failure("Rehearsal added an object outside A's archive and timeline")
+    return len(added)
+
+
 def recovery_result(output, mode):
     documents = json_documents(output)
     if len(documents) != 2:
@@ -147,17 +194,15 @@ def recovery_fixture(snapshot):
         raise Failure("Fixture HTTP registration no longer matches the recovery recipe")
     source = source.replace(needle, 'HTTP(healthRoutes, recoveryMarkerRoutes).')
     path.write_text(source)
-    marker = snapshot / "internal/app/vm_recovery.go"
-    marker.write_text('''package app
-
-import (
-    "context"
-
-    "github.com/weiloon1234/Foundry-Go/application"
-    "github.com/weiloon1234/Foundry-Go/database"
-    "github.com/weiloon1234/Foundry-Go/http"
-)
-
+    # acceptance_execute takes Git's file inventory from FIXTURE. Add code to an
+    # existing inventoried file so the immutable build snapshot includes it.
+    marker = snapshot / "internal/app/health.go"
+    health = marker.read_text()
+    imported = '\t"github.com/weiloon1234/Foundry-Go/application"\n'
+    if health.count(imported) != 1:
+        raise Failure("Fixture health imports no longer match the recovery recipe")
+    health = health.replace(imported, imported + '\t"github.com/weiloon1234/Foundry-Go/database"\n')
+    marker.write_text(health + '''
 func recoveryMarkerRoutes(services application.Services) ([]http.RouteRegistration, error) {
     db, err := services.Database()
     if err != nil { return nil, err }
@@ -204,7 +249,13 @@ def cli_entry(arguments):
     try:
         return cli.main()
     except (cli.LocalError, cli.DeployError, ValueError, OSError, KeyError) as error:
-        cli.say(f"Deployment stopped: {error}")
+        message = f"Deployment stopped: {error}"
+        cli.say(message)
+        refusal = os.environ.get("FOUNDRY_VM_CLI_REFUSAL_FILE")
+        if refusal and isinstance(error, (cli.LocalError, cli.DeployError)):
+            # This private channel originates at the CLI exception boundary.
+            # Never select a lookalike line from Docker/npm/Go stderr.
+            atomic_json(Path(refusal), {"refusal": message}, mode=0o600)
         return 1
 
 
@@ -418,8 +469,26 @@ class Run:
         with (self.logs / "steps.log").open("a") as stream:
             stream.write(message + "\n")
 
+    @contextmanager
+    def phase(self, name):
+        label = f"{self.scenario}/{self.mode}: {self.log_prefix}/{name}"
+        started = time.monotonic()
+        outcome = "failed"
+        self.note(f"== {label}: started ==")
+        try:
+            yield
+            outcome = "completed"
+        finally:
+            self.note(f"TIMING {label}: {outcome} elapsed_seconds={time.monotonic() - started:.1f}")
+
     def command(self, name, argv, *, timeout=600, input=None, env=None, publish=False, check=True,
-                delayed=None, combined=False):
+                delayed=None, combined=False, cli_refusal=False):
+        refusal_file = self.private / "cli-refusal.json"
+        if cli_refusal:
+            if publish:
+                raise Failure("CLI refusal publication cannot publish raw command output")
+            refusal_file.unlink(missing_ok=True)
+            env = {**(os.environ if env is None else env), "FOUNDRY_VM_CLI_REFUSAL_FILE": str(refusal_file)}
         self.note(f"== {self.scenario}/{self.mode}: {self.log_prefix}/{name} ==")
         output = self.private / "command-output"
         with output.open("w+") as stream, (self.private / "command-error").open("w+") as errors:
@@ -453,6 +522,18 @@ class Run:
             errors.seek(0)
             diagnostics = errors.read()
         self.note(f"{name}: exit={code}")
+        if code and cli_refusal and refusal_file.exists():
+            receipt = json.loads(refusal_file.read_text())
+            message = receipt.get("refusal")
+            if (set(receipt) != {"refusal"} or not isinstance(message, str)
+                    or not message.startswith("Deployment stopped: ") or len(message) > 65536):
+                raise Failure("Invalid private CLI refusal receipt; output withheld")
+            # Redact before selecting a line so multiline secrets stay indivisible.
+            line = redact(message, self.values).splitlines()[0]
+            if len(line) > 4096 or any(ord(character) < 32 for character in line):
+                raise Failure("Invalid private CLI refusal line; output withheld")
+            self.note(line)
+            (self.logs / f"{self.log_prefix}-{name}-refusal.log").write_text(line + "\n")
         if publish:
             (self.logs / f"{self.log_prefix}-{name}.log").write_text(redact(value + diagnostics, self.values))
         if check and code:
@@ -591,21 +672,23 @@ class Run:
                     "-i", str(key), "-p", str(port), "acceptance-operator@" + address]
         self.active = Guest(guest, port, config, address, ssh)
         self.guests.append(self.active)
-        self.launch()
-        self.remote("cloud-init", "sudo -n cloud-init status --wait --long", timeout=900, publish=True)
-        # Prepare the host as the deployment guide tells operators: current packages, then reboot if required.
-        self.remote("host-upgrade", "sudo -n env DEBIAN_FRONTEND=noninteractive sh -c "
-                    "'apt-get -o DPkg::Lock::Timeout=600 update && apt-get -o DPkg::Lock::Timeout=600 -y upgrade'",
-                    timeout=1500, publish=True)
-        if self.remote("reboot-required", "test -e /var/run/reboot-required && echo yes || echo no",
-                       publish=True)[1].strip() == "yes":
-            subprocess.run([*self.ssh, "sudo -n systemctl reboot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
-            self.active.qemu.wait(timeout=300)  # -no-reboot turns the guest reboot into a QEMU exit.
+        with self.phase("boot"):
             self.launch()
-            self.remote("settle", "systemctl is-system-running --wait || true", timeout=600, publish=True)
-        self.remote("stock-packages", "sudo -n grep '^STOCK ' /var/log/cloud-init-output.log; "
-                    "dpkg-query -W fwupd packagekit ubuntu-pro-client; "
-                    "systemctl list-timers --all --no-pager", publish=True)
+        with self.phase("cloud-init+upgrade"):
+            self.remote("cloud-init", "sudo -n cloud-init status --wait --long", timeout=900, publish=True)
+            # Prepare the host as the deployment guide tells operators: current packages, then reboot if required.
+            self.remote("host-upgrade", "sudo -n env DEBIAN_FRONTEND=noninteractive sh -c "
+                        "'apt-get -o DPkg::Lock::Timeout=600 update && apt-get -o DPkg::Lock::Timeout=600 -y upgrade'",
+                        timeout=1500, publish=True)
+            if self.remote("reboot-required", "test -e /var/run/reboot-required && echo yes || echo no",
+                           publish=True)[1].strip() == "yes":
+                subprocess.run([*self.ssh, "sudo -n systemctl reboot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+                self.active.qemu.wait(timeout=300)  # -no-reboot turns the guest reboot into a QEMU exit.
+                self.launch()
+                self.remote("settle", "systemctl is-system-running --wait || true", timeout=600, publish=True)
+            self.remote("stock-packages", "sudo -n grep '^STOCK ' /var/log/cloud-init-output.log; "
+                        "dpkg-query -W fwupd packagekit ubuntu-pro-client; "
+                        "systemctl list-timers --all --no-pager", publish=True)
         return self.active
 
     def launch(self):
@@ -703,10 +786,12 @@ class Run:
                     self.note(f"== {self.scenario}/{self.mode}: {name}-confirm-after-idle ==")
                     self.note(f"SSH control socket absent; confirming after {time.monotonic() - started:.1f}s")
 
-            code, output = self.command(name,
-                [sys.executable, "-B", __file__, "--cli", snapshot, proxy, command],
-                env=environment, timeout=1800, delayed=paused, check=not (fails or refusal), combined=bool(fails or refusal),
-                publish=action not in ("logs", "build"))
+            phase = extra.get("RECOVER_MODE") or ("backup" if action == "backup-run" else name)
+            with self.phase(phase):
+                code, output = self.command(name,
+                    [sys.executable, "-B", __file__, "--cli", snapshot, proxy, command],
+                    env=environment, timeout=1800, delayed=paused, check=not (fails or refusal), combined=bool(fails or refusal),
+                    publish=action not in ("logs", "build"), cli_refusal=action == "build")
             if fails and (code != 1 or not re.search(r"(?m)^Deployment stopped: readiness_failed: ", output)
                           or "Traceback (most recent call last)" in output):
                 raise Failure("Bad release did not exit with the designed readiness_failed refusal")
@@ -715,8 +800,9 @@ class Run:
                 raise Failure("CLI did not return the designed " + refusal + " refusal")
             return output
 
-        invoke("bootstrap", "inspect")
-        invoke("bootstrap", "prepare")
+        with self.phase("bootstrap"):
+            invoke("bootstrap", "inspect")
+            invoke("bootstrap", "prepare")
         profile = cli.read_json(snapshot / "deploy/environments/acceptance.json")
         units = instance_units({"name": instance_name(project, profile), "profile": profile, "topology": topology})
         versions = []
@@ -744,8 +830,11 @@ class Run:
                     raise Failure("Placed role is not running: " + unit)
             invoke("deploy", "logs", label="logs-" + label, LINES="10")
             report = json.loads(invoke("deploy", "report", label="report-" + label))
-            if self.scenario == "recovery" and (report.get("complete") is not True or report.get("problems") != []):
-                raise Failure("Recovered host report is incomplete or has problems")
+            if self.scenario == "recovery":
+                privileged = json.loads(self.remote("report-root-" + label,
+                    "sudo -n /usr/local/bin/foundry-host-report --pretty", timeout=240, publish=True)[1])
+                current_profile = json.loads((snapshot / "deploy/environments/acceptance.json").read_text())
+                check_reports(report, privileged, self.mode, profile["instance_id"], current_profile["host"]["host_id"])
             return status
 
         if self.scenario == "recovery":
@@ -819,6 +908,23 @@ class Run:
         source_profile = json.loads(profile_path.read_text())
         instance = profile["instance_id"]
 
+        def listing():
+            self.note(f"== recovery/{self.mode}: repository-inventory ==")
+            try:
+                output = rclone(repository, "lsjson", "acceptance:" + repository["backup_bucket"],
+                    "--recursive", "--files-only", "--hash", "--ca-cert", str(certs / "ca.crt"), "--retries", "1")
+            except RuntimeError:
+                raise Failure("Repository inventory failed (private output withheld)") from None
+            return repository_snapshot(json.loads(output.stdout))
+
+        def postgres_state():
+            sql = ("SELECT json_build_object('archive_mode', current_setting('archive_mode'), "
+                   "'in_recovery', pg_is_in_recovery(), 'timeline', timeline_id) FROM pg_control_checkpoint();")
+            script = ("import sys\nsys.path.insert(0, '/usr/local/lib/foundry/current/lib')\n"
+                      "from host import Host\nimport postgres\nhost = Host()\n"
+                      f"print(postgres._psql(host, host.read_registry(), {sql!r}).stdout)")
+            return json.loads(self.remote("postgres-archiving", "sudo -n python3 -c " + shlex.quote(script), timeout=60)[1])
+
         def fetch(label, backup, destination):
             self.note(f"== recovery/{self.mode}: {label} ==")
             try:
@@ -846,6 +952,7 @@ class Run:
                 raise Failure("Restored localhost application marker differs from VM A")
 
         marker = "vm-recovery-" + self.mode + "-" + uuid.uuid4().hex
+        self.values.append(marker)
         port = registry()["http_port"]
         self.remote("marker-write", "curl --fail --silent --show-error --max-time 15 --header 'Content-Type: application/json' --data-binary @- "
                     f"http://127.0.0.1:{port}/acceptance/recovery-marker", input=json.dumps({"status": marker}))
@@ -892,6 +999,22 @@ class Run:
             atomic_json(profile_path, staged)
             return guest, staged
 
+        # Prevent an unrelated scheduled full/diff backup from changing the baseline.
+        # A stays live and continues normal WAL archiving throughout the rehearsal.
+        for kind in ("full", "diff"):
+            unit = f"foundry-backup-{kind}-cluster"
+            self.remote("pause-source-" + kind + "-timer", f"sudo -n systemctl stop {unit}.timer && "
+                f"test \"$(systemctl show {unit}.service -p ActiveState --value)\" = inactive")
+        source_postgres = postgres_state()
+        if source_postgres["archive_mode"] != "on" or source_postgres["in_recovery"] is not False:
+            raise Failure("Source A is not a live archiving primary")
+        from backup import STANZA
+        inventory = json.loads(self.remote("source-archive-identity", "sudo -n runuser -u foundry-postgres -- "
+            "pgbackrest --config=/etc/foundry/pgbackrest/foundry.conf " + f"--stanza={STANZA} --output=json info")[1])
+        if len(inventory) != 1 or inventory[0]["name"] != STANZA or len(inventory[0]["archive"]) != 1:
+            raise Failure("Fresh source does not have exactly one stanza/archive identity")
+        archive_id = inventory[0]["archive"][0]["id"]
+        before = listing()
         rehearsal, staged = target("b", "127.0.0.2")
         if source.qemu.poll() is not None:
             raise Failure("Source A exited before rehearsal")
@@ -900,6 +1023,8 @@ class Run:
             RELEASE=version), "rehearsal")
         observed = registry()
         self.check_recovered(observed, result, source_profile, "rehearsal")
+        if postgres_state()["archive_mode"] != "off":
+            raise Failure("Rehearsal PostgreSQL has archiving enabled")
         marker_read(marker)
         if json.loads(profile_path.read_text()) != staged:
             raise Failure("Rehearsal changed the local profile")
@@ -916,6 +1041,10 @@ class Run:
         # Confirm A is still serving the original data after B completed.
         self.active = source
         marker_read(marker)
+        if postgres_state() != source_postgres:
+            raise Failure("Source A changed timeline or archiving state during rehearsal")
+        added = repository_unchanged(before, listing(), archive_id, source_postgres["timeline"])
+        self.note(f"PASS recovery/{self.mode}: B archive_mode=off; repository unchanged except {added} A timeline WAL objects")
         self.active = rehearsal
         self.diagnostics()
         self.stop_vm(rehearsal)

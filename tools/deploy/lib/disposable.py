@@ -9,8 +9,11 @@ ACCEPTANCE_CA = "/etc/foundry/acceptance-ca"
 
 def disposable_host(root=Path("/")):
     root = Path(root)
-    if (root / ".dockerenv").is_file():
-        return True
+    try:
+        if stat.S_ISREG((root / ".dockerenv").lstat().st_mode):
+            return True
+    except OSError:
+        pass
     if os.environ.get("FOUNDRY_DISPOSABLE_HOST") != "1":
         return False
     try:
