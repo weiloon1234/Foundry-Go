@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass, replace
 import ipaddress
 import re
 import subprocess
+import time
 import uuid
 
 from services import role_names
@@ -670,7 +671,6 @@ def feature_open(host, entry, resolution, evidence, *, deadline=None):
         return True
     import firewall
     import certificates
-    import time
     from contracts import AdmissionDisposition, HelperInvocation, RuntimeResolution
     from release import READINESS_SECONDS
     deadline = time.monotonic() + READINESS_SECONDS if deadline is None else deadline

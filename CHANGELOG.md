@@ -15,6 +15,11 @@
   in feature acceptance cover inspect/prepare, reviewed deployment, status, logs
   and report while retaining the direct-request scenarios. CI now runs the
   feature acceptance (`feature` mode, Ubuntu 24.04) on every push.
+- Fixed (tests): the managed-DNS rollback readiness test failed intermittently on
+  freshly booted CI machines. Public opening took its readiness deadline from the
+  real clock while the test observed readiness on a simulated clock, so a short
+  machine uptime made the deadline look already expired. The test clock now also
+  governs public opening. Production readiness was unaffected.
 - Added: `DEPLOY_BUILDER_ARCHITECTURE=native|target|amd64|arm64` selects release
   builder userland explicitly. The default follows the Docker server;
   `DOCKER_DEFAULT_PLATFORM` no longer decides it. Non-native builders must pass

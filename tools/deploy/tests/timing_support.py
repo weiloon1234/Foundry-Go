@@ -31,7 +31,7 @@ def readiness_clock(clock):
     """Keep deadlines, observations and fake process timestamps in one time domain."""
     with ExitStack() as stack:
         for name in ("services", "host", "release", "feature_lifecycle", "feature_runtime",
-                     "feature_recovery", "unix_sockets"):
+                     "feature_recovery", "unix_sockets", "listeners"):
             stack.enter_context(patch.object(importlib.import_module(name), "time", clock))
         finished, expired = threading.Event(), threading.Event()
         def guard():
