@@ -246,6 +246,16 @@ class Run:
                             "sudo -n journalctl --no-pager -n 80 -u apt-daily.service -u apt-daily-upgrade.service "
                             "-u unattended-upgrades.service -u packagekit.service -u fwupd.service",
                             timeout=60, publish=True, check=False)
+                # The CLI deliberately hides failed host commands; this disposable guest may show
+                # them, redacted with every value this run generated.
+                self.remote("host-failure", "sudo -n python3 -c " + shlex.quote(
+                            "import json\nr = json.load(open('/etc/foundry/registry.json'))\n"
+                            "for i in r.get('instances', {}).values():\n"
+                            "    p = i.get('provisioning', {})\n"
+                            "    print(i.get('name'), p.get('state'), p.get('completed_steps'), p.get('failed_step'))\n")
+                            + "; sudo -n journalctl --no-pager -p warning -n 120; "
+                            "sudo -n sh -c 'tail -n 80 /var/log/pgbackrest/*.log /var/log/postgresql/*.log 2>/dev/null'",
+                            timeout=60, publish=True, check=False)
             except Exception:
                 self.note("Systemd diagnostic collector unavailable")
 
