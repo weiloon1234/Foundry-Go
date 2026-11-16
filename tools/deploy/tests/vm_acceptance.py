@@ -137,6 +137,14 @@ def check_reports(operator, privileged, mode, instance, host_id):
         raise Failure("Privileged report is incomplete, has problems, or reports a different host")
 
 
+def check_cli_refusal(code, output, expected, *, exact=False):
+    lines = [line for line in output.splitlines() if line.startswith("Deployment stopped: ")]
+    matches = (len(lines) == 1 and (lines[0] == "Deployment stopped: " + expected if exact else
+                                  lines[0].startswith("Deployment stopped: " + expected + ": ")))
+    if code != 1 or not matches or "Traceback (most recent call last)" in output:
+        raise Failure("CLI did not return the designed " + expected + " refusal")
+
+
 def repository_snapshot(rows):
     result = {}
     for row in rows:
@@ -813,7 +821,7 @@ class Run:
                 self.values.extend(value.values())
             env["FOUNDRY_SECRET_" + name.upper() + "_FILE"] = str(path)
 
-        def invoke(command, action, *, label=None, delay=False, fails=False, refusal=None, **extra):
+        def invoke(command, action, *, label=None, delay=False, fails=False, refusal=None, refusal_line=None, **extra):
             # Entry point and normal process exit are exercised, including CLI
             # validation, plans, upload and every real SSH/sudo request.
             name = label or action
@@ -841,14 +849,14 @@ class Run:
             with self.phase(phase):
                 code, output = self.command(name,
                     [sys.executable, "-B", __file__, "--cli", snapshot, proxy, command],
-                    env=environment, timeout=1800, delayed=paused, check=not (fails or refusal), combined=bool(fails or refusal),
+                    env=environment, timeout=1800, delayed=paused,
+                    check=not (fails or refusal or refusal_line), combined=bool(fails or refusal or refusal_line),
                     publish=action not in ("logs", "build"), cli_refusal=action == "build")
             if fails and (code != 1 or not re.search(r"(?m)^Deployment stopped: readiness_failed: ", output)
                           or "Traceback (most recent call last)" in output):
                 raise Failure("Bad release did not exit with the designed readiness_failed refusal")
-            if refusal and (code != 1 or not re.search(r"(?m)^Deployment stopped: " + re.escape(refusal) + ": ", output)
-                            or "Traceback (most recent call last)" in output):
-                raise Failure("CLI did not return the designed " + refusal + " refusal")
+            if refusal or refusal_line:
+                check_cli_refusal(code, output, refusal_line or refusal, exact=refusal_line is not None)
             return output
 
         with self.phase("bootstrap"):
@@ -1056,15 +1064,7 @@ class Run:
         marker_read(marker)
         if json.loads(profile_path.read_text()) != source_profile:
             raise Failure("Rehearsal changed the local profile")
-        # Point a private profile at B solely to prove the normal deploy path refuses it.
-        bound = json.loads(json.dumps(source_profile))
-        bound["host"].update(address=rehearsal.address, host_id=result["host_id"])
-        atomic_json(profile_path, bound)
-        try:
-            invoke("deploy", "deploy", label="deploy-rehearsal-refused", RELEASE=version,
-                   refusal="rehearsal_read_only")
-        finally:
-            atomic_json(profile_path, source_profile)
+        self.rehearsal_refusals(invoke, profile_path, source_profile, rehearsal, result, version)
         self.remote("rehearsal-no-timers", "test -z \"$(find /etc/systemd/system -maxdepth 1 -name 'foundry-backup-*.timer' -print)\"")
         # Confirm A is still serving the original data after B completed.
         self.active = source
@@ -1104,6 +1104,24 @@ class Run:
         for timer in ("foundry-backup-full-cluster.timer", "foundry-backup-diff-cluster.timer"):
             self.remote("timer-" + timer, f"systemctl is-enabled {timer} && systemctl is-active {timer}", publish=True)
         self.note(f"PASS recovery/{self.mode}: C takeover, healthy roles, surviving data, clean status/report, full/key backup, timers and profile")
+
+    def rehearsal_refusals(self, invoke, profile_path, source_profile, rehearsal, result, version):
+        bound = json.loads(json.dumps(source_profile))
+        bound["host"].update(address=rehearsal.address, host_id=result["host_id"])
+        atomic_json(profile_path, bound)
+        try:
+            expected = ({"refusal_line": "Feature release declarations differ from the registered profile/topology."}
+                        if self.mode == "feature" else {"refusal": "rehearsal_read_only"})
+            invoke("deploy", "deploy", label="deploy-rehearsal-refused", RELEASE=version, **expected)
+            # This request has no release declaration: both topologies must
+            # reach B's server-side mutation guard before any repository write.
+            invoke("deploy", "backup-run", label="deploy-rehearsal-backup-refused", BACKUP_KIND="full",
+                   refusal="rehearsal_read_only")
+            self.note(f"PASS recovery/{self.mode}: B deploy refused; backup-run reached the server rehearsal guard")
+        finally:
+            # C's recover command selects A's retained release against A's
+            # profile before RECOVER_HOST supplies the replacement identity.
+            atomic_json(profile_path, source_profile)
 
     @staticmethod
     def check_recovered(observed, result, source_profile, mode):

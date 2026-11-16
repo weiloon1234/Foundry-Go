@@ -1458,8 +1458,11 @@ Each recovery job runs its topology through three fresh guests. On A, it
 checks the first deploy's initial full backup, writes a unique database marker
 through HTTP, and requests another full backup through the CLI. The runner uses
 `rclone` and `age` to download and decrypt the recovery archive into a private
-`FOUNDRY_RECOVERY_DIR`. B rehearses recovery while A stays alive, reads the marker
-on localhost, and refuses deployment in the `rehearsal` registry state. The runner
+`FOUNDRY_RECOVERY_DIR`. B rehearses recovery while A stays alive and reads the marker
+on localhost. A deploy attempt must return the designed refusal: feature's local
+release/profile mismatch or standard's server-side `rehearsal_read_only`. In both
+topologies, a separate `backup-run` request must reach B and return
+`rehearsal_read_only`, proving the server's mutation guard. The runner
 queries B's PostgreSQL server to prove `archive_mode=off`. It compares repository
 object hashes, sizes and modification times before and after rehearsal. Existing
 objects must remain unchanged; new objects must be WAL from A's observed archive ID

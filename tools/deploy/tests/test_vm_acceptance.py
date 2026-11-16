@@ -115,6 +115,20 @@ print("activated", flush=True)
 
 
 class FailureStateTests(unittest.TestCase):
+    def test_designed_refusal_requires_exit_one_one_matching_line_and_no_traceback(self):
+        local = "Feature release declarations differ from the registered profile/topology."
+        for expected, exact, line in ((local, True, "Deployment stopped: " + local),
+                ("rehearsal_read_only", False, "Deployment stopped: rehearsal_read_only: Recreate the server.")):
+            output = "Build and activate fixture on B\n" + line + "\n"
+            vm.check_cli_refusal(1, output, expected, exact=exact)
+            for code, invalid in ((0, output), (2, output), (1, ""), (1, output + line),
+                                  (1, "Traceback (most recent call last)\n" + output),
+                                  (1, output.replace("Deployment stopped:", "Other error:"))):
+                with self.subTest(expected=expected, code=code), self.assertRaises(vm.Failure):
+                    vm.check_cli_refusal(code, invalid, expected, exact=exact)
+        with self.assertRaises(vm.Failure):
+            vm.check_cli_refusal(1, "Deployment stopped: " + local + " extra", local, exact=True)
+
     def status(self, mode):
         feature = mode == "feature"
         return {"state": {"status": "unknown" if feature else "rolled_back",
@@ -329,6 +343,80 @@ class ArtifactRecoveryTests(unittest.TestCase):
         receipt.update(kind="full", backup_id="11111111-1111-4111-8111-111111111111")
         receipt.pop("restore_point", None)
         return receipt
+
+    def test_rehearsal_uses_local_deploy_refusal_and_real_server_backup_guard(self):
+        import upgrades
+        from host import Host, Paths
+        for mode in ("standard", "feature"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                source = self.source(mode)
+                entry = copy.deepcopy(source["status"]["instance"])
+                profile = entry["profile"]
+                project = json.loads((vm.FIXTURE / "deploy/project.json").read_text())
+                project["id"] = entry["project_id"]
+                manifest = source["status"]["state"]["current"]
+                archive = root / "dist/releases" / project["id"] / profile["instance_id"] / manifest["version"] / "app.tar.gz"
+                archive.parent.mkdir(parents=True)
+                archive.write_bytes(b"selection only")
+                archive.with_name("manifest.json").write_text(json.dumps(manifest))
+                profile_path = root / "deploy/environments/acceptance.json"
+                profile_path.parent.mkdir(parents=True)
+                profile_path.write_text(json.dumps(profile))
+                host = Host(Paths(root / "host"))
+                target_id = "11111111-1111-4111-8111-111111111111"
+                entry.update(recovered_from={"mode": "rehearsal"}, provisioning={"state": "rehearsal"})
+                registry = {"host_id": target_id, "instances": {profile["instance_id"]: entry},
+                            "tools": upgrades.protocol()}
+                cli = vm.load_cli()
+                cli.ROOT = root
+                remote = Mock()
+                requested = []
+
+                def request(action, payload):
+                    requested.append(action)
+                    self.assertNotIn("archive", payload)
+                    self.assertNotIn("manifest", payload)
+                    self.assertEqual(payload["profile"]["host"]["host_id"], target_id)
+                    try:
+                        upgrades.check_client(host, {**payload, "client": {"generation": registry["tools"]["generation"]}}, action)
+                    except cli.DeployError as error:
+                        # SSH.request's designed error translation.
+                        raise cli.LocalError(f"{error.code}: {error.detail}") from None
+                    self.fail("Rehearsal server admitted a mutation")
+                remote.request.side_effect = request
+
+                def invoke(command, action, **kwargs):
+                    bound = json.loads(profile_path.read_text())
+                    self.assertEqual(bound["host"]["address"], "127.0.0.2")
+                    with self.assertRaises((cli.LocalError, cli.DeployError)) as error:
+                        if action == "deploy":
+                            if mode == "feature":
+                                cli.select_archive(project, bound)
+                            else:
+                                request("activate", {"project": project, "profile": bound})
+                        else:
+                            self.assertEqual(action, "backup-run")
+                            with patch.dict(os.environ, {"ACTION": action, "BACKUP_KIND": "full", "CONFIRM": "yes"}, clear=True), \
+                                    patch.object(cli, "SSH", return_value=remote), patch.object(cli, "say"), \
+                                    patch.object(cli, "select_archive", side_effect=AssertionError("Backup must not select a release")):
+                                cli.deploy(project, bound, {})
+                    vm.check_cli_refusal(1, "Deployment stopped: " + str(error.exception),
+                                         kwargs.get("refusal_line") or kwargs["refusal"], exact="refusal_line" in kwargs)
+
+                run = vm.Run(root, root, "recovery")
+                run.mode = mode
+                guest = vm.Guest(root, profile["host"]["port"], root / "ssh_config", "127.0.0.2", [])
+                with patch.object(host, "read_registry", return_value=registry), patch.object(run, "note"), \
+                        patch.dict(os.environ, {"RELEASE": manifest["version"]}):
+                    run.rehearsal_refusals(invoke, profile_path, profile, guest, {"host_id": target_id}, manifest["version"])
+                    self.assertEqual(requested, ["backup-run"] if mode == "feature" else ["activate", "backup-run"])
+                    self.assertEqual(json.loads(profile_path.read_text()), profile)
+                    self.assertEqual(cli.select_archive(project, json.loads(profile_path.read_text())), archive)
+                    with self.assertRaisesRegex(RuntimeError, "probe failed"):
+                        run.rehearsal_refusals(Mock(side_effect=RuntimeError("probe failed")), profile_path,
+                                               profile, guest, {"host_id": target_id}, manifest["version"])
+                    self.assertEqual(json.loads(profile_path.read_text()), profile)
 
     def test_replacement_guests_preserve_declarations_and_retained_release_selection(self):
         for mode in ("standard", "feature"):
