@@ -14,8 +14,12 @@
   changes or unowned activation.
 - Fixed: pending v0.38.4 package journals retain their snapshot format and supply
   digest and can finish through `make bootstrap ACTION=prepare` after all
-  packages are installed. Candidate tools are staged on resume; tool generation
-  remains 18.
+  packages are installed; tool generation remains 18. An interrupted prepare has
+  already registered its tool bundle, so the resumed plan stops with
+  `host_upgrade_required` until the host tools are upgraded. Run
+  `ACTION=tools-plan make deploy` and apply that plan with `ACTION=tools-apply`
+  first, then rerun `ACTION=prepare`. The upgrade may report an informational
+  `pruning_error` for feature hosts; the old bundle is retained.
 
 ## v0.38.4 — 2026-11-16
 

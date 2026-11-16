@@ -139,6 +139,9 @@ remain in the selected module, and local state remains in the application direct
 release version, or `build`. Interactive operations request confirmation after
 showing their plan. `CONFIRM=yes` supplies that confirmation in automation.
 Tool upgrades require the reviewed `PLAN_TOKEN` and a stable UUIDv4 in `OPERATION`.
+An interrupted `make bootstrap` has already registered its tool bundle on the host.
+To resume it with a newer Foundry-Go pin, run `tools-plan` and `tools-apply` first.
+Otherwise the bootstrap plan stops with `host_upgrade_required`.
 
 Put a deployed instance into maintenance mode and resume it with:
 
