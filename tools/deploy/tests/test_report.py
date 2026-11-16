@@ -80,7 +80,7 @@ class FixtureHost:
                 "disabled_pending": [{"key": {"origin": "feature", "id": "001"}, "state": "pending_feature_disabled"}]}]}), "")
         if command[:2] == ["systemctl", "is-enabled"]:
             return subprocess.CompletedProcess(command, 1, "disabled\n", "")
-        output = self.outputs.get(command[0], defaults.get(command[0], ""))
+        output = self.outputs.get(tuple(command), self.outputs.get(command[0], defaults.get(command[0], "")))
         return subprocess.CompletedProcess(command, 0, output, "")
 
     def read_registry(self, missing=False):
@@ -172,6 +172,7 @@ class ReportTests(unittest.TestCase):
                     problems = []
                     report.listener_problem(problems, network["unexpected_exposure"][0])
                     self.assertEqual(problems, [{"code": "unexpected_public_listener",
+                        "socket": {"transport": "udp", "family": 4, "address": "10.0.2.15", "port": 68},
                         "detail": "udp [10.0.2.15]:68; processes: impostor"}])
                     self.assertNotIn("/private/secret", json.dumps(network))
 
@@ -587,30 +588,46 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn(SECRET, json.dumps(result))
 
     def test_public_listeners_exclude_loopback_and_flag_other_ports(self):
-        self.host.outputs["ss"] = "".join((
+        self.host.outputs[("ss", "-H", "-ltnp", "-4")] = "".join((
             "LISTEN 0 4096 0.0.0.0:22 0.0.0.0:*\n",
-            "LISTEN 0 4096 [::]:443 [::]:*\n",
             "LISTEN 0 4096 127.0.0.1:8100 0.0.0.0:*\n",
-            "LISTEN 0 4096 [::1]:9000 [::]:*\n",
             "LISTEN 0 4096 0.0.0.0:8100 0.0.0.0:*\n",
         ))
+        self.host.outputs[("ss", "-H", "-ltnp", "-6")] = "LISTEN 0 4096 [::]:443 [::]:*\nLISTEN 0 4096 [::1]:9000 [::]:*\n"
         result = report.collect_report(self.host)
         self.assertEqual([22, 443, 8100], result["host"]["network"]["public_listeners"])
         self.assertIn({"code": "unexpected_public_listener",
+                       "socket": {"transport": "tcp", "family": 4, "address": "0.0.0.0", "port": 8100},
                        "detail": "tcp [0.0.0.0]:8100; processes: unknown"}, result["problems"])
 
+    def test_wildcard_listener_is_one_problem_across_host_and_feature_scans(self):
+        import listeners
+        self.host.outputs[("ss", "-H", "-ltnp", "-6")] = "LISTEN 0 4096 *:9000 *:*\n"
+        result = report.collect_report(self.host)
+        observed = listeners.parse_sockets("LISTEN 0 4096 [0:0:0:0:0:0:0:0]:9000 [::]:*\n", "tcp", 6)
+        finding = listeners.ownership_findings((), observed, {})[0]
+        finding["processes"] = ["later-owner-observation"]
+        report.listener_problem(result["problems"], finding)
+        problems = [item for item in result["problems"] if item["code"] == "unexpected_public_listener"]
+        self.assertEqual(len(problems), 1)
+        self.assertEqual(problems[0]["socket"], {"transport": "tcp", "family": 6, "address": "::", "port": 9000})
+        # Same port on another family or transport remains a separate finding.
+        report.listener_problem(result["problems"], {**finding, "transport": "udp"})
+        report.listener_problem(result["problems"], {**finding, "family": 4, "address": "0.0.0.0"})
+        self.assertEqual(len([item for item in result["problems"] if item["code"] == "unexpected_public_listener"]), 3)
+
     def test_scoped_loopback_listener_is_ignored(self):
-        self.host.outputs["ss"] = "LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*\nLISTEN 0 4096 0.0.0.0:22 0.0.0.0:*\n"
+        self.host.outputs[("ss", "-H", "-ltnp", "-4")] = "LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*\nLISTEN 0 4096 0.0.0.0:22 0.0.0.0:*\n"
         result = report.collect_report(self.host)
         self.assertEqual([22], result["host"]["network"]["public_listeners"])
         self.assertNotIn({"code": "unexpected_public_listener"}, result["problems"])
 
     def test_loopback_listeners_are_ignored(self):
-        self.host.outputs["ss"] = "".join((
+        self.host.outputs[("ss", "-H", "-ltnp", "-4")] = "".join((
             "LISTEN 0 4096 127.0.0.1:8100 0.0.0.0:*\n",
             "LISTEN 0 4096 127.1.2.3:9000 0.0.0.0:*\n",
-            "LISTEN 0 4096 [::1]:9001 [::]:*\n",
         ))
+        self.host.outputs[("ss", "-H", "-ltnp", "-6")] = "LISTEN 0 4096 [::1]:9001 [::]:*\n"
         result = report.collect_report(self.host)
         self.assertEqual([], result["host"]["network"]["public_listeners"])
         self.assertNotIn({"code": "unexpected_public_listener"}, result["problems"])

@@ -7,6 +7,8 @@
 - Recognize verified OS DHCP clients in host reports while continuing to flag
   unknown listeners on DHCP ports. Unexpected-listener findings now identify the
   protocol, address, port and owning process names.
+  Verify socket-inode ownership across process inspection to reject reused PIDs,
+  and report each canonical socket once across host and feature scans.
 - Add a separate real-VM recovery acceptance job per topology, covering
   initial and explicit full backups, local age decryption, rehearsal while the source
   stays alive with verified repository isolation, and takeover with restored application

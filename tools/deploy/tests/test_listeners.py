@@ -47,12 +47,53 @@ class NetworkClientTests(unittest.TestCase):
         (proc / "exe").symlink_to(path)
         (proc / "stat").write_text(f"{pid} (systemd-networkd) " + " ".join(["S"] + ["0"] * 18 + ["42"]))
         (proc / "cgroup").write_text("0::" + group + "\n")
+        (proc / "fd").mkdir(exist_ok=True)
+        (proc / "fd/3").unlink(missing_ok=True)
+        (proc / "fd/3").symlink_to("socket:[77]")
         return path
 
-    def findings(self, *, transport="udp", family=4, port=68, pids=(42,)):
+    def findings(self, *, transport="udp", family=4, port=68, pids=(42,), inode=77):
         address = "10.0.2.15" if family == 4 else "fe80::1234"
-        observed = listeners.ObservedSocket(listeners.SocketIdentity(transport, family, address, port), pids)
+        observed = listeners.ObservedSocket(listeners.SocketIdentity(transport, family, address, port), pids, inode)
         return listeners.ownership_findings((), (observed,), {}, host=self.host)
+
+    def test_ss_inode_must_belong_to_verified_process(self):
+        import subprocess
+        self.process("/usr/lib/systemd/systemd-networkd", "/system.slice/systemd-networkd.service")
+        line = 'UNCONN 0 0 10.0.2.15:68 0.0.0.0:* users:(("systemd-networkd",pid=42,fd=3)) ino:77 sk:1\n'
+        def ss(args, **kwargs):
+            self.assertIn("-e", args)
+            return subprocess.CompletedProcess(args, 0, line if "-u" in args and "-4" in args else "", "")
+        with patch.object(self.host, "run", side_effect=ss):
+            observed = listeners.observe_sockets(self.host)
+        self.assertEqual(observed[0].inode, 77)
+        self.assertEqual(listeners.ownership_findings((), observed, {}, host=self.host), [])
+        descriptor = self.host.paths.p("/proc/42/fd/3")
+        descriptor.unlink()
+        descriptor.symlink_to("socket:[99]")
+        self.assertTrue(listeners.ownership_findings((), observed, {}, host=self.host),
+                        "A verified networkd process reusing ss's PID must still hold the observed socket")
+        descriptor.unlink()
+        descriptor.symlink_to("socket:[77]")
+        for missing in ("", "ino:0", "ino:invalid", "ino:77 ino:88"):
+            with self.subTest(inode=missing):
+                parsed = listeners.parse_sockets(line.replace("ino:77", missing), "udp", 4)
+                self.assertIsNone(parsed[0].inode)
+                self.assertTrue(listeners.ownership_findings((), parsed, {}, host=self.host))
+
+    def test_socket_association_fails_closed_on_permissions_and_pid_race(self):
+        self.process("/usr/lib/systemd/systemd-networkd", "/system.slice/systemd-networkd.service")
+        with patch.object(Path, "readlink", side_effect=PermissionError("unreadable")):
+            self.assertTrue(self.findings())
+        original = Path.readlink
+        def reused(path):
+            result = original(path)
+            self.host.paths.p("/proc/42/stat").write_text("42 (systemd-networkd) " + " ".join(["S"] + ["0"] * 18 + ["43"]))
+            return result
+        with patch.object(Path, "readlink", reused):
+            self.assertTrue(self.findings())
+        self.host.paths.p("/proc/42/fd/3").unlink()
+        self.assertTrue(self.findings())
 
     def test_dhcp_clients_require_installed_executable_and_service_ownership(self):
         for executable, groups in listeners.NETWORK_CLIENTS.items():

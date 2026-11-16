@@ -53,6 +53,7 @@ class ListenerClaim:
 class ObservedSocket:
     socket: SocketIdentity
     pids: tuple[int, ...]
+    inode: int | None = None
 
 
 def conflicts(left, right):
@@ -170,9 +171,12 @@ def parse_sockets(text, transport, family):
         address = address.strip("[]").split("%", 1)[0]
         if address == "*":
             address = "0.0.0.0" if family == 4 else "::"
+        address = str(ipaddress.ip_address(address))
         require(separator and port.isdigit(), "listener_observation", "Socket inventory is not numeric.")
+        inodes = re.findall(r"(?:^|\s)ino:(\d+)(?=\s|$)", line)
+        inode = int(inodes[0]) if len(inodes) == 1 and int(inodes[0]) > 0 else None
         result.append(ObservedSocket(SocketIdentity(transport, family, address, int(port)),
-                                     tuple(sorted({int(p) for p in re.findall(r"pid=(\d+)", line)}))))
+                                     tuple(sorted({int(p) for p in re.findall(r"pid=(\d+)", line)})), inode))
     return tuple(result)
 
 
@@ -180,7 +184,7 @@ def observe_sockets(host):
     result = []
     for family in (4, 6):
         for protocol, flag in (("tcp", "-t"), ("udp", "-u")):
-            response = host.run(["ss", "-H", "-l", "-n", "-p", flag, "-" + str(family)], timeout=5)
+            response = host.run(["ss", "-H", "-l", "-n", "-p", "-e", flag, "-" + str(family)], timeout=5)
             result.extend(parse_sockets(response.stdout, protocol, family))
     return tuple(result)
 
@@ -214,9 +218,9 @@ def _network_client(host, observed, processes):
     from admission import protected_path
     identity = observed.socket
     if (identity.transport != "udp" or (identity.family, identity.port) not in ((4, 68), (6, 546))
-            or not processes or any(process is None for process in processes.values())):
+            or observed.inode is None or not processes or any(process is None for process in processes.values())):
         return False
-    for process in processes.values():
+    for pid, process in processes.items():
         verified = False
         for executable, groups in NETWORK_CLIENTS.items():
             path = host.paths.p(executable)
@@ -233,9 +237,29 @@ def _network_client(host, observed, processes):
                     break
             except (DeployError, OSError):
                 continue
-        if not verified:
+        if not verified or not _holds_socket(host, pid, process, observed.inode):
             return False
     return True
+
+
+def _holds_socket(host, pid, process, inode):
+    from release import _process
+    # Bind ss's socket to the inspected process, not merely to its reusable PID.
+    # _process reads start time on both sides of executable/cgroup inspection.
+    before = _process(host, str(pid))
+    if before is None or before != process:
+        return False
+    try:
+        found = False
+        for count, descriptor in enumerate(host.paths.p(f"/proc/{pid}/fd").iterdir()):
+            if count >= 4096:
+                return False
+            if str(descriptor.readlink()) == f"socket:[{inode}]":
+                found = True
+                break
+        return found and _process(host, str(pid)) == before
+    except OSError:
+        return False
 
 
 def socket_processes(host, pids):

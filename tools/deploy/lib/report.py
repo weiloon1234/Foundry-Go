@@ -113,13 +113,6 @@ def failed_units(host, problems, deadline):
     return units
 
 
-def listener(value):
-    address, separator, port = value.rpartition(":")
-    if not separator or not port.isdigit():
-        return None
-    return address.strip("[]"), int(port)
-
-
 def loopback(address):
     try:
         # ss prints systemd-resolved's stub listener as 127.0.0.53%lo.
@@ -132,36 +125,41 @@ def loopback(address):
 
 
 def listener_problem(problems, finding):
-    problem(problems, "unexpected_public_listener",
-            detail=f"{finding['transport']} [{finding['address']}]:{finding['port']}; processes: "
-                   + ", ".join(finding.get("processes", ["unknown"])))
+    identity = {key: finding[key] for key in ("transport", "family", "address", "port")}
+    if any(item.get("code") == "unexpected_public_listener" and item.get("socket") == identity for item in problems):
+        return
+    problems.append({"code": "unexpected_public_listener", "socket": identity,
+                     "detail": f"{identity['transport']} [{identity['address']}]:{identity['port']}; processes: "
+                               + ", ".join(finding.get("processes", ["unknown"]))})
 
 
 def network(host, problems, deadline, *, claims=(), confined=()):
     import listeners as socket_owners
-    response = probe(host, ["ss", "-H", "-ltnp"], deadline, problems, "network_unavailable")
+    from dataclasses import asdict
+    observed = []
+    for family in (4, 6):
+        response = probe(host, ["ss", "-H", "-ltnp", "-" + str(family)], deadline, problems, "network_unavailable")
+        if response is None:
+            observed = None
+            break
+        try:
+            observed.extend(socket_owners.parse_sockets(response.stdout, "tcp", family))
+        except (DeployError, ValueError):
+            problem(problems, "network_unavailable")
+            observed = None
+            break
     listeners = None
-    if response is not None:
+    if observed is not None:
         ports = set()
-        for line in response.stdout.splitlines():
-            columns = line.split()
-            if len(columns) < 4:
+        for item in observed:
+            identity, pids = item.socket, set(item.pids)
+            if loopback(identity.address):
                 continue
-            observed = listener(columns[3])
-            if observed is None:
+            if pids and any(s.socket == identity and pids <= set(s.pids) for s in confined):
                 continue
-            address, port = observed
-            if loopback(address):
-                continue
-            pids = set(int(pid) for pid in re.findall(r"pid=(\d+)", line))
-            if pids and any(s.socket.port == port and pids <= set(s.pids) and
-                            (s.socket.address == address or address == "*" and
-                             ipaddress.ip_address(s.socket.address).is_unspecified) for s in confined):
-                continue
-            ports.add(port)
-            if port not in PUBLIC_PORTS and not any(c.socket.transport == "tcp" and c.socket.address == address
-                                                    and c.socket.port == port for c in claims):
-                listener_problem(problems, {"transport": "tcp", "address": address, "port": port,
+            ports.add(identity.port)
+            if identity.port not in PUBLIC_PORTS and not any(c.socket == identity for c in claims):
+                listener_problem(problems, {**asdict(identity),
                     "processes": socket_owners.process_names(socket_owners.socket_processes(host, pids))})
         listeners = sorted(ports)
     firewall = None
