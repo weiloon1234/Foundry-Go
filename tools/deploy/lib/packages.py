@@ -555,7 +555,7 @@ def _activation_classification(host, current):
     if not names:
         return {}
     result = host.run(["systemctl", "show", *names, "--no-pager", "-p", "Id", "-p", "Type",
-                       "-p", "TriggeredBy", "-p", "Transient", "-p", "UnitFileState"])
+                       "-p", "TriggeredBy", "-p", "Transient", "-p", "UnitFileState", "-p", "RemainAfterExit"])
     records = {}
     for block in result.stdout.strip().split("\n\n"):
         record = dict(line.split("=", 1) for line in block.splitlines() if "=" in line)
@@ -578,12 +578,17 @@ def _ephemeral_activation(name, record, kind):
 RUNTIME = ("ActiveState", "SubState", "MainPID")
 
 
+def _run_to_completion(kind):
+    # Missing RemainAfterExit counts as state-holding, so the check fails closed.
+    return kind.get("Type") == "oneshot" and kind.get("RemainAfterExit", "yes") == "no"
+
+
 def _runtime_policy(name, record, kind):
     triggers = kind.get("TriggeredBy", "").split()
     # A static service has no install section: only a bus, hook, dependency or trigger starts it.
     static_service = name.endswith(".service") and kind.get("UnitFileState") == "static"
     if (_ephemeral_activation(name, record, kind) or (triggers and all(t.endswith(".timer") for t in triggers))
-            or (static_service and kind.get("Type") in ("dbus", "oneshot"))):
+            or (static_service and (kind.get("Type") == "dbus" or _run_to_completion(kind)))):
         return "ignore"  # Sessions, scheduled runs and bus- or hook-started helpers start and exit on their own.
     if triggers or static_service:
         return "start"  # An idle on-demand unit may run; a running one must not stop, fail or restart.
@@ -841,8 +846,9 @@ def _finish_activation(host, journal):
         template = name.split("@", 1)[0] + "@." + name.rsplit(".", 1)[1] if "@" in name else name
         foreign = before.get(template, {}).get("template_state") if template != name and template not in journal["activation_units"] else None
         # A preexisting foreign template's instance (e.g. modprobe@sd_mod pulled in by fwupd) is a dependency
-        # of host activity, not a package payload. A static template has only dependency or trigger instances.
-        if foreign is not None and (foreign == "static" or record.get("ActiveState") in ("inactive", "failed")):
+        # of host activity, not a package payload, unless it keeps running.
+        if foreign is not None and (record.get("ActiveState") in ("inactive", "failed")
+                                    or _run_to_completion(classification.get(name, {}))):
             continue
         require(name in journal["activation_units"] or template in journal["activation_units"],
                 "package_activation", "Unowned activation appeared during package installation.")

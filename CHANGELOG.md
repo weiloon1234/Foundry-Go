@@ -7,11 +7,13 @@
   DigitalOcean 24.04 droplet: Ubuntu Pro's apt hook starts the static oneshots
   `apt-news.service` and `esm-cache.service` during any `apt-get update`, and
   bus-activated `fwupd.service` pulls in `modprobe@sd_mod.service`. Static
-  `Type=oneshot` services now ignore runtime state, like static D-Bus services.
-  Other static services may change freely while they were inactive, but stopping,
-  failing or restarting a running one still refuses. A new instance of a template
-  that existed before installation is not unowned activation when the template
-  is static or the instance is not running.
+  run-to-completion services (`Type=oneshot`, `RemainAfterExit=no`) now ignore
+  runtime state, like static D-Bus services. Other static services, including
+  state-holding oneshots with `RemainAfterExit=yes`, may change freely while they
+  were inactive, but stopping, failing or restarting an active one still
+  refuses. A new instance of a template that existed before installation is not
+  unowned activation when it is not running or is a run-to-completion oneshot; a
+  running new daemon instance still refuses.
 - Recovery for a host whose v0.38.5 prepare stopped on these: pin v0.38.6, run
   `ACTION=tools-plan make deploy` and apply it with `ACTION=tools-apply`, then
   rerun `ACTION=prepare`. The pending package journal resumes unchanged.

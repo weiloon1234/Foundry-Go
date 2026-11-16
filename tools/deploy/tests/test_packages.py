@@ -796,20 +796,28 @@ class ActivationComparisonTests(unittest.TestCase):
     def test_static_helpers_started_by_hooks_may_run_but_static_daemons_stay_guarded(self):
         running = {"ActiveState": "activating", "SubState": "start", "MainPID": "7311"}
         finished = {"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}
-        cases = [  # name, Type, UnitFileState, before change, after change, refused
-            ("esm-cache.service", "oneshot", "static", finished, running, False),
-            ("apt-news.service", "oneshot", "static", running, finished, False),
-            ("helper.service", "simple", "static", finished, {"ActiveState": "active", "SubState": "running", "MainPID": "88"}, False),
-            ("helper.service", "simple", "static", finished, {"ActiveState": "failed", "SubState": "failed", "MainPID": "0"}, False),
-            ("helper.service", "simple", "static", {}, {"MainPID": "8400"}, True),
-            ("helper.service", "simple", "static", {}, finished, True),
-            ("job.service", "oneshot", "enabled", finished, running, True),
+        held = {"ActiveState": "active", "SubState": "exited", "MainPID": "0"}
+        cases = [  # name, Type, RemainAfterExit, UnitFileState, before change, after change, refused
+            ("esm-cache.service", "oneshot", "no", "static", finished, running, False),
+            ("apt-news.service", "oneshot", "no", "static", running, finished, False),
+            ("helper.service", "simple", "no", "static", finished, {"ActiveState": "active", "SubState": "running", "MainPID": "88"}, False),
+            ("helper.service", "simple", "no", "static", finished, {"ActiveState": "failed", "SubState": "failed", "MainPID": "0"}, False),
+            ("helper.service", "simple", "no", "static", {}, {"MainPID": "8400"}, True),
+            ("helper.service", "simple", "no", "static", {}, finished, True),
+            ("job.service", "oneshot", "no", "enabled", finished, running, True),
+            # A state-holding static oneshot (e.g. firewall rules removed by ExecStop) must not be stopped.
+            ("rules.service", "oneshot", "yes", "static", held, finished, True),
+            ("rules.service", "oneshot", None, "static", held, finished, True),
+            ("rules.service", "oneshot", "yes", "static", finished, held, False),
         ]
-        for name, kind_type, state, old, new, refused in cases:
-            with self.subTest(name=name, state=state, new=new):
+        for name, kind_type, remain, state, old, new, refused in cases:
+            with self.subTest(name=name, remain=remain, state=state, new=new):
                 before = {name: {**self.record(name, state=state), **old}}
                 self.host.activation = {name: {**self.record(name, state=state), **new}}
-                self.host.activation_classification = {name: {"Type": kind_type, "UnitFileState": state}}
+                kind = {"Type": kind_type, "UnitFileState": state}
+                if remain is not None:
+                    kind["RemainAfterExit"] = remain
+                self.host.activation_classification = {name: kind}
                 journal = {"activation_before": before, "activation_units": {}}
                 if refused:
                     with self.assertRaises(DeployError) as error:
@@ -819,18 +827,24 @@ class ActivationComparisonTests(unittest.TestCase):
                     packages._finish_activation(self.host, journal)
 
     def test_instances_of_preexisting_foreign_templates_are_not_unowned(self):
-        cases = [  # template state, instance runtime, accepted
-            ("static", {"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}, True),
-            ("static", {"ActiveState": "active", "SubState": "running", "MainPID": "77"}, True),
-            ("enabled", {"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}, True),
-            ("enabled", {"ActiveState": "active", "SubState": "running", "MainPID": "77"}, False),
+        dead = {"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}
+        daemon = {"ActiveState": "active", "SubState": "running", "MainPID": "77"}
+        finishing = {"ActiveState": "activating", "SubState": "start", "MainPID": "78"}
+        job = {"Type": "oneshot", "RemainAfterExit": "no"}
+        cases = [  # template state, instance runtime, instance kind, accepted
+            ("static", dead, job, True),
+            ("static", finishing, job, True),
+            ("enabled", dead, {"Type": "simple"}, True),
+            ("static", daemon, {"Type": "simple"}, False),  # a package must not start an unowned daemon
+            ("static", {**daemon, "SubState": "exited", "MainPID": "0"}, {"Type": "oneshot", "RemainAfterExit": "yes"}, False),
+            ("enabled", daemon, {"Type": "simple"}, False),
         ]
-        for template_state, runtime, accepted in cases:
-            with self.subTest(template_state=template_state, runtime=runtime):
+        for template_state, runtime, kind, accepted in cases:
+            with self.subTest(template_state=template_state, runtime=runtime, kind=kind):
                 name = "modprobe@sd_mod.service"
                 self.host.activation = {"modprobe@.service": {"UnitFileState": template_state},
                                         name: {**self.record(name, state="static"), **runtime}}
-                self.host.activation_classification = {name: {"Type": "oneshot", "UnitFileState": "static"}}
+                self.host.activation_classification = {name: {**kind, "UnitFileState": "static"}}
                 self.host.commands.clear()
                 journal = {"activation_before": {"modprobe@.service": {"template_state": template_state}}, "activation_units": {}}
                 if accepted:
