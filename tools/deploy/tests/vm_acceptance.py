@@ -686,13 +686,13 @@ class Run:
             except Exception:
                 self.note("Systemd diagnostic collector unavailable")
 
-    def boot(self, image, key, mode, *, name=None, address="127.0.0.1"):
+    def boot(self, image, key, mode, *, name=None, address="127.0.0.1", port=None):
         if len(self.guests) >= 2:
             raise Failure("Refusing to run more than two VMs")
         self.mode = mode
         guest = self.private / (mode + "-" + name if name else mode)
         guest.mkdir(mode=0o700)
-        port = free_port()
+        port = free_port() if port is None else port
         (guest / "user-data").write_text("#cloud-config\n" + json.dumps(cloud_config(key.with_suffix(".pub").read_text().strip())))
         (guest / "meta-data").write_text(json.dumps({"instance-id": "foundry-" + uuid.uuid4().hex,
                                                    "local-hostname": "foundry-acceptance"}))
@@ -752,6 +752,24 @@ class Run:
                 "umask 077; cat > " + shlex.quote(ACCEPTANCE_CA + "/" + name)), input=(certs / name).read_text())
         self.remote("trust-ca", "sudo -n install -m 0644 " + shlex.quote(ACCEPTANCE_CA + "/ca.crt") + " "
                     "/usr/local/share/ca-certificates/acceptance-ca.crt && sudo -n update-ca-certificates")
+
+    def recovery_target(self, snapshot, key, env, settings, source_profile, certs, *, name, address):
+        # RECOVER_HOST replaces the address after release validation. Keep the
+        # archived profile's port; distinct loopback addresses isolate A/B/C.
+        guest = self.boot(self.private / "base.img", key, self.mode, name=name, address=address,
+                          port=source_profile["host"]["port"])
+        self.trust(certs)
+        self.remote("empty-target", "test ! -e /etc/foundry/registry.json && test ! -e /usr/bin/pgbackrest")
+        settings["hosts"][f"{address}:{guest.port}"] = {
+            "target": "acceptance-operator@" + address, "key_path": str(key)}
+        atomic_json(snapshot / ".deploy/settings.json", settings, mode=0o600)
+        binary = guest.directory / "bin"
+        binary.mkdir(mode=0o700)
+        (binary / "ssh").write_text("#!/bin/sh\nexec " + shlex.join(
+            [shutil.which("ssh"), "-F", str(guest.config)]) + ' "$@"\n')
+        (binary / "ssh").chmod(0o700)
+        env["PATH"] = str(binary) + os.pathsep + os.environ["PATH"]
+        return guest
 
     def operator(self, snapshot, proxy, key, storage, *, repository=None, certs=None):
         cli = load_cli()
@@ -1008,26 +1026,6 @@ class Run:
                 del env[name]
         self.note(f"PASS recovery/{self.mode}: repository archive decrypted locally into private FOUNDRY_RECOVERY_DIR")
 
-        def target(name, address):
-            guest = self.boot(self.private / "base.img", key, self.mode, name=name, address=address)
-            self.trust(certs)
-            self.remote("empty-target", "test ! -e /etc/foundry/registry.json && test ! -e /usr/bin/pgbackrest")
-            settings["hosts"][f"{address}:{guest.port}"] = {
-                "target": "acceptance-operator@" + address, "key_path": str(key)}
-            atomic_json(snapshot / ".deploy/settings.json", settings, mode=0o600)
-            binary = guest.directory / "bin"
-            binary.mkdir(mode=0o700)
-            (binary / "ssh").write_text("#!/bin/sh\nexec " + shlex.join(
-                [shutil.which("ssh"), "-F", str(guest.config)]) + ' "$@"\n')
-            (binary / "ssh").chmod(0o700)
-            env["PATH"] = str(binary) + os.pathsep + os.environ["PATH"]
-            # RECOVER_HOST changes only the address; the CLI intentionally uses
-            # the profile port. Stage that transport input before reviewing recovery.
-            staged = json.loads(json.dumps(source_profile))
-            staged["host"]["port"] = guest.port
-            atomic_json(profile_path, staged)
-            return guest, staged
-
         # Prevent an unrelated scheduled full/diff backup from changing the baseline.
         # A stays live and continues normal WAL archiving throughout the rehearsal.
         for kind in ("full", "diff"):
@@ -1044,7 +1042,8 @@ class Run:
             raise Failure("Fresh source does not have exactly one stanza/archive identity")
         archive_id = inventory[0]["archive"][0]["id"]
         before = listing()
-        rehearsal, staged = target("b", "127.0.0.2")
+        rehearsal = self.recovery_target(snapshot, key, env, settings, source_profile, certs,
+                                          name="b", address="127.0.0.2")
         if source.qemu.poll() is not None:
             raise Failure("Source A exited before rehearsal")
         result = recovery_result(invoke("bootstrap", "recover", label="recover-rehearsal",
@@ -1055,10 +1054,10 @@ class Run:
         if postgres_state()["archive_mode"] != "off":
             raise Failure("Rehearsal PostgreSQL has archiving enabled")
         marker_read(marker)
-        if json.loads(profile_path.read_text()) != staged:
+        if json.loads(profile_path.read_text()) != source_profile:
             raise Failure("Rehearsal changed the local profile")
         # Point a private profile at B solely to prove the normal deploy path refuses it.
-        bound = json.loads(json.dumps(staged))
+        bound = json.loads(json.dumps(source_profile))
         bound["host"].update(address=rehearsal.address, host_id=result["host_id"])
         atomic_json(profile_path, bound)
         try:
@@ -1084,12 +1083,13 @@ class Run:
         self.stop_vm(source)
         if source_process.poll() is None:
             raise Failure("Old server A is still running; refusing takeover")
-        takeover, staged = target("c", "127.0.0.3")
+        takeover = self.recovery_target(snapshot, key, env, settings, source_profile, certs,
+                                         name="c", address="127.0.0.3")
         result = recovery_result(invoke("bootstrap", "recover", label="recover-takeover",
             RECOVER_HOST=takeover.address, RECOVER_MODE="takeover", CONFIRM_OLD_SERVER_GONE="yes",
             FOUNDRY_RECOVERY_DIR=str(recovery_dir), RELEASE=version), "takeover", topology_mode=self.mode)
         self.check_recovered(registry(), result, source_profile, "takeover")
-        expected = json.loads(json.dumps(staged))
+        expected = json.loads(json.dumps(source_profile))
         expected["host"].update(address=takeover.address, host_id=result["host_id"])
         if json.loads(profile_path.read_text()) != expected:
             raise Failure("Takeover did not update the local profile to C")

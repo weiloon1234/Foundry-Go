@@ -330,6 +330,57 @@ class ArtifactRecoveryTests(unittest.TestCase):
         receipt.pop("restore_point", None)
         return receipt
 
+    def test_replacement_guests_preserve_declarations_and_retained_release_selection(self):
+        for mode in ("standard", "feature"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                source = self.source(mode)
+                entry = source["status"]["instance"]
+                profile, manifest = entry["profile"], source["status"]["state"]["current"]
+                root = Path(directory).resolve()
+                snapshot = root / "fixture"
+                (snapshot / "deploy/environments").mkdir(parents=True)
+                project = json.loads((vm.FIXTURE / "deploy/project.json").read_text())
+                project["id"] = entry["project_id"]
+                profile_path = snapshot / "deploy/environments/acceptance.json"
+                declarations = {snapshot / "deploy/project.json": project,
+                                profile_path: profile,
+                                snapshot / "deploy/topology.json": entry["topology"]}
+                for path, value in declarations.items():
+                    path.write_text(json.dumps(value))
+                original = {path: path.read_bytes() for path in declarations}
+                archive = snapshot / "dist/releases" / project["id"] / profile["instance_id"] / manifest["version"] / "app.tar.gz"
+                archive.parent.mkdir(parents=True)
+                archive.write_bytes(b"selection only; no unpack or build")
+                archive.with_name("manifest.json").write_text(json.dumps(manifest))
+                key = root / "key"
+                key.with_suffix(".pub").write_text("ssh-ed25519 fixture")
+                run = vm.Run(root, root, "recovery")
+                run.mode = mode
+                settings, env = {"schema": 1, "hosts": {}}, {}
+                cli = vm.load_cli()
+                cli.ROOT = snapshot
+                with patch.dict(os.environ, {"RELEASE": manifest["version"]}), \
+                        patch.object(run, "launch"), patch.object(run, "trust"), patch.object(run, "note"), \
+                        patch.object(run, "command", return_value=(0, "")), \
+                        patch.object(run, "remote", return_value=(0, "no")), \
+                        patch.object(vm, "free_port", side_effect=AssertionError("Replacement must reuse the profile port")), \
+                        patch.object(vm, "fixture_declarations", side_effect=AssertionError("Replacement must retain A's declarations")):
+                    for name, address in (("b", "127.0.0.2"), ("c", "127.0.0.3")):
+                        guest = run.recovery_target(snapshot, key, env, settings, profile, root, name=name, address=address)
+                        self.assertEqual(guest.port, profile["host"]["port"])
+                        self.assertEqual(guest.address, address)
+                        self.assertEqual(guest.ssh[guest.ssh.index("-p") + 1], str(profile["host"]["port"]))
+                        self.assertIn(f"{address}:{guest.port}", settings["hosts"])
+                        self.assertEqual({path: path.read_bytes() for path in declarations}, original)
+                        self.assertEqual(cli.select_archive(project, json.loads(profile_path.read_text())), archive)
+                    if mode == "feature":
+                        changed = copy.deepcopy(profile)
+                        changed["host"]["port"] += 1
+                        with self.assertRaises(cli.DeployError) as refusal:
+                            cli.select_archive(project, changed)
+                        self.assertEqual(refusal.exception.code, "release_identity")
+                        self.assertIn("Feature release declarations differ", str(refusal.exception))
+
     def test_actual_source_artifacts_pass_every_assertion_through_backup_run(self):
         class ReachedExport(Exception):
             pass

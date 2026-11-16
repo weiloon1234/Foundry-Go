@@ -1490,8 +1490,10 @@ Failed builds publish only the CLI's final designed refusal line, with secrets
 redacted; raw Docker, npm and Go output stays private.
 
 Every guest uses the same pinned image, cloud-init, package upgrade and required
-reboot, and CA trust. At most two 4 GiB guests run together. Each has its own SSH
-port, known-hosts file, overlay and serial log. The private fixture copy adds the
+reboot, and CA trust. At most two 4 GiB guests run together. Recovery guests use
+distinct loopback addresses with the source profile's SSH port, preserving the
+release's profile declaration for `RECOVER_HOST`. Each guest has its own
+known-hosts file, overlay and serial log. The private fixture copy adds the
 marker endpoint in existing inventoried source files so it survives the CLI build
 snapshot, and declares its loopback relay prerequisites safe for rehearsal.
 The tracked fixture is unchanged. Disposable recovery targets may retain only the

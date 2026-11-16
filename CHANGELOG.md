@@ -18,6 +18,8 @@
   `full` receipt using their recorded operation identities. Check complete feature
   bundle coverage separately from key-archive coverage, including explicit and
   post-takeover backups; replay recorded VM-A receipts in harness tests.
+  Preserve A's release declarations for replacement guests by using distinct
+  loopback addresses with the source profile's SSH port.
 - Allow only the acceptance CA directory and its regular certificate/key files on
   explicitly disposable recovery targets. Reject symlinked container markers and
   hard-linked CA files. Production recovery preflight remains unchanged.
