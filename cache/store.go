@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 // Store binds cache declarations to one namespace and a borrowed Backend.
@@ -84,7 +85,7 @@ func NewStore(backend Backend, config Config, options ...StoreOption) (*Store, e
 }
 
 // Namespace returns the store's configured namespace.
-func (s *Store) Namespace() Namespace { return s.config.Namespace }
+func (s *Store) Namespace() keyspace.Namespace { return s.config.Namespace }
 
 // Close rejects new operations with fault.Closed, cancels the contexts of
 // running fills (Remember loaders whose callers have gone, Flexible background

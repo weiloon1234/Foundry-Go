@@ -260,7 +260,7 @@ func TestRedisQuarantineTerminalMembersDoNotPinMaintenance(t *testing.T) {
 func TestRedisQuarantineMaximumIntegerRoundTrip(t *testing.T) {
 	f := newQuarantineFixture(t)
 	e := f.enqueue(t)
-	f.edit(t, e.ID(), map[string]any{"created": maxJobInteger, "history": []any{map[string]any{"state": "waiting", "reason": "", "at": maxJobInteger, "attempt": 0}}})
+	f.edit(t, e.ID(), map[string]any{"created": maxJobInteger, "history": []any{map[string]any{"state": "waiting", "reason": "", "at": maxJobInteger, "attempt": 0, "retry": 0}}})
 	if err := f.client.raw.HSet(t.Context(), f.keys[4], "time", maxJobInteger-60_000).Err(); err != nil {
 		t.Fatal(err)
 	}

@@ -8,9 +8,6 @@ import (
 // Name identifies a declared cache family within an application/environment.
 type Name string
 
-// Namespace separates applications and environments sharing a backend.
-type Namespace = keyspace.Namespace
-
 const MaxKeyBytes = keyspace.MaxKeyBytes
 
 func validName(name string) bool { return keyspace.ValidName(name) }
@@ -23,7 +20,7 @@ type EntryKey struct {
 }
 
 // NewEntryKey is intended for adapter authors. Codecs must distinguish semantic keys.
-func NewEntryKey(namespace Namespace, name Name, logical string) (EntryKey, error) {
+func NewEntryKey(namespace keyspace.Namespace, name Name, logical string) (EntryKey, error) {
 	address, err := keyaddress.New(namespace, string(name), logical)
 	return EntryKey{address: address}, err
 }
@@ -32,7 +29,7 @@ func NewEntryKey(namespace Namespace, name Name, logical string) (EntryKey, erro
 func (k EntryKey) Validate() error { return k.address.Validate() }
 
 // Namespace returns the application and environment namespace.
-func (k EntryKey) Namespace() Namespace { return k.address.Namespace }
+func (k EntryKey) Namespace() keyspace.Namespace { return k.address.Namespace }
 
 // Name returns the declared cache family name.
 func (k EntryKey) Name() Name { return Name(k.address.Name) }
@@ -48,7 +45,7 @@ func (k EntryKey) String() string {
 // NewNamespaceTagKey returns the reserved adapter metadata address for a complete
 // cache namespace. Its feature prefix cannot collide with application cache/tag
 // declarations. Applications call Store.Invalidate instead of managing versions.
-func NewNamespaceTagKey(namespace Namespace) (EntryKey, error) {
+func NewNamespaceTagKey(namespace keyspace.Namespace) (EntryKey, error) {
 	key, err := NewEntryKey(namespace, "generation", "v1")
 	key.namespaceTag = true
 	return key, err

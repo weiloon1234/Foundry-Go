@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/filelock"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -159,7 +158,7 @@ func TestStagingSolitaryWriteIgnoresPublishedNamespace(t *testing.T) {
 	}
 }
 
-func TestStagingMigratedPeerStartupDoesNotBlockWrites(t *testing.T) {
+func TestStagingPeerStartupDoesNotBlockWrites(t *testing.T) {
 	config := sharedStagingConfig(t.TempDir())
 	config.MaxScan, config.Sync = 1, false
 	writer, err := Open(t.Context(), config)
@@ -189,12 +188,6 @@ func TestStagingMigratedPeerStartupDoesNotBlockWrites(t *testing.T) {
 		}
 		defer os.Chmod(protected, 0700)
 	}
-	// A completed root must not wait for a legacy migration lock either.
-	unlock, err := filelock.Acquire(t.Context(), writer.staging, stagingMigrationLock)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer unlock()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	peer, err := Prepare(config)
@@ -223,6 +216,6 @@ func TestStagingMigratedPeerStartupDoesNotBlockWrites(t *testing.T) {
 	err = <-done
 	joined = true
 	if err != nil {
-		t.Fatal("migrated startup revisited the published namespace", err)
+		t.Fatal("startup revisited the published namespace", err)
 	}
 }

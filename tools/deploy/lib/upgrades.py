@@ -31,63 +31,83 @@ from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_wr
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
-BASE_REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", "lib/upgrades.py",
-                            "lib/provision.py", "lib/recover.py", "lib/release.py", "lib/runtime_config.py",
-                            "lib/capacity.py", "lib/journal.py", "lib/maintenance.py",
-                            "lib/topology.py", "lib/report.py", "server/manage.py",
-                            "server/report.py", "server/launcher.py", "lib/packages.py",
-                            "lib/postgres.py", "lib/redis_acl.py", "lib/edge.py",
-                            "lib/certificates.py", "lib/backup.py", "lib/cloudflare-ranges.json",
-                            "server/templates/foundry-http@.service",
-                            "server/templates/foundry-scheduler@.service",
-                            "server/templates/foundry-worker@.service",
-                            "server/templates/redis-server@foundry.service",
-                            "server/templates/foundry-backup.service",
-                            "server/templates/foundry-backup.timer",
-                            "server/templates/nginx-http.conf", "server/templates/nginx-https.conf",
-                            "server/templates/nginx-proxy.conf", "server/templates/nginx-upgrade.conf"})
+REHEARSAL_FILES = frozenset({
+    'local/acceptance.Dockerfile',
+    'local/containers.py',
+    'local/host.Dockerfile',
+    'local/rehearsal.py',
+    'local/rehearsal_host.py',
+    'local/rehearsal_probe.py',
+})
 
-
-# Cumulative requirements are selected from the inspected bundle's protocol,
-# never from the running tools' generation or the host's selected generation.
-GENERATION_11_FILES = frozenset({"lib/uploads.py", "server/templates/nginx-upload.conf"})
-GENERATION_12_FILES = frozenset({"lib/feature_lifecycle.py", "lib/feature_network.py", "lib/feature_runtime.py",
-    "lib/operations.py", "server/templates/admission.service", "lib/artifacts.py", "lib/admission.py", "lib/services.py",
-                               "server/runtime_v1.py", "server/templates/custom.service",
-                               "lib/firewall.py", "lib/listeners.py", "server/templates/firewall-runtime.rules",
-                               "server/templates/foundry-edge-boot.conf", "server/templates/nginx-http-admission.conf",
-                               "server/templates/nginx-stream.conf", "server/templates/nginx-tcp-tls.conf"})
-REHEARSAL_FILES = frozenset({"local/containers.py", "local/rehearsal.py", "local/rehearsal_host.py",
-    "local/rehearsal_probe.py", "local/host.Dockerfile", "local/acceptance.Dockerfile"})
-GENERATION_13_FILES = REHEARSAL_FILES | frozenset({"lib/feature_plan.py", "lib/feature_maintenance.py",
-    "lib/recovery_rehearsal.py", "lib/operation_lock.py", "lib/feature_recovery.py"})
-GENERATION_14_FILES = frozenset({"lib/config_templates.py"})
-GENERATION_15_FILES = frozenset({"lib/unix_sockets.py"})
-GENERATION_16_FILES = frozenset({"lib/network_confinement.py", "lib/shared_directories.py"})
-GENERATION_17_FILES = frozenset({"lib/http-path-syntax.json"})
-GENERATION_18_FILES = frozenset({"lib/dns.py", "lib/copy_enablement.py", "lib/operation_selection.py"})
-REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES | GENERATION_15_FILES | GENERATION_16_FILES | GENERATION_17_FILES | GENERATION_18_FILES
-
-
-def required_files(generation: int) -> frozenset[str]:
-    required = BASE_REQUIRED_FILES
-    if generation >= 11:
-        required |= GENERATION_11_FILES
-    if generation >= FEATURE_INTRODUCTION_GENERATION:
-        required |= GENERATION_12_FILES
-    if generation >= 13:
-        required |= GENERATION_13_FILES
-    if generation >= 14:
-        required |= GENERATION_14_FILES
-    if generation >= 15:
-        required |= GENERATION_15_FILES
-    if generation >= 16:
-        required |= GENERATION_16_FILES
-    if generation >= 17:
-        required |= GENERATION_17_FILES
-    if generation >= 18:
-        required |= GENERATION_18_FILES
-    return required
+# Generation 18 is the minimum supported bundle inventory.
+REQUIRED_FILES = frozenset({
+    'lib/admission.py',
+    'lib/artifacts.py',
+    'lib/backup.py',
+    'lib/capacity.py',
+    'lib/certificates.py',
+    'lib/cloudflare-ranges.json',
+    'lib/config_templates.py',
+    'lib/contracts.py',
+    'lib/copy_enablement.py',
+    'lib/dns.py',
+    'lib/edge.py',
+    'lib/feature_lifecycle.py',
+    'lib/feature_maintenance.py',
+    'lib/feature_network.py',
+    'lib/feature_plan.py',
+    'lib/feature_recovery.py',
+    'lib/feature_runtime.py',
+    'lib/firewall.py',
+    'lib/host.py',
+    'lib/http-path-syntax.json',
+    'lib/journal.py',
+    'lib/listeners.py',
+    'lib/maintenance.py',
+    'lib/network_confinement.py',
+    'lib/operation_lock.py',
+    'lib/operation_selection.py',
+    'lib/operations.py',
+    'lib/packages.py',
+    'lib/postgres.py',
+    'lib/provision.py',
+    'lib/recover.py',
+    'lib/recovery_rehearsal.py',
+    'lib/redis_acl.py',
+    'lib/release.py',
+    'lib/report.py',
+    'lib/runtime_config.py',
+    'lib/services.py',
+    'lib/shared_directories.py',
+    'lib/topology.py',
+    'lib/unix_sockets.py',
+    'lib/upgrades.py',
+    'lib/uploads.py',
+    'protocol.json',
+    'server/launcher.py',
+    'server/manage.py',
+    'server/report.py',
+    'server/runtime_v1.py',
+    'server/templates/admission.service',
+    'server/templates/custom.service',
+    'server/templates/firewall-runtime.rules',
+    'server/templates/foundry-backup.service',
+    'server/templates/foundry-backup.timer',
+    'server/templates/foundry-edge-boot.conf',
+    'server/templates/foundry-http@.service',
+    'server/templates/foundry-scheduler@.service',
+    'server/templates/foundry-worker@.service',
+    'server/templates/nginx-http-admission.conf',
+    'server/templates/nginx-http.conf',
+    'server/templates/nginx-https.conf',
+    'server/templates/nginx-proxy.conf',
+    'server/templates/nginx-stream.conf',
+    'server/templates/nginx-tcp-tls.conf',
+    'server/templates/nginx-upgrade.conf',
+    'server/templates/nginx-upload.conf',
+    'server/templates/redis-server@foundry.service',
+}) | REHEARSAL_FILES
 
 
 def _hash(value: object) -> str:
@@ -114,10 +134,8 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
     source = check_path(Path(tools_dir), "directory")
     files = sorted([source / "protocol.json", *source.glob("lib/*.py"), *source.glob("lib/*.json"),
                     *source.glob("server/*.py"), *source.glob("server/templates/*")])
-    # Older generation-12 bundles predate local rehearsal. When present, its
-    # complete shipped implementation participates in the ordinary bundle digest.
-    if any((source / name).exists() for name in REHEARSAL_FILES):
-        files = sorted([*files, *(source / name for name in REHEARSAL_FILES)])
+    check_upgrade_generation(protocol(source))
+    files = sorted([*files, *(source / name for name in REHEARSAL_FILES)])
     require(len(files) <= 512, "tools_too_large", "The tool bundle has too many files.")
     inventory, total = [], 0
     for path in files:
@@ -129,7 +147,7 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
                 "tools_too_large", "The tool bundle exceeds its size limit.")
         inventory.append({"path": path.relative_to(source).as_posix(), "size": size, "mode": 0o644,
                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    require(required_files(protocol(source)["generation"]) <= {item["path"] for item in inventory},
+    require(REQUIRED_FILES <= {item["path"] for item in inventory},
             "tools_incomplete", "The tool bundle is incomplete.")
     return source, files, inventory
 
@@ -637,24 +655,17 @@ def check_client(host, request: dict, action: str) -> None:
 def check_upgrade_generation(installed: dict, tools_dir: Path | None = None) -> None:
     """Reject unsupported installed hosts before uploading or installing a candidate."""
     generation = installed.get("generation") if isinstance(installed, dict) else None
-    require(type(generation) is int and generation >= protocol(tools_dir)["minimum_host_generation"],
-            "tools_upgrade_floor", "The host must already run generation 9 tools before this upgrade.")
+    minimum = protocol(tools_dir)["minimum_host_generation"]
+    require(type(generation) is int and generation >= minimum,
+            "tools_upgrade_floor", f"The host must already run generation {minimum} tools before this upgrade.")
 
 
 def tool_migrations(host, source, bundle):
-    migrations = []
-    generation = protocol(source)["generation"]
-    if generation >= FEATURE_COPIES_GENERATION:
-        from operations import runtime_migration
-        migration = runtime_migration(host, source)
-        if migration:
-            migrations.append(migration)
-    if generation >= FEATURE_INTRODUCTION_GENERATION:
-        from feature_network import boot_migration
-        migration = boot_migration(host, source, bundle)
-        if migration:
-            migrations.append(migration)
-    return migrations
+    from operations import check_runtime
+    from feature_network import boot_migration
+    check_runtime(host, source)
+    migration = boot_migration(host, source, bundle)
+    return [migration] if migration else []
 
 
 def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
@@ -670,8 +681,8 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
     _deletion_directory(host)
     retained_releases = []
     for instance_id, entry in registry["instances"].items():
-        require(target["minimum_client_generation"] <= entry["client_generation"] <= target["generation"],
-                "tools_incompatible", "The proposed tool generation would strand a registered application pin.")
+        # client_generation records bootstrap provenance; check_client negotiates
+        # the actual caller on every mutation. Never treat registration as a pin.
         releases = check_path(host.paths.opt(entry["name"]) / "releases", "directory")
         if releases.exists():
             from release import validate_manifest
@@ -842,12 +853,10 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
         require(check_path(report, "file").read_text() == report_wrapper,
                 "report_command_ownership", "The report command has unexpected content.")
     atomic_write(report, report_wrapper, 0o755)
-    if target_record["generation"] >= FEATURE_COPIES_GENERATION:
-        from operations import migrate_runtime
-        migrate_runtime(host, destination)
-    if target_record["generation"] >= FEATURE_INTRODUCTION_GENERATION:
-        from feature_network import advance_boot
-        advance_boot(host, destination, digest)
+    from operations import check_runtime
+    from feature_network import advance_boot
+    check_runtime(host, destination)
+    advance_boot(host, destination, digest)
     _select(host, digest)
     registry["tools"] = target_record
     _save_registry(host, registry)

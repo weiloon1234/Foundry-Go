@@ -83,32 +83,6 @@ func TestFailureSinkConstructionRetainsFrameworkDiagnostics(t *testing.T) {
 	}
 }
 
-func TestJobsModuleNamespaceDiagnosticSurvivesRegistration(t *testing.T) {
-	key := foundation.NewKey[*jobs.Dispatcher]("jobs")
-	namespace := keyspace.Namespace{Application: "diagnostic", Environment: "test"}
-	other := keyspace.Namespace{Application: "different", Environment: "test"}
-	var constructions atomic.Int32
-	module := jobs.Module("jobs", key, jobs.DefaultDispatchConfig(namespace), jobs.DefaultWorkerConfig(other, "default"), nil, func(foundation.Resolver) (jobs.Backend, []jobs.Declaration, error) {
-		constructions.Add(1)
-		return nil, nil, nil
-	})
-	_, err := foundation.NewBuilder().Register(module).Build(t.Context())
-	var retained *fault.Error
-	if err == nil || !errors.Is(err, fault.Invalid) || !errors.As(err, &retained) || !errors.Is(err, retained) {
-		t.Fatal("job module registration lost the namespace failure")
-	}
-	*retained = *fault.New(fault.Invalid, "private namespace replacement")
-	want := "register provider jobs: invalid: job module dispatcher and worker must share a namespace"
-	for _, format := range []string{"%v", "%+v", "%#v", "%s"} {
-		if got := fmt.Sprintf(format, err); got != want {
-			t.Fatalf("job module registration diagnostic = %q, want %q", got, want)
-		}
-	}
-	if constructions.Load() != 0 {
-		t.Fatal("namespace rejection acquired a backend")
-	}
-}
-
 func TestWorkerModuleNamespaceDiagnosticSurvivesConstruction(t *testing.T) {
 	backend, err := memory.New(memory.DefaultConfig())
 	if err != nil {

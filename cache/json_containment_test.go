@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraphtest"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"strings"
 	"testing"
@@ -25,7 +26,7 @@ func (v *brokenJSON) UnmarshalJSON(data []byte) error {
 }
 func TestCacheJSONPreservesOwnedDiagnosticAndContainsMethods(t *testing.T) {
 	s, _, _ := store(t, nil)
-	dates, err := cache.Define("dates", cache.StringKeys[string](), cache.JSON[temporal.Date]()).Bind(s)
+	dates, err := cache.Define("dates", keyspace.StringKeys[string](), cache.JSON[temporal.Date]()).Bind(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +35,7 @@ func TestCacheJSONPreservesOwnedDiagnosticAndContainsMethods(t *testing.T) {
 	}
 	for _, mode := range []string{"cycle", "panic", "goexit"} {
 		cause := &errorgraphtest.Error{Mode: mode}
-		family, err := cache.Define(cache.Name("broken_"+mode), cache.StringKeys[string](), cache.JSON[brokenJSON]()).Bind(s)
+		family, err := cache.Define(cache.Name("broken_"+mode), keyspace.StringKeys[string](), cache.JSON[brokenJSON]()).Bind(s)
 		if err != nil {
 			t.Fatal(err)
 		}

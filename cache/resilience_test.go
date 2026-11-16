@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	cachememory "github.com/weiloon1234/Foundry-Go/cache/memory"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	leasememory "github.com/weiloon1234/Foundry-Go/lease/memory"
 	"github.com/weiloon1234/Foundry-Go/testkit"
@@ -145,10 +146,10 @@ func TestOverBoundStoredValuesAreMissesThatWritesReplace(t *testing.T) {
 // flushOnly is a basic adapter with physical namespace removal and no tags.
 type flushOnly struct {
 	cache.Backend
-	flushed []cache.Namespace
+	flushed []keyspace.Namespace
 }
 
-func (b *flushOnly) FlushNamespace(_ context.Context, namespace cache.Namespace) (uint64, error) {
+func (b *flushOnly) FlushNamespace(_ context.Context, namespace keyspace.Namespace) (uint64, error) {
 	b.flushed = append(b.flushed, namespace)
 	return 3, nil
 }

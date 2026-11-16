@@ -102,6 +102,7 @@ class PublicListenerBindingTests(unittest.TestCase):
 
 class PublicListenerDeliveryTests(wiring.FeatureWiringFixture):
     def test_archive_gate_and_rollback_keep_public_binding_floor(self):
+        floor = upgrades.protocol()["minimum_client_generation"]
         self.build_archive(public=True, independent=True, maintenance="continue")
         wiring.FeatureWiringTests.configure_firewall(self)
         plan = self.request("bootstrap-plan", topology=self.topology.projection())
@@ -113,9 +114,10 @@ class PublicListenerDeliveryTests(wiring.FeatureWiringFixture):
         before = self.host.read_registry()
         running = dict(self.host.running)
         operation = str(uuid.uuid4())
-        with patch.dict(self.envelope, client={**self.envelope["client"], "generation": 13}), \
-                self.assertRaisesRegex(c.DeployError, "generation 14"):
+        with patch.dict(self.envelope, client={**self.envelope["client"], "generation": floor - 1}), \
+                self.assertRaises(c.DeployError) as caught:
             self.request("release-plan", archive=str(self.archive), archive_sha256=c.digest(self.archive), operation_id=operation)
+        self.assertEqual(caught.exception.code, "client_too_old")
         self.assertEqual(self.host.read_registry(), before)
         self.assertEqual(self.host.running, running)
         self.assertFalse(wiring.operations.directory(self.host, operation).exists())

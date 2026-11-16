@@ -312,3 +312,7 @@ func TestGraphRefusesChangedModuleFiles(t *testing.T) {
 		t.Fatal("changed module graph published output")
 	}
 }
+
+func listGraph(ctx context.Context, dir string, recursive bool, extraImports ...string) (*packageGraph, error) {
+	return loadGraph(ctx, dir, recursive, nil, extraImports)
+}

@@ -20,6 +20,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/plugin"
 	"github.com/weiloon1234/Foundry-Go/secret"
@@ -65,7 +66,7 @@ func TestConfiguredApplicationsOwnIndependentDefaults(t *testing.T) {
 	if alias != a {
 		t.Fatal("default is not an alias")
 	}
-	declaration := cache.Define("assembly", cache.StringKeys[string](), cache.JSON[string]())
+	declaration := cache.Define("assembly", keyspace.StringKeys[string](), cache.JSON[string]())
 	av, _ := declaration.Bind(a)
 	bv, _ := declaration.Bind(b)
 	if err := av.Put(t.Context(), "x", "one", cache.Forever()); err != nil {
@@ -263,7 +264,7 @@ func TestParallelApplicationsKeepDifferentConfiguration(t *testing.T) {
 			t.Fatal("image enablement was not application scoped", err)
 		}
 	}
-	declaration := cache.Define("parallel", cache.StringKeys[string](), cache.JSON[string]())
+	declaration := cache.Define("parallel", keyspace.StringKeys[string](), cache.JSON[string]())
 	a, err := declaration.Bind(first)
 	if err != nil {
 		t.Fatal(err)

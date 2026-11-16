@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/datatable/internal/exportio"
+	"github.com/weiloon1234/Foundry-Go/datatable/internal/spreadsheet"
 	"io"
 	"reflect"
 	"regexp"
@@ -202,7 +203,7 @@ func TestXLSXRejectsLimitsAndFinalizationFailures(t *testing.T) {
 		t.Fatal("worksheet column limit ignored")
 	}
 	for n, want := range map[int]string{1: "A", 26: "Z", 27: "AA", 52: "AZ", 702: "ZZ", 703: "AAA", 16384: "XFD"} {
-		if got := xlsxColumn(n); got != want {
+		if got := string(spreadsheet.AppendColumn(nil, n)); got != want {
 			t.Fatal("incorrect Excel column", n, got)
 		}
 	}

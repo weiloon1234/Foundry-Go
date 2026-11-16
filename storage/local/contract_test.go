@@ -188,7 +188,7 @@ func TestLocalCleanupSkipsLiveAndRemovesInterruptedStaging(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	directory := filepath.Join(root, "objects", "ff")
+	directory := filepath.Join(root, ".foundry-staging")
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cachetest"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"testing"
@@ -90,7 +91,7 @@ func rows(t *testing.T, db *database.DB, schema string) int64 {
 }
 func key(t *testing.T, s string) cache.EntryKey {
 	t.Helper()
-	key, err := cache.NewEntryKey(cache.Namespace{Application: "postgres-contract", Environment: "test"}, "values", s)
+	key, err := cache.NewEntryKey(keyspace.Namespace{Application: "postgres-contract", Environment: "test"}, "values", s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +191,7 @@ func TestPersistentContract(t *testing.T) {
 				return open(t, db, c)
 			},
 			Clock: source,
-			Key: func(namespace cache.Namespace, logical string) cache.EntryKey {
+			Key: func(namespace keyspace.Namespace, logical string) cache.EntryKey {
 				k, err := cache.NewEntryKey(namespace, "values", logical)
 				if err != nil {
 					t.Fatal(err)

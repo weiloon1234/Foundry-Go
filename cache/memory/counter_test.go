@@ -11,12 +11,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
 
 func counterBackend(t *testing.T, extraBytes int) (*memory.Backend, cache.EntryKey, *testkit.Clock) {
 	t.Helper()
-	key, err := cache.NewEntryKey(cache.Namespace{Application: "counter", Environment: "test"}, "attempts", "key")
+	key, err := cache.NewEntryKey(keyspace.Namespace{Application: "counter", Environment: "test"}, "attempts", "key")
 	if err != nil {
 		t.Fatal(err)
 	}

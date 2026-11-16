@@ -534,8 +534,7 @@ class DNSContractTests(unittest.TestCase):
             value["listeners"]["relay.ingress"]["dns"].update(change)
             with self.assertRaises(c.DeployError):
                 t.parse_profile(value, topology)
-        self.assertIn("lib/dns.py", upgrades.required_files(18))
-        self.assertNotIn("lib/dns.py", upgrades.required_files(17))
+        self.assertIn("lib/dns.py", upgrades.REQUIRED_FILES)
         with self.assertRaises(c.DeployError):
             upgrades.check_instance_capabilities({"profile": parsed.projection()}, 17)
         with self.assertRaises(c.DeployError):

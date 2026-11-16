@@ -243,9 +243,6 @@ func (s slotDefinition[M, K, S]) attachment(owner M, file File[M]) Attachment[M,
 	return Attachment[M, K]{File: file, owner: s.binding.Reference(owner)}
 }
 
-// collectionDeclaration returns the underlying declaration for the explicit attachment API.
-func (s slotDefinition[M, K, S]) collectionDeclaration() Collection[M, K] { return s.collection }
-
 // describe returns the slot's inspection snapshot.
 func (s slotDefinition[M, K, S]) describe() extensions.SlotDescription {
 	result := extensions.SlotDescription{Field: s.binding.Field, Kind: "many", Name: string(s.name()), Storage: "foundry_attachments"}

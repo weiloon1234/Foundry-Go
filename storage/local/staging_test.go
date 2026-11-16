@@ -155,24 +155,28 @@ func TestStagingFailedCleanupRetainsBytesUntilPrune(t *testing.T) {
 func TestStagingRestartAccountsForInterruptedRecords(t *testing.T) {
 	config := DefaultConfig(t.TempDir())
 	config.MaxObjectBytes = 8
-	config.Staging = StagingLimits{MaxActive: 1, MaxBytes: 8, SmallObjectBytes: 2}
 	backend, err := Open(t.Context(), config)
 	if err != nil {
+		t.Fatal(err)
+	}
+	file, name, _, err := backend.createStaging(t.Context(), storage.PutOptions{}, storage.PutOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reserved, ok := stagingReservation(name); !ok || reserved != -1 {
+		t.Fatal("disabled staging limits did not produce an unreserved file", name)
+	}
+	if _, err := file.WriteString("orphaned"); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.Close(); err != nil {
 		t.Fatal(err)
 	}
-	directory, _ := address(stagingKey(t, "interrupted"))
-	path := filepath.Join(config.Root, directory)
-	if err := os.MkdirAll(path, 0700); err != nil {
-		t.Fatal(err)
-	}
-	path = filepath.Join(path, tempPrefix+strings.Repeat("0", 32))
-	if err := os.WriteFile(path, []byte("orphaned"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	markLegacyStagingRoot(t, config.Root)
+	config.Staging = StagingLimits{MaxActive: 1, MaxBytes: 8, SmallObjectBytes: 2}
+
 	backend, err = Open(t.Context(), config)
 	if err != nil {
 		t.Fatal(err)
@@ -211,9 +215,9 @@ func TestStagingRecoveryIgnoresPublishedListingCeiling(t *testing.T) {
 			if err := backend.Close(); err != nil {
 				t.Fatal(err)
 			}
-			markLegacyStagingRoot(t, config.Root)
+
 			if orphan {
-				directory := filepath.Join(config.Root, "objects", "ff")
+				directory := filepath.Join(config.Root, stagingDirectory)
 				if err := os.MkdirAll(directory, 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -233,11 +237,19 @@ func TestStagingRecoveryIgnoresPublishedListingCeiling(t *testing.T) {
 			_, err = backend.Put(ctx, stagingKey(t, "after-restart"), strings.NewReader("next"), storage.PutOptions{})
 			if orphan {
 				if !errors.Is(err, fault.Overloaded) {
-					t.Fatal("recovery stopped before accounting for the final shard", err)
+					t.Fatal("recovery omitted unreserved staging", err)
 				}
 			} else if err != nil {
 				t.Fatal(err)
 			}
+			var want uint64
+			if orphan {
+				want = 1
+			}
+			if removed, err := backend.Prune(t.Context(), time.Now(), MaxPrune); err != nil || removed != want {
+				t.Fatal("pruning scanned published shards or missed staging", removed, err)
+			}
+
 		})
 	}
 }
@@ -310,8 +322,7 @@ func TestStagingRecoveryReconcilesOtherOwners(t *testing.T) {
 				}
 				return
 			}
-			directory, _ := address(stagingKey(t, "orphan"))
-			directory = filepath.Join(config.Root, directory)
+			directory := filepath.Join(config.Root, stagingDirectory)
 			if err := os.MkdirAll(directory, 0700); err != nil {
 				t.Fatal(err)
 			}
@@ -319,16 +330,12 @@ func TestStagingRecoveryReconcilesOtherOwners(t *testing.T) {
 			if err := os.WriteFile(path, []byte("orphaned"), 0600); err != nil {
 				t.Fatal(err)
 			}
-			markLegacyStagingRoot(t, config.Root)
+
 			peer, err := Open(t.Context(), config)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer peer.Close()
-			if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-				t.Fatal("legacy staging was not migrated", err)
-			}
-			path = filepath.Join(config.Root, stagingDirectory, filepath.Base(path))
 			if _, err := peer.Put(stagingBusyContext(t), stagingKey(t, "blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
 				t.Fatal("recovery did not account before admission", err)
 			}
@@ -362,61 +369,4 @@ func stagingBusyContext(t *testing.T) context.Context {
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	t.Cleanup(cancel)
 	return ctx
-}
-
-func TestStagingMigrationCompletionRequiresDrainedLegacyWriter(t *testing.T) {
-	config := sharedStagingConfig(t.TempDir())
-	backend, err := Open(t.Context(), config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.Close(); err != nil {
-		t.Fatal(err)
-	}
-	markLegacyStagingRoot(t, config.Root)
-	directory := filepath.Join(config.Root, "objects", "ff")
-	if err := os.MkdirAll(directory, 0700); err != nil {
-		t.Fatal(err)
-	}
-	file, err := os.OpenFile(filepath.Join(directory, tempPrefix+strings.Repeat("c", 32)), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer file.Close()
-	if _, err := file.WriteString("orphaned"); err != nil {
-		t.Fatal(err)
-	}
-	if locked, err := tryLock(file); err != nil || !locked {
-		t.Fatal("could not hold the legacy writer", err)
-	}
-	if peer, err := Open(t.Context(), config); err == nil {
-		peer.Close()
-		t.Fatal("migration completed with a live legacy writer")
-	}
-	marker := filepath.Join(config.Root, stagingDirectory, stagingMigrated)
-	if _, err := os.Stat(marker); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("incomplete migration recorded completion", err)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatal(err)
-	}
-	backend, err = Open(t.Context(), config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer backend.Close()
-	if _, err := os.Stat(marker); err != nil {
-		t.Fatal("successful migration did not record completion", err)
-	}
-	if _, err := backend.Put(t.Context(), stagingKey(t, "blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
-		t.Fatal("resumed migration omitted abandoned bytes", err)
-	}
-}
-
-// Legacy fixtures model a store created before the migration marker existed.
-func markLegacyStagingRoot(t *testing.T, root string) {
-	t.Helper()
-	if err := os.Remove(filepath.Join(root, stagingDirectory, stagingMigrated)); err != nil {
-		t.Fatal(err)
-	}
 }

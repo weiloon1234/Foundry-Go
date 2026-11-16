@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"log/slog"
 	"sync"
 	"time"
@@ -652,7 +653,7 @@ func (b *Backend) recount(ctx context.Context) (PruneResult, error) {
 
 // FlushNamespace deletes every row whose address belongs to namespace in one
 // statement. It is not a fence against writes that start afterwards.
-func (b *Backend) FlushNamespace(ctx context.Context, namespace cache.Namespace) (uint64, error) {
+func (b *Backend) FlushNamespace(ctx context.Context, namespace keyspace.Namespace) (uint64, error) {
 	prefix, err := cacheatomic.NamespacePrefix(namespace)
 	if err != nil {
 		return 0, err

@@ -162,12 +162,3 @@ func impersonatorColumns(r session.Record) (sql.NullString, sql.NullString, sql.
 	}
 	return sql.NullString{String: string(text), Valid: true}, sql.NullString{String: string(impersonator.Guard), Valid: true}, sql.NullString{String: impersonator.Session.String(), Valid: true}, nil
 }
-
-// uuids renders identifiers for a bound uuid[] parameter.
-func uuids(ids []model.ID[sessionstore.Entry]) []string {
-	result := make([]string, len(ids))
-	for i, id := range ids {
-		result[i] = id.String()
-	}
-	return result
-}

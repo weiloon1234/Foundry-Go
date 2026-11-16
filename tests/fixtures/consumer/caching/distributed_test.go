@@ -9,8 +9,8 @@ import (
 
 	"foundry.test/consumer/caching"
 	"foundry.test/consumer/mutatorqueries"
-	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/redis"
@@ -25,7 +25,7 @@ func TestDistributedProfilesKeepTypedContractAndRequireAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { client.Close(context.Background()) })
-	manager, err := lease.NewManager(client, lease.DefaultConfig(cache.Namespace{Application: "consumer", Environment: "test"}))
+	manager, err := lease.NewManager(client, lease.DefaultConfig(keyspace.Namespace{Application: "consumer", Environment: "test"}))
 	if err != nil {
 		t.Fatal(err)
 	}

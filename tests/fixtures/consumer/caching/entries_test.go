@@ -9,6 +9,7 @@ import (
 	"foundry.test/consumer/mutatorqueries"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
@@ -20,7 +21,7 @@ func TestTypedEntryOperationsKeepGetterSnapshotsAndModelKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { backend.Close(context.Background()) })
-	store, err := cache.NewStore(backend, cache.DefaultConfig(cache.Namespace{Application: "consumer-entry", Environment: "test"}))
+	store, err := cache.NewStore(backend, cache.DefaultConfig(keyspace.Namespace{Application: "consumer-entry", Environment: "test"}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -61,7 +61,7 @@ func integrationTracked(t *testing.T, configure func(*Config)) (*Client, func(st
 		return key
 	}, track
 }
-func integrationAddresses(t *testing.T, configure func(*Config), features ...keyspace.Feature) (*Client, cache.Namespace, func(string)) {
+func integrationAddresses(t *testing.T, configure func(*Config), features ...keyspace.Feature) (*Client, keyspace.Namespace, func(string)) {
 	t.Helper()
 	c := integrationConfig(t)
 	if configure != nil {
@@ -70,7 +70,7 @@ func integrationAddresses(t *testing.T, configure func(*Config), features ...key
 
 	var random [16]byte
 	rand.Read(random[:])
-	namespace := cache.Namespace{Application: "foundry-go", Environment: "redis-test-" + hex.EncodeToString(random[:])}
+	namespace := keyspace.Namespace{Application: "foundry-go", Environment: "redis-test-" + hex.EncodeToString(random[:])}
 	prefixes, err := rediscleanup.Prefixes(namespace, append([]keyspace.Feature{cache.KeyFeature, cache.NamespaceKeyFeature}, features...)...)
 	if err != nil {
 		t.Fatal(err)

@@ -334,3 +334,7 @@ func TestPublicationRollsBackFailuresAndCancellation(t *testing.T) {
 		})
 	}
 }
+
+func publishWithRename(ctx context.Context, p *packageInput, plan writePlan, rename func(string, string) error) (result error) {
+	return publishBatch(ctx, p.dir, []packageWrite{{p, plan}}, nil, rename)
+}

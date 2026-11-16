@@ -114,8 +114,7 @@ class UnixDeclarationsTests(unittest.TestCase):
             upgrades.check_feature_generation({'tools': {'generation': 15}}, inventory.topology, {}, client_generation=14)
         self.assertEqual(upgrades.feature_generation(inventory_fixture()[0].topology,
                          {'deployment_selection': {'minimum_generation': 15}}), 15)
-        self.assertIn('lib/unix_sockets.py', upgrades.required_files(15))
-        self.assertNotIn('lib/unix_sockets.py', upgrades.required_files(14))
+        self.assertIn('lib/unix_sockets.py', upgrades.REQUIRED_FILES)
 
     def test_existing_tcp_resolution_keeps_its_wire_shape(self):
         inventory, _, _ = inventory_fixture()

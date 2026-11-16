@@ -50,10 +50,11 @@ func New(inputs config.Inputs[Settings]) (plugin.Module, error) {
 	}
 	namespace := keyspace.Namespace{Application: "plugin-fixture", Environment: "test"}
 	eventModule := events.Module("fixture.events", Bus, events.DefaultConfig())
-	jobModule := jobs.Module("fixture.jobs", Dispatcher, jobs.DefaultDispatchConfig(namespace), jobs.DefaultWorkerConfig(namespace, "default"), nil, func(resolver foundation.Resolver) (jobs.Backend, []jobs.Declaration, error) {
+	jobModule := jobs.ConnectionModule("fixture.jobs", Dispatcher, jobs.DefaultDispatchConfig(namespace), nil, func(resolver foundation.Resolver) (jobs.Backend, []jobs.Declaration, error) {
 		backend, err := foundation.Resolve(resolver, backendKey)
 		return backend, nil, err
 	})
+	workerModule := jobs.WorkerModule("fixture.worker", Dispatcher, jobs.DefaultWorkerConfig(namespace, "default"), nil)
 	return plugin.Module{Declaration: Declaration(), OnRegister: func(r *plugin.Registrar) error {
 		if err := foundation.Provide(r, Title, settings.Prefix); err != nil {
 			return err
@@ -80,6 +81,9 @@ func New(inputs config.Inputs[Settings]) (plugin.Module, error) {
 			return err
 		}
 		if err := jobModule.Register(r); err != nil {
+			return err
+		}
+		if err := workerModule.Register(r); err != nil {
 			return err
 		}
 		return eventModule.Register(r)

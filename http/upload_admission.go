@@ -47,8 +47,8 @@ func (p *UploadPool) RetryCleanup() error { return p.pool.RetryCleanup() }
 // Server claims its router's pools before accepting connections, so call Claim
 // only when hosting the Router on another server, before it accepts requests.
 // Claim is idempotent for the same pool. A framework server and a manual Claim
-// must not share a pool. A live kernel lock or a legacy unversioned marker
-// refuses the claim; legacy markers require the documented one-time migration.
+// must not share a pool. A live kernel lock or an unknown marker format
+// refuses the claim without reconciling retained captures.
 func (p *UploadPool) Claim() error { return p.pool.Claim() }
 
 // Close seals admission and releases directory ownership only after requests

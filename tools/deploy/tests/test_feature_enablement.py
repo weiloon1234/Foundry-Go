@@ -1,5 +1,4 @@
-"""Systemd enablement authority and the nonstarting preview migration."""
-from dataclasses import replace
+"""Systemd enablement authority and guarded service startup."""
 from pathlib import Path
 import subprocess
 import sys
@@ -15,7 +14,6 @@ from host import Host, Paths
 import release
 import services
 from timing_support import ManualClock, readiness_clock
-from test_host_capabilities import selection
 from test_services import inventory_fixture
 
 
@@ -26,12 +24,7 @@ class FeatureEnablementTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.host = Host(Paths(Path(temporary.name).resolve()))
         self.inventory, self.entry, _ = inventory_fixture()
-        self.entry["deployment_selection"] = selection()
-        self.selected = replace(c.DeploymentSelection.parse(selection()),
-                                admission=replace(c.AdmissionRecord.parse(selection()["admission"]),
-                                                  disposition=c.AdmissionDisposition.COMMITTED))
-        self.store = admission.AdmissionStore(self.host, self.inventory.profile.instance_id)
-        self.enabled, self.running, self.commands = set(), {"http", "relay"}, []
+        self.enabled, self.commands = set(), []
         self.host.run = self.command
 
     def command(self, args, **kwargs):
@@ -44,39 +37,6 @@ class FeatureEnablementTests(unittest.TestCase):
             return subprocess.CompletedProcess(args, 0, "", "")
         raise AssertionError(args)
 
-    def test_preview_migration_only_enables_running_units_and_never_starts(self):
-        with patch.object(lifecycle, "load", return_value=(self.store, self.selected, self.inventory, {})), \
-                patch.object(lifecycle, "install_units") as install, \
-                patch.object(release, "_matches_executable", return_value=True), \
-                patch.object(release, "service", side_effect=lambda host, unit:
-                    {"ActiveState": "active" if unit in {self.inventory.units[n] for n in self.inventory.select(roles=tuple(self.running))} else "inactive"}):
-            result = lifecycle.migrate_enablement(self.host, {"tools": {"generation": 13}}, self.entry)
-            self.assertEqual(result["adopt_running"], ["http", "relay"])
-            self.assertEqual(result["starts"], [])
-            self.assertEqual(self.enabled, {self.inventory.units[n] for n in self.inventory.select(roles=tuple(self.running))})
-            install.assert_called_once()
-            count = len(self.commands)
-            self.assertEqual(lifecycle.migrate_enablement(self.host, {"tools": {"generation": 13}}, self.entry), result)
-            self.assertEqual(len(self.commands), count)
-        self.assertFalse(any(args[:2] in (["systemctl", "start"], ["systemctl", "restart"]) for args in self.commands))
-
-    def test_enablement_adoption_sets_sticky_release_one_floor(self):
-        selected = replace(self.selected, minimum_generation=12)
-        with patch.object(lifecycle, "load", return_value=(self.store, selected, self.inventory, {})), \
-                patch.object(lifecycle, "install_units"), patch.object(self.host, "journal") as journal, \
-                patch.object(release, "_matches_executable", return_value=True), \
-                patch.object(release, "service", return_value={"ActiveState": "inactive"}):
-            lifecycle.migrate_enablement(self.host, {"tools": {"generation": 13}}, self.entry)
-        self.assertEqual(self.entry["deployment_selection"]["minimum_generation"], 13)
-        self.assertEqual(c.read_json(self.store.durable / "selection.json")["minimum_generation"], 13)
-        journal.assert_called_once()
-
-    def test_pending_preview_migration_does_not_enable_or_start_anything(self):
-        pending = c.DeploymentSelection.parse(selection())
-        with patch.object(lifecycle, "load", return_value=(self.store, pending, self.inventory, {})):
-            result = lifecycle.migrate_enablement(self.host, {"tools": {"generation": 13}}, self.entry)
-        self.assertEqual(result["state"], "pending")
-        self.assertEqual(self.commands, [])
 
     def test_takeover_start_cannot_override_disabled_unit(self):
         self.enabled = {self.inventory.units[self.inventory.identity("http")]}

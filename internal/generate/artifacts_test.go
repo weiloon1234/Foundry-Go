@@ -57,7 +57,7 @@ func TestArtifactPublicationOwnsDeterministicSetAndCheckIsReadOnly(t *testing.T)
 	if !reflect.DeepEqual(before, artifactSnapshot(t, dir)) {
 		t.Fatal("repeat changed output")
 	}
-	if _, err := decodeManifest(before[manifestName]); err == nil {
+	if _, err := decodeManifestPolicy(before[manifestName], goOutputPolicy); err == nil {
 		t.Fatal("Go publisher accepted client ownership")
 	}
 	if err := os.WriteFile(filepath.Join(dir, "handwritten.ts"), []byte("user content"), 0600); err != nil {

@@ -339,7 +339,7 @@ class ReportTests(unittest.TestCase):
         release_dir = self.host.paths.opt("abc-production") / "releases" / "v1"
         release_dir.mkdir(parents=True)
         (self.host.paths.opt("abc-production") / "current").symlink_to(release_dir)
-        self.host.states[INSTANCE_ID].update(status="healthy", current={"version": "v1"}, maintenance={"down": True})
+        self.host.states[INSTANCE_ID].update(status="healthy", current={"version": "v1"})
         for ready in (True, False):
             self.ready.return_value = {"ready": ready, "http_status": 200 if ready else 503}
             with self.subTest(ready=ready), patch.object(report.os, "geteuid", return_value=1000), \

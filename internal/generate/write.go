@@ -55,10 +55,6 @@ func validDigest(digest string) bool {
 func readFile(path string) (oldFile, error) {
 	return readWithin(filepath.Dir(path), filepath.Base(path))
 }
-func decodeManifest(data []byte) (manifest, error) {
-	return decodeManifestPolicy(data, goOutputPolicy)
-}
-
 func decodeManifestPolicy(data []byte, policy outputPolicy) (manifest, error) {
 	var m manifest
 	if err := decodePublicationJSON(data, &m); err != nil {
@@ -170,10 +166,6 @@ func planWritePolicy(p *packageInput, outputs map[string][]byte, policy outputPo
 		plan.changes[manifestName] = data
 	}
 	return plan, nil
-}
-
-func publishWithRename(ctx context.Context, p *packageInput, plan writePlan, rename func(string, string) error) (result error) {
-	return publishBatch(ctx, p.dir, []packageWrite{{p, plan}}, nil, rename)
 }
 
 func checkInput(p *packageInput, plan writePlan) error {

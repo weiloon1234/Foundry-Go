@@ -5,35 +5,11 @@ import (
 	"encoding/json"
 	"io"
 
-	"encoding"
 	"github.com/weiloon1234/Foundry-Go/internal/jsoncodec"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
-	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
-
-// KeyCodec preserves the declared key type using the shared keyspace codec.
-type KeyCodec[K any] = keyspace.Codec[K]
-
-// NewKeyCodec wraps the supplied typed key encoder.
-func NewKeyCodec[K any](encode func(K) (string, error)) KeyCodec[K] { return keyspace.NewCodec(encode) }
-
-// StringKeys encodes string keys without changing their text.
-func StringKeys[K ~string]() KeyCodec[K] { return keyspace.StringKeys[K]() }
-
-// SignedKeys encodes signed integer keys as decimal text.
-func SignedKeys[K ~int | ~int8 | ~int16 | ~int32 | ~int64]() KeyCodec[K] {
-	return keyspace.SignedKeys[K]()
-}
-
-// UnsignedKeys encodes unsigned integer keys as decimal text.
-func UnsignedKeys[K ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr]() KeyCodec[K] {
-	return keyspace.UnsignedKeys[K]()
-}
-
-// TextKeys encodes keys through their MarshalText method.
-func TextKeys[K encoding.TextMarshaler]() KeyCodec[K] { return keyspace.TextKeys[K]() }
 
 // Codec preserves V through serialization. Callbacks must be concurrency-safe,
 // leave inputs unchanged and return owned results. The Cache copies buffers at

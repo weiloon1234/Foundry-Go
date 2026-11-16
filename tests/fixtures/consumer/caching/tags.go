@@ -5,12 +5,13 @@ import (
 
 	"foundry.test/consumer/mutatorqueries"
 	"github.com/weiloon1234/Foundry-Go/cache"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 // doc-example:begin invalidate-tag
 // MemberChanges links member-derived cache snapshots to a typed invalidation key.
-var MemberChanges = cache.DefineTag("member-changes-v1", cache.TextKeys[model.ID[mutatorqueries.Member]]())
+var MemberChanges = cache.DefineTag("member-changes-v1", keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
 
 type MemberTags = cache.Tags[model.ID[mutatorqueries.Member]]
 

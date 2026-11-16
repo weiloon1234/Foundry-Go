@@ -160,10 +160,11 @@ incremental; idle queues are reaped on subsequent operations, not by a global
 background scanner.
 
 Stop and drain workers/publication before closing the borrowed backend. The
-`jobs.Module` factory freezes a registry and exposes a typed dispatcher service;
-only `App.Run(ctx, foundation.Worker)` starts reservations. Its provider dependencies
+`jobs.ConnectionModule` factory freezes a registry and exposes a typed dispatcher service;
+`jobs.WorkerModule` selects its dispatcher, and only
+`App.Run(ctx, foundation.Worker)` starts reservations. Provider dependencies
 identify the owners of borrowed infrastructure. The foundation keeps these alive
-until the kernel and all owned callbacks exit. See the consumer's `WorkerModule`.
+until the kernel and all owned callbacks exit. See the consumer's `Modules`.
 
 ## Execution and cancellation
 

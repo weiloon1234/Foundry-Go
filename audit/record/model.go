@@ -11,7 +11,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -19,7 +18,6 @@ import (
 const MaxFields = 1024
 
 // The snapshot document version equals the Redaction policy that captured it.
-// Version 1 predates oversized digests and changed-only updates.
 type dataWire struct {
 	Version uint32      `json:"version"`
 	Primary string      `json:"primary"`
@@ -53,10 +51,7 @@ func (e Entry) Operation() lifecycle.Operation { return e.operation }
 // Format writes a fixed label without exposing captured data.
 func (Entry) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("audit entry")) }
 
-// Redaction reports the sensitive-name policy that captured this entry. Values
-// of an entry captured under an older policy are additionally masked under
-// CurrentRedaction when it is parsed, and the result stays valid under the
-// capturing policy.
+// Redaction reports the current sensitive-name policy that captured this entry.
 func (e Entry) Redaction() Redaction {
 	if e.data == nil {
 		return 0
@@ -102,66 +97,8 @@ func ParseEntry(identity model.Identity, operation lifecycle.Operation, payload 
 	if err != nil {
 		return Entry{}, err
 	}
-	masked, err := data.maskCurrent()
-	if err != nil {
-		return Entry{}, err
-	}
-	if !masked {
-		data.text = text
-	} else if text, err = data.marshal(); err != nil {
-		return Entry{}, err
-	} else if err := data.canonical(text); err != nil {
-		return Entry{}, err
-	}
+	data.text = text
 	return Entry{identity: identity, operation: operation, data: data}, nil
-}
-
-// maskCurrent hides, at read time, values that CurrentRedaction treats as
-// sensitive although the older policy that wrote the row disclosed them, such
-// as an otp or card_number column captured under RedactionV1. The row's own
-// policy has already validated the structure, and the masked entry remains
-// valid under it and never grows: a sensitive column becomes Redacted, a
-// disclosed JSON value with a newly sensitive key is redacted completely, and
-// an already redacted JSON value also redacts its newly sensitive keys. The
-// subject key is the entry's identity and is never masked.
-func (d *entryData) maskCurrent() (bool, error) {
-	if d.redaction >= CurrentRedaction {
-		return false, nil
-	}
-	masked := false
-	for i := range d.fields {
-		field := &d.fields[i]
-		if field.name == d.primary {
-			continue
-		}
-		sensitive := CurrentRedaction.Sensitive(field.name)
-		for _, snapshot := range []*Snapshot{&field.before, &field.after} {
-			switch {
-			case snapshot.state == Absent || snapshot.state == Redacted:
-			case sensitive:
-				*snapshot, masked = Snapshot{state: Redacted}, true
-			case field.typ == codec.TypeJSON && snapshot.value.Kind == "string" && (snapshot.state == Disclosed || snapshot.state == RedactedJSON):
-				text, changed, err := redactJSON(snapshot.value.Text, CurrentRedaction)
-				if err != nil {
-					return false, err
-				}
-				switch {
-				case !changed || text == snapshot.value.Text:
-				case snapshot.state == Disclosed || len(text) > len(snapshot.value.Text):
-					// A partially redacted copy would not be valid under the
-					// writing policy, or would outgrow the stored document.
-					*snapshot, masked = Snapshot{state: Redacted}, true
-				default:
-					encoded, err := sqlvalue.Encode(text)
-					if err != nil {
-						return false, invalidSnapshot()
-					}
-					snapshot.value, masked = encoded, true
-				}
-			}
-		}
-	}
-	return masked, nil
 }
 
 func parseData(identity model.Identity, operation lifecycle.Operation, wire dataWire) (*entryData, error) {
@@ -172,7 +109,7 @@ func parseData(identity model.Identity, operation lifecycle.Operation, wire data
 	if err != nil {
 		return nil, err
 	}
-	if wire.Version < uint32(RedactionV1) || wire.Version > uint32(CurrentRedaction) {
+	if wire.Version != uint32(CurrentRedaction) {
 		return nil, safeerror.NewFault(fault.Invalid, "invalid audit snapshot version or field count")
 	}
 	policy := Redaction(wire.Version)
@@ -210,16 +147,12 @@ func parseData(identity model.Identity, operation lifecycle.Operation, wire data
 // Compact returns an entry whose disclosed values above limit bytes are stored
 // as Oversized digests. It never fails because values are large; it is used by
 // recorders to apply their configured per-value threshold before storage.
-// Entries captured under an older policy are returned unchanged.
 func (e Entry) Compact(limit int) (Entry, error) {
 	if err := e.Validate(); err != nil {
 		return Entry{}, err
 	}
 	if limit < 1 {
 		return Entry{}, safeerror.NewFault(fault.Invalid, "audit value limit must be positive")
-	}
-	if e.data.redaction < RedactionV2 {
-		return e, nil
 	}
 	var fields []capturedField
 	for i, field := range e.data.fields {
@@ -546,8 +479,7 @@ func validateField(field capturedField, before, after bool, policy Redaction) er
 		case snapshot.state == Absent:
 			continue
 		case sensitive && snapshot.state != Redacted,
-			snapshot.state == RedactedJSON && field.typ != codec.TypeJSON,
-			snapshot.state == Oversized && policy < RedactionV2:
+			snapshot.state == RedactedJSON && field.typ != codec.TypeJSON:
 			return invalidSnapshot()
 		}
 		if field.typ != codec.TypeJSON || snapshot.state != RedactedJSON && (snapshot.state != Disclosed || snapshot.value.Kind == "null") {

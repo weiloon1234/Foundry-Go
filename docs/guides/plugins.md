@@ -45,7 +45,7 @@ Use the existing feature declarations with these registrar helpers:
 | Typed service | `foundation.Provide` / `Factory` | Existing typed service graph |
 | HTTP route or endpoint | `http.RegisterRoute` with its concrete descriptor and handler factory | `http.RegisterRouter`, resolved by the existing HTTP module |
 | HTTP middleware | `http.RegisterMiddleware` | Applied outside each contributed route's own middleware |
-| Job | `jobs.RegisterJob` with `Definition[P]` | Existing `jobs.Module` |
+| Job | `jobs.RegisterJob` with `Definition[P]` | Existing `jobs.ConnectionModule` |
 | Guard or policy | `auth.RegisterAuthorization` with the exact typed declaration | `auth.RegisterRegistry` |
 | Event topic/listener | `events.RegisterTopic` / `RegisterListener` | Existing `events.Module` |
 | Historical migration | `plugin.RegisterMigrations` | `plugin.RegisterMigrationRegistry`, then an explicit migration runner |

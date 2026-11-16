@@ -89,50 +89,6 @@ def reconcile(host, project, profile):
         return operations.reconcile_closed(host, entry)
 
 
-def migrate_enablement(host, registry, entry):
-    """Adopt running preview units once, under host then instance locks; never start one."""
-    import release
-    store = admission.AdmissionStore(host, entry["profile"]["instance_id"])
-    path = store.durable / "enablement.json"
-    if "deployment_selection" not in entry:
-        return None
-    if path.exists() and entry["deployment_selection"]["minimum_generation"] >= FEATURE_LIFECYCLE_GENERATION:
-        return admission.read_owned(host, path, lambda value: value)
-    store, selection, inventory, launch = load(host, entry)
-    if selection.admission.disposition is not AdmissionDisposition.COMMITTED:
-        return {"state": "pending", "detail": "Preview enablement migration awaits a committed deployment."}
-    require(registry["tools"]["generation"] >= FEATURE_LIFECYCLE_GENERATION,
-            "host_upgrade_required", "Enablement adoption requires deploy generation 13.")
-    store.require_cleanup_clear()
-    if selection.minimum_generation < FEATURE_LIFECYCLE_GENERATION:
-        selection = replace(selection, minimum_generation=FEATURE_LIFECYCLE_GENERATION)
-        store._write(store.durable / "selection.json", selection)
-        entry["deployment_selection"] = record_document(selection)
-        host.journal(registry, entry)
-    if path.exists():
-        return admission.read_owned(host, path, lambda value: value)
-    enabled = set(services.enabled_units(host, inventory.units))
-    running = []
-    for name, unit in inventory.units.items():
-        observed = release.service(host, unit)
-        require(observed["ActiveState"] in ("active", "inactive", "failed"),
-                "service_enablement", "Wait for stable workloads before preview enablement migration.")
-        if observed["ActiveState"] == "active":
-            require(release._matches_executable(observed, host.paths.p(inventory.specs[name].executable)),
-                    "service_enablement", "Running preview unit differs from its selected executable.")
-            running.append(name)
-    intent = {"schema": 1, "authority": "systemd", "state": "prepared", "enabled": sorted(unit_selection_names(enabled)),
-              "adopt_running": sorted(unit_selection_names(set(running) - enabled)), "starts": []}
-    admission.protected_directory(host, path.parent, 0o700)
-    atomic_json(path.with_name("enablement-intent.json"), intent, mode=0o600)
-    install_units(host, registry, entry, inventory, launch, Path(__file__).resolve().parents[1])
-    if intent["adopt_running"]:
-        host.run(["systemctl", "enable", *(inventory.units[name] for name in unit_selection_identities(inventory.profile.instance_id, intent["adopt_running"]))])
-    result = {**intent, "state": "complete", "enabled": list(unit_selection_names(services.enabled_units(host, inventory.units)))}
-    atomic_json(path, result, mode=0o600)
-    return result
-
-
 def network_report(host, entry, host_claims, host_confinement=None):
     from contracts import ClosureEvidence
     from report import declared_network
@@ -843,7 +799,6 @@ def configuration_request(host, project, profile, changes):
     import release
     with host.lock("host"), host.lock(profile["instance_id"]):
         registry, entry = host.require_identity(project, profile)
-        migrate_enablement(host, registry, entry)
         release.require_idle(host.load_state(entry))
         store, _, inventory, _ = load(host, entry)
         store.require_cleanup_clear()
@@ -909,8 +864,13 @@ def prepare_release(host, entry, state, request, *, recovery_declaration=None):
                                       expansion_budget=budget, reviewed=True)
     declaration = ReleaseDeclaration.parse(manifest["deployment"])
     topology = parse_topology(declaration.topology_json)
-    profile_record = parse_profile(entry["profile"] if recovery_declaration is not None else
-        release.target_declaration(host, entry, manifest)["profile"], topology)
+    if recovery_declaration is not None:
+        profile = entry["profile"]
+    elif release.declaration_index(host, entry, manifest).exists():
+        profile = release.target_declaration(host, entry, manifest)["profile"]
+    else:
+        profile = declaration.profile_json
+    profile_record = parse_profile(profile, topology)
     feature_maintenance.stopped_roles(topology)
     require(release.legacy_profile(profile_record.projection()) == release.legacy_profile(entry["profile"]),
             "release_identity", "Reviewed releases cannot change the instance host or infrastructure profile.")
@@ -970,7 +930,6 @@ def execute(host, request, *, pin=None):
         require(is_feature(entry) and registry["tools"]["generation"] >= FEATURE_LIFECYCLE_GENERATION,
                 "capability_unavailable", "Feature execution requires the generation-13 lifecycle release.")
         state = host.load_state(entry)
-        migrate_enablement(host, registry, entry)
         admission.AdmissionStore(host, profile["instance_id"]).require_cleanup_clear(request["operation_id"])
         release.require_idle(state)
         inventory, attempt, names, review = None, None, None, None

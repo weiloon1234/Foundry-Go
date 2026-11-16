@@ -29,9 +29,7 @@ func (d Document[P]) Redacted() bool { return d.redacted }
 // Payload returns the captured JSON text for explicit audit export, or an error if uninitialized.
 func (d Document[P]) Payload() (string, error) { return d.payload.Text() }
 
-// Redaction reports the sensitive-name policy the payload satisfies: the policy
-// that captured it, or CurrentRedaction when an older document contained keys
-// the current policy treats as sensitive and was masked when parsed.
+// Redaction reports the current sensitive-name policy the payload satisfies.
 func (d Document[P]) Redaction() Redaction { return d.redaction }
 
 // CaptureDocument freezes an independent representation and isolates custom
@@ -70,9 +68,7 @@ func ParseDocument[P any](text string, redacted bool) (Document[P], error) {
 // ParseDocumentWith checks restored redaction metadata under the policy that
 // captured the document and applies the concrete DTO schema only to complete,
 // unredacted data. It never trusts a persisted flag to hide an unsanitized
-// secret value, and extending the current policy never invalidates old rows.
-// Keys that CurrentRedaction treats as sensitive in an older document are
-// masked on read: the result is redacted and reports CurrentRedaction.
+// secret value. Policies other than CurrentRedaction are rejected.
 func ParseDocumentWith[P any](policy Redaction, text string, redacted bool) (Document[P], error) {
 	if err := policy.Validate(); err != nil {
 		return Document[P]{}, err
@@ -93,18 +89,6 @@ func ParseDocumentWith[P any](policy Redaction, text string, redacted bool) (Doc
 		return Document[P]{}, safeerror.NewFault(fault.Invalid, "invalid domain audit redaction metadata")
 	}
 	result := Document[P]{payload: payload, redacted: redacted, redaction: policy}
-	if policy < CurrentRedaction {
-		masked, changed, err := redactJSON(canonical, CurrentRedaction)
-		if err != nil {
-			return Document[P]{}, err
-		}
-		if changed && masked != canonical {
-			if result.payload, err = value.ParseJSON[json.RawMessage](masked); err != nil {
-				return Document[P]{}, err
-			}
-			result.redacted, result.redaction = true, CurrentRedaction
-		}
-	}
 	if !result.redacted {
 		if _, err := result.Decode(); err != nil {
 			return Document[P]{}, err

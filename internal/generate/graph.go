@@ -72,10 +72,6 @@ func (g *packageGraph) Import(path string) (*types.Package, error) {
 	return g.compiled.Import(path)
 }
 
-func listGraph(ctx context.Context, dir string, recursive bool, extraImports ...string) (*packageGraph, error) {
-	return loadGraph(ctx, dir, recursive, nil, extraImports)
-}
-
 // loadGraph lists the selected packages without compiling them, then requests
 // compiled export data only for dependencies outside the selection. A tree
 // captured by recovery is reused so one run walks the source tree once.

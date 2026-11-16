@@ -9,6 +9,7 @@ import (
 	"foundry.test/consumer/mutatorqueries"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
@@ -24,7 +25,7 @@ func TestTypedMemberInvalidationRefreshesGetterSnapshot(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	store, err := cache.NewStore(backend, cache.DefaultConfig(cache.Namespace{Application: "tag-consumer", Environment: "test"}))
+	store, err := cache.NewStore(backend, cache.DefaultConfig(keyspace.Namespace{Application: "tag-consumer", Environment: "test"}))
 	if err != nil {
 		t.Fatal(err)
 	}

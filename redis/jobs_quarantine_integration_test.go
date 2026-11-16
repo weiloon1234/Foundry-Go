@@ -421,12 +421,14 @@ func TestRedisQuarantineHistoryAndEnvelopeValidation(t *testing.T) {
 			}
 		})
 	}
-	t.Run("legacy-retry-omitted", func(t *testing.T) {
+	t.Run("retry-omitted", func(t *testing.T) {
 		f := newQuarantineFixture(t)
 		e := f.enqueue(t)
 		f.edit(t, e.ID(), map[string]any{"history": json.RawMessage(`[{"state":"waiting","reason":"","at":1,"attempt":4}]`)})
-		if got := f.list(t); len(got.Records) != 1 || got.Records[0].History[0].Attempt != 4 {
-			t.Fatal(got)
+		f.assertUnavailable(t, e)
+		f.list(t)
+		if len(f.quarantine(t).Records) != 1 {
+			t.Fatal("history without retry escaped quarantine")
 		}
 	})
 }

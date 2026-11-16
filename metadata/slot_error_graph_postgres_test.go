@@ -47,7 +47,7 @@ func TestPostgresMetadataSlotContainsDecoderErrorMatching(t *testing.T) {
 	}
 	slot = slot.from(manager)
 	for _, mode := range []string{"cycle", "panic", "goexit"} {
-		if err := slot.keyDeclaration().Set(t.Context(), manager, extensions.ORMIdentity(extensiontest.Members).Reference(1), InspectionValue{mode}); err != nil {
+		if err := slot.key.Set(t.Context(), manager, extensions.ORMIdentity(extensiontest.Members).Reference(1), InspectionValue{mode}); err != nil {
 			t.Fatal(err)
 		}
 		inspectionDecodes.Store(0)

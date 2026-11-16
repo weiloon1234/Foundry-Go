@@ -11,12 +11,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
 
 func tagKey(t *testing.T, name, logical string) cache.EntryKey {
 	t.Helper()
-	key, err := cache.NewEntryKey(cache.Namespace{Application: "tags", Environment: "test"}, cache.Name(name), logical)
+	key, err := cache.NewEntryKey(keyspace.Namespace{Application: "tags", Environment: "test"}, cache.Name(name), logical)
 	if err != nil {
 		t.Fatal(err)
 	}

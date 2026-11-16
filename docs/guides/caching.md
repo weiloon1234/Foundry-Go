@@ -33,7 +33,7 @@ type Profile struct {
 type Profiles = cache.Cache[model.ID[mutatorqueries.Member], Profile]
 
 // ProfileEntries is declared once; repeated bindings reuse its identity.
-var ProfileEntries = cache.Define("member-profiles-v1", cache.TextKeys[model.ID[mutatorqueries.Member]](), cache.JSON[Profile]())
+var ProfileEntries = cache.Define("member-profiles-v1", keyspace.TextKeys[model.ID[mutatorqueries.Member]](), cache.JSON[Profile]())
 
 func Bind(store *cache.Store) (Profiles, error) { return ProfileEntries.Bind(store) }
 ```
@@ -108,7 +108,7 @@ A tag family has its own typed key. Bind it to the same store as the cache view:
 <!-- compiled-source: tests/fixtures/consumer/caching/tags.go#invalidate-tag -->
 ```go
 // MemberChanges links member-derived cache snapshots to a typed invalidation key.
-var MemberChanges = cache.DefineTag("member-changes-v1", cache.TextKeys[model.ID[mutatorqueries.Member]]())
+var MemberChanges = cache.DefineTag("member-changes-v1", keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
 
 type MemberTags = cache.Tags[model.ID[mutatorqueries.Member]]
 
@@ -247,7 +247,7 @@ model-owned member IDs:
 ```go
 var ProfileViews = cache.DefineCounter(
     "profile-views-v1",
-    cache.TextKeys[model.ID[mutatorqueries.Member]](),
+    keyspace.TextKeys[model.ID[mutatorqueries.Member]](),
 )
 
 counts, err := ProfileViews.Bind(store)
@@ -486,7 +486,7 @@ backend, err := memory.New(memory.DefaultConfig(), clock.System{})
 if err != nil {
     return err
 }
-store, err := cache.NewStore(backend, cache.DefaultConfig(cache.Namespace{
+store, err := cache.NewStore(backend, cache.DefaultConfig(keyspace.Namespace{
     Application: "shop",
     Environment: "development",
 }))

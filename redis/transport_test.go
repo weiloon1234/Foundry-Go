@@ -16,6 +16,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 // transportServer is an owned protocol fault fixture, not another Redis service.
@@ -234,7 +235,7 @@ func TestLostMutationReplyNeverRetries(t *testing.T) {
 	if err := client.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	key, err := cache.NewEntryKey(cache.Namespace{Application: "foundry", Environment: "transport"}, "faults", "write")
+	key, err := cache.NewEntryKey(keyspace.Namespace{Application: "foundry", Environment: "transport"}, "faults", "write")
 	if err != nil {
 		t.Fatal(err)
 	}

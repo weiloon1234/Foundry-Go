@@ -108,7 +108,7 @@ local function validate_history(history)
         if not canonical_fields(entry, history_fields) or type(entry.state) ~= 'string' or not states[entry.state]
             or type(entry.reason) ~= 'string' or not integer(entry.at, 0, max_time)
             or not integer(entry.attempt, 0, 4294967295)
-            or (entry.retry ~= nil and not integer(entry.retry, 0, limits.manual_retries)) then return false end
+            or not integer(entry.retry, 0, limits.manual_retries) then return false end
     end
     return true
 end

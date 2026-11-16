@@ -15,6 +15,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 type rememberResult struct {
@@ -473,7 +474,7 @@ func TestRememberCodecFailureAndSizeLimitReleaseTheFlight(t *testing.T) {
 				}
 				return []byte("valid"), nil
 			}, func(data []byte) (profile, error) { return profile{Name: string(data)}, nil })
-			c, err := cache.Define("encode", cache.StringKeys[userKey](), codec).Bind(s)
+			c, err := cache.Define("encode", keyspace.StringKeys[userKey](), codec).Bind(s)
 			if err != nil {
 				t.Fatal(err)
 			}

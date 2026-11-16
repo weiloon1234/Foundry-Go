@@ -187,8 +187,8 @@ Leases, distributed coalescing, rate limiting and pub/sub remain milestone09 wor
 The public lease package supplies reusable Declaration[K], bound Leases[K],
 Manager, Guard and a focused Backend. The keyspace package now owns shared namespace
 syntax and typed key codecs; a private encoder preserves existing cache addresses
-and separates lease addresses. Cache compatibility aliases keep existing consumer
-code valid without a cache/lease dependency cycle.
+and separates lease addresses. Cache consumers use `keyspace.Namespace` and typed
+`keyspace.Codec` constructors directly.
 
 Acquisition distinguishes confirmed contention from failure. Finite validity
 subtracts command elapsed time and an explicit drift margin; late renewal cannot

@@ -135,7 +135,7 @@ class AcceptanceWiringTests(unittest.TestCase):
             action = stack.enter_context(patch.object(acceptance_host, 'action'))
             renewal = stack.enter_context(patch.object(acceptance_host, 'certificate_renewal'))
             isolation = stack.enter_context(patch.object(acceptance_host, 'isolation'))
-            stack.enter_context(patch("upgrades.protocol_metadata", return_value={"client": {"generation": 9}}))
+            stack.enter_context(patch("upgrades.protocol_metadata", return_value={"client": {"generation": 18}}))
             acceptance_host.main()
             prepare.assert_called_once()
             self.assertEqual(instances[0], prepare.call_args.args[1])
@@ -167,7 +167,7 @@ class AcceptanceWiringTests(unittest.TestCase):
         with patch.object(acceptance_host, 'fixture_topology', return_value={
                 'schema': 1, 'roles': [{'name': 'http'}]}), \
                 patch.object(acceptance_host, 'run', side_effect=replies) as run, \
-                patch('upgrades.protocol_metadata', return_value={'client': {'generation': 9}}):
+                patch('upgrades.protocol_metadata', return_value={'client': {'generation': 18}}):
             acceptance_host.prepare(None, (project, profile), {'configuration': {}},
                                     tools=Path('/verification/old-deploy'))
         self.assertEqual([call.args[0][2] for call in run.call_args_list],
@@ -175,7 +175,7 @@ class AcceptanceWiringTests(unittest.TestCase):
         for call in run.call_args_list:
             self.assertEqual(call.args[0][1], '/verification/old-deploy/server/manage.py')
         self.assertEqual(json.loads(run.call_args_list[1].kwargs['input'])['plan_token'], 'reviewed')
-        self.assertEqual(9, json.loads(run.call_args_list[1].kwargs['input'])['client']['generation'])
+        self.assertEqual(18, json.loads(run.call_args_list[1].kwargs['input'])['client']['generation'])
 
     def test_private_proxy_is_scoped_to_acceptance_builder_only(self):
         execute = Mock(return_value='ok')

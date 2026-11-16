@@ -155,8 +155,7 @@ class TemplateDeclarationTests(unittest.TestCase):
         with self.assertRaisesRegex(c.DeployError, "generation 14"):
             upgrades.check_instance_capabilities(entry, 13)
         upgrades.check_instance_capabilities(entry, 14)
-        self.assertIn("lib/config_templates.py", upgrades.required_files(14))
-        self.assertNotIn("lib/config_templates.py", upgrades.required_files(13))
+        self.assertIn("lib/config_templates.py", upgrades.REQUIRED_FILES)
 
 
 class TemplatePreparationTests(unittest.TestCase):

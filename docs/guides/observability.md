@@ -242,7 +242,7 @@ reusing a request in another operation gets another span. No automatic redirect
 or extra retry policy is introduced.
 
 Workers and schedulers continue discarding unrelated kernel context values. A
-legacy job gets a fresh trace correlated with its captured request ID. Schedules
+job without trace context gets a fresh trace correlated with its captured request ID. Schedules
 get an occurrence trace; nested domain/client work becomes a child. A socket
 copies only its explicit recorder, trace and existing request attribution into
 the hub-owned connection context. Message spans descend from that connection.

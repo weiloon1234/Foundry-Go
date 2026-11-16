@@ -14,10 +14,11 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
-var departments = cache.DefineTag("departments", cache.StringKeys[userKey]())
-var regions = cache.DefineTag("regions", cache.StringKeys[userKey]())
+var departments = cache.DefineTag("departments", keyspace.StringKeys[userKey]())
+var regions = cache.DefineTag("regions", keyspace.StringKeys[userKey]())
 
 func boundTags(t *testing.T, s *cache.Store) (cache.Tags[userKey], cache.Tags[userKey]) {
 	t.Helper()
@@ -211,7 +212,7 @@ func TestTagsValidateOwnershipBoundsAndCallbackFailures(t *testing.T) {
 	if err := s.InvalidateTags(t.Context(), foreign.For("a")); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
-	if _, err := cache.Define("departments", cache.StringKeys[userKey](), cache.JSON[int]()).Bind(s); !errors.Is(err, fault.Duplicate) {
+	if _, err := cache.Define("departments", keyspace.StringKeys[userKey](), cache.JSON[int]()).Bind(s); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("tag family ownership ignored", err)
 	}
 	if _, err := departments.Bind(s); err != nil {
@@ -238,7 +239,7 @@ func TestTagsValidateOwnershipBoundsAndCallbackFailures(t *testing.T) {
 		{"invalid", func(userKey) (string, error) { return "bad\nkey", nil }, fault.Invalid},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			tags, err := cache.DefineTag(cache.Name(test.name), cache.NewKeyCodec(test.fn)).Bind(s)
+			tags, err := cache.DefineTag(cache.Name(test.name), keyspace.NewCodec(test.fn)).Bind(s)
 			if err != nil {
 				t.Fatal(err)
 			}

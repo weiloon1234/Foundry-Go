@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 	"testing"
 	"time"
@@ -29,7 +30,7 @@ func BenchmarkMemoryCacheChurn(b *testing.B) {
 				}
 				data := []byte("bounded-cache-value")
 				for i := range keys {
-					keys[i], err = cache.NewEntryKey(cache.Namespace{Application: "benchmark", Environment: "test"}, "churn", fmt.Sprint(i))
+					keys[i], err = cache.NewEntryKey(keyspace.Namespace{Application: "benchmark", Environment: "test"}, "churn", fmt.Sprint(i))
 					if err != nil {
 						b.Fatal(err)
 					}

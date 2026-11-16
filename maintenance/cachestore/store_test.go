@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/maintenance/cachestore"
 )
@@ -20,7 +21,7 @@ func TestCacheStoreSharesStateBetweenGates(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer backend.Close(context.Background())
-	shared, err := cache.NewStore(backend, cache.DefaultConfig(cache.Namespace{Application: "maintenance", Environment: "test"}))
+	shared, err := cache.NewStore(backend, cache.DefaultConfig(keyspace.Namespace{Application: "maintenance", Environment: "test"}))
 	if err != nil {
 		t.Fatal(err)
 	}

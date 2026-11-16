@@ -118,7 +118,7 @@ client, err := foundation.Resolve(app.Services(), RedisConnection)
 if err != nil {
     return err
 }
-store, err := cache.NewStore(client, cache.DefaultConfig(cache.Namespace{
+store, err := cache.NewStore(client, cache.DefaultConfig(keyspace.Namespace{
     Application: "example", Environment: "production",
 }))
 if err != nil {

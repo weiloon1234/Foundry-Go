@@ -152,6 +152,12 @@ def _load(host: Host) -> dict | None:
             and all(PACKAGE.fullmatch(name) and isinstance(version, str) and VERSION.fullmatch(version)
                     for name, version in value["transaction"].items()),
             "package_journal", "Invalid package recovery intent.")
+    # Completed journals retain their historical shape. Only active installation
+    # needs the complete supply intent for safe resume.
+    if value["state"] == "installing":
+        require(all(isinstance(value.get(key), dict) for key in
+                    ("evidence", "activation_before", "activation_units", "cron_defaults")),
+                "package_journal", "Installing package journals require complete supply and activation fields.")
     if "evidence" in value:
         supply_fields = ["evidence", "activation_before", "activation_units"]
         if "cron_defaults" in value:
@@ -1237,7 +1243,6 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
     if reviewed is not None:
         require(reviewed.get("transaction") == journal["transaction"] and reviewed.get("evidence") == journal.get("evidence"),
                 "package_plan_changed", "Reviewed supply transaction differs from the recovery intent.")
-    require("evidence" in journal, "package_journal", "Legacy incomplete package intent needs reconciliation before capability installation.")
     pending = {name: version for name, version in journal["transaction"].items() if not _installed(inventory, name)}
     if pending and not prepared:
         evidence = _candidate_evidence(host, pending)

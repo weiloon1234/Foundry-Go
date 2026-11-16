@@ -609,13 +609,13 @@ class CapabilityCompatibilityTests(unittest.TestCase):
     def test_source_protocol_fixtures_preserve_upgrade_floors(self):
         # Captured 2.0 envelope shape of all supported source generations. These
         # are contract fixtures; installed source-bundle acceptance belongs to M6.
-        for source_generation in (9, 10, 11):
+        for source_generation in (18, 19):
             source = {"protocol": {"major": 2, "minor": 0}, "generation": source_generation,
                       "minimum_host_generation": 9, "minimum_client_generation": 1, "framework_version": "development"}
             upgrades.check_upgrade_generation(source)
             candidate = upgrades.protocol()
             self.assertEqual(set(source), set(candidate))
-            self.assertGreater(candidate["generation"], source["generation"])
-            self.assertEqual(candidate["minimum_client_generation"], 1)
+            self.assertGreaterEqual(candidate["generation"], source["generation"])
+            self.assertEqual(candidate["minimum_client_generation"], 18)
         with self.assertRaises(c.DeployError):
-            upgrades.check_upgrade_generation({"generation": 8})
+            upgrades.check_upgrade_generation({"generation": 17})

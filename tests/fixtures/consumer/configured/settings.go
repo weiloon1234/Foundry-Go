@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 const Reports cache.StoreName = "reports"
@@ -36,7 +37,7 @@ func Build(ctx context.Context, settings Settings) (*foundation.App, error) {
 
 // doc-example:end named-services
 
-var Greeting = cache.Define("greetings", cache.StringKeys[string](), cache.JSON[string]())
+var Greeting = cache.Define("greetings", keyspace.StringKeys[string](), cache.JSON[string]())
 
 // Greetings is ordinary constructor injection. Request handlers receive this
 // concrete dependency, while context.Context carries cancellation/attribution.

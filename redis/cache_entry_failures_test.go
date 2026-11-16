@@ -13,6 +13,7 @@ import (
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/internal/cachetest"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 type lostEntryAcknowledgement struct {
@@ -146,7 +147,7 @@ func TestCacheBatchMalformedTransportCounts(t *testing.T) {
 			if err := c.Start(t.Context()); err != nil {
 				t.Fatal(err)
 			}
-			key, err := cache.NewEntryKey(cache.Namespace{Application: "test", Environment: "batch-reply"}, "values", "key")
+			key, err := cache.NewEntryKey(keyspace.Namespace{Application: "test", Environment: "batch-reply"}, "values", "key")
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/imaging"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
@@ -28,7 +29,7 @@ type UploadResult struct {
 	Width int               `json:"width"`
 }
 
-var profiles = cache.Define("bootstrap.profiles", cache.StringKeys[string](), cache.JSON[Profile]())
+var profiles = cache.Define("bootstrap.profiles", keyspace.StringKeys[string](), cache.JSON[Profile]())
 
 // The configured engine applies the same declaration to ordinary HTTP uploads.
 // Contain enlarges small uploads, preserves aspect ratio and pads a square avatar.

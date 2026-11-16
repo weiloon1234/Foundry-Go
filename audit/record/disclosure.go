@@ -36,17 +36,12 @@ func (d Disclosure) Validate() error {
 
 func (d Disclosure) omits() bool { return d == Exclude || d == Ignore }
 
-// Redaction identifies the sensitive-name policy that captured a stored audit
-// row. Every row retains the policy that wrote it, so extending the recognized
-// names never invalidates older history; reads check each row against its own
-// policy. New captures always use CurrentRedaction.
+// Redaction identifies the sensitive-name policy recorded with stored audit data.
+// Capture and restore support only CurrentRedaction.
 type Redaction uint8
 
 const (
-	// RedactionV1 recognizes password, secret, token, credential, authorization
-	// and API/private-key names split at snake, kebab and camel-case boundaries.
-	RedactionV1 Redaction = 1
-	// RedactionV2 additionally splits letter/digit boundaries, ignores digit
+	// RedactionV2 splits letter/digit boundaries, ignores digit
 	// suffixes and simple plurals, recognizes joined names such as accesstoken,
 	// and adds passphrase, OTP, PIN, CVV/CVC, SSN, card number, cookie, session
 	// and recovery-code conventions.
@@ -57,7 +52,7 @@ const (
 
 // Validate reports fault.Invalid for an unknown redaction policy version.
 func (r Redaction) Validate() error {
-	if r < RedactionV1 || r > CurrentRedaction {
+	if r != CurrentRedaction {
 		return safeerror.NewFault(fault.Invalid, "unknown audit redaction policy")
 	}
 	return nil
@@ -72,43 +67,11 @@ func SensitiveName(name string) bool { return CurrentRedaction.Sensitive(name) }
 // every name as sensitive rather than disclosing data under a guessed rule.
 func (r Redaction) Sensitive(name string) bool {
 	switch r {
-	case RedactionV1:
-		return sensitiveV1(name)
 	case RedactionV2:
 		return sensitiveV2(name)
 	default:
 		return true
 	}
-}
-
-// sensitiveV1 is the frozen original rule. Do not extend it: rows captured
-// under it are validated with exactly this behavior.
-func sensitiveV1(name string) bool {
-	runes := []rune(name)
-	var normalized strings.Builder
-	for i, r := range runes {
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
-			normalized.WriteByte('_')
-			continue
-		}
-		if unicode.IsUpper(r) && i > 0 && (unicode.IsLower(runes[i-1]) || unicode.IsDigit(runes[i-1]) ||
-			(i+1 < len(runes) && unicode.IsUpper(runes[i-1]) && unicode.IsLower(runes[i+1]))) {
-			normalized.WriteByte('_')
-		}
-		normalized.WriteRune(unicode.ToLower(r))
-	}
-	parts := strings.FieldsFunc(normalized.String(), func(r rune) bool { return r == '_' })
-	for i, part := range parts {
-		switch part {
-		case "password", "passwd", "secret", "token", "credential", "credentials", "authorization", "apikey", "privatekey":
-			return true
-		case "api", "private":
-			if i+1 < len(parts) && parts[i+1] == "key" {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // sensitiveWords are complete words recognized by RedactionV2 after singular

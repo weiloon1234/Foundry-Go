@@ -32,104 +32,15 @@ func TestCurrentRedactionNormalizesNamesAndExtendsTokens(t *testing.T) {
 			t.Fatal("unrelated name was redacted", name)
 		}
 	}
-	if record.RedactionV1.Sensitive("session_id") || !record.RedactionV1.Sensitive("password_hash") || !record.RedactionV2.Sensitive("session_id") {
-		t.Fatal("redaction policy versions changed their frozen rules")
-	}
 	if err := record.Redaction(0).Validate(); !errors.Is(err, fault.Invalid) || !record.Redaction(99).Sensitive("id") {
 		t.Fatal("unknown redaction policy was trusted", err)
 	}
 }
 
-// legacyPayload is a history row written by the original policy: session_id
-// was not sensitive and stayed disclosed.
-const legacyPayload = `{"version":1,"primary":"id","fields":[` +
+// unsupportedPayload exercises rejection of retired model snapshot versions.
+const unsupportedPayload = `{"version":1,"primary":"id","fields":[` +
 	`{"name":"id","type":2,"assigned":true,"changed":true,"before":{"state":0},"after":{"state":1,"value":{"k":"int","t":"7"}}},` +
 	`{"name":"session_id","type":4,"assigned":true,"changed":true,"before":{"state":0},"after":{"state":1,"value":{"k":"string","t":"visible"}}}]}`
-
-func TestStoredHistoryIsValidatedUnderItsOwnRedactionPolicy(t *testing.T) {
-	identity, err := model.NewReference[subject]("audited_subjects", int64(7), codec.Signed[int64]()).Identity()
-	if err != nil {
-		t.Fatal(err)
-	}
-	legacy := legacyPayload
-	if codec.TypeText != 4 || codec.TypeInteger != 2 {
-		t.Fatal("stored parameter type numbering changed")
-	}
-	entry, err := record.ParseEntry(identity, lifecycle.Create, legacy)
-	if err != nil {
-		t.Fatal("extending the redaction policy invalidated old history", err)
-	}
-	if entry.Redaction() != record.RedactionV1 {
-		t.Fatal("legacy row lost its policy version")
-	}
-	view, err := record.Inspect(mustRestore(t, entry))
-	if err != nil {
-		t.Fatal(err)
-	}
-	field, err := record.ReadField(view, "session_id", codec.String[string]())
-	if err != nil {
-		t.Fatal(err)
-	}
-	stored, _ := field.Get()
-	// Validated under its own policy, then masked under the current one.
-	if stored.After().State() != record.Redacted {
-		t.Fatal("legacy value that the current policy treats as sensitive was disclosed")
-	}
-	current := strings.Replace(legacy, `"version":1`, `"version":2`, 1)
-	if _, err := record.ParseEntry(identity, lifecycle.Create, current); !errors.Is(err, fault.Invalid) {
-		t.Fatal("current policy accepted an unredacted session value", err)
-	}
-	oversized := strings.Replace(legacy, `"after":{"state":1,"value":{"k":"string","t":"visible"}}`, `"after":{"state":4,"size":7}`, 1)
-	if _, err := record.ParseEntry(identity, lifecycle.Create, oversized); !errors.Is(err, fault.Invalid) {
-		t.Fatal("legacy policy accepted a digest marker it never wrote", err)
-	}
-	future := strings.Replace(legacy, `"version":1`, `"version":3`, 1)
-	if _, err := record.ParseEntry(identity, lifecycle.Create, future); !errors.Is(err, fault.Invalid) {
-		t.Fatal("unknown future policy was accepted", err)
-	}
-}
-
-func TestDomainDocumentsAreValidatedUnderTheirStoredPolicy(t *testing.T) {
-	type payload struct {
-		Session string `json:"session"`
-	}
-	text := `{"session":"legacy-visible"}`
-	legacy, err := record.ParseDocumentWith[payload](record.RedactionV1, text, false)
-	if err != nil {
-		t.Fatal("old domain history became unreadable", err)
-	}
-	// The current policy masks the legacy session key on read.
-	masked, err := legacy.Payload()
-	if err != nil || masked != `{"session":"[redacted]"}` || !legacy.Redacted() || legacy.Redaction() != record.CurrentRedaction {
-		t.Fatal("legacy document disclosed a currently sensitive key", masked, err)
-	}
-	if _, err := legacy.Decode(); !errors.Is(err, fault.Missing) {
-		t.Fatal("masked legacy document decoded into a DTO", err)
-	}
-	if again, err := record.ParseDocumentWith[payload](legacy.Redaction(), masked, legacy.Redacted()); err != nil || !again.Redacted() {
-		t.Fatal("masked document is not valid under its reported policy", err)
-	}
-	type plain struct {
-		Theme string `json:"theme"`
-	}
-	unchanged, err := record.ParseDocumentWith[plain](record.RedactionV1, `{"theme":"dark"}`, false)
-	if err != nil || unchanged.Redacted() || unchanged.Redaction() != record.RedactionV1 {
-		t.Fatal("legacy document without sensitive keys changed", err)
-	}
-	if decoded, err := unchanged.Decode(); err != nil || decoded.Theme != "dark" {
-		t.Fatal("legacy document did not decode", err)
-	}
-	if _, err := record.ParseDocument[payload](text, false); err == nil {
-		t.Fatal("current policy accepted an unredacted session key")
-	}
-	captured, err := record.CaptureDocument(payload{Session: "hidden"})
-	if err != nil || !captured.Redacted() || captured.Redaction() != record.CurrentRedaction {
-		t.Fatal("current capture did not apply the extended policy", err)
-	}
-	if _, err := record.ParseDocumentWith[payload](record.Redaction(0), text, false); !errors.Is(err, fault.Invalid) {
-		t.Fatal("unknown document policy accepted", err)
-	}
-}
 
 func TestUpdatesKeepOnlyTouchedFieldsWithoutEncodingOthers(t *testing.T) {
 	encoded := 0
@@ -182,68 +93,37 @@ func TestUpdatesKeepOnlyTouchedFieldsWithoutEncodingOthers(t *testing.T) {
 	}
 }
 
-func mustRestore(t *testing.T, entry record.Entry) record.Model[subject, int64] {
-	t.Helper()
-	restored, err := record.RestoreModel(model.NewReference[subject]("audited_subjects", int64(0), codec.Signed[int64]()), entry)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return restored
-}
-
-// legacyMasked is a policy-1 row whose otp, card_number and JSON keys the
-// current policy treats as sensitive. Only password was sensitive then.
-const legacyMasked = `{"version":1,"primary":"id","fields":[` +
-	`{"name":"id","type":2,"assigned":true,"changed":true,"before":{"state":0},"after":{"state":1,"value":{"k":"int","t":"7"}}},` +
-	`{"name":"otp","type":4,"assigned":true,"changed":true,"before":{"state":0},"after":{"state":1,"value":{"k":"string","t":"123456"}}},` +
-	`{"name":"card_number","type":4,"assigned":true,"changed":true,"before":{"state":0},"after":{"state":1,"value":{"k":"string","t":"4111111111111111"}}},` +
-	`{"name":"note","type":4,"assigned":true,"changed":true,"before":{"state":0},"after":{"state":1,"value":{"k":"string","t":"visible"}}},` +
-	`{"name":"profile","type":13,"assigned":true,"changed":true,"before":{"state":0},"after":{"state":1,"value":{"k":"string","t":"{\"otp\":\"1\",\"theme\":\"dark\"}"}}},` +
-	`{"name":"settings","type":13,"assigned":true,"changed":true,"before":{"state":0},"after":{"state":3,"value":{"k":"string","t":"{\"password\":\"[redacted]\",\"pin\":\"123456789012345\"}"}}}]}`
-
-func TestLegacyHistoryIsMaskedUnderTheCurrentPolicyOnRead(t *testing.T) {
+func TestRetiredAndUnknownAuditPoliciesAreRejected(t *testing.T) {
 	identity, err := model.NewReference[subject]("audited_subjects", int64(7), codec.Signed[int64]()).Identity()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if codec.TypeJSON != 13 {
-		t.Fatal("stored parameter type numbering changed")
-	}
-	entry, err := record.ParseEntry(identity, lifecycle.Create, legacyMasked)
-	if err != nil {
-		t.Fatal("legacy history became unreadable", err)
-	}
-	if entry.Redaction() != record.RedactionV1 {
-		t.Fatal("legacy row lost its capturing policy")
-	}
-	view := inspect(t, mustRestore(t, entry))
-	for name, want := range map[string]record.State{"otp": record.Redacted, "card_number": record.Redacted, "note": record.Disclosed} {
-		field, err := record.ReadField(view, name, codec.String[string]())
-		if err != nil {
-			t.Fatal(err)
-		}
-		stored, _ := field.Get()
-		if stored.After().State() != want {
-			t.Fatal("legacy field has the wrong read state", name, stored.After().State())
+	for _, version := range []string{"0", "1", "3", "258"} {
+		payload := strings.Replace(unsupportedPayload, `"version":1`, `"version":`+version, 1)
+		if _, err := record.ParseEntry(identity, lifecycle.Create, payload); !errors.Is(err, fault.Invalid) {
+			t.Fatal("unsupported model snapshot accepted", version, err)
 		}
 	}
-	payload, err := entry.Payload()
+	type payload struct {
+		Theme string `json:"theme"`
+	}
+	for _, policy := range []record.Redaction{0, 1, 3, 99} {
+		if _, err := record.ParseDocumentWith[payload](policy, `{"theme":"dark"}`, false); !errors.Is(err, fault.Invalid) {
+			t.Fatal("unsupported document policy accepted", policy, err)
+		}
+		if err := policy.Validate(); !errors.Is(err, fault.Invalid) || !policy.Sensitive("theme") {
+			t.Fatal("unsupported policy trusted", policy, err)
+		}
+	}
+	current, err := record.ParseDocumentWith[payload](record.CurrentRedaction, `{"theme":"dark"}`, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, secret := range []string{"123456", "4111111111111111", `\"otp\":\"1\"`, "123456789012345"} {
-		if strings.Contains(payload, secret) {
-			t.Fatal("masked legacy payload still discloses a sensitive value", secret)
-		}
+	decoded, err := current.Decode()
+	if err != nil || decoded.Theme != "dark" {
+		t.Fatal("current document did not round trip", err)
 	}
-	if !strings.Contains(payload, `\"pin\":\"[redacted]\"`) || !strings.Contains(payload, "visible") {
-		t.Fatal("masking removed more or less than the current policy requires", payload)
-	}
-	again, err := record.ParseEntry(identity, lifecycle.Create, payload)
-	if err != nil || again.Redaction() != record.RedactionV1 {
-		t.Fatal("masked entry is not valid under its capturing policy", err)
-	}
-	if repeated, err := again.Payload(); err != nil || repeated != payload {
-		t.Fatal("masking is not idempotent", err)
+	if _, err := record.ParseEntry(identity, lifecycle.Create, strings.Replace(unsupportedPayload, `"version":1`, `"version":2`, 1)); !errors.Is(err, fault.Invalid) {
+		t.Fatal("current policy accepted disclosed session data", err)
 	}
 }

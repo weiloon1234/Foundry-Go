@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 type observedEntryBackend struct {
@@ -36,7 +37,7 @@ func TestTypedEntryOperationsSkipValueCodecsAndDeduplicate(t *testing.T) {
 	s, _, _ := store(t, func(c *cache.Config) { c.MaxBatchEntries = 3 })
 	encodes, decodes := 0, 0
 	codec := cache.NewCodec(func(int) ([]byte, error) { encodes++; return []byte("value"), nil }, func([]byte) (int, error) { decodes++; return 0, errors.New("decoder must not run") })
-	c, err := cache.Define("entry-operations", cache.StringKeys[userKey](), codec).Bind(s)
+	c, err := cache.Define("entry-operations", keyspace.StringKeys[userKey](), codec).Bind(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func TestTypedBatchEncodesAllKeysBeforeResolvingOneSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	cause := errors.New("private key failure")
-	keys := cache.NewKeyCodec(func(key string) (string, error) {
+	keys := keyspace.NewCodec(func(key string) (string, error) {
 		if key == "bad" {
 			return "", cause
 		}
@@ -128,7 +129,7 @@ func TestTypedBatchStaleSnapshotCannotDeleteNewerValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := cache.Define("rotating-batch", cache.StringKeys[string](), cache.JSON[string]()).Bind(s)
+	c, err := cache.Define("rotating-batch", keyspace.StringKeys[string](), cache.JSON[string]()).Bind(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +188,7 @@ func TestTypedBatchCallbackFailuresAndLateExitRemainOwned(t *testing.T) {
 	for _, mode := range []string{"panic", "goexit"} {
 		t.Run(mode, func(t *testing.T) {
 			s, backend, _ := store(t, nil)
-			c, err := cache.Define("failed-batch", cache.NewKeyCodec(func(key string) (string, error) {
+			c, err := cache.Define("failed-batch", keyspace.NewCodec(func(key string) (string, error) {
 				if key == "bad" {
 					if mode == "panic" {
 						panic("private key")
@@ -212,7 +213,7 @@ func TestTypedBatchCallbackFailuresAndLateExitRemainOwned(t *testing.T) {
 		entered := make(chan struct{})
 		release := make(chan struct{})
 		done := make(chan error, 1)
-		c, err := cache.Define("slow-batch", cache.NewKeyCodec(func(key string) (string, error) {
+		c, err := cache.Define("slow-batch", keyspace.NewCodec(func(key string) (string, error) {
 			if key == "slow" {
 				close(entered)
 				<-release

@@ -18,7 +18,7 @@ func jobContributions(key foundation.Key[*Dispatcher]) foundation.Collection[job
 	return foundation.NewCollection[jobContribution](fmt.Sprintf("jobs.declarations.%q", key.Name()))
 }
 
-// RegisterJob adds a typed job to a jobs.Module dispatcher. The constructor may
+// RegisterJob adds a typed job to a jobs.ConnectionModule dispatcher. The constructor may
 // resolve its own dispatcher; binding occurs in a separate assembly step before
 // boot. Use Definition.DeclareWith in the constructor for existing typed job
 // middleware and admission. No queue/backend operations run during registration.
@@ -36,7 +36,7 @@ func RegisterJob[P any](r *foundation.Registrar, key foundation.Key[*Dispatcher]
 			return jobContribution{}, err
 		}
 		if !dispatcher.managed {
-			return jobContribution{}, safeerror.NewFault(fault.Invalid, "job contributions require a jobs Module")
+			return jobContribution{}, safeerror.NewFault(fault.Invalid, "job contributions require a jobs ConnectionModule")
 		}
 		declaration, err := construct(resolver)
 		if err != nil {

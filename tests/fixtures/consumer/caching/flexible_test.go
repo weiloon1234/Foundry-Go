@@ -10,6 +10,7 @@ import (
 	"foundry.test/consumer/mutatorqueries"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
@@ -25,7 +26,7 @@ func TestFlexibleProfileRefreshesInBackgroundAndMemoizesRequests(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	store, err := cache.NewStore(backend, cache.DefaultConfig(cache.Namespace{Application: "consumer", Environment: "flexible"}))
+	store, err := cache.NewStore(backend, cache.DefaultConfig(keyspace.Namespace{Application: "consumer", Environment: "flexible"}))
 	if err != nil {
 		t.Fatal(err)
 	}

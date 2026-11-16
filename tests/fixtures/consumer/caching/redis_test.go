@@ -10,9 +10,9 @@ import (
 	"foundry.test/consumer/caching"
 	"foundry.test/consumer/mutatorqueries"
 	foundry "github.com/weiloon1234/Foundry-Go"
-	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/redis"
 )
@@ -37,7 +37,7 @@ func TestRedisConsumerBuildIsPureAndPreservesTypedProfileAPI(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	profiles, err := caching.BindRedis(client, cache.Namespace{Application: "consumer", Environment: "test"})
+	profiles, err := caching.BindRedis(client, keyspace.Namespace{Application: "consumer", Environment: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestRedisConsumerBuildIsPureAndPreservesTypedProfileAPI(t *testing.T) {
 	if err := caching.SaveProfile(t.Context(), profiles, member); !errors.Is(err, fault.Conflict) {
 		t.Fatal("unstarted Redis was used", err)
 	}
-	store, err := caching.RedisStore(client, cache.Namespace{Application: "consumer", Environment: "tagged-test"})
+	store, err := caching.RedisStore(client, keyspace.Namespace{Application: "consumer", Environment: "tagged-test"})
 	if err != nil {
 		t.Fatal(err)
 	}

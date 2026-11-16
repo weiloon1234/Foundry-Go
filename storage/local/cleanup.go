@@ -15,8 +15,8 @@ import (
 // Prune removes only recognized, old staging files whose live-writer lock can
 // be acquired. A slow upload is never removed merely because it is old. A crash
 // releases its file lock. Published objects and marker/lock files are untouched.
-// limit bounds deletion; Config.MaxScan bounds the legacy object-shard scan.
-// The dedicated staging directory is scanned separately in bounded batches.
+// limit bounds deletion. Only the dedicated staging directory is scanned,
+// in bounded batches independently of the published-object listing ceiling.
 func (b *Backend) Prune(ctx context.Context, olderThan time.Time, limit int) (uint64, error) {
 	if err := b.ready(ctx, storage.DeleteOperation); err != nil {
 		return 0, err
@@ -86,11 +86,6 @@ func (b *Backend) Prune(ctx context.Context, olderThan time.Time, limit int) (ui
 	}
 	err = b.walkStaging(ctx, visit)
 	unlock()
-	if err == nil {
-		// Older runs may have left staging in object shards. That legacy pass keeps
-		// its existing MaxScan bound; the dedicated directory never consumes it.
-		err = b.walkEntries(ctx, b.config.MaxScan, func(parent *os.Root, _ string, name string) error { return visit(parent, name) })
-	}
 
 	if errors.Is(err, finished) {
 		err = nil

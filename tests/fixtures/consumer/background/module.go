@@ -8,16 +8,17 @@ import (
 
 var DispatcherKey = foundation.NewKey[*jobs.Dispatcher]("background.dispatcher")
 
-// WorkerModule borrows the caller's backend. Production assembly lists its
+// Modules borrow the caller's backend. Production assembly lists its
 // owning Redis provider in requires so foundation preserves shutdown ordering.
-func WorkerModule(sender WelcomeSender, backend jobs.Backend, namespace keyspace.Namespace, requires ...foundation.ProviderID) foundation.Module {
-	return jobs.Module("background", DispatcherKey, jobs.DefaultDispatchConfig(namespace), jobs.DefaultWorkerConfig(namespace, "communications"), requires, func(foundation.Resolver) (jobs.Backend, []jobs.Declaration, error) {
+func Modules(sender WelcomeSender, backend jobs.Backend, namespace keyspace.Namespace, requires ...foundation.ProviderID) []foundation.Provider {
+	connection := jobs.ConnectionModule("background", DispatcherKey, jobs.DefaultDispatchConfig(namespace), requires, func(foundation.Resolver) (jobs.Backend, []jobs.Declaration, error) {
 		declaration, err := WelcomeDeclaration(sender)
 		if err != nil {
 			return nil, nil, err
 		}
 		return backend, []jobs.Declaration{declaration}, nil
 	})
+	return []foundation.Provider{connection, jobs.WorkerModule("background.worker", DispatcherKey, jobs.DefaultWorkerConfig(namespace, "communications"), []foundation.ProviderID{"background"})}
 }
 
 // WelcomeChain keeps concrete payload capture in application code. The framework

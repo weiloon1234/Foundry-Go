@@ -122,7 +122,7 @@ func TestDistributionPublicationOwnsNestedFilesAndRelease(t *testing.T) {
 	if !reflect.DeepEqual(before, distributionSnapshot(t, root)) {
 		t.Fatal("repeat changed distribution")
 	}
-	if _, err := decodeManifest(before[manifestName]); err == nil {
+	if _, err := decodeManifestPolicy(before[manifestName], goOutputPolicy); err == nil {
 		t.Fatal("Go publisher accepted plugin ownership")
 	}
 	if _, err := decodeManifestPolicy(before[manifestName], artifactOutputPolicy); err == nil {
@@ -464,7 +464,7 @@ func TestPublicationOwnershipJSONRejectsDuplicateKeys(t *testing.T) {
 		`{"version":1,"files":{},"files":{}}`,
 		`{"version":1,"files":{}} {}`,
 	} {
-		if _, err := decodeManifest([]byte(raw)); err == nil {
+		if _, err := decodeManifestPolicy([]byte(raw), goOutputPolicy); err == nil {
 			t.Fatal("ambiguous ownership JSON accepted")
 		}
 	}

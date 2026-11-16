@@ -17,12 +17,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/redis"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
-var values = cache.Define("configured-values", cache.StringKeys[string](), cache.JSON[string]())
+var values = cache.Define("configured-values", keyspace.StringKeys[string](), cache.JSON[string]())
 
 func memorySettings() infrastructure.Settings {
 	s := infrastructure.DefaultSettings()

@@ -448,7 +448,6 @@ class Host:
                 and type(state["configuration_revision"]) is int and state["configuration_revision"] >= 1
                 and isinstance(state["history"], list) and len(state["history"]) <= 50
                 and ("updated_at" not in state or valid_timestamp(state["updated_at"])), code, detail)
-        state.pop("maintenance", None)
         for key in ("current", "previous"):
             if state[key] is not None:
                 try:

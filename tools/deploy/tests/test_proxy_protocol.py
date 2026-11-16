@@ -175,9 +175,10 @@ class ProxyProtocolDeliveryTests(wiring.FeatureWiringFixture):
                            version="20261115T020000Z-abcdef19")
         before = self.host.read_registry()
         with patch.dict(self.envelope, client={**self.envelope["client"], "generation": 17}), \
-                self.assertRaisesRegex(c.DeployError, "generation 18"):
+                self.assertRaises(c.DeployError) as caught:
             self.request("release-plan", archive=str(self.archive), archive_sha256=c.digest(self.archive),
                          operation_id=str(uuid.uuid4()))
+        self.assertEqual(caught.exception.code, "client_too_old")
         self.assertEqual(self.host.read_registry(), before)
         self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
         registry, entry = self.host.require_identity(self.project, self.profile)

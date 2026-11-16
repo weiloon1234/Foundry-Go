@@ -153,9 +153,6 @@ func (p *Pool) claim(idempotent bool) error {
 		if err != nil {
 			return safeerror.WrapFailure(fault.Invalid, "upload pool ownership marker could not be read", err)
 		}
-		if len(contents) == 0 {
-			return safeerror.NewFault(fault.Conflict, "a v0.30.0 ownership marker was found; stop every v0.30.0 server using this directory, then remove the marker")
-		}
 		if string(contents) != ownerFormat {
 			return safeerror.NewFault(fault.Invalid, "unrecognized upload pool ownership marker format; serving refused without reconciling captures")
 		}

@@ -74,7 +74,7 @@ closes leaves only after borrowers drain.
 
 `jobs.ConnectionModule` constructs dispatchers and freezes contributions without
 registering a kernel. `jobs.WorkerModule` selects one dispatcher for one Worker
-kernel. The existing `jobs.Module` composes both paths for compatibility.
+kernel. Applications register both modules when they need a worker.
 
 `jobs.Connection` pairs a dispatcher with its configured default queue.
 `definition.On(connection)` returns a payload-typed binding: empty per-call queue

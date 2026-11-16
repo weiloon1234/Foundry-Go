@@ -8,18 +8,11 @@ bindings to private endpoints and executables. Public TCP uses nginx stream and
 source-filtered UFW rules; opening follows whole-set health verification. Restart,
 boot admission, reports, logs and whole-instance stop are integrated.
 
-This guide describes topology schema 2 and profile schema 3. Existing topology-1
-applications and generation 9–12 hosts keep their existing behavior. Upgrade tools
-before using release 1 capabilities. The v0.31.0 generation-12 preview remains
-supported by its installed tools. Enablement adoption and release 1 transitions set a sticky
-generation-13 client floor, including after application rollback. The application
-declarations and existing binding API remain compatible. Configuration templates
-and public listener bindings, added in v0.33.0, require generation 14 and set a
-sticky generation-14 client floor, including after rollback to a release without
-either capability. Unix listeners and endpoint bindings require generation 15 and
-set a sticky generation-15 floor. Upgrade both the host tools and deploy client
-before using them. Role loopback confinement and wildcard private listeners require
-generation 16 on both client and host, with the same sticky rollback/recovery floor.
+This guide describes topology schema 2 and profile schema 3. Topology schema 1
+remains supported for ordinary applications. Current tools are generation 19;
+hosts and deploy clients must both be generation 18 or later. Systemd enablement
+is authoritative; tools do not adopt enablement from older preview state.
+The application declarations and existing binding API remain compatible.
 Outbound PROXY protocol requires generation 18 on both client and host. Declaring
 it sets a sticky generation-18 floor, retained after rollback and recovery even
 when the selected release no longer declares it.
@@ -247,13 +240,11 @@ with dependent roles, and the plan reports the resulting selection.
 
 Every newly activated release retains its complete validated topology and profile
 under the release state owner, keyed by archive digest and topology digest.
-Rollback uses that target-owned record. For older releases, provide
-`ROLLBACK_TOPOLOGY_FILE=/path/to/topology.json` when planning rollback. The server
-requires its digest to match the target manifest's `topology_sha256`; it never
-uses the current topology as a substitute. If the original archive digest was
-never recorded, the imported declaration is explicitly keyed by retained manifest
-digest, without claiming an archive digest. Missing or mismatched declarations
-refuse before stopping services.
+Rollback requires that target-owned record and verifies its digests. A retained
+release without a persisted declaration refuses with `rollback_declaration_missing`:
+“Deploy a current release instead.” Neither caller-supplied topology nor the
+current release can reconstruct it. Missing or mismatched declarations refuse
+before stopping services.
 
 Application configuration changes use the application's `config:inspect` and
 `config:check`, including private file aliases, storage validation and Redis grant
@@ -827,6 +818,11 @@ configuration tree. The only entry fields are `files` and optional
 `source`, `mode`, `format`, `path`, and `bindings` cannot be combined with `files`.
 Per-file `path` and `directory_environment` are not accepted.
 
+Rendered files are re-serialized according to their declared format, so source
+formatting is not a preservation guarantee. In particular, `format: json` parses
+and re-serializes the whole document as compact JSON. Other rendered formats
+apply their own substitution and escaping rules.
+
 A tree contains 1 to 32 files. Each path has at most 8 components. Absolute paths,
 backslashes, empty components, `.` and `..` components, duplicate keys, and files
 that are parents of other files are refused. `directory_environment` requires at
@@ -1318,14 +1314,10 @@ role descriptor. Neither loader downloads artifacts nor replaces host verificati
 
 Use the application's pinned framework tool and the thin Make targets from the
 [deployment invocation guide](deployment.md#recipe-deploy). Feature topology
-requires generation 13 for release 1 operations and generation 14 for configuration
-templates or public listener bindings. Use a Foundry-Go pin containing the required
-tool generation. Use the host's existing profile
-to review and apply the forward-only tool upgrade. A deployed generation-12 preview
-keeps its schema-3 profile for `tools-plan`, `tools-apply` and `upgrade-resume`.
-For a legacy host, upgrade before adopting schema 3. Direct upgrades require at
-least generation 9; older hosts must reach that generation first. A fresh host gets
-the pinned tools during bootstrap.
+requires a generation-18 or later host and client; config trees require generation
+19. Use a Foundry-Go pin containing the required tool generation and the host's
+existing profile to review and apply the forward-only tool upgrade. A fresh host
+gets the pinned tools during bootstrap.
 
 ```sh
 ENVIRONMENT=production ACTION=tools-plan make deploy
@@ -1334,9 +1326,8 @@ ENVIRONMENT=production ACTION=tools-apply PLAN_TOKEN='<reviewed-token>' OPERATIO
 
 Keep the operation UUID for a tool-upgrade resume. Review the plan; the apply
 command asks for confirmation. Tool generation is independent of the framework's
-semantic version: verify the selected bundle reports at least generation 13, or
-generation 14 when using templates or public listener bindings, rather than
-assuming a version label establishes support.
+semantic version: verify that the selected bundle meets the required generation;
+a version label alone does not establish support.
 
 Before bootstrap, prepare the existing SSH, PostgreSQL/Redis and HTTP certificate
 inputs described in the deployment guide. Public TCP additionally needs an active,

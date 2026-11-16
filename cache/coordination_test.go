@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/lease/memory"
 	"github.com/weiloon1234/Foundry-Go/redis"
@@ -20,7 +21,7 @@ type unfencedTags struct {
 }
 
 func TestCoordinatedStoreValidatesAuthorityAndConstruction(t *testing.T) {
-	namespace := cache.Namespace{Application: "test", Environment: "coordination"}
+	namespace := keyspace.Namespace{Application: "test", Environment: "coordination"}
 	config := cache.DefaultConfig(namespace)
 	options := cache.DefaultCoordinationConfig()
 	if _, err := cache.NewCoordinatedStore(nil, config, options); !errors.Is(err, fault.Invalid) {

@@ -415,13 +415,8 @@ directories only when the marker has this current format and the lock is free,
 or when no marker exists. Unknown marker formats, unknown directory entries, or
 a capture that cannot be deleted refuse startup without admitting work.
 
-An empty v0.30.0 ownership marker has no kernel lock and cannot prove whether its
-owner is still alive. Claim refuses it with `fault.Conflict` and leaves the marker
-and all captures unchanged. For this one-time upgrade step, stop every v0.30.0
-server using the directory, then remove that directory's `.foundry-upload-owner`
-marker. The next startup writes the current format and reconciles the captures.
-Do not remove the marker before those servers have stopped. Current-format stale
-markers need no manual reconciliation.
+An empty marker is an unknown format and refuses startup with `fault.Invalid`,
+leaving the marker and captures unchanged.
 
 After requests drain and retained cleanup succeeds, close removes the marker and
 releases the lock. Never remove the marker of a live server. A second process or

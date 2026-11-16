@@ -8,9 +8,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
-var Greetings = cache.Define("profile.greetings", cache.StringKeys[string](), cache.JSON[string]())
+var Greetings = cache.Define("profile.greetings", keyspace.StringKeys[string](), cache.JSON[string]())
 
 // Routes captures a concrete typed cache. No settings decoding or service lookup
 // occurs while serving a request.

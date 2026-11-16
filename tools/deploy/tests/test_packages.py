@@ -165,6 +165,29 @@ class PackageTransactionTests(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
+    def test_supply_fields_are_required_only_while_installing(self):
+        packages.install_missing(self.host, ["new"])
+        original = packages._load(self.host)
+        fields = ("evidence", "activation_before", "activation_units", "cron_defaults")
+        for omitted in (fields, ("cron_defaults",)):
+            historical = {key: value for key, value in original.items() if key not in omitted}
+            if "evidence" in historical:
+                historical["supply_sha256"] = packages._digest({key: historical[key] for key in fields if key in historical})
+            packages._save(self.host, historical)
+            self.assertEqual(packages._load(self.host), historical)
+            packages.install_missing(self.host, [])
+
+        for missing in fields:
+            installing = {**original, "state": "installing"}
+            del installing[missing]
+            packages._save(self.host, installing)
+            before = packages._journal_path(self.host).read_bytes()
+            with self.subTest(missing=missing), self.assertRaises(DeployError) as caught:
+                packages.install_missing(self.host, [])
+            self.assertEqual(caught.exception.code, "package_journal")
+            self.assertIn("Installing package journals require", caught.exception.detail)
+            self.assertEqual(packages._journal_path(self.host).read_bytes(), before)
+
     def test_missing_install_is_pinned_guarded_and_restores_policy(self):
         packages.install_missing(self.host, ["new", "foreign"])
         command, kwargs = next((args, opts) for args, opts in self.host.commands if args[:2] == ["apt-get", "-y"])

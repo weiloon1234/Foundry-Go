@@ -845,9 +845,9 @@ def source_snapshot(project, profile, request, directory):
 
 def recover_build_containers(project):
     """Client death is not container exit. Refuse any surviving writer."""
-    # Check legacy names as well as both architectures before admitting a writer.
+    # Check both architectures before admitting a writer.
     names = [f"{PREFIX}-{kind}-{project['id']}{suffix}"
-             for suffix in ("", "-amd64", "-arm64") for kind in ("build", "cache-clean")]
+             for suffix in ("-amd64", "-arm64") for kind in ("build", "cache-clean")]
     for name in names:
         found = execute(["docker", "ps", "--all", "--filter", "name=^/" + name + "$", "--format", "{{.ID}}"], timeout=30).splitlines()
         if not found:
@@ -1396,10 +1396,8 @@ def deploy(project, profile, settings):
             arguments = {"target": target, "expected_current": expected}
             say(json.dumps(arguments, indent=2))
             operation = operation_id(profile, "rollback", arguments)
-            if "deployment_selection" in status.get("instance", {}) or os.environ.get("ROLLBACK_TOPOLOGY_FILE"):
+            if "deployment_selection" in status.get("instance", {}):
                 review_request = {**request, **arguments, "operation_id": operation}
-                if os.environ.get("ROLLBACK_TOPOLOGY_FILE"):
-                    review_request["topology"] = read_json(Path(os.environ["ROLLBACK_TOPOLOGY_FILE"]))
                 plan = ssh.request("release-plan", review_request)
                 display(plan)
                 arguments["plan_token"] = plan["plan_token"]

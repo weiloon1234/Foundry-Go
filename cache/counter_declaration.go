@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cacheint"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 // CounterDeclaration binds one concrete key type to exact signed int64 values.
@@ -11,7 +12,7 @@ import (
 type CounterDeclaration[K any] struct{ declaration Declaration[K, int64] }
 
 // DefineCounter creates a declaration with canonical signed decimal int64 values.
-func DefineCounter[K any](name Name, keys KeyCodec[K]) CounterDeclaration[K] {
+func DefineCounter[K any](name Name, keys keyspace.Codec[K]) CounterDeclaration[K] {
 	codec := NewCodec(func(value int64) ([]byte, error) { return cacheint.Encode(value), nil }, cacheint.Decode)
 	return CounterDeclaration[K]{declaration: Define(name, keys, codec)}
 }

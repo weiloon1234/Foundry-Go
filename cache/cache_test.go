@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
 
@@ -25,8 +26,8 @@ type profile struct {
 	Attributes map[string]any
 }
 
-var profiles = cache.Define("profiles", cache.StringKeys[userKey](), cache.JSON[profile]())
-var namespace = cache.Namespace{Application: "foundry-cache", Environment: "test"}
+var profiles = cache.Define("profiles", keyspace.StringKeys[userKey](), cache.JSON[profile]())
+var namespace = keyspace.Namespace{Application: "foundry-cache", Environment: "test"}
 
 func store(t *testing.T, configure func(*cache.Config)) (*cache.Store, *memory.Backend, *testkit.Clock) {
 	t.Helper()
@@ -91,7 +92,7 @@ func TestTypedSnapshotsMissZeroExpiryAndForget(t *testing.T) {
 	if removed, err := c.Forget(t.Context(), "42"); err != nil || removed {
 		t.Fatal("forget absent", removed, err)
 	}
-	pointers, err := cache.Define("pointers", cache.StringKeys[string](), cache.JSON[*profile]()).Bind(s)
+	pointers, err := cache.Define("pointers", keyspace.StringKeys[string](), cache.JSON[*profile]()).Bind(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,17 +112,17 @@ func TestDeclarationsAreValidatedBoundedAndNotInterchangeable(t *testing.T) {
 	if _, err := copy.Bind(s); err != nil {
 		t.Fatal("same declaration cannot rebind", err)
 	}
-	other := cache.Define("profiles", cache.StringKeys[userKey](), cache.JSON[int]())
+	other := cache.Define("profiles", keyspace.StringKeys[userKey](), cache.JSON[int]())
 	if _, err := other.Bind(s); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("conflicting payload bound", err)
 	}
-	if _, err := cache.Define("profiles", cache.StringKeys[userKey](), cache.JSON[profile]()).Bind(s); !errors.Is(err, fault.Duplicate) {
+	if _, err := cache.Define("profiles", keyspace.StringKeys[userKey](), cache.JSON[profile]()).Bind(s); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("separate codecs could share a family", err)
 	}
-	if _, err := cache.Define("another", cache.StringKeys[userKey](), cache.JSON[profile]()).Bind(s); !errors.Is(err, fault.Invalid) {
+	if _, err := cache.Define("another", keyspace.StringKeys[userKey](), cache.JSON[profile]()).Bind(s); !errors.Is(err, fault.Invalid) {
 		t.Fatal("declaration limit ignored", err)
 	}
-	for _, d := range []cache.Declaration[string, int]{{}, cache.Define("bad:name", cache.StringKeys[string](), cache.JSON[int]()), cache.Define("keys", cache.KeyCodec[string]{}, cache.JSON[int]()), cache.Define("values", cache.StringKeys[string](), cache.Codec[int]{})} {
+	for _, d := range []cache.Declaration[string, int]{{}, cache.Define("bad:name", keyspace.StringKeys[string](), cache.JSON[int]()), cache.Define("keys", keyspace.Codec[string]{}, cache.JSON[int]()), cache.Define("values", keyspace.StringKeys[string](), cache.Codec[int]{})} {
 		if _, err := d.Bind(s); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid declaration accepted", err)
 		}
@@ -179,7 +180,7 @@ func TestCodecFailureNeverPublishesOrWrites(t *testing.T) {
 					}
 					return cause
 				}
-				keys := cache.NewKeyCodec(func(k string) (string, error) {
+				keys := keyspace.NewCodec(func(k string) (string, error) {
 					if phase == "key" {
 						return k, fail()
 					}
@@ -227,7 +228,7 @@ func TestCodecFailureNeverPublishesOrWrites(t *testing.T) {
 }
 func TestOperationLimitsAndCancellationBeforePublication(t *testing.T) {
 	s, _, _ := store(t, func(c *cache.Config) { c.MaxKeyBytes = 3; c.MaxValueBytes = 3 })
-	c, err := cache.Define("small", cache.StringKeys[string](), cache.JSON[int]()).Bind(s)
+	c, err := cache.Define("small", keyspace.StringKeys[string](), cache.JSON[int]()).Bind(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +257,7 @@ func TestOperationLimitsAndCancellationBeforePublication(t *testing.T) {
 	}
 	ctx, cancelDecode := context.WithCancel(t.Context())
 	defer cancelDecode()
-	d := cache.Define("cancel-decode", cache.StringKeys[string](), cache.NewCodec(func(v int) ([]byte, error) { return []byte("1"), nil }, func([]byte) (int, error) { cancelDecode(); return 9, nil }))
+	d := cache.Define("cancel-decode", keyspace.StringKeys[string](), cache.NewCodec(func(v int) ([]byte, error) { return []byte("1"), nil }, func([]byte) (int, error) { cancelDecode(); return 9, nil }))
 	bound, err := d.Bind(s)
 	if err != nil {
 		t.Fatal(err)
@@ -290,7 +291,7 @@ func TestReadBoundsAndTimeoutReachBackend(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			c, err := cache.Define("read-limits", cache.StringKeys[string](), codec).Bind(s)
+			c, err := cache.Define("read-limits", keyspace.StringKeys[string](), codec).Bind(s)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -319,7 +320,7 @@ func TestJSONCorruptionAndCustomBufferOwnership(t *testing.T) {
 	}
 	s, _, _ := store(t, nil)
 	buffer := []byte("original")
-	c, err := cache.Define("buffers", cache.StringKeys[string](), cache.NewCodec(func([]byte) ([]byte, error) { return buffer, nil }, func(data []byte) ([]byte, error) { return data, nil })).Bind(s)
+	c, err := cache.Define("buffers", keyspace.StringKeys[string](), cache.NewCodec(func([]byte) ([]byte, error) { return buffer, nil }, func(data []byte) ([]byte, error) { return data, nil })).Bind(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,11 +343,11 @@ func TestNaturalIntegerKeysAndPureConstruction(t *testing.T) {
 	type SignedID int64
 	type UnsignedID uint64
 	s, _, _ := store(t, nil)
-	signed, err := cache.Define("signed", cache.SignedKeys[SignedID](), cache.JSON[string]()).Bind(s)
+	signed, err := cache.Define("signed", keyspace.SignedKeys[SignedID](), cache.JSON[string]()).Bind(s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	unsigned, err := cache.Define("unsigned", cache.UnsignedKeys[UnsignedID](), cache.JSON[string]()).Bind(s)
+	unsigned, err := cache.Define("unsigned", keyspace.UnsignedKeys[UnsignedID](), cache.JSON[string]()).Bind(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,14 +374,14 @@ func TestNaturalIntegerKeysAndPureConstruction(t *testing.T) {
 		}
 	}
 	calls := 0
-	declaration := cache.Define("pure", cache.NewKeyCodec(func(k string) (string, error) { calls++; return k, nil }), cache.NewCodec(func(v int) ([]byte, error) { calls++; return nil, nil }, func([]byte) (int, error) { calls++; return 0, nil }))
+	declaration := cache.Define("pure", keyspace.NewCodec(func(k string) (string, error) { calls++; return k, nil }), cache.NewCodec(func(v int) ([]byte, error) { calls++; return nil, nil }, func([]byte) (int, error) { calls++; return 0, nil }))
 	if _, err := declaration.Bind(s); err != nil || calls != 0 {
 		t.Fatal("construction ran codecs", calls, err)
 	}
 }
 func TestStoreConfigRejectsInvalidLimits(t *testing.T) {
 	_, backend, _ := store(t, nil)
-	for _, change := range []func(*cache.Config){func(c *cache.Config) { c.Namespace = cache.Namespace{} }, func(c *cache.Config) { c.MaxKeyBytes = 0 }, func(c *cache.Config) { c.MaxKeyBytes = cache.MaxKeyBytes + 1 }, func(c *cache.Config) { c.MaxValueBytes = 0 }, func(c *cache.Config) { c.MaxDeclarations = 0 }, func(c *cache.Config) { c.MaxBatchEntries = 0 }, func(c *cache.Config) { c.MaxBatchEntries = cache.MaxBatchEntries + 1 }, func(c *cache.Config) { c.MaxTags = 0 }, func(c *cache.Config) { c.MaxTags = cache.MaxTags + 1 }, func(c *cache.Config) { c.MaxFills = 0 }, func(c *cache.Config) { c.MaxFillWaiters = 0 }, func(c *cache.Config) { c.Timeout = 0 }} {
+	for _, change := range []func(*cache.Config){func(c *cache.Config) { c.Namespace = keyspace.Namespace{} }, func(c *cache.Config) { c.MaxKeyBytes = 0 }, func(c *cache.Config) { c.MaxKeyBytes = cache.MaxKeyBytes + 1 }, func(c *cache.Config) { c.MaxValueBytes = 0 }, func(c *cache.Config) { c.MaxDeclarations = 0 }, func(c *cache.Config) { c.MaxBatchEntries = 0 }, func(c *cache.Config) { c.MaxBatchEntries = cache.MaxBatchEntries + 1 }, func(c *cache.Config) { c.MaxTags = 0 }, func(c *cache.Config) { c.MaxTags = cache.MaxTags + 1 }, func(c *cache.Config) { c.MaxFills = 0 }, func(c *cache.Config) { c.MaxFillWaiters = 0 }, func(c *cache.Config) { c.Timeout = 0 }} {
 		config := cache.DefaultConfig(namespace)
 		change(&config)
 		if _, err := cache.NewStore(backend, config); !errors.Is(err, fault.Invalid) {

@@ -221,6 +221,11 @@ role on a stopped or degraded instance is still enabled and would start on reboo
 On a degraded instance, use `ACTION=stop ROLE=<role>` for that inactive role
 to preserve the roles that are running.
 
+Rollback requires the target release's persisted declaration. A retained release
+without it refuses with `rollback_declaration_missing` before stopping services;
+deploy a current release instead. Rollback cannot reconstruct a declaration from
+a supplied topology or the current release.
+
 Config changes, encryption key rotation, and rollback preserve enablement. They
 apply their change and restart only enabled roles, including during failure
 recovery. With no enabled roles, they start nothing and retain `stopped`. With
@@ -495,17 +500,18 @@ match both content and metadata.
 [`tools/deploy/protocol.json`](../../tools/deploy/protocol.json) owns the current protocol and tool generation. The stable
 launcher dispatches to the active immutable bundle. `hello` reports host metadata
 without a mutation. Requests include the client's protocol, framework version,
-generation, and bundle digest. The current tool generation is 12. The minimum
-client generation remains 1, so existing registrations and generation-9 clients
-remain supported for ordinary deployment actions. Generation-9 tools reject
-planning or applying an upgrade against a generation-11 host; they cannot bypass
-the retired-bundle ledger by selecting an older bundle.
+generation, and bundle digest. The current tool generation is 19. Hosts and clients
+must run generation 18 or later. Each mutation negotiates the actual client
+generation; an older bootstrap registration value does not block a current client.
+The retired-bundle ledger still prevents selecting an older retired bundle.
 
-Tool upgrades require an installed host generation of at least 9. `tools-plan` checks the installed host's generation through `hello` before
+Tool upgrades require an installed host generation of at least 18. `tools-plan` checks the installed host's generation through `hello` before
 staging anything. The candidate also enforces this floor before planning or
 installation. Older hosts receive `tools_upgrade_floor`: "The host must already
-run generation 9 tools before this upgrade." Temporary upgrade bridges are no
-longer shipped.
+run generation 18 tools before this upgrade." The generation-16 runtime bridge has
+been removed. Installed runtime bytes must match the selected bundle exactly.
+Generation 18 to 19 upgrades and same-generation bundle updates remain supported.
+Every bundle change still re-pins the boot coordinator through the upgrade journal.
 
 Before the next deploy or maintenance action, upgrade a supported older host
 to the current generation through `tools-plan` and `tools-apply`:
@@ -1332,7 +1338,7 @@ runner cleanup still removes disposable containers, volumes, and private materia
 The runner accepts an application release archive and the integrated framework
 root, with Ubuntu 24.04 or 26.04, arm64 or amd64, and `--foreign` or `--fresh`.
 The dedicated `tests/fixtures/deploy-acceptance` app supplies all existing phases
-and the opt-in generation-9 baseline upgrade phase. From the framework checkout, build one Linux
+and the opt-in v0.38.3 / generation-18 baseline upgrade phase. From the framework checkout, build one Linux
 archive through the normal deploy builder and run both arm64 cells:
 
 ```sh
@@ -1359,7 +1365,7 @@ for the packaging and workspace details.
 
 For `foreign-upgrade`, the CI entry point resolves the single `baseline_version`
 variable in `tools/deploy/tests/run_ci_acceptance.sh` independently of the candidate
-fixture. It supplies the published generation-9 tools through `--tools-root`.
+fixture. It supplies the published v0.38.3 / generation-18 tools through `--tools-root`.
 The same candidate application archive serves both sets of tools.
 The runner mounts that bundle read-only. It bootstraps and deploys with those tools,
 then upgrades through the candidate's `tools-plan` and `tools-apply` and deploys
@@ -1764,9 +1770,9 @@ Verify cleanup accounting, bounded proxy occupancy, and continued small JSON,
 small multipart, and small attachment publication. Unit rendering and filesystem
 fixtures do not establish those host or provider results.
 
-Run generation-11 `tools-plan`, review its changes, then run `tools-apply` before
+Run current `tools-plan`, review its changes, then run `tools-apply` before
 deploying a release that uses this upload profile. An application-only deploy does
-not upgrade the host tooling. Hosts below generation 9 must first reach the
+not upgrade the host tooling. Hosts below generation 18 must first reach the
 supported upgrade floor. Preserve the ordinary deploy and readiness steps after
 the tools upgrade.
 

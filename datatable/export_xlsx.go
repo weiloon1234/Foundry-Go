@@ -179,7 +179,6 @@ func abortXLSX(w *xlsxReport) {
 		_ = w.archive.Close()
 	}
 }
-func xlsxColumn(n int) string { return string(spreadsheet.AppendColumn(nil, n)) }
 func boolIndex(v bool) int {
 	if v {
 		return 1

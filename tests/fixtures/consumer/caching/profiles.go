@@ -7,6 +7,7 @@ import (
 
 	"foundry.test/consumer/mutatorqueries"
 	"github.com/weiloon1234/Foundry-Go/cache"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -19,7 +20,7 @@ type Profile struct {
 type Profiles = cache.Cache[model.ID[mutatorqueries.Member], Profile]
 
 // ProfileEntries is declared once; repeated bindings reuse its identity.
-var ProfileEntries = cache.Define("member-profiles-v1", cache.TextKeys[model.ID[mutatorqueries.Member]](), cache.JSON[Profile]())
+var ProfileEntries = cache.Define("member-profiles-v1", keyspace.TextKeys[model.ID[mutatorqueries.Member]](), cache.JSON[Profile]())
 
 func Bind(store *cache.Store) (Profiles, error) { return ProfileEntries.Bind(store) }
 

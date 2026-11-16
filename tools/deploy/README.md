@@ -13,20 +13,21 @@ confirmation rules, host prerequisites, and recovery procedures.
 | `lib/backup.py` | PostgreSQL and encrypted key/config backups |
 | `protocol.json` | Wire protocol and tool generation |
 
-The bundle uses protocol 2.0 and generation 18. Tool upgrades require an installed
-host generation of at least 9. The local command checks the installed host's
-`hello` response before staging any bundle; the candidate checks again before
-planning or installation. Older hosts receive `tools_upgrade_floor`: the host
-must already run generation 9 tools before this upgrade. The minimum client
-generation remains 1, preserving existing registrations. Generation-9 clients can
-still deploy ordinary application releases to generation-11 hosts. Older generation-9
-tools reject plans and applies against these hosts, preventing them from bypassing
-the retired-bundle ledger.
+The bundle uses protocol 2.0 and generation 19. Hosts and clients must run generation
+18 or later. The local command checks the installed host's `hello` response before
+staging any bundle; the candidate checks again before planning or installation.
+Older hosts receive `tools_upgrade_floor`: the host must already run generation 18
+tools before this upgrade. Each mutation checks its caller's client generation.
+The historical bootstrap registration value does not constrain current clients.
+
+The generation-16 runtime bridge has been removed. Installed runtime bytes must
+match the selected bundle exactly. Generation 18 to 19 upgrades and same-generation
+bundle updates retain the journaled boot-coordinator re-pin and generation-19 gates.
 
 The bundle rejects deployment attempts containing `result` metadata and backup
 receipts without `fresh_at` or journals without `configuration_revision`.
 Configuration failures continue to use `outcome: failed_applied`. The release
-archive format and protocol 2.0 are unchanged, so the published generation-9
+archive format and protocol 2.0 are unchanged, so the published v0.38.3 / generation-18
 baseline can activate the candidate archive during foreign-upgrade acceptance.
 
 Use `tools-plan`, confirmed `tools-apply`, then an ordinary deploy. Ready instances
@@ -35,7 +36,7 @@ and roles are not restarted by the tool upgrade.
 
 Artifact views render each bind endpoint separately as `BindReadOnlyPaths="SRC":"DST"`.
 The same upgrade path rewrites existing artifact-view units with this quoting fix;
-protocol 2.0 and generation 18 are unchanged. Configuration digests and immutable
+protocol 2.0 is unchanged. Configuration digests and immutable
 launch records describe the declarations and views, not rendered unit text, so the
 quoting change does not invalidate them. The corrected binds take effect on the
 next service start.
@@ -169,7 +170,7 @@ tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
   --archive "$archive" --framework-root "$framework" --fresh
 ```
 
-The opt-in `--upgrade` phase tests the published generation-9 baseline selected by
+The opt-in `--upgrade` phase tests the published v0.38.3 / generation-18 baseline selected by
 `baseline_version` in `tests/run_ci_acceptance.sh`, independently of the fixture's
 candidate framework. The CI entry point above resolves that tag and passes its
 unmodified module-cache tools through `--tools-root`. The same candidate application
@@ -210,8 +211,8 @@ network owners without changing app declarations.
 The preview uses the frozen topology-2, profile-3 and archive-2 contracts. Single
 instance custom services receive typed argv, hardened units, local probes,
 per-start configuration and protected bundle views. Wrappers, counts above one
-and ordinals other than one remain release-2 capability refusals. Legacy apps and
-generation 9, 10 and 11 hosts retain their existing paths.
+and ordinals other than one remain release-2 capability refusals. Topology-schema-1
+applications retain their existing paths on supported hosts.
 
 `feature_lifecycle.py` owns provision/deploy/restart/stop orchestration. Provision
 passes declared package requirements to lane B's reviewed transaction. Deploy

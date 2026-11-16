@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 )
 
@@ -19,7 +20,7 @@ const current recordKey = "current"
 // Name is the cache family owning the shared maintenance record.
 const Name cache.Name = "foundry.maintenance"
 
-var declaration = cache.Define(Name, cache.StringKeys[recordKey](), cache.JSON[maintenance.State]())
+var declaration = cache.Define(Name, keyspace.StringKeys[recordKey](), cache.JSON[maintenance.State]())
 
 // Store borrows a cache store; its owner must outlive every Load and Save.
 // The record is persistent (no TTL). Choose a store whose backend does not

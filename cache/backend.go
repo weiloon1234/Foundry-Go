@@ -1,6 +1,9 @@
 package cache
 
-import "context"
+import (
+	"context"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
+)
 
 // Backend is the serialized cache adapter boundary, not an application value API.
 // Implementations must be concurrency-safe, observe cancellation, copy retained
@@ -28,5 +31,5 @@ type Backend interface {
 // the number of removed entries; a remote error may hide a partial removal.
 type FlushBackend interface {
 	// FlushNamespace removes entries in the namespace and returns the removal count.
-	FlushNamespace(context.Context, Namespace) (uint64, error)
+	FlushNamespace(context.Context, keyspace.Namespace) (uint64, error)
 }

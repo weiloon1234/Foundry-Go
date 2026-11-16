@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cachetest"
 	"github.com/weiloon1234/Foundry-Go/internal/filelock"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 	"os"
 	"os/exec"
@@ -19,7 +20,7 @@ import (
 
 func key(t *testing.T, text string) cache.EntryKey {
 	t.Helper()
-	k, err := cache.NewEntryKey(cache.Namespace{Application: "file-contract", Environment: "test"}, "values", text)
+	k, err := cache.NewEntryKey(keyspace.Namespace{Application: "file-contract", Environment: "test"}, "values", text)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +264,7 @@ func TestPersistentContract(t *testing.T) {
 				return open(t, c)
 			},
 			Clock: source,
-			Key: func(namespace cache.Namespace, logical string) cache.EntryKey {
+			Key: func(namespace keyspace.Namespace, logical string) cache.EntryKey {
 				k, err := cache.NewEntryKey(namespace, "values", logical)
 				if err != nil {
 					t.Fatal(err)

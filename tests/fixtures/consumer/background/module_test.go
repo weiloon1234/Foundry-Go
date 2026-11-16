@@ -31,7 +31,7 @@ func TestWorkerKernelRunsConsumerHandlerWithTypedService(t *testing.T) {
 	}
 	defer backend.Close()
 	sender := welcomeSender{calls: make(chan model.ID[models.User], 1)}
-	app, err := foundry.New().Register(background.WorkerModule(sender, backend, keyspace.Namespace{Application: "consumer", Environment: "test"})).Build(t.Context())
+	app, err := foundry.New().Register(background.Modules(sender, backend, keyspace.Namespace{Application: "consumer", Environment: "test"})...).Build(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

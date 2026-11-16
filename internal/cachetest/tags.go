@@ -13,6 +13,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 type TaggedBackend interface {
@@ -54,7 +55,7 @@ func RunTagged(t *testing.T, setup func(*testing.T) TaggedFixture) {
 		b := f.Backend
 		keys := []cache.EntryKey{f.Key("a"), f.Key("b")}
 		slices.SortFunc(keys, func(a, b cache.EntryKey) int { return strings.Compare(a.String(), b.String()) })
-		foreign, err := cache.NewEntryKey(cache.Namespace{Application: "other", Environment: "test"}, "tags", "foreign")
+		foreign, err := cache.NewEntryKey(keyspace.Namespace{Application: "other", Environment: "test"}, "tags", "foreign")
 		if err != nil {
 			t.Fatal(err)
 		}

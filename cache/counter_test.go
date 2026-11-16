@@ -12,9 +12,10 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
-var counters = cache.DefineCounter("attempts", cache.StringKeys[userKey]())
+var counters = cache.DefineCounter("attempts", keyspace.StringKeys[userKey]())
 
 func boundCounters(t *testing.T, s *cache.Store) cache.Counter[userKey] {
 	t.Helper()
@@ -149,13 +150,13 @@ func TestCounterDeclarationsShareOwnershipAndRejectUnsupportedBackends(t *testin
 	if _, err := copy.Bind(s); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cache.DefineCounter("attempts", cache.StringKeys[userKey]()).Bind(s); !errors.Is(err, fault.Duplicate) {
+	if _, err := cache.DefineCounter("attempts", keyspace.StringKeys[userKey]()).Bind(s); !errors.Is(err, fault.Duplicate) {
 		t.Fatal(err)
 	}
-	if _, err := cache.Define("attempts", cache.StringKeys[userKey](), cache.JSON[int64]()).Bind(s); !errors.Is(err, fault.Duplicate) {
+	if _, err := cache.Define("attempts", keyspace.StringKeys[userKey](), cache.JSON[int64]()).Bind(s); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("ordinary cache reused counter identity", err)
 	}
-	if _, err := cache.DefineCounter("other", cache.StringKeys[userKey]()).Bind(s); !errors.Is(err, fault.Invalid) {
+	if _, err := cache.DefineCounter("other", keyspace.StringKeys[userKey]()).Bind(s); !errors.Is(err, fault.Invalid) {
 		t.Fatal("declaration bound ignored", err)
 	}
 	var zero cache.CounterDeclaration[userKey]
@@ -168,10 +169,10 @@ func TestCounterDeclarationsShareOwnershipAndRejectUnsupportedBackends(t *testin
 	if _, err := counters.Bind(nil); err == nil {
 		t.Fatal("nil store accepted")
 	}
-	if _, err := cache.DefineCounter("invalid:name", cache.StringKeys[userKey]()).Bind(s); err == nil {
+	if _, err := cache.DefineCounter("invalid:name", keyspace.StringKeys[userKey]()).Bind(s); err == nil {
 		t.Fatal("invalid family accepted")
 	}
-	if _, err := cache.DefineCounter("valid", cache.KeyCodec[userKey]{}).Bind(s); err == nil {
+	if _, err := cache.DefineCounter("valid", keyspace.Codec[userKey]{}).Bind(s); err == nil {
 		t.Fatal("invalid codec accepted")
 	}
 
@@ -184,7 +185,7 @@ func TestCounterDeclarationsShareOwnershipAndRejectUnsupportedBackends(t *testin
 	if _, err := counters.Bind(unsupported); !errors.Is(err, fault.Invalid) {
 		t.Fatal("unsupported counter bound", err)
 	}
-	if _, err := cache.Define("attempts", cache.StringKeys[userKey](), cache.JSON[int64]()).Bind(unsupported); err != nil {
+	if _, err := cache.Define("attempts", keyspace.StringKeys[userKey](), cache.JSON[int64]()).Bind(unsupported); err != nil {
 		t.Fatal("failed bind claimed a family", err)
 	}
 	small, _, _ := store(t, func(c *cache.Config) { c.MaxValueBytes = 19 })

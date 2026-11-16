@@ -6,12 +6,13 @@ import (
 
 	"foundry.test/consumer/mutatorqueries"
 	"github.com/weiloon1234/Foundry-Go/cache"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 // ProfileViews is an evictable, approximate activity count, not durable accounting.
 // The first update sets a one-day TTL; later updates preserve the same expiry.
-var ProfileViews = cache.DefineCounter("profile-views-v1", cache.TextKeys[model.ID[mutatorqueries.Member]]())
+var ProfileViews = cache.DefineCounter("profile-views-v1", keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
 
 type ViewCounts = cache.Counter[model.ID[mutatorqueries.Member]]
 

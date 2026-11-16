@@ -11,12 +11,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
 
 func key(t *testing.T, logical string) cache.EntryKey {
 	t.Helper()
-	k, err := cache.NewEntryKey(cache.Namespace{Application: "memory", Environment: "test"}, "values", logical)
+	k, err := cache.NewEntryKey(keyspace.Namespace{Application: "memory", Environment: "test"}, "values", logical)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +168,7 @@ func TestByteBudgetAndRejectedReplacementRetainExistingValue(t *testing.T) {
 func TestNamespaceIsolationCancellationAndClose(t *testing.T) {
 	b, _ := backend(t, memory.DefaultConfig())
 	a := key(t, "one")
-	other, err := cache.NewEntryKey(cache.Namespace{Application: "other", Environment: "test"}, "values", "one")
+	other, err := cache.NewEntryKey(keyspace.Namespace{Application: "other", Environment: "test"}, "values", "one")
 	if err != nil {
 		t.Fatal(err)
 	}

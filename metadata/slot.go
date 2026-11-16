@@ -81,9 +81,6 @@ func defineValue[M any, K comparable, V any](owner extensions.Owner[M, K], name 
 	return valueSlot[M, K, V]{key: Define(owner, name, spec.Version, spec.JSON), binding: binding, err: err}.from(nil)
 }
 
-// keyDeclaration returns the underlying declaration for the explicit metadata API.
-func (s valueSlot[M, K, V]) keyDeclaration() Key[M, K, V] { return s.key }
-
 // name is the stored key name.
 func (s valueSlot[M, K, V]) name() Name { return s.key.Name() }
 

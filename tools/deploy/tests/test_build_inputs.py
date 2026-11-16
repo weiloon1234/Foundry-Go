@@ -178,7 +178,7 @@ class BuildInputTests(unittest.TestCase):
         self.assertEqual(record["builder_architecture"], "amd64")
         self.assertFalse(any(args[1:3] == ["buildx", "create"] or "--mount" in args for args in calls))
 
-    def test_orphan_checks_cover_legacy_and_both_architectures(self):
+    def test_orphan_builders_and_architecture_qualified_containers(self):
         project, _ = fixture()
         for suffix in ("", "-arm64", "-amd64"):
             with self.subTest(suffix=suffix), patch.object(cli, "execute", return_value="foundry-" + project["id"] + suffix + " *\n"), \
@@ -188,7 +188,7 @@ class BuildInputTests(unittest.TestCase):
             cli.recover_build_containers(project)
         names = {call.args[0][call.args[0].index("--filter") + 1] for call in execute.call_args_list}
         self.assertEqual(names, {"name=^/foundry-" + kind + "-" + project["id"] + suffix + "$"
-                                for kind in ("build", "cache-clean") for suffix in ("", "-amd64", "-arm64")})
+                                for kind in ("build", "cache-clean") for suffix in ("-amd64", "-arm64")})
 
     def test_epoch_uses_snapshot_commit_for_clean_and_dirty_builds(self):
         _, profile = fixture()

@@ -220,14 +220,12 @@ it. A crash releases the writer lock, but its abandoned entry keeps its byte
 reservation until `Prune` removes it under the existing age, identity and lock
 checks. Failed cleanup likewise stays charged. Admission scans only the staging
 directory in fixed-size batches; published-object listing, walking and `MaxScan`
-exclude that directory. Startup recovery moves abandoned staging from older
-object-shard locations into it before admitting writes, independently of the
-listing ceiling. A durable completion marker makes later starts scan only the
-staging directory. Legacy enumeration uses a separate migration lock; it does not
-hold the admission lock across published-object scans. Migration and its marker
-are synced even when ordinary object writes disable `Sync`. Drain writers using
-the old layout before migration. `Prune` also checks those legacy locations under its
-existing scan bound. Keep each disk's `MaxActive` greater than the root's staging slot cap.
+exclude that directory. Startup accounting and `Prune` scan only this dedicated
+staging directory, independently of the published-object listing ceiling. With
+staging limits disabled, writes still use this directory but omit the reservation
+suffix from their filenames. If limits are later enabled, abandoned unreserved
+files count at their actual size; live unreserved writers charge at least the full `MaxBytes` budget.
+Keep each disk's `MaxActive` greater than the root's staging slot cap.
 Zero staging limits preserve existing behavior. Named disks expose the same
 policy as `infrastructure.LocalDiskSettings.Staging`.
 

@@ -120,6 +120,10 @@ def legacy_profile(profile):
     return {**{key: value for key, value in profile.items() if key not in ("placement", "listeners", "schema")}, "schema": PROFILE_SCHEMA}
 
 
+def declaration_index(host, entry, manifest):
+    return host.paths.instance_state(entry["name"]) / "release-declarations" / "releases" / (manifest["version"] + ".json")
+
+
 def persist_declaration(host, entry, manifest, topology, profile, archive_sha256=None):
     """The release owner keeps declarations independently of mutable registration."""
     from admission import protected_directory, read_owned
@@ -141,7 +145,7 @@ def persist_declaration(host, entry, manifest, topology, profile, archive_sha256
         require(read_owned(host, path, lambda v: v) == value, "release_conflict", "Persisted release declaration differs.")
     else:
         atomic_json(path, value, mode=0o600)
-    index = root / "releases" / (manifest["version"] + ".json")
+    index = declaration_index(host, entry, manifest)
     protected_directory(host, index.parent, 0o700)
     if index.exists():
         previous = read_owned(host, index, lambda v: v)
@@ -155,32 +159,24 @@ def persist_declaration(host, entry, manifest, topology, profile, archive_sha256
     return value
 
 
-def target_declaration(host, entry, manifest, supplied=None):
-    """Resolve retained targets from their own declarations, never the current topology."""
+def target_declaration(host, entry, manifest):
+    """Resolve retained targets only from their persisted declarations."""
     from admission import read_owned
     from contracts import canonical_digest, contract_digest
-    from topology import parse_topology
     root = host.paths.instance_state(entry["name"]) / "release-declarations"
-    index = root / "releases" / (manifest["version"] + ".json")
-    if index.exists():
-        record = read_owned(host, index, lambda v: v)
-        checksum = record["archive_key"]
-        contract_digest(checksum.removeprefix("manifest-"))
-        topology_digest = contract_digest(record["topology_sha256"])
-        value = read_owned(host, root / checksum / (topology_digest + ".json"), lambda v: v)
-        require(value["manifest_sha256"] == record["manifest_sha256"] == canonical_digest(manifest)
-                and value["topology_sha256"] == manifest.get("topology_sha256", value["topology_sha256"]),
-                "release_conflict", "Target declaration differs from its retained manifest.")
-        if supplied is not None:
-            require(parse_topology(supplied, registered="sha256" in supplied).projection() == value["topology"],
-                    "release_topology", "Supplied declaration differs from the target's persisted declaration.")
-        return value
-    if manifest["schema"] == 2:
-        declaration = manifest["deployment"]
-        return persist_declaration(host, entry, manifest, declaration["topology"], declaration["profile"])
-    require(supplied is not None, "rollback_topology_required",
-            "This older release has no persisted topology. Supply its topology to release-plan; its digest must match the target's topology_sha256.")
-    return persist_declaration(host, entry, manifest, supplied, legacy_profile(entry["profile"]))
+    index = declaration_index(host, entry, manifest)
+    require(index.exists(), "rollback_declaration_missing",
+            "This retained release has no persisted declaration and cannot be rolled back to. Deploy a current release instead.")
+    record = read_owned(host, index, lambda v: v)
+    checksum = record["archive_key"]
+    contract_digest(checksum.removeprefix("manifest-"))
+    topology_digest = contract_digest(record["topology_sha256"])
+    value = read_owned(host, root / checksum / (topology_digest + ".json"), lambda v: v)
+    require(value["manifest_sha256"] == record["manifest_sha256"] == canonical_digest(manifest)
+            and value["topology_sha256"] == manifest.get("topology_sha256", value["topology_sha256"]),
+            "release_conflict", "Target declaration differs from its retained manifest.")
+    return value
+
 
 def safe_member(name):
     path = PurePosixPath(name)
@@ -1227,7 +1223,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
 
 
 
-def legacy_rollback_plan(host, project, profile, target, expected_current, operation_id, supplied=None):
+def legacy_rollback_plan(host, project, profile, target, expected_current, operation_id):
     from contracts import atomic_json, canonical_digest, contract_uuid
     from admission import protected_directory
     contract_uuid(operation_id)
@@ -1239,16 +1235,12 @@ def legacy_rollback_plan(host, project, profile, target, expected_current, opera
             saved = read_owned(host, path, lambda value: value)
             require(saved["target"] == target and saved["expected_current"] == expected_current,
                     "operation_conflict", "Rollback review identity changed.")
-            if supplied is not None:
-                from topology import parse_topology
-                require(parse_topology(supplied).sha256 == saved["topology_sha256"],
-                        "release_topology", "Supplied topology differs from the reviewed target.")
             return saved
         require_idle(host.load_state(entry))
         require(current_version(host, entry) == expected_current, "stale_current", "Refresh the current release before reviewing rollback.")
         manifest = read_json(release_path(host, entry, target) / "manifest.json")
         verified_release(host, entry, manifest)
-        declaration = target_declaration(host, entry, manifest, supplied)
+        declaration = target_declaration(host, entry, manifest)
         require(declaration["topology"] == {key: value for key, value in entry["topology"].items() if key != "sha256"},
                 "release_topology", "Legacy operation shape cannot change topology; use a capable feature transition.")
         value = {"ok": True, "operation_id": operation_id, "target": target, "expected_current": expected_current,

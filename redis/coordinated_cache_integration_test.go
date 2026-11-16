@@ -13,11 +13,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cachetest"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
-var coordinatedValues = cache.Define("coordinated-values", cache.StringKeys[string](), cache.JSON[string]())
-var coordinatedTags = cache.DefineTag("coordinated-tags", cache.StringKeys[string]())
+var coordinatedValues = cache.Define("coordinated-values", keyspace.StringKeys[string](), cache.JSON[string]())
+var coordinatedTags = cache.DefineTag("coordinated-tags", keyspace.StringKeys[string]())
 
 type observedPublisher struct {
 	*Client

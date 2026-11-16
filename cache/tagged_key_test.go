@@ -6,9 +6,10 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
-func snapshotKey(t *testing.T, n cache.Namespace, name cache.Name, key string) cache.EntryKey {
+func snapshotKey(t *testing.T, n keyspace.Namespace, name cache.Name, key string) cache.EntryKey {
 	t.Helper()
 	v, err := cache.NewEntryKey(n, name, key)
 	if err != nil {
@@ -61,7 +62,7 @@ func TestTaggedSnapshotIsCanonicalOwnedAndVersionSensitive(t *testing.T) {
 	if _, err := cache.NewTaggedKey(base, []cache.TagStamp{{Key: a, Version: va}, {Key: a, Version: vb}}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("conflicting duplicate accepted", err)
 	}
-	other := snapshotKey(t, cache.Namespace{Application: "other", Environment: "test"}, "teams", "a")
+	other := snapshotKey(t, keyspace.Namespace{Application: "other", Environment: "test"}, "teams", "a")
 	for _, input := range [][]cache.TagStamp{nil, {{Key: a}}, {{Key: other, Version: va}}, make([]cache.TagStamp, cache.MaxTags+1)} {
 		if _, err := cache.NewTaggedKey(base, input); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)

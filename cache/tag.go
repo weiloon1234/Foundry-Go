@@ -1,13 +1,16 @@
 package cache
 
-import "context"
+import (
+	"context"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
+)
 
 // TagDeclaration owns a tag family's concrete key type. It shares declaration
 // ownership and limits with value/counter families within the same Store.
 type TagDeclaration[K any] struct{ declaration Declaration[K, TagVersion] }
 
 // DefineTag creates a typed tag declaration using opaque tag versions.
-func DefineTag[K any](name Name, keys KeyCodec[K]) TagDeclaration[K] {
+func DefineTag[K any](name Name, keys keyspace.Codec[K]) TagDeclaration[K] {
 	codec := NewCodec(func(v TagVersion) ([]byte, error) {
 		if err := v.Validate(); err != nil {
 			return nil, err

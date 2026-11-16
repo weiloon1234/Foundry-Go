@@ -333,11 +333,6 @@ func (p *packageInput) diagnostic(pos token.Pos, message string) error {
 	return fmt.Errorf("%s: %s", p.fset.Position(pos), message)
 }
 
-// diagnosticAt reports at an already-resolved field position.
-func (p *packageInput) diagnosticAt(position token.Position, message string) error {
-	return fmt.Errorf("%s: %s", position, message)
-}
-
 // Reject malformed/duplicate tags instead of letting reflect.StructTag.Lookup
 // silently hide a misspelled persistence declaration.
 func parseTags(text string) (map[string]string, error) { return modelmeta.ParseTags(text) }

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/cache"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 func TestEntryKeysAreScopedValidatedAndDoNotExposeLogicalKeys(t *testing.T) {
@@ -13,7 +14,7 @@ func TestEntryKeysAreScopedValidatedAndDoNotExposeLogicalKeys(t *testing.T) {
 		for _, env := range []string{"test", "prod"} {
 			for _, name := range []cache.Name{"profiles", "sessions"} {
 				for _, logical := range []string{"private@example.com", "another@example.com"} {
-					key, err := cache.NewEntryKey(cache.Namespace{Application: app, Environment: env}, name, logical)
+					key, err := cache.NewEntryKey(keyspace.Namespace{Application: app, Environment: env}, name, logical)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -33,7 +34,7 @@ func TestEntryKeysAreScopedValidatedAndDoNotExposeLogicalKeys(t *testing.T) {
 			t.Fatal("invalid key accepted")
 		}
 	}
-	for _, ns := range []cache.Namespace{{}, {Application: "app:other", Environment: "test"}, {Application: "app", Environment: "test{slot}"}} {
+	for _, ns := range []keyspace.Namespace{{}, {Application: "app:other", Environment: "test"}, {Application: "app", Environment: "test{slot}"}} {
 		if _, err := cache.NewEntryKey(ns, "profiles", "key"); err == nil {
 			t.Fatal("invalid namespace accepted")
 		}

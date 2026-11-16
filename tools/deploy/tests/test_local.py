@@ -106,22 +106,22 @@ class LocalDeploymentTests(unittest.TestCase):
         project, profile = fixture()
         for action in ('tools-plan', 'tools-apply', 'upgrade-resume'):
             remote = MagicMock()
-            remote.request.return_value = {'tools': {'generation': 8}, 'client_generation': {'maximum': 8}}
+            remote.request.return_value = {'tools': {'generation': 17}, 'client_generation': {'maximum': 17}}
             with patch.dict(os.environ, {'ACTION': action}, clear=True), \
                     patch.object(cli, 'SSH', return_value=remote):
-                with self.assertRaisesRegex(cli.LocalError, 'tools_upgrade_floor:.*must already run generation 9 tools'):
+                with self.assertRaisesRegex(cli.LocalError, 'tools_upgrade_floor:.*must already run generation 18 tools'):
                     cli.deploy(project, profile, {})
             remote.request.assert_called_once_with('hello', {'project': project, 'profile': profile})
             remote.staged_tools.assert_not_called()
 
-    def test_tool_plan_stages_after_installed_generation_nine_is_observed(self):
+    def test_tool_plan_stages_after_installed_generation_eighteen_is_observed(self):
         project, profile = fixture()
         remote = MagicMock()
         remote.staged_tools.return_value.__enter__.return_value = '/candidate'
         def request(action, payload, tools=None):
             if action == 'hello':
                 remote.staged_tools.assert_not_called()
-                return {'tools': {'generation': 9}}
+                return {'tools': {'generation': 18}}
             self.assertEqual('tools-plan', action)
             self.assertEqual('/candidate', tools)
             return {'plan_token': 'reviewed'}
@@ -1402,7 +1402,7 @@ class LocalDeploymentTests(unittest.TestCase):
     def test_orphan_writer_requires_matching_record_and_exit_before_removal(self):
         project, _ = fixture()
         operation = str(uuid.uuid4())
-        name = "foundry-build-" + project["id"]
+        name = "foundry-build-" + project["id"] + "-amd64"
         record = {"project_id": project["id"], "operation_id": operation, "containers": [name]}
         path = self.root / ".deploy" / "builds" / (operation + ".json")
         cli.atomic_json(path, record, mode=0o600)
@@ -1431,6 +1431,9 @@ class LocalDeploymentTests(unittest.TestCase):
                 else:
                     cli.recover_build_containers(project)
                     self.assertIn(["docker", "rm", "container-id"], calls)
+                    filters = [args[4] for args in calls if args[1] == "ps"]
+                    self.assertEqual(set(filters), {"name=^/foundry-" + kind + "-" + project["id"] + "-" + arch + "$"
+                                     for kind in ("build", "cache-clean") for arch in ("amd64", "arm64")})
 
     def test_rollback_resume_keeps_original_target_and_expectation(self):
         project, profile = fixture()

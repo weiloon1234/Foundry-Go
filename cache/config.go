@@ -5,12 +5,13 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 // Config bounds one application's typed cache access. Namespace is mandatory.
 // MaxValueBytes bounds encoded data; custom codecs may allocate before that check.
 type Config struct {
-	Namespace       Namespace
+	Namespace       keyspace.Namespace
 	MaxKeyBytes     int
 	MaxValueBytes   int
 	MaxDeclarations int
@@ -32,7 +33,7 @@ type Config struct {
 const MaxLoadTimeout = 24 * time.Hour
 
 // DefaultConfig returns bounded cache defaults for the supplied namespace.
-func DefaultConfig(namespace Namespace) Config {
+func DefaultConfig(namespace keyspace.Namespace) Config {
 	return Config{Namespace: namespace, MaxKeyBytes: 1024, MaxValueBytes: 1 << 20, MaxDeclarations: 256, MaxTags: 16, MaxBatchEntries: 64, MaxFills: 128, MaxFillWaiters: 256, Timeout: 5 * time.Second, LoadTimeout: 30 * time.Second}
 }
 

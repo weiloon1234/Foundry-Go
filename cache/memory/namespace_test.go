@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
 	"github.com/weiloon1234/Foundry-Go/internal/cachetest"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
 
@@ -18,7 +19,7 @@ func TestMemoryNamespaceContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { backend.Close(context.Background()) })
-		return cachetest.NamespaceFixture{Backend: backend, Namespace: cache.Namespace{Application: "namespace-test", Environment: "memory"}, Track: func(cache.EntryKey) {}}
+		return cachetest.NamespaceFixture{Backend: backend, Namespace: keyspace.Namespace{Application: "namespace-test", Environment: "memory"}, Track: func(cache.EntryKey) {}}
 	})
 }
 func TestNamespaceForeverMemoryRemainsBounded(t *testing.T) {
@@ -27,11 +28,11 @@ func TestNamespaceForeverMemoryRemainsBounded(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { backend.Close(context.Background()) })
-	store, err := cache.NewStore(backend, cache.DefaultConfig(cache.Namespace{Application: "forever", Environment: "test"}))
+	store, err := cache.NewStore(backend, cache.DefaultConfig(keyspace.Namespace{Application: "forever", Environment: "test"}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	handle, err := cache.Define("values", cache.StringKeys[string](), cache.JSON[string]()).Bind(store)
+	handle, err := cache.Define("values", keyspace.StringKeys[string](), cache.JSON[string]()).Bind(store)
 	if err != nil {
 		t.Fatal(err)
 	}

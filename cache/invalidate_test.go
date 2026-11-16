@@ -13,6 +13,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 func TestNamespaceInvalidationKeepsFullApplicationTagBudget(t *testing.T) {
@@ -21,7 +22,7 @@ func TestNamespaceInvalidationKeepsFullApplicationTagBudget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	declarations := cache.DefineTag("many", cache.StringKeys[string]())
+	declarations := cache.DefineTag("many", keyspace.StringKeys[string]())
 	family, err := declarations.Bind(store)
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +102,7 @@ func TestNamespaceInvalidationRejectsInvalidAndUnsupportedOperations(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cache.DefineCounter("unsupported", cache.StringKeys[string]()).Bind(limited); !errors.Is(err, fault.Invalid) {
+	if _, err := cache.DefineCounter("unsupported", keyspace.StringKeys[string]()).Bind(limited); !errors.Is(err, fault.Invalid) {
 		t.Fatal("counter silently bypassed namespace snapshot", err)
 	}
 	if stats := backend.Stats(); stats.Entries != 0 {
@@ -186,7 +187,7 @@ func TestReservedNamespaceMetadataCannotBecomePayload(t *testing.T) {
 	if _, err := cache.NewTaggedKey(scope, []cache.TagStamp{{Key: scope, Version: version}}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("reserved metadata became a derived payload", err)
 	}
-	if _, err := cache.NewNamespaceTagKey(cache.Namespace{}); !errors.Is(err, fault.Invalid) {
+	if _, err := cache.NewNamespaceTagKey(keyspace.Namespace{}); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 }

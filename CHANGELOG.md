@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.40.0 — 2026-11-16
+
+- Breaking: removed `jobs.Module`. Register `jobs.ConnectionModule` and
+  `jobs.WorkerModule` separately. Removed `cache.Namespace`, `cache.KeyCodec`,
+  `cache.NewKeyCodec`, `cache.StringKeys`, `cache.SignedKeys`, `cache.UnsignedKeys`,
+  and `cache.TextKeys`. Use the corresponding `keyspace` types and constructors
+  (`keyspace.Codec` and `keyspace.NewCodec` for key codecs). Physical cache keys are unchanged.
+- Breaking: deployment hosts and clients must be generation >=18. Removed the
+  generation-16 runtime bridge and below-18 bundle inventories. CI upgrade
+  acceptance now starts at v0.38.3 / generation 18. Bootstrap registration history
+  no longer blocks current clients. The 18-to-19 path, same-generation updates,
+  boot-coordinator re-pinning, and generation-19 gates remain supported.
+- Removed unused private helpers and old unqualified Docker build-container name
+  recovery. Moved test-only helpers out of production files or called shared
+  implementations directly.
+- Corrected deployment generation, floor, bridge and baseline guidance, job module
+  and cache examples, and observability wording for jobs without trace context.
+
+- Removed the generation-7 maintenance-state scrubber and generation-12 service
+  enablement adoption, including the adoption response field.
+- Removed local-storage staging migration markers, migration locking and old
+  object-shard traversal. Startup accounting and pruning scan only the staging
+  directory. Unreserved files emitted with staging limits disabled remain supported.
+- Breaking: audit reads reject model version 1 and redaction policy 1; removed
+  `record.RedactionV1` and read-time upgrades. Applied migrations and stored data
+  remain unchanged. Redis job history now requires `retry`; other optional sparse
+  counters remain supported.
+- Removed the v0.30.0 empty upload-marker remediation. Empty markers use the
+  existing unknown-format refusal and remain untouched.
+- Installing package journals require supply and activation fields. Completed
+  journals without historical evidence or cron defaults still load; removed the
+  incomplete-intent compatibility branch.
+- Rollback requires a persisted target declaration. Removed topology reconstruction
+  and `ROLLBACK_TOPOLOGY_FILE` / supplied-topology request support. Missing
+  declarations refuse with `rollback_declaration_missing` and direct the operator
+  to deploy a current release. The `serve` maintenance alias remains supported
+  because persisted topologies can contain it.
+- Updated storage, audit, upload and rollback guidance. Clarified that rendered
+  configuration formats re-serialize files and JSON output is compact.
+
 ## v0.39.2 — 2026-11-16
 
 - Fixed: a reviewed feature deploy or rollback confirmed minutes after review

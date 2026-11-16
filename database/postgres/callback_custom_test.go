@@ -51,7 +51,7 @@ func TestPostgresUninferredNativeScalarPlansRetainSourceTypes(t *testing.T) {
 	protectCodecMap(m)
 	plain := pgtype.NewMap()
 	typ := &pgtype.Type{Name: "custom_integer", OID: 80003, Codec: pgtype.Int8Codec{}}
-	protectCodecType(m, typ)
+	codecRegistryFor(m).register(typ)
 	plain.RegisterType(typ)
 	for repeat := 0; repeat < 2; repeat++ {
 		for _, source := range []any{int64(11), int32(12), pgtype.Int8{Int64: 13, Valid: true}, int64(14)} {
@@ -116,7 +116,7 @@ func TestPostgresCustomJSONCallbacksRetained(t *testing.T) {
 			codec = &pgtype.JSONBCodec{Marshal: marshal, Unmarshal: unmarshal}
 		}
 		typ := &pgtype.Type{Name: "custom_json", OID: 80004, Codec: codec}
-		protectCodecType(m, typ)
+		codecRegistryFor(m).register(typ)
 		m.RegisterDefaultPgType(customJSONValue{}, typ.Name)
 		encoded, err := m.Encode(typ.OID, pgtype.TextFormatCode, protectValue(m, customJSONValue{}), nil)
 		if err != nil || string(encoded) != "{ \"custom\": true }" || marshalCalls != 1 {
@@ -151,7 +151,7 @@ func TestPostgresXMLCallbackErrorsStayOpaque(t *testing.T) {
 				return xml.Unmarshal(data, target)
 			},
 		}}
-		protectCodecType(m, typ)
+		codecRegistryFor(m).register(typ)
 		_, err := m.Encode(pgtype.XMLOID, pgtype.TextFormatCode, protectValue(m, hostileXML{cause}), nil)
 		assertNativeCause(t, err, cause)
 		assertNativeCause(t, m.Scan(pgtype.XMLOID, pgtype.TextFormatCode, []byte("<value/>"), protectTarget(&hostileXML{cause})), cause)
@@ -167,7 +167,7 @@ func TestPostgresRegisteredJSONCodecUnwrapsBeforeBinding(t *testing.T) {
 			codec = &pgtype.JSONBCodec{Marshal: json.Marshal, Unmarshal: json.Unmarshal}
 		}
 		const oid uint32 = 80005
-		protectCodecType(m, &pgtype.Type{Name: "uninferred_json", OID: oid, Codec: codec})
+		codecRegistryFor(m).register(&pgtype.Type{Name: "uninferred_json", OID: oid, Codec: codec})
 		data, err := m.Encode(oid, pgtype.TextFormatCode, protectValue(m, customJSONValue{}), nil)
 		if err != nil || string(data) != "{}" {
 			t.Fatal("registered catch-all codec did not receive original value")
@@ -197,7 +197,7 @@ func TestPostgresCustomValuerFallbackPreservesNativePrecedence(t *testing.T) {
 	m := pgtype.NewMap()
 	protectCodecMap(m)
 	const oid uint32 = 80006
-	protectCodecType(m, &pgtype.Type{Name: "unmapped_integer", OID: oid, Codec: pgtype.Int8Codec{}})
+	codecRegistryFor(m).register(&pgtype.Type{Name: "unmapped_integer", OID: oid, Codec: pgtype.Int8Codec{}})
 	for _, format := range []int16{pgtype.TextFormatCode, pgtype.BinaryFormatCode} {
 		data, err := m.Encode(oid, format, protectValue(m, preferredNativeInteger{}), nil)
 		if err != nil {

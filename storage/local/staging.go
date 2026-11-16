@@ -41,11 +41,8 @@ func (s StagingLimits) validate(maximum int64) error {
 
 const stagingDirectory = ".foundry-staging"
 const stagingLockName = ".foundry-admission"
-const stagingMigrationLock = ".foundry-migration-lock"
-const stagingMigrated = ".foundry-migrated"
 
-// Recovery runs once before readiness, independently of the listing ceiling.
-// Old abandoned files move into the same accounting directory as new writes.
+// Startup accounts for staging before readiness, independently of published objects.
 func (b *Backend) startStaging(ctx context.Context) (err error) {
 	if err = b.root.Mkdir(stagingDirectory, 0700); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
@@ -67,9 +64,6 @@ func (b *Backend) startStaging(ctx context.Context) (err error) {
 			b.staging = nil
 		}
 	}()
-	if err := b.migrateStaging(ctx); err != nil {
-		return err
-	}
 	unlock, err := filelock.Acquire(ctx, b.staging, stagingLockName)
 	if err != nil {
 		return err
@@ -79,97 +73,8 @@ func (b *Backend) startStaging(ctx context.Context) (err error) {
 	return err
 }
 
-func (b *Backend) stagingMigrationComplete() (bool, error) {
-	info, err := b.staging.Lstat(stagingMigrated)
-	if errors.Is(err, fs.ErrNotExist) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	if !info.Mode().IsRegular() || info.Size() != 0 {
-		return false, fs.ErrInvalid
-	}
-	return true, nil
-}
-
-func (b *Backend) migrateStaging(ctx context.Context) error {
-	if done, err := b.stagingMigrationComplete(); done || err != nil {
-		return err
-	}
-	// Only first-time migration waits here. Published-object enumeration never
-	// holds the admission lock used by healthy peers.
-	unlock, err := filelock.Acquire(ctx, b.staging, stagingMigrationLock)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	if done, err := b.stagingMigrationComplete(); done || err != nil {
-		return err
-	}
-	err = b.walkEntries(ctx, 0, func(parent *os.Root, directory, name string) error {
-		if !stagingName(name) {
-			return nil
-		}
-		file, err := parent.OpenFile(name, os.O_RDWR, 0)
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		locked, err := tryLock(file)
-		if err != nil {
-			return err
-		}
-		if !locked {
-			return safeerror.NewFault(fault.Conflict, "legacy staging writers must drain before migration")
-		}
-		unlock, err := filelock.Acquire(ctx, b.staging, stagingLockName)
-		if err != nil {
-			return err
-		}
-		defer unlock()
-		info, err := file.Stat()
-		if err != nil {
-			return err
-		}
-		current, err := parent.Lstat(name)
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if !info.Mode().IsRegular() || !os.SameFile(info, current) {
-			return fs.ErrInvalid
-		}
-		if _, err := b.staging.Lstat(name); !errors.Is(err, fs.ErrNotExist) {
-			if err != nil {
-				return err
-			}
-			return fs.ErrExist
-		}
-		if err := b.root.Rename(directory+"/"+name, stagingDirectory+"/"+name); err != nil {
-			return err
-		}
-		// The completion marker must never outlive an unsynced migration, even
-		// when ordinary object writes opt out of durability.
-		return safeerror.Join("staging recovery sync failed", syncDirectory(b.staging), syncDirectory(parent))
-	})
-	if err != nil {
-		return err
-	}
-	marker, err := b.staging.OpenFile(stagingMigrated, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return err
-	}
-	return safeerror.Join("staging migration completion failed", marker.Sync(), marker.Close(), syncDirectory(b.staging), syncDirectory(b.root))
-}
-
 // The caller holds the staging directory's admission lock. Published objects and
-// the listing/legacy-prune MaxScan budget never participate in this traversal.
+// the listing MaxScan budget never participate in this traversal.
 func (b *Backend) walkStaging(ctx context.Context, visit func(*os.Root, string) error) error {
 	return readDirectory(ctx, b.staging, func(name string) error {
 		if !stagingName(name) {
@@ -216,7 +121,7 @@ func (b *Backend) stagingUsage(ctx context.Context) (bytes int64, active int, er
 		}
 		charge := reserved
 		if reserved < 0 {
-			// Legacy entries have no declared reservation. An active legacy writer
+			// Unreserved entries come from writers with staging limits disabled. An active writer
 			// excludes new large work until it drains; abandoned bytes remain charged.
 			charge = info.Size()
 			if !locked {
@@ -310,7 +215,7 @@ func stagingOverload(op storage.Operation, err error) error {
 	return failure(storage.Unavailable, op, storage.Unchanged, safeerror.WrapFault(fault.Overloaded, "local staging capacity is exhausted", err))
 }
 
-// -1 denotes a legacy entry, zero a new small write, and a positive value the
+// -1 denotes an unreserved entry, zero a small write, and a positive value the
 // large write's complete payload reservation. Names are immutable until rename.
 func stagingReservation(name string) (int64, bool) {
 	suffix, ok := strings.CutPrefix(name, tempPrefix)

@@ -18,7 +18,7 @@ func TestPluginJobCanResolveItsOwnDispatcher(t *testing.T) {
 	key := foundation.NewKey[*jobs.Dispatcher]("plugin.jobs")
 	definition := jobs.Define[payload]("plugin.reports", 1, jobs.DefaultPolicy("default"))
 	namespace := keyspace.Namespace{Application: "plugin", Environment: "test"}
-	module := jobs.Module("jobs", key, jobs.DefaultDispatchConfig(namespace), jobs.DefaultWorkerConfig(namespace, "default"), nil, func(foundation.Resolver) (jobs.Backend, []jobs.Declaration, error) {
+	module := jobs.ConnectionModule("jobs", key, jobs.DefaultDispatchConfig(namespace), nil, func(foundation.Resolver) (jobs.Backend, []jobs.Declaration, error) {
 		backend, err := memory.New(memory.DefaultConfig())
 		return backend, nil, err
 	})

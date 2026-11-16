@@ -127,8 +127,7 @@ v0.22.0 or later to use bare server-side artisan commands and the live
 `application.MaintenanceCommands()` and configure a shared `maintenance.store`.
 The `down` and `up` JSON commands remain available on v0.20.0 and later.
 
-Maintenance comes from the shared application store. The tool drops obsolete
-generation-7 host-state maintenance records and never writes new ones. A live
+Maintenance comes from the shared application store and its live status probe. A
 down status selects `/health/live` with `{"status":"ok"}` for lifecycle checks.
 An unsupported status command is treated as serving. `up` requires normal
 `/health/ready` with `{"ready":true}` without rollback on failure.

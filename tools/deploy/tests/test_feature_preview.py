@@ -264,13 +264,12 @@ class FeaturePreviewTests(unittest.TestCase):
                 else:
                     upgrades._check_feature_request(None, request, action)
 
-    def test_new_runtime_owners_are_required_generation_12_files(self):
-        required = upgrades.required_files(12)
+    def test_runtime_owners_are_required_bundle_files(self):
+        required = upgrades.REQUIRED_FILES
         for name in ("feature_lifecycle", "feature_network", "feature_runtime", "admission", "services", "artifacts", "operations"):
             self.assertIn("lib/" + name + ".py", required)
         for name in ("server/runtime_v1.py", "server/templates/admission.service", "server/templates/custom.service"):
             self.assertIn(name, required)
-            self.assertNotIn(name, upgrades.required_files(11))
 
     def test_container_fixture_uses_frozen_archive_and_artifact_contracts(self):
         import io

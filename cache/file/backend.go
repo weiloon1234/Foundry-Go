@@ -29,6 +29,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/filelock"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 const marker = ".foundry-cache"
@@ -538,7 +539,7 @@ func (b *Backend) Sweep(ctx context.Context, limit int) (PruneResult, error) {
 
 // FlushNamespace physically removes every readable record of namespace. It
 // locks one shard at a time, so it is not a fence against concurrent writers.
-func (b *Backend) FlushNamespace(ctx context.Context, namespace cache.Namespace) (uint64, error) {
+func (b *Backend) FlushNamespace(ctx context.Context, namespace keyspace.Namespace) (uint64, error) {
 	prefix, err := cacheatomic.NamespacePrefix(namespace)
 	if err != nil {
 		return 0, err

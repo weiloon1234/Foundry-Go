@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upgrade from the published generation-9 baseline tools on the disposable host."""
+"""Upgrade from the published generation-18 baseline tools on the disposable host."""
 import argparse
 import json
 from pathlib import Path
@@ -40,6 +40,7 @@ def upgrade(archive, old_tools):
     host, project, profile, entry = fixture()
     baseline = host.read_registry()
     assert baseline['tools']['generation'] == protocol(old_tools)['generation']
+    assert baseline['tools']['generation'] >= protocol(TOOLS)['minimum_host_generation']
     assert baseline['tools']['bundle_sha256'] == tool_bundle(old_tools)[2]
     registration = baseline['instances'][profile['instance_id']]['client_generation']
     prove_running(host, entry)

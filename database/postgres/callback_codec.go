@@ -44,11 +44,6 @@ func protectCodecMap(m *pgtype.Map) {
 	}
 	m.TryWrapScanPlanFuncs = scan
 }
-func protectCodecType(m *pgtype.Map, typ *pgtype.Type) {
-	if typ != nil {
-		codecRegistryFor(m).register(typ)
-	}
-}
 func protectValue(m *pgtype.Map, v any) any {
 	if v == nil {
 		return nil

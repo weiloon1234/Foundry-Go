@@ -7,16 +7,17 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 // NamespaceFixture owns exact test addresses; no backend enumeration is needed.
 type NamespaceFixture struct {
 	Backend   TaggedBackend
-	Namespace cache.Namespace
+	Namespace keyspace.Namespace
 	Track     func(cache.EntryKey)
 }
 
-func (f NamespaceFixture) store(t *testing.T, namespace cache.Namespace) *cache.Store {
+func (f NamespaceFixture) store(t *testing.T, namespace keyspace.Namespace) *cache.Store {
 	t.Helper()
 	store, err := cache.NewStore(f.Backend, cache.DefaultConfig(namespace))
 	if err != nil {
@@ -24,7 +25,7 @@ func (f NamespaceFixture) store(t *testing.T, namespace cache.Namespace) *cache.
 	}
 	return store
 }
-func (f NamespaceFixture) snapshot(t *testing.T, namespace cache.Namespace, name cache.Name, logical string, tags ...cache.EntryKey) cache.TaggedKey {
+func (f NamespaceFixture) snapshot(t *testing.T, namespace keyspace.Namespace, name cache.Name, logical string, tags ...cache.EntryKey) cache.TaggedKey {
 	t.Helper()
 	base, err := cache.NewEntryKey(namespace, name, logical)
 	if err != nil {
@@ -51,9 +52,9 @@ func RunNamespace(t *testing.T, setup func(*testing.T) NamespaceFixture) {
 		foreign := f.Namespace
 		foreign.Environment += "-other"
 		other := f.store(t, foreign)
-		values := cache.Define("namespace-values", cache.StringKeys[string](), cache.JSON[string]())
-		counts := cache.DefineCounter("namespace-counts", cache.StringKeys[string]())
-		tags := cache.DefineTag("namespace-tags", cache.StringKeys[string]())
+		values := cache.Define("namespace-values", keyspace.StringKeys[string](), cache.JSON[string]())
+		counts := cache.DefineCounter("namespace-counts", keyspace.StringKeys[string]())
+		tags := cache.DefineTag("namespace-tags", keyspace.StringKeys[string]())
 		one, err := values.Bind(first)
 		if err != nil {
 			t.Fatal(err)
@@ -135,7 +136,7 @@ func RunNamespace(t *testing.T, setup func(*testing.T) NamespaceFixture) {
 	t.Run("metadata-loss-and-stable-forever-address", func(t *testing.T) {
 		f := setup(t)
 		store := f.store(t, f.Namespace)
-		values := cache.Define("generation", cache.StringKeys[string](), cache.JSON[string]())
+		values := cache.Define("generation", keyspace.StringKeys[string](), cache.JSON[string]())
 		handle, err := values.Bind(store)
 		if err != nil {
 			t.Fatal(err)
@@ -187,7 +188,7 @@ func RunNamespace(t *testing.T, setup func(*testing.T) NamespaceFixture) {
 	t.Run("remember-owner-cannot-publish-after-rotation", func(t *testing.T) {
 		f := setup(t)
 		store := f.store(t, f.Namespace)
-		values := cache.Define("namespace-slow", cache.StringKeys[string](), cache.JSON[string]())
+		values := cache.Define("namespace-slow", keyspace.StringKeys[string](), cache.JSON[string]())
 		handle, err := values.Bind(store)
 		if err != nil {
 			t.Fatal(err)

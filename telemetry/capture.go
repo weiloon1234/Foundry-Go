@@ -35,22 +35,6 @@ type batch struct {
 	poolUsage float64
 }
 
-func (b batch) bucketSnapshot() []bucket {
-	result := slices.Clone(b.buckets)
-	for i := range result {
-		result[i].Metric.Buckets = slices.Clone(result[i].Metric.Buckets)
-	}
-	return result
-}
-
-func (b batch) issueSnapshot() []observedIssue {
-	result := slices.Clone(b.issues)
-	for i := range result {
-		result[i].Detail.Frames = slices.Clone(result[i].Detail.Frames)
-	}
-	return result
-}
-
 func (b batch) runtimeSnapshot() Runtime {
 	result := b.runtime
 	result.Samples = slices.Clone(result.Samples)

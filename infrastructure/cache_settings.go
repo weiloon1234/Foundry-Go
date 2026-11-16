@@ -9,6 +9,7 @@ import (
 	cachepg "github.com/weiloon1234/Foundry-Go/cache/postgres"
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/redis"
 )
@@ -66,7 +67,7 @@ type CacheSettings struct {
 // DefaultCacheSettings returns default cache driver, backend, lease, and coordination settings.
 func DefaultCacheSettings() CacheSettings {
 	f, p := cachefile.DefaultConfig(""), cachepg.DefaultConfig()
-	return CacheSettings{Driver: MemoryCache, Config: cache.DefaultConfig(cache.Namespace{}), Memory: memory.DefaultConfig(), File: FileCacheSettings{MaxEntries: f.MaxEntries, MaxBytes: f.MaxBytes, Sync: f.Sync, PruneInterval: f.PruneInterval}, Postgres: PostgresCacheSettings{Schema: p.Schema, MaxEntries: p.MaxEntries, MaxBytes: p.MaxBytes, PruneInterval: p.PruneInterval}, Leases: lease.DefaultConfig(cache.Namespace{}), Coordination: cache.DefaultCoordinationConfig()}
+	return CacheSettings{Driver: MemoryCache, Config: cache.DefaultConfig(keyspace.Namespace{}), Memory: memory.DefaultConfig(), File: FileCacheSettings{MaxEntries: f.MaxEntries, MaxBytes: f.MaxBytes, Sync: f.Sync, PruneInterval: f.PruneInterval}, Postgres: PostgresCacheSettings{Schema: p.Schema, MaxEntries: p.MaxEntries, MaxBytes: p.MaxBytes, PruneInterval: p.PruneInterval}, Leases: lease.DefaultConfig(keyspace.Namespace{}), Coordination: cache.DefaultCoordinationConfig()}
 }
 
 // CacheStores maps cache store names to settings.

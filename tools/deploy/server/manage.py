@@ -41,7 +41,7 @@ def execute(host, action, request):
     arguments = {"recover-plan": recovery_fields,
                  "recover-apply": recovery_fields | {"archive", "plan_token", "old_server_gone"}, "bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
                  "restart": {"role", "copy"}, "stop": {"role", "copy"}, "logs": {"role", "copy", "lines"}, "down": maintenance.FIELDS,
-                 "activate": {"archive", "archive_sha256", "plan_token"}, "release-plan": {"archive", "archive_sha256", "secrets", "target", "expected_current", "topology"}, "config-set": {"values", "secrets"},
+                 "activate": {"archive", "archive_sha256", "plan_token"}, "release-plan": {"archive", "archive_sha256", "secrets", "target", "expected_current"}, "config-set": {"values", "secrets"},
                  "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current", "plan_token"},
                  "backup-keys-rotate": {"secrets"}, "backup-recipients-rotate": {"secrets"},
                  "dns-token-rotate": {"secrets"}, "backup-configure": {"secrets"}, "backup-run": {"kind"},
@@ -106,11 +106,7 @@ def execute(host, action, request):
     if "copy" in request:
         operation_selection.units(entry, request["role"], request["copy"])
     import feature_lifecycle
-    enablement_migration = None
     if feature_lifecycle.is_feature(entry) and request.get("client", {}).get("generation", 0) >= FEATURE_LIFECYCLE_GENERATION:
-        with host.lock("host"), host.lock(profile["instance_id"]):
-            registry, entry = host.require_identity(project, profile)
-            enablement_migration = feature_lifecycle.migrate_enablement(host, registry, entry)
         if action not in ("down", "up", "activate", "rollback", "reconcile"):
             import feature_maintenance
             feature_maintenance.reconcile(host, project, profile,
@@ -120,13 +116,13 @@ def execute(host, action, request):
         if not feature_lifecycle.is_feature(entry):
             require(request.get("target") is not None, "invalid_request", "Legacy release plans select an explicit rollback target.")
             return release.legacy_rollback_plan(host, project, profile, request["target"], request.get("expected_current"),
-                                                request.get("operation_id"), request.get("topology"))
+                                                request.get("operation_id"))
         import feature_plan
         private = request.get("secrets", {})
         require(isinstance(private, dict) and set(private) <= {"configuration"}, "invalid_secrets", "Invalid release private input.")
         return feature_plan.plan(host, project, profile, request.get("archive"), request.get("archive_sha256"),
                                  request.get("operation_id"), private.get("configuration"), target=request.get("target"),
-                                 expected_current=request.get("expected_current"), supplied_topology=request.get("topology"))
+                                 expected_current=request.get("expected_current"))
     if feature_lifecycle.is_feature(entry) and action in ("activate", "rollback", "restart", "stop", "down", "up"):
         feature_lifecycle.check_operation(action)
         arguments = {key: request[key] for key in ("archive", "archive_sha256", "plan_token", "role", "copy", "target", "expected_current") if key in request}
@@ -233,8 +229,7 @@ def execute(host, action, request):
         from report import services_document
         observations = release.services(host, entry)
         return {"instance": entry, "state": state, "maintenance": live,
-                "live_version": version, "services": services_document(observations),
-                **({"enablement_migration": enablement_migration} if enablement_migration else {})}
+                "live_version": version, "services": services_document(observations)}
     if action in ("down", "up"):
         require(request.get("confirm") is True, "confirmation_required", "Confirm the maintenance change.")
         extra = maintenance.arguments(action, {key: request[key] for key in maintenance.FIELDS if key in request})

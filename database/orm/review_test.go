@@ -18,6 +18,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/enum"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -450,7 +451,7 @@ func TestOffsetMatchRejectsZeroSizeNeighbors(t *testing.T) {
 		A struct{}
 		B struct{ Inner struct{} }
 	}]()
-	if offsetMatches(typ, 0, reflect.TypeFor[struct{}]()) < 2 {
+	if modelmeta.OffsetMatches(typ, 0, reflect.TypeFor[struct{}]()) < 2 {
 		t.Fatal("ambiguous nested offset not detected")
 	}
 	var row record

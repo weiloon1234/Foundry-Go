@@ -51,7 +51,7 @@ import shared_directories
 from services import probe as actual_probe
 import upgrades
 import unix_sockets
-from topology import parse_profile, parse_topology, validate_topology
+from topology import parse_profile, parse_topology
 from test_artifacts import elf
 from test_contracts import fixture
 from test_manage import manager
@@ -1015,9 +1015,9 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertEqual(error.exception.code, "stale_plan")
         self.assertEqual(self.host.running, before)
 
-    def rollback_target(self, target, *, topology=None):
+    def rollback_target(self, target):
         arguments = {"target": target, "expected_current": self.request("status")["live_version"], "operation_id": str(uuid.uuid4())}
-        reviewed = self.request("release-plan", **arguments, **({"topology": topology} if topology else {}))
+        reviewed = self.request("release-plan", **arguments)
         result = self.request("rollback", **arguments, plan_token=reviewed["plan_token"])
         self.profile = result["profile_update"]
         before = list(self.host.started)
@@ -1045,7 +1045,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertFalse(set(previous.resolution.endpoints) & set(current.resolution.endpoints))
         self.assertFalse(any("migrate" in command or "db:seed" in command for command in self.host.commands[commands:]))
 
-    def test_legacy_rollback_requires_target_topology_and_preserves_current_secrets(self):
+    def test_rollback_requires_persisted_declaration_and_preserves_current_secrets(self):
         import runtime_config
         self.test_service_secret_rotation_retains_http_and_private_values()
         _, entry = self.host.require_identity(self.project, self.profile)
@@ -1060,14 +1060,20 @@ class FeatureWiringTests(FeatureWiringFixture):
         for name in manifest["files"]:
             self.host.owned_write(path / name, (source / name.replace(target, feature["version"])).read_bytes(), mode=0o755 if name == "artisan" else 0o644)
         self.host.owned_write(path / "manifest.json", json.dumps(manifest))
+        commands = len(self.host.commands)
+        before = self.host.load_state(entry)
         with self.assertRaises(c.DeployError) as error:
             self.rollback_target(target)
-        self.assertEqual(error.exception.code, "rollback_topology_required")
-        with self.assertRaises(c.DeployError) as error:
-            self.rollback_target(target, topology={"schema": 1, "roles": [{"name": "http"}, {"name": "worker"}]})
-        self.assertEqual(error.exception.code, "release_topology")
+        self.assertEqual(self.host.load_state(entry), before)
+        self.assertFalse(release.declaration_index(self.host, entry, manifest).exists())
+        self.assertFalse(any(args[:2] == ["systemctl", "stop"] for args in self.host.commands[commands:]))
+        self.assertEqual(error.exception.code, "rollback_declaration_missing")
+        self.assertIn("Deploy a current release instead", error.exception.detail)
+        # A declaration originally persisted by publication remains a valid
+        # schema-1 rollback target; review cannot synthesize it from caller input.
+        release.persist_declaration(self.host, entry, manifest, topology.projection(), release.legacy_profile(entry["profile"]))
         secret = runtime_config.service_secret_snapshot(self.host, entry)
-        self.rollback_target(target, topology=topology.projection())
+        self.rollback_target(target)
         _, entry = self.host.require_identity(self.project, self.profile)
         store, selection, inventory, launch = lifecycle.load(self.host, entry)
         self.assertEqual(inventory.deployment.archive_schema, 1)
@@ -1417,127 +1423,7 @@ class FeatureWiringTests(FeatureWiringFixture):
             self.assertEqual(error.exception.code, expected)
         self.assertNotIn(["ufw", "reload"], self.host.commands)
 
-    def test_deployed_generation_12_profile_can_plan_apply_and_resume_current_upgrade(self):
-        from contextlib import ExitStack
-        import runtime_config
-        source = self.host.paths.root / 'preview-tools'
-        shutil.copytree(TOOLS, source, ignore=shutil.ignore_patterns('__pycache__'))
-        metadata = c.read_json(source / 'protocol.json')
-        metadata['generation'] = 12
-        c.atomic_json(source / 'protocol.json', metadata)
-        # Construct deployed preview state using its prior capability floor and
-        # immutable generation-12 bundle. The upgrade uses current guards unchanged.
-        with ExitStack() as stack:
-            stack.enter_context(patch.object(runtime_config, 'scheduler_environment', return_value={}))
-            for module in (lifecycle, upgrades):
-                stack.enter_context(patch.object(module, 'FEATURE_LIFECYCLE_GENERATION', 12))
-            for module, path in ((lifecycle, 'lib/feature_lifecycle.py'), (upgrades, 'lib/upgrades.py'),
-                                 (provision, 'lib/provision.py'), (manager, 'server/manage.py')):
-                stack.enter_context(patch.object(module, '__file__', str(source / path)))
-            self.envelope = upgrades.protocol_metadata(source)
-            plan = self.request('bootstrap-plan', topology=self.topology.projection())
-            self.request('bootstrap-apply', topology=self.topology.projection(), plan_token=plan['plan_token'], confirm=True)
-            self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
-        _, entry = self.host.require_identity(self.project, self.profile)
-        store, selected, inventory, _ = lifecycle.load(self.host, entry)
-        self.assertEqual(selected.minimum_generation, 12)
-        self.assertEqual(self.host.read_registry()['tools']['generation'], 12)
-        # Preview units were deliberately disabled after startup.
-        self.host.run(['systemctl', 'disable', *inventory.units.values()])
-        (store.durable / 'enablement.json').unlink()
-        before = dict(self.host.running)
-        self.envelope = upgrades.protocol_metadata(TOOLS)
-        plan = self.request('tools-plan')
-        operation = str(uuid.uuid4())
-        result = self.request('tools-apply', plan_token=plan['plan_token'], operation_id=operation)
-        self.assertEqual(result['outcome'], 'succeeded')
-        self.assertEqual(self.host.read_registry()['tools']['generation'], upgrades.protocol()['generation'])
-        self.assertEqual(self.host.running, before)
-        self.assertFalse(set(inventory.units.values()) & self.host.enabled)
-        self.assertEqual(self.request('upgrade-resume', plan_token=plan['plan_token'],
-                                     operation_id=operation)['outcome'], 'unchanged')
-        old_environment = runtime_config.effective_environment_path(self.host, entry, inventory.resolution)
-        self.assertNotIn(runtime_config.SCHEDULER_ENABLED, c.parse_env(old_environment.read_text()))
-        reviewed = self.request('release-plan', archive=str(self.archive), archive_sha256=c.digest(self.archive),
-                                operation_id=str(uuid.uuid4()))
-        self.assertTrue(reviewed['ok'])
-        _, entry = self.host.require_identity(self.project, self.profile)
-        candidate, _ = lifecycle.load_resolution(self.host, entry, reviewed['candidate_resolution'])
-        candidate_env = runtime_config.effective_environment_path(self.host, entry, candidate.resolution, candidate=True)
-        self.assertEqual(c.parse_env(candidate_env.read_text())[runtime_config.SCHEDULER_ENABLED], 'false')
-        self.assertNotIn(runtime_config.SCHEDULER_ENABLED, c.parse_env(old_environment.read_text()))
-        with patch.object(release.backup, 'archive_keys'):
-            self.request('config-set', secrets={'configuration': {'APP__TEST__TOKEN': 'preview-upgrade'}}, confirm=True)
-        _, entry = self.host.require_identity(self.project, self.profile)
-        values = runtime_config.validate_runtime_environment(self.host, entry)
-        self.assertEqual(values[runtime_config.SCHEDULER_ENABLED], 'false')
-        self.assertEqual(values['APP__TEST__TOKEN'], 'preview-upgrade')
 
-    def test_v035_boot_pin_refuses_generation_18_shapes_until_upgrade_then_reboots(self):
-        self.build_archive(public=True)
-        self.configure_firewall()
-        old_source = self.host.paths.root / "generation-16"
-        shutil.copytree(TOOLS, old_source, ignore=shutil.ignore_patterns("__pycache__"))
-        c.atomic_json(old_source / "protocol.json", {**upgrades.protocol(old_source), "generation": 16})
-        legacy = (Path(__file__).parent / "runtime_fixtures/v0_35_0/runtime_v1.py").read_bytes()
-        (old_source / "server/runtime_v1.py").write_bytes(legacy)
-        self.envelope = upgrades.protocol_metadata(old_source)
-        with patch.object(manager, "__file__", str(old_source / "server/manage.py")), \
-                patch.object(provision, "__file__", str(old_source / "lib/provision.py")):
-            plan = self.request("bootstrap-plan", topology=self.topology.projection())
-            self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
-        self.envelope = upgrades.protocol_metadata(TOOLS)
-        registry = self.host.read_registry()
-        before = self.host.paths.registry.read_bytes()
-        from test_dns import managed_profile
-        candidates = []
-        candidate = json.loads(before)
-        placed = candidate["instances"][self.profile["instance_id"]]["profile"]
-        placed["placement"]["relay"] = 2
-        placed["listeners"]["relay.api"]["ports"].append(9444)
-        candidates.append(candidate)
-        candidate = json.loads(before)
-        candidate["instances"][self.profile["instance_id"]]["profile"]["listeners"]["relay.api"]["dns"] = (
-            managed_profile().projection()["listeners"]["relay.ingress"]["dns"])
-        candidates.append(candidate)
-        candidate = json.loads(before)
-        topology = self.topology.projection()
-        relay = topology["roles"][1]
-        relay["listeners"]["api"]["proxy_protocol"] = "v1"
-        relay["listeners"]["health"] = {"transport": "tcp", "bind": "loopback"}
-        relay["readiness"]["listener"] = "health"
-        candidate["instances"][self.profile["instance_id"]]["topology"] = validate_topology(topology)
-        candidates.append(candidate)
-        for candidate in candidates:
-            for tools in (registry["tools"], upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)):
-                for pending in (None, str(uuid.uuid4())):
-                    candidate["tools"] = {**tools, "upgrade_operation": pending}
-                    with self.assertRaises(c.DeployError) as caught:
-                        self.host.write_registry(candidate)
-                    self.assertEqual(caught.exception.code, "boot_coordinator_upgrade_required")
-                    self.assertEqual(self.host.paths.registry.read_bytes(), before)
-        upgrade = upgrades.plan_upgrade(self.host, TOOLS)
-        self.assertEqual(upgrades.apply_upgrade(self.host, TOOLS, upgrade["plan_token"], str(uuid.uuid4()))["outcome"], "succeeded")
-        selected = self.host.read_registry()["tools"]["bundle_sha256"]
-        self.assertIn(selected, self.host.loaded_boot)
-        original_profile = self.profile.copy()
-        self.build_archive(copies=2, public=True)
-        self.host.public_profile = parse_profile(self.profile, self.topology)
-        self.profile = original_profile
-        result = self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
-        self.profile = result["profile_update"]
-        _, entry = self.host.require_identity(self.project, self.profile)
-        _, _, inventory, _ = lifecycle.load(self.host, entry)
-        self.assertEqual(len(inventory.copies("relay")), 2)
-        lifecycle.stop_units(self.host, inventory)
-        self.host.owned_write(self.host.paths.p("/proc/sys/kernel/random/boot_id"), str(uuid.uuid4()))
-        self.run_coordinator(feature_network.BOOT_UNIT)
-        self.run_coordinator("foundry-admission-" + self.profile["instance_id"] + ".service")
-        for identity in inventory.start_order(inventory.units):
-            self.host.start(inventory.units[identity])
-        self.run_coordinator("foundry-admission-open-" + self.profile["instance_id"] + ".service")
-        self.assertEqual(set(self.host.running), set(inventory.units.values()))
-        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.units, self.clock.monotonic() + 1))
 
     def test_second_bootstrap_after_tool_upgrade_uses_advanced_verified_boot_pin(self):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())

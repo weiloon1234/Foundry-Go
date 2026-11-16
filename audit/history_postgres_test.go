@@ -339,7 +339,7 @@ const legacyModelPayload = `{"version":1,"primary":"id","fields":[` +
 	`{"name":"id","type":2,"assigned":true,"changed":true,"before":{"state":0},"after":{"state":1,"value":{"k":"int","t":"7"}}},` +
 	`{"name":"session_id","type":4,"assigned":true,"changed":true,"before":{"state":0},"after":{"state":1,"value":{"k":"string","t":"legacy"}}}]}`
 
-func TestAuditMigrationBackfillsOrderingKeysAndKeepsLegacyPolicies(t *testing.T) {
+func TestAuditMigrationPreservesRowsAndRetiredPoliciesAreRejected(t *testing.T) {
 	_, _, within := auditSchema(t, 1)
 	subjectJSON := `{"model":"subjects","key":{"k":"int","t":"7"}}`
 	origin := `{"subject":{"model":"members","key":{"k":"int","t":"9"}},"request":{"id":"legacy-request"}}`
@@ -371,58 +371,41 @@ VALUES ($1::uuid, 'test.audit', $2::smallint, $3, $4::bigint, $5::jsonb, $6::jso
 		Session string `json:"session"`
 	}
 	legacy := audit.Define[legacyAction]("legacy.action", 1)
+	id, err := audit.ParseActionID[legacyAction]("00000000-0000-7000-8000-000000000002")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := within(ctx, func(tx *database.Tx) error {
-		activity, err := audit.SubjectActivity(ctx, tx, recorder, subjectRef(), audit.TimelineRequest{Size: 10})
+		rows, err := tx.Query(ctx, `SELECT
+count(*) = 3,
+bool_and(subject_key IS NOT NULL AND actor_key IS NOT NULL),
+count(*) FILTER (WHERE correlation = 'legacy-request' AND redaction = 1) = 2,
+count(*) FILTER (WHERE id = '00000000-0000-7000-8000-000000000001'::uuid AND sequence = 1 AND payload = $1::jsonb) = 1,
+count(*) FILTER (WHERE id = '00000000-0000-7000-8000-000000000002'::uuid AND sequence = 2 AND payload = $2::jsonb) = 1,
+count(*) FILTER (WHERE correlation = 'after-migration' AND sequence > 2 AND redaction = 2) = 1
+FROM foundry_audit`, legacyModelPayload, `{"session":"legacy-visible"}`)
 		if err != nil {
 			return err
 		}
-		if len(activity.Items) != 3 || activity.Items[0].IsAction() || !activity.Items[1].IsAction() || activity.Items[2].IsAction() {
-			return errors.New("backfilled sequence or generated subject key is wrong")
+		defer rows.Close()
+		if !rows.Next() {
+			return errors.New("missing migration evidence")
 		}
-		if activity.Items[2].Sequence() != 1 || activity.Items[1].Sequence() != 2 || activity.Items[0].Sequence() <= 2 {
-			return errors.New("new rows did not follow backfilled sequences")
-		}
-		history, err := audit.ModelHistory(ctx, tx, recorder, subjectRef(), orm.PageRequest{Number: 1, Size: 10})
-		if err != nil || len(history.Items) != 2 || history.Items[1].Changes().Entry().Redaction() != record.RedactionV1 {
-			return errors.New("legacy model history became unreadable")
-		}
-		id, ok := audit.ActionActivityID(activity.Items[1], legacy)
-		if !ok {
-			return errors.New("legacy action identity was lost")
-		}
-		found, err := legacy.Find(ctx, tx, recorder, id)
-		if err != nil {
+		var count, keys, correlation, modelRow, actionRow, current bool
+		if err := rows.Scan(&count, &keys, &correlation, &modelRow, &actionRow, &current); err != nil {
 			return err
 		}
-		row, present := found.Get()
-		if !present {
-			return errors.New("extended redaction invalidated legacy history")
+		if !count || !keys || !correlation || !modelRow || !actionRow || !current {
+			return errors.New("audit migration changed rows or lost ordering/lookup metadata")
 		}
-		// Validated under its own policy 1, then masked under the current one.
-		document := row.Document()
-		payload, err := document.Payload()
-		if err != nil || !document.Redacted() || document.Redaction() != record.CurrentRedaction || strings.Contains(payload, "legacy-visible") {
-			return errors.New("legacy action disclosed a value the current policy redacts")
-		}
-		if _, err := document.Decode(); !errors.Is(err, fault.Missing) {
-			return errors.New("masked legacy action decoded into a DTO")
-		}
-		byRequest, err := audit.CorrelationActivity(ctx, tx, recorder, "legacy-request", audit.TimelineRequest{Size: 10})
-		if err != nil || len(byRequest.Items) != 2 {
-			return errors.New("request correlation was not backfilled")
-		}
-		actor := model.NewReference[member]("members", int64(9), codec.Signed[int64]())
-		byActor, err := audit.ActorActivity(ctx, tx, recorder, actor, audit.TimelineRequest{Size: 10})
-		if err != nil || len(byActor.Items) != 3 {
-			return errors.New("generated actor key does not match the Go lookup key")
-		}
-		// Explicit corruption inside this retained schema: a legacy row claimed
-		// by the current policy must fail rather than disclose its value.
-		if _, err := tx.Exec(ctx, `UPDATE foundry_audit SET redaction = 2 WHERE id = $1::uuid`, id.String()); err != nil {
+		if err := rows.Close(); err != nil {
 			return err
 		}
-		if _, err := legacy.Find(ctx, tx, recorder, id); err == nil {
-			return errors.New("policy mismatch accepted")
+		if _, err := audit.ModelHistory(ctx, tx, recorder, subjectRef(), orm.PageRequest{Number: 1, Size: 10}); !errors.Is(err, fault.Invalid) {
+			return errors.New("retired model history was accepted")
+		}
+		if _, err := legacy.Find(ctx, tx, recorder, id); !errors.Is(err, fault.Invalid) {
+			return errors.New("retired action policy was accepted")
 		}
 		return nil
 	}); err != nil {

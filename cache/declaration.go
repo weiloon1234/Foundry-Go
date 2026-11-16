@@ -3,6 +3,7 @@ package cache
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 // A non-zero-size identity distinguishes declarations with the same name even
@@ -11,7 +12,7 @@ type declarationID struct{ marker byte }
 type definition[K, V any] struct {
 	id     declarationID
 	name   Name
-	keys   KeyCodec[K]
+	keys   keyspace.Codec[K]
 	values Codec[V]
 }
 
@@ -19,7 +20,7 @@ type definition[K, V any] struct {
 type Declaration[K, V any] struct{ definition *definition[K, V] }
 
 // Define creates a reusable declaration identity without validating its name or codecs.
-func Define[K, V any](name Name, keys KeyCodec[K], values Codec[V]) Declaration[K, V] {
+func Define[K, V any](name Name, keys keyspace.Codec[K], values Codec[V]) Declaration[K, V] {
 	return Declaration[K, V]{definition: &definition[K, V]{name: name, keys: keys, values: values}}
 }
 

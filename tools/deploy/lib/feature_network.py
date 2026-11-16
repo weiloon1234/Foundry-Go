@@ -59,14 +59,13 @@ def checked_boot_files(host, tools_dir, bundle):
     """A coordinator must use the selected tools' registry and profile readers."""
     import admission
     import services
-    from operations import runtime_compatible
     pin = boot_pin(host)
     if pin:
         require(pin[0] == bundle, "boot_coordinator_upgrade_required",
                 "Advance the boot coordinator through a tools upgrade before changing application state.")
         runtime = admission.protected_path(host, host.paths.p(services.RUNTIME_ENTRY), "file")
-        require(runtime.exists() and runtime_compatible(runtime.read_bytes(), (pin[1] / "server/runtime_v1.py").read_bytes()),
-                "runtime_bridge_required", "The boot coordinator requires its compatible fixed runtime.")
+        require(runtime.exists() and runtime.read_bytes() == (pin[1] / "server/runtime_v1.py").read_bytes(),
+                "runtime_mismatch", "The boot coordinator requires its exact fixed runtime.")
     return boot_files(tools_dir, bundle)
 
 

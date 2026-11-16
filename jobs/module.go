@@ -8,27 +8,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-// Module preserves the advanced single-connection API. Named assembly uses
-// ConnectionModule for each dispatcher and exactly one selected WorkerModule.
-func Module(name foundation.ProviderID, key foundation.Key[*Dispatcher], dispatch DispatchConfig, worker WorkerConfig, requires []foundation.ProviderID, construct func(foundation.Resolver) (Backend, []Declaration, error)) foundation.Module {
-	worker = worker.snapshot()
-	module := ConnectionModule(name, key, dispatch, requires, construct)
-	register := module.OnRegister
-	module.OnRegister = func(r *foundation.Registrar) error {
-		if err := worker.Validate(); err != nil {
-			return err
-		}
-		if dispatch.Namespace != worker.Namespace {
-			return safeerror.NewFault(fault.Invalid, "job module dispatcher and worker must share a namespace")
-		}
-		if err := register(r); err != nil {
-			return err
-		}
-		return registerWorker(r, key, worker)
-	}
-	return module
-}
-
 // ConnectionModule freezes the typed registry and contributions without selecting
 // a kernel. Backend ownership stays with requires; all kernels may dispatch.
 func ConnectionModule(name foundation.ProviderID, key foundation.Key[*Dispatcher], dispatch DispatchConfig, requires []foundation.ProviderID, construct func(foundation.Resolver) (Backend, []Declaration, error)) foundation.Module {

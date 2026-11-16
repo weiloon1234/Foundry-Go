@@ -104,8 +104,6 @@ class ConfigTreeDeclarationTests(unittest.TestCase):
         self.assertEqual(upgrades.feature_generation(t.parse_topology(declaration()), {}), previous)
         self.assertEqual(upgrades.feature_generation(t.parse_topology(declaration()),
                          {"deployment_selection": {"minimum_generation": 19}}), 19)
-        # No new installed files or persisted-state migration is needed for trees.
-        self.assertEqual(upgrades.required_files(18), upgrades.required_files(19))
 
 
 class ConfigTreePreparationTests(unittest.TestCase):

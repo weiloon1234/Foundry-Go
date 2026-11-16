@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cachetest"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 func taggedFixture(t *testing.T, configure func(*Config)) (*Client, cachetest.TaggedFixture) {
@@ -223,8 +224,8 @@ func TestRedisCrossClientInvalidationRejectsRememberOwner(t *testing.T) {
 		}
 	})
 	namespace := key("namespace-owner").Namespace()
-	values := cache.Define("typed-values", cache.StringKeys[string](), cache.JSON[string]())
-	changes := cache.DefineTag("typed-changes", cache.StringKeys[string]())
+	values := cache.Define("typed-values", keyspace.StringKeys[string](), cache.JSON[string]())
+	changes := cache.DefineTag("typed-changes", keyspace.StringKeys[string]())
 	var stores []*cache.Store
 	bind := func(client *Client) (cache.Cache[string, string], cache.Tags[string]) {
 		store, err := cache.NewStore(client, cache.DefaultConfig(namespace))
@@ -478,11 +479,11 @@ func TestRedisTypedOperationsCostOneRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	values, err := cache.Define("round-trip-values", cache.StringKeys[string](), cache.JSON[string]()).Bind(store)
+	values, err := cache.Define("round-trip-values", keyspace.StringKeys[string](), cache.JSON[string]()).Bind(store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	counters, err := cache.DefineCounter("round-trip-counters", cache.StringKeys[string]()).Bind(store)
+	counters, err := cache.DefineCounter("round-trip-counters", keyspace.StringKeys[string]()).Bind(store)
 	if err != nil {
 		t.Fatal(err)
 	}

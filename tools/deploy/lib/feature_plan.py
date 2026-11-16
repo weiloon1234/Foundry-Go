@@ -13,7 +13,7 @@ import runtime_config
 import services
 from contracts import unit_selection_names
 from contracts import (Deployment, ReleaseDeclaration, RuntimeResolution, atomic_json,
-                       canonical_digest, contract_uuid, digest, record_document, read_json, require)
+                       canonical_digest, contract_uuid, digest, read_json, require)
 from topology import parse_profile, parse_topology
 
 
@@ -39,12 +39,12 @@ def observations(host, registry, entry, topology, profile, operation_id):
 
 
 
-def retained_release(host, entry, target, supplied_topology):
+def retained_release(host, entry, target):
     import release
     path = release.release_path(host, entry, target)
     manifest = read_json(path / "manifest.json")
     release.verified_release(host, entry, manifest, reviewed=True)
-    recorded = release.target_declaration(host, entry, manifest, supplied_topology)
+    recorded = release.target_declaration(host, entry, manifest)
     require(release.legacy_profile(recorded["profile"]) == release.legacy_profile(entry["profile"]),
             "release_identity", "Target profile belongs to different host infrastructure.")
     if manifest["schema"] == 1:
@@ -60,12 +60,11 @@ def retained_release(host, entry, target, supplied_topology):
             return manifest, declaration, path, launch["artifact_roots"], recorded["archive_sha256"]
     require(False, "rollback_artifacts_required", "Target artifact selections are unavailable; upload the original release archive for reviewed reactivation.")
 
-def plan(host, project, profile, archive, checksum, operation_id, configuration=None, *, target=None, expected_current=None, supplied_topology=None):
+def plan(host, project, profile, archive, checksum, operation_id, configuration=None, *, target=None, expected_current=None):
     import release
     operation_id = contract_uuid(operation_id)
     with host.lock("host"), host.lock(profile["instance_id"]):
         registry, entry = host.require_identity(project, profile)
-        lifecycle.migrate_enablement(host, registry, entry)
         path = operations.directory(host, operation_id) / "release-plan.json"
         if path.exists():
             saved = admission.read_owned(host, path, lambda value: value)
@@ -75,9 +74,6 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                     public["action"] == "activate" and checksum == public["archive_sha256"]
                     and digest(Path(archive)) == checksum)
             require(same and not configuration, "operation_identity", "Use a fresh operation UUID for a changed review.")
-            if supplied_topology is not None:
-                require(parse_topology(supplied_topology).sha256 == parse_topology(saved["launch"]["topology"]).sha256,
-                        "release_topology", "Supplied topology differs from the reviewed target.")
             return public
         state = host.load_state(entry)
         release.require_idle(state)
@@ -88,7 +84,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                     "stale_current", "Review an explicit rollback target against the current release.")
             require(not configuration and archive is None and checksum is None,
                     "invalid_rollback", "Rollback retains current credentials; private restoration is a separate operation.")
-            manifest, declaration, target_path, roots, checksum = retained_release(host, entry, target, supplied_topology)
+            manifest, declaration, target_path, roots, checksum = retained_release(host, entry, target)
         else:
             request = {"operation_id": operation_id, "archive": str(archive), "archive_sha256": checksum}
             prepared = path.with_name("prepared-release.json")

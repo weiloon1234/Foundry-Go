@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 // Limits shares the persistent adapter ceilings and defaults. Byte accounting
@@ -30,7 +31,7 @@ func (l Limits) Validate() error {
 
 // NamespacePrefix returns the physical address prefix shared by every plain
 // cache entry of namespace, derived from cache.EntryKey's own address format.
-func NamespacePrefix(namespace cache.Namespace) (string, error) {
+func NamespacePrefix(namespace keyspace.Namespace) (string, error) {
 	const name, logical = "flush", "flush"
 	probe, err := cache.NewEntryKey(namespace, name, logical)
 	if err != nil {

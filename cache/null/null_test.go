@@ -9,16 +9,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cache/null"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 var (
-	values   = cache.Define("values", cache.StringKeys[string](), cache.JSON[string]())
-	counters = cache.DefineCounter("counters", cache.StringKeys[string]())
-	groups   = cache.DefineTag("groups", cache.StringKeys[string]())
+	values   = cache.Define("values", keyspace.StringKeys[string](), cache.JSON[string]())
+	counters = cache.DefineCounter("counters", keyspace.StringKeys[string]())
+	groups   = cache.DefineTag("groups", keyspace.StringKeys[string]())
 )
 
 func TestNullStoreRetainsNothingButSupportsEveryCapability(t *testing.T) {
-	store, err := cache.NewStore(null.New(), cache.DefaultConfig(cache.Namespace{Application: "null", Environment: "test"}))
+	store, err := cache.NewStore(null.New(), cache.DefaultConfig(keyspace.Namespace{Application: "null", Environment: "test"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestNullStoreRetainsNothingButSupportsEveryCapability(t *testing.T) {
 
 func TestNullBackendValidatesInputs(t *testing.T) {
 	backend := null.New()
-	key, err := cache.NewEntryKey(cache.Namespace{Application: "null", Environment: "test"}, "values", "key")
+	key, err := cache.NewEntryKey(keyspace.Namespace{Application: "null", Environment: "test"}, "values", "key")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -15,6 +15,7 @@ from test_local import cli, metadata
 from test_host_capabilities import bundle, declaration, profile as feature_profile
 from test_uploads import profile as upload_profile
 import runtime_config
+from upgrades import protocol
 
 FIXTURE = Path(__file__).resolve().parents[3] / "tests/fixtures/deploy-acceptance"
 
@@ -117,7 +118,7 @@ class OfflineValidationTests(unittest.TestCase):
         status, result = self.invoke()
         self.assertEqual(status, 0, result)
         self.assertEqual(set(result), {"schema", "action", "ok", "minimum_generation", "checks"})
-        self.assertEqual((result["schema"], result["action"], result["ok"], result["minimum_generation"]), (1, "validate", True, 1))
+        self.assertEqual((result["schema"], result["action"], result["ok"], result["minimum_generation"]), (1, "validate", True, protocol()["minimum_client_generation"]))
         self.assertEqual([c["profile"] for c in result["checks"] if c["kind"] == "profile"], ["acceptance-lab", "acceptance"])
         self.assertTrue(any(c["path"] == "deploy/acceptance-lab-bindings.json" for c in result["checks"]))
         self.assertTrue(all(c["status"] == "passed" and not c["errors"] for c in result["checks"]))
@@ -317,7 +318,7 @@ class OfflineValidationTests(unittest.TestCase):
         self.failed("profile", "invalid_uploads")
         value["uploads"]["routes"] = ["/api/{id}/media"]
         self.write("deploy/environments/acceptance.json", value)
-        self.assertEqual(self.invoke()[1]["minimum_generation"], 17)
+        self.assertEqual(self.invoke()[1]["minimum_generation"], protocol()["minimum_client_generation"])
 
     def test_copies_count_bounds(self):
         self.feature()

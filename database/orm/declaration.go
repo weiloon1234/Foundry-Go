@@ -437,12 +437,6 @@ func configureConventions(d *declaration) {
 // NoSoftDeletes disables the DeletedAt convention. Explicit SoftDeleteOf conflicts with this option.
 func NoSoftDeletes() Option { return Option{noSoftDeletes: true} }
 
-// Count all address/type matches, including nested fields. A pointer cannot
-// distinguish two fields sharing a representation at the same byte offset.
-func offsetMatches(t reflect.Type, offset uintptr, target reflect.Type) int {
-	return modelmeta.OffsetMatches(t, offset, target)
-}
-
 type tableAttachment interface{ ormAttach(*tableCore) *tableCore }
 
 func attachDeclaration(d *declaration, result reflect.Value) {

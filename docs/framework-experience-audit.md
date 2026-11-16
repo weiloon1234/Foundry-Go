@@ -167,10 +167,9 @@ must account for all named primary/read pools.
 
 ### 3. Multi-connection jobs require kernel composition
 
-Each [jobs.Module](../jobs/module.go) registers the Worker kernel, and
-[Registrar.Kernel](../foundation/services.go) rejects duplicate kernel kinds.
-Therefore registering two ordinary job modules is not a working multi-connection
-worker design. The [WebSocket module](../websocket/module.go) has a corresponding
+[jobs.ConnectionModule](../jobs/module.go) registers each dispatcher without a
+kernel. One `jobs.WorkerModule` selects the worker dispatcher.
+[Registrar.Kernel](../foundation/services.go) rejects duplicate kernel kinds. The [WebSocket module](../websocket/module.go) has a corresponding
 single-kernel constraint.
 
 Separate configured connection/dispatcher ownership from worker-kernel assembly.

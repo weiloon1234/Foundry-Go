@@ -118,7 +118,7 @@ func TestPostgresNativeCallbacksContainErrorsBeforeDriverInspection(t *testing.T
 			m := pgtype.NewMap()
 			protectCodecMap(m)
 			composite := &pgtype.Type{Name: "test_composite", OID: 80001, Codec: &pgtype.CompositeCodec{Fields: []pgtype.CompositeCodecField{{Name: "value", Type: mustPGType(m, pgtype.TextOID)}}}}
-			protectCodecType(m, composite)
+			codecRegistryFor(m).register(composite)
 			pointer := failingText{cause}
 			indirect := &pointer
 			cases := []struct {

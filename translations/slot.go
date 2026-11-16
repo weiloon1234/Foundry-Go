@@ -95,9 +95,6 @@ func defineText[M any, K comparable](owner extensions.Owner[M, K], name Name, op
 	return s
 }
 
-// fieldDeclaration returns the underlying declaration for the explicit translation API.
-func (s textSlot[M, K]) fieldDeclaration() Field[M, K] { return s.field }
-
 // name is the stored field name.
 func (s textSlot[M, K]) name() Name { return s.field.Name() }
 

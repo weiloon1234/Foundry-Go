@@ -11,7 +11,7 @@ from unittest.mock import patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import DeployError, HOST_PATHS, MAX_JSON, atomic_json, read_json
+from contracts import DeployError, HOST_PATHS, MAX_JSON, atomic_json
 from host import Host, Paths
 import upgrades
 from test_contracts import fixture, registry
@@ -42,13 +42,13 @@ class ManagerTests(unittest.TestCase):
             run.assert_not_called()
 
 
-    def test_generation_nine_client_can_deploy_on_current_host(self):
+    def test_generation_eighteen_client_can_deploy_on_current_host(self):
         import release
         value = self.host.read_registry()
         value['tools'] = upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)
         self.assertEqual(upgrades.protocol()['generation'], value['tools']['generation'])
         self.host.write_registry(value)
-        request = {**self.request, 'client': {**self.request['client'], 'generation': 9},
+        request = {**self.request, 'client': {**self.request['client'], 'generation': 18},
                    'archive': '/staged/app.tar.gz', 'archive_sha256': 'a' * 64}
         with patch.object(release, 'activate', return_value={'ok': True}) as activate, \
                 patch.object(release, 'unpack_archive', return_value={'schema': 1}) as inspect:
@@ -61,13 +61,13 @@ class ManagerTests(unittest.TestCase):
         import release
         from test_host_capabilities import selection
         _, _, feature = fixture(project_slug="feature", host_id=self.entry["host_id"], port=8101)
-        feature["deployment_selection"] = selection(feature["profile"]["instance_id"])
+        feature["deployment_selection"] = {**selection(feature["profile"]["instance_id"]), "minimum_generation": 19}
         value = registry(self.entry, feature)
         value["tools"] = upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)
         self.host.write_registry(value)
-        request = {**self.request, "client": {**self.request["client"], "generation": 9},
+        request = {**self.request, "client": {**self.request["client"], "generation": 18},
                    "archive": "/staged/app.tar.gz", "archive_sha256": "a" * 64}
-        for generation in (9, 10, 11):
+        for generation in (18,):
             request["client"]["generation"] = generation
             with patch.object(release, "activate", return_value={"ok": True}) as activate, \
                     patch.object(release, "unpack_archive", return_value={"schema": 1}):
@@ -86,7 +86,9 @@ class ManagerTests(unittest.TestCase):
         with self.assertRaises(DeployError) as error:
             manager.execute(self.host, "stop", {**self.request, "unreviewed": True})
         self.assertEqual("invalid_request", error.exception.code)
-
+        with self.assertRaises(DeployError) as error:
+            manager.execute(self.host, "release-plan", {**self.request, "topology": {"schema": 1}})
+        self.assertEqual("invalid_request", error.exception.code)
 
     def test_rotation_requires_and_dispatches_stable_operation_id(self):
         import release
@@ -294,14 +296,3 @@ class ManagerTests(unittest.TestCase):
             with self.assertRaises(DeployError) as error:
                 manager.execute(self.host, action, {**self.request, "confirm": True})
             self.assertEqual("no_release", error.exception.code)
-
-    def test_generation_seven_maintenance_record_is_dropped_on_load_and_save(self):
-        state = self.host.load_state(self.entry)
-        path = self.host.paths.instance_state(self.entry["name"]) / "state.json"
-        for value in ({"down": True, "since": "2026-11-11T00:00:00Z"}, None, {"obsolete": True}):
-            with self.subTest(value=value):
-                atomic_json(path, {**state, "maintenance": value})
-                loaded = self.host.load_state(self.entry)
-                self.assertEqual(state, loaded)
-                self.host.save_state(self.entry, loaded)
-                self.assertNotIn("maintenance", read_json(path))

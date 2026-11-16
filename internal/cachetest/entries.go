@@ -13,6 +13,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 type EntryAdapter interface {
@@ -125,7 +126,7 @@ func RunEntries(t *testing.T, setup func(*testing.T) EntryFixture) {
 					t.Fatal(count, err)
 				}
 			} else {
-				foreign, err := cache.NewEntryKey(cache.Namespace{Application: "other", Environment: "owned-test"}, "family", "key")
+				foreign, err := cache.NewEntryKey(keyspace.Namespace{Application: "other", Environment: "owned-test"}, "family", "key")
 				if err != nil {
 					t.Fatal(err)
 				}

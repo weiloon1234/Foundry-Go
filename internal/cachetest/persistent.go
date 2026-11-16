@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cacheatomic"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
 
@@ -26,14 +27,14 @@ type PersistentBackend interface {
 type PersistentFixture struct {
 	Open  func(t *testing.T, maxEntries, maxValueBytes int) PersistentBackend
 	Clock *testkit.Clock
-	Key   func(namespace cache.Namespace, logical string) cache.EntryKey
+	Key   func(namespace keyspace.Namespace, logical string) cache.EntryKey
 }
 
 // RunPersistent checks the file and PostgreSQL capacity, unusable-entry and
 // namespace flush contracts.
 func RunPersistent(t *testing.T, setup func(*testing.T) PersistentFixture) {
 	t.Helper()
-	namespace := cache.Namespace{Application: "persistent-contract", Environment: "test"}
+	namespace := keyspace.Namespace{Application: "persistent-contract", Environment: "test"}
 	t.Run("capacity-counts-only-live-entries", func(t *testing.T) {
 		f := setup(t)
 		b := f.Open(t, 2, 1024)
@@ -164,7 +165,7 @@ func RunPersistent(t *testing.T, setup func(*testing.T) PersistentFixture) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		values := cache.Define("values", cache.StringKeys[string](), cache.JSON[string]())
+		values := cache.Define("values", keyspace.StringKeys[string](), cache.JSON[string]())
 		handle, err := values.Bind(store)
 		if err != nil {
 			t.Fatal(err)
@@ -181,7 +182,7 @@ func RunPersistent(t *testing.T, setup func(*testing.T) PersistentFixture) {
 		if found, err := b.Exists(t.Context(), f.Key(foreign, "value")); err != nil || found {
 			t.Fatal("namespace entry survived invalidation", found, err)
 		}
-		if removed, err := b.FlushNamespace(t.Context(), cache.Namespace{}); !errors.Is(err, fault.Invalid) || removed != 0 {
+		if removed, err := b.FlushNamespace(t.Context(), keyspace.Namespace{}); !errors.Is(err, fault.Invalid) || removed != 0 {
 			t.Fatal("invalid namespace flushed", removed, err)
 		}
 	})
