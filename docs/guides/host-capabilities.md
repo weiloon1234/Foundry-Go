@@ -568,7 +568,13 @@ paths under `deploy/bin/`.
   binding resolves a verified executable without starting a daemon. Framework
   package defaults remain fenced unless their owner explicitly hands them off.
 
-  Package installation refuses configuration changes to any preexisting unit and
+  Reviewed plans bind required package versions, the proposed installation, and
+  foreign unit configuration. Unrelated dpkg changes and foreign runtime activity
+  during review or payload download do not invalidate approval. After downloads,
+  installation records a fresh package inventory and service baseline before mutation.
+  Foundry unit observations remain exact throughout review and installation.
+
+  From that baseline, package installation refuses configuration changes to any preexisting unit and
   runtime changes to independently managed services, including starts, stops,
   failures and restarts. It ignores runtime changes to numeric `user@` and
   `user-runtime-dir@` session services, transient units, static `Type=dbus`
@@ -1625,8 +1631,11 @@ and neither readiness nor public exposure depends on them. Recovery retains fail
 observations explicitly and leaves external cutover pending.
 
 Release activation rechecks the reviewed host observations inside its owned
-executor. Only that verified executor's newly created systemd unit is excluded;
-other activation changes still invalidate the plan. A `stale_plan` observation
+executor. Session and transient units, foreign runtime activity, and unrelated
+package changes do not invalidate review. Required package versions, unit
+configuration, and Foundry unit identity remain checked. Among Foundry units,
+only that verified executor's newly created systemd unit is excluded.
+A `stale_plan` observation
 error lists changed key names, never values, and records those names in the
 private operation directory's `stale-plan.json`. Review a fresh plan after
 resolving the reported changes.

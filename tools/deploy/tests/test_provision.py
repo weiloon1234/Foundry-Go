@@ -109,6 +109,123 @@ class FoundationProvisionTests(unittest.TestCase):
         self.assertNotEqual(before["plan_token"], after["plan_token"])
         self.assertNotEqual(before["entry"]["allocations"]["http_port"], after["entry"]["allocations"]["http_port"])
 
+    def reviewed_ready_host(self):
+        initial = self.plan()
+        self.profile["host"]["host_id"] = initial["host_id"]
+        self.register(initial)
+        entry = self.host.registry_value["instances"][self.profile["instance_id"]]
+        entry["provisioning"] = {"state": "ready", "completed_steps": [
+            "secrets", "bootstrap_secrets", "database", "redis", "configuration", "backup", "unit", "certificate"]}
+        for module in (provision.postgres, provision.redis_acl, provision.certificates):
+            module.inspect.return_value = {"state": "ready"}
+        for name in ("validate_runtime_environment", "initialize_bootstrap_secrets"):
+            self.enterContext(patch.object(provision, name))
+        self.enterContext(patch.object(provision, "_ready_configuration", return_value=True))
+        self.enterContext(patch.object(provision.upgrades, "prune_tools", return_value={}))
+        return self.plan()
+
+    def confirm(self, plan):
+        return provision.bootstrap_apply(self.host, self.project, self.profile, TOOLS,
+                                         plan["plan_token"], topology=TOPOLOGY)
+
+    def test_bootstrap_confirmation_ignores_unrelated_listener_churn(self):
+        plan = self.reviewed_ready_host()
+        self.host.ports = [45678]
+        self.assertTrue(self.confirm(plan)["ok"])
+
+    def test_bootstrap_confirmation_refuses_new_edge_or_reserved_listener_before_mutation(self):
+        import listeners
+        with patch.object(listeners, "reserved_wildcard_ports", return_value={32000}):
+            plan = self.reviewed_ready_host()
+            for port in (80, 443, 32000):
+                self.host.ports = [port]
+                with self.subTest(port=port), patch.object(provision, "_ensure_roots") as mutate:
+                    with self.assertRaises(DeployError) as error:
+                        self.confirm(plan)
+                    self.assertEqual(error.exception.code, "plan_changed")
+                    mutate.assert_not_called()
+
+    def test_bootstrap_confirmation_refuses_changed_allocation(self):
+        plan = self.plan()
+        self.profile["host"]["host_id"] = plan["host_id"]
+        self.host.ports = [plan["entry"]["allocations"]["http_port"]]
+        with self.assertRaises(DeployError) as error:
+            self.confirm(plan)
+        self.assertEqual(error.exception.code, "plan_changed")
+
+    def test_bootstrap_confirmation_refuses_changed_occupancy_of_registered_port(self):
+        plan = self.reviewed_ready_host()
+        self.host.ports = [plan["entry"]["allocations"]["http_port"]]
+        with self.assertRaises(DeployError) as error:
+            self.confirm(plan)
+        self.assertEqual(error.exception.code, "plan_changed")
+
+    def test_bootstrap_confirmation_ignores_unrelated_packages_but_binds_requirements(self):
+        provision.packages.inspect.return_value = {"missing": [], "installed": {
+            "nginx": {"version": "1", "status": "install ok installed"},
+            "unrelated": {"version": "1", "status": "install ok installed"}}}
+        plan = self.reviewed_ready_host()
+        installed = provision.packages.inspect.return_value["installed"]
+        installed["unrelated"]["version"] = "2"
+        self.assertTrue(self.confirm(plan)["ok"])
+        installed["nginx"]["version"] = "2"
+        with self.assertRaises(DeployError) as error:
+            self.confirm(plan)
+        self.assertEqual(error.exception.code, "plan_changed")
+
+    def test_bootstrap_confirmation_ignores_foreign_runtime_but_refuses_foundry_restart(self):
+        units = {name: {"LoadState": "loaded", "ActiveState": "active", "SubState": "running",
+                        "MainPID": "10", "UnitFileState": "enabled", "FragmentPath": "/usr/lib/systemd/system/" + name}
+                 for name in ("cron.service", "foundry-owned.service")}
+        provision.packages.inspect.return_value = {"missing": [], "activation": units}
+        with patch.object(provision.packages, "_activation_classification", return_value={}):
+            plan = self.reviewed_ready_host()
+            units["cron.service"]["MainPID"] = "20"
+            self.assertTrue(self.confirm(plan)["ok"])
+            units["foundry-owned.service"]["MainPID"] = "20"
+            with self.assertRaises(DeployError) as error:
+                self.confirm(plan)
+        self.assertEqual(error.exception.code, "plan_changed")
+
+    def test_bootstrap_confirmation_waits_for_background_apt(self):
+        plan = self.reviewed_ready_host()
+        busy = [True]
+        inspected = provision.packages.inspect.return_value
+        def finish_apt(seconds):
+            busy[0] = False
+        with patch.object(provision.packages, "_locks", side_effect=lambda host: ["dpkg"] if busy[0] else []), \
+                patch.object(provision.packages.time, "sleep", side_effect=finish_apt), \
+                patch.object(provision.packages, "inspect", side_effect=lambda host: {**inspected, "state": "busy"} if busy[0] else inspected):
+            self.assertTrue(self.confirm(plan)["ok"])
+
+    def test_bootstrap_confirmation_refuses_apt_lock_at_deadline(self):
+        plan = self.reviewed_ready_host()
+        with patch.object(provision.packages, "_locks", return_value=["dpkg"]), \
+                patch.object(provision.packages, "LOCK_WAIT_SECONDS", 0), self.assertRaises(DeployError) as error:
+            self.confirm(plan)
+        self.assertEqual(error.exception.code, "package_locked")
+
+    def test_bootstrap_planning_waits_for_apt_then_confirms(self):
+        self.reviewed_ready_host()
+        busy = [True]
+        inspected = provision.packages.inspect.return_value
+        def finish_apt(seconds):
+            busy[0] = False
+        with patch.object(provision.packages, "_locks", side_effect=lambda host: ["dpkg"] if busy[0] else []), \
+                patch.object(provision.packages.time, "sleep", side_effect=finish_apt) as wait, \
+                patch.object(provision.packages, "inspect", side_effect=lambda host: {**inspected, "state": "busy"} if busy[0] else inspected):
+            plan = self.plan()
+            wait.assert_called_once()
+            self.assertNotEqual(plan["observations"]["packages"].get("state"), "busy")
+            self.assertTrue(self.confirm(plan)["ok"])
+
+    def test_bootstrap_planning_refuses_apt_lock_at_deadline(self):
+        with patch.object(provision.packages, "_locks", return_value=["dpkg"]), \
+                patch.object(provision.packages, "LOCK_WAIT_SECONDS", 0), self.assertRaises(DeployError) as error:
+            self.plan()
+        self.assertEqual(error.exception.code, "package_locked")
+        self.assertEqual(self.host.writes, [])
+
     def test_invalid_rehearsal_maintenance_graph_refuses_before_host_inspection(self):
         declarations = TOOLS.parents[1] / "tests/fixtures/deploy-acceptance/deploy"
         project = json.loads((declarations / "project.json").read_text())

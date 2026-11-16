@@ -1,10 +1,37 @@
 # Changelog
 
-## Unreleased
+## v0.41.0 — 2026-11-17
 
-- Extend real-VM operator acceptance in both topology modes with delayed interactive
-  deployment confirmation after SSH expiry and failed deployment, reconciliation,
-  and healthy rollback recovery, including delayed feature rollback confirmation.
+- Reviewed plans survive operator delay on stock Ubuntu cloud servers. Every host
+  observation compared between review and confirmation was audited; background
+  activity no longer stales a plan, while anything the plan depends on still refuses.
+- Real-VM operator acceptance now covers, in both topology modes, a deploy confirmed
+  after every SSH session has closed, and a failed deploy followed by reconcile and
+  a rollback to a healthy release. Feature rollbacks are also confirmed after the pause.
+- Bootstrap confirmation ignores unrelated listening ports but refuses changed
+  occupancy on ports 80 and 443, the allocated HTTP port, declared public listener
+  ports, and reserved wildcard ports before mutating the host. The HTTP allocation
+  and database service checks remain bound to review.
+- Bootstrap, release, rollback, and package-install reviews tolerate unrelated
+  dpkg changes while retaining required package versions, executable evidence, and
+  the exact approved installation. Downloads recheck that transaction before
+  recording a fresh inventory. Changed requirements refuse even when no packages
+  remain missing.
+- Bootstrap, release, and rollback planning and confirmation wait for scheduled
+  apt work within the existing bounded timeout. A busy host refuses with
+  `package_locked` instead of publishing a token with incomplete package evidence.
+- Activation reviews tolerate foreign daemon runtime changes, closed login
+  sessions, transient units, and run-to-completion instances of existing foreign
+  templates appearing or vanishing. Vanished sessions and transient units are not
+  re-queried. Unit configuration, template state, and Foundry runtime identity,
+  including transient Foundry units and scopes, remain checked.
+- Package installation records its foreign-service preservation baseline immediately
+  before mutation, allowing runtime churn during review and payload download.
+  Service changes during the owned installation still refuse.
+- Readiness checks retry missing live-process observations within the remaining
+  timeout. A timed-out retry returns the last observation without extending the
+  budget; initial inspection failures and operation deadlines still propagate.
+  Changed process identities and persistently missing evidence still refuse readiness.
 
 ## v0.40.0 — 2026-11-16
 

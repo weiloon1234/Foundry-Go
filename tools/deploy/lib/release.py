@@ -701,17 +701,35 @@ def _process(host, pid):
 
 
 def service(host, unit, timeout=5):
-    found = host.run(["systemctl", "show", unit,
-                      "--property=LoadState,ActiveState,SubState,MainPID,NRestarts,ControlGroup,InvocationID,ExecMainStartTimestampMonotonic", "--no-pager"],
-                     check=False, timeout=timeout)
-    if found.returncode:
-        raise DeployError("service_inspection", "Required service could not be inspected.")
-    values = dict(line.split("=", 1) for line in found.stdout.splitlines() if "=" in line)
-    result = {"unit": unit, **{key: values.get(key) for key in
-              ("LoadState", "ActiveState", "SubState", "MainPID", "NRestarts", "ControlGroup", "InvocationID", "ExecMainStartTimestampMonotonic")}}
-    process = _process(host, result["MainPID"])
-    result.update(exe=process["exe"] if process else None, process=process)
-    return result
+    deadline = time.monotonic() + timeout
+    result = None
+    while True:
+        command_timeout = timeout if result is None else deadline - time.monotonic()
+        if result is not None and command_timeout <= 0:
+            return result
+        try:
+            found = host.run(["systemctl", "show", unit,
+                              "--property=LoadState,ActiveState,SubState,MainPID,NRestarts,ControlGroup,InvocationID,ExecMainStartTimestampMonotonic", "--no-pager"],
+                             check=False, timeout=command_timeout)
+        except DeployError as error:
+            if result is not None and error.code == "command_unavailable":
+                return result
+            raise
+        if found.returncode:
+            raise DeployError("service_inspection", "Required service could not be inspected.")
+        values = dict(line.split("=", 1) for line in found.stdout.splitlines() if "=" in line)
+        result = {"unit": unit, **{key: values.get(key) for key in
+                  ("LoadState", "ActiveState", "SubState", "MainPID", "NRestarts", "ControlGroup", "InvocationID", "ExecMainStartTimestampMonotonic")}}
+        process = _process(host, result["MainPID"])
+        result.update(exe=process["exe"] if process else None, process=process)
+        pid = result["MainPID"]
+        remaining = deadline - time.monotonic()
+        if (process is not None or result["ActiveState"] not in ("active", "activating")
+                or not isinstance(pid, str) or not pid.isdecimal() or int(pid) == 0 or remaining <= 0):
+            return result
+        # A missing /proc sample is not evidence of a different process. Reobserve
+        # systemd too, so PID reuse or a real restart still reaches identity checks.
+        time.sleep(min(.05, remaining))
 
 
 def _matches_executable(observation, executable):

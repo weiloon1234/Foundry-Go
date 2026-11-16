@@ -359,6 +359,14 @@ def new_entry(project, profile, topology, port, metadata):
     return entry
 
 
+def _bootstrap_ports(host, registry, http_port, profile):
+    from listeners import public_claims, reserved_wildcard_ports
+    ports = {80, 443, http_port} | reserved_wildcard_ports(host, registry)
+    if profile is not None:
+        ports.update(claim.socket.port for claim in public_claims(profile))
+    return ports
+
+
 def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     """Bind platform, service observations, identity and topology to one digest.
 
@@ -378,6 +386,7 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
         parsed = parse_topology({k: v for k, v in topology.items() if k != "sha256"})
         if existing is None or existing["topology"] != topology:
             feature_maintenance.stopped_roles(parsed)
+    packages.wait_idle(host)
     snapshot = inspect_host(host)
     require(snapshot["os"] == "ubuntu" and snapshot["os_version"] in {"24.04", "26.04"}, "unsupported_host", "Ubuntu 24.04 or 26.04 is required.")
     require(snapshot["architecture"] == profile["architecture"], "architecture_mismatch", "Profile architecture differs from host.")
@@ -442,13 +451,13 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     upgrade = upgrades.tools_upgrade(host, registry, tools_dir)
     if upgrade and upgrade["from_digest"] is not None:
         findings.append({"kind": "stop", "code": "host_upgrade_required", "detail": "Apply a separate reviewed tool upgrade first."})
-    # Session, on-demand and scheduled unit churn between review and apply must not
-    # invalidate the plan; independently managed services still bind it exactly.
-    package_observation = observations["packages"]
-    if "activation" in package_observation:
-        package_observation = {**package_observation,
-                               "activation": packages.stable_activation(host, package_observation["activation"])}
-    digest_input = {"host": snapshot, "profile": bound, "topology": topology, "project": project,
+    # Bind package effects and configuration, not background activity during review.
+    package_observation = packages.stable_observation(host, observations["packages"])
+    ports = _bootstrap_ports(host, registry, entry["allocations"]["http_port"], placed if feature else None)
+    digest_input = {"host": {k: v for k, v in snapshot.items() if k != "listeners"},
+                    "http_port": entry["allocations"]["http_port"],
+                    "listener_occupancy": {str(port): port in snapshot["listeners"] for port in sorted(ports)},
+                    "profile": bound, "topology": topology, "project": project,
                     "revision": registry["revision"], "observations": {**observations, "packages": package_observation},
                     "bundle": upgrades.tool_bundle(tools_dir)[2]}
     token = hashlib.sha256(json.dumps(digest_input, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -535,6 +544,7 @@ def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topol
     """Replan under the host lock, then call service owners in dependency order."""
     require(profile["host"]["host_id"] is not None, "host_binding_required", "Persist the proposed host UUID before apply.")
     with host.lock("host"):
+        packages.wait_idle(host)
         plan = bootstrap_plan(host, project, profile, tools_dir, topology=topology)
         require(plan["ok"] and not any(item.get("kind") == "stop" for item in plan["findings"]),
                 "bootstrap_blocked", "Bootstrap plan contains blocking findings.")

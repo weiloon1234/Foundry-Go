@@ -98,6 +98,15 @@ def _locks(host: Host) -> list[str]:
     return busy
 
 
+def wait_idle(host: Host) -> None:
+    """Let Ubuntu's scheduled apt work finish before reobserving a reviewed plan."""
+    deadline = time.monotonic() + LOCK_WAIT_SECONDS
+    while _locks(host):
+        remaining = deadline - time.monotonic()
+        require(remaining > 0, "package_locked", "apt/dpkg is busy; retry after the current transaction exits.")
+        time.sleep(min(LOCK_POLL_SECONDS, remaining))
+
+
 def ubuntu_major(host: Host) -> int:
     path = host.paths.p("/etc/os-release")
     if path.is_symlink():
@@ -112,13 +121,17 @@ def ubuntu_major(host: Host) -> int:
     return {"24.04": 16, "26.04": 18}[version]
 
 
-def _required(host: Host, inventory: dict) -> list[str]:
+def _requirements(host: Host) -> dict:
     required = dict(REQUIREMENTS)
     major = ubuntu_major(host)
     required.update({f"postgresql-{major}": (f"/usr/lib/postgresql/{major}/bin/postgres",),
                      f"postgresql-client-{major}": (f"/usr/lib/postgresql/{major}/bin/psql",),
                      "postgresql-common": ("/usr/bin/pg_createcluster",)})
-    return sorted(name for name, binaries in required.items()
+    return required
+
+
+def _required(host: Host, inventory: dict) -> list[str]:
+    return sorted(name for name, binaries in _requirements(host).items()
                   if not _installed(inventory, name) and not (binary_available(host, name) if name in REQUIREMENTS
                           else binaries and all(host.paths.p(p).is_file() for p in binaries)))
 
@@ -513,9 +526,9 @@ def _candidate_evidence(host, transaction):
     return evidence
 
 
-UNIT = re.compile(r"[A-Za-z0-9_:,.@\\-]+\.(?:service|socket|timer|path|target)")
+UNIT = re.compile(r"[A-Za-z0-9_:,.@\\-]+\.(?:service|socket|timer|path|target|scope)")
 TEMPLATE_UNIT = re.compile(r"@\.(?:service|socket|timer|path|target)$")
-SESSION_UNIT = re.compile(r"(?:user|user-runtime-dir)@[0-9]+\.service")
+SESSION_UNIT = re.compile(r"(?:(?:user|user-runtime-dir)@[0-9]+\.service|session-[A-Za-z0-9]+\.scope)")
 ACTIVATION_UNIT_LIMIT = 4096
 
 
@@ -557,7 +570,8 @@ def _activation_snapshot(host):
 def _activation_classification(host, current):
     require(len(current) <= ACTIVATION_UNIT_LIMIT, "package_activation", "Host activation inventory is too large.")
     names = sorted(name for name, record in current.items()
-                   if "template_state" not in record and "alias_state" not in record)
+                   if "template_state" not in record and "alias_state" not in record
+                   and not name.startswith(PREFIX + "-") and not _ephemeral_activation(name, record, {}))
     if not names:
         return {}
     result = host.run(["systemctl", "show", *names, "--no-pager", "-p", "Id", "-p", "Type",
@@ -577,7 +591,9 @@ def _activation_classification(host, current):
 
 def _ephemeral_activation(name, record, kind):
     # Login sessions and transient units appear and vanish with work the install did not cause.
-    return bool(SESSION_UNIT.fullmatch(name) or kind.get("Transient") == "yes"
+    return not name.startswith(PREFIX + "-") and bool(SESSION_UNIT.fullmatch(name) or name.endswith(".scope")
+                or kind.get("Transient") == "yes"
+                or record.get("UnitFileState") == "transient"
                 or str(record.get("FragmentPath", "")).startswith("/run/systemd/transient/"))
 
 
@@ -589,7 +605,17 @@ def _run_to_completion(kind):
     return kind.get("Type") == "oneshot" and kind.get("RemainAfterExit", "yes") == "no"
 
 
+def _completion_instance(name, record, kind, baseline):
+    if name.startswith(PREFIX + "-") or "@" not in name or TEMPLATE_UNIT.search(name):
+        return False
+    template = name.split("@", 1)[0] + "@." + name.rsplit(".", 1)[1]
+    return ("template_state" in baseline.get(template, {}) and record.get("UnitFileState") == "static"
+            and record.get("FragmentPath", "").endswith("/" + template) and _run_to_completion(kind))
+
+
 def _runtime_policy(name, record, kind):
+    if name.startswith(PREFIX + "-"):
+        return "exact"
     triggers = kind.get("TriggeredBy", "").split()
     # A static service has no install section: only a bus, hook, dependency or trigger starts it.
     static_service = name.endswith(".service") and kind.get("UnitFileState") == "static"
@@ -611,10 +637,13 @@ def _activation_differences(before, current, classification, *, allow_new=False)
     # original snapshot shape. Both sides use the current host's classification.
     if not isinstance(before, dict):
         return [("activation", "missing")]
+    baseline = before
     before = {name: record for name, record in before.items()
-              if name in current or not _ephemeral_activation(name, record, {})}
+              if not _completion_instance(name, record, classification.get(name, {}), baseline)
+              and (name in current or not _ephemeral_activation(name, record, {}))}
     current = {name: record for name, record in current.items()
-               if name in before or not (allow_new or _ephemeral_activation(name, record, classification.get(name, {})))}
+               if not _completion_instance(name, record, classification.get(name, {}), baseline)
+               and (name in before or not (allow_new or _ephemeral_activation(name, record, classification.get(name, {}))))}
     differences = [(name, "removed") for name in sorted(before.keys() - current.keys())]
     differences += [(name, "added") for name in sorted(current.keys() - before.keys())]
     for name in sorted(before.keys() & current.keys()):
@@ -644,7 +673,11 @@ def _difference_detail(differences, limit=8):
 
 
 def stable_activation(host, snapshot):
-    """Project an activation snapshot for plan tokens: the same churn the comparison ignores never changes it."""
+    """Bind foreign configuration and Foundry identity across operator delay.
+
+    Foreign runtime gets a fresh preservation baseline immediately before the
+    owned installation; a restart before that boundary is not an install effect.
+    """
     classification = _activation_classification(host, snapshot)
     stable = {}
     for name, record in snapshot.items():
@@ -654,12 +687,33 @@ def stable_activation(host, snapshot):
             stable[name] = dict(record)
             continue
         kind = classification.get(name, {})
-        if _ephemeral_activation(name, record, kind):
+        if _ephemeral_activation(name, record, kind) or _completion_instance(name, record, kind, snapshot):
             continue
-        policy = _runtime_policy(name, record, kind)
-        runtime = RUNTIME if policy == "exact" else ("ActiveState", "MainPID") if policy == "substate" else ()
-        stable[name] = {k: v for k, v in record.items() if k not in RUNTIME or k in runtime}
+        stable[name] = {k: v for k, v in record.items() if k not in RUNTIME}
     return stable
+
+
+def _reviewed_activation_differences(host, before, current):
+    if not isinstance(before, dict):
+        return [("activation", "missing")]
+    return _activation_differences(stable_activation(host, before), stable_activation(host, current), {})
+
+
+def _reviewed_inventory(host, observation, inventory):
+    names = (set(_requirements(host)) | set(observation.get("role_requirements", ()))
+             | set(observation.get("retained_requirements", ())) | set(observation.get("missing", ()))
+             | set(observation.get("transaction", ())))
+    return {name: _record(inventory, name) for name in sorted(names)}
+
+
+def stable_observation(host, observation):
+    """Bind package effects and requirements, not unrelated dpkg inventory."""
+    result = dict(observation)
+    if "installed" in result:
+        result["installed"] = _reviewed_inventory(host, observation, result["installed"])
+    if "activation" in result:
+        result["activation"] = stable_activation(host, result["activation"])
+    return result
 
 
 _DEB_UNITS = r'''
@@ -874,7 +928,7 @@ def _mask_defaults(host, journal):
 
 def _finish_activation(host, journal):
     before, current = journal["activation_before"], _activation_snapshot(host)
-    classification = _activation_classification(host, current)
+    classification = _activation_classification(host, {**before, **current})
     differences = _activation_differences(before, current, classification, allow_new=True)
     require(not differences, "package_service_changed",
             "Preexisting host activation changed during installation; operator review required: " + _difference_detail(differences))
@@ -1184,11 +1238,7 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
     require(not isinstance(names, (str, bytes)) and all(isinstance(n, str) and PACKAGE.fullmatch(n) for n in names),
             "package_names", "Package names must be literal distro package identifiers.")
     journal = _load(host)
-    # Ubuntu's daily unattended-upgrades holds these for minutes on a healthy host.
-    deadline = time.monotonic() + LOCK_WAIT_SECONDS
-    while _locks(host) and time.monotonic() < deadline:
-        time.sleep(LOCK_POLL_SECONDS)
-    require(not _locks(host), "package_locked", "apt/dpkg is busy; retry after the current transaction exits.")
+    wait_idle(host)
     require(not _transaction_active(host, journal), "package_locked", "The recorded package process tree is still running.")
     if journal and (journal["state"] == "installing" or journal.get("policy_state") != "restored"):
         _restore_policy(host, journal)
@@ -1196,6 +1246,10 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
     prepared = False
     if not journal or journal["state"] == "complete":
         _clean_inventory(inventory)
+        if reviewed is not None:
+            require(_reviewed_inventory(host, reviewed, reviewed.get("installed", {})) ==
+                    _reviewed_inventory(host, reviewed, inventory), "package_plan_changed",
+                    "Installed package requirements changed after approval.")
         missing = sorted(set(name for name in names if not _installed(inventory, name)))
         if not missing:
             return
@@ -1206,9 +1260,8 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
         activation = _activation_snapshot(host)
         if reviewed is not None:
             changed = [part for part, same in (("transaction", reviewed.get("transaction") == approved),
-                                               ("origin", reviewed.get("evidence") == evidence),
-                                               ("installed packages", reviewed.get("installed") == inventory)) if not same]
-            differences = _activation_differences(reviewed.get("activation"), activation, _activation_classification(host, activation))
+                                               ("origin", reviewed.get("evidence") == evidence)) if not same]
+            differences = _reviewed_activation_differences(host, reviewed.get("activation"), activation)
             if differences:
                 changed.append("activation: " + _difference_detail(differences))
             require(not changed, "package_plan_changed",
@@ -1220,11 +1273,18 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
             require(not path.exists() and not preserved.exists(),
                     "package_activation", "Preexisting cron configuration cannot be claimed by package installation.")
         current = _activation_snapshot(host)
-        differences = _activation_differences(activation, current, _activation_classification(host, current))
-        if _inventory(host) != inventory:
+        differences = _reviewed_activation_differences(host, activation, current)
+        acquired_inventory = _inventory(host)
+        requirements = reviewed if reviewed is not None else {"missing": missing, "transaction": approved}
+        if _reviewed_inventory(host, requirements, acquired_inventory) != _reviewed_inventory(host, requirements, inventory):
             differences.insert(0, ("installed packages", "changed"))
         require(not differences, "package_plan_changed",
                 "Host changed while acquiring inert package payloads: " + _difference_detail(differences))
+        if acquired_inventory != inventory:
+            _clean_inventory(acquired_inventory)
+            require(_simulate(host, missing, acquired_inventory) == approved, "package_plan_changed",
+                    "Package transaction changed while acquiring inert package payloads.")
+            inventory = acquired_inventory
         prepared = True
         operation = str(uuid.uuid4())
         retained_activation = journal.get("default_activation", {}) if journal else {}

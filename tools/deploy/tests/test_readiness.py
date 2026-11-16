@@ -3,6 +3,7 @@ from contextlib import ExitStack
 from dataclasses import replace
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import threading
 import time
@@ -19,6 +20,8 @@ from timing_support import Checkpoints, ManualClock, readiness_clock
 import release
 import services
 from test_copies import numbered_inventory
+
+SERVICE = release.service
 
 
 class ReadinessTests(unittest.TestCase):
@@ -41,6 +44,89 @@ class ReadinessTests(unittest.TestCase):
         stack.enter_context(patch.object(release, "service", return_value=observation))
         stack.enter_context(patch.object(release, "_matches_executable", return_value=True))
         return host, inventory, started, observation
+
+    def process_sample_scenario(self, *, changed=False, unavailable=False):
+        host, inventory, started, observation = self.fixture()
+        process = {"start": "42", "exe": "/selected"}
+        samples = iter([process, None, {**process, "start": "99" if changed else "42"}])
+        def sample(*args):
+            return None if unavailable else next(samples, process)
+        output = "\n".join(key + "=" + value for key, value in observation.items() if isinstance(value, str))
+        with patch.object(host, "run", return_value=subprocess.CompletedProcess([], 0, output, "")), \
+                patch.object(release, "service", wraps=SERVICE), patch.object(release, "_process", side_effect=sample), \
+                patch.object(release, "STABILITY_SECONDS", 0), patch.object(services, "probe", return_value=True):
+            return services.wait_ready_set(host, inventory, inventory.select(roles=("relay",)),
+                                           time.monotonic() + (.1 if unavailable else 2))
+
+    def test_readiness_retries_missing_process_sample_after_first_identity(self):
+        self.assertTrue(self.process_sample_scenario())
+
+    def test_readiness_still_refuses_changed_process_identity(self):
+        self.assertFalse(self.process_sample_scenario(changed=True))
+
+    def test_readiness_missing_process_identity_expires_at_deadline(self):
+        self.assertFalse(self.process_sample_scenario(unavailable=True))
+
+    def service_retry_fixture(self):
+        clock = ManualClock(start=0)
+        self.enterContext(patch.object(release, "time", SimpleNamespace(monotonic=clock.monotonic, sleep=clock.advance)))
+        self.enterContext(patch.object(release, "_process", return_value=None))
+        response = subprocess.CompletedProcess([], 0, "LoadState=loaded\nActiveState=active\nMainPID=20\n", "")
+        return clock, response
+
+    def test_service_retry_timeout_returns_last_observation_within_budget(self):
+        clock, response = self.service_retry_fixture()
+        timeouts = []
+        def run(args, **kwargs):
+            timeouts.append(kwargs["timeout"])
+            if len(timeouts) == 1:
+                clock.advance(.1)
+                return response
+            clock.advance(kwargs["timeout"])
+            raise c.DeployError("command_unavailable", "Retry timed out.")
+        observed = release.service(SimpleNamespace(run=run), "foundry-test.service", timeout=.2)
+        self.assertEqual(observed["MainPID"], "20")
+        self.assertIsNone(observed["process"])
+        self.assertEqual(timeouts[0], .2)
+        self.assertEqual(len(timeouts), 2)
+        self.assertAlmostEqual(timeouts[1], .05)
+        self.assertLessEqual(clock.monotonic(), .2)
+
+    def test_service_does_not_retry_after_sleep_exhausts_deadline(self):
+        clock, response = self.service_retry_fixture()
+        calls = []
+        def run(args, **kwargs):
+            calls.append(kwargs["timeout"])
+            self.assertEqual(len(calls), 1)
+            return response
+        observed = release.service(SimpleNamespace(run=run), "foundry-test.service", timeout=.04)
+        self.assertIsNone(observed["process"])
+        self.assertEqual(calls, [.04])
+        self.assertEqual(clock.monotonic(), .04)
+
+    def test_service_first_command_errors_still_raise(self):
+        self.service_retry_fixture()
+        error = c.DeployError("command_unavailable", "First command timed out.")
+        def run(args, **kwargs):
+            self.assertEqual(kwargs["timeout"], .2)
+            raise error
+        with self.assertRaises(c.DeployError) as caught:
+            release.service(SimpleNamespace(run=run), "foundry-test.service", timeout=.2)
+        self.assertIs(caught.exception, error)
+
+    def test_service_retry_preserves_other_errors_and_operation_deadlines(self):
+        for error in (c.DeployError("service_inspection", "Inspection failed."), host_module.OperationTimeout()):
+            with self.subTest(error=type(error).__name__):
+                clock, response = self.service_retry_fixture()
+                calls = []
+                def run(args, **kwargs):
+                    calls.append(args)
+                    if len(calls) == 1:
+                        return response
+                    raise error
+                with self.assertRaises(type(error)) as caught:
+                    release.service(SimpleNamespace(run=run), "foundry-test.service", timeout=.2)
+                self.assertIs(caught.exception, error)
 
     def slow_peer_scenario(self, count):
         clock, checkpoints = ManualClock(), Checkpoints()

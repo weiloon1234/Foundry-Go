@@ -4,6 +4,7 @@ The fake never executes commands. apt authentication, database/certificate provi
 and HTTP responses are fixtures; all public lane B/C calls retain their signatures.
 """
 from dataclasses import asdict
+import copy
 import hashlib
 import ipaddress
 import io
@@ -811,6 +812,117 @@ class FeatureWiringTests(FeatureWiringFixture):
 
     def test_review_ignores_root_session_churn_between_review_and_confirm(self):
         self.executor_review(session_churn=True)
+
+    def review_release(self):
+        bootstrap = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=bootstrap["plan_token"], confirm=True)
+        arguments = {"archive": str(self.archive), "archive_sha256": c.digest(self.archive),
+                     "operation_id": str(uuid.uuid4())}
+        plan = self.request("release-plan", **arguments)
+        return {**arguments, "plan_token": plan["plan_token"]}
+
+    def test_release_confirmation_ignores_unrelated_dpkg_changes(self):
+        self.host.package_inventory["unrelated"] = installed()
+        arguments = self.review_release()
+        self.host.package_inventory["unrelated"] = installed("2")
+        self.assertTrue(self.request("activate", **arguments)["ok"])
+
+    def test_release_confirmation_ignores_foreign_daemon_restart(self):
+        rows = {"cron.service": {"LoadState": "loaded", "ActiveState": "active", "SubState": "running",
+                                 "MainPID": "10", "UnitFileState": "enabled", "FragmentPath": "/usr/lib/systemd/system/cron.service"}}
+        with patch.object(packages, "_activation_snapshot", side_effect=lambda host: copy.deepcopy(rows)), \
+                patch.object(packages, "_activation_classification", return_value={}):
+            arguments = self.review_release()
+            rows["cron.service"]["MainPID"] = "20"
+            self.assertTrue(self.request("activate", **arguments)["ok"])
+
+    def test_release_confirmation_refuses_required_package_changes(self):
+        arguments = self.review_release()
+        self.host.package_inventory["nginx"] = installed("2")
+        with self.assertRaises(c.DeployError) as error:
+            self.request("activate", **arguments)
+        self.assertEqual(error.exception.code, "stale_plan")
+        self.assertEqual(self.host.started, [])
+
+    def test_release_confirmation_accepts_closed_sessions_without_querying_vanished_units(self):
+        rows = {name: {"LoadState": "loaded", "ActiveState": "active", "SubState": "running", "MainPID": "500",
+                       "UnitFileState": "static" if name.startswith("user@") else "transient", "FragmentPath": ""}
+                for name in ("user@1000.service", "session-3.scope", "run-u12.service")}
+        machine_run = self.host.run
+        def run(args, **kwargs):
+            if args[:2] == ["systemctl", "show"] and "TriggeredBy" in args:
+                output = "\n\n".join("Id=" + name + "\nType=simple\nTriggeredBy=\nTransient=yes\nUnitFileState="
+                    + rows[name]["UnitFileState"] for name in args[2:args.index("--no-pager")] if name in rows)
+                return subprocess.CompletedProcess(args, 0, output, "")
+            return machine_run(args, **kwargs)
+        with patch.object(self.host, "run", side_effect=run), \
+                patch.object(packages, "_activation_snapshot", side_effect=lambda host: copy.deepcopy(rows)):
+            arguments = self.review_release()
+            rows.clear()
+            # No systemctl classification response exists for any vanished unit.
+            self.assertTrue(self.request("activate", **arguments)["ok"])
+
+    def test_release_confirmation_waits_for_background_apt(self):
+        arguments = self.review_release()
+        busy = [True]
+        inspect = packages.inspect
+        def observe(*args, **kwargs):
+            result = inspect(*args, **kwargs)
+            return {**result, "state": "busy"} if busy[0] else result
+        def finish_apt(seconds):
+            busy[0] = False
+        with patch.object(packages, "_locks", side_effect=lambda host: ["dpkg"] if busy[0] else []), \
+                patch.object(packages.time, "sleep", side_effect=finish_apt), \
+                patch.object(packages, "inspect", side_effect=observe):
+            self.assertTrue(self.request("activate", **arguments)["ok"])
+
+    def test_release_confirmation_refuses_apt_lock_at_deadline(self):
+        arguments = self.review_release()
+        with patch.object(packages, "_locks", return_value=["dpkg"]), \
+                patch.object(packages, "LOCK_WAIT_SECONDS", 0), self.assertRaises(c.DeployError) as error:
+            self.request("activate", **arguments)
+        self.assertEqual(error.exception.code, "package_locked")
+        self.assertEqual(self.host.started, [])
+
+    def test_bootstrap_confirmation_refuses_new_declared_public_listener(self):
+        self.build_archive(public=True)
+        self.configure_firewall()
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        port = self.host.public_profile.listeners[0][1].ports[0]
+        machine_run = self.host.run
+        def run(args, **kwargs):
+            if args == ["ss", "-Hltn"]:
+                return subprocess.CompletedProcess(args, 0, f"LISTEN 0 128 0.0.0.0:{port} 0.0.0.0:*", "")
+            return machine_run(args, **kwargs)
+        with patch.object(self.host, "run", side_effect=run), patch.object(provision, "_ensure_roots") as mutate, \
+                self.assertRaises(c.DeployError) as error:
+            self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.assertEqual(error.exception.code, "plan_changed")
+        mutate.assert_not_called()
+
+    def test_release_planning_waits_for_apt_then_confirms(self):
+        bootstrap = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=bootstrap["plan_token"], confirm=True)
+        arguments = {"archive": str(self.archive), "archive_sha256": c.digest(self.archive), "operation_id": str(uuid.uuid4())}
+        busy = [True]
+        def finish_apt(seconds):
+            busy[0] = False
+        with patch.object(packages, "_locks", side_effect=lambda host: ["dpkg"] if busy[0] else []), \
+                patch.object(packages.time, "sleep", side_effect=finish_apt) as wait:
+            plan = self.request("release-plan", **arguments)
+            wait.assert_called_once()
+            self.assertEqual(plan["observations"]["packages"]["state"], "ready")
+            self.assertTrue(self.request("activate", **arguments, plan_token=plan["plan_token"])["ok"])
+
+    def test_release_planning_refuses_apt_lock_without_publishing_token(self):
+        bootstrap = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=bootstrap["plan_token"], confirm=True)
+        operation = str(uuid.uuid4())
+        with patch.object(packages, "_locks", return_value=["dpkg"]), \
+                patch.object(packages, "LOCK_WAIT_SECONDS", 0), self.assertRaises(c.DeployError) as error:
+            self.request("release-plan", archive=str(self.archive), archive_sha256=c.digest(self.archive), operation_id=operation)
+        self.assertEqual(error.exception.code, "package_locked")
+        self.assertFalse((operations.directory(self.host, operation) / "release-plan.json").exists())
 
     def test_tools_plan_accepts_retained_releases_from_an_earlier_reviewed_topology(self):
         # Production 2026-11-16: releases built before a reviewed topology change stay

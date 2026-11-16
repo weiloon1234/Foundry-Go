@@ -361,13 +361,54 @@ class PackageTransactionTests(unittest.TestCase):
             plan = packages.inspect(self.host)
         for key in ("transaction", "evidence", "activation", "installed"):
             changed = copy.deepcopy(plan)
-            changed[key] = {"unexpected": {}}
+            changed[key] = {"new": installed()} if key == "installed" else {"unexpected": {}}
             with self.subTest(key=key), self.assertRaises(DeployError) as error:
                 packages.install_missing(self.host, ["new"], reviewed=changed)
             self.assertEqual(error.exception.code, "package_plan_changed")
             self.assertFalse(packages._journal_path(self.host).exists())
         packages.install_missing(self.host, ["new"], reviewed=plan)
         self.assertEqual(packages._load(self.host)["state"], "complete")
+
+    def test_reviewed_install_ignores_unrelated_dpkg_changes(self):
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        self.host.inventory["foreign"] = installed("2")
+        self.host.inventory["unrelated-new"] = installed()
+        packages.install_missing(self.host, ["new"], reviewed=plan)
+        self.assertEqual(packages._load(self.host)["state"], "complete")
+
+    def test_payload_acquisition_rebases_unrelated_packages_after_rechecking_transaction(self):
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        def acquire(*args):
+            self.host.inventory["foreign"] = installed("2")
+            return {}, {}
+        with patch.object(packages, "_prepare_payloads", side_effect=acquire):
+            packages.install_missing(self.host, ["new"], reviewed=plan)
+        journal = packages._load(self.host)
+        self.assertEqual(journal["state"], "complete")
+        self.assertEqual(journal["before"]["foreign"], installed("2"))
+
+    def test_payload_acquisition_refuses_changed_transaction_despite_unrelated_package_change(self):
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        def acquire(*args):
+            self.host.inventory["foreign"] = installed("2")
+            self.host.candidates["surprise"] = "1"
+            return {}, {}
+        with patch.object(packages, "_prepare_payloads", side_effect=acquire), self.assertRaises(DeployError) as error:
+            packages.install_missing(self.host, ["new"], reviewed=plan)
+        self.assertEqual(error.exception.code, "package_plan_changed")
+        self.assertFalse(packages._journal_path(self.host).exists())
+
+    def test_reviewed_install_refuses_requirement_changes_even_without_missing_packages(self):
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        self.host.inventory["new"] = installed("2")
+        with self.assertRaises(DeployError) as error:
+            packages.install_missing(self.host, ["new"], reviewed=plan)
+        self.assertEqual(error.exception.code, "package_plan_changed")
+        self.assertFalse(packages._journal_path(self.host).exists())
 
     def test_dependency_hash_drift_blocks_resume_before_configuration(self):
         self.host.interrupt = True
@@ -712,6 +753,48 @@ class ActivationComparisonTests(unittest.TestCase):
         packages.install_missing(self.host, ["new"], reviewed=plan)
         self.assertEqual(packages._load(self.host)["state"], "complete")
 
+    def test_reviewed_plan_rebases_foreign_daemon_runtime_before_installation(self):
+        name = "cron.service"
+        self.host.activation[name] = self.record(name)
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        self.host.activation[name]["MainPID"] = "8400"
+        packages.install_missing(self.host, ["new"], reviewed=plan)
+        journal = packages._load(self.host)
+        self.assertEqual(journal["state"], "complete")
+        self.assertEqual(journal["activation_before"][name]["MainPID"], "8400")
+
+    def test_foreign_restart_during_acquisition_is_the_install_baseline(self):
+        name = "cron.service"
+        self.host.activation[name] = self.record(name)
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        prepare = packages._prepare_payloads
+        def acquire(*args):
+            result = prepare(*args)
+            self.host.activation[name]["MainPID"] = "8400"
+            return result
+        with patch.object(packages, "_prepare_payloads", side_effect=acquire):
+            packages.install_missing(self.host, ["new"], reviewed=plan)
+        journal = packages._load(self.host)
+        self.assertEqual(journal["state"], "complete")
+        self.assertEqual(journal["activation_before"][name]["MainPID"], "8400")
+
+    def test_foundry_restart_during_acquisition_still_refuses(self):
+        name = "foundry-owned.service"
+        self.host.activation[name] = self.record(name)
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        prepare = packages._prepare_payloads
+        def acquire(*args):
+            result = prepare(*args)
+            self.host.activation[name]["MainPID"] = "8400"
+            return result
+        with patch.object(packages, "_prepare_payloads", side_effect=acquire), self.assertRaises(DeployError) as error:
+            packages.install_missing(self.host, ["new"], reviewed=plan)
+        self.assertEqual(error.exception.code, "package_plan_changed")
+        self.assertFalse(packages._journal_path(self.host).exists())
+
     def test_payload_acquisition_uses_same_runtime_comparison(self):
         name = "user@0.service"
         self.host.activation[name] = self.record(name)
@@ -899,7 +982,7 @@ class ActivationComparisonTests(unittest.TestCase):
         with self.assertRaises(DeployError):
             packages._finish_activation(self.host, {"activation_before": {}, "activation_units": {}})
 
-    def test_plan_token_projection_ignores_churn_but_binds_independent_services(self):
+    def test_plan_token_projection_ignores_foreign_runtime_but_binds_configuration(self):
         self.host.activation_classification = {"packagekit.service": {"Type": "dbus", "UnitFileState": "static"},
                                                "ssh.service": {"TriggeredBy": "ssh.socket"},
                                                "run-u9.service": {"Transient": "yes"}}
@@ -915,10 +998,57 @@ class ActivationComparisonTests(unittest.TestCase):
         self.assertEqual(packages.stable_activation(self.host, base), packages.stable_activation(self.host, churned))
         restarted = copy.deepcopy(base)
         restarted["cron.service"]["MainPID"] = "9999"
-        self.assertNotEqual(packages.stable_activation(self.host, base), packages.stable_activation(self.host, restarted))
+        self.assertEqual(packages.stable_activation(self.host, base), packages.stable_activation(self.host, restarted))
         reconfigured = copy.deepcopy(base)
         reconfigured["packagekit.service"]["UnitFileState"] = "masked"
         self.assertNotEqual(packages.stable_activation(self.host, base), packages.stable_activation(self.host, reconfigured))
+
+    def test_reviewed_install_accepts_completion_template_instances_appearing_and_vanishing(self):
+        template, name = "modprobe@.service", "modprobe@sd_mod.service"
+        self.host.activation = {template: {"UnitFileState": "static"}}
+        self.host.activation_classification[name] = {"Type": "oneshot", "RemainAfterExit": "no"}
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        stable = packages.stable_activation(self.host, plan["activation"])
+        self.host.activation[name] = {**self.record(name, state="static"),
+                                      "FragmentPath": "/usr/lib/systemd/system/" + template}
+        with patch.object(packages, "_required", return_value=["new"]):
+            running = packages.inspect(self.host)
+        self.assertEqual(stable, packages.stable_activation(self.host, running["activation"]))
+        del self.host.activation[name]
+        packages.install_missing(self.host, ["new"], reviewed=running)
+        self.assertEqual(packages._load(self.host)["state"], "complete")
+
+    def test_reviewed_install_refuses_foundry_template_instance_churn(self):
+        template, name = "foundry-job@.service", "foundry-job@1.service"
+        self.host.activation = {template: {"UnitFileState": "static"}}
+        self.host.activation_classification[name] = {"Type": "oneshot", "RemainAfterExit": "no"}
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        self.host.activation[name] = {**self.record(name, state="static"),
+                                      "FragmentPath": "/usr/lib/systemd/system/" + template}
+        with self.assertRaises(DeployError) as error:
+            packages.install_missing(self.host, ["new"], reviewed=plan)
+        self.assertEqual(error.exception.code, "package_plan_changed")
+
+    def test_reviewed_install_refuses_foundry_transient_runtime_changes(self):
+        name = "foundry-operation-test.service"
+        self.host.activation[name] = self.record(name, state="transient")
+        self.host.activation_classification[name] = {"Transient": "yes"}
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        self.host.activation[name]["MainPID"] = "999"
+        with self.assertRaises(DeployError) as error:
+            packages.install_missing(self.host, ["new"], reviewed=plan)
+        self.assertEqual(error.exception.code, "package_plan_changed")
+
+    def test_projection_does_not_reclassify_vanished_ephemeral_units(self):
+        before = {"user@1000.service": self.record("user@1000.service", state="static"),
+                  "session-3.scope": self.record("session-3.scope", state="transient"),
+                  "run-u13.scope": {**self.record("run-u13.scope", state=""), "FragmentPath": ""},
+                  "run-u12.service": {**self.record("run-u12.service", state="transient"), "FragmentPath": ""}}
+        with patch.object(self.host, "run", side_effect=AssertionError("vanished unit queried")):
+            self.assertEqual(packages.stable_activation(self.host, before), packages.stable_activation(self.host, {}))
 
     def test_refusals_name_the_changed_units_and_fields(self):
         before = {"cron.service": self.record("cron.service"), "gone.service": self.record("gone.service")}

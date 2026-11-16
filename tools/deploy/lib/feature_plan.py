@@ -155,6 +155,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
         if restoring:
             require(not migrations["pending"],
                     "rollback_schema", "Target release is incompatible with the current database schema.")
+        packages.wait_idle(host)
         observed = observations(host, registry, entry, topology, candidate_profile, operation_id)
         managed_dns = dns.plan(host, entry, candidate_profile, operation_id)
         enabled, running, removed = lifecycle.transition_enablement(host, entry, inventory, restoring=restoring)
@@ -194,10 +195,9 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
 
 def _stable_observations(host, observed):
     package_observation = observed.get("packages")
-    if not isinstance(package_observation, dict) or not isinstance(package_observation.get("activation"), dict):
+    if not isinstance(package_observation, dict):
         return observed
-    return {**observed, "packages": {**package_observation,
-                                     "activation": packages.stable_activation(host, package_observation["activation"])}}
+    return {**observed, "packages": packages.stable_observation(host, package_observation)}
 
 
 def reviewed(host, registry, entry, request, *, pin=None):
@@ -219,6 +219,7 @@ def reviewed(host, registry, entry, request, *, pin=None):
     topology = parse_topology(launch["topology"])
     profile = parse_profile(launch["profile"], topology)
     dns.verify(host, entry, public.get("managed_dns", []))
+    packages.wait_idle(host)
     current = observations(host, registry, entry, topology, profile, request["operation_id"])
     expected = public["observations"]
     if pin is not None:
