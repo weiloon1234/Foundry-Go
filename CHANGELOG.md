@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.39.4 — 2026-11-16
+
+- Fixed: `ACTION=tools-plan` refused a feature host with `release_identity` when a retained
+  release was built before a reviewed topology or profile change. Retained feature releases
+  keep the reviewed declaration they were built with, so tool upgrades now validate them by
+  release identity (project, instance, environment, architecture, provenance, inventory)
+  instead of requiring the current registered topology. Deploy and rollback reviews are unchanged.
+- Fixed: `local.Open` could reject a fresh store with `storage_invalid` when another process
+  created the same store concurrently. The unlocked foreign-directory probe now rejects an
+  unexpected entry only while the store marker is still absent.
+
 ## v0.39.3 — 2026-11-16
 
 - Fixed: a feature role start could intermittently refuse with `feature_runtime_refused: running:

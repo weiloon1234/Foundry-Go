@@ -94,6 +94,31 @@ func TestLocalReopenAndIndependentWritersPreserveConditionalIdentity(t *testing.
 		t.Fatal("reopened object changed", err, closeErr)
 	}
 }
+func TestLocalConcurrentFirstOpenersShareOneStore(t *testing.T) {
+	for range 50 {
+		root := t.TempDir()
+		var wg sync.WaitGroup
+		failures := make(chan error, 8)
+		for range 8 {
+			wg.Go(func() {
+				backend, err := local.Open(t.Context(), local.DefaultConfig(root))
+				if err != nil {
+					failures <- err
+					return
+				}
+				failures <- backend.Close()
+			})
+		}
+		wg.Wait()
+		close(failures)
+		for err := range failures {
+			if err != nil {
+				t.Fatal("a concurrent first opener refused the store another opener created", err)
+			}
+		}
+	}
+}
+
 func TestLocalRejectsUnmanagedRootAndSymlinkEscape(t *testing.T) {
 	unrelated := t.TempDir()
 	existing := filepath.Join(unrelated, "existing")
