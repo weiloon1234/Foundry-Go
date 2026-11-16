@@ -2,10 +2,12 @@
 import os
 from pathlib import Path
 import pwd
+import re
+import sys
 import time
 
 import admission
-from contracts import (Deployment, HelperInvocation, RuntimeResolution, canonical_digest,
+from contracts import (Deployment, DeployError, HelperInvocation, RuntimeResolution, canonical_digest,
                        check_path, digest, read_json, record_document, require)
 from host import Host
 import runtime_config
@@ -35,6 +37,17 @@ def selected(host, pin, launch, *, require_selection=True):
 
 
 def run(action, pin, launch):
+    try:
+        return _run(action, pin, launch)
+    except DeployError as error:
+        # Codes are framework identifiers. Details can contain private paths/values.
+        code = error.code if isinstance(error.code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", error.code) else "invalid_error_code"
+        phase = action if action in ("admit", "prepare", "dispatch", "running", "cleanup", "boot", "open") else "unknown"
+        sys.stderr.write(f"feature_runtime_refused: {phase}: {code}\n")
+        return 1
+
+
+def _run(action, pin, launch):
     host = Host()
     invocation, entry, inventory, spec = selected(host, pin, launch,
                                                 require_selection=action not in ("dispatch", "cleanup"))

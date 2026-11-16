@@ -34,7 +34,7 @@ UNSUPPORTED = {
     "backup-keys-rotate": "Backup credential rotation has no reviewed feature recovery-archive transition; retain the configured credentials and use ACTION=backup-run with the current repository.",
     "backup-recipients-rotate": "Recipient rotation has no reviewed feature recovery-archive transition; retain the configured recipients and use ACTION=backup-run with them.",
     "dns-token-rotate": "DNS token rotation does not coordinate feature managed-record credentials; retain the configured token and use ACTION=status to inspect DNS evidence.",
-    "reconcile": "Automatic interrupted feature-operation reconciliation is unavailable; use ACTION=status and ACTION=report to inspect retained cleanup evidence before recovery.",
+    "reconcile": "Only closed health-phase cleanup can be reconciled to stopped with ACTION=reconcile; inspect ACTION=status and ACTION=report for other interrupted operations.",
     "reprovisioning a selected feature instance": "Changed reprovisioning cannot replace a selected feature deployment; use a reviewed ACTION=deploy for supported declaration changes. Unchanged ACTION=prepare is supported.",
     "release and artifact pruning": "Feature release and artifact references are retained for recovery; retain them and use ACTION=status to inspect selected releases.",
     "helper bundle pruning": "Feature boot and runtime references require retained helper bundles; retain them and use ACTION=tools-plan to review an upgrade.",
@@ -81,6 +81,12 @@ def load_resolution(host, entry, identifier):
     inventory = services.UnitInventory(entry["name"], topology, parse_profile(launch["profile"], topology),
                                        Deployment.parse(launch["deployment"]), RuntimeResolution.parse(launch["resolution"]))
     return inventory, launch
+
+
+def reconcile(host, project, profile):
+    with host.lock("host"), host.lock(profile["instance_id"]):
+        _, entry = host.require_identity(project, profile)
+        return operations.reconcile_closed(host, entry)
 
 
 def migrate_enablement(host, registry, entry):
@@ -529,7 +535,8 @@ def transition_enablement(host, entry, inventory, *, restoring=False):
                (removed.get(name, False) if restoring or name in removed else True)}
     held_running = configuration_hold_running(host, entry)
     previous_attempt = store._operations().get(selection.admission.operation_id, {})
-    if previous_attempt.get("outcome") == "failed" and dns.rejected_operation(host, entry, selection.admission.operation_id):
+    if (operations.cleanup_reconciled(previous_attempt) or previous_attempt.get("outcome") == "failed"
+            and dns.rejected_operation(host, entry, selection.admission.operation_id)):
         held_running = set(unit_selection_identities(inventory.profile.instance_id, previous_attempt["running_roles"]))
     running = {name for name in desired if name not in previous.units or
                (name in held_running if held_running is not None else

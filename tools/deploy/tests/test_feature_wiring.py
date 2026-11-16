@@ -123,7 +123,8 @@ class WiringHost(Host):
         with patch.object(shared_directories, "prepare", side_effect=AssertionError("Unit hooks must not prepare host caches")), \
                 patch.object(shared_directories, "verify", wraps=shared_directories.verify) as verified:
             for action in ("admit", "prepare"):
-                feature_runtime.run(action, c.record_document(pin), launch)
+                c.require(feature_runtime.run(action, c.record_document(pin), launch) == 0,
+                          "service_start", "Runtime helper refused the start.")
             verified.assert_called_once_with(self, inventory.topology, inventory.specs[role].identity.instance_id, role.role,
                                              entry["allocations"]["uid"], entry["allocations"]["gid"])
         self.proc(process.pid, invocation, alive=False)
@@ -131,8 +132,11 @@ class WiringHost(Host):
         self.running[unit] = (main, inventory, role)
         self.start_times[unit] = str(int(self.clock.monotonic() * 1_000_000))
         self.starting = unit
-        feature_runtime.run("running", c.record_document(pin), launch)
-        self.starting = None
+        try:
+            c.require(feature_runtime.run("running", c.record_document(pin), launch) == 0,
+                      "service_start", "Runtime helper refused the start.")
+        finally:
+            self.starting = None
         self.started.append(role.role)
 
     def nginx_config(self):
@@ -264,7 +268,9 @@ class WiringHost(Host):
                               "NeedDaemonReload": "no", "ExecStart": "{ argv[]=" + " ".join(shlex.split(command)) + " ; }"}
                 elif unit.startswith("foundry-operation-"):
                     pin = self.operation_pin
-                    values = {"Type": "exec", "KillMode": "control-group", "Restart": "no", "Transient": "yes", "DropInPaths": ""}
+                    values = {"Type": "exec", "KillMode": "control-group", "Restart": "no", "Transient": "yes", "DropInPaths": "",
+                              "Id": unit, "LoadState": "not-found", "ActiveState": "inactive", "MainPID": "0",
+                              "ControlPID": "0", "ControlGroup": "", "Job": "0"}
                     for directive, phase in (("ExecStart", "operation"), ("ExecStopPost", "operation-cleanup")):
                         values[directive] = "{ argv[]=" + " ".join(operations.command(phase, pin["operation_id"], pin["bundle_sha256"])) + " ; }"
                 else:

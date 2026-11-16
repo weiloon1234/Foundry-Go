@@ -173,19 +173,22 @@ def plan(host, topology, profile, package_plan, *, entry=None, review_operation=
             from contracts import AdmissionDisposition, record_document
             store, selection, inventory, _ = load(host, entry)
             import dns
-            rejected = (review_operation is not None and selection.admission.disposition is AdmissionDisposition.PENDING
-                        and dns.rejected_operation(host, entry, selection.admission.operation_id)
-                        and store._operations().get(selection.admission.operation_id, {}).get("outcome") == "failed")
-            if rejected:
+            from operations import cleanup_reconciled
+            attempt = store._operations().get(selection.admission.operation_id, {})
+            cleaned = (review_operation is not None and selection.admission.disposition is AdmissionDisposition.PENDING
+                       and attempt.get("outcome") == "failed"
+                       and (dns.rejected_operation(host, entry, selection.admission.operation_id)
+                            or cleanup_reconciled(attempt)))
+            if cleaned:
                 store.require_cleanup_clear(review_operation)
             require(record_document(selection) == entry["deployment_selection"]
-                    and (selection.admission.disposition is AdmissionDisposition.COMMITTED or rejected)
+                    and (selection.admission.disposition is AdmissionDisposition.COMMITTED or cleaned)
                     and inventory.topology == topology and inventory.profile == profile,
-                    "network_selection", "Network inspection requires committed declarations or a cleaned DNS rejection under release review.")
+                    "network_selection", "Network inspection requires committed declarations or a reconciled closed failure under release review.")
             import feature_maintenance
             import services
             held = feature_maintenance.active_holds(host, entry, inventory)
-            exposed = set() if rejected else set(services.enabled_units(host, inventory.units)) - held
+            exposed = set() if cleaned else set(services.enabled_units(host, inventory.units)) - held
             opened = tuple(c for c in claims if c.identity in exposed)
             closed = tuple(c for c in claims if c.identity not in exposed)
             observation = firewall.observe(host, profile.instance_id, closed or opened, integrated=True,

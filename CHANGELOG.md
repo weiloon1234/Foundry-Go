@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.39.1 — 2026-11-16
+
+- Fixed: a feature health failure could stop the entire instance and leave its
+  cleanup owner `closed`. Starts rejected that owner, while feature reconciliation
+  was unsupported, leaving no same-host rollback path. `ACTION=reconcile` now
+  completes a matching full-instance health cleanup after checking its closure
+  receipt, workload and operation exit, and current network closure. It leaves
+  admission pending and status `stopped`; a reviewed rollback or deploy restores
+  the intended running roles while preserving disabled roles and maintenance holds.
+- Added: typed runtime helper refusals print the action and safe `DeployError.code`,
+  without error details or private paths. The fixed `runtime_v1.py` bytes and tool
+  generation 19 are unchanged. Install the bundle with `tools-plan`/`tools-apply`.
+- Incident investigation: the original `running` refusal remains unproven. The
+  deterministic two-unit hook interleaving retains the shared permit with pending
+  selection and an armed cleanup owner, including on the pre-fix admission logic.
+  No speculative retry or admission bypass was added. See
+  [same-host recovery and incident evidence](docs/guides/host-capabilities.md#recover-a-closed-health-failure).
+
 ## v0.39.0 — 2026-11-16
 
 - Added: executable-role config trees declare up to 32 files under one directory,

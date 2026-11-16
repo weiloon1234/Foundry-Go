@@ -58,7 +58,7 @@ following limitations remain; unsupported lifecycle operations return
 | Changed reprovisioning of a selected instance | Changes to its profile, package requirements or owned network/boot files refuse. Unchanged re-bootstrap is supported. |
 | Newly required packages at activation | Bootstrap installs packages; deployment cannot silently add missing packages. |
 | Named lifecycle operations | `ROLE`/`COPY` scope restart, stop and logs; dependency and maintenance checks still apply. |
-| Automatic reconciliation of interrupted lifecycle operations | Do not assume an interrupted operation rolled back. Inspect status and retained cleanup evidence. Unresolved cleanup blocks later starts. |
+| Automatic reconciliation of interrupted lifecycle operations | Unresolved cleanup blocks later starts. Explicit `reconcile` can release a proven closed full-instance health failure to stopped; other interruptions still require investigation. |
 | Bundle ABI without package-version evidence | Bundle consumers must use package executables with one matching observed service package version. An artifact executable cannot supply this ABI proof. |
 | Feature release/artifact pruning and helper-bundle pruning | Explicit feature pruning refuses. Automatic helper retention keeps every helper bundle and upgrade journal with a capability diagnostic. Invocation/view limits still apply; reaching a limit refuses further starts. |
 | Host capacity changes involving features | Capacity changes are unsupported for feature instances. Legacy neighbors retain their existing supported operations. |
@@ -68,7 +68,7 @@ following limitations remain; unsupported lifecycle operations return
 `make bootstrap ACTION=inspect` reads the host through staged candidate tools,
 including before its first registry exists. `ACTION=prepare` then reviews and
 applies bootstrap. `make release` builds locally; `ACTION=deploy` reviews and
-activates that archive. Tool generation remains 18.
+activates that archive. Tool generation is 19; v0.39.1 does not increase it.
 
 “Supported” below means the feature owner handles the operation; ordinary identity,
 plan, readiness and capability-generation checks still apply. On a fresh host,
@@ -91,13 +91,127 @@ instance. `hello` returns before the client capability gate.
 | `keys-rotate` | Refused | No feature keyring transition; retain keyring, use `config` for service secrets only | `test_operator_feature_path.py` |
 | `backup-keys-rotate`, `backup-recipients-rotate` | Refused | No reviewed feature recovery-archive rotation; retain credentials/recipients, use `backup-run` with current settings | `test_operator_feature_path.py` |
 | `dns-token-rotate` | Refused | No coordinated managed-record credential rotation; retain token, inspect DNS evidence in `status` | `test_operator_feature_path.py` |
-| `reconcile` | Refused | No automatic interrupted-operation reconciliation; inspect `status`/`report` and retained cleanup evidence before recovery | `test_operator_feature_path.py` |
+| `reconcile` | Requires a selected failed deployment | [Closed full-instance health cleanup only](#recover-a-closed-health-failure); completes cleanup and leaves the instance stopped | `test_feature_cleanup.py`, `test_operator_feature_path.py` |
 
 Deliberate refusals return `capability_unavailable` before mutation. The exhaustive
 server-action regression checks both fresh and registered feature gates; the
 operator acceptance phase runs bootstrap inspect/prepare, reviewed deployment,
 status, logs and report through the real CLI and installed launcher, on its own
 fresh container. Existing direct-request acceptance phases remain separate.
+
+### Recover a closed health failure
+
+In v0.38.6, an activation failure during `health` could leave every role stopped
+and the operation's cleanup record `closed`. The admission owner blocked that
+record, while the feature action gate refused reconciliation. This combination
+prevented same-host deploy, rollback, and restart even after cleanup proved exit
+and network closure.
+
+From v0.39.1, `ACTION=reconcile` supports this specific state. The last attempt
+must have `outcome: needs_reconciliation`, `error: operation_cleanup_pending`,
+and `phase: health`. The deploy, rollback, or restart must cover the whole instance.
+The selected release, runtime resolution, transition, and `cleanup-closure.json`
+must agree. The closure receipt must prove backend exit and old-reference
+isolation. Reconciliation checks every affected unit and the operation unit for
+main processes, control processes, queued jobs, and cgroup members. It then
+rechecks network closure through the existing network owner.
+
+Other unresolved cleanup owners, incomplete or mismatched evidence, partial
+transitions, and uncertain DNS writes or public admission refuse reconciliation.
+Migration, seed, configuration, and replacement-host recovery interruptions are
+outside this path. A refusal reports its specific code and retains the blocker.
+
+To recover an affected production instance, use the application's existing deploy
+configuration:
+
+1. Pin the application to Foundry-Go v0.39.1 and review the host tool upgrade:
+
+   ```sh
+   ENVIRONMENT=production ACTION=tools-plan make deploy
+   ```
+
+2. Apply that plan with its token and a new operation UUID:
+
+   ```sh
+   ENVIRONMENT=production ACTION=tools-apply PLAN_TOKEN='<reviewed-token>' \
+     OPERATION='<new-uuid-v4>' CONFIRM=yes make deploy
+   ```
+
+3. Inspect the failed attempt and retained cleanup evidence:
+
+   ```sh
+   ENVIRONMENT=production ACTION=status make deploy
+   ENVIRONMENT=production ACTION=report make deploy
+   ```
+
+4. Reconcile the closed cleanup:
+
+   ```sh
+   ENVIRONMENT=production ACTION=reconcile CONFIRM=yes make deploy
+   ```
+
+   The response reports `cleanup_reconciled: true` and `status: stopped`. The
+   cleanup owner becomes `complete`, and the attempt becomes `failed` with
+   `error: operation_cleanup_reconciled`. Admission remains pending. Reconciliation
+   starts no roles and does not claim that the failed release passed health.
+   Repeating this command is safe, including after an interrupted reconciliation.
+
+5. Review and roll back to an exact retained release:
+
+   ```sh
+   ENVIRONMENT=production ACTION=rollback TARGET='<previous-release>' \
+     EXPECTED_CURRENT='<failed-release>' OPERATION='<new-uuid-v4>' make deploy
+   ENVIRONMENT=production ACTION=status make deploy
+   ```
+
+   Alternatively, build the corrected release with `ENVIRONMENT=production make
+   release`, then run `ENVIRONMENT=production ACTION=deploy make deploy`. Both
+   paths use the recorded intended running set, existing enablement, and
+   maintenance holds. They do not leave all roles stopped merely because cleanup
+   stopped them. Use a new operation UUID rather than replaying the failed deploy.
+
+The tool upgrade installs the new library without changing `runtime_v1.py` or
+requiring another exact-bytes bridge. Existing invocations retain their pinned
+bundle. The next reviewed deployment installs units pinned to the new library.
+
+### Diagnose a runtime helper refusal
+
+Typed helper refusals now include the action and a fixed error identifier:
+
+```text
+feature_runtime_refused: running: operation_cleanup_pending
+```
+
+The helper omits `DeployError.detail`, paths, and payloads. Errors outside the
+typed library boundary retain the fixed helper's generic refusal.
+
+The original skin-analyzer start-post failure on 2026-11-16 is not proven by the
+retained generic message. `operation_cleanup_pending` in the final attempt is
+written by independent cleanup, so it does not establish the original hook's
+error. The deterministic `test_pending_armed_hooks_interleave_without_losing_the_permit`
+test starts two units, delays one `running` hook until the other's completes, and
+checks their separate claims under the shared permit. It passes on the original
+admission logic. During an all-changed-unit health transition, admission remains
+pending and neither invocation is retained; the described interleaving does not
+drop its permit. Readiness requires systemd `active`, so it cannot commit the
+selection while a unit remains in `start-post`.
+
+The following host observations distinguish the remaining candidates. Preserve
+the relevant identifiers and comparisons without collecting secret environments.
+
+| Refusal path | Distinguishing evidence |
+| --- | --- |
+| `selected()` | `feature_runtime_selection`; pinned spec and resolution hashes versus the selected profile and retained origin |
+| Loopback confinement | `network_confinement`; loaded IP allow/deny policy, matching cgroup, and attached ingress/egress BPF programs |
+| Workload observation | `service_inspection` or `feature_runtime_identity`; systemd MainPID, InvocationID, cgroup, executable identity, and process start ticks at the failed hook |
+| `_authorize()` | `operation_cleanup_pending` or `admission_permit_invalid`; selection disposition, active permit's operation/boot/resolution, cleanup state at refusal, and whether its executor identity still matches |
+| Permit claim | `admission_allowance_used`; the unit's claim invocation versus the current systemd invocation. A retry deliberately cannot reuse an earlier invocation's allowance |
+| Receipt handoff | `admission_invocation`; the pinned helper identity versus the admitted receipt and observed MainPID identity |
+
+An executable mismatch normally polls for up to ten seconds. An executor identity
+failure after a match, a confinement refusal, or an authorization refusal can exit
+immediately. The incident's roughly four-second interval alone cannot identify
+which path failed. No retry or admission exception is justified by that timing.
 
 Service secrets use the existing private configuration intake. Declare names in
 `secrets` and map service `_FILE` variables through `secret_files`; explicit

@@ -559,7 +559,7 @@ def _check_feature_request(registry, request, action):
                                 client_generation=request.get("client", {}).get("generation", 0))
     requested = (isinstance(profile, dict) and profile.get("schema") == FEATURE_PROFILE_SCHEMA
                  or isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA)
-    supported = {"inspect", "backup-configure", "backup-run", "restore-drill", "recover-plan", "recover-apply", "down", "up", "rollback", "release-plan", "config-set", "bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "status", "logs", "sync", "config-keys", "report"}
+    supported = {"reconcile", "inspect", "backup-configure", "backup-run", "restore-drill", "recover-plan", "recover-apply", "down", "up", "rollback", "release-plan", "config-set", "bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "status", "logs", "sync", "config-keys", "report"}
     feature = requested or registry is not None and any(
         (entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry)
         and (profile is None or entry["profile"]["instance_id"] == profile.get("instance_id"))

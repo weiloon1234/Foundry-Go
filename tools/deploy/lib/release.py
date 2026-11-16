@@ -1355,8 +1355,8 @@ def rollback(host, project, profile, target, expected_current, operation_id, pla
 
 def reconcile(host, project, profile):
     if profile.get("schema") == 3:
-        from feature_lifecycle import refuse
-        refuse("reconciliation")
+        from feature_lifecycle import reconcile as reconcile_feature
+        return reconcile_feature(host, project, profile)
     _, entry = host.require_identity(project, profile)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
