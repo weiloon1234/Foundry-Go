@@ -17,6 +17,15 @@
   selection and an armed cleanup owner, including on the pre-fix admission logic.
   No speculative retry or admission bypass was added. See
   [same-host recovery and incident evidence](docs/guides/host-capabilities.md#recover-a-closed-health-failure).
+- Fixed: the first successful deploy takes an initial full PostgreSQL backup and
+  encrypted key/config archive when backups are configured and none has completed,
+  for both standard and feature instances. The backup persists one operation UUID
+  and requires explicit reconciliation for uncertain outcomes. Backup failure
+  records a warning without failing or rolling back the deployment.
+- Added: host reports flag `backup_missing` with the full-backup command when no
+  completed backup is recorded. Hosts deployed before v0.39.1 should run
+  `ACTION=backup-run BACKUP_KIND=full make deploy` now. Later deployments skip the
+  initial backup once any backup completes; rollback and recovery are unchanged.
 
 ## v0.39.0 — 2026-11-16
 

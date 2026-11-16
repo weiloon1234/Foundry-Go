@@ -2685,6 +2685,75 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual("complete", self.state()["backup"]["last_attempt_outcome"])
         self.assertEqual(self.state()["last_attempt"]["recovery_operation_id"], self.state()["backup"]["last_complete_id"])
 
+    def test_first_successful_deploy_takes_one_full_backup_and_later_deploy_skips(self):
+        self.entry["backup"]["destination_ref"] = release.backup.CONFIG
+        self.host.write_registry(self.registry)
+        archive, manifest = self.bundle()
+        label = "20261116-020000F"
+        def database(host, kind):
+            state = self.state()
+            self.assertEqual(state["current"], manifest)
+            self.assertEqual(state["last_attempt"]["outcome"], "succeeded")
+            self.assertEqual(state["status"], "healthy")
+            self.assertTrue(state["backup"]["initial_operation_id"])
+            return label
+        with patch.object(release.backup, "_info", return_value=[
+                {"label": label, "type": "full", "timestamp": {"stop": int(time.time())}}]), \
+                patch.object(release.backup, "_database_backup", side_effect=database) as run, \
+                patch.object(release.backup, "_backrest"), \
+                patch.object(release.backup, "archive_keys", return_value={"status": "complete"}):
+            self.assertTrue(self.deploy(archive)["ok"])
+            self.assertEqual(self.state()["backup"]["last_complete_id"], self.state()["backup"]["initial_operation_id"])
+            self.assertTrue(self.deploy(archive)["unchanged"])
+            second, second_manifest = self.bundle(2)
+            self.assertTrue(self.deploy(second)["ok"])
+            self.assertTrue(release.rollback(self.host, self.project, self.profile,
+                manifest["version"], second_manifest["version"], str(uuid.uuid4()))["ok"])
+        run.assert_called_once_with(self.host, "full")
+
+    def test_initial_backup_failure_keeps_deploy_successful_and_retry_reuses_uuid(self):
+        import report
+        self.entry["backup"]["destination_ref"] = release.backup.CONFIG
+        self.host.write_registry(self.registry)
+        archive, manifest = self.bundle()
+        with patch.object(release.backup, "_info", return_value=[]), \
+                patch.object(release.backup, "_database_backup", side_effect=DeployError("command_failed", "private-canary")) as run:
+            result = self.deploy(archive)
+            operation = self.state()["backup"]["initial_operation_id"]
+            again = self.deploy(archive)
+        self.assertTrue(result["ok"])
+        self.assertTrue(again["ok"])
+        self.assertTrue(again["unchanged"])
+        self.assertIn("backup_missing", result["warnings"])
+        self.assertIn("backup_missing", again["warnings"])
+        self.assertEqual(self.state()["current"], manifest)
+        self.assertEqual(self.state()["status"], "healthy")
+        self.assertEqual(self.state()["last_attempt"]["outcome"], "succeeded")
+        self.assertEqual(self.state()["backup"]["initial_operation_id"], operation)
+        self.assertEqual(self.state()["backup"]["attempt"]["operation_id"], operation)
+        self.assertEqual(self.state()["backup"]["attempt"]["error"], "backup_outcome_unknown")
+        self.assertNotIn("private-canary", json.dumps(self.state()))
+        run.assert_called_once_with(self.host, "full")
+        problems = []
+        report.backup_freshness({**self.entry, "backup": self.state()["backup"]}, problems, self.profile["instance_id"])
+        finding = next(item for item in problems if item["code"] == "backup_missing")
+        self.assertIn("ACTION=backup-run BACKUP_KIND=full", finding["detail"])
+
+    def test_initial_backup_interruption_resumes_with_persisted_uuid(self):
+        self.entry["backup"]["destination_ref"] = release.backup.CONFIG
+        self.host.write_registry(self.registry)
+        archive, _ = self.bundle()
+        with patch.object(release.backup, "run_backup", side_effect=KeyboardInterrupt) as first:
+            with self.assertRaises(KeyboardInterrupt):
+                self.deploy(archive)
+        operation = self.state()["backup"]["initial_operation_id"]
+        self.assertEqual(self.state()["last_attempt"]["outcome"], "succeeded")
+        self.assertEqual(first.call_args.args[2:], (operation, "full"))
+        with patch.object(release.backup, "run_backup") as resumed:
+            self.assertTrue(self.deploy(archive)["unchanged"])
+        self.assertEqual(resumed.call_args.args[2:], (operation, "full"))
+        resumed.assert_called_once()
+
 
 class RuntimePortTests(unittest.TestCase):
     def test_runtime_uses_the_allocated_postgres_port(self):

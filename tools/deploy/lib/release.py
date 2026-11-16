@@ -1124,7 +1124,9 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                     release = verified_release(host, entry, state["current"])
                     write_runtime_descriptor(host, entry, release)
                     require(ready(host, entry, timeout=10), "readiness_failed", "Current release is no longer ready; inspect it before retrying.")
+                    warnings = backup.initial_backup(host, entry)
                     return {"ok": True, "unchanged": True, "instance": entry["name"], "version": version,
+                            **({"warnings": warnings} if warnings else {}),
                             **pruned_tools}
             release = publish_release(host, entry, staging, manifest)
             attempt = begin(host, entry, state, "deploy", version,
@@ -1215,6 +1217,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                 prune(host, entry, state)
             except (DeployError, OSError):
                 warnings.append("retention_incomplete")
+            warnings.extend(backup.initial_backup(host, entry))
             if warnings:
                 result["warnings"] = warnings
             return result

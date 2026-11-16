@@ -469,6 +469,9 @@ def backup_freshness(entry, problems, instance_id):
     drill_outcome = drill_outcome if isinstance(drill_outcome, str) and drill_outcome in allowed_outcomes else None
     if configured and not fresh:
         problem(problems, "backup_stale", instance_id)
+    if configured and not complete_id:
+        problem(problems, "backup_missing", instance_id,
+                detail="No completed backup. Run ACTION=backup-run BACKUP_KIND=full make deploy.")
     if outcome == "failed":
         problem(problems, "backup_failed", instance_id)
     return {"last_complete_id": complete_id, "last_complete_at": complete_at,

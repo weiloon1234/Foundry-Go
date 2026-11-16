@@ -410,6 +410,37 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(state["last_attempt_outcome"], "unknown")
         self.assertNotIn("database", state)
 
+    def test_initial_backup_reconciles_original_operation_without_another_database_backup(self):
+        self.entry["backup"]["destination_ref"] = backup.CONFIG
+        with patch.object(backup, "_info", return_value=[]) as info, \
+                patch.object(backup, "_database_backup", side_effect=DeployError("command_failed", "timeout")) as database, \
+                patch.object(backup, "_backrest"):
+            self.assertEqual(backup.initial_backup(self.host, self.entry), ["backup_missing"])
+            operation = self.host.load_state(self.entry)["backup"]["initial_operation_id"]
+            self.assertEqual(backup.initial_backup(self.host, self.entry), ["backup_missing"])
+            self.assertEqual(self.host.load_state(self.entry)["backup"]["attempt"]["error"], "backup_outcome_unknown")
+            info.return_value = [{"label": LABEL, "type": "full",
+                                  "timestamp": {"start": int(time.time()), "stop": int(time.time())}}]
+            receipt = backup.reconcile_backup(self.host, self.entry, operation, LABEL)
+            self.assertEqual(backup.initial_backup(self.host, self.entry), [])
+        self.assertEqual(receipt["backup_id"], operation)
+        database.assert_called_once_with(self.host, "full")
+
+    def test_initial_backup_skips_unconfigured_or_already_completed_instances(self):
+        with patch.object(backup, "run_backup") as run:
+            self.assertEqual(backup.initial_backup(self.host, self.entry), [])
+            self.entry["backup"].update(destination_ref=backup.CONFIG, last_complete_id=str(uuid.uuid4()))
+            self.assertEqual(backup.initial_backup(self.host, self.entry), [])
+        run.assert_not_called()
+        self.assertNotIn("initial_operation_id", self.host.load_state(self.entry).get("backup", {}))
+
+    def test_initial_backup_never_starts_if_uuid_cannot_be_persisted(self):
+        self.entry["backup"]["destination_ref"] = backup.CONFIG
+        with patch.object(self.host, "save_state", side_effect=OSError("unavailable")), \
+                patch.object(backup, "run_backup") as run:
+            self.assertEqual(backup.initial_backup(self.host, self.entry), ["backup_missing"])
+        run.assert_not_called()
+
     def test_unrelated_or_unsafe_archive_inputs_are_refused(self):
         directory = self.host.paths.instance_config(self.entry["name"])
         for value in ("/etc/shadow", "/etc/foundry/instances/other/key", "relative/key"):
