@@ -468,11 +468,13 @@ paths under `deploy/bin/`.
   `user-runtime-dir@` session services, transient units, static `Type=dbus`
   services, static run-to-completion oneshots (`RemainAfterExit=no`, such as Ubuntu
   Pro's hook-started `esm-cache.service`) and services triggered only by timers.
-  Other static services, including state-holding oneshots, and services triggered
-  by a socket or path, such as `ssh.service` or `dbus.service`, may change freely
-  while they were inactive. Once active, stopping, failing or restarting them still
-  refuses installation. Timer, path and target units ignore only `SubState`
-  changes and still compare `ActiveState`. Session and transient units that appear
+  Other static services, including state-holding oneshots, may change freely while
+  they were inactive; once active, stopping, failing or restarting them still
+  refuses installation. Services triggered by a socket or path, such as
+  `ssh.service`, `dbus.service` or `systemd-fsckd.service`, may also start or exit
+  cleanly while idle, but a restart or failure still refuses; their socket's
+  `ActiveState` stays compared. Timer, path, target and socket units ignore only
+  `SubState` changes and still compare `ActiveState`. Session and transient units that appear
   or disappear are ignored. A new instance of a template that existed before
   installation, such as `modprobe@sd_mod.service`, is not unowned activation when
   it is not running or is a run-to-completion oneshot. These rules also apply when

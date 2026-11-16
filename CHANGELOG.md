@@ -10,6 +10,15 @@
 - Added: explicitly marked disposable acceptance VMs may use the shared acceptance
   helpers and synthetic certificates. The VM path requires an environment opt-in
   and a root-owned, mode-0600 regular marker; production profile restrictions remain.
+- Fixed (found by the VM acceptance): a bootstrap plan was invalidated by harmless
+  unit churn between review and apply, refusing with `plan_changed`. The plan token
+  now binds a stable activation projection: configuration of every unit and runtime
+  of independently managed services only. A socket-triggered helper exiting while
+  idle after boot (`systemd-fsckd.service`) no longer refuses installation, and
+  socket units ignore their listening/running `SubState` flip. A restart or failure
+  of a socket-triggered daemon, or its socket stopping, still refuses.
+- Changed: package plan and activation refusals now name the changed package part
+  (transaction, origin, installed packages) or the first changed units and fields.
 
 ## v0.38.6 — 2026-11-16
 
