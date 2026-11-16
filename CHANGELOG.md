@@ -2,6 +2,13 @@
 
 ## v0.40.0 — 2026-11-16
 
+- Fixed: a feature role start could intermittently refuse with `feature_runtime_refused: running:
+  feature_runtime_identity`, after which cleanup stopped the instance. `execve` switches
+  `/proc/<pid>/exe` before it builds the new stack, so the workload's environment briefly
+  reads empty and the `INVOCATION_ID` identity check failed on that transient observation.
+  The running hook now keeps observing until the existing deadline; a workload that never
+  proves its invocation identity still refuses. Hosts take the fix through
+  `tools-plan`/`tools-apply`.
 - Breaking: removed `jobs.Module`. Register `jobs.ConnectionModule` and
   `jobs.WorkerModule` separately. Removed `cache.Namespace`, `cache.KeyCodec`,
   `cache.NewKeyCodec`, `cache.StringKeys`, `cache.SignedKeys`, `cache.UnsignedKeys`,

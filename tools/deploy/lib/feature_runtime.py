@@ -111,11 +111,14 @@ def _run(action, pin, launch):
                     _matches_executable({**observed, "ActiveState": "active"}, host.paths.p(spec.executable))):
                 process = ProcessIdentity(int(observed["MainPID"]), int(observed["process"]["start"]),
                                           invocation.process.invocation_id)
-                require(admission.executor_alive(host, process), "feature_runtime_identity", "Workload invocation changed.")
-                store.bind_workload(invocation, process, permit_id=permit_id)
-                return 0
+                # execve switches /proc/<pid>/exe before it builds the new stack, so the
+                # environment (and INVOCATION_ID) can briefly read as empty. Prove identity
+                # by the deadline instead of failing on that transient observation.
+                if admission.executor_alive(host, process):
+                    store.bind_workload(invocation, process, permit_id=permit_id)
+                    return 0
             time.sleep(.05)
-        require(False, "feature_runtime_identity", "Selected workload did not acquire its systemd MainPID.")
+        require(False, "feature_runtime_identity", "Selected workload did not prove its systemd invocation identity.")
     require(action == "prepare", "feature_runtime_action", "Unsupported runtime action.")
     roots = {key: tuple(value) for key, value in launch["artifact_roots"].items()}
     from contracts import ReleaseDeclaration
