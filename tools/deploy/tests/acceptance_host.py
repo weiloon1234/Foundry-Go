@@ -370,7 +370,9 @@ def report(host):
             assert service is not None and service["load"] == "loaded", "Shared-service probes must work without root"
         reported = {item["instance_id"]: item for item in entries}
         assert set(reported) == set(states)
-        expected_problems = {("backup_stale", instance_id) for instance_id in missing_receipts}
+        # Without any completed receipt the report also names the full-backup remedy.
+        expected_problems = {(code, instance_id) for instance_id in missing_receipts
+                             for code in ("backup_stale", "backup_missing")}
         check_failed_units(host, value["host"]["failed_units"])
         if value["host"]["failed_units"]:
             expected_problems.add(("units_failed", None))
