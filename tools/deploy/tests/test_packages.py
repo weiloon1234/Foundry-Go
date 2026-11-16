@@ -860,6 +860,18 @@ class ActivationComparisonTests(unittest.TestCase):
         with self.assertRaises(DeployError):
             packages._finish_activation(self.host, {"activation_before": {}, "activation_units": {}})
 
+    def test_refusals_name_the_changed_units_and_fields(self):
+        before = {"cron.service": self.record("cron.service"), "gone.service": self.record("gone.service")}
+        current = {"cron.service": {**self.record("cron.service"), "MainPID": "8400", "UnitFileState": "disabled"}}
+        differences = packages._activation_differences(before, current, {})
+        self.assertEqual(differences, [("gone.service", "removed"), ("cron.service", "UnitFileState/MainPID")])
+        detail = packages._difference_detail([(f"u{i}.service", "MainPID") for i in range(10)])
+        self.assertTrue(detail.endswith("u7.service (MainPID) and 2 more"))
+        self.host.activation = current
+        with self.assertRaises(DeployError) as error:
+            packages._finish_activation(self.host, {"activation_before": before, "activation_units": {}})
+        self.assertIn("cron.service (UnitFileState/MainPID)", error.exception.detail)
+
     def test_timer_only_triggered_runs_may_finish_or_restart(self):
         name, kind = "apt-daily.service", {"TriggeredBy": "apt-daily.timer"}
         for change in ({"ActiveState": "inactive", "SubState": "dead", "MainPID": "0"}, {"MainPID": "8400"}):
