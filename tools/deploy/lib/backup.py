@@ -681,7 +681,7 @@ def initial_backup(host: Host, entry: dict) -> list[str]:
             host.save_state(entry, state)
         run_backup(host, entry, operation, "full")
         return []
-    except (DeployError, OSError, ValueError) as error:
+    except Exception as error:  # nothing here may change a committed deploy's outcome
         # The deploy is already committed. Preserve the backup identity and
         # unknown outcome for explicit reconciliation, without retrying it here.
         try:
