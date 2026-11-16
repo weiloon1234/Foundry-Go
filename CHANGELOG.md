@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Keep network reports available for interface-scoped IPv6 listeners in `ss` output.
 - Fix host reports falsely marking numbered service copies unready when their
   admission receipts are present under the copy's identity.
 - Recognize verified OS DHCP clients in host reports while continuing to flag

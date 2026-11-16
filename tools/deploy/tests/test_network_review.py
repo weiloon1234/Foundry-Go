@@ -298,7 +298,11 @@ class ReportReviewTests(unittest.TestCase):
         raw_second["listeners"]["relay.ingress"]["ports"] = [9444]
         host.read_registry.return_value = {"instances": {p["instance_id"]: {"profile": p, "topology": {**topology.projection(), "sha256": topology.sha256}}
                                                        for p in (first.projection(), raw_second)}}
-        host.run.return_value = subprocess.CompletedProcess([], 0, "LISTEN 0 511 203.0.113.10:9443 0.0.0.0:*\nLISTEN 0 511 203.0.113.10:9444 0.0.0.0:*\n", "")
+        def command(args, **kwargs):
+            output = ("LISTEN 0 511 203.0.113.10:9443 0.0.0.0:*\nLISTEN 0 511 203.0.113.10:9444 0.0.0.0:*\n"
+                      if args == ["ss", "-H", "-ltnp", "-4"] else "")
+            return subprocess.CompletedProcess(args, 0, output, "")
+        host.run.side_effect = command
         with patch.object(listeners, "observe_sockets", return_value=observed), \
                 patch.object(listeners, "process_members", return_value=frozenset({9})), \
                 patch.object(listeners, "observe_dns", side_effect=OSError), patch.object(firewall, "observe"):
@@ -308,10 +312,13 @@ class ReportReviewTests(unittest.TestCase):
         self.assertTrue(all(f.get("instance_id", first.instance_id) == first.instance_id for f in value["findings"]))
         import time
         problems = []
-        report.network(host, problems, time.monotonic() + 10, claims=claims)
-        self.assertNotIn({"code": "unexpected_public_listener"}, problems)
+        self.assertEqual(report.network(host, problems, time.monotonic() + 10, claims=claims)["public_listeners"], [9443, 9444])
+        self.assertEqual(problems, [])
 
     def test_declared_port_does_not_hide_wrong_address_or_udp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        host = Host(Paths(Path(temporary.name)))
         first = fixture.network_profile()
         claims = listeners.public_claims(first)
         unknown = listeners.ObservedSocket(replace(claims[0].socket, address="0.0.0.0"), (3,))
@@ -319,5 +326,6 @@ class ReportReviewTests(unittest.TestCase):
         with patch.object(listeners, "observe_sockets", return_value=(unknown, udp)), \
                 patch.object(listeners, "process_members", return_value=frozenset({9})), \
                 patch.object(listeners, "observe_dns", side_effect=OSError), patch.object(firewall, "observe"):
-            value = report.declared_network(Mock(), first, topology=fixture.network_topology(), host_claims=claims)
+            value = report.declared_network(host, first, topology=fixture.network_topology(), host_claims=claims)
         self.assertEqual({v["transport"] for v in value["unexpected_exposure"]}, {"tcp", "udp"})
+        self.assertTrue(all(v["processes"] == ["unknown"] for v in value["unexpected_exposure"]))

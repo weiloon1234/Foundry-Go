@@ -3,6 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from unittest.mock import patch
@@ -15,6 +16,7 @@ import report
 import services
 import topology as t
 import upgrades
+from host import Paths
 from test_host_capabilities import declaration, INSTANCE
 from test_network import runtime
 from test_services import inventory_fixture
@@ -195,10 +197,15 @@ class ConfinementTests(unittest.TestCase):
         entry = {"topology": t.validate_topology(topology.projection()),
                  "deployment_selection": {"selected_resolution_id": resolution.id}}
         registry = {"instances": {INSTANCE: entry}}
-        host = Mock()
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        host = Mock(paths=Paths(Path(temporary.name)))
         observed = listeners.ObservedSocket(listeners.SocketIdentity("tcp", 4, "0.0.0.0", 18000), (10,))
-        host.run.return_value = subprocess.CompletedProcess([], 0,
-            'LISTEN 0 128 0.0.0.0:18000 0.0.0.0:* users:(("app",pid=10,fd=3))', '')
+        def command(args, **kwargs):
+            output = ('LISTEN 0 128 0.0.0.0:18000 0.0.0.0:* users:(("app",pid=10,fd=3))'
+                      if args == ["ss", "-H", "-ltnp", "-4"] else "")
+            return subprocess.CompletedProcess(args, 0, output, "")
+        host.run.side_effect = command
         with patch.object(listeners, "_feature_inventory", return_value=inventory), \
                 patch.object(listeners, "observe_sockets", return_value=(observed,)), \
                 patch.object(listeners, "process_members", return_value={10}), \
@@ -217,6 +224,7 @@ class ConfinementTests(unittest.TestCase):
             problems = []
             self.assertEqual(report.network(host, problems, time.monotonic() + 1, confined=failed["sockets"])["public_listeners"], [18000])
             self.assertIn("unexpected_public_listener", [p["code"] for p in problems])
+            self.assertNotIn("network_unavailable", [p["code"] for p in problems])
 
     def test_stopped_historical_wildcards_remain_reserved_for_other_allocation_owners(self):
         from types import SimpleNamespace

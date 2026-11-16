@@ -168,7 +168,7 @@ def parse_sockets(text, transport, family):
         columns = line.split()
         require(len(columns) >= 5, "listener_observation", "Socket inventory is incomplete.")
         address, separator, port = columns[3].rpartition(":")
-        address = address.strip("[]").split("%", 1)[0]
+        address = address.split("%", 1)[0].strip("[]")
         if address == "*":
             address = "0.0.0.0" if family == 4 else "::"
         address = str(ipaddress.ip_address(address))

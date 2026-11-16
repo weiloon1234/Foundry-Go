@@ -3,6 +3,7 @@
 import copy
 from contextlib import nullcontext
 from dataclasses import replace
+import ipaddress
 import json
 import shutil
 import signal
@@ -599,6 +600,19 @@ class ReportTests(unittest.TestCase):
         self.assertIn({"code": "unexpected_public_listener",
                        "socket": {"transport": "tcp", "family": 4, "address": "0.0.0.0", "port": 8100},
                        "detail": "tcp [0.0.0.0]:8100; processes: unknown"}, result["problems"])
+
+    def test_ipv6_inventory_accepts_mapped_scoped_and_wildcard_addresses(self):
+        # ss -6 filters AF_INET6 sockets; IPv4-mapped addresses retain that family.
+        for raw, canonical in (("[::ffff:192.0.2.1]", "::ffff:c000:201"),
+                               ("[fe80::1]%eth0", "fe80::1"), ("*", "::"), ("[::]", "::")):
+            with self.subTest(address=raw):
+                self.host.outputs[("ss", "-H", "-ltnp", "-6")] = f"LISTEN 0 4096 {raw}:9000 *:*\n"
+                problems = []
+                value = report.network(self.host, problems, time.monotonic() + 10)
+                self.assertEqual(value["public_listeners"], [9000])
+                self.assertEqual([p["code"] for p in problems], ["unexpected_public_listener"])
+                self.assertEqual(problems[0]["socket"],
+                                 {"transport": "tcp", "family": 6, "address": str(ipaddress.ip_address(canonical)), "port": 9000})
 
     def test_wildcard_listener_is_one_problem_across_host_and_feature_scans(self):
         import listeners
