@@ -18,7 +18,7 @@ import subprocess
 import time
 import uuid
 
-from contracts import DeployError, HOST_PATHS, check_path, contract_path, digest, parse_json, read_json, require
+from contracts import DeployError, HOST_PATHS, PREFIX, check_path, contract_path, digest, parse_json, read_json, require
 from host import Host, LOCK_WAIT_SECONDS
 from topology import DeploymentProfile, ExecutableBinding, ExecutableRole, PackageExecutable, Topology
 
@@ -642,6 +642,11 @@ def stable_activation(host, snapshot):
     classification = _activation_classification(host, snapshot)
     stable = {}
     for name, record in snapshot.items():
+        if name.startswith(PREFIX + "-"):
+            # Foundry's own units, including transient operation units, stay exact:
+            # a concurrent operation appearing after review must invalidate it.
+            stable[name] = dict(record)
+            continue
         kind = classification.get(name, {})
         if _ephemeral_activation(name, record, kind):
             continue

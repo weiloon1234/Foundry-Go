@@ -196,6 +196,14 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
         return public
 
 
+def _stable_observations(host, observed):
+    package_observation = observed.get("packages")
+    if not isinstance(package_observation, dict) or not isinstance(package_observation.get("activation"), dict):
+        return observed
+    return {**observed, "packages": {**package_observation,
+                                     "activation": packages.stable_activation(host, package_observation["activation"])}}
+
+
 def reviewed(host, registry, entry, request, *, pin=None):
     """Reobserve under both locks, before marking pending or withdrawing ingress."""
     path = operations.directory(host, contract_uuid(request["operation_id"])) / "release-plan.json"
@@ -224,6 +232,9 @@ def reviewed(host, registry, entry, request, *, pin=None):
         unit = "foundry-operation-" + request["operation_id"] + ".service"
         if unit not in expected["packages"]["activation"]:
             current["packages"]["activation"].pop(unit, None)
+    # Review and confirm are minutes apart: session, on-demand and scheduled churn of
+    # foreign units (user@0 cycling with SSH logins) must not stale a reviewed plan.
+    current, expected = (_stable_observations(host, value) for value in (current, expected))
     changed = sorted(key for key in current.keys() | expected.keys()
                      if key != "dns" and (key not in current or key not in expected or current[key] != expected[key]))
     if changed:

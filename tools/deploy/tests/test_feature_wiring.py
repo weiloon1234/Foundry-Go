@@ -735,8 +735,9 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertEqual(c.read_json(store.durable / "cleanup" / (operation + ".json"))["status"], "complete")
         self.assertTrue(self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))["ok"])
 
-    def executor_review(self, concurrent=False, preexisting=False):
+    def executor_review(self, concurrent=False, preexisting=False, session_churn=False):
         self.build_archive(public=True)
+        sessions, session = iter(range(44838, 99999)), ["44837"]
         self.configure_firewall()
         bootstrap = self.request("bootstrap-plan", topology=self.topology.projection())
         self.request("bootstrap-apply", topology=self.topology.projection(),
@@ -757,13 +758,22 @@ class FeatureWiringTests(FeatureWiringFixture):
                 rows["foundry-operation-" + operation + ".service"] = record
                 if concurrent and pin is not None:
                     rows["foundry-operation-" + str(uuid.UUID(int=123)) + ".service"] = record
+            if session_churn and args[:2] == ["systemctl", "list-units"]:
+                # The root user manager restarts with each SSH login (incident 2026-11-16).
+                session[0] = str(next(sessions))
+            if session_churn:
+                rows["user@0.service"] = {"LoadState": "loaded", "ActiveState": "active", "SubState": "running",
+                                          "MainPID": session[0], "UnitFileState": "static",
+                                          "FragmentPath": "/usr/lib/systemd/system/user@.service"}
             output = None
             if args[:2] == ["systemctl", "list-unit-files"]:
                 output = ""
             elif args[:2] == ["systemctl", "list-units"]:
                 output = "\n".join(rows)
             elif args[:2] == ["systemctl", "show"] and "-p" in args:
-                output = "\n\n".join("Id=" + name + "\n" + "\n".join(k + "=" + v for k, v in rows[name].items())
+                # Real systemd also answers the classification properties.
+                kind = {"Type": "simple", "TriggeredBy": "", "Transient": "yes", "RemainAfterExit": "no"}
+                output = "\n\n".join("Id=" + name + "\n" + "\n".join(k + "=" + v for k, v in {**kind, **rows[name]}.items())
                                       for name in args[2:args.index("--no-pager")])
             if output is not None:
                 return subprocess.CompletedProcess(args, 0, output, "")
@@ -798,6 +808,9 @@ class FeatureWiringTests(FeatureWiringFixture):
 
     def test_executor_review_does_not_hide_changes_to_a_preexisting_unit(self):
         self.executor_review(preexisting=True)
+
+    def test_review_ignores_root_session_churn_between_review_and_confirm(self):
+        self.executor_review(session_churn=True)
 
     def test_first_public_release_plans_without_dns_and_dns_changes_do_not_gate_apply(self):
         import socket

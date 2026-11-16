@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.39.2 — 2026-11-16
+
+- Fixed: a reviewed feature deploy or rollback confirmed minutes after review
+  refused `stale_plan` (`Changed observation keys: packages`). Review stored the
+  raw unit snapshot, and the root user manager (`user@0.service`) restarts with a
+  new MainPID after each SSH session ends. Release review now compares the same
+  stable projection as bootstrap plans: configuration of every unit and runtime of
+  independently managed services. Foundry's own units, including another
+  operation's transient unit, stay exact, so a concurrent operation still
+  invalidates the review.
+- Upgrade: run `ACTION=tools-plan`/`ACTION=tools-apply` (generation 19, no
+  migration), then review and confirm the deploy or rollback again.
+
 ## v0.39.1 — 2026-11-16
 
 - Fixed: a feature health failure could stop the entire instance and leave its
