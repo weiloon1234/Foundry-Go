@@ -97,6 +97,8 @@ class PackageHost(Host):
         self.interrupt = False
         self.new_main = False
         self.main_running = False
+        self.activation = {}
+        self.activation_classification = {}
         self.paths.p("/usr/sbin").mkdir(parents=True)
         os_release = self.paths.p("/etc/os-release")
         os_release.parent.mkdir(parents=True)
@@ -110,6 +112,21 @@ class PackageHost(Host):
         elif args[0] == "systemctl":
             if args[1] in ("disable", "daemon-reload"):
                 pass
+            elif args[1] in ("list-unit-files", "list-units"):
+                output = "\n".join(name + " " + record.get("UnitFileState", "disabled")
+                                   for name, record in sorted(self.activation.items()))
+            elif args[1] == "show" and "Id" in args:
+                records = []
+                properties = {args[index + 1] for index, arg in enumerate(args) if arg == "-p"}
+                for name in args[2:args.index("--no-pager")]:
+                    masked = self.paths.p("/etc/systemd/system/" + name).is_symlink()
+                    record = {"LoadState": "masked" if masked else "loaded", "ActiveState": "inactive",
+                              "SubState": "dead", "MainPID": "0", "UnitFileState": "masked" if masked else "disabled",
+                              "FragmentPath": "", **self.activation.get(name, {})}
+                    record.update({"Id": name, "Type": "simple", "TriggeredBy": "", "Transient": "no",
+                                   **self.activation_classification.get(name, {})})
+                    records.append("\n".join(key + "=" + value for key, value in record.items() if key in properties))
+                output = "\n\n".join(records)
             else:
                 exists = self.paths.p("/etc/postgresql/16/main").exists() and args[2] == "postgresql@16-main.service"
                 output = ("LoadState=loaded\nActiveState=" + ("active\nMainPID=42" if self.main_running else "inactive\nMainPID=0")) if exists else "LoadState=not-found\nActiveState=inactive\nMainPID=0"
@@ -503,7 +520,8 @@ class DefaultActivationTests(unittest.TestCase):
         journal = {"activation_before": before, "activation_units": {"new.timer": ["new"]}}
         with patch.object(packages, "_activation_snapshot", return_value={**before, "new.timer": self.record()}):
             packages._finish_activation(self.host, journal)
-        self.assertEqual([args for args, _ in self.host.commands], [["systemctl", "disable", "new.timer"]])
+        self.assertEqual([args for args, _ in self.host.commands if args[1] != "show"],
+                         [["systemctl", "disable", "new.timer"]])
 
 
 CERTBOT_CRON = b"0 */12 * * * root test -x /usr/bin/certbot -a ! -d /run/systemd/system && certbot -q renew\n"
@@ -536,7 +554,7 @@ class PayloadPackageHost(PackageHost):
 
     def units(self):
         return {path.name for directory in ("/etc/systemd/system", "/usr/lib/systemd/system")
-                for path in self.paths.p(directory).glob("*") if packages.UNIT.fullmatch(path.name)}
+                for path in self.paths.p(directory).glob("*") if packages.UNIT.fullmatch(path.name)} | self.activation.keys()
 
     def run(self, args, **kwargs):
         output = ""
@@ -574,13 +592,6 @@ class PayloadPackageHost(PackageHost):
                 self.inventory[name] = installed()
         elif args[0] == "systemctl" and args[1] in ("list-unit-files", "list-units"):
             output = "\n".join(name + " disabled" for name in sorted(self.units()))
-        elif args[0] == "systemctl" and args[1] == "show" and "Id" in args:
-            records = []
-            for name in args[2:args.index("--no-pager")]:
-                masked = self.paths.p("/etc/systemd/system/" + name).is_symlink()
-                records.append(f"Id={name}\nLoadState={'masked' if masked else 'loaded'}\nActiveState=inactive\n"
-                               f"SubState=dead\nMainPID=0\nUnitFileState={'masked' if masked else 'disabled'}\nFragmentPath=\n")
-            output = "\n".join(records)
         elif args[:3] == ["systemctl", "enable", "--now"]:
             unit = args[3] if args[3].endswith(".service") else args[3] + ".service"
             if self.paths.p("/etc/systemd/system/" + unit).is_symlink():
@@ -590,6 +601,220 @@ class PayloadPackageHost(PackageHost):
             return super().run(args, **kwargs)
         self.commands.append((list(args), kwargs))
         return subprocess.CompletedProcess(args, 0, output, "")
+
+
+class ActivationComparisonTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.host = PayloadPackageHost(Path(temporary.name).resolve(), {"new": {}})
+
+    def record(self, name, *, active="active", state="enabled", pid="1171"):
+        return {"LoadState": "loaded", "ActiveState": active, "SubState": "running" if active == "active" else "dead",
+                "MainPID": pid, "UnitFileState": state, "FragmentPath": "/usr/lib/systemd/system/" + name}
+
+    def cloud_activation(self):
+        for name in ("fwupd.service", "packagekit.service"):
+            self.host.activation[name] = self.record(name, active="inactive", state="static", pid="0")
+            self.host.activation_classification[name] = {"Type": "dbus"}
+        self.host.activation["user@0.service"] = self.record("user@0.service", state="static")
+
+    def churn(self):
+        for record in self.host.activation.values():
+            record.update(ActiveState="active", SubState="running", MainPID="8400")
+
+    def install_with_churn(self):
+        run = self.host.run
+
+        def command(args, **kwargs):
+            result = run(args, **kwargs)
+            if args[:2] == ["apt-get", "-y"] and "--download-only" not in args:
+                self.churn()
+            return result
+
+        with patch.object(self.host, "run", side_effect=command):
+            packages.install_missing(self.host, ["new"])
+
+    def test_stock_ubuntu_dbus_and_root_session_churn_completes_install(self):
+        self.cloud_activation()
+        before = copy.deepcopy(self.host.activation)
+        self.install_with_churn()
+        journal = packages._load(self.host)
+        self.assertEqual(journal["state"], "complete")
+        self.assertEqual(journal["activation_before"], before)
+        self.assertEqual(journal["policy_state"], "restored")
+
+    def test_v0384_installed_pending_journal_resumes_all_finish_checks(self):
+        self.cloud_activation()
+
+        def old_finish(host, journal):
+            packages.require(journal["activation_before"] == packages._activation_snapshot(host),
+                             "package_service_changed", "Old comparison refused activation churn.")
+
+        with patch.object(packages, "_finish_activation", side_effect=old_finish), self.assertRaises(DeployError) as error:
+            self.install_with_churn()
+        self.assertEqual(error.exception.code, "package_service_changed")
+        before = packages._load(self.host)
+        self.assertEqual(before["state"], "installing")
+        self.assertTrue(packages._installed(self.host.inventory, "new"))
+        for record in before["activation_before"].values():
+            self.assertEqual(set(record), {"LoadState", "ActiveState", "SubState", "MainPID", "UnitFileState", "FragmentPath"})
+        self.churn()
+        self.host.activation["user@0.service"]["MainPID"] = "9000"
+        self.host.commands.clear()
+        with patch.object(packages, "_required", return_value=[]):
+            plan = packages.inspect(self.host)
+        self.assertEqual(plan["state"], "resume")
+        self.assertEqual(plan["missing"], [])
+        with contextlib.ExitStack() as stack:
+            finish = [stack.enter_context(patch.object(packages, name, wraps=getattr(packages, name)))
+                      for name in ("_finish_defaults", "_finish_activation", "_finish_cron")]
+            packages.install_missing(self.host, plan["missing"], reviewed=plan)
+            for check in finish:
+                check.assert_called_once()
+        after = packages._load(self.host)
+        self.assertEqual(after["state"], "complete")
+        self.assertEqual(after["policy_state"], "restored")
+        self.assertEqual(after["activation_before"], before["activation_before"])
+        self.assertEqual(after["supply_sha256"], before["supply_sha256"])
+        self.assertFalse(any(args[0] in ("apt-get", "dpkg") for args, _ in self.host.commands))
+
+    def test_reviewed_plan_accepts_root_session_pid_change(self):
+        name = "user@0.service"
+        self.host.activation[name] = self.record(name)
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        self.host.activation[name]["MainPID"] = "8400"
+        packages.install_missing(self.host, ["new"], reviewed=plan)
+        self.assertEqual(packages._load(self.host)["state"], "complete")
+
+    def test_payload_acquisition_uses_same_runtime_comparison(self):
+        name = "user@0.service"
+        self.host.activation[name] = self.record(name)
+        prepare = packages._prepare_payloads
+
+        def acquire(*args):
+            result = prepare(*args)
+            self.host.activation[name]["MainPID"] = "8400"
+            return result
+
+        with patch.object(packages, "_prepare_payloads", side_effect=acquire):
+            packages.install_missing(self.host, ["new"])
+        self.assertEqual(packages._load(self.host)["state"], "complete")
+
+    def test_independent_service_runtime_changes_still_refuse(self):
+        cases = [("cron.service", "enabled", "simple", {"MainPID": "8400"}),
+                 ("dbus.service", "static", "notify", {"MainPID": "8400"}),
+                 ("cron.service", "enabled", "simple", {"ActiveState": "inactive", "MainPID": "0"}),
+                 ("cron.service", "enabled", "simple", {"ActiveState": "failed", "SubState": "failed"}),
+                 ("indirect.service", "indirect", "simple", {"MainPID": "8400"}),
+                 ("generated.service", "generated", "forking", {"MainPID": "8400"}),
+                 ("enabled-dbus.service", "enabled", "dbus", {"MainPID": "8400"})]
+        for name, state, kind, change in cases:
+            with self.subTest(name=name, change=change):
+                before = {name: self.record(name, state=state)}
+                self.host.activation = {name: {**before[name], **change}}
+                self.host.activation_classification = {name: {"Type": kind}}
+                with self.assertRaises(DeployError) as error:
+                    packages._finish_activation(self.host, {"activation_before": before, "activation_units": {}})
+                self.assertEqual(error.exception.code, "package_service_changed")
+        name = "cron.service"
+        before = {name: self.record(name, active="inactive", pid="0")}
+        self.host.activation = {name: self.record(name)}
+        with self.assertRaises(DeployError) as error:
+            packages._finish_activation(self.host, {"activation_before": before, "activation_units": {}})
+        self.assertEqual(error.exception.code, "package_service_changed")
+
+    def test_session_and_on_demand_configuration_changes_always_refuse(self):
+        for name, kind in (("user@0.service", {}), ("user-runtime-dir@42.service", {}),
+                           ("packagekit.service", {"Type": "dbus"}),
+                           ("refresh.service", {"TriggeredBy": "refresh.timer"})):
+            for field, value in (("LoadState", "not-found"), ("UnitFileState", "enabled"),
+                                 ("FragmentPath", "/etc/systemd/system/replacement.service")):
+                with self.subTest(name=name, field=field):
+                    before = {name: self.record(name, state="static")}
+                    self.host.activation = {name: {**before[name], field: value}}
+                    self.host.activation_classification = {name: kind}
+                    with self.assertRaises(DeployError) as error:
+                        packages._finish_activation(self.host, {"activation_before": before, "activation_units": {}})
+                    self.assertEqual(error.exception.code, "package_service_changed")
+
+    def test_triggered_and_session_runtime_changes_are_ignored(self):
+        for name, kind in (("user-runtime-dir@42.service", {}),
+                           ("refresh.service", {"TriggeredBy": "refresh.timer"}),
+                           ("worker.service", {"TriggeredBy": "worker.socket"}),
+                           ("watch.service", {"TriggeredBy": "watch.path"})):
+            with self.subTest(name=name):
+                before = {name: self.record(name, active="inactive", pid="0")}
+                self.host.activation = {name: self.record(name)}
+                self.host.activation_classification = {name: kind}
+                packages._finish_activation(self.host, {"activation_before": before, "activation_units": {}})
+
+    def test_timer_path_target_ignore_only_substate(self):
+        for suffix in ("timer", "path", "target"):
+            name = "foreign." + suffix
+            before = {name: self.record(name, pid="0")}
+            self.host.activation = {name: {**before[name], "SubState": "waiting"}}
+            journal = {"activation_before": before, "activation_units": {}}
+            with self.subTest(name=name):
+                packages._finish_activation(self.host, journal)
+                self.host.activation[name]["ActiveState"] = "inactive"
+                with self.assertRaises(DeployError) as error:
+                    packages._finish_activation(self.host, journal)
+                self.assertEqual(error.exception.code, "package_service_changed")
+
+    def test_new_transient_and_session_units_are_ignored_but_unowned_units_refuse(self):
+        for name, kind, accepted in (("session-helper.service", {"Transient": "yes"}, True),
+                                     ("user@0.service", {}, True), ("user-runtime-dir@42.service", {}, True),
+                                     ("surprise.service", {}, False), ("user@foreign.service", {}, False),
+                                     ("packagekit.service", {"Type": "dbus"}, False)):
+            with self.subTest(name=name):
+                self.host.activation = {name: self.record(name, state="static")}
+                self.host.activation_classification = {name: kind}
+                self.host.commands.clear()
+                journal = {"activation_before": {}, "activation_units": {}}
+                if accepted:
+                    packages._finish_activation(self.host, journal)
+                else:
+                    with self.assertRaises(DeployError) as error:
+                        packages._finish_activation(self.host, journal)
+                    self.assertEqual(error.exception.code, "package_activation")
+                    self.assertIn("Unowned activation", error.exception.detail)
+                self.assertFalse(any(args[1] == "disable" for args, _ in self.host.commands))
+
+    def test_vanished_session_and_transient_units_are_ignored_but_others_refuse(self):
+        transient = {**self.record("run-u42.service"), "FragmentPath": "/run/systemd/transient/run-u42.service"}
+        for name, record, accepted in (("user@0.service", self.record("user@0.service", state="static"), True),
+                                       ("run-u42.service", transient, True),
+                                       ("cron.service", self.record("cron.service"), False)):
+            with self.subTest(name=name):
+                self.host.activation, self.host.activation_classification = {}, {}
+                journal = {"activation_before": {name: record}, "activation_units": {}}
+                if accepted:
+                    packages._finish_activation(self.host, journal)
+                    self.assertTrue(packages._activation_matches({name: record}, {}, {}))
+                else:
+                    with self.assertRaises(DeployError) as error:
+                        packages._finish_activation(self.host, journal)
+                    self.assertEqual(error.exception.code, "package_service_changed")
+
+    def test_plan_comparison_ignores_new_ephemeral_units_only(self):
+        before = {"cron.service": self.record("cron.service")}
+        current = {**before, "user@0.service": self.record("user@0.service", state="static"),
+                   "run-u7.service": self.record("run-u7.service", state="transient")}
+        self.assertTrue(packages._activation_matches(before, current, {"run-u7.service": {"Transient": "yes"}}))
+        current["surprise.service"] = self.record("surprise.service")
+        self.assertFalse(packages._activation_matches(before, current, {"run-u7.service": {"Transient": "yes"}}))
+
+    def test_classification_is_bounded_and_requires_complete_output(self):
+        with self.assertRaises(DeployError):
+            packages._activation_classification(self.host, {f"unit-{i}.service": {} for i in range(4097)})
+        self.assertEqual(self.host.commands, [])
+        name = "packagekit.service"
+        for output in ("", f"Id={name}\nType=dbus\nUnitFileState=static\nTransient=no\n"):
+            with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, output)), \
+                    self.assertRaises(DeployError):
+                packages._activation_classification(self.host, {name: self.record(name)})
 
 
 class BuiltinPayloadTests(unittest.TestCase):

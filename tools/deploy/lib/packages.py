@@ -509,6 +509,8 @@ def _candidate_evidence(host, transaction):
 
 UNIT = re.compile(r"[A-Za-z0-9_:,.@\\-]+\.(?:service|socket|timer|path|target)")
 TEMPLATE_UNIT = re.compile(r"@\.(?:service|socket|timer|path|target)$")
+SESSION_UNIT = re.compile(r"(?:user|user-runtime-dir)@[0-9]+\.service")
+ACTIVATION_UNIT_LIMIT = 4096
 
 
 def _activation_snapshot(host):
@@ -523,7 +525,7 @@ def _activation_snapshot(host):
                 # `systemctl show` rejects template names such as autovt@.service.
                 if TEMPLATE_UNIT.search(parts[0]) and args[0] == "list-unit-files" and len(parts) > 1:
                     templates[parts[0]] = parts[1]
-    require(len(names) <= 4096, "package_activation", "Host activation inventory is too large.")
+    require(len(names) <= ACTIVATION_UNIT_LIMIT, "package_activation", "Host activation inventory is too large.")
     records = {name: {"template_state": state} for name, state in templates.items()}
     shown = sorted(names - templates.keys())
     if not shown:
@@ -544,6 +546,59 @@ def _activation_snapshot(host):
                 "package_activation", "Cannot classify an activation alias.")
         records[name] = {"alias_state": result.stdout.strip()}
     return dict(sorted(records.items()))
+
+
+def _activation_classification(host, current):
+    require(len(current) <= ACTIVATION_UNIT_LIMIT, "package_activation", "Host activation inventory is too large.")
+    names = sorted(name for name, record in current.items()
+                   if "template_state" not in record and "alias_state" not in record)
+    if not names:
+        return {}
+    result = host.run(["systemctl", "show", *names, "--no-pager", "-p", "Id", "-p", "Type",
+                       "-p", "TriggeredBy", "-p", "Transient", "-p", "UnitFileState"])
+    records = {}
+    for block in result.stdout.strip().split("\n\n"):
+        record = dict(line.split("=", 1) for line in block.splitlines() if "=" in line)
+        name = record.pop("Id", None)
+        require(name in current and name in names and name not in records
+                and "TriggeredBy" in record and record.get("Transient") in ("yes", "no")
+                and "UnitFileState" in record and (not name.endswith(".service") or "Type" in record),
+                "package_activation", "Cannot classify existing host activation.")
+        records[name] = record
+    require(records.keys() == set(names), "package_activation", "Host activation classification is incomplete.")
+    return records
+
+
+def _ephemeral_activation(name, record, kind):
+    # Login sessions and transient units appear and vanish with work the install did not cause.
+    return bool(SESSION_UNIT.fullmatch(name) or kind.get("Transient") == "yes"
+                or str(record.get("FragmentPath", "")).startswith("/run/systemd/transient/"))
+
+
+def _activation_matches(before, current, classification, *, allow_new=False):
+    # Normalize copies only: old journals and reviewed supply digests retain the
+    # original snapshot shape. Both sides use the current host's classification.
+    def normalized(snapshot):
+        records = {}
+        for name, record in snapshot.items():
+            kind = classification.get(name, {})
+            ignored = set()
+            if (_ephemeral_activation(name, record, kind) or kind.get("TriggeredBy")
+                    or (name.endswith(".service") and kind.get("Type") == "dbus"
+                        and kind.get("UnitFileState") == "static")):
+                ignored.update(("ActiveState", "SubState", "MainPID"))
+            elif name.endswith((".timer", ".path", ".target")):
+                ignored.add("SubState")
+            records[name] = {key: value for key, value in record.items() if key not in ignored}
+        return records
+
+    if not isinstance(before, dict):
+        return False
+    before = {name: record for name, record in before.items()
+              if name in current or not _ephemeral_activation(name, record, {})}
+    current = {name: record for name, record in current.items()
+               if name in before or not (allow_new or _ephemeral_activation(name, record, classification.get(name, {})))}
+    return normalized(before) == normalized(current)
 
 
 _DEB_UNITS = r'''
@@ -758,10 +813,13 @@ def _mask_defaults(host, journal):
 
 def _finish_activation(host, journal):
     before, current = journal["activation_before"], _activation_snapshot(host)
-    require(all(current.get(name) == record for name, record in before.items()),
+    classification = _activation_classification(host, current)
+    require(_activation_matches(before, current, classification, allow_new=True),
             "package_service_changed", "Preexisting host activation changed during installation; operator review required.")
     for name, record in current.items():
         if name in before:
+            continue
+        if _ephemeral_activation(name, record, classification.get(name, {})):
             continue
         template = name.split("@", 1)[0] + "@." + name.rsplit(".", 1)[1] if "@" in name else name
         require(name in journal["activation_units"] or template in journal["activation_units"],
@@ -1080,7 +1138,8 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
         activation = _activation_snapshot(host)
         if reviewed is not None:
             require(reviewed.get("transaction") == approved and reviewed.get("evidence") == evidence
-                    and reviewed.get("installed") == inventory and reviewed.get("activation") == activation,
+                    and reviewed.get("installed") == inventory
+                    and _activation_matches(reviewed.get("activation"), activation, _activation_classification(host, activation)),
                     "package_plan_changed", "Package transaction, origin or activation changed after approval.")
         units, cron = _prepare_payloads(host, approved, evidence)
         for location in cron:
@@ -1088,7 +1147,9 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
             preserved = check_path(path.with_name(path.name + ".dpkg-dist"), "file")
             require(not path.exists() and not preserved.exists(),
                     "package_activation", "Preexisting cron configuration cannot be claimed by package installation.")
-        require(_inventory(host) == inventory and _activation_snapshot(host) == activation,
+        current = _activation_snapshot(host)
+        require(_inventory(host) == inventory
+                and _activation_matches(activation, current, _activation_classification(host, current)),
                 "package_plan_changed", "Host changed while acquiring inert package payloads.")
         prepared = True
         operation = str(uuid.uuid4())

@@ -461,6 +461,15 @@ paths under `deploy/bin/`.
   Tool-only dependencies need no custom service role: the example's `json`
   binding resolves a verified executable without starting a daemon. Framework
   package defaults remain fenced unless their owner explicitly hands them off.
+
+  Package installation refuses configuration changes to any preexisting unit and
+  runtime changes to independently managed services, including starts, stops,
+  failures and restarts. It ignores runtime changes to numeric `user@` and
+  `user-runtime-dir@` session services, static `Type=dbus` services and units with
+  a nonempty `TriggeredBy`. Timer, path and target units ignore only `SubState`
+  changes and still compare `ActiveState`. New transient and session units are
+  ignored by the unowned-activation check. These rules also apply when resuming
+  an interrupted package installation.
 - **Artifacts:** `version` is a single path component. `platforms` maps
   `linux-amd64` and/or `linux-arm64` to an HTTPS `url` and 64-hex `sha256` of the
   download, or a [release source](#release-carried-artifacts). Declared URLs cannot
