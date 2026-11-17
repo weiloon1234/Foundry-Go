@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.42.1 — 2026-11-17
 
 - Package installation no longer refuses with `package_service_changed` when a static,
   bus-activated system service starts or exits on its own during the install. Bus
