@@ -574,7 +574,7 @@ def _activation_classification(host, current):
                    and not name.startswith(PREFIX + "-") and not _ephemeral_activation(name, record, {}))
     if not names:
         return {}
-    result = host.run(["systemctl", "show", *names, "--no-pager", "-p", "Id", "-p", "Type",
+    result = host.run(["systemctl", "show", *names, "--no-pager", "-p", "Id", "-p", "Type", "-p", "BusName",
                        "-p", "TriggeredBy", "-p", "Transient", "-p", "UnitFileState", "-p", "RemainAfterExit"])
     records = {}
     for block in result.stdout.strip().split("\n\n"):
@@ -619,8 +619,11 @@ def _runtime_policy(name, record, kind):
     triggers = kind.get("TriggeredBy", "").split()
     # A static service has no install section: only a bus, hook, dependency or trigger starts it.
     static_service = name.endswith(".service") and kind.get("UnitFileState") == "static"
+    # Bus activation is declared by BusName, whatever the readiness Type: Ubuntu 26.04's
+    # systemd-timedated is Type=notify, starts on a D-Bus call and exits when idle.
+    bus_activated = kind.get("Type") == "dbus" or bool(kind.get("BusName"))
     if (_ephemeral_activation(name, record, kind) or (triggers and all(t.endswith(".timer") for t in triggers))
-            or (static_service and (kind.get("Type") == "dbus" or _run_to_completion(kind)))):
+            or (static_service and (bus_activated or _run_to_completion(kind)))):
         return "ignore"  # Sessions, scheduled runs and bus- or hook-started helpers start and exit on their own.
     if triggers:
         # Socket/path activation may start the unit or let it exit while idle (systemd-fsckd after boot);

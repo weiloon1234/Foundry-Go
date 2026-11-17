@@ -900,6 +900,26 @@ class ActivationComparisonTests(unittest.TestCase):
                     else:
                         packages._finish_activation(self.host, journal)
 
+    def test_static_bus_named_services_may_activate_or_idle_exit_whatever_their_type(self):
+        # Ubuntu 26.04 systemd-timedated: static, Type=notify, BusName=org.freedesktop.timedate1.
+        name = "systemd-timedated.service"
+        transitions = ((("active", "700"), ("inactive", "0")), (("inactive", "0"), ("active", "701")),
+                       (("active", "700"), ("active", "702")))
+        for bus_name, refused in (("org.freedesktop.timedate1", False), ("", True)):
+            for (active, pid), (after, after_pid) in transitions:
+                with self.subTest(bus_name=bus_name, before=active, after=after):
+                    before = {name: self.record(name, active=active, state="static", pid=pid)}
+                    self.host.activation = {name: self.record(name, active=after, state="static", pid=after_pid)}
+                    self.host.activation_classification = {name: {"Type": "notify", "BusName": bus_name}}
+                    journal = {"activation_before": before, "activation_units": {}}
+                    # Without a bus name a static unit may start, but must not stop or restart.
+                    if refused and not (active == "inactive" and after == "active"):
+                        with self.assertRaises(DeployError) as error:
+                            packages._finish_activation(self.host, journal)
+                        self.assertEqual(error.exception.code, "package_service_changed")
+                    else:
+                        packages._finish_activation(self.host, journal)
+
     def test_sockets_ignore_listening_running_flip_but_not_stopping(self):
         name = "systemd-fsckd.socket"
         before = {name: {**self.record(name, state="static"), "SubState": "running", "MainPID": "0"}}

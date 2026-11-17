@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Package installation no longer refuses with `package_service_changed` when a static,
+  bus-activated system service starts or exits on its own during the install. Bus
+  activation is recognized by the unit's `BusName`, not only `Type=dbus`: Ubuntu 26.04's
+  `systemd-timedated` is `Type=notify` and blocked bootstrap `prepare` on a stock server.
+  Static services without a bus name still refuse when they stop or restart.
+- Real-VM operator and recovery acceptance now also run on Ubuntu 26.04 (official cloud
+  image release 20261108, checksum-pinned), alongside 24.04.
+
 ## v0.42.0 — 2026-11-17
 
 - Backup and replacement-server recovery are now proven on real Ubuntu VMs on every
