@@ -956,6 +956,10 @@ class Run:
             self.note(f"PASS {self.scenario}/{self.mode}: delayed interactive recovery rollback after all CLI SSH sessions expired")
         self.note(f"PASS {self.scenario}/{self.mode}: failed deploy, reconcile, rollback, healthy roles, logs and report")
         plan = json.loads(invoke("deploy", "tools-plan"))
+        if self.mode == "feature":
+            if (plan.get("retention", {}).get("code") != "helper_bundles_retained"
+                    or plan["prune_bundles"] or plan["prune_upgrade_journals"]):
+                raise Failure("Feature host tools plan must retain helper bundles and journals with a retention notice")
         if plan["upgrade"] is not None or plan["prune_bundles"] or plan["prune_upgrade_journals"]:
             invoke("deploy", "tools-apply", PLAN_TOKEN=plan["plan_token"], OPERATION=str(uuid.uuid4()))
         self.note(f"PASS {self.scenario}/{self.mode}: real CLI bootstrap, three rebuilt releases, recovery and tools plan")

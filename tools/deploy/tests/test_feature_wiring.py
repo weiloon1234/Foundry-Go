@@ -564,6 +564,9 @@ class FeatureWiringTests(FeatureWiringFixture):
                 patch.object(release.backup, "archive_keys", side_effect=archive) as keys:
             first = self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
             self.assertTrue(first["ok"])
+            self.assertEqual(first["retention"], upgrades.helper_bundle_retention_notice())
+            self.assertEqual(first["retention"]["code"], "helper_bundles_retained")
+            self.assertNotIn("error", first["retention"])
             self.profile = first["profile_update"]
             state = self.host.load_state(entry)
             self.assertEqual(state["backup"]["last_complete_id"], state["backup"]["initial_operation_id"])

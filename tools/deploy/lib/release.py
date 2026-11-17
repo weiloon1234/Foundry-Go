@@ -22,7 +22,7 @@ import urllib.request
 import uuid
 
 from contracts import (DeployError, HOST_PATHS, LAYOUT_VERSION, SCHEMA, VERSION_PATTERN,
-                       check_path, digest, dump_env, now,
+                       check_path, digest, dump_env, is_feature, now,
                        parse_env, parse_json, read_json, require, valid_timestamp, valid_uuid, instance_paths,
                        reserve_runtime_storage, select_runtime_storage)
 from runtime_config import (ENCRYPTION_KEYS, MAX_CONFIGURATION_CHANGES, PIPELINE_KEYS, pipeline_keys, validate_runtime_environment,
@@ -1026,7 +1026,7 @@ def prune_runtime_maps(destination, protected):
 
 
 def prune(host, entry, state):
-    from feature_lifecycle import is_feature, refuse
+    from feature_lifecycle import refuse
     if is_feature(entry):
         refuse("release and artifact pruning")
     keep = entry["profile"]["retention"]
@@ -1275,7 +1275,7 @@ def legacy_rollback_plan(host, project, profile, target, expected_current, opera
 
 def rollback(host, project, profile, target, expected_current, operation_id, plan_token=None):
     _, selected_entry = host.require_identity(project, profile)
-    from feature_lifecycle import is_feature, request_operation
+    from feature_lifecycle import request_operation
     if is_feature(selected_entry):
         return request_operation(host, "rollback", project, profile, operation_id=operation_id,
                                  target=target, expected_current=expected_current, plan_token=plan_token)
@@ -1504,7 +1504,6 @@ def require_configuration_keys(host, entry, release, env_file, keys):
 
 def config_set(host, project, profile, changes):
     _, selected_entry = host.require_identity(project, profile)
-    from feature_lifecycle import is_feature
     if is_feature(selected_entry):
         from feature_lifecycle import configuration_request
         return configuration_request(host, project, profile, changes)

@@ -403,6 +403,10 @@ def runtime_storage(values, read_value):
     return result
 
 
+def is_feature(entry):
+    return entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry
+
+
 def validate_registry(value):
     from topology import validate_topology
     fields(value, "schema layout_version host_id revision created_at updated_at tools shared projects instances", "registry")

@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
 from contracts import (BACKUP_POLICY, BACKUP_JITTER_SECONDS, DeployError, POSTGRES_PORT,
                        Deployment, DeploymentSelection, ReleaseDeclaration, RuntimeResolution,
-                       canonical_digest, check_path, contract_object, instance_paths,
+                       canonical_digest, check_path, contract_object, instance_paths, is_feature,
                        normalize_backup_repository, now, parse_env, read_json, record_document, require, valid_uuid)
 from host import Host
 import packages
@@ -133,7 +133,7 @@ def service_coverage(inventory):
 
 
 def _feature_snapshot(host, entry, files):
-    from feature_lifecycle import is_feature, load
+    from feature_lifecycle import load
     if not is_feature(entry):
         return None
     require("deployment_selection" in entry, "backup_deployment_missing",
@@ -181,7 +181,6 @@ def _feature_snapshot(host, entry, files):
 
 
 def _selection_binding(entry):
-    from feature_lifecycle import is_feature
     if not is_feature(entry):
         return None
     require("deployment_selection" in entry, "backup_deployment_missing", "Select a feature deployment before backup.")
@@ -442,7 +441,7 @@ def _archive_files(host, entry):
         check_path(path)
         if path.is_file():
             files["instances/" + entry["name"] + "/" + str(path.relative_to(directory))] = path
-    from feature_lifecycle import is_feature, load
+    from feature_lifecycle import load
     if is_feature(entry):
         require("deployment_selection" in entry, "backup_deployment_missing",
                 "Select a feature deployment before archiving recovery material.")

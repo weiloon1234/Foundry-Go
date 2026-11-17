@@ -129,7 +129,7 @@ class CopyOperationsTests(unittest.TestCase):
              patch.object(self.host, "require_identity", return_value=({}, entry)), \
              patch("upgrades.check_client"), \
              patch.object(operation_selection, "units", return_value={self.second: self.inventory.units[self.second]}), \
-             patch.object(feature_lifecycle, "is_feature", return_value=True), \
+             patch.object(manager, "is_feature", return_value=True), \
              patch.object(feature_lifecycle, "request_operation", return_value={"ok": True, "status": "degraded"}) as operation:
             result = manager.execute(self.host, "stop", {"project": project, "profile": profile, "role": "relay", "copy": 2})
         self.assertEqual(result["status"], "degraded")

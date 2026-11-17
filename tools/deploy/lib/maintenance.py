@@ -3,7 +3,7 @@ import ipaddress
 import re
 import unicodedata
 
-from contracts import DeployError, parse_json, require
+from contracts import DeployError, is_feature, parse_json, require
 
 FIELDS = frozenset({"message", "retry", "allow", "except", "bypass"})
 
@@ -111,7 +111,7 @@ def arguments(action, values):
 
 
 def run(host, entry, path, action, extra):
-    from feature_lifecycle import check_operation, is_feature
+    from feature_lifecycle import check_operation
     if is_feature(entry):
         check_operation(action)
     import release

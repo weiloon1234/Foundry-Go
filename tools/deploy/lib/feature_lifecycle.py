@@ -24,7 +24,7 @@ from contracts import (AdmissionDisposition, AdmissionRecord, Deployment,
                        ProcessIdentity, ReleaseDeclaration, ResolvedBundleBinding, ResolvedEndpointBinding,
                        ResolvedExecutableBinding, RoleBindings, RuntimeResolution, UnitIdentity, UnitSpec,
                        ValidationPermit, atomic_json, atomic_write, canonical_digest, check_path, contract_uuid,
-                       digest, marker, read_json, record_document, require)
+                       digest, is_feature, marker, read_json, record_document, require)
 from topology import (ApplicationExecutable, ArtifactExecutable, BuiltinRole, BundleDirectoryBinding,
                       CopiesBinding, EndpointBinding, ExecutableBinding, ExecutableRole, PackageExecutable, PublicListenerReference, parse_profile, parse_topology, expand_placement)
 
@@ -43,10 +43,6 @@ UNSUPPORTED["capacity-apply"] = UNSUPPORTED["capacity-plan"]
 UNSUPPORTED["key rotation"] = UNSUPPORTED["keys-rotate"]
 UNSUPPORTED["reconciliation"] = UNSUPPORTED["reconcile"]
 UNSUPPORTED["interrupted-operation reconciliation"] = UNSUPPORTED["reconcile"]
-
-
-def is_feature(entry):
-    return entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry
 
 
 def unsupported_detail(action):
@@ -919,6 +915,7 @@ def prepare_release(host, entry, state, request, *, recovery_declaration=None):
 
 def execute(host, request, *, pin=None):
     """Run inside the owned operation unit, after the SSH observer has handed off."""
+    from upgrades import helper_bundle_retention_notice
     import release
     action = request["action"]
     check_operation(action)
@@ -1021,7 +1018,7 @@ def execute(host, request, *, pin=None):
                     **({"bypass_path": maintenance_result["bypass_path"]}
                        if "bypass_path" in maintenance_result else {})} if action in ("down", "up") else {}),
                 "status": state["status"], "profile_update": entry["profile"],
-                "retention": {"error": {"code": "capability_unavailable", "detail": unsupported_detail("helper bundle pruning")}}}
+                "retention": helper_bundle_retention_notice()}
 
 
 def request_operation(host, action, project, profile, *, operation_id=None, **arguments):

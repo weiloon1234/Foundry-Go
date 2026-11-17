@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.43.1 — 2026-11-17
+
+- Tool plans on hosts with any feature instance now list no bundle or upgrade
+  journal prune candidates. These hosts continue to retain every bundle and journal.
+- Tool plans, tool installation, bootstrap and deploy results on these hosts now
+  carry the informational `retention` notice (code `helper_bundles_retained`). It
+  replaces the `pruning_error` and `retention.error` fields, which are removed.
+
 ## v0.43.0 — 2026-11-17
 
 - Deploy hosts and clients now require generation 19. A generation-18 host must

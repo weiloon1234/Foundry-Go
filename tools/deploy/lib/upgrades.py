@@ -23,7 +23,7 @@ if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
-                       now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
+                       is_feature, now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
                        FEATURE_CAPABILITIES,
                        TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
@@ -316,14 +316,23 @@ def _obsolete_upgrade_journals(host, active_digest: str) -> list[tuple[Path, dic
     return obsolete
 
 
+def retains_helper_bundles(registry):
+    return any(is_feature(entry) for entry in registry["instances"].values())
+
+
+def helper_bundle_retention_notice():
+    return {"code": "helper_bundles_retained",
+            "detail": "This host keeps every tool bundle and completed upgrade journal because feature boot "
+                      "and runtime references need them. Nothing is pruned here."}
+
+
 def _prune_bundles(host) -> dict:
     """Run only in the selected bundle with the caller's inherited host lock."""
     require(host.host_lock_fd is not None, "tools_lock_required", "Tool pruning requires the host lock.")
     registry = host.read_registry()
-    for entry in registry["instances"].values():
-        if entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry:
-            from feature_lifecycle import refuse
-            refuse("helper bundle pruning")
+    if retains_helper_bundles(registry):
+        from feature_lifecycle import refuse
+        refuse("helper bundle pruning")
     require(not _upgrade_pending(host, registry), "tools_upgrade_pending",
             "Complete the pending tool upgrade before pruning bundles.")
     active = _installed(host, registry["tools"])
@@ -381,10 +390,9 @@ def prune_tools(host, digest: str) -> dict:
     """Run selected-bundle cleanup while retaining the caller's host lock."""
     require(host.host_lock_fd is not None, "tools_lock_required", "Tool pruning requires the host lock.")
     registry = host.read_registry()
-    if any(e.get("topology", {}).get("schema") == 2 or "deployment_selection" in e for e in registry["instances"].values()):
-        from feature_lifecycle import unsupported_detail
+    if retains_helper_bundles(registry):
         return {"removed_bundles": [], "removed_upgrade_journals": [],
-                "pruning_error": {"code": "capability_unavailable", "detail": unsupported_detail("helper bundle pruning")}}
+                "retention": helper_bundle_retention_notice()}
     selected = _bundle_path(host, digest)
     # Preserve the ledger diagnostic at the caller boundary; child failures are redacted.
     _retired_bundles(host)
@@ -553,7 +561,6 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
         # the actual caller on every mutation. Never treat registration as a pin.
         releases = check_path(host.paths.opt(entry["name"]) / "releases", "directory")
         if releases.exists():
-            from feature_lifecycle import is_feature
             from release import validate_manifest
             for release in sorted(releases.iterdir()):
                 check_path(release, "directory")
@@ -603,13 +610,16 @@ def verify_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = Fa
 def plan_upgrade(host, tools_dir: Path) -> dict:
     """Bind approval to host identity, registry revision, current digest and exact effects."""
     registry = host.read_registry()
+    retained = retains_helper_bundles(registry)
     plan = {"schema": 1, "host_id": registry["host_id"], "revision": registry["revision"],
             "upgrade": tools_upgrade(host, registry, tools_dir),
-            "prune_bundles": ([] if _upgrade_pending(host, registry) else
+            "prune_bundles": ([] if retained or _upgrade_pending(host, registry) else
                               [path.name for path in _obsolete_bundles(host, tool_bundle(tools_dir)[2])]),
-            "prune_upgrade_journals": ([] if _upgrade_pending(host, registry) else
+            "prune_upgrade_journals": ([] if retained or _upgrade_pending(host, registry) else
                                       sorted([path.name for path, _ in _obsolete_upgrade_journals(host, tool_bundle(tools_dir)[2])]
                                              + [path.name for path in _deleting_upgrade_journals(host)]))}
+    if retained:
+        plan["retention"] = helper_bundle_retention_notice()
     plan["plan_token"] = _hash(plan)
     return plan
 

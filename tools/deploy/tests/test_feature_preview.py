@@ -240,9 +240,10 @@ class FeaturePreviewTests(unittest.TestCase):
             value = upgrades.prune_tools(self.host, "a" * 64)
         run.assert_not_called()
         self.assertEqual(value["removed_bundles"], [])
-        self.assertEqual(value["pruning_error"]["code"], "capability_unavailable")
-        self.assertIn("retained helper bundles", value["pruning_error"]["detail"])
-        self.assertIn("ACTION=tools-plan", value["pruning_error"]["detail"])
+        self.assertEqual(value["removed_upgrade_journals"], [])
+        self.assertEqual(value["retention"], upgrades.helper_bundle_retention_notice())
+        self.assertEqual(value["retention"]["code"], "helper_bundles_retained")
+        self.assertNotIn("pruning_error", value)
 
     def test_feature_refusals_name_current_limitation_and_alternative(self):
         for action in ("keys-rotate", "backup-keys-rotate"):

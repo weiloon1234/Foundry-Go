@@ -446,7 +446,9 @@ class FoundationProvisionTests(unittest.TestCase):
         credentials = {"database_password": "fixture", "redis_password": "fixture"}
         with ExitStack() as stack:
             stack.enter_context(patch.object(provision, "bootstrap_plan", return_value=plan))
-            stack.enter_context(patch.object(provision.upgrades, "install_tools", return_value={"removed_bundles": [], "removed_upgrade_journals": []}))
+            notice = provision.upgrades.helper_bundle_retention_notice()
+            stack.enter_context(patch.object(provision.upgrades, "install_tools", return_value={
+                "removed_bundles": [], "removed_upgrade_journals": [], "retention": notice}))
             stack.enter_context(patch.object(provision, "_journal"))
             stack.enter_context(patch.object(provision, "_prepare_instance"))
             initialize = stack.enter_context(patch.object(provision, "initialize_bootstrap_secrets", return_value=credentials))
@@ -459,6 +461,7 @@ class FoundationProvisionTests(unittest.TestCase):
             result = provision.bootstrap_apply(self.host, self.project, self.profile, TOOLS, plan["plan_token"],
                                                topology=TOPOLOGY, private_secrets=private)
         self.assertTrue(result["ok"])
+        self.assertEqual(notice, result["retention"])
         initialize.assert_called_once_with(self.host, plan["entry"], private)
         self.assertLess(calls.index("postgres"), calls.index("backup"))
         self.assertLess(calls.index("environment"), calls.index("backup"))

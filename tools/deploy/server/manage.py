@@ -9,7 +9,7 @@ import sys
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import DeployError, MAX_JSON, check_path, identity, now, parse_env, parse_json, read_json, require
+from contracts import DeployError, MAX_JSON, check_path, identity, is_feature, now, parse_env, parse_json, read_json, require
 from topology import instance_units, selected_units
 from host import Host
 import journal
@@ -105,14 +105,14 @@ def execute(host, action, request):
     if "copy" in request:
         operation_selection.units(entry, request["role"], request["copy"])
     import feature_lifecycle
-    if feature_lifecycle.is_feature(entry):
+    if is_feature(entry):
         if action not in ("down", "up", "activate", "rollback", "reconcile"):
             import feature_maintenance
             feature_maintenance.reconcile(host, project, profile,
                 allow_start=action in ("status", "restart", "config-set", "keys-rotate"))
             _, entry = host.require_identity(project, profile)
     if action == "release-plan":
-        if not feature_lifecycle.is_feature(entry):
+        if not is_feature(entry):
             require(request.get("target") is not None, "invalid_request", "Legacy release plans select an explicit rollback target.")
             return release.legacy_rollback_plan(host, project, profile, request["target"], request.get("expected_current"),
                                                 request.get("operation_id"))
@@ -122,7 +122,7 @@ def execute(host, action, request):
         return feature_plan.plan(host, project, profile, request.get("archive"), request.get("archive_sha256"),
                                  request.get("operation_id"), private.get("configuration"), target=request.get("target"),
                                  expected_current=request.get("expected_current"))
-    if feature_lifecycle.is_feature(entry) and action in ("activate", "rollback", "restart", "stop", "down", "up"):
+    if is_feature(entry) and action in ("activate", "rollback", "restart", "stop", "down", "up"):
         feature_lifecycle.check_operation(action)
         arguments = {key: request[key] for key in ("archive", "archive_sha256", "plan_token", "role", "copy", "target", "expected_current") if key in request}
         if action in ("down", "up"):
@@ -206,7 +206,7 @@ def execute(host, action, request):
         return release.keys_rotate(host, project, profile, request.get("operation_id"), private.get("encryption"))
     if action == "config-keys":
         values = parse_env(check_path(host.paths.instance_config(entry["name"]) / "app.env", "file").read_text())
-        if feature_lifecycle.is_feature(entry):
+        if is_feature(entry):
             from topology import parse_topology, parse_profile
             from runtime_config import service_secret_keys
             topology = parse_topology(entry["topology"], registered=True)

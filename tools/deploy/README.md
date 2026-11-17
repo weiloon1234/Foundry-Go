@@ -43,9 +43,16 @@ launch records describe the declarations and views, not rendered unit text, so t
 quoting change does not invalidate them. The corrected binds take effect on the
 next service start.
 
-Plans list superseded bundle digests in `prune_bundles`. After selection, registry
-publication and journal completion, installation runs the selected bundle's pruning
-code with the host lock inherited. Only canonical digest directories are removed;
+Hosts with any feature instance keep every tool bundle and completed upgrade
+journal because feature boot and runtime references need them. On these hosts,
+`tools-plan` returns empty `prune_bundles` and `prune_upgrade_journals` lists.
+Plans, tool installation, bootstrap and deploy results carry the informational
+`retention` notice with code `helper_bundles_retained`. Nothing is pruned on
+these hosts.
+
+On other hosts, plans list superseded bundle digests in `prune_bundles`. After
+selection, registry publication and journal completion, installation runs the
+selected bundle's pruning code with the host lock inherited. Only canonical digest directories are removed;
 symlinks and unexpected entries require administrator review. Any incomplete upgrade
 journal blocks pruning, including an intent not yet claimed in the registry.
 Plans also list completed journals for other bundles in `prune_upgrade_journals`.

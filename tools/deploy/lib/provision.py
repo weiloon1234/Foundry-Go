@@ -15,7 +15,7 @@ import secrets
 import uuid
 
 from contracts import (DeployError, HOST_ROOTS, PREFIX, REDIS_UNIT, REGISTRY_SCHEMA, LAYOUT_VERSION, PORT_FIRST, PORT_LAST,
-    atomic_json, check_path, dump_env, identity, instance_paths, marker, now, read_json, require,
+    atomic_json, check_path, dump_env, identity, instance_paths, is_feature, marker, now, read_json, require,
     validate_profile, validate_project, reserve_runtime_storage, select_runtime_storage)
 from topology import selected_units, instance_units, validate_topology
 from runtime_config import (CREDENTIAL_KEYS, read_credentials as _credentials, runtime_environment,
@@ -299,7 +299,7 @@ def _template(tools_dir, name, entry, *, postgres_unit=""):
 
 
 def _install_unit(host, registry, entry, tools_dir, *, http_only=False):
-    from feature_lifecycle import is_feature, load, install_units
+    from feature_lifecycle import load, install_units
     if is_feature(entry):
         if "deployment_selection" in entry:
             _, _, inventory, launch = load(host, entry)
@@ -615,7 +615,8 @@ def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topol
                 _journal(host, registry, entry)
                 return {"ok": True, "host_id": registry["host_id"], "instance": entry["name"],
                         "provisioning": "ready", "removed_bundles": tools["removed_bundles"],
-                        "removed_upgrade_journals": tools["removed_upgrade_journals"]}
+                        "removed_upgrade_journals": tools["removed_upgrade_journals"],
+                        **({"retention": tools["retention"]} if "retention" in tools else {})}
             except (DeployError, OSError, ValueError):
                 entry["provisioning"]["state"] = "failed"
                 _journal(host, registry, entry)

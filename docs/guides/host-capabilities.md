@@ -51,7 +51,7 @@ following limitations remain; unsupported lifecycle operations return
 | Named lifecycle operations | `ROLE`/`COPY` scope restart, stop and logs; dependency and maintenance checks still apply. |
 | Automatic reconciliation of interrupted lifecycle operations | Unresolved cleanup blocks later starts. Explicit `reconcile` can release a proven closed full-instance health failure to stopped; other interruptions still require investigation. |
 | Bundle ABI without package-version evidence | Bundle consumers must use package executables with one matching observed service package version. An artifact executable cannot supply this ABI proof. |
-| Feature release/artifact pruning and helper-bundle pruning | Explicit feature pruning refuses. Automatic helper retention keeps every helper bundle and upgrade journal with a capability diagnostic. Invocation/view limits still apply; reaching a limit refuses further starts. |
+| Feature release/artifact pruning and helper-bundle pruning | Explicit feature pruning refuses. Automatic helper retention keeps every helper bundle and upgrade journal with a retention notice. Invocation/view limits still apply; reaching a limit refuses further starts. |
 | Host capacity changes involving features | Capacity changes are unsupported for feature instances. Legacy neighbors retain their existing supported operations. |
 
 ### Operator commands

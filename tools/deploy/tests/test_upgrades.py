@@ -665,6 +665,46 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(before, self.host.read_registry())
         self.assertEqual([], upgrades.plan_upgrade(self.host, self.source)["prune_bundles"])
 
+    def test_feature_host_plan_and_unchanged_apply_retain_bundles_and_journals(self):
+        installed = self.install()
+        leftover = self.leftover()
+        operation = str(uuid.uuid4())
+        journal = self.host.paths.p(HOST_PATHS["upgrades"]) / operation / "intent.json"
+        original = self.host.paths.p(HOST_PATHS["upgrades"]) / installed["operation_id"] / "intent.json"
+        upgrades.atomic_json(journal, {**json.loads(original.read_text()),
+                                      "operation_id": operation, "bundle_sha256": leftover.name})
+        ordinary = upgrades.plan_upgrade(self.host, self.source)
+        self.assertEqual(ordinary["prune_bundles"], [leftover.name])
+        self.assertEqual(ordinary["prune_upgrade_journals"], [operation])
+        self.assertNotIn("retention", ordinary)
+        self.host.registry["instances"] = {"feature": {"name": "feature", "topology": {"schema": 2}}}
+        plan = upgrades.plan_upgrade(self.host, self.source)
+        self.assertIsNone(plan["upgrade"])
+        self.assertEqual(plan["prune_bundles"], [])
+        self.assertEqual(plan["prune_upgrade_journals"], [])
+        notice = upgrades.helper_bundle_retention_notice()
+        self.assertEqual(plan["retention"], notice)
+        self.assertEqual(notice["code"], "helper_bundles_retained")
+        self.assertTrue(notice["detail"].isascii())
+        self.assertNotIn("error", notice)
+        with patch.object(self.host, "run") as run:
+            applied = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
+            unchanged = self.install()
+        run.assert_not_called()
+        for result in (applied, unchanged):
+            self.assertEqual(result["outcome"], "unchanged")
+            self.assertEqual(result["removed_bundles"], [])
+            self.assertEqual(result["removed_upgrade_journals"], [])
+            self.assertEqual(result["retention"], notice)
+            self.assertNotIn("pruning_error", result)
+        self.assertTrue(leftover.is_dir())
+        self.assertTrue(journal.is_file())
+        with self.host.lock("host"), self.assertRaises(DeployError) as caught:
+            upgrades._prune_bundles(self.host)
+        self.assertEqual(caught.exception.code, "capability_unavailable")
+        self.assertTrue(leftover.is_dir())
+        self.assertTrue(journal.is_file())
+
     def test_pending_registry_or_unclaimed_journal_blocks_prune(self):
         self.install()
         leftover = self.leftover()
