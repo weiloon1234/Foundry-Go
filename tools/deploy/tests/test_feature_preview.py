@@ -253,16 +253,11 @@ class FeaturePreviewTests(unittest.TestCase):
             self.assertIn("transition", raised.exception.detail)
             self.assertIn("ACTION=", raised.exception.detail)
 
-    def test_recovery_and_backup_dispatch_require_generation_13(self):
+    def test_recovery_and_backup_dispatch_support_current_clients(self):
         for action in ("backup-configure", "backup-run", "restore-drill", "recover-plan", "recover-apply"):
-            for generation in (12, 13):
-                request = {"profile": {"schema": 3}, "client": {"generation": generation}}
-                if generation == 12:
-                    with self.subTest(action=action), self.assertRaises(c.DeployError) as raised:
-                        upgrades._check_feature_request(None, request, action)
-                    self.assertEqual(raised.exception.code, "instance_capability_required")
-                else:
-                    upgrades._check_feature_request(None, request, action)
+            with self.subTest(action=action):
+                upgrades._check_feature_request(None, {"profile": {"schema": 3}, "client": {"generation": 19}}, action)
+
 
     def test_runtime_owners_are_required_bundle_files(self):
         required = upgrades.REQUIRED_FILES

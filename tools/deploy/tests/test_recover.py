@@ -727,10 +727,13 @@ class RecoveryTests(unittest.TestCase):
             install.assert_not_called()
 
     def test_rehearsal_guards_direct_writes_and_all_mutating_actions(self):
+        request = upgrades.protocol_metadata()
         entry = copy.deepcopy(self.entry)
         entry.update(recovered_from={"mode": "rehearsal"})
         entry["provisioning"]["state"] = "rehearsal"
-        self.host.write_registry(registry(entry))
+        registered = registry(entry)
+        registered["tools"] = upgrades._active_record(TOOLS, request["client"]["bundle_sha256"], None)
+        self.host.write_registry(registered)
         for command in ("backup", "expire", "check", "archive-push", "stanza-create", "stanza-upgrade", "stanza-delete"):
             with self.assertRaises(DeployError):
                 backup._backrest(self.host, [command])
@@ -740,7 +743,7 @@ class RecoveryTests(unittest.TestCase):
             backup._install_timers(self.host, self.host.read_registry())
         for action in ("activate", "restart", "stop", "config-set", "keys-rotate", "bootstrap-apply", "tools-apply", "backup-run", "backup-configure", "restore-drill"):
             with self.assertRaises(DeployError) as error:
-                upgrades.check_client(self.host, {}, action)
+                upgrades.check_client(self.host, request, action)
             self.assertEqual(error.exception.code, "rehearsal_read_only")
         for command in ("info", "archive-get"):
             backup._backrest(self.host, [command])

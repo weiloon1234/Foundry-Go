@@ -1,6 +1,6 @@
 # B24 milestone 4: lane C handoff
 
-The implementation uses the frozen generation-12 records. The authorized plain TCP
+The implementation uses the frozen deployment records. The authorized plain TCP
 extension changes only the public-listener topology check: `tls` accepts `edge` or
 `none`, both with `authentication: true`. `contracts.py`, `protocol.json`,
 lifecycle/provisioning writers and B26 upload declarations/templates are unchanged.

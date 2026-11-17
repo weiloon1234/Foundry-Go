@@ -19,7 +19,6 @@ from host import Host, Paths
 import services
 import shared_directories as shared
 import topology as t
-import upgrades
 from test_services import inventory_fixture
 from test_host_capabilities import INSTANCE, DIGEST, CURRENT
 
@@ -43,20 +42,13 @@ def shared_inventory(*, writers=("http",), readers=("relay",)):
 
 
 class SharedDeclarationTests(unittest.TestCase):
-    def test_typed_roundtrip_access_and_generation(self):
+    def test_typed_roundtrip_access(self):
         inventory, _ = shared_inventory()
         self.assertEqual(c.Deployment.parse(c.record_document(inventory.deployment)), inventory.deployment)
         self.assertEqual(inventory.specs[inventory.identity("http")].bindings.shared_directories[0].access, "read-write")
         self.assertEqual(inventory.specs[inventory.identity("relay")].bindings.shared_directories[0].access, "read-only")
         self.assertEqual(inventory.specs[inventory.identity("worker")].bindings.shared_directories, ())
         self.assertNotIn("shared_directories", c.record_document(inventory.specs[inventory.identity("worker")].bindings))
-        self.assertEqual(upgrades.feature_generation(inventory.topology, {}), 16)
-        with self.assertRaises(c.DeployError):
-            upgrades.check_feature_generation({"tools": {"generation": 15}}, inventory.topology, {}, client_generation=16)
-        with self.assertRaises(c.DeployError):
-            upgrades.check_feature_generation({"tools": {"generation": 16}}, inventory.topology, {}, client_generation=15)
-        self.assertEqual(upgrades.feature_generation(t.parse_topology({"schema": 1, "roles": [{"name": "http"}]}),
-                                                    {"deployment_selection": {"minimum_generation": 16}}), 16)
 
     def test_reject_invalid_state_limit_roles_and_ungranted_references(self):
         inventory, _ = shared_inventory()

@@ -349,6 +349,8 @@ class ArtifactRecoveryTests(unittest.TestCase):
     def test_rehearsal_uses_local_deploy_refusal_and_real_server_backup_guard(self):
         import upgrades
         from host import Host, Paths
+        envelope = upgrades.protocol_metadata()
+        tools = upgrades._active_record(Path(__file__).resolve().parents[1], envelope["client"]["bundle_sha256"], None)
         for mode in ("standard", "feature"):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory).resolve()
@@ -369,7 +371,7 @@ class ArtifactRecoveryTests(unittest.TestCase):
                 target_id = "11111111-1111-4111-8111-111111111111"
                 entry.update(recovered_from={"mode": "rehearsal"}, provisioning={"state": "rehearsal"})
                 registry = {"host_id": target_id, "instances": {profile["instance_id"]: entry},
-                            "tools": upgrades.protocol()}
+                            "tools": tools}
                 cli = vm.load_cli()
                 cli.ROOT = root
                 remote = Mock()
@@ -381,7 +383,7 @@ class ArtifactRecoveryTests(unittest.TestCase):
                     self.assertNotIn("manifest", payload)
                     self.assertEqual(payload["profile"]["host"]["host_id"], target_id)
                     try:
-                        upgrades.check_client(host, {**payload, "client": {"generation": registry["tools"]["generation"]}}, action)
+                        upgrades.check_client(host, {**envelope, **payload}, action)
                     except cli.DeployError as error:
                         # SSH.request's designed error translation.
                         raise cli.LocalError(f"{error.code}: {error.detail}") from None

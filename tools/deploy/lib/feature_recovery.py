@@ -18,7 +18,7 @@ import runtime_config
 import services
 from contracts import unit_selection_names, unit_selection_identities
 from contracts import (AdmissionDisposition, AdmissionRecord, Deployment,
-                       DeploymentSelection, FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION,
+                       DeploymentSelection, FEATURE_CAPABILITIES,
                        HelperInvocation, ReleaseDeclaration, RuntimeResolution, ValidationPermit,
                        atomic_json, atomic_write, canonical_digest, contract_uuid, digest, record_document, require)
 from topology import ExecutableRole, parse_profile, parse_topology
@@ -79,16 +79,14 @@ def configuration_fingerprint(host, entry):
 def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_dir):
     intent, root = context(host, entry, journal)
     with host.lock(entry['profile']['instance_id']):
-        require(registry['tools']['generation'] >= FEATURE_LIFECYCLE_GENERATION and
-                registry['tools']['bundle_sha256'] == intent['bundle'] and checksum == intent['archive_sha256'],
-                'host_upgrade_required', 'Recovery requires its reviewed generation-13 bundle and release digest.')
+        require(registry['tools']['bundle_sha256'] == intent['bundle'] and checksum == intent['archive_sha256'],
+                'host_upgrade_required', 'Recovery requires its reviewed bundle and release digest.')
         manifest = release.unpack_archive(host, Path(archive), None, entry, checksum, reviewed=True)
         declaration = ReleaseDeclaration.parse(snapshot['declaration'])
         topology = parse_topology(declaration.topology_json)
-        from upgrades import check_feature_generation
-        minimum_generation = check_feature_generation(registry, topology,
-            {"profile": intent["source_profile"], "deployment_selection": {"minimum_generation": max(snapshot["selection"]["minimum_generation"],
-                entry.get("deployment_selection", {}).get("minimum_generation", 0))}}, profile=intent['effective_profile'])
+        from upgrades import check_selection_generation
+        minimum_generation = check_selection_generation(registry, entry,
+            archived_minimum=snapshot["selection"]["minimum_generation"])
         source = parse_profile(intent['source_profile'], topology)
         original = services.UnitInventory(entry['name'], topology, source,
             Deployment.parse(snapshot['deployment']), RuntimeResolution.parse(snapshot['resolution']))

@@ -28,7 +28,7 @@ import acceptance_feature as feature
 import acceptance_host as shared
 import acceptance_network as network
 import backup
-from contracts import (DeployError, FEATURE_CONFINEMENT_GENERATION, FEATURE_COPIES_GENERATION, FEATURE_CONFIG_TREE_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION,
+from contracts import (DeployError,
                        ReleaseDeclaration, atomic_json, canonical_digest, digest, read_json, unit_selection_names)
 import edge
 import feature_lifecycle
@@ -36,6 +36,7 @@ from host import Host
 import listeners
 import recover
 import services
+from upgrades import protocol
 from topology import parse_profile, parse_topology
 
 EXPORT = WORK / "recover-export"
@@ -218,8 +219,7 @@ def source():
         assert archived["selection"]["maintenance_holds"] == [], "Fixture must not start with a maintenance hold"
         assert canonical_digest(archived["deployment"]) == receipt["deployment_sha256"]
         assert archived["declaration"] == read_manifest(selected)["deployment"]
-        assert archived["selection"]["minimum_generation"] == max(FEATURE_CONFINEMENT_GENERATION,
-                                                                  FEATURE_SHARED_DIRECTORY_GENERATION, FEATURE_COPIES_GENERATION, FEATURE_CONFIG_TREE_GENERATION)
+        assert archived["selection"]["minimum_generation"] == protocol()["minimum_client_generation"]
         assert archived["resolution"]["unix_endpoints"]
         assert not any("/run/" in name or name.endswith(".sock") for name in files), "Runtime sockets entered backup"
         shutil.copyfile(selected, EXPORT / "release.tar.gz")

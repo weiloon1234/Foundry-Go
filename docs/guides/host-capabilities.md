@@ -1,7 +1,8 @@
 # Host capabilities
 
 Foundry-Go v0.32.0 completes B24 release 1: deploy an application and
-single-instance custom services on a generation-13 Foundry host. It installs declared distribution packages, verifies
+single-instance custom services. Hosts and clients run generation 19. The framework
+installs declared distribution packages, verifies
 pinned artifacts, prepares service-local configuration and bundle views, and
 starts roles through admission in readiness order. Applications receive typed
 bindings to private endpoints and executables. Public TCP uses nginx stream and
@@ -10,16 +11,13 @@ boot admission, reports, logs and whole-instance stop are integrated.
 
 This guide describes topology schema 2 and profile schema 3. Topology schema 1
 remains supported for ordinary applications. Current tools are generation 19;
-hosts and deploy clients must both be generation 18 or later. Systemd enablement
+hosts and deploy clients must both be generation 19 or later. Systemd enablement
 is authoritative; tools do not adopt enablement from older preview state.
 The application declarations and existing binding API remain compatible.
-Outbound PROXY protocol requires generation 18 on both client and host. Declaring
-it sets a sticky generation-18 floor, retained after rollback and recovery even
-when the selected release no longer declares it.
-Managed Cloudflare DNS requires generation 18 on both client and host. Selecting
-managed mode keeps that floor after rollback or removal of the last managed listener.
-Numbered copies, copy bindings, and copy-scoped secrets share generation 18.
-Config trees require generation 19 on both peers, with the same sticky floor.
+Every feature in this guide is available at generation 19, including outbound PROXY
+protocol, managed Cloudflare DNS, numbered copies, copy-scoped secrets, and config
+trees. Stored instance generation floors remain readable. New selections carry
+forward the higher of the stored floor and the protocol client floor.
 Tools upgrades advance and verify the boot coordinator before publishing any of
 these new registry or profile shapes. A stale pin refuses application-state writes.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
@@ -275,7 +273,7 @@ launch origin does not grant permission to start.
 | Declaration outside release 1 | Later capability |
 | --- | --- |
 | Supervising wrappers | B24 release 3 |
-| Outbound PROXY v2 and inbound PROXY to nginx | Unsupported; outbound v1 is available with generation 18 |
+| Outbound PROXY v2 and inbound PROXY to nginx | Unsupported; outbound v1 is supported |
 | UDP listeners | Planned for B24 release 2; unsupported in release 1 |
 | Artifact formats other than `file` and `tar.gz` | Unsupported format; no later numbered release is promised |
 
@@ -680,7 +678,7 @@ paths under `deploy/bin/`.
   is `http`. An enabled consumer cannot bind an unplaced endpoint producer.
   `{"public_listener":{"role":"relay","listener":"ingress"}}` supplies a
   public listener record through the runtime descriptor. It has no implicit argv
-  or environment conversion and requires generation 14.
+  or environment conversion.
 
 Custom `configs` map names to either a single-file declaration or a `files` map
 under one config directory. Each file declares `source` under `deploy/files/` and `mode`:
@@ -797,7 +795,7 @@ Unix endpoint bindings count as maintenance prerequisites. A continuing consumer
 cannot depend on a provider declared to stop. Backups retain the declarations and
 binding records, but never archive the runtime socket directory or its contents.
 Recovery prepares a fresh directory and starts providers through the same readiness
-path. The generation-15 floor survives rollback and recovery.
+path.
 
 ### Secret configuration templates
 
@@ -845,8 +843,8 @@ Each numbered copy receives its own tree and seeds.
 Release review includes every member's declaration and source digest. Rollback
 prepares the target release's tree. Backup retains the selected release and private
 secret snapshots; recovery renders a fresh tree. Runtime edits and local seed state
-remain outside backup coverage. Config trees require client and host deploy-tool
-generation 19. Existing single-file declarations retain their previous minimum.
+remain outside backup coverage. Config trees and single-file declarations share
+the generation-19 host and client floor.
 
 Placeholders have these forms:
 
@@ -1106,29 +1104,18 @@ Set a custom executable role's count in profile 3 `placement`:
 {"placement": {"http": 1, "relay": 3, "worker": 1}}
 ```
 
-Generation 17 is reserved for v0.36.0 parameterized upload routes. Numbered copies
-use generation 18. The tools upgrade plan includes a runtime-v1 bridge when the
-installed helper matches the exact v0.35.0 bytes. The upgrade journal records the
-source and target digests, and the helper is atomically replaced before selecting
-the new bundle. Interrupted upgrades resume forward. Existing singleton invocation
-pins and cleanup remain compatible; unknown helper bytes are refused. This bridge
-is required because the old fixed helper rejects ordinals above one before
-importing its bundled library.
+Same-generation bundle updates are supported. Installed runtime bytes must match
+the selected bundle exactly. Existing invocation pins and cleanup remain valid.
 
 Every tools upgrade also advances an installed network-boot coordinator to the
 candidate bundle. Its pin change is recorded in the upgrade journal, atomically
 published, reloaded and checked against systemd's loaded command before tools
 selection. Resume repeats the reload and verification even if the file already
 has the new pin. Application registry writes refuse a stale coordinator or a
-capability above its parser generation. This protects new declarations at
-generation 14 (templates and public-listener bindings), 15 (Unix bindings),
-16 (confinement and shared directories), and subsequent generations, including
-17's separately delivered upload-route changes. Tools-upgrade intent writes may
+stored instance floor above its parser generation. Tools-upgrade intent writes may
 precede the advance only while application state remains unchanged.
 
-Counts above one require generation 18 on both the client and host. The floor
-remains selected through rollback and recovery, including a later single-copy
-profile. A count of zero means unplaced. Wrappers remain outside release 2a.
+A count of zero means unplaced. Wrappers remain outside release 2a.
 
 Copies have stable ordinals from 1 through the count. `ROLE=relay` selects every
 placed relay copy. Each copy gets its own systemd unit, private TCP allocation,
@@ -1320,8 +1307,8 @@ role descriptor. Neither loader downloads artifacts nor replaces host verificati
 
 Use the application's pinned framework tool and the thin Make targets from the
 [deployment invocation guide](deployment.md#recipe-deploy). Feature topology
-requires a generation-18 or later host and client; config trees require generation
-19. Use a Foundry-Go pin containing the required tool generation and the host's
+requires a generation-19 or later host and client, including for config trees.
+Use a Foundry-Go pin containing the required tool generation and the host's
 existing profile to review and apply the forward-only tool upgrade. A fresh host
 gets the pinned tools during bootstrap.
 
@@ -1940,9 +1927,8 @@ the current checkout on a native arm64 Docker engine.
 
 Some daemons accept a control port without accepting a listen address; obs-websocket
 is one example. Declare `"network": {"confinement": "loopback"}` on the role and
-`"wildcard": true` on each such private TCP listener. Upgrade client and host tools
-to generation 16 first. Activation, rollback and recovery retain that instance floor,
-even when the selected release no longer declares confinement.
+`"wildcard": true` on each such private TCP listener. These declarations are
+available with generation-19 clients and hosts.
 
 The following complete role is a small worked example of the same binding behavior.
 Add it alongside the required built-in `http` role in topology schema 2, and add
@@ -2001,9 +1987,8 @@ proof or foreign ownership cannot hide a wildcard socket from exposure findings.
 
 ## Shared file directories
 
-Topology 2 can grant roles access to named disposable caches. Both the client and
-host require deploy-tool generation 16. The instance keeps that minimum generation
-after rollback or recovery. A shared directory name also becomes its binding name
+Topology 2 can grant roles access to named disposable caches. A shared directory
+name also becomes its binding name
 for every listed role, so it cannot collide with another binding in those roles.
 
 Each directory has exactly four declaration fields: `state`, `max_bytes`,
@@ -2226,8 +2211,8 @@ these runtime-only caches.
 
 The release 2a consumer contract supports distinct secrets and endpoints for each
 placed executable copy. Ordinals are dense from 1 through the role's count.
-Builtins remain singletons. Generation 18 supports counts up to 128 per custom
-role, with at most 256 placed units per instance.
+Builtins remain singletons. Custom roles support counts up to 128, with at most
+256 placed units per instance.
 
 ### Copy-scoped secrets
 

@@ -24,9 +24,7 @@ if __name__ == "__main__":
 
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
-                       FEATURE_CAPABILITIES, FEATURE_INTRODUCTION_GENERATION, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION, FEATURE_UNIX_GENERATION, FEATURE_CONFINEMENT_GENERATION,
-                       FEATURE_SHARED_DIRECTORY_GENERATION, UPLOAD_TEMPLATE_GENERATION, FEATURE_PROXY_PROTOCOL_GENERATION,
-                       FEATURE_MANAGED_DNS_GENERATION, FEATURE_COPIES_GENERATION, FEATURE_CONFIG_TREE_GENERATION,
+                       FEATURE_CAPABILITIES,
                        TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
@@ -40,7 +38,7 @@ REHEARSAL_FILES = frozenset({
     'local/rehearsal_probe.py',
 })
 
-# Generation 18 is the minimum supported bundle inventory.
+# Required inventory for supported tool bundles.
 REQUIRED_FILES = frozenset({
     'lib/admission.py',
     'lib/artifacts.py',
@@ -441,165 +439,32 @@ def contract_versions() -> dict:
 
 def check_instance_capabilities(entry: dict, client_generation: int) -> None:
     """Target-local sticky admission; rolling back application code cannot clear it."""
-    minimum = max(upload_generation(entry),
-                  FEATURE_MANAGED_DNS_GENERATION if managed_dns_profile(entry.get("profile")) else 0)
-    if "deployment_selection" in entry:
-        minimum = max(minimum, DeploymentSelection.parse(entry["deployment_selection"]).minimum_generation)
-    if not minimum:
+    if "deployment_selection" not in entry:
         return
+    minimum = DeploymentSelection.parse(entry["deployment_selection"]).minimum_generation
     require(type(client_generation) is int and client_generation >= minimum,
             "instance_capability_required", f"This instance requires deploy client generation {minimum}; upgrade the tools.")
 
 
-def upload_generation(entry):
-    # Legacy upload allocations remain fixed after configuration. Feature
-    # transitions also persist this floor in their DeploymentSelection.
-    from uploads import has_templates
-    return UPLOAD_TEMPLATE_GENERATION if has_templates(entry.get("profile", {})) else 0
-
-
-def check_upload_generation(registry, entry, *, client_generation=None):
-    minimum = upload_generation(entry)
-    if not minimum:
-        return
-    if client_generation is not None:
-        require(type(client_generation) is int and client_generation >= minimum,
-                "instance_capability_required", f"Upload templates require deploy client generation {minimum}.")
+def check_selection_generation(registry, entry, *, archived_minimum=0):
+    """Carry stored floors forward without exceeding the host's selected tools."""
+    minimum = max(protocol()["minimum_client_generation"], archived_minimum,
+                  entry.get("deployment_selection", {}).get("minimum_generation", 0))
     require(registry["tools"]["generation"] >= minimum, "host_upgrade_required",
-            f"Upload templates require host tools generation {minimum}.")
-
-
-def managed_dns_profile(profile):
-    if not isinstance(profile, dict) or not isinstance(profile.get("listeners", {}), dict):
-        return False
-    return any(isinstance(v, dict) and isinstance(v.get("dns"), dict) and v["dns"].get("mode") == "managed"
-               for v in profile.get("listeners", {}).values())
-
-
-def feature_generation(topology, entry, *, profile=None):
-    """Application rollback cannot lower a selected capability floor."""
-    from topology import ConfigTree, ExecutableRole, PublicListenerReference
-    trees = any(isinstance(config, ConfigTree) for role in topology.roles if isinstance(role, ExecutableRole)
-                for _, config in role.configs)
-    templates = any(config.format is not None for role in topology.roles if isinstance(role, ExecutableRole)
-                    for _, entry_config in role.configs for config in entry_config.iter_files())
-    public_listeners = any(isinstance(binding, PublicListenerReference) for role in topology.roles
-                           for _, binding in role.common.bindings)
-    unix = any(listener.transport == "unix" for role in topology.roles if isinstance(role, ExecutableRole)
-               for _, listener in role.listeners)
-    proxy_protocol = any(listener.proxy_protocol is not None for role in topology.roles if isinstance(role, ExecutableRole)
-                         for _, listener in role.listeners)
-    confinement = any(r.common.confinement for r in topology.roles) or any(
-        "wildcard" in listener for role in topology.projection()["roles"]
-        for listener in role.get("listeners", {}).values())
-    from topology import DeploymentProfile, parse_placement
-    profile = entry.get("profile", {}) if profile is None else profile
-    if isinstance(profile, DeploymentProfile):
-        profile = profile.projection()
-    placement = parse_placement(profile.get("placement", {}))
-    from topology import CopiesBinding
-    copies = (any(count > 1 for _, count in placement)
-              or any(secret.scope == "copy" for _, secret in topology.secrets)
-              or any(isinstance(binding, CopiesBinding) for role in topology.roles for _, binding in role.common.bindings))
-    return max(FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION if templates or public_listeners else 0,
-               FEATURE_MANAGED_DNS_GENERATION if any(managed_dns_profile(p) for p in (entry.get("profile"), profile)) else 0,
-               FEATURE_UNIX_GENERATION if unix else 0,
-               FEATURE_CONFINEMENT_GENERATION if confinement else 0,
-               FEATURE_SHARED_DIRECTORY_GENERATION if topology.shared_directories else 0,
-               upload_generation(entry),
-               upload_generation({"profile": profile or {}}),
-               FEATURE_PROXY_PROTOCOL_GENERATION if proxy_protocol else 0,
-               FEATURE_COPIES_GENERATION if copies else 0,
-               FEATURE_CONFIG_TREE_GENERATION if trees else 0,
-               entry.get("deployment_selection", {}).get("minimum_generation", 0))
-
-
-def check_feature_generation(registry, topology, entry, *, client_generation=None, profile=None):
-    minimum = feature_generation(topology, entry, profile=profile)
-    if client_generation is not None:
-        require(type(client_generation) is int and client_generation >= minimum,
-                "instance_capability_required", f"These declarations require deploy client generation {minimum}.")
-    require(registry["tools"]["generation"] >= minimum, "host_upgrade_required",
-            f"Upgrade the host tools to generation {minimum} before using these declarations.")
+            f"Upgrade the host tools to generation {minimum} before using this selection.")
     return minimum
-
-
-def check_target_capabilities(host, request, action):
-    """Inspect older clients' target declarations before staging or recovery setup."""
-    if action not in {"release-plan", "activate", "rollback", "recover-plan", "recover-apply"}:
-        return
-    registry = host.read_registry(missing=True)
-    installed = registry if registry is not None else {"tools": protocol()}
-    generation = request.get("client", {}).get("generation", 0)
-    latest = max(FEATURE_CONFINEMENT_GENERATION, FEATURE_SHARED_DIRECTORY_GENERATION, UPLOAD_TEMPLATE_GENERATION,
-                 FEATURE_PROXY_PROTOCOL_GENERATION, FEATURE_MANAGED_DNS_GENERATION, FEATURE_COPIES_GENERATION,
-                 FEATURE_CONFIG_TREE_GENERATION)
-    if type(generation) is int and generation >= latest and installed["tools"]["generation"] >= latest:
-        return
-    from topology import parse_topology
-    target_profile = None
-    if action in {"recover-plan", "recover-apply"}:
-        import recover
-        require(isinstance(request.get("recovery_archive"), str), "recovery_members", "A staged private recovery archive is required.")
-        recovered = recover.archive_configuration(request["project"], request["profile"],
-            recover.read_archive(Path(request["recovery_archive"])), request.get("topology"))
-        check_upload_generation(installed, recovered["metadata"] or {"profile": request["profile"]}, client_generation=generation)
-        if recovered["feature"] is None:
-            return
-        topology = recovered["feature"].topology
-        entry = recovered["metadata"]
-        target_profile = entry.get("profile", {})
-    else:
-        import release
-        _, entry = host.require_identity(request["project"], request["profile"])
-        check_upload_generation(installed, entry, client_generation=generation)
-        if request.get("target") is not None:
-            manifest = read_json(release.release_path(host, entry, request["target"]) / "manifest.json")
-        elif request.get("archive") is not None:
-            manifest = release.unpack_archive(host, Path(request["archive"]), None, entry,
-                                              request.get("archive_sha256"), reviewed=True)
-        else:
-            return  # The action's owner reports missing target inputs.
-        if manifest.get("schema") != ARCHIVE_SCHEMA:
-            return
-        from contracts import ReleaseDeclaration
-        declaration = ReleaseDeclaration.parse(manifest["deployment"])
-        topology = parse_topology(declaration.topology_json)
-        target_profile = json.loads(declaration.profile_json)
-    check_feature_generation(installed, topology, entry, client_generation=generation, profile=target_profile)
 
 
 def _check_feature_request(registry, request, action):
     profile = request.get("profile")
     topology = request.get("topology")
-    if isinstance(profile, dict):
-        check_upload_generation(registry or {"tools": protocol()}, {"profile": profile},
-                                client_generation=request.get("client", {}).get("generation", 0))
     requested = (isinstance(profile, dict) and profile.get("schema") == FEATURE_PROFILE_SCHEMA
                  or isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA)
     supported = {"reconcile", "inspect", "backup-configure", "backup-run", "restore-drill", "recover-plan", "recover-apply", "down", "up", "rollback", "release-plan", "config-set", "bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "status", "logs", "sync", "config-keys", "report"}
-    feature = requested or registry is not None and any(
-        (entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry)
-        and (profile is None or entry["profile"]["instance_id"] == profile.get("instance_id"))
-        for entry in registry["instances"].values())
-    if feature and action in (supported - READ_ACTIONS) | {"recover-plan"}:
-        if managed_dns_profile(profile):
-            require(request.get("client", {}).get("generation", 0) >= FEATURE_MANAGED_DNS_GENERATION,
-                    "instance_capability_required", f"Managed DNS requires deploy client generation {FEATURE_MANAGED_DNS_GENERATION}.")
-            require(registry is None or registry["tools"]["generation"] >= FEATURE_MANAGED_DNS_GENERATION,
-                    "host_upgrade_required", f"Managed DNS requires host generation {FEATURE_MANAGED_DNS_GENERATION}.")
-        require(request.get("client", {}).get("generation", 0) >= FEATURE_LIFECYCLE_GENERATION,
-                "instance_capability_required", "B24 release 1 operations require deploy client generation 13.")
-        require(registry is None or registry["tools"]["generation"] >= FEATURE_LIFECYCLE_GENERATION,
-                "host_upgrade_required", "Upgrade this generation-12 host to generation 13 before B24 release 1 operations.")
+    if requested and action in (supported - READ_ACTIONS) | {"recover-plan"}:
         if isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA:
             from topology import parse_topology
-            parsed_topology = parse_topology(topology, registered="sha256" in topology)
-            minimum = feature_generation(parsed_topology, {}, profile=profile)
-            require(request.get("client", {}).get("generation", 0) >= minimum,
-                    "instance_capability_required", f"These declarations require deploy client generation {minimum}.")
-            if registry is not None:
-                check_feature_generation(registry, parsed_topology, {}, profile=profile)
+            parse_topology(topology, registered="sha256" in topology)
     if requested and action not in supported | UPGRADE_ACTIONS | {"tools-plan"}:
         from feature_lifecycle import refuse
         refuse(action)
@@ -615,15 +480,26 @@ def _check_feature_request(registry, request, action):
     generation = client.get("generation") if isinstance(client, dict) else None
     for entry in selected:
         check_instance_capabilities(entry, generation)
-        check_upload_generation(registry, entry, client_generation=generation)
         if (entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry) and action not in supported | UPGRADE_ACTIONS | {"tools-plan"}:
             from feature_lifecycle import refuse
             refuse(action)
 
 
 def check_client(host, request: dict, action: str) -> None:
-    """Gate ordinary mutations on negotiated protocol and pending upgrade ownership."""
+    """Negotiate every operation except hello, then enforce mutation ownership."""
+    if action == "hello":
+        return
     registry = host.read_registry(missing=True)
+    metadata = protocol()
+    minimum = metadata["minimum_client_generation"]
+    if registry and (_bundle_path(host, registry["tools"]["bundle_sha256"]) / "manifest.json").exists():
+        metadata = protocol(_bundle_path(host, registry["tools"]["bundle_sha256"]))
+    client, wire = request.get("client"), request.get("protocol")
+    require(isinstance(client, dict) and type(client.get("generation")) is int and isinstance(wire, dict),
+            "invalid_request", "Operations require an explicit client generation and protocol.")
+    require(wire.get("major") == metadata["protocol"]["major"] and
+            client["generation"] >= max(minimum, metadata["minimum_client_generation"]),
+            "client_too_old", "Bump your Foundry-Go pin to a supported deploy generation.")
     _check_feature_request(registry, request, action)
     if action in READ_ACTIONS:
         return
@@ -638,16 +514,8 @@ def check_client(host, request: dict, action: str) -> None:
                     "recovery_pending", "Resume the recorded recovery before other mutations.")
     if registry and registry["tools"]["upgrade_operation"] and action not in UPGRADE_ACTIONS | {"recover-apply"}:
         raise DeployError("tools_upgrade_pending", "Resume the approved tool upgrade before other mutations.")
-    metadata = protocol()
-    if registry and (_bundle_path(host, registry["tools"]["bundle_sha256"]) / "manifest.json").exists():
-        metadata = protocol(_bundle_path(host, registry["tools"]["bundle_sha256"]))
-    client, wire = request.get("client"), request.get("protocol")
-    require(isinstance(client, dict) and type(client.get("generation")) is int and isinstance(wire, dict),
-            "invalid_request", "Mutations require an explicit client generation and protocol.")
-    require(wire.get("major") == metadata["protocol"]["major"] and
-            type(wire.get("minor")) is int and 0 <= wire["minor"] <= metadata["protocol"]["minor"] and
-            client["generation"] >= metadata["minimum_client_generation"],
-            "client_too_old", "Bump your Foundry-Go pin to a supported deploy generation.")
+    require(type(wire.get("minor")) is int and 0 <= wire["minor"] <= metadata["protocol"]["minor"],
+            "client_too_old", "Bump your Foundry-Go pin to a supported deploy generation before this mutation.")
     require(action in UPGRADE_ACTIONS or client["generation"] <= metadata["generation"],
             "host_upgrade_required", "Review and apply a host tool upgrade before this mutation.")
 

@@ -2,7 +2,7 @@
 
 Backup and recovery use the existing typed deployment records. Integration now
 provides the three callbacks in `feature_lifecycle`, backed by `feature_recovery`,
-and lifts the five dispatcher refusals below at generation 13. The runner hooks
+with generation-19 hosts and clients. The runner hooks
 below are installed. Native tests cover archived configuration,
 coverage, plan binding and orchestration with simulated lifecycle callbacks;
 they do not establish real-host recovery or network isolation.
@@ -12,7 +12,7 @@ they do not establish real-host recovery or network isolation.
 In `upgrades._check_feature_request`, add exactly these actions to `supported`:
 `backup-configure`, `backup-run`, `restore-drill`, `recover-plan`, `recover-apply`.
 Both the requested-profile/topology check and registered-instance check use that
-set. Keep generation checks, rehearsal write restrictions, confirmation and plan
+set. Keep the protocol floor, rehearsal write restrictions, confirmation and plan
 token checks. Recovery must retain `recover._feature_owner`'s refusal until all
 three recovery callbacks and the `start_units`/`stop_units` seams below exist. Backup credential rotations are separate
 actions and are not included in this lift.

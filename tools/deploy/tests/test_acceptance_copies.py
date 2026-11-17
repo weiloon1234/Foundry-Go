@@ -24,7 +24,6 @@ import services
 from test_artifacts import elf
 from test_contracts import fixture
 from topology import parse_profile
-import upgrades
 
 
 class CopiesAcceptanceTests(unittest.TestCase):
@@ -93,7 +92,6 @@ class CopiesAcceptanceTests(unittest.TestCase):
         unix = [endpoint for endpoint in listeners.unix_endpoints(topology, profile) if endpoint.role == scenario.COPIES_ROLE]
         self.assertEqual([copy_socket_name('copies.sock', n) for n in range(1, 4)], [endpoint.name for endpoint in unix])
         self.assertEqual(3, len({services.ServicePaths.for_unit(identity, profile.instance_id).state for identity in identities}))
-        self.assertEqual(19, upgrades.feature_generation(topology, {}, profile=profile))
 
     def test_release_inventory_requires_every_tree_member(self):
         archive_path, _, _, topology = self.build(0)
@@ -138,7 +136,6 @@ class CopiesAcceptanceTests(unittest.TestCase):
     def test_default_fixture_retains_singleton_recovery_contract(self):
         _, _, profile, topology = self.build(0)
         self.assertNotIn(scenario.COPIES_ROLE, dict(profile.placement))
-        self.assertEqual(19, upgrades.feature_generation(topology, {}, profile=profile))
 
     def test_lane_c_hook_is_required_and_preserves_failures(self):
         inventory = Mock()

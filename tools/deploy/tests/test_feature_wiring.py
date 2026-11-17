@@ -649,7 +649,7 @@ class FeatureWiringTests(FeatureWiringFixture):
             self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
             _, entry = self.host.require_identity(self.project, self.profile)
             _, selection, inventory, _ = lifecycle.load(self.host, entry)
-            self.assertEqual(selection.minimum_generation, 16)
+            self.assertEqual(selection.minimum_generation, 19)
             self.assertTrue(proof.called)
             text = self.host.paths.p('/etc/systemd/system/' + inventory.units[inventory.identity('relay')]).read_text()
             self.assertIn(network_confinement.FILTER, text)
@@ -666,7 +666,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
         _, entry = self.host.require_identity(self.project, self.profile)
         _, selection, inventory, launch = lifecycle.load(self.host, entry)
-        self.assertEqual(selection.minimum_generation, 15)
+        self.assertEqual(selection.minimum_generation, 19)
         endpoint, = inventory.resolution.unix_endpoints
         self.assertEqual([e.role for e in inventory.resolution.endpoints], ['http'])
         descriptor = c.read_json(self.host.paths.p(launch['descriptors']['http']))
@@ -1003,7 +1003,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         def selected_template(expected):
             _, entry = self.host.require_identity(self.project, self.profile)
             _, selected, inventory, launch = lifecycle.load(self.host, entry)
-            self.assertEqual(selected.minimum_generation, 14)
+            self.assertEqual(selected.minimum_generation, 19)
             paths = services.ServicePaths.for_unit(inventory.specs[inventory.identity("relay")].identity, inventory.resolution.id)
             path = self.host.paths.p(paths.config("private", "rendered-template", "relay.yaml"))
             self.assertEqual(json.loads(path.read_text().removeprefix("token: ")), expected)
@@ -1030,8 +1030,8 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertNotEqual(second, third)
         self.rollback_target(old_version)
         _, entry = self.host.require_identity(self.project, self.profile)
-        self.assertEqual(entry["deployment_selection"]["minimum_generation"], 14)
-        with self.assertRaisesRegex(c.DeployError, "generation 14"):
+        self.assertEqual(entry["deployment_selection"]["minimum_generation"], 19)
+        with self.assertRaisesRegex(c.DeployError, "generation 19"):
             upgrades.check_instance_capabilities(entry, 13)
 
     def test_service_secret_rotation_retains_http_and_private_values(self):
@@ -1573,7 +1573,6 @@ class FeatureWiringTests(FeatureWiringFixture):
                 self.request("bootstrap-plan", topology=self.topology.projection())
             self.assertEqual(error.exception.code, expected)
         self.assertNotIn(["ufw", "reload"], self.host.commands)
-
 
 
     def test_second_bootstrap_after_tool_upgrade_uses_advanced_verified_boot_pin(self):

@@ -47,9 +47,8 @@ The sections below record the shared interfaces and historical lane verification
    in `requires`. TCP copy lists follow existing endpoint behavior: declarations
    use `requires` when startup must await the provider. Copy edges participate
    in cycle validation even without an explicit prerequisite.
-7. Extend the generation-18 predicate in `upgrades.feature_generation` to include
-   any `CopiesBinding` or `SecretDeclaration.scope == "copy"`, even at count one.
-   `Topology.secrets` values are now frozen `SecretDeclaration(prompt, scope)`
+7. Copy bindings and copy-scoped secrets use the generation-19 host and client floor.
+   `Topology.secrets` values are frozen `SecretDeclaration(prompt, scope)`
    records; default scope is internally `role`. Existing shared secret names and
    keys are unchanged. Public port list length is checked by
    `topology.public_listener_policies`, shared by profile parsing and edge policy.

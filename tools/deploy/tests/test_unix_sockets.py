@@ -22,7 +22,6 @@ import services
 import topology as t
 import unix_sockets
 from unix_socket_probe import Result
-import upgrades
 from test_services import inventory_fixture
 from test_host_capabilities import DIGEST, INSTANCE, CURRENT
 
@@ -105,16 +104,6 @@ class UnixDeclarationsTests(unittest.TestCase):
         with self.assertRaises(c.DeployError):
             t.parse_topology(raw)
 
-    def test_generation_floor_is_sticky_and_old_hosts_request_upgrade(self):
-        inventory, _ = unix_inventory()
-        self.assertEqual(upgrades.feature_generation(inventory.topology, {}), 15)
-        with self.assertRaisesRegex(c.DeployError, 'Upgrade.*generation 15'):
-            upgrades.check_feature_generation({'tools': {'generation': 14}}, inventory.topology, {}, client_generation=15)
-        with self.assertRaisesRegex(c.DeployError, 'client generation 15'):
-            upgrades.check_feature_generation({'tools': {'generation': 15}}, inventory.topology, {}, client_generation=14)
-        self.assertEqual(upgrades.feature_generation(inventory_fixture()[0].topology,
-                         {'deployment_selection': {'minimum_generation': 15}}), 15)
-        self.assertIn('lib/unix_sockets.py', upgrades.REQUIRED_FILES)
 
     def test_existing_tcp_resolution_keeps_its_wire_shape(self):
         inventory, _, _ = inventory_fixture()

@@ -3,9 +3,8 @@ import copy
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 import sys
-from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import unit_selection_names, unit_selection_identities
@@ -15,7 +14,6 @@ import listeners
 import runtime_config
 import services
 import topology as t
-import upgrades
 from test_host_capabilities import CURRENT, INSTANCE, declaration, profile
 from test_services import inventory_fixture
 from timing_support import ManualClock, Checkpoints, readiness_clock
@@ -369,43 +367,3 @@ class CopyFoundationTests(unittest.TestCase):
         paths = services.ServicePaths.for_unit(spec.identity, CURRENT)
         value = services.resolve_argument(t.Argument.parse({"listener_port": "control"}), role, spec, resolution, paths, (), {})
         self.assertEqual(value, str(next(e.port for e in resolution.endpoints if e.role == "relay" and e.ordinal == 2)))
-
-    def test_generation_18_requires_both_peers_and_survives_rollback(self):
-        topology = t.parse_topology(declaration())
-        copies = {**profile(), "placement": {"http": 1, "relay": 2, "worker": 1}}
-        self.assertGreaterEqual(upgrades.protocol()["generation"], c.FEATURE_COPIES_GENERATION)
-        self.assertEqual(upgrades.feature_generation(topology, {"profile": copies}), 18)
-        for host, client in ((16, 18), (17, 18), (18, 16), (18, 17)):
-            with self.subTest(host=host, client=client), self.assertRaises(c.DeployError):
-                upgrades.check_feature_generation({"tools": {"generation": host}}, topology, {},
-                                                   client_generation=client, profile=copies)
-        entry = {"deployment_selection": {"minimum_generation": 18}}
-        self.assertEqual(upgrades.check_feature_generation({"tools": {"generation": 18}}, topology, entry,
-                                                          client_generation=18, profile=profile()), 18)
-        self.assertEqual(upgrades.feature_generation(topology, {}, profile=profile()), 13)
-        for field in ("arguments", "environment", "configs"):
-            raw = declaration()
-            if field == "arguments":
-                raw["roles"][1][field] = [{"copy_number": "self"}]
-            elif field == "environment":
-                raw["roles"][1][field] = {"COPY": {"copy_number": "self"}}
-            else:
-                raw["roles"][1][field]["settings"]["bindings"]["/copy"] = {"copy_number": "self"}
-            with self.subTest(field=field):
-                self.assertEqual(upgrades.feature_generation(t.parse_topology(raw), {}, profile=profile()), 13)
-
-    def test_generation_preflight_checks_new_profiles_and_recovery_evidence(self):
-        raw = declaration()
-        copies = {**profile(), "placement": {"http": 1, "relay": 2, "worker": 1}}
-        request = {"topology": raw, "profile": copies, "client": {"generation": 16}}
-        with self.assertRaisesRegex(c.DeployError, "generation 18"):
-            upgrades._check_feature_request(None, request, "bootstrap-plan")
-        import recover
-        host = Mock()
-        host.read_registry.return_value = None
-        for metadata in ({"profile": copies}, {"profile": profile(), "deployment_selection": {"minimum_generation": 18}}):
-            recovered = {"feature": SimpleNamespace(topology=t.parse_topology(raw)), "metadata": metadata}
-            with patch.object(recover, "read_archive", return_value={}), \
-                    patch.object(recover, "archive_configuration", return_value=recovered), \
-                    self.assertRaisesRegex(c.DeployError, "generation 18"):
-                upgrades.check_target_capabilities(host, {**request, "project": {}, "recovery_archive": "/private/input"}, "recover-plan")

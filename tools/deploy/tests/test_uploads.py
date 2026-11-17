@@ -20,7 +20,6 @@ from provision import _template
 from runtime_config import runtime_environment, validate_configuration_changes
 from test_contracts import fixture
 import uploads
-import upgrades
 
 TOOLS = Path(__file__).resolve().parents[1]
 
@@ -181,65 +180,6 @@ class UploadPolicyTests(unittest.TestCase):
         self.assertIsNone(re.search(regex, "/axbxxx/123/"))
         self.assertIsNone(re.search(regex, "/" + literal + "/123"))
 
-    def test_upload_generation_floors_and_legacy_compatibility(self):
-        from topology import parse_topology
-        topology = parse_topology({"schema": 1, "roles": [{"name": "http"}]})
-        registry = {"tools": {"generation": 16}}
-        upgrades.check_upload_generation(registry, self.entry, client_generation=16)
-        upgrades.check_instance_capabilities(self.entry, 16)
-        self.profile["uploads"]["routes"] = ["/resources/{resource}/media"]
-        for host, client, code in ((16, 17, "host_upgrade_required"), (17, 16, "instance_capability_required")):
-            with self.subTest(host=host, client=client), self.assertRaises(DeployError) as raised:
-                upgrades.check_upload_generation({"tools": {"generation": host}}, self.entry, client_generation=client)
-            self.assertEqual(code, raised.exception.code)
-        upgrades.check_upload_generation({"tools": {"generation": 17}}, self.entry, client_generation=17)
-        with self.assertRaises(DeployError):
-            upgrades.check_instance_capabilities(self.entry, 16)
-        self.assertEqual(17, upgrades.feature_generation(topology, self.entry))
-        target = copy.deepcopy(self.profile)
-        del self.profile["uploads"]
-        self.assertEqual(17, upgrades.feature_generation(topology, self.entry, profile=target))
-        with self.assertRaises(DeployError):
-            upgrades.check_feature_generation(registry, topology, self.entry, profile=target)
-        # Feature selections retain the floor even after application rollback.
-        self.assertEqual(17, upgrades.feature_generation(topology, {"deployment_selection": {"minimum_generation": 17}}))
-        self.assertGreaterEqual(upgrades.protocol()["generation"], upgrades.UPLOAD_TEMPLATE_GENERATION)
-
-    def test_release_target_profile_and_recovery_require_generation_17(self):
-        import release
-        import recover
-        from topology import parse_topology
-        topology = parse_topology({"schema": 2, "roles": [{"name": "http", "kind": "builtin"}]})
-        target = {**self.profile, "schema": 3, "placement": {"http": 1}, "listeners": {}}
-        target["uploads"] = {**profile(), "routes": ["/resources/{resource}/media"]}
-        manifest = {"schema": 2, "deployment": {
-            "schema": 2, "topology": topology.projection(), "topology_sha256": topology.sha256,
-            "profile": target, "inventory": [{"path": "artisan", "sha256": "a" * 64,
-                                               "size": 1, "kind": "application"}],
-            "artifacts": [], "application_executables": {}}}
-        host = Mock()
-        host.require_identity.return_value = ({}, self.entry)
-        for installed, client, code in ((17, 16, "instance_capability_required"), (16, 17, "host_upgrade_required")):
-            host.read_registry.return_value = {"tools": {"generation": installed}}
-            request = {"client": {"generation": client}, "project": self.project, "profile": self.profile,
-                       "archive": "/staged/app.tar.gz", "archive_sha256": "a" * 64}
-            with patch.object(release, "unpack_archive", return_value=manifest), self.assertRaises(DeployError) as raised:
-                upgrades.check_target_capabilities(host, request, "release-plan")
-            self.assertEqual(code, raised.exception.code)
-            recovered = {"metadata": {"profile": target}, "feature": None}
-            with patch.object(recover, "read_archive", return_value={}), \
-                    patch.object(recover, "archive_configuration", return_value=recovered), \
-                    self.assertRaises(DeployError) as raised:
-                upgrades.check_target_capabilities(host, {**request, "recovery_archive": "/private/recovery"}, "recover-plan")
-            self.assertEqual(code, raised.exception.code)
-
-    def test_bootstrap_template_floor_applies_before_instance_registration(self):
-        self.profile["uploads"]["routes"] = ["/resources/{resource}/media"]
-        for installed, client, code in ((17, 16, "instance_capability_required"), (16, 17, "host_upgrade_required")):
-            registry = {"tools": {"generation": installed}, "instances": {}}
-            with self.assertRaises(DeployError) as raised:
-                upgrades._check_feature_request(registry, {"profile": self.profile, "client": {"generation": client}}, "bootstrap-plan")
-            self.assertEqual(code, raised.exception.code)
 
     def test_schema_bounds_and_deadlines(self):
         validate_profile(self.profile, self.project)

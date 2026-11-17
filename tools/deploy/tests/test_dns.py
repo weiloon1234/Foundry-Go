@@ -519,15 +519,9 @@ class ManagedDNSTests(unittest.TestCase):
 
 
 class DNSContractTests(unittest.TestCase):
-    def test_profile_and_sticky_generation(self):
+    def test_managed_profile_contract(self):
         parsed = managed_profile()
         topology = t.parse_topology(declaration())
-        self.assertEqual(upgrades.feature_generation(topology, {}, profile=parsed.projection()), 18)
-        with self.assertRaises(c.DeployError):
-            upgrades.check_feature_generation({"tools": {"generation": 17}}, topology, {}, profile=parsed.projection())
-        with self.assertRaises(c.DeployError):
-            upgrades.check_feature_generation({"tools": {"generation": 18}}, topology, {}, profile=parsed.projection(), client_generation=17)
-        self.assertEqual(upgrades.feature_generation(topology, {"deployment_selection": {"minimum_generation": 18}}), 18)
         for change in ({"proxied": True}, {"records": []}, {"zone_id": "../invalid"},
                        {"public_addresses": ["203.0.113.90"]}, {"mode": "external"}):
             value = parsed.projection()
@@ -535,10 +529,6 @@ class DNSContractTests(unittest.TestCase):
             with self.assertRaises(c.DeployError):
                 t.parse_profile(value, topology)
         self.assertIn("lib/dns.py", upgrades.REQUIRED_FILES)
-        with self.assertRaises(c.DeployError):
-            upgrades.check_instance_capabilities({"profile": parsed.projection()}, 17)
-        with self.assertRaises(c.DeployError):
-            upgrades._check_feature_request(None, {"profile": parsed.projection(), "client": {"generation": 17}}, "bootstrap-plan")
 
     def test_transport_response_bound_redirects_and_redaction(self):
         client = dns.Cloudflare(TOKEN)
@@ -817,7 +807,7 @@ class DNSLifecycleTests(FeatureWiringFixture):
         self.profile = result["profile_update"]
         self.assertFalse(self.provider.records)
         _, entry = self.host.require_identity(self.project, self.profile)
-        self.assertEqual(feature_lifecycle.load(self.host, entry)[1].minimum_generation, 18)
+        self.assertEqual(feature_lifecycle.load(self.host, entry)[1].minimum_generation, 19)
         self.assertEqual({item["public_admission"] for item in dns.load(self.host, entry)["operations"].values()}, {"committed"})
 
     def test_provider_drift_refuses_before_closure(self):

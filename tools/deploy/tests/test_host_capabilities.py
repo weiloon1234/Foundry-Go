@@ -552,6 +552,15 @@ class CapabilityRecordTests(unittest.TestCase):
                    "resolution_id": CURRENT, "bundle_sha256": DIGEST, "helper_format": 1, "state": "pending"}
         self.assertEqual(c.record_document(c.CleanupObligation.parse(cleanup)), cleanup)
 
+    def test_selection_generation_roundtrips_stored_values_and_keeps_parse_bound(self):
+        for generation in range(12, 21):
+            raw = {**selection(), "minimum_generation": generation}
+            with self.subTest(generation=generation):
+                self.assertEqual(c.record_document(c.DeploymentSelection.parse(raw)), raw)
+        for generation in (11, True, "19"):
+            with self.subTest(generation=generation), self.assertRaises(c.DeployError):
+                c.DeploymentSelection.parse({**selection(), "minimum_generation": generation})
+
     def test_records_reject_unknown_fields_and_bool_versions(self):
         for parser, raw in ((c.AdmissionRecord.parse, admission()), (c.RuntimeResolution.parse, resolution()),
                             (c.ClosureEvidence.parse, closure()), (c.DeploymentSelection.parse, selection())):
@@ -561,61 +570,39 @@ class CapabilityRecordTests(unittest.TestCase):
 
 
 class CapabilityCompatibilityTests(unittest.TestCase):
-    def test_feature_instance_rejection_does_not_block_legacy_neighbor(self):
-        _, _, legacy = fixture()
-        _, _, feature = fixture(project_slug="feature", host_id=legacy["host_id"], port=8101)
-        feature["deployment_selection"] = selection(feature["profile"]["instance_id"])
-        mixed = registry(legacy, feature)
+    def test_stored_floor_is_target_local_and_independent_of_feature_dispatch(self):
+        _, _, ordinary = fixture()
+        _, _, feature = fixture(project_slug="feature", host_id=ordinary["host_id"], port=8101)
+        feature["deployment_selection"] = {**selection(feature["profile"]["instance_id"]), "minimum_generation": 20}
+        mixed = registry(ordinary, feature)
         mixed["tools"]["generation"] = upgrades.protocol()["generation"]
         c.validate_registry(mixed)
-        for generation in (1, 9, 10, 11):
-            upgrades.check_instance_capabilities(legacy, generation)
-            with self.assertRaises(c.DeployError) as caught:
-                upgrades.check_instance_capabilities(feature, generation)
-            self.assertEqual(caught.exception.code, "instance_capability_required")
+        upgrades.check_instance_capabilities(ordinary, 19)
+        with self.assertRaises(c.DeployError) as caught:
+            upgrades.check_instance_capabilities(feature, 19)
+        self.assertEqual(caught.exception.code, "instance_capability_required")
         for action in ("status", "restart", "config-set", "keys-rotate"):
-            with patch("upgrades.protocol", return_value={"protocol": {"major": 2, "minor": 0}, "generation": 99,
-                                                       "minimum_client_generation": 1}):
-                request = {"profile": legacy["profile"], "client": {"generation": 9}, "protocol": {"major": 2, "minor": 0}}
+            request = {"profile": ordinary["profile"], "client": {"generation": 19}, "protocol": {"major": 2, "minor": 0}}
+            upgrades._check_feature_request(mixed, request, action)
+            request["profile"] = feature["profile"]
+            with self.assertRaises(c.DeployError) as caught:
                 upgrades._check_feature_request(mixed, request, action)
-                request["profile"] = feature["profile"]
-                with self.assertRaises(c.DeployError):
-                    upgrades._check_feature_request(mixed, request, action)
-        # Generation 12 can inspect the sticky record; action-specific preview
-        # gates and the network owner still control feature execution.
-        upgrades.check_instance_capabilities(feature, upgrades.protocol()["generation"])
+            self.assertEqual(caught.exception.code, "instance_capability_required")
+        upgrades.check_instance_capabilities(feature, 20)
         with self.assertRaises(c.DeployError) as caught:
-            upgrades._check_feature_request(mixed, {"profile": feature["profile"], "client": {"generation": upgrades.protocol()["generation"]}}, "keys-rotate")
+            upgrades._check_feature_request(mixed, {"profile": feature["profile"], "client": {"generation": 20}}, "keys-rotate")
         self.assertEqual(caught.exception.code, "capability_unavailable")
-
-    def test_release_one_requires_upgrade_and_preserves_sticky_floor(self):
-        _, _, feature = fixture()
-        feature["deployment_selection"] = {**selection(feature["profile"]["instance_id"]), "minimum_generation": 12}
-        host = registry(feature)
-        host["tools"]["generation"] = 12
-        request = {"profile": feature["profile"], "client": {"generation": 13}}
-        upgrades._check_feature_request(host, {**request, "client": {"generation": 12}}, "status")
-        with self.assertRaises(c.DeployError) as caught:
-            upgrades._check_feature_request(host, request, "down")
-        self.assertEqual(caught.exception.code, "host_upgrade_required")
-        host["tools"]["generation"] = 13
-        upgrades._check_feature_request(host, request, "down")
-        with self.assertRaises(c.DeployError):
-            upgrades._check_feature_request(host, {**request, "client": {"generation": 12}}, "down")
-        feature["deployment_selection"]["minimum_generation"] = 13
-        with self.assertRaises(c.DeployError):
-            upgrades.check_instance_capabilities(feature, 12)
 
     def test_source_protocol_fixtures_preserve_upgrade_floors(self):
         # Captured 2.0 envelope shape of all supported source generations. These
         # are contract fixtures; installed source-bundle acceptance belongs to M6.
-        for source_generation in (18, 19):
+        for source_generation in (19,):
             source = {"protocol": {"major": 2, "minor": 0}, "generation": source_generation,
                       "minimum_host_generation": 9, "minimum_client_generation": 1, "framework_version": "development"}
             upgrades.check_upgrade_generation(source)
             candidate = upgrades.protocol()
             self.assertEqual(set(source), set(candidate))
             self.assertGreaterEqual(candidate["generation"], source["generation"])
-            self.assertEqual(candidate["minimum_client_generation"], 18)
+            self.assertEqual(candidate["minimum_client_generation"], 19)
         with self.assertRaises(c.DeployError):
-            upgrades.check_upgrade_generation({"generation": 17})
+            upgrades.check_upgrade_generation({"generation": 18})

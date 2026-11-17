@@ -627,18 +627,8 @@ FEATURE_PROFILE_SCHEMA = 3
 ARCHIVE_SCHEMA = 2
 RECORD_SCHEMA = 1
 FEATURE_CAPABILITIES = frozenset({"topology-v2", "profile-v3", "release-v2"})
-# Historical capability floor, independent of the currently selected tool generation.
-FEATURE_INTRODUCTION_GENERATION = 12
-FEATURE_LIFECYCLE_GENERATION = 13
-FEATURE_DELIVERY_GENERATION = 14
-FEATURE_UNIX_GENERATION = 15
-FEATURE_CONFINEMENT_GENERATION = 16
-FEATURE_SHARED_DIRECTORY_GENERATION = 16
-UPLOAD_TEMPLATE_GENERATION = 17
-FEATURE_PROXY_PROTOCOL_GENERATION = 18
-FEATURE_MANAGED_DNS_GENERATION = 18
-FEATURE_COPIES_GENERATION = 18
-FEATURE_CONFIG_TREE_GENERATION = 19
+# Lower bound of persisted deployment selections; independent of peer admission.
+SELECTION_MINIMUM_GENERATION = 12
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
 MAX_ROLE_COPIES, MAX_UNITS = 128, 256
 MAX_ENDPOINTS = MAX_LISTENERS * MAX_ROLE_COPIES + 1  # Expanded custom listeners plus built-in HTTP.
@@ -1134,7 +1124,7 @@ class DeploymentSelection:
         instance, resolution = contract_uuid(v["instance_id"]), contract_uuid(v["selected_resolution_id"])
         require(admission.instance_id == instance and admission.resolution_id == resolution,
                 "invalid_contract", "Selection and admission identities differ.")
-        return cls(instance, contract_int(v["minimum_generation"], FEATURE_INTRODUCTION_GENERATION), capabilities, resolution,
+        return cls(instance, contract_int(v["minimum_generation"], SELECTION_MINIMUM_GENERATION), capabilities, resolution,
                    None if v["previous_resolution_id"] is None else contract_uuid(v["previous_resolution_id"]),
                    admission, contract_unit_keys(instance, v["enabled_roles"]), contract_unit_keys(instance, v["maintenance_holds"]))
 

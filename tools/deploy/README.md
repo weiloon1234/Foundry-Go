@@ -14,20 +14,22 @@ confirmation rules, host prerequisites, and recovery procedures.
 | `protocol.json` | Wire protocol and tool generation |
 
 The bundle uses protocol 2.0 and generation 19. Hosts and clients must run generation
-18 or later. The local command checks the installed host's `hello` response before
+19 or later. The local command checks the installed host's `hello` response before
 staging any bundle; the candidate checks again before planning or installation.
-Older hosts receive `tools_upgrade_floor`: the host must already run generation 18
-tools before this upgrade. Each mutation checks its caller's client generation.
+Older hosts receive `tools_upgrade_floor`: the host must already run generation 19
+tools before this upgrade. Every manager-protocol action except `hello`, including
+reads, checks its caller's client generation. `ACTION=report` uses the standalone
+report command, and `ACTION=logs FOLLOW=yes` runs `journalctl` directly; neither
+uses manager-protocol negotiation.
 The historical bootstrap registration value does not constrain current clients.
 
-The generation-16 runtime bridge has been removed. Installed runtime bytes must
-match the selected bundle exactly. Generation 18 to 19 upgrades and same-generation
-bundle updates retain the journaled boot-coordinator re-pin and generation-19 gates.
+Installed runtime bytes must match the selected bundle exactly. Same-generation
+bundle updates are supported and retain the journaled boot-coordinator re-pin.
 
 The bundle rejects deployment attempts containing `result` metadata and backup
 receipts without `fresh_at` or journals without `configuration_revision`.
 Configuration failures continue to use `outcome: failed_applied`. The release
-archive format and protocol 2.0 are unchanged, so the published v0.38.3 / generation-18
+archive format and protocol 2.0 are unchanged, so the published v0.42.1 / generation-19
 baseline can activate the candidate archive during foreign-upgrade acceptance.
 
 Use `tools-plan`, confirmed `tools-apply`, then an ordinary deploy. Ready instances
@@ -170,7 +172,7 @@ tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
   --archive "$archive" --framework-root "$framework" --fresh
 ```
 
-The opt-in `--upgrade` phase tests the published v0.38.3 / generation-18 baseline selected by
+The opt-in `--upgrade` phase tests the published v0.42.1 / generation-19 baseline selected by
 `baseline_version` in `tests/run_ci_acceptance.sh`, independently of the fixture's
 candidate framework. The CI entry point above resolves that tag and passes its
 unmodified module-cache tools through `--tools-root`. The same candidate application

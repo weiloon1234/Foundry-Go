@@ -33,7 +33,7 @@ class ManagerTests(unittest.TestCase):
 
     def test_mutations_reject_newer_and_older_clients_before_commands(self):
         with patch.object(self.host, "run") as run:
-            for generation, code in ((0, "client_too_old"), (upgrades.protocol()["generation"] + 1, "host_upgrade_required")):
+            for generation, code in ((18, "client_too_old"), (upgrades.protocol()["generation"] + 1, "host_upgrade_required")):
                 request = copy.deepcopy(self.request)
                 request["client"]["generation"] = generation
                 with self.assertRaises(DeployError) as error:
@@ -42,35 +42,44 @@ class ManagerTests(unittest.TestCase):
             run.assert_not_called()
 
 
-    def test_generation_eighteen_client_can_deploy_on_current_host(self):
+    def test_below_floor_clients_are_rejected_for_every_action_except_hello(self):
         import release
-        value = self.host.read_registry()
-        value['tools'] = upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)
-        self.assertEqual(upgrades.protocol()['generation'], value['tools']['generation'])
-        self.host.write_registry(value)
-        request = {**self.request, 'client': {**self.request['client'], 'generation': 18},
-                   'archive': '/staged/app.tar.gz', 'archive_sha256': 'a' * 64}
-        with patch.object(release, 'activate', return_value={'ok': True}) as activate, \
-                patch.object(release, 'unpack_archive', return_value={'schema': 1}) as inspect:
-            self.assertEqual({'ok': True}, manager.execute(self.host, 'activate', request))
-            inspect.assert_called_once()
-        activate.assert_called_once()
-        self.assertEqual('/staged/app.tar.gz', activate.call_args.args[3])
+        request = {**self.request, "client": {**self.request["client"], "generation": 18}}
+        before = self.host.paths.registry.read_bytes()
+        with patch.object(self.host, "run") as run, \
+                patch.object(release, "activate") as activate, \
+                patch.object(release, "unpack_archive") as inspect:
+            for action in set(manager.ACTIONS) - {"hello"}:
+                with self.subTest(action=action), self.assertRaises(DeployError) as caught:
+                    manager.execute(self.host, action, request)
+                self.assertEqual("client_too_old", caught.exception.code)
+            self.assertEqual(manager.execute(self.host, "hello", request)["client_generation"]["minimum"], 19)
+            run.assert_not_called()
+            activate.assert_not_called()
+            inspect.assert_not_called()
+        self.assertEqual(before, self.host.paths.registry.read_bytes())
+
+    def test_reads_require_explicit_client_generation_and_protocol(self):
+        for action in upgrades.READ_ACTIONS - {"hello"}:
+            for field in ("client", "protocol"):
+                request = {key: value for key, value in self.request.items() if key != field}
+                with self.subTest(action=action, missing=field), self.assertRaises(DeployError) as caught:
+                    manager.execute(self.host, action, request)
+                self.assertEqual("invalid_request", caught.exception.code)
 
     def test_feature_gate_is_target_local_and_precedes_lifecycle_dispatch(self):
         import release
         from test_host_capabilities import selection
         _, _, feature = fixture(project_slug="feature", host_id=self.entry["host_id"], port=8101)
-        feature["deployment_selection"] = {**selection(feature["profile"]["instance_id"]), "minimum_generation": 19}
+        feature["deployment_selection"] = {**selection(feature["profile"]["instance_id"]), "minimum_generation": 20}
         value = registry(self.entry, feature)
         value["tools"] = upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)
         self.host.write_registry(value)
-        request = {**self.request, "client": {**self.request["client"], "generation": 18},
+        request = {**self.request, "client": {**self.request["client"], "generation": 19},
                    "archive": "/staged/app.tar.gz", "archive_sha256": "a" * 64}
-        for generation in (18,):
+        for generation in (19,):
             request["client"]["generation"] = generation
-            with patch.object(release, "activate", return_value={"ok": True}) as activate, \
-                    patch.object(release, "unpack_archive", return_value={"schema": 1}):
+            with patch.object(release, "activate", return_value={"ok": True}) as activate:
                 self.assertEqual({"ok": True}, manager.execute(self.host, "activate", request))
                 activate.assert_called_once()
             feature_request = {**self.request, "profile": feature["profile"],

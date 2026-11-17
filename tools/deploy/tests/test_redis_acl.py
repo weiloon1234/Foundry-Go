@@ -376,7 +376,6 @@ class RedisServicePreparationTests(unittest.TestCase):
         self.assertEqual("ready", redis_acl.inspect(self.host, self.registry)["state"])
 
     def test_unjournaled_template_mask_remains_a_conflict(self):
-        self.registry["tools"] = {"generation": 12}
         mask = self.host.paths.p("/etc/systemd/system/redis-server@.service")
         mask.parent.mkdir(parents=True)
         mask.symlink_to("/dev/null")
@@ -385,14 +384,7 @@ class RedisServicePreparationTests(unittest.TestCase):
         self.assertEqual(self.registry["shared"], {})
         self.assertTrue(mask.is_symlink())
 
-    def test_old_generations_do_not_request_package_handoffs(self):
-        for generation in (9, 10, 11):
-            with self.subTest(generation=generation), patch("packages.default_activation_pending", side_effect=AssertionError("legacy handoff")):
-                self.registry["tools"] = {"generation": generation}
-                redis_acl.prepare(self.host, self.registry)
-
-    def test_generation_12_without_package_mask_needs_no_handoff(self):
-        self.registry["tools"] = {"generation": 12}
+    def test_without_package_mask_needs_no_handoff(self):
         with patch("packages.authorize_default_activation") as authorize:
             redis_acl.prepare(self.host, self.registry)
         authorize.assert_not_called()

@@ -13,8 +13,6 @@ import contracts as c
 import runtime_config
 import services
 import topology as t
-import upgrades
-from test_host_capabilities import declaration, selection
 import test_services
 
 
@@ -134,28 +132,6 @@ class TemplateDeclarationTests(unittest.TestCase):
               "bindings": asdict(cfg)["bindings"]}, asdict(sources[cfg.source])) for name, cfg in role.configs],
               "bundles": [], "secret_paths": {}})
         self.assertEqual(services.configuration_digest(role, members), old)
-
-    def test_generation_fourteen_is_required_and_sticky_after_rollback(self):
-        raw = declaration()
-        raw["roles"][1]["configs"] = {"settings": {"source": "deploy/files/config", "mode": "rendered-template", "format": "json"}}
-        parsed = t.parse_topology(raw)
-        self.assertEqual(upgrades.feature_generation(parsed, {}), 14)
-        with self.assertRaisesRegex(c.DeployError, "generation 14"):
-            upgrades.check_feature_generation({"tools": {"generation": 13}}, parsed, {})
-        host = {"tools": {"generation": 13}, "instances": {}}
-        request = {"topology": raw, "client": {"generation": 14}}
-        with self.assertRaisesRegex(c.DeployError, "generation 14"):
-            upgrades._check_feature_request(host, request, "bootstrap-plan")
-        host["tools"]["generation"] = 14
-        with self.assertRaisesRegex(c.DeployError, "generation 14"):
-            upgrades._check_feature_request(host, {**request, "client": {"generation": 13}}, "bootstrap-plan")
-        upgrades._check_feature_request(host, request, "bootstrap-plan")
-        entry = {"deployment_selection": {**selection(), "minimum_generation": 14}}
-        self.assertEqual(upgrades.feature_generation(t.parse_topology(declaration()), entry), 14)
-        with self.assertRaisesRegex(c.DeployError, "generation 14"):
-            upgrades.check_instance_capabilities(entry, 13)
-        upgrades.check_instance_capabilities(entry, 14)
-        self.assertIn("lib/config_templates.py", upgrades.REQUIRED_FILES)
 
 
 class TemplatePreparationTests(unittest.TestCase):

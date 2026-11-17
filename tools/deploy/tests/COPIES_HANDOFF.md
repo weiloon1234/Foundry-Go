@@ -1,7 +1,7 @@
 # Numbered service copies: shared interface
 
 Release 2a, lane A1, turn 2b enables numbered custom copies through reviewed
-release plans under generation 18. Wrappers belong to release 3.
+release plans with generation-19 hosts and clients. Wrappers belong to release 3.
 
 ## Identity and expansion
 
@@ -130,11 +130,9 @@ grants and network confinement remain role policies inherited by every copy.
 Arguments and environment use only `{"copy_number": "self"}`, resolved as the
 decimal ordinal. Rendered JSON field bindings resolve it to an integer.
 
-`FEATURE_COPIES_GENERATION = 18` is the client and host floor for counts above one.
-The existing `copy_number` reference does not raise the floor.
-`upgrades.feature_generation` and `check_feature_generation` accept `profile=` for
-the candidate profile; without it they inspect `entry["profile"]`. Both preserve
-the selected floor through rollback and recovery. Protocol generation is 18.
+Numbered copies use the protocol's generation-19 host and client floor. New
+selections carry forward the higher of the stored floor and the protocol client
+floor, including during rollback and recovery.
 
 ## Lane ownership
 

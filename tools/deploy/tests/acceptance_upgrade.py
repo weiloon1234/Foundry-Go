@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upgrade from the published generation-18 baseline tools on the disposable host."""
+"""Upgrade from the published v0.42.1 / generation-19 baseline tools on the disposable host."""
 import argparse
 import json
 from pathlib import Path

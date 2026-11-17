@@ -285,13 +285,17 @@ class TransitionTests(unittest.TestCase):
         self.assertEqual(self.host.calls.count(['systemctl', 'restart', self.pg['unit']]), 1)
 
     def test_readiness_failure_keeps_old_allocations_and_blocks_mutations(self):
+        request = upgrades.protocol_metadata()
+        registered = self.host.read_registry()
+        registered['tools'] = upgrades._active_record(Path(__file__).resolve().parents[1], request['client']['bundle_sha256'], None)
+        self.host.write_registry(registered)
         self.ready.return_value = False
         with self.assertRaises(DeployError) as error:
             self.apply()
         self.assertEqual(error.exception.code, 'capacity_not_ready')
         self.assertEqual(self.host.read_registry()['shared']['postgresql']['capacity'], LEGACY_CAPACITY)
         with self.assertRaises(DeployError) as error:
-            upgrades.check_client(self.host, {}, 'activate')
+            upgrades.check_client(self.host, request, 'activate')
         self.assertEqual(error.exception.code, 'capacity_pending')
         self.ready.return_value = True
         self.assertTrue(self.apply()['ok'])

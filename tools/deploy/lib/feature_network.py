@@ -114,13 +114,12 @@ def check_registry_writer(host, registry):
             return  # The upgrade intent may precede pin publication; application state cannot.
     source = host.paths.p(registry["tools"]["active_path"])
     checked_boot_files(host, source, registry["tools"]["bundle_sha256"])
-    from upgrades import feature_generation, protocol
-    from topology import parse_topology
+    from upgrades import protocol
     generation = protocol(source)["generation"]
     for entry in registry["instances"].values():
         if entry.get("topology", {}).get("schema") == 2:
-            require(feature_generation(parse_topology(entry["topology"], registered=True), entry) <= generation,
-                    "boot_coordinator_upgrade_required", "The boot coordinator cannot read the requested capability generation.")
+            require(entry.get("deployment_selection", {}).get("minimum_generation", 0) <= generation,
+                    "boot_coordinator_upgrade_required", "The boot coordinator cannot read the stored instance generation floor.")
 
 
 def bootstrap_ready(host, entry, tools_dir, bundle):

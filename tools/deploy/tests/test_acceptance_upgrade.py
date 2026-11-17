@@ -16,9 +16,9 @@ class UpgradeHarnessTests(unittest.TestCase):
         with patch.object(upgrade, 'run', return_value=success) as run:
             self.assertEqual({'plan_token': 'reviewed'}, upgrade.invoke('tools-plan', {}, tools=Path('/candidate')))
             self.assertEqual('/candidate/server/manage.py', run.call_args.args[0][2])
-            upgrade.invoke('activate', {'client': {'generation': 18}})
+            upgrade.invoke('activate', {'client': {'generation': 19}})
             self.assertEqual([upgrade.LAUNCHER, 'activate'], run.call_args.args[0])
-            self.assertEqual(18, json.loads(run.call_args.kwargs['input'])['client']['generation'])
+            self.assertEqual(19, json.loads(run.call_args.kwargs['input'])['client']['generation'])
         refused = subprocess.CompletedProcess([], 1, '{"error":{"code":"host_upgrade_required"}}', '')
         with patch.object(upgrade, 'run', return_value=refused):
             upgrade.invoke('restart', {}, error='host_upgrade_required')
@@ -32,7 +32,7 @@ class UpgradeHarnessTests(unittest.TestCase):
                 active.mkdir()
                 old_tools = Path('/baseline')
                 old_digest = 'a' * 64 if changed else active.name
-                baseline = {'tools': {'generation': 18 if changed else 19, 'bundle_sha256': old_digest,
+                baseline = {'tools': {'generation': 19, 'bundle_sha256': old_digest,
                                       'active_path': str(active)},
                             'instances': {'instance': {'client_generation': 1}}}
                 installed = {**baseline, 'tools': {**baseline['tools'], 'generation': 19, 'bundle_sha256': active.name}}
@@ -45,7 +45,7 @@ class UpgradeHarnessTests(unittest.TestCase):
                 for name in ('prove_running', 'check_report'):
                     stack.enter_context(patch.object(upgrade, name))
                 stack.enter_context(patch.object(upgrade, 'protocol', side_effect=lambda path:
-                    {'generation': baseline['tools']['generation'] if path == old_tools else 19, 'minimum_host_generation': 18}))
+                    {'generation': baseline['tools']['generation'] if path == old_tools else 19, 'minimum_host_generation': 19}))
                 stack.enter_context(patch.object(upgrade, 'tool_bundle', side_effect=lambda path:
                     (None, None, old_digest if path == old_tools else active.name)))
                 stack.enter_context(patch.object(upgrade, 'request', return_value={}))

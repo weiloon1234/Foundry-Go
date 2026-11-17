@@ -501,16 +501,19 @@ match both content and metadata.
 launcher dispatches to the active immutable bundle. `hello` reports host metadata
 without a mutation. Requests include the client's protocol, framework version,
 generation, and bundle digest. The current tool generation is 19. Hosts and clients
-must run generation 18 or later. Each mutation negotiates the actual client
-generation; an older bootstrap registration value does not block a current client.
+must run generation 19 or later. Every manager-protocol action except `hello`,
+including reads, negotiates the actual client generation. `ACTION=report` uses the
+standalone report command, and `ACTION=logs FOLLOW=yes` runs `journalctl` directly;
+neither uses manager-protocol negotiation. An older bootstrap registration value
+does not block a current client.
 The retired-bundle ledger still prevents selecting an older retired bundle.
 
-Tool upgrades require an installed host generation of at least 18. `tools-plan` checks the installed host's generation through `hello` before
+Tool upgrades require an installed host generation of at least 19. `tools-plan`
+checks the installed host's generation through `hello` before
 staging anything. The candidate also enforces this floor before planning or
 installation. Older hosts receive `tools_upgrade_floor`: "The host must already
-run generation 18 tools before this upgrade." The generation-16 runtime bridge has
-been removed. Installed runtime bytes must match the selected bundle exactly.
-Generation 18 to 19 upgrades and same-generation bundle updates remain supported.
+run generation 19 tools before this upgrade." Installed runtime bytes must match
+the selected bundle exactly. Same-generation bundle updates remain supported.
 Every bundle change still re-pins the boot coordinator through the upgrade journal.
 
 Before the next deploy or maintenance action, upgrade a supported older host
@@ -1338,7 +1341,7 @@ runner cleanup still removes disposable containers, volumes, and private materia
 The runner accepts an application release archive and the integrated framework
 root, with Ubuntu 24.04 or 26.04, arm64 or amd64, and `--foreign` or `--fresh`.
 The dedicated `tests/fixtures/deploy-acceptance` app supplies all existing phases
-and the opt-in v0.38.3 / generation-18 baseline upgrade phase. From the framework checkout, build one Linux
+and the opt-in v0.42.1 / generation-19 baseline upgrade phase. From the framework checkout, build one Linux
 archive through the normal deploy builder and run both arm64 cells:
 
 ```sh
@@ -1365,7 +1368,7 @@ for the packaging and workspace details.
 
 For `foreign-upgrade`, the CI entry point resolves the single `baseline_version`
 variable in `tools/deploy/tests/run_ci_acceptance.sh` independently of the candidate
-fixture. It supplies the published v0.38.3 / generation-18 tools through `--tools-root`.
+fixture. It supplies the published v0.42.1 / generation-19 tools through `--tools-root`.
 The same candidate application archive serves both sets of tools.
 The runner mounts that bundle read-only. It bootstraps and deploys with those tools,
 then upgrades through the candidate's `tools-plan` and `tools-apply` and deploys
@@ -1629,12 +1632,10 @@ Declare a resource-scoped endpoint with the router's single-segment syntax:
 "routes": ["/api/v1/resources/{resource}/media"]
 ```
 
-This declaration requires deploy-tool generation 17 on the client and host.
-Install the host bundle before bootstrap. Literal-only profiles continue to work
-with generation 16 clients and hosts. Legacy instances keep their configured
-upload allocation fixed, so application rollback cannot lower this requirement.
-Feature deployment selections retain generation 17 through rollback and recovery,
-even if a later profile removes its templates.
+Upload templates and literal-only routes are available with generation-19 clients
+and hosts. Install the host bundle before bootstrap. Ordinary instances keep their
+configured upload allocation fixed. Stored instance generation floors carry forward
+through rollback and recovery.
 
 Parameter names use `[A-Za-z_][A-Za-z0-9_]*` and must be unique within a route.
 The deploy tool consumes the syntax exported by the router's
@@ -1829,7 +1830,7 @@ fixtures do not establish those host or provider results.
 
 Run current `tools-plan`, review its changes, then run `tools-apply` before
 deploying a release that uses this upload profile. An application-only deploy does
-not upgrade the host tooling. Hosts below generation 18 must first reach the
+not upgrade the host tooling. Hosts below generation 19 must first reach the
 supported upgrade floor. Preserve the ordinary deploy and readiness steps after
 the tools upgrade.
 

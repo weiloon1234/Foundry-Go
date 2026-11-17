@@ -15,11 +15,10 @@ with the generator that created them before upgrading.
 
 ## Managed Cloudflare DNS — unreleased
 
-Managed DNS, outbound PROXY protocol, and numbered copies share deploy-tool generation 18 in
-v0.37.0. Upgrade both client and host before selecting these features. Each
-capability retains its own sticky generation floor through rollback and recovery.
-Upload templates keep their generation-17 floor. Existing external DNS profiles
-remain external and do not authorize provider writes.
+All deployment features are available with generation-19 hosts and clients.
+Stored instance generation floors remain readable and carry forward through
+rollback and recovery. Existing external DNS profiles remain external and do not
+authorize provider writes.
 
 Managed public listeners require explicit record ownership UUIDs, zone IDs,
 addresses, and TTLs. Activation, rollback, and replacement-host recovery change
@@ -30,8 +29,7 @@ reconciliation before public admission. See the
 ## Outbound PROXY protocol — unreleased
 
 Public TCP listeners may declare `proxy_protocol: "v1"` in topology schema 2.
-This requires deploy-tool generation 18 on client and host; rollback and recovery
-retain the instance floor. Existing declarations send no PROXY header. Upgrade
+Existing declarations send no PROXY header. Upgrade
 the application backend to parse v1 before opting in, and provide a separate
 non-PROXY readiness listener. HTTP sites and runtime binding records retain their
 existing contracts. See the
@@ -52,19 +50,18 @@ Like role secrets, copy-scoped secrets are readable by every role of the instanc
 because roles share one account. Console descriptors omit copy secret paths; this
 limits descriptor contents, not filesystem access. See
 [numbered copy consumers](guides/host-capabilities.md#numbered-copy-consumers).
-Generation 18 supports reviewed count changes, copy selection, backup and recovery.
-Tools upgrades must advance the network-boot coordinator as well as the fixed
-helper. Older coordinators cannot parse numbered placement, managed DNS, or
-PROXY listener declarations. The upgrade
-journals, publishes and verifies that pin before selecting the new tools. Registry
-writes require the selected bundle's coordinator and its capability floor.
-The pin must advance for a changed bundle even when both bundles report generation 18.
+Current tools support reviewed count changes, copy selection, backup and recovery.
+Tools upgrades must advance the network-boot coordinator. Installed runtime bytes
+must match the selected bundle exactly. The upgrade journals, publishes and
+verifies the coordinator pin before selecting the new tools. Registry
+writes require the selected bundle's coordinator to satisfy stored instance floors.
+The pin must advance for a changed bundle even when both bundles report generation 19.
 
 ## Loopback confinement — v0.35.0
 
 Role `network.confinement: "loopback"` and private TCP listener `wildcard: true`
-require client and host deploy-tool generation 16. The instance retains this floor
-through rollback and recovery. Existing endpoint wire records remain unchanged;
+are available with generation-19 hosts and clients. Existing endpoint wire records
+remain unchanged;
 consumers receive a loopback address and the allocated port. Confinement denies
 external inbound and outbound IP traffic for the entire role, while preserving
 loopback and Unix sockets. See the
@@ -72,8 +69,7 @@ loopback and Unix sockets. See the
 
 ## Unix endpoint bindings — v0.34.0
 
-Unix listeners require deploy-tool generation 15 on both client and host. The
-instance floor remains 15 after rollback or recovery. Existing TCP/HTTP endpoint
+Unix listeners are available with generation-19 hosts and clients. Existing TCP/HTTP endpoint
 records keep their wire shape; Unix records carry `directory`, `name` and `path`
 instead of `address` and `port`. Runtime resolutions include `unix_endpoints` only
 when used. Upgrade application consumers before declaring a Unix binding for them;
@@ -87,8 +83,8 @@ socket paths; it never restores sockets from backup. See the
 
 ## Shared directory bindings — v0.35.0
 
-Declared shared directories require deploy-tool generation 16 on client and host.
-The instance floor remains 16 after rollback or recovery. Role-binding schema 1
+Declared shared directories are available with generation-19 hosts and clients.
+Role-binding schema 1
 adds `shared_directories` only for roles granted access. Upgrade those application
 binaries before declaring the directories: earlier strict descriptor readers
 reject the new field. Roles with no grant retain their previous descriptor shape.

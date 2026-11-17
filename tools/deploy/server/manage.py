@@ -9,7 +9,7 @@ import sys
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import DeployError, FEATURE_LIFECYCLE_GENERATION, MAX_JSON, check_path, identity, now, parse_env, parse_json, read_json, require
+from contracts import DeployError, MAX_JSON, check_path, identity, now, parse_env, parse_json, read_json, require
 from topology import instance_units, selected_units
 from host import Host
 import journal
@@ -68,7 +68,6 @@ def execute(host, action, request):
         return inspect_host(host)
     project, profile = request.get("project"), request.get("profile")
     identity(project, profile)
-    upgrades.check_target_capabilities(host, request, action)
     if action in ("recover-plan", "recover-apply"):
         import recover
         arguments = {key: request.get(key) for key in ("topology", "mode", "operation_id", "archive_sha256", "target_time", "recovery_public_binding")}
@@ -106,7 +105,7 @@ def execute(host, action, request):
     if "copy" in request:
         operation_selection.units(entry, request["role"], request["copy"])
     import feature_lifecycle
-    if feature_lifecycle.is_feature(entry) and request.get("client", {}).get("generation", 0) >= FEATURE_LIFECYCLE_GENERATION:
+    if feature_lifecycle.is_feature(entry):
         if action not in ("down", "up", "activate", "rollback", "reconcile"):
             import feature_maintenance
             feature_maintenance.reconcile(host, project, profile,

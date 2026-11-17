@@ -176,7 +176,7 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
         with self.host.lock('host'):
             self.prepare(registry, entry)
             _, selection, inventory, launch = lifecycle.load(self.host, entry)
-            self.assertEqual(selection.minimum_generation, 15)
+            self.assertEqual(selection.minimum_generation, 19)
             self.assertEqual(launch['declaration'], self.snapshot['declaration'])
             self.assertEqual(inventory.resolution.unix_endpoints, c.RuntimeResolution.parse(self.snapshot['resolution']).unix_endpoints)
             staged = self.host.paths.root / 'staged-tools'
@@ -190,26 +190,27 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
             self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
             self.assertEqual(self.host.started[-2:], ['relay', 'http'])
 
-    def test_recovery_preserves_archived_template_floor_after_application_rollback(self):
+    def test_recovery_advances_archived_floor_to_protocol_minimum(self):
         registry, entry = self.target()
         self.snapshot['selection']['minimum_generation'] = 14
         with self.host.lock('host'):
             self.prepare(registry, entry)
-            self.assertEqual(lifecycle.load(self.host, entry)[1].minimum_generation, 14)
+            self.assertEqual(lifecycle.load(self.host, entry)[1].minimum_generation, 19)
+            self.assertEqual(self.snapshot['selection']['minimum_generation'], 14)
 
-    def test_recovery_keeps_confinement_floor_after_application_rollback(self):
+    def test_recovery_keeps_current_floor_after_application_rollback(self):
         registry, entry = self.target()
-        self.snapshot['selection']['minimum_generation'] = 16
+        self.snapshot['selection']['minimum_generation'] = 19
         with self.host.lock('host'):
             self.prepare(registry, entry)
-            self.assertEqual(lifecycle.load(self.host, entry)[1].minimum_generation, 16)
+            self.assertEqual(lifecycle.load(self.host, entry)[1].minimum_generation, 19)
 
-    def test_public_binding_recovery_uses_generation_fourteen_and_replacement_profile(self):
+    def test_public_binding_recovery_uses_replacement_profile(self):
         registry, entry = self.target(public=True, public_binding=True)
         with self.host.lock('host'):
             self.prepare(registry, entry)
             _, selection, inventory, _ = lifecycle.load(self.host, entry)
-            self.assertEqual(selection.minimum_generation, 14)
+            self.assertEqual(selection.minimum_generation, 19)
             binding, = inventory.specs[inventory.identity('http')].bindings.public_listeners
             self.assertEqual(binding.public_addresses, ('203.0.113.11', '2001:db8:42::11'))
 

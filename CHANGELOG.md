@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.43.0 — 2026-11-17
+
+- Deploy hosts and clients now require generation 19. A generation-18 host must
+  first upgrade with v0.42.1 tools before using v0.43.0. Same-generation bundle
+  updates remain supported.
+- Manager-protocol actions refuse clients below generation 19 for reads as well as
+  mutations. `hello` remains available for negotiation. `ACTION=report` uses the
+  standalone report command, and `ACTION=logs FOLLOW=yes` runs `journalctl`
+  directly; neither uses manager-protocol negotiation.
+- Published tool-upgrade acceptance now starts from v0.42.1.
+- Per-feature generation gates are gone: every feature needs only the generation-19
+  floor. Stored instance generation floors remain readable.
+
 ## v0.42.1 — 2026-11-17
 
 - Package installation no longer refuses with `package_service_changed` when a static,

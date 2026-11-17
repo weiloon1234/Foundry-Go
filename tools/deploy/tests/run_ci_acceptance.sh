@@ -27,7 +27,7 @@ build_info=$(mktemp -d)
 trap 'rm -rf "$build_info"' EXIT
 
 if [[ "$mode" == foreign-upgrade ]]; then
-  baseline_version=v0.38.3
+  baseline_version=v0.42.1
   baseline=$(cd "$framework" &&
     GOWORK=off "${GO:-go}" mod download -json "github.com/weiloon1234/Foundry-Go@$baseline_version" |
     python3 -c 'import json,sys; print(json.load(sys.stdin)["Dir"])')

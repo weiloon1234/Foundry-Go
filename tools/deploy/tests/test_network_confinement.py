@@ -15,7 +15,6 @@ import network_confinement
 import report
 import services
 import topology as t
-import upgrades
 from host import Paths
 from test_host_capabilities import declaration, INSTANCE
 from test_network import runtime
@@ -53,25 +52,8 @@ class ConfinementTests(unittest.TestCase):
             t.parse_topology(raw)
         raw = confined_topology()
         raw["roles"][1]["listeners"]["control"].pop("wildcard")
-        self.assertEqual(upgrades.feature_generation(t.parse_topology(raw), {}), 16)
+        t.parse_topology(raw)
 
-    def test_generation_16_host_client_and_sticky_rollback_recovery_floor(self):
-        topology = t.parse_topology(confined_topology())
-        with self.assertRaises(c.DeployError) as error:
-            upgrades.check_feature_generation({"tools": {"generation": 15}}, topology, {}, client_generation=16)
-        self.assertEqual(error.exception.code, "host_upgrade_required")
-        self.assertIn("generation 16", error.exception.detail)
-        with self.assertRaises(c.DeployError):
-            upgrades.check_feature_generation({"tools": {"generation": 16}}, topology, {}, client_generation=15)
-        explicit_false = declaration()
-        explicit_false["roles"][1]["listeners"]["control"]["wildcard"] = False
-        self.assertEqual(upgrades.feature_generation(t.parse_topology(explicit_false), {}), 16)
-        entry = {"deployment_selection": {"minimum_generation": 16}}
-        old = t.parse_topology(declaration())
-        self.assertEqual(upgrades.feature_generation(old, entry), 16)
-        self.assertEqual(upgrades.check_feature_generation({"tools": {"generation": 16}}, old, entry), 16)
-        with self.assertRaises(c.DeployError):
-            upgrades.check_feature_generation({"tools": {"generation": 15}}, old, entry)
 
     def test_wildcard_reserves_every_address_and_both_families(self):
         topology = t.parse_topology(confined_topology())

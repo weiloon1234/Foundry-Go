@@ -1,4 +1,4 @@
-"""Configuration trees reuse file validation, preparation, and capability gates."""
+"""Configuration trees reuse file validation and preparation."""
 from contextlib import nullcontext
 from dataclasses import replace
 import json
@@ -16,7 +16,6 @@ import contracts as c
 import runtime_config
 import services
 import topology as t
-import upgrades
 import test_config_templates
 from test_host_capabilities import declaration
 
@@ -84,26 +83,6 @@ class ConfigTreeDeclarationTests(unittest.TestCase):
             "bindings": {"/port": {"listener_port": "unknown"}}}}}}
         with self.assertRaises(c.DeployError):
             t.parse_topology(raw)
-
-    def test_generation_requires_both_peers_and_remains_sticky(self):
-        raw = declaration()
-        previous = upgrades.feature_generation(t.parse_topology(raw), {})
-        raw["roles"][1]["configs"] = {"settings": tree_declaration()}
-        parsed = t.parse_topology(raw)
-        self.assertEqual(upgrades.protocol()["generation"], c.FEATURE_CONFIG_TREE_GENERATION)
-        self.assertEqual(upgrades.feature_generation(parsed, {}), 19)
-        for host, client, code in ((18, 19, "host_upgrade_required"), (19, 18, "instance_capability_required")):
-            with self.subTest(host=host, client=client):
-                with self.assertRaises(c.DeployError) as caught:
-                    upgrades.check_feature_generation({"tools": {"generation": host}}, parsed, {}, client_generation=client)
-                self.assertEqual(caught.exception.code, code)
-                with self.assertRaises(c.DeployError):
-                    upgrades._check_feature_request({"tools": {"generation": host}, "instances": {}},
-                        {"topology": raw, "client": {"generation": client}}, "bootstrap-plan")
-        upgrades.check_feature_generation({"tools": {"generation": 19}}, parsed, {}, client_generation=19)
-        self.assertEqual(upgrades.feature_generation(t.parse_topology(declaration()), {}), previous)
-        self.assertEqual(upgrades.feature_generation(t.parse_topology(declaration()),
-                         {"deployment_selection": {"minimum_generation": 19}}), 19)
 
 
 class ConfigTreePreparationTests(unittest.TestCase):

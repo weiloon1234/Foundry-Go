@@ -220,7 +220,7 @@ class FeatureCopiesTests(FeatureWiringFixture):
         for identity, path in state_files.items():
             self.assertEqual(path.read_text(), identity.record_key)
         self.assertEqual(shared_file.read_text(), "shared cache")
-        self.assertEqual(c.DeploymentSelection.parse(entry["deployment_selection"]).minimum_generation, 18)
+        self.assertEqual(c.DeploymentSelection.parse(entry["deployment_selection"]).minimum_generation, 19)
 
     def test_failed_removed_copy_exit_does_not_record_disable_or_unlink(self):
         _, inventory = self.deploy_copies()

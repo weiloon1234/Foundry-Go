@@ -127,7 +127,7 @@ class CopyOperationsTests(unittest.TestCase):
         project, profile, entry = fixture()
         with patch.object(self.host, "read_registry", return_value={}), \
              patch.object(self.host, "require_identity", return_value=({}, entry)), \
-             patch("upgrades.check_client"), patch("upgrades.check_target_capabilities"), \
+             patch("upgrades.check_client"), \
              patch.object(operation_selection, "units", return_value={self.second: self.inventory.units[self.second]}), \
              patch.object(feature_lifecycle, "is_feature", return_value=True), \
              patch.object(feature_lifecycle, "request_operation", return_value={"ok": True, "status": "degraded"}) as operation:

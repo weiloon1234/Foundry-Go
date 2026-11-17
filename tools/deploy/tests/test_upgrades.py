@@ -56,9 +56,9 @@ class UpgradeTests(unittest.TestCase):
             path = self.source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("# test bundle\n")
-        self.metadata = {"protocol": {"major": 2, "minor": 0}, "generation": 18,
-                         "minimum_host_generation": 18, "minimum_client_generation": 18,
-                         "framework_version": "v0.38.3"}
+        self.metadata = {"protocol": {"major": 2, "minor": 0}, "generation": 19,
+                         "minimum_host_generation": 19, "minimum_client_generation": 19,
+                         "framework_version": "v0.42.1"}
         (self.source / "protocol.json").write_text(json.dumps(self.metadata))
         (self.source / "server/launcher.py").write_text(
             (Path(__file__).resolve().parents[1] / "server/launcher.py").read_text())
@@ -71,10 +71,10 @@ class UpgradeTests(unittest.TestCase):
         with self.host.lock("host"):
             return upgrades.install_tools(self.host, self.host.read_registry(), self.source, **kwargs)
 
-    def generation_18_runtime(self):
+    def same_generation_runtime(self):
         import services
         runtime_bytes = (Path(__file__).resolve().parents[1] / "server/runtime_v1.py").read_bytes()
-        self.metadata["generation"] = 18
+        self.metadata["generation"] = 19
         (self.source / "protocol.json").write_text(json.dumps(self.metadata))
         (self.source / "server/runtime_v1.py").write_bytes(runtime_bytes)
         self.host.registry["tools"] = upgrades._active_record(self.source, upgrades.tool_bundle(self.source)[2], None)
@@ -84,13 +84,13 @@ class UpgradeTests(unittest.TestCase):
         candidate = self.root / "candidate"
         import shutil
         shutil.copytree(self.source, candidate)
-        (candidate / "protocol.json").write_text(json.dumps({**self.metadata, "generation": 19}))
+        (candidate / "lib/candidate.py").write_text("# distinct same-generation bundle\n")
         return runtime, candidate
 
-    def test_generation_18_upgrade_preserves_runtime_and_invocation_pins_and_advances_boot(self):
+    def test_same_generation_upgrade_preserves_runtime_and_invocation_pins_and_advances_boot(self):
         import feature_network
         import operations
-        runtime, candidate = self.generation_18_runtime()
+        runtime, candidate = self.same_generation_runtime()
         old = self.host.registry["tools"].copy()
         pinned = upgrades._installed(self.host, old)
         boot = feature_network.boot_files(pinned, old["bundle_sha256"])
@@ -113,10 +113,10 @@ class UpgradeTests(unittest.TestCase):
                          feature_network.boot_files(candidate, self.host.registry["tools"]["bundle_sha256"]))
         self.assertNotEqual(self.host.paths.p(feature_network.BOOT_PATH).read_text(), boot[feature_network.BOOT_PATH])
 
-    def test_generation_18_to_19_and_same_generation_updates_advance_boot_before_selection(self):
+    def test_same_generation_updates_advance_boot_before_selection(self):
         import feature_network
         import services
-        self.metadata["generation"] = 18
+        self.metadata["generation"] = 19
         (self.source / "protocol.json").write_text(json.dumps(self.metadata))
         self.host.registry["tools"] = upgrades._active_record(self.source, upgrades.tool_bundle(self.source)[2], None)
         self.install()
@@ -125,7 +125,7 @@ class UpgradeTests(unittest.TestCase):
             self.host.owned_write(self.host.paths.p(name), content)
         self.host.owned_write(self.host.paths.p(services.RUNTIME_ENTRY), (self.source / "server/runtime_v1.py").read_bytes())
         select = upgrades._select
-        for revision, generation in enumerate((18, 19, 19)):
+        for revision, generation in enumerate((19, 19, 19)):
             with self.subTest(generation=generation, revision=revision):
                 (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": generation,
                     "framework_version": f"integration-{revision}"}))
@@ -143,7 +143,7 @@ class UpgradeTests(unittest.TestCase):
 
     def test_boot_advance_resumes_before_and_after_atomic_publication_and_reload(self):
         import feature_network
-        runtime, candidate = self.generation_18_runtime()
+        runtime, candidate = self.same_generation_runtime()
         old = self.host.registry["tools"].copy()
         pinned = upgrades._installed(self.host, old)
         for name, content in feature_network.boot_files(pinned, old["bundle_sha256"]).items():
@@ -185,7 +185,7 @@ class UpgradeTests(unittest.TestCase):
 
 
     def test_upgrade_refuses_unknown_installed_runtime_bytes(self):
-        runtime, candidate = self.generation_18_runtime()
+        runtime, candidate = self.same_generation_runtime()
         runtime.write_bytes(runtime.read_bytes() + b"# unknown edit\n")
         before = self.host.read_registry()
         with self.assertRaises(DeployError) as caught:
@@ -194,7 +194,7 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(self.host.read_registry(), before)
 
     def test_upgrade_refuses_changed_candidate_runtime_without_replacing_installed_bytes(self):
-        runtime, candidate = self.generation_18_runtime()
+        runtime, candidate = self.same_generation_runtime()
         before = runtime.read_bytes()
         (candidate / "server/runtime_v1.py").write_bytes(before + b"# different runtime\n")
         with self.assertRaises(DeployError) as caught:
@@ -202,7 +202,7 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "runtime_mismatch")
         self.assertEqual(runtime.read_bytes(), before)
 
-    def test_bundle_digest_keeps_generation_18_inventory_encoding(self):
+    def test_bundle_digest_keeps_inventory_encoding(self):
         import hashlib
         files = sorted(p for p in self.source.rglob("*") if p.is_file())
         inventory = [{"path": p.relative_to(self.source).as_posix(), "size": p.stat().st_size,
@@ -213,7 +213,7 @@ class UpgradeTests(unittest.TestCase):
     def test_check_client_accepts_registered_and_unregistered_feature_topologies(self):
         from test_host_capabilities import declaration
         from topology import validate_topology
-        self.host.registry["tools"]["generation"] = 18
+        self.host.registry["tools"]["generation"] = 19
         for templates, public_listeners in ((False, False), (True, False), (False, True), (True, True)):
             raw = declaration()
             if templates:
@@ -223,7 +223,7 @@ class UpgradeTests(unittest.TestCase):
                 raw["roles"][0]["bindings"] = {
                     "public": {"public_listener": {"role": "relay", "listener": "ingress"}}}
             for topology in (raw, validate_topology(raw)):
-                request = {"protocol": self.metadata["protocol"], "client": {"generation": 18},
+                request = {"protocol": self.metadata["protocol"], "client": {"generation": 19},
                            "topology": topology}
                 for action in ("bootstrap-plan", "release-plan", "activate"):
                     with self.subTest(templates=templates, public_listeners=public_listeners,
@@ -239,9 +239,8 @@ class UpgradeTests(unittest.TestCase):
         topology = validate_topology(raw)
         for action in ("bootstrap-plan", "release-plan", "activate"):
             for host_generation, client_generation, digest, code in (
-                    (14, 14, "0" * 64, "invalid_topology"),
-                    (13, 14, topology["sha256"], "host_upgrade_required"),
-                    (14, 13, topology["sha256"], "instance_capability_required")):
+                    (19, 19, "0" * 64, "invalid_topology"),
+                    (19, 18, topology["sha256"], "client_too_old")):
                 self.host.registry["tools"]["generation"] = host_generation
                 request = {"protocol": self.metadata["protocol"], "client": {"generation": client_generation},
                            "topology": {**topology, "sha256": digest}}
@@ -249,6 +248,38 @@ class UpgradeTests(unittest.TestCase):
                     with self.assertRaises(DeployError) as caught:
                         upgrades.check_client(self.host, request, action)
                     self.assertEqual(caught.exception.code, code)
+
+    def test_new_selections_use_protocol_floor_and_preserve_higher_stored_values(self):
+        for stored in (0, *range(12, 21)):
+            entry = {"deployment_selection": {"minimum_generation": stored}} if stored else {}
+            for archived in (0, 13, 18, 19, 20):
+                with self.subTest(stored=stored, archived=archived):
+                    self.assertEqual(max(19, stored, archived), upgrades.check_selection_generation(
+                        {"tools": {"generation": 20}}, entry, archived_minimum=archived))
+                    if max(stored, archived) > 19:
+                        with self.assertRaises(DeployError) as caught:
+                            upgrades.check_selection_generation({"tools": {"generation": 19}}, entry,
+                                                                archived_minimum=archived)
+                        self.assertEqual("host_upgrade_required", caught.exception.code)
+
+    def test_boot_writer_checks_stored_floor_against_selected_bundle(self):
+        import feature_network
+        from test_host_capabilities import declaration, selection
+        from topology import validate_topology
+        self.same_generation_runtime()
+        current = self.host.registry["tools"]
+        for name, content in feature_network.boot_files(self.source, current["bundle_sha256"]).items():
+            self.host.owned_write(self.host.paths.p(name), content)
+        for minimum in (13, 18, 19, 20):
+            self.host.registry["instances"] = {"feature": {"topology": validate_topology(declaration()),
+                "deployment_selection": {**selection(), "minimum_generation": minimum}}}
+            with self.subTest(minimum=minimum):
+                if minimum <= 19:
+                    feature_network.check_registry_writer(self.host, self.host.registry)
+                else:
+                    with self.assertRaises(DeployError) as caught:
+                        feature_network.check_registry_writer(self.host, self.host.registry)
+                    self.assertEqual("boot_coordinator_upgrade_required", caught.exception.code)
 
     def test_fresh_install_is_immutable_and_unchanged_retry_keeps_revision(self):
         self.assertEqual("succeeded", self.install()["outcome"])
@@ -341,7 +372,7 @@ class UpgradeTests(unittest.TestCase):
         with patch.object(upgrades, "_select", side_effect=OSError("injected interruption")):
             with self.assertRaises(OSError):
                 upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], operation)
-        request = {"protocol": self.metadata["protocol"], "client": {"generation": 18}}
+        request = {"protocol": self.metadata["protocol"], "client": {"generation": 19}}
         with self.assertRaises(DeployError) as caught:
             upgrades.check_client(self.host, request, "activate")
         self.assertEqual("tools_upgrade_pending", caught.exception.code)
@@ -460,23 +491,67 @@ class UpgradeTests(unittest.TestCase):
 
     def test_newer_client_refuses_host_but_allows_hello(self):
         self.install()
-        for generation, code in [(19, "host_upgrade_required"), (17, "client_too_old")]:
+        for generation, code in [(20, "host_upgrade_required"), (18, "client_too_old")]:
             request = {"protocol": {"major": 2, "minor": 0}, "client": {"generation": generation}}
             with self.assertRaises(DeployError) as caught:
                 upgrades.check_client(self.host, request, "activate")
             self.assertEqual(code, caught.exception.code)
             upgrades.check_client(self.host, request, "hello")
-        self.assertEqual({"minimum": 18, "maximum": 18}, upgrades.hello(self.host)["client_generation"])
+        self.assertEqual({"minimum": 19, "maximum": 19}, upgrades.hello(self.host)["client_generation"])
 
-    def test_generation_eighteen_upgrades_to_current(self):
+    def test_reads_reject_below_floor_clients_and_incompatible_protocol_major(self):
+        self.install()
+        for action in ("status", "tools-plan"):
+            for generation, major in ((18, 2), (20, 3)):
+                request = {"protocol": {"major": major, "minor": 0}, "client": {"generation": generation}}
+                with self.subTest(action=action, generation=generation, major=major), self.assertRaises(DeployError) as caught:
+                    upgrades.check_client(self.host, request, action)
+                self.assertEqual("client_too_old", caught.exception.code)
+
+    def test_newer_client_can_read_and_plan_with_a_higher_protocol_minor(self):
+        self.install()
+        for action in upgrades.READ_ACTIONS - {"hello"}:
+            for minor in (0, 1):
+                request = {"protocol": {"major": 2, "minor": minor}, "client": {"generation": 20}}
+                with self.subTest(action=action, minor=minor):
+                    upgrades.check_client(self.host, request, action)
+
+    def test_mutations_still_reject_higher_protocol_minor(self):
+        self.install()
+        request = {"protocol": {"major": 2, "minor": 1}, "client": {"generation": 19}}
+        with self.assertRaises(DeployError) as caught:
+            upgrades.check_client(self.host, request, "activate")
+        self.assertEqual("client_too_old", caught.exception.code)
+
+    def test_installed_bundle_cannot_lower_the_running_tools_client_floor(self):
+        self.metadata.update(minimum_host_generation=18, minimum_client_generation=18)
+        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+        self.host.registry["tools"] = upgrades._active_record(self.source, upgrades.tool_bundle(self.source)[2], None)
+        self.install()
+        request = {"protocol": self.metadata["protocol"], "client": {"generation": 18}}
+        for action in (upgrades.READ_ACTIONS - {"hello"}) | {"activate", "tools-apply", "upgrade-resume"}:
+            with self.subTest(action=action), self.assertRaises(DeployError) as caught:
+                upgrades.check_client(self.host, request, action)
+            self.assertEqual("client_too_old", caught.exception.code)
+
+    def test_supported_reads_remain_available_during_pending_mutations(self):
+        self.install()
+        self.host.registry["tools"]["upgrade_operation"] = str(uuid.uuid4())
+        request = {"protocol": self.metadata["protocol"], "client": {"generation": 19}}
+        with patch("capacity.require_idle", side_effect=AssertionError("mutation guard")):
+            for action in upgrades.READ_ACTIONS:
+                with self.subTest(action=action):
+                    upgrades.check_client(self.host, request, action)
+
+    def test_generation_nineteen_upgrades_to_current(self):
         self.assert_upgrade_to_current()
 
     def assert_upgrade_to_current(self):
         actual = Path(__file__).resolve().parents[1]
         metadata = upgrades.protocol(actual)
         self.assertEqual(metadata["generation"], 19)
-        self.assertEqual(18, metadata["minimum_host_generation"])
-        self.assertEqual(18, metadata["minimum_client_generation"])
+        self.assertEqual(19, metadata["minimum_host_generation"])
+        self.assertEqual(19, metadata["minimum_client_generation"])
         _, files, _ = upgrades.tool_bundle(actual)
         self.assertIn(actual / "lib/maintenance.py", files)
         self.assertIn(actual / "lib/uploads.py", files)
@@ -489,17 +564,18 @@ class UpgradeTests(unittest.TestCase):
         result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
         self.assertEqual("succeeded", result["outcome"])
         self.assertEqual(metadata["generation"], self.host.read_registry()["tools"]["generation"])
-        self.assertEqual({"minimum": 18, "maximum": metadata["generation"]}, upgrades.hello(self.host)["client_generation"])
+        self.assertEqual({"minimum": 19, "maximum": metadata["generation"]}, upgrades.hello(self.host)["client_generation"])
         for old_generation in (18,):
             self.metadata["generation"] = old_generation
-            (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+            (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "minimum_host_generation": 18,
+                "minimum_client_generation": 18}))
             with self.assertRaises(DeployError) as caught:
                 upgrades.plan_upgrade(self.host, self.source)
-            self.assertEqual(caught.exception.code, "tools_downgrade")
+            self.assertEqual(caught.exception.code, "tools_upgrade_floor")
 
 
-    def test_generation_eighteen_requires_upload_files(self):
-        (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": 18}))
+    def test_supported_bundle_requires_upload_files(self):
+        (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": 19}))
         for name in ("lib/uploads.py", "server/templates/nginx-upload.conf"):
             with self.subTest(name=name):
                 path = self.source / name
@@ -514,14 +590,14 @@ class UpgradeTests(unittest.TestCase):
 
     def test_below_floor_refuses_planning_and_installation_before_writes(self):
         self.install()
-        self.host.registry['tools']['generation'] = 17
+        self.host.registry['tools']['generation'] = 18
         before = self.host.read_registry()
         for action in (lambda: upgrades.plan_upgrade(self.host, self.source),
                        lambda: self.install(allow_upgrade=True)):
             with self.assertRaises(DeployError) as caught:
                 action()
             self.assertEqual('tools_upgrade_floor', caught.exception.code)
-            self.assertIn('must already run generation 18 tools', caught.exception.detail)
+            self.assertIn('must already run generation 19 tools', caught.exception.detail)
             self.assertEqual(before, self.host.read_registry())
 
     def test_candidate_python_inventory_contains_only_runtime_and_shipped_rehearsal_modules(self):
@@ -532,8 +608,8 @@ class UpgradeTests(unittest.TestCase):
                          'lib/rehearsal_storage.py', 'lib/release_review.py', 'lib/disposable.py'})
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
-    def test_supported_bundles_require_the_generation_18_inventory(self):
-        for generation in (18, 19):
+    def test_supported_bundles_require_the_complete_inventory(self):
+        for generation in (19,):
             with self.subTest(generation=generation):
                 (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": generation}))
                 _, files, _ = upgrades.tool_bundle(self.source)
@@ -550,7 +626,7 @@ class UpgradeTests(unittest.TestCase):
                         path.write_bytes(data)
 
     def test_below_floor_bundle_is_rejected(self):
-        for generation in range(1, 18):
+        for generation in range(1, 19):
             (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": generation,
                 "minimum_host_generation": 1, "minimum_client_generation": 1}))
             with self.assertRaises(DeployError) as caught:
@@ -976,32 +1052,22 @@ class UpgradeTests(unittest.TestCase):
                             child.unlink()
                         path.rmdir()
 
-    def test_generation_eighteen_candidate_cannot_reselect_a_after_a_b_c_pruning(self):
-        first = self.install()
+    def test_generation_eighteen_candidate_is_rejected_before_history_reads(self):
+        self.install()
         baseline = self.root / 'baseline'
         import shutil
         shutil.copytree(self.source, baseline)
-        self.metadata['generation'] = 19
-        (self.source / 'protocol.json').write_text(json.dumps(self.metadata))
-        second = self.install(allow_upgrade=True)
-        (self.source / 'lib/change.py').write_text('# C\n')
-        third = self.install(allow_upgrade=True)
-        self.assertEqual([third['operation_id']], [path.name for path in self.host.paths.p(HOST_PATHS['upgrades']).iterdir()])
-        self.assertIn(first['bundle_sha256'], upgrades._retired_bundles(self.host))
-        self.assertIn(second['bundle_sha256'], upgrades._retired_bundles(self.host))
+        (baseline / 'protocol.json').write_text(json.dumps({**self.metadata, 'generation': 18,
+            'minimum_host_generation': 18, 'minimum_client_generation': 18}))
         before = self.host.read_registry()
-        # The generation guard must refuse a downgrade before either history
-        # mechanism is consulted.
         with patch.object(upgrades, '_retired_bundles', side_effect=AssertionError('history read')), \
                 patch.object(upgrades, '_upgrade_journals', side_effect=AssertionError('history read')):
             for action in (lambda: upgrades.plan_upgrade(self.host, baseline),
                            lambda: upgrades.apply_upgrade(self.host, baseline, 'old-plan', str(uuid.uuid4()))):
                 with self.assertRaises(DeployError) as caught:
                     action()
-                self.assertEqual('tools_downgrade', caught.exception.code)
+                self.assertEqual('tools_upgrade_floor', caught.exception.code)
         self.assertEqual(before, self.host.read_registry())
-        for action in ('activate', 'restart', 'down', 'up'):
-            upgrades.check_client(self.host, {'protocol': self.metadata['protocol'], 'client': {'generation': 18}}, action)
 
     def test_upgrade_preserves_old_registration_and_reloads_units_for_current_clients(self):
         import provision
@@ -1029,10 +1095,10 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(self.host.paths.tools / 'tools' / result['bundle_sha256'], reinstall.call_args.args[3])
         self.assertIn(['systemctl', 'daemon-reload'], [call.args[0] for call in run.call_args_list])
         self.assertEqual(3, self.host.read_registry()['instances'][profile['instance_id']]['client_generation'])
-        for generation in (18, 19):
+        for generation in (19,):
             upgrades.check_client(self.host, {"protocol": self.metadata["protocol"], "client": {"generation": generation}}, "activate")
         with self.assertRaises(DeployError) as caught:
-            upgrades.check_client(self.host, {"protocol": self.metadata["protocol"], "client": {"generation": 17}}, "activate")
+            upgrades.check_client(self.host, {"protocol": self.metadata["protocol"], "client": {"generation": 18}}, "activate")
         self.assertEqual(caught.exception.code, "client_too_old")
 
 

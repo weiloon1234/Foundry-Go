@@ -106,22 +106,22 @@ class LocalDeploymentTests(unittest.TestCase):
         project, profile = fixture()
         for action in ('tools-plan', 'tools-apply', 'upgrade-resume'):
             remote = MagicMock()
-            remote.request.return_value = {'tools': {'generation': 17}, 'client_generation': {'maximum': 17}}
+            remote.request.return_value = {'tools': {'generation': 18}, 'client_generation': {'maximum': 18}}
             with patch.dict(os.environ, {'ACTION': action}, clear=True), \
                     patch.object(cli, 'SSH', return_value=remote):
-                with self.assertRaisesRegex(cli.LocalError, 'tools_upgrade_floor:.*must already run generation 18 tools'):
+                with self.assertRaisesRegex(cli.LocalError, 'tools_upgrade_floor:.*must already run generation 19 tools'):
                     cli.deploy(project, profile, {})
             remote.request.assert_called_once_with('hello', {'project': project, 'profile': profile})
             remote.staged_tools.assert_not_called()
 
-    def test_tool_plan_stages_after_installed_generation_eighteen_is_observed(self):
+    def test_tool_plan_stages_after_installed_generation_nineteen_is_observed(self):
         project, profile = fixture()
         remote = MagicMock()
         remote.staged_tools.return_value.__enter__.return_value = '/candidate'
         def request(action, payload, tools=None):
             if action == 'hello':
                 remote.staged_tools.assert_not_called()
-                return {'tools': {'generation': 18}}
+                return {'tools': {'generation': 19}}
             self.assertEqual('tools-plan', action)
             self.assertEqual('/candidate', tools)
             return {'plan_token': 'reviewed'}
@@ -1464,20 +1464,17 @@ class LocalDeploymentTests(unittest.TestCase):
         self.assertEqual(rollbacks[0]["operation_id"], operation)
 
 
-class ConfinedReleaseToolTests(unittest.TestCase):
-    def test_generation_fifteen_host_gets_upgrade_message_before_upload_or_target_parse(self):
-        from types import SimpleNamespace
-        import contracts
-        from test_network_confinement import confined_topology
+class ReleaseToolFloorTests(unittest.TestCase):
+    def test_below_floor_host_is_refused_before_upload(self):
         remote = MagicMock()
-        remote.request.return_value = {"tools": {"generation": 15}}
-        with patch.object(contracts.ReleaseDeclaration, "parse", return_value=SimpleNamespace(topology_json=confined_topology(), profile_json="{}")):
-            with self.assertRaisesRegex(cli.LocalError, "host_upgrade_required: Upgrade the host tools to generation 16"):
-                cli.check_release_tools(remote, {}, {"schema": 2, "deployment": {}}, {})
-            remote.request.assert_called_once_with("hello", {})
-            remote.upload.assert_not_called()
-            remote.request.return_value = {"tools": {"generation": 16}}
+        remote.request.return_value = {"tools": {"generation": 18}}
+        with self.assertRaisesRegex(cli.LocalError, "tools_upgrade_floor:.*generation 19"):
             cli.check_release_tools(remote, {}, {"schema": 2, "deployment": {}}, {})
+        remote.request.assert_called_once_with("hello", {})
+        remote.upload.assert_not_called()
+        remote.request.return_value = {"tools": {"generation": 19}}
+        cli.check_release_tools(remote, {}, {"schema": 2, "deployment": {}}, {})
+
 
 
 if __name__ == "__main__":

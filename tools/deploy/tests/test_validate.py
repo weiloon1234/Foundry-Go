@@ -295,7 +295,7 @@ class OfflineValidationTests(unittest.TestCase):
                 (self.root / "deploy/files/relay.json").write_text(source)
                 status, result = self.invoke()
                 self.assertEqual(status, 0, result)
-                self.assertEqual(result["minimum_generation"], 14)
+                self.assertEqual(result["minimum_generation"], 19)
                 self.assertNotIn("synthetic-secret", json.dumps(result))
 
     def test_invalid_json_pointer_binding(self):
@@ -333,7 +333,7 @@ class OfflineValidationTests(unittest.TestCase):
         self.write("deploy/environments/acceptance.json", value)
         status, result = self.invoke()
         self.assertEqual(status, 0, result)
-        self.assertEqual(result["minimum_generation"], 18)
+        self.assertEqual(result["minimum_generation"], 19)
 
     def test_rehearsal_binding(self):
         value = self.read("deploy/acceptance-lab-bindings.json")
@@ -490,7 +490,7 @@ class OfflineValidationTests(unittest.TestCase):
         raw = self.feature()
         raw["roles"][1]["listeners"]["ingress"]["proxy_protocol"] = "v1"
         self.write("deploy/topology.json", raw)
-        self.assertEqual(self.invoke()[1]["minimum_generation"], 18)
+        self.assertEqual(self.invoke()[1]["minimum_generation"], 19)
         raw["roles"][1]["readiness"]["listener"] = "ingress"
         self.write("deploy/topology.json", raw)
         self.failed("topology", "invalid_topology")

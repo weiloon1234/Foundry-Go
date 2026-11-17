@@ -89,14 +89,12 @@ def _unused_template(unit: dict) -> bool:
             and not unit.get("DropInPaths"))
 
 
-def _package_template_pending(host: Host, registry: dict) -> bool:
-    if registry.get("tools", {}).get("generation", 0) < 12:
-        return False
+def _package_template_pending(host: Host) -> bool:
     from packages import default_activation_pending
     return default_activation_pending(host, REDIS_TEMPLATE)
 
 
-def _reserved_template(host: Host, registry: dict, unit: dict) -> bool:
+def _reserved_template(host: Host, unit: dict) -> bool:
     if (unit.get("LoadState") != "masked" or unit.get("ActiveState") != "inactive"
             or unit.get("MainPID") != "0" or unit.get("DropInPaths")):
         return False
@@ -107,7 +105,7 @@ def _reserved_template(host: Host, registry: dict, unit: dict) -> bool:
             path = host.paths.p(directory) / name
             if path.exists() or path.is_symlink():
                 return False
-    return _package_template_pending(host, registry)
+    return _package_template_pending(host)
 
 
 def _port_busy(host: Host) -> bool:
@@ -142,7 +140,7 @@ def inspect(host: Host, registry: dict, *, capacity_target=None) -> dict:
     """Inspect dedicated metadata only; no requests ever reach foreign Redis."""
     shared, claim = _service_claim(host, registry)
     unit = _unit(host)
-    unused = _unused_template(unit) or _reserved_template(host, registry, unit)
+    unused = _unused_template(unit) or _reserved_template(host, unit)
     paths = ("/etc/foundry/redis", REDIS_DATA, REDIS_UNIT_PATH)
     present = any(check_path(host.paths.p(path)).exists() for path in paths)
     if not shared and not claim:
@@ -306,7 +304,7 @@ def prepare(host: Host, registry: dict) -> None:
               if not host.paths.p("/usr/bin/" + binary).is_file()]
     if needed:
         install_missing(host, needed)
-    if _package_template_pending(host, registry):
+    if _package_template_pending(host):
         authorize_default_activation(host, REDIS_TEMPLATE,
                                      {**shared, "installed_by_foundry": True, "unit": REDIS_TEMPLATE})
         inspect(host, registry)

@@ -20,7 +20,7 @@ import services
 from copy_enablement import record_removed_copy_enablement
 from contracts import unit_selection_names, unit_selection_identities
 from contracts import (AdmissionDisposition, AdmissionRecord, Deployment,
-                       DeploymentSelection, DeployError, FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, HostTransition,
+                       DeploymentSelection, DeployError, FEATURE_CAPABILITIES, HostTransition,
                        ProcessIdentity, ReleaseDeclaration, ResolvedBundleBinding, ResolvedEndpointBinding,
                        ResolvedExecutableBinding, RoleBindings, RuntimeResolution, UnitIdentity, UnitSpec,
                        ValidationPermit, atomic_json, atomic_write, canonical_digest, check_path, contract_uuid,
@@ -544,8 +544,8 @@ def named_selection(host, entry, inventory, selection, action, request):
 def transition(host, registry, entry, inventory, state, attempt, *, stop_only=False,
                names=None, configuration=None, launch=None, review=None, maintenance_request=None):
     import release
-    from upgrades import check_feature_generation
-    minimum_generation = check_feature_generation(registry, inventory.topology, entry, profile=inventory.profile)
+    from upgrades import check_selection_generation
+    minimum_generation = check_selection_generation(registry, entry)
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
     old = entry.get("deployment_selection", {}).get("selected_resolution_id", inventory.resolution.id)
     previous = load(host, entry)[2] if "deployment_selection" in entry else inventory
@@ -927,8 +927,8 @@ def execute(host, request, *, pin=None):
     feature_network.capability()
     with host.lock("host"), host.lock(profile["instance_id"]):
         registry, entry = host.require_identity(project, profile)
-        require(is_feature(entry) and registry["tools"]["generation"] >= FEATURE_LIFECYCLE_GENERATION,
-                "capability_unavailable", "Feature execution requires the generation-13 lifecycle release.")
+        require(is_feature(entry),
+                "capability_unavailable", "Feature execution requires a feature instance.")
         state = host.load_state(entry)
         admission.AdmissionStore(host, profile["instance_id"]).require_cleanup_clear(request["operation_id"])
         release.require_idle(state)

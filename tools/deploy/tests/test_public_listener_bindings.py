@@ -2,9 +2,8 @@
 import copy
 from dataclasses import FrozenInstanceError
 import os
-from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 import uuid
 
 from test_host_capabilities import declaration, profile
@@ -45,36 +44,6 @@ class PublicListenerBindingTests(unittest.TestCase):
         with self.assertRaisesRegex(c.DeployError, "runtime descriptor"):
             t.parse_topology(raw)
 
-    def test_public_bindings_alone_require_generation_fourteen(self):
-        raw = self.declaration()
-        parsed = t.parse_topology(raw)
-        self.assertEqual(upgrades.feature_generation(t.parse_topology(declaration()), {}), 13)
-        self.assertEqual(upgrades.feature_generation(parsed, {}), 14)
-        request = {"topology": raw, "client": {"generation": 14}}
-        host = {"tools": {"generation": 13}, "instances": {}}
-        with self.assertRaisesRegex(c.DeployError, "generation 14") as caught:
-            upgrades._check_feature_request(host, request, "bootstrap-plan")
-        self.assertEqual(caught.exception.code, "host_upgrade_required")
-        host["tools"]["generation"] = 14
-        with self.assertRaisesRegex(c.DeployError, "generation 14") as caught:
-            upgrades._check_feature_request(host, {**request, "client": {"generation": 13}}, "bootstrap-plan")
-        self.assertEqual(caught.exception.code, "instance_capability_required")
-        upgrades._check_feature_request(host, request, "bootstrap-plan")
-        self.assertEqual(upgrades.feature_generation(t.parse_topology(declaration()),
-            {"deployment_selection": {"minimum_generation": 14}}), 14)
-
-    def test_recovery_gate_reads_archived_capabilities_and_sticky_floor(self):
-        import recover
-        host = Mock()
-        host.read_registry.return_value = None
-        request = {"client": {"generation": 13}, "project": {}, "profile": {}, "recovery_archive": "/private/input"}
-        for topology, floor in ((self.declaration(), 13), (declaration(), 14)):
-            recovered = {"feature": SimpleNamespace(topology=t.parse_topology(topology)),
-                         "metadata": {"profile": {}, "deployment_selection": {"minimum_generation": floor}}}
-            with self.subTest(floor=floor), patch.object(recover, "read_archive", return_value={}), \
-                    patch.object(recover, "archive_configuration", return_value=recovered), \
-                    self.assertRaisesRegex(c.DeployError, "generation 14"):
-                upgrades.check_target_capabilities(host, request, "recover-plan")
 
     def test_record_roundtrip_and_legacy_wire_shape(self):
         legacy = {"schema": 1, "role": "http", "executables": [], "endpoints": [], "bundles": []}
@@ -123,18 +92,11 @@ class PublicListenerDeliveryTests(wiring.FeatureWiringFixture):
         self.assertFalse(wiring.operations.directory(self.host, operation).exists())
         self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
         registry, entry = self.host.require_identity(self.project, self.profile)
-        self.assertEqual(entry["deployment_selection"]["minimum_generation"], 14)
-        # Isolate the retained-target gate from the current selection's sticky gate.
-        older_entry = copy.deepcopy(entry)
-        older_entry["deployment_selection"]["minimum_generation"] = 13
-        with patch.object(self.host, "require_identity", return_value=(registry, older_entry)), \
-                self.assertRaisesRegex(c.DeployError, "generation 14"):
-            upgrades.check_target_capabilities(self.host, {"project": self.project, "profile": self.profile,
-                "client": {"generation": 13}, "target": self.version}, "rollback")
+        self.assertEqual(entry["deployment_selection"]["minimum_generation"], 19)
         wiring.FeatureWiringTests.rollback_target(self, old_version)
         _, entry = self.host.require_identity(self.project, self.profile)
-        self.assertEqual(entry["deployment_selection"]["minimum_generation"], 14)
-        with self.assertRaisesRegex(c.DeployError, "generation 14"):
+        self.assertEqual(entry["deployment_selection"]["minimum_generation"], 19)
+        with self.assertRaisesRegex(c.DeployError, "generation 19"):
             upgrades.check_instance_capabilities(entry, 13)
 
     def test_descriptor_uses_profile_values_and_changed_binding_replaces_consumer(self):

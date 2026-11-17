@@ -1180,16 +1180,11 @@ def maintenance_parameters(action):
 def check_release_tools(ssh, request, manifest, entry):
     if manifest.get("schema") != 2:
         return
-    from contracts import ReleaseDeclaration
-    from topology import parse_topology
-    from upgrades import check_feature_generation
-    declaration = ReleaseDeclaration.parse(manifest["deployment"])
-    topology = parse_topology(declaration.topology_json)
+    from upgrades import check_selection_generation
     installed = ssh.request("hello", request)
     try:
-        from contracts import contract_document
-        candidate = contract_document(declaration.profile_json)
-        check_feature_generation({"tools": installed["tools"]}, topology, entry, profile=candidate)
+        check_upgrade_generation(installed["tools"])
+        check_selection_generation({"tools": installed["tools"]}, entry)
     except DeployError as error:
         raise LocalError(f"{error.code}: {error.detail}") from None
 

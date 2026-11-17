@@ -12,7 +12,7 @@ from contracts import DeployError, MAX_JSON, check_path, require, slug, validate
 from declaration_inputs import load_profile, read_declaration, read_declaration_json
 from runtime_config import MAX_SERVICE_CONFIG_BYTES, MAX_VALUE_BYTES, render_service_config
 from topology import ArgumentKind, ExecutableRole, parse_profile, parse_topology
-from upgrades import feature_generation, protocol, upload_generation
+from upgrades import protocol
 
 
 @dataclass(frozen=True)
@@ -129,8 +129,7 @@ def validate_declarations(root: Path, environment: str | None = None, bindings: 
             else:
                 parsed = item.run(lambda: parse_profile(value, topology, project))
                 if parsed is not None:
-                    item.minimum_generation = (feature_generation(topology, {}, profile=value) if topology.schema == 2
-                                               else max(protocol()["minimum_client_generation"], upload_generation({"profile": value})))
+                    item.minimum_generation = protocol()["minimum_client_generation"]
         release = check("release", "deploy/topology.json", name)
         if parsed is None:
             release.skip()

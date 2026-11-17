@@ -45,9 +45,8 @@ class FeatureRecoveryAcceptanceTests(unittest.TestCase):
         with patch.object(feature, "read_json", return_value=profile):
             feature.feature_archive(source, self.archive, entry["host_id"], confined=True, copies=3)
 
-    def test_confined_wildcard_fixture_has_valid_versioned_executable_and_generation(self):
+    def test_confined_wildcard_fixture_has_valid_versioned_executable(self):
         from test_contracts import fixture
-        import upgrades
         profile = fixture()[1]
         with patch.object(feature, "read_json", return_value=profile):
             _, _, declaration, _ = feature.feature_archive(self.root / "input.tar.gz", self.archive,
@@ -58,7 +57,6 @@ class FeatureRecoveryAcceptanceTests(unittest.TestCase):
         self.assertTrue(role.executable.package.endswith("-minimal"))
         self.assertIn(role.executable.path.removeprefix("/usr/bin/"), role.executable.package)
         compile(role.arguments[2].value, "wildcard-fixture", "exec")
-        self.assertEqual(upgrades.feature_generation(declaration, {}), 19)
 
     def test_state_variants_remain_valid_and_preserve_payload_and_source(self):
         original = digest(self.archive)

@@ -102,9 +102,9 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
         if not rollback:
             target_path = target
         topology = parse_topology(declaration.topology_json)
-        from upgrades import check_feature_generation
+        from upgrades import check_selection_generation
         target_profile = release.target_declaration(host, entry, manifest)["profile"]
-        check_feature_generation(registry, topology, entry, profile=target_profile)
+        check_selection_generation(registry, entry)
         candidate_profile = parse_profile(target_profile, topology)
         import feature_maintenance
         feature_maintenance.stopped_roles(topology)
