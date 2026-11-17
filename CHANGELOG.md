@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.43.2 — 2026-11-17
+
+- Dependency updates: `github.com/andybalholm/brotli` v1.3.0, `github.com/gen2brain/vpx`
+  v0.2.2, `golang.org/x/crypto` v0.59.0, `github.com/aws/aws-sdk-go-v2/config` v1.33.18
+  and `github.com/jackc/pgx/v5` v5.13.0, with `golang.org/x/text` v0.44.0,
+  `golang.org/x/sys` v0.50.0 and `golang.org/x/sync` v0.25.0. The TypeScript tooling
+  uses jsdom 31.0.1. Consumers pick these up as minimum versions when they update
+  their Foundry-Go pin.
+- WebP decoding now rejects a VP8 chunk that is not a key frame (`vpx` v0.2.2). The
+  WebP format requires key frames, so only malformed files are affected.
+
 ## v0.43.1 — 2026-11-17
 
 - Tool plans on hosts with any feature instance now list no bundle or upgrade

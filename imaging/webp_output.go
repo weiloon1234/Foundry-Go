@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-// vpx v0.2.1 writes the chunk's first letter as odd-length RIFF padding.
+// vpx v0.2.1 and v0.2.2 write the chunk's first letter as odd-length RIFF padding.
 // Canonicalize only those padding bytes at the trusted encoder boundary,
 // retaining strict container validation for untrusted inputs. This streaming
 // writer uses constant space and handles arbitrary Write boundaries.

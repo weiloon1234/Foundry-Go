@@ -7,7 +7,7 @@ tool github.com/weiloon1234/Foundry-Go/cmd/foundry
 require (
 	foundry.test/pluginbase v0.0.0
 	foundry.test/plugindep v0.0.0
-	github.com/andybalholm/brotli v1.2.8
+	github.com/andybalholm/brotli v1.3.0
 	github.com/weiloon1234/Foundry-Go v0.0.0
 )
 
@@ -15,7 +15,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.48.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.27 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.33.6 // indirect
+	github.com/aws/aws-sdk-go-v2/config v1.33.18 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.21.0 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.20.9 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.12 // indirect
@@ -36,11 +36,11 @@ require (
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/disintegration/gift v1.2.1 // indirect
 	github.com/gen2brain/gav1d v0.2.5 // indirect
-	github.com/gen2brain/vpx v0.2.1 // indirect
+	github.com/gen2brain/vpx v0.2.2 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.12.0 // indirect
+	github.com/jackc/pgx/v5 v5.13.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/nyaruka/phonenumbers/v2 v2.0.16 // indirect
@@ -48,12 +48,12 @@ require (
 	github.com/redis/go-redis/v9 v9.22.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/image v0.46.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
