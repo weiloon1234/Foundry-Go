@@ -14,12 +14,14 @@ import (
 // always work and an installed libvips runtime adds native capabilities.
 // LibvipsBackend requires discovery to succeed at construction. PortableBackend
 // disables native discovery. No custom build tag or libvips headers are needed.
-type Backend uint8
+//
+//foundry:enum
+type Backend string
 
 const (
-	PortableBackend Backend = iota
-	LibvipsBackend
-	AutoBackend
+	PortableBackend Backend = "portable"
+	LibvipsBackend  Backend = "libvips"
+	AutoBackend     Backend = "auto"
 )
 
 // ErrNativeUnavailable matches a missing, disabled or incompatible native runtime,

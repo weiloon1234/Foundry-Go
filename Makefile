@@ -1,7 +1,7 @@
 GO ?= go
 TEST_PACKAGE_BATCH_SIZE ?= 6
 TEST_TIMEOUT ?= 20m
-GENERATION_DIRS := logging cloud/credentials infrastructure application internal/auditstore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/webhookstore webhook/capture httpclient/capture countries datatable database/orm/internal/enuminit telemetry tests/fixtures/consumer tests/fixtures/goway
+GENERATION_DIRS := logging cloud/credentials infrastructure imaging application internal/auditstore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/webhookstore webhook/capture httpclient/capture countries datatable database/orm/internal/enuminit telemetry tests/fixtures/consumer tests/fixtures/goway
 FIXTURE_DIRS := tests/fixtures/plugin_base tests/fixtures/plugin_dep tests/fixtures/consumer tests/fixtures/goway
 export GOWORK := off
 # Nested modules do not inherit the root module's preferred toolchain.
@@ -31,9 +31,13 @@ endef
 
 # Framework-owned DTO and configuration outputs precede consumer generation so
 # a fresh checkout can bootstrap metadata without relying on existing output.
+# Imaging declarations use its portable build; generation cannot load cgo packages.
 define generate_packages
-set -eu; for task_generate_dir in $(GENERATION_DIRS); do \
-	$(GO) run ./cmd/foundry generate --recursive $(1) --dir "$$task_generate_dir"; \
+set -eu; task_generate_default_cgo=$$($(GO) env CGO_ENABLED); \
+for task_generate_dir in $(GENERATION_DIRS); do \
+	task_generate_cgo=$$task_generate_default_cgo; \
+	if [ "$$task_generate_dir" = imaging ]; then task_generate_cgo=0; fi; \
+	CGO_ENABLED=$$task_generate_cgo $(GO) run ./cmd/foundry generate --recursive $(1) --dir "$$task_generate_dir"; \
 done
 endef
 

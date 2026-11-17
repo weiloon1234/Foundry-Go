@@ -2844,7 +2844,7 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 			Image: SettingsAppImageConfigKeySet{
 				Enabled: config.Scalar[Settings, bool]("app.image.enabled", func(settings *Settings) *bool { return &settings.App.Image.Enabled }),
 				Config: SettingsAppImageConfigConfigKeySet{
-					Backend: config.Scalar[Settings, imaging.Backend]("app.image.config.backend", func(settings *Settings) *imaging.Backend { return &settings.App.Image.Config.Backend }),
+					Backend: config.Enum[Settings, imaging.Backend]("app.image.config.backend", func(settings *Settings) *imaging.Backend { return &settings.App.Image.Config.Backend }, (imaging.Backend("")).EnumDescriptor()),
 					Limits: SettingsAppImageConfigLimitsConfigKeySet{
 						InputBytes:   config.Scalar[Settings, int64]("app.image.config.limits.input_bytes", func(settings *Settings) *int64 { return &settings.App.Image.Config.Limits.InputBytes }),
 						OutputBytes:  config.Scalar[Settings, int64]("app.image.config.limits.output_bytes", func(settings *Settings) *int64 { return &settings.App.Image.Config.Limits.OutputBytes }),

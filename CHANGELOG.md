@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.44.0 — 2026-11-17
+
+- `imaging.Backend` is now a string enum. Configuration files spell it `"auto"`,
+  `"portable"` or `"libvips"`; numeric values are rejected. The zero value is no
+  longer a valid backend: use `DefaultConfig()` or set it explicitly.
+
 ## v0.43.2 — 2026-11-17
 
 - Dependency updates: `github.com/andybalholm/brotli` v1.3.0, `github.com/gen2brain/vpx`

@@ -449,7 +449,12 @@ When the runtime is missing, unloadable or incompatible:
 Use `settings.Image.Config.Backend = imaging.LibvipsBackend` to require the native
 runtime and fail construction/startup if it cannot load. Use `PortableBackend`
 to disable discovery deliberately and suppress the missing-runtime warning.
-These selections use the same Foundry API.
+Configuration files use the enum names:
+
+```toml
+[app.image.config]
+backend = "portable" # or "libvips" or "auto" (default)
+```
 
 The native bridge requires a cgo-enabled binary on macOS, Linux, FreeBSD or Windows;
 ordinary native Go builds enable cgo when a C compiler is available.

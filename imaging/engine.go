@@ -36,7 +36,7 @@ func New(config Config) (*Engine, error) {
 		return nil, err
 	}
 	formats := portableFormats()
-	capabilities := Capabilities{Formats: formats[:]}
+	capabilities := Capabilities{Backend: PortableBackend, Formats: formats[:]}
 	var nativeErr error
 	if config.Backend != PortableBackend {
 		native, err := nativeCapabilities()

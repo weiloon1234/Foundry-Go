@@ -31,7 +31,7 @@ func TestPortableBackendRejectsNativePlans(t *testing.T) {
 		t.Fatal("capability snapshot was borrowed")
 	}
 	config := DefaultConfig()
-	config.Backend = Backend(255)
+	config.Backend = Backend("unknown")
 	if _, err := New(config); err == nil {
 		t.Fatal("unknown backend accepted")
 	}
@@ -103,4 +103,30 @@ func FuzzNativeImageHeaders(f *testing.F) {
 			_ = validateNativeSVG(data)
 		}
 	})
+}
+
+func TestBackendConfigurationMembership(t *testing.T) {
+	if DefaultConfig().Backend != AutoBackend {
+		t.Fatal("default backend must be automatic")
+	}
+	for _, backend := range BackendValues() {
+		config := DefaultConfig()
+		config.Backend = backend
+		if err := config.Validate(); err != nil {
+			t.Fatalf("declared backend %q rejected: %v", backend, err)
+		}
+		if parsed, err := ParseBackend(string(backend)); err != nil || parsed != backend {
+			t.Fatalf("backend %q did not round trip: %v", backend, err)
+		}
+	}
+	for _, backend := range []Backend{"", "unknown", "0", "1", "2"} {
+		config := DefaultConfig()
+		config.Backend = backend
+		if err := config.Validate(); err == nil || err.Error() != invalid("invalid image engine configuration").Error() {
+			t.Fatalf("invalid backend %q changed the configuration fault: %v", backend, err)
+		}
+		if _, err := ParseBackend(string(backend)); err == nil {
+			t.Fatalf("invalid backend %q parsed", backend)
+		}
+	}
 }

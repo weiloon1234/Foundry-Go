@@ -1855,6 +1855,13 @@ type SettingsAppFeaturesWebhookCaptureConfigConfigKeySet struct {
 	// with http.FullCaptureBody.
 	//
 	ForceRedacted config.Key[Settings, bool]
+	// MaskNames selects app.features.webhook_capture.config.mask_names. Set accepts []string.
+	//
+	// MaskNames adds credential names for headers, query values and body
+	// fields, matched exactly and case-insensitively (at most 64, each 1 to
+	// 128 bytes).
+	//
+	MaskNames config.Key[Settings, []string]
 	// Rate selects app.features.webhook_capture.config.rate. Set accepts int.
 	//
 	// Rate admits at most this many captures per second per process (1 to
@@ -2828,6 +2835,7 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 						BodyBytes:     config.Scalar[Settings, int]("app.features.webhook_capture.config.body_bytes", func(settings *Settings) *int { return &settings.App.Features.WebhookCapture.Config.BodyBytes }),
 						ValueBytes:    config.Scalar[Settings, int]("app.features.webhook_capture.config.value_bytes", func(settings *Settings) *int { return &settings.App.Features.WebhookCapture.Config.ValueBytes }),
 						ForceRedacted: config.Scalar[Settings, bool]("app.features.webhook_capture.config.force_redacted", func(settings *Settings) *bool { return &settings.App.Features.WebhookCapture.Config.ForceRedacted }),
+						MaskNames:     config.JSON[Settings, []string]("app.features.webhook_capture.config.mask_names", func(settings *Settings) *[]string { return &settings.App.Features.WebhookCapture.Config.MaskNames }),
 						Rate:          config.Scalar[Settings, int]("app.features.webhook_capture.config.rate", func(settings *Settings) *int { return &settings.App.Features.WebhookCapture.Config.Rate }),
 						Burst:         config.Scalar[Settings, int]("app.features.webhook_capture.config.burst", func(settings *Settings) *int { return &settings.App.Features.WebhookCapture.Config.Burst }),
 						QueueRows:     config.Scalar[Settings, int]("app.features.webhook_capture.config.queue_rows", func(settings *Settings) *int { return &settings.App.Features.WebhookCapture.Config.QueueRows }),
@@ -2864,7 +2872,7 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 			Image: SettingsAppImageConfigKeySet{
 				Enabled: config.Scalar[Settings, bool]("app.image.enabled", func(settings *Settings) *bool { return &settings.App.Image.Enabled }),
 				Config: SettingsAppImageConfigConfigKeySet{
-					Backend: config.Scalar[Settings, imaging.Backend]("app.image.config.backend", func(settings *Settings) *imaging.Backend { return &settings.App.Image.Config.Backend }),
+					Backend: config.Enum[Settings, imaging.Backend]("app.image.config.backend", func(settings *Settings) *imaging.Backend { return &settings.App.Image.Config.Backend }, (imaging.Backend("")).EnumDescriptor()),
 					Limits: SettingsAppImageConfigLimitsConfigKeySet{
 						InputBytes:   config.Scalar[Settings, int64]("app.image.config.limits.input_bytes", func(settings *Settings) *int64 { return &settings.App.Image.Config.Limits.InputBytes }),
 						OutputBytes:  config.Scalar[Settings, int64]("app.image.config.limits.output_bytes", func(settings *Settings) *int64 { return &settings.App.Image.Config.Limits.OutputBytes }),
@@ -3360,6 +3368,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.Features.WebhookCapture.Config.BodyBytes,
 		keys.App.Features.WebhookCapture.Config.ValueBytes,
 		keys.App.Features.WebhookCapture.Config.ForceRedacted,
+		keys.App.Features.WebhookCapture.Config.MaskNames,
 		keys.App.Features.WebhookCapture.Config.Rate,
 		keys.App.Features.WebhookCapture.Config.Burst,
 		keys.App.Features.WebhookCapture.Config.QueueRows,
