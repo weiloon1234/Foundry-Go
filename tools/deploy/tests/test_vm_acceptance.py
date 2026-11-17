@@ -953,6 +953,27 @@ class RecoveryTests(unittest.TestCase):
             self.assertEqual(run.guests, [])
             self.assertIsNone(run.active)
 
+    def test_ssh_readiness_retries_a_probe_that_stalls_in_the_handshake(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = vm.Run(root, root, "operator")
+            run.active = vm.Guest(root, 2222, root / "ssh_config", "127.0.0.1", ["ssh"])
+            qemu = Mock()
+            qemu.poll.return_value = None
+            probes = [subprocess.TimeoutExpired(["ssh"], 10), subprocess.CompletedProcess(["ssh"], 255),
+                      subprocess.CompletedProcess(["ssh"], 0)]
+            def probe(*_args, **_kwargs):
+                outcome = probes.pop(0)
+                if isinstance(outcome, BaseException):
+                    raise outcome
+                return outcome
+            with patch.object(vm.subprocess, "Popen", return_value=qemu), \
+                    patch.object(vm.subprocess, "run", side_effect=probe), \
+                    patch.object(vm.time, "sleep"), patch.object(run, "note"):
+                run.launch()
+            self.assertEqual(probes, [])
+
     def test_serial_failure_still_stops_other_guest(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

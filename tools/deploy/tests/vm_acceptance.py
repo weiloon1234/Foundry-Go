@@ -746,8 +746,13 @@ class Run:
         while time.monotonic() < deadline:
             if guest.qemu.poll() is not None:
                 raise Failure(f"QEMU exited before SSH: exit={guest.qemu.returncode}")
-            result = subprocess.run([*self.ssh, "true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-            if result.returncode == 0:
+            try:
+                result = subprocess.run([*self.ssh, "true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            except subprocess.TimeoutExpired:
+                # QEMU's forwarder accepts TCP before the guest's sshd answers, so an
+                # early probe can stall in the handshake: not ready yet, probe again.
+                result = None
+            if result is not None and result.returncode == 0:
                 return
             time.sleep(2)
         raise Failure("Guest SSH readiness deadline exceeded")

@@ -9,6 +9,7 @@
   Static services without a bus name still refuse when they stop or restart.
 - Real-VM operator and recovery acceptance now also run on Ubuntu 26.04 (official cloud
   image release 20261108, checksum-pinned), alongside 24.04.
+  Guest SSH readiness now retries a probe that stalls in the handshake while the guest boots.
 
 ## v0.42.0 — 2026-11-17
 
