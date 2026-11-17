@@ -163,11 +163,13 @@ class FailureStateTests(unittest.TestCase):
 
 class VMAcceptanceTests(unittest.TestCase):
     def test_pin_is_serial_specific_and_unsupported_release_refuses(self):
-        pin = vm.image_pin("24.04")
-        self.assertIn("/release-" + pin["serial"] + "/", pin["url"])
-        self.assertEqual(len(pin["sha256"]), 64)
+        for release in ("24.04", "26.04"):
+            pin = vm.image_pin(release)
+            self.assertIn("/release-" + pin["serial"] + "/", pin["url"])
+            self.assertIn("ubuntu-" + release + "-server-cloudimg-amd64.img", pin["url"])
+            self.assertEqual(len(pin["sha256"]), 64)
         with self.assertRaises(vm.Failure):
-            vm.image_pin("26.04")
+            vm.image_pin("25.10")
 
     def test_seed_has_sudo_admin_marker_and_no_disabled_services(self):
         seed = vm.cloud_config("ssh-ed25519 public-fixture-key")

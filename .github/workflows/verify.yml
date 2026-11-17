@@ -92,6 +92,9 @@ jobs:
           - {ubuntu: '24.04', scenario: operator, topology: both}
           - {ubuntu: '24.04', scenario: recovery, topology: feature}
           - {ubuntu: '24.04', scenario: recovery, topology: standard}
+          - {ubuntu: '26.04', scenario: operator, topology: both}
+          - {ubuntu: '26.04', scenario: recovery, topology: feature}
+          - {ubuntu: '26.04', scenario: recovery, topology: standard}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

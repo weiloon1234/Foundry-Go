@@ -1436,13 +1436,13 @@ requirements of the CI amd64 and lead's arm64 container matrices before producti
 ## VM acceptance
 
 The `deploy-vm-amd64` jobs in `.github/workflows/verify.yml` run on pushes
-and manual dispatches. One `operator` job covers both topologies, and one `recovery`
-job runs per topology. Recovery has a 90-minute job deadline and a 75-minute
-acceptance step. Operator retains its 60-minute job deadline and 50-minute step.
-They boot the official Ubuntu
+and manual dispatches, for Ubuntu 24.04 and 26.04. Per release, one `operator` job
+covers both topologies, and one `recovery` job runs per topology. Recovery has a
+90-minute job deadline and a 75-minute acceptance step. Operator retains its
+60-minute job deadline and 50-minute step. They boot the official Ubuntu
 server cloud image with QEMU/KVM. [VM image inputs](../../tools/deploy/docker/vm-inputs.json)
-pin its release serial, immutable URL and SHA-256; the runner checks the digest
-before boot. Ubuntu 26.04 remains a follow-up after 24.04 is stable.
+pin each release's serial, immutable URL and SHA-256; the runner checks the digest
+before boot.
 
 Both scenarios use fresh overlays for the deploy-acceptance fixture's schema-2 topology
 (HTTP and two relay copies) and standard topology (HTTP, scheduler and worker).

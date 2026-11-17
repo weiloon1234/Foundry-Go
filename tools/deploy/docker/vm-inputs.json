@@ -7,6 +7,13 @@
       "url": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img",
       "sha256": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94",
       "checksums": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/SHA256SUMS"
+    },
+    "26.04": {
+      "serial": "20261108",
+      "architecture": "amd64",
+      "url": "https://cloud-images.ubuntu.com/releases/resolute/release-20261108/ubuntu-26.04-server-cloudimg-amd64.img",
+      "sha256": "7b90593f5532b49b7e3fe3d2743f0d1f0d822e5b07cebcd8e00c0df8069ecab9",
+      "checksums": "https://cloud-images.ubuntu.com/releases/resolute/release-20261108/SHA256SUMS"
     }
   }
 }
