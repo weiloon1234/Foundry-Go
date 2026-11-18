@@ -61,7 +61,9 @@ func TestEditorChunkRetriesOnlyEarlyServerDeath(t *testing.T) {
 					mode = "batch"
 				}
 				attempts++
-				return inspectBatchProgress(t.Context(), options, 500*time.Millisecond, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", mode}, 300*time.Millisecond)
+				// Generous bounds: only the two hang modes wait out the operation timeout,
+				// and a healthy helper must have time to start and exit on a slow runner.
+				return inspectBatchProgress(t.Context(), options, 3*time.Second, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", mode}, shutdownGrace)
 			})
 			if attempts != tc.attempts || len(results) != tc.completed || (err == nil) != (tc.attempts == 2) {
 				t.Fatalf("chunk retry: %d attempts, %d results, %v", attempts, len(results), err)
