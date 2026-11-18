@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
@@ -588,29 +589,31 @@ func TestRegistryAndScopeRejectInvalidConstruction(t *testing.T) {
 }
 
 func TestTimeoutSuppressesLateSuccessAndCannotRetryWithinScope(t *testing.T) {
-	var calls atomic.Int32
-	p := provider(func(ctx context.Context, _ accountKey) (value.Optional[account], error) {
-		calls.Add(1)
-		<-ctx.Done()
-		return value.Set(account{ID: 7, Enabled: true}), nil
-	})
-	guard := auth.DefineGuard("api", p, strategy(t, "bearer", 7))
-	config := auth.DefaultConfig()
-	config.Timeout = 10 * time.Millisecond
-	registry, err := auth.NewRegistry(config, guard.Registration())
-	if err != nil {
-		t.Fatal(err)
-	}
-	scoped := scope(t, registry, auth.Credential{Name: "bearer", Secret: secret.New("valid")})
-	for range 2 {
-		got, err := guard.Require(scoped.Context())
-		if got != (account{}) || !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatal("late subject escaped timeout", got, err)
+	synctest.Test(t, func(t *testing.T) {
+		var calls atomic.Int32
+		p := provider(func(ctx context.Context, _ accountKey) (value.Optional[account], error) {
+			calls.Add(1)
+			<-ctx.Done()
+			return value.Set(account{ID: 7, Enabled: true}), nil
+		})
+		guard := auth.DefineGuard("api", p, strategy(t, "bearer", 7))
+		config := auth.DefaultConfig()
+		config.Timeout = 10 * time.Millisecond
+		registry, err := auth.NewRegistry(config, guard.Registration())
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	if calls.Load() != 1 {
-		t.Fatal("timed-out provider silently retried")
-	}
+		scoped := scope(t, registry, auth.Credential{Name: "bearer", Secret: secret.New("valid")})
+		for range 2 {
+			got, err := guard.Require(scoped.Context())
+			if got != (account{}) || !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatal("late subject escaped timeout", got, err)
+			}
+		}
+		if calls.Load() != 1 {
+			t.Fatal("timed-out provider silently retried")
+		}
+	})
 }
 
 func TestStoredModelNamespaceIsCheckedEvenWithMatchingGoTypes(t *testing.T) {

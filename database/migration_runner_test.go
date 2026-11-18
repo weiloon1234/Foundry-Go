@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -441,30 +442,32 @@ func TestMigrationLockDeadlineDuringLockQueryIsTimeout(t *testing.T) {
 }
 
 func TestMigrationLockWaitHonorsTimeoutWithoutApplyingSchema(t *testing.T) {
-	server := newMigrationServer()
-	server.waitStarted = make(chan struct{})
-	server.proceed = make(chan struct{})
-	server.contended = make(chan struct{})
-	var release sync.Once
-	t.Cleanup(func() { release.Do(func() { close(server.proceed) }) })
-	definitions := migrationDefinitions()
-	definitions[0].SQL = []string{"WAIT"}
-	first, _ := migrationRunner(t, server, 1, definitions, nil)
-	second, _ := migrationRunner(t, server, 2, definitions, func(c *migrate.PostgresConfig) { c.LockTimeout = 5 * time.Millisecond })
-	done := make(chan error, 1)
-	go func() { _, err := first.Up(t.Context()); done <- err }()
-	<-server.waitStarted
-	result, err := second.Up(t.Context())
-	if !errors.Is(err, context.DeadlineExceeded) || len(result.Applied) != 0 {
-		t.Fatalf("lock deadline: %+v %v", result, err)
-	}
-	release.Do(func() { close(server.proceed) })
-	if err := <-done; err != nil {
-		t.Fatal(err)
-	}
-	if len(server.ddl) != 2 {
-		t.Fatal("contending runner changed schema before acquiring lock")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		server := newMigrationServer()
+		server.waitStarted = make(chan struct{})
+		server.proceed = make(chan struct{})
+		server.contended = make(chan struct{})
+		var release sync.Once
+		t.Cleanup(func() { release.Do(func() { close(server.proceed) }) })
+		definitions := migrationDefinitions()
+		definitions[0].SQL = []string{"WAIT"}
+		first, _ := migrationRunner(t, server, 1, definitions, nil)
+		second, _ := migrationRunner(t, server, 2, definitions, func(c *migrate.PostgresConfig) { c.LockTimeout = 5 * time.Millisecond })
+		done := make(chan error, 1)
+		go func() { _, err := first.Up(t.Context()); done <- err }()
+		<-server.waitStarted
+		result, err := second.Up(t.Context())
+		if !errors.Is(err, context.DeadlineExceeded) || len(result.Applied) != 0 {
+			t.Fatalf("lock deadline: %+v %v", result, err)
+		}
+		release.Do(func() { close(server.proceed) })
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+		if len(server.ddl) != 2 {
+			t.Fatal("contending runner changed schema before acquiring lock")
+		}
+	})
 }
 
 func TestMigrationConfigurationRejectsIdentifierAliasingAndInjection(t *testing.T) {

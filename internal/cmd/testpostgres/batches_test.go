@@ -18,7 +18,7 @@ import (
 
 func TestPackageBatchesPreserveCoverageAndFailClosed(t *testing.T) {
 	checkPackageBatches(t, "test -race -count=1", func(ctx context.Context, binary, dir string, environment []string) error {
-		return testPackages(ctx, binary, dir, environment, []string{"test", "-race", "-count=1"}, 2, packageShard{index: 1, total: 1}, nil)
+		return testPackages(ctx, binary, dir, environment, []string{"test", "-race", "-count=1"}, 2, packageShard{index: 1, total: 1}, nil, nil)
 	})
 }
 
@@ -66,7 +66,7 @@ fi
 	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := run(t.Context(), binary, "unused", true, 2, 13*time.Minute, "1/1", nil); err != nil {
+	if err := run(t.Context(), binary, "unused", true, 2, 13*time.Minute, "1/1", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(log)
@@ -109,17 +109,21 @@ fi
 		name, shard string
 		race        bool
 		want        []string
+		heavy       []string
 	}{
-		{"ordinary", "1/1", false, []string{"pkg/a", "pkg/b", "pkg/c", "pkg/d"}},
-		{"race-first", "1/2", true, []string{"pkg/a", "pkg/d"}},
-		{"race-second", "2/2", true, []string{"pkg/c"}},
-		{"empty-shard", "5/5", true, nil},
+		{"ordinary", "1/1", false, []string{"pkg/a", "pkg/b", "pkg/c", "pkg/d"}, nil},
+		{"race-first", "1/2", true, []string{"pkg/a", "pkg/d"}, nil},
+		{"race-second", "2/2", true, []string{"pkg/c"}, nil},
+		{"empty-shard", "5/5", true, nil, nil},
+		{"heavy-first", "1/2", true, []string{"pkg/d", "pkg/a"}, []string{"pkg/d", "pkg/c", "pkg/b"}},
+		{"heavy-second", "2/2", true, []string{"pkg/c"}, []string{"pkg/d", "pkg/c", "pkg/b"}},
+		{"heavy-single", "1/1", true, []string{"pkg/a", "pkg/c", "pkg/d"}, []string{"pkg/d", "pkg/c", "pkg/b"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := os.WriteFile(log, nil, 0600); err != nil {
 				t.Fatal(err)
 			}
-			if err := run(t.Context(), binary, "unused", tc.race, 6, time.Minute, tc.shard, []string{"pkg/b"}); err != nil {
+			if err := run(t.Context(), binary, "unused", tc.race, 6, time.Minute, tc.shard, []string{"pkg/b"}, tc.heavy); err != nil {
 				t.Fatal(err)
 			}
 			data, err := os.ReadFile(log)

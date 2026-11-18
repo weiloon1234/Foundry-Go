@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/cache"
@@ -250,23 +251,25 @@ func TestCounterBackendFailuresRemainErrorsAndAreNotRetried(t *testing.T) {
 		{"timeout", func(ctx context.Context) (int64, error) { <-ctx.Done(); return 123, nil }, context.DeadlineExceeded},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, backend, _ := store(t, nil)
-			calls := 0
-			adapter := failingCounter{Backend: backend, increment: func(ctx context.Context, _ cache.EntryKey, _ int64, _ cache.TTL) (int64, error) {
-				calls++
-				return test.fail(ctx)
-			}}
-			config := cache.DefaultConfig(namespace)
-			config.Timeout = 10 * time.Millisecond
-			s, err := cache.NewStore(adapter, config)
-			if err != nil {
-				t.Fatal(err)
-			}
-			c := boundCounters(t, s)
-			value, err := c.Increment(t.Context(), "key", 1, cache.Forever())
-			if value != 0 || !errors.Is(err, test.target) || strings.Contains(err.Error(), "private") || calls != 1 {
-				t.Fatal(value, err, calls)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				_, backend, _ := store(t, nil)
+				calls := 0
+				adapter := failingCounter{Backend: backend, increment: func(ctx context.Context, _ cache.EntryKey, _ int64, _ cache.TTL) (int64, error) {
+					calls++
+					return test.fail(ctx)
+				}}
+				config := cache.DefaultConfig(namespace)
+				config.Timeout = 10 * time.Millisecond
+				s, err := cache.NewStore(adapter, config)
+				if err != nil {
+					t.Fatal(err)
+				}
+				c := boundCounters(t, s)
+				value, err := c.Increment(t.Context(), "key", 1, cache.Forever())
+				if value != 0 || !errors.Is(err, test.target) || strings.Contains(err.Error(), "private") || calls != 1 {
+					t.Fatal(value, err, calls)
+				}
+			})
 		})
 	}
 }

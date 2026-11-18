@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/cache"
@@ -274,35 +275,37 @@ func TestReadBoundsAndTimeoutReachBackend(t *testing.T) {
 	codec := cache.NewCodec(func(int) ([]byte, error) { return []byte("0"), nil }, func([]byte) (int, error) { decoded.Add(1); return 1, nil })
 	for _, mode := range []string{"oversized", "timeout", "missing"} {
 		t.Run(mode, func(t *testing.T) {
-			backend := readBackend{read: func(ctx context.Context, _ cache.EntryKey) ([]byte, bool, error) {
-				switch mode {
-				case "timeout":
-					<-ctx.Done()
-					return []byte("1"), true, ctx.Err()
-				case "missing":
-					return nil, false, nil
+			synctest.Test(t, func(t *testing.T) {
+				backend := readBackend{read: func(ctx context.Context, _ cache.EntryKey) ([]byte, bool, error) {
+					switch mode {
+					case "timeout":
+						<-ctx.Done()
+						return []byte("1"), true, ctx.Err()
+					case "missing":
+						return nil, false, nil
+					}
+					return []byte("oversized"), true, nil
+				}}
+				config := cache.DefaultConfig(namespace)
+				config.MaxValueBytes = 3
+				config.Timeout = 10 * time.Millisecond
+				s, err := cache.NewStore(backend, config)
+				if err != nil {
+					t.Fatal(err)
 				}
-				return []byte("oversized"), true, nil
-			}}
-			config := cache.DefaultConfig(namespace)
-			config.MaxValueBytes = 3
-			config.Timeout = 10 * time.Millisecond
-			s, err := cache.NewStore(backend, config)
-			if err != nil {
-				t.Fatal(err)
-			}
-			c, err := cache.Define("read-limits", keyspace.StringKeys[string](), codec).Bind(s)
-			if err != nil {
-				t.Fatal(err)
-			}
-			value, found, err := c.Get(t.Context(), "key")
-			if value != 0 || found {
-				t.Fatal("invalid read published result")
-			}
-			// A value above the current decode bound is a miss that a write replaces.
-			if mode == "timeout" && !errors.Is(err, context.DeadlineExceeded) || mode == "oversized" && err != nil || mode == "missing" && err != nil {
-				t.Fatal("read failure classification", err)
-			}
+				c, err := cache.Define("read-limits", keyspace.StringKeys[string](), codec).Bind(s)
+				if err != nil {
+					t.Fatal(err)
+				}
+				value, found, err := c.Get(t.Context(), "key")
+				if value != 0 || found {
+					t.Fatal("invalid read published result")
+				}
+				// A value above the current decode bound is a miss that a write replaces.
+				if mode == "timeout" && !errors.Is(err, context.DeadlineExceeded) || mode == "oversized" && err != nil || mode == "missing" && err != nil {
+					t.Fatal("read failure classification", err)
+				}
+			})
 		})
 	}
 	if decoded.Load() != 0 {

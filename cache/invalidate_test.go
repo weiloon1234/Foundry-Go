@@ -112,39 +112,41 @@ func TestNamespaceInvalidationRejectsInvalidAndUnsupportedOperations(t *testing.
 func TestNamespaceInvalidationOwnsCallbacksAndFailures(t *testing.T) {
 	for _, mode := range []string{"error", "panic", "goexit", "timeout"} {
 		t.Run(mode, func(t *testing.T) {
-			_, backend, _ := store(t, nil)
-			cause := errors.New("private invalidation detail")
-			calls := 0
-			wrapped := namespaceFailure{Backend: backend, TaggedBackend: backend, fail: func(ctx context.Context) error {
-				calls++
-				switch mode {
-				case "panic":
-					panic(cause)
-				case "goexit":
-					runtime.Goexit()
-				case "timeout":
-					<-ctx.Done()
-					return nil
+			synctest.Test(t, func(t *testing.T) {
+				_, backend, _ := store(t, nil)
+				cause := errors.New("private invalidation detail")
+				calls := 0
+				wrapped := namespaceFailure{Backend: backend, TaggedBackend: backend, fail: func(ctx context.Context) error {
+					calls++
+					switch mode {
+					case "panic":
+						panic(cause)
+					case "goexit":
+						runtime.Goexit()
+					case "timeout":
+						<-ctx.Done()
+						return nil
+					}
+					return cause
+				}}
+				config := cache.DefaultConfig(namespace)
+				config.Timeout = time.Millisecond
+				s, err := cache.NewStore(wrapped, config)
+				if err != nil {
+					t.Fatal(err)
 				}
-				return cause
-			}}
-			config := cache.DefaultConfig(namespace)
-			config.Timeout = time.Millisecond
-			s, err := cache.NewStore(wrapped, config)
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = s.Invalidate(t.Context())
-			target := cause
-			switch mode {
-			case "panic", "goexit":
-				target = fault.Panicked
-			case "timeout":
-				target = context.DeadlineExceeded
-			}
-			if !errors.Is(err, target) || calls != 1 || strings.Contains(err.Error(), "private") {
-				t.Fatal(err, calls)
-			}
+				err = s.Invalidate(t.Context())
+				target := cause
+				switch mode {
+				case "panic", "goexit":
+					target = fault.Panicked
+				case "timeout":
+					target = context.DeadlineExceeded
+				}
+				if !errors.Is(err, target) || calls != 1 || strings.Contains(err.Error(), "private") {
+					t.Fatal(err, calls)
+				}
+			})
 		})
 	}
 	synctest.Test(t, func(t *testing.T) {

@@ -145,70 +145,72 @@ func timeoutRoute(id RouteID, timeout time.Duration, handler func(stdhttp.Respon
 // in both directions, while client cancellation still propagates.
 func TestRouteTimeoutReplacesKernelRequestTimeout(t *testing.T) {
 	t.Parallel()
-	started := time.Now()
-	router, err := NewRouter(
-		timeoutRoute("long", 400*time.Millisecond, func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-			time.Sleep(60 * time.Millisecond)
-			deadline, ok := r.Context().Deadline()
-			if r.Context().Err() != nil || !ok || deadline.Before(started.Add(300*time.Millisecond)) {
-				t.Error("long route did not replace the kernel deadline", r.Context().Err())
-			}
-			if r.Context().Value(applicationValue{}) != "kept" || RequestID(r.Context()) == "" {
-				t.Error("replaced deadline lost request values")
-			}
-			w.WriteHeader(204)
-		}),
-		timeoutRoute("short", 10*time.Millisecond, func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-			select {
-			case <-r.Context().Done():
-			case <-time.After(time.Second):
-				t.Error("short route kept the longer kernel deadline")
-			}
-			w.WriteHeader(204)
-		}),
-		timeoutRoute("held", time.Minute, func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-			select {
-			case <-r.Context().Done():
-			case <-time.After(2 * time.Second):
-				t.Error("client cancellation did not reach an extended route")
-			}
-			w.WriteHeader(204)
-		}),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	config := DefaultServerConfig()
-	config.RequestTimeout = 20 * time.Millisecond
-	kernel := newHandlerLifetime().wrap(router, slog.New(slog.NewTextHandler(io.Discard, nil)), config)
-	parent := context.WithValue(t.Context(), applicationValue{}, "kept")
-	for _, path := range []string{"/long", "/short"} {
-		response := httptest.NewRecorder()
-		kernel.ServeHTTP(response, httptest.NewRequestWithContext(parent, "GET", path, nil))
-		if response.Code != 204 {
-			t.Fatal(path, response.Code)
+	synctest.Test(t, func(t *testing.T) {
+		started := time.Now()
+		router, err := NewRouter(
+			timeoutRoute("long", 400*time.Millisecond, func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+				time.Sleep(60 * time.Millisecond)
+				deadline, ok := r.Context().Deadline()
+				if r.Context().Err() != nil || !ok || deadline.Before(started.Add(300*time.Millisecond)) {
+					t.Error("long route did not replace the kernel deadline", r.Context().Err())
+				}
+				if r.Context().Value(applicationValue{}) != "kept" || RequestID(r.Context()) == "" {
+					t.Error("replaced deadline lost request values")
+				}
+				w.WriteHeader(204)
+			}),
+			timeoutRoute("short", 10*time.Millisecond, func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+				select {
+				case <-r.Context().Done():
+				case <-time.After(time.Second):
+					t.Error("short route kept the longer kernel deadline")
+				}
+				w.WriteHeader(204)
+			}),
+			timeoutRoute("held", time.Minute, func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+				select {
+				case <-r.Context().Done():
+				case <-time.After(2 * time.Second):
+					t.Error("client cancellation did not reach an extended route")
+				}
+				w.WriteHeader(204)
+			}),
+		)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	client, cancel := context.WithCancel(parent)
-	time.AfterFunc(40*time.Millisecond, cancel)
-	kernel.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(client, "GET", "/held", nil))
+		config := DefaultServerConfig()
+		config.RequestTimeout = 20 * time.Millisecond
+		kernel := newHandlerLifetime().wrap(router, slog.New(slog.NewTextHandler(io.Discard, nil)), config)
+		parent := context.WithValue(t.Context(), applicationValue{}, "kept")
+		for _, path := range []string{"/long", "/short"} {
+			response := httptest.NewRecorder()
+			kernel.ServeHTTP(response, httptest.NewRequestWithContext(parent, "GET", path, nil))
+			if response.Code != 204 {
+				t.Fatal(path, response.Code)
+			}
+		}
+		client, cancel := context.WithCancel(parent)
+		time.AfterFunc(40*time.Millisecond, cancel)
+		kernel.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(client, "GET", "/held", nil))
 
-	standalone := httptest.NewRecorder()
-	router.ServeHTTP(standalone, httptest.NewRequest("GET", "/short", nil))
-	if standalone.Code != 204 {
-		t.Fatal("standalone route timeout", standalone.Code)
-	}
-	for _, invalid := range []time.Duration{0, -time.Second, MaxRouteTimeout + 1} {
-		if ValidateRoute(ConfigureRoute(DefineRoute(RouteSpec{ID: "bad", Method: GET, Access: Public}, StaticPath("/bad")), Timeout(invalid))) == nil {
-			t.Fatal("invalid route timeout accepted", invalid)
+		standalone := httptest.NewRecorder()
+		router.ServeHTTP(standalone, httptest.NewRequest("GET", "/short", nil))
+		if standalone.Code != 204 {
+			t.Fatal("standalone route timeout", standalone.Code)
 		}
-	}
-	if info := (func() RouteInfo {
-		r, _ := NewRouter(timeoutRoute("x", time.Minute, func(stdhttp.ResponseWriter, *stdhttp.Request) {}))
-		return r.Routes()[0]
-	})(); info.Timeout != time.Minute {
-		t.Fatal("route timeout was not inspectable")
-	}
+		for _, invalid := range []time.Duration{0, -time.Second, MaxRouteTimeout + 1} {
+			if ValidateRoute(ConfigureRoute(DefineRoute(RouteSpec{ID: "bad", Method: GET, Access: Public}, StaticPath("/bad")), Timeout(invalid))) == nil {
+				t.Fatal("invalid route timeout accepted", invalid)
+			}
+		}
+		if info := (func() RouteInfo {
+			r, _ := NewRouter(timeoutRoute("x", time.Minute, func(stdhttp.ResponseWriter, *stdhttp.Request) {}))
+			return r.Routes()[0]
+		})(); info.Timeout != time.Minute {
+			t.Fatal("route timeout was not inspectable")
+		}
+	})
 }
 
 // A route can accept a larger body than the server-wide MaxBodyBytes without

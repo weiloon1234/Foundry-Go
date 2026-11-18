@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/jobs"
@@ -38,100 +39,106 @@ func withWorker(t *testing.T, f workerFixture, handler jobs.Handler[payload], co
 }
 
 func TestDrainLetsAdmittedHandlerFinishAndStopsReserving(t *testing.T) {
-	entered, release := make(chan struct{}, 2), make(chan struct{})
-	f := newWorkerFixture(t, jobs.DefaultPolicy("default"), nil)
-	f = withWorker(t, f, func(ctx context.Context, _ payload) error {
-		entered <- struct{}{}
-		<-release
-		return ctx.Err()
-	}, func(c *jobs.WorkerConfig) { c.DrainTimeout = 3 * time.Second })
-	first := f.enqueue(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- f.worker.Run(ctx) }()
-	<-entered
-	cancel()
-	second := f.enqueue(t)
-	// The heartbeat keeps the reservation alive past its original lease.
-	time.Sleep(200 * time.Millisecond)
-	close(release)
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
+	synctest.Test(t, func(t *testing.T) {
+		entered, release := make(chan struct{}, 2), make(chan struct{})
+		f := newWorkerFixture(t, jobs.DefaultPolicy("default"), nil)
+		f = withWorker(t, f, func(ctx context.Context, _ payload) error {
+			entered <- struct{}{}
+			<-release
+			return ctx.Err()
+		}, func(c *jobs.WorkerConfig) { c.DrainTimeout = 3 * time.Second })
+		first := f.enqueue(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() { done <- f.worker.Run(ctx) }()
+		<-entered
+		cancel()
+		second := f.enqueue(t)
+		// The heartbeat keeps the reservation alive past its original lease.
+		time.Sleep(200 * time.Millisecond)
+		close(release)
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("drained worker did not stop")
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("drained worker did not stop")
-	}
-	if record := waitRecord(t, f, first, jobs.Succeeded); record.Attempts != 1 {
-		t.Fatal("drained handler did not complete once", record.Attempts)
-	}
-	if record := waitRecord(t, f, second, jobs.Waiting); record.Attempts != 0 {
-		t.Fatal("draining worker reserved new work")
-	}
+		if record := waitRecord(t, f, first, jobs.Succeeded); record.Attempts != 1 {
+			t.Fatal("drained handler did not complete once", record.Attempts)
+		}
+		if record := waitRecord(t, f, second, jobs.Waiting); record.Attempts != 0 {
+			t.Fatal("draining worker reserved new work")
+		}
+	})
 }
 
 func TestDrainDeadlineCancelsAndRefundsInterruptedAttempt(t *testing.T) {
-	entered := make(chan struct{}, 1)
-	policy := jobs.DefaultPolicy("default")
-	policy.Attempts = 1
-	f := newWorkerFixture(t, policy, nil)
-	f = withWorker(t, f, func(ctx context.Context, _ payload) error {
-		entered <- struct{}{}
-		<-ctx.Done()
-		return ctx.Err()
-	}, func(c *jobs.WorkerConfig) { c.DrainTimeout = 20 * time.Millisecond })
-	id := f.enqueue(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- f.worker.Run(ctx) }()
-	<-entered
-	cancel()
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
+	synctest.Test(t, func(t *testing.T) {
+		entered := make(chan struct{}, 1)
+		policy := jobs.DefaultPolicy("default")
+		policy.Attempts = 1
+		f := newWorkerFixture(t, policy, nil)
+		f = withWorker(t, f, func(ctx context.Context, _ payload) error {
+			entered <- struct{}{}
+			<-ctx.Done()
+			return ctx.Err()
+		}, func(c *jobs.WorkerConfig) { c.DrainTimeout = 20 * time.Millisecond })
+		id := f.enqueue(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() { done <- f.worker.Run(ctx) }()
+		<-entered
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("drain deadline did not cancel the handler")
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("drain deadline did not cancel the handler")
-	}
-	record := waitRecord(t, f, id, jobs.Waiting)
-	if record.Attempts != 0 || record.History[len(record.History)-1].Reason != jobs.WorkerStopped {
-		t.Fatalf("interrupted attempt consumed its only budget: %d %+v", record.Attempts, record.History)
-	}
+		record := waitRecord(t, f, id, jobs.Waiting)
+		if record.Attempts != 0 || record.History[len(record.History)-1].Reason != jobs.WorkerStopped {
+			t.Fatalf("interrupted attempt consumed its only budget: %d %+v", record.Attempts, record.History)
+		}
+	})
 }
 
 func TestHandlerReturningNilIsSucceededAfterStopOrPreventRetry(t *testing.T) {
 	for _, mode := range []string{"stopped", "prevent-retry"} {
 		t.Run(mode, func(t *testing.T) {
-			entered := make(chan struct{}, 1)
-			f := newWorkerFixture(t, jobs.DefaultPolicy("default"), nil)
-			f = withWorker(t, f, func(ctx context.Context, _ payload) error {
-				if mode == "prevent-retry" {
-					jobs.PreventRetry(ctx)
+			synctest.Test(t, func(t *testing.T) {
+				entered := make(chan struct{}, 1)
+				f := newWorkerFixture(t, jobs.DefaultPolicy("default"), nil)
+				f = withWorker(t, f, func(ctx context.Context, _ payload) error {
+					if mode == "prevent-retry" {
+						jobs.PreventRetry(ctx)
+						return nil
+					}
+					entered <- struct{}{}
+					<-ctx.Done()
+					// Side effects completed; the stop must not turn this into a retry.
 					return nil
+				}, func(c *jobs.WorkerConfig) { c.DrainTimeout = 0 })
+				id := f.enqueue(t)
+				done := make(chan error, 1)
+				go func() { done <- f.worker.Run(context.Background()) }()
+				if mode == "stopped" {
+					<-entered
+					if err := f.worker.Stop(t.Context()); err != nil {
+						t.Fatal(err)
+					}
 				}
-				entered <- struct{}{}
-				<-ctx.Done()
-				// Side effects completed; the stop must not turn this into a retry.
-				return nil
-			}, func(c *jobs.WorkerConfig) { c.DrainTimeout = 0 })
-			id := f.enqueue(t)
-			done := make(chan error, 1)
-			go func() { done <- f.worker.Run(context.Background()) }()
-			if mode == "stopped" {
-				<-entered
-				if err := f.worker.Stop(t.Context()); err != nil {
+				if record := waitRecord(t, f, id, jobs.Succeeded); record.Attempts != 1 {
+					t.Fatal(record.Attempts)
+				}
+				_ = f.worker.Stop(t.Context())
+				if err := <-done; err != nil {
 					t.Fatal(err)
 				}
-			}
-			if record := waitRecord(t, f, id, jobs.Succeeded); record.Attempts != 1 {
-				t.Fatal(record.Attempts)
-			}
-			_ = f.worker.Stop(t.Context())
-			if err := <-done; err != nil {
-				t.Fatal(err)
-			}
+			})
 		})
 	}
 }

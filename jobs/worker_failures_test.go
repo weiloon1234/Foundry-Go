@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -39,163 +40,177 @@ func runWorker(t *testing.T, f workerFixture) <-chan error {
 func TestWorkerIsolatesPanicAndGoexit(t *testing.T) {
 	for _, kind := range []string{"panic", "goexit"} {
 		t.Run(kind, func(t *testing.T) {
-			policy := jobs.DefaultPolicy("default")
-			policy.Attempts = 1
-			f := newWorkerFixture(t, policy, func(context.Context, payload) error {
-				if kind == "panic" {
-					panic("private payload")
+			synctest.Test(t, func(t *testing.T) {
+				policy := jobs.DefaultPolicy("default")
+				policy.Attempts = 1
+				f := newWorkerFixture(t, policy, func(context.Context, payload) error {
+					if kind == "panic" {
+						panic("private payload")
+					}
+					runtime.Goexit()
+					return nil
+				})
+				id := f.enqueue(t)
+				runWorker(t, f)
+				record := waitRecord(t, f, id, jobs.Failed)
+				if record.Attempts != 1 || record.History[len(record.History)-1].Reason != jobs.HandlerPanicked {
+					t.Fatal(record)
 				}
-				runtime.Goexit()
-				return nil
 			})
-			id := f.enqueue(t)
-			runWorker(t, f)
-			record := waitRecord(t, f, id, jobs.Failed)
-			if record.Attempts != 1 || record.History[len(record.History)-1].Reason != jobs.HandlerPanicked {
-				t.Fatal(record)
-			}
 		})
 	}
 }
 func TestWorkerCancellationWaitsForHandler(t *testing.T) {
-	entered := make(chan struct{})
-	cancelled := make(chan struct{})
-	release := make(chan struct{})
-	defer close(release)
-	f := newWorkerFixture(t, jobs.DefaultPolicy("default"), func(ctx context.Context, _ payload) error {
-		close(entered)
-		<-ctx.Done()
-		close(cancelled)
-		<-release
-		return nil
+	synctest.Test(t, func(t *testing.T) {
+		entered := make(chan struct{})
+		cancelled := make(chan struct{})
+		release := make(chan struct{})
+		defer close(release)
+		f := newWorkerFixture(t, jobs.DefaultPolicy("default"), func(ctx context.Context, _ payload) error {
+			close(entered)
+			<-ctx.Done()
+			close(cancelled)
+			<-release
+			return nil
+		})
+		id := f.enqueue(t)
+		runWorker(t, f)
+		select {
+		case <-entered:
+		case <-time.After(3 * time.Second):
+			t.Fatal("not started")
+		}
+		if ok, err := f.definition.Cancel(t.Context(), f.dispatcher, id, ""); err != nil || !ok {
+			t.Fatal(ok, err)
+		}
+		select {
+		case <-cancelled:
+		case <-time.After(3 * time.Second):
+			t.Fatal("not cancelled")
+		}
+		record := waitRecord(t, f, id, jobs.Running)
+		if !record.CancellationRequested || f.worker.Active() != 1 {
+			t.Fatal("handler ownership abandoned")
+		}
+		release <- struct{}{}
+		waitRecord(t, f, id, jobs.Cancelled)
 	})
-	id := f.enqueue(t)
-	runWorker(t, f)
-	select {
-	case <-entered:
-	case <-time.After(3 * time.Second):
-		t.Fatal("not started")
-	}
-	if ok, err := f.definition.Cancel(t.Context(), f.dispatcher, id, ""); err != nil || !ok {
-		t.Fatal(ok, err)
-	}
-	select {
-	case <-cancelled:
-	case <-time.After(3 * time.Second):
-		t.Fatal("not cancelled")
-	}
-	record := waitRecord(t, f, id, jobs.Running)
-	if !record.CancellationRequested || f.worker.Active() != 1 {
-		t.Fatal("handler ownership abandoned")
-	}
-	release <- struct{}{}
-	waitRecord(t, f, id, jobs.Cancelled)
 }
 func TestWorkerSelfShutdownAndSavedContext(t *testing.T) {
-	var f workerFixture
-	contextResult := make(chan context.Context, 1)
-	f = newWorkerFixture(t, jobs.DefaultPolicy("default"), func(ctx context.Context, _ payload) error {
-		if err := f.worker.Stop(ctx); !errors.Is(err, fault.Cycle) {
-			return errors.New("self shutdown was not rejected")
+	synctest.Test(t, func(t *testing.T) {
+		var f workerFixture
+		contextResult := make(chan context.Context, 1)
+		f = newWorkerFixture(t, jobs.DefaultPolicy("default"), func(ctx context.Context, _ payload) error {
+			if err := f.worker.Stop(ctx); !errors.Is(err, fault.Cycle) {
+				return errors.New("self shutdown was not rejected")
+			}
+			if _, ok := f.definition.CurrentID(ctx); !ok {
+				return errors.New("typed execution identity missing")
+			}
+			contextResult <- ctx
+			return nil
+		})
+		id := f.enqueue(t)
+		runWorker(t, f)
+		waitRecord(t, f, id, jobs.Succeeded)
+		ctx := <-contextResult
+		if _, ok := jobs.Current(ctx); ok {
+			t.Fatal("saved context retained active execution")
 		}
-		if _, ok := f.definition.CurrentID(ctx); !ok {
-			return errors.New("typed execution identity missing")
-		}
-		contextResult <- ctx
-		return nil
 	})
-	id := f.enqueue(t)
-	runWorker(t, f)
-	waitRecord(t, f, id, jobs.Succeeded)
-	ctx := <-contextResult
-	if _, ok := jobs.Current(ctx); ok {
-		t.Fatal("saved context retained active execution")
-	}
 }
 func TestAdmissionDenialsDoNotConsumeAttempts(t *testing.T) {
-	var admissions atomic.Int32
-	policy := jobs.DefaultPolicy("default")
-	policy.Attempts = 1
-	f := newWorkerFixture(t, policy, func(context.Context, payload) error { return nil }, jobs.HandlerOptions[payload]{Admission: func(context.Context, payload) (time.Duration, error) {
-		if admissions.Add(1) < 3 {
-			return time.Millisecond, nil
+	synctest.Test(t, func(t *testing.T) {
+		var admissions atomic.Int32
+		policy := jobs.DefaultPolicy("default")
+		policy.Attempts = 1
+		f := newWorkerFixture(t, policy, func(context.Context, payload) error { return nil }, jobs.HandlerOptions[payload]{Admission: func(context.Context, payload) (time.Duration, error) {
+			if admissions.Add(1) < 3 {
+				return time.Millisecond, nil
+			}
+			return 0, nil
+		}})
+		id := f.enqueue(t)
+		runWorker(t, f)
+		record := waitRecord(t, f, id, jobs.Succeeded)
+		if record.Attempts != 1 || admissions.Load() != 3 {
+			t.Fatalf("attempts=%d admissions=%d", record.Attempts, admissions.Load())
 		}
-		return 0, nil
-	}})
-	id := f.enqueue(t)
-	runWorker(t, f)
-	record := waitRecord(t, f, id, jobs.Succeeded)
-	if record.Attempts != 1 || admissions.Load() != 3 {
-		t.Fatalf("attempts=%d admissions=%d", record.Attempts, admissions.Load())
-	}
+	})
 }
 func TestSkipPredicateCompletesWithoutMiddlewareOrHandler(t *testing.T) {
-	var handled, before atomic.Int32
-	f := newWorkerFixture(t, jobs.DefaultPolicy("default"), func(context.Context, payload) error { handled.Add(1); return nil }, jobs.HandlerOptions[payload]{
-		Middleware: []jobs.Middleware[payload]{{Before: func(context.Context, payload) error { before.Add(1); return nil }}},
-		Skip:       func(_ context.Context, p payload) (bool, error) { return p.Labels["obsolete"] == "yes", nil },
+	synctest.Test(t, func(t *testing.T) {
+		var handled, before atomic.Int32
+		f := newWorkerFixture(t, jobs.DefaultPolicy("default"), func(context.Context, payload) error { handled.Add(1); return nil }, jobs.HandlerOptions[payload]{
+			Middleware: []jobs.Middleware[payload]{{Before: func(context.Context, payload) error { before.Add(1); return nil }}},
+			Skip:       func(_ context.Context, p payload) (bool, error) { return p.Labels["obsolete"] == "yes", nil },
+		})
+		skipped, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{"obsolete": "yes"}}, jobs.Options[payload]{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		kept, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{}}, jobs.Options[payload]{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		runWorker(t, f)
+		waitRecord(t, f, skipped.ID, jobs.Succeeded)
+		waitRecord(t, f, kept.ID, jobs.Succeeded)
+		if handled.Load() != 1 || before.Load() != 1 {
+			t.Fatal("skipped job ran middleware or handler", handled.Load(), before.Load())
+		}
+		if _, err := f.definition.DeclareWith(nil, jobs.HandlerOptions[payload]{Skip: func(context.Context, payload) (bool, error) { return true, nil }}); err == nil {
+			t.Fatal("producer-only declaration accepted a skip predicate")
+		}
 	})
-	skipped, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{"obsolete": "yes"}}, jobs.Options[payload]{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	kept, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{}}, jobs.Options[payload]{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	runWorker(t, f)
-	waitRecord(t, f, skipped.ID, jobs.Succeeded)
-	waitRecord(t, f, kept.ID, jobs.Succeeded)
-	if handled.Load() != 1 || before.Load() != 1 {
-		t.Fatal("skipped job ran middleware or handler", handled.Load(), before.Load())
-	}
-	if _, err := f.definition.DeclareWith(nil, jobs.HandlerOptions[payload]{Skip: func(context.Context, payload) (bool, error) { return true, nil }}); err == nil {
-		t.Fatal("producer-only declaration accepted a skip predicate")
-	}
 }
 func TestAdmissionTimeoutConsumesRetryBudget(t *testing.T) {
-	policy := jobs.DefaultPolicy("default")
-	policy.Attempts = 1
-	policy.Timeout = 5 * time.Millisecond
-	f := newWorkerFixture(t, policy, func(context.Context, payload) error { t.Error("timed-out admission executed handler"); return nil }, jobs.HandlerOptions[payload]{Admission: func(ctx context.Context, _ payload) (time.Duration, error) {
-		<-ctx.Done()
-		return 0, ctx.Err()
-	}})
-	id := f.enqueue(t)
-	runWorker(t, f)
-	record := waitRecord(t, f, id, jobs.Failed)
-	if record.Attempts != 1 || record.History[len(record.History)-1].Reason != jobs.TimedOut {
-		t.Fatal(record)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		policy := jobs.DefaultPolicy("default")
+		policy.Attempts = 1
+		policy.Timeout = 5 * time.Millisecond
+		f := newWorkerFixture(t, policy, func(context.Context, payload) error { t.Error("timed-out admission executed handler"); return nil }, jobs.HandlerOptions[payload]{Admission: func(ctx context.Context, _ payload) (time.Duration, error) {
+			<-ctx.Done()
+			return 0, ctx.Err()
+		}})
+		id := f.enqueue(t)
+		runWorker(t, f)
+		record := waitRecord(t, f, id, jobs.Failed)
+		if record.Attempts != 1 || record.History[len(record.History)-1].Reason != jobs.TimedOut {
+			t.Fatal(record)
+		}
+	})
 }
 func TestMiddlewareUnwindsFailuresAndIsolatesCallbacks(t *testing.T) {
-	calls := make(chan string, 10)
-	hook := func(label string, fail bool) jobs.Handler[payload] {
-		return func(context.Context, payload) error {
-			calls <- label
-			if fail {
-				panic("private")
+	synctest.Test(t, func(t *testing.T) {
+		calls := make(chan string, 10)
+		hook := func(label string, fail bool) jobs.Handler[payload] {
+			return func(context.Context, payload) error {
+				calls <- label
+				if fail {
+					panic("private")
+				}
+				return nil
 			}
-			return nil
 		}
-	}
-	policy := jobs.DefaultPolicy("default")
-	policy.Attempts = 1
-	f := newWorkerFixture(t, policy, hook("handler", false), jobs.HandlerOptions[payload]{Middleware: []jobs.Middleware[payload]{
-		{Before: hook("before-a", false), After: hook("after-a", false), Failed: func(context.Context, payload, error) error { calls <- "failed-a"; return nil }},
-		{Before: hook("before-b", false), After: hook("after-b", true), Failed: func(context.Context, payload, error) error { calls <- "failed-b"; return nil }},
-	}})
-	id := f.enqueue(t)
-	runWorker(t, f)
-	waitRecord(t, f, id, jobs.Failed)
-	close(calls)
-	var actual []string
-	for v := range calls {
-		actual = append(actual, v)
-	}
-	if !slices.Equal(actual, []string{"before-a", "before-b", "handler", "after-b", "after-a", "failed-b", "failed-a"}) {
-		t.Fatal(actual)
-	}
+		policy := jobs.DefaultPolicy("default")
+		policy.Attempts = 1
+		f := newWorkerFixture(t, policy, hook("handler", false), jobs.HandlerOptions[payload]{Middleware: []jobs.Middleware[payload]{
+			{Before: hook("before-a", false), After: hook("after-a", false), Failed: func(context.Context, payload, error) error { calls <- "failed-a"; return nil }},
+			{Before: hook("before-b", false), After: hook("after-b", true), Failed: func(context.Context, payload, error) error { calls <- "failed-b"; return nil }},
+		}})
+		id := f.enqueue(t)
+		runWorker(t, f)
+		waitRecord(t, f, id, jobs.Failed)
+		close(calls)
+		var actual []string
+		for v := range calls {
+			actual = append(actual, v)
+		}
+		if !slices.Equal(actual, []string{"before-a", "before-b", "handler", "after-b", "after-a", "failed-b", "failed-a"}) {
+			t.Fatal(actual)
+		}
+	})
 }
 
 // An unknown name/version is transient by default (another replica may know it
@@ -205,74 +220,76 @@ func TestMiddlewareUnwindsFailuresAndIsolatesCallbacks(t *testing.T) {
 func TestWorkerRejectsUnknownVersionsAndInvalidPayloads(t *testing.T) {
 	for _, kind := range []string{"unknown-version", "unknown-version-terminal", "invalid-payload"} {
 		t.Run(kind, func(t *testing.T) {
-			policy := jobs.DefaultPolicy("default")
-			policy.Attempts, policy.Backoff, policy.Jitter = 2, []time.Duration{time.Millisecond}, 0
-			f := newWorkerFixture(t, policy, func(context.Context, payload) error { t.Error("invalid delivery invoked handler"); return nil })
-			if kind == "unknown-version-terminal" {
-				declaration, err := f.definition.Declare(func(context.Context, payload) error { return nil })
-				if err != nil {
-					t.Fatal(err)
-				}
-				registry, err := jobs.NewRegistry(declaration)
-				if err != nil {
-					t.Fatal(err)
-				}
-				config := jobs.DefaultWorkerConfig(f.key.Namespace(), f.key.Queue())
-				config.Concurrency, config.PollInterval, config.RetryUnregistered = 1, time.Millisecond, false
-				if f.worker, err = jobs.NewWorker(f.backend, registry, config); err != nil {
-					t.Fatal(err)
-				}
-			}
-			pending, err := f.definition.Capture(t.Context(), payload{Labels: map[string]string{}}, jobs.Options[payload]{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			data, err := pending.Envelope().MarshalJSON()
-			if err != nil {
-				t.Fatal(err)
-			}
-			var wire map[string]json.RawMessage
-			if err := json.Unmarshal(data, &wire); err != nil {
-				t.Fatal(err)
-			}
-			reason, attempts := jobs.Unregistered, uint32(2)
-			if kind == "unknown-version-terminal" {
-				attempts = 0
-			}
-			if kind != "invalid-payload" {
-				wire["version"] = json.RawMessage("2")
-			} else {
-				attempts = 0
-				wire["payload"] = json.RawMessage(`{"unexpected":true}`)
-				reason = jobs.PayloadInvalid
-			}
-			data, err = json.Marshal(wire)
-			if err != nil {
-				t.Fatal(err)
-			}
-			envelope, err := jobs.DecodeEnvelope(data)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := f.backend.JobEnqueue(t.Context(), f.key, envelope); err != nil {
-				t.Fatal(err)
-			}
-			runWorker(t, f)
-			deadline := time.Now().Add(3 * time.Second)
-			for time.Now().Before(deadline) {
-				found, err := f.backend.JobInspect(t.Context(), f.key, envelope.ID())
-				if err != nil {
-					t.Fatal(err)
-				}
-				if r, ok := found.Get(); ok && r.State == jobs.Failed {
-					if r.History[len(r.History)-1].Reason != reason || r.Attempts != attempts {
-						t.Fatal(r.History, r.Attempts)
+			synctest.Test(t, func(t *testing.T) {
+				policy := jobs.DefaultPolicy("default")
+				policy.Attempts, policy.Backoff, policy.Jitter = 2, []time.Duration{time.Millisecond}, 0
+				f := newWorkerFixture(t, policy, func(context.Context, payload) error { t.Error("invalid delivery invoked handler"); return nil })
+				if kind == "unknown-version-terminal" {
+					declaration, err := f.definition.Declare(func(context.Context, payload) error { return nil })
+					if err != nil {
+						t.Fatal(err)
 					}
-					return
+					registry, err := jobs.NewRegistry(declaration)
+					if err != nil {
+						t.Fatal(err)
+					}
+					config := jobs.DefaultWorkerConfig(f.key.Namespace(), f.key.Queue())
+					config.Concurrency, config.PollInterval, config.RetryUnregistered = 1, time.Millisecond, false
+					if f.worker, err = jobs.NewWorker(f.backend, registry, config); err != nil {
+						t.Fatal(err)
+					}
 				}
-				time.Sleep(time.Millisecond)
-			}
-			t.Fatal("poison delivery was not retained as failure")
+				pending, err := f.definition.Capture(t.Context(), payload{Labels: map[string]string{}}, jobs.Options[payload]{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				data, err := pending.Envelope().MarshalJSON()
+				if err != nil {
+					t.Fatal(err)
+				}
+				var wire map[string]json.RawMessage
+				if err := json.Unmarshal(data, &wire); err != nil {
+					t.Fatal(err)
+				}
+				reason, attempts := jobs.Unregistered, uint32(2)
+				if kind == "unknown-version-terminal" {
+					attempts = 0
+				}
+				if kind != "invalid-payload" {
+					wire["version"] = json.RawMessage("2")
+				} else {
+					attempts = 0
+					wire["payload"] = json.RawMessage(`{"unexpected":true}`)
+					reason = jobs.PayloadInvalid
+				}
+				data, err = json.Marshal(wire)
+				if err != nil {
+					t.Fatal(err)
+				}
+				envelope, err := jobs.DecodeEnvelope(data)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := f.backend.JobEnqueue(t.Context(), f.key, envelope); err != nil {
+					t.Fatal(err)
+				}
+				runWorker(t, f)
+				deadline := time.Now().Add(3 * time.Second)
+				for time.Now().Before(deadline) {
+					found, err := f.backend.JobInspect(t.Context(), f.key, envelope.ID())
+					if err != nil {
+						t.Fatal(err)
+					}
+					if r, ok := found.Get(); ok && r.State == jobs.Failed {
+						if r.History[len(r.History)-1].Reason != reason || r.Attempts != attempts {
+							t.Fatal(r.History, r.Attempts)
+						}
+						return
+					}
+					time.Sleep(time.Millisecond)
+				}
+				t.Fatal("poison delivery was not retained as failure")
+			})
 		})
 	}
 }

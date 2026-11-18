@@ -5,6 +5,8 @@ TEST_POSTGRES_SHARD ?= 1/1
 # Keep these three tool packages on one line; testpostgres guards all non-test source for concurrency.
 RACE_EXEMPT_PACKAGES := ./internal/retirement ./internal/noraw ./cmd/foundry
 RACE_EXEMPT_IMPORTS = $(addprefix $(shell awk '$$1 == "module" { print $$2 }' go.mod)/,$(patsubst ./%,%,$(RACE_EXEMPT_PACKAGES)))
+# Heaviest first; PostgreSQL shards deal these import paths before ordinary packages.
+RACE_HEAVY_PACKAGES := github.com/weiloon1234/Foundry-Go/internal/generate github.com/weiloon1234/Foundry-Go/internal/agent foundry.test/consumer github.com/weiloon1234/Foundry-Go/database/orm github.com/weiloon1234/Foundry-Go/attachments foundry.test/goway
 GENERATION_DIRS := logging cloud/credentials infrastructure imaging application internal/auditstore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/webhookstore webhook/capture httpclient/capture countries datatable database/orm/internal/enuminit telemetry tests/fixtures/consumer tests/fixtures/goway
 FIXTURE_DIRS := tests/fixtures/plugin_base tests/fixtures/plugin_dep tests/fixtures/consumer tests/fixtures/goway
 export GOWORK := off
@@ -134,7 +136,7 @@ typescript-check: typescript-tools-check
 	cd tests/fixtures/consumer && FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1 $(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./clientcontracts -run '^(TestTypeScriptClientAgainstRealHTTPAndWebSocket|TestOptionalFormAdaptersWithRealReactAndVue)$$'
 
 test-postgres:
-	$(GO) run ./internal/cmd/testpostgres --go $(GO) --race --race-exempt '$(RACE_EXEMPT_IMPORTS)' --shard $(TEST_POSTGRES_SHARD) --batch-size $(TEST_PACKAGE_BATCH_SIZE) --timeout $(TEST_TIMEOUT)
+	$(GO) run ./internal/cmd/testpostgres --go $(GO) --race --race-exempt '$(RACE_EXEMPT_IMPORTS)' --heavy '$(RACE_HEAVY_PACKAGES)' --shard $(TEST_POSTGRES_SHARD) --batch-size $(TEST_PACKAGE_BATCH_SIZE) --timeout $(TEST_TIMEOUT)
 
 # Use an explicitly configured private PostgreSQL URL, as testkit/postgres owns.
 # Each repetition retains its own isolated schema; no reset or cold cache.

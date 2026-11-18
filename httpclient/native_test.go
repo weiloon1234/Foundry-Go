@@ -87,7 +87,8 @@ func TestNativeDeadlinesAndDecompressedResponseBound(t *testing.T) {
 	config := testConfig()
 	config.BaseURL = server.URL
 	config.Retry = httpclient.NoRetries()
-	config.AttemptTimeout = 30 * time.Millisecond
+	// The native connection and request must reach the server before expiry.
+	config.AttemptTimeout = time.Second
 	config.ResponseBytes = 64
 	c := newClient(t, config, nil)
 	result := make(chan error, 1)

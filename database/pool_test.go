@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -228,59 +229,63 @@ func TestPoolCloseDeadlineRetainsActiveOwnership(t *testing.T) {
 }
 
 func TestAcquisitionDeadlineDoesNotShortenStatementContext(t *testing.T) {
-	state := &driverState{}
-	state.exec = func(ctx context.Context, _ string, _ []driver.NamedValue) (driver.Result, error) {
-		select {
-		case <-time.After(20 * time.Millisecond):
-			return driver.RowsAffected(1), nil
-		case <-ctx.Done():
-			return nil, ctx.Err()
+	synctest.Test(t, func(t *testing.T) {
+		state := &driverState{}
+		state.exec = func(ctx context.Context, _ string, _ []driver.NamedValue) (driver.Result, error) {
+			select {
+			case <-time.After(20 * time.Millisecond):
+				return driver.RowsAffected(1), nil
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
 		}
-	}
-	db := open(t, state, func(c *database.PoolConfig) { c.MaxOpen = 1; c.MaxIdle = 1; c.AcquireTimeout = 5 * time.Millisecond })
-	rows, err := db.Query(t.Context(), "select 42")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	if _, err := db.Exec(t.Context(), "select 1"); !errors.Is(err, database.DeadlineExceeded) || !errors.Is(err, fault.Overloaded) {
-		t.Fatalf("pool exhaustion: %v", err)
-	}
-	// A caller deadline that ends first is the caller's timeout, not overload.
-	short, cancel := context.WithTimeout(t.Context(), time.Millisecond)
-	defer cancel()
-	if _, err := db.Exec(short, "select 1"); errors.Is(err, fault.Overloaded) {
-		t.Fatalf("caller deadline reported as pool overload: %v", err)
-	}
-	if db.Stats().Owners != 1 {
-		t.Fatal("failed acquisition leaked owner")
-	}
-	if err := rows.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(t.Context(), "select 1"); err != nil {
-		t.Fatalf("acquisition deadline escaped into statement: %v", err)
-	}
+		db := open(t, state, func(c *database.PoolConfig) { c.MaxOpen = 1; c.MaxIdle = 1; c.AcquireTimeout = 5 * time.Millisecond })
+		rows, err := db.Query(t.Context(), "select 42")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		if _, err := db.Exec(t.Context(), "select 1"); !errors.Is(err, database.DeadlineExceeded) || !errors.Is(err, fault.Overloaded) {
+			t.Fatalf("pool exhaustion: %v", err)
+		}
+		// A caller deadline that ends first is the caller's timeout, not overload.
+		short, cancel := context.WithTimeout(t.Context(), time.Millisecond)
+		defer cancel()
+		if _, err := db.Exec(short, "select 1"); errors.Is(err, fault.Overloaded) {
+			t.Fatalf("caller deadline reported as pool overload: %v", err)
+		}
+		if db.Stats().Owners != 1 {
+			t.Fatal("failed acquisition leaked owner")
+		}
+		if err := rows.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(t.Context(), "select 1"); err != nil {
+			t.Fatalf("acquisition deadline escaped into statement: %v", err)
+		}
+	})
 }
 
 func TestOpenBoundsAndConnectDeadline(t *testing.T) {
-	for _, change := range []func(*database.PoolConfig){
-		func(c *database.PoolConfig) { c.MaxOpen = 0 }, func(c *database.PoolConfig) { c.MaxIdle = -1 }, func(c *database.PoolConfig) { c.MaxIdle = c.MaxOpen + 1 },
-		func(c *database.PoolConfig) { c.MaxLifetime = -1 }, func(c *database.PoolConfig) { c.MaxIdleTime = -1 }, func(c *database.PoolConfig) { c.ConnectTimeout = 0 }, func(c *database.PoolConfig) { c.AcquireTimeout = 0 },
-	} {
-		config := database.DefaultPoolConfig()
-		change(&config)
-		state := &driverState{}
-		if _, err := database.Open(t.Context(), database.Adapter{Connector: connector{state}}, config); !errors.Is(err, fault.Invalid) || state.connected.Load() != 0 {
-			t.Fatal("invalid configuration connected")
+	synctest.Test(t, func(t *testing.T) {
+		for _, change := range []func(*database.PoolConfig){
+			func(c *database.PoolConfig) { c.MaxOpen = 0 }, func(c *database.PoolConfig) { c.MaxIdle = -1 }, func(c *database.PoolConfig) { c.MaxIdle = c.MaxOpen + 1 },
+			func(c *database.PoolConfig) { c.MaxLifetime = -1 }, func(c *database.PoolConfig) { c.MaxIdleTime = -1 }, func(c *database.PoolConfig) { c.ConnectTimeout = 0 }, func(c *database.PoolConfig) { c.AcquireTimeout = 0 },
+		} {
+			config := database.DefaultPoolConfig()
+			change(&config)
+			state := &driverState{}
+			if _, err := database.Open(t.Context(), database.Adapter{Connector: connector{state}}, config); !errors.Is(err, fault.Invalid) || state.connected.Load() != 0 {
+				t.Fatal("invalid configuration connected")
+			}
 		}
-	}
-	config := database.DefaultPoolConfig()
-	config.ConnectTimeout = 5 * time.Millisecond
-	state := &driverState{ping: func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }}
-	if _, err := database.Open(t.Context(), database.Adapter{Connector: connector{state}}, config); !errors.Is(err, database.DeadlineExceeded) || state.closed.Load() != 1 {
-		t.Fatalf("open cleanup: %v", err)
-	}
+		config := database.DefaultPoolConfig()
+		config.ConnectTimeout = 5 * time.Millisecond
+		state := &driverState{ping: func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }}
+		if _, err := database.Open(t.Context(), database.Adapter{Connector: connector{state}}, config); !errors.Is(err, database.DeadlineExceeded) || state.closed.Load() != 1 {
+			t.Fatalf("open cleanup: %v", err)
+		}
+	})
 }
 
 func TestRawErrorsRemainClassifiableWithoutFormattingSecrets(t *testing.T) {

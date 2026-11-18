@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/jobs"
@@ -58,52 +59,54 @@ func withOptions(t *testing.T, f workerFixture, handler jobs.Handler[payload], o
 func TestWithoutOverlappingSerializesSameKeyAndReleasesOnExit(t *testing.T) {
 	for _, mode := range []jobs.OverlapMode{jobs.ReleaseOnOverlap, jobs.SkipOnOverlap} {
 		t.Run(map[jobs.OverlapMode]string{jobs.ReleaseOnOverlap: "release", jobs.SkipOnOverlap: "skip"}[mode], func(t *testing.T) {
-			var running, maximum, calls atomic.Int32
-			entered, release := make(chan struct{}, 4), make(chan struct{})
-			options := jobs.OverlapOptions{TTL: time.Second, Delay: 5 * time.Millisecond, Mode: mode}
-			f := newWorkerFixture(t, jobs.DefaultPolicy("default"), nil)
-			f = withOptions(t, f, func(context.Context, payload) error {
-				calls.Add(1)
-				if current := running.Add(1); current > maximum.Load() {
-					maximum.Store(current)
+			synctest.Test(t, func(t *testing.T) {
+				var running, maximum, calls atomic.Int32
+				entered, release := make(chan struct{}, 4), make(chan struct{})
+				options := jobs.OverlapOptions{TTL: time.Second, Delay: 5 * time.Millisecond, Mode: mode}
+				f := newWorkerFixture(t, jobs.DefaultPolicy("default"), nil)
+				f = withOptions(t, f, func(context.Context, payload) error {
+					calls.Add(1)
+					if current := running.Add(1); current > maximum.Load() {
+						maximum.Store(current)
+					}
+					entered <- struct{}{}
+					<-release
+					running.Add(-1)
+					return nil
+				}, jobs.HandlerOptions[payload]{Overlap: jobs.WithoutOverlapping(overlapLeases(t), func(p payload) string { return p.Labels["account"] }, options)}, 2)
+				dispatch := func() jobs.ID[payload] {
+					receipt, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{"account": "same"}}, jobs.Options[payload]{})
+					if err != nil {
+						t.Fatal(err)
+					}
+					return receipt.ID
 				}
-				entered <- struct{}{}
-				<-release
-				running.Add(-1)
-				return nil
-			}, jobs.HandlerOptions[payload]{Overlap: jobs.WithoutOverlapping(overlapLeases(t), func(p payload) string { return p.Labels["account"] }, options)}, 2)
-			dispatch := func() jobs.ID[payload] {
-				receipt, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{"account": "same"}}, jobs.Options[payload]{})
-				if err != nil {
-					t.Fatal(err)
+				first := dispatch()
+				runWorker(t, f)
+				<-entered
+				second := dispatch()
+				if mode == jobs.SkipOnOverlap {
+					// The overlapping job completes without running.
+					waitRecord(t, f, second, jobs.Succeeded)
+				} else {
+					time.Sleep(50 * time.Millisecond)
 				}
-				return receipt.ID
-			}
-			first := dispatch()
-			runWorker(t, f)
-			<-entered
-			second := dispatch()
-			if mode == jobs.SkipOnOverlap {
-				// The overlapping job completes without running.
-				waitRecord(t, f, second, jobs.Succeeded)
-			} else {
-				time.Sleep(50 * time.Millisecond)
-			}
-			close(release)
-			waitRecord(t, f, first, jobs.Succeeded)
-			record := waitRecord(t, f, second, jobs.Succeeded)
-			if maximum.Load() != 1 {
-				t.Fatal("jobs with the same key overlapped")
-			}
-			want := int32(2)
-			if mode == jobs.SkipOnOverlap {
-				want = 1
-			}
-			if calls.Load() != want || record.Attempts > 1 {
-				t.Fatal("overlap handling", calls.Load(), record.Attempts)
-			}
-			// The lease was released after exit: a later job with the key runs.
-			waitRecord(t, f, dispatch(), jobs.Succeeded)
+				close(release)
+				waitRecord(t, f, first, jobs.Succeeded)
+				record := waitRecord(t, f, second, jobs.Succeeded)
+				if maximum.Load() != 1 {
+					t.Fatal("jobs with the same key overlapped")
+				}
+				want := int32(2)
+				if mode == jobs.SkipOnOverlap {
+					want = 1
+				}
+				if calls.Load() != want || record.Attempts > 1 {
+					t.Fatal("overlap handling", calls.Load(), record.Attempts)
+				}
+				// The lease was released after exit: a later job with the key runs.
+				waitRecord(t, f, dispatch(), jobs.Succeeded)
+			})
 		})
 	}
 	if _, err := jobs.Define[payload]("invalid.overlap", 1, jobs.DefaultPolicy("default")).DeclareWith(func(context.Context, payload) error { return nil }, jobs.HandlerOptions[payload]{
@@ -114,87 +117,95 @@ func TestWithoutOverlappingSerializesSameKeyAndReleasesOnExit(t *testing.T) {
 }
 
 func TestThrottleExceptionsReleasesWithoutConsumingAttempts(t *testing.T) {
-	clock := testkit.NewClock(time.Unix(0, 0))
-	backend, err := limitmemory.New(10, clock)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer backend.Close()
-	store, err := ratelimit.NewStore(backend, ratelimit.DefaultConfig(keyspace.Namespace{Application: "jobs", Environment: "test"}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	limiter, err := ratelimit.Define("jobs.exceptions", keyspace.StringKeys[string](), ratelimit.PerHour(1)).Bind(store)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var calls atomic.Int32
-	policy := jobs.DefaultPolicy("default")
-	policy.Attempts, policy.Backoff, policy.Jitter = 5, []time.Duration{time.Millisecond}, 0
-	f := newWorkerFixture(t, policy, nil)
-	f = withOptions(t, f, func(context.Context, payload) error { calls.Add(1); return errors.New("provider down") }, jobs.HandlerOptions[payload]{
-		Throttle: jobs.ThrottleExceptions(limiter, func(payload) string { return "provider" }, 10*time.Millisecond),
-	}, 1)
-	id := f.enqueue(t)
-	runWorker(t, f)
-	// After one exception the budget is exhausted: later reservations are
-	// released as rate limited while the attempt count stays at one.
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		found, err := f.definition.Inspect(t.Context(), f.dispatcher, id, "")
+	synctest.Test(t, func(t *testing.T) {
+		clock := testkit.NewClock(time.Unix(0, 0))
+		backend, err := limitmemory.New(10, clock)
 		if err != nil {
 			t.Fatal(err)
 		}
-		record, _ := found.Get()
-		if len(record.History) > 0 && record.History[len(record.History)-1].Reason == jobs.RateLimited {
-			if record.Attempts != 1 || calls.Load() != 1 {
-				t.Fatal("throttled job consumed attempts", record.Attempts, calls.Load())
-			}
-			return
+		defer backend.Close()
+		store, err := ratelimit.NewStore(backend, ratelimit.DefaultConfig(keyspace.Namespace{Application: "jobs", Environment: "test"}))
+		if err != nil {
+			t.Fatal(err)
 		}
-		time.Sleep(time.Millisecond)
-	}
-	t.Fatal("exception throttle did not release the job")
+		limiter, err := ratelimit.Define("jobs.exceptions", keyspace.StringKeys[string](), ratelimit.PerHour(1)).Bind(store)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var calls atomic.Int32
+		policy := jobs.DefaultPolicy("default")
+		policy.Attempts, policy.Backoff, policy.Jitter = 5, []time.Duration{time.Millisecond}, 0
+		f := newWorkerFixture(t, policy, nil)
+		f = withOptions(t, f, func(context.Context, payload) error { calls.Add(1); return errors.New("provider down") }, jobs.HandlerOptions[payload]{
+			Throttle: jobs.ThrottleExceptions(limiter, func(payload) string { return "provider" }, 10*time.Millisecond),
+		}, 1)
+		id := f.enqueue(t)
+		runWorker(t, f)
+		// After one exception the budget is exhausted: later reservations are
+		// released as rate limited while the attempt count stays at one.
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			found, err := f.definition.Inspect(t.Context(), f.dispatcher, id, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			record, _ := found.Get()
+			if len(record.History) > 0 && record.History[len(record.History)-1].Reason == jobs.RateLimited {
+				if record.Attempts != 1 || calls.Load() != 1 {
+					t.Fatal("throttled job consumed attempts", record.Attempts, calls.Load())
+				}
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+		t.Fatal("exception throttle did not release the job")
+	})
 }
 
 func TestMaxExceptionsAndRetryUntilEndRetries(t *testing.T) {
 	t.Run("max-exceptions", func(t *testing.T) {
-		policy := jobs.DefaultPolicy("default")
-		policy.Attempts, policy.MaxExceptions, policy.Backoff, policy.Jitter = 5, 2, []time.Duration{time.Millisecond}, 0
-		f := newWorkerFixture(t, policy, func(context.Context, payload) error { return errors.New("fail") })
-		id := f.enqueue(t)
-		runWorker(t, f)
-		record := waitRecord(t, f, id, jobs.Failed)
-		if record.Attempts != 2 || record.Exceptions != 2 || record.History[len(record.History)-1].Reason != jobs.ExceptionLimit {
-			t.Fatalf("exception limit: attempts=%d exceptions=%d %+v", record.Attempts, record.Exceptions, record.History)
-		}
+		synctest.Test(t, func(t *testing.T) {
+			policy := jobs.DefaultPolicy("default")
+			policy.Attempts, policy.MaxExceptions, policy.Backoff, policy.Jitter = 5, 2, []time.Duration{time.Millisecond}, 0
+			f := newWorkerFixture(t, policy, func(context.Context, payload) error { return errors.New("fail") })
+			id := f.enqueue(t)
+			runWorker(t, f)
+			record := waitRecord(t, f, id, jobs.Failed)
+			if record.Attempts != 2 || record.Exceptions != 2 || record.History[len(record.History)-1].Reason != jobs.ExceptionLimit {
+				t.Fatalf("exception limit: attempts=%d exceptions=%d %+v", record.Attempts, record.Exceptions, record.History)
+			}
+		})
 	})
 	t.Run("retry-until-passed", func(t *testing.T) {
-		var calls atomic.Int32
-		f := newWorkerFixture(t, jobs.DefaultPolicy("default"), func(context.Context, payload) error { calls.Add(1); return nil })
-		receipt, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{}}, jobs.Options[payload]{RetryUntil: time.Now().Add(-time.Second)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		runWorker(t, f)
-		record := waitRecord(t, f, receipt.ID, jobs.Failed)
-		if record.Attempts != 0 || calls.Load() != 0 || record.History[len(record.History)-1].Reason != jobs.RetryExpired {
-			t.Fatal("expired job started", record.Attempts, calls.Load())
-		}
+		synctest.Test(t, func(t *testing.T) {
+			var calls atomic.Int32
+			f := newWorkerFixture(t, jobs.DefaultPolicy("default"), func(context.Context, payload) error { calls.Add(1); return nil })
+			receipt, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{}}, jobs.Options[payload]{RetryUntil: time.Now().Add(-time.Second)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			runWorker(t, f)
+			record := waitRecord(t, f, receipt.ID, jobs.Failed)
+			if record.Attempts != 0 || calls.Load() != 0 || record.History[len(record.History)-1].Reason != jobs.RetryExpired {
+				t.Fatal("expired job started", record.Attempts, calls.Load())
+			}
+		})
 	})
 	t.Run("retry-beyond-deadline", func(t *testing.T) {
-		policy := jobs.DefaultPolicy("default")
-		policy.Backoff, policy.Jitter = []time.Duration{time.Hour}, 0
-		f := newWorkerFixture(t, policy, func(context.Context, payload) error { return errors.New("fail") })
-		receipt, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{}}, jobs.Options[payload]{RetryUntil: time.Now().Add(time.Minute)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		runWorker(t, f)
-		record := waitRecord(t, f, receipt.ID, jobs.Failed)
-		if record.Attempts != 1 || record.History[len(record.History)-1].Reason != jobs.RetryExpired {
-			t.Fatal("retry scheduled past its deadline", record.Attempts)
-		}
+		synctest.Test(t, func(t *testing.T) {
+			policy := jobs.DefaultPolicy("default")
+			policy.Backoff, policy.Jitter = []time.Duration{time.Hour}, 0
+			f := newWorkerFixture(t, policy, func(context.Context, payload) error { return errors.New("fail") })
+			receipt, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{}}, jobs.Options[payload]{RetryUntil: time.Now().Add(time.Minute)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			runWorker(t, f)
+			record := waitRecord(t, f, receipt.ID, jobs.Failed)
+			if record.Attempts != 1 || record.History[len(record.History)-1].Reason != jobs.RetryExpired {
+				t.Fatal("retry scheduled past its deadline", record.Attempts)
+			}
+		})
 	})
 }
 

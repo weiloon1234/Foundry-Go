@@ -1,0 +1,388 @@
+Timing-fragile tests — lane/a-flakes — 2026-11-18
+
+Base: 0d6774d7. Work stopped at the requested 40 top-level test limit (subcases retained).
+39 tests use testing/synctest; one real TCP test uses a 1 s attempt budget instead of 30 ms.
+All assertions and cases are retained. No production/API/generated/dependency/changelog changes.
+All changed database tests use the existing in-memory driver fixture, not PostgreSQL. No changed test requires PostgreSQL or Redis.
+
+Scan: 473 short-duration lines in 230 files, including root and tests/fixtures.
+Included bare milliseconds and micro/nanoseconds as well as 1–50 ms multiples. Also searched second-division and duration-string forms.
+Inventory verdict describes the original source. Locations point to the files as changed by the 40-test batch.
+Safe means safe against this specific short-deadline failure, not a claim that the entire test is flake-free.
+Closure/ownership expiry waits are left alone when no successful work races them. Admission waits with different pre-expiry classifications are listed as fragile.
+Known attachment remote-download timeout is already 500 ms on this base; the remaining 50 ms remote hit is an admission assertion.
+No before/after benchmark was requested or run. Check durations below are process wall time, including compilation/startup, not performance claims.
+
+Inventory table
+
+| File:line | Test/helper | Verdict | Action | Reason |
+| --- | --- | --- | --- | --- |
+| application/telemetry_postgres_test.go:230 | TestPostgresTelemetryObservesConfiguredHTTPAndReporter | safe | unchanged | Poll interval; a separate, larger deadline bounds progress. |
+| attachments/admission_postgres_test.go:68 | TestPostgresAttachmentReadsWritesAndOwnerCleanupUseSeparateAdmission | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| attachments/file_admission_postgres_test.go:107 | TestPostgresFileWritesAdmitAndDrainOpenThroughClose | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| attachments/file_admission_postgres_test.go:113 | TestPostgresFileWritesAdmitAndDrainOpenThroughClose | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| attachments/lifetime_postgres_test.go:62 | TestPostgresAttachmentCancellationRetainsActualReaderLifetime | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| attachments/lifetime_postgres_test.go:67 | TestPostgresAttachmentCancellationRetainsActualReaderLifetime | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| attachments/remote_postgres_test.go:182 | TestPostgresAttachmentRemoteAdmissionCoversDownloadAndStorage | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| attachments/resource_acceptance_test.go:603 | newResourceWorker | fragile | deferred at 40-test cap | URL peer must receive a request before timer cancellation; worker subsequently waits for the peer report file. |
+| attachments/upload_admission_postgres_test.go:99 | TestPostgresLargeUploadSublimitPrecedesSourcesAndPreservesSmallWork | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| auth/auth_test.go:338 | TestCancellationRetainsCallbackSlotAndCloseWaitsForExit | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| auth/auth_test.go:601 | TestTimeoutSuppressesLateSuccessAndCannotRetryWithinScope | fragile | synctest | Provider must run once before timeout; scheduler delay can expire the context before invocation. |
+| auth/challenge/requests_test.go:138 | TestRecoveryRequestsAcknowledgeWithoutExposingExistenceOrFailures | fragile | synctest | Recovery admission and the follow-up quota lookup must complete inside the same 10 ms policy; observed CI failure. |
+| auth/challenge/requests_test.go:204 | TestRecoveryRequestDispatchIsOwnedBoundedAndDrained | fragile | synctest | Initial quota admission and delivery entry must complete before the dispatch timeout. |
+| auth/challenge/requests_test.go:218 | TestRecoveryRequestDispatchIsOwnedBoundedAndDrained | safe | synctest | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| auth/challenge/requests_test.go:280 | TestRecoveryRequestsFailBeforeLookupWhenAdmissionUnavailable | fragile | synctest | Error case must execute the limiter and preserve its cause before the shared 10 ms budget expires. |
+| auth/password/dummy_test.go:18 | TestDummyCheckUsesSharedHashCapacity | fragile | synctest | Post-overload DummyCheck must finish the real KDF inside the reused 50 ms policy. |
+| auth/password/hasher_test.go:155 | TestCanceledAndOverloadedHasherReturnsNoHash | fragile | deferred at 40-test cap | Held gate callback must enter before its 50 ms operation budget; otherwise the entry-channel wait can hang. |
+| auth/password_login_test.go:362 | TestPasswordLoginRejectsIncompleteBindingsAndTimeout | safe | unchanged | Lookup intentionally waits for context expiry; no successful result or callback-entry count is required. |
+| auth/session/session_test.go:258 | TestIssueOwnsCanceledCallbackUntilExitAndKeepsCommittedResult | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| auth/token/current_test.go:151 | TestCommittedRefreshSurvivesLateDeadline | fragile | synctest | Token Issue and refresh commit must succeed before waiting for the same short policy to expire. |
+| auth/token/postgres/backend_test.go:446 | TestTokenRefreshChecksExpiryAfterSubjectLock | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| auth/token/postgres/contention_test.go:24 | TestTokenContentionClassification | safe | unchanged | Server-side lock timeout targets a deliberately held subject lock; client setup is outside that lock wait. |
+| auth/token/postgres/contention_test.go:27 | TestTokenContentionClassification | fragile | deferred at 40-test cap | Shared pool acquisition timeout also covers successful connection acquisition during setup and subsequent operations. |
+| cache/cache_test.go:291 | TestReadBoundsAndTimeoutReachBackend | fragile | synctest | Missing and oversized reads must complete without error under the same timeout used for the expiry case. |
+| cache/counter_test.go:262 | TestCounterBackendFailuresRemainErrorsAndAreNotRetried | fragile | synctest | Callbacks must execute exactly once and retain their error classification before the short budget expires. |
+| cache/flexible_test.go:193 | TestStoreCloseDrainsInFlightRefresh | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| cache/invalidate_test.go:133 | TestNamespaceInvalidationOwnsCallbacksAndFailures | fragile | synctest | Callbacks must execute exactly once and retain their error classification before the short budget expires. |
+| contract/json_stream_test.go:215 | TestStreamingJSONCallbackOwnershipAndFailures | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| database/error_classification_test.go:59 | TestFailedConnectionAcquisitionRetainsClassifierOwner | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| database/error_classification_test.go:160 | TestTransactionErrorInspectionRetainsRollbackAndPoolOwnership | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| database/migration_runner_test.go:437 | TestMigrationLockDeadlineDuringLockQueryIsTimeout | safe | unchanged | The fake advisory-lock query intentionally waits for expiry; either deadline path leaves no applied schema. |
+| database/migration_runner_test.go:455 | TestMigrationLockWaitHonorsTimeoutWithoutApplyingSchema | fragile | synctest | Second runner must establish its migration session and perform contention handling within the short lock budget. |
+| database/module_test.go:60 | TestPoolConcurrentStartWaitersAndCloseDuringStartup | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| database/module_test.go:178 | TestDatabaseModuleKeepsApplicationStoppingWhilePoolIsOwned | not sure | needs follow-up inspection | Short lifecycle budget crosses callback scheduling/cleanup; no proven alternative failure path established in this pass. |
+| database/module_test.go:194 | TestDatabaseModuleKeepsApplicationStoppingWhilePoolIsOwned | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| database/observer_scope_test.go:172 | TestObserverScopePoolShutdownDrainsWorkAfterConnectionRelease | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| database/observer_scope_test.go:198 | TestObserverScopeCanRetainAnExistingStreamDuringPoolDrain | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| database/pool_test.go:198 | TestPoolCloseDeadlineRetainsActiveOwnership | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| database/pool_test.go:236 | TestAcquisitionDeadlineDoesNotShortenStatementContext | safe | synctest | Simulated statement delay proves the acquisition deadline does not escape; timeout risk belongs to the acquisition setting. |
+| database/pool_test.go:242 | TestAcquisitionDeadlineDoesNotShortenStatementContext | fragile | synctest | Successful acquisition must beat 5 ms; the 1 ms caller timer also competes with that budget. |
+| database/pool_test.go:252 | TestAcquisitionDeadlineDoesNotShortenStatementContext | fragile | synctest | Successful acquisition must beat 5 ms; the 1 ms caller timer also competes with that budget. |
+| database/pool_test.go:283 | TestOpenBoundsAndConnectDeadline | fragile | synctest | Connect must complete before the 5 ms ping deadline so exactly one opened connection is closed. |
+| database/postgres/acceptance_test.go:54 | TestPostgresParametersStreamingAndResourceRelease | fragile | deferred at 40-test cap | Shared pool acquisition timeout also covers successful connection acquisition during setup and subsequent operations. |
+| database/postgres/acceptance_test.go:107 | TestPostgresCancellationUnavailableAndProtocolBounds | safe | unchanged | pg_sleep intentionally exceeds the deadline; cancellation before query dispatch still has the asserted deadline identity. |
+| database/postgres/nontransactional_migrations_test.go:59 | TestPostgresConcurrentMigrationCheckpointAndRecovery | safe | unchanged | Poll interval; a separate, larger deadline bounds progress. |
+| database/postgres/session_limits_postgres_test.go:18 | TestPostgresSessionTimeoutsClassifyServerCancellationAndLockWaits | safe | unchanged | PostgreSQL lock timeout only fires against a deliberately held lock; statement timeout is a separate 500 ms setting. |
+| database/runtime_resilience_test.go:106 | TestCommitTimeoutBoundsDetachedCompletion | safe | unchanged | Commit intentionally waits for expiry and asserts unknown outcome; successful work is outside the short commit phase. |
+| database/sticky_reads_test.go:34 | TestStickyReadsRouteToPrimaryAfterAWriteInScope | fragile | synctest | A follow-up read must occur inside the 50 ms sticky-routing deadline after each successful write. |
+| database/sticky_reads_test.go:114 | TestStickyReadsMeasureFromWriteCompletion | fragile | synctest | A follow-up read must occur inside the 50 ms sticky-routing deadline after each successful write. |
+| database/transaction_test.go:319 | TestPoolShutdownWaitsForAfterCommitCallbackExit | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| datatable/collation_boot_test.go:191 | TestCheckCollationPreservesDatabaseErrorsAndCancellation | safe | unchanged | Probe deliberately blocks on its deadline; either early or late cancellation returns the expected deadline identity. |
+| datatable/collation_boot_test.go:197 | TestCheckCollationPreservesDatabaseErrorsAndCancellation | safe | unchanged | Probe deliberately blocks on its deadline; either early or late cancellation returns the expected deadline identity. |
+| datatable/datatable_postgres_test.go:330 | TestPostgresDatatableCancellationRetainsCallbackOwnership | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| datatable/datatable_postgres_test.go:433 | TestPostgresExportSlotsReleaseWhenArtifactsComplete | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| datatable/export_artifact_test.go:73 | shortWait | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| datatable/routes_test.go:362 | TestPostgresRoutesCallbackFailureAndCancellation | fragile | deferred at 40-test cap | Route setup and callbacks must reach a live export/download deadline; test asserts remaining budget is positive. |
+| diagnostics/public_test.go:105 | TestPublicReadinessSharesOneCachedCheck | safe | unchanged | 50 ms is a successful probe delay, not a short completion deadline. |
+| email/email_test.go:382 | TestMailerCapacityCancellationAndSelfWait | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| email/jobs_test.go:278 | TestQueuedAcceptancePreventsRetryAfterTimeoutAndMiddlewareFailure | fragile | deferred at 40-test cap | Queued mail must reach acceptance before job expiry; otherwise succeeded state and single acceptance are lost. |
+| email/smtp_test.go:165 | TestSMTPProtocolSecurityEnvelopeAndOutcomes | fragile | deferred at 40-test cap | SMTP connection must be established before cancellation; test then waits for the server observation unconditionally. |
+| events/dispatch_test.go:143 | TestDispatchCapacityAndShutdownRetainActualCallbackOwnership | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| events/dispatch_test.go:196 | TestDispatchBeyondCapacityQueuesUntilASlotFrees | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| events/lifecycle_test.go:152 | TestApplicationKeepsDependenciesAliveForAnUncooperativeEventHandler | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| foundation/lifecycle_test.go:228 | TestShutdownWaitsForBootAndKeepsPartialResourcesOwned | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| foundation/lifecycle_test.go:270 | TestShutdownDoesNotCloseDependenciesUnderActiveTasks | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| foundation/lifecycle_test.go:473 | TestCleanupDeadlineKeepsDependenciesOwnedUntilReturn | not sure | needs follow-up inspection | Short lifecycle budget crosses callback scheduling/cleanup; no proven alternative failure path established in this pass. |
+| foundation/lifecycle_test.go:494 | TestCleanupDeadlineKeepsDependenciesOwnedUntilReturn | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| foundation/observability_test.go:36 | TestApplicationOwnsReporterUntilActualExit | not sure | needs follow-up inspection | Short lifecycle budget crosses callback scheduling/cleanup; no proven alternative failure path established in this pass. |
+| foundation/observability_test.go:50 | TestApplicationOwnsReporterUntilActualExit | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| foundation/shutdown_budget_test.go:170 | TestStartupTimeoutFailsBoot | not sure | needs follow-up inspection | Short lifecycle budget crosses callback scheduling/cleanup; no proven alternative failure path established in this pass. |
+| health/module_test.go:25 | TestReadinessModuleDrainsBeforeItsDependency | fragile | synctest | Probe must enter before its deadline to retain callback ownership and the asserted call count during shutdown. |
+| health/module_test.go:61 | TestReadinessModuleDrainsBeforeItsDependency | safe | synctest | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| health/probes_test.go:53 | TestReadinessBoundsIgnoredCancellationAndRetainsShutdownOwnership | fragile | synctest | Probe must enter before its deadline to retain callback ownership and the asserted call count during shutdown. |
+| http/browser_session_deadline_postgres_test.go:58 | TestBrowserSessionsFollowRouteBudgetThroughGlobalWrappers | fragile | deferred at 40-test cap | Browser-session routing/login must complete before the short kernel budget in the withheld/late cases. |
+| http/browser_session_state_test.go:55 | TestBrowserSessionOwnsLateMutationAndRejectsEarlyResponse | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| http/connection_budget_test.go:92 | TestNativeServerBoundsAcceptedConnectionsBeforeHandlerAdmission | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| http/endpoint_lifecycle_test.go:183 | TestRequestLifecycleMultipartCleanupAndCancellation | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| http/endpoint_semantics_test.go:54 | TestRequestDeadlineClassificationFollowsLifecyclePhase | safe | unchanged | Slow body intentionally exceeds request deadline; the expected result is body timeout even if decoding starts late. |
+| http/endpoint_semantics_test.go:86 | TestRequestDeadlineClassificationFollowsLifecyclePhase | safe | unchanged | Already protected by the reference synctest bubble on this branch. |
+| http/endpoint_semantics_test.go:162 | TestRouteTimeoutReplacesKernelRequestTimeout | fragile | synctest | Routing/value propagation must complete before short budgets; long-route sleep and client-cancellation timers share real scheduling. |
+| http/endpoint_semantics_test.go:183 | TestRouteTimeoutReplacesKernelRequestTimeout | fragile | synctest | Routing/value propagation must complete before short budgets; long-route sleep and client-cancellation timers share real scheduling. |
+| http/endpoint_semantics_test.go:194 | TestRouteTimeoutReplacesKernelRequestTimeout | fragile | synctest | Routing/value propagation must complete before short budgets; long-route sleep and client-cancellation timers share real scheduling. |
+| http/error_details_test.go:627 | TestErrorLocalizationAfterContextEnds | fragile | deferred at 40-test cap | Typed handler must be reached before expiry to publish its declared localized error instead of an early timeout. |
+| http/etag_test.go:182 | TestETagCaptureSaturationAndRelease | safe | unchanged | Capture capacity is explicitly held; successful admission uses the immediately available slot, while saturation deliberately times out. |
+| http/file_reader_test.go:233 | TestFileReaderCloseWaitsForActiveCallbackAndPreventsLateAccess | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| http/form_callback_test.go:54 | TestFormScalarCallbacksStayOwned | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| http/modelbinding/nested_test.go:104 | TestNestedResolverFailureAndCancellationRemainOwned | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| http/request_deadline_test.go:60 | TestRequestDeadlineRetainsHandlerOwnershipUntilExit | safe | unchanged | Raw handler deliberately waits for expiry and has no pre-handler typed decoding requirement. |
+| http/request_deadline_test.go:110 | TestTypedEndpointPublishesSuccessCompletedAfterKernelDeadline | fragile | synctest | Typed routing/decoding must reach the handler before deadline; otherwise late-success/error assertions observe an early request failure. |
+| http/request_observation_test.go:128 | TestHTTPConcurrentBudgetRetainsCancelledHandlerUntilReturn | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| http/request_observer_test.go:127 | TestAdmittedCompletionRetainsRequestCapacity | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| http/stream_events_test.go:147 | TestServeEventsBoundedQueueAppliesBackpressure | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| http/transport_deadline_test.go:62 | TestGlobalWrappersHonorRouteBudgetAndCompletedResponses | fragile | synctest | Typed routing/decoding must reach the handler before deadline; otherwise late-success/error assertions observe an early request failure. |
+| http/transport_deadline_test.go:124 | TestLateEventStreamIsReportedNotEmpty | fragile | synctest | Typed routing/decoding must reach the handler before deadline; otherwise late-success/error assertions observe an early request failure. |
+| http/transport_deadline_test.go:205 | TestAdmissionRejectionsAreNotReportedAsFailures | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| http/webhook_capture_test.go:507 | TestWebhookCaptureUnreadKernelRejections | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| httpclient/capture/rows_test.go:309 | TestRowShapePerCallPath | fragile | deferred at 40-test cap | Capture must record a sent attempt before cancellation; early expiry can record attempt zero instead. |
+| httpclient/capture/rows_test.go:320 | TestRowShapePerCallPath | fragile | deferred at 40-test cap | Capture must record a sent attempt before cancellation; early expiry can record attempt zero instead. |
+| httpclient/capture/rows_test.go:429 | TestNeverSentCallsAreAttemptZero | safe | unchanged | Saturated client intentionally never sends; caller expiry still records the asserted attempt-zero path. |
+| httpclient/destination_test.go:105 | TestDestinationDialPinsAndRechecksDNS | safe | unchanged | Only the final DNS lookup uses the 1 ms setting and intentionally waits for expiry. |
+| httpclient/helpers_test.go:173 | TestExhaustedClientCapacityIsATypedOverload | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| httpclient/lifetime_test.go:53 | TestCloseRetainsUncooperativeTransportOwnership | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| httpclient/lifetime_test.go:98 | TestResponseCloseCompletesBeforeAdmissionIsReleased | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| httpclient/native_test.go:91 | TestNativeDeadlinesAndDecompressedResponseBound | fragile | real bound: 30 ms -> 1 s | Real TCP request must reach the server before 30 ms expiry; test waits for server entry and later body-bound handling. |
+| idempotency/operation_postgres_test.go:301 | TestBoundedActiveWorkCancellationAndClose | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| imaging/engine_test.go:307 | TestCloseRetainsActualReaderLifetime | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| imaging/native_vips_test.go:413 | TestNativeCloseRetainsActualReaderLifetime | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| imaging/native_vips_test.go:436 | TestNativeInFlightCancellationLeavesEngineUsable | not sure | needs follow-up inspection | JPEG XL operation races a 5 ms deadline; no deterministic native-operation entry signal is available in this test. |
+| infrastructure/persistent_cache_test.go:164 | TestShutdownWaitsForInFlightCacheRefresh | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| internal/admission/semaphore_test.go:21 | TestSemaphoreWaitsThenReportsOverload | safe | unchanged | Wait starts inside Acquire with the slot held; it is meant to expire. |
+| internal/admission/semaphore_test.go:24 | TestSemaphoreWaitsThenReportsOverload | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| internal/filelock/acquire_test.go:26 | TestAcquireWaitsAndHonorsCancellation | safe | unchanged | Lock remains held throughout the timed attempt; expiry before or during acquisition returns the same expected deadline. |
+| internal/filelock/acquire_test.go:120 | TestCanceledWaitersLeaveNothingBehind | safe | unchanged | Lock remains held throughout the timed attempt; expiry before or during acquisition returns the same expected deadline. |
+| internal/upload/pool_test.go:171 | TestPoolWaitsForActualCaptureExit | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| internal/workscope/group_test.go:95 | TestAdmissionQueuesBurstsAndReportsOverload | fragile | deferred at 40-test cap | Queued success later in this test has only 50 ms to be admitted after a 10 ms sleep releases capacity. |
+| internal/workscope/lease_test.go:28 | TestLeaseRetainsCapacityAfterCancellationUntilActualRelease | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| jobs/backend_failures_test.go:102 | TestWorkerSurvivesBackendFailuresAndRetainsShutdownOwnership | fragile | deferred at 40-test cap | Memory worker startup/reservation/start/heartbeat work must complete inside a 30–50 ms operation budget; helper consumers inherit it. |
+| jobs/backend_failures_test.go:183 | TestWorkerRefundsAStartLostDuringShutdown | safe | unchanged | Small value is only polling/backoff; operation budget on this line is 5 s/300 ms. |
+| jobs/execution_policy_test.go:52 | withOptions | fragile | selected consumers use synctest; other consumers deferred | Memory worker startup/reservation/start/heartbeat work must complete inside a 30–50 ms operation budget; helper consumers inherit it. |
+| jobs/jobs_test.go:145 | newWorkerFixture | fragile | selected consumers use synctest; other consumers deferred | Heartbeat renewals must beat the shared 150 ms real lease; selected worker consumers now run in virtual time. |
+| jobs/jobs_test.go:146 | newWorkerFixture | fragile | selected consumers use synctest; other consumers deferred | Memory worker startup/reservation/start/heartbeat work must complete inside a 30–50 ms operation budget; helper consumers inherit it. |
+| jobs/jobs_test.go:248 | TestUncooperativeHandlerRetainsLeaseAndShutdownOwnership | fragile | synctest | Handler/admission must be reached before 5–10 ms expiry to preserve state, retry counts and callback ownership. |
+| jobs/jobs_test.go:269 | TestUncooperativeHandlerRetainsLeaseAndShutdownOwnership | safe | synctest | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| jobs/observability_test.go:69 | TestWorkerPausesReservationAndRestoresOnlyOwnedCorrelation | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| jobs/permanent_test.go:24 | TestPermanentFailureStopsRetryEvenAfterTimeout | fragile | synctest | Handler/admission must be reached before 5–10 ms expiry to preserve state, retry counts and callback ownership. |
+| jobs/worker_drain_test.go:26 | withWorker | fragile | selected consumers use synctest; other consumers deferred | Memory worker startup/reservation/start/heartbeat work must complete inside a 30–50 ms operation budget; helper consumers inherit it. |
+| jobs/worker_drain_test.go:87 | TestDrainDeadlineCancelsAndRefundsInterruptedAttempt | safe | synctest | Drain deadline begins after handler entry and deliberately cancels it; inherited startup/operation risk is listed on withWorker. |
+| jobs/worker_failures_test.go:171 | TestAdmissionTimeoutConsumesRetryBudget | fragile | synctest | Handler/admission must be reached before 5–10 ms expiry to preserve state, retry counts and callback ownership. |
+| jobs/worker_lease_admission_test.go:99 | checkLeaseLossAdmission | fragile | deferred at 40-test cap | Memory worker startup/reservation/start/heartbeat work must complete inside a 30–50 ms operation budget; helper consumers inherit it. |
+| jobs/worker_lease_admission_test.go:136 | checkLeaseLossAdmission | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| jobs/worker_lease_admission_test.go:200 | TestLeaseLostBeforeStartDoesNotRunHandler | fragile | deferred at 40-test cap | Memory worker startup/reservation/start/heartbeat work must complete inside a 30–50 ms operation budget; helper consumers inherit it. |
+| jobs/worker_lease_admission_test.go:218 | TestLeaseLostBeforeStartDoesNotRunHandler | safe | unchanged | Poll interval; a separate, larger deadline bounds progress. |
+| jobs/worker_logging_test.go:174 | TestBlockingJobLoggerRetainsSlotAndShutdownOwnership | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| jobs/worker_logging_test.go:210 | TestJobFinalizationFailureIsLoggedAsUnconfirmed | safe | unchanged | Small value is only polling/backoff; operation budget on this line is 5 s/300 ms. |
+| jobs/worker_scheduling_test.go:157 | TestLeaseLossCancelsAndRetainsLiveHandler | safe | unchanged | One-millisecond heartbeat is a poll interval used to inject lease loss; not a completion deadline. |
+| lease/lease_test.go:85 | TestAcquireWaitAndExpiry | safe | unchanged | Already runs inside testing/synctest. |
+| lease/lease_test.go:89 | TestAcquireWaitAndExpiry | safe | unchanged | Already runs inside testing/synctest. |
+| notifications/delivery_postgres_test.go:264 | TestNotificationConcurrentClaimAndShutdownOwnActualCallback | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| observability/exporters_test.go:83 | TestTraceExporterFailureAndLifetimeRemainOwned | not sure | needs follow-up inspection | Need to trace whether short reporter/exporter deadline can suppress callback entry; close wait itself is expiry-only. |
+| observability/exporters_test.go:104 | TestTraceExporterFailureAndLifetimeRemainOwned | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| observability/recorder_test.go:125 | TestReporterShutdownOwnsContextIgnoringCallback | not sure | needs follow-up inspection | Need to trace whether short reporter/exporter deadline can suppress callback entry; close wait itself is expiry-only. |
+| observability/recorder_test.go:146 | TestReporterShutdownOwnsContextIgnoringCallback | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| outbox/publisher/timestamp_postgres_test.go:155 | TestPostgresPublisherRetryDeadlinePrecision | safe | unchanged | Explicit test clock/data arithmetic around persisted retry instants, not a wall-clock deadline. |
+| pubsub/ownership_test.go:33 | TestKeyCallbackRetainsOperationUntilExit | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| pubsub/ownership_test.go:103 | TestDecoderRetainsSubscriptionUntilExit | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| ratelimit/limiter_test.go:88 | TestCallbacksFailuresAndLateReplies | fragile | deferred at 40-test cap | Immediate error callback must retain its sentinel cause rather than lose it to a pre-invocation timeout. |
+| ratelimit/limiter_test.go:120 | TestResolverOwnsCapacityUntilExit | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| redis/tls_containment_test.go:325 | TestReadTimeoutLeavesConnectionUsable | safe | unchanged | No bytes are sent during read timeout; connection recovery uses a separate five-second deadline. |
+| redis/transport_test.go:193 | TestOperationCapacityAndCloseDrain | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| schedule/observability_test.go:52 | TestSchedulerMaintenanceKeepsBoundedCatchUpAndOwnedTracing | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| schedule/scheduler_test.go:236 | TestEnvironmentFiltersAndUncooperativeShutdown | fragile | deferred at 40-test cap | Scheduled handler must start and signal entry before its 20 ms invocation deadline. |
+| schedule/scheduler_test.go:270 | TestEnvironmentFiltersAndUncooperativeShutdown | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| storage/admission_test.go:51 | TestStreamsUseTheirOwnQueuedPool | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| storage/admission_test.go:77 | TestIdleStreamIsCancelledButProgressKeepsItOpen | fragile | synctest | Reads spaced 20 ms apart must beat the 40 ms idle timer; scheduler stalls can cancel a progressing stream. |
+| storage/admission_test.go:123 | TestOperationsQueueForCapacity | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| storage/error_classification_test.go:51 | TestStorageErrorInspectionCannotEscapeOrReleaseOwnership | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| storage/local/staging_test.go:369 | stagingBusyContext | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| storage/s3/transfer_test.go:347 | TestSharedUploadAdmissionRemainsOwnedUntilBlockedSourceExits | fragile | deferred at 40-test cap | Must reach saturated admission before caller deadline; pre-expired contexts can return deadline instead of the asserted Overloaded classification. |
+| telemetry/module_postgres_test.go:91 | TestPostgresTelemetryModuleRetainsDependenciesPastShutdownDeadline | not sure | needs follow-up inspection | Short lifecycle budget crosses callback scheduling/cleanup; no proven alternative failure path established in this pass. |
+| telemetry/test_flush_postgres_test.go:204 | TestPostgresTestFlushBudgetLeavesPendingBatch | safe | unchanged | Injected storage transaction waits for expiry; short flush budget intentionally fails and keeps pending data. |
+| testkit/http/assertions_test.go:43 | TestClientTimeoutIsConfigurable | safe | unchanged | Short client intentionally times out a slow handler; successful follow-up uses a separate five-second client. |
+| testkit/postgres/application/limiter_test.go:214 | TestLimiter_MultiAppAndSubtestsHoldOneSlotWithoutDeadlock | safe | unchanged | Full semaphore is held throughout; only DeadlineExceeded is asserted, with no successful work inside the short wait. |
+| testkit/postgres/application/limiter_test.go:262 | TestLimiter_CancellationWhileWaitingReturnsContextError | fragile | deferred at 40-test cap | Elapsed-time assertion starts after context creation; a scheduling pause in that gap can make the measured wait too short. |
+| testkit/postgres/application/limiter_test.go:354 | TestLimiter_ShutdownTimeoutRetainsSlotUntilDependenciesClose | not sure | needs follow-up inspection | Short lifecycle budget crosses callback scheduling/cleanup; no proven alternative failure path established in this pass. |
+| testkit/postgres/application/limiter_test.go:408 | TestLimiter_ShutdownTimeoutRetainsSlotUntilDependenciesClose | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| tests/fixtures/consumer/httpendpoints/deadline_test.go:35 | TestServerDeadlineReachesTypedDomainHandler | fragile | deferred at 40-test cap | Real HTTP routing must enter typed handler before 50 ms expiry; test asserts handler cancellation and server-budget classification. |
+| tests/fixtures/consumer/httpkernel/kernel_test.go:43 | TestHTTPKernelRetainsInjectedDependencies | not sure | needs follow-up inspection | Short lifecycle budget crosses callback scheduling/cleanup; no proven alternative failure path established in this pass. |
+| tests/fixtures/consumer/httpkernel/kernel_test.go:45 | TestHTTPKernelRetainsInjectedDependencies | not sure | needs follow-up inspection | Short lifecycle budget crosses callback scheduling/cleanup; no proven alternative failure path established in this pass. |
+| tests/fixtures/consumer/httpkernel/kernel_test.go:143 | TestOtherKernelDoesNotBindHTTPListener | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| tests/fixtures/consumer/isolatedhttp/isolation_test.go:155 | TestIsolatedCompleteHTTPApplications | safe | unchanged | Poll interval; a separate, larger deadline bounds progress. |
+| tests/fixtures/consumer/realtime/orders_test.go:39 | TestWebSocketKernelUsesTypedConsumerAndNativeMiddleware | fragile | deferred at 40-test cap | Real WebSocket upgrade must complete before the HTTP request budget, then connection must survive that budget. |
+| tests/fixtures/consumer/teamworkflow/fixture_test.go:127 | waitFor | safe | unchanged | Poll interval; a separate, larger deadline bounds progress. |
+| tests/fixtures/deploy-acceptance/internal/work/receipts_test.go:50 | TestCanceledBarrierNeverCompletes | safe | unchanged | Unreleased receipt barrier must expire; cancellation before entry also leaves no completed marker, as asserted. |
+| validation/parallel_test.go:82 | TestParallelCancellationWaitsForCallbackExitAndCanReuse | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| value/json_keys_test.go:144 | TestJSONKeyCallbackOwnershipAndFailureClassification | safe | unchanged | Negative observation while a callback/resource is held until explicit release; slower scheduling does not release it. |
+| websocket/bounds_internal_test.go:127 | TestManagementOperationsQueueThenReportOverload | fragile | deferred at 40-test cap | Queued management operation must be admitted after 5 ms sleep but before its 30 ms admission wait expires. |
+| websocket/lifecycle_test.go:68 | TestCancelledCallbackKeepsConnectionSlotUntilActualExit | fragile | deferred at 40-test cap | Subscribe/authorization/callback entry must succeed within the same short operation policy used for intentional expiry. |
+| websocket/lifecycle_test.go:84 | TestCancelledCallbackKeepsConnectionSlotUntilActualExit | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| websocket/publication_ownership_test.go:40 | TestPublicationCodecRetainsOwnershipUntilActualExit | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+| websocket/runtime_features_test.go:117 | TestHeartbeatEvictsSilentPeerAndRateCountsMalformedFrames | safe | unchanged | Heartbeat interval for a deliberately silent peer; no successful Pong is required. |
+| websocket/runtime_features_test.go:118 | TestHeartbeatEvictsSilentPeerAndRateCountsMalformedFrames | safe | unchanged | Peer deliberately never reads/responds; heartbeat/Pong expiry is the intended outcome, with no response timer race. |
+| websocket/runtime_features_test.go:148 | TestRefreshRevokesIdleSubjectAndLocalSubjectLimitCountsConnections | safe | unchanged | Refresh interval, not a completion timeout; disabled subject is eventually evicted. |
+| websocket/runtime_features_test.go:208 | TestHeartbeatChurnReleasesLoopsAndQueues | fragile | deferred at 40-test cap | Fast heartbeat activates a 100 ms Pong deadline while each real client must subscribe successfully. |
+| websocket/runtime_features_test.go:245 | TestBlockedAuthorizationRefreshRetainsOwnershipUntilActualExit | safe | unchanged | Refresh poll interval; fragility is in the adjacent operation timeout. |
+| websocket/runtime_features_test.go:246 | TestBlockedAuthorizationRefreshRetainsOwnershipUntilActualExit | fragile | deferred at 40-test cap | Subscribe/authorization/callback entry must succeed within the same short operation policy used for intentional expiry. |
+| websocket/runtime_features_test.go:261 | TestBlockedAuthorizationRefreshRetainsOwnershipUntilActualExit | safe | unchanged | Deadline is meant to fire while previously admitted work remains held; no successful operation must finish inside this wait. |
+
+Excluded raw hits
+
+The scan found 473 raw duration lines. The table retains the 186 relevant hits; excluded hits were polls, sleeps, explicit clock/data arithmetic, or validation/precision/TTL inputs.
+
+Inherited worker-fixture budgets
+
+| File:line | Test | Action |
+| --- | --- | --- |
+| jobs/backend_failures_test.go:75 | TestWorkerSurvivesBackendFailuresAndRetainsShutdownOwnership | deferred: inspect inherited operation budget |
+| jobs/backend_failures_test.go:166 | TestWorkerRefundsAStartLostDuringShutdown | deferred: inspect inherited operation budget |
+| jobs/encryption_test.go:27 | TestEncryptedPayloadsAreSealedAtCaptureAndOpenedByWorkers | deferred: inspect inherited operation budget |
+| jobs/encryption_test.go:63 | TestWorkerWithoutKeyringRetriesEncryptedPayload | deferred: inspect inherited operation budget |
+| jobs/envelope_trace_test.go:105 | TestTracedWorkerRestoresProducerParent | deferred: inspect inherited operation budget |
+| jobs/envelope_trace_test.go:150 | TestRedispatchKeepsCurrentFormatAfterClearingRetryDeadline | deferred: inspect inherited operation budget |
+| jobs/error_graph_test.go:25 | TestCyclicJobErrorsFinishRetriesAndReleaseWorker | deferred: inspect inherited operation budget |
+| jobs/execution_policy_test.go:59 | TestWithoutOverlappingSerializesSameKeyAndReleasesOnExit | changed: synctest |
+| jobs/execution_policy_test.go:119 | TestThrottleExceptionsReleasesWithoutConsumingAttempts | changed: synctest |
+| jobs/execution_policy_test.go:165 | TestMaxExceptionsAndRetryUntilEndRetries | changed: synctest |
+| jobs/inspection_test.go:11 | TestQuarantineInspectionOptionalBackendAndValidation | deferred: inspect inherited operation budget |
+| jobs/jobs_test.go:196 | TestWorkerRetriesKeepIdentityAndDiscardRequestContext | changed: synctest |
+| jobs/jobs_test.go:242 | TestUncooperativeHandlerRetainsLeaseAndShutdownOwnership | changed: synctest |
+| jobs/observability_test.go:16 | TestWorkerPausesReservationAndRestoresOnlyOwnedCorrelation | deferred: inspect inherited operation budget |
+| jobs/outbox_postgres_test.go:137 | TestMemoryOutboxPublicationIsRejected | deferred: inspect inherited operation budget |
+| jobs/permanent_test.go:16 | TestPermanentFailureStopsRetryEvenAfterTimeout | changed: synctest |
+| jobs/permanent_test.go:46 | TestWorkerOwnsErrorClassification | changed: synctest |
+| jobs/permanent_test.go:82 | TestPreventRetryOnlyAffectsLiveStartedAttempt | deferred: inspect inherited operation budget |
+| jobs/retry_test.go:29 | TestTypedManualRetryReconcilesAmbiguousAcceptance | deferred: inspect inherited operation budget |
+| jobs/worker_drain_test.go:41 | TestDrainLetsAdmittedHandlerFinishAndStopsReserving | changed: synctest |
+| jobs/worker_drain_test.go:77 | TestDrainDeadlineCancelsAndRefundsInterruptedAttempt | changed: synctest |
+| jobs/worker_drain_test.go:109 | TestHandlerReturningNilIsSucceededAfterStopOrPreventRetry | changed: synctest |
+| jobs/worker_drain_test.go:146 | TestLocalEnqueueWakesIdleWorker | deferred: inspect inherited operation budget |
+| jobs/worker_drain_test.go:168 | TestRetryJitterIsProportionalToDelay | deferred: inspect inherited operation budget |
+| jobs/worker_failures_test.go:40 | TestWorkerIsolatesPanicAndGoexit | changed: synctest |
+| jobs/worker_failures_test.go:63 | TestWorkerCancellationWaitsForHandler | changed: synctest |
+| jobs/worker_failures_test.go:99 | TestWorkerSelfShutdownAndSavedContext | changed: synctest |
+| jobs/worker_failures_test.go:122 | TestAdmissionDenialsDoNotConsumeAttempts | changed: synctest |
+| jobs/worker_failures_test.go:141 | TestSkipPredicateCompletesWithoutMiddlewareOrHandler | changed: synctest |
+| jobs/worker_failures_test.go:167 | TestAdmissionTimeoutConsumesRetryBudget | changed: synctest |
+| jobs/worker_failures_test.go:184 | TestMiddlewareUnwindsFailuresAndIsolatesCallbacks | changed: synctest |
+| jobs/worker_failures_test.go:220 | TestWorkerRejectsUnknownVersionsAndInvalidPayloads | changed: synctest |
+| jobs/worker_lease_admission_test.go:176 | TestLeaseLostBeforeStartDoesNotRunHandler | deferred: inspect inherited operation budget |
+| jobs/worker_logging_test.go:44 | TestWorkerFailureLoggingHasMetadataWithoutErrorOrPayload | deferred: inspect inherited operation budget |
+| jobs/worker_logging_test.go:112 | TestWorkerLoggingFailureDoesNotReplayOrLoseCapacity | deferred: inspect inherited operation budget |
+| jobs/worker_logging_test.go:157 | TestBlockingJobLoggerRetainsSlotAndShutdownOwnership | deferred: inspect inherited operation budget |
+| jobs/worker_logging_test.go:196 | TestJobFinalizationFailureIsLoggedAsUnconfirmed | deferred: inspect inherited operation budget |
+| jobs/worker_logging_test.go:256 | TestWorkerStopReleasesInterruptedAttemptWithoutConsumingBudget | deferred: inspect inherited operation budget |
+| jobs/worker_maintenance_test.go:61 | TestWorkerMaintenanceReservationLogs | deferred: inspect inherited operation budget |
+| jobs/worker_recovery_test.go:37 | TestWorkerFailurePauseLocalEnqueueAndMinimum | already uses synctest |
+| jobs/worker_scheduling_test.go:134 | TestLeaseLossCancelsAndRetainsLiveHandler | deferred: inspect inherited operation budget |
+
+Files changed
+
+auth/challenge/requests_test.go: TestRecoveryRequestsAcknowledgeWithoutExposingExistenceOrFailures, TestRecoveryRequestDispatchIsOwnedBoundedAndDrained, TestRecoveryRequestsFailBeforeLookupWhenAdmissionUnavailable
+auth/auth_test.go: TestTimeoutSuppressesLateSuccessAndCannotRetryWithinScope
+auth/token/current_test.go: TestCommittedRefreshSurvivesLateDeadline
+auth/password/dummy_test.go: TestDummyCheckUsesSharedHashCapacity
+cache/cache_test.go: TestReadBoundsAndTimeoutReachBackend
+cache/counter_test.go: TestCounterBackendFailuresRemainErrorsAndAreNotRetried
+cache/invalidate_test.go: TestNamespaceInvalidationOwnsCallbacksAndFailures
+database/migration_runner_test.go: TestMigrationLockWaitHonorsTimeoutWithoutApplyingSchema
+database/pool_test.go: TestAcquisitionDeadlineDoesNotShortenStatementContext, TestOpenBoundsAndConnectDeadline
+database/sticky_reads_test.go: TestStickyReadsRouteToPrimaryAfterAWriteInScope, TestStickyReadsMeasureFromWriteCompletion
+http/endpoint_semantics_test.go: TestRouteTimeoutReplacesKernelRequestTimeout
+http/request_deadline_test.go: TestTypedEndpointPublishesSuccessCompletedAfterKernelDeadline
+http/transport_deadline_test.go: TestGlobalWrappersHonorRouteBudgetAndCompletedResponses, TestLateEventStreamIsReportedNotEmpty
+storage/admission_test.go: TestIdleStreamIsCancelledButProgressKeepsItOpen
+health/probes_test.go: TestReadinessBoundsIgnoredCancellationAndRetainsShutdownOwnership
+health/module_test.go: TestReadinessModuleDrainsBeforeItsDependency
+jobs/jobs_test.go: TestWorkerRetriesKeepIdentityAndDiscardRequestContext, TestUncooperativeHandlerRetainsLeaseAndShutdownOwnership
+jobs/execution_policy_test.go: TestWithoutOverlappingSerializesSameKeyAndReleasesOnExit, TestThrottleExceptionsReleasesWithoutConsumingAttempts, TestMaxExceptionsAndRetryUntilEndRetries
+jobs/worker_drain_test.go: TestDrainLetsAdmittedHandlerFinishAndStopsReserving, TestDrainDeadlineCancelsAndRefundsInterruptedAttempt, TestHandlerReturningNilIsSucceededAfterStopOrPreventRetry
+jobs/worker_failures_test.go: TestWorkerIsolatesPanicAndGoexit, TestWorkerCancellationWaitsForHandler, TestWorkerSelfShutdownAndSavedContext, TestAdmissionDenialsDoNotConsumeAttempts, TestSkipPredicateCompletesWithoutMiddlewareOrHandler, TestAdmissionTimeoutConsumesRetryBudget, TestMiddlewareUnwindsFailuresAndIsolatesCallbacks, TestWorkerRejectsUnknownVersionsAndInvalidPayloads
+jobs/permanent_test.go: TestPermanentFailureStopsRetryEvenAfterTimeout, TestWorkerOwnsErrorClassification
+httpclient/native_test.go: TestNativeDeadlinesAndDecompressedResponseBound
+
+Uncertainty / needs a design decision
+
+No production seam was added or identified as mandatory for the 40 fixes. The native JPEG XL cancellation case needs an entry-signal/design assessment before claiming it tests in-flight cancellation deterministically.
+The lifecycle and reporter/exporter entries marked not sure need callback-path tracing; they were not silently classified safe or changed.
+Remaining fragile rows and worker-helper consumers are deferred because of the requested cap; this is not a claim that the entire repository is hardened.
+
+Commands and results
+
+GOWORK=off go test ./auth/challenge -run '^(TestRecoveryRequestsAcknowledgeWithoutExposingExistenceOrFailures|TestRecoveryRequestDispatchIsOwnedBoundedAndDrained|TestRecoveryRequestsFailBeforeLookupWhenAdmissionUnavailable)$' -count=20
+Exit 0; wall time 2.305 s
+ok  	github.com/weiloon1234/Foundry-Go/auth/challenge	0.557s
+
+GOWORK=off go test ./auth/challenge -run '^(TestRecoveryRequestsAcknowledgeWithoutExposingExistenceOrFailures|TestRecoveryRequestDispatchIsOwnedBoundedAndDrained|TestRecoveryRequestsFailBeforeLookupWhenAdmissionUnavailable)$' -race -count=5
+Exit 0; wall time 4.177 s
+ok  	github.com/weiloon1234/Foundry-Go/auth/challenge	1.502s
+
+GOWORK=off go test ./auth -run '^(TestTimeoutSuppressesLateSuccessAndCannotRetryWithinScope)$' -count=20
+Exit 0; wall time 1.213 s
+ok  	github.com/weiloon1234/Foundry-Go/auth	0.452s
+
+GOWORK=off go test ./auth -run '^(TestTimeoutSuppressesLateSuccessAndCannotRetryWithinScope)$' -race -count=5
+Exit 0; wall time 2.881 s
+ok  	github.com/weiloon1234/Foundry-Go/auth	1.480s
+
+GOWORK=off go test ./auth/token -run '^(TestCommittedRefreshSurvivesLateDeadline)$' -count=20
+Exit 0; wall time 0.971 s
+ok  	github.com/weiloon1234/Foundry-Go/auth/token	0.440s
+
+GOWORK=off go test ./auth/token -run '^(TestCommittedRefreshSurvivesLateDeadline)$' -race -count=5
+Exit 0; wall time 2.330 s
+ok  	github.com/weiloon1234/Foundry-Go/auth/token	1.474s
+
+GOWORK=off go test ./auth/password -run '^(TestDummyCheckUsesSharedHashCapacity)$' -count=20
+Exit 0; wall time 1.452 s
+ok  	github.com/weiloon1234/Foundry-Go/auth/password	1.036s
+
+GOWORK=off go test ./auth/password -run '^(TestDummyCheckUsesSharedHashCapacity)$' -race -count=5
+Exit 0; wall time 3.390 s
+ok  	github.com/weiloon1234/Foundry-Go/auth/password	2.843s
+
+GOWORK=off go test ./cache -run '^(TestReadBoundsAndTimeoutReachBackend|TestCounterBackendFailuresRemainErrorsAndAreNotRetried|TestNamespaceInvalidationOwnsCallbacksAndFailures)$' -count=20
+Exit 0; wall time 4.417 s
+ok  	github.com/weiloon1234/Foundry-Go/cache	0.562s
+
+GOWORK=off go test ./cache -run '^(TestReadBoundsAndTimeoutReachBackend|TestCounterBackendFailuresRemainErrorsAndAreNotRetried|TestNamespaceInvalidationOwnsCallbacksAndFailures)$' -race -count=5
+Exit 0; wall time 11.292 s
+ok  	github.com/weiloon1234/Foundry-Go/cache	1.630s
+
+GOWORK=off go test ./database -run '^(TestMigrationLockWaitHonorsTimeoutWithoutApplyingSchema|TestAcquisitionDeadlineDoesNotShortenStatementContext|TestOpenBoundsAndConnectDeadline|TestStickyReadsRouteToPrimaryAfterAWriteInScope|TestStickyReadsMeasureFromWriteCompletion)$' -count=20
+Exit 0; wall time 3.456 s
+ok  	github.com/weiloon1234/Foundry-Go/database	0.575s
+
+GOWORK=off go test ./database -run '^(TestMigrationLockWaitHonorsTimeoutWithoutApplyingSchema|TestAcquisitionDeadlineDoesNotShortenStatementContext|TestOpenBoundsAndConnectDeadline|TestStickyReadsRouteToPrimaryAfterAWriteInScope|TestStickyReadsMeasureFromWriteCompletion)$' -race -count=5
+Exit 0; wall time 7.827 s
+ok  	github.com/weiloon1234/Foundry-Go/database	1.728s
+
+GOWORK=off go test ./http -run '^(TestRouteTimeoutReplacesKernelRequestTimeout|TestTypedEndpointPublishesSuccessCompletedAfterKernelDeadline|TestGlobalWrappersHonorRouteBudgetAndCompletedResponses|TestLateEventStreamIsReportedNotEmpty)$' -count=20
+Exit 0; wall time 12.019 s
+ok  	github.com/weiloon1234/Foundry-Go/http	0.947s
+
+GOWORK=off go test ./http -run '^(TestRouteTimeoutReplacesKernelRequestTimeout|TestTypedEndpointPublishesSuccessCompletedAfterKernelDeadline|TestGlobalWrappersHonorRouteBudgetAndCompletedResponses|TestLateEventStreamIsReportedNotEmpty)$' -race -count=5
+Exit 0; wall time 24.838 s
+ok  	github.com/weiloon1234/Foundry-Go/http	2.139s
+
+GOWORK=off go test ./storage -run '^(TestIdleStreamIsCancelledButProgressKeepsItOpen)$' -count=20
+Exit 0; wall time 0.854 s
+ok  	github.com/weiloon1234/Foundry-Go/storage	0.448s
+
+GOWORK=off go test ./storage -run '^(TestIdleStreamIsCancelledButProgressKeepsItOpen)$' -race -count=5
+Exit 0; wall time 2.079 s
+ok  	github.com/weiloon1234/Foundry-Go/storage	1.494s
+
+GOWORK=off go test ./health -run '^(TestReadinessBoundsIgnoredCancellationAndRetainsShutdownOwnership|TestReadinessModuleDrainsBeforeItsDependency)$' -count=20
+Exit 0; wall time 0.803 s
+ok  	github.com/weiloon1234/Foundry-Go/health	0.466s
+
+GOWORK=off go test ./health -run '^(TestReadinessBoundsIgnoredCancellationAndRetainsShutdownOwnership|TestReadinessModuleDrainsBeforeItsDependency)$' -race -count=5
+Exit 0; wall time 1.889 s
+ok  	github.com/weiloon1234/Foundry-Go/health	1.483s
+
+GOWORK=off go test ./jobs -run '^(TestWorkerRetriesKeepIdentityAndDiscardRequestContext|TestUncooperativeHandlerRetainsLeaseAndShutdownOwnership|TestWithoutOverlappingSerializesSameKeyAndReleasesOnExit|TestThrottleExceptionsReleasesWithoutConsumingAttempts|TestMaxExceptionsAndRetryUntilEndRetries|TestDrainLetsAdmittedHandlerFinishAndStopsReserving|TestDrainDeadlineCancelsAndRefundsInterruptedAttempt|TestHandlerReturningNilIsSucceededAfterStopOrPreventRetry|TestWorkerIsolatesPanicAndGoexit|TestWorkerCancellationWaitsForHandler|TestWorkerSelfShutdownAndSavedContext|TestAdmissionDenialsDoNotConsumeAttempts|TestSkipPredicateCompletesWithoutMiddlewareOrHandler|TestAdmissionTimeoutConsumesRetryBudget|TestMiddlewareUnwindsFailuresAndIsolatesCallbacks|TestWorkerRejectsUnknownVersionsAndInvalidPayloads|TestPermanentFailureStopsRetryEvenAfterTimeout|TestWorkerOwnsErrorClassification)$' -count=20
+Exit 0; wall time 1.873 s
+ok  	github.com/weiloon1234/Foundry-Go/jobs	0.633s
+
+GOWORK=off go test ./jobs -run '^(TestWorkerRetriesKeepIdentityAndDiscardRequestContext|TestUncooperativeHandlerRetainsLeaseAndShutdownOwnership|TestWithoutOverlappingSerializesSameKeyAndReleasesOnExit|TestThrottleExceptionsReleasesWithoutConsumingAttempts|TestMaxExceptionsAndRetryUntilEndRetries|TestDrainLetsAdmittedHandlerFinishAndStopsReserving|TestDrainDeadlineCancelsAndRefundsInterruptedAttempt|TestHandlerReturningNilIsSucceededAfterStopOrPreventRetry|TestWorkerIsolatesPanicAndGoexit|TestWorkerCancellationWaitsForHandler|TestWorkerSelfShutdownAndSavedContext|TestAdmissionDenialsDoNotConsumeAttempts|TestSkipPredicateCompletesWithoutMiddlewareOrHandler|TestAdmissionTimeoutConsumesRetryBudget|TestMiddlewareUnwindsFailuresAndIsolatesCallbacks|TestWorkerRejectsUnknownVersionsAndInvalidPayloads|TestPermanentFailureStopsRetryEvenAfterTimeout|TestWorkerOwnsErrorClassification)$' -race -count=5
+Exit 0; wall time 4.199 s
+ok  	github.com/weiloon1234/Foundry-Go/jobs	1.763s
+
+GOWORK=off go test ./httpclient -run '^(TestNativeDeadlinesAndDecompressedResponseBound)$' -count=20
+Exit 0; wall time 21.106 s
+ok  	github.com/weiloon1234/Foundry-Go/httpclient	20.547s
+
+GOWORK=off go test ./httpclient -run '^(TestNativeDeadlinesAndDecompressedResponseBound)$' -race -count=5
+Exit 0; wall time 7.368 s
+ok  	github.com/weiloon1234/Foundry-Go/httpclient	6.532s
+
+GOWORK=off go vet ./auth/challenge ./auth ./auth/token ./auth/password ./cache ./database ./http ./storage ./health ./jobs ./httpclient
+Exit 0; wall time 1.638 s
+(no output)
+
+make fmt-check
+Exit 0; wall time 0.497 s
+(no output)
+
+Initial sandbox attempts failed before test execution because the shared Go build cache was not writable. The same selected checks were resumed with approved cache access; no cache was cleared or replaced.
+Formatting: /usr/local/go/bin/gofmt -w on the 22 changed Go files. make fmt-check also passed in the initial sandbox attempt.
+Source review: git diff -w confirms only synctest imports/wrappers and the one native timeout/comment changed. Read-only rg/python searches inspected tests, helpers and scoped AGENTS.md files. No full suite, other-package tests, database/Redis services, commit, push, tag or merge was run.

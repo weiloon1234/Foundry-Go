@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -193,105 +194,109 @@ func waitRecord(t *testing.T, f workerFixture, id jobs.ID[payload], state jobs.S
 	}
 }
 func TestWorkerRetriesKeepIdentityAndDiscardRequestContext(t *testing.T) {
-	type requestKey struct{}
-	var attempts atomic.Uint32
-	var first jobs.ExecutionID
-	policy := jobs.DefaultPolicy("default")
-	policy.Attempts = 3
-	policy.Backoff = []time.Duration{0}
-	policy.Jitter = 0
-	f := newWorkerFixture(t, policy, func(ctx context.Context, input payload) error {
-		if ctx.Value(requestKey{}) != nil {
-			return errors.New("request context leaked")
+	synctest.Test(t, func(t *testing.T) {
+		type requestKey struct{}
+		var attempts atomic.Uint32
+		var first jobs.ExecutionID
+		policy := jobs.DefaultPolicy("default")
+		policy.Attempts = 3
+		policy.Backoff = []time.Duration{0}
+		policy.Jitter = 0
+		f := newWorkerFixture(t, policy, func(ctx context.Context, input payload) error {
+			if ctx.Value(requestKey{}) != nil {
+				return errors.New("request context leaked")
+			}
+			current, ok := jobs.Current(ctx)
+			if !ok {
+				return errors.New("attempt metadata missing")
+			}
+			number := attempts.Add(1)
+			if number == 1 {
+				first = current.ID
+			} else if current.ID != first {
+				return errors.New("redelivery identity changed")
+			}
+			if current.Number != number {
+				return errors.New("attempt count drift")
+			}
+			if number < 3 {
+				return errors.New("transient business failure")
+			}
+			return nil
+		})
+		id := f.enqueue(t)
+		run := make(chan error, 1)
+		go func() { run <- f.worker.Run(context.WithValue(context.Background(), requestKey{}, "ephemeral")) }()
+		record := waitRecord(t, f, id, jobs.Succeeded)
+		if record.Attempts != 3 || attempts.Load() != 3 {
+			t.Fatalf("retry attempts: %d %d", record.Attempts, attempts.Load())
 		}
-		current, ok := jobs.Current(ctx)
-		if !ok {
-			return errors.New("attempt metadata missing")
+		if err := f.worker.Stop(context.Background()); err != nil {
+			t.Fatal(err)
 		}
-		number := attempts.Add(1)
-		if number == 1 {
-			first = current.ID
-		} else if current.ID != first {
-			return errors.New("redelivery identity changed")
+		if err := <-run; err != nil {
+			t.Fatal(err)
 		}
-		if current.Number != number {
-			return errors.New("attempt count drift")
-		}
-		if number < 3 {
-			return errors.New("transient business failure")
-		}
-		return nil
 	})
-	id := f.enqueue(t)
-	run := make(chan error, 1)
-	go func() { run <- f.worker.Run(context.WithValue(context.Background(), requestKey{}, "ephemeral")) }()
-	record := waitRecord(t, f, id, jobs.Succeeded)
-	if record.Attempts != 3 || attempts.Load() != 3 {
-		t.Fatalf("retry attempts: %d %d", record.Attempts, attempts.Load())
-	}
-	if err := f.worker.Stop(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if err := <-run; err != nil {
-		t.Fatal(err)
-	}
 }
 func TestUncooperativeHandlerRetainsLeaseAndShutdownOwnership(t *testing.T) {
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	defer close(release)
-	policy := jobs.DefaultPolicy("default")
-	policy.Timeout = 5 * time.Millisecond
-	policy.Attempts = 1
-	f := newWorkerFixture(t, policy, func(ctx context.Context, _ payload) error { close(entered); <-release; return nil })
-	id := f.enqueue(t)
-	run := make(chan error, 1)
-	go func() { run <- f.worker.Run(context.Background()) }()
-	select {
-	case <-entered:
-	case <-time.After(3 * time.Second):
-		t.Fatal("handler not started")
-	}
-	// Cross the original lease expiry while the context-ignoring handler is live.
-	<-time.After(240 * time.Millisecond)
-	owner, err := lease.NewOwner()
-	if err != nil {
-		t.Fatal(err)
-	}
-	found, err := f.backend.JobReserve(context.Background(), f.key, owner, time.Second)
-	if err != nil || found.IsSet() {
-		t.Fatalf("live handler was deliberately redelivered: %v", err)
-	}
-	stop, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	err = f.worker.Stop(stop)
-	cancel()
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("bounded shutdown: %v", err)
-	}
-	select {
-	case <-f.worker.Done():
-		t.Fatal("worker abandoned live handler")
-	default:
-	}
-	if f.worker.Active() != 1 {
-		t.Fatal("live handler no longer counted")
-	}
-	// Release before cleanup rather than waiting forever for the owned goroutine.
-	release <- struct{}{}
-	select {
-	case err := <-run:
+	synctest.Test(t, func(t *testing.T) {
+		entered := make(chan struct{})
+		release := make(chan struct{})
+		defer close(release)
+		policy := jobs.DefaultPolicy("default")
+		policy.Timeout = 5 * time.Millisecond
+		policy.Attempts = 1
+		f := newWorkerFixture(t, policy, func(ctx context.Context, _ payload) error { close(entered); <-release; return nil })
+		id := f.enqueue(t)
+		run := make(chan error, 1)
+		go func() { run <- f.worker.Run(context.Background()) }()
+		select {
+		case <-entered:
+		case <-time.After(3 * time.Second):
+			t.Fatal("handler not started")
+		}
+		// Cross the original lease expiry while the context-ignoring handler is live.
+		<-time.After(240 * time.Millisecond)
+		owner, err := lease.NewOwner()
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("worker did not drain")
-	}
-	// The handler returned nil after its deadline and the stop request: its
-	// side effects completed, so the attempt succeeded rather than timing out.
-	record := waitRecord(t, f, id, jobs.Succeeded)
-	if record.History[len(record.History)-1].Reason != jobs.NoReason {
-		t.Fatalf("completed attempt reason: %+v", record.History)
-	}
+		found, err := f.backend.JobReserve(context.Background(), f.key, owner, time.Second)
+		if err != nil || found.IsSet() {
+			t.Fatalf("live handler was deliberately redelivered: %v", err)
+		}
+		stop, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		err = f.worker.Stop(stop)
+		cancel()
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("bounded shutdown: %v", err)
+		}
+		select {
+		case <-f.worker.Done():
+			t.Fatal("worker abandoned live handler")
+		default:
+		}
+		if f.worker.Active() != 1 {
+			t.Fatal("live handler no longer counted")
+		}
+		// Release before cleanup rather than waiting forever for the owned goroutine.
+		release <- struct{}{}
+		select {
+		case err := <-run:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("worker did not drain")
+		}
+		// The handler returned nil after its deadline and the stop request: its
+		// side effects completed, so the attempt succeeded rather than timing out.
+		record := waitRecord(t, f, id, jobs.Succeeded)
+		if record.History[len(record.History)-1].Reason != jobs.NoReason {
+			t.Fatalf("completed attempt reason: %+v", record.History)
+		}
+	})
 }
 func TestDefinitionAndPolicyCopiesAreOwned(t *testing.T) {
 	definition := jobs.Define[payload]("copy", 1, jobs.DefaultPolicy("default"))

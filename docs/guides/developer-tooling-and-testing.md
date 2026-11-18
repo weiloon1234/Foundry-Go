@@ -663,8 +663,13 @@ profile. Go and deployment unit checks depend on each other's source and fixture
 so path selection never skips either side's unit checks.
 For Go changes, two `backends` shards run `make test-postgres` with
 `TEST_POSTGRES_SHARD=1/2` and `2/2`; only shard 1 also runs `make test-redis`.
-The PostgreSQL runner sorts and partitions each module's packages independently.
-Local runs default to `1/1`. The Makefile's `RACE_EXEMPT_PACKAGES` list removes
+The Makefile's `RACE_HEAVY_PACKAGES` lists heavy import paths, heaviest first.
+The PostgreSQL runner assigns them round-robin using their positions in that list
+across all three modules. Each module ignores entries it does not contain, runs
+its assigned heavy packages first, then deals its remaining sorted packages
+round-robin starting at shard 1. A test rejects heavy entries absent from all
+three modules. Local runs default to `1/1` and retain the full sorted execution
+order. The Makefile's `RACE_EXEMPT_PACKAGES` list removes
 packages from `make race` and race-enabled PostgreSQL checks, while `make test`
 retains their ordinary coverage. The exemptions are `internal/retirement`,
 `internal/noraw`, and `cmd/foundry`. A parser guard rejects missing exempt packages,

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -47,41 +48,43 @@ func TestReadinessOwnsDeclarationsAndHidesDependencyErrors(t *testing.T) {
 }
 
 func TestReadinessBoundsIgnoredCancellationAndRetainsShutdownOwnership(t *testing.T) {
-	config := health.DefaultConfig()
-	config.MaxConcurrent, config.CheckTimeout, config.ProbeTimeout = 1, 80*time.Millisecond, 20*time.Millisecond
-	release := make(chan struct{})
-	var calls atomic.Int64
-	r, err := health.NewRegistry(config, health.Probe{ID: "blocked", Check: func(context.Context) error { calls.Add(1); <-release; return nil }})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		close(release)
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := r.Close(ctx); err != nil {
-			t.Error("released callback did not finish shutdown", err)
+	synctest.Test(t, func(t *testing.T) {
+		config := health.DefaultConfig()
+		config.MaxConcurrent, config.CheckTimeout, config.ProbeTimeout = 1, 80*time.Millisecond, 20*time.Millisecond
+		release := make(chan struct{})
+		var calls atomic.Int64
+		r, err := health.NewRegistry(config, health.Probe{ID: "blocked", Check: func(context.Context) error { calls.Add(1); <-release; return nil }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			close(release)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if err := r.Close(ctx); err != nil {
+				t.Error("released callback did not finish shutdown", err)
+			}
+		})
+		for range 3 {
+			report, err := r.Check(t.Context())
+			if err != nil || report.Ready || report.Results[0].State != health.TimedOut {
+				t.Fatal("probe timeout did not bound caller", err)
+			}
+		}
+		if calls.Load() != 1 {
+			t.Fatal("timed-out probes escaped shared concurrency bound")
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		if err := r.Close(ctx); !errors.Is(err, context.Canceled) {
+			t.Fatal("close forgot blocked callback", err)
+		}
+		select {
+		case <-r.Done():
+			t.Fatal("done closed before callback exit")
+		default:
 		}
 	})
-	for range 3 {
-		report, err := r.Check(t.Context())
-		if err != nil || report.Ready || report.Results[0].State != health.TimedOut {
-			t.Fatal("probe timeout did not bound caller", err)
-		}
-	}
-	if calls.Load() != 1 {
-		t.Fatal("timed-out probes escaped shared concurrency bound")
-	}
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	if err := r.Close(ctx); !errors.Is(err, context.Canceled) {
-		t.Fatal("close forgot blocked callback", err)
-	}
-	select {
-	case <-r.Done():
-		t.Fatal("done closed before callback exit")
-	default:
-	}
 }
 
 func TestReadinessIsolatesPanicAndGoexit(t *testing.T) {

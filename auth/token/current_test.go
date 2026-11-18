@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
@@ -144,25 +145,27 @@ func TestNarrowedCeilingIntersectsStoredScopes(t *testing.T) {
 // A committed refresh must reach the caller even when the operation deadline
 // passes after the backend returned: the old refresh token is consumed.
 func TestCommittedRefreshSurvivesLateDeadline(t *testing.T) {
-	backend := newMemoryBackend()
-	config := settings()
-	config.Timeout = 50 * time.Millisecond
-	tokens := bindingWithin(t, backend, config, scopes(t, "orders.read"))
-	issued, err := tokens.Issue(t.Context(), proof(t, auth.Authenticated), IssueOptions[member]{Refresh: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	commit := backend.refresh
-	backend.refresh = func(ctx context.Context, a Address, old, access, refresh Digest) (value.Optional[Record], error) {
-		result, err := commit(ctx, a, old, access, refresh)
-		<-ctx.Done() // The deadline passes after the backend committed.
-		return result, err
-	}
-	raw, _ := issued.RefreshSecret().Get()
-	refreshed, err := tokens.Refresh(t.Context(), raw)
-	if err != nil || refreshed.AccessSecret().IsZero() || refreshed.Info().Generation() != 1 {
-		t.Fatal("committed refresh result was lost", err)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		backend := newMemoryBackend()
+		config := settings()
+		config.Timeout = 50 * time.Millisecond
+		tokens := bindingWithin(t, backend, config, scopes(t, "orders.read"))
+		issued, err := tokens.Issue(t.Context(), proof(t, auth.Authenticated), IssueOptions[member]{Refresh: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		commit := backend.refresh
+		backend.refresh = func(ctx context.Context, a Address, old, access, refresh Digest) (value.Optional[Record], error) {
+			result, err := commit(ctx, a, old, access, refresh)
+			<-ctx.Done() // The deadline passes after the backend committed.
+			return result, err
+		}
+		raw, _ := issued.RefreshSecret().Get()
+		refreshed, err := tokens.Refresh(t.Context(), raw)
+		if err != nil || refreshed.AccessSecret().IsZero() || refreshed.Info().Generation() != 1 {
+			t.Fatal("committed refresh result was lost", err)
+		}
+	})
 }
 
 // Handlers read the verified token without a second lookup, revoke it or the

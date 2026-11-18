@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -96,17 +97,19 @@ func TestRequestDeadlineRetainsHandlerOwnershipUntilExit(t *testing.T) {
 // before it returned never replaces the success with a timeout.
 func TestTypedEndpointPublishesSuccessCompletedAfterKernelDeadline(t *testing.T) {
 	t.Parallel()
-	e := DefineEndpoint(DefineRoute(RouteSpec{ID: "timeout", Method: GET, Access: Public}, StaticPath("/")), EmptyQuery(), EmptyBody(), JSONResponse(200, endpointReplyJSON()))
-	router, err := NewRouter(e.Handle(func(ctx context.Context, _ Input[NoPath, NoQuery, NoBody]) (EndpointReply, error) {
-		<-ctx.Done()
-		return EndpointReply{Name: "expired success"}, nil
-	}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	w := httptest.NewRecorder()
-	deadlineBoundary(newHandlerLifetime(), router, 10*time.Millisecond).ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "expired success") {
-		t.Fatal("typed endpoint replaced its completed success after the deadline", w.Code, w.Body.String())
-	}
+	synctest.Test(t, func(t *testing.T) {
+		e := DefineEndpoint(DefineRoute(RouteSpec{ID: "timeout", Method: GET, Access: Public}, StaticPath("/")), EmptyQuery(), EmptyBody(), JSONResponse(200, endpointReplyJSON()))
+		router, err := NewRouter(e.Handle(func(ctx context.Context, _ Input[NoPath, NoQuery, NoBody]) (EndpointReply, error) {
+			<-ctx.Done()
+			return EndpointReply{Name: "expired success"}, nil
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		deadlineBoundary(newHandlerLifetime(), router, 10*time.Millisecond).ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+		if w.Code != 200 || !strings.Contains(w.Body.String(), "expired success") {
+			t.Fatal("typed endpoint replaced its completed success after the deadline", w.Code, w.Body.String())
+		}
+	})
 }

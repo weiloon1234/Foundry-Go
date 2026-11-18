@@ -20,6 +20,8 @@ import (
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
+var moduleDirectories = [...]string{".", "tests/fixtures/consumer", "tests/fixtures/goway"}
+
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -27,11 +29,12 @@ func main() {
 	file := flag.String("env-file", ".env.test", "private test environment file")
 	race := flag.Bool("race", false, "enable the race detector")
 	exempt := flag.String("race-exempt", "", "space-separated race-exempt import paths; configured by Makefile")
+	heavy := flag.String("heavy", "", "space-separated heavy import paths, heaviest first; configured by Makefile")
 	shardSpec := flag.String("shard", "1/1", "package shard INDEX/TOTAL (1-based)")
 	batchSize := flag.Int("batch-size", 0, "required maximum packages per test invocation; configured by Makefile")
 	timeout := flag.Duration("timeout", 0, "required positive per-package test timeout; configured by Makefile")
 	flag.Parse()
-	if err := run(ctx, *goBinary, *file, *race, *batchSize, *timeout, *shardSpec, strings.Fields(*exempt)); err != nil {
+	if err := run(ctx, *goBinary, *file, *race, *batchSize, *timeout, *shardSpec, strings.Fields(*exempt), strings.Fields(*heavy)); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -79,7 +82,7 @@ func readURL(path string) (string, error) {
 	return value, nil
 }
 
-func run(ctx context.Context, goBinary, file string, race bool, batchSize int, timeout time.Duration, shardSpec string, exempt []string) error {
+func run(ctx context.Context, goBinary, file string, race bool, batchSize int, timeout time.Duration, shardSpec string, exempt, heavy []string) error {
 	if batchSize <= 0 {
 		return errors.New("PostgreSQL test package batch size must be positive")
 	}
@@ -107,12 +110,12 @@ func run(ctx context.Context, goBinary, file string, race bool, batchSize int, t
 	} else if len(exempt) > 0 {
 		fmt.Printf("Race-exempt (covered by make test): %s\n", strings.Join(exempt, " "))
 	}
-	for _, dir := range []string{".", "tests/fixtures/consumer", "tests/fixtures/goway"} {
+	for _, dir := range moduleDirectories {
 		args := []string{"test", "-mod=readonly", "-count=1", "-timeout=" + timeout.String()}
 		if race {
 			args = append(args, "-race")
 		}
-		if err := testPackages(ctx, goBinary, dir, environment, args, batchSize, shard, exempt); err != nil {
+		if err := testPackages(ctx, goBinary, dir, environment, args, batchSize, shard, exempt, heavy); err != nil {
 			return fmt.Errorf("required PostgreSQL acceptance failed in %s: %w", dir, err)
 		}
 	}
@@ -134,13 +137,25 @@ func parseShard(value string) (packageShard, error) {
 	return packageShard{index: index, total: total}, nil
 }
 
-func partitionPackages(packages []string, shard packageShard, exempt []string) []string {
+func partitionPackages(packages []string, shard packageShard, exempt, heavy []string) []string {
 	packages = slices.Clone(packages)
 	slices.Sort(packages)
 	selected := make([]string, 0)
+	if shard.total > 1 {
+		// Keep list positions across modules so fixture roots do not both start
+		// on shard one. Missing and exempt packages are never selected.
+		for index, pkg := range heavy {
+			if slices.Index(heavy, pkg) != index || !slices.Contains(packages, pkg) || slices.Contains(exempt, pkg) {
+				continue
+			}
+			if index%shard.total == shard.index-1 {
+				selected = append(selected, pkg)
+			}
+		}
+	}
 	index := 0
 	for _, pkg := range packages {
-		if slices.Contains(exempt, pkg) {
+		if slices.Contains(exempt, pkg) || shard.total > 1 && slices.Contains(heavy, pkg) {
 			continue
 		}
 		if index%shard.total == shard.index-1 {
@@ -151,21 +166,29 @@ func partitionPackages(packages []string, shard packageShard, exempt []string) [
 	return selected
 }
 
-func testPackages(ctx context.Context, goBinary, dir string, environment, args []string, batchSize int, shard packageShard, exempt []string) error {
-	if batchSize <= 0 {
-		return errors.New("test package batch size must be positive")
-	}
+func listPackages(ctx context.Context, goBinary, dir string, environment []string) ([]string, error) {
 	list := exec.CommandContext(ctx, goBinary, "list", "-mod=readonly", "./...")
 	list.Dir, list.Env, list.Stderr = dir, environment, os.Stderr
 	output, err := list.Output()
 	if err != nil {
-		return fmt.Errorf("discover test packages: %w", err)
+		return nil, fmt.Errorf("discover test packages: %w", err)
 	}
 	packages := strings.Fields(string(output))
 	if len(packages) == 0 {
-		return errors.New("test package discovery returned no packages")
+		return nil, errors.New("test package discovery returned no packages")
 	}
-	packages = partitionPackages(packages, shard, exempt)
+	return packages, nil
+}
+
+func testPackages(ctx context.Context, goBinary, dir string, environment, args []string, batchSize int, shard packageShard, exempt, heavy []string) error {
+	if batchSize <= 0 {
+		return errors.New("test package batch size must be positive")
+	}
+	packages, err := listPackages(ctx, goBinary, dir, environment)
+	if err != nil {
+		return err
+	}
+	packages = partitionPackages(packages, shard, exempt, heavy)
 	for len(packages) > 0 {
 		count := min(batchSize, len(packages))
 		batch := packages[:count]

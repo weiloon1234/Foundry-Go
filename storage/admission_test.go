@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -72,29 +73,31 @@ func TestStreamsUseTheirOwnQueuedPool(t *testing.T) {
 }
 
 func TestIdleStreamIsCancelledButProgressKeepsItOpen(t *testing.T) {
-	disk := streamDisk(t, readerBackend(), func(c *storage.Config) { c.Timeout, c.StreamIdleTimeout = time.Minute, 40*time.Millisecond })
-	reader, _, err := disk.Open(t.Context(), testKey(t), storage.ReadOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Progress restarts the idle deadline; the operation Timeout is not used.
-	for range 3 {
-		time.Sleep(20 * time.Millisecond)
-		if _, err := reader.Read(make([]byte, 1)); err != nil {
-			t.Fatal("progressing stream was cut off", err)
+	synctest.Test(t, func(t *testing.T) {
+		disk := streamDisk(t, readerBackend(), func(c *storage.Config) { c.Timeout, c.StreamIdleTimeout = time.Minute, 40*time.Millisecond })
+		reader, _, err := disk.Open(t.Context(), testKey(t), storage.ReadOptions{})
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	deadline := time.Now().Add(2 * time.Second)
-	for disk.Stats().Streams != 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	if disk.Stats().Streams != 0 {
-		t.Fatal("idle stream kept its slot")
-	}
-	if _, err := reader.Read(make([]byte, 1)); err == nil {
-		t.Fatal("idle stream remained readable")
-	}
-	_ = reader.Close()
+		// Progress restarts the idle deadline; the operation Timeout is not used.
+		for range 3 {
+			time.Sleep(20 * time.Millisecond)
+			if _, err := reader.Read(make([]byte, 1)); err != nil {
+				t.Fatal("progressing stream was cut off", err)
+			}
+		}
+		deadline := time.Now().Add(2 * time.Second)
+		for disk.Stats().Streams != 0 && time.Now().Before(deadline) {
+			time.Sleep(5 * time.Millisecond)
+		}
+		if disk.Stats().Streams != 0 {
+			t.Fatal("idle stream kept its slot")
+		}
+		if _, err := reader.Read(make([]byte, 1)); err == nil {
+			t.Fatal("idle stream remained readable")
+		}
+		_ = reader.Close()
+	})
 }
 
 func TestOperationsQueueForCapacity(t *testing.T) {
