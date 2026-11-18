@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -99,10 +98,8 @@ func TestMakeHeavyPackagesExistInListedModules(t *testing.T) {
 	if len(heavy) == 0 {
 		t.Fatal("missing literal RACE_HEAVY_PACKAGES assignment in Makefile")
 	}
-	goBinary := filepath.Join(runtime.GOROOT(), "bin", "go")
-	if runtime.GOOS == "windows" {
-		goBinary += ".exe"
-	}
+	// runtime.GOROOT is empty in -trimpath builds; use the go command on PATH, as the tool's default does.
+	goBinary := "go"
 	t.Setenv("GOWORK", "off")
 	var packages []string
 	for _, dir := range moduleDirectories {
