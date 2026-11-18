@@ -82,6 +82,9 @@ func loginBinding(s passwordSubject) auth.PasswordModel[passwordSubject, loginEm
 func loginInstance(t *testing.T, h *password.Hasher, b auth.PasswordModel[passwordSubject, loginEmail], configs ...auth.Config) *auth.PasswordLogin[passwordSubject, int64, loginEmail] {
 	t.Helper()
 	config := auth.DefaultConfig()
+	// Real password hashing under the race detector on a small runner can exceed the
+	// default operation timeout; tests about the timeout pass their own configuration.
+	config.Timeout = time.Minute
 	if len(configs) > 0 {
 		config = configs[0]
 	}
