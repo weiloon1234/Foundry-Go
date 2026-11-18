@@ -54,9 +54,12 @@ provider credentials out of tracked files and command output.
 | `make docs-check` | Check local Markdown link targets, explicit future-work claims against completed milestones, contiguous blueprint numbering, and fixture Go requirements |
 | `make release-tools-check` | Verify the independent module packager and native measurement harness |
 | `make verify` | Run the full repository gate |
-| `make verify-go` | Run the repository gate without deployment-tool tests |
 | `make race` | Race-enabled framework/tool and consumer checks, excluding the guarded `RACE_EXEMPT_PACKAGES` list |
 | `make test-postgres` | Required real PostgreSQL acceptance with race detection and the same exemptions; `TEST_POSTGRES_SHARD=INDEX/TOTAL` selects a shard |
+
+The race exemptions are `internal/retirement`, `internal/noraw`, and `cmd/foundry`.
+The guard checks every non-test Go file regardless of build tags and rejects `go`
+statements, calls to methods named `Go`, and errgroup imports.
 
 `GOWORK=off` is set by Make so a local workspace cannot hide module-boundary mistakes. The consumer, Go-way and two plugin fixtures use test-only local replacements; the root module has none. The [release gate](../release-checklist.md) separately builds packaged modules in copied consumers with every replacement removed.
 

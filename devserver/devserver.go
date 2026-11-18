@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,8 +24,8 @@ import (
 //  1. Validates options and streams, snapshotting configuration.
 //  2. Traps SIGHUP to stop child process groups when the controlling terminal disconnects.
 //  3. Starts all configured Helpers concurrently in their own process groups.
-//  4. Performs initial compilation of Target via `go build -gcflags=all=-dwarf=false -ldflags=-w -o <Binary> <Target>`,
-//     inheriting GOFLAGS from the environment.
+//  4. Performs initial compilation of Target via `go build -ldflags=-w -o <Binary> <Target>`,
+//     inheriting GOFLAGS and adding `-gcflags=all=-dwarf=false` only when GOFLAGS has no compiler flags.
 //  5. Starts the server child executable in its own process group.
 //  6. Enters filesystem watch loop with debounce settling.
 //  7. On change: executes OnChange hook, rebuilds binary, and gracefully restarts
@@ -187,8 +188,7 @@ func (d *devServer) rebuild(ctx context.Context) {
 		return
 	}
 
-	// Omit DWARF from compiler archives and the linked development binary.
-	build := []string{"build", "-gcflags=all=-dwarf=false", "-ldflags=-w", "-o", d.binary, d.target}
+	build := d.buildArgs(os.Getenv("GOFLAGS"))
 	if err := runChild(ctx, d.root, "go", build, cli.Streams{Out: d.output, Err: d.output}); err != nil {
 		if ctx.Err() == nil {
 			next := "fix the error and save a watched file to rebuild"
@@ -219,6 +219,22 @@ func (d *devServer) rebuild(ctx context.Context) {
 	}()
 	d.current = &runningServer{cancel: cancel, done: done}
 	fmt.Fprintln(d.status, "server started")
+}
+
+func (d *devServer) buildArgs(goFlags string) []string {
+	build := []string{"build"}
+	compilerFlags := false
+	for _, flag := range strings.Fields(goFlags) {
+		name, _, _ := strings.Cut(flag, "=")
+		if name == "-gcflags" || name == "--gcflags" {
+			compilerFlags = true
+			break
+		}
+	}
+	if !compilerFlags {
+		build = append(build, "-gcflags=all=-dwarf=false")
+	}
+	return append(build, "-ldflags=-w", "-o", d.binary, d.target)
 }
 
 func (d *devServer) running() bool {

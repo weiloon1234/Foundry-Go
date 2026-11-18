@@ -2,8 +2,9 @@
 
 ## v0.44.1 — 2026-11-18
 
-- The dev server now also compiles without debug information
-  (`-gcflags=all=-dwarf=false`, beside the existing `-ldflags=-w`). Cached package
+- The dev server now also compiles without debug information by default
+  (`-gcflags=all=-dwarf=false`, beside the existing `-ldflags=-w`), preserving
+  compiler flags supplied through `GOFLAGS`. Cached package
   files are about a quarter smaller and rebuilds use less memory. Stack traces and
   profiles are unaffected. To step through code with Delve, build with your own
   `-gcflags`.
@@ -11,10 +12,11 @@
   selector that is reached through a type it had already checked under another name.
 - Framework development: the Makefile adds the same no-debug-information flag to its
   canonical `GOFLAGS`; `make test-postgres` and `make race` skip race detection for
-  four tool packages that start no goroutines and accept a package shard; CI selects
-  its jobs from the changed paths and always runs everything on `release/**` branches,
-  tags and the weekly schedule; generator, editor-probe and retirement tests reuse
-  work instead of repeating it.
+  three tool packages that start no goroutines. `make test-postgres` accepts a
+  package shard. CI always runs the full `make verify`; only the deployment matrix,
+  race tier and security scan are selected by path. Release branches, tags and the
+  weekly schedule enable every gate. Generator, editor-probe and retirement tests
+  reuse work instead of repeating it.
 
 ## v0.44.0 — 2026-11-17
 

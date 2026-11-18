@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -165,57 +166,100 @@ func TestPrefixWriterKeepsLinesWhole(t *testing.T) {
 	}
 }
 
-func TestRebuildBuildCommandOmitsDWARF(t *testing.T) {
-	root := t.TempDir()
-	write := func(name, content string) {
-		t.Helper()
-		path := filepath.Join(root, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
+func TestBuildArgsPreserveCompilerFlags(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		goFlags  string
+		preserve bool
+	}{
+		{"empty", "", false},
+		{"other flags", "-trimpath -tags=dev", false},
+		{"unrelated value", "-ldflags=-X=main.flag=-gcflags", false},
+		{"prefix only", "-gcflags-extra=value", false},
+		{"single dash field", "-trimpath -gcflags all=-d=checkptr=2", true},
+		{"single dash equals", "-gcflags=all=-d=checkptr=2 -trimpath", true},
+		{"double dash field", "--gcflags all=-d=checkptr=2", true},
+		{"double dash equals", "--gcflags=all=-d=checkptr=2", true},
+		{"empty value", "-gcflags=", true},
+		{"whitespace", " \t-trimpath\n--gcflags=all=-d=checkptr=2  ", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := devServer{binary: "bin/dev-server", target: "./cmd/server"}
+			want := []string{"build"}
+			if !test.preserve {
+				want = append(want, "-gcflags=all=-dwarf=false")
+			}
+			want = append(want, "-ldflags=-w", "-o", server.binary, server.target)
+			if got := server.buildArgs(test.goFlags); !slices.Equal(got, want) {
+				t.Fatalf("build args = %q, want %q", got, want)
+			}
+		})
 	}
+}
 
-	write("go.mod", "module test-app\n\ngo 1.24\n")
-	write("cmd/server/main.go", "package main\n\nimport \"time\"\n\nfunc main() { for { time.Sleep(time.Hour) } }\n")
+func TestRebuildBuildCommandCompilerFlags(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		goFlags       string
+		compilerFlags string
+	}{
+		{"default", "-trimpath", "all=-dwarf=false"},
+		{"caller flags", "-trimpath -gcflags=all=-d=checkptr=2", "all=-d=checkptr=2"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("GOFLAGS", test.goFlags)
+			root := t.TempDir()
+			write := func(name, content string) {
+				t.Helper()
+				path := filepath.Join(root, filepath.FromSlash(name))
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	var status bytes.Buffer
-	var output bytes.Buffer
+			write("go.mod", "module test-app\n\ngo 1.24\n")
+			write("cmd/server/main.go", "package main\n\nimport \"time\"\n\nfunc main() { for { time.Sleep(time.Hour) } }\n")
 
-	server := devServer{
-		root:    root,
-		binary:  filepath.Join(root, "bin", "dev-server"),
-		target:  "./cmd/server",
-		status:  &status,
-		output:  &output,
-		watcher: newWatcher(root, nil),
-		opts:    Options{Root: root},
-	}
+			var status bytes.Buffer
+			var output bytes.Buffer
 
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
+			server := devServer{
+				root:    root,
+				binary:  filepath.Join(root, "bin", "dev-server"),
+				target:  "./cmd/server",
+				status:  &status,
+				output:  &output,
+				watcher: newWatcher(root, nil),
+				opts:    Options{Root: root},
+			}
 
-	server.rebuild(ctx)
-	defer server.stop()
+			ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+			defer cancel()
 
-	if !server.running() {
-		t.Fatalf("rebuilt server is not running; status: %q; output: %q", status.String(), output.String())
-	}
-	if _, err := os.Stat(server.binary); err != nil {
-		t.Fatalf("expected binary at %s, error: %v", server.binary, err)
-	}
-	info, err := buildinfo.ReadFile(server.binary)
-	if err != nil {
-		t.Fatal(err)
-	}
-	settings := make(map[string]string)
-	for _, setting := range info.Settings {
-		settings[setting.Key] = setting.Value
-	}
-	if settings["-gcflags"] != "all=-dwarf=false" || settings["-ldflags"] != "-w" {
-		t.Fatal("development binary retained DWARF build flags", settings)
+			server.rebuild(ctx)
+			defer server.stop()
+
+			if !server.running() {
+				t.Fatalf("rebuilt server is not running; status: %q; output: %q", status.String(), output.String())
+			}
+			if _, err := os.Stat(server.binary); err != nil {
+				t.Fatalf("expected binary at %s, error: %v", server.binary, err)
+			}
+			info, err := buildinfo.ReadFile(server.binary)
+			if err != nil {
+				t.Fatal(err)
+			}
+			settings := make(map[string]string)
+			for _, setting := range info.Settings {
+				settings[setting.Key] = setting.Value
+			}
+			if settings["-gcflags"] != test.compilerFlags {
+				t.Fatalf("build settings = %v, want gcflags %q", settings, test.compilerFlags)
+			}
+		})
 	}
 }
 

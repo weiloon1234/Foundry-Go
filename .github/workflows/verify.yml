@@ -241,8 +241,6 @@ jobs:
           retention-days: 14
 
   verify:
-    needs: changes
-    if: ${{ needs.changes.outputs.go == 'true' || needs.changes.outputs.deploy == 'true' }}
     runs-on: macos-15
     timeout-minutes: 120
     steps:
@@ -251,16 +249,9 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-foundry
         with:
-          profile: ${{ needs.changes.outputs.go == 'true' && 'verify' || 'deploy' }}
+          profile: verify
       - name: Full verification
-        if: ${{ needs.changes.outputs.go == 'true' && needs.changes.outputs.deploy == 'true' }}
         run: make verify
-      - name: Native framework and independent consumers
-        if: ${{ needs.changes.outputs.go == 'true' && needs.changes.outputs.deploy != 'true' }}
-        run: make verify-go
-      - name: Deployment and release tools
-        if: ${{ needs.changes.outputs.go != 'true' && needs.changes.outputs.deploy == 'true' }}
-        run: make deploy-tools-check release-tools-check fmt-check docs-check
       - uses: ./.github/actions/save-go-cache
 
   backends:

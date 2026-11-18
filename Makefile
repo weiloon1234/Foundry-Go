@@ -2,8 +2,8 @@ GO ?= go
 TEST_PACKAGE_BATCH_SIZE ?= 6
 TEST_TIMEOUT ?= 20m
 TEST_POSTGRES_SHARD ?= 1/1
-# Keep this literal list on one line; testpostgres guards every package's source.
-RACE_EXEMPT_PACKAGES := ./internal/generate ./internal/retirement ./internal/noraw ./cmd/foundry
+# Keep these three tool packages on one line; testpostgres guards all non-test source for concurrency.
+RACE_EXEMPT_PACKAGES := ./internal/retirement ./internal/noraw ./cmd/foundry
 RACE_EXEMPT_IMPORTS = $(addprefix $(shell awk '$$1 == "module" { print $$2 }' go.mod)/,$(patsubst ./%,%,$(RACE_EXEMPT_PACKAGES)))
 GENERATION_DIRS := logging cloud/credentials infrastructure imaging application internal/auditstore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/webhookstore webhook/capture httpclient/capture countries datatable database/orm/internal/enuminit telemetry tests/fixtures/consumer tests/fixtures/goway
 FIXTURE_DIRS := tests/fixtures/plugin_base tests/fixtures/plugin_dep tests/fixtures/consumer tests/fixtures/goway
@@ -50,7 +50,7 @@ for task_generate_dir in $(GENERATION_DIRS); do \
 done
 endef
 
-.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-tools-check typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check deploy-tools-check security-check security-tools-check verify verify-go publish-client-contracts
+.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-tools-check typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check deploy-tools-check security-check security-tools-check verify publish-client-contracts
 
 toolchain-check:
 	$(GO) version
@@ -148,10 +148,8 @@ TYPESCRIPT_BENCH_COUNT ?= 5
 benchmark-typescript:
 	$(GO) test -timeout=$(TEST_TIMEOUT) -run '^TestRenderPerformanceFixtures$$' -bench '^(BenchmarkRender|BenchmarkRenderModules|BenchmarkReceivedNaming|BenchmarkGenerateCheck)$$' -benchmem -benchtime=$(TYPESCRIPT_BENCH_TIME) -count=$(TYPESCRIPT_BENCH_COUNT) ./typescript
 
-VERIFY_GO_TARGETS := toolchain-check typescript-tools-check fmt-check vet test fixture-check generate-check docs-check release-tools-check
-verify verify-go: export FOUNDRY_TEST_TYPESCRIPT_REQUIRED := 1
-verify: $(VERIFY_GO_TARGETS) deploy-tools-check
-verify-go: $(VERIFY_GO_TARGETS)
+verify: export FOUNDRY_TEST_TYPESCRIPT_REQUIRED := 1
+verify: toolchain-check typescript-tools-check fmt-check vet test fixture-check generate-check docs-check release-tools-check deploy-tools-check
 
 # Scans reuse installed tools and warm caches; no cold package measurement.
 SECURITY_OUTPUT ?= .cache/security-check

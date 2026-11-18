@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -58,10 +59,24 @@ func checkRaceExemptSource(dir string) error {
 		if err != nil {
 			return err
 		}
+		for _, imported := range source.Imports {
+			path, err := strconv.Unquote(imported.Path.Value)
+			if err != nil {
+				return err
+			}
+			if path == "golang.org/x/sync/errgroup" {
+				return fmt.Errorf("%s imports errgroup", files.Position(imported.Pos()))
+			}
+		}
 		var goroutine token.Pos
 		ast.Inspect(source, func(node ast.Node) bool {
-			if statement, ok := node.(*ast.GoStmt); ok {
-				goroutine = statement.Pos()
+			switch node := node.(type) {
+			case *ast.GoStmt:
+				goroutine = node.Pos()
+			case *ast.CallExpr:
+				if method, ok := ast.Unparen(node.Fun).(*ast.SelectorExpr); ok && method.Sel.Name == "Go" {
+					goroutine = node.Pos()
+				}
 			}
 			return goroutine == token.NoPos
 		})
@@ -90,13 +105,28 @@ func TestRaceExemptionGuardRejectsMissingPackagesAndGoroutines(t *testing.T) {
 	}{
 		{"plain.go", "package example\nfunc f() {}", false},
 		{"plain_test.go", "package example\nfunc test() { go f() }", false},
+		{"goroutine.go", "package example\nfunc start() { go f() }", true},
 		{"other_platform.go", "//go:build unavailable\n\npackage example\nfunc start() { go f() }", true},
+		{"waitgroup.go", "package example\nimport \"sync\"\nfunc start() { var group sync.WaitGroup; group.Go(func() {}) }", true},
+		{"other_group.go", "package example\nfunc start() { group.Go(func() {}) }", true},
+		{"parenthesized.go", "package example\nfunc start() { (group.Go)(func() {}) }", true},
+		{"tagged_group.go", "//go:build unavailable\n\npackage example\nfunc start() { group.Go(func() {}) }", true},
+		{"errgroup.go", "package example\nimport \"golang.org/x/sync/errgroup\"", true},
+		{"aliased_errgroup.go", "package example\nimport group \"golang.org/x/sync/errgroup\"", true},
+		{"raw_errgroup.go", "package example\nimport `golang.org/x/sync/errgroup`", true},
+		{"tagged_errgroup.go", "//go:build unavailable\n\npackage example\nimport _ \"golang.org/x/sync/errgroup\"", true},
 	} {
-		if err := os.WriteFile(filepath.Join(root, source.name), []byte(source.code), 0600); err != nil {
-			t.Fatal(err)
-		}
-		if err := checkRaceExemptSource(root); (err != nil) != source.fail {
-			t.Fatalf("%s: %v", source.name, err)
-		}
+		t.Run(source.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "baseline.go"), []byte("package example"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, source.name), []byte(source.code), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := checkRaceExemptSource(dir); (err != nil) != source.fail {
+				t.Fatalf("%s: %v", source.name, err)
+			}
+		})
 	}
 }

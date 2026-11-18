@@ -346,7 +346,9 @@ panic/Goexit, but cannot forcibly stop arbitrary application goroutines.
 
 `devserver.Run(ctx, opts, streams)` runs the application development loop. It watches
 Go sources and declared application inputs, settles change bursts, rebuilds the target
-binary without compiler or linker DWARF (`-gcflags=all=-dwarf=false -ldflags=-w`), and restarts the server child process.
+binary with `-ldflags=-w`, and restarts the server child process. It also adds
+`-gcflags=all=-dwarf=false` unless the inherited `GOFLAGS` contains `-gcflags` or
+`--gcflags`, either as a separate field or followed by `=...`.
 If compilation fails, the previous server keeps running uninterrupted.
 
 Configure `devserver.Options`:
@@ -651,24 +653,27 @@ checks and unexecuted tests are not acceptance evidence.
 
 The repository workflow (`.github/workflows/verify.yml`) selects gates from changed
 paths. Changes under `tools/deploy/`, `tests/fixtures/deploy-acceptance/`, or
-`.github/` enable deployment jobs. Any change outside `tools/deploy/` enables Go
-jobs. Schedules, manual runs, tags, release branches, and unavailable change history
-enable every gate.
+`.github/` enable deployment jobs. Any change outside `tools/deploy/` enables the
+backend race tier and security scan. Schedules, manual runs, tags, release branches,
+and unavailable change history enable every gate. Pull requests skip the container
+and VM acceptance jobs.
 
-The macOS `verify` job runs `make verify` when both groups apply, `make verify-go`
-for Go-only changes, or `make deploy-tools-check release-tools-check fmt-check docs-check`
-for deployment-only changes. `make verify` remains the full local gate.
+The macOS `verify` job always runs the full `make verify` with the `verify` setup
+profile. Go and deployment unit checks depend on each other's source and fixtures,
+so path selection never skips either side's unit checks.
 For Go changes, two `backends` shards run `make test-postgres` with
 `TEST_POSTGRES_SHARD=1/2` and `2/2`; only shard 1 also runs `make test-redis`.
 The PostgreSQL runner sorts and partitions each module's packages independently.
 Local runs default to `1/1`. The Makefile's `RACE_EXEMPT_PACKAGES` list removes
 packages from `make race` and race-enabled PostgreSQL checks, while `make test`
-retains their ordinary coverage. A parser guard rejects missing exempt packages
-or non-test source that starts a goroutine.
+retains their ordinary coverage. The exemptions are `internal/retirement`,
+`internal/noraw`, and `cmd/foundry`. A parser guard rejects missing exempt packages,
+`go` statements, calls to methods named `Go`, and errgroup imports. It checks every
+non-test Go file regardless of build tags.
 
 The `security` job runs `make security-check` and uploads its evidence for Go
-changes. Go verification and backend jobs start isolated runner-local PostgreSQL 18
-and Redis. Deployment-only verification and security need no services.
+changes. Verification and backend jobs start isolated runner-local PostgreSQL 18
+and Redis. Security needs no services.
 The shared setup action (`.github/actions/setup-foundry/action.yml`) installs the
 root `go.mod` toolchain and each job's required tools. Required backend, real gopls
 and TypeScript checks remain enabled. Each profile and backend shard restores its own newest Go
