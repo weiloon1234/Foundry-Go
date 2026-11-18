@@ -225,7 +225,8 @@ func (d *devServer) buildArgs(goFlags string) []string {
 	build := []string{"build"}
 	compilerFlags := false
 	for _, flag := range strings.Fields(goFlags) {
-		name, _, _ := strings.Cut(flag, "=")
+		// GOFLAGS may quote an entry whose value holds spaces; the name follows the quote.
+		name, _, _ := strings.Cut(strings.TrimLeft(flag, `'"`), "=")
 		if name == "-gcflags" || name == "--gcflags" {
 			compilerFlags = true
 			break

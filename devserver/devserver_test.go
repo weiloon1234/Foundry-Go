@@ -181,6 +181,9 @@ func TestBuildArgsPreserveCompilerFlags(t *testing.T) {
 		{"double dash field", "--gcflags all=-d=checkptr=2", true},
 		{"double dash equals", "--gcflags=all=-d=checkptr=2", true},
 		{"empty value", "-gcflags=", true},
+		{"single quoted entry", "-trimpath '-gcflags=all=-d=checkptr=2 -l'", true},
+		{"double quoted entry", "\"-gcflags=all=-d=checkptr=2 -l\" -trimpath", true},
+		{"quoted other flag", "'-ldflags=-X main.name=-gcflags'", false},
 		{"whitespace", " \t-trimpath\n--gcflags=all=-d=checkptr=2  ", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
