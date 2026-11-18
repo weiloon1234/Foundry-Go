@@ -184,6 +184,8 @@ func TestRetirementGuardExposures(t *testing.T) {
 		{"deprecated function", "sample", "// Deprecated: function.\nfunc Public() {}", "deprecated exposed declaration"},
 		{"unexposed declaration", "sample", "type hidden struct {\n// Deprecated: private API.\nField int\n}; type Public struct { private hidden }", ""},
 		{"unrelated selector", "datatable", "type Config struct{}; var Other struct { DownloadTimeout int }", ""},
+		{"shared type before denied variable", "database/orm", "type hidden struct{}; func (hidden) Not() {}; var AFirst hidden; var Predicate hidden", "retired public selector " + framework + "database/orm.Predicate.Not"},
+		{"shared type before denied field", "datatable", "type hidden struct { DownloadTimeout int }; var AFirst hidden; var Config hidden", "retired public selector " + framework + "datatable.Config.DownloadTimeout"},
 		{"ambiguous promotion", "datatable", "type left struct { DownloadTimeout int }; type right struct { DownloadTimeout int }; type Config struct { left; right }", ""},
 	}
 	for _, tc := range cases {
@@ -200,6 +202,28 @@ func TestRetirementGuardExposures(t *testing.T) {
 				t.Fatalf("want %q, got %v", tc.want, err)
 			}
 		})
+	}
+}
+
+func TestRetirementGuardModuleLocations(t *testing.T) {
+	root := t.TempDir()
+	writeSource(t, root, "go.mod", "module example\n")
+	writeSource(t, root, "datatable/a.go", "package sample; type hidden struct { DownloadTimeout int }; var AFirst hidden")
+	writeSource(t, root, "datatable/b.go", "package sample; var Config hidden")
+	if err := Check(root); err != nil {
+		t.Fatal(err)
+	}
+	writeSource(t, root, "go.mod", "module "+strings.TrimSuffix(framework, "/")+"\n")
+	if err := Check(root); err == nil || !strings.Contains(err.Error(), "retired public selector "+framework+"datatable.Config.DownloadTimeout") {
+		t.Fatalf("changed root module was not checked: %v", err)
+	}
+	writeSource(t, root, "datatable/go.mod", "module example/nested\n")
+	if err := Check(root); err != nil {
+		t.Fatalf("nested module did not replace the parent owner: %v", err)
+	}
+	writeSource(t, root, "datatable/go.mod", "module "+framework+"datatable\n")
+	if err := Check(root); err == nil || !strings.Contains(err.Error(), "retired public selector "+framework+"datatable.Config.DownloadTimeout") {
+		t.Fatalf("changed nested module was not checked: %v", err)
 	}
 }
 

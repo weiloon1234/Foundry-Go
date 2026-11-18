@@ -50,7 +50,7 @@ func exposureImporters(fset *token.FileSet, packages map[string]*sourcePackage) 
 		if len(imports) == 0 {
 			continue
 		}
-		cmd := exec.Command("go", append([]string{"list", "-export", "-deps", "-json"}, imports...)...)
+		cmd := exec.Command("go", append([]string{"list", "-export", "-deps", "-json=ImportPath,Export"}, imports...)...)
 		cmd.Dir = dir
 		data, err := cmd.Output()
 		if err != nil {

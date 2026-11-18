@@ -20,6 +20,7 @@ func checkExposures(fset *token.FileSet, sources map[string]*sourcePackage, deni
 		deprecated: declarationDocs(fset, sources),
 		clean:      make(map[types.Type]bool),
 	}
+	clean := w.clean
 	for _, key := range sortedKeys(sources) {
 		source := sources[key]
 		config := types.Config{
@@ -38,6 +39,11 @@ func checkExposures(fset *token.FileSet, sources map[string]*sourcePackage, deni
 			return safeerror.New(fmt.Sprintf("%s: no scope for exposure check", source.owner))
 		}
 		w.interfaceDocs = interfaceDocs(source.files, info)
+		w.clean = clean
+		if len(w.interfaceDocs) != 0 {
+			// Annotation-dependent results belong to this package's type check.
+			w.clean = make(map[types.Type]bool)
+		}
 		w.owner = source.owner
 		for _, name := range pkg.Scope().Names() {
 			obj := pkg.Scope().Lookup(name)
@@ -51,6 +57,8 @@ func checkExposures(fset *token.FileSet, sources map[string]*sourcePackage, deni
 
 			w.object(obj, name)
 
+			// Commit the whole reachable graph together, after cycles and all
+			// signatures, fields, methods and annotations have been inspected.
 			if len(w.failures) == before {
 				for _, t := range w.visited {
 					w.clean[t] = true
@@ -100,11 +108,25 @@ func (w *exposureWalker) fail(reason, selector string, pos token.Pos) {
 }
 
 func (w *exposureWalker) typ(typ types.Type, selector string) {
-	if typ == nil || w.seen[typ] || w.clean[typ] {
+	if typ == nil || w.seen[typ] {
+		return
+	}
+	// Only selector-independent results may be reused under another public name
+	// or owner. Descendants outside the ledger prefix can still share the cache.
+	memoize := true
+	for _, denied := range w.denied[strings.TrimPrefix(w.owner, framework)] {
+		if strings.HasPrefix(denied, selector+".") {
+			memoize = false
+			break
+		}
+	}
+	if memoize && w.clean[typ] {
 		return
 	}
 	w.seen[typ] = true
-	w.visited = append(w.visited, typ)
+	if memoize {
+		w.visited = append(w.visited, typ)
+	}
 	w.interfaceAnnotations(typ, selector)
 	// Keep the alias chain long enough to inspect each declaration's docs.
 	if alias, ok := typ.(*types.Alias); ok {

@@ -42,6 +42,10 @@ func declarations() (map[string][]string, error) {
 // constraints. Exposure assembled only across mutually exclusive build variants
 // remains outside the semantic check; the final public-surface audit covers it.
 func Check(root string) error {
+	absoluteRoot, err := filepath.Abs(root)
+	if err != nil {
+		return err
+	}
 	denied, err := declarations()
 	if err != nil {
 		return err
@@ -49,6 +53,7 @@ func Check(root string) error {
 	var failures []error
 	fset := token.NewFileSet()
 	packages := make(map[string]*sourcePackage)
+	locations := make(map[string]sourceLocation)
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -77,7 +82,7 @@ func Check(root string) error {
 		if strings.HasSuffix(path, "_legacy.go") {
 			failures = append(failures, safeerror.New(fmt.Sprintf("%s: retired filename", relative)))
 		}
-		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments|parser.SkipObjectResolution)
 		if err != nil {
 			return err
 		}
@@ -124,7 +129,7 @@ func Check(root string) error {
 			}
 			return true
 		})
-		owner, moduleDir, err := packageLocation(root, filepath.Dir(path))
+		location, err := packageLocation(absoluteRoot, filepath.Join(absoluteRoot, filepath.Dir(relative)), locations)
 		if err != nil {
 			return err
 		}
@@ -133,7 +138,7 @@ func Check(root string) error {
 		key := filepath.Dir(path) + "/" + file.Name.Name
 		pkg := packages[key]
 		if pkg == nil {
-			pkg = &sourcePackage{owner: owner, moduleDir: moduleDir}
+			pkg = &sourcePackage{owner: location.owner, moduleDir: location.moduleDir}
 			packages[key] = pkg
 		}
 		pkg.files = append(pkg.files, file)
@@ -153,46 +158,43 @@ func Check(root string) error {
 	return safeerror.Join("operation failed", failures...)
 }
 
-// Resolve the nearest module, including fixture modules and nested source trees.
-func packageLocation(root, dir string) (string, string, error) {
-	root, err := filepath.Abs(root)
-	if err != nil {
-		return "", "", err
+type sourceLocation struct {
+	owner, moduleDir string
+}
+
+// Resolve each directory once within Check, including nested module boundaries.
+// Fixture mutations in a later Check always get a fresh location cache.
+func packageLocation(root, dir string, locations map[string]sourceLocation) (sourceLocation, error) {
+	if location, ok := locations[dir]; ok {
+		return location, nil
 	}
-	current, err := filepath.Abs(dir)
-	if err != nil {
-		return "", "", err
-	}
-	original := current
-	for {
-		data, err := os.ReadFile(filepath.Join(current, "go.mod"))
-		if err == nil {
-			for _, line := range strings.Split(string(data), "\n") {
-				fields := strings.Fields(line)
-				if len(fields) == 2 && fields[0] == "module" {
-					module := strings.Trim(fields[1], "\"")
-					relative, err := filepath.Rel(current, original)
-					if err != nil {
-						return "", "", err
-					}
-					if relative != "." {
-						module += "/" + filepath.ToSlash(relative)
-					}
-					return module, current, nil
-				}
+	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	if err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 2 && fields[0] == "module" {
+				location := sourceLocation{owner: strings.Trim(fields[1], "\""), moduleDir: dir}
+				locations[dir] = location
+				return location, nil
 			}
-			return "", "", safeerror.New(fmt.Sprintf("%s: missing module path", current))
 		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return "", "", err
-		}
-		if current == root {
-			return "", "", safeerror.New(fmt.Sprintf("%s: source has no module", dir))
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", "", safeerror.New(fmt.Sprintf("%s: source outside root", dir))
-		}
-		current = parent
+		return sourceLocation{}, safeerror.New(fmt.Sprintf("%s: missing module path", dir))
 	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return sourceLocation{}, err
+	}
+	if dir == root {
+		return sourceLocation{}, safeerror.New(fmt.Sprintf("%s: source has no module", dir))
+	}
+	parent := filepath.Dir(dir)
+	if parent == dir {
+		return sourceLocation{}, safeerror.New(fmt.Sprintf("%s: source outside root", dir))
+	}
+	location, err := packageLocation(root, parent, locations)
+	if err != nil {
+		return sourceLocation{}, err
+	}
+	location.owner += "/" + filepath.Base(dir)
+	locations[dir] = location
+	return location, nil
 }
