@@ -25,7 +25,9 @@ func BrowserLogout(ctx context.Context, web *Browser) error                { ret
 // install browser middleware; guarded routes receive it through Authentication.
 func BrowserRoutes(web *Browser, verify VerifiedLogin) (*foundryhttp.Router, error) {
 	endpoint := func(id foundryhttp.RouteID, method foundryhttp.Method, path string, access foundryhttp.Access) foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent] {
-		return foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path)), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+		idRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path))
+
+		return foundryhttp.DefineEndpoint(idRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
 	}
 	login := foundryhttp.ConfigureEndpoint(endpoint("browser.login", foundryhttp.POST, "/login", foundryhttp.Public), foundryhttp.Use(web.Middleware())).Handle(func(ctx context.Context, _ ProfileInput) (foundryhttp.NoContent, error) {
 		proof, err := verify(ctx)

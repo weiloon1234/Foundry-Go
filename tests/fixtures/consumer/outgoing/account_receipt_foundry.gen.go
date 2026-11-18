@@ -5,6 +5,7 @@ package outgoing
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -33,6 +34,13 @@ var foundryAccountReceiptJSON = sync.OnceValue(func() foundrycontract.JSON[Accou
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// AccountReceiptResponse builds the HTTP response from AccountReceiptJSON; status remains part of the route declaration.
+//
+//go:noinline
+func AccountReceiptResponse(status int) foundryhttp.Response[AccountReceipt] {
+	return foundryhttp.JSONResponse(status, AccountReceiptJSON())
+}
 
 // AccountReceiptValidationFieldSet retains concrete DTO and value types for validation.
 // Example: AccountReceiptValidationFields()

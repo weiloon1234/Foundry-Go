@@ -25,7 +25,7 @@ type Settings struct {
 	Note    value.Optional[value.Nullable[string]] `json:"note,omitzero"`
 }
 
-//foundry:multipart
+//foundry:multipart http=body
 type ProfileInput struct {
 	Title      value.Optional[string]
 	Attachment foundryhttp.UploadedFile `form:"document"`
@@ -69,7 +69,8 @@ models and uploaded files do not implicitly become JSON objects.
 <a id="recipe-multipart-endpoint"></a>
 ## Endpoint and validation
 
-Compose `MultipartBody(ProfileInputDescriptor())` into an ordinary typed endpoint.
+Declare `//foundry:multipart http=body` and use `ProfileInputBody(directory)`
+in an ordinary typed endpoint.
 The handler receives `request.Body` as ProfileInput and returns its separately
 declared response DTO. The [independent consumer](../../tests/fixtures/consumer/httpuploads/forms.go)
 illustrates descriptor assembly, validation and an injected domain service.
@@ -77,7 +78,6 @@ illustrates descriptor assembly, validation and an injected domain service.
 <!-- compiled-source: tests/fixtures/consumer/httpuploads/forms.go#multipart-endpoint -->
 ```go
 func Router(directory string, service Service) (*foundryhttp.Router, error) {
-	form := foundryhttp.MultipartDirectory(ProfileInputDescriptor(), directory)
 	fields := ProfileInputValidationFields()
 	rules := validation.All(
 		validation.Rules(fields.Title, validation.Optional(validation.MaxLength[string](80))),
@@ -90,7 +90,10 @@ func Router(directory string, service Service) (*foundryhttp.Router, error) {
 		validation.Rules(fields.Photos, validation.Each[Gallery](validation.FileMaxSize[foundryhttp.UploadedFile](1<<20))),
 	)
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "uploads.profile", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/profile"))
-	endpoint := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.JSONResponse(201, UploadReplyJSON())), rules)
+
+	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), ProfileInputBody(directory), UploadReplyResponse(201))
+	endpoint = foundryhttp.ValidateBody(endpoint, rules)
+
 	return foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, ProfileInput]) (UploadReply, error) {
 		return service.Save(ctx, input.Body)
 	}))
@@ -127,7 +130,7 @@ never become local paths. UploadedFile cannot be implicitly JSON-serialized or
 retained for a job after the request ends. A domain operation must stream it to
 persistent storage before returning. Use the [storage upload adapter](storage.md) to persist the request-owned file through an explicitly selected disk.
 
-MultipartDirectory accepts an absolute server-owned directory; an empty value
+The generated multipart body helper accepts an absolute server-owned directory; an empty value
 uses the operating system's temporary directory. Declaration/route assembly
 performs no filesystem I/O. Foundry creates a private per-request directory
 lazily when the first file arrives. Cleanup removes owned entries and reports
@@ -145,7 +148,9 @@ ceiling with `BodyLimit` and a matching `Timeout` for slow transfers:
 ```go
 limits := foundryhttp.DefaultEndpointLimits()
 limits.Multipart.Bytes, limits.Multipart.FileBytes = 520<<20, 512<<20
-upload := foundryhttp.ConfigureEndpoint(foundryhttp.ConfigureEndpoint(foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.EmptyResponse(204)), foundryhttp.Limits(limits)), foundryhttp.BodyLimit(520 << 20)), foundryhttp.Timeout(10 * time.Minute))
+upload := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), ProfileInputBody(directory), foundryhttp.EmptyResponse(204))
+upload = foundryhttp.ConfigureEndpoint(upload, foundryhttp.Limits(limits),
+    foundryhttp.BodyLimit(520 << 20), foundryhttp.Timeout(10 * time.Minute))
 ```
 
 Other routes keep the kernel default. Multipart Bytes

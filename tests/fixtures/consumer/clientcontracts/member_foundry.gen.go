@@ -5,6 +5,7 @@ package clientcontracts
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -25,6 +26,18 @@ var foundryMemberJSON = sync.OnceValue(func() foundrycontract.JSON[Member] {
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// MemberBody builds the HTTP body from MemberJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func MemberBody() foundryhttp.Body[Member] { return foundryhttp.JSONBody(MemberJSON()) }
+
+// MemberResponse builds the HTTP response from MemberJSON; status remains part of the route declaration.
+//
+//go:noinline
+func MemberResponse(status int) foundryhttp.Response[Member] {
+	return foundryhttp.JSONResponse(status, MemberJSON())
+}
 
 // MemberValidationFieldSet retains concrete DTO and value types for validation.
 // Example: MemberValidationFields()

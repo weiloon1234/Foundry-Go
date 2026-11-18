@@ -5,6 +5,7 @@ package requestflow
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -31,6 +32,13 @@ var foundryReplyJSON = sync.OnceValue(func() foundrycontract.JSON[Reply] {
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// ReplyResponse builds the HTTP response from ReplyJSON; status remains part of the route declaration.
+//
+//go:noinline
+func ReplyResponse(status int) foundryhttp.Response[Reply] {
+	return foundryhttp.JSONResponse(status, ReplyJSON())
+}
 
 // ReplyValidationFieldSet retains concrete DTO and value types for validation.
 // Example: ReplyValidationFields()

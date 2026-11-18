@@ -121,9 +121,11 @@ func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], confi
 	id := string(table.ID())
 	scope := foundryhttp.DefineScope("/"+id, foundryhttp.RouteID(id)).Within(group)
 	route := func(method foundryhttp.Method, path string, id foundryhttp.RouteID, access foundryhttp.Access) foundryhttp.Route[foundryhttp.NoPath] {
-		return foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path)), foundryhttp.Within(scope))
+		route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path))
+		return foundryhttp.ConfigureRoute(route, foundryhttp.Within(scope))
 	}
-	query := foundryhttp.Authenticated(QueryEndpoint(table, route(foundryhttp.POST, "", "query", foundryhttp.Guarded), foundryhttp.EmptyQuery()), config.Guard, read...)
+	queryEndpoint := QueryEndpoint(table, route(foundryhttp.POST, "", "query", foundryhttp.Guarded), foundryhttp.EmptyQuery())
+	query := foundryhttp.Authenticated(queryEndpoint, config.Guard, read...)
 	if err := foundryhttp.ValidateAuthenticated(query); err != nil {
 		return nil, err
 	}
@@ -140,12 +142,15 @@ func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], confi
 	if err := config.Quota.Validate(); err != nil {
 		return nil, err
 	}
-	download := foundryhttp.TicketAuthenticated(DownloadEndpoint(table, route(foundryhttp.GET, "/download", "download", foundryhttp.Guarded), DownloadQueryDescriptor(), foundryhttp.DownloadResponse("text/csv; charset=utf-8", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), foundryhttp.Timeout(config.Manager.DownloadTimeout())), config.Guard, config.Tickets.redeemer, export...)
+	downloadEndpoint := DownloadEndpoint(table, route(foundryhttp.GET, "/download", "download", foundryhttp.Guarded), DownloadQueryDescriptor(), foundryhttp.DownloadResponse("text/csv; charset=utf-8", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), foundryhttp.Timeout(config.Manager.DownloadTimeout()))
+	download := foundryhttp.TicketAuthenticated(downloadEndpoint, config.Guard, config.Tickets.redeemer, export...)
 	if err := foundryhttp.ValidateTicketAuthenticated(download); err != nil {
 		return nil, err
 	}
 	issueRoute := foundryhttp.ConfigureRoute(route(foundryhttp.POST, "/export", "export", foundryhttp.Guarded), foundryhttp.Use(foundryhttp.CredentialRequests(), config.Quota))
-	issue := foundryhttp.Authenticated(BindTicketExport(table, foundryhttp.DefineEndpoint(issueRoute, foundryhttp.EmptyQuery(), foundryhttp.JSONBody(ExportRequestJSON()), foundryhttp.JSONResponse(200, ExportTicketJSON())), ExportRequestValidationFields().Request), config.Guard, export...)
+	issueEndpoint := foundryhttp.DefineEndpoint(issueRoute, foundryhttp.EmptyQuery(), foundryhttp.JSONBody(ExportRequestJSON()), foundryhttp.JSONResponse(200, ExportTicketJSON()))
+	issueEndpoint = BindTicketExport(table, issueEndpoint, ExportRequestValidationFields().Request)
+	issue := foundryhttp.Authenticated(issueEndpoint, config.Guard, export...)
 	if err := foundryhttp.ValidateAuthenticated(issue); err != nil {
 		return nil, err
 	}

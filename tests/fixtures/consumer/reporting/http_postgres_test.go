@@ -91,7 +91,10 @@ func TestPublicReportDownloadOwnsFrozenFilterTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.frozen", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/frozen")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8"))
+
+	reportsFrozenRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.frozen", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/frozen"))
+	endpoint := foundryhttp.DefineEndpoint(reportsFrozenRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8"))
+
 	route := foundryhttp.RequireAuthentication(endpoint, transport, f.guard).Handle(func(ctx context.Context, _ reporting.Operator, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
 		input := datatable.Request{Filters: []datatable.Filter{{Op: datatable.All, Children: []datatable.Filter{{Op: datatable.Equal, Column: "name", Values: []string{"Ada"}}}}}}
 		download, err := reporting.Members.Download(ctx, f.manager, reporting.FromGuard(f.guard), input, datatable.ExportOptions{Format: datatable.CSV})

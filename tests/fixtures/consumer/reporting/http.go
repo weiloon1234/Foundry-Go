@@ -26,10 +26,13 @@ func ListMembers(ctx context.Context, manager *datatable.Manager, guard auth.Gua
 // response. The framework owns response ranges and artifact cleanup. The route
 // declares the manager's download deadline, which covers generation and transfer.
 func DownloadRoute(manager *datatable.Manager, transport *foundryhttp.Authentication, guard auth.Guard[Operator], presentation datatable.Presentation) foundryhttp.RouteRegistration {
-	endpoint := foundryhttp.ConfigureEndpoint(datatable.DownloadEndpoint(Members,
-		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.members.csv", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/reports/members.csv")),
+	reportsMembersCsvRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.members.csv", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/reports/members.csv"))
+	endpoint := datatable.DownloadEndpoint(Members,
+		reportsMembersCsvRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.DownloadResponse("text/csv; charset=utf-8"),
-	), foundryhttp.Timeout(manager.DownloadTimeout()))
+	)
+	endpoint = foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Timeout(manager.DownloadTimeout()))
+
 	return foundryhttp.RequireAuthentication(endpoint, transport, guard).Handle(func(ctx context.Context, _ Operator, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
 		return Members.Download(ctx, manager, FromGuard(guard), datatable.Request{}, datatable.ExportOptions{Format: datatable.CSV, Presentation: presentation})
 	})
@@ -38,10 +41,12 @@ func DownloadRoute(manager *datatable.Manager, transport *foundryhttp.Authentica
 // QueryRoute returns table errors unchanged; the framework owns client rejection
 // classification and current guard/policy checks.
 func QueryRoute(manager *datatable.Manager, transport *foundryhttp.Authentication, guard auth.Guard[Operator]) foundryhttp.RouteRegistration {
+	reportsMembersQueryRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.members.query", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/reports/members/query"))
 	endpoint := datatable.QueryEndpoint(Members,
-		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.members.query", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/reports/members/query")),
+		reportsMembersQueryRoute,
 		foundryhttp.EmptyQuery(),
 	)
+
 	return foundryhttp.RequireAuthentication(endpoint, transport, guard).Handle(func(ctx context.Context, _ Operator, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, datatable.Request]) (pagination.NumberedResponse[MemberRow], error) {
 		page, err := ListMembers(ctx, manager, guard, in.Body)
 		if err != nil {

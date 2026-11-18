@@ -46,6 +46,10 @@ func TestComponentScaffoldsGenerateAndCompileInFreshConsumer(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "list_notes_request_dto.go")); err == nil {
 		t.Fatal("GET endpoint received a request body")
 	}
+	endpointSource, err := os.ReadFile(filepath.Join(dir, "create_note_endpoint.go"))
+	if err != nil || !strings.Contains(string(endpointSource), "CreateNoteBody()") || !strings.Contains(string(endpointSource), "CreateNoteResponseResponse(201)") {
+		t.Fatal("endpoint scaffold must use the generated helpers", err)
+	}
 	// A migration file is named after its ID, dots included, so listings sort by ID.
 	migration, err := os.ReadFile(filepath.Join(dir, "notes.create_table_migration.go"))
 	if err != nil || !strings.Contains(string(migration), "CREATE TABLE notes (") {
@@ -99,5 +103,28 @@ func TestComponentScaffoldOptionsAreValidatedFirst(t *testing.T) {
 		if err := ValidateScaffold(options); err == nil {
 			t.Fatalf("invalid scaffold options accepted: %+v", options)
 		}
+	}
+}
+
+func TestHTTPScaffoldsRejectFrameworkModuleBeforeWriting(t *testing.T) {
+	for _, options := range []ScaffoldOptions{
+		{Kind: EndpointScaffold, Name: "CreateNote", ID: "notes.create", Method: "POST", Path: "/notes"},
+		{Kind: DTOScaffold, Name: "CreateNoteRequest", httpMode: "body"},
+		{Kind: DTOScaffold, Name: "NoteResource", httpMode: "response", dtoRole: "response"},
+	} {
+		t.Run(string(options.Kind)+options.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			write(t, dir, "go.mod", "module "+framework+"\n")
+			write(t, dir, "source.go", "package sample\n")
+			options.Dir = dir
+			path, err := Scaffold(t.Context(), options)
+			if path != "" || err == nil || !strings.Contains(err.Error(), "application module") {
+				t.Fatal(path, err)
+			}
+			entries, err := os.ReadDir(dir)
+			if err != nil || len(entries) != 2 {
+				t.Fatalf("rejected scaffold left files: %v %v", entries, err)
+			}
+		})
 	}
 }

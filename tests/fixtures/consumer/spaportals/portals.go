@@ -96,9 +96,12 @@ func Routes(services application.Services) ([]foundryhttp.RouteRegistration, err
 	if err != nil {
 		return nil, err
 	}
+
+	adminSessionRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "admin.session", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/admin/api/session"))
 	session := foundryhttp.DefineEndpoint(
-		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "admin.session", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/admin/api/session")),
+		adminSessionRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, contract.StringJSON[string]()))
+
 	return []foundryhttp.RouteRegistration{
 		bundles.Mount("portals.admin_bundles", "/admin/assets").Register(),
 		session.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {

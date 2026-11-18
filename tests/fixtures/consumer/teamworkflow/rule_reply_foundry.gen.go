@@ -5,6 +5,7 @@ package teamworkflow
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -25,6 +26,13 @@ var foundryRuleReplyJSON = sync.OnceValue(func() foundrycontract.JSON[RuleReply]
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// RuleReplyResponse builds the HTTP response from RuleReplyJSON; status remains part of the route declaration.
+//
+//go:noinline
+func RuleReplyResponse(status int) foundryhttp.Response[RuleReply] {
+	return foundryhttp.JSONResponse(status, RuleReplyJSON())
+}
 
 // RuleReplyValidationFieldSet retains concrete DTO and value types for validation.
 // Example: RuleReplyValidationFields()

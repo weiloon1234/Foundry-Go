@@ -15,10 +15,13 @@ import (
 
 type Request = foundryhttp.Input[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody]
 
-var Show = foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "documents.show", Method: foundryhttp.GET, Access: foundryhttp.Public}, httpkernel.UserPathDescriptor()),
-	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("application/pdf", "text/plain; charset=utf-8"),
-)
+var Show = func() foundryhttp.Endpoint[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.Download] {
+	documentsShowRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "documents.show", Method: foundryhttp.GET, Access: foundryhttp.Public}, httpkernel.UserPathDescriptor())
+	return foundryhttp.DefineEndpoint(
+		documentsShowRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("application/pdf", "text/plain; charset=utf-8"),
+	)
+}()
 
 // Document is domain-owned metadata. Path comes from a trusted domain lookup;
 // display names cannot select the filesystem object opened by Foundry.

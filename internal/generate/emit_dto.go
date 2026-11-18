@@ -44,6 +44,7 @@ func (e *emitter) emitDTO(declaration dtoDeclaration) {
 		e.emitGenericJSONValue(declaration.typ, declaration.dtoGraph, arguments)
 		e.line("}")
 	}
+	e.emitHTTPHelpers(declaration.name, public, declaration.http, false)
 	if declaration.role != dtoResponseRole {
 		e.emitDTOValidation(declaration)
 	}

@@ -7,6 +7,7 @@ import (
 	challenge "github.com/weiloon1234/Foundry-Go/auth/challenge"
 	password "github.com/weiloon1234/Foundry-Go/auth/password"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -29,6 +30,11 @@ var foundryResetRequestJSON = sync.OnceValue(func() foundrycontract.JSON[ResetRe
 		foundrycontract.JSONType[password.Plaintext]("github.com/weiloon1234/Foundry-Go/auth/password.Plaintext", (*new(password.Plaintext)).JSONContract),
 	}})
 })
+
+// ResetBody builds the HTTP body from ResetRequestJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func ResetBody() foundryhttp.Body[ResetRequest] { return foundryhttp.JSONBody(ResetRequestJSON()) }
 
 // ResetRequestValidationFieldSet retains concrete DTO and value types for validation.
 // Example: ResetRequestValidationFields()

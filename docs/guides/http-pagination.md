@@ -28,10 +28,13 @@ contains the complete declarations and generated contracts for this example:
 ```go
 type ListRequest = pagination.Request[foundryhttp.NoPath, MemberFilters]
 
-var List = pagination.DefineNumbered(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.index", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members")),
-	MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig(),
-)
+var List = func() pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse] {
+	membersIndexRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.index", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members"))
+	return pagination.DefineNumbered(
+		membersIndexRoute,
+		MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig(),
+	)
+}()
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#http-pagination-example-2 -->

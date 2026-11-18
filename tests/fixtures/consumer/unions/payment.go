@@ -35,23 +35,29 @@ type DeliveryVariants struct {
 	Sent BankDTO `union:"sent"`
 }
 
-//foundry:dto
+//foundry:dto http=body
 type PaymentRequest struct {
 	Method PaymentMethod                                 `json:"method"`
 	More   []PaymentMethod                               `json:"more,omitempty"`
 	Maybe  value.Optional[value.Nullable[PaymentMethod]] `json:"maybe,omitzero"`
 }
 
-var Echo = http.DefineEndpoint(
-	http.DefineRoute(http.RouteSpec{ID: "unions.echo", Method: http.POST, Access: http.Public}, http.StaticPath("/unions/echo")),
-	http.EmptyQuery(), http.JSONBody(PaymentRequestJSON()), http.JSONResponse(200, genericdto.EnvelopeJSON(PaymentRequestJSON())),
-)
+var Echo = func() http.Endpoint[http.NoPath, http.NoQuery, PaymentRequest, genericdto.Envelope[PaymentRequest]] {
+	unionsEchoRoute := http.DefineRoute(http.RouteSpec{ID: "unions.echo", Method: http.POST, Access: http.Public}, http.StaticPath("/unions/echo"))
+	return http.DefineEndpoint(
+		unionsEchoRoute,
+		http.EmptyQuery(), PaymentBody(), http.JSONResponse(200, genericdto.EnvelopeJSON(PaymentRequestJSON())),
+	)
+}()
 
 // Method echoes a request body whose root is the union itself.
-var Method = http.DefineEndpoint(
-	http.DefineRoute(http.RouteSpec{ID: "unions.method", Method: http.POST, Access: http.Public}, http.StaticPath("/unions/method")),
-	http.EmptyQuery(), http.JSONBody(PaymentMethodJSON()), http.JSONResponse(200, PaymentMethodJSON()),
-)
+var Method = func() http.Endpoint[http.NoPath, http.NoQuery, PaymentMethod, PaymentMethod] {
+	unionsMethodRoute := http.DefineRoute(http.RouteSpec{ID: "unions.method", Method: http.POST, Access: http.Public}, http.StaticPath("/unions/method"))
+	return http.DefineEndpoint(
+		unionsMethodRoute,
+		http.EmptyQuery(), http.JSONBody(PaymentMethodJSON()), http.JSONResponse(200, PaymentMethodJSON()),
+	)
+}()
 
 type EchoInput = http.Input[http.NoPath, http.NoQuery, PaymentRequest]
 

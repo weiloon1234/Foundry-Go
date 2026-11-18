@@ -18,7 +18,7 @@ type SubmissionPath struct {
 	Project Slug
 }
 
-//foundry:dto
+//foundry:dto http=body
 type Patch struct {
 	Title  value.Optional[value.Nullable[string]] `json:"title,omitzero"`
 	Budget value.Optional[int64]                  `json:"budget,omitzero"`
@@ -32,7 +32,7 @@ type ProjectView struct {
 	Budget int64                  `json:"budget"`
 }
 
-//foundry:dto
+//foundry:dto http=body
 type SubmissionInput struct {
 	Name   string `json:"name"`
 	Reject bool   `json:"reject,omitempty"`

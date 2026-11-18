@@ -47,10 +47,15 @@ func Migrations() []migrate.Definition {
 	}}}
 }
 func Endpoint() http.Endpoint[Path, http.NoQuery, Submission, Receipt] {
-	return http.ValidateBody(http.PrepareEndpoint(http.ConfigureEndpoint(http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "orders.create", Method: http.POST, Access: http.Guarded}, PathDescriptor()), http.EmptyQuery(), http.JSONBody(SubmissionJSON()), http.JSONResponse(201, ReceiptJSON())), http.Errors(Rejected, OrderExists)), func(_ context.Context, in Request) (http.NoQuery, Submission, error) {
+	ordersCreateRoute := http.DefineRoute(http.RouteSpec{ID: "orders.create", Method: http.POST, Access: http.Guarded}, PathDescriptor())
+	ordersCreateEndpoint := http.DefineEndpoint(ordersCreateRoute, http.EmptyQuery(), SubmissionBody(), ReceiptResponse(201))
+	ordersCreateEndpoint = http.ConfigureEndpoint(ordersCreateEndpoint, http.Errors(Rejected, OrderExists))
+	ordersCreateEndpoint = http.PrepareEndpoint(ordersCreateEndpoint, func(_ context.Context, in Request) (http.NoQuery, Submission, error) {
 		in.Body.Name = strings.TrimSpace(in.Body.Name)
 		return in.Query, in.Body, nil
-	}), validation.Rules(validation.DefineField("name", func(in Submission) string { return in.Name }), validation.NonBlank[string]()))
+	})
+
+	return http.ValidateBody(ordersCreateEndpoint, validation.Rules(validation.DefineField("name", func(in Submission) string { return in.Name }), validation.NonBlank[string]()))
 }
 
 // Build uses ordinary configured infrastructure. Only the idempotent callback's
@@ -90,12 +95,15 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 		if err != nil {
 			return nil, err
 		}
-		required := http.AuthorizeActor(http.RequireAuthentication(Endpoint(), transport, guard), func(_ context.Context, _ Actor, in Request) error {
+
+		required := http.RequireAuthentication(Endpoint(), transport, guard)
+		required = http.AuthorizeActor(required, func(_ context.Context, _ Actor, in Request) error {
 			if in.Body.Name == "request-denied" || hooks.Deny != nil && hooks.Deny.Load() {
 				return http.Forbidden
 			}
 			return nil
 		})
+
 		return []http.RouteRegistration{OrderRoute(db, required, guard, store, func(ctx context.Context, tx *database.Tx, actor Actor, in BoundRequest) (Receipt, error) {
 			if hooks.Calls != nil {
 				hooks.Calls.Add(1)

@@ -5,6 +5,7 @@ package requestflow
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -25,6 +26,13 @@ var foundryJSONSubmissionJSON = sync.OnceValue(func() foundrycontract.JSON[JSONS
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// JSONSubmissionBody builds the HTTP body from JSONSubmissionJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func JSONSubmissionBody() foundryhttp.Body[JSONSubmission] {
+	return foundryhttp.JSONBody(JSONSubmissionJSON())
+}
 
 // JSONSubmissionValidationFieldSet retains concrete DTO and value types for validation.
 // Example: JSONSubmissionValidationFields()

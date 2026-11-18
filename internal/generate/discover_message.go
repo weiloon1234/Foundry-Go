@@ -37,6 +37,7 @@ func discoverMessage(p *packageInput, spec *ast.TypeSpec, named *types.Named, ar
 	if options.plural == "" && options.kind != "" || options.kind != "" && options.kind != i18n.Cardinal && options.kind != i18n.Ordinal {
 		return d, p.diagnostic(spec.Pos(), "message plural kind requires a parameter and cardinal or ordinal")
 	}
+	d.http = "none"
 	d.message = options
 	return d, nil
 }

@@ -6,6 +6,7 @@ package httpdto
 import (
 	models "foundry.test/consumer/models"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
 	sync "sync"
@@ -42,6 +43,11 @@ var foundryUpdateUserJSON = sync.OnceValue(func() foundrycontract.JSON[UpdateUse
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// UpdateUserBody builds the HTTP body from UpdateUserJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func UpdateUserBody() foundryhttp.Body[UpdateUser] { return foundryhttp.JSONBody(UpdateUserJSON()) }
 
 // UpdateUserValidationFieldSet retains concrete DTO and value types for validation.
 // Example: UpdateUserValidationFields()

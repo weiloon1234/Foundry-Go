@@ -5,6 +5,7 @@ package httpquery
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
 	sync "sync"
@@ -33,6 +34,13 @@ var foundryRequestHeadersResponseJSON = sync.OnceValue(func() foundrycontract.JS
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// RequestHeadersResponseResponse builds the HTTP response from RequestHeadersResponseJSON; status remains part of the route declaration.
+//
+//go:noinline
+func RequestHeadersResponseResponse(status int) foundryhttp.Response[RequestHeadersResponse] {
+	return foundryhttp.JSONResponse(status, RequestHeadersResponseJSON())
+}
 
 // RequestHeadersResponseValidationFieldSet retains concrete DTO and value types for validation.
 // Example: RequestHeadersResponseValidationFields()

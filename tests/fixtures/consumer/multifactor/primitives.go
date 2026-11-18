@@ -28,12 +28,12 @@ func RotateEncryption(ctx context.Context, keys *encryption.Keyring, owner encry
 	return keys.Reencrypt(ctx, owner, ciphertext)
 }
 
-//foundry:dto
+//foundry:dto http=body
 type TOTPRequest struct {
 	Code mfa.TOTPCode `json:"code"`
 }
 
-//foundry:dto
+//foundry:dto http=body
 type RecoveryRequest struct {
 	Code mfa.RecoveryCode `json:"code"`
 }

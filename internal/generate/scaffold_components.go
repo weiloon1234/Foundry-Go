@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/internal/httppath"
+	"github.com/weiloon1234/Foundry-Go/internal/routecontract"
 )
 
 // MaxScaffoldEnumCases bounds the cases of one enum scaffold.
@@ -107,7 +108,7 @@ func renderComponentScaffold(pkg string, options ScaffoldOptions) (string, error
 		request, response := endpointContracts(options)
 		body, bodyType, status, contracts := "foundryhttp.EmptyBody()", "foundryhttp.NoBody", 200, response
 		if request != "" {
-			body, bodyType, contracts = "foundryhttp.JSONBody("+request+"JSON())", request, request+" and "+response
+			body, bodyType, contracts = routecontract.HelperName(request, "Body")+"()", request, request+" and "+response
 		}
 		if options.Method == "POST" {
 			status = 201
@@ -127,7 +128,7 @@ var %sRoute = foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: %q, Method: foun
 // %sEndpoint connects the route to the generated %s contracts.
 // Use Guarded access with an authentication transport for signed-in callers.
 func %sEndpoint() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, %s, %s] {
-	return foundryhttp.DefineEndpoint(%sRoute, foundryhttp.EmptyQuery(), %s, foundryhttp.JSONResponse(%d, %sJSON()))
+	return foundryhttp.DefineEndpoint(%sRoute, foundryhttp.EmptyQuery(), %s, %s(%d))
 }
 
 // Handle%s performs the domain work. Register %sEndpoint().Handle(Handle%s)
@@ -137,7 +138,7 @@ func Handle%s(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, f
 }
 `, pkg, framework+"/fault", framework+"/http",
 			options.Name, options.Name, options.ID, options.Method, options.Path,
-			options.Name, contracts, options.Name, bodyType, response, options.Name, body, status, response,
+			options.Name, contracts, options.Name, bodyType, response, options.Name, body, routecontract.HelperName(response, "Response"), status,
 			options.Name, options.Name, options.Name, options.Name, bodyType, response, response, "endpoint "+options.ID+" has not been implemented"), nil
 	case EnumScaffold:
 		var cases strings.Builder

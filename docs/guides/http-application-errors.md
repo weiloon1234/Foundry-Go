@@ -18,15 +18,13 @@ var SeatUnavailable = foundryhttp.DefineError(
     "seats.unavailable", 409, "The selected seat is no longer available.",
 )
 
-var Reserve = foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(
-    foundryhttp.DefineRoute(
-        foundryhttp.RouteSpec{ID: "seats.reserve", Method: foundryhttp.POST, Access: foundryhttp.Public},
-        foundryhttp.StaticPath("/seats/reserve"),
-    ),
-    foundryhttp.EmptyQuery(),
-    foundryhttp.EmptyBody(),
-    foundryhttp.EmptyResponse(204),
-), foundryhttp.Errors(SeatUnavailable))
+reserveRoute := foundryhttp.DefineRoute(
+    foundryhttp.RouteSpec{ID: "seats.reserve", Method: foundryhttp.POST, Access: foundryhttp.Public},
+    foundryhttp.StaticPath("/seats/reserve"),
+)
+reserve := foundryhttp.DefineEndpoint(reserveRoute, foundryhttp.EmptyQuery(),
+    foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+reserve = foundryhttp.ConfigureEndpoint(reserve, foundryhttp.Errors(SeatUnavailable))
 ```
 
 The [consumer example](../../tests/fixtures/consumer/httpendpoints/errors.go)
@@ -115,11 +113,14 @@ The exact declarations belong to the endpoint's error contract:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/member_create.go#declare-error-endpoint -->
 ```go
-var MemberCreate = foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members")),
-	foundryhttp.EmptyQuery(), foundryhttp.JSONBody(CreateMemberJSON()), foundryhttp.JSONResponse(201, MemberCreatedJSON()),
-	foundryhttp.Errors(MemberExists, RegistrationClosed),
-)
+var MemberCreate = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, CreateMember, MemberCreated] {
+	membersCreateRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members"))
+	return foundryhttp.DefineEndpoint(
+		membersCreateRoute,
+		foundryhttp.EmptyQuery(), CreateMemberBody(), MemberCreatedResponse(201),
+		foundryhttp.Errors(MemberExists, RegistrationClosed),
+	)
+}()
 ```
 
 Map service errors at the HTTP boundary. The fixture entries are public;

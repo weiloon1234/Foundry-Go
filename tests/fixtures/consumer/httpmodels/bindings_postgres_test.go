@@ -105,27 +105,40 @@ func TestPostgresModelBindingNaturalKeysAndSoftDeleteVisibility(t *testing.T) {
 		if _, err := orm.Insert(ctx, tx, models.WriteRecords.Table, orm.KeySet(models.WriteRecords.Key(), 42), orm.TextSet(models.WriteRecords.Name, "record")); err != nil {
 			return err
 		}
+
+		countriesShowRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "countries.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
+			foundryhttp.DefinePath("/countries/{country}", foundryhttp.Param("country", foundryhttp.StringPath[models.CountryCode](), func(p *httpmodels.CountryPath) *models.CountryCode { return &p.Country })))
 		countries := foundryhttp.DefineEndpoint(
-			foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "countries.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
-				foundryhttp.DefinePath("/countries/{country}", foundryhttp.Param("country", foundryhttp.StringPath[models.CountryCode](), func(p *httpmodels.CountryPath) *models.CountryCode { return &p.Country }))),
+			countriesShowRoute,
 			foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
-		countryRoute := modelbinding.Bind(foundryhttp.ForBinding(countries), httpmodels.CountryByCode(tx)).Handle(func(_ context.Context, in modelbinding.Input[httpmodels.CountryPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Country]) (foundryhttp.NoContent, error) {
+
+		countriesShowBinding := foundryhttp.ForBinding(countries)
+
+		countryRoute := modelbinding.Bind(countriesShowBinding, httpmodels.CountryByCode(tx)).Handle(func(_ context.Context, in modelbinding.Input[httpmodels.CountryPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Country]) (foundryhttp.NoContent, error) {
 			if in.Model.Code != "a/b + %" || in.Model.Name != "country" {
 				return foundryhttp.NoContent{}, errors.New("natural key hydration failed")
 			}
 			return foundryhttp.NoContent{}, nil
 		})
+
 		type numberPath struct{ Code models.RecordKey }
+
+		recordsShowRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "records.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
+			foundryhttp.DefinePath("/records/{record}", foundryhttp.Param("record", foundryhttp.IntegerPath[models.RecordKey](), func(p *numberPath) *models.RecordKey { return &p.Code })))
 		records := foundryhttp.DefineEndpoint(
-			foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "records.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
-				foundryhttp.DefinePath("/records/{record}", foundryhttp.Param("record", foundryhttp.IntegerPath[models.RecordKey](), func(p *numberPath) *models.RecordKey { return &p.Code }))),
+			recordsShowRoute,
 			foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
-		recordRoute := modelbinding.Bind(foundryhttp.ForBinding(records), modelbinding.ByKey(tx, orm.Keyed(models.WriteRecords.Query(), models.WriteRecords.Key()), func(p numberPath) models.RecordKey { return p.Code })).Handle(func(_ context.Context, in modelbinding.Input[numberPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.WriteRecord]) (foundryhttp.NoContent, error) {
+
+		recordsShowBinding := foundryhttp.ForBinding(records)
+		txEndpoint := modelbinding.ByKey(tx, orm.Keyed(models.WriteRecords.Query(), models.WriteRecords.Key()), func(p numberPath) models.RecordKey { return p.Code })
+
+		recordRoute := modelbinding.Bind(recordsShowBinding, txEndpoint).Handle(func(_ context.Context, in modelbinding.Input[numberPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.WriteRecord]) (foundryhttp.NoContent, error) {
 			if in.Model.Code != 42 || in.Model.Name != "record" {
 				return foundryhttp.NoContent{}, errors.New("numeric key hydration failed")
 			}
 			return foundryhttp.NoContent{}, nil
 		})
+
 		r, err := foundryhttp.NewRouter(countryRoute, recordRoute)
 		if err != nil {
 			return err
@@ -179,12 +192,18 @@ func TestPostgresModelBindingRetainsRetrievedHooksAndStoredFields(t *testing.T) 
 			ID model.ID[retrievalqueries.Member]
 		}
 		resolver := modelbinding.ByKey(tx, orm.Keyed(q.With(retrievalqueries.MemberLinks.Parent), retrievalqueries.Members.Key()), func(p memberPath) model.ID[retrievalqueries.Member] { return p.ID })
+
+		retrievalShowRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "retrieval.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
+			foundryhttp.DefinePath("/retrieval/{member}", foundryhttp.Param("member", foundryhttp.ModelIDPath[retrievalqueries.Member](), func(p *memberPath) *model.ID[retrievalqueries.Member] { return &p.ID })))
 		endpoint := foundryhttp.DefineEndpoint(
-			foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "retrieval.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
-				foundryhttp.DefinePath("/retrieval/{member}", foundryhttp.Param("member", foundryhttp.ModelIDPath[retrievalqueries.Member](), func(p *memberPath) *model.ID[retrievalqueries.Member] { return &p.ID }))),
+			retrievalShowRoute,
 			foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+
 		handled := 0
-		r, err := foundryhttp.NewRouter(modelbinding.Bind(foundryhttp.ForBinding(endpoint), resolver).Handle(func(_ context.Context, in modelbinding.Input[memberPath, foundryhttp.NoQuery, foundryhttp.NoBody, retrievalqueries.Member]) (foundryhttp.NoContent, error) {
+
+		retrievalShowBinding := foundryhttp.ForBinding(endpoint)
+
+		r, err := foundryhttp.NewRouter(modelbinding.Bind(retrievalShowBinding, resolver).Handle(func(_ context.Context, in modelbinding.Input[memberPath, foundryhttp.NoQuery, foundryhttp.NoBody, retrievalqueries.Member]) (foundryhttp.NoContent, error) {
 			handled++
 			name, err := in.Model.AccessName()
 			if err != nil {
@@ -197,6 +216,7 @@ func TestPostgresModelBindingRetainsRetrievedHooksAndStoredFields(t *testing.T) 
 			}
 			return foundryhttp.NoContent{}, nil
 		}))
+
 		if err != nil {
 			return err
 		}

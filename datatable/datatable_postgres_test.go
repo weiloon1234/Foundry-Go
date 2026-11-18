@@ -499,7 +499,8 @@ func TestPostgresDownloadValidatorsPreventSplicedRangeResumes(t *testing.T) {
 	fixture := reportPostgres(t)
 	manager, table := reportManager(t, fixture, reportSpec(), nil)
 	actor := reportActor{Tenant: 7, Allowed: true}
-	endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.download", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/report.csv")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8"))
+	downloadRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.download", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/report.csv"))
+	endpoint := foundryhttp.DefineEndpoint(downloadRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8"))
 	router, err := foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
 		return table.Download(ctx, manager, actor, Request{}, ExportOptions{Format: CSV})
 	}))
@@ -635,8 +636,11 @@ func TestPostgresDownloadRunsUnderItsRouteDeadlineAndReleasesOnCancel(t *testing
 	download := func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
 		return table.Download(ctx, manager, actor, Request{}, ExportOptions{Format: CSV})
 	}
-	kernel := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.kernel", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/kernel.csv")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8"))
-	routed := foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.routed", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/routed.csv")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8")), foundryhttp.Timeout(manager.DownloadTimeout()))
+	kernelRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.kernel", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/kernel.csv"))
+	kernel := foundryhttp.DefineEndpoint(kernelRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8"))
+	routedRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.routed", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/routed.csv"))
+	routed := foundryhttp.DefineEndpoint(routedRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8"))
+	routed = foundryhttp.ConfigureEndpoint(routed, foundryhttp.Timeout(manager.DownloadTimeout()))
 	base := serveReports(t, 150*time.Millisecond, kernel.Handle(download), routed.Handle(download))
 	transport := &stdhttp.Transport{}
 	defer transport.CloseIdleConnections()

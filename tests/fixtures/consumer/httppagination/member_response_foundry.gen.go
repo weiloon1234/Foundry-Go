@@ -6,6 +6,7 @@ package httppagination
 import (
 	mutatorqueries "foundry.test/consumer/mutatorqueries"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -37,6 +38,13 @@ var foundryMemberResponseJSON = sync.OnceValue(func() foundrycontract.JSON[Membe
 		},
 	}})
 })
+
+// MemberResponseResponse builds the HTTP response from MemberResponseJSON; status remains part of the route declaration.
+//
+//go:noinline
+func MemberResponseResponse(status int) foundryhttp.Response[MemberResponse] {
+	return foundryhttp.JSONResponse(status, MemberResponseJSON())
+}
 
 // MemberResponseValidationFieldSet retains concrete DTO and value types for validation.
 // Example: MemberResponseValidationFields()

@@ -1,5 +1,62 @@
 # Changelog
 
+## v0.45.0 — 2026-11-19
+
+- Route declarations use staged functions. A route-declaring call may no longer
+  appear inside an argument of another route-declaring call. The public typed
+  functions and request runtime remain unchanged. Terminal calls such as
+  `http.Authenticated(endpoint, guard).Handle(handler)` remain valid.
+- Generated concrete JSON request/resource and multipart declarations provide
+  non-inlined HTTP pieces beside their existing contracts. Helpers reuse those
+  contracts; there is no second schema. Helper-name collisions fail generation
+  and identify both declarations, including declarations and import names in
+  same-package tests across build constraints. External test-package collisions
+  remain ordinary compiler errors.
+- DTO directives accept `http=body`, `http=response`, and `http=both`,
+  independently of `role=response`. Without `http=`, no helper is emitted.
+  Multipart directives accept `http=body`. The migration tool infers keys from
+  actual typed uses. Helpers belong to application and fixture modules; framework
+  packages retain direct adapters and cannot emit HTTP helpers. HTTP scaffolds
+  reject framework destinations before writing files.
+- `go tool foundry routes check --dir .` checks resolved Go function identities,
+  including import aliases and generic instantiations. It reports nested route
+  declarations and direct wrappers of eligible generated DTO declarations, even
+  without an `http=` key, and exits non-zero on findings. Eligibility follows the
+  declaration’s directive and owning module, including dependency-only packages;
+  messages and other modules are exempt. Function-type conversions retain nesting
+  detection. Eligibility uses owning modules rather than import-path prefixes.
+  The CLI stops waiting at its deadline with timeout status 124, even while an
+  uncancellable Go parser or type checker is still running.
+
+Before:
+
+```go
+admin := http.Authenticated(http.ValidateBody(
+    http.DefineEndpoint(create, http.EmptyQuery(),
+        http.JSONBody(requests.SavePageRequestJSON()),
+        http.JSONResponse(200, resources.PageResourceJSON())),
+    requests.SavePageRules(slots)), guard)
+```
+
+After:
+
+```go
+response := resources.PageResponse(200)
+endpoint := http.DefineEndpoint(create, http.EmptyQuery(), requests.SavePageBody(), response)
+endpoint = http.ValidateBody(endpoint, requests.SavePageRules(slots))
+admin := http.Authenticated(endpoint, guard)
+```
+
+Applications: update the framework pin, run the external staged-route codemod
+with `--annotate --write`, regenerate declarations, then run it with `--write`.
+Review its annotation, unsupported-construct, numbered-name and `reordered-call`
+reports, then run gofmt. Hoisting assumes declaration factories are order-independent;
+review factories with side effects and prove route descriptors and the exported
+client contract byte-identical before applying the migration. Add `go tool foundry routes check --dir .` to the application gate.
+The temporary codemod is retained in the flat-routes proposal's `codemod/staged/`
+directory and is not shipped in the framework. Pagination/datatable helper
+adapters are follow-up work; their existing typed functions remain available.
+
 ## v0.44.1 — 2026-11-18
 
 - The dev server now also compiles without debug information by default

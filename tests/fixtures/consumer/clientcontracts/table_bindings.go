@@ -13,7 +13,7 @@ import (
 
 // TableExportRequest is the consumer-owned ticket protocol.
 //
-//foundry:dto
+//foundry:dto http=body
 type TableExportRequest struct {
 	Format  datatable.ExportFormat `json:"format"`
 	Request datatable.Request      `json:"request"`
@@ -21,7 +21,7 @@ type TableExportRequest struct {
 
 // TableExportResource preserves the complete custom ticket result.
 //
-//foundry:dto
+//foundry:dto http=response
 type TableExportResource struct {
 	URL       string `json:"url"`
 	ExpiresAt int64  `json:"expires_at"`
@@ -49,7 +49,9 @@ type TableIdentity struct {
 
 // doc-example:begin datatable-3
 func tableQuery[S, R, A any](table datatable.Table[S, R, A], id h.RouteID, path string) h.RouteRegistration {
-	endpoint := datatable.QueryEndpoint(table, h.DefineRoute(h.RouteSpec{ID: id, Method: h.POST, Access: h.Public}, h.StaticPath(path)), h.EmptyQuery())
+	idRoute := h.DefineRoute(h.RouteSpec{ID: id, Method: h.POST, Access: h.Public}, h.StaticPath(path))
+	endpoint := datatable.QueryEndpoint(table, idRoute, h.EmptyQuery())
+
 	return endpoint.Handle(func(context.Context, h.Input[h.NoPath, h.NoQuery, datatable.Request]) (pagination.NumberedResponse[R], error) {
 		return pagination.NumberedResponse[R]{Data: []R{}}, nil
 	})
@@ -58,10 +60,19 @@ func tableQuery[S, R, A any](table datatable.Table[S, R, A], id h.RouteID, path 
 // TableBindingsManifest exercises ticket, direct-file, query-only and download-only tables.
 func TableBindingsManifest(ctx context.Context) (*manifest.Manifest, error) {
 	// doc-example:begin datatable-4
-	ticket := datatable.BindTicketExport(reporting.Members, h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "issue.report", Method: h.POST, Access: h.Public}, h.StaticPath("/issue")), h.EmptyQuery(), h.JSONBody(TableExportRequestJSON()), h.JSONResponse(201, TableExportResourceJSON())), TableExportRequestValidationFields().Request)
-	download := datatable.DownloadEndpoint(reporting.Members, h.DefineRoute(h.RouteSpec{ID: "files.open", Method: h.GET, Access: h.Public}, h.StaticPath("/file")), TableDownloadQueryDescriptor(), h.DownloadResponse("text/csv"))
-	aggregate := datatable.DownloadEndpoint(reporting.Totals, h.DefineRoute(h.RouteSpec{ID: "files.aggregate", Method: h.GET, Access: h.Public}, h.StaticPath("/aggregate")), h.EmptyQuery(), h.DownloadResponse("text/csv"))
-	direct := datatable.BindFileExport(reporting.Orders, h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "reports.direct", Method: h.GET, Access: h.Public}, TableFilePathDescriptor()), TableDownloadQueryDescriptor(), h.EmptyBody(), h.DownloadResponse("text/csv"))) // doc-example:end datatable-4
+	issueReportRoute := h.DefineRoute(h.RouteSpec{ID: "issue.report", Method: h.POST, Access: h.Public}, h.StaticPath("/issue"))
+	issueReportEndpoint := h.DefineEndpoint(issueReportRoute, h.EmptyQuery(), TableExportBody(), TableExportResponse(201))
+	ticket := datatable.BindTicketExport(reporting.Members, issueReportEndpoint, TableExportRequestValidationFields().Request)
+
+	filesOpenRoute := h.DefineRoute(h.RouteSpec{ID: "files.open", Method: h.GET, Access: h.Public}, h.StaticPath("/file"))
+	download := datatable.DownloadEndpoint(reporting.Members, filesOpenRoute, TableDownloadQueryDescriptor(), h.DownloadResponse("text/csv"))
+
+	filesAggregateRoute := h.DefineRoute(h.RouteSpec{ID: "files.aggregate", Method: h.GET, Access: h.Public}, h.StaticPath("/aggregate"))
+	aggregate := datatable.DownloadEndpoint(reporting.Totals, filesAggregateRoute, h.EmptyQuery(), h.DownloadResponse("text/csv"))
+
+	reportsDirectRoute := h.DefineRoute(h.RouteSpec{ID: "reports.direct", Method: h.GET, Access: h.Public}, TableFilePathDescriptor())
+	reportsDirectEndpoint := h.DefineEndpoint(reportsDirectRoute, TableDownloadQueryDescriptor(), h.EmptyBody(), h.DownloadResponse("text/csv"))
+	direct := datatable.BindFileExport(reporting.Orders, reportsDirectEndpoint) // doc-example:end datatable-4
 	router, err := h.NewRouter(tableQuery(reporting.Members, "admin.inventory", "/members"), tableQuery(reporting.NumericLevels, "admin.levels", "/levels"),
 		ticket.Handle(func(context.Context, h.Input[h.NoPath, h.NoQuery, TableExportRequest]) (TableExportResource, error) {
 			return TableExportResource{}, nil

@@ -5,6 +5,7 @@ package recovering
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -25,6 +26,11 @@ var foundryLinkRequestJSON = sync.OnceValue(func() foundrycontract.JSON[LinkRequ
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// LinkBody builds the HTTP body from LinkRequestJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func LinkBody() foundryhttp.Body[LinkRequest] { return foundryhttp.JSONBody(LinkRequestJSON()) }
 
 // LinkRequestValidationFieldSet retains concrete DTO and value types for validation.
 // Example: LinkRequestValidationFields()

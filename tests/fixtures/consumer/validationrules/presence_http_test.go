@@ -49,10 +49,13 @@ func presenceEndpoint() foundryhttp.Endpoint[foundryhttp.NoPath, presenceBody, p
 		foundryhttp.OptionalQueryParam("count", foundryhttp.IntegerQuery[int](), func(input *presenceBody) *value.Optional[int] { return &input.Count }),
 		foundryhttp.OptionalQueryParam("active", foundryhttp.BoolQuery[bool](), func(input *presenceBody) *value.Optional[bool] { return &input.Active }),
 	)
+
+	presenceCheckRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "presence.check", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/presence"))
+
 	return foundryhttp.DefineEndpoint(
-		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "presence.check", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/presence")),
+		presenceCheckRoute,
 		query,
-		foundryhttp.JSONBody(validationrules.PresenceInputJSON()),
+		validationrules.PresenceInputBody(),
 		foundryhttp.EmptyResponse(stdhttp.StatusNoContent),
 	)
 }

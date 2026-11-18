@@ -33,7 +33,7 @@ type ArticleMediaPath struct {
 // ArticleInput creates or replaces an article's text. Translated fields are
 // objects keyed by locale, for example {"en": "Hello", "ms": "Helo"}.
 //
-//foundry:dto
+//foundry:dto http=body
 type ArticleInput struct {
 	Slug    string                   `json:"slug"`
 	Author  string                   `json:"author"`
@@ -48,7 +48,7 @@ type Gallery []foundryhttp.UploadedFile
 // ArticleMedia uploads a logo and gallery images, with optional translated
 // text as a JSON part.
 //
-//foundry:multipart
+//foundry:multipart http=body
 type ArticleMedia struct {
 	Title     value.Optional[map[i18n.LocaleID]string] `form:",json"`
 	Logo      value.Optional[foundryhttp.UploadedFile]
@@ -69,7 +69,7 @@ type FileView struct {
 
 // ArticleView presents an article in the request's locale.
 //
-//foundry:dto role=response
+//foundry:dto role=response http=response
 type ArticleView struct {
 	ID          model.ID[Article]        `json:"id"`
 	Slug        string                   `json:"slug"`
@@ -83,7 +83,7 @@ type ArticleView struct {
 
 // ArticleList is one page of article views.
 //
-//foundry:dto role=response
+//foundry:dto role=response http=response
 type ArticleList struct {
 	Items []ArticleView `json:"items"`
 }
@@ -127,12 +127,27 @@ func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
 		validation.Rules(media.Galleries, validation.MaxItems[Gallery](s.x.Galleries.Describe().MaxFiles), validation.Each[Gallery](gallery)),
 	)
 	// doc-example:end slot-upload-rules
-	create := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/articles")), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(ArticleInputJSON()), foundryhttp.JSONResponse(201, ArticleViewJSON())), textRules)
-	update := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.update", Method: foundryhttp.PUT, Access: foundryhttp.Public}, ArticlePathDescriptor()), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(ArticleInputJSON()), foundryhttp.JSONResponse(200, ArticleViewJSON())), textRules)
-	upload := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.media", Method: foundryhttp.POST, Access: foundryhttp.Public}, ArticleMediaPathDescriptor()), foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(ArticleMediaDescriptor()), foundryhttp.JSONResponse(200, ArticleViewJSON())), mediaRules)
-	show := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.show", Method: foundryhttp.GET, Access: foundryhttp.Public}, ArticlePathDescriptor()), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, ArticleViewJSON()))
-	list := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.list", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/articles")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, ArticleListJSON()))
-	remove := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.delete", Method: foundryhttp.DELETE, Access: foundryhttp.Public}, ArticlePathDescriptor()), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+	articlesCreateRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/articles"))
+	create := foundryhttp.DefineEndpoint(articlesCreateRoute, foundryhttp.EmptyQuery(), ArticleInputBody(), ArticleViewResponse(201))
+	create = foundryhttp.ValidateBody(create, textRules)
+
+	articlesUpdateRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.update", Method: foundryhttp.PUT, Access: foundryhttp.Public}, ArticlePathDescriptor())
+	update := foundryhttp.DefineEndpoint(articlesUpdateRoute, foundryhttp.EmptyQuery(), ArticleInputBody(), ArticleViewResponse(200))
+	update = foundryhttp.ValidateBody(update, textRules)
+
+	articlesMediaRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.media", Method: foundryhttp.POST, Access: foundryhttp.Public}, ArticleMediaPathDescriptor())
+	upload := foundryhttp.DefineEndpoint(articlesMediaRoute, foundryhttp.EmptyQuery(), ArticleMediaBody(""), ArticleViewResponse(200))
+	upload = foundryhttp.ValidateBody(upload, mediaRules)
+
+	articlesShowRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.show", Method: foundryhttp.GET, Access: foundryhttp.Public}, ArticlePathDescriptor())
+	show := foundryhttp.DefineEndpoint(articlesShowRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), ArticleViewResponse(200))
+
+	articlesListRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.list", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/articles"))
+	list := foundryhttp.DefineEndpoint(articlesListRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), ArticleListResponse(200))
+
+	articlesDeleteRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.delete", Method: foundryhttp.DELETE, Access: foundryhttp.Public}, ArticlePathDescriptor())
+	remove := foundryhttp.DefineEndpoint(articlesDeleteRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+
 	return []foundryhttp.RouteRegistration{
 		create.Handle(s.Create), update.Handle(s.Update), upload.Handle(s.Upload),
 		show.Handle(s.Show), list.Handle(s.List), remove.Handle(s.Delete),

@@ -3,6 +3,7 @@ package generate
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -27,6 +28,9 @@ type listedPackage struct {
 	GoFiles, CgoFiles             []string
 	IgnoredGoFiles                []string
 	Imports, Match                []string
+	CompiledGoFiles               []string
+	ImportMap                     map[string]string
+	DepOnly                       bool
 	// Deps lists every transitive dependency.
 	Deps   []string
 	Module *listedModule
@@ -40,10 +44,11 @@ type source struct {
 type packageInput struct {
 	dir, path, name string
 	// display is the module-relative directory used in diagnostics.
-	display  string
-	files    []source
-	previous map[string][]byte
-	defined  map[string]bool
+	display   string
+	testFiles []source
+	files     []source
+	previous  map[string][]byte
+	defined   map[string]bool
 	// definedAt and methods locate handwritten declarations that generated
 	// symbols must not redeclare.
 	definedAt map[string]token.Pos
@@ -55,6 +60,9 @@ type packageInput struct {
 	checked   *types.Package
 	// persistenceDependent reports that the package's imports reach
 	// database/orm; persistence retains its complete check for recognition.
+	httpDependency       bool
+	frameworkPackage     bool
+	testDefinedAt        map[string]token.Pos
 	persistenceDependent bool
 	persistence          *persistenceSource
 	enumTypes            map[*types.Named]bool
@@ -67,7 +75,7 @@ type packageInput struct {
 // handwritten declarations using already checked in-memory dependencies first.
 // Full syntax is parsed once with module-relative names, so every diagnostic names
 // the actual source path rather than an ambiguous basename.
-func (g *packageGraph) loadPackage(path string) (*packageInput, error) {
+func (g *packageGraph) loadPackage(ctx context.Context, path string) (*packageInput, error) {
 	target := g.packages[path]
 	absolute := target.Dir
 	input := &packageInput{dir: absolute, path: target.ImportPath, name: target.Name, display: g.scope.display(absolute), fset: g.fset, previous: make(map[string][]byte), goNames: g.snapshot[absolute], importer: g}
@@ -105,12 +113,17 @@ func (g *packageGraph) loadPackage(path string) (*packageInput, error) {
 		declared = declared || mayDeclare(g.overlay[path])
 		input.files = append(input.files, source{name, g.overlay[path], full})
 	}
+	input.httpDependency = g.httpDependencies[path]
+	input.frameworkPackage = g.scope.path == framework
 	input.persistenceDependent = g.importsPersistence(input.files)
 	if !declared {
 		// Without directives there is nothing to discover. The complete overlay
 		// check still validates the package and supplies it to dependents.
 		input.defined = make(map[string]bool)
 		return input, nil
+	}
+	if err := input.testSymbols(ctx, g); err != nil {
+		return nil, err
 	}
 	declarations, err := input.declarationFiles()
 	if err != nil {

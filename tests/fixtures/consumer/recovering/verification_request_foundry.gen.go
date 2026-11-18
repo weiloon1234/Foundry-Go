@@ -6,6 +6,7 @@ package recovering
 import (
 	challenge "github.com/weiloon1234/Foundry-Go/auth/challenge"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -28,6 +29,13 @@ var foundryVerificationRequestJSON = sync.OnceValue(func() foundrycontract.JSON[
 		foundrycontract.JSONType[challenge.Token[Member, challenge.EmailVerification]]("github.com/weiloon1234/Foundry-Go/auth/challenge.Token[foundry.test/consumer/recovering.Member,github.com/weiloon1234/Foundry-Go/auth/challenge.EmailVerification]", (*new(challenge.Token[Member, challenge.EmailVerification])).JSONContract),
 	}})
 })
+
+// VerificationBody builds the HTTP body from VerificationRequestJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func VerificationBody() foundryhttp.Body[VerificationRequest] {
+	return foundryhttp.JSONBody(VerificationRequestJSON())
+}
 
 // VerificationRequestValidationFieldSet retains concrete DTO and value types for validation.
 // Example: VerificationRequestValidationFields()

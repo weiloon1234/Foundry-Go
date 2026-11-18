@@ -6,7 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/password"
 )
 
-//foundry:dto
+//foundry:dto http=body
 type LoginRequest struct {
 	Email    string             `json:"email"`
 	Password password.Plaintext `json:"password"`

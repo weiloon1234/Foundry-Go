@@ -18,10 +18,13 @@ import (
 func TestServerDeadlineReachesTypedDomainHandler(t *testing.T) {
 	t.Parallel()
 	var canceled atomic.Bool
+
+	slowRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "slow", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/"))
 	endpoint := foundryhttp.DefineEndpoint(
-		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "slow", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/")),
-		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, httpdto.UserResponseJSON()),
+		slowRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), httpdto.UserResponseResponse(200),
 	)
+
 	router, err := foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (httpdto.UserResponse, error) {
 		<-ctx.Done()
 		canceled.Store(ctx.Err() == context.DeadlineExceeded)

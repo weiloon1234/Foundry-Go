@@ -15,12 +15,15 @@ import (
 
 type PreviewRequest = foundryhttp.Input[httpkernel.UserPath, httpquery.SearchInput, foundryhttp.NoBody]
 
-var Preview = foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "preview.show", Method: foundryhttp.GET, Access: foundryhttp.Public}, httpkernel.UserPathDescriptor()),
-	httpquery.SearchInputDescriptor(),
-	foundryhttp.EmptyBody(),
-	foundryhttp.JSONResponse(200, httpdto.UserResponseJSON()),
-)
+var Preview = func() foundryhttp.Endpoint[httpkernel.UserPath, httpquery.SearchInput, foundryhttp.NoBody, httpdto.UserResponse] {
+	previewShowRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "preview.show", Method: foundryhttp.GET, Access: foundryhttp.Public}, httpkernel.UserPathDescriptor())
+	return foundryhttp.DefineEndpoint(
+		previewShowRoute,
+		httpquery.SearchInputDescriptor(),
+		foundryhttp.EmptyBody(),
+		httpdto.UserResponseResponse(200),
+	)
+}()
 var Asset = foundryhttp.DefineRoute(
 	foundryhttp.RouteSpec{ID: "preview.asset", Method: foundryhttp.GET, Access: foundryhttp.Public},
 	httpkernel.AssetPathDescriptor(),

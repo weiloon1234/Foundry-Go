@@ -10,12 +10,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-//foundry:dto
+//foundry:dto http=body
 type CreateMember struct {
 	Name string `json:"name"`
 }
 
-//foundry:dto
+//foundry:dto http=response
 type MemberCreated struct {
 	ID model.ID[models.User] `json:"id"`
 }
@@ -42,11 +42,14 @@ var RegistrationClosed = foundryhttp.DefineError(
 ) // doc-example:end http-application-errors-member-exists-details
 
 // doc-example:begin declare-error-endpoint
-var MemberCreate = foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members")),
-	foundryhttp.EmptyQuery(), foundryhttp.JSONBody(CreateMemberJSON()), foundryhttp.JSONResponse(201, MemberCreatedJSON()),
-	foundryhttp.Errors(MemberExists, RegistrationClosed),
-) // doc-example:end declare-error-endpoint
+var MemberCreate = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, CreateMember, MemberCreated] {
+	membersCreateRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members"))
+	return foundryhttp.DefineEndpoint(
+		membersCreateRoute,
+		foundryhttp.EmptyQuery(), CreateMemberBody(), MemberCreatedResponse(201),
+		foundryhttp.Errors(MemberExists, RegistrationClosed),
+	)
+}() // doc-example:end declare-error-endpoint
 
 type existingMember struct {
 	ID    model.ID[models.User]

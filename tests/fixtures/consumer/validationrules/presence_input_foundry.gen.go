@@ -5,6 +5,7 @@ package validationrules
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
 	sync "sync"
@@ -56,6 +57,13 @@ var foundryPresenceInputJSON = sync.OnceValue(func() foundrycontract.JSON[Presen
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// PresenceInputBody builds the HTTP body from PresenceInputJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func PresenceInputBody() foundryhttp.Body[PresenceInput] {
+	return foundryhttp.JSONBody(PresenceInputJSON())
+}
 
 // PresenceInputValidationFieldSet retains concrete DTO and value types for validation.
 // Example: PresenceInputValidationFields()

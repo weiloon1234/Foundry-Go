@@ -6,6 +6,7 @@ package clientcontracts
 import (
 	models "foundry.test/consumer/models"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
@@ -29,6 +30,13 @@ var foundryMemberCreatedJSON = sync.OnceValue(func() foundrycontract.JSON[Member
 		},
 	}})
 })
+
+// MemberCreatedResponse builds the HTTP response from MemberCreatedJSON; status remains part of the route declaration.
+//
+//go:noinline
+func MemberCreatedResponse(status int) foundryhttp.Response[MemberCreated] {
+	return foundryhttp.JSONResponse(status, MemberCreatedJSON())
+}
 
 // MemberCreatedValidationFieldSet retains concrete DTO and value types for validation.
 // Example: MemberCreatedValidationFields()

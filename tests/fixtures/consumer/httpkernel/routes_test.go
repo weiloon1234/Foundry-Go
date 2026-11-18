@@ -15,12 +15,15 @@ import (
 type routeMember struct{}
 type memberPath struct{ Member model.ID[routeMember] }
 
-var memberShow = foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(
-	foundryhttp.RouteSpec{ID: "members.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
-	foundryhttp.DefinePath("/members/{member}",
-		foundryhttp.Param("member", foundryhttp.ModelIDPath[routeMember](), func(path *memberPath) *model.ID[routeMember] { return &path.Member }),
-	),
-), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
+var memberShow = func() foundryhttp.Route[memberPath] {
+	membersShowRoute := foundryhttp.DefineRoute(
+		foundryhttp.RouteSpec{ID: "members.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
+		foundryhttp.DefinePath("/members/{member}",
+			foundryhttp.Param("member", foundryhttp.ModelIDPath[routeMember](), func(path *memberPath) *model.ID[routeMember] { return &path.Member }),
+		),
+	)
+	return foundryhttp.ConfigureRoute(membersShowRoute, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
+}()
 
 // This fixture explicitly uses the raw payload adapter. Typed request/response
 // DTO discovery is the next HTTP slice; path identity is already compiler checked.

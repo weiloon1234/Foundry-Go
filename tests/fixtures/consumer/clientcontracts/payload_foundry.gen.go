@@ -9,6 +9,7 @@ import (
 	models "foundry.test/consumer/models"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
 	decimal "github.com/weiloon1234/Foundry-Go/decimal"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	i18n "github.com/weiloon1234/Foundry-Go/i18n"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
@@ -106,6 +107,18 @@ var foundryPayloadJSON = sync.OnceValue(func() foundrycontract.JSON[Payload] {
 		},
 	}})
 })
+
+// PayloadBody builds the HTTP body from PayloadJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func PayloadBody() foundryhttp.Body[Payload] { return foundryhttp.JSONBody(PayloadJSON()) }
+
+// PayloadResponse builds the HTTP response from PayloadJSON; status remains part of the route declaration.
+//
+//go:noinline
+func PayloadResponse(status int) foundryhttp.Response[Payload] {
+	return foundryhttp.JSONResponse(status, PayloadJSON())
+}
 
 // PayloadValidationFieldSet retains concrete DTO and value types for validation.
 // Example: PayloadValidationFields()

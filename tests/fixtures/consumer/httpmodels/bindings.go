@@ -20,7 +20,7 @@ type ShowRequest = modelbinding.Input[httpkernel.UserPath, foundryhttp.NoQuery, 
 
 var Show = foundryhttp.DefineEndpoint(
 	httpkernel.ShowUser,
-	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, httpdto.UserResponseJSON()),
+	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), httpdto.UserResponseResponse(200),
 )
 
 type Service interface {
@@ -34,7 +34,9 @@ func UserByID(db database.Executor) modelbinding.Resolver[httpkernel.UserPath, m
 }
 
 func Router(db database.Executor, service Service) (*foundryhttp.Router, error) {
-	bound := modelbinding.Bind(foundryhttp.ForBinding(Show), UserByID(db))
+	showUserBinding := foundryhttp.ForBinding(Show)
+	bound := modelbinding.Bind(showUserBinding, UserByID(db))
+
 	return foundryhttp.NewRouter(bound.Handle(service.Show))
 } // doc-example:end http-model-binding-user-by-id
 

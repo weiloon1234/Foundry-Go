@@ -6,6 +6,7 @@ package httpdto
 import (
 	models "foundry.test/consumer/models"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
@@ -33,6 +34,13 @@ var foundryUserResponseJSON = sync.OnceValue(func() foundrycontract.JSON[UserRes
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// UserResponseResponse builds the HTTP response from UserResponseJSON; status remains part of the route declaration.
+//
+//go:noinline
+func UserResponseResponse(status int) foundryhttp.Response[UserResponse] {
+	return foundryhttp.JSONResponse(status, UserResponseJSON())
+}
 
 // UserResponseValidationFieldSet retains concrete DTO and value types for validation.
 // Example: UserResponseValidationFields()

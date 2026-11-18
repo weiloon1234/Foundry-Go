@@ -5,7 +5,7 @@
     "order_response_foundry.gen.go": "ff015ec1f7bb06cf50aedaf2daeab36e3475584a4808a6a00697251fddbd209e",
     "stream_response_foundry.gen.go": "c44a16442907598aaa466b96fad6bd025db3d26e4eaec1771d7c7a31312b8bbd",
     "tracking_response_foundry.gen.go": "391295eed9e318eabae808861bc1f43f2ccd0ea8beda7e2d15c3dd3b583827f9",
-    "update_user_foundry.gen.go": "d686d3e298c731b4fcb3e01dd56ab958d43da29897376bc9073d3b5ff798b0bd",
-    "user_response_foundry.gen.go": "368f9ceba5f86a62a7d0daecf83c604155d555277dbe364f4b5407dd668b9725"
+    "update_user_foundry.gen.go": "ff336e978cfce84c39793772512ced4f9de5076e78fd930019a02e99cc638574",
+    "user_response_foundry.gen.go": "f088dedfe9d734fa66efcffef1fe8bf9a2324392120b02357862041ca1663c35"
   }
 }

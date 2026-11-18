@@ -5,6 +5,7 @@ package clientcontracts
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -32,6 +33,13 @@ var foundryTableExportResourceJSON = sync.OnceValue(func() foundrycontract.JSON[
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// TableExportResponse builds the HTTP response from TableExportResourceJSON; status remains part of the route declaration.
+//
+//go:noinline
+func TableExportResponse(status int) foundryhttp.Response[TableExportResource] {
+	return foundryhttp.JSONResponse(status, TableExportResourceJSON())
+}
 
 // TableExportResourceValidationFieldSet retains concrete DTO and value types for validation.
 // Example: TableExportResourceValidationFields()

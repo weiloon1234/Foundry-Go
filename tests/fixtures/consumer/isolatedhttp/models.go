@@ -9,14 +9,14 @@ type Record struct {
 	Text string
 }
 
-//foundry:dto
+//foundry:dto http=body
 type Submission struct {
 	Name     string `json:"name"`
 	Text     string `json:"text"`
 	Rollback bool   `json:"rollback"`
 }
 
-//foundry:dto
+//foundry:dto http=response
 type Receipt struct {
 	Name string `json:"name"`
 	Text string `json:"text"`

@@ -5,6 +5,6 @@
     "card_dto_foundry.gen.go": "d3f7eda2077446b8d2c02e860a9c7853b1dd7efae0df7cfe4770177279fe9d6a",
     "delivery_foundry.gen.go": "c90536ee8c10f87420d93592259512301fee046366f09e7d91926dedcd3a10c1",
     "payment_method_foundry.gen.go": "dddf5bed7bcba8cf9581914de2221e9d8fc9f62cba0f10b3865ffe057c4d83d6",
-    "payment_request_foundry.gen.go": "f0f3b884237c34eab289e7251ac5366a777dd35c50ec259237cb85a4d0d4fb53"
+    "payment_request_foundry.gen.go": "e06d9b021ab0344fa32e97af440173b60f2c780d82a7bbbb9da4c835034229b0"
   }
 }

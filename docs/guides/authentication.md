@@ -503,9 +503,11 @@ uses the helpers alongside its existing guard and permission declarations. The t
 Configure scopes, permissions and ordinary endpoint options, then call `SignedAuthenticated`:
 
 ```go
-secured := http.ConfigureAuthenticated(http.RequireAuthentication(endpoint, authentication, api), http.Permissions(ViewAccount))
+secured := http.RequireAuthentication(endpoint, authentication, api)
+secured = http.ConfigureAuthenticated(secured, http.Permissions(ViewAccount))
 signed := http.SignedAuthenticated(secured, signer)
-bound := modelbinding.BindAuthenticated(http.ForSignedAuthenticatedBinding(signed), orders)
+binding := http.ForSignedAuthenticatedBinding(signed)
+bound := modelbinding.BindAuthenticated(binding, orders)
 registration := bound.Handle(func(ctx context.Context, user User,
     in modelbinding.Input[OrderPath, http.NoQuery, http.NoBody, Order],
 ) (http.NoContent, error) {
@@ -538,7 +540,8 @@ resources never produce partially populated models for a handler.
 For native `net/http` integration, bind authentication to the typed route itself:
 
 ```go
-secured := http.ConfigureAuthenticated(http.RequireRouteAuthentication(route, authentication, api), http.Permissions(ViewAccount))
+secured := http.RequireRouteAuthentication(route, authentication, api)
+secured = http.ConfigureAuthenticatedRoute(secured, http.Permissions(ViewAccount))
 registration := http.HandleAuthenticatedRaw(secured, func(w stdhttp.ResponseWriter,
     r *stdhttp.Request, user User, path OrderPath,
 ) {

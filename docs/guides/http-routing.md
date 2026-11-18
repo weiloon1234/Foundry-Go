@@ -14,7 +14,7 @@ type MemberPath struct {
     Member model.ID[Member]
 }
 
-var MemberShow = foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(
+MemberShow := foundryhttp.DefineRoute(
     foundryhttp.RouteSpec{
         ID: "members.show",
         Method: foundryhttp.GET,
@@ -24,7 +24,8 @@ var MemberShow = foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(
         foundryhttp.Param("member", foundryhttp.ModelIDPath[Member](),
             func(path *MemberPath) *model.ID[Member] { return &path.Member }),
     ),
-), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
+)
+MemberShow = foundryhttp.ConfigureRoute(MemberShow, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 
 location, err := foundryhttp.RouteURL(MemberShow, MemberPath{Member: member.ID})
 // /api/members/<member UUID>

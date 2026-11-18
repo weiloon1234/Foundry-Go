@@ -17,17 +17,23 @@ import (
 // JSON view instead of parsing directives itself.
 type moduleScope struct {
 	root   string
+	path   string
 	ignore []string
 	vendor bool
 }
 
 type moduleFileJSON struct {
+	Module struct{ Path string }
 	Ignore []struct{ Path string }
 }
 
 func loadModuleScope(ctx context.Context, dir string) (moduleScope, error) {
 	var scope moduleScope
-	for current := dir; ; current = filepath.Dir(current) {
+	absolute, err := filepath.Abs(dir)
+	if err != nil {
+		return scope, err
+	}
+	for current := absolute; ; current = filepath.Dir(current) {
 		if _, err := os.Lstat(filepath.Join(current, "go.mod")); err == nil {
 			scope.root = current
 			break
@@ -43,12 +49,16 @@ func loadModuleScope(ctx context.Context, dir string) (moduleScope, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return scope, ctx.Err()
+		}
 		return scope, fmt.Errorf("read module file %s: %w: %s", filepath.Join(scope.root, "go.mod"), err, strings.TrimSpace(stderr.String()))
 	}
 	var file moduleFileJSON
 	if err := json.Unmarshal(stdout.Bytes(), &file); err != nil {
 		return scope, fmt.Errorf("decode module file %s: %w", filepath.Join(scope.root, "go.mod"), err)
 	}
+	scope.path = file.Module.Path
 	for _, ignore := range file.Ignore {
 		scope.ignore = append(scope.ignore, ignore.Path)
 	}

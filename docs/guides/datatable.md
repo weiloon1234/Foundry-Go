@@ -585,7 +585,9 @@ Foundry-Go `http` package):
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/table_bindings.go#datatable-3 -->
 ```go
 func tableQuery[S, R, A any](table datatable.Table[S, R, A], id h.RouteID, path string) h.RouteRegistration {
-	endpoint := datatable.QueryEndpoint(table, h.DefineRoute(h.RouteSpec{ID: id, Method: h.POST, Access: h.Public}, h.StaticPath(path)), h.EmptyQuery())
+	idRoute := h.DefineRoute(h.RouteSpec{ID: id, Method: h.POST, Access: h.Public}, h.StaticPath(path))
+	endpoint := datatable.QueryEndpoint(table, idRoute, h.EmptyQuery())
+
 	return endpoint.Handle(func(context.Context, h.Input[h.NoPath, h.NoQuery, datatable.Request]) (pagination.NumberedResponse[R], error) {
 		return pagination.NumberedResponse[R]{Data: []R{}}, nil
 	})
@@ -596,10 +598,19 @@ Ticket export, download and direct file export bindings:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/table_bindings.go#datatable-4 -->
 ```go
-ticket := datatable.BindTicketExport(reporting.Members, h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "issue.report", Method: h.POST, Access: h.Public}, h.StaticPath("/issue")), h.EmptyQuery(), h.JSONBody(TableExportRequestJSON()), h.JSONResponse(201, TableExportResourceJSON())), TableExportRequestValidationFields().Request)
-download := datatable.DownloadEndpoint(reporting.Members, h.DefineRoute(h.RouteSpec{ID: "files.open", Method: h.GET, Access: h.Public}, h.StaticPath("/file")), TableDownloadQueryDescriptor(), h.DownloadResponse("text/csv"))
-aggregate := datatable.DownloadEndpoint(reporting.Totals, h.DefineRoute(h.RouteSpec{ID: "files.aggregate", Method: h.GET, Access: h.Public}, h.StaticPath("/aggregate")), h.EmptyQuery(), h.DownloadResponse("text/csv"))
-direct := datatable.BindFileExport(reporting.Orders, h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "reports.direct", Method: h.GET, Access: h.Public}, TableFilePathDescriptor()), TableDownloadQueryDescriptor(), h.EmptyBody(), h.DownloadResponse("text/csv")))
+issueReportRoute := h.DefineRoute(h.RouteSpec{ID: "issue.report", Method: h.POST, Access: h.Public}, h.StaticPath("/issue"))
+issueReportEndpoint := h.DefineEndpoint(issueReportRoute, h.EmptyQuery(), TableExportBody(), TableExportResponse(201))
+ticket := datatable.BindTicketExport(reporting.Members, issueReportEndpoint, TableExportRequestValidationFields().Request)
+
+filesOpenRoute := h.DefineRoute(h.RouteSpec{ID: "files.open", Method: h.GET, Access: h.Public}, h.StaticPath("/file"))
+download := datatable.DownloadEndpoint(reporting.Members, filesOpenRoute, TableDownloadQueryDescriptor(), h.DownloadResponse("text/csv"))
+
+filesAggregateRoute := h.DefineRoute(h.RouteSpec{ID: "files.aggregate", Method: h.GET, Access: h.Public}, h.StaticPath("/aggregate"))
+aggregate := datatable.DownloadEndpoint(reporting.Totals, filesAggregateRoute, h.EmptyQuery(), h.DownloadResponse("text/csv"))
+
+reportsDirectRoute := h.DefineRoute(h.RouteSpec{ID: "reports.direct", Method: h.GET, Access: h.Public}, TableFilePathDescriptor())
+reportsDirectEndpoint := h.DefineEndpoint(reportsDirectRoute, TableDownloadQueryDescriptor(), h.EmptyBody(), h.DownloadResponse("text/csv"))
+direct := datatable.BindFileExport(reporting.Orders, reportsDirectEndpoint)
 ```
 
 A query route can use any ID, such as `admin.inventory` or a scoped

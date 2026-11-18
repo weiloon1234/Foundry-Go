@@ -11,7 +11,7 @@ import (
 
 // BrowserLogin proves that the auth descriptor uses the DTO's declared JSON key.
 //
-//foundry:dto
+//foundry:dto http=body
 type BrowserLogin struct {
 	Email    string `json:"login_id" client:"kind=email"`
 	Password string `json:"password" client:"kind=password"`
@@ -27,13 +27,16 @@ func browserAuthRoutes(transport *foundryhttp.Authentication, guard auth.Guard[A
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: foundryhttp.RouteID("browser." + id), Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/browser/"+id))
 	}
 	response := foundryhttp.TokenCookieResponse[Account, int64](cookie, 200, clock.System{})
-	login := foundryhttp.DefineEndpoint(route("login"), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(BrowserLoginJSON()), response)
+	login := foundryhttp.DefineEndpoint(route("login"), foundryhttp.EmptyQuery(), BrowserLoginBody(), response)
 	refresh := foundryhttp.DefineEndpoint(route("refresh"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), response)
 	logout := foundryhttp.DefineEndpoint(route("logout"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookieLogout(cookie), foundryhttp.ClearRefreshCookie(cookie, foundryhttp.EmptyResponse(204)))
+
+	browserProfileRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "browser.profile", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/browser/profile"))
 	profile := foundryhttp.DefineEndpoint(
-		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "browser.profile", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/browser/profile")),
-		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, MemberJSON()),
+		browserProfileRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), MemberResponse(200),
 	)
+
 	return []foundryhttp.RouteRegistration{
 		login.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, BrowserLogin]) (token.Issued[Account, int64], error) {
 			return token.Issued[Account, int64]{}, auth.Unauthenticated

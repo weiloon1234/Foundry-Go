@@ -21,14 +21,14 @@ type Order struct {
 //foundry:path pattern=/workspaces/{workspace}/orders
 type Path struct{ Workspace int64 }
 
-//foundry:dto
+//foundry:dto http=both
 type Submission struct {
 	Name    string                                 `json:"name"`
 	Memo    value.Optional[value.Nullable[string]] `json:"memo,omitzero"`
 	Failure string                                 `json:"failure,omitempty"`
 }
 
-//foundry:dto
+//foundry:dto http=response
 type Receipt struct {
 	ID    model.ID[Order]                        `json:"id"`
 	Name  string                                 `json:"name"`

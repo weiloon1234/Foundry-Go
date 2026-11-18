@@ -80,7 +80,11 @@ func TestVerifiedWebhookReauthenticatesEveryReplay(t *testing.T) {
 	}
 	var calls atomic.Int32
 	// doc-example:begin verified-webhook-route
-	endpoint := http.Idempotent(http.ConfigureEndpoint(http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "provider.webhook", Method: http.POST, Access: http.Public}, http.StaticPath("/webhook")), http.EmptyQuery(), http.JSONBody(SubmissionJSON()), http.EmptyResponse(204)), http.Use(http.VerifyWebhook(verifier))), store, idempotency.Definition{ID: "provider.delivery", Version: 1})
+	providerWebhookRoute := http.DefineRoute(http.RouteSpec{ID: "provider.webhook", Method: http.POST, Access: http.Public}, http.StaticPath("/webhook"))
+	providerWebhookEndpoint := http.DefineEndpoint(providerWebhookRoute, http.EmptyQuery(), SubmissionBody(), http.EmptyResponse(204))
+	providerWebhookEndpoint = http.ConfigureEndpoint(providerWebhookEndpoint, http.Use(http.VerifyWebhook(verifier)))
+	endpoint := http.Idempotent(providerWebhookEndpoint, store, idempotency.Definition{ID: "provider.delivery", Version: 1})
+
 	type input = http.Input[http.NoPath, http.NoQuery, Submission]
 	router, err := http.NewRouter(endpoint.Handle(func(ctx context.Context, _ input) (idempotency.Scope, error) {
 		delivery, ok := verifier.FromContext(ctx)

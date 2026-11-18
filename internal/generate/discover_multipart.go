@@ -14,6 +14,7 @@ type multipartDeclaration struct {
 	position  token.Position
 	fields    []multipartField
 	fieldHelp []fieldHelp
+	http      string
 }
 
 type multipartField struct {
@@ -26,9 +27,16 @@ type multipartField struct {
 
 func discoverMultipart(p *packageInput, spec *ast.TypeSpec, named *types.Named, args map[string]string) (multipartDeclaration, error) {
 	declaration := multipartDeclaration{name: spec.Name.Name, typ: named, position: p.fset.Position(spec.Pos())}
-	if len(args) != 0 {
-		return declaration, p.diagnostic(spec.Pos(), "multipart declarations do not accept options")
+	for key, value := range args {
+		if key != "http" || value != "body" {
+			return declaration, p.diagnostic(spec.Pos(), "multipart declarations only accept http=body")
+		}
 	}
+	mode, err := p.httpMode(spec.Pos(), "", args["http"], named.TypeParams().Len() != 0)
+	if err != nil {
+		return declaration, err
+	}
+	declaration.http = mode
 	structure, ok := named.Underlying().(*types.Struct)
 	if !ok {
 		return declaration, p.diagnostic(spec.Pos(), "multipart declaration must be a struct")

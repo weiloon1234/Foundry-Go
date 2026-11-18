@@ -5,6 +5,7 @@ package teamworkflow
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -27,6 +28,13 @@ var foundrySubmissionInputJSON = sync.OnceValue(func() foundrycontract.JSON[Subm
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// SubmissionInputBody builds the HTTP body from SubmissionInputJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func SubmissionInputBody() foundryhttp.Body[SubmissionInput] {
+	return foundryhttp.JSONBody(SubmissionInputJSON())
+}
 
 // SubmissionInputValidationFieldSet retains concrete DTO and value types for validation.
 // Example: SubmissionInputValidationFields()

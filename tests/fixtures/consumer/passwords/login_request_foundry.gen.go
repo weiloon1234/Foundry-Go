@@ -6,6 +6,7 @@ package passwords
 import (
 	password "github.com/weiloon1234/Foundry-Go/auth/password"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -28,6 +29,11 @@ var foundryLoginRequestJSON = sync.OnceValue(func() foundrycontract.JSON[LoginRe
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// LoginBody builds the HTTP body from LoginRequestJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func LoginBody() foundryhttp.Body[LoginRequest] { return foundryhttp.JSONBody(LoginRequestJSON()) }
 
 // LoginRequestValidationFieldSet retains concrete DTO and value types for validation.
 // Example: LoginRequestValidationFields()

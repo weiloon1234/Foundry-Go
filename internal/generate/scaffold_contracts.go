@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+
+	"github.com/weiloon1234/Foundry-Go/internal/routecontract"
 )
 
 // scaffoldWithContracts creates the DTOs a component uses, generates their
@@ -45,7 +47,21 @@ func scaffoldWithContracts(ctx context.Context, options ScaffoldOptions) (string
 	// Each scaffold requires current generated output, so each DTO's codec is
 	// generated before the next file is created.
 	for _, name := range contracts {
-		if _, err := Scaffold(ctx, ScaffoldOptions{Dir: options.Dir, Kind: DTOScaffold, Name: name, listExports: options.listExports}); err != nil {
+		dto := ScaffoldOptions{Dir: options.Dir, Kind: DTOScaffold, Name: name, listExports: options.listExports}
+		if options.Kind == EndpointScaffold {
+			request, _ := endpointContracts(options)
+			if name == request {
+				dto.httpMode = "body"
+			} else {
+				dto.httpMode, dto.dtoRole = "response", "response"
+			}
+		} else {
+			dto.httpMode = "none"
+		}
+		if routecontract.DefaultHTTP(dto.dtoRole) == dto.httpMode {
+			dto.httpMode = ""
+		}
+		if _, err := Scaffold(ctx, dto); err != nil {
 			return "", err
 		}
 		if _, err := Generate(ctx, options.generation()); err != nil {

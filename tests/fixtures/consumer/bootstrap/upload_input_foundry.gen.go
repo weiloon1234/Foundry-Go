@@ -22,6 +22,13 @@ var foundryUploadInputDescriptor = sync.OnceValue(func() foundryhttp.Multipart[U
 	)
 })
 
+// UploadInputBody builds the HTTP body from UploadInputDescriptor; the generated descriptor owns the schema.
+//
+//go:noinline
+func UploadInputBody(directory string) foundryhttp.Body[UploadInput] {
+	return foundryhttp.MultipartBody(foundryhttp.MultipartDirectory(UploadInputDescriptor(), directory))
+}
+
 // UploadInputValidationFieldSet retains concrete DTO and value types for validation.
 // Example: UploadInputValidationFields()
 type UploadInputValidationFieldSet struct {

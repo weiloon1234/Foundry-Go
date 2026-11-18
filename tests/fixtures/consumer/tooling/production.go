@@ -41,7 +41,9 @@ func OperationalRoutes(runtime *diagnostics.Runtime, authentication *foundryhttp
 	}{
 		{LiveRoute, diagnostics.Liveness}, {ReadyRoute, diagnostics.Readiness}, {StatusRoute, diagnostics.Status}, {MetricsRoute, diagnostics.Metrics},
 	} {
-		protected := foundryhttp.ConfigureAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(item.route, authentication, guard), foundryhttp.Permissions(permission))
+		protected := foundryhttp.RequireRouteAuthentication(item.route, authentication, guard)
+		protected = foundryhttp.ConfigureAuthenticatedRoute(protected, foundryhttp.Permissions(permission))
+
 		path, err := foundryhttp.AuthenticatedRouteURL(protected, foundryhttp.NoPath{})
 		if err != nil {
 			return nil, nil, err

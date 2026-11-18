@@ -45,8 +45,12 @@ func VerifyRoute(login *Login, limits *ratelimit.Store) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	endpoint := foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "password.verify", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/verify")),
-		foundryhttp.EmptyQuery(), foundryhttp.JSONBody(LoginRequestJSON()), foundryhttp.EmptyResponse(204)), foundryhttp.Use(foundryhttp.TrustedProxy(foundryhttp.TrustedProxyConfig{}), middleware))
+
+	passwordVerifyRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "password.verify", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/verify"))
+	endpoint := foundryhttp.DefineEndpoint(passwordVerifyRoute,
+		foundryhttp.EmptyQuery(), LoginBody(), foundryhttp.EmptyResponse(204))
+	endpoint = foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Use(foundryhttp.TrustedProxy(foundryhttp.TrustedProxyConfig{}), middleware))
+
 	return foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, in LoginInput) (foundryhttp.NoContent, error) {
 		_, err := Authenticate(ctx, login, in.Body)
 		return foundryhttp.NoContent{}, err

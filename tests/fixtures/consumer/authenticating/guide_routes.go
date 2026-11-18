@@ -57,7 +57,10 @@ func ScopedOrderRoute(db database.Executor, binding foundryhttp.GuardBinding[mod
 		}
 		return orm.Keyed(models.Orders.Query().Where(orm.ColumnEq(models.Orders.BuyerID, actor.ID)), models.Orders.Key()).Find(ctx, db, path.Order)
 	})
-	bound := modelbinding.BindAuthenticated(foundryhttp.ForAuthenticatedBinding(endpoint), resolver)
+
+	endpointBinding := foundryhttp.ForAuthenticatedBinding(endpoint)
+	bound := modelbinding.BindAuthenticated(endpointBinding, resolver)
+
 	authorized := modelbinding.AuthorizeAuthenticatedResource(bound, func(ctx context.Context, _ models.User, in OrderInput) error {
 		return ReadOrder.Authorize(ctx, guard, in.Model)
 	})
@@ -88,10 +91,13 @@ func TicketRoute(tokens *UserTokens) (foundryhttp.RouteRegistration, error) {
 	if err != nil {
 		return foundryhttp.RouteRegistration{}, err
 	}
+
+	realtimeTicketRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "realtime.ticket", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/realtime/ticket"))
 	endpoint := foundryhttp.DefineEndpoint(
-		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "realtime.ticket", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/realtime/ticket")),
+		realtimeTicketRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.TicketResponse[models.User, model.ID[models.User]](200, clock.System{}),
 	)
+
 	return foundryhttp.Authenticated(endpoint, binding).Handle(func(ctx context.Context, _ models.User, _ ProfileInput) (token.Ticket[models.User, model.ID[models.User]], error) {
 		return tokens.IssueTicket(ctx)
 	}), nil

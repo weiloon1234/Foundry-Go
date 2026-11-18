@@ -5,6 +5,7 @@ package isolatedhttp
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -26,6 +27,13 @@ var foundryReceiptJSON = sync.OnceValue(func() foundrycontract.JSON[Receipt] {
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// ReceiptResponse builds the HTTP response from ReceiptJSON; status remains part of the route declaration.
+//
+//go:noinline
+func ReceiptResponse(status int) foundryhttp.Response[Receipt] {
+	return foundryhttp.JSONResponse(status, ReceiptJSON())
+}
 
 // ReceiptValidationFieldSet retains concrete DTO and value types for validation.
 // Example: ReceiptValidationFields()

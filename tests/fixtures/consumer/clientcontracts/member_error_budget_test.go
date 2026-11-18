@@ -58,7 +58,9 @@ func memberErrorBudgetClients(t *testing.T, dir string) http.Handler {
 		limits.Response.Steps = steps
 		endpoint := foundryhttp.ConfigureEndpoint(clientcontracts.MemberCreate, foundryhttp.Limits(limits))
 		private := func(id foundryhttp.RouteID, path string, declaration foundryhttp.ErrorDeclarationOption, failure error) foundryhttp.RouteRegistration {
-			endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath(path)), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204), foundryhttp.Errors(declaration))
+			idRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
+			endpoint := foundryhttp.DefineEndpoint(idRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204), foundryhttp.Errors(declaration))
+
 			return foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Limits(limits)).Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 				return foundryhttp.NoContent{}, failure
 			})

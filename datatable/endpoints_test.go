@@ -28,7 +28,8 @@ func TestTableEndpointConstructorsRetainContractsAndErrors(t *testing.T) {
 	if _, err := description.Normalize(); err != nil {
 		t.Fatal(err)
 	}
-	file := BindFileExport(table, h.DefineEndpoint(route, h.EmptyQuery(), h.JSONBody(RequestJSON()), h.DownloadResponse("text/csv")))
+	file := h.DefineEndpoint(route, h.EmptyQuery(), h.JSONBody(RequestJSON()), h.DownloadResponse("text/csv"))
+	file = BindFileExport(table, file)
 	fileInfo, err := h.InspectEndpoint(file)
 	if err != nil {
 		t.Fatal(err)

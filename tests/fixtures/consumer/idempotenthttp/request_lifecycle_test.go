@@ -23,7 +23,10 @@ func TestIdempotentRequestLifecycleAndReplayResponse(t *testing.T) {
 	}
 	type input = http.Input[http.NoPath, http.NoQuery, Submission]
 	var stages []string
-	endpoint := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "lifecycle", Method: http.POST, Access: http.Public}, http.StaticPath("/lifecycle")), http.EmptyQuery(), http.JSONBody(SubmissionJSON()), http.JSONResponse(201, SubmissionJSON()))
+
+	lifecycleRoute := http.DefineRoute(http.RouteSpec{ID: "lifecycle", Method: http.POST, Access: http.Public}, http.StaticPath("/lifecycle"))
+	endpoint := http.DefineEndpoint(lifecycleRoute, http.EmptyQuery(), SubmissionBody(), SubmissionResponse(201))
+
 	fields := SubmissionValidationFields()
 	endpoint = http.ValidateBody(endpoint, validation.All(
 		validation.Rules(fields.Memo, validation.Absent[value.Nullable[string]]()),
@@ -45,10 +48,13 @@ func TestIdempotentRequestLifecycleAndReplayResponse(t *testing.T) {
 		}
 		return nil
 	})
-	operation := http.IdempotentHeaders(http.Idempotent(endpoint, store, idempotency.Definition{ID: "lifecycle", Version: 1}), func(context.Context, Submission) ([]http.ResponseHeader, error) {
+
+	operation := http.Idempotent(endpoint, store, idempotency.Definition{ID: "lifecycle", Version: 1})
+	operation = http.IdempotentHeaders(operation, func(context.Context, Submission) ([]http.ResponseHeader, error) {
 		stages = append(stages, "headers")
 		return []http.ResponseHeader{{Name: "Location", Value: "/result"}}, nil
 	})
+
 	registration := operation.Handle(func(context.Context, input) (idempotency.Scope, error) {
 		stages = append(stages, "scope")
 		return idempotency.NewScope("lifecycle", "caller")

@@ -14,7 +14,7 @@ import (
 type User struct{}
 type Project struct{}
 
-//foundry:dto
+//foundry:dto http=body
 type UserDTO struct {
 	ID       model.ID[User]                         `json:"id"`
 	Name     string                                 `json:"name"`
@@ -46,15 +46,21 @@ type Combined struct {
 	Project Envelope[ProjectDTO] `json:"project"`
 }
 
-var Echo = http.DefineEndpoint(
-	http.DefineRoute(http.RouteSpec{ID: "generic.echo", Method: http.POST, Access: http.Public}, http.StaticPath("/generic/echo")),
-	http.EmptyQuery(), http.JSONBody(UserDTOJSON()), http.JSONResponse(200, EnvelopeJSON(UserDTOJSON())),
-)
+var Echo = func() http.Endpoint[http.NoPath, http.NoQuery, UserDTO, Envelope[UserDTO]] {
+	genericEchoRoute := http.DefineRoute(http.RouteSpec{ID: "generic.echo", Method: http.POST, Access: http.Public}, http.StaticPath("/generic/echo"))
+	return http.DefineEndpoint(
+		genericEchoRoute,
+		http.EmptyQuery(), UserDTOBody(), http.JSONResponse(200, EnvelopeJSON(UserDTOJSON())),
+	)
+}()
 
-var ShowProject = http.DefineEndpoint(
-	http.DefineRoute(http.RouteSpec{ID: "generic.project", Method: http.GET, Access: http.Public}, http.StaticPath("/generic/project")),
-	http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, EnvelopeJSON(ProjectDTOJSON())),
-)
+var ShowProject = func() http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, Envelope[ProjectDTO]] {
+	genericProjectRoute := http.DefineRoute(http.RouteSpec{ID: "generic.project", Method: http.GET, Access: http.Public}, http.StaticPath("/generic/project"))
+	return http.DefineEndpoint(
+		genericProjectRoute,
+		http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, EnvelopeJSON(ProjectDTOJSON())),
+	)
+}()
 
 type EchoInput = http.Input[http.NoPath, http.NoQuery, UserDTO]
 

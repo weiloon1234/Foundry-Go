@@ -7,7 +7,7 @@ import (
 
 // doc-example:begin presence-input-rules
 //
-//foundry:dto
+//foundry:dto http=body
 type PresenceInput struct {
 	Label     value.Optional[string]                 `json:"label,omitzero"`
 	Nickname  value.Optional[value.Nullable[string]] `json:"nickname,omitzero"`

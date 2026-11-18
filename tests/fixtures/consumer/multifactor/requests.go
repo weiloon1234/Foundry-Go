@@ -12,19 +12,19 @@ type PasswordCredentials struct {
 	Password password.Plaintext `json:"password"`
 }
 
-//foundry:dto
+//foundry:dto http=body
 type EnrollmentRequest struct {
 	Credentials PasswordCredentials `json:"credentials"`
 }
 
-//foundry:dto
+//foundry:dto http=body
 type ConfirmationRequest struct {
 	Credentials  PasswordCredentials       `json:"credentials"`
 	EnrollmentID mfa.EnrollmentID[Account] `json:"enrollment_id"`
 	Code         mfa.TOTPCode              `json:"code"`
 }
 
-//foundry:dto
+//foundry:dto http=body
 type RegenerationRequest struct {
 	Credentials PasswordCredentials `json:"credentials"`
 	Code        mfa.TOTPCode        `json:"code"`

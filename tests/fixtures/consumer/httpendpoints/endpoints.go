@@ -13,12 +13,15 @@ import (
 // UpdateRequest retains generated declarations from all three input sources.
 type UpdateRequest = foundryhttp.Input[httpkernel.UserPath, httpquery.NearbyInput, httpdto.UpdateUser]
 
-var Update = foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "users.update", Method: foundryhttp.PATCH, Access: foundryhttp.Public}, httpkernel.UserPathDescriptor()),
-	httpquery.NearbyInputDescriptor(),
-	foundryhttp.JSONBody(httpdto.UpdateUserJSON()),
-	foundryhttp.JSONResponse(200, httpdto.UserResponseJSON()),
-)
+var Update = func() foundryhttp.Endpoint[httpkernel.UserPath, httpquery.NearbyInput, httpdto.UpdateUser, httpdto.UserResponse] {
+	usersUpdateRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "users.update", Method: foundryhttp.PATCH, Access: foundryhttp.Public}, httpkernel.UserPathDescriptor())
+	return foundryhttp.DefineEndpoint(
+		usersUpdateRoute,
+		httpquery.NearbyInputDescriptor(),
+		httpdto.UpdateUserBody(),
+		httpdto.UserResponseResponse(200),
+	)
+}()
 
 // Service is a domain boundary: transport parsing stays inside Foundry.
 type Service interface {

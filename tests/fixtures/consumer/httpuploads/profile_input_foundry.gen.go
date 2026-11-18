@@ -42,6 +42,13 @@ var foundryProfileInputDescriptor = sync.OnceValue(func() foundryhttp.Multipart[
 	)
 })
 
+// ProfileInputBody builds the HTTP body from ProfileInputDescriptor; the generated descriptor owns the schema.
+//
+//go:noinline
+func ProfileInputBody(directory string) foundryhttp.Body[ProfileInput] {
+	return foundryhttp.MultipartBody(foundryhttp.MultipartDirectory(ProfileInputDescriptor(), directory))
+}
+
 // ProfileInputValidationFieldSet retains concrete DTO and value types for validation.
 // Example: ProfileInputValidationFields()
 type ProfileInputValidationFieldSet struct {

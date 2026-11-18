@@ -16,7 +16,7 @@ type Path struct {
 	Task    Slug
 }
 
-//foundry:dto
+//foundry:dto http=response
 type Reply struct {
 	Team    string `json:"team"`
 	Project Slug   `json:"project"`
@@ -29,7 +29,9 @@ type Request = modelbinding.Input[Path, foundryhttp.NoQuery, foundryhttp.NoBody,
 type TransportRequest = foundryhttp.Input[Path, foundryhttp.NoQuery, foundryhttp.NoBody]
 
 func Transport(access foundryhttp.Access) foundryhttp.Endpoint[Path, foundryhttp.NoQuery, foundryhttp.NoBody, Reply] {
-	return foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "nested.show", Method: foundryhttp.GET, Access: access}, PathDescriptor()), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, ReplyJSON()))
+	nestedShowRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "nested.show", Method: foundryhttp.GET, Access: access}, PathDescriptor())
+
+	return foundryhttp.DefineEndpoint(nestedShowRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), ReplyResponse(200))
 }
 func ProjectBySlug(db database.Executor) modelbinding.Resolver[Path, Project] {
 	return modelbinding.ByColumn(db, ProjectRecords.Query().Where(orm.ColumnEq(ProjectRecords.Enabled, true)), orm.TextExpr(ProjectRecords.Slug), func(path Path) Slug { return path.Project })

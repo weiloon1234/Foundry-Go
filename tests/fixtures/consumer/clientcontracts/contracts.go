@@ -52,10 +52,14 @@ var Updates = websocket.Public[PublicOwner]("updates", websocket.DefineRooms(fou
 var Updated = websocket.DefineOutgoing(Updates, "updated", PayloadJSON())
 var Relay = websocket.DefineIncoming(Updates, "relay", PayloadJSON()).AcknowledgeAccepted()
 
-var Echo = foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "items.echo", Method: foundryhttp.POST, Access: foundryhttp.Public}, ItemPathDescriptor()),
-	FiltersDescriptor(), foundryhttp.JSONBody(PayloadJSON()), foundryhttp.JSONResponse(201, PayloadJSON()),
-), validation.Parallel(validation.Rules(validation.WithLabelKey(validation.WithLabel(PayloadValidationFields().Natural, "Country"), "fields.country"), validation.NonBlank[models.CountryCode](), validation.MaxLength[models.CountryCode](64), validation.Uppercase[models.CountryCode]())))
+var Echo = func() foundryhttp.Endpoint[ItemPath, Filters, Payload, Payload] {
+	itemsEchoRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "items.echo", Method: foundryhttp.POST, Access: foundryhttp.Public}, ItemPathDescriptor())
+	itemsEchoEndpoint := foundryhttp.DefineEndpoint(
+		itemsEchoRoute,
+		FiltersDescriptor(), PayloadBody(), PayloadResponse(201),
+	)
+	return foundryhttp.ValidateBody(itemsEchoEndpoint, validation.Parallel(validation.Rules(validation.WithLabelKey(validation.WithLabel(PayloadValidationFields().Natural, "Country"), "fields.country"), validation.NonBlank[models.CountryCode](), validation.MaxLength[models.CountryCode](64), validation.Uppercase[models.CountryCode]())))
+}()
 
 type Fixture struct {
 	Router         *foundryhttp.Router
@@ -130,12 +134,21 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 		foundryhttp.AllOf(foundryhttp.Scopes(approvalScopes), foundryhttp.Permissions(Manage)),
 		foundryhttp.AllOf(foundryhttp.Permissions(Manage)),
 	)
-	secure := foundryhttp.DefineEndpoint(AccountRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, MemberJSON()))
-	broken := foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "failure", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/failure")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, contract.StringJSON[string]())), foundryhttp.Errors(Changed))
-	form := foundryhttp.MultipartDirectory(httpuploads.ProfileInputDescriptor(), temporary)
-	upload := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "uploads.profile", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/upload")), foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.JSONResponse(201, httpuploads.UploadReplyJSON()))
-	download := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "download", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/download")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/plain"))
-	empty := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "empty", Method: foundryhttp.DELETE, Access: foundryhttp.Public}, foundryhttp.StaticPath("/empty")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+	secure := foundryhttp.DefineEndpoint(AccountRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), MemberResponse(200))
+
+	failureRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "failure", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/failure"))
+	broken := foundryhttp.DefineEndpoint(failureRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, contract.StringJSON[string]()))
+	broken = foundryhttp.ConfigureEndpoint(broken, foundryhttp.Errors(Changed))
+
+	uploadsProfileRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "uploads.profile", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/upload"))
+	upload := foundryhttp.DefineEndpoint(uploadsProfileRoute, foundryhttp.EmptyQuery(), httpuploads.ProfileInputBody(temporary), httpuploads.UploadReplyResponse(201))
+
+	downloadRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "download", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/download"))
+	download := foundryhttp.DefineEndpoint(downloadRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/plain"))
+
+	emptyRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "empty", Method: foundryhttp.DELETE, Access: foundryhttp.Public}, foundryhttp.StaticPath("/empty"))
+	empty := foundryhttp.DefineEndpoint(emptyRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+
 	pluralRoutes, err := pluralValidationRoutes()
 	if err != nil {
 		return result, err
@@ -144,6 +157,18 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	if err != nil {
 		return result, err
 	}
+
+	guardAccount := foundryhttp.RequireAuthentication(secure, transport, guard)
+
+	pageBindingGuardedList := pagination.Authenticated(httppagination.GuardedList, pageBinding)
+	pageBindingGuardedList = pagination.ConfigureAuthenticated(pageBindingGuardedList, foundryhttp.Permissions(Manage))
+
+	pageBindingGuardedSimpleList := pagination.Authenticated(httppagination.GuardedSimpleList, pageBinding)
+	pageBindingGuardedSimpleList = pagination.ConfigureAuthenticated(pageBindingGuardedSimpleList, foundryhttp.Permissions(Manage))
+
+	pageBindingGuardedCursorList := pagination.Authenticated(httppagination.GuardedCursorList, pageBinding)
+	pageBindingGuardedCursorList = pagination.ConfigureAuthenticated(pageBindingGuardedCursorList, foundryhttp.Permissions(Manage))
+
 	router, err := foundryhttp.NewRouter(append(append(append(pluralRoutes, transportRoutes(signer)...), browserAuthRoutes(transport, browserGuard)...),
 		InspectHeaders.Handle(handleInspectHeaders),
 		MemberCreate.Handle(HandleMemberCreate),
@@ -157,9 +182,11 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 				return Payload{}, foundryhttp.BadRequest
 			}
 			return input.Body, nil
-		}), foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(secure, transport, guard), accountAccess).Handle(func(_ context.Context, subject Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
+		}),
+		foundryhttp.ConfigureAuthenticated(guardAccount, accountAccess).Handle(func(_ context.Context, subject Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
 			return Member{Display: subject.Display}, nil
-		}), broken.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {
+		}),
+		broken.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {
 			return "", Changed
 		}),
 		upload.Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, httpuploads.ProfileInput]) (httpuploads.UploadReply, error) {
@@ -171,16 +198,21 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 		}),
 		empty.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 			return foundryhttp.NoContent{}, nil
-		}), pagination.HandleAuthenticated(pagination.ConfigureAuthenticated(pagination.Authenticated(httppagination.GuardedList, pageBinding), foundryhttp.Permissions(Manage)), func(_ context.Context, actor Account, input httppagination.ListRequest) (orm.PageResult[httppagination.MemberResponse], error) {
+		}),
+		pagination.HandleAuthenticated(pageBindingGuardedList, func(_ context.Context, actor Account, input httppagination.ListRequest) (orm.PageResult[httppagination.MemberResponse], error) {
 			return orm.PageResult[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{{Email: mutatorqueries.DisplayEmail(actor.Display), ID: modelIDForPage()}}, Number: input.Page.Number, Size: input.Page.Size, Total: 1, Pages: 1}, nil
-		}), pagination.HandleAuthenticated(pagination.ConfigureAuthenticated(pagination.Authenticated(httppagination.GuardedSimpleList, pageBinding), foundryhttp.Permissions(Manage)), func(_ context.Context, actor Account, input httppagination.ListRequest) (orm.SimplePage[httppagination.MemberResponse], error) {
+		}),
+		pagination.HandleAuthenticated(pageBindingGuardedSimpleList, func(_ context.Context, actor Account, input httppagination.ListRequest) (orm.SimplePage[httppagination.MemberResponse], error) {
 			return orm.SimplePage[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{{Email: mutatorqueries.DisplayEmail(actor.Display), ID: modelIDForPage()}}, Number: input.Page.Number, Size: input.Page.Size}, nil
-		}), pagination.HandleAuthenticated(pagination.ConfigureAuthenticated(pagination.Authenticated(httppagination.GuardedCursorList, pageBinding), foundryhttp.Permissions(Manage)), func(ctx context.Context, actor Account, input httppagination.CursorListRequest) (httppagination.CursorListResult, error) {
+		}),
+		pagination.HandleAuthenticated(pageBindingGuardedCursorList, func(ctx context.Context, actor Account, input httppagination.CursorListRequest) (httppagination.CursorListResult, error) {
 			return pagination.MapCursorPage(ctx, orm.CursorPage[mutatorqueries.Member]{Size: input.Page.Size}, httppagination.PresentMember)
-		}), pagination.Handle(httppagination.List, func(_ context.Context, input httppagination.ListRequest) (orm.PageResult[httppagination.MemberResponse], error) {
+		}),
+		pagination.Handle(httppagination.List, func(_ context.Context, input httppagination.ListRequest) (orm.PageResult[httppagination.MemberResponse], error) {
 			return orm.PageResult[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{}, Number: input.Page.Number, Size: input.Page.Size, Total: 0, Pages: 0}, nil
 		}),
 	)...)
+
 	if err != nil {
 		return result, err
 	}

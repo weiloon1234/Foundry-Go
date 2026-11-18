@@ -5,6 +5,7 @@ package isolatedhttp
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -28,6 +29,11 @@ var foundrySubmissionJSON = sync.OnceValue(func() foundrycontract.JSON[Submissio
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// SubmissionBody builds the HTTP body from SubmissionJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func SubmissionBody() foundryhttp.Body[Submission] { return foundryhttp.JSONBody(SubmissionJSON()) }
 
 // SubmissionValidationFieldSet retains concrete DTO and value types for validation.
 // Example: SubmissionValidationFields()

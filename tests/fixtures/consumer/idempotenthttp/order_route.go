@@ -24,8 +24,11 @@ func OrderRoute(db database.Executor, endpoint http.AuthenticatedEndpoint[Path, 
 		workspaces := Workspaces.Query().Where(orm.TextEq(Workspaces.Tenant, actor.Tenant))
 		return orm.Keyed(workspaces, Workspaces.Key()).Find(ctx, db, path.Workspace)
 	})
-	operation := modelbinding.AuthorizeAuthenticatedIdempotentResource(
-		modelbinding.BindAuthenticatedIdempotent(http.IdempotentAuthenticated(endpoint, store, idempotency.Definition{ID: "orders.create", Version: 1}), resolver),
+
+	endpointReplay := http.IdempotentAuthenticated(endpoint, store, idempotency.Definition{ID: "orders.create", Version: 1})
+	operation := modelbinding.BindAuthenticatedIdempotent(endpointReplay, resolver)
+	operation = modelbinding.AuthorizeAuthenticatedIdempotentResource(
+		operation,
 		func(_ context.Context, _ Actor, in BoundRequest) error {
 			if !in.Model.Enabled {
 				return http.Forbidden
@@ -33,6 +36,7 @@ func OrderRoute(db database.Executor, endpoint http.AuthenticatedEndpoint[Path, 
 			return nil
 		},
 	)
+
 	operation = modelbinding.AuthenticatedIdempotentHeaders(operation, func(_ context.Context, result Receipt) ([]http.ResponseHeader, error) {
 		return []http.ResponseHeader{{Name: "Location", Value: http.HeaderValue("/orders/" + result.ID.String())}}, nil
 	})

@@ -13,16 +13,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-//foundry:dto
+//foundry:dto http=response
 type Profile struct {
 	Name string `json:"name"`
 	Kind string `json:"kind"`
 }
 
-//foundry:multipart
+//foundry:multipart http=body
 type UploadInput struct{ Image http.UploadedFile }
 
-//foundry:dto
+//foundry:dto http=response
 type UploadResult struct {
 	Key   storage.ObjectKey `json:"key"`
 	Bytes int64             `json:"bytes"`
@@ -40,7 +40,9 @@ var avatar = imaging.NewPlan().
 type MemberProfileInput = http.Input[http.NoPath, http.NoQuery, http.NoBody]
 
 func profileEndpoint(id http.RouteID, path string, method http.Method) http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, Profile] {
-	return http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: id, Method: method, Access: http.Guarded}, http.StaticPath(path)), http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, ProfileJSON()))
+	idRoute := http.DefineRoute(http.RouteSpec{ID: id, Method: method, Access: http.Guarded}, http.StaticPath(path))
+
+	return http.DefineEndpoint(idRoute, http.EmptyQuery(), http.EmptyBody(), ProfileResponse(200))
 }
 func Routes(settings Settings, services application.Services) ([]http.RouteRegistration, error) {
 	db, err := services.Database()
@@ -75,7 +77,11 @@ func Routes(settings Settings, services application.Services) ([]http.RouteRegis
 	operator := http.Authenticated(profileEndpoint("bootstrap.operator", "/api/operator", http.POST), operators).Handle(func(_ context.Context, actor Operator, _ MemberProfileInput) (Profile, error) {
 		return Profile{Name: actor.Department, Kind: "operator"}, nil
 	})
-	upload := http.ValidateBody(http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "bootstrap.avatar", Method: http.POST, Access: http.Guarded}, http.StaticPath("/api/avatar")), http.EmptyQuery(), http.MultipartBody(UploadInputDescriptor()), http.JSONResponse(201, UploadResultJSON())), validation.Rules(UploadInputValidationFields().Image, validation.FileMaxSize[http.UploadedFile](1<<20), validation.FileContentTypes[http.UploadedFile]("image/png")))
+
+	bootstrapAvatarRoute := http.DefineRoute(http.RouteSpec{ID: "bootstrap.avatar", Method: http.POST, Access: http.Guarded}, http.StaticPath("/api/avatar"))
+	upload := http.DefineEndpoint(bootstrapAvatarRoute, http.EmptyQuery(), UploadInputBody(""), UploadResultResponse(201))
+	upload = http.ValidateBody(upload, validation.Rules(UploadInputValidationFields().Image, validation.FileMaxSize[http.UploadedFile](1<<20), validation.FileContentTypes[http.UploadedFile]("image/png")))
+
 	saved := http.Authenticated(upload, members).Handle(func(ctx context.Context, actor Member, input http.Input[http.NoPath, http.NoQuery, UploadInput]) (UploadResult, error) {
 		reader, err := input.Body.Image.Open(ctx)
 		if err != nil {

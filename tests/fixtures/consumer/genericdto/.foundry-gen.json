@@ -4,7 +4,7 @@
     "combined_foundry.gen.go": "afe66f717bce89f383778353a5a25cd092523be03c0e08b1b49146999a02a46d",
     "envelope_foundry.gen.go": "11a19a77875a9b67a3665b816ad80195b9ebb6c563d7d4c2e2cd3bcf9615becf",
     "project_dto_foundry.gen.go": "79506b3614b2dec7b115a017cedc740ce405df0b292b956b073d8dcfaa9be3f1",
-    "user_dto_foundry.gen.go": "eef4394b5d20f42ff72b7dbb2dd0151af5631a84818a8806b4c33a48191a8b1d",
+    "user_dto_foundry.gen.go": "0d442a91e6a8aa17bb64363107a57b40a0607a7c351974813f57d1949aaaf671",
     "user_envelope_foundry.gen.go": "feb63c5728d819fd8d23adbfb0c24e8664c3b5e32fb99eeef83326b381a305a7"
   }
 }

@@ -66,6 +66,14 @@ A DTO that is only ever sent, never decoded from a request, can be declared with
 `//foundry:dto role=response`. Its JSON codec and schema are unchanged; the
 request validation field descriptors (`XValidationFields`) are not generated.
 
+Select generated HTTP pieces independently with `http=body`, `http=response`,
+or `http=both`. Without `http=`, no helper is emitted. For example,
+`//foundry:dto role=response http=response` emits the response helper while
+retaining the response role's validation behavior. The migration codemod infers
+these keys from actual uses. See [staged routes](flat-routes.md#generated-http-pieces)
+for helper names, signatures, collision failures and structural exclusions.
+
+
 ## Strict, typed decoding
 
 The descriptor is immutable and can be reused concurrently. The lower-level

@@ -35,9 +35,11 @@ func Router(service httpendpoints.Service) (*foundryhttp.Router, error) {
 
 // doc-example:begin middleware-route
 func Probe(policy foundryhttp.Middleware) foundryhttp.RouteRegistration {
-	route := foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(foundryhttp.RouteSpec{
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
 		ID: "probe", Method: foundryhttp.GET, Access: foundryhttp.Public,
-	}, foundryhttp.StaticPath("/probe")), foundryhttp.Use(policy))
+	}, foundryhttp.StaticPath("/probe"))
+	route = foundryhttp.ConfigureRoute(route, foundryhttp.Use(policy))
+
 	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
 	return endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, nil

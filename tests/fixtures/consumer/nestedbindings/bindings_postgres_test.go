@@ -77,12 +77,16 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		counter := &queryfixture.QueryCounter{Executor: tx}
 		handled := 0
 		endpoint := n.Transport(foundryhttp.Public)
-		bound := modelbinding.AuthorizeResource(modelbinding.Bind(foundryhttp.ForBinding(endpoint), n.Resolve(counter)), func(_ context.Context, in n.Request) error {
+
+		endpointBinding := foundryhttp.ForBinding(endpoint)
+		bound := modelbinding.Bind(endpointBinding, n.Resolve(counter))
+		bound = modelbinding.AuthorizeResource(bound, func(_ context.Context, in n.Request) error {
 			if in.Model.Parent.Parent.Name == "Beta" {
 				return foundryhttp.Forbidden
 			}
 			return nil
 		})
+
 		router, err := foundryhttp.NewRouter(bound.Handle(func(ctx context.Context, in n.Request) (n.Reply, error) {
 			handled++
 			if in.Model.Child.ProjectID != in.Model.Parent.Child.ID || in.Model.Parent.Child.TeamID != in.Model.Parent.Parent.ID {
@@ -216,18 +220,24 @@ func TestPostgresTypedRequestAndResourcePolicyStages(t *testing.T) {
 			return err
 		}
 		base := n.Transport(foundryhttp.Guarded)
-		secured := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(base, transport, guard), func(_ context.Context, _ n.Team, in n.TransportRequest) error {
+
+		secured := foundryhttp.RequireAuthentication(base, transport, guard)
+		secured = foundryhttp.AuthorizeActor(secured, func(_ context.Context, _ n.Team, in n.TransportRequest) error {
 			if in.Path.Project == "request-denied" {
 				return foundryhttp.Forbidden
 			}
 			return nil
 		})
-		bound := modelbinding.AuthorizeAuthenticatedResource(modelbinding.BindAuthenticated(foundryhttp.ForAuthenticatedBinding(secured), n.Resolve(counter)), func(_ context.Context, actor n.Team, in n.Request) error {
+
+		baseBinding := foundryhttp.ForAuthenticatedBinding(secured)
+		bound := modelbinding.BindAuthenticated(baseBinding, n.Resolve(counter))
+		bound = modelbinding.AuthorizeAuthenticatedResource(bound, func(_ context.Context, actor n.Team, in n.Request) error {
 			if actor.ID != in.Model.Parent.Parent.ID {
 				return foundryhttp.Forbidden
 			}
 			return nil
 		})
+
 		handled := 0
 		router, err := foundryhttp.NewRouter(bound.Handle(func(ctx context.Context, _ n.Team, in n.Request) (n.Reply, error) {
 			handled++

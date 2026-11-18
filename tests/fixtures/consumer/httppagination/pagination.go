@@ -18,7 +18,7 @@ type MemberFilters struct {
 	Email value.Optional[string] `query:"email"`
 }
 
-//foundry:dto
+//foundry:dto http=response
 type MemberResponse struct {
 	ID       model.ID[mutatorqueries.Member]                `json:"id"`
 	Email    mutatorqueries.DisplayEmail                    `json:"email"`
@@ -28,10 +28,13 @@ type MemberResponse struct {
 // doc-example:begin http-pagination-list-request
 type ListRequest = pagination.Request[foundryhttp.NoPath, MemberFilters]
 
-var List = pagination.DefineNumbered(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.index", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members")),
-	MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig(),
-) // doc-example:end http-pagination-list-request
+var List = func() pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse] {
+	membersIndexRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.index", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members"))
+	return pagination.DefineNumbered(
+		membersIndexRoute,
+		MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig(),
+	)
+}() // doc-example:end http-pagination-list-request
 
 type Service interface {
 	List(context.Context, ListRequest) (orm.PageResult[MemberResponse], error)

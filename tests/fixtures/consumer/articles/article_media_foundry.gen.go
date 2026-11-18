@@ -30,6 +30,13 @@ var foundryArticleMediaDescriptor = sync.OnceValue(func() foundryhttp.Multipart[
 	)
 })
 
+// ArticleMediaBody builds the HTTP body from ArticleMediaDescriptor; the generated descriptor owns the schema.
+//
+//go:noinline
+func ArticleMediaBody(directory string) foundryhttp.Body[ArticleMedia] {
+	return foundryhttp.MultipartBody(foundryhttp.MultipartDirectory(ArticleMediaDescriptor(), directory))
+}
+
 // ArticleMediaValidationFieldSet retains concrete DTO and value types for validation.
 // Example: ArticleMediaValidationFields()
 type ArticleMediaValidationFieldSet struct {

@@ -5,6 +5,7 @@ package clientcontracts
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -26,6 +27,13 @@ var foundryBrowserLoginJSON = sync.OnceValue(func() foundrycontract.JSON[Browser
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// BrowserLoginBody builds the HTTP body from BrowserLoginJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func BrowserLoginBody() foundryhttp.Body[BrowserLogin] {
+	return foundryhttp.JSONBody(BrowserLoginJSON())
+}
 
 // BrowserLoginValidationFieldSet retains concrete DTO and value types for validation.
 // Example: BrowserLoginValidationFields()

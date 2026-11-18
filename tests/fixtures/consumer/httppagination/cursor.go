@@ -13,10 +13,13 @@ import (
 type CursorListRequest = pagination.CursorRequest[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member]
 type CursorListResult = pagination.CursorResult[mutatorqueries.Member, MemberResponse]
 
-var CursorList = pagination.DefineCursor[mutatorqueries.Member](
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.cursor", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/cursor")),
-	MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultCursorConfig(),
-) // doc-example:end http-cursor-pagination-cursor-list-request
+var CursorList = func() pagination.CursorEndpoint[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member, MemberResponse] {
+	membersCursorRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.cursor", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/cursor"))
+	return pagination.DefineCursor[mutatorqueries.Member](
+		membersCursorRoute,
+		MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultCursorConfig(),
+	)
+}() // doc-example:end http-cursor-pagination-cursor-list-request
 
 type CursorService interface {
 	CursorList(context.Context, CursorListRequest) (CursorListResult, error)

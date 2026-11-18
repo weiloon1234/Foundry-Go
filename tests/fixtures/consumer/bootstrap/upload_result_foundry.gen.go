@@ -5,6 +5,7 @@ package bootstrap
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	storage "github.com/weiloon1234/Foundry-Go/storage"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
@@ -35,6 +36,13 @@ var foundryUploadResultJSON = sync.OnceValue(func() foundrycontract.JSON[UploadR
 		},
 	}})
 })
+
+// UploadResultResponse builds the HTTP response from UploadResultJSON; status remains part of the route declaration.
+//
+//go:noinline
+func UploadResultResponse(status int) foundryhttp.Response[UploadResult] {
+	return foundryhttp.JSONResponse(status, UploadResultJSON())
+}
 
 // UploadResultValidationFieldSet retains concrete DTO and value types for validation.
 // Example: UploadResultValidationFields()

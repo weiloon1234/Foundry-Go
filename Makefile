@@ -52,7 +52,7 @@ for task_generate_dir in $(GENERATION_DIRS); do \
 done
 endef
 
-.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-tools-check typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check deploy-tools-check security-check security-tools-check verify publish-client-contracts
+.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-tools-check typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check routes-check release-tools-check deploy-tools-check security-check security-tools-check verify publish-client-contracts
 
 toolchain-check:
 	$(GO) version
@@ -108,6 +108,12 @@ agent-smoke: generate-check
 test-redis:
 	FOUNDRY_TEST_REDIS_REQUIRED=1 $(GO) test -race -timeout=$(TEST_TIMEOUT) ./redis/... ./cache/... ./lease/... ./ratelimit/... ./pubsub/...
 
+routes-check:
+	@set -eu; for task_fixture_dir in $(FIXTURE_DIRS); do \
+		$(GO) run ./cmd/foundry routes check --dir "$$task_fixture_dir"; \
+	done
+	$(GO) run ./cmd/foundry routes check ./datatable ./webhook/capture ./httpclient/capture
+
 docs-check:
 	$(GO) run ./internal/cmd/checkdocs
 
@@ -151,7 +157,7 @@ benchmark-typescript:
 	$(GO) test -timeout=$(TEST_TIMEOUT) -run '^TestRenderPerformanceFixtures$$' -bench '^(BenchmarkRender|BenchmarkRenderModules|BenchmarkReceivedNaming|BenchmarkGenerateCheck)$$' -benchmem -benchtime=$(TYPESCRIPT_BENCH_TIME) -count=$(TYPESCRIPT_BENCH_COUNT) ./typescript
 
 verify: export FOUNDRY_TEST_TYPESCRIPT_REQUIRED := 1
-verify: toolchain-check typescript-tools-check fmt-check vet test fixture-check generate-check docs-check release-tools-check deploy-tools-check
+verify: toolchain-check typescript-tools-check fmt-check vet test fixture-check generate-check routes-check docs-check release-tools-check deploy-tools-check
 
 # Scans reuse installed tools and warm caches; no cold package measurement.
 SECURITY_OUTPUT ?= .cache/security-check

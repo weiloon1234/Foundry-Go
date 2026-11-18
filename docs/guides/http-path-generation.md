@@ -13,14 +13,15 @@ type UserPath struct {
     User model.ID[models.User]
 }
 
-var ShowUser = foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(
+ShowUser := foundryhttp.DefineRoute(
     foundryhttp.RouteSpec{
         ID: "users.show",
         Method: foundryhttp.GET,
         Access: foundryhttp.Public,
     },
     UserPathDescriptor(),
-), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
+)
+ShowUser = foundryhttp.ConfigureRoute(ShowUser, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 
 location, err := foundryhttp.RouteURL(ShowUser, UserPath{User: user.ID})
 ```

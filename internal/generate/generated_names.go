@@ -34,6 +34,9 @@ func (p *packageInput) checkGeneratedNames(outputs map[string]*ast.File, origins
 			switch decl := decl.(type) {
 			case *ast.FuncDecl:
 				if decl.Recv == nil {
+					if position, exists := p.testDefinedAt[decl.Name.Name]; exists {
+						return collision(decl.Name.Name, position)
+					}
 					if position, exists := p.definedAt[decl.Name.Name]; exists {
 						return collision(decl.Name.Name, position)
 					}
@@ -67,6 +70,9 @@ func (p *packageInput) checkGeneratedNames(outputs map[string]*ast.File, origins
 					for _, ident := range names {
 						if ident.Name == "_" {
 							continue
+						}
+						if position, exists := p.testDefinedAt[ident.Name]; exists {
+							return collision(ident.Name, position)
 						}
 						if position, exists := p.definedAt[ident.Name]; exists {
 							return collision(ident.Name, position)

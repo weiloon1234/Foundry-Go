@@ -5,6 +5,7 @@ package bootstrap
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -26,6 +27,13 @@ var foundryProfileJSON = sync.OnceValue(func() foundrycontract.JSON[Profile] {
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// ProfileResponse builds the HTTP response from ProfileJSON; status remains part of the route declaration.
+//
+//go:noinline
+func ProfileResponse(status int) foundryhttp.Response[Profile] {
+	return foundryhttp.JSONResponse(status, ProfileJSON())
+}
 
 // ProfileValidationFieldSet retains concrete DTO and value types for validation.
 // Example: ProfileValidationFields()

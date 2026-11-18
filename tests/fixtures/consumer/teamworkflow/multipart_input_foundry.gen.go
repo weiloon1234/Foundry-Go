@@ -22,6 +22,13 @@ var foundryMultipartInputDescriptor = sync.OnceValue(func() foundryhttp.Multipar
 	)
 })
 
+// MultipartInputBody builds the HTTP body from MultipartInputDescriptor; the generated descriptor owns the schema.
+//
+//go:noinline
+func MultipartInputBody(directory string) foundryhttp.Body[MultipartInput] {
+	return foundryhttp.MultipartBody(foundryhttp.MultipartDirectory(MultipartInputDescriptor(), directory))
+}
+
 // MultipartInputValidationFieldSet retains concrete DTO and value types for validation.
 // Example: MultipartInputValidationFields()
 type MultipartInputValidationFieldSet struct {

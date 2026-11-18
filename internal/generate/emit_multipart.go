@@ -48,6 +48,7 @@ func emitMultipart(p *packageInput, declaration multipartDeclaration) ([]byte, e
 		}
 	}
 	e.line(")})")
+	e.emitHTTPHelpers(declaration.name, declaration.name+"Descriptor", declaration.http, true)
 	e.emitTransportValidation(declaration.name, declaration.typ, declaration.position, declaration.validationProperties(), declaration.fieldHelp, "multipart", "part")
 	return e.finish(declaration.position.Filename)
 }

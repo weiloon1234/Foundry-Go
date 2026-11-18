@@ -64,8 +64,13 @@ func Build(ctx context.Context, s application.Settings, committed func(context.C
 		if err != nil {
 			return nil, err
 		}
-		create := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "scoped.create", Method: http.POST, Access: http.Public}, http.StaticPath("/records")), http.EmptyQuery(), http.JSONBody(SubmissionJSON()), http.JSONResponse(201, ReceiptJSON()))
-		get := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "scoped.show", Method: http.GET, Access: http.Public}, RecordPathDescriptor()), http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, ReceiptJSON()))
+
+		scopedCreateRoute := http.DefineRoute(http.RouteSpec{ID: "scoped.create", Method: http.POST, Access: http.Public}, http.StaticPath("/records"))
+		create := http.DefineEndpoint(scopedCreateRoute, http.EmptyQuery(), SubmissionBody(), ReceiptResponse(201))
+
+		scopedShowRoute := http.DefineRoute(http.RouteSpec{ID: "scoped.show", Method: http.GET, Access: http.Public}, RecordPathDescriptor())
+		get := http.DefineEndpoint(scopedShowRoute, http.EmptyQuery(), http.EmptyBody(), ReceiptResponse(200))
+
 		return []http.RouteRegistration{
 			create.Handle(func(ctx context.Context, input http.Input[http.NoPath, http.NoQuery, Submission]) (Receipt, error) {
 				var receipt Receipt

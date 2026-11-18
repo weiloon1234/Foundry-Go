@@ -19,7 +19,7 @@ type Settings struct {
 	Note    value.Optional[value.Nullable[string]] `json:"note,omitzero"`
 }
 
-//foundry:multipart
+//foundry:multipart http=body
 type ProfileInput struct {
 	Title      value.Optional[string]
 	Attachment foundryhttp.UploadedFile `form:"document"`
@@ -30,7 +30,7 @@ type ProfileInput struct {
 
 // doc-example:end multipart-input
 
-//foundry:dto
+//foundry:dto http=response
 type UploadReply struct {
 	Name         string `json:"name"`
 	Bytes        int64  `json:"bytes"`
@@ -45,7 +45,6 @@ type Service interface {
 
 // doc-example:begin multipart-endpoint
 func Router(directory string, service Service) (*foundryhttp.Router, error) {
-	form := foundryhttp.MultipartDirectory(ProfileInputDescriptor(), directory)
 	fields := ProfileInputValidationFields()
 	rules := validation.All(
 		validation.Rules(fields.Title, validation.Optional(validation.MaxLength[string](80))),
@@ -58,7 +57,10 @@ func Router(directory string, service Service) (*foundryhttp.Router, error) {
 		validation.Rules(fields.Photos, validation.Each[Gallery](validation.FileMaxSize[foundryhttp.UploadedFile](1<<20))),
 	)
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "uploads.profile", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/profile"))
-	endpoint := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.JSONResponse(201, UploadReplyJSON())), rules)
+
+	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), ProfileInputBody(directory), UploadReplyResponse(201))
+	endpoint = foundryhttp.ValidateBody(endpoint, rules)
+
 	return foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, ProfileInput]) (UploadReply, error) {
 		return service.Save(ctx, input.Body)
 	}))

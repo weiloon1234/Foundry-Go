@@ -6,6 +6,7 @@ package multifactor
 import (
 	mfa "github.com/weiloon1234/Foundry-Go/auth/mfa"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -26,6 +27,11 @@ var foundryTOTPRequestJSON = sync.OnceValue(func() foundrycontract.JSON[TOTPRequ
 		foundrycontract.JSONType[mfa.TOTPCode]("github.com/weiloon1234/Foundry-Go/auth/mfa.TOTPCode", (*new(mfa.TOTPCode)).JSONContract),
 	}})
 })
+
+// TOTPBody builds the HTTP body from TOTPRequestJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func TOTPBody() foundryhttp.Body[TOTPRequest] { return foundryhttp.JSONBody(TOTPRequestJSON()) }
 
 // TOTPRequestValidationFieldSet retains concrete DTO and value types for validation.
 // Example: TOTPRequestValidationFields()

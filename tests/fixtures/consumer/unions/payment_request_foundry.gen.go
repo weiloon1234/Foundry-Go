@@ -5,6 +5,7 @@ package unions
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
 	sync "sync"
@@ -69,6 +70,13 @@ var foundryPaymentRequestJSON = sync.OnceValue(func() foundrycontract.JSON[Payme
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// PaymentBody builds the HTTP body from PaymentRequestJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func PaymentBody() foundryhttp.Body[PaymentRequest] {
+	return foundryhttp.JSONBody(PaymentRequestJSON())
+}
 
 // PaymentRequestValidationFieldSet retains concrete DTO and value types for validation.
 // Example: PaymentRequestValidationFields()

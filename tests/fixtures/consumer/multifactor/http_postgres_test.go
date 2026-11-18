@@ -229,7 +229,9 @@ type mfaDeliveryClock func() time.Time
 
 func (c mfaDeliveryClock) Now() time.Time { return c() }
 func mfaDeliveryEndpoint[R any](response foundryhttp.Response[R]) foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, R] {
-	return foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "delivery", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/deliver")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response)
+	deliveryRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "delivery", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/deliver"))
+
+	return foundryhttp.DefineEndpoint(deliveryRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response)
 }
 func TestPostgresMFASecretResponsesNeverDiscloseOnFailures(t *testing.T) {
 	s := mfaSetup(t)
@@ -332,7 +334,11 @@ func TestPostgresMFAHTTPWithholdsCompletedCookieAfterResponseFailure(t *testing.
 			kernel := s.kernel(t, "session")
 			pending := pendingCredential(t, kernel)
 			browser := s.browser(t)
-			endpoint := foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "mfa.fail", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/mfa/fail")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204)), foundryhttp.Use(browser.Middleware()))
+
+			mfaFailRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "mfa.fail", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/mfa/fail"))
+			endpoint := foundryhttp.DefineEndpoint(mfaFailRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+			endpoint = foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Use(browser.Middleware()))
+
 			factor := verifier(t, s, codes.Codes()[0])
 			router, err := foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 				_, err := browser.CompleteMFA(ctx, factor, session.IssueOptions{})

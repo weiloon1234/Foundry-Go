@@ -7,6 +7,7 @@ import (
 	mfa "github.com/weiloon1234/Foundry-Go/auth/mfa"
 	password "github.com/weiloon1234/Foundry-Go/auth/password"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -40,6 +41,13 @@ var foundryConfirmationRequestJSON = sync.OnceValue(func() foundrycontract.JSON[
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// ConfirmationBody builds the HTTP body from ConfirmationRequestJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func ConfirmationBody() foundryhttp.Body[ConfirmationRequest] {
+	return foundryhttp.JSONBody(ConfirmationRequestJSON())
+}
 
 // ConfirmationRequestValidationFieldSet retains concrete DTO and value types for validation.
 // Example: ConfirmationRequestValidationFields()

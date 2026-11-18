@@ -14,10 +14,13 @@ import (
 
 type Request = foundryhttp.Input[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody]
 
-var Export = foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.export", Method: foundryhttp.GET, Access: foundryhttp.Public}, httpkernel.UserPathDescriptor()),
-	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.StreamResponse("text/csv; charset=utf-8"),
-)
+var Export = func() foundryhttp.Endpoint[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.Stream] {
+	reportsExportRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.export", Method: foundryhttp.GET, Access: foundryhttp.Public}, httpkernel.UserPathDescriptor())
+	return foundryhttp.DefineEndpoint(
+		reportsExportRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.StreamResponse("text/csv; charset=utf-8"),
+	)
+}()
 
 // Reports checks domain access before returning the reader. Its reads honor ctx.
 // The source owns cleanup until return, then Foundry closes the returned body.

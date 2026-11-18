@@ -30,7 +30,10 @@ func TestDeclaredModelBindingKeepsStoredModelOutOfResponse(t *testing.T) {
 		}
 		return value.Set(models.User{ID: id, Email: "member@example.test", Status: models.StatusActive, Age: 37, Scratch: []string{"private"}}), nil
 	})
-	bound := modelbinding.Bind(foundryhttp.ForBinding(httpmodels.Show), resolver)
+
+	showBinding := foundryhttp.ForBinding(httpmodels.Show)
+	bound := modelbinding.Bind(showBinding, resolver)
+
 	r, err := foundryhttp.NewRouter(bound.Handle(httpmodels.Presenter{}.Show))
 	if err != nil {
 		t.Fatal(err)

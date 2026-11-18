@@ -47,13 +47,17 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLogin) (*
 		return RefreshFromBody(ctx, tokens, input.Body)
 	})
 	// doc-example:end native-token-delivery
-	profile := foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(foundryhttp.DefineEndpoint(
+	profileEndpoint := foundryhttp.DefineEndpoint(
 		route("api.profile", foundryhttp.GET, "/profile", foundryhttp.Guarded),
-		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204)), transport, guard), foundryhttp.Scopes(scopes)).Handle(func(ctx context.Context, user models.User, _ ProfileInput) (foundryhttp.NoContent, error) {
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+	guardProfile := foundryhttp.RequireAuthentication(profileEndpoint, transport, guard)
+
+	profile := foundryhttp.ConfigureAuthenticated(guardProfile, foundryhttp.Scopes(scopes)).Handle(func(ctx context.Context, user models.User, _ ProfileInput) (foundryhttp.NoContent, error) {
 		// Policies and additional guard calls reuse this concrete model.
 		_, err := guard.Require(ctx)
 		return foundryhttp.NoContent{}, err
 	})
+
 	return foundryhttp.NewRouter(login, refresh, profile)
 }
 

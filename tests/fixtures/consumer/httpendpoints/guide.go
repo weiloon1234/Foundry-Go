@@ -21,12 +21,15 @@ type UpdateService interface {
 func GuideRouter(service UpdateService) (*foundryhttp.Router, error) {
 	api := foundryhttp.DefineScope("/api", "api")
 	users := foundryhttp.DefineScope("/members", "members").Within(api)
-	route := foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(
+
+	route := foundryhttp.DefineRoute(
 		foundryhttp.RouteSpec{ID: "update", Method: foundryhttp.PATCH, Access: foundryhttp.Public},
 		httpkernel.UserPathDescriptor(),
-	), foundryhttp.Within(users))
+	)
+	route = foundryhttp.ConfigureRoute(route, foundryhttp.Within(users))
+
 	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(),
-		foundryhttp.JSONBody(httpdto.UpdateUserJSON()), foundryhttp.JSONResponse(200, httpdto.UserResponseJSON()))
+		httpdto.UpdateUserBody(), httpdto.UserResponseResponse(200))
 	endpoint = foundryhttp.ValidateBody(endpoint,
 		validation.Rules(httpdto.UpdateUserValidationFields().Email, validation.Optional(validation.NonBlank[string]())))
 	endpoint = foundryhttp.PrepareEndpoint(endpoint, func(_ context.Context, in foundryhttp.Input[httpkernel.UserPath, foundryhttp.NoQuery, httpdto.UpdateUser]) (foundryhttp.NoQuery, httpdto.UpdateUser, error) {

@@ -16,14 +16,17 @@ type HeaderInput struct {
 	Sequence value.Optional[HeaderSequence]
 }
 
-var InspectHeaders = foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "headers.inspect", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/headers")),
-	foundryhttp.DefineQuery(
-		foundryhttp.OptionalQueryParam("q", foundryhttp.StringQuery[string](), func(q *HeaderInput) *value.Optional[string] { return &q.Query }),
-		foundryhttp.HeaderParam("X-App-Version", foundryhttp.StringQuery[string](), func(q *HeaderInput) *string { return &q.Version }),
-		foundryhttp.OptionalHeaderParam("X-Sequence", foundryhttp.IntegerQuery[HeaderSequence](), func(q *HeaderInput) *value.Optional[HeaderSequence] { return &q.Sequence }),
-	), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204),
-)
+var InspectHeaders = func() foundryhttp.Endpoint[foundryhttp.NoPath, HeaderInput, foundryhttp.NoBody, foundryhttp.NoContent] {
+	headersInspectRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "headers.inspect", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/headers"))
+	return foundryhttp.DefineEndpoint(
+		headersInspectRoute,
+		foundryhttp.DefineQuery(
+			foundryhttp.OptionalQueryParam("q", foundryhttp.StringQuery[string](), func(q *HeaderInput) *value.Optional[string] { return &q.Query }),
+			foundryhttp.HeaderParam("X-App-Version", foundryhttp.StringQuery[string](), func(q *HeaderInput) *string { return &q.Version }),
+			foundryhttp.OptionalHeaderParam("X-Sequence", foundryhttp.IntegerQuery[HeaderSequence](), func(q *HeaderInput) *value.Optional[HeaderSequence] { return &q.Sequence }),
+		), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204),
+	)
+}()
 
 func handleInspectHeaders(context.Context, foundryhttp.Input[foundryhttp.NoPath, HeaderInput, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 	return foundryhttp.NoContent{}, nil

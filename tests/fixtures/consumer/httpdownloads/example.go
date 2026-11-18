@@ -11,10 +11,12 @@ import (
 // application owns root; the framework opens and closes each response file.
 // doc-example:begin local-download
 func ReportRoute(root *os.Root) (*foundryhttp.Router, error) {
+	reportsDownloadRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.download", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/report"))
 	endpoint := foundryhttp.DefineEndpoint(
-		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.download", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/report")),
+		reportsDownloadRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("application/pdf"),
 	)
+
 	return foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
 		return foundryhttp.LocalDownload(root, "reports/monthly.pdf").WithName("report.pdf").WithMediaType("application/pdf"), nil
 	}))

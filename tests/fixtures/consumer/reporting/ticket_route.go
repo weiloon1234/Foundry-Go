@@ -13,8 +13,9 @@ import (
 
 // MemberTicketEndpoint declares a ticket-only download with a concrete operator.
 func MemberTicketEndpoint(binding http.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]]) http.TicketEndpoint[http.NoPath, http.NoQuery, http.NoBody, Operator, http.Download] {
+	reportsTicketRoute := http.DefineRoute(http.RouteSpec{ID: "reports.ticket", Method: http.GET, Access: http.Guarded}, http.StaticPath("/reports/ticket"))
 	endpoint := datatable.DownloadEndpoint(Members,
-		http.DefineRoute(http.RouteSpec{ID: "reports.ticket", Method: http.GET, Access: http.Guarded}, http.StaticPath("/reports/ticket")),
+		reportsTicketRoute,
 		http.EmptyQuery(), http.DownloadResponse("text/csv; charset=utf-8"),
 	)
 	// doc-example:begin ticket-authentication

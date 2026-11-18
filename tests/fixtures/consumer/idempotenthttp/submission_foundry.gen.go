@@ -5,6 +5,7 @@ package idempotenthttp
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
 	sync "sync"
@@ -34,6 +35,18 @@ var foundrySubmissionJSON = sync.OnceValue(func() foundrycontract.JSON[Submissio
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// SubmissionBody builds the HTTP body from SubmissionJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func SubmissionBody() foundryhttp.Body[Submission] { return foundryhttp.JSONBody(SubmissionJSON()) }
+
+// SubmissionResponse builds the HTTP response from SubmissionJSON; status remains part of the route declaration.
+//
+//go:noinline
+func SubmissionResponse(status int) foundryhttp.Response[Submission] {
+	return foundryhttp.JSONResponse(status, SubmissionJSON())
+}
 
 // SubmissionValidationFieldSet retains concrete DTO and value types for validation.
 // Example: SubmissionValidationFields()

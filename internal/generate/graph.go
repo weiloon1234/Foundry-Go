@@ -47,7 +47,8 @@ type packageGraph struct {
 	framework *listedModule
 	overlay   map[string][]byte
 	// exports locates compiled export data by import path.
-	exports map[string]string
+	exports          map[string]string
+	httpDependencies map[string]bool
 	// persistenceDependents holds listed import paths whose transitive
 	// dependencies include database/orm.
 	persistenceDependents map[string]bool
@@ -171,6 +172,9 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 			exports[pkg.ImportPath] = pkg.Export
 		}
 		g.recordPersistenceDependent(pkg)
+		if pkg.ImportPath == framework+"/http" {
+			g.httpDependencies = httpDependencySet(pkg.Deps)
+		}
 		if pkg.ImportPath == framework+"/value" && pkg.Module != nil {
 			module := *pkg.Module
 			g.framework = &module
@@ -267,7 +271,7 @@ func (g *packageGraph) exportImporter() types.Importer {
 // export data that adds proposed handwritten files, by absolute path, for a
 // validation-only generation. It has its own importer and type-check results.
 func (g *packageGraph) withOverlay(files map[string][]byte) *packageGraph {
-	clone := &packageGraph{root: g.root, scope: g.scope, recursive: g.recursive, packages: g.packages, documentationPackages: g.documentationPackages, order: g.order, snapshot: g.snapshot, moduleFiles: g.moduleFiles, fset: g.fset, framework: g.framework, overlay: files, exports: g.exports, persistenceDependents: g.persistenceDependents, checked: make(map[string]*types.Package)}
+	clone := &packageGraph{root: g.root, scope: g.scope, recursive: g.recursive, packages: g.packages, documentationPackages: g.documentationPackages, order: g.order, snapshot: g.snapshot, moduleFiles: g.moduleFiles, fset: g.fset, framework: g.framework, overlay: files, exports: g.exports, httpDependencies: g.httpDependencies, persistenceDependents: g.persistenceDependents, checked: make(map[string]*types.Package)}
 	clone.compiled = clone.exportImporter()
 	return clone
 }
@@ -279,10 +283,16 @@ func (g *packageGraph) goList(ctx context.Context, arguments []string, receive f
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return fmt.Errorf("load consumer Go packages: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	decoder := json.NewDecoder(&stdout)
 	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		var pkg listedPackage
 		err := decoder.Decode(&pkg)
 		if err == io.EOF {
@@ -672,7 +682,7 @@ func (g *packageGraph) preparePackage(ctx context.Context, path string, result *
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	p, err := g.loadPackage(path)
+	p, err := g.loadPackage(ctx, path)
 	if err != nil {
 		return err
 	}

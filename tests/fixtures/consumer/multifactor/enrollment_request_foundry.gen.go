@@ -6,6 +6,7 @@ package multifactor
 import (
 	password "github.com/weiloon1234/Foundry-Go/auth/password"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -35,6 +36,13 @@ var foundryEnrollmentRequestJSON = sync.OnceValue(func() foundrycontract.JSON[En
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// EnrollmentBody builds the HTTP body from EnrollmentRequestJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func EnrollmentBody() foundryhttp.Body[EnrollmentRequest] {
+	return foundryhttp.JSONBody(EnrollmentRequestJSON())
+}
 
 // EnrollmentRequestValidationFieldSet retains concrete DTO and value types for validation.
 // Example: EnrollmentRequestValidationFields()

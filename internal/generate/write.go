@@ -186,7 +186,7 @@ func checkInput(p *packageInput, plan writePlan) error {
 			return fmt.Errorf("Go source file set changed during generation; retry")
 		}
 	}
-	for _, file := range p.files {
+	for _, file := range slices.Concat(p.files, p.testFiles) {
 		current, err := os.ReadFile(filepath.Join(p.dir, file.name))
 		if err != nil {
 			return err

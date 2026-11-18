@@ -535,7 +535,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"typed-download-value", "httpdownloads/downloads.go", "download.", "WithName", []string{"WithName", "WithMediaType", "WithDisposition", "WithEntityTag"}, []string{"string", "Download"}, "/http/download.go"},
 		{"typed-download-handler", "httpdownloads/downloads.go", "Show.", "Handle", []string{"Handle", "URL"}, []string{"UserPath", "Download"}, "/http/endpoint.go"},
 
-		{"typed-multipart-descriptor", "httpuploads/forms.go", "foundryhttp.", "MultipartDirectory", []string{"MultipartDirectory", "ValidateMultipart", "InspectMultipart"}, []string{"Multipart", "ProfileInput"}, "/http/multipart.go"},
+		{"typed-multipart-helper", "clientcontracts/contracts.go", "httpuploads.", "ProfileInputBody", []string{"ProfileInputBody", "ProfileInputDescriptor"}, []string{"Body[", "ProfileInput"}, "/httpuploads/profile_input_foundry.gen.go"},
 		{"typed-multipart-validation-field", "httpuploads/forms.go", "validation.", "Rules", []string{"Rules", "WithLabel"}, []string{"Field", "Rule"}, "/validation/composition.go"},
 		{"typed-upload-reader", "httpuploads/forms.go", "file.", "Open", []string{"Open", "Name", "Size", "ContentType", "Extension"}, []string{"Context", "ReadSeekCloser", "error"}, "/internal/upload/file.go"},
 		{"typed-http-model-binding", "httpmodels/bindings.go", "modelbinding.", "ByKey", []string{"ByKey", "Define", "Bind"}, []string{"Resolver", "KeyQuery"}, "/http/modelbinding/key.go"},
@@ -598,6 +598,8 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"generated-http-dto-encode", "httpdto/encoding_test.go", "rows.", "Encode", []string{"Encode", "Decode", "Description"}, []string{"[]", "UserResponse", "JSONLimits", "error"}, "/contract/json_encoding.go"},
 		{"generated-http-dto-slice", "httpdto/encoding_test.go", "contract.", "Slice", []string{"Slice", "Nullable"}, []string{"JSON[", "[]T"}, "/contract/json_composition.go"},
 		{"generated-http-dto-nullable", "httpdto/encoding_test.go", "optional.", "Decode", []string{"Decode", "Encode", "Description"}, []string{"Nullable[", "UserResponse", "error"}, "/contract/json.go"},
+		{"generated-http-body-helper", "httpendpoints/endpoints.go", "httpdto.", "UpdateUserBody", []string{"UpdateUserBody"}, []string{"Body[", "UpdateUser"}, "/httpdto/update_user_foundry.gen.go"},
+		{"generated-http-response-helper", "httpendpoints/endpoints.go", "httpdto.", "UserResponseResponse", []string{"UserResponseResponse"}, []string{"Response[", "UserResponse"}, "/httpdto/user_response_foundry.gen.go"},
 		{"generated-http-dto-descriptor", "httpdto/dto_test.go", "httpdto.", "UserResponseJSON", []string{"UpdateUserJSON", "UserResponseJSON", "OrderResponseJSON"}, []string{"JSON[", "UserResponse"}, "/httpdto/user_response_foundry.gen.go"},
 		{"generated-http-dto-decode", "httpdto/dto_test.go", "declaration.", "Decode", []string{"Decode", "Validate", "Description"}, []string{"UpdateUser", "JSONLimits", "error"}, "/contract/json.go"},
 		{"generated-http-dto-id", "httpdto/dto_test.go", "response.", "ID", []string{"ID", "Email", "State"}, []string{"ID[", "User"}, "/httpdto/dto.go"},

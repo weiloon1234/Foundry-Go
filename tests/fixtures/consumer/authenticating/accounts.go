@@ -64,7 +64,9 @@ func RestoreIdentity(provider UserProvider, identity model.Identity) (model.Refe
 }
 
 func Profile(transport *foundryhttp.Authentication, guard auth.Guard[models.User]) ProfileEndpoint {
-	endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "profile", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/profile")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+	profileRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "profile", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/profile"))
+	endpoint := foundryhttp.DefineEndpoint(profileRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+
 	return foundryhttp.RequireAuthentication(endpoint, transport, guard)
 }
 func ProfileRoute(endpoint ProfileEndpoint, guard auth.Guard[models.User]) foundryhttp.RouteRegistration {

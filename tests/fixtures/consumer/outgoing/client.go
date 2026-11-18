@@ -9,12 +9,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
-//foundry:dto
+//foundry:dto http=body
 type CreateAccount struct {
 	Name string `json:"name"`
 }
 
-//foundry:dto
+//foundry:dto http=response
 type AccountReceipt struct {
 	ID   int64  `json:"id,string"`
 	Name string `json:"name"`

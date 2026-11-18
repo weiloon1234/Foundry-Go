@@ -9,7 +9,7 @@ import (
 
 // doc-example:begin patch-presence
 
-//foundry:dto
+//foundry:dto http=body
 type UpdateUser struct {
 	Email    value.Optional[string]                 `json:"email,omitzero"`
 	Nickname value.Optional[value.Nullable[string]] `json:"nickname,omitzero"`
@@ -18,7 +18,7 @@ type UpdateUser struct {
 
 // doc-example:end patch-presence
 
-//foundry:dto
+//foundry:dto http=response
 type UserResponse struct {
 	ID    model.ID[models.User] `json:"id"`
 	Email string                `json:"email"`

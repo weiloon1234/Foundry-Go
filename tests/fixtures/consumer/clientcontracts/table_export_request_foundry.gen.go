@@ -6,6 +6,7 @@ package clientcontracts
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
 	datatable "github.com/weiloon1234/Foundry-Go/datatable"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -67,6 +68,13 @@ var foundryTableExportRequestJSON = sync.OnceValue(func() foundrycontract.JSON[T
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// TableExportBody builds the HTTP body from TableExportRequestJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func TableExportBody() foundryhttp.Body[TableExportRequest] {
+	return foundryhttp.JSONBody(TableExportRequestJSON())
+}
 
 // TableExportRequestValidationFieldSet retains concrete DTO and value types for validation.
 // Example: TableExportRequestValidationFields()

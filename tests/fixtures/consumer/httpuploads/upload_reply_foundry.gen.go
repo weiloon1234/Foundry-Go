@@ -5,6 +5,7 @@ package httpuploads
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -31,6 +32,13 @@ var foundryUploadReplyJSON = sync.OnceValue(func() foundrycontract.JSON[UploadRe
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// UploadReplyResponse builds the HTTP response from UploadReplyJSON; status remains part of the route declaration.
+//
+//go:noinline
+func UploadReplyResponse(status int) foundryhttp.Response[UploadReply] {
+	return foundryhttp.JSONResponse(status, UploadReplyJSON())
+}
 
 // UploadReplyValidationFieldSet retains concrete DTO and value types for validation.
 // Example: UploadReplyValidationFields()

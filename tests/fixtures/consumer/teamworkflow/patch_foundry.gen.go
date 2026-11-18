@@ -5,6 +5,7 @@ package teamworkflow
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
 	sync "sync"
@@ -40,6 +41,11 @@ var foundryPatchJSON = sync.OnceValue(func() foundrycontract.JSON[Patch] {
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// PatchBody builds the HTTP body from PatchJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func PatchBody() foundryhttp.Body[Patch] { return foundryhttp.JSONBody(PatchJSON()) }
 
 // PatchValidationFieldSet retains concrete DTO and value types for validation.
 // Example: PatchValidationFields()

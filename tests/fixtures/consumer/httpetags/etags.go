@@ -16,16 +16,19 @@ type MemberPath struct {
 }
 type Request = foundryhttp.Input[MemberPath, foundryhttp.NoQuery, foundryhttp.NoBody]
 
-var Show = foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(
+var Show = func() foundryhttp.Endpoint[MemberPath, foundryhttp.NoQuery, foundryhttp.NoBody, httppagination.MemberResponse] {
+	etagMembersShowRoute := foundryhttp.DefineRoute(
 		foundryhttp.RouteSpec{ID: "etag.members.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
 		foundryhttp.DefinePath("/members/{member}", foundryhttp.Param("member",
 			foundryhttp.ModelIDPath[mutatorqueries.Member](),
 			func(p *MemberPath) *model.ID[mutatorqueries.Member] { return &p.Member })),
-	),
-	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
-	foundryhttp.JSONResponse(200, httppagination.MemberResponseJSON()),
-)
+	)
+	return foundryhttp.DefineEndpoint(
+		etagMembersShowRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
+		httppagination.MemberResponseResponse(200),
+	)
+}()
 
 type Directory interface {
 	Find(context.Context, model.ID[mutatorqueries.Member]) (mutatorqueries.Member, error)

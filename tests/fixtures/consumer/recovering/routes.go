@@ -17,15 +17,20 @@ func CompletionRoutes(reset *Reset, verification *Verification) (*foundryhttp.Ro
 	route := func(id foundryhttp.RouteID, path string) foundryhttp.Route[foundryhttp.NoPath] {
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
 	}
-	change := foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(route("recovery.reset", "/recovery/reset"), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(ResetRequestJSON()), foundryhttp.EmptyResponse(204)), foundryhttp.Use(foundryhttp.CredentialRequests(), foundryhttp.CSRF(foundryhttp.CSRFConfig{}))).
-		Handle(func(ctx context.Context, input ResetInput) (foundryhttp.NoContent, error) {
-			_, err := reset.Complete(ctx, input.Body.Token, input.Body.Password)
-			return foundryhttp.NoContent{}, err
-		})
-	verify := foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(route("recovery.verify", "/recovery/verify"), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(VerificationRequestJSON()), foundryhttp.EmptyResponse(204)), foundryhttp.Use(foundryhttp.CredentialRequests(), foundryhttp.CSRF(foundryhttp.CSRFConfig{}))).
-		Handle(func(ctx context.Context, input VerificationInput) (foundryhttp.NoContent, error) {
-			_, err := verification.Complete(ctx, input.Body.Token)
-			return foundryhttp.NoContent{}, err
-		})
+
+	changeEndpoint := foundryhttp.DefineEndpoint(route("recovery.reset", "/recovery/reset"), foundryhttp.EmptyQuery(), ResetBody(), foundryhttp.EmptyResponse(204))
+
+	change := foundryhttp.ConfigureEndpoint(changeEndpoint, foundryhttp.Use(foundryhttp.CredentialRequests(), foundryhttp.CSRF(foundryhttp.CSRFConfig{}))).Handle(func(ctx context.Context, input ResetInput) (foundryhttp.NoContent, error) {
+		_, err := reset.Complete(ctx, input.Body.Token, input.Body.Password)
+		return foundryhttp.NoContent{}, err
+	})
+
+	verifyEndpoint := foundryhttp.DefineEndpoint(route("recovery.verify", "/recovery/verify"), foundryhttp.EmptyQuery(), VerificationBody(), foundryhttp.EmptyResponse(204))
+
+	verify := foundryhttp.ConfigureEndpoint(verifyEndpoint, foundryhttp.Use(foundryhttp.CredentialRequests(), foundryhttp.CSRF(foundryhttp.CSRFConfig{}))).Handle(func(ctx context.Context, input VerificationInput) (foundryhttp.NoContent, error) {
+		_, err := verification.Complete(ctx, input.Body.Token)
+		return foundryhttp.NoContent{}, err
+	})
+
 	return foundryhttp.NewRouter(change, verify)
 }

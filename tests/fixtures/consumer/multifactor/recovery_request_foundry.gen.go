@@ -6,6 +6,7 @@ package multifactor
 import (
 	mfa "github.com/weiloon1234/Foundry-Go/auth/mfa"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -26,6 +27,13 @@ var foundryRecoveryRequestJSON = sync.OnceValue(func() foundrycontract.JSON[Reco
 		foundrycontract.JSONType[mfa.RecoveryCode]("github.com/weiloon1234/Foundry-Go/auth/mfa.RecoveryCode", (*new(mfa.RecoveryCode)).JSONContract),
 	}})
 })
+
+// RecoveryBody builds the HTTP body from RecoveryRequestJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func RecoveryBody() foundryhttp.Body[RecoveryRequest] {
+	return foundryhttp.JSONBody(RecoveryRequestJSON())
+}
 
 // RecoveryRequestValidationFieldSet retains concrete DTO and value types for validation.
 // Example: RecoveryRequestValidationFields()

@@ -10,10 +10,14 @@ import (
 // domain behavior. Internal causes remain ordinary Go errors.
 var SeatUnavailable = foundryhttp.DefineError("seats.unavailable", 409, "The selected seat is no longer available.")
 
-var Reserve = foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "seats.reserve", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/seats/reserve")),
-	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204),
-), foundryhttp.Errors(SeatUnavailable))
+var Reserve = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent] {
+	seatsReserveRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "seats.reserve", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/seats/reserve"))
+	seatsReserveEndpoint := foundryhttp.DefineEndpoint(
+		seatsReserveRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204),
+	)
+	return foundryhttp.ConfigureEndpoint(seatsReserveEndpoint, foundryhttp.Errors(SeatUnavailable))
+}()
 
 // ReservationService defines only the domain operation.
 type ReservationService interface{ Reserve(context.Context) error }

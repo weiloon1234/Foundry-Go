@@ -20,14 +20,19 @@ type OrderEndpoint = foundryhttp.AuthenticatedEndpoint[OrderPath, foundryhttp.No
 type SignedOrderEndpoint = foundryhttp.SignedAuthenticatedEndpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 type OrderTransport = modelbinding.AuthenticatedTransport[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 
-var showOrder = foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "orders.show", Method: foundryhttp.GET, Access: foundryhttp.Guarded},
-		foundryhttp.DefinePath("/orders/{order}", foundryhttp.Param("order", foundryhttp.ModelIDPath[models.Order](), func(p *OrderPath) *model.ID[models.Order] { return &p.Order }))),
-	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204),
-)
+var showOrder = func() foundryhttp.Endpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent] {
+	ordersShowRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "orders.show", Method: foundryhttp.GET, Access: foundryhttp.Guarded},
+		foundryhttp.DefinePath("/orders/{order}", foundryhttp.Param("order", foundryhttp.ModelIDPath[models.Order](), func(p *OrderPath) *model.ID[models.Order] { return &p.Order })))
+	return foundryhttp.DefineEndpoint(
+		ordersShowRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204),
+	)
+}()
 
 func Orders(transport *foundryhttp.Authentication, guard auth.Guard[models.User]) OrderEndpoint {
-	return foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(showOrder, transport, guard), foundryhttp.Permissions(ViewAccount))
+	guardOrdersShow := foundryhttp.RequireAuthentication(showOrder, transport, guard)
+
+	return foundryhttp.ConfigureAuthenticated(guardOrdersShow, foundryhttp.Permissions(ViewAccount))
 }
 func SignedOrders(endpoint OrderEndpoint, signer foundryhttp.URLSigner) SignedOrderEndpoint {
 	return foundryhttp.SignedAuthenticated(endpoint, signer)
@@ -55,7 +60,9 @@ func BoundOrder(endpoint OrderTransport, resolver modelbinding.Resolver[OrderPat
 var nativeProfile = foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "profile.native", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/profile/native"))
 
 func NativeProfile(transport *foundryhttp.Authentication, guard auth.Guard[models.User]) foundryhttp.AuthenticatedRoute[foundryhttp.NoPath, models.User] {
-	return foundryhttp.ConfigureAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(nativeProfile, transport, guard), foundryhttp.Permissions(ViewAccount))
+	profileNativeEndpoint := foundryhttp.RequireRouteAuthentication(nativeProfile, transport, guard)
+
+	return foundryhttp.ConfigureAuthenticatedRoute(profileNativeEndpoint, foundryhttp.Permissions(ViewAccount))
 }
 func NativeProfileHandler(route foundryhttp.AuthenticatedRoute[foundryhttp.NoPath, models.User], handler func(stdhttp.ResponseWriter, *stdhttp.Request, models.User, foundryhttp.NoPath)) foundryhttp.RouteRegistration {
 	return foundryhttp.HandleAuthenticatedRaw(route, handler)

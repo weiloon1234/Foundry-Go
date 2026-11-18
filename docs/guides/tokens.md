@@ -399,10 +399,13 @@ func TicketRoute(tokens *UserTokens) (foundryhttp.RouteRegistration, error) {
 	if err != nil {
 		return foundryhttp.RouteRegistration{}, err
 	}
+
+	realtimeTicketRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "realtime.ticket", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/realtime/ticket"))
 	endpoint := foundryhttp.DefineEndpoint(
-		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "realtime.ticket", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/realtime/ticket")),
+		realtimeTicketRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.TicketResponse[models.User, model.ID[models.User]](200, clock.System{}),
 	)
+
 	return foundryhttp.Authenticated(endpoint, binding).Handle(func(ctx context.Context, _ models.User, _ ProfileInput) (token.Ticket[models.User, model.ID[models.User]], error) {
 		return tokens.IssueTicket(ctx)
 	}), nil

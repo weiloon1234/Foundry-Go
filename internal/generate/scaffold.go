@@ -51,6 +51,8 @@ func ScaffoldKinds() []ScaffoldKind {
 // Cases (enum); Event payload type (listener); Subject and Resource types
 // (policy). Type names refer to exported types of the same package.
 type ScaffoldOptions struct {
+	httpMode string
+	dtoRole  string
 	Dir      string
 	Kind     ScaffoldKind
 	Name     string
@@ -95,8 +97,19 @@ func Scaffold(ctx context.Context, options ScaffoldOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if options.Dir == "" {
-		options.Dir = "."
+	// Keep preflight, contract scaffolds and publication on one destination.
+	options.Dir, err = filepath.Abs(options.Dir)
+	if err != nil {
+		return "", err
+	}
+	if options.Kind == EndpointScaffold || (options.Kind == DTOScaffold && options.httpMode != "" && options.httpMode != "none") {
+		scope, err := loadModuleScope(ctx, options.Dir)
+		if err != nil {
+			return "", err
+		}
+		if scope.path == framework {
+			return "", fmt.Errorf("HTTP endpoint/request/response scaffolds require an application module; framework packages keep direct HTTP adapters")
+		}
 	}
 	if options.Kind == EndpointScaffold || options.Kind == NotificationScaffold {
 		return scaffoldWithContracts(ctx, options)

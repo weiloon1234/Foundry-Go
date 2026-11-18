@@ -38,7 +38,9 @@ func TestTypedCommandsAndPureInspection(t *testing.T) {
 }
 
 func TestHTTPHelperUsesGeneratedRequestAndResponseContracts(t *testing.T) {
-	endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "tooling.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/accounts")), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(outgoing.CreateAccountJSON()), foundryhttp.JSONResponse(201, outgoing.AccountReceiptJSON()))
+	toolingCreateRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "tooling.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/accounts"))
+	endpoint := foundryhttp.DefineEndpoint(toolingCreateRoute, foundryhttp.EmptyQuery(), outgoing.CreateAccountBody(), outgoing.AccountReceiptResponse(201))
+
 	router, err := foundryhttp.NewRouter(endpoint.Handle(func(_ context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, outgoing.CreateAccount]) (outgoing.AccountReceipt, error) {
 		return outgoing.AccountReceipt{ID: 7, Name: input.Body.Name}, nil
 	}))

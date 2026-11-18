@@ -37,7 +37,7 @@ reuse generated JSON/validation declarations:
 <!-- compiled-source: tests/fixtures/consumer/validationrules/presence.go#presence-input-rules -->
 ```go
 //
-//foundry:dto
+//foundry:dto http=body
 type PresenceInput struct {
 	Label     value.Optional[string]                 `json:"label,omitzero"`
 	Nickname  value.Optional[value.Nullable[string]] `json:"nickname,omitzero"`
@@ -96,7 +96,7 @@ Omitted fields leave stored values unchanged; map supplied values into the
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/dto.go#patch-presence -->
 ```go
-//foundry:dto
+//foundry:dto http=body
 type UpdateUser struct {
 	Email    value.Optional[string]                 `json:"email,omitzero"`
 	Nickname value.Optional[value.Nullable[string]] `json:"nickname,omitzero"`

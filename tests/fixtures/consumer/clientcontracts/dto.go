@@ -14,7 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-//foundry:dto
+//foundry:dto http=both
 type Payload struct {
 	ID      model.ID[models.Order] `json:"id"`
 	BuyerID model.ID[models.User]  `json:"buyer_id"`
@@ -51,7 +51,7 @@ type OwnerIndex struct {
 	Pair   [2]string                        `json:"pair"`
 }
 
-//foundry:dto
+//foundry:dto http=both
 type Member struct {
 	Display string `json:"display"`
 }

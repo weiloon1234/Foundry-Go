@@ -79,7 +79,11 @@ func TestHTTPPresenceConditionalTriggersUseTheirDeclaredSource(t *testing.T) {
 func TestHTTPPresenceSameNameSourcesKeepIndependentDiagnostics(t *testing.T) {
 	fields := validationrules.PresenceInputValidationFields()
 	rule := validation.Rules(fields.Label, validation.Required[string]())
-	server, calls := presenceServer(t, foundryhttp.ValidateBody(foundryhttp.ValidateQuery(presenceEndpoint(), rule), rule))
+
+	endpoint := foundryhttp.ValidateQuery(presenceEndpoint(), rule)
+
+	server, calls := presenceServer(t, foundryhttp.ValidateBody(endpoint, rule))
+
 	status, failure := sendPresence(t, server, "", "{}")
 	if status != 422 || len(failure.Issues) != 2 || failure.Issues[0].Path != "/query/label" || failure.Issues[1].Path != "/body/label" {
 		t.Fatalf("source diagnostics: %d %+v", status, failure)

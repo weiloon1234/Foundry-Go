@@ -5,6 +5,7 @@ package articles
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	i18n "github.com/weiloon1234/Foundry-Go/i18n"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -50,6 +51,13 @@ var foundryArticleInputJSON = sync.OnceValue(func() foundrycontract.JSON[Article
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// ArticleInputBody builds the HTTP body from ArticleInputJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func ArticleInputBody() foundryhttp.Body[ArticleInput] {
+	return foundryhttp.JSONBody(ArticleInputJSON())
+}
 
 // ArticleInputValidationFieldSet retains concrete DTO and value types for validation.
 // Example: ArticleInputValidationFields()

@@ -7,6 +7,7 @@ import (
 	mfa "github.com/weiloon1234/Foundry-Go/auth/mfa"
 	password "github.com/weiloon1234/Foundry-Go/auth/password"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -38,6 +39,13 @@ var foundryRegenerationRequestJSON = sync.OnceValue(func() foundrycontract.JSON[
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// RegenerationBody builds the HTTP body from RegenerationRequestJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func RegenerationBody() foundryhttp.Body[RegenerationRequest] {
+	return foundryhttp.JSONBody(RegenerationRequestJSON())
+}
 
 // RegenerationRequestValidationFieldSet retains concrete DTO and value types for validation.
 // Example: RegenerationRequestValidationFields()

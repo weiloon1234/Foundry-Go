@@ -23,7 +23,9 @@ adds generated field rules and endpoint integration; its focused checks passed.
 [Route-model binding](http-model-binding.md), [pagination adapters](http-pagination.md) and additional validation/middleware are available. Combined transport acceptance passed; the [HTTP blueprint](../../blueprint/08-http-validation-and-responses.md) records current milestone status.
 
 An endpoint combines a route, query declaration, request body and response
-descriptor. Generated descriptors retain the application types throughout
+descriptor. Write each route-declaring call in its own statement, passing the
+previous value first. See [staged route declarations](flat-routes.md) for the
+rule and the application gate. Generated descriptors retain the application types throughout
 decoding, handler invocation, response encoding and inspection.
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/guide.go#compose-endpoint -->
@@ -35,12 +37,15 @@ type UpdateService interface {
 func GuideRouter(service UpdateService) (*foundryhttp.Router, error) {
 	api := foundryhttp.DefineScope("/api", "api")
 	users := foundryhttp.DefineScope("/members", "members").Within(api)
-	route := foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(
+
+	route := foundryhttp.DefineRoute(
 		foundryhttp.RouteSpec{ID: "update", Method: foundryhttp.PATCH, Access: foundryhttp.Public},
 		httpkernel.UserPathDescriptor(),
-	), foundryhttp.Within(users))
+	)
+	route = foundryhttp.ConfigureRoute(route, foundryhttp.Within(users))
+
 	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(),
-		foundryhttp.JSONBody(httpdto.UpdateUserJSON()), foundryhttp.JSONResponse(200, httpdto.UserResponseJSON()))
+		httpdto.UpdateUserBody(), httpdto.UserResponseResponse(200))
 	endpoint = foundryhttp.ValidateBody(endpoint,
 		validation.Rules(httpdto.UpdateUserValidationFields().Email, validation.Optional(validation.NonBlank[string]())))
 	endpoint = foundryhttp.PrepareEndpoint(endpoint, func(_ context.Context, in foundryhttp.Input[httpkernel.UserPath, foundryhttp.NoQuery, httpdto.UpdateUser]) (foundryhttp.NoQuery, httpdto.UpdateUser, error) {
@@ -155,8 +160,8 @@ has type `Query[NoQuery]` and rejects undeclared query keys. Typed GET and HEAD
 endpoints require empty request bodies. Use the explicit raw adapter for native
 HTTP behavior outside these typed payload contracts.
 
-`JSONResponse` declares a body-bearing 2xx success status and a concrete JSON
-response type. `EmptyResponse(204)` and `EmptyResponse(205)` require a handler
+A generated response helper declares a body-bearing 2xx success status and a
+concrete JSON response type through the existing `JSONResponse` adapter. `EmptyResponse(204)` and `EmptyResponse(205)` require a handler
 returning `NoContent`. Failed domain operations return ordinary Go errors;
 Foundry's existing typed error codes determine their safe HTTP response.
 
@@ -170,7 +175,7 @@ endpoints keep one status, because a replay reproduces it.
 
 ```go
 var Upsert = foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(),
-    foundryhttp.JSONBody(MemberJSON()), foundryhttp.JSONResponses(MemberJSON(), 200, 201))
+    MemberBody(), foundryhttp.JSONResponses(MemberJSON(), 200, 201))
 
 registration := Upsert.Handle(func(ctx context.Context, in Request) (foundryhttp.Statused[Member], error) {
     member, created, err := members.Upsert(ctx, in.Body)
@@ -261,7 +266,7 @@ server policy and are not exported to client manifests.
 
 ```go
 upload := foundryhttp.DefineEndpoint(
-    route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.EmptyResponse(204),
+    route, foundryhttp.EmptyQuery(), ProfileInputBody(directory), foundryhttp.EmptyResponse(204),
     foundryhttp.Limits(uploadLimits), // Multipart.Bytes/FileBytes: 512 MiB
     foundryhttp.BodyLimit(512 << 20),
     foundryhttp.Timeout(10 * time.Minute),

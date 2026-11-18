@@ -5,6 +5,7 @@ package outgoing
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -25,6 +26,13 @@ var foundryCreateAccountJSON = sync.OnceValue(func() foundrycontract.JSON[Create
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// CreateAccountBody builds the HTTP body from CreateAccountJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func CreateAccountBody() foundryhttp.Body[CreateAccount] {
+	return foundryhttp.JSONBody(CreateAccountJSON())
+}
 
 // CreateAccountValidationFieldSet retains concrete DTO and value types for validation.
 // Example: CreateAccountValidationFields()

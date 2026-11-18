@@ -75,9 +75,10 @@ A raw route can publish typed server-sent events (`text/event-stream`) with
 so the payload type and wire checks match typed responses:
 
 ```go
-route := foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(foundryhttp.RouteSpec{
+route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
     ID: "orders.events", Method: foundryhttp.GET, Access: foundryhttp.Public,
-}, foundryhttp.StaticPath("/orders/events")), foundryhttp.Timeout(time.Hour))
+}, foundryhttp.StaticPath("/orders/events"))
+route = foundryhttp.ConfigureRoute(route, foundryhttp.Timeout(time.Hour))
 
 registration := foundryhttp.HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
     err := foundryhttp.ServeEvents(w, r, OrderEventJSON(), foundryhttp.DefaultEventStreamConfig(),
@@ -117,10 +118,11 @@ request as usual and returns `EventsFrom(producer)`; the stream starts only afte
 the handler succeeded:
 
 ```go
-var OrderEvents = foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
-    foundryhttp.EventStreamResponse(OrderEventJSON())), foundryhttp.Timeout(time.Hour))
+orderEvents := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
+    foundryhttp.EventStreamResponse(OrderEventJSON()))
+orderEvents = foundryhttp.ConfigureEndpoint(orderEvents, foundryhttp.Timeout(time.Hour))
 
-registration := OrderEvents.Handle(func(ctx context.Context, in Request) (foundryhttp.Events[OrderEvent], error) {
+registration := orderEvents.Handle(func(ctx context.Context, in Request) (foundryhttp.Events[OrderEvent], error) {
     return foundryhttp.EventsFrom(func(ctx context.Context, sink *foundryhttp.EventSink[OrderEvent]) error {
         after, _ := foundryhttp.LastEventID(ctx) // Set when the client resumes.
         for update := range orders.Watch(ctx, after) {

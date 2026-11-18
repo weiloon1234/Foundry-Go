@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/gotype"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonshape"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/routecontract"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -24,6 +25,7 @@ type dtoDeclaration struct {
 	message   *messageOptions
 	// role is dtoResponseRole for DTOs that are never decoded from requests.
 	role string
+	http string
 	dtoGraph
 }
 
@@ -63,11 +65,26 @@ func discoverDTO(p *packageInput, spec *ast.TypeSpec, named *types.Named, args m
 	}
 	declaration := dtoDeclaration{name: spec.Name.Name, typ: named, position: p.fset.Position(spec.Pos())}
 	for key, value := range args {
-		if key != "role" || value != dtoResponseRole {
-			return declaration, p.diagnostic(spec.Pos(), "DTO declarations only accept role=response")
+		switch key {
+		case "role":
+			if value != dtoResponseRole {
+				return declaration, p.diagnostic(spec.Pos(), "DTO declarations only accept role=response")
+			}
+			declaration.role = value
+		case "http":
+			if !routecontract.ValidHTTP(value) {
+				return declaration, p.diagnostic(spec.Pos(), "DTO http must be body, response or both")
+			}
+		default:
+			return declaration, p.diagnostic(spec.Pos(), "DTO declarations only accept role=response and http=body|response|both")
 		}
-		declaration.role = value
 	}
+	mode, err := p.httpMode(spec.Pos(), declaration.role, args["http"], named.TypeParams().Len() != 0)
+	if err != nil {
+		return declaration, err
+	}
+	declaration.http = mode
+
 	if _, ok := named.Underlying().(*types.Struct); !ok {
 		return declaration, p.diagnostic(spec.Pos(), "DTO declaration must be a struct")
 	}

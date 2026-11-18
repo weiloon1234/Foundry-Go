@@ -5,6 +5,7 @@ package articles
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	sync "sync"
 )
 
@@ -72,3 +73,10 @@ var foundryArticleViewJSON = sync.OnceValue(func() foundrycontract.JSON[ArticleV
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// ArticleViewResponse builds the HTTP response from ArticleViewJSON; status remains part of the route declaration.
+//
+//go:noinline
+func ArticleViewResponse(status int) foundryhttp.Response[ArticleView] {
+	return foundryhttp.JSONResponse(status, ArticleViewJSON())
+}

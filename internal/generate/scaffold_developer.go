@@ -81,13 +81,20 @@ func renderDeveloperScaffold(pkg string, options ScaffoldOptions) (string, error
 	case ModelScaffold:
 		return renderORMModel(pkg, options)
 	case DTOScaffold:
+		directive := "//foundry:dto"
+		if options.dtoRole != "" {
+			directive += " role=" + options.dtoRole
+		}
+		if options.httpMode != "" {
+			directive += " http=" + options.httpMode
+		}
 		return fmt.Sprintf(`package %s
 
 // %s is an explicit transport contract. Add exported JSON-tagged fields,
 // then run foundry generate to create its typed codec and schema.
-//foundry:dto
+%s
 type %s struct {}
-`, pkg, options.Name, options.Name), nil
+`, pkg, options.Name, directive, options.Name), nil
 	case JobScaffold:
 		return fmt.Sprintf(`package %s
 

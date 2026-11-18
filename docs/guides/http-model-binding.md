@@ -33,7 +33,9 @@ func UserByID(db database.Executor) modelbinding.Resolver[httpkernel.UserPath, m
 }
 
 func Router(db database.Executor, service Service) (*foundryhttp.Router, error) {
-	bound := modelbinding.Bind(foundryhttp.ForBinding(Show), UserByID(db))
+	showUserBinding := foundryhttp.ForBinding(Show)
+	bound := modelbinding.Bind(showUserBinding, UserByID(db))
+
 	return foundryhttp.NewRouter(bound.Handle(service.Show))
 }
 ```
@@ -220,7 +222,10 @@ func ScopedOrderRoute(db database.Executor, binding foundryhttp.GuardBinding[mod
 		}
 		return orm.Keyed(models.Orders.Query().Where(orm.ColumnEq(models.Orders.BuyerID, actor.ID)), models.Orders.Key()).Find(ctx, db, path.Order)
 	})
-	bound := modelbinding.BindAuthenticated(foundryhttp.ForAuthenticatedBinding(endpoint), resolver)
+
+	endpointBinding := foundryhttp.ForAuthenticatedBinding(endpoint)
+	bound := modelbinding.BindAuthenticated(endpointBinding, resolver)
+
 	authorized := modelbinding.AuthorizeAuthenticatedResource(bound, func(ctx context.Context, _ models.User, in OrderInput) error {
 		return ReadOrder.Authorize(ctx, guard, in.Model)
 	})

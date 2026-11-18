@@ -17,39 +17,58 @@ import (
 var AccountRoute = foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "account.show", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/account"))
 
 // Upsert declares two success statuses; the handler selects one of them.
-var Upsert = foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.upsert", Method: foundryhttp.PUT, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/upsert")),
-	foundryhttp.EmptyQuery(), foundryhttp.JSONBody(MemberJSON()), foundryhttp.JSONResponses(MemberJSON(), 200, 201),
-)
+var Upsert = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, Member, foundryhttp.Statused[Member]] {
+	membersUpsertRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.upsert", Method: foundryhttp.PUT, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/upsert"))
+	return foundryhttp.DefineEndpoint(
+		membersUpsertRoute,
+		foundryhttp.EmptyQuery(), MemberBody(), foundryhttp.JSONResponses(MemberJSON(), 200, 201),
+	)
+}()
 
 // Continue answers a form submission with a redirect to a named route.
-var Continue = foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "session.continue", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/continue")),
-	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.RedirectResponse(303),
-)
+var Continue = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.Redirect] {
+	sessionContinueRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "session.continue", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/continue"))
+	return foundryhttp.DefineEndpoint(
+		sessionContinueRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.RedirectResponse(303),
+	)
+}()
 
 // RawUpload streams a raw body of a declared media type, bounded to 64 KiB.
-var RawUpload = foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "files.raw", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/raw")),
-	foundryhttp.EmptyQuery(), foundryhttp.RawRequestBody("application/octet-stream", "text/plain"), foundryhttp.JSONResponse(201, httpuploads.UploadReplyJSON()),
-), foundryhttp.Limits(rawLimits()))
+var RawUpload = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RawBody, httpuploads.UploadReply] {
+	filesRawRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "files.raw", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/raw"))
+	filesRawEndpoint := foundryhttp.DefineEndpoint(
+		filesRawRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.RawRequestBody("application/octet-stream", "text/plain"), httpuploads.UploadReplyResponse(201),
+	)
+	return foundryhttp.ConfigureEndpoint(filesRawEndpoint, foundryhttp.Limits(rawLimits()))
+}()
 
 // MemberEvents streams typed server-sent events and resumes after Last-Event-ID.
-var MemberEvents = foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(
-	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.events", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/events")),
-	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EventStreamResponse(MemberJSON()),
-), foundryhttp.Timeout(time.Minute))
+var MemberEvents = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.Events[Member]] {
+	membersEventsRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.events", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/events"))
+	membersEventsEndpoint := foundryhttp.DefineEndpoint(
+		membersEventsRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EventStreamResponse(MemberJSON()),
+	)
+	return foundryhttp.ConfigureEndpoint(membersEventsEndpoint, foundryhttp.Timeout(time.Minute))
+}()
 
 // signedMember accepts expiring, permanent and origin-relative signed links; a
 // mail client's utm_source decoration is ignored.
 func signedMember(signer foundryhttp.URLSigner) foundryhttp.SignedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, Member] {
-	return foundryhttp.ConfigureSigned(foundryhttp.ConfigureSigned(foundryhttp.Signed(
-		foundryhttp.DefineEndpoint(
-			foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.signed", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/signed")),
-			foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, MemberJSON()),
-		),
+	membersSignedRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.signed", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/signed"))
+	membersSignedEndpoint := foundryhttp.DefineEndpoint(
+		membersSignedRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), MemberResponse(200),
+	)
+	membersSignedSigned := foundryhttp.Signed(
+		membersSignedEndpoint,
 		signer,
-	), foundryhttp.PermanentLinks()), foundryhttp.IgnoredParameters("utm_source"))
+	)
+	membersSignedSigned = foundryhttp.ConfigureSigned(membersSignedSigned, foundryhttp.PermanentLinks())
+
+	return foundryhttp.ConfigureSigned(membersSignedSigned, foundryhttp.IgnoredParameters("utm_source"))
 }
 
 // SignedLinks are the link forms a client receives from the server.

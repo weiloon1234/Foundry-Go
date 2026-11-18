@@ -5,6 +5,7 @@ package genericdto
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -43,6 +44,11 @@ var foundryUserDTOJSON = sync.OnceValue(func() foundrycontract.JSON[UserDTO] {
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// UserDTOBody builds the HTTP body from UserDTOJSON; the generated descriptor owns the schema.
+//
+//go:noinline
+func UserDTOBody() foundryhttp.Body[UserDTO] { return foundryhttp.JSONBody(UserDTOJSON()) }
 
 // UserDTOValidationFieldSet retains concrete DTO and value types for validation.
 // Example: UserDTOValidationFields()

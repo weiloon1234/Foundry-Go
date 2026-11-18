@@ -22,6 +22,13 @@ var foundryMultipartSubmissionDescriptor = sync.OnceValue(func() foundryhttp.Mul
 	)
 })
 
+// MultipartSubmissionBody builds the HTTP body from MultipartSubmissionDescriptor; the generated descriptor owns the schema.
+//
+//go:noinline
+func MultipartSubmissionBody(directory string) foundryhttp.Body[MultipartSubmission] {
+	return foundryhttp.MultipartBody(foundryhttp.MultipartDirectory(MultipartSubmissionDescriptor(), directory))
+}
+
 // MultipartSubmissionValidationFieldSet retains concrete DTO and value types for validation.
 // Example: MultipartSubmissionValidationFields()
 type MultipartSubmissionValidationFieldSet struct {
