@@ -161,8 +161,8 @@ func TestRealGoplsConsumer(t *testing.T) {
 				}
 			}
 			c.results, c.err, c.sourceErr = inspectConsumerEditorBatch(operations, func() ([]Result, error) {
-				return retryEditorChunk(t, ctx, func() ([]Result, error) {
-					return InspectBatch(ctx, operations, 45*time.Second)
+				return retryEditorChunk(t, ctx, func() ([]Result, bool, error, error) {
+					return inspectBatchProgress(ctx, operations, 45*time.Second, executable, []string{"serve"}, shutdownGrace)
 				})
 			})
 		})

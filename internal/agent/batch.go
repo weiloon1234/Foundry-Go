@@ -51,50 +51,43 @@ func inspectionMethod(operation string) (string, error) {
 	}
 }
 
-// batchFailure retains operation progress before cleanup adds its own errors.
-// The acceptance harness uses it to distinguish an early server death from a
-// failed close after a response. Production callers never retry a batch.
-type batchFailure struct {
-	cause     error
-	responded bool
+func inspectBatch(ctx context.Context, options []Options, timeout time.Duration, executable string, args []string, cleanupGrace time.Duration) ([]Result, error) {
+	results, _, _, err := inspectBatchProgress(ctx, options, timeout, executable, args, cleanupGrace)
+	return results, err
 }
 
-func (e *batchFailure) Error() string { return e.cause.Error() }
-func (e *batchFailure) Unwrap() error { return e.cause }
-
-func inspectBatch(ctx context.Context, options []Options, timeout time.Duration, executable string, args []string, cleanupGrace time.Duration) (results []Result, err error) {
+// inspectBatchProgress also reports response progress and the operation error
+// before cleanup, so the acceptance harness never retries cleanup-only failures.
+func inspectBatchProgress(ctx context.Context, options []Options, timeout time.Duration, executable string, args []string, cleanupGrace time.Duration) (results []Result, responded bool, operationErr, err error) {
 	if ctx == nil || len(options) == 0 || len(options) > MaxBatchOperations || timeout < 0 || cleanupGrace <= 0 {
-		return nil, fmt.Errorf("invalid agent inspection batch")
+		return nil, false, nil, fmt.Errorf("invalid agent inspection batch")
 	}
 	options = slices.Clone(options)
 	documents := make([]document, len(options))
 	methods := make([]string, len(options))
 	for i, item := range options {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, false, nil, err
 		}
 		methods[i], err = inspectionMethod(item.Operation)
 		if err != nil {
-			return nil, err
+			return nil, false, nil, err
 		}
 		documents[i], err = prepare(item)
 		if err != nil {
-			return nil, err
+			return nil, false, nil, err
 		}
 		if i != 0 && documents[i].workspace != documents[0].workspace {
-			return nil, fmt.Errorf("agent batch context files must share one consumer workspace")
+			return nil, false, nil, fmt.Errorf("agent batch context files must share one consumer workspace")
 		}
 	}
 	initializationStarted := time.Now()
 	session, err := start(ctx, executable, args, documents[0].workspace)
 	if err != nil {
-		return nil, err
+		return nil, false, nil, err
 	}
-	responded := false
 	defer func() {
-		if err != nil {
-			err = &batchFailure{cause: err, responded: responded}
-		}
+		operationErr = err
 		closeErr := session.close(cleanupGrace)
 		err = safeerror.Join("operation failed", err, ctx.Err(), closeErr)
 	}()
@@ -105,7 +98,7 @@ func inspectBatch(ctx context.Context, options []Options, timeout time.Duration,
 		return failure
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, nil, err
 	}
 	initializationElapsed := time.Since(initializationStarted)
 	for i, doc := range documents {
@@ -129,11 +122,11 @@ func inspectBatch(ctx context.Context, options []Options, timeout time.Duration,
 			return nil
 		})
 		if err != nil {
-			return results, fmt.Errorf("agent batch operation %d (%s): %w", i+1, options[i].Operation, err)
+			return results, responded, nil, fmt.Errorf("agent batch operation %d (%s): %w", i+1, options[i].Operation, err)
 		}
 		results = append(results, result)
 	}
-	return results, nil
+	return results, responded, nil, nil
 }
 
 // A timed-out phase cancels this owned session: its protocol stream is no

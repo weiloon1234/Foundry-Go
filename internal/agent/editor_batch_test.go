@@ -14,17 +14,16 @@ import (
 	"time"
 )
 
-func retryEditorChunk(t *testing.T, ctx context.Context, inspect func() ([]Result, error)) ([]Result, error) {
+func retryEditorChunk(t *testing.T, ctx context.Context, inspect func() ([]Result, bool, error, error)) ([]Result, error) {
 	t.Helper()
-	results, err := inspect()
-	var failure *batchFailure
-	if !errors.As(err, &failure) || failure.responded || ctx.Err() != nil ||
-		errors.Is(failure.cause, context.Canceled) || errors.Is(failure.cause, context.DeadlineExceeded) ||
-		!closedEditorPipe(failure.cause) {
+	results, responded, operationErr, err := inspect()
+	if operationErr == nil || responded || ctx.Err() != nil ||
+		errors.Is(operationErr, context.Canceled) || errors.Is(operationErr, context.DeadlineExceeded) ||
+		!closedEditorPipe(operationErr) {
 		return results, err
 	}
 	t.Logf("gopls chunk died before its first inspection response; retrying once on a fresh server: %v", err)
-	results, retryErr := inspect()
+	results, _, _, retryErr := inspect()
 	if retryErr != nil {
 		return results, fmt.Errorf("gopls chunk failed after one early-death retry; first attempt: %w; fresh server: %w", err, retryErr)
 	}
@@ -56,13 +55,13 @@ func TestEditorChunkRetriesOnlyEarlyServerDeath(t *testing.T) {
 		t.Run(tc.mode, func(t *testing.T) {
 			options, _ := batchFixture(t)
 			attempts := 0
-			results, err := retryEditorChunk(t, t.Context(), func() ([]Result, error) {
+			results, err := retryEditorChunk(t, t.Context(), func() ([]Result, bool, error, error) {
 				mode := tc.mode
 				if attempts != 0 {
 					mode = "batch"
 				}
 				attempts++
-				return inspectBatch(t.Context(), options, 500*time.Millisecond, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", mode}, 300*time.Millisecond)
+				return inspectBatchProgress(t.Context(), options, 500*time.Millisecond, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", mode}, 300*time.Millisecond)
 			})
 			if attempts != tc.attempts || len(results) != tc.completed || (err == nil) != (tc.attempts == 2) {
 				t.Fatalf("chunk retry: %d attempts, %d results, %v", attempts, len(results), err)
@@ -74,10 +73,10 @@ func TestEditorChunkRetriesOnlyEarlyServerDeath(t *testing.T) {
 func TestEditorChunkReportsBothDeaths(t *testing.T) {
 	options, _ := batchFixture(t)
 	var failures []error
-	_, err := retryEditorChunk(t, t.Context(), func() ([]Result, error) {
-		results, err := inspectBatch(t.Context(), options, time.Second, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "batch-die-before-response"}, shutdownGrace)
+	_, err := retryEditorChunk(t, t.Context(), func() ([]Result, bool, error, error) {
+		results, responded, operationErr, err := inspectBatchProgress(t.Context(), options, time.Second, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "batch-die-before-response"}, shutdownGrace)
 		failures = append(failures, err)
-		return results, err
+		return results, responded, operationErr, err
 	})
 	if len(failures) != 2 || err == nil || !strings.Contains(err.Error(), "first attempt:") || !strings.Contains(err.Error(), "fresh server:") {
 		t.Fatalf("lost bounded retry or both failures: %d attempts, %v", len(failures), err)
@@ -90,21 +89,30 @@ func TestEditorChunkReportsBothDeaths(t *testing.T) {
 }
 
 func TestEditorChunkDoesNotRetryAssertionsOrCleanupErrors(t *testing.T) {
-	for _, failure := range []error{
-		nil,
-		io.EOF, // Cleanup alone is not evidence of an early operation failure.
-		errors.Join(&batchFailure{cause: errors.New("protocol error")}, io.EOF),
-		&batchFailure{cause: errors.Join(io.EOF, context.DeadlineExceeded)},
-		&batchFailure{cause: errors.Join(io.EOF, context.Canceled)},
+	protocolErr := errors.New("protocol error")
+	deadlineErr := errors.Join(io.EOF, context.DeadlineExceeded)
+	canceledErr := errors.Join(io.EOF, context.Canceled)
+	for _, tc := range []struct {
+		name              string
+		responded         bool
+		operationErr, err error
+	}{
+		{"assertion payload", true, nil, nil},
+		{"cleanup only", true, nil, io.EOF},
+		{"protocol error and cleanup EOF", false, protocolErr, errors.Join(protocolErr, io.EOF)},
+		{"deadline", false, deadlineErr, deadlineErr},
+		{"canceled", false, canceledErr, canceledErr},
 	} {
-		attempts := 0
-		results, err := retryEditorChunk(t, t.Context(), func() ([]Result, error) {
-			attempts++
-			return []Result{{Payload: []byte(`{"items":[]}`)}}, failure
+		t.Run(tc.name, func(t *testing.T) {
+			attempts := 0
+			results, err := retryEditorChunk(t, t.Context(), func() ([]Result, bool, error, error) {
+				attempts++
+				return []Result{{Payload: []byte(`{"items":[]}`)}}, tc.responded, tc.operationErr, tc.err
+			})
+			if attempts != 1 || len(results) != 1 || err != tc.err || string(results[0].Payload) != `{"items":[]}` {
+				t.Fatal("retried or changed assertion payload/cleanup failure", attempts, results, err)
+			}
 		})
-		if attempts != 1 || len(results) != 1 || err != failure || string(results[0].Payload) != `{"items":[]}` {
-			t.Fatal("retried or changed assertion payload/cleanup failure", attempts, results, err)
-		}
 	}
 }
 
