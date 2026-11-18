@@ -35,7 +35,7 @@ func InspectBatch(ctx context.Context, options []Options, timeout time.Duration)
 			return nil, fmt.Errorf("agent batch must use one language-server executable")
 		}
 	}
-	return inspectBatch(ctx, options, timeout, executable, []string{"serve"})
+	return inspectBatch(ctx, options, timeout, executable, []string{"serve"}, shutdownGrace)
 }
 
 func inspectionMethod(operation string) (string, error) {
@@ -51,73 +51,98 @@ func inspectionMethod(operation string) (string, error) {
 	}
 }
 
-func inspectBatch(ctx context.Context, options []Options, timeout time.Duration, executable string, args []string) (results []Result, err error) {
-	if ctx == nil || len(options) == 0 || len(options) > MaxBatchOperations || timeout < 0 {
+func inspectBatch(ctx context.Context, options []Options, timeout time.Duration, executable string, args []string, cleanupGrace time.Duration) (results []Result, err error) {
+	if ctx == nil || len(options) == 0 || len(options) > MaxBatchOperations || timeout < 0 || cleanupGrace <= 0 {
 		return nil, fmt.Errorf("invalid agent inspection batch")
 	}
-	options = slices.Clone(options)
-	documents := make([]document, len(options))
-	methods := make([]string, len(options))
-	for i, item := range options {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		methods[i], err = inspectionMethod(item.Operation)
-		if err != nil {
-			return nil, err
-		}
-		documents[i], err = prepare(item)
-		if err != nil {
-			return nil, err
-		}
-		if i != 0 && documents[i].workspace != documents[0].workspace {
-			return nil, fmt.Errorf("agent batch context files must share one consumer workspace")
-		}
+	inspections, err := prepareInspections(ctx, options)
+	if err != nil {
+		return nil, err
 	}
+	workspace := inspections[0].document.workspace
 	initializationStarted := time.Now()
-	session, err := start(ctx, executable, args, documents[0].workspace)
+	session, err := start(ctx, executable, args, workspace)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
-		closeErr := session.close()
+		closeErr := session.close(cleanupGrace)
 		err = safeerror.Join("operation failed", err, ctx.Err(), closeErr)
 	}()
 	var server ServerInfo
 	err = session.phase(timeout, func() error {
 		var failure error
-		server, failure = session.initialize(documents[0].workspace)
+		server, failure = session.initialize(workspace)
 		return failure
 	})
 	if err != nil {
 		return nil, err
 	}
-	initializationElapsed := time.Since(initializationStarted)
-	for i, doc := range documents {
+	results, _, err = session.inspectPrepared(inspections, server, time.Since(initializationStarted), timeout)
+	return results, err
+}
+
+type preparedInspection struct {
+	document  document
+	operation string
+	method    string
+}
+
+func prepareInspections(ctx context.Context, options []Options) ([]preparedInspection, error) {
+	options = slices.Clone(options)
+	inspections := make([]preparedInspection, len(options))
+	for i, item := range options {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		method, err := inspectionMethod(item.Operation)
+		if err != nil {
+			return nil, err
+		}
+		doc, err := prepare(item)
+		if err != nil {
+			return nil, err
+		}
+		if i != 0 && doc.workspace != inspections[0].document.workspace {
+			return nil, fmt.Errorf("agent batch context files must share one consumer workspace")
+		}
+		inspections[i] = preparedInspection{doc, item.Operation, method}
+	}
+	return inspections, nil
+}
+
+// inspectPrepared shares the production overlay lifecycle with the acceptance
+// harness. responded includes a successful request whose didClose later fails;
+// such a scenario must never be retried. Session ownership stays with the caller.
+func (s *session) inspectPrepared(inspections []preparedInspection, server ServerInfo, initializationElapsed, timeout time.Duration) (results []Result, responded bool, err error) {
+	for i, inspection := range inspections {
+		doc := inspection.document
 		var result Result
-		err := session.phase(timeout, func() error {
-			if err := session.notify("textDocument/didOpen", map[string]any{"textDocument": map[string]any{"uri": doc.uri, "languageId": "go", "version": i + 1, "text": doc.text}}); err != nil {
+		err := s.phase(timeout, func() error {
+			s.documentVersion++
+			if err := s.notify("textDocument/didOpen", map[string]any{"textDocument": map[string]any{"uri": doc.uri, "languageId": "go", "version": s.documentVersion, "text": doc.text}}); err != nil {
 				return err
 			}
 			requestStarted := time.Now()
-			payload, err := session.request(methods[i], map[string]any{"textDocument": map[string]string{"uri": doc.uri}, "position": doc.position})
+			payload, err := s.request(inspection.method, map[string]any{"textDocument": map[string]string{"uri": doc.uri}, "position": doc.position})
 			requestElapsed := time.Since(requestStarted)
 			if err != nil {
 				return err
 			}
-			if err := session.notify("textDocument/didClose", map[string]any{"textDocument": map[string]string{"uri": doc.uri}}); err != nil {
+			responded = true
+			if err := s.notify("textDocument/didClose", map[string]any{"textDocument": map[string]string{"uri": doc.uri}}); err != nil {
 				return err
 			}
-			result = Result{Operation: options[i].Operation, Workspace: doc.workspace, File: doc.path, Position: doc.position, Server: server, Payload: payload,
+			result = Result{Operation: inspection.operation, Workspace: doc.workspace, File: doc.path, Position: doc.position, Server: server, Payload: payload,
 				Timing: Timing{InitializeNanoseconds: initializationElapsed.Nanoseconds(), RequestNanoseconds: requestElapsed.Nanoseconds()}}
 			return nil
 		})
 		if err != nil {
-			return results, fmt.Errorf("agent batch operation %d (%s): %w", i+1, options[i].Operation, err)
+			return results, responded, fmt.Errorf("agent batch operation %d (%s): %w", i+1, inspection.operation, err)
 		}
 		results = append(results, result)
 	}
-	return results, nil
+	return results, responded, nil
 }
 
 // A timed-out phase cancels this owned session: its protocol stream is no

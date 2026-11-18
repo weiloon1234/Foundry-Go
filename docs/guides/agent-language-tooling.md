@@ -79,12 +79,18 @@ The client has protocol tests for framing limits, Unicode positions, unsaved buf
 
 ## Verification batches and cache freshness
 
-Milestone 23 adds batching to the acceptance harness. Each consumer editor
-scenario starts one fresh gopls process and performs completion, hover and
-lookup with separate owned overlays. Initialization and each operation have
-independent deadlines. No server or unsaved state crosses scenarios. Every
-existing assertion remains required; a completed response does not hide failed
-cleanup. This harness change does not alter the single-operation CLI contract.
+The acceptance harness reuses one sequential gopls session per test function and
+fixture module. Every probe remains a named subtest with its own assertions.
+Completion, hover and lookup each open and close an independent overlay;
+diagnostic notifications are consumed without retaining them between probes.
+Initialization and each operation have independent deadlines. Any protocol
+failure discards the session, so later probes start with a fresh server.
+If the server dies or closes its pipe before any successful inspection response
+in a scenario, the harness retries that scenario once and reports both failures
+if the retry fails. Assertion mismatches, protocol errors and timeouts are not
+retried, nor are failures after a successful inspection response. Final shutdown
+errors still fail the owning test. This reuse and recovery belong only to the
+acceptance harness: the CLI and `InspectBatch` still own a fresh server per call.
 
 The independent consumer's named compiler-rejection tests retain one catalogue.
 Selected cases run in bounded batches of twelve packages. Each case must have

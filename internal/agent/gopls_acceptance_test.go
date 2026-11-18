@@ -1,13 +1,10 @@
 package agent
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -33,6 +30,7 @@ func TestRealGoplsConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	harness := newEditorSession(t, executable, workspace)
 	checkConsumerEditorAnchors(t, workspace)
 	path := filepath.Join(workspace, "package_graph_test.go")
 	data, err := os.ReadFile(path)
@@ -48,18 +46,19 @@ func TestRealGoplsConsumer(t *testing.T) {
 	selector := start + len("models.Users.")
 	for _, operation := range []string{"complete", "hover", "definition"} {
 		t.Run(operation, func(t *testing.T) {
-			parallelRealGopls(t)
 			offset := selector
 			if operation != "complete" {
 				offset++
 			}
 			options := Options{Workspace: workspace, File: path, Operation: operation, Gopls: executable, Line: strings.Count(source[:offset], "\n") + 1, Column: offset - strings.LastIndexByte(source[:offset], '\n')}
-			ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
-			defer cancel()
-			result, err := Inspect(ctx, options)
+			results, err := harness.inspect(t, []Options{options}, 45*time.Second)
 			if err != nil {
 				t.Fatal(err)
 			}
+			if len(results) != 1 {
+				t.Fatalf("incomplete editor scenario: got %d results, want 1", len(results))
+			}
+			result := results[0]
 			if result.Server.Name != "gopls" {
 				t.Fatalf("expected real gopls server identity, got %+v", result.Server)
 			}
@@ -113,126 +112,54 @@ func TestRealGoplsConsumer(t *testing.T) {
 			}
 		})
 	}
-	type probeChunk struct {
-		probes    []consumerEditorProbe
-		once      sync.Once
-		results   []Result
-		err       error
-		sourceErr error
-	}
-
-	runChunk := func(c *probeChunk, ctx context.Context) ([]Result, error, error) {
-		c.once.Do(func() {
-			select {
-			case realGoplsSlots <- struct{}{}:
-				defer func() { <-realGoplsSlots }()
-			case <-ctx.Done():
-				c.err = ctx.Err()
-				return
-			}
-			var operations []Options
-			for _, probe := range c.probes {
-				path := filepath.Join(workspace, probe.file)
-				data, err := os.ReadFile(path)
-				if err != nil {
-					c.err = err
-					return
-				}
-				source := string(data)
-				prefix := probe.prefix
-				start := strings.Index(source, prefix+probe.symbol)
-				if start < 0 {
-					c.err = fmt.Errorf("probe %s: consumer query inspection expression was removed", probe.name)
-					return
-				}
-				for _, operation := range []string{"complete", "hover", "definition"} {
-					offset := start + len(prefix)
-					if operation != "complete" {
-						offset++
-					}
-					operations = append(operations, Options{
-						Workspace: workspace,
-						File:      path,
-						Operation: operation,
-						Gopls:     executable,
-						Line:      strings.Count(source[:offset], "\n") + 1,
-						Column:    offset - strings.LastIndexByte(source[:offset], '\n'),
-					})
-				}
-			}
-			c.results, c.err, c.sourceErr = inspectConsumerEditorBatch(operations, func() ([]Result, error) {
-				return InspectBatch(ctx, operations, 45*time.Second)
+	for _, probe := range consumerEditorProbes() {
+		t.Run(probe.name, func(t *testing.T) {
+			options := consumerEditorOptions(t, workspace, probe.file, probe.prefix, probe.symbol)
+			results, batchErr, sourceErr := inspectConsumerEditorBatch(options, func() ([]Result, error) {
+				return harness.inspect(t, options, 45*time.Second)
 			})
+			if sourceErr != nil {
+				t.Error(sourceErr)
+			}
+			if batchErr != nil {
+				t.Fatal(batchErr)
+			}
+			if len(results) != len(options) {
+				t.Fatalf("incomplete editor scenario: got %d results, want %d", len(results), len(options))
+			}
+			for _, result := range results {
+				switch result.Operation {
+				case "complete":
+					var list struct {
+						Items []struct{ Label string } `json:"items"`
+					}
+					if err := json.Unmarshal(result.Payload, &list); err != nil {
+						if err := json.Unmarshal(result.Payload, &list.Items); err != nil {
+							t.Fatal(err)
+						}
+					}
+					for _, method := range probe.completion {
+						found := false
+						for _, item := range list.Items {
+							found = found || item.Label == method || strings.HasPrefix(item.Label, method+"(")
+						}
+						if !found {
+							t.Fatalf("gopls missed query method %s", method)
+						}
+					}
+				case "hover":
+					for _, part := range probe.hover {
+						if !strings.Contains(string(result.Payload), part) {
+							t.Fatalf("typed query hover lost %s: %s", part, result.Payload)
+						}
+					}
+				case "definition":
+					if !strings.Contains(string(result.Payload), probe.definition) {
+						t.Fatal("query definition missed the handwritten ORM method")
+					}
+				}
+			}
 		})
-		return c.results, c.err, c.sourceErr
-	}
-
-	allProbes := consumerEditorProbes()
-	const probeChunkLimit = 5
-	for chunkStart := 0; chunkStart < len(allProbes); chunkStart += probeChunkLimit {
-		chunkEnd := min(chunkStart+probeChunkLimit, len(allProbes))
-		chunk := &probeChunk{probes: allProbes[chunkStart:chunkEnd]}
-		for pIdx, probe := range chunk.probes {
-			pIdx := pIdx
-			probe := probe
-			t.Run(probe.name, func(t *testing.T) {
-				t.Parallel()
-				results, batchErr, sourceErr := runChunk(chunk, t.Context())
-				if sourceErr != nil {
-					t.Error(sourceErr)
-				}
-				startOp := pIdx * 3
-				endOp := startOp + 3
-				if batchErr != nil {
-					var failedOp int
-					var opName string
-					if n, _ := fmt.Sscanf(batchErr.Error(), "agent batch operation %d (%s):", &failedOp, &opName); n >= 1 {
-						if failedOp > startOp && failedOp <= endOp {
-							t.Fatalf("agent batch operation failed: %v", batchErr)
-						} else if failedOp <= startOp {
-							t.Fatalf("prior operation failed in agent batch: %v", batchErr)
-						}
-					} else {
-						t.Fatalf("agent batch failed: %v", batchErr)
-					}
-				}
-				if len(results) < endOp {
-					t.Fatalf("incomplete editor scenario: got %d results, need at least %d", len(results), endOp)
-				}
-				for _, result := range results[startOp:endOp] {
-					switch result.Operation {
-					case "complete":
-						var list struct {
-							Items []struct{ Label string } `json:"items"`
-						}
-						if err := json.Unmarshal(result.Payload, &list); err != nil {
-							if err := json.Unmarshal(result.Payload, &list.Items); err != nil {
-								t.Fatal(err)
-							}
-						}
-						for _, method := range probe.completion {
-							found := false
-							for _, item := range list.Items {
-								found = found || item.Label == method || strings.HasPrefix(item.Label, method+"(")
-							}
-							if !found {
-								t.Fatalf("gopls missed query method %s", method)
-							}
-						}
-					case "hover":
-						for _, part := range probe.hover {
-							if !strings.Contains(string(result.Payload), part) {
-								t.Fatalf("typed query hover lost %s: %s", part, result.Payload)
-							}
-						}
-					case "definition":
-						if !strings.Contains(string(result.Payload), probe.definition) {
-							t.Fatal("query definition missed the handwritten ORM method")
-						}
-					}
-				}
-			})
-		}
 	}
 }
 

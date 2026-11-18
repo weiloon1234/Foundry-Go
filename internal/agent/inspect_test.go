@@ -23,7 +23,7 @@ func TestInspectProtocolAndProcessLifecycle(t *testing.T) {
 			options.Operation = operation
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			result, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "normal"})
+			result, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "normal"}, shutdownGrace)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -55,7 +55,7 @@ func TestInspectErrorsAndCancellation(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
-			_, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", tc.mode})
+			_, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", tc.mode}, shutdownGrace)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error = %v, want %s", err, tc.want)
 			}
@@ -79,7 +79,7 @@ func TestInspectAllowsSlowServerShutdown(t *testing.T) {
 	options, _ := inspectionFixture(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	result, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "slow-shutdown"})
+	result, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "slow-shutdown"}, shutdownGrace)
 	if err != nil || !json.Valid(result.Payload) {
 		t.Fatalf("inspection with a slow, responsive shutdown: %s, %v", result.Payload, err)
 	}
@@ -89,25 +89,26 @@ func TestInspectDrainsServerOutputDuringExit(t *testing.T) {
 	options, _ := inspectionFixture(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	result, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "noisy-exit"})
+	result, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "noisy-exit"}, shutdownGrace)
 	if err != nil || !json.Valid(result.Payload) {
 		t.Fatalf("completed inspection failed while draining server exit output: %s, %v", result.Payload, err)
 	}
 }
 
 func TestInspectBoundsUnresponsiveShutdown(t *testing.T) {
+	const grace = 300 * time.Millisecond
 	for _, mode := range []string{"hang-shutdown", "hang-exit"} {
 		t.Run(mode, func(t *testing.T) {
 			options, _ := inspectionFixture(t)
-			ctx, cancel := context.WithTimeout(t.Context(), shutdownGrace+5*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), grace+5*time.Second)
 			defer cancel()
 			started := time.Now()
-			result, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", mode})
+			result, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", mode}, grace)
 			if !errors.Is(err, context.DeadlineExceeded) || !json.Valid(result.Payload) || !strings.Contains(err.Error(), "wait for gopls exit") {
 				t.Fatalf("unresponsive cleanup lost its phase or result: %s, %v", result.Payload, err)
 			}
-			if ctx.Err() != nil || time.Since(started) > shutdownGrace+3*time.Second {
-				t.Fatal("cleanup was not independently bounded", ctx.Err())
+			if elapsed := time.Since(started); ctx.Err() != nil || elapsed < grace || elapsed > grace+3*time.Second {
+				t.Fatal("cleanup was not independently bounded", elapsed, ctx.Err())
 			}
 		})
 	}
@@ -118,8 +119,8 @@ func TestInspectShutdownHonorsCancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	started := time.Now()
-	result, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "hang-shutdown"})
-	if !errors.Is(err, context.DeadlineExceeded) || !json.Valid(result.Payload) {
+	result, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "hang-shutdown"}, shutdownGrace)
+	if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(ctx.Err(), context.DeadlineExceeded) || !json.Valid(result.Payload) {
 		t.Fatalf("cleanup lost caller cancellation or inspection result: %s, %v", result.Payload, err)
 	}
 	if time.Since(started) > 3*time.Second {
@@ -184,6 +185,9 @@ func serveFixture(mode string) error {
 	if err != nil {
 		return err
 	}
+	if mode == "editor-die-initialize" {
+		return fmt.Errorf("fixture exited before initialization")
+	}
 	if mode == "hang" {
 		time.Sleep(time.Minute)
 		return nil
@@ -226,6 +230,9 @@ func serveFixture(mode string) error {
 	}
 	if _, err := read("initialized"); err != nil {
 		return err
+	}
+	if strings.HasPrefix(mode, "editor-") {
+		return serveEditorSessionFixture(reader, mode)
 	}
 	count := 1
 	if strings.HasPrefix(mode, "batch") {

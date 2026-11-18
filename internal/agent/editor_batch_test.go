@@ -6,8 +6,36 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func consumerEditorOptions(t *testing.T, workspace, file, prefix, symbol string) []Options {
+	t.Helper()
+	path := filepath.Join(workspace, file)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	start := strings.Index(source, prefix+symbol)
+	if start < 0 {
+		t.Fatal("consumer inspection expression was removed")
+	}
+	var options []Options
+	for _, operation := range []string{"complete", "hover", "definition"} {
+		offset := start + len(prefix)
+		if operation != "complete" {
+			offset++
+		}
+		options = append(options, Options{
+			Workspace: workspace, File: path, Operation: operation,
+			Line:   strings.Count(source[:offset], "\n") + 1,
+			Column: offset - strings.LastIndexByte(source[:offset], '\n'),
+		})
+	}
+	return options
+}
 
 func inspectConsumerEditorBatch(options []Options, inspect func() ([]Result, error)) ([]Result, error, error) {
 	sources := make(map[string][]byte)
