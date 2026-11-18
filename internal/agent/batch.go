@@ -35,7 +35,7 @@ func InspectBatch(ctx context.Context, options []Options, timeout time.Duration)
 			return nil, fmt.Errorf("agent batch must use one language-server executable")
 		}
 	}
-	return inspectBatch(ctx, options, timeout, executable, []string{"serve"})
+	return inspectBatch(ctx, options, timeout, executable, []string{"serve"}, shutdownGrace)
 }
 
 func inspectionMethod(operation string) (string, error) {
@@ -51,8 +51,19 @@ func inspectionMethod(operation string) (string, error) {
 	}
 }
 
-func inspectBatch(ctx context.Context, options []Options, timeout time.Duration, executable string, args []string) (results []Result, err error) {
-	if ctx == nil || len(options) == 0 || len(options) > MaxBatchOperations || timeout < 0 {
+// batchFailure retains operation progress before cleanup adds its own errors.
+// The acceptance harness uses it to distinguish an early server death from a
+// failed close after a response. Production callers never retry a batch.
+type batchFailure struct {
+	cause     error
+	responded bool
+}
+
+func (e *batchFailure) Error() string { return e.cause.Error() }
+func (e *batchFailure) Unwrap() error { return e.cause }
+
+func inspectBatch(ctx context.Context, options []Options, timeout time.Duration, executable string, args []string, cleanupGrace time.Duration) (results []Result, err error) {
+	if ctx == nil || len(options) == 0 || len(options) > MaxBatchOperations || timeout < 0 || cleanupGrace <= 0 {
 		return nil, fmt.Errorf("invalid agent inspection batch")
 	}
 	options = slices.Clone(options)
@@ -79,8 +90,12 @@ func inspectBatch(ctx context.Context, options []Options, timeout time.Duration,
 	if err != nil {
 		return nil, err
 	}
+	responded := false
 	defer func() {
-		closeErr := session.close()
+		if err != nil {
+			err = &batchFailure{cause: err, responded: responded}
+		}
+		closeErr := session.close(cleanupGrace)
 		err = safeerror.Join("operation failed", err, ctx.Err(), closeErr)
 	}()
 	var server ServerInfo
@@ -105,6 +120,7 @@ func inspectBatch(ctx context.Context, options []Options, timeout time.Duration,
 			if err != nil {
 				return err
 			}
+			responded = true
 			if err := session.notify("textDocument/didClose", map[string]any{"textDocument": map[string]string{"uri": doc.uri}}); err != nil {
 				return err
 			}

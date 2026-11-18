@@ -15,8 +15,9 @@
   three tool packages that start no goroutines. `make test-postgres` accepts a
   package shard. CI always runs the full `make verify`; only the deployment matrix,
   race tier and security scan are selected by path. Release branches, tags and the
-  weekly schedule enable every gate. Generator, editor-probe and retirement tests
-  reuse work instead of repeating it.
+  weekly schedule enable every gate. Generator and retirement tests reuse work
+  instead of repeating it; the editor acceptance probes retry once when gopls dies
+  before its first response and no longer wait out real 30-second shutdown timeouts.
 
 ## v0.44.0 — 2026-11-17
 

@@ -63,7 +63,7 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		sourceErr error
 	}
 
-	runFieldDocChunk := func(c *fieldDocChunk, ctx context.Context) ([]Result, error, error) {
+	runFieldDocChunk := func(t *testing.T, c *fieldDocChunk, ctx context.Context) ([]Result, error, error) {
 		c.once.Do(func() {
 			select {
 			case realGoplsSlots <- struct{}{}:
@@ -102,7 +102,9 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 				}
 			}
 			c.results, c.err, c.sourceErr = inspectConsumerEditorBatch(operations, func() ([]Result, error) {
-				return InspectBatch(ctx, operations, 45*time.Second)
+				return retryEditorChunk(t, ctx, func() ([]Result, error) {
+					return InspectBatch(ctx, operations, 45*time.Second)
+				})
 			})
 		})
 		return c.results, c.err, c.sourceErr
@@ -117,7 +119,7 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 			probe := probe
 			t.Run(probe.name, func(t *testing.T) {
 				t.Parallel()
-				results, batchErr, sourceErr := runFieldDocChunk(chunk, t.Context())
+				results, batchErr, sourceErr := runFieldDocChunk(t, chunk, t.Context())
 				if sourceErr != nil {
 					t.Error(sourceErr)
 				}

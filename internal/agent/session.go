@@ -157,11 +157,11 @@ func (s *session) answer(request message) error {
 	return writeMessage(s.writer, message{ID: request.ID, Result: encoded})
 }
 
-func (s *session) close() error {
+func (s *session) close(cleanupGrace time.Duration) error {
 	defer s.cancel()
 	// Reuse the phase deadline so timeout errors retain DeadlineExceeded and
 	// its cancellation callback finishes before cleanup returns.
-	return s.phase(shutdownGrace, func() error {
+	return s.phase(cleanupGrace, func() error {
 		var shutdownErr error
 		if s.initialized && s.ctx.Err() == nil {
 			if _, err := s.request("shutdown", nil); err != nil {
