@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 )
 
 type Options struct {
@@ -37,10 +36,10 @@ func Inspect(ctx context.Context, options Options) (Result, error) {
 	if options.Gopls == "" {
 		options.Gopls = "gopls"
 	}
-	return inspect(ctx, options, options.Gopls, []string{"serve"}, shutdownGrace)
+	return inspect(ctx, options, options.Gopls, []string{"serve"})
 }
-func inspect(ctx context.Context, options Options, executable string, args []string, cleanupGrace time.Duration) (Result, error) {
-	results, err := inspectBatch(ctx, []Options{options}, 0, executable, args, cleanupGrace)
+func inspect(ctx context.Context, options Options, executable string, args []string) (Result, error) {
+	results, err := inspectBatch(ctx, []Options{options}, 0, executable, args)
 	if len(results) == 0 {
 		return Result{}, err
 	}

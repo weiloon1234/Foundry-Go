@@ -27,7 +27,7 @@ func TestBatchInspectionsShareOnlyTheirScenarioAndKeepIndependentOverlays(t *tes
 	for range 2 {
 		// The helper demands one initialization followed by all three ordered
 		// open/request/close operations before shutdown, in each fresh process.
-		results, err := inspectBatch(t.Context(), options, 3*time.Second, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "batch"}, shutdownGrace)
+		results, err := inspectBatch(t.Context(), options, 3*time.Second, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "batch"})
 		if err != nil || len(results) != len(options) {
 			t.Fatal(len(results), err)
 		}
@@ -47,13 +47,13 @@ func TestBatchInspectionsShareOnlyTheirScenarioAndKeepIndependentOverlays(t *tes
 
 func TestBatchPhaseDeadlinesResetAndFailuresStopLaterOperations(t *testing.T) {
 	options, _ := batchFixture(t)
-	results, err := inspectBatch(t.Context(), options, 900*time.Millisecond, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "batch-slow"}, shutdownGrace)
+	results, err := inspectBatch(t.Context(), options, 900*time.Millisecond, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "batch-slow"})
 	if err != nil || len(results) != 3 {
 		t.Fatal("operation deadlines were not independent", len(results), err)
 	}
 	for _, mode := range []string{"batch-error", "batch-hang"} {
 		started := time.Now()
-		results, err := inspectBatch(t.Context(), options, 500*time.Millisecond, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", mode}, shutdownGrace)
+		results, err := inspectBatch(t.Context(), options, 500*time.Millisecond, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", mode})
 		if err == nil || len(results) != 1 || !strings.Contains(err.Error(), "operation 2 (hover)") {
 			t.Fatal("batch lost its completed prefix or failed phase", len(results), err)
 		}
@@ -66,7 +66,7 @@ func TestBatchPhaseDeadlinesResetAndFailuresStopLaterOperations(t *testing.T) {
 func TestBatchInitializationHasItsOwnDeadline(t *testing.T) {
 	options, _ := batchFixture(t)
 	started := time.Now()
-	results, err := inspectBatch(t.Context(), options, 500*time.Millisecond, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "hang"}, shutdownGrace)
+	results, err := inspectBatch(t.Context(), options, 500*time.Millisecond, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "hang"})
 	if !errors.Is(err, context.DeadlineExceeded) || len(results) != 0 || time.Since(started) > 3*time.Second {
 		t.Fatal("unbounded batch initialization", len(results), err)
 	}
@@ -79,7 +79,7 @@ func TestBatchShutdownWaitsForBackgroundWork(t *testing.T) {
 	// All operations finish promptly, but the server must finish background
 	// work before acknowledging shutdown. This exceeded the old five-second
 	// cleanup timer despite remaining inside the caller's deadline.
-	results, err := inspectBatch(ctx, options, time.Second, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "batch-slow-shutdown"}, shutdownGrace)
+	results, err := inspectBatch(ctx, options, time.Second, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "batch-slow-shutdown"})
 	if err != nil || len(results) != len(options) {
 		t.Fatalf("completed batch failed during responsive shutdown: %d results, %v", len(results), err)
 	}

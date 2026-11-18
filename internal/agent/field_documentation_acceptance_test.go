@@ -2,10 +2,13 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,7 +32,6 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := newEditorSession(t, executable, workspace)
 	type fieldDocProbe struct {
 		name, file, prefix, symbol, definition string
 		documentation                          []string
@@ -53,84 +55,154 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		{"json-property", "jsonqueries/path_postgres_test.go", "expr.JSONProperty(prefs, jsonqueries.", "Theme", "/jsonqueries/tables.go", []string{"reader appearance", "omitted uses the application default"}},
 	}
 
-	for _, probe := range probes {
-		t.Run(probe.name, func(t *testing.T) {
-			options := consumerEditorOptions(t, workspace, probe.file, probe.prefix, probe.symbol)
-			results, batchErr, sourceErr := inspectConsumerEditorBatch(options, func() ([]Result, error) {
-				return harness.inspect(t, options, 45*time.Second)
-			})
-			if sourceErr != nil {
-				t.Error(sourceErr)
+	type fieldDocChunk struct {
+		probes    []fieldDocProbe
+		once      sync.Once
+		results   []Result
+		err       error
+		sourceErr error
+	}
+
+	runFieldDocChunk := func(c *fieldDocChunk, ctx context.Context) ([]Result, error, error) {
+		c.once.Do(func() {
+			select {
+			case realGoplsSlots <- struct{}{}:
+				defer func() { <-realGoplsSlots }()
+			case <-ctx.Done():
+				c.err = ctx.Err()
+				return
 			}
-			if batchErr != nil {
-				t.Fatal(batchErr)
-			}
-			if len(results) != len(options) {
-				t.Fatalf("incomplete field documentation scenario: got %d results, want %d", len(results), len(options))
-			}
-			var err error
-			for _, result := range results {
-				operation := result.Operation
-				if operation == "definition" {
-					if !strings.Contains(string(result.Payload), probe.definition) {
-						t.Fatalf("wrong field definition: %s", result.Payload)
-					}
-					continue
+			var operations []Options
+			for _, probe := range c.probes {
+				path := filepath.Join(workspace, probe.file)
+				data, err := os.ReadFile(path)
+				if err != nil {
+					c.err = err
+					return
 				}
-				var hover struct{ Contents json.RawMessage }
-				var doc string
-				if operation == "complete" {
-					var list struct {
-						Items []struct {
-							Label         string
-							Documentation json.RawMessage
-						} `json:"items"`
+				source := string(data)
+				start := strings.Index(source, probe.prefix+probe.symbol)
+				if start < 0 {
+					c.err = fmt.Errorf("field inspection expression was removed for probe %s", probe.name)
+					return
+				}
+				for _, operation := range []string{"complete", "hover", "definition"} {
+					offset := start + len(probe.prefix)
+					if operation != "complete" {
+						offset++
 					}
-					if err := json.Unmarshal(result.Payload, &list); err != nil {
-						if err := json.Unmarshal(result.Payload, &list.Items); err != nil {
+					operations = append(operations, Options{
+						Workspace: workspace,
+						File:      path,
+						Operation: operation,
+						Gopls:     executable,
+						Line:      strings.Count(source[:offset], "\n") + 1,
+						Column:    offset - strings.LastIndexByte(source[:offset], '\n'),
+					})
+				}
+			}
+			c.results, c.err, c.sourceErr = inspectConsumerEditorBatch(operations, func() ([]Result, error) {
+				return InspectBatch(ctx, operations, 45*time.Second)
+			})
+		})
+		return c.results, c.err, c.sourceErr
+	}
+
+	const fieldDocChunkLimit = 5
+	for chunkStart := 0; chunkStart < len(probes); chunkStart += fieldDocChunkLimit {
+		chunkEnd := min(chunkStart+fieldDocChunkLimit, len(probes))
+		chunk := &fieldDocChunk{probes: probes[chunkStart:chunkEnd]}
+		for pIdx, probe := range chunk.probes {
+			pIdx := pIdx
+			probe := probe
+			t.Run(probe.name, func(t *testing.T) {
+				t.Parallel()
+				results, batchErr, sourceErr := runFieldDocChunk(chunk, t.Context())
+				if sourceErr != nil {
+					t.Error(sourceErr)
+				}
+				startOp := pIdx * 3
+				endOp := startOp + 3
+				if batchErr != nil {
+					var failedOp int
+					var opName string
+					if n, _ := fmt.Sscanf(batchErr.Error(), "agent batch operation %d (%s):", &failedOp, &opName); n >= 1 {
+						if failedOp > startOp && failedOp <= endOp {
+							t.Fatalf("agent batch operation failed: %v", batchErr)
+						} else if failedOp <= startOp {
+							t.Fatalf("prior operation failed in agent batch: %v", batchErr)
+						}
+					} else {
+						t.Fatalf("agent batch failed: %v", batchErr)
+					}
+				}
+				if len(results) < endOp {
+					t.Fatalf("incomplete field documentation scenario: got %d results, need at least %d", len(results), endOp)
+				}
+				var err error
+				for _, result := range results[startOp:endOp] {
+					operation := result.Operation
+					if operation == "definition" {
+						if !strings.Contains(string(result.Payload), probe.definition) {
+							t.Fatalf("wrong field definition: %s", result.Payload)
+						}
+						continue
+					}
+					var hover struct{ Contents json.RawMessage }
+					var doc string
+					if operation == "complete" {
+						var list struct {
+							Items []struct {
+								Label         string
+								Documentation json.RawMessage
+							} `json:"items"`
+						}
+						if err := json.Unmarshal(result.Payload, &list); err != nil {
+							if err := json.Unmarshal(result.Payload, &list.Items); err != nil {
+								t.Fatal(err)
+							}
+						}
+						doc = ""
+						for _, item := range list.Items {
+							if item.Label == probe.symbol || strings.HasPrefix(item.Label, probe.symbol+"(") {
+								doc, err = completionDocumentation(item.Documentation)
+								if err != nil {
+									t.Fatal(err)
+								}
+								break
+							}
+						}
+						if doc == "" {
+							t.Fatalf("gopls completion omitted documentation for %s", probe.symbol)
+						}
+					} else {
+						if err := json.Unmarshal(result.Payload, &hover); err != nil {
+							t.Fatal(err)
+						}
+						doc, err = completionDocumentation(hover.Contents)
+						if err != nil {
 							t.Fatal(err)
 						}
 					}
-					doc = ""
-					for _, item := range list.Items {
-						if item.Label == probe.symbol || strings.HasPrefix(item.Label, probe.symbol+"(") {
-							doc, err = completionDocumentation(item.Documentation)
-							if err != nil {
-								t.Fatal(err)
-							}
-							break
+					display := strings.NewReplacer("\\_", "_", "\\[", "[", "\\]", "]")
+					doc = display.Replace(doc)
+					for _, want := range probe.documentation {
+						if !strings.Contains(doc, want) {
+							t.Fatalf("%s lost %q: %s", operation, want, doc)
 						}
 					}
-					if doc == "" {
-						t.Fatalf("gopls completion omitted documentation for %s", probe.symbol)
-					}
-				} else {
-					if err := json.Unmarshal(result.Payload, &hover); err != nil {
+					var readable bytes.Buffer
+					if err := WriteText(&readable, result); err != nil {
 						t.Fatal(err)
 					}
-					doc, err = completionDocumentation(hover.Contents)
-					if err != nil {
-						t.Fatal(err)
+					for _, want := range probe.documentation {
+						if !strings.Contains(display.Replace(readable.String()), want) {
+							t.Fatalf("readable %s lost %q", operation, want)
+						}
 					}
 				}
-				display := strings.NewReplacer("\\_", "_", "\\[", "[", "\\]", "]")
-				doc = display.Replace(doc)
-				for _, want := range probe.documentation {
-					if !strings.Contains(doc, want) {
-						t.Fatalf("%s lost %q: %s", operation, want, doc)
-					}
-				}
-				var readable bytes.Buffer
-				if err := WriteText(&readable, result); err != nil {
-					t.Fatal(err)
-				}
-				for _, want := range probe.documentation {
-					if !strings.Contains(display.Replace(readable.String()), want) {
-						t.Fatalf("readable %s lost %q", operation, want)
-					}
-				}
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -151,7 +223,6 @@ func TestRealGoplsStoredFieldCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := newEditorSession(t, executable, workspace)
 	for _, probe := range []struct {
 		name, file, prefix, symbol, insert string
 		functions, forbidden               []string
@@ -166,6 +237,7 @@ func TestRealGoplsStoredFieldCapabilities(t *testing.T) {
 		{"required-no-clearing", "generated_test.go", "orm.", "TextSet", "", []string{"TextSet"}, []string{"TextSetNull"}},
 	} {
 		t.Run(probe.name, func(t *testing.T) {
+			parallelRealGopls(t)
 			path := filepath.Join(workspace, probe.file)
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -177,14 +249,12 @@ func TestRealGoplsStoredFieldCapabilities(t *testing.T) {
 				t.Fatal("stored-field inspection expression was removed")
 			}
 			offset := start + len(probe.prefix)
-			results, err := harness.inspect(t, []Options{{Workspace: workspace, File: path, Operation: "complete", Gopls: executable, Insert: probe.insert, Line: strings.Count(source[:offset], "\n") + 1, Column: offset - strings.LastIndexByte(source[:offset], '\n')}}, 45*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+			defer cancel()
+			result, err := Inspect(ctx, Options{Workspace: workspace, File: path, Operation: "complete", Gopls: executable, Insert: probe.insert, Line: strings.Count(source[:offset], "\n") + 1, Column: offset - strings.LastIndexByte(source[:offset], '\n')})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(results) != 1 {
-				t.Fatalf("incomplete stored-field scenario: got %d results, want 1", len(results))
-			}
-			result := results[0]
 			var list struct{ Items []struct{ Label string } }
 			if err := json.Unmarshal(result.Payload, &list); err != nil {
 				if err := json.Unmarshal(result.Payload, &list.Items); err != nil {
