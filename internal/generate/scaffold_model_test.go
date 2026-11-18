@@ -68,7 +68,7 @@ func TestORMScaffoldSymbolCollisions(t *testing.T) {
 			}
 			write(t, pkgDir, "doc.go", "package "+tc.name+"\n")
 			o.Dir = pkgDir
-			if _, err := Scaffold(t.Context(), o); err != nil {
+			if _, err := scaffoldFixture(t.Context(), o); err != nil {
 				t.Fatal(err)
 			}
 			write(t, pkgDir, "scaffold_test.go", fmt.Sprintf(`package %s
@@ -92,7 +92,7 @@ func TestORMScaffoldRejectsInvalidSQLNames(t *testing.T) {
 	for _, table := range []string{"9", "123", "public.9", "public.123", "用户", "public.用户", "éclair", "public.éclair"} {
 		t.Run(table, func(t *testing.T) {
 			dir := fixture(t, "package sample\n")
-			_, err := Scaffold(t.Context(), ScaffoldOptions{Dir: dir, Kind: ModelScaffold, Name: "Widget", Table: table})
+			_, err := scaffoldFixture(t.Context(), ScaffoldOptions{Dir: dir, Kind: ModelScaffold, Name: "Widget", Table: table})
 			if err == nil || !strings.Contains(err.Error(), "requires --table") {
 				t.Fatalf("invalid SQL table: %v", err)
 			}
@@ -160,7 +160,7 @@ func TestORMScaffoldGoldens(t *testing.T) {
 // guide's managed-role, separate-input and relation additions on the actual output.
 func TestORMScaffoldHandwrittenRolesAndRelations(t *testing.T) {
 	dir := fixture(t, "package sample\n")
-	path, err := Scaffold(t.Context(), ScaffoldOptions{Dir: dir, Kind: ModelScaffold, Name: "Widget", Table: "widget"})
+	path, err := scaffoldFixture(t.Context(), ScaffoldOptions{Dir: dir, Kind: ModelScaffold, Name: "Widget", Table: "widget"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestORMScaffoldHandwrittenRolesAndRelations(t *testing.T) {
   _=orm.InputTextSet(Widgets.Name,NameInput{Text:"  normalized  "})
  }
  `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	after, err := os.ReadFile(path)

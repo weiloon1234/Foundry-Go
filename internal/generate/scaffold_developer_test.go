@@ -18,7 +18,7 @@ func TestDeveloperScaffoldsGenerateAndCompileInFreshConsumer(t *testing.T) {
 		{Kind: CommandScaffold, Name: "InspectWidgets", ID: "widgets.inspect"},
 	} {
 		options.Dir = dir
-		path, err := Scaffold(t.Context(), options)
+		path, err := scaffoldFixture(t.Context(), options)
 		if err != nil {
 			t.Fatal(options.Kind, err)
 		}
@@ -29,14 +29,14 @@ func TestDeveloperScaffoldsGenerateAndCompileInFreshConsumer(t *testing.T) {
 		if strings.Contains(string(before), generatedHeader) {
 			t.Fatal("scaffold became generator-owned")
 		}
-		if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+		if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 			t.Fatal(options.Kind, err)
 		}
 		after, err := os.ReadFile(path)
 		if err != nil || string(after) != string(before) {
 			t.Fatal("generation changed consumer-owned scaffold", err)
 		}
-		if _, err := Scaffold(t.Context(), options); err == nil {
+		if _, err := scaffoldFixture(t.Context(), options); err == nil {
 			t.Fatal("existing scaffold overwritten")
 		}
 	}
@@ -75,7 +75,7 @@ func TestScaffoldBehavior(t *testing.T){
 func TestModelScaffoldDeclaresExtensionSlots(t *testing.T) {
 	dir := fixture(t, "package sample\n")
 	options := ScaffoldOptions{Dir: dir, Kind: ModelScaffold, Name: "Article", Table: "articles", Translated: []string{"Title", "Summary"}, Attachment: []string{"Logo"}, Attachments: []string{"Galleries"}, Metadata: []string{"SEO"}, Disk: "public"}
-	path, err := Scaffold(t.Context(), options)
+	path, err := scaffoldFixture(t.Context(), options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,16 +93,16 @@ func TestModelScaffoldDeclaresExtensionSlots(t *testing.T) {
 			t.Fatalf("ORM scaffold generated legacy model output %s: %v", file, err)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal("scaffold left generation stale", err)
 	}
-	if _, err := Scaffold(t.Context(), options); err == nil {
+	if _, err := scaffoldFixture(t.Context(), options); err == nil {
 		t.Fatal("existing scaffold overwritten")
 	}
 	// A plain model and translated-only slots need no disk or policy.
 	for _, other := range []ScaffoldOptions{{Kind: ModelScaffold, Name: "Tag", Table: "tags", Translated: []string{"Label"}}, {Kind: ModelScaffold, Name: "Plain", Table: "plains"}, {Kind: ModelScaffold, Name: "Special", Table: "specials", Translated: []string{"Table", "Key", "Query", "TableSlot"}}} {
 		other.Dir = dir
-		if _, err := Scaffold(t.Context(), other); err != nil {
+		if _, err := scaffoldFixture(t.Context(), other); err != nil {
 			t.Fatal(other.Name, err)
 		}
 	}
@@ -115,7 +115,7 @@ func TestModelScaffoldDeclaresExtensionSlots(t *testing.T) {
 	}
 	write(t, models, "doc.go", "package models\n\nfunc PostExtensions() {}\n")
 	collision := ScaffoldOptions{Dir: models, Kind: ModelScaffold, Name: "Post", Table: "posts", Attachment: []string{"Cover"}, Disk: "public"}
-	if _, err := Scaffold(t.Context(), collision); err == nil {
+	if _, err := scaffoldFixture(t.Context(), collision); err == nil {
 		t.Fatal("a scaffold colliding with a handwritten declaration was accepted")
 	}
 	if _, err := os.Stat(filepath.Join(models, "post_model.go")); !os.IsNotExist(err) {
@@ -124,11 +124,11 @@ func TestModelScaffoldDeclaresExtensionSlots(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(models, "doc.go"), []byte("package models\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Scaffold(t.Context(), collision); err != nil {
+	if _, err := scaffoldFixture(t.Context(), collision); err != nil {
 		t.Fatal("subpackage scaffold", err)
 	}
 	// Ordinary generation must leave the handwritten ORM model unchanged.
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "slots_test.go", `package sample
@@ -207,7 +207,7 @@ func TestDeveloperScaffoldOptionsAndRecoveryAuthority(t *testing.T) {
 
 func TestModelScaffoldDocumentsSlots(t *testing.T) {
 	dir := fixture(t, "package sample\n")
-	path, err := Scaffold(t.Context(), ScaffoldOptions{Dir: dir, Kind: ModelScaffold, Name: "Note", Table: "notes", Translated: []string{"Title"}})
+	path, err := scaffoldFixture(t.Context(), ScaffoldOptions{Dir: dir, Kind: ModelScaffold, Name: "Note", Table: "notes", Translated: []string{"Title"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestModelScaffoldDocumentsSlots(t *testing.T) {
 	if err != nil || !strings.Contains(string(data), "translated text stored in foundry_model_translations") || strings.Contains(string(data), "//foundry:model") {
 		t.Fatal("the scaffolded model lacks handwritten slot documentation", err)
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal("generation is stale after the scaffold", err)
 	}
 }

@@ -24,7 +24,7 @@ var pageWire = PageJSON[string]
 // Go's nullable default.
 func TestNonNullListsEncodeEmptyAndRejectNull(t *testing.T) {
 	dir := fixture(t, nonNullCollectionSource)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if output := generatedSnapshot(t, dir)["listing_foundry.gen.go"]; !strings.Contains(output, `ID: "github.com/weiloon1234/Foundry-Go/value.List[string]", Kind: foundrycontract.Kind("array"), Nullable: false`) {
@@ -62,7 +62,7 @@ func TestNonNullLists(t *testing.T) {
 
 func TestByteListIsRejected(t *testing.T) {
 	dir := fixture(t, "package sample\nimport \"github.com/weiloon1234/Foundry-Go/value\"\n//foundry:dto\ntype Input struct{ Data value.List[byte] `json:\"data\"` }")
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "value.List of bytes") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "value.List of bytes") {
 		t.Fatal("byte list generated", err)
 	}
 	if len(generatedSnapshot(t, dir)) != 0 {

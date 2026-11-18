@@ -314,5 +314,5 @@ func TestGraphRefusesChangedModuleFiles(t *testing.T) {
 }
 
 func listGraph(ctx context.Context, dir string, recursive bool, extraImports ...string) (*packageGraph, error) {
-	return loadGraph(ctx, dir, recursive, nil, extraImports)
+	return loadGraph(ctx, dir, recursive, nil, extraImports, nil)
 }

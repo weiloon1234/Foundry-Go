@@ -23,7 +23,7 @@ func main(){
  if value.Name!="valid"{panic("decoded main-package DTO changed")}
 }
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	command := exec.CommandContext(t.Context(), "go", "run", ".")

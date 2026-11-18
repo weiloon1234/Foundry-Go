@@ -23,7 +23,7 @@ func TestComponentScaffoldsGenerateAndCompileInFreshConsumer(t *testing.T) {
 		{Kind: MigrationScaffold, Name: "CreateNotes", ID: "notes.create_table", Origin: "app", Version: "v1.0.0", Create: "notes"},
 	} {
 		options.Dir = dir
-		path, err := Scaffold(t.Context(), options)
+		path, err := scaffoldFixture(t.Context(), options)
 		if err != nil {
 			t.Fatal(options.Kind, err)
 		}
@@ -31,10 +31,10 @@ func TestComponentScaffoldsGenerateAndCompileInFreshConsumer(t *testing.T) {
 		if err != nil || strings.Contains(string(data), generatedHeader) {
 			t.Fatal("scaffold is missing or generator-owned", err)
 		}
-		if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+		if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 			t.Fatal(options.Kind, err)
 		}
-		if _, err := Scaffold(t.Context(), options); err == nil {
+		if _, err := scaffoldFixture(t.Context(), options); err == nil {
 			t.Fatal("existing scaffold overwritten", options.Kind)
 		}
 	}

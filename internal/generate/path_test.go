@@ -42,13 +42,13 @@ func URL(input MemberPath)(string,error) { return foundryhttp.RouteURL(ShowMembe
 
 func TestFreshPathGenerationAndRuntime(t *testing.T) {
 	dir := fixture(t, pathSource)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("fresh path stale check: %v", err)
 	}
 	if len(generatedSnapshot(t, dir)) != 0 {
 		t.Fatal("check wrote output")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -61,13 +61,13 @@ func TestFreshPathGenerationAndRuntime(t *testing.T) {
 	if strings.Contains(output, "Ignored") || strings.Contains(output, "Draft") || strings.Contains(output, dir) {
 		t.Fatal("path output acquired skipped fields, persistence behavior or absolute source paths")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("path generation was not deterministic")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "path_runtime_test.go", `package sample
@@ -108,6 +108,7 @@ func TestGeneratedRoute(t *testing.T) {
 }
 
 func TestInvalidPathDeclarationsDoNotPublish(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	for name, source := range map[string]string{
 		"missing pattern":       "//foundry:path\ntype Input struct{}",
 		"nonstruct":             "//foundry:path pattern=/x\ntype Input string",
@@ -128,8 +129,8 @@ func TestInvalidPathDeclarationsDoNotPublish(t *testing.T) {
 		"wrong codec signature": "type Code string\nfunc(Code)MarshalText()string{return \"\"}\n//foundry:path pattern=/{id}\ntype Input struct{ ID Code }",
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := fixture(t, "package sample\n"+source)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+			dir := fixtures.fixture(t, "package sample\n"+source)
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 				t.Fatal("invalid path generated")
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {
@@ -142,19 +143,19 @@ func TestInvalidPathDeclarationsDoNotPublish(t *testing.T) {
 func TestPathFieldChangesProduceStaleOutput(t *testing.T) {
 	source := "package sample\n//foundry:path pattern=/{member}\ntype Input struct{ Member string }"
 	dir := fixture(t, source)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	before := generatedSnapshot(t, dir)
 	updated := "package sample\n//foundry:path pattern=/{member}\ntype Input struct{ Key string `path:\"member\"` }"
 	write(t, dir, "models.go", updated)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("renamed binding was not stale: %v", err)
 	}
 	if !reflect.DeepEqual(before, generatedSnapshot(t, dir)) {
 		t.Fatal("stale check changed generated output")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(generatedSnapshot(t, dir)["input_foundry.gen.go"], ".Key") {
@@ -174,14 +175,14 @@ type Label = Token[string]
 //foundry:path pattern=/{label}
 type Input struct { Label Label }
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	output := generatedSnapshot(t, dir)["input_foundry.gen.go"]
 	if !strings.Contains(output, "TextPath[Label, *Label]") {
 		t.Fatalf("generic alias lost its text codec: %s", output)
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 }

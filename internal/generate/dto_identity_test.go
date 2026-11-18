@@ -26,7 +26,7 @@ type Request struct {
  Scalars Pair[byte,rune]
 }
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	snapshot := generatedSnapshot(t, dir)
@@ -34,13 +34,13 @@ type Request struct {
 	if !strings.Contains(snapshot["request_foundry.gen.go"], want) {
 		t.Fatal("typed token contract identity was hashed or spaced")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(snapshot, generatedSnapshot(t, dir)) {
 		t.Fatal("generic contract generation changed")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "generic_runtime_test.go", `package sample_test
@@ -81,7 +81,7 @@ func main(){
  if value.Enrollment.IsZero()||value.Token.Secret().IsZero(){panic("decoded empty values")}
 }
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	command := exec.CommandContext(t.Context(), "go", "run", ".")

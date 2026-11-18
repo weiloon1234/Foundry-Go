@@ -49,7 +49,7 @@ func Rules() validation.Rule[Envelope[int]] {return validation.Rules(EnvelopeVal
 
 func TestGenericDTOGenerationAndRuntime(t *testing.T) {
 	dir := fixture(t, genericDTOSource)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -61,10 +61,10 @@ func TestGenericDTOGenerationAndRuntime(t *testing.T) {
 	if output := first["envelope_foundry.gen.go"]; strings.Contains(output, "foundryEnvelopeValidationFields") || !strings.Contains(output, "return EnvelopeValidationFieldSet[T]{") {
 		t.Fatal("generic validation fields must retain per-call value construction")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
@@ -149,7 +149,7 @@ func main(){
 }
 `
 	dir := fixture(t, source)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	command := exec.CommandContext(t.Context(), "go", "run", ".")
@@ -160,6 +160,7 @@ func main(){
 }
 
 func TestGenericDTORejectsInvalidDeclarationsAndUsage(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	for name, extra := range map[string]string{
 		"wrong_argument": `var invalid = EnvelopeJSON[int](contract.StringJSON[string]())`,
 		"constraint":     `var invalid = TaggedJSON(contract.IntegerJSON[int]())`,
@@ -167,8 +168,8 @@ func TestGenericDTORejectsInvalidDeclarationsAndUsage(t *testing.T) {
 		"wrong_rule":     `var invalid = validation.Rules(EnvelopeValidationFields[string]().Data, validation.Min[int](1))`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := fixture(t, genericDTOSource+"\n"+extra)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+			dir := fixtures.fixture(t, genericDTOSource+"\n"+extra)
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 				t.Fatal("invalid generic usage generated")
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {

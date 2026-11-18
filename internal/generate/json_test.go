@@ -26,21 +26,21 @@ func TestDTOValidationPathNamingIsStable(t *testing.T) {
  func usage(){ f:=PayloadValidationFields(); _=f.Field_Left__Node_Value; _=f.Field_Right_Value }
  `
 	dir := fixture(t, source)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	before := generatedSnapshot(t, dir)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(before, generatedSnapshot(t, dir)) {
 		t.Fatal("path naming changed")
 	}
 	write(t, dir, "models.go", strings.Replace(source, "Next *Payload", "Extra bool; Next *Payload", 1))
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -55,14 +55,14 @@ func TestDTOJSONLocalsDoNotShadowPayloadTypes(t *testing.T) {
  //foundry:dto
  type Payload struct{ Settings f; Data path }
  `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDTOJSONRejectsMalformedTagName(t *testing.T) {
 	dir := fixture(t, "package sample\n//foundry:dto\ntype Payload struct { Name string `json:\"odd'path\"` }\n")
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 		t.Fatal("malformed name accepted")
 	}
 	if len(generatedSnapshot(t, dir)) != 0 {

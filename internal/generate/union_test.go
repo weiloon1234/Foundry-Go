@@ -32,7 +32,7 @@ type Node struct{Name string ` + "`json:\"name\"`" + `;Next *Recursive ` + "`jso
 
 func TestUnionFreshGenerationRecursionAndRecovery(t *testing.T) {
 	dir := fixture(t, unionSource)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	initial := generatedSnapshot(t, dir)
@@ -41,10 +41,10 @@ func TestUnionFreshGenerationRecursionAndRecovery(t *testing.T) {
 			t.Fatal("missing", want)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(initial, generatedSnapshot(t, dir)) {
@@ -66,7 +66,7 @@ import sample "foundry.test/generator"
 //foundry:dto
 type Imported struct{Method sample.Payment}
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Recursive: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Recursive: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, child, "child_test.go", `package child
@@ -117,7 +117,7 @@ type EmptyVariants struct{}`,
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {
 			dir := fixture(t, source)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 				t.Fatal("invalid union generated")
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {
@@ -131,7 +131,7 @@ func TestUnionExecutableIdentity(t *testing.T) {
 	source := strings.Replace(unionSource, "package sample", "package main", 1) + `
 func main(){p,err:=PaymentFromCard(Card{Token:"test"});if err!=nil{panic(err)};if _,ok:=p.Card();!ok{panic("missing")};if err=PaymentJSON().Validate();err!=nil{panic(err)}}`
 	dir := fixture(t, source)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	command := exec.CommandContext(t.Context(), "go", "run", ".")

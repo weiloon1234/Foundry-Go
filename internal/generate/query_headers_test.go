@@ -37,7 +37,7 @@ var Parameters = InputDescriptor()
 
 func TestQueryHeaderGeneration(t *testing.T) {
 	dir := fixture(t, headerQuerySource)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -58,13 +58,13 @@ func TestQueryHeaderGeneration(t *testing.T) {
 			t.Fatalf("header output acquired %q", unwanted)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("header output or ownership manifest changed on repeat generation")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "headers_test.go", `package sample_test
@@ -95,6 +95,7 @@ func TestHeaderMetadata(t *testing.T) {
 }
 
 func TestInvalidQueryHeaderDeclarationsDoNotPublish(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	for name, want := range map[string]string{
 		"empty_name":          "HTTP header name is empty or too long",
 		"invalid_name":        "HTTP header name contains an invalid byte",
@@ -130,8 +131,8 @@ func TestInvalidQueryHeaderDeclarationsDoNotPublish(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			dir := fixture(t, string(source))
-			_, err = Generate(t.Context(), Options{Dir: dir})
+			dir := fixtures.fixture(t, string(source))
+			_, err = generateFixture(t.Context(), Options{Dir: dir})
 			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("expected %q, got %v", want, err)
 			}
@@ -149,18 +150,18 @@ func TestInvalidQueryHeaderDeclarationsDoNotPublish(t *testing.T) {
 func TestQueryHeaderSourceChangesInvalidateOutput(t *testing.T) {
 	source := "package sample\n//foundry:query\ntype Input struct { Field string `query:\"X-Field\"` }\n"
 	dir := fixture(t, source)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	before := generatedSnapshot(t, dir)
 	write(t, dir, "models.go", strings.Replace(source, "query:", "header:", 1))
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("source change was not stale: %v", err)
 	}
 	if !reflect.DeepEqual(before, generatedSnapshot(t, dir)) {
 		t.Fatal("stale check published output")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	after := generatedSnapshot(t, dir)
@@ -168,7 +169,7 @@ func TestQueryHeaderSourceChangesInvalidateOutput(t *testing.T) {
 		t.Fatal("source change did not update the binding and ownership manifest")
 	}
 	write(t, dir, "models.go", source)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(before, generatedSnapshot(t, dir)) {

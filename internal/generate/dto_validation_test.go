@@ -46,7 +46,7 @@ func RequestRules() validation.Rule[Request] {
 
 func TestFreshDTOValidationGenerationAndRuntime(t *testing.T) {
 	dir := fixture(t, dtoValidationSource)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -56,13 +56,13 @@ func TestFreshDTOValidationGenerationAndRuntime(t *testing.T) {
 			t.Fatalf("missing %q in generated validation:\n%s", want, output)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("validation generation is not deterministic")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "validation_runtime_test.go", `package sample_test
@@ -120,7 +120,7 @@ func TestGeneratedValidation(t *testing.T) {
 func TestDTOValidationGenerationRejectsWrongTypedRulesBeforePublication(t *testing.T) {
 	source := strings.Replace(dtoValidationSource, "validation.NonBlank[Contact]()", "validation.Min[int](1)", 1)
 	dir := fixture(t, source)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 		t.Fatal("wrong rule value was accepted")
 	}
 	if len(generatedSnapshot(t, dir)) != 0 {
@@ -142,7 +142,7 @@ type hidden struct{Label string}
 type Payload struct{hidden}
 func New(label string)Payload{return Payload{hidden:hidden{Label:label}}}
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	output := generatedSnapshot(t, dir)["request_foundry.gen.go"]

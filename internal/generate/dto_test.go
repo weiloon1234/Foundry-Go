@@ -41,13 +41,13 @@ var memberWire = MemberDTOJSON()
 
 func TestFreshDTOGenerationAndRuntime(t *testing.T) {
 	dir := fixture(t, dtoSource)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("fresh DTO stale check: %v", err)
 	}
 	if len(generatedSnapshot(t, dir)) != 0 {
 		t.Fatal("stale check wrote files")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -62,13 +62,13 @@ func TestFreshDTOGenerationAndRuntime(t *testing.T) {
 			t.Fatalf("DTO output acquired %q", unwanted)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("DTO generation was not deterministic")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "dto_runtime_test.go", `package sample_test
@@ -114,6 +114,7 @@ func TestPublicGeneratedDTO(t *testing.T) {
 }
 
 func TestInvalidDTODeclarationsDoNotPublish(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	for name, source := range map[string]string{
 		"nonstruct":                   "//foundry:dto\ntype Input string",
 		"option":                      "//foundry:dto guessed=true\ntype Input struct{}",
@@ -133,8 +134,8 @@ func TestInvalidDTODeclarationsDoNotPublish(t *testing.T) {
 		"symbol collision":            "//foundry:dto\ntype Input struct{}\nfunc InputJSON(){}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := fixture(t, "package sample\n"+source)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+			dir := fixtures.fixture(t, "package sample\n"+source)
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 				t.Fatal("invalid DTO generated")
 			} else if strings.Contains(name, "model") && !strings.Contains(err.Error(), "persistence models") {
 				t.Fatalf("model fixture failed for an unrelated reason: %v", err)
@@ -148,18 +149,18 @@ func TestInvalidDTODeclarationsDoNotPublish(t *testing.T) {
 
 func TestDTOChangesProduceStaleOutput(t *testing.T) {
 	dir := fixture(t, "package sample\n//foundry:dto\ntype Input struct{ Name string `json:\"name\"` }")
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	before := generatedSnapshot(t, dir)
 	write(t, dir, "models.go", "package sample\n//foundry:dto\ntype Input struct{ Name string `json:\"display_name\"` }")
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("DTO tag edit was not stale: %v", err)
 	}
 	if !reflect.DeepEqual(before, generatedSnapshot(t, dir)) {
 		t.Fatal("stale check changed output")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(generatedSnapshot(t, dir)["input_foundry.gen.go"], "display_name") {
@@ -184,7 +185,7 @@ type State uint8
 const Active State=1
 type Account struct{ Key int; Password string }
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Recursive: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Recursive: true}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(generatedSnapshot(t, dir)["input_foundry.gen.go"], "domain.State(0).EnumDescriptor()") {
@@ -196,7 +197,7 @@ import "foundry.test/generator/domain"
 //foundry:dto
 type Input struct{ Account domain.Account }
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Recursive: true}); err == nil || !strings.Contains(err.Error(), "persistence models") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Recursive: true}); err == nil || !strings.Contains(err.Error(), "persistence models") {
 		t.Fatalf("imported model leaked into DTO: %v", err)
 	}
 	if !reflect.DeepEqual(before, generatedSnapshot(t, dir)) {

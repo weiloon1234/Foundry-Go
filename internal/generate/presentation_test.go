@@ -37,7 +37,7 @@ type Upload struct {
 
 func TestPresentationGenerationAndTransportOwnership(t *testing.T) {
 	dir := fixture(t, presentationSource)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -46,13 +46,13 @@ func TestPresentationGenerationAndTransportOwnership(t *testing.T) {
 			t.Fatal("missing or private presentation", name)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("nondeterministic presentation")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "presentation_runtime_test.go", `package sample
@@ -77,7 +77,7 @@ func TestPresentationGenerationRejectsInvalidDeclarations(t *testing.T) {
 		t.Run(tag[:min(len(tag), 32)], func(t *testing.T) {
 			source := "package sample\n//foundry:dto\ntype Input struct { Value string `json:\"value\" client:\"" + tag + "\"` }\n"
 			dir := fixture(t, source)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "presentation") {
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "presentation") {
 				t.Fatal("invalid presentation accepted", err)
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {
@@ -101,7 +101,7 @@ func TestPresentationGenerationRejectsCodecContradictions(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := fixture(t, "package sample\n"+test.source)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), test.message) {
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), test.message) {
 				t.Fatal("codec contradiction was not a generation diagnostic", err)
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {
@@ -111,7 +111,7 @@ func TestPresentationGenerationRejectsCodecContradictions(t *testing.T) {
 	}
 	// The same hints on matching plain strings still generate.
 	dir := fixture(t, "package sample\n//foundry:query\ntype Search struct { Sites []string `query:\"site\" client:\"kind=url\"` }\n")
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 }

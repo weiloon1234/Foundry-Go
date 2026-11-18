@@ -42,13 +42,13 @@ func Parameters() foundryhttp.Query[SearchInput] { return SearchInputDescriptor(
 
 func TestFreshQueryGenerationAndRuntime(t *testing.T) {
 	dir := fixture(t, querySource)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("fresh query stale check: %v", err)
 	}
 	if len(generatedSnapshot(t, dir)) != 0 {
 		t.Fatal("check published output")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -68,13 +68,13 @@ func TestFreshQueryGenerationAndRuntime(t *testing.T) {
 			t.Fatalf("query output acquired %q", unwanted)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("query output is not deterministic")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "query_runtime_test.go", `package sample_test
@@ -121,6 +121,7 @@ func TestPublicQuery(t *testing.T) {
 }
 
 func TestInvalidQueryDeclarationsDoNotPublish(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	for name, source := range map[string]string{
 		"options":            "//foundry:query source=query\ntype Input struct{}",
 		"nonstruct":          "//foundry:query\ntype Input string",
@@ -152,8 +153,8 @@ func TestInvalidQueryDeclarationsDoNotPublish(t *testing.T) {
 		"alias":              "//foundry:query\ntype Input = struct{ Field string }",
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := fixture(t, "package sample\n"+source)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+			dir := fixtures.fixture(t, "package sample\n"+source)
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 				t.Fatal("invalid query generated")
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {
@@ -166,7 +167,7 @@ func TestInvalidQueryDeclarationsDoNotPublish(t *testing.T) {
 func TestQueryFormTagsPreserveGeneratedOutput(t *testing.T) {
 	source := "package sample\n//foundry:query\ntype Input struct { Search string `query:\"q\"`; Inferred string; Ignored map[string]any `query:\"-\"` }\n"
 	dir := fixture(t, source)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	want := generatedSnapshot(t, dir)["input_foundry.gen.go"]
@@ -175,7 +176,7 @@ func TestQueryFormTagsPreserveGeneratedOutput(t *testing.T) {
 			tagged := strings.ReplaceAll(source, "`query:", "`"+tags+" query:")
 			tagged = strings.Replace(tagged, "Inferred string", "Inferred string `"+tags+"`", 1)
 			write(t, dir, "models.go", tagged)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 				t.Fatal(err)
 			}
 			if got := generatedSnapshot(t, dir)["input_foundry.gen.go"]; got != want {
@@ -187,18 +188,18 @@ func TestQueryFormTagsPreserveGeneratedOutput(t *testing.T) {
 
 func TestQueryFieldChangesProduceStaleOutput(t *testing.T) {
 	dir := fixture(t, "package sample\n//foundry:query\ntype Input struct{ Field string }")
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	before := generatedSnapshot(t, dir)
 	write(t, dir, "models.go", "package sample\n//foundry:query\ntype Input struct{ Renamed []string `query:\"filter[field]\"` }")
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("changed query was not stale: %v", err)
 	}
 	if !reflect.DeepEqual(before, generatedSnapshot(t, dir)) {
 		t.Fatal("stale check changed output")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	output := generatedSnapshot(t, dir)["input_foundry.gen.go"]
@@ -220,7 +221,7 @@ func(v *Packed)UnmarshalText([]byte)error{return nil}
 //foundry:query
 type Input struct { Token Alias; Packed Packed; Optional value.Optional[Packed]; Tokens []Alias }
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	output := generatedSnapshot(t, dir)["input_foundry.gen.go"]
@@ -229,7 +230,7 @@ type Input struct { Token Alias; Packed Packed; Optional value.Optional[Packed];
 			t.Fatalf("custom text contract was not retained: %s", want)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -46,6 +46,7 @@ func makeDAGChain() string {
 }
 
 func TestNativePersistenceModelsCannotBecomeTransportDTOs(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	define := `store.Define("accounts", func(b store.Builder[Account], a *Account) store.Table[Account,int] { return store.TableOf(b, &a.ID) })`
 	for shape, tables := range map[string]string{
 		// Exercises table handles wrapped in an embedded struct namespace.
@@ -177,12 +178,12 @@ var Y AliasTwice[Item2]`,
 					if imported {
 						source = "package sample\nimport \"foundry.test/generator/domain\"\ntype Account = domain.Account\n//foundry:dto\ntype Response struct { " + field + " }\n"
 					}
-					dir := fixture(t, source)
+					dir := fixtures.fixture(t, source)
 					if shape == "generic_wrapper" || shape == "lib_holder" || shape == "cross_pkg_method" || shape == "dag_chain" || shape == "cross_pkg_box2" || shape == "lib_generic_holder" || shape == "lib_generic_method" || shape == "lib_void_wrapper" || shape == "lib_wrapper_chain" {
 						if err := os.Mkdir(filepath.Join(dir, "lib"), 0755); err != nil {
 							t.Fatal(err)
 						}
-						write(t, filepath.Join(dir, "lib"), "lib.go", `package lib
+						fixtures.write(t, filepath.Join(dir, "lib"), "lib.go", `package lib
 import store "github.com/weiloon1234/Foundry-Go/database/orm"
 type Account struct { ID int }
 type Box[T any] struct { V T }
@@ -205,9 +206,9 @@ func Register[M any]() { var _ store.Table[M, int] }
 						if err := os.Mkdir(filepath.Join(dir, "domain"), 0755); err != nil {
 							t.Fatal(err)
 						}
-						write(t, filepath.Join(dir, "domain"), "account.go", "package domain\n"+declaration)
+						fixtures.write(t, filepath.Join(dir, "domain"), "account.go", "package domain\n"+declaration)
 					}
-					_, err := Generate(t.Context(), Options{Dir: dir, Recursive: true})
+					_, err := generateFixture(t.Context(), Options{Dir: dir, Recursive: true})
 					if err == nil || !strings.Contains(err.Error(), "persistence model") {
 						t.Fatalf("native model accepted as %s: %v", name, err)
 					}
@@ -224,7 +225,7 @@ func TestRetiredPersistenceDirectivesAreActionable(t *testing.T) {
 	for _, kind := range []string{"model", "projection"} {
 		t.Run(kind, func(t *testing.T) {
 			dir := fixture(t, "package sample\n//foundry:"+kind+"\ntype Item struct {ID int}\n")
-			_, err := Generate(t.Context(), Options{Dir: dir})
+			_, err := generateFixture(t.Context(), Options{Dir: dir})
 			if err == nil || !strings.Contains(err.Error(), "generation is retired") {
 				t.Fatal(err)
 			}
@@ -256,7 +257,7 @@ type Response struct { Status Status }
 				source = strings.Replace(source, "import ", "import . ", 1)
 			}
 			dir := fixture(t, source)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -272,7 +273,7 @@ type Account struct {ID int}
 //foundry:dto
 type Response struct { orm.Table[Account,int]; Callback func() }
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "unsupported DTO field type") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "unsupported DTO field type") {
 		t.Fatalf("DTO's unsupported callback field disappeared behind its table handle: %v", err)
 	}
 	if len(generatedSnapshot(t, dir)) != 0 {
@@ -295,7 +296,7 @@ type Envelope struct { Items []Payload }
 //foundry:dto
 type Response struct { Content Envelope }
 `)
-			_, err := Generate(t.Context(), Options{Dir: dir})
+			_, err := generateFixture(t.Context(), Options{Dir: dir})
 			if unsupported {
 				if err == nil || !strings.Contains(err.Error(), "unsupported DTO field type") {
 					t.Fatalf("nested unsupported field disappeared: %v", err)
@@ -311,7 +312,7 @@ type Response struct { Content Envelope }
 			if output := generatedSnapshot(t, dir)["response_foundry.gen.go"]; !strings.Contains(output, `Name: "label"`) {
 				t.Fatalf("nested label missing from transport contract:\n%s", output)
 			}
-			if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+			if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -348,7 +349,7 @@ var Accounts = orm.Define[models.Account]("accounts", func(b orm.Builder[models.
 			}
 			var first string
 			for run := 0; run < 5; run++ {
-				_, err := Generate(t.Context(), Options{Dir: dir, Recursive: true})
+				_, err := generateFixture(t.Context(), Options{Dir: dir, Recursive: true})
 				if err == nil || !strings.Contains(err.Error(), shape.diagnostic) {
 					t.Fatalf("run %d accepted a sibling package's model as %s: %v", run, name, err)
 				}
@@ -428,10 +429,10 @@ type Response struct { Status Status }
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := fixture(t, source)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+			if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -451,7 +452,7 @@ func TestPersistenceModelArgumentsMustBeNamed(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := fixture(t, "package sample\nimport store \"github.com/weiloon1234/Foundry-Go/database/orm\"\ntype Account struct { ID int }\n"+declaration+"\n//foundry:dto\ntype Response struct { Name string }\n")
-			_, err := Generate(t.Context(), Options{Dir: dir})
+			_, err := generateFixture(t.Context(), Options{Dir: dir})
 			if err == nil || !strings.Contains(err.Error(), "models.go:4:") || !strings.Contains(err.Error(), "persistence-model recognition in foundry.test/generator") || !strings.Contains(err.Error(), "is not a named type") {
 				t.Fatalf("unnamed model argument was not diagnosed: %v", err)
 			}
@@ -480,7 +481,7 @@ var _ = ResponseJSON()
 //foundry:dto
 type Response struct { `+shape.field+` }
 `)
-			_, err := Generate(t.Context(), Options{Dir: dir})
+			_, err := generateFixture(t.Context(), Options{Dir: dir})
 			if err == nil || !strings.Contains(err.Error(), "models.go:7:6: "+shape.diagnostic) {
 				t.Fatalf("model diagnostic did not take precedence: %v", err)
 			}

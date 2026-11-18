@@ -74,12 +74,13 @@ type ScaffoldOptions struct {
 	Metadata    []string
 	Disk        string
 	// Framework identifies the release used by scaffold generation.
-	Framework frameworkinfo.Build
+	Framework   frameworkinfo.Build
+	listExports exportLister
 }
 
 // generation is the generation the scaffold runs for its package.
 func (o ScaffoldOptions) generation() Options {
-	return Options{Dir: o.Dir, Framework: o.Framework}
+	return Options{Dir: o.Dir, Framework: o.Framework, listExports: o.listExports}
 }
 
 // scaffoldName also admits the dots and hyphens of a migration ID, which leads
@@ -117,7 +118,7 @@ func scaffoldFile(ctx context.Context, options ScaffoldOptions, imports []string
 	if err != nil {
 		return "", err
 	}
-	graph, err := loadGraph(ctx, options.Dir, false, tree, imports)
+	graph, err := loadGraph(ctx, options.Dir, false, tree, imports, options.listExports)
 	if err != nil {
 		return "", err
 	}

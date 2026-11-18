@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/weiloon1234/Foundry-Go/testkit"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,40 +28,6 @@ func (u User) Validate() error { return UserJSON().Validate() }
 var initial = UserJSON()
 `
 
-func fixture(t *testing.T, source string) string {
-	testkit.TrackExternalInputs(t)
-	t.Helper()
-	root, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mod, err := os.ReadFile(filepath.Join(root, "go.mod"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	moduleLine := "module " + framework + "\n"
-	if !strings.HasPrefix(string(mod), moduleLine) {
-		t.Fatal("root go.mod has an unexpected module declaration")
-	}
-	sum, err := os.ReadFile(filepath.Join(root, "go.sum"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Keep approved dependency requirements/checksums in sync with the actual
-	// framework, as a consumer would after resolving its framework dependency.
-	fixtureMod := strings.Replace(string(mod), moduleLine, "module foundry.test/generator\n", 1)
-	fixtureMod += fmt.Sprintf("\nrequire %s v0.0.0\nreplace %s => %q\n", framework, framework, root)
-	// macOS can return a /var temporary path whose canonical form is /private/var.
-	// Private graph helpers require the same canonical root as Go package discovery.
-	dir, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	write(t, dir, "go.mod", fixtureMod)
-	write(t, dir, "go.sum", string(sum))
-	write(t, dir, "models.go", source)
-	return dir
-}
 func write(t *testing.T, dir, name, data string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0o644); err != nil {

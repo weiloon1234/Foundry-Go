@@ -45,7 +45,7 @@ func scaffoldWithContracts(ctx context.Context, options ScaffoldOptions) (string
 	// Each scaffold requires current generated output, so each DTO's codec is
 	// generated before the next file is created.
 	for _, name := range contracts {
-		if _, err := Scaffold(ctx, ScaffoldOptions{Dir: options.Dir, Kind: DTOScaffold, Name: name}); err != nil {
+		if _, err := Scaffold(ctx, ScaffoldOptions{Dir: options.Dir, Kind: DTOScaffold, Name: name, listExports: options.listExports}); err != nil {
 			return "", err
 		}
 		if _, err := Generate(ctx, options.generation()); err != nil {

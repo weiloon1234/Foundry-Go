@@ -59,13 +59,13 @@ func Descriptor()foundryhttp.Multipart[UploadForm]{return UploadFormDescriptor()
 
 func TestFreshMultipartGenerationAndRuntime(t *testing.T) {
 	dir := fixture(t, multipartSource)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("fresh check: %v", err)
 	}
 	if len(generatedSnapshot(t, dir)) != 0 {
 		t.Fatal("fresh check published output")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -86,13 +86,13 @@ func TestFreshMultipartGenerationAndRuntime(t *testing.T) {
 			t.Fatalf("generated form acquired %q", unwanted)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("multipart generation is not deterministic")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "multipart_runtime_test.go", multipartGeneratedRuntime)
@@ -174,6 +174,7 @@ func TestGeneratedForm(t *testing.T){
 `
 
 func TestInvalidMultipartDeclarationsDoNotPublish(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	for name, source := range map[string]string{
 		"options":                "//foundry:multipart guessed=true\ntype Form struct{}",
 		"nonstruct":              "//foundry:multipart\ntype Form string",
@@ -206,8 +207,8 @@ func TestInvalidMultipartDeclarationsDoNotPublish(t *testing.T) {
 		"validation-collision":   "//foundry:multipart\ntype Form struct{}\nfunc FormValidationFields(){}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := fixture(t, "package sample\n"+source)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+			dir := fixtures.fixture(t, "package sample\n"+source)
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 				t.Fatal("invalid multipart declaration generated")
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {
@@ -219,18 +220,18 @@ func TestInvalidMultipartDeclarationsDoNotPublish(t *testing.T) {
 
 func TestMultipartFieldChangesAndRejectedReplacement(t *testing.T) {
 	dir := fixture(t, "package sample\n//foundry:multipart\ntype Form struct{Value string}")
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	before := generatedSnapshot(t, dir)
 	write(t, dir, "models.go", "package sample\n//foundry:multipart\ntype Form struct{Renamed []string `form:\"values[]\"`}")
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("changed form not stale: %v", err)
 	}
 	if !reflect.DeepEqual(before, generatedSnapshot(t, dir)) {
 		t.Fatal("stale check changed output")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	current := generatedSnapshot(t, dir)
@@ -241,7 +242,7 @@ func TestMultipartFieldChangesAndRejectedReplacement(t *testing.T) {
 		}
 	}
 	write(t, dir, "models.go", "package sample\n//foundry:multipart\ntype Form struct{Value func()}")
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 		t.Fatal("invalid replacement generated")
 	}
 	if !reflect.DeepEqual(current, generatedSnapshot(t, dir)) {

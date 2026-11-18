@@ -17,7 +17,7 @@ func TestDTORequiresExplicitContractForNativeCodecProtocols(t *testing.T) {
          func (Custom) AppendText(b []byte) ([]byte, error) { return append(b, "custom"...), nil }`,
 	} {
 		dir := fixture(t, "package sample\n"+source+"\n//foundry:dto\ntype Response struct { Value Custom }\n")
-		_, err := Generate(t.Context(), Options{Dir: dir})
+		_, err := generateFixture(t.Context(), Options{Dir: dir})
 		if err == nil || !strings.Contains(err.Error(), "explicit transport contract") {
 			t.Fatalf("custom codec protocol was inferred as Go fields: %v", err)
 		}
@@ -36,7 +36,7 @@ func (Custom) AppendText(string) (string,error) { return "",nil }
 //foundry:dto
 type Response struct { Value Custom }
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatalf("unrelated methods were treated as JSON codecs: %v", err)
 	}
 }

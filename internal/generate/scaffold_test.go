@@ -19,7 +19,7 @@ func migrationScaffold(dir string) ScaffoldOptions {
 func TestScaffoldsCompileAndRemainConsumerOwned(t *testing.T) {
 	dir := fixture(t, "package sample\n")
 	options := migrationScaffold(dir)
-	path, err := Scaffold(t.Context(), options)
+	path, err := scaffoldFixture(t.Context(), options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestScaffoldsCompileAndRemainConsumerOwned(t *testing.T) {
 		t.Fatal("migration scaffold omits its optional Down SQL")
 	}
 	secondDir := fixture(t, "package sample\n")
-	secondPath, err := Scaffold(t.Context(), migrationScaffold(secondDir))
+	secondPath, err := scaffoldFixture(t.Context(), migrationScaffold(secondDir))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestScaffoldsCompileAndRemainConsumerOwned(t *testing.T) {
 	if err != nil || string(first) != string(second) {
 		t.Fatal("explicit scaffold options produced nondeterministic output")
 	}
-	if _, err := Scaffold(t.Context(), ScaffoldOptions{Dir: dir, Kind: SeederScaffold, Name: "SeedRegions", ID: "app.regions"}); err != nil {
+	if _, err := scaffoldFixture(t.Context(), ScaffoldOptions{Dir: dir, Kind: SeederScaffold, Name: "SeedRegions", ID: "app.regions"}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "scaffolds_test.go", `package sample
@@ -73,14 +73,14 @@ func TestUnfinishedDefinitionsFail(t *testing.T) {
 		t.Fatal("test did not implement the scaffold")
 	}
 	write(t, dir, filepath.Base(path), edited)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	current, err := os.ReadFile(path)
 	if err != nil || string(current) != edited || len(generatedSnapshot(t, dir)) != 0 {
 		t.Fatal("generator changed or took ownership of handwritten scaffolds")
 	}
-	if _, err := Scaffold(t.Context(), options); err == nil {
+	if _, err := scaffoldFixture(t.Context(), options); err == nil {
 		t.Fatal("scaffolding overwrote an existing file")
 	}
 	current, _ = os.ReadFile(path)
@@ -133,7 +133,7 @@ func TestScaffoldValidatesNamesPackageAndGenerationBeforePublication(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := Scaffold(ctx, options); err == nil {
+			if _, err := scaffoldFixture(ctx, options); err == nil {
 				t.Fatal("invalid scaffold accepted")
 			}
 			after, err := goSourceNames(dir)

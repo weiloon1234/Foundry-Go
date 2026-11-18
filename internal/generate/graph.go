@@ -29,6 +29,10 @@ type listedModule struct {
 	Replace            *listedModule
 }
 
+// exportLister allows tests with immutable dependencies to reuse Go export
+// metadata. Production callers leave it nil and always query the consumer.
+type exportLister func(*packageGraph, context.Context, []string, func(listedPackage)) error
+
 type packageGraph struct {
 	root                  string
 	scope                 moduleScope
@@ -75,7 +79,10 @@ func (g *packageGraph) Import(path string) (*types.Package, error) {
 // loadGraph lists the selected packages without compiling them, then requests
 // compiled export data only for dependencies outside the selection. A tree
 // captured by recovery is reused so one run walks the source tree once.
-func loadGraph(ctx context.Context, dir string, recursive bool, tree *generationTree, extraImports []string) (*packageGraph, error) {
+func loadGraph(ctx context.Context, dir string, recursive bool, tree *generationTree, extraImports []string, listExports exportLister) (*packageGraph, error) {
+	if listExports == nil {
+		listExports = (*packageGraph).goList
+	}
 	if tree == nil {
 		var err error
 		tree, err = walkGenerationTree(ctx, dir, recursive)
@@ -156,7 +163,7 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 	arguments = append(arguments, "-e", "-deps", "-export", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,Deps,Export,Module", "--")
 	arguments = append(arguments, targets...)
 	exports := make(map[string]string)
-	if err := g.goList(ctx, arguments, func(pkg listedPackage) {
+	if err := listExports(g, ctx, arguments, func(pkg listedPackage) {
 		if _, selected := g.packages[pkg.ImportPath]; !selected {
 			g.documentationPackages[pkg.ImportPath] = pkg
 		}
@@ -177,7 +184,7 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 	slotsPath := framework + "/extensions/slots"
 	if _, listed := exports[slotsPath]; !listed && (exports[framework+"/translations"] != "" || exports[framework+"/attachments"] != "" || exports[framework+"/metadata"] != "") {
 		arguments = append(append([]string{"list"}, g.scope.listFlags()...), "-e", "-deps", "-export", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,Deps,Export,Module", "--", slotsPath)
-		if err := g.goList(ctx, arguments, func(pkg listedPackage) {
+		if err := listExports(g, ctx, arguments, func(pkg listedPackage) {
 			if _, selected := g.packages[pkg.ImportPath]; !selected {
 				g.documentationPackages[pkg.ImportPath] = pkg
 			}

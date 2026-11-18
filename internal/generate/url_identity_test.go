@@ -52,17 +52,17 @@ func main(){
  if _,err:=LookupResponseJSON().Encode(ctx,LookupResponse{Code:input.Code,Rank:input.Rank,ID:input.ID,ByCode:map[Code]string{"example":"value"}},contract.JSONLimits{Bytes:1024,Depth:8,Nodes:30,Steps:100,Issues:10});err!=nil{panic(err)}
 }
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("source identity generation changed")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	command := exec.CommandContext(t.Context(), "go", "run", ".")

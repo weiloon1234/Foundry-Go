@@ -45,13 +45,13 @@ var keys = SettingsConfigKeys()
 
 func TestGeneratedConfigurationFreshDeterministicAndRuntime(t *testing.T) {
 	dir := fixture(t, configurationSource)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("fresh check: %v", err)
 	}
 	if len(generatedSnapshot(t, dir)) != 0 {
 		t.Fatal("read-only check published output")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -60,7 +60,7 @@ func TestGeneratedConfigurationFreshDeterministicAndRuntime(t *testing.T) {
 			t.Fatalf("generated config missing %q", want)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
@@ -95,11 +95,11 @@ func TestLoad(t *testing.T){
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("generated configuration runtime: %v\n%s", err, output)
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "models.go", strings.Replace(configurationSource, `config:"http"`, `config:"server"`, 1))
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("renamed configuration key not stale: %v", err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
@@ -126,10 +126,10 @@ const Live Mode="live"
 //foundry:config
 type Options struct{ Mode Mode }
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Recursive: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Recursive: true}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Recursive: true, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Recursive: true, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	content, err := os.ReadFile(filepath.Join(dir, "settings_foundry.gen.go"))
@@ -142,6 +142,7 @@ type Options struct{ Mode Mode }
 }
 
 func TestInvalidConfigurationDeclarationsDoNotPublish(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	for name, source := range map[string]string{
 		"not a struct":                    "//foundry:config\ntype Settings string",
 		"generic":                         "//foundry:config\ntype Settings[T any] struct{ Value T }",
@@ -173,8 +174,8 @@ func TestInvalidConfigurationDeclarationsDoNotPublish(t *testing.T) {
 		"public format locale non-string": "//foundry:config\ntype Settings struct{ Count int `config:\"count,public\" client:\"env=COUNT,kind=format_locale\"` }",
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := fixture(t, "package sample\n"+source)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+			dir := fixtures.fixture(t, "package sample\n"+source)
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 				t.Fatal("invalid configuration generated")
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {
@@ -202,7 +203,7 @@ type Settings struct {
 }
 `
 	dir := fixture(t, src)
-	report, err := Generate(t.Context(), Options{Dir: dir})
+	report, err := generateFixture(t.Context(), Options{Dir: dir})
 	if err != nil {
 		t.Fatalf("unexpected generation error: %v", err)
 	}
@@ -225,6 +226,7 @@ type Settings struct {
 }
 
 func TestPublicConfigRejectsInvalidClientFlags(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	for _, test := range []struct {
 		tag  string
 		want string
@@ -237,8 +239,8 @@ func TestPublicConfigRejectsInvalidClientFlags(t *testing.T) {
 		{"env=VITE_ZONE,optional=true", "unknown client tag option"},
 	} {
 		t.Run(test.tag, func(t *testing.T) {
-			dir := fixture(t, "package sample\n//foundry:config\ntype Settings struct { Zone string `config:\"zone,public\" client:\""+test.tag+"\"` }\n")
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), test.want) {
+			dir := fixtures.fixture(t, "package sample\n//foundry:config\ntype Settings struct { Zone string `config:\"zone,public\" client:\""+test.tag+"\"` }\n")
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("expected %q, got %v", test.want, err)
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {
@@ -283,7 +285,7 @@ const (
 type Wide uint64
 const Large Wide = 18446744073709551615
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Recursive: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Recursive: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "public_runtime_test.go", `package sample

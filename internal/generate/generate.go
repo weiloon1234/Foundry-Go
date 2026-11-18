@@ -23,7 +23,8 @@ type Options struct {
 	// running tool's build. A known version that differs from the consumer's
 	// selected framework fails before any file is written. Leave it empty in
 	// development builds, where no release version is available.
-	Framework frameworkinfo.Build
+	Framework   frameworkinfo.Build
+	listExports exportLister
 }
 
 type Report struct {
@@ -67,7 +68,7 @@ func Generate(ctx context.Context, options Options) (Report, error) {
 	if err != nil {
 		return report, err
 	}
-	graph, err := loadGraph(ctx, options.Dir, options.Recursive, tree, nil)
+	graph, err := loadGraph(ctx, options.Dir, options.Recursive, tree, nil, options.listExports)
 	if err != nil {
 		return report, err
 	}

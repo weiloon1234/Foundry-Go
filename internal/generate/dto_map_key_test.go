@@ -36,7 +36,7 @@ type Result struct {
 
 func TestFreshMapKeyDTOGenerationAndRuntime(t *testing.T) {
 	dir := fixture(t, mapKeyDTOFixture)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -45,13 +45,13 @@ func TestFreshMapKeyDTOGenerationAndRuntime(t *testing.T) {
 			t.Fatal("missing typed map output", want)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("map generation nondeterministic")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "map_runtime_test.go", `package sample_test
@@ -76,6 +76,7 @@ func TestGeneratedMapKeys(t *testing.T){
 }
 
 func TestInvalidDTOMapKeyDeclarationsDoNotPublish(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	for name, declaration := range map[string]string{
 		"boolean":                 "type Key bool",
 		"pointer":                 "type Key = *string",
@@ -85,8 +86,8 @@ func TestInvalidDTOMapKeyDeclarationsDoNotPublish(t *testing.T) {
 		"arguments":               "type Key string\nfunc(Key)JSONKeyContract(string)contract.JSONKey[Key]{return contract.JSONKey[Key]{}}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := fixture(t, "package sample\nimport \"github.com/weiloon1234/Foundry-Go/contract\"\nvar _ = contract.StringKind\n"+declaration+"\n//foundry:dto\ntype Result struct{Values map[Key]string}\n")
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+			dir := fixtures.fixture(t, "package sample\nimport \"github.com/weiloon1234/Foundry-Go/contract\"\nvar _ = contract.StringKind\n"+declaration+"\n//foundry:dto\ntype Result struct{Values map[Key]string}\n")
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 				t.Fatal("invalid map key accepted")
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {

@@ -23,7 +23,7 @@ const(ProjectStatusDraft ProjectStatus="draft";ProjectStatusInReview ProjectStat
 
 func TestMessageGenerationSharesDTOContractAndTypedArguments(t *testing.T) {
 	dir := fixture(t, messageSource)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -41,10 +41,10 @@ func TestMessageGenerationSharesDTOContractAndTypedArguments(t *testing.T) {
 			t.Fatal("trimmed enum label", want)
 		}
 	}
-	if report, err := Generate(t.Context(), Options{Dir: dir}); err != nil || len(report.Written) != 0 || !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
+	if report, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil || len(report.Written) != 0 || !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("message generation is not stable", err)
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "messages_runtime_test.go", `package sample_test
@@ -63,7 +63,7 @@ func TestGeneratedMessage(t *testing.T){
 		t.Fatalf("generated message failed: %v\n%s", err, output)
 	}
 	write(t, dir, "models.go", strings.Replace(messageSource, "key=cart.items", "key=cart.lines", 1))
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err == nil {
 		t.Fatal("message key change did not invalidate output")
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
@@ -72,6 +72,7 @@ func TestGeneratedMessage(t *testing.T){
 }
 
 func TestMessageGenerationRejectsInvalidParametersWithoutPublishing(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	for name, source := range map[string]string{
 		"missing key":       "//foundry:message\ntype Args struct{}",
 		"bad key":           "//foundry:message key=Upper\ntype Args struct{}",
@@ -95,8 +96,8 @@ func TestMessageGenerationRejectsInvalidParametersWithoutPublishing(t *testing.T
 		"enum option":       "//foundry:enum labels=state guessed=true\ntype State string\nconst StateReady State=\"ready\"",
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := fixture(t, "package sample\n"+source+"\n")
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
+			dir := fixtures.fixture(t, "package sample\n"+source+"\n")
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil {
 				t.Fatal("invalid message generated")
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {

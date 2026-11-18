@@ -27,7 +27,7 @@ func TestDirectivePrefilterAcceptsEveryParsedCommentForm(t *testing.T) {
 // skip declaration checking for a package that uses only that form.
 func TestSpacedDirectivesAreDiscovered(t *testing.T) {
 	dir := fixture(t, "package sample\n\n// foundry:enum\ntype Mode string\n\nconst Fast Mode = \"fast\"\n\n// foundry:dto\ntype Payload struct{ Mode Mode `json:\"mode\"` }\n")
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	outputs := generatedSnapshot(t, dir)
@@ -36,7 +36,7 @@ func TestSpacedDirectivesAreDiscovered(t *testing.T) {
 	}
 	constrained := fixture(t, "package sample\n")
 	write(t, constrained, "mode_platform.go", "//go:build foundry_never_selected\n\npackage sample\n\n// foundry:enum\ntype Mode string\n\nconst Fast Mode = \"fast\"\n")
-	if _, err := Generate(t.Context(), Options{Dir: constrained}); err == nil || !strings.Contains(err.Error(), "build constraints") {
+	if _, err := generateFixture(t.Context(), Options{Dir: constrained}); err == nil || !strings.Contains(err.Error(), "build constraints") {
 		t.Fatalf("constrained spaced directive was not reported: %v", err)
 	}
 }

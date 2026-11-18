@@ -46,7 +46,7 @@ type Result struct {
 
 func TestFreshCustomDTOGenerationAndRuntime(t *testing.T) {
 	dir := fixture(t, customDTOFixture)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	first := generatedSnapshot(t, dir)
@@ -58,13 +58,13 @@ func TestFreshCustomDTOGenerationAndRuntime(t *testing.T) {
 	if strings.Contains(first["result_foundry.gen.go"], "stored") {
 		t.Fatal("private codec representation inferred")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("nondeterministic custom generation")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}
 	write(t, dir, "custom_runtime_test.go", `package sample_test
@@ -90,6 +90,7 @@ func TestGeneratedNativeCustomValues(t *testing.T){
 }
 
 func TestInvalidCustomDTOContractMethodsDoNotPublish(t *testing.T) {
+	fixtures := newRejectionFixtures(t)
 	for name, method := range map[string]string{
 		"wrong_value":     "func(Code)JSONContract()contract.JSON[Other]{return contract.JSON[Other]{}}",
 		"pointer_factory": "func(*Code)JSONContract()contract.JSON[Code]{return contract.JSON[Code]{}}",
@@ -101,8 +102,8 @@ func TestInvalidCustomDTOContractMethodsDoNotPublish(t *testing.T) {
 			if name != "one_way" {
 				source += "func(*Code)UnmarshalText([]byte)error{return nil}\n"
 			}
-			dir := fixture(t, source)
-			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "JSONContract") {
+			dir := fixtures.fixture(t, source)
+			if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "JSONContract") {
 				t.Fatal("invalid custom factory accepted or wrong diagnostic", err)
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {
@@ -115,7 +116,7 @@ func TestInvalidCustomDTOContractMethodsDoNotPublish(t *testing.T) {
 func TestPrivateCustomDTOContractIsRejectedBeforePublication(t *testing.T) {
 	source := strings.ReplaceAll(customDTOFixture, "Reference", "reference")
 	dir := fixture(t, source)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "exported named types") {
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "exported named types") {
 		t.Fatal("private custom contract lacked a construction diagnostic", err)
 	}
 	if len(generatedSnapshot(t, dir)) != 0 {
