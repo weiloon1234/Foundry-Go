@@ -13,6 +13,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/routecontract"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -51,8 +52,10 @@ func ScaffoldKinds() []ScaffoldKind {
 // Cases (enum); Event payload type (listener); Subject and Resource types
 // (policy). Type names refer to exported types of the same package.
 type ScaffoldOptions struct {
-	httpMode string
-	dtoRole  string
+	// HTTP selects body, response or both for a DTO; empty emits no helper.
+	HTTP string
+	// Role selects response-only DTO validation semantics independently of HTTP.
+	Role     string
 	Dir      string
 	Kind     ScaffoldKind
 	Name     string
@@ -102,7 +105,7 @@ func Scaffold(ctx context.Context, options ScaffoldOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if options.Kind == EndpointScaffold || (options.Kind == DTOScaffold && options.httpMode != "" && options.httpMode != "none") {
+	if options.Kind == EndpointScaffold || (options.Kind == DTOScaffold && options.HTTP != "") {
 		scope, err := loadModuleScope(ctx, options.Dir)
 		if err != nil {
 			return "", err
@@ -168,7 +171,8 @@ func scaffoldFile(ctx context.Context, options ScaffoldOptions, imports []string
 		overlay[name] = data
 	}
 	overlay[name] = data
-	if options.hasSlots() {
+	if options.hasSlots() || (options.Kind == DTOScaffold && options.HTTP != "") {
+		// HTTP helpers must pass the ordinary generator collision check before publication.
 		// Metadata slots can refer to a DTO codec generated from the same file.
 		// Check that codec and the handwritten ORM declarations together.
 		if err := checkWithGeneration(ctx, graph, name, data); err != nil {
@@ -203,6 +207,15 @@ func checkWithGeneration(ctx context.Context, graph *packageGraph, name string, 
 func ValidateScaffold(options ScaffoldOptions) error { _, err := scaffoldImports(options); return err }
 
 func scaffoldImports(options ScaffoldOptions) ([]string, error) {
+	if options.Kind != DTOScaffold && (options.HTTP != "" || options.Role != "") {
+		return nil, fmt.Errorf("--http and --role are only valid for a DTO")
+	}
+	if options.HTTP != "" && !routecontract.ValidHTTP(options.HTTP) {
+		return nil, fmt.Errorf("DTO --http must be body, response or both")
+	}
+	if options.Role != "" && options.Role != dtoResponseRole {
+		return nil, fmt.Errorf("DTO --role must be response")
+	}
 	if len(options.Name) > 128 || !token.IsIdentifier(options.Name) || !ast.IsExported(options.Name) {
 		return nil, fmt.Errorf("scaffold needs an exported Go --name of at most 128 bytes")
 	}

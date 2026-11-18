@@ -18,6 +18,9 @@
   actual typed uses. Helpers belong to application and fixture modules; framework
   packages retain direct adapters and cannot emit HTTP helpers. HTTP scaffolds
   reject framework destinations before writing files.
+- Generic DTO scaffolds accept `--http body|response|both` and independent
+  `--role response`; omitted flags retain the existing plain DTO output. Invalid
+  values, framework destinations and helper collisions fail before file creation.
 - `go tool foundry routes check --dir .` checks resolved Go function identities,
   including import aliases and generic instantiations. It reports nested route
   declarations and direct wrappers of eligible generated DTO declarations, even

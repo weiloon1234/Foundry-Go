@@ -100,7 +100,8 @@ func (s *Service) Routes() ([]http.RouteRegistration, error) {
 	catalogue := pagination.DefineNumbered(workflowCatalogueRoute, CatalogueFiltersDescriptor(), CatalogueItemJSON(), pagination.DefaultConfig())
 
 	routes := []http.RouteRegistration{
-		patch.Handle(s.Patch), submit.Handle(submissionScope, s.Submit),
+		patch.Handle(s.Patch),
+		submit.Handle(submissionScope, s.Submit),
 		boundShow.Handle(func(_ context.Context, _ Actor, in modelbinding.Input[ProjectPath, http.NoQuery, http.NoBody, Resources]) (ProjectEnvelope, error) {
 			return ProjectEnvelope{Data: present(in.Model.Child), Trace: "workflow"}, nil
 		}),

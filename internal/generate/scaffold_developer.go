@@ -82,11 +82,11 @@ func renderDeveloperScaffold(pkg string, options ScaffoldOptions) (string, error
 		return renderORMModel(pkg, options)
 	case DTOScaffold:
 		directive := "//foundry:dto"
-		if options.dtoRole != "" {
-			directive += " role=" + options.dtoRole
+		if options.Role != "" {
+			directive += " role=" + options.Role
 		}
-		if options.httpMode != "" {
-			directive += " http=" + options.httpMode
+		if options.HTTP != "" {
+			directive += " http=" + options.HTTP
 		}
 		return fmt.Sprintf(`package %s
 

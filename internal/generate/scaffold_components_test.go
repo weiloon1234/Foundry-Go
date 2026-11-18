@@ -109,8 +109,8 @@ func TestComponentScaffoldOptionsAreValidatedFirst(t *testing.T) {
 func TestHTTPScaffoldsRejectFrameworkModuleBeforeWriting(t *testing.T) {
 	for _, options := range []ScaffoldOptions{
 		{Kind: EndpointScaffold, Name: "CreateNote", ID: "notes.create", Method: "POST", Path: "/notes"},
-		{Kind: DTOScaffold, Name: "CreateNoteRequest", httpMode: "body"},
-		{Kind: DTOScaffold, Name: "NoteResource", httpMode: "response", dtoRole: "response"},
+		{Kind: DTOScaffold, Name: "CreateNoteRequest", HTTP: "body"},
+		{Kind: DTOScaffold, Name: "NoteResource", HTTP: "response", Role: "response"},
 	} {
 		t.Run(string(options.Kind)+options.Name, func(t *testing.T) {
 			dir := t.TempDir()

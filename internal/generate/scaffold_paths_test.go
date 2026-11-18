@@ -11,8 +11,8 @@ func TestHTTPScaffoldsRejectDefaultDirectoryInFrameworkSubpackage(t *testing.T) 
 	for _, destination := range []string{"", "."} {
 		for _, options := range []ScaffoldOptions{
 			{Kind: EndpointScaffold, Name: "CreateNote", ID: "notes.create", Method: "POST", Path: "/notes"},
-			{Kind: DTOScaffold, Name: "CreateNoteRequest", httpMode: "body"},
-			{Kind: DTOScaffold, Name: "NoteResource", httpMode: "response", dtoRole: "response"},
+			{Kind: DTOScaffold, Name: "CreateNoteRequest", HTTP: "body"},
+			{Kind: DTOScaffold, Name: "NoteResource", HTTP: "response", Role: "response"},
 		} {
 			t.Run(destination+"/"+options.Name, func(t *testing.T) {
 				root := t.TempDir()
@@ -46,8 +46,8 @@ func TestScaffoldDestinationPaths(t *testing.T) {
 	for _, layout := range []string{"relative subpackage", "relative module root", "absolute"} {
 		for _, options := range []ScaffoldOptions{
 			{Kind: EndpointScaffold, Name: "CreateNote", ID: "notes.create", Method: "POST", Path: "/notes"},
-			{Kind: DTOScaffold, Name: "CreateNoteRequest", httpMode: "body"},
-			{Kind: DTOScaffold, Name: "NoteResource", httpMode: "response", dtoRole: "response"},
+			{Kind: DTOScaffold, Name: "CreateNoteRequest", HTTP: "body"},
+			{Kind: DTOScaffold, Name: "NoteResource", HTTP: "response", Role: "response"},
 			{Kind: CommandScaffold, Name: "Inspect", ID: "app.inspect"},
 		} {
 			t.Run(layout+"/"+options.Name, func(t *testing.T) {

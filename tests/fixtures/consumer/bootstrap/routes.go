@@ -101,5 +101,9 @@ func Routes(settings Settings, services application.Services) ([]http.RouteRegis
 		}
 		return UploadResult{Key: key, Bytes: result.Size(), Width: result.Info().Width}, nil
 	})
-	return []http.RouteRegistration{member, operator, saved}, nil
+	return []http.RouteRegistration{
+		member,
+		operator,
+		saved,
+	}, nil
 }

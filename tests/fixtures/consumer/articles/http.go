@@ -149,8 +149,12 @@ func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
 	remove := foundryhttp.DefineEndpoint(articlesDeleteRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
 
 	return []foundryhttp.RouteRegistration{
-		create.Handle(s.Create), update.Handle(s.Update), upload.Handle(s.Upload),
-		show.Handle(s.Show), list.Handle(s.List), remove.Handle(s.Delete),
+		create.Handle(s.Create),
+		update.Handle(s.Update),
+		upload.Handle(s.Upload),
+		show.Handle(s.Show),
+		list.Handle(s.List),
+		remove.Handle(s.Delete),
 	}, nil
 }
 

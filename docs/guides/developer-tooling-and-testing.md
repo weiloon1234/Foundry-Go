@@ -410,7 +410,8 @@ Then create individual declarations:
 
 ```sh
 GOWORK=off go tool foundry make model Widget --table widgets --dir ./models
-GOWORK=off go tool foundry make dto WidgetResponse --dir ./transport
+GOWORK=off go tool foundry make dto SaveWidgetRequest --http body --dir ./transport
+GOWORK=off go tool foundry make dto WidgetResource --role response --http response --dir ./transport
 GOWORK=off go tool foundry make job DeliverWidget --id widget.deliver --queue deliveries --dir ./jobs
 GOWORK=off go tool foundry make command InspectWidgets --id widgets.inspect --dir ./commands
 GOWORK=off go tool foundry generate --recursive --dir .
@@ -444,6 +445,15 @@ publishes those codecs. A later generation failure leaves the handwritten file;
 for the scaffolded model. Endpoint, notification and model-with-slots scaffolds
 pass the tool's framework build to generation. ORM field comments are handwritten.
 Other scaffolds run no generation.
+
+The generic DTO scaffold accepts `--http body`, `--http response` or `--http both`.
+Omit it to retain the plain `//foundry:dto` output. `--role response` independently
+omits request validation; together with `--http response` it writes
+`//foundry:dto role=response http=response`. Application command aliases can forward
+these flags to `foundry make dto`. Internal tooling uses `ScaffoldOptions.HTTP`
+and `ScaffoldOptions.Role`. Unknown values, framework-module destinations and
+helper-name collisions are rejected before the scaffold writes a file. Helpers
+are checked in memory; run generation after adding the DTO fields to publish them.
 
 These commands create one consumer-owned artifact, never an application project.
 Existing migration/seeder scaffolds use the same path checks and publisher.

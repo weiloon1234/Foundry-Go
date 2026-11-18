@@ -27,7 +27,7 @@ type Diagnostic struct {
 
 func (d Diagnostic) String() string { return fmt.Sprintf("%s: %s: %s", d.Position, d.Code, d.Message) }
 
-func Check(ctx context.Context, dir string, patterns []string) (result []Diagnostic, resultErr error) {
+func check(ctx context.Context, dir string, patterns []string) (result []Diagnostic, resultErr error) {
 	defer func() {
 		if ctx.Err() != nil {
 			result = nil

@@ -62,6 +62,9 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	}
 	var cases string
 	switch options.Kind {
+	case generate.DTOScaffold:
+		flags.StringVar(&options.HTTP, "http", "", "HTTP helper: body, response or both (default: no helper)")
+		flags.StringVar(&options.Role, "role", "", "DTO validation role: response (default: request validation)")
 	case generate.EndpointScaffold:
 		flags.StringVar(&options.Method, "method", "POST", "HTTP method: GET, POST, PUT, PATCH or DELETE")
 		flags.StringVar(&options.Path, "path", "", "static route path, such as /notes")

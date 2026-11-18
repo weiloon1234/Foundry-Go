@@ -13,11 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-func runRoutes(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	return runRoutesWithCheck(ctx, args, stdout, stderr, routestyle.Check)
-}
-
-func runRoutesWithCheck(ctx context.Context, args []string, stdout, stderr io.Writer, check func(context.Context, string, []string) ([]routestyle.Diagnostic, error)) (resultErr error) {
+func runRoutes(ctx context.Context, args []string, stdout, stderr io.Writer) (resultErr error) {
 	const usage = "usage: foundry routes check [--dir .] [--timeout 5m] [./...]\nCheck staged route declarations and generated DTO helper use. No files are changed.\n--timeout bounds how long the CLI waits, including parsing and type checking; expiry exits with status 124."
 	if handled, err := subcommandHelp(args, stdout, usage); handled {
 		return err
@@ -45,22 +41,7 @@ func runRoutesWithCheck(ctx context.Context, args []string, stdout, stderr io.Wr
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	type outcome struct {
-		diagnostics []routestyle.Diagnostic
-		err         error
-	}
-	completed := make(chan outcome, 1)
-	go func() {
-		diagnostics, err := check(ctx, *dir, flags.Args())
-		completed <- outcome{diagnostics, err}
-	}()
-	var result outcome
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case result = <-completed:
-	}
-	diagnostics, err := result.diagnostics, result.err
+	diagnostics, err := routestyle.Check(ctx, *dir, flags.Args())
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
