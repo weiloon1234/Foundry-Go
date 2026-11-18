@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/fstest"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/validation"
@@ -64,20 +65,29 @@ func TestRequestDeadlineClassificationFollowsLifecyclePhase(t *testing.T) {
 		{"declared-error-wins", func(context.Context) error { return locked }, 409},
 		{"unclassified-deadline", func(ctx context.Context) error { return ctx.Err() }, 503},
 	} {
-		router, err := NewRouter(ConfigureEndpoint(patchEndpoint(), Errors(locked)).Handle(func(ctx context.Context, _ endpointRequest) (EndpointReply, error) {
-			<-ctx.Done()
-			return EndpointReply{}, test.result(ctx)
-		}))
-		if err != nil {
-			t.Fatal(err)
-		}
-		request := httptest.NewRequest("PATCH", "/items/"+endpointUserID, strings.NewReader(`{"name":"ok"}`))
-		request.Header.Set("Content-Type", "application/json")
-		response := httptest.NewRecorder()
-		deadlineBoundary(newHandlerLifetime(), router, 10*time.Millisecond).ServeHTTP(response, request)
-		if response.Code != test.status {
-			t.Fatalf("%s: %d %s", test.name, response.Code, response.Body.String())
-		}
+		// Virtual time advances only after the handler blocks on its deadline.
+		synctest.Test(t, func(t *testing.T) {
+			router, err := NewRouter(ConfigureEndpoint(patchEndpoint(), Errors(locked)).Handle(func(ctx context.Context, _ endpointRequest) (EndpointReply, error) {
+				if ctx.Err() != nil {
+					t.Error("deadline expired before handler entry")
+				}
+				<-ctx.Done()
+				if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+					t.Error("handler did not observe deadline expiry")
+				}
+				return EndpointReply{}, test.result(ctx)
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest("PATCH", "/items/"+endpointUserID, strings.NewReader(`{"name":"ok"}`))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			deadlineBoundary(newHandlerLifetime(), router, 10*time.Millisecond).ServeHTTP(response, request)
+			if response.Code != test.status {
+				t.Fatalf("%s: %d %s", test.name, response.Code, response.Body.String())
+			}
+		})
 	}
 }
 

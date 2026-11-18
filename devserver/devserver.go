@@ -23,7 +23,7 @@ import (
 //  1. Validates options and streams, snapshotting configuration.
 //  2. Traps SIGHUP to stop child process groups when the controlling terminal disconnects.
 //  3. Starts all configured Helpers concurrently in their own process groups.
-//  4. Performs initial compilation of Target via `go build -ldflags=-w -o <Binary> <Target>`,
+//  4. Performs initial compilation of Target via `go build -gcflags=all=-dwarf=false -ldflags=-w -o <Binary> <Target>`,
 //     inheriting GOFLAGS from the environment.
 //  5. Starts the server child executable in its own process group.
 //  6. Enters filesystem watch loop with debounce settling.
@@ -187,8 +187,8 @@ func (d *devServer) rebuild(ctx context.Context) {
 		return
 	}
 
-	// Link without DWARF is about 3.5x faster (14.2 -> 3.9 s measured); dlv debug builds its own binary.
-	build := []string{"build", "-ldflags=-w", "-o", d.binary, d.target}
+	// Omit DWARF from compiler archives and the linked development binary.
+	build := []string{"build", "-gcflags=all=-dwarf=false", "-ldflags=-w", "-o", d.binary, d.target}
 	if err := runChild(ctx, d.root, "go", build, cli.Streams{Out: d.output, Err: d.output}); err != nil {
 		if ctx.Err() == nil {
 			next := "fix the error and save a watched file to rebuild"

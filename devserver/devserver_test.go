@@ -3,6 +3,7 @@ package devserver
 import (
 	"bytes"
 	"context"
+	"debug/buildinfo"
 	"errors"
 	"maps"
 	"os"
@@ -164,7 +165,7 @@ func TestPrefixWriterKeepsLinesWhole(t *testing.T) {
 	}
 }
 
-func TestRebuildBuildCommandLdflags(t *testing.T) {
+func TestRebuildBuildCommandOmitsDWARF(t *testing.T) {
 	root := t.TempDir()
 	write := func(name, content string) {
 		t.Helper()
@@ -178,7 +179,7 @@ func TestRebuildBuildCommandLdflags(t *testing.T) {
 	}
 
 	write("go.mod", "module test-app\n\ngo 1.24\n")
-	write("cmd/server/main.go", "package main\n\nfunc main() {}\n")
+	write("cmd/server/main.go", "package main\n\nimport \"time\"\n\nfunc main() { for { time.Sleep(time.Hour) } }\n")
 
 	var status bytes.Buffer
 	var output bytes.Buffer
@@ -204,6 +205,17 @@ func TestRebuildBuildCommandLdflags(t *testing.T) {
 	}
 	if _, err := os.Stat(server.binary); err != nil {
 		t.Fatalf("expected binary at %s, error: %v", server.binary, err)
+	}
+	info, err := buildinfo.ReadFile(server.binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := make(map[string]string)
+	for _, setting := range info.Settings {
+		settings[setting.Key] = setting.Value
+	}
+	if settings["-gcflags"] != "all=-dwarf=false" || settings["-ldflags"] != "-w" {
+		t.Fatal("development binary retained DWARF build flags", settings)
 	}
 }
 

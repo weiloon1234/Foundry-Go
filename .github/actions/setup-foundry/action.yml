@@ -2,8 +2,11 @@ name: Set up Foundry verification
 description: Install the root Go toolchain and the tools and services needed by each gate.
 inputs:
   profile:
-    description: Required gate profile (verify, backends, or security).
+    description: Required gate profile (verify, backends, security, or deploy).
     required: true
+  cache-shard:
+    description: Optional shard identifier for an independent build cache.
+    default: ''
 runs:
   using: composite
   steps:
@@ -13,7 +16,7 @@ runs:
         FOUNDRY_SETUP_PROFILE: ${{ inputs.profile }}
       run: |
         case "$FOUNDRY_SETUP_PROFILE" in
-          verify|backends|security) ;;
+          verify|backends|security|deploy) ;;
           *) echo 'Unknown Foundry setup profile' >&2; exit 1 ;;
         esac
     - name: Free runner disk for race builds
@@ -43,9 +46,14 @@ runs:
       shell: bash
       env:
         FOUNDRY_SETUP_PROFILE: ${{ inputs.profile }}
+        FOUNDRY_CACHE_SHARD: ${{ inputs.cache-shard }}
       run: |
         set -euo pipefail
         prefix="go-$RUNNER_OS-$RUNNER_ARCH-$FOUNDRY_SETUP_PROFILE-"
+        if [ -n "$FOUNDRY_CACHE_SHARD" ]; then
+          [[ "$FOUNDRY_CACHE_SHARD" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo 'Invalid cache shard' >&2; exit 1; }
+          prefix="${prefix}shard-$FOUNDRY_CACHE_SHARD-"
+        fi
         {
           echo "FOUNDRY_GO_CACHE_STARTED=$(date +%s)"
           echo "FOUNDRY_GO_CACHE_PREFIX=$prefix"
@@ -81,13 +89,14 @@ runs:
         expected="$(awk '$1 == "toolchain" { print $2 }' go.mod)"
         test -n "$expected"
         test "$(GOTOOLCHAIN=local go env GOVERSION)" = "$expected"
-    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+    - if: ${{ inputs.profile != 'deploy' }}
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
         node-version: '24'
         cache: npm
         cache-dependency-path: tools/typescript/package-lock.json
     - name: Prepare isolated runner services
-      if: ${{ inputs.profile != 'security' }}
+      if: ${{ inputs.profile == 'verify' || inputs.profile == 'backends' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -102,6 +111,7 @@ runs:
         redis-cli -h 127.0.0.1 ping
         echo "FOUNDRY_TEST_POSTGRES_URL=postgres://$(whoami)@127.0.0.1:5432/foundry_ci?sslmode=disable" >> "$GITHUB_ENV"
     - name: Prepare editor and TypeScript tools
+      if: ${{ inputs.profile != 'deploy' }}
       shell: bash
       run: |
         set -euo pipefail

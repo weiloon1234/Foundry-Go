@@ -1,6 +1,10 @@
 GO ?= go
 TEST_PACKAGE_BATCH_SIZE ?= 6
 TEST_TIMEOUT ?= 20m
+TEST_POSTGRES_SHARD ?= 1/1
+# Keep this literal list on one line; testpostgres guards every package's source.
+RACE_EXEMPT_PACKAGES := ./internal/generate ./internal/retirement ./internal/noraw ./cmd/foundry
+RACE_EXEMPT_IMPORTS = $(addprefix $(shell awk '$$1 == "module" { print $$2 }' go.mod)/,$(patsubst ./%,%,$(RACE_EXEMPT_PACKAGES)))
 GENERATION_DIRS := logging cloud/credentials infrastructure imaging application internal/auditstore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/webhookstore webhook/capture httpclient/capture countries datatable database/orm/internal/enuminit telemetry tests/fixtures/consumer tests/fixtures/goway
 FIXTURE_DIRS := tests/fixtures/plugin_base tests/fixtures/plugin_dep tests/fixtures/consumer tests/fixtures/goway
 export GOWORK := off
@@ -9,6 +13,8 @@ export GOTOOLCHAIN := $(shell awk '$$1 == "toolchain" { print $$2 }' go.mod)
 # Canonical build flags: -trimpath removes absolute workspace paths from action IDs,
 # ensuring build cache entries are shared across checkouts, worktrees, and CI runners.
 override GOFLAGS := $(strip $(if $(findstring -trimpath,$(GOFLAGS)),$(GOFLAGS),$(GOFLAGS) -trimpath))
+# Skip compiler DWARF unless the caller selected their own compiler flags.
+override GOFLAGS := $(strip $(if $(findstring -gcflags,$(GOFLAGS)),$(GOFLAGS),$(GOFLAGS) -gcflags=all=-dwarf=false))
 export GOFLAGS
 
 # Compute once, lazily, for this make invocation. The tool prints one validated
@@ -26,7 +32,10 @@ endef
 define test_packages
 task_packages=$$($(GO) list ./...); \
 test -n "$$task_packages"; \
-printf '%s\n' "$$task_packages" | xargs -n $(TEST_PACKAGE_BATCH_SIZE) sh -c '$(GO) test -timeout=$(TEST_TIMEOUT) $(1) "$$@" || exit 255' foundry-tests
+$(if $(2),task_packages=$$(printf '%s\n' "$$task_packages" | awk 'BEGIN { n = split("$(2)", paths, " "); for (i = 1; i <= n; i++) exempt[paths[i]] = 1 } !($$0 in exempt)');) \
+if test -n "$$task_packages"; then \
+	printf '%s\n' "$$task_packages" | xargs -n $(TEST_PACKAGE_BATCH_SIZE) sh -c '$(GO) test -timeout=$(TEST_TIMEOUT) $(1) "$$@" || exit 255' foundry-tests; \
+fi
 endef
 
 # Framework-owned DTO and configuration outputs precede consumer generation so
@@ -41,7 +50,7 @@ for task_generate_dir in $(GENERATION_DIRS); do \
 done
 endef
 
-.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-tools-check typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check deploy-tools-check security-check security-tools-check verify publish-client-contracts
+.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-tools-check typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check deploy-tools-check security-check security-tools-check verify verify-go publish-client-contracts
 
 toolchain-check:
 	$(GO) version
@@ -61,7 +70,8 @@ test:
 
 race:
 	$(call prepare_test_inputs)
-	@set -eu; $(call test_packages,-race)
+	@printf '%s\n' 'Race-exempt (covered by make test): $(RACE_EXEMPT_PACKAGES)'
+	@set -eu; $(call test_packages,-race,$(RACE_EXEMPT_IMPORTS))
 	@set -eu; for task_fixture_dir in $(FIXTURE_DIRS); do \
 		(cd "$$task_fixture_dir"; $(call test_packages,-race)); \
 	done
@@ -124,7 +134,7 @@ typescript-check: typescript-tools-check
 	cd tests/fixtures/consumer && FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1 $(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./clientcontracts -run '^(TestTypeScriptClientAgainstRealHTTPAndWebSocket|TestOptionalFormAdaptersWithRealReactAndVue)$$'
 
 test-postgres:
-	$(GO) run ./internal/cmd/testpostgres --go $(GO) --race --batch-size $(TEST_PACKAGE_BATCH_SIZE) --timeout $(TEST_TIMEOUT)
+	$(GO) run ./internal/cmd/testpostgres --go $(GO) --race --race-exempt '$(RACE_EXEMPT_IMPORTS)' --shard $(TEST_POSTGRES_SHARD) --batch-size $(TEST_PACKAGE_BATCH_SIZE) --timeout $(TEST_TIMEOUT)
 
 # Use an explicitly configured private PostgreSQL URL, as testkit/postgres owns.
 # Each repetition retains its own isolated schema; no reset or cold cache.
@@ -138,8 +148,10 @@ TYPESCRIPT_BENCH_COUNT ?= 5
 benchmark-typescript:
 	$(GO) test -timeout=$(TEST_TIMEOUT) -run '^TestRenderPerformanceFixtures$$' -bench '^(BenchmarkRender|BenchmarkRenderModules|BenchmarkReceivedNaming|BenchmarkGenerateCheck)$$' -benchmem -benchtime=$(TYPESCRIPT_BENCH_TIME) -count=$(TYPESCRIPT_BENCH_COUNT) ./typescript
 
-verify: export FOUNDRY_TEST_TYPESCRIPT_REQUIRED := 1
-verify: toolchain-check typescript-tools-check fmt-check vet test fixture-check generate-check docs-check release-tools-check deploy-tools-check
+VERIFY_GO_TARGETS := toolchain-check typescript-tools-check fmt-check vet test fixture-check generate-check docs-check release-tools-check
+verify verify-go: export FOUNDRY_TEST_TYPESCRIPT_REQUIRED := 1
+verify: $(VERIFY_GO_TARGETS) deploy-tools-check
+verify-go: $(VERIFY_GO_TARGETS)
 
 # Scans reuse installed tools and warm caches; no cold package measurement.
 SECURITY_OUTPUT ?= .cache/security-check

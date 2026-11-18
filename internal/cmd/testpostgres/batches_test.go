@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ import (
 
 func TestPackageBatchesPreserveCoverageAndFailClosed(t *testing.T) {
 	checkPackageBatches(t, "test -race -count=1", func(ctx context.Context, binary, dir string, environment []string) error {
-		return testPackages(ctx, binary, dir, environment, []string{"test", "-race", "-count=1"}, 2)
+		return testPackages(ctx, binary, dir, environment, []string{"test", "-race", "-count=1"}, 2, packageShard{index: 1, total: 1}, nil)
 	})
 }
 
@@ -65,7 +66,7 @@ fi
 	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := run(t.Context(), binary, "unused", true, 2, 13*time.Minute); err != nil {
+	if err := run(t.Context(), binary, "unused", true, 2, 13*time.Minute, "1/1", nil); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(log)
@@ -75,6 +76,166 @@ fi
 	want := "test -mod=readonly -count=1 -timeout=13m0s -race pkg/a\n"
 	if string(data) != want+want+want {
 		t.Fatal("root and fixture commands lost the configured timeout", string(data))
+	}
+}
+
+func TestRequiredRunnerShardsEveryModuleAndExemptsOnlyRace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test executable uses POSIX shell")
+	}
+	dir := t.TempDir()
+	for _, fixture := range []string{"consumer", "goway"} {
+		if err := os.MkdirAll(filepath.Join(dir, "tests/fixtures", fixture), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(dir)
+	t.Setenv("FOUNDRY_TEST_POSTGRES_URL", "fixture-only-not-a-connection")
+	log := filepath.Join(dir, "calls")
+	t.Setenv("BATCH_LOG", log)
+	binary := filepath.Join(dir, "go-probe")
+	script := `#!/bin/sh
+set -eu
+if test "$1" = list; then
+    printf '%s\n' pkg/d pkg/b pkg/a pkg/c
+else
+    printf '%s|%s\n' "$PWD" "$*" >> "$BATCH_LOG"
+fi
+`
+	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, shard string
+		race        bool
+		want        []string
+	}{
+		{"ordinary", "1/1", false, []string{"pkg/a", "pkg/b", "pkg/c", "pkg/d"}},
+		{"race-first", "1/2", true, []string{"pkg/a", "pkg/d"}},
+		{"race-second", "2/2", true, []string{"pkg/c"}},
+		{"empty-shard", "5/5", true, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := os.WriteFile(log, nil, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := run(t.Context(), binary, "unused", tc.race, 6, time.Minute, tc.shard, []string{"pkg/b"}); err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(log)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(tc.want) == 0 {
+				if len(data) != 0 {
+					t.Fatal("empty shard invoked go test", string(data))
+				}
+				return
+			}
+			lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+			if len(lines) != 3 {
+				t.Fatal("not every module was tested", string(data))
+			}
+			for index, module := range []string{".", "tests/fixtures/consumer", "tests/fixtures/goway"} {
+				path, args, _ := strings.Cut(lines[index], "|")
+				path, err = filepath.EvalSymlinks(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				actual, err := filepath.EvalSymlinks(filepath.Join(dir, module))
+				if err != nil || path != actual {
+					t.Fatal("wrong module", path, actual, err)
+				}
+				fields := strings.Fields(args)
+				if slices.Contains(fields, "-race") != tc.race || !slices.Equal(fields[len(fields)-len(tc.want):], tc.want) {
+					t.Fatal("wrong packages or race mode", args)
+				}
+			}
+		})
+	}
+}
+
+func TestMakeRaceExemptionsRemainCoveredByTest(t *testing.T) {
+	testkit.TrackExternalInputs(t)
+	if runtime.GOOS == "windows" {
+		t.Skip("test executable uses POSIX shell")
+	}
+	makeBinary, err := exec.LookPath("make")
+	if err != nil {
+		t.Skip("Makefile acceptance requires an existing make command")
+	}
+	makefile, err := filepath.Abs("../../../Makefile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.test/root\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	log := filepath.Join(dir, "calls")
+	binary := filepath.Join(dir, "go-probe")
+	script := `#!/bin/sh
+set -eu
+if test "$1" = run; then
+    printf '%s\n' "$BATCH_INPUTS"
+elif test "$1" = list; then
+    printf '%s\n' example.test/root/exempt example.test/root/exempt/child example.test/root/ordinary
+else
+    printf '%s\n' "$*" >> "$BATCH_LOG"
+fi
+`
+	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []string{"test", "race"} {
+		if err := os.WriteFile(log, nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.CommandContext(t.Context(), makeBinary, "--no-print-directory", "-f", makefile, "GO="+binary, "RACE_EXEMPT_PACKAGES=./exempt", "FIXTURE_DIRS=", target)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "BATCH_LOG="+log, "BATCH_INPUTS="+testinputs.Variable+"="+strings.Repeat("a", 64))
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatal(string(output), err)
+		}
+		data, err := os.ReadFile(log)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fields := strings.Fields(string(data))
+		if slices.Contains(fields, "example.test/root/exempt") != (target == "test") || slices.Contains(fields, "-race") != (target == "race") {
+			t.Fatal("race exemption changed ordinary coverage or race mode", string(data))
+		}
+		for _, pkg := range []string{"example.test/root/exempt/child", "example.test/root/ordinary"} {
+			if !slices.Contains(fields, pkg) {
+				t.Fatal("non-exempt package was skipped", string(data))
+			}
+		}
+		if target == "race" && strings.Count(string(output), "Race-exempt (covered by make test): ./exempt") != 1 {
+			t.Fatal("race exemption notice missing or repeated", string(output))
+		}
+	}
+}
+
+func TestMakeCompilerFlagsPreserveCallerSelection(t *testing.T) {
+	testkit.TrackExternalInputs(t)
+	makeBinary, err := exec.LookPath("make")
+	if err != nil {
+		t.Skip("Makefile acceptance requires an existing make command")
+	}
+	for _, tc := range []struct{ flags, want string }{
+		{"", "-trimpath -gcflags=all=-dwarf=false"},
+		{"-trimpath", "-trimpath -gcflags=all=-dwarf=false"},
+		{"-gcflags=all=-dwarf=true", "-gcflags=all=-dwarf=true -trimpath"},
+		{"-trimpath -gcflags=example.test/app=-N", "-trimpath -gcflags=example.test/app=-N"},
+	} {
+		cmd := exec.CommandContext(t.Context(), makeBinary, "--no-print-directory", "-f", "Makefile", "-f", "-", "GOFLAGS="+tc.flags, "print-flags")
+		cmd.Stdin = strings.NewReader("print-flags:\n\t@printf '%s\\n' \"$$GOFLAGS\"\n")
+		cmd.Dir = "../../.."
+		output, err := cmd.CombinedOutput()
+		if err != nil || strings.TrimSpace(string(output)) != tc.want {
+			t.Fatalf("GOFLAGS=%q: got %q, want %q: %v", tc.flags, output, tc.want, err)
+		}
 	}
 }
 

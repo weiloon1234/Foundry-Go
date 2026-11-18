@@ -16,14 +16,90 @@ concurrency:
 
 env:
   GOWORK: 'off'
-  GOFLAGS: '-trimpath'
+  GOFLAGS: '-trimpath -gcflags=all=-dwarf=false'
   FOUNDRY_TEST_POSTGRES_REQUIRED: '1'
   FOUNDRY_TEST_REDIS_REQUIRED: '1'
   FOUNDRY_TEST_TYPESCRIPT_REQUIRED: '1'
   FOUNDRY_TEST_REDIS_ADDR: '127.0.0.1:6379'
 
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      deploy: ${{ steps.paths.outputs.deploy }}
+      go: ${{ steps.paths.outputs.go }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        continue-on-error: true
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Select gates from changed paths
+        id: paths
+        shell: bash
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+          CREATED: ${{ github.event.created }}
+          FORCED: ${{ github.event.forced }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed=$(mktemp)
+          trap 'rm -f "$changed"' EXIT
+          changed_files() {
+            case "$GITHUB_EVENT_NAME" in
+              schedule|workflow_dispatch) return 1 ;;
+            esac
+            case "$GITHUB_REF" in
+              refs/tags/*|refs/heads/release/*) return 1 ;;
+            esac
+            case "${GITHUB_HEAD_REF:-} ${GITHUB_BASE_REF:-}" in
+              release/*|*\ release/*) return 1 ;;
+            esac
+            [ "$(git rev-parse --is-shallow-repository)" = false ] || return 1
+            case "$GITHUB_EVENT_NAME" in
+              push)
+                [ "$CREATED" != true ] && [ "$FORCED" != true ] || return 1
+                base=$BEFORE
+                head=$AFTER
+                git cat-file -e "$base^{commit}" 2>/dev/null || return 1
+                git cat-file -e "$head^{commit}" 2>/dev/null || return 1
+                git merge-base --is-ancestor "$base" "$head" || return 1
+                ;;
+              pull_request)
+                head=$PR_HEAD
+                base=$(git merge-base "$PR_BASE" "$head") || return 1
+                ;;
+              *) return 1 ;;
+            esac
+            # Report both paths of a rename, including moves across gate boundaries.
+            git diff --no-ext-diff --name-only --no-renames -z "$base" "$head" -- > "$changed"
+          }
+          deploy=true
+          go=true
+          if changed_files; then
+            deploy=false
+            go=false
+            while IFS= read -r -d '' path; do
+              case "$path" in
+                tools/deploy/*|tests/fixtures/deploy-acceptance/*|.github/*) deploy=true ;;
+              esac
+              case "$path" in
+                tools/deploy/*) ;;
+                *) go=true ;;
+              esac
+            done < "$changed"
+          else
+            echo 'Running all gates: full event or changed-file history unavailable.'
+          fi
+          printf 'deploy=%s\ngo=%s\n' "$deploy" "$go" >> "$GITHUB_OUTPUT"
+
   systemd-contract:
+    needs: changes
+    if: ${{ needs.changes.outputs.deploy == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     steps:
@@ -35,7 +111,8 @@ jobs:
         run: sudo -E env FOUNDRY_REAL_SYSTEMD=1 python3 -B -m unittest discover -s tools/deploy/tests -p test_systemd_contract.py -v
 
   deploy-acceptance-amd64:
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    needs: changes
+    if: ${{ github.event_name != 'pull_request' && needs.changes.outputs.deploy == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -80,7 +157,8 @@ jobs:
 
   deploy-vm-amd64:
     name: deploy-vm-amd64 (${{ matrix.ubuntu }}, ${{ matrix.scenario }}, ${{ matrix.topology }})
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    needs: changes
+    if: ${{ github.event_name != 'pull_request' && needs.changes.outputs.deploy == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: ${{ matrix.scenario == 'recovery' && 90 || 60 }}
     strategy:
@@ -163,6 +241,8 @@ jobs:
           retention-days: 14
 
   verify:
+    needs: changes
+    if: ${{ needs.changes.outputs.go == 'true' || needs.changes.outputs.deploy == 'true' }}
     runs-on: macos-15
     timeout-minutes: 120
     steps:
@@ -171,14 +251,27 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-foundry
         with:
-          profile: verify
-      - name: Native framework and independent consumers
+          profile: ${{ needs.changes.outputs.go == 'true' && 'verify' || 'deploy' }}
+      - name: Full verification
+        if: ${{ needs.changes.outputs.go == 'true' && needs.changes.outputs.deploy == 'true' }}
         run: make verify
+      - name: Native framework and independent consumers
+        if: ${{ needs.changes.outputs.go == 'true' && needs.changes.outputs.deploy != 'true' }}
+        run: make verify-go
+      - name: Deployment and release tools
+        if: ${{ needs.changes.outputs.go != 'true' && needs.changes.outputs.deploy == 'true' }}
+        run: make deploy-tools-check release-tools-check fmt-check docs-check
       - uses: ./.github/actions/save-go-cache
 
   backends:
+    needs: changes
+    if: ${{ needs.changes.outputs.go == 'true' }}
     runs-on: macos-15
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -186,11 +279,19 @@ jobs:
       - uses: ./.github/actions/setup-foundry
         with:
           profile: backends
-      - name: Persistent backends and races
-        run: make test-postgres test-redis
+          cache-shard: ${{ matrix.shard }}-of-${{ strategy.job-total }}
+      - name: PostgreSQL and races
+        env:
+          TEST_POSTGRES_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+        run: make test-postgres
+      - name: Redis acceptance
+        if: ${{ matrix.shard == 1 }}
+        run: make test-redis
       - uses: ./.github/actions/save-go-cache
 
   security:
+    needs: changes
+    if: ${{ needs.changes.outputs.go == 'true' }}
     runs-on: macos-15
     timeout-minutes: 60
     steps:

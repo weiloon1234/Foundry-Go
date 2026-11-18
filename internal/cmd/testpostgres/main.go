@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -24,10 +26,12 @@ func main() {
 	goBinary := flag.String("go", "go", "selected Go command")
 	file := flag.String("env-file", ".env.test", "private test environment file")
 	race := flag.Bool("race", false, "enable the race detector")
+	exempt := flag.String("race-exempt", "", "space-separated race-exempt import paths; configured by Makefile")
+	shardSpec := flag.String("shard", "1/1", "package shard INDEX/TOTAL (1-based)")
 	batchSize := flag.Int("batch-size", 0, "required maximum packages per test invocation; configured by Makefile")
 	timeout := flag.Duration("timeout", 0, "required positive per-package test timeout; configured by Makefile")
 	flag.Parse()
-	if err := run(ctx, *goBinary, *file, *race, *batchSize, *timeout); err != nil {
+	if err := run(ctx, *goBinary, *file, *race, *batchSize, *timeout, *shardSpec, strings.Fields(*exempt)); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -75,12 +79,16 @@ func readURL(path string) (string, error) {
 	return value, nil
 }
 
-func run(ctx context.Context, goBinary, file string, race bool, batchSize int, timeout time.Duration) error {
+func run(ctx context.Context, goBinary, file string, race bool, batchSize int, timeout time.Duration, shardSpec string, exempt []string) error {
 	if batchSize <= 0 {
 		return errors.New("PostgreSQL test package batch size must be positive")
 	}
 	if timeout <= 0 {
 		return errors.New("PostgreSQL test package timeout must be positive")
+	}
+	shard, err := parseShard(shardSpec)
+	if err != nil {
+		return err
 	}
 	value, err := readURL(file)
 	if err != nil {
@@ -94,19 +102,56 @@ func run(ctx context.Context, goBinary, file string, race bool, batchSize int, t
 		}
 	}
 	environment = append(environment, pgtest.URLVariable+"="+value, pgtest.RequiredVariable+"=1", "GOWORK=off")
+	if !race {
+		exempt = nil
+	} else if len(exempt) > 0 {
+		fmt.Printf("Race-exempt (covered by make test): %s\n", strings.Join(exempt, " "))
+	}
 	for _, dir := range []string{".", "tests/fixtures/consumer", "tests/fixtures/goway"} {
 		args := []string{"test", "-mod=readonly", "-count=1", "-timeout=" + timeout.String()}
 		if race {
 			args = append(args, "-race")
 		}
-		if err := testPackages(ctx, goBinary, dir, environment, args, batchSize); err != nil {
+		if err := testPackages(ctx, goBinary, dir, environment, args, batchSize, shard, exempt); err != nil {
 			return fmt.Errorf("required PostgreSQL acceptance failed in %s: %w", dir, err)
 		}
 	}
 	return nil
 }
 
-func testPackages(ctx context.Context, goBinary, dir string, environment, args []string, batchSize int) error {
+type packageShard struct {
+	index int
+	total int
+}
+
+func parseShard(value string) (packageShard, error) {
+	indexText, totalText, ok := strings.Cut(value, "/")
+	index, indexErr := strconv.Atoi(indexText)
+	total, totalErr := strconv.Atoi(totalText)
+	if !ok || indexErr != nil || totalErr != nil || index < 1 || total < 1 || index > total {
+		return packageShard{}, errors.New("shard must be INDEX/TOTAL with 1 <= INDEX <= TOTAL")
+	}
+	return packageShard{index: index, total: total}, nil
+}
+
+func partitionPackages(packages []string, shard packageShard, exempt []string) []string {
+	packages = slices.Clone(packages)
+	slices.Sort(packages)
+	selected := make([]string, 0)
+	index := 0
+	for _, pkg := range packages {
+		if slices.Contains(exempt, pkg) {
+			continue
+		}
+		if index%shard.total == shard.index-1 {
+			selected = append(selected, pkg)
+		}
+		index++
+	}
+	return selected
+}
+
+func testPackages(ctx context.Context, goBinary, dir string, environment, args []string, batchSize int, shard packageShard, exempt []string) error {
 	if batchSize <= 0 {
 		return errors.New("test package batch size must be positive")
 	}
@@ -120,6 +165,7 @@ func testPackages(ctx context.Context, goBinary, dir string, environment, args [
 	if len(packages) == 0 {
 		return errors.New("test package discovery returned no packages")
 	}
+	packages = partitionPackages(packages, shard, exempt)
 	for len(packages) > 0 {
 		count := min(batchSize, len(packages))
 		batch := packages[:count]

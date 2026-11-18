@@ -346,7 +346,7 @@ panic/Goexit, but cannot forcibly stop arbitrary application goroutines.
 
 `devserver.Run(ctx, opts, streams)` runs the application development loop. It watches
 Go sources and declared application inputs, settles change bursts, rebuilds the target
-binary with link optimizations (`-ldflags=-w`), and restarts the server child process.
+binary without compiler or linker DWARF (`-gcflags=all=-dwarf=false -ldflags=-w`), and restarts the server child process.
 If compilation fails, the previous server keeps running uninterrupted.
 
 Configure `devserver.Options`:
@@ -649,14 +649,29 @@ checks and unexecuted tests are not acceptance evidence.
 
 ## Continuous verification and security
 
-The repository workflow (`.github/workflows/verify.yml`) runs three independent
-macOS jobs: `verify` runs `make verify`, `backends` runs `make test-postgres test-redis`,
-and `security` runs `make security-check` and uploads its evidence. The first two
-jobs start isolated runner-local PostgreSQL 18 (the tested backend) and Redis;
-security needs no services.
+The repository workflow (`.github/workflows/verify.yml`) selects gates from changed
+paths. Changes under `tools/deploy/`, `tests/fixtures/deploy-acceptance/`, or
+`.github/` enable deployment jobs. Any change outside `tools/deploy/` enables Go
+jobs. Schedules, manual runs, tags, release branches, and unavailable change history
+enable every gate.
+
+The macOS `verify` job runs `make verify` when both groups apply, `make verify-go`
+for Go-only changes, or `make deploy-tools-check release-tools-check fmt-check docs-check`
+for deployment-only changes. `make verify` remains the full local gate.
+For Go changes, two `backends` shards run `make test-postgres` with
+`TEST_POSTGRES_SHARD=1/2` and `2/2`; only shard 1 also runs `make test-redis`.
+The PostgreSQL runner sorts and partitions each module's packages independently.
+Local runs default to `1/1`. The Makefile's `RACE_EXEMPT_PACKAGES` list removes
+packages from `make race` and race-enabled PostgreSQL checks, while `make test`
+retains their ordinary coverage. A parser guard rejects missing exempt packages
+or non-test source that starts a goroutine.
+
+The `security` job runs `make security-check` and uploads its evidence for Go
+changes. Go verification and backend jobs start isolated runner-local PostgreSQL 18
+and Redis. Deployment-only verification and security need no services.
 The shared setup action (`.github/actions/setup-foundry/action.yml`) installs the
 root `go.mod` toolchain and each job's required tools. Required backend, real gopls
-and TypeScript checks remain enabled. Each profile restores its own newest Go
+and TypeScript checks remain enabled. Each profile and backend shard restores its own newest Go
 build and module cache from `main` without waiting for the other gates. A
 successful `main` run then saves a fresh copy keyed by its commit
 (`.github/actions/save-go-cache`), keeping only the build cache entries that run
@@ -667,7 +682,9 @@ generic-method reduction and ORM test repartitioning, every cold `go vet ./...`
 compile stays under 2 GB peak RSS (largest: `database/orm` at 1.82 GB and
 `database/orm/rows` at 1.54 GB), so the 7 GB macOS runners use default parallel
 compilation without `GOFLAGS=-p=1`; see the [CI budget](developer-resource-measurements.md#developer-and-ci-budgets).
-Both `Makefile` and CI configure canonical `GOFLAGS` containing `-trimpath`.
+Both `Makefile` and CI configure canonical `GOFLAGS` containing `-trimpath -gcflags=all=-dwarf=false`, omitting compiler DWARF from development and test archives.
+Make preserves caller-provided `-gcflags`; use `GOFLAGS=-gcflags=all=-dwarf=true make test` to restore DWARF.
+For Delve, run `GOFLAGS=-gcflags=all=-dwarf=true dlv debug ./cmd/artisan` separately from devserver so Delve supplies its debug flags without devserver's `-ldflags=-w`.
 Without `-trimpath`, Go includes absolute checkout directories in build action
 IDs, causing each checkout path or worktree to build separate cache copies and
 duplicate `GOCACHE`. With `-trimpath`, recorded source paths are module-relative,

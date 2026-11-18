@@ -1,5 +1,5 @@
 name: Save Foundry Go caches
-description: Keep only the Go build cache entries this job used, then save the caches set up by setup-foundry.
+description: Keep only the Go build cache entries this job used, then save the profile and shard caches selected by setup-foundry.
 runs:
   using: composite
   steps:
@@ -20,4 +20,5 @@ runs:
         path: |
           ${{ env.FOUNDRY_GO_BUILD_CACHE }}
           ${{ env.FOUNDRY_GO_MODULE_CACHE }}
+        # Reuse the exact restore key, including setup-foundry's optional shard.
         key: ${{ env.FOUNDRY_GO_CACHE_KEY }}

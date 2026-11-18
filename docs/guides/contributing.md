@@ -53,9 +53,10 @@ provider credentials out of tracked files and command output.
 | `make agent-smoke` | Verify real gopls against the consumer, requiring `FOUNDRY_TEST_GOPLS` to select an existing approved executable |
 | `make docs-check` | Check local Markdown link targets, explicit future-work claims against completed milestones, contiguous blueprint numbering, and fixture Go requirements |
 | `make release-tools-check` | Verify the independent module packager and native measurement harness |
-| `make verify` | Run the normal repository gate |
-| `make race` | Race-enabled framework/tool and consumer checks |
-| `make test-postgres` | Required real PostgreSQL acceptance, including the independent consumer, with race detection |
+| `make verify` | Run the full repository gate |
+| `make verify-go` | Run the repository gate without deployment-tool tests |
+| `make race` | Race-enabled framework/tool and consumer checks, excluding the guarded `RACE_EXEMPT_PACKAGES` list |
+| `make test-postgres` | Required real PostgreSQL acceptance with race detection and the same exemptions; `TEST_POSTGRES_SHARD=INDEX/TOTAL` selects a shard |
 
 `GOWORK=off` is set by Make so a local workspace cannot hide module-boundary mistakes. The consumer, Go-way and two plugin fixtures use test-only local replacements; the root module has none. The [release gate](../release-checklist.md) separately builds packaged modules in copied consumers with every replacement removed.
 
@@ -66,6 +67,8 @@ package compilation without removing checks; choose concurrency from available
 host memory. The `Makefile` canonically exports `GOFLAGS` containing `-trimpath`
 (while preserving any caller-provided flags) so that action IDs omit absolute
 workspace directories and multiple worktrees or checkouts share one build cache.
+The default also omits compiler DWARF unless the caller supplies `-gcflags`; see
+[build flags and Delve](developer-tooling-and-testing.md#continuous-verification-and-security).
 A GC soft limit does not cap total process memory or solve a
 compilation unit whose live objects exceed available RAM.
 
