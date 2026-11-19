@@ -46,7 +46,7 @@ func (Events[T]) MarshalJSON() ([]byte, error) {
 // EventsFrom; the stream starts only after it succeeded, then behaves as
 // ServeEvents (flush per event, heartbeats, bounded queue, owned producer). Each
 // event's data is bounded by EndpointLimits.Response. Declare the route's
-// WithTimeout for the longest stream lifetime. A client disconnect or the route
+// http.Timeout for the longest stream lifetime. A client disconnect or the route
 // deadline ends the stream normally; a producer failure or an invalid event
 // aborts the connection. Metadata, OpenAPI and the TypeScript client describe
 // the stream and its data type; the client iterates the decoded events.

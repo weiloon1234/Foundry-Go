@@ -48,7 +48,7 @@ func TestPaginationContractBytesAndRedaction(t *testing.T) {
 	// Frozen v1 envelope: exact integers, JSON field order and raw URL encoding.
 	const envelope = `{"v":1,"scope":"0000000000000000000000000000000000000000000000000000000000000000","values":[{"k":"int","t":"9223372036854775807"},{"k":"null"},{"k":"string","t":"private"}]}`
 	want := base64.RawURLEncoding.EncodeToString([]byte(envelope))
-	token, err := querycore.MakeCursor(strings.Repeat("0", 64), []driver.Value{int64(math.MaxInt64), nil, "private"})
+	token, err := querycore.BuildCursor(strings.Repeat("0", 64), 3, func(i int) (driver.Value, error) { return []driver.Value{int64(math.MaxInt64), nil, "private"}[i], nil })
 	if err != nil || token != want {
 		t.Fatal("cursor v1 bytes changed", err)
 	}

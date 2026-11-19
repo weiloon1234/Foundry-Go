@@ -8,8 +8,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-// SlotBinding connects one generated model struct field to an extension
-// declaration. Generation supplies it from the model's slot fields; Field names
+// SlotBinding connects one handwritten model struct field to an extension
+// declaration. Handwritten slot declarations supply it; Field names
 // the Go field, which identifies the slot in eager loading and diagnostics.
 // Reference derives the owner identity from a model value without I/O. Get and
 // Set read and replace the slot on a model copy.
@@ -20,7 +20,7 @@ type SlotBinding[M any, K comparable, S any] struct {
 	Set       func(M, S) M
 }
 
-// Validate checks the generated binding without calling its functions.
+// Validate checks the declared binding without calling its functions.
 func (b SlotBinding[M, K, S]) Validate() error {
 	if !token.IsIdentifier(b.Field) || !token.IsExported(b.Field) || b.Reference == nil || b.Get == nil || b.Set == nil {
 		return invalid("invalid model extension slot binding")

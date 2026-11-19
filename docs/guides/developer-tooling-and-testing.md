@@ -117,7 +117,7 @@ cache. Reading a released recipe needs no compiler or renderer.
 
 ### Former API teaching in migration guides
 
-Only `orm-migration.md` and `v0.2-migration.md` may teach removed APIs. Use the
+Only `orm-migration.md` may teach removed APIs. Use the
 existing `<!-- orm-example: name-before -->` label immediately before one fence,
 pipe-delimited mapping table, or paragraph (including one list item). A fence
 ends at its closing delimiter; a table ends at its last row. A paragraph ends at
@@ -126,7 +126,7 @@ cover headings or whole sections. Label each former-API block separately.
 
 Active guides and application instructions cannot use this exception. Link to
 the migration owner instead of repeating former methods in current API teaching.
-The [validation mapping](v0.2-migration.md#validation-migration) is one such owner.
+Current validation functions belong in the [validation guide](validation.md#descriptor-functions).
 
 <a id="recipe-reference-guides"></a>
 ## Reference pinned guides

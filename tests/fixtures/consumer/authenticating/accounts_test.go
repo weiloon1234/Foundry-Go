@@ -52,7 +52,12 @@ func TestConsumerReceivesGeneratedModelAndReusesProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := foundryhttp.NewRouter(authenticating.ProfileRoute(authenticating.PermissionProfile(authenticating.Profile(transport, api)), api))
+
+	endpoint := authenticating.Profile(transport, api)
+	endpoint = authenticating.PermissionProfile(endpoint)
+
+	router, err := foundryhttp.NewRouter(authenticating.ProfileRoute(endpoint, api))
+
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,6 +8,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 )
 
-var _ = modelbinding.Bind(foundryhttp.ForBinding(n.Transport(foundryhttp.Public)), n.Resolve(nil)).Handle(func(context.Context, modelbinding.Input[n.Path, foundryhttp.NoQuery, foundryhttp.NoBody, n.Project]) (n.Reply, error) {
+var endpoint = n.Transport(foundryhttp.Public)
+var binding = foundryhttp.ForBinding(endpoint)
+var resolver = n.Resolve(nil)
+
+var _ = modelbinding.Bind(binding, resolver).Handle(func(context.Context, modelbinding.Input[n.Path, foundryhttp.NoQuery, foundryhttp.NoBody, n.Project]) (n.Reply, error) {
 	return n.Reply{}, nil
 })

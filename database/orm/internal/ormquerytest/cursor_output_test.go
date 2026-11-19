@@ -12,7 +12,7 @@ import (
 )
 
 func TestCursorPageOutputValidationDoesNotClaimInputFailure(t *testing.T) {
-	raw, err := querycore.MakeCursor(strings.Repeat("a", 64), []driver.Value{int64(7)})
+	raw, err := querycore.BuildCursor(strings.Repeat("a", 64), 1, func(i int) (driver.Value, error) { return []driver.Value{int64(7)}[i], nil })
 	if err != nil {
 		t.Fatal(err)
 	}

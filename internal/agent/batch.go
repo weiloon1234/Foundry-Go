@@ -12,32 +12,6 @@ import (
 // MaxBatchOperations bounds prepared source overlays retained by one session.
 const MaxBatchOperations = 16
 
-// InspectBatch owns one fresh language-server session for a related scenario.
-// Each operation opens its independently prepared overlay and closes it before
-// the next operation. Initialization and each operation have separate deadlines;
-// any failure stops the batch and closes the owned process. Returned results are
-// the completed prefix; callers must still check the error, including cleanup.
-// No server or unsaved state is shared between calls.
-func InspectBatch(ctx context.Context, options []Options, timeout time.Duration) ([]Result, error) {
-	if len(options) == 0 || len(options) > MaxBatchOperations || timeout <= 0 {
-		return nil, fmt.Errorf("agent batch requires bounded operations and a positive operation timeout")
-	}
-	executable := options[0].Gopls
-	if executable == "" {
-		executable = "gopls"
-	}
-	for _, item := range options {
-		selected := item.Gopls
-		if selected == "" {
-			selected = "gopls"
-		}
-		if selected != executable {
-			return nil, fmt.Errorf("agent batch must use one language-server executable")
-		}
-	}
-	return inspectBatch(ctx, options, timeout, executable, []string{"serve"}, shutdownGrace)
-}
-
 func inspectionMethod(operation string) (string, error) {
 	switch operation {
 	case "complete":

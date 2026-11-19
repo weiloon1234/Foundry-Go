@@ -13,7 +13,8 @@ import (
 
 func invalid(ex database.Executor, transport h.Endpoint[h.NoPath, h.NoQuery, h.NoBody, h.NoContent]) {
 	resolver := modelbinding.ByKey(ex, orm.Keyed(a.Members.Query(), a.Members.Key()), func(h.NoPath) model.ID[a.Member] { return model.ID[a.Member]{} })
-	_ = modelbinding.Bind(h.ForBinding(transport), resolver).Handle(func(context.Context, modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, a.Other]) (h.NoContent, error) {
+	binding := h.ForBinding(transport)
+	_ = modelbinding.Bind(binding, resolver).Handle(func(context.Context, modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, a.Other]) (h.NoContent, error) {
 		return h.NoContent{}, nil
 	})
 }

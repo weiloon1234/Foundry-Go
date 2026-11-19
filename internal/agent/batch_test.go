@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,22 +102,48 @@ func TestBatchValidatesAllRequestsBeforeStartingServer(t *testing.T) {
 	} {
 		items := append([]Options(nil), options...)
 		mutate(items)
-		_, err := InspectBatch(t.Context(), items, time.Second)
+		_, err := inspectTestBatch(t.Context(), items, time.Second)
 		if err == nil || strings.Contains(err.Error(), "start gopls") {
 			t.Fatal("invalid batch started a server", err)
 		}
 	}
 	for _, items := range [][]Options{nil, make([]Options, MaxBatchOperations+1)} {
-		if _, err := InspectBatch(t.Context(), items, time.Second); err == nil {
+		if _, err := inspectTestBatch(t.Context(), items, time.Second); err == nil {
 			t.Fatal("unbounded or empty batch accepted")
 		}
 	}
-	if _, err := InspectBatch(t.Context(), options, 0); err == nil {
+	if _, err := inspectTestBatch(t.Context(), options, 0); err == nil {
 		t.Fatal("unbounded operation accepted")
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := InspectBatch(ctx, options, time.Second); !errors.Is(err, context.Canceled) {
+	if _, err := inspectTestBatch(ctx, options, time.Second); !errors.Is(err, context.Canceled) {
 		t.Fatal("canceled batch started", err)
 	}
+}
+
+// inspectTestBatch owns one fresh language-server session for a related scenario.
+// Each operation opens its independently prepared overlay and closes it before
+// the next operation. Initialization and each operation have separate deadlines;
+// any failure stops the batch and closes the owned process. Returned results are
+// the completed prefix; callers must still check the error, including cleanup.
+// No server or unsaved state is shared between calls.
+func inspectTestBatch(ctx context.Context, options []Options, timeout time.Duration) ([]Result, error) {
+	if len(options) == 0 || len(options) > MaxBatchOperations || timeout <= 0 {
+		return nil, fmt.Errorf("agent batch requires bounded operations and a positive operation timeout")
+	}
+	executable := options[0].Gopls
+	if executable == "" {
+		executable = "gopls"
+	}
+	for _, item := range options {
+		selected := item.Gopls
+		if selected == "" {
+			selected = "gopls"
+		}
+		if selected != executable {
+			return nil, fmt.Errorf("agent batch must use one language-server executable")
+		}
+	}
+	return inspectBatch(ctx, options, timeout, executable, []string{"serve"}, shutdownGrace)
 }

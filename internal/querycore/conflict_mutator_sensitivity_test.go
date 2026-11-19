@@ -18,10 +18,10 @@ func TestConflictMutatorSensitivityPreservesProposedIdentity(t *testing.T) {
 		valid bool
 	}{
 		{"own proposed", FieldRef{ConflictProposedTable, "secret"}, true},
-		{"sensitive own proposed", WithSensitivity(FieldRef{ConflictProposedTable, "secret"}, true), true},
-		{"sensitive foreign column", WithSensitivity(FieldRef{ConflictProposedTable, "other"}, true), false},
-		{"sensitive stored value", WithSensitivity(FieldRef{ConflictStoredTable, "secret"}, true), false},
-		{"sensitive parameter", WithSensitivity(ParameterNode{}, true), false},
+		{"sensitive own proposed", SensitiveValue{Value: FieldRef{ConflictProposedTable, "secret"}}, true},
+		{"sensitive foreign column", SensitiveValue{Value: FieldRef{ConflictProposedTable, "other"}}, false},
+		{"sensitive stored value", SensitiveValue{Value: FieldRef{ConflictStoredTable, "secret"}}, false},
+		{"sensitive parameter", SensitiveValue{Value: ParameterNode{}}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := ValidateConflictMutator(ConflictUpdate{Field: FieldRef{"models", "secret"}, Value: tc.value}, field)

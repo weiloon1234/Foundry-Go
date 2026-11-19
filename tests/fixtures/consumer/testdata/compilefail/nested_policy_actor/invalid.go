@@ -9,4 +9,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 )
 
-var _ = modelbinding.AuthorizeAuthenticatedResource[n.Path, foundryhttp.NoQuery, foundryhttp.NoBody, n.Team, n.Resources, n.Reply](modelbinding.BindAuthenticated(foundryhttp.ForAuthenticatedBinding(foundryhttp.RequireAuthentication(n.Transport(foundryhttp.Guarded), nil, auth.Guard[n.Team]{})), n.Resolve(nil)), func(context.Context, string, n.Request) error { return nil })
+var endpoint = n.Transport(foundryhttp.Guarded)
+var secured = foundryhttp.RequireAuthentication(endpoint, nil, auth.Guard[n.Team]{})
+var binding = foundryhttp.ForAuthenticatedBinding(secured)
+var resolver = n.Resolve(nil)
+var bound = modelbinding.BindAuthenticated(binding, resolver)
+
+var _ = modelbinding.AuthorizeAuthenticatedResource[n.Path, foundryhttp.NoQuery, foundryhttp.NoBody, n.Team, n.Resources, n.Reply](bound, func(context.Context, string, n.Request) error { return nil })

@@ -13,7 +13,8 @@ import (
 
 func invalid(ex database.Executor, transport h.OptionalAuthenticationEndpoint[h.NoPath, h.NoQuery, h.NoBody, a.Member, h.NoContent]) {
 	resolver := modelbinding.ByKey(ex, orm.Keyed(a.Others.Query(), a.Others.Key()), func(h.NoPath) model.ID[a.Other] { return model.ID[a.Other]{} })
-	_ = modelbinding.BindAuthenticated(h.ForOptionalBinding(transport), resolver).Handle(func(context.Context, a.Member, modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, a.Other]) (h.NoContent, error) {
+	binding := h.ForOptionalBinding(transport)
+	_ = modelbinding.BindAuthenticated(binding, resolver).Handle(func(context.Context, a.Member, modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, a.Other]) (h.NoContent, error) {
 		return h.NoContent{}, nil
 	})
 }

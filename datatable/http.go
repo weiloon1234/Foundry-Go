@@ -13,7 +13,7 @@ import (
 // returned artifact. Subject A must remain valid for that request's lifetime.
 //
 // Generation and transfer run under the request's single deadline. Declare the
-// download route with WithTimeout(m.DownloadTimeout()) so a report is not cut
+// download route with http.Timeout(m.DownloadTimeout()) so a report is not cut
 // by the kernel RequestTimeout; generation is also bounded by ExportTimeout.
 // When the request context ends (deadline, client disconnect or shutdown),
 // generation stops and releases its export slot, read transaction and

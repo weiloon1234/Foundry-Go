@@ -2,7 +2,6 @@ package querycore
 
 import (
 	"encoding/json"
-	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -10,7 +9,6 @@ import (
 	"unicode/utf8"
 )
 
-func ValidateJSONKind(kind string) error { return database.JSONKind(kind).Validate() }
 func ValidateJSONProperty(name string) error {
 	if len(name) > value.JSONMaxBytes || !utf8.ValidString(name) || strings.ContainsRune(name, 0) {
 		return safeerror.NewFault(fault.Invalid, "invalid JSON property name")

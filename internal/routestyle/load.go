@@ -76,19 +76,19 @@ func check(ctx context.Context, dir string, patterns []string) (result []Diagnos
 	return result, nil
 }
 
-// Analysis is shared with the temporary migration tool. It retains one package's
-// type information and immutable function-alias definitions.
+// Analysis retains one package's type information and function-alias definitions.
 type Analysis struct {
 	Context          context.Context
 	Info             *types.Info
 	Files            *token.FileSet
 	aliases          map[types.Object][]ast.Expr
+	stages           map[*types.Package]map[*types.TypeName]bool
 	HTTPDependencies map[string]bool
 	Declarations     map[string]generate.TransportDeclaration
 }
 
 func NewAnalysis(info *types.Info, files *token.FileSet) *Analysis {
-	return &Analysis{Context: context.Background(), Info: info, Files: files, aliases: make(map[types.Object][]ast.Expr), Declarations: make(map[string]generate.TransportDeclaration)}
+	return &Analysis{Context: context.Background(), stages: make(map[*types.Package]map[*types.TypeName]bool), Info: info, Files: files, aliases: make(map[types.Object][]ast.Expr), Declarations: make(map[string]generate.TransportDeclaration)}
 }
 func (a *Analysis) Index(file *ast.File) {
 	if a.Context.Err() != nil {

@@ -155,7 +155,7 @@ the sources from the application when it runs:
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/guide_export.go#export-command -->
 ```go
 func ClientExportCommand(sources typescript.Sources) (cli.Declaration, error) {
-	return typescript.ExportCommand("contracts.export",
+	return typescript.ExportCommand("contracts:export",
 		openapi.Options{Title: "Consumer", APIVersion: "1"}, sources)
 }
 ```
@@ -164,7 +164,7 @@ func ClientExportCommand(sources typescript.Sources) (cli.Declaration, error) {
 `foundation.Resolver`. Resolve the router, realtime description and other
 registered sources from the application in that callback. Register the declaration
 with the application's CLI commands, then run
-`app contracts.export --dir frontend/src/generated [--prefix contracts] [--check]`.
+`app contracts:export --dir frontend/src/generated [--prefix contracts] [--check]`.
 
 The default output is the client entry `contracts_foundry.gen.ts`, the shared
 runtime modules it imports (`contracts_runtime_foundry.gen.ts` and
@@ -810,7 +810,7 @@ Custom transport injection is unchanged: pass any `HTTPTransport` to
 and a `close()` method under the same contract.
 
 The framework embeds `typescript/runtime/fetch.ts` with its other runtime sources.
-`typescript.Generate` and `contracts.export` publish it inside
+`typescript.Generate` and `contracts:export` publish it inside
 `<prefix>_runtime_foundry.gen.ts`; the full entry and surface entries re-export
 `fetchTransport`. `typescript.Render` includes it in its self-contained output.
 No additional generated file is required. Keep the entry and its runtime siblings

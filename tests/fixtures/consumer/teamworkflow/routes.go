@@ -65,7 +65,9 @@ func (s *Service) Routes() ([]http.RouteRegistration, error) {
 	}
 	resolver := projectResolver(s.db, func(p ProjectPath) int64 { return p.Team }, func(p ProjectPath) Slug { return p.Project })
 
-	guardWorkflowPatch := http.RequireAuthentication(PatchEndpoint(), transport, guard)
+	workflowPatchEndpoint := PatchEndpoint()
+	guardWorkflowPatch := http.RequireAuthentication(workflowPatchEndpoint, transport, guard)
+
 	workflowPatchBinding := http.ForAuthenticatedBinding(guardWorkflowPatch)
 	patch := modelbinding.BindAuthenticated(workflowPatchBinding, resolver)
 	patch = modelbinding.AuthorizeAuthenticatedResource(patch,
@@ -84,7 +86,9 @@ func (s *Service) Routes() ([]http.RouteRegistration, error) {
 
 	submissions := projectResolver(s.db, func(p SubmissionPath) int64 { return p.Team }, func(p SubmissionPath) Slug { return p.Project })
 
-	required := http.RequireAuthentication(SubmitEndpoint(), transport, guard)
+	workflowSubmitEndpoint := SubmitEndpoint()
+	required := http.RequireAuthentication(workflowSubmitEndpoint, transport, guard)
+
 	required = http.AuthorizeActor(required, func(_ context.Context, _ Actor, in http.Input[SubmissionPath, http.NoQuery, SubmissionInput]) error {
 		if in.Body.Name == "request-denied" {
 			return http.Forbidden

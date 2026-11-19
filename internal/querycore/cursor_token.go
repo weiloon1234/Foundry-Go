@@ -98,11 +98,6 @@ func CursorStatementScopeFor(modelIdentity string, statement Statement, identity
 	return hex.EncodeToString(hash[:]), nil
 }
 
-// MakeCursor serializes the unchanged v1 envelope after bounding each key.
-func MakeCursor(scope string, values []driver.Value) (string, error) {
-	return BuildCursor(scope, len(values), func(i int) (driver.Value, error) { return values[i], nil })
-}
-
 // BuildCursor bounds and encodes each field before evaluating the next getter.
 // This preserves error precedence and bounded expansion for both API adapters.
 func BuildCursor(scope string, count int, get func(int) (driver.Value, error)) (string, error) {

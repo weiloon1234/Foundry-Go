@@ -20,6 +20,9 @@ var catalogueExclusions = map[string]string{
 }
 
 func declarationType(typ types.Type) bool {
+	if alias, ok := typ.(*types.Alias); ok && alias.Obj().Exported() {
+		return declarationName(alias.Obj())
+	}
 	switch t := types.Unalias(typ).(type) {
 	case *types.Pointer:
 		return declarationType(t.Elem())
@@ -27,18 +30,35 @@ func declarationType(typ types.Type) bool {
 		return declarationType(t.Elem())
 	case *types.Named:
 		obj := t.Obj()
-		if obj.Pkg() == nil {
-			return false
+		if declarationName(obj) {
+			return true
 		}
-		path := obj.Pkg().Path()
-		if path != frameworkinfo.ModulePath+"/http" && path != frameworkinfo.ModulePath+"/http/pagination" && path != frameworkinfo.ModulePath+"/http/modelbinding" {
-			return false
+		// Public pagination aliases expose genuine private generic origins.
+		if obj.Pkg() != nil {
+			for _, name := range obj.Pkg().Scope().Names() {
+				alias, ok := obj.Pkg().Scope().Lookup(name).(*types.TypeName)
+				if ok && alias.IsAlias() && declarationName(alias) {
+					if origin, ok := types.Unalias(alias.Type()).(*types.Named); ok && origin.Origin() == t.Origin() {
+						return true
+					}
+				}
+			}
 		}
-		name := obj.Name()
-		return name == "RouteRegistration" || strings.HasSuffix(name, "Endpoint") || strings.HasSuffix(name, "Route") || strings.HasSuffix(name, "Transport") || (path == frameworkinfo.ModulePath+"/http/modelbinding" && name == "Resolver")
 	}
 	return false
 }
+func declarationName(obj *types.TypeName) bool {
+	if obj.Pkg() == nil || !obj.Exported() {
+		return false
+	}
+	path := obj.Pkg().Path()
+	if path != frameworkinfo.ModulePath+"/http" && path != frameworkinfo.ModulePath+"/http/pagination" && path != frameworkinfo.ModulePath+"/http/modelbinding" {
+		return false
+	}
+	name := obj.Name()
+	return name == "RouteRegistration" || strings.HasSuffix(name, "Endpoint") || strings.HasSuffix(name, "Route") || strings.HasSuffix(name, "Transport") || (path == frameworkinfo.ModulePath+"/http/modelbinding" && name == "Resolver")
+}
+
 func TestRealDeclarationCatalogueIsComplete(t *testing.T) {
 	// Independent of the catalogue: removing an entire entry must fail too.
 	families := []string{"/http", "/http/pagination", "/http/modelbinding", "/datatable"}
@@ -65,7 +85,43 @@ func TestRealDeclarationCatalogueIsComplete(t *testing.T) {
 		for _, name := range strings.Fields(catalogueExclusions[suffix]) {
 			excluded[name] = true
 		}
+		analysis := NewAnalysis(pkg.TypesInfo, pkg.Fset)
+		// These regression expectations distinguish private runtime machinery from
+		// private origins deliberately exposed by public pagination aliases.
+		for qualified, stage := range map[string]bool{
+			"/http.matchedRoute":                         false,
+			"/http.uploadRoute":                          false,
+			"/http.endpointTransport":                    false,
+			"/http.requestEndpoint":                      false,
+			"/http/pagination.pageEndpoint":              true,
+			"/http/pagination.authenticatedPageEndpoint": true,
+			"/datatable.Table":                           false,
+		} {
+			family, name, _ := strings.Cut(qualified, ".")
+			if family != suffix {
+				continue
+			}
+			obj, ok := pkg.Types.Scope().Lookup(name).(*types.TypeName)
+			if !ok {
+				t.Errorf("expected type %s missing", qualified)
+				continue
+			}
+			if declarationType(obj.Type()) != stage || analysis.IsStage(obj.Type()) != stage {
+				t.Errorf("%s: independent predicate and derived stage membership must both be %t", qualified, stage)
+			}
+		}
 		for _, name := range pkg.Types.Scope().Names() {
+			if typ, ok := pkg.Types.Scope().Lookup(name).(*types.TypeName); ok {
+				if declarationType(typ.Type()) && name != "RouteRegistration" && !analysis.IsStage(typ.Type()) {
+					t.Errorf("stage type %s.%s is not derived from the catalogue", suffix, name)
+				}
+				switch name {
+				case "Scope", "RouteSpec", "RouteRegistration", "Body", "Response", "Query", "EndpointOption", "RouteOption":
+					if analysis.IsStage(typ.Type()) {
+						t.Errorf("non-stage %s.%s classified as a stage", suffix, name)
+					}
+				}
+			}
 			fn, ok := pkg.Types.Scope().Lookup(name).(*types.Func)
 			if !ok || !fn.Exported() || strings.HasSuffix(pkg.Fset.Position(fn.Pos()).Filename, "_test.go") {
 				continue

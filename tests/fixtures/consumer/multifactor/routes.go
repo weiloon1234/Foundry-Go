@@ -32,7 +32,8 @@ func MFARoutes(factors *Factors, browser *Browser, tokens *Tokens, source clock.
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
 	}
 
-	enrollEndpoint := foundryhttp.DefineEndpoint(route("mfa.enroll", "/mfa/enroll"), foundryhttp.EmptyQuery(), EnrollmentBody(), foundryhttp.MFAEnrollmentResponse[Account](201, source))
+	enrollEndpointRoute := route("mfa.enroll", "/mfa/enroll")
+	enrollEndpoint := foundryhttp.DefineEndpoint(enrollEndpointRoute, foundryhttp.EmptyQuery(), EnrollmentBody(), foundryhttp.MFAEnrollmentResponse[Account](201, source))
 
 	enroll := foundryhttp.ConfigureEndpoint(enrollEndpoint, foundryhttp.Use(browser.Middleware())).Handle(func(ctx context.Context, input EnrollmentInput) (mfa.Enrollment[Account], error) {
 		password, err := verify(ctx, input.Body.Credentials)
@@ -42,7 +43,8 @@ func MFARoutes(factors *Factors, browser *Browser, tokens *Tokens, source clock.
 		return factors.Enroll(ctx, password)
 	})
 
-	confirmEndpoint := foundryhttp.DefineEndpoint(route("mfa.confirm", "/mfa/confirm"), foundryhttp.EmptyQuery(), ConfirmationBody(), foundryhttp.MFARecoveryResponse[Account](200))
+	confirmEndpointRoute := route("mfa.confirm", "/mfa/confirm")
+	confirmEndpoint := foundryhttp.DefineEndpoint(confirmEndpointRoute, foundryhttp.EmptyQuery(), ConfirmationBody(), foundryhttp.MFARecoveryResponse[Account](200))
 
 	confirm := foundryhttp.ConfigureEndpoint(confirmEndpoint, foundryhttp.Use(browser.Middleware())).Handle(func(ctx context.Context, input ConfirmationInput) (mfa.RecoveryCodes[Account], error) {
 		password, err := verify(ctx, input.Body.Credentials)
@@ -52,7 +54,8 @@ func MFARoutes(factors *Factors, browser *Browser, tokens *Tokens, source clock.
 		return factors.Confirm(ctx, password, input.Body.EnrollmentID, input.Body.Code)
 	})
 
-	regenerateEndpoint := foundryhttp.DefineEndpoint(route("mfa.regenerate", "/mfa/recovery"), foundryhttp.EmptyQuery(), RegenerationBody(), foundryhttp.MFARecoveryResponse[Account](200))
+	regenerateEndpointRoute := route("mfa.regenerate", "/mfa/recovery")
+	regenerateEndpoint := foundryhttp.DefineEndpoint(regenerateEndpointRoute, foundryhttp.EmptyQuery(), RegenerationBody(), foundryhttp.MFARecoveryResponse[Account](200))
 
 	regenerate := foundryhttp.ConfigureEndpoint(regenerateEndpoint, foundryhttp.Use(browser.Middleware())).Handle(func(ctx context.Context, input RegenerationInput) (mfa.RecoveryCodes[Account], error) {
 		password, err := verify(ctx, input.Body.Credentials)
@@ -66,7 +69,8 @@ func MFARoutes(factors *Factors, browser *Browser, tokens *Tokens, source clock.
 		return factors.RegenerateRecovery(ctx, password, response)
 	})
 
-	webTOTPEndpoint := foundryhttp.DefineEndpoint(route("mfa.web.totp", "/mfa/web/totp"), foundryhttp.EmptyQuery(), TOTPBody(), foundryhttp.EmptyResponse(204))
+	webTOTPEndpointRoute := route("mfa.web.totp", "/mfa/web/totp")
+	webTOTPEndpoint := foundryhttp.DefineEndpoint(webTOTPEndpointRoute, foundryhttp.EmptyQuery(), TOTPBody(), foundryhttp.EmptyResponse(204))
 
 	webTOTP := foundryhttp.ConfigureEndpoint(webTOTPEndpoint, foundryhttp.Use(browser.Middleware())).Handle(func(ctx context.Context, input TOTPInput) (foundryhttp.NoContent, error) {
 		response, err := mfa.TOTPResponse(input.Body.Code)
@@ -81,7 +85,8 @@ func MFARoutes(factors *Factors, browser *Browser, tokens *Tokens, source clock.
 		return foundryhttp.NoContent{}, err
 	})
 
-	webRecoveryEndpoint := foundryhttp.DefineEndpoint(route("mfa.web.recovery", "/mfa/web/recovery"), foundryhttp.EmptyQuery(), RecoveryBody(), foundryhttp.EmptyResponse(204))
+	webRecoveryEndpointRoute := route("mfa.web.recovery", "/mfa/web/recovery")
+	webRecoveryEndpoint := foundryhttp.DefineEndpoint(webRecoveryEndpointRoute, foundryhttp.EmptyQuery(), RecoveryBody(), foundryhttp.EmptyResponse(204))
 
 	webRecovery := foundryhttp.ConfigureEndpoint(webRecoveryEndpoint, foundryhttp.Use(browser.Middleware())).Handle(func(ctx context.Context, input RecoveryInput) (foundryhttp.NoContent, error) {
 		response, err := mfa.RecoveryResponse(input.Body.Code)
@@ -97,29 +102,34 @@ func MFARoutes(factors *Factors, browser *Browser, tokens *Tokens, source clock.
 	})
 
 	tokenResponse := foundryhttp.TokenResponse[Account, model.ID[Account]](200, source)
-	apiTOTP := foundryhttp.DefineEndpoint(route("mfa.api.totp", "/mfa/api/totp"), foundryhttp.EmptyQuery(), foundryhttp.MFATOTPBody(), tokenResponse).
-		Handle(func(ctx context.Context, input TokenTOTPInput) (IssuedToken, error) {
-			response, err := mfa.TOTPResponse(input.Body.Code)
-			if err != nil {
-				return IssuedToken{}, err
-			}
-			factor, err := factors.Verifier(response)
-			if err != nil {
-				return IssuedToken{}, err
-			}
-			return tokens.CompleteMFA(ctx, input.Body.Challenge.Secret(), factor, token.IssueOptions[Account]{Name: "API", Refresh: true})
-		})
-	apiRecovery := foundryhttp.DefineEndpoint(route("mfa.api.recovery", "/mfa/api/recovery"), foundryhttp.EmptyQuery(), foundryhttp.MFARecoveryBody(), tokenResponse).
-		Handle(func(ctx context.Context, input TokenRecoveryInput) (IssuedToken, error) {
-			response, err := mfa.RecoveryResponse(input.Body.Code)
-			if err != nil {
-				return IssuedToken{}, err
-			}
-			factor, err := factors.Verifier(response)
-			if err != nil {
-				return IssuedToken{}, err
-			}
-			return tokens.CompleteMFA(ctx, input.Body.Challenge.Secret(), factor, token.IssueOptions[Account]{Name: "API", Refresh: true})
-		})
+
+	apiTOTPRoute := route("mfa.api.totp", "/mfa/api/totp")
+
+	apiTOTP := foundryhttp.DefineEndpoint(apiTOTPRoute, foundryhttp.EmptyQuery(), foundryhttp.MFATOTPBody(), tokenResponse).Handle(func(ctx context.Context, input TokenTOTPInput) (IssuedToken, error) {
+		response, err := mfa.TOTPResponse(input.Body.Code)
+		if err != nil {
+			return IssuedToken{}, err
+		}
+		factor, err := factors.Verifier(response)
+		if err != nil {
+			return IssuedToken{}, err
+		}
+		return tokens.CompleteMFA(ctx, input.Body.Challenge.Secret(), factor, token.IssueOptions[Account]{Name: "API", Refresh: true})
+	})
+
+	apiRecoveryRoute := route("mfa.api.recovery", "/mfa/api/recovery")
+
+	apiRecovery := foundryhttp.DefineEndpoint(apiRecoveryRoute, foundryhttp.EmptyQuery(), foundryhttp.MFARecoveryBody(), tokenResponse).Handle(func(ctx context.Context, input TokenRecoveryInput) (IssuedToken, error) {
+		response, err := mfa.RecoveryResponse(input.Body.Code)
+		if err != nil {
+			return IssuedToken{}, err
+		}
+		factor, err := factors.Verifier(response)
+		if err != nil {
+			return IssuedToken{}, err
+		}
+		return tokens.CompleteMFA(ctx, input.Body.Challenge.Secret(), factor, token.IssueOptions[Account]{Name: "API", Refresh: true})
+	})
+
 	return foundryhttp.NewRouter(enroll, confirm, regenerate, webTOTP, webRecovery, apiTOTP, apiRecovery)
 }

@@ -28,16 +28,19 @@ func TestDeclaredBindingsPreserveLegacySQL(t *testing.T) {
 	}{
 		{"UUID and scope",
 			func() error {
-				_, err := modelbinding.Resolve(httpmodels.UserByID(db), t.Context(), httpkernel.UserPath{User: user})
+				userResolver := httpmodels.UserByID(db)
+				_, err := modelbinding.Resolve(userResolver, t.Context(), httpkernel.UserPath{User: user})
 				return err
 			}},
 		{"natural key", func() error {
-			_, err := modelbinding.Resolve(httpmodels.CountryByCode(db), t.Context(), httpmodels.CountryPath{Country: "a/b + %"})
+			countryResolver := httpmodels.CountryByCode(db)
+			_, err := modelbinding.Resolve(countryResolver, t.Context(), httpmodels.CountryPath{Country: "a/b + %"})
 			return err
 		}},
 		{"parent scope",
 			func() error {
-				_, err := modelbinding.Resolve(httpmodels.OrderWithinUser(db), t.Context(), httpmodels.OrderPath{User: user, Order: order})
+				orderResolver := httpmodels.OrderWithinUser(db)
+				_, err := modelbinding.Resolve(orderResolver, t.Context(), httpmodels.OrderPath{User: user, Order: order})
 				return err
 			}},
 	} {

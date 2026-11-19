@@ -35,7 +35,9 @@ func UserByID(db database.Executor) modelbinding.Resolver[httpkernel.UserPath, m
 
 func Router(db database.Executor, service Service) (*foundryhttp.Router, error) {
 	showUserBinding := foundryhttp.ForBinding(Show)
-	bound := modelbinding.Bind(showUserBinding, UserByID(db))
+
+	showUserEndpoint := UserByID(db)
+	bound := modelbinding.Bind(showUserBinding, showUserEndpoint)
 
 	return foundryhttp.NewRouter(bound.Handle(service.Show))
 } // doc-example:end http-model-binding-user-by-id

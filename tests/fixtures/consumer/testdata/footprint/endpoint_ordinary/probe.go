@@ -84,15 +84,16 @@ var (
 
 func Route() foundryhttp.RouteRegistration {
 	scope := foundryhttp.DefineScope("/v1", "probe")
+	route := foundryhttp.DefineRoute(
+		foundryhttp.RouteSpec{
+			ID:     "items.create",
+			Method: foundryhttp.POST,
+			Access: foundryhttp.Public,
+		},
+		itemPathDescriptor(),
+	)
 	endpoint := foundryhttp.DefineEndpoint(
-		foundryhttp.DefineRoute(
-			foundryhttp.RouteSpec{
-				ID:     "items.create",
-				Method: foundryhttp.POST,
-				Access: foundryhttp.Public,
-			},
-			itemPathDescriptor(),
-		),
+		route,
 		itemQueryDescriptor(),
 		foundryhttp.JSONBody(itemBodyJSON()),
 		foundryhttp.JSONResponse(200, itemReplyJSON()),

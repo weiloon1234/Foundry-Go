@@ -8,7 +8,7 @@ import (
 )
 
 // Handwritten SQL declarations retain primary and soft-delete roles. The
-// existing generated model helpers remain only for independent legacy fixtures.
+// generated files contain DTO and job contracts; models and ORM declarations are handwritten.
 type MemberModelColumns struct {
 	orm.Table[Member, model.ID[Member]]
 	ID        orm.Primary[Member, model.ID[Member]]

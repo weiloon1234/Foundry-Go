@@ -34,7 +34,10 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLogin) (*
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path))
 	}
 	response := foundryhttp.TokenResponse[models.User, model.ID[models.User]](200, clock)
-	login := foundryhttp.DefineEndpoint(route("api.login", foundryhttp.POST, "/login", foundryhttp.Public),
+
+	loginRoute := route("api.login", foundryhttp.POST, "/login", foundryhttp.Public)
+
+	login := foundryhttp.DefineEndpoint(loginRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ ProfileInput) (IssuedUserToken, error) {
 		proof, err := verify(ctx)
 		if err != nil {
@@ -42,14 +45,19 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLogin) (*
 		}
 		return StartVerifiedToken(ctx, tokens, proof, "API client", true)
 	})
-	refresh := foundryhttp.DefineEndpoint(route("api.refresh", foundryhttp.POST, "/refresh", foundryhttp.Public),
+
+	refreshRoute := route("api.refresh", foundryhttp.POST, "/refresh", foundryhttp.Public)
+
+	refresh := foundryhttp.DefineEndpoint(refreshRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenBody(), response).Handle(func(ctx context.Context, input RefreshInput) (IssuedUserToken, error) {
 		return RefreshFromBody(ctx, tokens, input.Body)
 	})
 	// doc-example:end native-token-delivery
+	profileEndpointRoute := route("api.profile", foundryhttp.GET, "/profile", foundryhttp.Guarded)
 	profileEndpoint := foundryhttp.DefineEndpoint(
-		route("api.profile", foundryhttp.GET, "/profile", foundryhttp.Guarded),
+		profileEndpointRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+
 	guardProfile := foundryhttp.RequireAuthentication(profileEndpoint, transport, guard)
 
 	profile := foundryhttp.ConfigureAuthenticated(guardProfile, foundryhttp.Scopes(scopes)).Handle(func(ctx context.Context, user models.User, _ ProfileInput) (foundryhttp.NoContent, error) {

@@ -46,9 +46,8 @@ Commit the generated `*_foundry.gen.go` files and `.foundry-gen.json` alongside 
 Publication rechecks source/target state, stages synced output and backups, records a recovery journal, replaces individual files by atomic rename, and writes ownership last. Ordinary failures and cancellation roll back applied changes. File permissions are preserved. If an editor changes a published file during failure handling, rollback retains the journal and refuses to overwrite that edit.
 
 Generation never edits handwritten files. Field comments belong to the author.
-Retired source-edit journals fail with `generate.RetiredJournalError` and retain
-staging. Reconcile such a journal with the generator that created it before using
-the current generator. Supported journal formats are defined in
+Unknown fields and unsupported journal versions are rejected without changing
+staging. Supported journal formats are defined in
 [`internal/generate/recover.go`](../../internal/generate/recover.go).
 
 On the implemented Unix advisory-lock platforms, the next ordinary generation automatically recovers an interrupted publication. `foundry generate --recover --dir generation-root` performs recovery alone, using the scope recorded in the journal; omit `--recursive` for this command. Recovery keeps a completely published set or restores an incomplete set, including deleted and newly created outputs. It verifies hashes, file types, permissions and backups before restoration, and refuses to run while another publisher holds the process guard. `--check` never performs recovery or creates staging/guards.

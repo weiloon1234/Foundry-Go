@@ -40,7 +40,7 @@ func TestComputedCursorSensitivityWithoutModelFields(t *testing.T) {
 	col := expr.FoundrySelectedColumn(expr.AsSelected(expr.Row(ordinary)), sqlowner.Expressions())
 	col.Sensitive = true
 	core.Sensitive = true
-	core.Node = querycore.WithSensitivity(core.Node, true)
+	core.Node = querycore.SensitiveValue{Value: core.Node}
 	field := expr.FoundryRowExpression[member](core, col, sqlowner.Expressions())
 	optional := expr.NullableRow(field)
 	fallback := expr.Param(orm.TextExpr(m.Name), "public")

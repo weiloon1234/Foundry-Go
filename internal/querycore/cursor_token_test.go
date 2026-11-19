@@ -36,7 +36,7 @@ func TestCursorTransportRoundTripsExactDriverValues(t *testing.T) {
 }
 
 func FuzzCursorTransport(f *testing.F) {
-	token, err := MakeCursor(strings.Repeat("a", 64), []driver.Value{int64(42)})
+	token, err := makeCursor(strings.Repeat("a", 64), []driver.Value{int64(42)})
 	if err != nil {
 		f.Fatal(err)
 	}
@@ -54,4 +54,9 @@ func FuzzCursorTransport(f *testing.F) {
 			}
 		}
 	})
+}
+
+// makeCursor serializes the unchanged v1 envelope after bounding each key.
+func makeCursor(scope string, values []driver.Value) (string, error) {
+	return BuildCursor(scope, len(values), func(i int) (driver.Value, error) { return values[i], nil })
 }

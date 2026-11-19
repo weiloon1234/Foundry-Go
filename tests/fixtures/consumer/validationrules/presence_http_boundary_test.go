@@ -12,7 +12,12 @@ import (
 
 func TestHTTPPresenceRejectsInvalidRepresentationBeforeRules(t *testing.T) {
 	fields := validationrules.PresenceInputValidationFields()
-	server, calls := presenceServer(t, foundryhttp.ValidateBody(presenceEndpoint(), validation.Rules(fields.Label, validation.Prohibited[string]())))
+
+	endpoint := presenceEndpoint()
+	endpoint = foundryhttp.ValidateBody(endpoint, validation.Rules(fields.Label, validation.Prohibited[string]()))
+
+	server, calls := presenceServer(t, endpoint)
+
 	for _, tc := range []struct{ name, query, body, path string }{
 		{"null_text_without_nullable", "", "{\"label\":null}", "/body/label"},
 		{"null_integer_without_nullable", "", "{\"count\":null}", "/body/count"},
@@ -42,7 +47,11 @@ func TestHTTPPresenceRejectsInvalidRepresentationBeforeRules(t *testing.T) {
 }
 
 func TestHTTPPresenceConditionalTriggersUseTheirDeclaredSource(t *testing.T) {
-	server, calls := presenceServer(t, foundryhttp.ValidateBody(presenceEndpoint(), validationrules.RequiredWithRules()))
+	endpoint := presenceEndpoint()
+	endpoint = foundryhttp.ValidateBody(endpoint, validationrules.RequiredWithRules())
+
+	server, calls := presenceServer(t, endpoint)
+
 	for _, tc := range []struct {
 		name, query, body string
 		reject            bool
@@ -80,9 +89,12 @@ func TestHTTPPresenceSameNameSourcesKeepIndependentDiagnostics(t *testing.T) {
 	fields := validationrules.PresenceInputValidationFields()
 	rule := validation.Rules(fields.Label, validation.Required[string]())
 
-	endpoint := foundryhttp.ValidateQuery(presenceEndpoint(), rule)
+	endpoint := presenceEndpoint()
+	endpoint = foundryhttp.ValidateQuery(endpoint, rule)
 
-	server, calls := presenceServer(t, foundryhttp.ValidateBody(endpoint, rule))
+	endpointEndpoint := foundryhttp.ValidateBody(endpoint, rule)
+
+	server, calls := presenceServer(t, endpointEndpoint)
 
 	status, failure := sendPresence(t, server, "", "{}")
 	if status != 422 || len(failure.Issues) != 2 || failure.Issues[0].Path != "/query/label" || failure.Issues[1].Path != "/body/label" {
@@ -108,7 +120,12 @@ func TestHTTPPresenceSameNameSourcesKeepIndependentDiagnostics(t *testing.T) {
 func TestHTTPPresenceCollectionContentRulesKeepItemPaths(t *testing.T) {
 	fields := validationrules.PresenceInputValidationFields()
 	rule := validation.Rules(fields.Tags, validation.Required(validation.Each[[]string](validation.NonBlank[string]())))
-	server, calls := presenceServer(t, foundryhttp.ValidateBody(presenceEndpoint(), rule))
+
+	endpoint := presenceEndpoint()
+	endpoint = foundryhttp.ValidateBody(endpoint, rule)
+
+	server, calls := presenceServer(t, endpoint)
+
 	status, failure := sendPresence(t, server, "", "{\"tags\":[\"one\",\" \"]}")
 	if status != 422 || len(failure.Issues) != 1 || failure.Issues[0].Path != "/body/tags/1" {
 		t.Fatalf("indexed content error: %d %+v", status, failure)

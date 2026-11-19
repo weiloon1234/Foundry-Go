@@ -79,7 +79,8 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		endpoint := n.Transport(foundryhttp.Public)
 
 		endpointBinding := foundryhttp.ForBinding(endpoint)
-		bound := modelbinding.Bind(endpointBinding, n.Resolve(counter))
+		nestedResolver := n.Resolve(counter)
+		bound := modelbinding.Bind(endpointBinding, nestedResolver)
 		bound = modelbinding.AuthorizeResource(bound, func(_ context.Context, in n.Request) error {
 			if in.Model.Parent.Parent.Name == "Beta" {
 				return foundryhttp.Forbidden
@@ -131,7 +132,8 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		}
 		// Same slug under another team succeeds independently; no global slug fallback.
 		for i, team := range f.teams {
-			resources, err := modelbinding.Resolve(n.Resolve(counter), ctx, n.Path{Team: team.ID, Project: "shared", Task: "same"})
+			nestedResolver := n.Resolve(counter)
+			resources, err := modelbinding.Resolve(nestedResolver, ctx, n.Path{Team: team.ID, Project: "shared", Task: "same"})
 			if err != nil || resources.Parent.Child.ID != f.projects[i].ID || resources.Child.ID != f.tasks[i].ID {
 				return errors.New("nested key escaped its parent")
 			}
@@ -140,16 +142,19 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		_, err = modelbinding.Resolve(n.Projects(counter), ctx, n.Path{Team: f.teams[0].ID, Project: onlyBeta.Slug})
+		projectResolver := n.Projects(counter)
+		_, err = modelbinding.Resolve(projectResolver, ctx, n.Path{Team: f.teams[0].ID, Project: onlyBeta.Slug})
 		if !errors.Is(err, foundryhttp.NotFound) {
 			return errors.New("global child fallback")
 		}
 		// Global alternate slug is ambiguous, scoped alternate slug is unique.
-		if _, err := modelbinding.Resolve(n.ProjectBySlug(counter), ctx, n.Path{Project: "shared"}); err == nil || errors.Is(err, foundryhttp.NotFound) {
+		slugResolver := n.ProjectBySlug(counter)
+		if _, err := modelbinding.Resolve(slugResolver, ctx, n.Path{Project: "shared"}); err == nil || errors.Is(err, foundryhttp.NotFound) {
 			return errors.New("duplicate global slug selected a row")
 		}
 		trace := &n.Trace{}
-		if _, err := modelbinding.Resolve(n.Resolve(counter), n.WithTrace(ctx, trace), n.Path{Team: f.teams[0].ID, Project: "shared", Task: "same"}); err != nil || trace.Projects != 1 {
+		tracedResolver := n.Resolve(counter)
+		if _, err := modelbinding.Resolve(tracedResolver, n.WithTrace(ctx, trace), n.Path{Team: f.teams[0].ID, Project: "shared", Task: "same"}); err != nil || trace.Projects != 1 {
 			return errors.New("project retrieval hook lost or duplicated")
 		}
 		veto := &n.Trace{Fail: true}
@@ -230,7 +235,8 @@ func TestPostgresTypedRequestAndResourcePolicyStages(t *testing.T) {
 		})
 
 		baseBinding := foundryhttp.ForAuthenticatedBinding(secured)
-		bound := modelbinding.BindAuthenticated(baseBinding, n.Resolve(counter))
+		nestedResolver := n.Resolve(counter)
+		bound := modelbinding.BindAuthenticated(baseBinding, nestedResolver)
 		bound = modelbinding.AuthorizeAuthenticatedResource(bound, func(_ context.Context, actor n.Team, in n.Request) error {
 			if actor.ID != in.Model.Parent.Parent.ID {
 				return foundryhttp.Forbidden

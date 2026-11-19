@@ -24,7 +24,7 @@ func ExportClient(ctx context.Context, fixture Fixture, dir string) (typescript.
 
 // doc-example:begin export-command
 func ClientExportCommand(sources typescript.Sources) (cli.Declaration, error) {
-	return typescript.ExportCommand("contracts.export",
+	return typescript.ExportCommand("contracts:export",
 		openapi.Options{Title: "Consumer", APIVersion: "1"}, sources)
 }
 

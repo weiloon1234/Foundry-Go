@@ -96,7 +96,9 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 			return nil, err
 		}
 
-		required := http.RequireAuthentication(Endpoint(), transport, guard)
+		ordersCreateEndpoint := Endpoint()
+		required := http.RequireAuthentication(ordersCreateEndpoint, transport, guard)
+
 		required = http.AuthorizeActor(required, func(_ context.Context, _ Actor, in Request) error {
 			if in.Body.Name == "request-denied" || hooks.Deny != nil && hooks.Deny.Load() {
 				return http.Forbidden

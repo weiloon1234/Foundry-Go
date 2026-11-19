@@ -5,6 +5,7 @@ package app
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -31,6 +32,13 @@ var foundryUploadReceiptJSON = sync.OnceValue(func() foundrycontract.JSON[Upload
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// UploadReceiptResponse builds the HTTP response from UploadReceiptJSON; status remains part of the route declaration.
+//
+//go:noinline
+func UploadReceiptResponse(status int) foundryhttp.Response[UploadReceipt] {
+	return foundryhttp.JSONResponse(status, UploadReceiptJSON())
+}
 
 // UploadReceiptValidationFieldSet retains concrete DTO and value types for validation.
 // Example: UploadReceiptValidationFields()

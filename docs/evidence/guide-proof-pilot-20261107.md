@@ -430,7 +430,7 @@ questions in this handoff.
 - [docs/guides/model-queries.md](../../docs/guides/model-queries.md)
 - [docs/guides/model-relations.md](../../docs/guides/model-relations.md)
 - [docs/guides/model-writes.md](../../docs/guides/model-writes.md)
-- [docs/guides/v0.2-migration.md](../../docs/guides/v0.2-migration.md)
+- Former v0.2 migration guide (removed); current [validation guide](../guides/validation.md)
 - [docs/guides/validation.md](../../docs/guides/validation.md)
 - [internal/cmd/checkdocs/main.go](../../internal/cmd/checkdocs/main.go)
 - [internal/cmd/checkdocs/navigation_test.go](../../internal/cmd/checkdocs/navigation_test.go)

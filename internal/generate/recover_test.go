@@ -265,44 +265,45 @@ func TestRollbackPreservesConcurrentEdits(t *testing.T) {
 	}
 }
 
-func TestRecoveryRejectsRetiredSourceJournal(t *testing.T) {
+func TestRecoveryPreservesUnsupportedJournals(t *testing.T) {
 	if !automaticRecovery {
 		t.Skip("recovery adapter unavailable")
 	}
-	for _, version := range []int{4, 2} {
-		t.Run(strconv.Itoa(version), func(t *testing.T) {
-			dir := fixture(t, "package sample\ntype User struct{ Email string }\n")
-			before := snapshotFile(t, dir, "models.go")
-			if err := os.Mkdir(filepath.Join(dir, lockName), 0700); err != nil {
-				t.Fatal(err)
+	for _, data := range []string{
+		`{"version":1,"guards":["."],"files":{"models.go":{}}}`,
+		`{"version":999,"guards":["."],"files":{"models.go":{}}}`,
+		`{"version":2,"guards":["."],"files":{"models.go":{}},"unknown":true}`,
+	} {
+		dir := fixture(t, "package sample\ntype User struct{ Email string }\n")
+		before := snapshotFile(t, dir, "models.go")
+		staging := filepath.Join(dir, lockName)
+		if err := os.Mkdir(staging, 0700); err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(staging, journalName)
+		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+		backup := filepath.Join(staging, "original")
+		if err := os.WriteFile(backup, []byte("staged original"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		for _, run := range []func() error{
+			func() error { _, err := Recover(t.Context(), dir); return err },
+			func() error { _, err := Generate(t.Context(), Options{Dir: dir}); return err },
+		} {
+			if err := run(); err == nil {
+				t.Fatal("unsupported journal accepted")
 			}
-			data := []byte(fmt.Sprintf(`{"version":%d,"guards":["."],"field_notes":["models.go"],"files":{"models.go":{}}}`, version))
-			path := filepath.Join(dir, lockName, journalName)
-			if err := os.WriteFile(path, data, 0600); err != nil {
-				t.Fatal(err)
+			if state(snapshotFile(t, dir, "models.go")) != state(before) {
+				t.Fatal("source changed")
 			}
-			for _, run := range []struct {
-				name string
-				call func() error
-			}{
-				{"recover", func() error { _, err := Recover(t.Context(), dir); return err }},
-				{"generate", func() error { _, err := Generate(t.Context(), Options{Dir: dir}); return err }},
-			} {
-				t.Run(run.name, func(t *testing.T) {
-					err := run.call()
-					var retired *RetiredJournalError
-					if !errors.As(err, &retired) || retired.Version != version || !strings.Contains(err.Error(), "staging retained") {
-						t.Fatalf("expected typed retired journal error, got %v", err)
-					}
-					if state(snapshotFile(t, dir, "models.go")) != state(before) {
-						t.Fatal("rejected journal changed handwritten source")
-					}
-					retained, err := os.ReadFile(path)
-					if err != nil || string(retained) != string(data) {
-						t.Fatalf("rejected journal was not retained: %v", err)
-					}
-				})
+			for name, want := range map[string]string{path: data, backup: "staged original"} {
+				got, err := os.ReadFile(name)
+				if err != nil || string(got) != want {
+					t.Fatalf("staging changed: %s: %v", name, err)
+				}
 			}
-		})
+		}
 	}
 }

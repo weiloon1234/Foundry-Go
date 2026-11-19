@@ -1,6 +1,6 @@
-// Package slots binds generated model extension slots to the translation,
+// Package slots binds handwritten model extension slots to the translation,
 // attachment and metadata managers. A model declares translations.Text,
-// attachments.One/Many and metadata.Value fields; generation derives one
+// attachments.One/Many and metadata.Value fields. slots.DeclareORM constructs one
 // Declaration per model, and applications bind a Runtime once per constructor.
 package slots
 
@@ -72,10 +72,10 @@ type Description struct {
 // ResolveRuntime supplies the runtime while an application is constructed.
 type ResolveRuntime func(foundation.Resolver) (Runtime, error)
 
-// Installer registers a generated model's deletion-cleanup observer on a pool.
+// Installer registers a handwritten model's deletion-cleanup observer on a pool.
 type Installer func(*foundation.Registrar, foundation.Key[*database.DB], ResolveRuntime) error
 
-// Declaration is one model's generated extension envelope: its owner, slot
+// Declaration is one model's extension declaration: its owner, slot
 // registrations by kind and deletion-cleanup observer. It is immutable and
 // owns no global state.
 type Declaration struct {
@@ -84,7 +84,7 @@ type Declaration struct {
 	install Installer
 }
 
-// Declare is called by generated <Model>ExtensionDeclaration functions.
+// Declare constructs an extension declaration. DeclareORM binds handwritten ORM owners.
 func Declare(owner extensions.Declaration, parts Parts, install Installer) Declaration {
 	return Declaration{owner: owner, parts: parts.clone(), install: install}
 }
@@ -234,7 +234,7 @@ func NewCleanup[M any, K comparable](runtime Runtime, owner extensions.Owner[M, 
 	}}, nil
 }
 
-// Deleted is the generated observer's Deleted callback body. It also runs for
+// Deleted is the registered observer's Deleted callback body. It also runs for
 // force deletion; soft deletion returns without changes.
 func (c Cleanup[M]) Deleted(ctx context.Context, tx *database.Tx, before value.Optional[M], operation value.Optional[lifecycle.Operation]) error {
 	if c.run == nil {

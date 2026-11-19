@@ -23,7 +23,7 @@ func (e *privateCursorFailure) Format(s fmt.State, _ rune) {
 
 func TestCursorCodecRedactionPreservesClassification(t *testing.T) {
 	scope := strings.Repeat("a", 64)
-	token, err := MakeCursor(scope, []driver.Value{int64(7)})
+	token, err := makeCursor(scope, []driver.Value{int64(7)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestCursorCodecRedactionPreservesClassification(t *testing.T) {
 }
 func TestCursorBoundaryDistinguishesInputFromMetadataFailures(t *testing.T) {
 	scope := strings.Repeat("a", 64)
-	token, err := MakeCursor(scope, []driver.Value{int64(7)})
+	token, err := makeCursor(scope, []driver.Value{int64(7)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,9 +92,9 @@ func TestCursorBoundaryDistinguishesInputFromMetadataFailures(t *testing.T) {
 		scope string
 		key   driver.Value
 	}{{"different", int64(7)}, {scope, "private incompatible key"}, {scope, nil}} {
-		token, err := MakeCursor(bad.scope, []driver.Value{bad.key})
+		token, err := makeCursor(bad.scope, []driver.Value{bad.key})
 		if bad.scope == "different" {
-			token, err = MakeCursor(strings.Repeat("b", 64), []driver.Value{bad.key})
+			token, err = makeCursor(strings.Repeat("b", 64), []driver.Value{bad.key})
 		}
 		if err != nil {
 			t.Fatal(err)
@@ -107,7 +107,7 @@ func TestCursorBoundaryDistinguishesInputFromMetadataFailures(t *testing.T) {
 }
 func TestCursorCodecFailuresRemainServerErrors(t *testing.T) {
 	scope := strings.Repeat("a", 64)
-	token, err := MakeCursor(scope, []driver.Value{int64(7)})
+	token, err := makeCursor(scope, []driver.Value{int64(7)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestCursorCodecFailuresRemainServerErrors(t *testing.T) {
 	}
 }
 func TestCursorResourceBounds(t *testing.T) {
-	if _, err := MakeCursor(strings.Repeat("a", 64), []driver.Value{strings.Repeat("x", MaxCursorBytes+1)}); !errors.Is(err, fault.Invalid) {
+	if _, err := makeCursor(strings.Repeat("a", 64), []driver.Value{strings.Repeat("x", MaxCursorBytes+1)}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("oversized output cursor accepted", err)
 	}
 }
@@ -165,7 +165,7 @@ func (e *cyclicCursorFailure) Unwrap() error {
 }
 func TestCyclicCursorCodecErrorRemainsServerFailure(t *testing.T) {
 	scope := strings.Repeat("a", 64)
-	token, err := MakeCursor(scope, []driver.Value{int64(7)})
+	token, err := makeCursor(scope, []driver.Value{int64(7)})
 	if err != nil {
 		t.Fatal(err)
 	}

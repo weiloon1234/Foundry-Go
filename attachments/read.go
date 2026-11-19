@@ -261,7 +261,7 @@ func (c Collection[M, K]) Find(ctx context.Context, m *Manager, owner model.Refe
 }
 
 func readBytes[M any, K comparable](ctx context.Context, m *Manager, file Attachment[M, K], maximum int64) ([]byte, error) {
-	if maximum < 1 || maximum > MaxUploadBytes || file.info.Size > maximum {
+	if maximum < 1 || maximum > MaxBufferedBytes || file.info.Size > maximum {
 		return nil, storageFailure(storage.LimitExceeded, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	disk, err := m.disks.Disk(file.disk)
@@ -295,7 +295,7 @@ func (c Collection[M, K]) ReadBytes(ctx context.Context, m *Manager, owner model
 	if err := c.check(m); err != nil {
 		return nil, err
 	}
-	if maximum < 1 || maximum > MaxUploadBytes {
+	if maximum < 1 || maximum > MaxBufferedBytes {
 		return nil, storageFailure(storage.LimitExceeded, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	var result []byte
@@ -331,7 +331,7 @@ func (c Collection[M, K]) Image(ctx context.Context, m *Manager, owner model.Ref
 		if err != nil {
 			return err
 		}
-		data, err := readBytes(ctx, m, file, min(MaxUploadBytes, m.image.Limits().InputBytes))
+		data, err := readBytes(ctx, m, file, min(MaxBufferedBytes, m.image.Limits().InputBytes))
 		if err != nil {
 			return err
 		}

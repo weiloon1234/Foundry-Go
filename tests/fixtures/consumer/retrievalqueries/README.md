@@ -7,7 +7,7 @@ The migrated application registers ORM retrieval observers after the local facto
 Tests cover hydration before callbacks, closed rows, per-batch factories, bounded
 streaming, complete records through joins/CTEs/unions, locked reads and cursors.
 Scalar and DTO reads skip model retrieval callbacks. Model accessors remain explicit.
-The shared default chunk-size constant remains a legacy compatibility alias;
+The shared default chunk-size constant supplies the query engine batch size;
 queries no longer use the generated engine. Legacy retrieval/relation factories
 and model/projection directives are removed.
 

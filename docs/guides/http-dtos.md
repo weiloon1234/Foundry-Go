@@ -69,8 +69,7 @@ request validation field descriptors (`XValidationFields`) are not generated.
 Select generated HTTP pieces independently with `http=body`, `http=response`,
 or `http=both`. Without `http=`, no helper is emitted. For example,
 `//foundry:dto role=response http=response` emits the response helper while
-retaining the response role's validation behavior. The migration codemod infers
-these keys from actual uses. See [staged routes](flat-routes.md#generated-http-pieces)
+retaining the response role's validation behavior. See [staged routes](flat-routes.md#generated-http-pieces)
 for helper names, signatures, collision failures and structural exclusions.
 
 

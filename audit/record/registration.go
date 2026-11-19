@@ -12,7 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-// Writer is the narrow storage boundary used by generated audit observers. The
+// Writer is the narrow storage boundary used by ORM audit observers. The
 // supplied transaction is the real business transaction; returning an error
 // fails its model write. Implementations must support concurrent operations.
 type Writer interface {
@@ -26,19 +26,19 @@ type Writer interface {
 // service lookup or second application container.
 type ResolveWriter func(foundation.Resolver) (Writer, error)
 
-// Declaration wraps a generated model's existing observer registration. It is
+// Declaration wraps a handwritten model's existing observer registration. It is
 // opaque outside this explicit declaration boundary and owns no global state.
 type Declaration struct {
 	install func(*foundation.Registrar, foundation.Key[*database.DB], ResolveWriter) error
 }
 
-// Declare is called by generated model adapters. Application providers pass the
+// Declare is called by handwritten model adapters. Application providers pass the
 // resulting declaration to audit.Register with their typed database/writer keys.
 func Declare(install func(*foundation.Registrar, foundation.Key[*database.DB], ResolveWriter) error) Declaration {
 	return Declaration{install: install}
 }
 
-// Register invokes the generated registration using foundation/database's
+// Register invokes the declared registration using foundation/database's
 // existing duplicate, dependency, construction and frozen-state handling.
 func (d Declaration) Register(r *foundation.Registrar, pool foundation.Key[*database.DB], resolve ResolveWriter) error {
 	if d.install == nil || resolve == nil {

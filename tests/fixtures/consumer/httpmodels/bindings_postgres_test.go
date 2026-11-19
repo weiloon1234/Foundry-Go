@@ -114,7 +114,8 @@ func TestPostgresModelBindingNaturalKeysAndSoftDeleteVisibility(t *testing.T) {
 
 		countriesShowBinding := foundryhttp.ForBinding(countries)
 
-		countryRoute := modelbinding.Bind(countriesShowBinding, httpmodels.CountryByCode(tx)).Handle(func(_ context.Context, in modelbinding.Input[httpmodels.CountryPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Country]) (foundryhttp.NoContent, error) {
+		countryResolver := httpmodels.CountryByCode(tx)
+		countryRoute := modelbinding.Bind(countriesShowBinding, countryResolver).Handle(func(_ context.Context, in modelbinding.Input[httpmodels.CountryPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Country]) (foundryhttp.NoContent, error) {
 			if in.Model.Code != "a/b + %" || in.Model.Name != "country" {
 				return foundryhttp.NoContent{}, errors.New("natural key hydration failed")
 			}
@@ -162,10 +163,12 @@ func TestPostgresModelBindingNaturalKeysAndSoftDeleteVisibility(t *testing.T) {
 		}
 		type groupPath struct{ Code softqueries.GroupCode }
 		selectKey := func(p groupPath) softqueries.GroupCode { return p.Code }
-		if _, err := modelbinding.Resolve(modelbinding.ByKey(tx, orm.Keyed(groups, softqueries.Groups.Key()), selectKey), ctx, groupPath{group.Code}); !errors.Is(err, foundryhttp.NotFound) {
+		visibleGroupResolver := modelbinding.ByKey(tx, orm.Keyed(groups, softqueries.Groups.Key()), selectKey)
+		if _, err := modelbinding.Resolve(visibleGroupResolver, ctx, groupPath{group.Code}); !errors.Is(err, foundryhttp.NotFound) {
 			return errors.New("default binding exposed deleted model")
 		}
-		got, err := modelbinding.Resolve(modelbinding.ByKey(tx, orm.Keyed(groups.WithTrashed(), softqueries.Groups.Key()), selectKey), ctx, groupPath{group.Code})
+		allGroupResolver := modelbinding.ByKey(tx, orm.Keyed(groups.WithTrashed(), softqueries.Groups.Key()), selectKey)
+		got, err := modelbinding.Resolve(allGroupResolver, ctx, groupPath{group.Code})
 		if err != nil || got.DeletedAt.IsNull() {
 			return errors.New("explicit deleted visibility lost")
 		}

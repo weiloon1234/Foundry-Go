@@ -10,7 +10,8 @@ import (
 )
 
 func bad(store *idempotency.Store) {
-	http.Idempotent(fixture.Endpoint(), store, idempotency.Definition{ID: "test", Version: 1}).Handle(func(context.Context, fixture.Request) (idempotency.Scope, error) { return idempotency.Scope{}, nil }, func(context.Context, *database.Tx, fixture.Request) (fixture.Submission, error) {
+	endpoint := fixture.Endpoint()
+	http.Idempotent(endpoint, store, idempotency.Definition{ID: "test", Version: 1}).Handle(func(context.Context, fixture.Request) (idempotency.Scope, error) { return idempotency.Scope{}, nil }, func(context.Context, *database.Tx, fixture.Request) (fixture.Submission, error) {
 		return fixture.Submission{}, nil
 	})
 }

@@ -53,7 +53,8 @@ func TestEditorialAlternativesKeepActorScopeAndResourceTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoint := authenticating.EditorialProfile(authenticating.Profile(transport, guard), writeScopes, approveScopes, write, approve)
+	profile := authenticating.Profile(transport, guard)
+	endpoint := authenticating.EditorialProfile(profile, writeScopes, approveScopes, write, approve)
 	router, err := h.NewRouter(authenticating.ProfileRoute(endpoint, guard))
 	if err != nil {
 		t.Fatal(err)
@@ -75,7 +76,8 @@ func TestEditorialAlternativesKeepActorScopeAndResourceTypes(t *testing.T) {
 	if status := serve("approve"); status != 403 {
 		t.Fatal("permission revocation ignored", status)
 	}
-	if err := h.ValidateAuthenticated(h.ConfigureAuthenticated(authenticating.Profile(transport, guard), authenticating.ExactScopeOption(approveScopes))); err != nil {
+	configured := h.ConfigureAuthenticated(profile, authenticating.ExactScopeOption(approveScopes))
+	if err := h.ValidateAuthenticated(configured); err != nil {
 		t.Fatal("legacy function-value wrapper", err)
 	}
 }

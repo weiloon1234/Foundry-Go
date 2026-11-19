@@ -91,7 +91,8 @@ func TestDeclaredKeyBindingsUseScopedParameterizedQueries(t *testing.T) {
 		t.Fatal("query scope/parameters lost", db.statement)
 	}
 	db.calls = 0
-	if _, err := modelbinding.Resolve(httpmodels.CountryByCode(db), t.Context(), httpmodels.CountryPath{Country: models.CountryCode("private-country")}); !errors.Is(err, cause) {
+	countryResolver := httpmodels.CountryByCode(db)
+	if _, err := modelbinding.Resolve(countryResolver, t.Context(), httpmodels.CountryPath{Country: models.CountryCode("private-country")}); !errors.Is(err, cause) {
 		t.Fatal(err)
 	}
 	if db.calls != 1 || !strings.Contains(db.statement, `"code"`) || strings.Contains(db.statement, "private-country") {
@@ -102,7 +103,8 @@ func TestDeclaredKeyBindingsUseScopedParameterizedQueries(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.calls = 0
-	if _, err := modelbinding.Resolve(httpmodels.OrderWithinUser(db), t.Context(), httpmodels.OrderPath{User: id, Order: order}); !errors.Is(err, cause) {
+	orderResolver := httpmodels.OrderWithinUser(db)
+	if _, err := modelbinding.Resolve(orderResolver, t.Context(), httpmodels.OrderPath{User: id, Order: order}); !errors.Is(err, cause) {
 		t.Fatal(err)
 	}
 	if db.calls != 1 || !strings.Contains(db.statement, `"buyer_id"`) || len(db.arguments) < 2 {

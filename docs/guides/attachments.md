@@ -145,10 +145,9 @@ Input and stored-output defaults are 8 MiB. Opaque-file policies declare positiv
 `MaxBytes` and `MaxStoredBytes` ceilings; unchanged bytes must fit both. For example,
 set both to `512 << 20` for a 512 MiB video collection. Exactly the ceiling is
 accepted; the next byte is rejected. Image and variant policies retain the 64 MiB
-`MaxBufferedBytes` ceiling plus the image engine's limits. `MaxUploadBytes` remains
-an alias for that legacy in-memory bound, and `ReadBytes` still requires a maximum
-at or below it. Adding variants later cannot buffer an oversized historical
-original: generation rejects it before opening storage, using the smaller of
+`MaxBufferedBytes` ceiling plus the image engine's limits. `MaxBufferedBytes` owns
+this in-memory bound. `ReadBytes` requires a maximum at or below it. Adding variants
+later cannot buffer an oversized historical original: generation rejects it before opening storage, using the smaller of
 `MaxBufferedBytes` and the engine's input limit. Streaming reads and retirement
 remain available. Properties, reader
 length, filename syntax and content are validated before a storage intent is

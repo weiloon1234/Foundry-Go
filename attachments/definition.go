@@ -32,12 +32,10 @@ const (
 )
 const (
 	// MaxBufferedBytes bounds image processing and byte-returning helpers.
-	MaxBufferedBytes int64 = 64 << 20
-	// MaxUploadBytes is the legacy in-memory ceiling, not a policy ceiling.
-	MaxUploadBytes     = MaxBufferedBytes
-	MaxCollectionFiles = 256
-	MaxOwnerIntents    = 4096
-	MaxPropertiesBytes = 64 << 10
+	MaxBufferedBytes   int64 = 64 << 20
+	MaxCollectionFiles       = 256
+	MaxOwnerIntents          = 4096
+	MaxPropertiesBytes       = 64 << 10
 )
 
 // Policy declares storage, cardinality, accepted media, resource bounds and image

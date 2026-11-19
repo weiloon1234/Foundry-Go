@@ -57,7 +57,7 @@ func TestLargePoliciesRetainImageBounds(t *testing.T) {
 			t.Fatal("oversized variant policy accepted")
 		}
 	}
-	if MaxUploadBytes != 64<<20 {
+	if MaxBufferedBytes != 64<<20 {
 		t.Fatal("legacy limit changed")
 	}
 }

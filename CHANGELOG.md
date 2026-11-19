@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.46.0 — 2026-11-19
+
+- `routes check` rejects a call returning a route stage as an argument of any
+  call, including application helpers, generic helpers and method values.
+  Stage types derive from the existing catalogue, including pointers and
+  multi-result calls containing a stage. Descriptors, options, scopes, table
+  declarations and registrations may stay inline; terminal `.Handle(...)` and `.URL(...)`
+  receivers and statement, assignment and return stage calls remain allowed.
+  Parentheses and conversions cannot hide nesting. For example:
+
+  ```go
+  // From
+  loginEndpoint := http.DefineEndpoint(routehelpers.Route(credentials, http.POST, "/login", "login", http.Public), http.EmptyQuery(), requests.AdminLoginBody(), native)
+  create := http.IdempotentAuthenticated(routeaccess.SecureCapture(http.DefineEndpoint(route, query, body, response), access), store, definition)
+
+  // To
+  loginRoute := routehelpers.Route(credentials, http.POST, "/login", "login", http.Public)
+  loginEndpoint := http.DefineEndpoint(loginRoute, http.EmptyQuery(), requests.AdminLoginBody(), native)
+  endpoint := http.DefineEndpoint(route, query, body, response)
+  secured := routeaccess.SecureCapture(endpoint, access)
+  create := http.IdempotentAuthenticated(secured, store, definition)
+  ```
+
+- Remove `attachments.MaxUploadBytes`; use `attachments.MaxBufferedBytes`.
+  Its 64 MiB bound is unchanged and applies to buffering, not streaming uploads.
+- Remove callerless `querycore.ReadMutationAssignments` and
+  `querycore.ValidateJSONKind`. Remove production `MakeCursor`, `WithSensitivity`
+  and `agent.InspectBatch` wrappers; behavior tests use test-local helpers or
+  the existing `BuildCursor` and `SensitiveValue` contracts.
+- Remove migration-only `generate.FrameworkHTTPDependencies`, the retired
+  journal `FieldNotes` field, `RetiredJournalError` and their special-case tests.
+  Ordinary strict journal decoding rejects unknown fields and unsupported versions
+  without changing staging. Remove the retired generated-field-notice filter.
+- Remove the redundant generation-12 deployment file gate; immutable bundle
+  inventory and integrity validation remain authoritative.
+- Migrate deploy-acceptance routes to named stages and generated response helpers;
+  include that fixture in `make routes-check`.
+- Remove the v0.2 migration guide, its links and its former-API teaching exception.
+  Current validation functions are documented in the validation guide. Remove
+  completed migration phases and reorder caveats from staged-route and DTO guides.
+- Correct handwritten model, ORM, slot and audit ownership comments, the shared
+  chunk-size description and generator behavior documentation. Route timeout
+  guidance uses `http.Timeout(...)`. Application console examples use colon
+  spelling, including `contracts:export`.
+
 ## v0.45.0 — 2026-11-19
 
 - Route declarations use staged functions. A route-declaring call may no longer
@@ -2163,7 +2208,8 @@ The first immutable client contract cohort is `contracts-v0.3.0`.
   archive fell 85.70% in functions (4,182 → 598) and 60.87% in peak compiler RSS
   (249.88 → 97.77 MiB). Validation alone fell 278 → 72 marginal functions/DTO
   (−74.10%). Former methods on `Field` and `Rule` are removed, with no shims.
-  See the [migration guide](docs/guides/v0.2-migration.md).
+  See the current [validation guide](docs/guides/validation.md) and
+  [endpoint guide](docs/guides/http-endpoints.md).
 - **Breaking (v0.2 compile footprint):** HTTP endpoint and route configuration
   moves to trailing options (`http.Within`, `http.Timeout`, `http.Use`, `http.Errors`)
   and typed package functions. Route and payload descriptors (`Path`, `Query`,

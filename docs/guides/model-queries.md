@@ -75,7 +75,9 @@ outcomes through the framework's typed errors.
 ## Typed predicates and expression ordering
 
 Methodless column handles use per-kind functions, such as `orm.TextEq(column, value)`
-and `orm.NumberGt(column, value)`. Each family preserves its declared equality/membership,
+and `orm.NumberGt(column, value)`. Go does not overload functions by argument
+type. Separate operators keep concrete column types and avoid value boxing or
+runtime type dispatch. Each family preserves its declared equality/membership,
 NULL checks, ordered comparisons or text patterns. Enums remain equality-only;
 model IDs retain their model owner. Empty membership is false. NULL comparisons
 follow SQL three-valued logic; use explicit NULL checks for absence. Empty

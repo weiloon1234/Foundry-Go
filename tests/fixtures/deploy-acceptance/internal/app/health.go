@@ -8,12 +8,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/http"
 )
 
-//foundry:dto
+//foundry:dto http=response
 type HealthLive struct {
 	Status string `json:"status"`
 }
 
-//foundry:dto
+//foundry:dto http=response
 type HealthReady struct {
 	Ready bool `json:"ready"`
 }
@@ -36,14 +36,21 @@ func healthRoutes(services application.Services) ([]http.RouteRegistration, erro
 			next.ServeHTTP(w, r)
 		}), nil
 	})
-	live := http.ConfigureEndpoint(http.DefineEndpoint(
-		http.DefineRoute(http.RouteSpec{ID: "health.live", Method: http.GET, Access: http.Public}, http.StaticPath("/health/live")),
-		http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, HealthLiveJSON()),
-	), http.Use(noCache))
-	ready := http.ConfigureEndpoint(http.DefineEndpoint(
-		http.DefineRoute(http.RouteSpec{ID: "health.ready", Method: http.GET, Access: http.Public}, http.StaticPath("/health/ready")),
-		http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, HealthReadyJSON()),
-	), http.Use(noCache))
+
+	liveRoute := http.DefineRoute(http.RouteSpec{ID: "health.live", Method: http.GET, Access: http.Public}, http.StaticPath("/health/live"))
+	live := http.DefineEndpoint(
+		liveRoute,
+		http.EmptyQuery(), http.EmptyBody(), HealthLiveResponse(200),
+	)
+	live = http.ConfigureEndpoint(live, http.Use(noCache))
+
+	readyRoute := http.DefineRoute(http.RouteSpec{ID: "health.ready", Method: http.GET, Access: http.Public}, http.StaticPath("/health/ready"))
+	ready := http.DefineEndpoint(
+		readyRoute,
+		http.EmptyQuery(), http.EmptyBody(), HealthReadyResponse(200),
+	)
+	ready = http.ConfigureEndpoint(ready, http.Use(noCache))
+
 	return []http.RouteRegistration{
 		live.Handle(func(context.Context, healthInput) (HealthLive, error) {
 			return HealthLive{Status: "ok"}, nil

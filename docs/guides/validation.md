@@ -73,8 +73,14 @@ values become public messages.
 `Field[T, V]` and `Rule[T]` are immutable, methodless handles. Pass the
 handle first to validation functions.
 
-For former method names and their replacements, see the
-[validation migration table](v0.2-migration.md#validation-migration).
+`validation.Rules(field, rules...)` attaches rules to a field descriptor.
+`validation.Check(rule, ctx, input, limits)` executes the graph. Configure field
+labels with `validation.WithLabel` or `validation.WithLabelKey`, and issue messages
+with `validation.WithMessage`.
+
+Inspect handles with `validation.FieldName`, `validation.DescribeRule` and
+`validation.Select`. `validation.ValidateField` and `validation.ValidateRule`
+validate declarations; `validation.CheckProhibitions` runs the prohibition phase.
 
 Use `validation.Rules[Request, string]` or `validation.Check[Request]` as
 function values. To replace a bound method value, capture the descriptor once:

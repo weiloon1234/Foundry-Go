@@ -44,8 +44,6 @@ def command(action, operation, bundle):
 def prepare(host, registry, entry, request):
     import upgrades
     bundle = host.paths.p(registry["tools"]["active_path"])
-    require((bundle / "lib/operations.py").is_file(), "capability_unavailable",
-            "Feature activation requires the generation-12 independent operation cleanup release.")
     upgrades._installed(host, registry["tools"])
     install_runtime(host, bundle)
     root = directory(host, request["operation_id"])

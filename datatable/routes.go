@@ -124,7 +124,8 @@ func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], confi
 		route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path))
 		return foundryhttp.ConfigureRoute(route, foundryhttp.Within(scope))
 	}
-	queryEndpoint := QueryEndpoint(table, route(foundryhttp.POST, "", "query", foundryhttp.Guarded), foundryhttp.EmptyQuery())
+	queryRoute := route(foundryhttp.POST, "", "query", foundryhttp.Guarded)
+	queryEndpoint := QueryEndpoint(table, queryRoute, foundryhttp.EmptyQuery())
 	query := foundryhttp.Authenticated(queryEndpoint, config.Guard, read...)
 	if err := foundryhttp.ValidateAuthenticated(query); err != nil {
 		return nil, err
@@ -142,12 +143,14 @@ func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], confi
 	if err := config.Quota.Validate(); err != nil {
 		return nil, err
 	}
-	downloadEndpoint := DownloadEndpoint(table, route(foundryhttp.GET, "/download", "download", foundryhttp.Guarded), DownloadQueryDescriptor(), foundryhttp.DownloadResponse("text/csv; charset=utf-8", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), foundryhttp.Timeout(config.Manager.DownloadTimeout()))
+	downloadRoute := route(foundryhttp.GET, "/download", "download", foundryhttp.Guarded)
+	downloadEndpoint := DownloadEndpoint(table, downloadRoute, DownloadQueryDescriptor(), foundryhttp.DownloadResponse("text/csv; charset=utf-8", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), foundryhttp.Timeout(config.Manager.DownloadTimeout()))
 	download := foundryhttp.TicketAuthenticated(downloadEndpoint, config.Guard, config.Tickets.redeemer, export...)
 	if err := foundryhttp.ValidateTicketAuthenticated(download); err != nil {
 		return nil, err
 	}
-	issueRoute := foundryhttp.ConfigureRoute(route(foundryhttp.POST, "/export", "export", foundryhttp.Guarded), foundryhttp.Use(foundryhttp.CredentialRequests(), config.Quota))
+	issueRoute := route(foundryhttp.POST, "/export", "export", foundryhttp.Guarded)
+	issueRoute = foundryhttp.ConfigureRoute(issueRoute, foundryhttp.Use(foundryhttp.CredentialRequests(), config.Quota))
 	issueEndpoint := foundryhttp.DefineEndpoint(issueRoute, foundryhttp.EmptyQuery(), foundryhttp.JSONBody(ExportRequestJSON()), foundryhttp.JSONResponse(200, ExportTicketJSON()))
 	issueEndpoint = BindTicketExport(table, issueEndpoint, ExportRequestValidationFields().Request)
 	issue := foundryhttp.Authenticated(issueEndpoint, config.Guard, export...)

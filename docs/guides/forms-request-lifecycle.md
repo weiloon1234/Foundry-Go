@@ -108,7 +108,8 @@ is unchanged. Configure hooks before applying signing or resource-binding adapte
 ## Concrete guard actors
 
 ```go
-secured := http.RequireAuthentication(http.PrepareEndpoint(endpoint, prepare), transport, accountGuard)
+prepared := http.PrepareEndpoint(endpoint, prepare)
+secured := http.RequireAuthentication(prepared, transport, accountGuard)
 secured = http.AuthorizeActor(secured, func(ctx context.Context, actor Account, input Request) error {
     return accountPolicy(ctx, actor, input.Body)
 })

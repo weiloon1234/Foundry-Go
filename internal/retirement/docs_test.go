@@ -174,7 +174,7 @@ func TestMigrationBeforeBlocks(t *testing.T) {
 		"- Capture former method values such as `r.Check`\n  in a closure during migration.\n",
 	}
 	for _, block := range blocks {
-		for _, name := range []string{"docs/guides/orm-migration.md", "docs/guides/v0.2-migration.md"} {
+		for _, name := range []string{"docs/guides/orm-migration.md"} {
 			if err := CheckDocument(name, []byte(label+block)); err != nil {
 				t.Errorf("%s: labeled block rejected: %v", name, err)
 			}
@@ -194,7 +194,7 @@ func TestMigrationBeforeBlocks(t *testing.T) {
 		}
 	}
 	for _, text := range []string{label + "\nUse `r.Check`.\n", label + "## Current API\nUse `r.Check`.\n", label + "---\nUse `r.Check`.\n"} {
-		if err := CheckDocument("docs/guides/v0.2-migration.md", []byte(text)); err == nil {
+		if err := CheckDocument("docs/guides/orm-migration.md", []byte(text)); err == nil {
 			t.Errorf("accepted nonadjacent label: %q", text)
 		}
 	}

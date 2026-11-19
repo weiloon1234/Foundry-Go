@@ -39,7 +39,7 @@ type Stream struct {
 // and Foundry accepted it, for incremental output such as a long export or a
 // log tail. Without it the native writer may buffer small chunks. Length and
 // byte-limit checks are unchanged: a flushed prefix can still be aborted by a
-// later failure, never completed early. Declare the route's WithTimeout for
+// later failure, never completed early. Declare the route's http.Timeout for
 // streams that outlive the kernel RequestTimeout.
 func (s Stream) Progressive() Stream { s.progressive = true; return s }
 

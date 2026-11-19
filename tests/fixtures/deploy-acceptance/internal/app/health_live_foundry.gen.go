@@ -5,6 +5,7 @@ package app
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -25,6 +26,13 @@ var foundryHealthLiveJSON = sync.OnceValue(func() foundrycontract.JSON[HealthLiv
 		{ID: "string", Kind: foundrycontract.Kind("string"), Nullable: false},
 	}})
 })
+
+// HealthLiveResponse builds the HTTP response from HealthLiveJSON; status remains part of the route declaration.
+//
+//go:noinline
+func HealthLiveResponse(status int) foundryhttp.Response[HealthLive] {
+	return foundryhttp.JSONResponse(status, HealthLiveJSON())
+}
 
 // HealthLiveValidationFieldSet retains concrete DTO and value types for validation.
 // Example: HealthLiveValidationFields()

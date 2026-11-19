@@ -334,7 +334,7 @@ type SettingsHTTPServerConfigKeySet struct {
 	// RequestTimeout bounds the request context after admission. Cooperative
 	// handlers and database calls observe its cancellation. Ownership lasts
 	// until actual handler exit; raw handlers own their response behavior.
-	// A matched route declared with WithTimeout replaces it for that route.
+	// A matched route declared with http.Timeout replaces it for that route.
 	//
 	RequestTimeout config.Key[Settings, time.Duration]
 	// ShutdownTimeout selects http.server.shutdown_timeout. Set accepts time.Duration.
@@ -657,7 +657,7 @@ type SettingsRealtimeHTTPConfigKeySet struct {
 	// RequestTimeout bounds the request context after admission. Cooperative
 	// handlers and database calls observe its cancellation. Ownership lasts
 	// until actual handler exit; raw handlers own their response behavior.
-	// A matched route declared with WithTimeout replaces it for that route.
+	// A matched route declared with http.Timeout replaces it for that route.
 	//
 	RequestTimeout config.Key[Settings, time.Duration]
 	// ShutdownTimeout selects realtime.http.shutdown_timeout. Set accepts time.Duration.

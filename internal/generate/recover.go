@@ -27,7 +27,6 @@ type journal struct {
 	Version      int                          `json:"version"`
 	Files        map[string]journalEntry      `json:"files"`
 	Guards       []string                     `json:"guards,omitempty"`
-	FieldNotes   []string                     `json:"field_notes,omitempty"`
 	Distribution *pluginmanifest.Distribution `json:"distribution,omitempty"`
 	NewDirs      []string                     `json:"new_dirs,omitempty"`
 }
@@ -230,21 +229,10 @@ func recoverLocked(ctx context.Context, dir string) (Recovery, error) {
 	return result, discardStaging(dir)
 }
 
-// RetiredJournalError identifies a source-edit journal that this generator cannot recover.
-// Its staging must be reconciled with the matching older generator before retrying.
-type RetiredJournalError struct{ Version int }
-
-func (e *RetiredJournalError) Error() string {
-	return fmt.Sprintf("generation journal version %d uses retired field documentation recovery; staging retained; reconcile with the generator that created it before retrying", e.Version)
-}
-
 func decodeJournal(data []byte) (journal, error) {
 	var log journal
 	if err := decodePublicationJSON(data, &log); err != nil {
 		return log, fmt.Errorf("invalid generation journal: %w", err)
-	}
-	if log.Version == 4 || len(log.FieldNotes) != 0 {
-		return log, &RetiredJournalError{Version: log.Version}
 	}
 	if (log.Version != 2 && log.Version != 5 && log.Version != 6 && log.Version != 7) || len(log.Files) == 0 {
 		return log, fmt.Errorf("unsupported generation journal")

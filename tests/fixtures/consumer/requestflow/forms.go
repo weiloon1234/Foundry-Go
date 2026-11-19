@@ -69,7 +69,9 @@ func Prepare(_ context.Context, input Request) (Search, Submission, error) {
 }
 
 var Submit = func() foundryhttp.Endpoint[foundryhttp.NoPath, Search, Submission, Reply] {
-	formsSubmitEndpoint := foundryhttp.PrepareEndpoint(endpoint(foundryhttp.Public), Prepare)
+	formsSubmitEndpoint := endpoint(foundryhttp.Public)
+	formsSubmitEndpoint = foundryhttp.PrepareEndpoint(formsSubmitEndpoint, Prepare)
+
 	return foundryhttp.AuthorizeEndpoint(formsSubmitEndpoint, func(_ context.Context, input Request) error {
 		if input.Body.Name == "denied" {
 			return foundryhttp.Forbidden
@@ -92,7 +94,9 @@ type Account struct {
 }
 
 func AccountEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Account]) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
-	guardFormsSubmit := foundryhttp.RequireAuthentication(endpoint(foundryhttp.Guarded), transport, guard)
+	formsSubmitEndpoint := endpoint(foundryhttp.Guarded)
+	guardFormsSubmit := foundryhttp.RequireAuthentication(formsSubmitEndpoint, transport, guard)
+
 	guardFormsSubmit = foundryhttp.PrepareAuthenticated(guardFormsSubmit, Prepare)
 
 	return foundryhttp.AuthorizeActor(guardFormsSubmit, func(_ context.Context, actor Account, input Request) error {
@@ -103,7 +107,9 @@ func AccountEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Acc
 	})
 }
 func GuestEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Account]) foundryhttp.OptionalAuthenticationEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
-	guardFormsSubmit := foundryhttp.OptionalAuthentication(endpoint(foundryhttp.Public), transport, guard)
+	formsSubmitEndpoint := endpoint(foundryhttp.Public)
+	guardFormsSubmit := foundryhttp.OptionalAuthentication(formsSubmitEndpoint, transport, guard)
+
 	guardFormsSubmit = foundryhttp.PrepareOptional(guardFormsSubmit, Prepare)
 
 	return foundryhttp.AuthorizeOptionalActor(guardFormsSubmit, func(_ context.Context, actor value.Optional[Account], input Request) error {
@@ -119,16 +125,24 @@ func RuleSourceRouter() (*foundryhttp.Router, error) {
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
 	}
 
-	json := foundryhttp.DefineEndpoint(route("rules.json", "/json", foundryhttp.POST), foundryhttp.EmptyQuery(), JSONSubmissionBody(), foundryhttp.EmptyResponse(204))
+	jsonRoute := route("rules.json", "/json", foundryhttp.POST)
+	json := foundryhttp.DefineEndpoint(jsonRoute, foundryhttp.EmptyQuery(), JSONSubmissionBody(), foundryhttp.EmptyResponse(204))
+
 	json = foundryhttp.ValidateBody(json, validation.Rules(JSONSubmissionValidationFields().Name, NameRules))
 
-	multi := foundryhttp.DefineEndpoint(route("rules.multipart", "/multipart", foundryhttp.POST), foundryhttp.EmptyQuery(), MultipartSubmissionBody(""), foundryhttp.EmptyResponse(204))
+	multiRoute := route("rules.multipart", "/multipart", foundryhttp.POST)
+	multi := foundryhttp.DefineEndpoint(multiRoute, foundryhttp.EmptyQuery(), MultipartSubmissionBody(""), foundryhttp.EmptyResponse(204))
+
 	multi = foundryhttp.ValidateBody(multi, validation.Rules(MultipartSubmissionValidationFields().Name, NameRules))
 
-	query := foundryhttp.DefineEndpoint(route("rules.query", "/query", foundryhttp.GET), SubmissionDescriptor(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+	queryRoute := route("rules.query", "/query", foundryhttp.GET)
+	query := foundryhttp.DefineEndpoint(queryRoute, SubmissionDescriptor(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+
 	query = foundryhttp.ValidateQuery(query, validation.Rules(SubmissionValidationFields().Name, NameRules))
 
-	form := foundryhttp.DefineEndpoint(route("rules.form", "/form", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.FormBody(SubmissionDescriptor()), foundryhttp.EmptyResponse(204))
+	formRoute := route("rules.form", "/form", foundryhttp.POST)
+	form := foundryhttp.DefineEndpoint(formRoute, foundryhttp.EmptyQuery(), foundryhttp.FormBody(SubmissionDescriptor()), foundryhttp.EmptyResponse(204))
+
 	form = foundryhttp.ValidateBody(form, validation.Rules(SubmissionValidationFields().Name, NameRules))
 
 	return foundryhttp.NewRouter(

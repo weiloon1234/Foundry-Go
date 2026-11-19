@@ -22,7 +22,10 @@ func BrowserTokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLo
 	}
 	// doc-example:begin browser-token-delivery
 	response := foundryhttp.TokenCookieResponse[models.User, model.ID[models.User]](cookie, 200, clock)
-	login := foundryhttp.DefineEndpoint(route("login"), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ ProfileInput) (IssuedUserToken, error) {
+
+	loginRoute := route("login")
+
+	login := foundryhttp.DefineEndpoint(loginRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ ProfileInput) (IssuedUserToken, error) {
 		proof, err := verify(ctx)
 		if err != nil {
 			return IssuedUserToken{}, err
@@ -30,14 +33,18 @@ func BrowserTokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLo
 		return StartVerifiedToken(ctx, tokens, proof, "Browser", true)
 	})
 	// The handler is the same as for the JSON refresh body.
-	refresh := foundryhttp.DefineEndpoint(route("refresh"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), response).Handle(func(ctx context.Context, input RefreshInput) (IssuedUserToken, error) {
+	refreshRoute := route("refresh")
+
+	refresh := foundryhttp.DefineEndpoint(refreshRoute, foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), response).Handle(func(ctx context.Context, input RefreshInput) (IssuedUserToken, error) {
 		return RefreshFromBody(ctx, tokens, input.Body)
 	})
 	// doc-example:end browser-token-delivery
 	// The cookie itself authenticates logout, so an expired access token cannot
 	// leave the family live; without a usable cookie there is nothing to revoke.
 	// doc-example:begin browser-token-logout
-	logout := foundryhttp.DefineEndpoint(route("logout"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookieLogout(cookie),
+	logoutRoute := route("logout")
+
+	logout := foundryhttp.DefineEndpoint(logoutRoute, foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookieLogout(cookie),
 		foundryhttp.ClearRefreshCookie(cookie, foundryhttp.EmptyResponse(204))).Handle(func(ctx context.Context, input RefreshLogoutInput) (foundryhttp.NoContent, error) {
 		if refresh, ok := input.Body.RefreshToken.Get(); ok {
 			if _, err := tokens.LogoutRefresh(ctx, refresh.Secret()); err != nil {

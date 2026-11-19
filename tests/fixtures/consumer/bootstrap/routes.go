@@ -69,12 +69,18 @@ func Routes(settings Settings, services application.Services) ([]http.RouteRegis
 	if err != nil {
 		return nil, err
 	}
-	member := http.Authenticated(profileEndpoint("bootstrap.member", "/api/member", http.GET), members).Handle(func(ctx context.Context, actor Member, _ MemberProfileInput) (Profile, error) {
+
+	bootstrapMemberEndpoint := profileEndpoint("bootstrap.member", "/api/member", http.GET)
+
+	member := http.Authenticated(bootstrapMemberEndpoint, members).Handle(func(ctx context.Context, actor Member, _ MemberProfileInput) (Profile, error) {
 		return cached.Remember(ctx, actor.ID.String(), cache.Forever(), func(context.Context) (Profile, error) {
 			return Profile{Name: settings.Greeting + " " + actor.Name, Kind: "member"}, nil
 		})
 	})
-	operator := http.Authenticated(profileEndpoint("bootstrap.operator", "/api/operator", http.POST), operators).Handle(func(_ context.Context, actor Operator, _ MemberProfileInput) (Profile, error) {
+
+	bootstrapOperatorEndpoint := profileEndpoint("bootstrap.operator", "/api/operator", http.POST)
+
+	operator := http.Authenticated(bootstrapOperatorEndpoint, operators).Handle(func(_ context.Context, actor Operator, _ MemberProfileInput) (Profile, error) {
 		return Profile{Name: actor.Department, Kind: "operator"}, nil
 	})
 

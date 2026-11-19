@@ -25,6 +25,6 @@ existing package paths and wire fields. Reporting queries, exports and authority
 reloads use ORM declarations. Schema setup and deliberately corrupt driver inputs
 remain explicit SQL in integration fixtures.
 
-Generated model helpers and their relation declarations coexist only until the
-lead's generation barrier. The source goldens and operator identity golden keep
+Models and relation declarations are handwritten. The source goldens and operator
+identity golden keep
 legacy calls as independent compatibility oracles; they are not runtime fallbacks.

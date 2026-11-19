@@ -28,8 +28,9 @@ type KeyCodec[K any] interface {
 	Decode(any) (K, error)
 }
 
-// Reference retains a model and its concrete stored primary-key type. Generated
-// FoundryReference methods supply its table, key and codec without calling getters.
+// Reference retains a model and its concrete stored primary-key type. Handwritten
+// FoundryReference methods use orm.IdentityOf(...).ReferenceOf(...) to supply the
+// table, key and codec.
 // A reference does not hydrate a model or establish existence or authorization.
 type Reference[M, K any] struct {
 	_     [0]*M
@@ -38,7 +39,7 @@ type Reference[M, K any] struct {
 	codec KeyCodec[K]
 }
 
-// NewReference is the explicit generated metadata boundary. Applications normally
+// NewReference is the explicit metadata boundary. Applications normally
 // obtain references from a model's FoundryReference method rather than repeating
 // names or codecs. Identity freezes the key when transport metadata is needed.
 func NewReference[M, K any](name string, key K, codec KeyCodec[K]) Reference[M, K] {
@@ -54,7 +55,7 @@ func (r Reference[M, K]) Key() K { return r.key }
 // Format writes a fixed label without exposing the reference.
 func (Reference[M, K]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("model reference")) }
 
-// Validate checks generated model/key metadata without encoding a key or doing I/O.
+// Validate checks handwritten model/key metadata without encoding a key or doing I/O.
 // The reference may hold a zero key, as it does when used to parse stored identities.
 func (r Reference[M, K]) Validate() error { return r.validate() }
 
@@ -92,7 +93,7 @@ func (r Reference[M, K]) Identity() (Identity, error) {
 
 // Parse restores a serialized identity using this reference's expected model and
 // primary-key codec. Its current key is ignored. At a transport boundary use a
-// generated zero model's FoundryReference().Parse(identity); no lookup occurs.
+// handwritten zero model's FoundryReference().Parse(identity); no lookup occurs.
 // Parsing validates metadata, never authentication, authorization or existence.
 func (r Reference[M, K]) Parse(identity Identity) (Reference[M, K], error) {
 	if err := r.validate(); err != nil {
@@ -143,7 +144,7 @@ type Identity struct {
 	key  sqlvalue.Value
 }
 
-// Identifiable is implemented by generated model metadata. Framework adapters
+// Identifiable is implemented by handwritten model metadata. Framework adapters
 // capture the stored identity without another database lookup or an Actor.
 type Identifiable interface {
 	// FoundryIdentity returns the model's persistence identity.

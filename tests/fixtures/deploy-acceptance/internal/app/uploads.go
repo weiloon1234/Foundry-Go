@@ -42,14 +42,14 @@ type uploadPath struct{ ID string }
 type uploadQuery struct{ ID, Hold string }
 type uploadBody struct{ File http.UploadedFile }
 
-//foundry:dto
+//foundry:dto http=response
 type UploadReceipt struct {
 	Operation string `json:"operation"`
 	Bytes     int64  `json:"bytes"`
 	SHA256    string `json:"sha256"`
 }
 
-//foundry:dto
+//foundry:dto http=response
 type UploadUsage struct {
 	Active       int   `json:"active"`
 	Reserved     int64 `json:"reserved"`
@@ -215,7 +215,10 @@ func (u *uploadRuntime) routes(application.Services) ([]http.RouteRegistration, 
 	smallLimits := http.DefaultEndpointLimits()
 	smallLimits.Multipart.Bytes, smallLimits.Multipart.FileBytes = 2<<20, 1<<20
 	smallLimits.Multipart.Files, smallLimits.Multipart.Parts, smallLimits.Multipart.Readers = 1, 1, 1
-	multipart := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "acceptance.upload.multipart", Method: http.POST, Access: http.Public}, http.StaticPath("/acceptance/uploads/multipart"), http.BodyLimit(2<<20)), query, http.MultipartBody(http.MultipartDirectory(fileForm, u.settings.SmallDirectory)), http.EmptyResponse(204), http.Limits(smallLimits))
+
+	acceptanceUploadMultipartRoute := http.DefineRoute(http.RouteSpec{ID: "acceptance.upload.multipart", Method: http.POST, Access: http.Public}, http.StaticPath("/acceptance/uploads/multipart"), http.BodyLimit(2<<20))
+	multipart := http.DefineEndpoint(acceptanceUploadMultipartRoute, query, http.MultipartBody(http.MultipartDirectory(fileForm, u.settings.SmallDirectory)), http.EmptyResponse(204), http.Limits(smallLimits))
+
 	routes = append(routes, multipart.Handle(func(_ context.Context, in http.Input[http.NoPath, uploadQuery, uploadBody]) (http.NoContent, error) {
 		if err := work.ValidateID(in.Query.ID); err != nil {
 			return http.NoContent{}, http.BadRequest
@@ -244,7 +247,10 @@ func (u *uploadRuntime) routes(application.Services) ([]http.RouteRegistration, 
 		if kind == "scoped" {
 			path = http.DefinePath("/acceptance/resources/{resource}/media", http.Param("resource", http.StringPath[string](), func(p *uploadPath) *string { return &p.ID }))
 		}
-		endpoint := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "acceptance.upload." + http.RouteID(kind), Method: http.POST, Access: http.Public}, path, http.BodyLimit(bodyBytes), http.Timeout(timeout)), query, http.MultipartBody(form), http.JSONResponse(200, UploadReceiptJSON()), http.Limits(limits))
+
+		endpointRoute := http.DefineRoute(http.RouteSpec{ID: "acceptance.upload." + http.RouteID(kind), Method: http.POST, Access: http.Public}, path, http.BodyLimit(bodyBytes), http.Timeout(timeout))
+		endpoint := http.DefineEndpoint(endpointRoute, query, http.MultipartBody(form), UploadReceiptResponse(200), http.Limits(limits))
+
 		routes = append(routes, endpoint.Handle(func(ctx context.Context, in http.Input[uploadPath, uploadQuery, uploadBody]) (UploadReceipt, error) {
 			identifier := in.Query.ID
 			if kind == "scoped" {
@@ -304,12 +310,18 @@ func (u *uploadRuntime) routes(application.Services) ([]http.RouteRegistration, 
 			return UploadReceipt{Operation: published.Operation.String(), Bytes: n, SHA256: fmt.Sprintf("%x", hash.Sum(nil))}, nil
 		}))
 	}
-	usage := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "acceptance.upload.usage", Method: http.GET, Access: http.Public}, http.StaticPath("/acceptance/uploads/usage")), http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, UploadUsageJSON()))
+
+	acceptanceUploadUsageRoute := http.DefineRoute(http.RouteSpec{ID: "acceptance.upload.usage", Method: http.GET, Access: http.Public}, http.StaticPath("/acceptance/uploads/usage"))
+	usage := http.DefineEndpoint(acceptanceUploadUsageRoute, http.EmptyQuery(), http.EmptyBody(), UploadUsageResponse(200))
+
 	routes = append(routes, usage.Handle(func(context.Context, http.Input[http.NoPath, http.NoQuery, http.NoBody]) (UploadUsage, error) {
 		active, reserved := u.pool.Usage()
 		return UploadUsage{Active: active, Reserved: reserved, Publications: u.backend.published.Load() + u.smallBackend.published.Load(), Publishing: u.backend.active.Load() + u.smallBackend.active.Load()}, nil
 	}))
-	cleanup := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "acceptance.upload.cleanup", Method: http.POST, Access: http.Public}, http.StaticPath("/acceptance/uploads/cleanup")), query, http.EmptyBody(), http.EmptyResponse(204))
+
+	acceptanceUploadCleanupRoute := http.DefineRoute(http.RouteSpec{ID: "acceptance.upload.cleanup", Method: http.POST, Access: http.Public}, http.StaticPath("/acceptance/uploads/cleanup"))
+	cleanup := http.DefineEndpoint(acceptanceUploadCleanupRoute, query, http.EmptyBody(), http.EmptyResponse(204))
+
 	routes = append(routes, cleanup.Handle(func(ctx context.Context, in http.Input[http.NoPath, uploadQuery, http.NoBody]) (http.NoContent, error) {
 		if err := work.ValidateID(in.Query.ID); err != nil {
 			return http.NoContent{}, http.BadRequest

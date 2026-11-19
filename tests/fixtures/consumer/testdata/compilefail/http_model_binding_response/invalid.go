@@ -21,4 +21,5 @@ var _ httpkernel.UserPath
 var _ foundryhttp.NoQuery
 var _ = httpmodels.Show
 
-var _ = modelbinding.Bind(foundryhttp.ForBinding(httpmodels.Show), modelbinding.Resolver[httpkernel.UserPath, models.User]{}).Handle(func(context.Context, httpmodels.ShowRequest) (models.User, error) { return models.User{}, nil })
+var binding = foundryhttp.ForBinding(httpmodels.Show)
+var _ = modelbinding.Bind(binding, modelbinding.Resolver[httpkernel.UserPath, models.User]{}).Handle(func(context.Context, httpmodels.ShowRequest) (models.User, error) { return models.User{}, nil })

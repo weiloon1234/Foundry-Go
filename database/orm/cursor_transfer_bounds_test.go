@@ -77,7 +77,9 @@ func TestCursorResourceBoundsIncludePrimaryTieBreaker(t *testing.T) {
 	if _, err := newCursorPlan(d.Query().OrderBy(orders[:len(orders)-1]...).state, 1, "", false, false); err != nil {
 		t.Fatal("bounded order rejected", err)
 	}
-	if _, err := querycore.MakeCursor(strings.Repeat("a", 64), []driver.Value{strings.Repeat("x", querycore.MaxCursorBytes+1)}); !errors.Is(err, fault.Invalid) {
+	if _, err := querycore.BuildCursor(strings.Repeat("a", 64), 1, func(int) (driver.Value, error) {
+		return strings.Repeat("x", querycore.MaxCursorBytes+1), nil
+	}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("oversized token", err)
 	}
 }

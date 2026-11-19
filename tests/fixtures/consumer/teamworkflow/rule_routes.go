@@ -30,16 +30,24 @@ func RuleRoutes() []http.RouteRegistration {
 		return http.DefineRoute(http.RouteSpec{ID: id, Method: method, Access: http.Public}, http.StaticPath(path))
 	}
 
-	json := http.DefineEndpoint(route("workflow.rules.json", "/rules/json", http.POST), http.EmptyQuery(), SubmissionInputBody(), RuleReplyResponse(200))
+	jsonRoute := route("workflow.rules.json", "/rules/json", http.POST)
+	json := http.DefineEndpoint(jsonRoute, http.EmptyQuery(), SubmissionInputBody(), RuleReplyResponse(200))
+
 	json = http.ValidateBody(json, validation.Rules(SubmissionInputValidationFields().Name, NameRules))
 
-	form := http.DefineEndpoint(route("workflow.rules.form", "/rules/form", http.POST), http.EmptyQuery(), http.FormBody(FormInputDescriptor()), RuleReplyResponse(200))
+	formRoute := route("workflow.rules.form", "/rules/form", http.POST)
+	form := http.DefineEndpoint(formRoute, http.EmptyQuery(), http.FormBody(FormInputDescriptor()), RuleReplyResponse(200))
+
 	form = http.ValidateBody(form, validation.Rules(FormInputValidationFields().Name, NameRules))
 
-	query := http.DefineEndpoint(route("workflow.rules.query", "/rules/query", http.GET), FormInputDescriptor(), http.EmptyBody(), RuleReplyResponse(200))
+	queryRoute := route("workflow.rules.query", "/rules/query", http.GET)
+	query := http.DefineEndpoint(queryRoute, FormInputDescriptor(), http.EmptyBody(), RuleReplyResponse(200))
+
 	query = http.ValidateQuery(query, validation.Rules(FormInputValidationFields().Name, NameRules))
 
-	multipart := http.DefineEndpoint(route("workflow.rules.multipart", "/rules/multipart", http.POST), http.EmptyQuery(), MultipartInputBody(""), RuleReplyResponse(200))
+	multipartRoute := route("workflow.rules.multipart", "/rules/multipart", http.POST)
+	multipart := http.DefineEndpoint(multipartRoute, http.EmptyQuery(), MultipartInputBody(""), RuleReplyResponse(200))
+
 	multipart = http.ValidateBody(multipart, validation.Rules(MultipartInputValidationFields().Name, NameRules))
 
 	return []http.RouteRegistration{

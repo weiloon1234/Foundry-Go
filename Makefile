@@ -109,7 +109,7 @@ test-redis:
 	FOUNDRY_TEST_REDIS_REQUIRED=1 $(GO) test -race -timeout=$(TEST_TIMEOUT) ./redis/... ./cache/... ./lease/... ./ratelimit/... ./pubsub/...
 
 routes-check:
-	@set -eu; for task_fixture_dir in $(FIXTURE_DIRS); do \
+	@set -eu; for task_fixture_dir in $(FIXTURE_DIRS) tests/fixtures/deploy-acceptance; do \
 		$(GO) run ./cmd/foundry routes check --dir "$$task_fixture_dir"; \
 	done
 	$(GO) run ./cmd/foundry routes check ./datatable ./webhook/capture ./httpclient/capture

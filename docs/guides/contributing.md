@@ -47,7 +47,7 @@ provider credentials out of tracked files and command output.
 | `make vet` | Static analysis of framework/tool packages |
 | `make test` | Current framework/tool tests |
 | `make fixture-check` | Vet and test both plugin fixtures, the independent consumer and the Go-way fixture |
-| `make generate` | Regenerate framework-owned declarations and both consumer fixtures, removing obsolete managed field notices |
+| `make generate` | Regenerate framework-owned declarations, consumer contracts and guide regions |
 | `make generate-check` | Type-check generated output and fail on stale files without rewriting them |
 | `make gopls-install` | Explicitly install the pinned development tool into `bin/` |
 | `make agent-smoke` | Verify real gopls against the consumer, requiring `FOUNDRY_TEST_GOPLS` to select an existing approved executable |

@@ -6,7 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 )
 
-// Register constructs one recorder and adds generated model audit observers to
+// Register constructs one recorder and adds handwritten model audit observers to
 // the selected pool. Foundation owns duplicate detection, dependency resolution
 // and freezing; model callbacks retain the constructed recorder directly.
 func Register(r *foundation.Registrar, pool foundation.Key[*database.DB], key foundation.Key[*Recorder], config Config, models ...record.Declaration) error {

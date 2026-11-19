@@ -1,8 +1,10 @@
 package routestyle
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
+	"go/printer"
 	"go/token"
 	"go/types"
 	"strings"
@@ -32,9 +34,6 @@ func (a *Analysis) CheckFile(file *ast.File) []Diagnostic {
 				result = append(result, Diagnostic{a.Files.Position(call.Pos()), code, message})
 			}
 		}
-		if !IsDeclaration(a.Function(call.Fun)) {
-			return true
-		}
 		for _, arg := range call.Args {
 			ast.Inspect(arg, func(n ast.Node) bool {
 				if a.Context.Err() != nil {
@@ -43,9 +42,14 @@ func (a *Analysis) CheckFile(file *ast.File) []Diagnostic {
 				if _, ok := n.(*ast.FuncLit); ok {
 					return false
 				}
-				inner, ok := n.(*ast.CallExpr)
-				if ok && IsDeclaration(a.Function(inner.Fun)) {
-					result = append(result, Diagnostic{a.Files.Position(inner.Pos()), "route-nesting", "move this route-declaring call to a named local before the enclosing statement; pass that value as the previous stage"})
+				if inner, ok := n.(*ast.CallExpr); ok {
+					if !a.Info.Types[inner.Fun].IsType() && a.IsStage(a.Info.TypeOf(inner)) {
+						var name bytes.Buffer
+						printer.Fprint(&name, a.Files, inner.Fun)
+						result = append(result, Diagnostic{a.Files.Position(inner.Pos()), "route-nesting", fmt.Sprintf("assign %s(...) to a named local first; pass that value as the route stage", name.String())})
+					}
+					// Each call's arguments are checked by the outer walk. Its receiver
+					// is not an argument: stage.Handle(...) and stage.URL(...) stay inline.
 					return false
 				}
 				return true

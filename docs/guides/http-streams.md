@@ -10,10 +10,11 @@ HTTP permits servers to ignore Range; see [RFC 9110](https://www.rfc-editor.org/
 Declare the media and return a deferred source from the typed handler:
 
 ```go
+route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
+    ID: "reports.export", Method: foundryhttp.GET, Access: foundryhttp.Public,
+}, httpkernel.UserPathDescriptor())
 endpoint := foundryhttp.DefineEndpoint(
-    foundryhttp.DefineRoute(foundryhttp.RouteSpec{
-        ID: "reports.export", Method: foundryhttp.GET, Access: foundryhttp.Public,
-    }, httpkernel.UserPathDescriptor()),
+    route,
     foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
     foundryhttp.StreamResponse("text/csv; charset=utf-8"),
 )

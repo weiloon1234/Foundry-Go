@@ -82,7 +82,7 @@ func checkDocument(name string, data []byte, strict bool) error {
 	for i, line := range strings.Split(string(data), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if fence == "" && beforeMarker.MatchString(trimmed) {
-			pending = name == "docs/guides/orm-migration.md" || name == "docs/guides/v0.2-migration.md"
+			pending = name == "docs/guides/orm-migration.md"
 			textBefore = false
 			if !pending {
 				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: migration before labels are allowed only in designated migration guides", name, i+1)))

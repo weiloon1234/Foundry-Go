@@ -10,16 +10,6 @@ type SensitiveValue struct{ Value ValueExpression }
 
 func (SensitiveValue) ValueNode() {}
 
-func WithSensitivity(v ValueExpression, sensitive bool) ValueExpression {
-	if !sensitive {
-		return v
-	}
-	if _, ok := v.(SensitiveValue); ok {
-		return v
-	}
-	return SensitiveValue{Value: v}
-}
-
 // UnwrapSensitivity is only for SQL shape/identity checks. Stored ASTs retain
 // their annotations; the ordinary expression visitor validates their children.
 func UnwrapSensitivity(v ValueExpression) ValueExpression {

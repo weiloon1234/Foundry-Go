@@ -90,15 +90,16 @@ var (
 
 func Route(binding foundryhttp.GuardBinding[Actor], scopes auth.AccessScopes[Actor], permission auth.Permission[Actor]) foundryhttp.RouteRegistration {
 	scope := foundryhttp.DefineScope("/v1", "probe")
+	route := foundryhttp.DefineRoute(
+		foundryhttp.RouteSpec{
+			ID:     "items.guarded",
+			Method: foundryhttp.POST,
+			Access: foundryhttp.Guarded,
+		},
+		itemPathDescriptor(),
+	)
 	endpoint := foundryhttp.DefineEndpoint(
-		foundryhttp.DefineRoute(
-			foundryhttp.RouteSpec{
-				ID:     "items.guarded",
-				Method: foundryhttp.POST,
-				Access: foundryhttp.Guarded,
-			},
-			itemPathDescriptor(),
-		),
+		route,
 		itemQueryDescriptor(),
 		foundryhttp.JSONBody(itemBodyJSON()),
 		foundryhttp.JSONResponse(200, itemReplyJSON()),

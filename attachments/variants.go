@@ -172,7 +172,7 @@ func (m *Manager) validateVariant(row store.Variant, original store.File) error 
 	if !validVariantKey(original.Scope, row.ID, row.ObjectKey) {
 		return invalid()
 	}
-	if row.Size < 0 || row.Size > MaxUploadBytes || row.Width < 0 || row.Height < 0 || row.Width > 65535 || row.Height > 65535 {
+	if row.Size < 0 || row.Size > MaxBufferedBytes || row.Width < 0 || row.Height < 0 || row.Width > 65535 || row.Height > 65535 {
 		return invalid()
 	}
 	if storage.MediaType(row.ContentType).Validate() != nil || storage.ETag(row.ETag).Validate() != nil || storage.VersionID(row.ObjectVersion).Validate() != nil {
@@ -338,7 +338,7 @@ func (m *Manager) produceVariant(ctx context.Context, original store.File, varia
 	if err != nil {
 		return err
 	}
-	if output.Size() > MaxUploadBytes {
+	if output.Size() > MaxBufferedBytes {
 		return storageFailure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
 	}
 	hash := sha256.New()

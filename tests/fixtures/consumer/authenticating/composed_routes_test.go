@@ -67,7 +67,10 @@ func TestConsumerSignedOrderAndNativeRoutesKeepConcreteModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	signed := authenticating.SignedOrders(authenticating.Orders(transport, guard), signer)
+
+	signedEndpoint := authenticating.Orders(transport, guard)
+	signed := authenticating.SignedOrders(signedEndpoint, signer)
+
 	resolver := modelbinding.Define(func(_ context.Context, p authenticating.OrderPath) (value.Optional[models.Order], error) {
 		resources.Add(1)
 		if p.Order != orderID {
@@ -76,7 +79,10 @@ func TestConsumerSignedOrderAndNativeRoutesKeepConcreteModels(t *testing.T) {
 		return value.Set(order), nil
 	})
 	calls := 0
-	bound := authenticating.BoundOrder(foundryhttp.ForSignedAuthenticatedBinding(signed), resolver, guard, func(ctx context.Context, subject models.User, resource models.Order) error {
+
+	signedBinding := foundryhttp.ForSignedAuthenticatedBinding(signed)
+
+	bound := authenticating.BoundOrder(signedBinding, resolver, guard, func(ctx context.Context, subject models.User, resource models.Order) error {
 		calls++
 		identity, present := attribution.FromContext(ctx).Model()
 		expected, _ := orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(subject).Identity()
@@ -85,7 +91,10 @@ func TestConsumerSignedOrderAndNativeRoutesKeepConcreteModels(t *testing.T) {
 		}
 		return nil
 	})
-	native := authenticating.NativeProfileHandler(authenticating.NativeProfile(transport, guard), func(w http.ResponseWriter, r *http.Request, subject models.User, _ foundryhttp.NoPath) {
+
+	nativeRoute := authenticating.NativeProfile(transport, guard)
+
+	native := authenticating.NativeProfileHandler(nativeRoute, func(w http.ResponseWriter, r *http.Request, subject models.User, _ foundryhttp.NoPath) {
 		calls++
 		if subject.ID != userID {
 			t.Error("native handler lost model")
@@ -95,6 +104,7 @@ func TestConsumerSignedOrderAndNativeRoutesKeepConcreteModels(t *testing.T) {
 		}
 		w.WriteHeader(204)
 	})
+
 	router, err := foundryhttp.NewRouter(bound, native)
 	if err != nil {
 		t.Fatal(err)

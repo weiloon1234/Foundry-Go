@@ -20,16 +20,42 @@ runtime is unchanged.
 
 ## The rule
 
-A route-declaring call must not occur inside an argument of another
-route-declaring call. This includes route and endpoint construction and
-configuration, authentication, optional authentication, signing, tickets,
-idempotency, pagination, model binding and datatable route declarations.
-The [function catalogue](../../internal/routestyle/catalog.go) is shared by the
-check and the migration tool.
+A call whose static result type is a route stage value must not be an argument
+of any call. Pointers to stages and multi-result calls with any stage result are
+covered too. This applies to application helpers, generic helpers, function values
+and methods as well as framework functions. Assign the call result first.
 
-Option constructors such as `http.Errors`, `http.Scopes` and `http.Within`, DTO
-descriptors, and body/response helpers are not route-declaring calls. Terminal
-methods on call results are allowed:
+Stage types come from the [declaration catalogue](../../internal/routestyle/catalog.go)
+signatures: routes, endpoints, authenticated, idempotent, signed, model-bound,
+paginated, datatable and raw stages, including binding transports and resolvers.
+The checker derives their named type origins, so generic instantiation does not
+change the rule. There is no second list of stage types. A `datatable.Table` is a
+reusable declaration, not a route stage, so `datatable.Define(spec)` may stay inline.
+
+For example, change:
+
+```go
+loginEndpoint := http.DefineEndpoint(routehelpers.Route(credentials, http.POST, "/login", "login", http.Public), http.EmptyQuery(), requests.AdminLoginBody(), native)
+create := http.IdempotentAuthenticated(routeaccess.SecureCapture(http.DefineEndpoint(route, query, body, response), access), store, definition)
+```
+
+To:
+
+```go
+loginRoute := routehelpers.Route(credentials, http.POST, "/login", "login", http.Public)
+loginEndpoint := http.DefineEndpoint(loginRoute, http.EmptyQuery(), requests.AdminLoginBody(), native)
+
+endpoint := http.DefineEndpoint(route, query, body, response)
+secured := routeaccess.SecureCapture(endpoint, access)
+create := http.IdempotentAuthenticated(secured, store, definition)
+```
+
+Descriptors (`XBody()`, `XResponse(...)`, `http.EmptyQuery()`), options
+(`http.Scopes(...)`, `http.Errors(...)`, `http.Within(...)`), scopes and
+`RouteRegistration` values are not stages and may stay inline. Parentheses and
+conversions cannot hide a nested stage call. Stage calls as statements,
+assignments or return operands are allowed. Terminal methods on call results
+are also allowed, including when the registration or URL is passed to another call:
 
 ```go
 public := http.DefineEndpoint(route, query, body, response).Handle(showPage)
@@ -63,8 +89,7 @@ type PageResource struct { /* response fields */ }
 `http=body`, `http=response`, and `http=both` select the generated
 pieces. Without an explicit `http=` key, no helper is emitted. This explicit-only
 default avoids compiling unused adapters. `role=response` retains its existing
-validation meaning. The migration
-tool derives transport direction from actual typed uses without changing role.
+validation meaning.
 
 The helper stem removes one terminal `Request` or `Resource` suffix, then appends
 `Body` or `Response`. Thus `SavePageRequest` produces `SavePageBody`,
@@ -88,7 +113,7 @@ modules, including fixture modules. Generation rejects `http=` in the framework
 module; endpoint and HTTP request/response scaffolds reject that destination
 before creating files. Module ownership, not an import-path prefix, controls this
 rule. Generic DTOs, unions, pagination adapters and datatable adapters do not
-gain helpers in this release.
+gain helpers.
 
 ## Application gate
 
@@ -106,10 +131,9 @@ those operations may continue in the analysis goroutine until the CLI process
 exits. Run each module separately and include the build tags used by the
 application's gate through `GOFLAGS`.
 
-The check resolves function objects by import path. Import aliases, dot imports,
-explicit generic arguments and statically resolvable function aliases do not
-change the rule. Unrelated functions with matching names are allowed. It does
-not attempt interprocedural analysis of dynamically selected function values.
+The check resolves static result types by package identity. Import aliases, dot
+imports, explicit generic arguments and dynamically selected function values do
+not change the rule. A same-named function returning a non-stage value is allowed.
 Callback bodies are checked in their own execution context.
 
 Findings name the file, line and edit to make. The command exits non-zero on
@@ -123,42 +147,3 @@ declarations, declarations owned by another module and framework packages are
 exempt. The diagnostic names the helper and says to add `http=body`, `http=response`, or `http=both`, regenerate,
 and use it. Framework packages retain their direct adapters. Streams, raw
 bodies, token/cookie responses and composed pagination/datatable adapters are not generated DTO declarations and are exempt.
-
-## Migration
-
-Replace nested declarations such as this pre-v0.45.0 form:
-
-```go
-admin := http.Authenticated(http.DefineEndpoint(create, http.EmptyQuery(),
-    http.JSONBody(requests.SavePageRequestJSON()),
-    http.JSONResponse(200, resources.PageResourceJSON())), guard)
-```
-
-After adding the transport keys and regenerating, declare each stage:
-
-```go
-response := resources.PageResponse(200)
-endpoint := http.DefineEndpoint(create, http.EmptyQuery(), requests.SavePageBody(), response)
-admin := http.Authenticated(endpoint, guard)
-```
-
-After updating the framework, run the external codemod with `--annotate --write`
-to infer transport keys. Regenerate declarations, then run the codemod with
-`--write` to replace wrappers and stage routes. Review both reports and run
-`gofmt`. Resolve unsupported constructs before adding the check to the
-application gate. The codemod is a temporary
-migration tool and is not shipped with the framework CLI.
-
-The codemod assumes route declarations, option constructors and other factories
-used in declaration arguments are order-independent. It may hoist them across
-earlier calls and reports each assumption as `reordered-call`. Review that report
-for factories with side effects: registration, appends, map writes, logging,
-resource acquisition, `sync.Once`, clock or random reads. It refuses visible
-conflicting writes, channel operations, immediate closures, `defer`/`go`,
-unsupported scope changes and types it cannot preserve, leaving the affected file
-unchanged. This is not a whole-program effect proof. Prove route descriptors and
-the exported client contract byte-identical before applying each application
-migration.
-
-Numbered fallback names still require readability review. A second successful
-pass should report no changes.

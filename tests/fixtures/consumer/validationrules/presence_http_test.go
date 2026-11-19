@@ -173,7 +173,11 @@ func TestHTTPJSONPresenceMatrix(t *testing.T) {
 		t.Run(group.name, func(t *testing.T) {
 			for index, policy := range group.rules {
 				t.Run(policy.name, func(t *testing.T) {
-					server, calls := presenceServer(t, foundryhttp.ValidateBody(presenceEndpoint(), policy.rule))
+					presenceCheckEndpoint := presenceEndpoint()
+					presenceCheckEndpoint = foundryhttp.ValidateBody(presenceCheckEndpoint, policy.rule)
+
+					server, calls := presenceServer(t, presenceCheckEndpoint)
+
 					for _, tc := range group.cases {
 						t.Run(tc.name, func(t *testing.T) {
 							before, _ := calls.snapshot()
@@ -252,7 +256,11 @@ func TestHTTPQueryPresenceMatrix(t *testing.T) {
 		t.Run(group.name, func(t *testing.T) {
 			for index, policy := range group.rules {
 				t.Run(policy.name, func(t *testing.T) {
-					server, calls := presenceServer(t, foundryhttp.ValidateQuery(presenceEndpoint(), policy.rule))
+					presenceCheckEndpoint := presenceEndpoint()
+					presenceCheckEndpoint = foundryhttp.ValidateQuery(presenceCheckEndpoint, policy.rule)
+
+					server, calls := presenceServer(t, presenceCheckEndpoint)
+
 					for _, tc := range group.cases {
 						t.Run(tc.name, func(t *testing.T) {
 							before, _ := calls.snapshot()

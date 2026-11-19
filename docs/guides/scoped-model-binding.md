@@ -39,7 +39,9 @@ with an explicit typed custom resolver when the domain relationship is different
 <!-- compiled-source: tests/fixtures/consumer/nestedbindings/bindings.go#scoped-model-binding-resolve -->
 ```go
 func Resolve(db database.Executor) modelbinding.Resolver[Path, Resources] {
-	return modelbinding.ThroughSelectedRelation(db, Projects(db), func(previous TeamProject) Project { return previous.Child }, ProjectLinks.Tasks, orm.TextExpr(TaskRecords.Slug), func(path Path) Slug { return path.Task })
+	teamsEndpoint := Projects(db)
+
+	return modelbinding.ThroughSelectedRelation(db, teamsEndpoint, func(previous TeamProject) Project { return previous.Child }, ProjectLinks.Tasks, orm.TextExpr(TaskRecords.Slug), func(path Path) Slug { return path.Task })
 }
 ```
 

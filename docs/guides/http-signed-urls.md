@@ -70,7 +70,8 @@ when a link must stay on one host or tenant.
 Links without expiry require an explicit opt-in on the signed descriptor:
 
 ```go
-avatar := foundryhttp.ConfigureSignedRoute(foundryhttp.SignRoute(AvatarRoute, signer), foundryhttp.PermanentLinks())
+avatar := foundryhttp.SignRoute(AvatarRoute, signer)
+avatar = foundryhttp.ConfigureSignedRoute(avatar, foundryhttp.PermanentLinks())
 link, err := foundryhttp.PermanentRouteURL(avatar, ctx, publicOrigin, path)
 ```
 

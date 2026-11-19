@@ -29,7 +29,6 @@ func TestOriginalFieldHelpCommentForms(t *testing.T) {
 		"inline padded block": {"/* Delivery address.\n\nUsed for receipts. */\nValue string", "\tDelivery address.\n\nUsed for receipts."},
 		"multiple names":      {"// Delivery address.\nValue, Other string", "Delivery address."},
 		"directives":          {"//go:noinline\n// foundry:field\n//foundry:field\nValue string", ""},
-		"managed":             {fieldNotePrefix + "Managed copy.\nValue string", ""},
 		"ordinary prose":      {"// Mentions foundry:field and go:noinline in prose.\n// Foundry field behavior (generated) is ordinary prose here.\nValue string", "Mentions foundry:field and go:noinline in prose.\nFoundry field behavior (generated) is ordinary prose here."},
 		"paragraphs":          {"// Delivery address.\n//\n// Examples use [ordinary brackets].\n//\n//\tmember@example.test\nValue string", "Delivery address.\n\nExamples use [ordinary brackets].\n\n\tmember@example.test"},
 	} {

@@ -7,15 +7,16 @@ import (
 )
 
 func Route() foundryhttp.RouteRegistration {
+	route := foundryhttp.DefineRoute(
+		foundryhttp.RouteSpec{
+			ID:     "probe.ping",
+			Method: foundryhttp.POST,
+			Access: foundryhttp.Public,
+		},
+		foundryhttp.StaticPath("/ping"),
+	)
 	endpoint := foundryhttp.DefineEndpoint(
-		foundryhttp.DefineRoute(
-			foundryhttp.RouteSpec{
-				ID:     "probe.ping",
-				Method: foundryhttp.POST,
-				Access: foundryhttp.Public,
-			},
-			foundryhttp.StaticPath("/ping"),
-		),
+		route,
 		foundryhttp.EmptyQuery(),
 		foundryhttp.EmptyBody(),
 		foundryhttp.EmptyResponse(204),

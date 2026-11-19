@@ -29,7 +29,10 @@ func BrowserRoutes(web *Browser, verify VerifiedLogin) (*foundryhttp.Router, err
 
 		return foundryhttp.DefineEndpoint(idRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
 	}
-	login := foundryhttp.ConfigureEndpoint(endpoint("browser.login", foundryhttp.POST, "/login", foundryhttp.Public), foundryhttp.Use(web.Middleware())).Handle(func(ctx context.Context, _ ProfileInput) (foundryhttp.NoContent, error) {
+
+	loginEndpoint := endpoint("browser.login", foundryhttp.POST, "/login", foundryhttp.Public)
+
+	login := foundryhttp.ConfigureEndpoint(loginEndpoint, foundryhttp.Use(web.Middleware())).Handle(func(ctx context.Context, _ ProfileInput) (foundryhttp.NoContent, error) {
 		proof, err := verify(ctx)
 		if err != nil {
 			return foundryhttp.NoContent{}, err
@@ -37,17 +40,27 @@ func BrowserRoutes(web *Browser, verify VerifiedLogin) (*foundryhttp.Router, err
 		_, err = BrowserLogin(ctx, web, proof)
 		return foundryhttp.NoContent{}, err
 	})
-	profile := foundryhttp.RequireAuthentication(endpoint("browser.profile", foundryhttp.GET, "/profile", foundryhttp.Guarded), web.Authentication(), web.Guard()).Handle(func(ctx context.Context, user models.User, _ ProfileInput) (foundryhttp.NoContent, error) {
+
+	profileEndpoint := endpoint("browser.profile", foundryhttp.GET, "/profile", foundryhttp.Guarded)
+
+	profile := foundryhttp.RequireAuthentication(profileEndpoint, web.Authentication(), web.Guard()).Handle(func(ctx context.Context, user models.User, _ ProfileInput) (foundryhttp.NoContent, error) {
 		// Domain code receives the concrete model, and can use its typed getters.
 		_, err := web.Guard().Require(ctx)
 		return foundryhttp.NoContent{}, err
 	})
-	rotate := foundryhttp.RequireAuthentication(endpoint("browser.rotate", foundryhttp.POST, "/rotate", foundryhttp.Guarded), web.Authentication(), web.Guard()).Handle(func(ctx context.Context, _ models.User, _ ProfileInput) (foundryhttp.NoContent, error) {
+
+	rotateEndpoint := endpoint("browser.rotate", foundryhttp.POST, "/rotate", foundryhttp.Guarded)
+
+	rotate := foundryhttp.RequireAuthentication(rotateEndpoint, web.Authentication(), web.Guard()).Handle(func(ctx context.Context, _ models.User, _ ProfileInput) (foundryhttp.NoContent, error) {
 		_, err := BrowserRotate(ctx, web)
 		return foundryhttp.NoContent{}, err
 	})
-	logout := foundryhttp.ConfigureEndpoint(endpoint("browser.logout", foundryhttp.POST, "/logout", foundryhttp.Public), foundryhttp.Use(web.Middleware())).Handle(func(ctx context.Context, _ ProfileInput) (foundryhttp.NoContent, error) {
+
+	logoutEndpoint := endpoint("browser.logout", foundryhttp.POST, "/logout", foundryhttp.Public)
+
+	logout := foundryhttp.ConfigureEndpoint(logoutEndpoint, foundryhttp.Use(web.Middleware())).Handle(func(ctx context.Context, _ ProfileInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, BrowserLogout(ctx, web)
 	})
+
 	return foundryhttp.NewRouter(login, profile, rotate, logout)
 }

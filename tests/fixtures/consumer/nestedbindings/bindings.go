@@ -44,7 +44,9 @@ func Projects(db database.Executor) modelbinding.Resolver[Path, TeamProject] {
 } // doc-example:end scoped-model-binding-projects
 // doc-example:begin scoped-model-binding-resolve
 func Resolve(db database.Executor) modelbinding.Resolver[Path, Resources] {
-	return modelbinding.ThroughSelectedRelation(db, Projects(db), func(previous TeamProject) Project { return previous.Child }, ProjectLinks.Tasks, orm.TextExpr(TaskRecords.Slug), func(path Path) Slug { return path.Task })
+	teamsEndpoint := Projects(db)
+
+	return modelbinding.ThroughSelectedRelation(db, teamsEndpoint, func(previous TeamProject) Project { return previous.Child }, ProjectLinks.Tasks, orm.TextExpr(TaskRecords.Slug), func(path Path) Slug { return path.Task })
 } // doc-example:end scoped-model-binding-resolve
 func Handle(_ context.Context, input Request) (Reply, error) {
 	return Reply{Team: input.Model.Parent.Parent.Name, Project: input.Model.Parent.Child.Slug, Task: input.Model.Child.Slug}, nil

@@ -50,23 +50,6 @@ func (q QueryCore) ValidateMutation(kind MutationKind, assignments []MutationAss
 	return assigned, nil
 }
 
-func ReadMutationAssignments(assignments []MutationAssignment) (map[FieldRef]AssignmentValue, error) {
-	if len(assignments) > MaxExpressionNodes {
-		return nil, safeerror.NewFault(fault.Invalid, "mutation exceeds its assignment bound")
-	}
-	values := make(map[FieldRef]AssignmentValue, len(assignments))
-	for _, assignment := range assignments {
-		if err := assignment.Field.Validate(assignment.Field.Table); err != nil {
-			return nil, err
-		}
-		if _, duplicate := values[assignment.Field]; duplicate || assignment.Bind == nil {
-			return nil, safeerror.NewFault(fault.Invalid, "mutation has a repeated or invalid assignment")
-		}
-		values[assignment.Field] = assignment.AssignmentValue
-	}
-	return values, nil
-}
-
 // ValidateAdjustment checks the target before a write acquires resources or samples time.
 func (q QueryCore) ValidateAdjustment(a *Adjustment, c *Compiler, assigned map[string]MutationAssignment) error {
 	if q.Model.Timestamps != nil && a.Field.Column == q.Model.Timestamps.Updated {

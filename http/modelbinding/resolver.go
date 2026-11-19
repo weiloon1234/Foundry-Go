@@ -14,7 +14,7 @@ import (
 
 // Resolver owns one lookup from decoded path P to model M. It retains no
 // request result between calls. Define supports custom route keys and scopes;
-// ByKey reuses a generated model query's typed primary-key lookup.
+// ByKey reuses a handwritten model query's typed primary-key lookup.
 type Resolver[P, M any] struct {
 	lookup  func(context.Context, P) (value.Optional[M], error)
 	check   func() error

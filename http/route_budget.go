@@ -26,7 +26,7 @@ type routeBudget struct {
 	bodyBytes int64
 }
 
-// WithTimeout replaces the kernel RequestTimeout for this route. The deadline
+// http.Timeout replaces the kernel RequestTimeout for this route. The deadline
 // starts when the kernel admitted the request, so time spent in global
 // middleware counts. A longer timeout also extends the native connection read
 // and write deadlines for this request. It must be positive and at most
@@ -209,7 +209,7 @@ func transportParent(r *stdhttp.Request) context.Context {
 // transportErr reports the cancellation a response wrapper outside the router
 // must honor. Client disconnect and forced shutdown always apply. While a
 // matched route runs, its effective context applies instead of the kernel
-// RequestTimeout, which a route may have replaced (WithTimeout). Once the
+// RequestTimeout, which a route may have replaced (http.Timeout). Once the
 // route completed, only real cancellation applies, so a completed success is
 // still delivered after a deadline. Before routing, and outside the kernel,
 // the wrapper's request context applies.

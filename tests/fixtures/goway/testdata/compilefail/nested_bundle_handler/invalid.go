@@ -9,7 +9,8 @@ import (
 )
 
 func bad(endpoint h.Endpoint[h.NoPath, h.NoQuery, h.NoBody, h.NoContent], resolver modelbinding.Resolver[h.NoPath, modelbinding.Models[models.User, models.Order]]) {
-	_ = modelbinding.Bind(h.ForBinding(endpoint), resolver).Handle(func(context.Context, modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, models.User]) (h.NoContent, error) {
+	binding := h.ForBinding(endpoint)
+	_ = modelbinding.Bind(binding, resolver).Handle(func(context.Context, modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, models.User]) (h.NoContent, error) {
 		return h.NoContent{}, nil
 	})
 }

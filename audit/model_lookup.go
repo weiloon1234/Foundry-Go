@@ -21,7 +21,7 @@ func ParseActionID[P any](text string) (ActionID[P], error) {
 	return model.ParseID[ActionEntry[P]](text)
 }
 
-// FindModel reads an audit-row ID owned by the expected model. Supply a generated
+// FindModel reads an audit-row ID owned by the expected model. Supply a handwritten
 // zero model's FoundryReference as the decoding template; its current key is not
 // used. Foreign models/areas are absent, and no subject-model lookup occurs.
 func FindModel[M, K any](ctx context.Context, executor database.Executor, recorder *Recorder, template model.Reference[M, K], id ModelID[M]) (value.Optional[ModelRecord[M, K]], error) {

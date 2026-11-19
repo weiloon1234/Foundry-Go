@@ -41,15 +41,21 @@ func testAnalysis(t *testing.T, body string) (*Analysis, *ast.File) {
 	}
 	httpPath := frameworkinfo.ModulePath + "/http"
 	check(httpPath, "http.go", `package http
+ type Route struct{}
+ type RouteRegistration struct{}
+ type Scope struct{}
+ func DefineScope() Scope { return Scope{} }
+ func EmptyQuery() Descriptor[int] { return Descriptor[int]{} }
+ func Scopes(Scope) int { return 0 }
  type Endpoint[T any] struct{}
  type Descriptor[T any] struct{}
  type Body[T any] struct{}
  type Response[T any] struct{}
- func DefineRoute() int {return 0}
+ func DefineRoute() Route {return Route{}}
  func DefineEndpoint[T any](route T) Endpoint[T] {return Endpoint[T]{}}
  func ConfigureEndpoint[T any](e Endpoint[T]) Endpoint[T] {return e}
  func Authenticated[T any](e Endpoint[T]) Endpoint[T] {return e}
- func (e Endpoint[T]) Handle(f func()) {}
+ func (e Endpoint[T]) Handle(f func()) RouteRegistration { return RouteRegistration{} }
  func (e Endpoint[T]) URL() string {return ""}
  func JSONBody[T any](d Descriptor[T]) Body[T] {return Body[T]{}}
  func JSONResponse[T any](status int,d Descriptor[T]) Response[T] {return Response[T]{}}
@@ -85,17 +91,17 @@ func TestNestedDeclarationsAndAllowedTerminals(t *testing.T) {
 		count        int
 	}{
 		{"nested", `_=h.DefineEndpoint(h.DefineRoute())`, 1},
-		{"generic", `_=h.DefineEndpoint[int](h.DefineRoute())`, 1},
+		{"generic", `_=h.DefineEndpoint[h.Route](h.DefineRoute())`, 1},
 		{"triple", `_=h.ConfigureEndpoint(h.DefineEndpoint(h.DefineRoute()))`, 2},
 		{"nested terminal receiver", `h.DefineEndpoint(h.DefineRoute()).Handle(func(){})`, 1},
 		{"terminal handle", `r:=h.DefineRoute(); h.DefineEndpoint(r).Handle(func(){})`, 0},
 		{"authenticated terminal", `r:=h.DefineRoute();e:=h.DefineEndpoint(r);h.Authenticated(e).Handle(func(){})`, 0},
 		{"terminal URL", `r:=h.DefineRoute(); _=h.DefineEndpoint(r).URL()`, 0},
 		{"stages", `r:=h.DefineRoute();e:=h.DefineEndpoint(r);e=h.ConfigureEndpoint(e);e.Handle(func(){})`, 0},
-		{"conversion", `type Configurer func(h.Endpoint[int]) h.Endpoint[int];r:=h.DefineRoute();e:=h.DefineEndpoint(r);_=Configurer(h.ConfigureEndpoint[int])(h.ConfigureEndpoint(e))`, 1},
-		{"converted alias", `type Configurer func(h.Endpoint[int]) h.Endpoint[int];r:=h.DefineRoute();e:=h.DefineEndpoint(r);f:=Configurer(h.ConfigureEndpoint[int]);_=f(h.ConfigureEndpoint(e))`, 1},
-		{"alias", `declare:=h.DefineEndpoint[int];_=declare(h.DefineRoute())`, 1},
-		{"unrelated name", `DefineEndpoint:=func(int)int{return 0};_=DefineEndpoint(h.DefineRoute())`, 0},
+		{"conversion", `type Configurer func(h.Endpoint[h.Route]) h.Endpoint[h.Route];r:=h.DefineRoute();e:=h.DefineEndpoint(r);_=Configurer(h.ConfigureEndpoint[h.Route])(h.ConfigureEndpoint(e))`, 1},
+		{"converted alias", `type Configurer func(h.Endpoint[h.Route]) h.Endpoint[h.Route];r:=h.DefineRoute();e:=h.DefineEndpoint(r);f:=Configurer(h.ConfigureEndpoint[h.Route]);_=f(h.ConfigureEndpoint(e))`, 1},
+		{"alias", `declare:=h.DefineEndpoint[h.Route];_=declare(h.DefineRoute())`, 1},
+		{"unrelated name", `DefineEndpoint:=func(h.Scope)int{return 0};_=DefineEndpoint(h.DefineScope())`, 0},
 		{"delayed callback", `r:=h.DefineRoute();h.DefineEndpoint(r).Handle(func(){r:=h.DefineRoute();_=h.DefineEndpoint(r)})`, 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -183,5 +189,58 @@ func TestOnlyEligibleDTODeclarationsDemandHelpers(t *testing.T) {
 		if got := a.CheckFile(f); len(got) != 0 {
 			t.Fatal(kind, got)
 		}
+	}
+}
+
+func TestStageTypesCrossApplicationBoundaries(t *testing.T) {
+	prefix := `package routes
+import h "` + frameworkinfo.ModulePath + `/http"
+func routeHelper() h.Route { return h.DefineRoute() }
+func pointerHelper() *h.Route { r:=h.DefineRoute(); return &r }
+func routeWithError() (h.Route,error) { return h.DefineRoute(),nil }
+func consumePair(h.Route,error) {}
+func errorWithRoute() (error,h.Route) { return nil,h.DefineRoute() }
+func consumeReverse(error,h.Route) {}
+func endpointHelper(e h.Endpoint[h.Route]) h.Endpoint[h.Route] { return e }
+func genericHelper[T any](v T) T { return v }
+type builder struct{}
+func (builder) Route() h.Route { return h.DefineRoute() }
+func consume(any) {}
+func use(){`
+	for _, test := range []struct {
+		name, source, call string
+		count              int
+	}{
+		{"pointer stage", `consume(pointerHelper())`, "pointerHelper", 1},
+		{"multi-result stage", `consumePair(routeWithError())`, "routeWithError", 1},
+		{"stage in later result", `consumeReverse(errorWithRoute())`, "errorWithRoute", 1},
+		{"multi-result assignment", `r,err:=routeWithError(); consumePair(r,err)`, "", 0},
+		{"helper route", `_ = h.DefineEndpoint(routeHelper())`, "routeHelper", 1},
+		{"helper endpoint", `r:=routeHelper(); e:=h.DefineEndpoint(r); _=h.ConfigureEndpoint(endpointHelper(e))`, "endpointHelper", 1},
+		{"catalogue inside helper", `r:=routeHelper(); _=endpointHelper(h.DefineEndpoint(r))`, "h.DefineEndpoint", 1},
+		{"generic helper", `r:=routeHelper(); _=h.DefineEndpoint(genericHelper(r))`, "genericHelper", 1},
+		{"method value", `b:=builder{}; route:=b.Route; _=h.DefineEndpoint(route())`, "route", 1},
+		{"dynamic function value", `f:=routeHelper; if true {f=builder{}.Route}; consume(f())`, "f", 1},
+		{"parentheses and conversion", `consume(h.Route((routeHelper())))`, "routeHelper", 1},
+		{"stage statement", `routeHelper()`, "", 0},
+		{"stage assignment", `r:=routeHelper(); _=r`, "", 0},
+		{"return operand", `_ = func() h.Route { return routeHelper() }`, "", 0},
+		{"terminal in argument", `r:=routeHelper(); consume(h.DefineEndpoint(r).URL())`, "", 0},
+		{"registration argument", `r:=routeHelper(); consume(h.DefineEndpoint(r).Handle(func(){}))`, "", 0},
+		{"inline scope and options", `consume(h.Scopes(h.DefineScope())); _=h.DefineEndpoint(h.EmptyQuery())`, "", 0},
+		{"inline descriptors", `consume(h.JSONBody(h.Descriptor[int]{}))`, "", 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			a, f := testAnalysis(t, prefix+test.source+"}")
+			got := a.CheckFile(f)
+			if len(got) != test.count {
+				t.Fatalf("findings=%v, want %d", got, test.count)
+			}
+			for _, d := range got {
+				if d.Code != "route-nesting" || !strings.Contains(d.Message, test.call+"(...)") || !strings.Contains(d.Message, "assign ") {
+					t.Fatal(d)
+				}
+			}
+		})
 	}
 }

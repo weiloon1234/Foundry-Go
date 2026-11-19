@@ -5,6 +5,7 @@ package app
 
 import (
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
 	sync "sync"
 )
@@ -34,6 +35,13 @@ var foundryUploadUsageJSON = sync.OnceValue(func() foundrycontract.JSON[UploadUs
 		},
 	}})
 })
+
+// UploadUsageResponse builds the HTTP response from UploadUsageJSON; status remains part of the route declaration.
+//
+//go:noinline
+func UploadUsageResponse(status int) foundryhttp.Response[UploadUsage] {
+	return foundryhttp.JSONResponse(status, UploadUsageJSON())
+}
 
 // UploadUsageValidationFieldSet retains concrete DTO and value types for validation.
 // Example: UploadUsageValidationFields()

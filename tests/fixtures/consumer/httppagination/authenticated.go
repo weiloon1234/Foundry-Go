@@ -16,9 +16,18 @@ func guardedRoute(id foundryhttp.RouteID, path string) foundryhttp.Route[foundry
 	return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath(path))
 }
 
-var GuardedList = pagination.DefineNumbered(guardedRoute("members.secure", "/members/secure"), MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig())
-var GuardedSimpleList = pagination.DefineSimple(guardedRoute("members.secure_simple", "/members/secure-simple"), MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig())
-var GuardedCursorList = pagination.DefineCursor[mutatorqueries.Member](guardedRoute("members.secure_cursor", "/members/secure-cursor"), MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultCursorConfig())
+var GuardedList = func() pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse] {
+	membersSecureRoute := guardedRoute("members.secure", "/members/secure")
+	return pagination.DefineNumbered(membersSecureRoute, MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig())
+}()
+var GuardedSimpleList = func() pagination.SimpleEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse] {
+	membersSecureSimpleRoute := guardedRoute("members.secure_simple", "/members/secure-simple")
+	return pagination.DefineSimple(membersSecureSimpleRoute, MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig())
+}()
+var GuardedCursorList = func() pagination.CursorEndpoint[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member, MemberResponse] {
+	membersSecureCursorRoute := guardedRoute("members.secure_cursor", "/members/secure-cursor")
+	return pagination.DefineCursor[mutatorqueries.Member](membersSecureCursorRoute, MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultCursorConfig())
+}()
 
 // doc-example:begin http-pagination-authenticated-numbered
 func AuthenticatedNumbered(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
@@ -39,5 +48,9 @@ type AuthenticatedService interface {
 
 func AuthenticatedRouter(binding foundryhttp.GuardBinding[Actor], service AuthenticatedService) (*foundryhttp.Router, error) {
 	endpoint := AuthenticatedNumbered(binding)
-	return foundryhttp.NewRouter(pagination.HandleAuthenticated(endpoint, service.List), pagination.HandleAuthenticated(AuthenticatedSimple(binding), service.SimpleList), pagination.HandleAuthenticated(AuthenticatedCursor(binding), service.CursorList))
+
+	membersSecureSimpleEndpoint := AuthenticatedSimple(binding)
+	membersSecureCursorEndpoint := AuthenticatedCursor(binding)
+
+	return foundryhttp.NewRouter(pagination.HandleAuthenticated(endpoint, service.List), pagination.HandleAuthenticated(membersSecureSimpleEndpoint, service.SimpleList), pagination.HandleAuthenticated(membersSecureCursorEndpoint, service.CursorList))
 }

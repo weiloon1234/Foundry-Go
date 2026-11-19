@@ -23,30 +23,6 @@ type AnalysisPackage struct {
 	Declarations     map[string]TransportDeclaration
 }
 
-// FrameworkHTTPDependencies uses the same source import graph as generation.
-// It is also used by the external migration before any annotation is written.
-func FrameworkHTTPDependencies(ctx context.Context, dir string) (map[string]bool, error) {
-	root, err := filepath.Abs(dir)
-	if err != nil {
-		return nil, err
-	}
-	scope, err := loadModuleScope(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-	g := &packageGraph{root: root, scope: scope}
-	args := append([]string{"list"}, scope.listFlags()...)
-	args = append(args, "-deps", "-json=ImportPath,Deps", "--", framework+"/http")
-	if err := g.goList(ctx, args, func(pkg listedPackage) {
-		if pkg.ImportPath == framework+"/http" {
-			g.httpDependencies = httpDependencySet(pkg.Deps)
-		}
-	}); err != nil {
-		return nil, err
-	}
-	return g.httpDependencies, nil
-}
-
 // LoadAnalysis reuses the generator's Go listing, module selection and export
 // importer. Test variants use their own import remapping and type-check context.
 func LoadAnalysis(ctx context.Context, dir string, patterns []string) (result []*AnalysisPackage, resultErr error) {

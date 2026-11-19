@@ -52,14 +52,18 @@ func TestTableEndpointConstructionCauses(t *testing.T) {
 		t.Fatal("invalid table declaration accepted")
 	}
 	for _, table := range []Table[reportRecord, ReportRow, reportActor]{{}, invalidTable} {
+		queryEndpoint := QueryEndpoint(table, route, h.EmptyQuery())
+		downloadEndpoint := DownloadEndpoint(table, route, h.EmptyQuery(), h.DownloadResponse("text/csv"))
+		ticketEndpoint := BindTicketExport(table, existing, request)
+		fileEndpoint := BindFileExport(table, file)
 		cases := []struct {
 			name string
 			err  error
 		}{
-			{"QueryEndpoint", h.ValidateEndpoint(QueryEndpoint(table, route, h.EmptyQuery()))},
-			{"DownloadEndpoint", h.ValidateEndpoint(DownloadEndpoint(table, route, h.EmptyQuery(), h.DownloadResponse("text/csv")))},
-			{"BindTicketExport", h.ValidateEndpoint(BindTicketExport(table, existing, request))},
-			{"BindFileExport", h.ValidateEndpoint(BindFileExport(table, file))},
+			{"QueryEndpoint", h.ValidateEndpoint(queryEndpoint)},
+			{"DownloadEndpoint", h.ValidateEndpoint(downloadEndpoint)},
+			{"BindTicketExport", h.ValidateEndpoint(ticketEndpoint)},
+			{"BindFileExport", h.ValidateEndpoint(fileEndpoint)},
 		}
 		for _, test := range cases {
 			if test.err == nil || !errors.Is(test.err, fault.Invalid) || !strings.Contains(test.err.Error(), "datatable."+test.name) || !strings.Contains(test.err.Error(), "custom.read") || !strings.Contains(test.err.Error(), "invalid table declaration") {
@@ -76,7 +80,8 @@ func TestTableEndpointConstructionCauses(t *testing.T) {
 	}
 	table := Define(reportSpec())
 	for _, field := range []validation.Field[Request, Request]{{}, validation.DefineField[Request, Request]("request", nil)} {
-		err := h.ValidateEndpoint(BindTicketExport(table, existing, field))
+		ticket := BindTicketExport(table, existing, field)
+		err := h.ValidateEndpoint(ticket)
 		if err == nil || !strings.Contains(err.Error(), "datatable.BindTicketExport") || !strings.Contains(err.Error(), string(table.ID())) || !strings.Contains(err.Error(), "custom.read") || !strings.Contains(err.Error(), "invalid request-field declaration") || !errors.Is(err, fault.Invalid) || errors.Unwrap(err) == nil {
 			t.Fatalf("missing request-field construction cause: %v", err)
 		}
@@ -86,7 +91,8 @@ func TestTableEndpointConstructionCauses(t *testing.T) {
 	}
 	earlier := h.ConfigureEndpoint(existing, h.InvalidEndpointOption(cause))
 	earlierErr := h.ValidateEndpoint(earlier)
-	if err := h.ValidateEndpoint(BindTicketExport(table, earlier, validation.Field[Request, Request]{})); err != earlierErr {
+	earlierTicket := BindTicketExport(table, earlier, validation.Field[Request, Request]{})
+	if err := h.ValidateEndpoint(earlierTicket); err != earlierErr {
 		t.Fatalf("earlier declaration error replaced: %v", err)
 	}
 }

@@ -52,7 +52,7 @@ func TestCursorRejectsForeignBoundariesBeforeSQL(t *testing.T) {
 		})
 	}
 	// A structurally valid token with a bad key codec must remain an input error.
-	bad, err := querycore.MakeCursor(p.scope, []driver.Value{nil, "not an integer"})
+	bad, err := querycore.BuildCursor(p.scope, 2, func(i int) (driver.Value, error) { return []driver.Value{nil, "not an integer"}[i], nil })
 	if err != nil {
 		t.Fatal(err)
 	}

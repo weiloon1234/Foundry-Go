@@ -33,7 +33,11 @@ func TestConsumerRequestHeaderDeclarations(t *testing.T) {
 	if err != nil || len(query) != 1 || query[0].Name != "q" || query[0].Required {
 		t.Fatalf("query projection: %+v, %v", query, err)
 	}
-	info, err := foundryhttp.InspectEndpoint(httpquery.RequestHeadersEndpoint())
+
+	endpoint := httpquery.RequestHeadersEndpoint()
+
+	info, err := foundryhttp.InspectEndpoint(endpoint)
+
 	if err != nil {
 		t.Fatal(err)
 	}

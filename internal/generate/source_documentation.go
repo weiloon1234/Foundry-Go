@@ -16,7 +16,6 @@ import (
 )
 
 // Retired managed notices are excluded from source help copied into generated contracts.
-const fieldNotePrefix = "// Foundry field behavior (generated): "
 
 type fieldHelp string
 
@@ -431,8 +430,7 @@ func (d *sourceDocumentation) help(source documentedType, name string) (fieldHel
 		}
 		filtered := &ast.CommentGroup{}
 		for _, item := range group.List {
-			if strings.HasPrefix(item.Text, fieldNotePrefix) ||
-				(strings.HasPrefix(item.Text, "//") && strings.HasPrefix(strings.TrimSpace(strings.TrimPrefix(item.Text, "//")), "foundry:")) {
+			if strings.HasPrefix(item.Text, "//") && strings.HasPrefix(strings.TrimSpace(strings.TrimPrefix(item.Text, "//")), "foundry:") {
 				continue
 			}
 			filtered.List = append(filtered.List, item)

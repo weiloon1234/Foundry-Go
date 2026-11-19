@@ -73,7 +73,7 @@ func TestSelectSensitivityFailsClosedAndUsesOutputPositions(t *testing.T) {
 func TestSensitiveValueRetainsScopeAndSQLIdentity(t *testing.T) {
 	columns := []Column{{Name: "id"}}
 	field := FieldRef{Table: "items", Column: "id"}
-	node := SelectNode{Source: TableSource{Table: "items", Columns: columns}, Selections: []SelectItem{{Expression: WithSensitivity(field, true)}}, GroupBy: []ValueExpression{field}}
+	node := SelectNode{Source: TableSource{Table: "items", Columns: columns}, Selections: []SelectItem{{Expression: SensitiveValue{Value: field}}}, GroupBy: []ValueExpression{field}}
 	compiler := Compiler{}
 	sql, err := compiler.CompileSelect(node)
 	if err != nil || sql != `SELECT "items"."id" FROM "items" GROUP BY "items"."id"` {
@@ -95,7 +95,7 @@ func TestSensitiveValueRetainsScopeAndSQLIdentity(t *testing.T) {
 		t.Fatal("annotation lost on requalification", err)
 	}
 	// Marking a field never supplies missing ownership or bypasses validation.
-	node.Selections[0].Expression = WithSensitivity(FieldRef{Table: "foreign", Column: "id"}, true)
+	node.Selections[0].Expression = SensitiveValue{Value: FieldRef{Table: "foreign", Column: "id"}}
 	compiler = Compiler{}
 	if _, err := compiler.CompileSelect(node); !errors.Is(err, fault.Invalid) {
 		t.Fatal("sensitivity bypassed scope validation", err)

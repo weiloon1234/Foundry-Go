@@ -5,13 +5,25 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+## Framework cleanup — v0.46.0
+
+Replace `attachments.MaxUploadBytes` with `attachments.MaxBufferedBytes`; the
+buffer bound is unchanged. Route construction now requires a local for every
+stage-typed call passed as an argument, including application helpers. Follow the
+[staged route rule](guides/flat-routes.md#the-rule) and run `go tool foundry routes check`
+for each application module. Generated HTTP helpers keep their existing signatures.
+Application console examples use colon-separated names such as `contracts:export`.
+
+The migration-only dependency query and retired source-edit journal error are
+removed. Unsupported journals still fail without changing their staging. Runtime
+route behavior, persisted data and deployment compatibility readers are unchanged.
+
 ## CLI retirement — v0.24.0, 2026-11-12
 
 The `--field-docs` option is removed from `foundry generate`
 and scaffold commands. Remove that option from scripts and Makefile recipes.
-Generation leaves handwritten comments unchanged. Retired source-edit journals
-fail with a typed `generate.RetiredJournalError` and retain staging; reconcile them
-with the generator that created them before upgrading.
+Generation leaves handwritten comments unchanged. Unknown fields and unsupported
+journal versions are rejected and retain staging.
 
 ## Managed Cloudflare DNS — unreleased
 
@@ -669,7 +681,7 @@ and additive; see [assets and SPA routing](guides/http-assets.md).
 | Encrypted model fields | Opt-in native encrypted-column declarations retain their concrete plaintext and ciphertext types. Keep every key that encrypted stored values in `Encryption.Previous`: removing it makes those rows unreadable. Values are bound to table, column and primary key, so renaming either or rewriting a key needs re-encryption. |
 | Browser refresh cookies | Opt-in: `TokenCookieResponse`, `RefreshTokenCookie`, `RefreshTokenCookieLogout` and `ClearRefreshCookie` add a cookie transport beside the unchanged JSON transport for the same guard. Endpoint metadata, the manifest and OpenAPI gain an optional `refresh_cookie` description (with `optional` for a cookie logout); existing operations export as before. `Tokens.LogoutRefresh` requires the backend to implement `token.RefreshRevocationBackend`, which the PostgreSQL backend does; a custom backend without it fails with `fault.Invalid`. |
 | Client message formatting | Additive: entries export `catalogTranslations`, `formatText`, `formatMessage`, `CatalogMessageKey` and `CatalogMessageArguments`. The last two names are now reserved, so a schema with exactly that name receives a qualified TypeScript name. |
-| Generated TypeScript layout | `contracts.export` now also publishes `<prefix>_runtime_foundry.gen.ts` and `<prefix>_runtime_realtime_foundry.gen.ts`, which the client entry imports; commit and serve them with the entry. The entry's exported API is unchanged. `manifestJSON` holds compact JSON of the same document, so code comparing its text must compare parsed values. `typescript.Render` still returns one self-contained module. Surfaces are additive; `typescript.ExportCommand` gains a variadic `Surface` parameter, so existing calls compile. |
+| Generated TypeScript layout | `contracts:export` now also publishes `<prefix>_runtime_foundry.gen.ts` and `<prefix>_runtime_realtime_foundry.gen.ts`, which the client entry imports; commit and serve them with the entry. The entry's exported API is unchanged. `manifestJSON` holds compact JSON of the same document, so code comparing its text must compare parsed values. `typescript.Render` still returns one self-contained module. Surfaces are additive; `typescript.ExportCommand` gains a variadic `Surface` parameter, so existing calls compile. |
 | Per-guard token lifetimes | Additive: `token.New` and `application.NewTokenGuard` gain a variadic `Option` parameter, so existing calls compile and issue with the store's lifetimes as before. Only a function value of their exact former type needs updating. Families already issued keep their stored lifetimes. |
 | Token refresh history | Refresh keeps the current and previous generation rows and moves older consumed refresh digests to `foundry_token_consumed_refreshes`. A rollback to an earlier release keeps valid tokens working but loses reuse detection for digests already moved. |
 

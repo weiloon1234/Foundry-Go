@@ -115,7 +115,7 @@ func (s *EventSink[T]) Send(ctx context.Context, event Event[T]) error {
 // disconnect, forced shutdown or the route deadline) or the stream fails, and
 // must return promptly then; ServeEvents waits for its actual return, including
 // after cancellation, and contains its panics and Goexit. Declare the route's
-// WithTimeout for the stream's longest lifetime: the kernel RequestTimeout and
+// http.Timeout for the stream's longest lifetime: the kernel RequestTimeout and
 // WriteTimeout otherwise end it. The client resumes with the Last-Event-ID
 // request header, which the handler reads from the request.
 //

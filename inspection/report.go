@@ -36,8 +36,8 @@ type Sources struct {
 	Commands      *cli.Registry
 	Contracts     *manifest.Manifest
 	Configuration []config.Report
-	// Models lists generated model extension declarations, such as a model
-	// package's FoundryExtensions().
+	// Models lists handwritten model extension declarations, constructed with
+	// slots.DeclareORM.
 	Models []slots.Declaration
 }
 
