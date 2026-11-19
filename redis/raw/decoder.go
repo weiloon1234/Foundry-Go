@@ -54,17 +54,6 @@ func DecodeString() Decoder[string] {
 	return DecodeWith(func(ctx context.Context, r Reply) (string, error) { return r.Text() })
 }
 
-// DecodeBytes accepts a text reply and returns an owned byte slice.
-func DecodeBytes() Decoder[[]byte] {
-	return DecodeWith(func(ctx context.Context, r Reply) ([]byte, error) {
-		v, err := r.Text()
-		if err != nil {
-			return nil, err
-		}
-		return []byte(v), nil
-	})
-}
-
 // DecodeArray decodes each array element in order and returns no partial result on failure.
 func DecodeArray[R any](element Decoder[R]) Decoder[[]R] {
 	return DecodeWith(func(ctx context.Context, r Reply) ([]R, error) {

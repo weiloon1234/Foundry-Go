@@ -6,7 +6,6 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
-	"slices"
 	"sync"
 	"time"
 
@@ -182,16 +181,6 @@ type jobReply struct {
 
 // JobSupportedLayout is the Redis job-queue storage layout required by this release.
 const JobSupportedLayout = 3
-
-// JobKeys returns the sorted, deduplicated 11 physical Redis keys owned by key.
-func JobKeys(key jobs.Key) ([]string, error) {
-	if err := key.Validate(); err != nil {
-		return nil, err
-	}
-	keys := jobKeys(key)
-	slices.Sort(keys)
-	return slices.Compact(keys), nil
-}
 
 // JobQuarantined returns a bounded page of safe metadata without running queue
 // maintenance, so a corrupt workflow does not prevent quarantine inspection.

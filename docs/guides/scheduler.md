@@ -57,7 +57,7 @@ millisecond and 365 days. Handler duration/restarts do not cause drift.
 last local day of each month.
 
 Options narrow a declaration without new timing syntax. `Days` (for example
-`schedule.Weekdays()` or `schedule.Weekends()`), `Between` (built with
+`schedule.Weekdays()` or `[]time.Weekday{time.Saturday, time.Sunday}`), `Between` (built with
 `schedule.Between(from, to)` or `schedule.UnlessBetween(from, to)` from
 `temporal.Time` values; a window wraps midnight when `from` is after `to`) and
 `LastDayOfMonth` are evaluated in the spec's zone (UTC for intervals) at

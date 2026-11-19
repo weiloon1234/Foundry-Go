@@ -491,12 +491,13 @@ returns.
 
 Enable exports in the spec and mark exportable columns with `ScalarCell(codec)`
 or `NullableCell(codec)`. These reuse the scalar codec for exact value formatting;
-NULL renders as an empty cell. `FormatWith` supplies explicit human presentation
-without changing the JSON/filter contract. The callback receives the validated
-locale and time zone. Locale defaults to the catalog default; time zone defaults
+NULL renders as an empty cell. Put custom display text in a concrete DTO field
+before export. Adding or replacing that field changes the DTO's JSON and column
+metadata. Preformatted text does not preserve an export-only formatter that
+uses context and the export's `Presentation`. Locale defaults to the catalog default; time zone defaults
 to `Config.TimeZone`, inherited from the [application timezone](application-timezone.md)
 in configured assembly or UTC for a direct manager. Explicit per-export
-`Presentation.TimeZone` wins. Formatters must remain bounded and honor cancellation.
+`Presentation.TimeZone` wins.
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/reporting_postgres_test.go):
 
@@ -540,7 +541,7 @@ with at most 15 significant digits (integers use format `0`), finite floats,
 booleans, dates (`yyyy-mm-dd`) and date-times (`yyyy-mm-dd hh:mm:ss`) from
 1900-03-01 to 9999-12-31. Date-times are written as wall time in the export's
 presentation time zone, since spreadsheets store no zone. Longer integers (such
-as 16-digit identifiers) and decimals, other dates, enumerations and every `FormatWith` column stay
+as 16-digit identifiers), decimals, other dates, and enumerations stay
 exact inline text. Formulas, macros, hyperlinks, external links and a growing
 shared-string table are absent. XML escaping and OOXML literal-escape handling
 preserve text and carriage returns. The ZIP has a fixed number of parts and

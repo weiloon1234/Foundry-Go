@@ -302,8 +302,8 @@ timezone descriptors accept explicit named zones only. Named zones use Go's
 configured timezone database; there is no implicit process-local fallback.
 
 For concrete temporal fields, `Before`, `BeforeOrEqual`, `After` and
-`AfterOrEqual` take same-type bounds. `BeforeField`, `BeforeOrEqualField`,
-`AfterField` and `AfterOrEqualField` compare generated fields directly:
+`AfterOrEqual` take same-type bounds. `BeforeField` and `AfterOrEqualField`
+compare generated fields directly:
 
 ```go
 fields := AvailabilityWindowValidationFields()
@@ -330,7 +330,7 @@ future := validation.AfterNow[temporal.DateTime](services.Time())
 dueDate := validation.AfterOrEqualToday[temporal.Date](services.Time())
 ```
 
-`AfterNow`, `AfterOrEqualNow`, `BeforeNow` and `BeforeOrEqualNow` accept
+`AfterNow`, `BeforeNow` and `BeforeOrEqualNow` accept
 `time.Time`, `temporal.DateTime` and `temporal.LocalDateTime`; local values
 compare with the current wall time in the service's timezone. `AfterToday`,
 `AfterOrEqualToday`, `BeforeToday` and `BeforeOrEqualToday` also accept

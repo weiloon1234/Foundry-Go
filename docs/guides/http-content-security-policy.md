@@ -26,7 +26,7 @@ remains browser behavior; declarations do not copy `DefaultSrc` into other field
 
 Sources have a distinct Go type. Use `CSPSelf`, `CSPNone`, `CSPAny`,
 `CSPSchemeSource`, `CSPHostSource`, the explicit keyword constructors, or a hash
-constructor. `CSPSHA256`, `CSPSHA384`, and `CSPSHA512` accept fixed-size digest
+constructor. `CSPSHA256` accepts a fixed-size SHA-256 digest
 arrays, so mixing digest lengths fails compilation. Hash the exact script/style
 bytes, including their whitespace. Host patterns support wildcard subdomains,
 optional schemes/ports and encoded paths. Use ASCII/punycode hostnames; IPv6

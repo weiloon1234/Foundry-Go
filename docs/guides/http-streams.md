@@ -136,8 +136,14 @@ registration := orderEvents.Handle(func(ctx context.Context, in Request) (foundr
 })
 ```
 
-Each event's data is bounded by `EndpointLimits.Response`, which clients receive;
-`Events.WithConfig` changes the queue and heartbeat. `LastEventID(ctx)` returns a
+Each typed event's data is bounded by `EndpointLimits.Response`, which clients receive.
+Typed events use `DefaultEventStreamConfig()` for the queue and heartbeat.
+Custom queue or heartbeat settings require a raw handler using `ServeEvents`.
+Set its `EventStreamConfig.Data` limits explicitly; it does not use
+`EndpointLimits.Response`. A raw route does not supply the typed endpoint's
+generated stream metadata or TypeScript client contract.
+
+`LastEventID(ctx)` returns a
 single valid `Last-Event-ID` header (at most 1 KiB, no line breaks or NUL). A
 typed stream whose handler completed after its deadline is a reported 503, never
 an empty 200. A client disconnect or the route deadline ends the stream normally; a producer

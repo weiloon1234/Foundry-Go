@@ -251,7 +251,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 		}
 	}
 	s.Features.WebhookCapture.declared = len(captures) > 0
-	channels, err := logging.PrepareChannels(s.Log.Default, s.Log.inTimeZone(s.TimeZone), configured.logger, configured.logHandlers...)
+	channels, err := logging.PrepareChannels(s.Log.Default, s.Log.inTimeZone(s.TimeZone), configured.logger)
 	if err != nil {
 		return nil, err
 	}

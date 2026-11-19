@@ -99,12 +99,6 @@ func ParseExtension(extension string) (Format, error) {
 	return f, f.Validate()
 }
 
-// CanDecode reports whether the portable engine can read this format.
-func (f Format) CanDecode() bool {
-	capability, ok := portableFormat(f)
-	return ok && capability.Read
-}
-
 func invalid(message string) error { return safeerror.NewFault(fault.Invalid, message) }
 func limited() error {
 	return safeerror.NewFault(fault.Invalid, "image exceeds configured resource limits")

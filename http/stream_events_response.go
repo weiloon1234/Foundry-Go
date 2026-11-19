@@ -20,20 +20,11 @@ const EventStreamMediaType = "text/event-stream"
 // streams. Copies share the producer but run independently for each request.
 type Events[T any] struct {
 	produce func(context.Context, *EventSink[T]) error
-	config  EventStreamConfig
 }
 
 // EventsFrom declares the stream's producer; see ServeEvents for its contract.
 func EventsFrom[T any](produce func(context.Context, *EventSink[T]) error) Events[T] {
-	return Events[T]{produce: produce, config: DefaultEventStreamConfig()}
-}
-
-// WithConfig replaces the queue and heartbeat. A typed endpoint bounds each
-// event's data by its EndpointLimits.Response, which clients also receive, so
-// config.Data is ignored here.
-func (e Events[T]) WithConfig(config EventStreamConfig) Events[T] {
-	e.config = config
-	return e
+	return Events[T]{produce: produce}
 }
 
 // MarshalJSON rejects implicit serialization; events require their response contract.
@@ -62,7 +53,7 @@ func prepareEventsDescriptor[T any](d eventsDescriptor[T], events Events[T], lim
 	if events.produce == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "event stream has no producer")
 	}
-	config := events.config
+	config := DefaultEventStreamConfig()
 	config.Data = limits
 	if err := config.Validate(); err != nil {
 		return nil, err

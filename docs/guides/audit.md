@@ -96,7 +96,7 @@ func findHistory(ctx context.Context, db database.Executor, recorder *audit.Reco
 }
 ```
 
-`id` has type `audit.ModelID[hooks.Member]`; another model's ID fails compilation. `audit.ParseModelID[M]` supplies the explicit string/transport boundary. A foreign model or area is absent. A malformed persisted snapshot fails validation. Neither lookup authenticates the caller nor fetches the original model.
+`id` has type `audit.ModelID[hooks.Member]`; another model's ID fails compilation. `model.ParseID[audit.ModelEntry[hooks.Member]](text)` supplies the explicit string/transport boundary. A foreign model or area is absent. A malformed persisted snapshot fails validation. Neither lookup authenticates the caller nor fetches the original model.
 
 `orm.AuditRead` and `orm.AuditReadNullable` read historical fields through current typed columns. Encrypted fields have the corresponding encrypted reader functions. They preserve the historical stored type without hydrating a partial application model.
 

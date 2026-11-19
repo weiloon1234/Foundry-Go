@@ -196,7 +196,6 @@ type SharedDirectory struct {
 type Bindings struct {
 	rehearsal         storage.Rehearsal
 	unit              Unit
-	deployment        SHA256
 	executables       map[BindingName]Executable
 	endpoints         map[BindingName]Endpoint
 	bundles           map[BindingName]BundleDirectory
@@ -228,9 +227,6 @@ func (b Bindings) SharedDirectory(name BindingName) (SharedDirectory, error) {
 
 // Unit returns the identity of the role invocation that owns these bindings.
 func (b Bindings) Unit() Unit { return b.unit }
-
-// DeploymentSHA256 returns the digest of the selected deployment.
-func (b Bindings) DeploymentSHA256() SHA256 { return b.deployment }
 
 // Executable returns the named executable.
 // A missing name returns an error classified as fault.Missing.
@@ -517,7 +513,7 @@ func (w featureDescriptor) bindings(runID string) (Bindings, error) {
 		w.Bindings.Executables == nil || w.Bindings.Endpoints == nil || w.Bindings.Bundles == nil || len(w.Bindings.PublicListeners) > 128 || len(w.Bindings.SharedDirectories) > 32 || len(w.Bindings.Copies) > 128 {
 		return Bindings{}, invalidBindings()
 	}
-	b := Bindings{rehearsal: rehearsal, unit: Unit{InstanceID(w.Unit.Instance), RoleName(w.Unit.Role), uint16(w.Unit.Ordinal)}, deployment: SHA256(w.Deployment),
+	b := Bindings{rehearsal: rehearsal, unit: Unit{InstanceID(w.Unit.Instance), RoleName(w.Unit.Role), uint16(w.Unit.Ordinal)},
 		executables: make(map[BindingName]Executable), endpoints: make(map[BindingName]Endpoint), bundles: make(map[BindingName]BundleDirectory),
 		publicListeners: make(map[BindingName]PublicListener), sharedDirectories: make(map[BindingName]SharedDirectory), copies: make(map[BindingName][]Copy)}
 	names := make(map[string]bool)

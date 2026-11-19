@@ -55,9 +55,6 @@ func Weekdays() []time.Weekday {
 	return []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday}
 }
 
-// Weekends returns Saturday and Sunday for Options.Days.
-func Weekends() []time.Weekday { return []time.Weekday{time.Saturday, time.Sunday} }
-
 // Predicate decides at execution time whether an occurrence runs. It is an
 // owned callback: it receives the invocation context and must honor it.
 type Predicate func(context.Context, Invocation) (bool, error)

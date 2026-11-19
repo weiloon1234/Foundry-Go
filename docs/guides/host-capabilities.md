@@ -1297,8 +1297,8 @@ Upgrade the consuming binary before declaring a public listener binding.
 selector is absent. An explicitly invalid selector or malformed descriptor is an
 error. The caller must choose any local-development alternative explicitly; it
 must not turn errors into defaults. Missing named lookups return `fault.Missing`.
-`Bindings.Unit()` identifies instance, role and ordinal; `DeploymentSHA256()`
-identifies the selected deployment. Keep the immutable snapshot and inject only
+`Bindings.Unit()` identifies instance, role and ordinal. Keep the immutable
+snapshot and inject only
 the concrete values each component needs. `deployment.Detect()` reads the same
 role descriptor. Neither loader downloads artifacts nor replaces host verification.
 

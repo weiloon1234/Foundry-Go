@@ -165,29 +165,40 @@ path and rotation options are rejected for syslog sinks.
 
 ## Custom handlers
 
-Go code can supply any `slog.Handler` for a channel, such as a vendor or
-OpenTelemetry bridge:
+There is no application option that preserves the removed custom-handler
+option's behavior. To keep channel level filtering and delivery counters, use
+`logging.WithHandler` in direct `logging.PrepareChannels` assembly. Declare the
+channel and its minimum level, and pass `nil` for the borrowed default logger:
 
 ```go
-app, err := application.New(settings,
-	application.WithLogHandler("vendor", vendorHandler),
-).Build(ctx)
+func prepareVendorChannels(handler slog.Handler) (*logging.ChannelSet, error) {
+	settings := map[logging.ChannelName]logging.ChannelSettings{
+		"vendor": {Sink: logging.SinkConfig{Driver: logging.Custom, Level: slog.LevelWarn}},
+	}
+	return logging.PrepareChannels("vendor", settings, nil,
+		logging.WithHandler("vendor", handler))
+}
 ```
 
-The equivalent direct API is `logging.PrepareChannels(selected, settings, nil,
-logging.WithHandler("vendor", vendorHandler))`. A name absent from settings is
-added as a custom channel at the default INFO minimum. To choose its level from
-deployment settings, configure the channel with the custom driver:
+The channel-set owner calls `Start` before use, obtains the logger through
+`Channels().Default()`, reads delivery counters through `Stats()`, and calls
+`Close` after all borrowers drain. The WARN minimum filters INFO even when the
+handler accepts INFO. Direct `WithHandler` can also add an undeclared channel,
+but that channel defaults to INFO; declare it to retain a configured level.
 
-```toml
-[log.channels.vendor.sink]
-driver = 'custom'
-level = 'WARN'
-```
+`application.WithLogger(slog.New(handler))` instead borrows that logger as the
+application default. It bypasses the selected channel's wrapper, so the
+configured minimum level does not apply and that channel has no delivery
+counters in the application's channel set. An INFO-accepting handler emits INFO
+even when the selected channel is configured at WARN. `WithLogger` does not add
+a channel declaration. If the old handler option supplied an otherwise
+undeclared default channel, preparation fails with
+`default log channel is not configured` until that channel is declared.
+Borrowing a logger also leaves its lifecycle with its owner.
 
 A custom channel accepts only `level`, which is applied before the handler's own
 `Enabled`. Binding a handler to a non-custom channel, a custom channel without a
-handler, a nil handler or the same name twice fails at Build. Custom channels can
+handler, a nil handler or the same name twice fails during preparation. Custom channels can
 be stack children. The handler is borrowed and never closed by the application,
 and it receives records unchanged: wrap it with `logging.Correlate` to add the
 correlation and context groups. Framework redaction applies only to the JSON

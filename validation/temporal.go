@@ -56,16 +56,6 @@ func BeforeField[T any, V Temporal](field, other Field[T, V]) Rule[T] {
 	return Compare(field, other, temporalPair[V]("foundry.before", -1, false))
 }
 
-// BeforeOrEqualField allows equality when comparing two same-type fields.
-func BeforeOrEqualField[T any, V Temporal](field, other Field[T, V]) Rule[T] {
-	return Compare(field, other, temporalPair[V]("foundry.before_or_equal", -1, true))
-}
-
-// AfterField requires the first field to be strictly after the second field.
-func AfterField[T any, V Temporal](field, other Field[T, V]) Rule[T] {
-	return Compare(field, other, temporalPair[V]("foundry.after", 1, false))
-}
-
 // AfterOrEqualField requires the first field to be at or after the second field.
 func AfterOrEqualField[T any, V Temporal](field, other Field[T, V]) Rule[T] {
 	return Compare(field, other, temporalPair[V]("foundry.after_or_equal", 1, true))
@@ -101,11 +91,6 @@ type TodayTemporal interface {
 // apply; a zero Service makes the declaration invalid. Metadata is server-only.
 func AfterNow[T NowTemporal](service temporal.Service) Rule[T] {
 	return relativeNow[T](service, "foundry.after_now", 1, false)
-}
-
-// AfterOrEqualNow accepts the current time or later.
-func AfterOrEqualNow[T NowTemporal](service temporal.Service) Rule[T] {
-	return relativeNow[T](service, "foundry.after_or_equal_now", 1, true)
 }
 
 // BeforeNow requires a value strictly before the current time.

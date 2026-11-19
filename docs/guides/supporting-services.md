@@ -158,8 +158,8 @@ details and defaults.
 | `features.extension_cleanup.jobs` | The `foundry.extensions.cleanup` job and an outbox producer on every database connection, so slot cleanup after deletions through other connections is crash-safe | [Durable cleanup](model-extension-slots.md#durable-cleanup-through-the-outbox) |
 | `encryption.key_id`, `key`, `previous`; `features.auth.mfa.*` | `services.Encryption()`, `CookieEncrypter()`, `MFA()` and `application.MFACommand()` | [Encryption](encryption.md#application-key-ring), [MFA](mfa.md) |
 | `features.health.configured_connections`, `configured_storage`, `configured_mail` | Database/Redis/realtime, disk and mailer readiness probes | [Readiness](readiness-and-maintenance.md) |
-| `features.observability.trace_sample_ratio`, `trace_batch_size`, `error_log.*` | Ratio sampling, batch export (`application.WithTraceBatchExporter`) and the structured error reporter; pool, queue, realtime and log metrics | [Observability](observability.md) |
-| `log.channels.<name>.sink.async`, `syslog`, `custom` driver | Asynchronous and syslog sinks; `application.WithLogHandler` binds custom handlers | [Logging](logging.md) |
+| `features.observability.trace_sample_ratio`, `trace_batch_size`, `error_log.*` | Ratio sampling, batch export (`observability.Config.TraceBatchExporters`) and the structured error reporter; pool, queue, realtime and log metrics | [Observability](observability.md) |
+| `log.channels.<name>.sink.async`, `syslog`, `custom` driver | Asynchronous and syslog sinks; `logging.WithHandler` binds custom handlers in direct channel assembly | [Logging](logging.md) |
 | `realtime.shared`, `realtime.publisher` | Upgrades on the HTTP listener; managed publisher for processes without a hub | [Realtime assembly](application-bootstrap.md#realtime-assembly) |
 
 `application.AboutCommand(name, settings)` prints the framework and Go versions,

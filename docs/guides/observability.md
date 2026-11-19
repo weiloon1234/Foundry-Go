@@ -194,15 +194,31 @@ receives an owned slice. Per-entry and batch exporters together are limited to
 ## OTLP export
 
 `observability.NewOTLPExporter` returns a standard-library OTLP/HTTP JSON batch
-exporter. Configured applications add it with `application.WithTraceBatchExporter`:
+exporter. Supply it in a recorder configuration and pass that recorder through
+`application.WithObservability`. Application observability settings do not
+configure a supplied recorder. The example uses recorder defaults; set the
+intended limits and trace sampling on `config` before calling `observability.New`.
+Disable configured telemetry, error-log reporting and observability maintenance
+for this path; a supplied recorder owns those policies.
 
 ```go
-exporter, err := observability.NewOTLPExporter(observability.OTLPConfig{
-	Endpoint:    "https://collector.example:4318/v1/traces",
-	ServiceName: "orders",
-	Headers:     []observability.OTLPHeader{{Name: "Authorization", Value: secret.New(token)}},
-})
-// Handle err, then pass application.WithTraceBatchExporter(exporter).
+func tracedBuilder(settings application.Settings, token string) (*application.Builder, error) {
+	exporter, err := observability.NewOTLPExporter(observability.OTLPConfig{
+		Endpoint:    "https://collector.example:4318/v1/traces",
+		ServiceName: "orders",
+		Headers:     []observability.OTLPHeader{{Name: "Authorization", Value: secret.New(token)}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	config := observability.DefaultConfig()
+	config.TraceBatchExporters = []observability.TraceBatchExporter{exporter}
+	recorder, err := observability.New(config)
+	if err != nil {
+		return nil, err
+	}
+	return application.New(settings, application.WithObservability(recorder)), nil
+}
 ```
 
 `Endpoint` is the complete absolute HTTP(S) traces URL without credentials. Header
@@ -296,8 +312,12 @@ func sentryReporter(client *sentry.Client) observability.Reporter {
 }
 ```
 
-Register it with `application.WithErrorReporter`. The callback runs in a bounded
-worker with the recorder's `ReporterTimeout`; it must honor cancellation.
+Pass the reporter to `observability.New(config, reporter)` and supply the recorder
+with `application.WithObservability(recorder)`. A supplied recorder owns its
+reporter and maintenance policies, so disable configured telemetry/error-log
+reporter assembly and configured observability maintenance when using that path.
+The callback runs in a bounded worker with the recorder's `ReporterTimeout`;
+it must honor cancellation.
 
 ## Error classification bounds
 

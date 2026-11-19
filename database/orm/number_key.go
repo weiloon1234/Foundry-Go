@@ -16,29 +16,9 @@ func NumberKeyEq[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v 
 	return comparison[M](c.number, querycore.Equal, []V{v})
 }
 
-// NumberKeyNe excludes a concrete value. Example: NumberKeyNe(Orders.ID, 100).
-func NumberKeyNe[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v V) Predicate[M] {
-	return comparison[M](c.number, querycore.NotEqual, []V{v})
-}
-
-// NumberKeyIn tests membership. Example: NumberKeyIn(Orders.ID, a, b).
-func NumberKeyIn[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v ...V) Predicate[M] {
-	return comparison[M](c.number, querycore.In, v)
-}
-
-// NumberKeyNotIn excludes membership. Example: NumberKeyNotIn(Orders.ID, a, b).
-func NumberKeyNotIn[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v ...V) Predicate[M] {
-	return comparison[M](c.number, querycore.NotIn, v)
-}
-
 // NumberKeyAsc sorts ascending. Example: NumberKeyAsc(Orders.ID).
 func NumberKeyAsc[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R]) Order[M] {
 	return columnOrder[M](c.number, false)
-}
-
-// NumberKeyDesc sorts descending. Example: NumberKeyDesc(Orders.ID).
-func NumberKeyDesc[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R]) Order[M] {
-	return columnOrder[M](c.number, true)
 }
 
 // NumberKeySet assigns a value, including zero. Example: NumberKeySet(Orders.ID, 100).

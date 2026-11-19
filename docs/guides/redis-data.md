@@ -137,7 +137,7 @@ score, err := rankings.Increment(ctx, group.ID, member.ID, 25)
 top, err := rankings.Range(ctx, group.ID, data.Last(10)) // []data.Scored[model.ID[Member]]
 rank, found, err := rankings.Rank(ctx, group.ID, member.ID, data.Descending)
 window, err := rankings.RangeByScore(ctx, group.ID, data.Between(1000, 2000), data.First(20))
-count, err := rankings.CountByScore(ctx, group.ID, data.AllScores())
+count, err := rankings.CountByScore(ctx, group.ID, data.ScoreRange{Min: math.Inf(-1), Max: math.Inf(1)})
 ```
 
 Members use canonical JSON identity, as in sets; each carries a `float64` score.

@@ -45,14 +45,6 @@ func KeyNe[M any, K comparable, R columnRole](c keyColumn[M, K, R], v K) Predica
 	return comparison[M](c.key, querycore.NotEqual, []K{v})
 }
 
-// KeyColumnEq compares a concrete value from a key column handle. Example: KeyColumnEq(Users.Key(), id).
-func KeyColumnEq[M any, K comparable](c KeyColumn[M, K], v K) Predicate[M] {
-	if !lookupColumn(c) {
-		return Predicate[M]{err: invalid("key column is required")}
-	}
-	return comparison[M](c.ormColumn(nil), querycore.Equal, []K{v})
-}
-
 // KeyColumnNe excludes a concrete value from a key column handle. Example: KeyColumnNe(Users.Key(), id).
 func KeyColumnNe[M any, K comparable](c KeyColumn[M, K], v K) Predicate[M] {
 	if !lookupColumn(c) {
@@ -186,26 +178,6 @@ func TextGt[M any, V ~string, R columnRole](c textColumn[M, V, R], v V) Predicat
 	return comparison[M](c.text, querycore.Greater, []V{v})
 }
 
-// TextGte compares ordered values. Example: TextGte(Users.Email, "@example.com").
-func TextGte[M any, V ~string, R columnRole](c textColumn[M, V, R], v V) Predicate[M] {
-	return comparison[M](c.text, querycore.GreaterOrEqual, []V{v})
-}
-
-// TextLt compares ordered values. Example: TextLt(Users.Email, "@example.com").
-func TextLt[M any, V ~string, R columnRole](c textColumn[M, V, R], v V) Predicate[M] {
-	return comparison[M](c.text, querycore.Less, []V{v})
-}
-
-// TextLte compares ordered values. Example: TextLte(Users.Email, "@example.com").
-func TextLte[M any, V ~string, R columnRole](c textColumn[M, V, R], v V) Predicate[M] {
-	return comparison[M](c.text, querycore.LessOrEqual, []V{v})
-}
-
-// TextBetween includes both endpoints. Example: TextBetween(Users.Email, a, b).
-func TextBetween[M any, V ~string, R columnRole](c textColumn[M, V, R], a, b V) Predicate[M] {
-	return between[M](c.text, a, b)
-}
-
 // TextContains matches a literal substring; wildcards are escaped. Example: TextContains(Users.Email, "@").
 func TextContains[M any, V ~string, R columnRole](c textColumn[M, V, R], v V) Predicate[M] {
 	return comparison[M](c.text, querycore.Contains, []V{v}, true)
@@ -251,19 +223,9 @@ func TimeEq[M any, V TimeValue, R columnRole](c timeColumn[M, V, R], v V) Predic
 	return comparison[M](c.time, querycore.Equal, []V{v})
 }
 
-// TimeNe excludes a concrete value. Example: TimeNe(createdAt, at) (createdAt is orm.Time[User, time.Time]).
-func TimeNe[M any, V TimeValue, R columnRole](c timeColumn[M, V, R], v V) Predicate[M] {
-	return comparison[M](c.time, querycore.NotEqual, []V{v})
-}
-
 // TimeIn tests membership. Example: TimeIn(createdAt, a, b) (createdAt is orm.Time[User, time.Time]).
 func TimeIn[M any, V TimeValue, R columnRole](c timeColumn[M, V, R], v ...V) Predicate[M] {
 	return comparison[M](c.time, querycore.In, v)
-}
-
-// TimeNotIn excludes membership. Example: TimeNotIn(createdAt, a, b) (createdAt is orm.Time[User, time.Time]).
-func TimeNotIn[M any, V TimeValue, R columnRole](c timeColumn[M, V, R], v ...V) Predicate[M] {
-	return comparison[M](c.time, querycore.NotIn, v)
 }
 
 // TimeAsc sorts ascending. Example: TimeAsc(createdAt) (createdAt is orm.Time[User, time.Time]).
@@ -329,9 +291,6 @@ func EnumNotIn[M any, E enum.Scalar](c Enum[M, E], v ...E) Predicate[M] {
 // EnumAsc sorts ascending. Example: EnumAsc(Users.Status).
 func EnumAsc[M any, E enum.Scalar](c Enum[M, E]) Order[M] { return columnOrder[M](c.enum, false) }
 
-// EnumDesc sorts descending. Example: EnumDesc(Users.Status).
-func EnumDesc[M any, E enum.Scalar](c Enum[M, E]) Order[M] { return columnOrder[M](c.enum, true) }
-
 // EnumSet assigns a value, including zero. Example: EnumSet(Users.Status, StatusActive).
 func EnumSet[M any, E enum.Scalar](c Enum[M, E], v E) Assignment[M] {
 	return columnAssignment[M](c.enum, v)
@@ -392,21 +351,6 @@ func NullableNumberEq[M any, V NumberValue](c NullableNumber[M, V], v V) Predica
 	return comparison[M](c.nullableNumber.base, querycore.Equal, []V{v})
 }
 
-// NullableNumberNe excludes a concrete value. Example: NullableNumberNe(LedgerEntries.Balance, amount).
-func NullableNumberNe[M any, V NumberValue](c NullableNumber[M, V], v V) Predicate[M] {
-	return comparison[M](c.nullableNumber.base, querycore.NotEqual, []V{v})
-}
-
-// NullableNumberIn tests membership. Example: NullableNumberIn(LedgerEntries.Balance, a, b).
-func NullableNumberIn[M any, V NumberValue](c NullableNumber[M, V], v ...V) Predicate[M] {
-	return comparison[M](c.nullableNumber.base, querycore.In, v)
-}
-
-// NullableNumberNotIn excludes membership. Example: NullableNumberNotIn(LedgerEntries.Balance, a, b).
-func NullableNumberNotIn[M any, V NumberValue](c NullableNumber[M, V], v ...V) Predicate[M] {
-	return comparison[M](c.nullableNumber.base, querycore.NotIn, v)
-}
-
 // NullableNumberAsc sorts ascending. Example: NullableNumberAsc(LedgerEntries.Balance).
 func NullableNumberAsc[M any, V NumberValue](c NullableNumber[M, V]) Order[M] {
 	return columnOrder[M](c.nullableNumber.base, false)
@@ -430,21 +374,6 @@ func NullableNumberGt[M any, V NumberValue](c NullableNumber[M, V], v V) Predica
 // NullableNumberGte compares ordered values. Example: NullableNumberGte(LedgerEntries.Balance, amount).
 func NullableNumberGte[M any, V NumberValue](c NullableNumber[M, V], v V) Predicate[M] {
 	return comparison[M](c.nullableNumber.base, querycore.GreaterOrEqual, []V{v})
-}
-
-// NullableNumberLt compares ordered values. Example: NullableNumberLt(LedgerEntries.Balance, amount).
-func NullableNumberLt[M any, V NumberValue](c NullableNumber[M, V], v V) Predicate[M] {
-	return comparison[M](c.nullableNumber.base, querycore.Less, []V{v})
-}
-
-// NullableNumberLte compares ordered values. Example: NullableNumberLte(LedgerEntries.Balance, amount).
-func NullableNumberLte[M any, V NumberValue](c NullableNumber[M, V], v V) Predicate[M] {
-	return comparison[M](c.nullableNumber.base, querycore.LessOrEqual, []V{v})
-}
-
-// NullableNumberBetween includes both endpoints. Example: NullableNumberBetween(LedgerEntries.Balance, a, b).
-func NullableNumberBetween[M any, V NumberValue](c NullableNumber[M, V], a, b V) Predicate[M] {
-	return between[M](c.nullableNumber.base, a, b)
 }
 
 // NullableNumberIsNull matches SQL NULL. Example: NullableNumberIsNull(LedgerEntries.Balance).
@@ -477,11 +406,6 @@ func NullableTextIn[M any, V ~string](c NullableText[M, V], v ...V) Predicate[M]
 	return comparison[M](c.nullableText.base, querycore.In, v)
 }
 
-// NullableTextNotIn excludes membership. Example: NullableTextNotIn(Users.Nickname, a, b).
-func NullableTextNotIn[M any, V ~string](c NullableText[M, V], v ...V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.NotIn, v)
-}
-
 // NullableTextAsc sorts ascending. Example: NullableTextAsc(Users.Nickname).
 func NullableTextAsc[M any, V ~string](c NullableText[M, V]) Order[M] {
 	return columnOrder[M](c.nullableText.base, false)
@@ -495,31 +419,6 @@ func NullableTextDesc[M any, V ~string](c NullableText[M, V]) Order[M] {
 // NullableTextSet assigns a value, including zero. Example: NullableTextSet(Users.Nickname, "Ada").
 func NullableTextSet[M any, V ~string](c NullableText[M, V], v V) Assignment[M] {
 	return columnAssignment[M](c.nullableText.base, v)
-}
-
-// NullableTextGt compares ordered values. Example: NullableTextGt(Users.Nickname, "Ada").
-func NullableTextGt[M any, V ~string](c NullableText[M, V], v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.Greater, []V{v})
-}
-
-// NullableTextGte compares ordered values. Example: NullableTextGte(Users.Nickname, "Ada").
-func NullableTextGte[M any, V ~string](c NullableText[M, V], v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.GreaterOrEqual, []V{v})
-}
-
-// NullableTextLt compares ordered values. Example: NullableTextLt(Users.Nickname, "Ada").
-func NullableTextLt[M any, V ~string](c NullableText[M, V], v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.Less, []V{v})
-}
-
-// NullableTextLte compares ordered values. Example: NullableTextLte(Users.Nickname, "Ada").
-func NullableTextLte[M any, V ~string](c NullableText[M, V], v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.LessOrEqual, []V{v})
-}
-
-// NullableTextBetween includes both endpoints. Example: NullableTextBetween(Users.Nickname, a, b).
-func NullableTextBetween[M any, V ~string](c NullableText[M, V], a, b V) Predicate[M] {
-	return between[M](c.nullableText.base, a, b)
 }
 
 // NullableTextContains matches a literal substring; wildcards are escaped. Example: NullableTextContains(Users.Nickname, "da").
@@ -577,26 +476,6 @@ func NullableTextSetNull[M any, V ~string](c NullableText[M, V]) Assignment[M] {
 	return nullAssignment[M](c.nullableText.base)
 }
 
-// NullableTimeEq compares a concrete value. Example: NullableTimeEq(Users.Birthday, birthday).
-func NullableTimeEq[M any, V TimeValue, R columnRole](c nullableTimeColumn[M, V, R], v V) Predicate[M] {
-	return comparison[M](c.nullableTime.base, querycore.Equal, []V{v})
-}
-
-// NullableTimeNe excludes a concrete value. Example: NullableTimeNe(Users.Birthday, birthday).
-func NullableTimeNe[M any, V TimeValue, R columnRole](c nullableTimeColumn[M, V, R], v V) Predicate[M] {
-	return comparison[M](c.nullableTime.base, querycore.NotEqual, []V{v})
-}
-
-// NullableTimeIn tests membership. Example: NullableTimeIn(Users.Birthday, a, b).
-func NullableTimeIn[M any, V TimeValue, R columnRole](c nullableTimeColumn[M, V, R], v ...V) Predicate[M] {
-	return comparison[M](c.nullableTime.base, querycore.In, v)
-}
-
-// NullableTimeNotIn excludes membership. Example: NullableTimeNotIn(Users.Birthday, a, b).
-func NullableTimeNotIn[M any, V TimeValue, R columnRole](c nullableTimeColumn[M, V, R], v ...V) Predicate[M] {
-	return comparison[M](c.nullableTime.base, querycore.NotIn, v)
-}
-
 // NullableTimeAsc sorts ascending. Example: NullableTimeAsc(Users.Birthday).
 func NullableTimeAsc[M any, V TimeValue, R columnRole](c nullableTimeColumn[M, V, R]) Order[M] {
 	return columnOrder[M](c.nullableTime.base, false)
@@ -632,11 +511,6 @@ func NullableTimeLte[M any, V TimeValue, R columnRole](c nullableTimeColumn[M, V
 	return comparison[M](c.nullableTime.base, querycore.LessOrEqual, []V{v})
 }
 
-// NullableTimeBetween includes both endpoints. Example: NullableTimeBetween(Users.Birthday, a, b).
-func NullableTimeBetween[M any, V TimeValue, R columnRole](c nullableTimeColumn[M, V, R], a, b V) Predicate[M] {
-	return between[M](c.nullableTime.base, a, b)
-}
-
 // NullableTimeIsNull matches SQL NULL. Example: NullableTimeIsNull(Users.Birthday).
 func NullableTimeIsNull[M any, V TimeValue, R columnRole](c nullableTimeColumn[M, V, R]) Predicate[M] {
 	return comparison[M](c.nullableTime.base, querycore.IsNull, nil)
@@ -660,26 +534,6 @@ func NullableEnumEq[M any, E enum.Scalar](c NullableEnum[M, E], v E) Predicate[M
 // NullableEnumNe excludes a concrete value. Example: NullableEnumNe(optionalStatus, StatusActive) (optionalStatus is orm.NullableEnum[User, Status]).
 func NullableEnumNe[M any, E enum.Scalar](c NullableEnum[M, E], v E) Predicate[M] {
 	return comparison[M](c.nullableEnum.base, querycore.NotEqual, []E{v})
-}
-
-// NullableEnumIn tests membership. Example: NullableEnumIn(optionalStatus, a, b) (optionalStatus is orm.NullableEnum[User, Status]).
-func NullableEnumIn[M any, E enum.Scalar](c NullableEnum[M, E], v ...E) Predicate[M] {
-	return comparison[M](c.nullableEnum.base, querycore.In, v)
-}
-
-// NullableEnumNotIn excludes membership. Example: NullableEnumNotIn(optionalStatus, a, b) (optionalStatus is orm.NullableEnum[User, Status]).
-func NullableEnumNotIn[M any, E enum.Scalar](c NullableEnum[M, E], v ...E) Predicate[M] {
-	return comparison[M](c.nullableEnum.base, querycore.NotIn, v)
-}
-
-// NullableEnumAsc sorts ascending. Example: NullableEnumAsc(optionalStatus) (optionalStatus is orm.NullableEnum[User, Status]).
-func NullableEnumAsc[M any, E enum.Scalar](c NullableEnum[M, E]) Order[M] {
-	return columnOrder[M](c.nullableEnum.base, false)
-}
-
-// NullableEnumDesc sorts descending. Example: NullableEnumDesc(optionalStatus) (optionalStatus is orm.NullableEnum[User, Status]).
-func NullableEnumDesc[M any, E enum.Scalar](c NullableEnum[M, E]) Order[M] {
-	return columnOrder[M](c.nullableEnum.base, true)
 }
 
 // NullableEnumSet assigns a value, including zero. Example: NullableEnumSet(optionalStatus, StatusActive) (optionalStatus is orm.NullableEnum[User, Status]).

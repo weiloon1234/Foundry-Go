@@ -1,5 +1,145 @@
 # Changelog
 
+## v0.47.0 — 2026-11-19
+
+Remove 203 public functions and methods without a typed caller in the inspected
+framework, fixtures, release tool, Starter, Boss Club, Semaklah, and skin-analyzer.
+Keep `orm.KeyNotIn`, which skin-analyzer calls. These are source compatibility
+changes. No persisted data or deployment protocol changes.
+
+### Application options and audit IDs
+
+- D6: `application.WithErrorReporter` → pass reporters to `observability.New`.
+  `application.WithTraceExporter` → `observability.Config.TraceExporters`.
+  `application.WithTraceBatchExporter` → `observability.Config.TraceBatchExporters`.
+  Pass the resulting recorder to `application.WithObservability`. Supplied recorders
+  own their reporter and maintenance policies; configured telemetry, error-log
+  reporters and observability maintenance cannot also be assembled for them.
+  Application observability limits and trace sampling settings are not copied
+  into a supplied recorder. Set those explicitly in its `observability.Config`.
+- D7: `application.WithLogHandler` → no same-behavior replacement at the
+  application option level. Use `logging.WithHandler` in direct
+  `logging.PrepareChannels` assembly with the channel declared, its minimum
+  level set, and no borrowed default logger. This retains level filtering and
+  delivery counters; the channel-set owner starts and closes it.
+  `application.WithLogger(slog.New(handler))` borrows a default logger and bypasses
+  the channel wrapper. It loses that channel's delivery counters and configured
+  minimum level: a handler accepting INFO emits INFO even with WARN configured.
+  It also does not declare the default channel. If the removed option supplied
+  that declaration, preparation now fails with `default log channel is not configured`.
+  See the [direct channel example](docs/guides/logging.md#custom-handlers).
+- D8: `audit.ParseModelID[M](text)` → `model.ParseID[audit.ModelEntry[M]](text)`.
+
+### ORM operator families
+
+The names below use prefix + suffix notation. For example, `InputText` + `Desc`
+means `orm.InputTextDesc`. These wrappers have no replacement; add them back when
+an application needs them. Existing expression APIs and retained siblings remain.
+The mutation-input types, constructors and write operations remain.
+
+#### D9: mutation-input column operators (139)
+
+- `InputColumn`: `NotIn`, `Desc`.
+- `NullableInputColumn`: `Eq`, `Ne`, `In`, `NotIn`, `Asc`, `Desc`, `IsNotNull`.
+- `InputText`: `In`, `NotIn`, `Desc`, `Gt`, `Gte`, `Lt`, `Lte`, `Between`, `IContains`, `StartsWith`, `EndsWith`, `ILike`, `IStartsWith`, `IEndsWith`.
+- `NullableInputText`: `Eq`, `Ne`, `In`, `NotIn`, `Asc`, `Desc`, `Gt`, `Gte`, `Lt`, `Lte`, `Between`, `IContains`, `StartsWith`, `EndsWith`, `Like`, `ILike`, `IStartsWith`, `IEndsWith`, `IsNull`, `IsNotNull`.
+- `InputNumber`: `Ne`, `In`, `NotIn`, `Desc`, `Gt`, `Lt`, `Lte`, `Between`.
+- `NullableInputNumber`: `Eq`, `Ne`, `In`, `NotIn`, `Asc`, `Desc`, `Gt`, `Gte`, `Lt`, `Lte`, `Between`, `IsNull`, `IsNotNull`.
+- `InputTime`: `Eq`, `Ne`, `In`, `NotIn`, `Asc`, `Desc`, `Gt`, `Gte`, `Lt`, `Lte`, `Between`.
+- `NullableInputTime`: `Eq`, `Ne`, `In`, `NotIn`, `Asc`, `Desc`, `Gt`, `Gte`, `Lt`, `Lte`, `Between`, `IsNull`, `IsNotNull`.
+- `InputEnum`: `Ne`, `In`, `NotIn`, `Asc`, `Desc`.
+- `NullableInputEnum`: `Eq`, `Ne`, `In`, `NotIn`, `Asc`, `Desc`, `IsNull`, `IsNotNull`.
+- `InputJSON`: `Eq`, `Ne`, `In`, `NotIn`, `Asc`, `Desc`.
+- `NullableInputJSON`: `Eq`, `Ne`, `In`, `NotIn`, `Asc`, `Desc`, `IsNull`, `IsNotNull`.
+- `InputInterval`: `Eq`, `Ne`, `In`, `NotIn`, `Asc`, `Desc`, `Gt`, `Gte`, `Lt`, `Lte`, `Between`.
+- `NullableInputInterval`: `Eq`, `Ne`, `In`, `NotIn`, `Asc`, `Desc`, `Gt`, `Gte`, `Lt`, `Lte`, `Between`, `IsNull`, `IsNotNull`.
+
+#### D10: stored-column operators (29)
+
+- `KeyColumn`: `Eq`.
+- `Text`: `Gte`, `Lt`, `Lte`, `Between`.
+- `Time`: `Ne`, `NotIn`.
+- `Enum`: `Desc`.
+- `NullableNumber`: `Ne`, `In`, `NotIn`, `Lt`, `Lte`, `Between`.
+- `NullableText`: `NotIn`, `Gt`, `Gte`, `Lt`, `Lte`, `Between`.
+- `NullableTime`: `Eq`, `Ne`, `In`, `NotIn`, `Between`.
+- `NullableEnum`: `In`, `NotIn`, `Asc`, `Desc`.
+
+#### D11: input-key operators (5)
+
+- `InputKey`: `Ne`, `In`, `NotIn`, `Asc`, `Desc`.
+
+#### D12: numeric-key operators (4)
+
+- `NumberKey`: `Ne`, `In`, `NotIn`, `Desc`.
+
+The gaps are deliberate: `InputTextAsc` stays while `InputTextDesc` goes;
+`InputNumberGte` stays while `InputNumberGt`, `InputNumberLt` and `InputNumberLte` go.
+`TextGt` stays while `TextGte`, `TextLt`, `TextLte` and `TextBetween` go.
+`KeyColumnNe` stays while `KeyColumnEq` goes. `InputKeyEq` stays while its
+inequality, membership and sorting siblings go. `NumberKeyEq` and `NumberKeyAsc`
+stay while `NumberKeyNe`, `NumberKeyIn`, `NumberKeyNotIn` and `NumberKeyDesc` go.
+
+### Presentation, transports and runtime conveniences
+
+- D13: `datatable.Cell.FormatWith` → put display text in a concrete DTO field
+  before export and use `ScalarCell` or `NullableCell`. There is no custom cell
+  formatter hook; add it back when an application needs it. This alternative
+  changes the DTO's JSON and column metadata when a field is added or replaced.
+  It does not preserve an export-only callback driven by context and `Presentation`.
+- D14: `deployment.Bindings.DeploymentSHA256` → no replacement; add it back when
+  an application needs it. `Bindings.Unit` remains. The wire deployment digest
+  and its validation remain; only the accessor and duplicate retained value go.
+- D15: `http.FloatCookie[float64]()` → `http.FloatPath[float64]()`. The cookie
+  codec is an alias of the path codec; named float types work the same way.
+- D16: `CSPUnsafeEval`, `CSPWasmUnsafeEval`, `CSPUnsafeHashes`, `CSPReportSample`,
+  `CSPSHA384` and `CSPSHA512` → no replacement; add them back when an application
+  needs them. SHA-256 (`http.CSPSHA256`), nonce, host, scheme, self, wildcard,
+  unsafe-inline and strict-dynamic constructors remain.
+- D17: `http.OriginPattern.Wildcard` → no inspection helper replacement; add it
+  back when an application needs it. Pattern validation and matching remain.
+- D18: `http.Events.WithConfig` → typed event streams use
+  `http.DefaultEventStreamConfig()`. Use direct `http.ServeEvents` with an explicit
+  `http.EventStreamConfig` when custom queue or heartbeat settings are required.
+  That is a raw handler, not a replacement within a typed endpoint. Set
+  `EventStreamConfig.Data` explicitly: it replaces the typed endpoint's
+  `EndpointLimits.Response` bound. Raw routes do not supply the typed endpoint's
+  generated stream metadata or TypeScript client contract.
+- D19: `imaging.Format.CanDecode` → `engine.Capabilities().ForFormat(format)`
+  and inspect the returned capability's `Read` flag when found. This describes
+  the selected engine; the removed shortcut described only the portable engine.
+- D20: `jobs.DefaultOverlapOptions()` →
+  `jobs.OverlapOptions{TTL: 30 * time.Second, Delay: 10 * time.Second}`.
+- D21: `data.AllScores()` →
+  `data.ScoreRange{Min: math.Inf(-1), Max: math.Inf(1)}`.
+- D22: `redis.JobKeys` → no exact queue-key enumeration replacement; add it back
+  when an application needs it. Queue operations keep their internal key layout.
+- D23: `raw.DecodeBytes()` → `raw.DecodeString()` and `[]byte(text)` after a
+  successful decode when the caller can accept a string result first.
+  `DecodeString` is not a drop-in `raw.Decoder[[]byte]`, including inside
+  `DecodeArray`. To retain that decoder type, use `raw.DecodeWith` with a callback
+  returning `([]byte, error)`: call `Reply.Text()`, return `nil, err` on failure,
+  and `[]byte(text), nil` on success.
+- D24: `schedule.Weekends()` in `Options.Days` →
+  `options.Days = []time.Weekday{time.Saturday, time.Sunday}` on the existing
+  options. Preserve the other options; `schedule.Weekdays()` remains.
+- D25: `disk.DeletePrefix` → `disk.List` followed by `disk.DeleteMany` for a
+  nonempty returned key slice. Preserve prefix authorization, a nonempty prefix,
+  `storage.MaxBatchDelete`, pagination, per-key failures and uncertain outcomes.
+  Carry `Page.Skipped` into the result even for an empty final page. It counts
+  omitted entries, including oversized or foreign objects that were not deleted;
+  a zero next cursor does not prove that the prefix is empty.
+  The exclusive `DeletePrefixOptions` and `DeletePrefixResult` types also go.
+  See the [bounded prefix-page example](docs/guides/storage.md).
+- D26: `validation.BeforeOrEqualField`, `validation.AfterField` and
+  `validation.AfterOrEqualNow` → no replacement with identical semantics; add
+  them back when an application needs them. `BeforeField`, `AfterOrEqualField`,
+  `AfterNow` and `BeforeOrEqualNow` remain. Do not substitute a stricter rule
+  when equality or the diagnostic field matters.
+
+Update the ORM operation pins, retirement ledger and active teaching with these
+removals. Historical changelog entries and frozen evidence are unchanged.
+
 ## v0.46.0 — 2026-11-19
 
 - `routes check` rejects a call returning a route stage as an argument of any

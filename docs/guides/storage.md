@@ -123,8 +123,44 @@ together, and the cursor is bound to the delimited mode. `DeleteMany` deletes up
 to `MaxBatchDelete` distinct keys unconditionally under one operation slot (one
 `DeleteObjects` request on AWS) and reports each key in `Deleted` or `Failed`
 with its own classified outcome; a partial failure also returns an error.
-`DeletePrefix` lists and deletes one bounded page below a nonempty prefix and
-returns `Next`; it is not a snapshot, so concurrently written objects can remain.
+To delete a prefix page, validate a nonempty application-authorized prefix, call
+`List` with a limit at most `MaxBatchDelete`, collect the returned `ObjectKey`
+values, and call `DeleteMany` only when that slice is nonempty. Retain `Page.Next`
+for continuation and carry `Page.Skipped` through the result, including when no
+objects are returned. Skipped entries include oversized or foreign objects that
+listing omitted and deletion never attempted. A final page can have a zero
+`Next`, no returned objects, and a positive `Skipped` count. That does not mean
+the prefix is empty. Accumulate skipped counts across pages and inspect errors
+and per-key failures. Listing and deletion are not a snapshot, so concurrently
+written objects can also remain.
+
+```go
+type prefixPageResult struct {
+	storage.DeleteManyResult
+	Skipped int
+	Next    storage.Cursor
+}
+
+func deletePage(ctx context.Context, disk *storage.Disk, prefix storage.Prefix, cursor storage.Cursor) (prefixPageResult, error) {
+	if prefix.String() == "" {
+		return prefixPageResult{}, fmt.Errorf("a nonempty prefix is required")
+	}
+	page, err := disk.List(ctx, storage.ListOptions{Prefix: prefix, Cursor: cursor, Limit: storage.MaxBatchDelete})
+	if err != nil {
+		return prefixPageResult{}, err
+	}
+	result := prefixPageResult{Skipped: page.Skipped, Next: page.Next}
+	keys := make([]storage.ObjectKey, len(page.Objects))
+	for i, object := range page.Objects {
+		keys[i] = object.Key
+	}
+	if len(keys) == 0 {
+		return result, nil
+	}
+	result.DeleteManyResult, err = disk.DeleteMany(ctx, keys)
+	return result, err
+}
+```
 
 `source.CopyTo(ctx, sourceKey, destination, targetKey, options)` copies a complete
 source to another key/disk. When both disks share one adapter implementing

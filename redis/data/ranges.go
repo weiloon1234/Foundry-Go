@@ -47,14 +47,12 @@ func (w Window) validate(l Limits) error {
 }
 
 // ScoreRange bounds sorted-set scores, inclusive unless excluded. Use
-// math.Inf for an open end; AllScores selects every score. NaN is invalid.
+// math.Inf for an open end. Negative and positive infinity select every score.
+// NaN is invalid.
 type ScoreRange struct {
 	Min, Max               float64
 	ExcludeMin, ExcludeMax bool
 }
-
-// AllScores selects every member regardless of score.
-func AllScores() ScoreRange { return ScoreRange{Min: math.Inf(-1), Max: math.Inf(1)} }
 
 // Between selects scores from min through max inclusive.
 func Between(min, max float64) ScoreRange { return ScoreRange{Min: min, Max: max} }

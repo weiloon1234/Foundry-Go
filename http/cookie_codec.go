@@ -13,9 +13,6 @@ import (
 // Cookie serialization has its own quoting, bounds and duplicate-name rules.
 type CookieCodec[V any] = PathCodec[V]
 
-// FloatCookie preserves finite native/named floats; use TextCookie for exact decimals.
-func FloatCookie[V PathFloat]() CookieCodec[V] { return FloatPath[V]() }
-
 // StringCookie returns the typed string path codec for cookie values.
 func StringCookie[V ~string]() CookieCodec[V] { return StringPath[V]() }
 

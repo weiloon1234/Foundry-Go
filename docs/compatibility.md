@@ -5,6 +5,27 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+## Unused public API removal — v0.47.0
+
+This release removes 203 uncalled functions and methods, plus the two request/result
+types owned exclusively by prefix deletion. `orm.KeyNotIn` remains because
+skin-analyzer calls it. The [v0.47.0 changelog](../CHANGELOG.md#v0470--2026-11-19)
+lists every removed family, replacement and gap beside retained siblings.
+
+Applications must stop using removed names before updating the framework pin.
+Supply custom observation reporters and exporters through a recorder passed to
+`application.WithObservability`, with limits and sampling set explicitly on the
+recorder. No application option preserves custom-channel handler behavior.
+Direct `logging.PrepareChannels` assembly with `logging.WithHandler` retains
+channel level filtering and counters. `application.WithLogger` borrows a default
+logger, bypasses that wrapper, and still requires a declared default channel.
+See [custom handlers](guides/logging.md#custom-handlers) for the migration.
+
+No persisted format, queue layout, database schema, generated wire contract or
+deployment generation changes. Generate application declarations with the matching
+framework and run the application's route check after changing its pin. The
+retirement ledger rejects reintroducing removed public names.
+
 ## Framework cleanup — v0.46.0
 
 Replace `attachments.MaxUploadBytes` with `attachments.MaxBufferedBytes`; the
@@ -674,7 +695,7 @@ and additive; see [assets and SPA routing](guides/http-assets.md).
 | Job layout migration API | v0.16.0 removes `jobs.LayoutMigrator`, `jobs.ErrLegacyLayout`, `jobs.Dispatcher.MigrateLayout`, `redis.JobBackend.JobMigrateLayout`, and `jobs migrate-layout`. Remove consumer routing and calls. There are no aliases or replacement migration APIs. |
 | Queue storage inspection | v0.17.0 removes the remaining read-only Redis queue layout inspection API and its result types. Remove custom consumer calls. Runtime layout-3 enforcement is unchanged. |
 | Deployment queue admission inventory | v0.16.0 removes `deploy:jobs-inspect`, `application.Builder.JobQueues`, `InspectJobQueues`, `WriteJobQueues`, `ProbeJobQueues`, and `JobQueuesCommand`; `JobQueueReport`, `JobQueueInventory`, `JobConnectionInventory`, `JobInventoryNamespace`, `JobQueueCoverage`, `JobQueueBlockerCode`, `JobQueueBlocker`, and their constants, including `JobQueueInventorySchema`, `JobQueueBlockerLayout1RequiresUpgrade`, and all `MaxJobQueue*` inventory limits. Remove inventory consumers. `application.DeployJobCommands`, `JobCommand`, and `RunJobCommand` are also removed. Register `jobs/command.Declaration` through the normal application CLI and resolve `services.Jobs`. Deploy-tool generation 6 is required because generation 5 calls the removed command. |
-| Infrastructure queue inventory API | v0.16.0 removes `infrastructure.ConfigureJobs`, `Plan.Jobs`, `Plan.RedisStorageID`, `JobConnectionLayoutResult`, `redis.Config.StorageID`, and `redis.JobPolicyID`, which served deployment admission. Ordinary `Plan.RedisKeys` ACL inventory and `redis.JobKeys` exact-key enumeration are unchanged. |
+| Infrastructure queue inventory API | v0.16.0 removes `infrastructure.ConfigureJobs`, `Plan.Jobs`, `Plan.RedisStorageID`, `JobConnectionLayoutResult`, `redis.Config.StorageID`, and `redis.JobPolicyID`, which served deployment admission. Ordinary `Plan.RedisKeys` ACL inventory remains. Exact-key queue enumeration was removed in v0.47.0. |
 | Outbox records | Preserve captured bytes, IDs and destinations across retries. An ambiguous publish is reconciled using the same captured pending operation. |
 | Application/database schema | Use reviewed forward migrations with compatible expansion/backfill before contraction. No automatic destructive synchronization or reset. Framework-owned migrations (sessions, tokens, outbox, idempotency, audit, settings/extensions, translations, countries, notifications, attachments, job archive, outbound webhooks, MFA) must be applied before the release that reads them serves traffic; application boot never applies them. Down migrations are optional and run only through `migrate rollback --step N --confirm`. `app.RunDatabaseCommand` keeps each schema target's history in `<schema>.schema_migrations`, as the PostgreSQL testkit does; it does not read history that a hand-built `DefaultPostgresConfig` runner wrote to `foundry_ops.schema_migrations`, so keep that runner for such a deployment. |
 | Model extension slots | Native handles declare slot names explicitly; `DefineORMOwner` takes an owner name and `OwnerOptions.StorageModel`. Preserve both names before renaming a Go field or a table; otherwise existing translations, metadata and files are hidden, not deleted. `translations`, `metadata` and `attachments` `undeclared` commands report stored names no slot declares. |

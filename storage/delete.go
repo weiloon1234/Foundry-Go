@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-// MaxBatchDelete bounds one DeleteMany or DeletePrefix page.
+// MaxBatchDelete bounds one DeleteMany operation.
 const MaxBatchDelete = 1000
 
 // BatchDeleter deletes several keys unconditionally in one provider request.
@@ -101,42 +101,4 @@ func (d *Disk) DeleteMany(ctx context.Context, keys []ObjectKey) (DeleteManyResu
 		return result, newFailure(Unavailable, DeleteOperation, mutationOutcome(result.Failed[0].Err), failures)
 	}
 	return result, nil
-}
-
-// DeletePrefixOptions selects one bounded page below a nonempty prefix.
-type DeletePrefixOptions struct {
-	Prefix Prefix
-	Cursor Cursor
-	Limit  int
-}
-
-// DeletePrefixResult reports one page. Skipped entries (foreign or oversized
-// objects) are never deleted. Continue with Next until it is zero.
-type DeletePrefixResult struct {
-	DeleteManyResult
-	Skipped int
-	Next    Cursor
-}
-
-// DeletePrefix lists one page under a nonempty prefix and deletes its objects
-// unconditionally. It is not a snapshot: objects written concurrently can
-// survive, and a directory is never implied to be empty afterwards.
-func (d *Disk) DeletePrefix(ctx context.Context, options DeletePrefixOptions) (DeletePrefixResult, error) {
-	if options.Prefix.String() == "" || options.Limit < 1 || options.Limit > MaxBatchDelete {
-		return DeletePrefixResult{}, newFailure(Invalid, DeleteOperation, Unchanged, nil)
-	}
-	page, err := d.List(ctx, ListOptions{Prefix: options.Prefix, Cursor: options.Cursor, Limit: options.Limit})
-	if err != nil {
-		return DeletePrefixResult{}, err
-	}
-	result := DeletePrefixResult{Skipped: page.Skipped, Next: page.Next}
-	if len(page.Objects) == 0 {
-		return result, nil
-	}
-	keys := make([]ObjectKey, len(page.Objects))
-	for i, info := range page.Objects {
-		keys[i] = info.Key
-	}
-	result.DeleteManyResult, err = d.DeleteMany(ctx, keys)
-	return result, err
 }

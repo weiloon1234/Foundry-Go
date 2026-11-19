@@ -54,31 +54,6 @@ func InputKeyEq[M, I any, K comparable](c InputKey[M, I, K], v K) Predicate[M] {
 	return comparison[M](c.key, querycore.Equal, []K{v})
 }
 
-// InputKeyNe excludes a stored key. Example: InputKeyNe(users.ID, storedID).
-func InputKeyNe[M, I any, K comparable](c InputKey[M, I, K], v K) Predicate[M] {
-	return comparison[M](c.key, querycore.NotEqual, []K{v})
-}
-
-// InputKeyIn matches stored keys. Example: InputKeyIn(users.ID, firstID, secondID).
-func InputKeyIn[M, I any, K comparable](c InputKey[M, I, K], v ...K) Predicate[M] {
-	return comparison[M](c.key, querycore.In, v)
-}
-
-// InputKeyNotIn excludes stored keys. Example: InputKeyNotIn(users.ID, firstID, secondID).
-func InputKeyNotIn[M, I any, K comparable](c InputKey[M, I, K], v ...K) Predicate[M] {
-	return comparison[M](c.key, querycore.NotIn, v)
-}
-
-// InputKeyAsc orders by stored key. Example: InputKeyAsc(users.ID).
-func InputKeyAsc[M, I any, K comparable](c InputKey[M, I, K]) Order[M] {
-	return columnOrder[M](c.key, false)
-}
-
-// InputKeyDesc orders by stored key. Example: InputKeyDesc(users.ID).
-func InputKeyDesc[M, I any, K comparable](c InputKey[M, I, K]) Order[M] {
-	return columnOrder[M](c.key, true)
-}
-
 // InputKeySet captures fresh input. Example: InputKeySet(users.ID, FreshID{Value: storedID}).
 func InputKeySet[M, I any, K comparable](c InputKey[M, I, K], v I) Assignment[M] {
 	return inputAssignment[M](c.key.core, c.input, v)

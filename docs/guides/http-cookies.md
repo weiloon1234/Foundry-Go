@@ -26,10 +26,12 @@ if err := remember.Set(ctx, writer, true); err != nil {
 ```
 
 `Cookie[V]` and `SignedCookie[V]` retain V through Read and Set.
-`StringCookie`, `IntegerCookie`, `FloatCookie`, `BoolCookie`, `ModelIDCookie` and
+`StringCookie`, `IntegerCookie`, `BoolCookie`, `ModelIDCookie` and
 `TextCookie` reuse the existing scalar codecs, including named types, model
 ownership, generated enum validation, exact decimals and temporal text methods.
 `CookieCodec[V]` is that same scalar interface. There is no duplicate model codec.
+For finite native or named floating-point cookies, pass `http.FloatPath[float64]()`
+(or the named float type). `CookieCodec[V]` is an alias of `PathCodec[V]`.
 
 Read returns `value.Optional[V]`: missing differs from a present empty string
 or false value. Names are case-sensitive. The Cookie header is scanned pair by

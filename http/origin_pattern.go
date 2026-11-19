@@ -21,9 +21,6 @@ type OriginPattern string
 // Validate checks that the origin pattern can be compiled.
 func (p OriginPattern) Validate() error { _, err := compileOriginPattern(p); return err }
 
-// Wildcard reports whether the declaration matches a family of subdomains.
-func (p OriginPattern) Wildcard() bool { return strings.Contains(string(p), "://*.") }
-
 type originMatcher struct {
 	// exact is the canonical serialized form of a non-web origin.
 	exact string

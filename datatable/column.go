@@ -17,7 +17,7 @@ import (
 // The table's JSON graph remains authoritative for public field metadata.
 // XLSX writes scalar integer, float, decimal, boolean, date and date-time
 // cells as typed spreadsheet values when the codec text is exactly
-// representable; FormatWith output is always text.
+// representable.
 //
 // Example: datatable.ScalarCell(foundryhttp.StringQuery[string]())
 type Cell[V any] struct {
@@ -48,19 +48,6 @@ func NullableCell[V any](codec foundryhttp.QueryCodec[V]) Cell[value.Nullable[V]
 		}
 		return base.format(ctx, item, p)
 	}}
-}
-
-// FormatWith explicitly customizes human presentation without replacing the
-// field's JSON or filter contract. It must be concurrency-safe and bounded.
-// Custom presentation is exported as text in every format.
-func (c Cell[V]) FormatWith(format func(context.Context, V, Presentation) (string, error)) Cell[V] {
-	if format == nil {
-		c.err = invalid("cell formatter is missing")
-	} else {
-		c.format = format
-		c.kind = textCell
-	}
-	return c
 }
 
 // ColumnInfo describes one declared column for client inspection and export metadata.
