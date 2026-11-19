@@ -174,10 +174,7 @@ func (d JSON[T]) Decode(ctx context.Context, data []byte, limits JSONLimits) (T,
 		return *new(T), err
 	}
 	var result T
-	err := callback.Isolated("decode JSON DTO", func() error {
-		return decodeNativeJSON(data, &result)
-	})
-	if err := decodeJSONOutcome(ctx, err); err != nil {
+	if err := decodeJSONInto(ctx, data, &result); err != nil {
 		return *new(T), err
 	}
 	return result, nil
@@ -248,6 +245,13 @@ func decodeJSONOutcome(ctx context.Context, err error) error {
 	return nil
 }
 
-func decodeNativeJSON[T any](data []byte, result *T) error {
+func decodeNativeJSON(data []byte, result any) error {
 	return jsoncodec.UnmarshalExact(data, result, jsonv2.RejectUnknownMembers(true))
+}
+
+func decodeJSONInto(ctx context.Context, data []byte, result any) error {
+	err := callback.Isolated("decode JSON DTO", func() error {
+		return decodeNativeJSON(data, result)
+	})
+	return decodeJSONOutcome(ctx, err)
 }

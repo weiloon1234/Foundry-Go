@@ -42,6 +42,10 @@ func (l JSONEncodingLimits) Validate() error {
 // Panic and Goexit in codecs become internal faults.
 // Cancellation never abandons a codec that is still running or retaining resources.
 func EncodeJSON[T any](ctx context.Context, input T, limits JSONEncodingLimits) ([]byte, error) {
+	return encodeJSON(ctx, input, limits)
+}
+
+func encodeJSON(ctx context.Context, input any, limits JSONEncodingLimits) ([]byte, error) {
 	if ctx == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "JSON encoding requires a context")
 	}

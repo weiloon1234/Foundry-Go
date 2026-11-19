@@ -25,28 +25,38 @@ type ID[M any] struct {
 // following RFC 9562 section 5.7. Ordering within a millisecond, across clock
 // rollback, or across hosts is not guaranteed. IDs are not authentication secrets.
 func NewIDAt[M any](now time.Time) (ID[M], error) {
-	var id ID[M]
+	value, err := newIDAt(now)
+	return ID[M]{value: value}, err
+}
+
+func newIDAt(now time.Time) ([16]byte, error) {
+	var value [16]byte
 	// Compare time instants before UnixMilli, which can overflow for huge years.
 	if now.Before(time.UnixMilli(0)) || !now.Before(time.UnixMilli(1<<48)) {
-		return id, safeerror.NewFault(fault.Invalid, "UUIDv7 time is outside the 48-bit millisecond range")
+		return value, safeerror.NewFault(fault.Invalid, "UUIDv7 time is outside the 48-bit millisecond range")
 	}
-	rand.Read(id.value[:]) // crypto/rand.Read always fills the buffer or terminates.
+	rand.Read(value[:]) // crypto/rand.Read always fills the buffer or terminates.
 	millis := uint64(now.UnixMilli())
 	for i := 5; i >= 0; i-- {
-		id.value[i] = byte(millis)
+		value[i] = byte(millis)
 		millis >>= 8
 	}
-	id.value[6] = (id.value[6] & 0x0f) | 0x70
-	id.value[8] = (id.value[8] & 0x3f) | 0x80
-	return id, nil
+	value[6] = (value[6] & 0x0f) | 0x70
+	value[8] = (value[8] & 0x3f) | 0x80
+	return value, nil
 }
 
 // ParseID accepts exactly the canonical 8-4-4-4-12 hexadecimal UUID shape,
 // case-insensitively. Existing UUID versions and the nil UUID are preserved.
 func ParseID[M any](text string) (ID[M], error) {
-	var id ID[M]
+	value, err := parseID(text)
+	return ID[M]{value: value}, err
+}
+
+func parseID(text string) ([16]byte, error) {
+	var value [16]byte
 	if len(text) != 36 || text[8] != '-' || text[13] != '-' || text[18] != '-' || text[23] != '-' {
-		return id, safeerror.NewFault(fault.Invalid, "invalid UUID text")
+		return value, safeerror.NewFault(fault.Invalid, "invalid UUID text")
 	}
 	var compact [32]byte
 	j := 0
@@ -57,10 +67,10 @@ func ParseID[M any](text string) (ID[M], error) {
 		compact[j] = text[i]
 		j++
 	}
-	if _, err := hex.Decode(id.value[:], compact[:]); err != nil {
-		return ID[M]{}, safeerror.NewFault(fault.Invalid, "invalid UUID text")
+	if _, err := hex.Decode(value[:], compact[:]); err != nil {
+		return [16]byte{}, safeerror.NewFault(fault.Invalid, "invalid UUID text")
 	}
-	return id, nil
+	return value, nil
 }
 
 // IDFromBytes is the explicit binary decoding boundary.
@@ -73,17 +83,19 @@ func (id ID[M]) Bytes() [16]byte { return id.value }
 func (id ID[M]) IsZero() bool { return id.value == [16]byte{} }
 
 // String returns the identifier as a lowercase, hyphenated UUID string.
-func (id ID[M]) String() string {
+func (id ID[M]) String() string { return formatID(id.value) }
+
+func formatID(value [16]byte) string {
 	var out [36]byte
-	hex.Encode(out[:8], id.value[:4])
+	hex.Encode(out[:8], value[:4])
 	out[8] = '-'
-	hex.Encode(out[9:13], id.value[4:6])
+	hex.Encode(out[9:13], value[4:6])
 	out[13] = '-'
-	hex.Encode(out[14:18], id.value[6:8])
+	hex.Encode(out[14:18], value[6:8])
 	out[18] = '-'
-	hex.Encode(out[19:23], id.value[8:10])
+	hex.Encode(out[19:23], value[8:10])
 	out[23] = '-'
-	hex.Encode(out[24:], id.value[10:])
+	hex.Encode(out[24:], value[10:])
 	return string(out[:])
 }
 
@@ -102,10 +114,10 @@ func (id *ID[M]) UnmarshalText(data []byte) error {
 
 // UnmarshalJSON decodes a JSON identifier, replacing the receiver only on success.
 func (id *ID[M]) UnmarshalJSON(data []byte) error {
-	parsed, err := textvalue.Decode(data, ParseID[M])
+	parsed, err := textvalue.Decode(data, parseID)
 	if err != nil {
 		return err
 	}
-	*id = parsed
+	*id = ID[M]{value: parsed}
 	return nil
 }

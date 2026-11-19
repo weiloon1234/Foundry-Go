@@ -48,6 +48,10 @@ func (d JSON[T]) Encode(ctx context.Context, input T, limits JSONLimits) ([]byte
 	if err := d.Validate(); err != nil {
 		return nil, err
 	}
+	return encodeJSON(ctx, input, limits, d.schema)
+}
+
+func encodeJSON(ctx context.Context, input any, limits JSONLimits, schema *compiledSchema) ([]byte, error) {
 	if err := limits.Validate(); err != nil {
 		return nil, err
 	}
@@ -67,7 +71,7 @@ func (d JSON[T]) Encode(ctx context.Context, input T, limits JSONLimits) ([]byte
 	if err != nil {
 		return nil, encodeFailure(nil, err)
 	}
-	issues, err := d.schema.check(ctx, node, shapeLimits{steps: limits.Steps, issues: limits.Issues})
+	issues, err := schema.check(ctx, node, shapeLimits{steps: limits.Steps, issues: limits.Issues})
 	if err != nil {
 		return nil, encodeFailure(issues, err)
 	}

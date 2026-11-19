@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Build time
+
+- JSON DTO encoding and decoding, `value.EncodeJSON` and `model.ID` parsing and
+  formatting keep the work that does not depend on the type parameter in
+  non-generic helpers, so it compiles once instead of once per DTO or model type.
+  Five paired builds against v0.47.0: cold-build compiler CPU −3.5% (Starter),
+  −4.4% (Boss Club), −5.5% (Semaklah); build cache −1.8% to −2.5%. Eighteen
+  runtime benchmarks show no extra allocation and latency within 3%. No public
+  API, wire format or persisted data changes.
+
 ## v0.47.0 — 2026-11-19
 
 Remove 203 public functions and methods without a typed caller in the inspected

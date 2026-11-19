@@ -95,8 +95,8 @@ func (v *Nullable[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func isNull(data []byte) bool    { return bytes.Equal(bytes.TrimSpace(data), []byte("null")) }
-func isNullable[T any](v T) bool { _, ok := any(v).(interface{ nullableValue() }); return ok }
+func isNull(data []byte) bool { return bytes.Equal(bytes.TrimSpace(data), []byte("null")) }
+func isNullable(v any) bool   { _, ok := v.(interface{ nullableValue() }); return ok }
 
 // IsNullableType reports whether T carries Foundry's nullable-value contract.
 // It inspects type capability without invoking methods or reading a value.
@@ -109,7 +109,7 @@ func IsOptionalType[T any]() bool {
 	return ok
 }
 
-func marshalPresent[T any](v T) ([]byte, error) {
+func marshalPresent(v any) ([]byte, error) {
 	data, err := jsoncodec.Marshal(v)
 	if err != nil {
 		return nil, jsoncodec.MethodError(err)
