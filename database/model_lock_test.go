@@ -87,7 +87,7 @@ func TestLockedFirstSharesOrderingAndCallerTransaction(t *testing.T) {
 		t.Fatal("canceled query changed error", err)
 	}
 	id := mutationFields.Key()
-	if _, err := rows.ForUpdate(rows.Read(rows.SelectValue(mutationModel(), orm.KeyExpr(id)))).All(t.Context(), nil); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.ForUpdate(rows.Read(rows.SelectValue(mutationModel(), id))).All(t.Context(), nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal("scalar locked read accepted nil transaction", err)
 	}
 }

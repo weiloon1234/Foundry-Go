@@ -10,7 +10,7 @@
 
 Further reading: [Transaction outcomes](#transaction-ownership-and-failures).
 
-`orm.Table[M, K]` creates, updates and deletes complete models with concrete key and assignment types. Per-kind functions such as `orm.TextSet` construct `orm.Assignment[M]` values. Writes use the shared mutation compiler, codecs and complete `RETURNING` hydration.
+`orm.Table[M, K]` creates, updates and deletes complete models with concrete key and assignment types. `orm.Set`, `orm.SetNull` and `orm.SetIfPresent` construct `orm.Assignment[M]` values. Writes use the shared mutation compiler, codecs and complete `RETURNING` hydration.
 
 <a id="recipe-write-models"></a>
 ## Create and update
@@ -21,21 +21,21 @@ Further reading: [Transaction outcomes](#transaction-ownership-and-failures).
 ```go
 func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
 	f := hooks.Members
-	return orm.Insert(ctx, tx, f.Table, orm.KeySet(f.Key(), id), orm.InputTextSet(f.Name, "Ada"), orm.ColumnSet(f.Body, []byte{}))
+	return orm.Insert(ctx, tx, f.Table, orm.Set(f.Key(), id), orm.Set(f.Name, "Ada"), orm.Set(f.Body, []byte{}))
 }
 ```
 
 <!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#writes-after -->
 ```go
 func write(ctx context.Context, tx *database.Tx, id int64) error {
-	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "Ada"), orm.NullableInputTextSetNull(hooks.Members.Note))
+	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))
 	return err
 }
 ```
 
 The examples use the [compiled member declaration](../../tests/fixtures/goway/models/hooks/models.go). `orm.Insert` takes the concrete table. `orm.Update` and `orm.Delete` take its query and key handle, retaining the declared key type and any tenant or authorization predicates. No match returns `database.NotFound`, discoverable through `errors.Is`.
 
-Assignments leave the caller's inputs unchanged. Omission emits no assignment: on insert PostgreSQL supplies its default or NULL; on update the stored value stays unchanged. `orm.NumberSet(column, 0)`, `orm.ColumnSet(column, false)` and `orm.TextSet(column, "")` supply values. Nullable family functions such as `orm.NullableTextSetNull(column)` write SQL NULL. Inside a before-write hook, `orm.WriteUnset` removes an assignment and restores omission.
+Assignments leave the caller's inputs unchanged. Omission emits no assignment: on insert PostgreSQL supplies its default or NULL; on update the stored value stays unchanged. `orm.Set(column, 0)`, `orm.Set(column, false)` and `orm.Set(column, "")` supply values. Nullable family functions such as `orm.SetNull(column)` write SQL NULL. Inside a before-write hook, `orm.WriteUnset` removes an assignment and restores omission.
 
 Required fields without defaults must be supplied. `foundry:"default=database"` permits omission but neither creates nor verifies the SQL default. Migrations own the schema. An omitted `model.ID[M]` primary receives a UUIDv7 unless it has a database default or a distinct mutation input. Natural keys require a supplied value or a database default. An explicitly supplied key is never replaced.
 
@@ -62,11 +62,11 @@ When changing such a column, acquire `FOR UPDATE` first, in the same transaction
 ```go
 func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
 	return db.Transaction(ctx, func(tx *database.Tx) error {
-		selected := hooks.Members.Table.Query().Where(orm.KeyEq(hooks.Members.Table.Key(), id))
+		selected := hooks.Members.Table.Query().Where(orm.Eq(hooks.Members.Table.Key(), id))
 		if _, err := orm.RequireLocked(ctx, tx, orm.Lock(selected)); err != nil {
 			return err
 		}
-		_, err := orm.Update(ctx, tx, selected, hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "guest"))
+		_, err := orm.Update(ctx, tx, selected, hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "guest"))
 		return err
 	})
 }

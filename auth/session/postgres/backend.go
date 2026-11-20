@@ -97,9 +97,9 @@ func (b *Backend) now() (time.Time, error) {
 }
 func entries(scope, subject string) orm.Query[sessionstore.Entry] {
 	f := sessionstore.Entries
-	q := sessionstore.Entries.Query().Where(orm.TextEq(f.Scope, scope))
+	q := sessionstore.Entries.Query().Where(orm.Eq(f.Scope, scope))
 	if subject != "" {
-		q = q.Where(orm.TextEq(f.SubjectKey, subject))
+		q = q.Where(orm.Eq(f.SubjectKey, subject))
 	}
 	return q
 }
@@ -117,7 +117,7 @@ func lockSubject(ctx context.Context, tx *database.Tx, address session.Address, 
 		if err != nil {
 			return sessionstore.Subject{}, false, err
 		}
-		draft := []orm.Assignment[sessionstore.Subject]{orm.KeySet(sessionstore.Subjects.Key(), key), orm.TextSet(sessionstore.Subjects.Scope, scope), orm.JSONSet(sessionstore.Subjects.Identity, data)}
+		draft := []orm.Assignment[sessionstore.Subject]{orm.Set(sessionstore.Subjects.Key(), key), orm.Set(sessionstore.Subjects.Scope, scope), orm.Set(sessionstore.Subjects.Identity, data)}
 		// First-subject races can hit the primary key or UNIQUE (key, scope).
 		// Cover both, then retain the scoped locking read and identity checks.
 		if _, err := orm.Upsert(ctx, tx, sessionstore.Subjects.Query(), orm.OnConflict[sessionstore.Subject]().DoNothing(), draft...); err != nil {
@@ -131,7 +131,7 @@ func lockSubjectKey(ctx context.Context, tx *database.Tx, address session.Addres
 	if err != nil {
 		return sessionstore.Subject{}, false, err
 	}
-	found, err := orm.FirstLocked(ctx, tx, orm.Lock(sessionstore.Subjects.Query().Where(orm.TextEq(sessionstore.Subjects.Scope, scope)).Where(orm.KeyEq(sessionstore.Subjects.Key(), key))))
+	found, err := orm.FirstLocked(ctx, tx, orm.Lock(sessionstore.Subjects.Query().Where(orm.Eq(sessionstore.Subjects.Scope, scope)).Where(orm.Eq(sessionstore.Subjects.Key(), key))))
 	if err != nil {
 		return sessionstore.Subject{}, false, err
 	}

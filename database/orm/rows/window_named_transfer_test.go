@@ -2,8 +2,6 @@ package rows_test
 
 import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -17,7 +15,7 @@ import (
 
 func TestNamedWindowsShareDefinitionsAndBindings(t *testing.T) {
 	q := rows.From(recursionTable.Query())
-	f := expr.Value(orm.KeyExpr(recursionTable.Key()))
+	f := expr.Value(recursionTable.Key())
 	base := expr.WindowFor(rows.ModelScope(recursionTable.Query())).PartitionBy(expr.Group(f)).Named("partition")
 	ordered := base.OrderBy(expr.Asc(f)).Named("ordered")
 	framed := ordered.RowsBetween(expr.Preceding(2), expr.CurrentRow()).Named("framed")
@@ -41,7 +39,7 @@ func TestNamedWindowsShareDefinitionsAndBindings(t *testing.T) {
 }
 func TestNamedWindowInheritanceAndCycles(t *testing.T) {
 	q := rows.From(recursionTable.Query())
-	f := expr.Value(orm.KeyExpr(recursionTable.Key()))
+	f := expr.Value(recursionTable.Key())
 	base := expr.WindowFor(rows.ModelScope(recursionTable.Query())).OrderBy(expr.Asc(f)).Named("ordered")
 	framed := base.RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
 	for name, w := range map[string]expr.Window[recursionRecord]{
@@ -73,7 +71,7 @@ func TestNamedWindowInheritanceAndCycles(t *testing.T) {
 }
 func TestNamedWindowQueryIsolationAndQualification(t *testing.T) {
 	q := rows.From(recursionTable.Query())
-	f := expr.Value(orm.KeyExpr(recursionTable.Key()))
+	f := expr.Value(recursionTable.Key())
 	w := expr.WindowFor(rows.ModelScope(recursionTable.Query()))
 	inner := rows.LimitScalar(rows.SelectScalar(q, expr.RowNumber(w.OrderBy(expr.Asc(f)).Named("same"))), 1)
 	outer := rows.OrderScalar(rows.SelectScalar(q, expr.AsSelected(rows.ScalarRowQuery(q, inner))), expr.AscValue(expr.RowNumber(w.OrderBy(expr.Desc(f)).Named("same"))))

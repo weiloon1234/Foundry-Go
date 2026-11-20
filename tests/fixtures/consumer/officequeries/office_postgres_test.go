@@ -39,14 +39,14 @@ func setup(t *testing.T) offices {
 	}
 	ctx := t.Context()
 	region := func(name string) officequeries.Region {
-		r, err := orm.Insert(ctx, db, officequeries.Regions.Table, orm.TextSet(officequeries.Regions.Name, name), orm.TextSet(officequeries.Regions.Code, "r-"+name))
+		r, err := orm.Insert(ctx, db, officequeries.Regions.Table, orm.Set(officequeries.Regions.Name, name), orm.Set(officequeries.Regions.Code, "r-"+name))
 		if err != nil {
 			t.Fatal(err)
 		}
 		return r
 	}
 	office := func(region officequeries.Region, name string) officequeries.Office {
-		o, err := orm.Insert(ctx, db, officequeries.Offices.Table, orm.ColumnSet(officequeries.Offices.RegionID, region.ID), orm.TextSet(officequeries.Offices.Name, name), orm.TextSet(officequeries.Offices.Code, "o-"+name))
+		o, err := orm.Insert(ctx, db, officequeries.Offices.Table, orm.Set(officequeries.Offices.RegionID, region.ID), orm.Set(officequeries.Offices.Name, name), orm.Set(officequeries.Offices.Code, "o-"+name))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -60,7 +60,7 @@ func setup(t *testing.T) offices {
 		name   string
 		salary int64
 	}{{f.alpha, "ann", 10}, {f.alpha, "bob", 30}, {f.alpha, "cid", 20}, {f.beta, "dee", 5}, {f.xi, "eve", 7}} {
-		if _, err := orm.Insert(ctx, db, officequeries.Employees.Table, orm.ColumnSet(officequeries.Employees.OfficeID, employee.office.ID), orm.TextSet(officequeries.Employees.Name, employee.name), orm.NumberSet(officequeries.Employees.Salary, employee.salary), orm.TimeSet(officequeries.Employees.HiredAt, base.Add(time.Duration(i)*time.Hour))); err != nil {
+		if _, err := orm.Insert(ctx, db, officequeries.Employees.Table, orm.Set(officequeries.Employees.OfficeID, employee.office.ID), orm.Set(officequeries.Employees.Name, employee.name), orm.Set(officequeries.Employees.Salary, employee.salary), orm.Set(officequeries.Employees.HiredAt, base.Add(time.Duration(i)*time.Hour))); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -80,7 +80,7 @@ func TestRelationshipsThroughAnIntermediate(t *testing.T) {
 	f := setup(t)
 	ctx := t.Context()
 	regions, err := orm.All(ctx, f.db, officequeries.Regions.Query().With(officequeries.RegionLinks.Employees).
-		OrderBy(orm.TextAsc(officequeries.Regions.Name)))
+		OrderBy(orm.Asc(officequeries.Regions.Name)))
 	if err != nil || len(regions) != 2 {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestRelationshipsThroughAnIntermediate(t *testing.T) {
 		t.Fatal(err)
 	}
 	regions, err = orm.All(ctx, f.db, officequeries.Regions.Query().With(officequeries.RegionLinks.Employees).
-		Where(orm.KeyEq(officequeries.Regions.ID, f.north.ID)))
+		Where(orm.Eq(officequeries.Regions.ID, f.north.ID)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,12 +105,12 @@ func TestRelationshipsThroughAnIntermediate(t *testing.T) {
 		t.Fatal("intermediate scope ignored", names(north))
 	}
 	e := officequeries.Employees
-	withSouth, err := orm.All(ctx, f.db, officequeries.Regions.Query().Where(orm.Has(officequeries.RegionLinks.Employees.Where(orm.TextEq(e.Name, "eve")))))
+	withSouth, err := orm.All(ctx, f.db, officequeries.Regions.Query().Where(orm.Has(officequeries.RegionLinks.Employees.Where(orm.Eq(e.Name, "eve")))))
 	if err != nil || len(withSouth) != 1 || withSouth[0].ID != f.south.ID {
 		t.Fatal("WhereHas through the intermediate", withSouth, err)
 	}
 	employees, err := orm.All(ctx, f.db, officequeries.Employees.Query().With(officequeries.EmployeeLinks.Region).
-		Where(orm.TextEq(e.Name, "eve")))
+		Where(orm.Eq(e.Name, "eve")))
 	if err != nil || len(employees) != 1 {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestRelationshipsThroughAnIntermediate(t *testing.T) {
 func assertLatestHires(t *testing.T, f offices, north, south string) {
 	t.Helper()
 	latest, err := orm.All(t.Context(), f.db, officequeries.Regions.Query().With(officequeries.RegionLinks.LatestHire).
-		OrderBy(orm.TextAsc(officequeries.Regions.Name)))
+		OrderBy(orm.Asc(officequeries.Regions.Name)))
 	if err != nil || len(latest) != 2 {
 		t.Fatal("one-of-many through an intermediate", err)
 	}
@@ -150,7 +150,7 @@ func TestOneOfManyAndAdHocAggregates(t *testing.T) {
 	ctx := t.Context()
 	r := officequeries.OfficeLinks
 	loaded, err := orm.All(ctx, f.db, officequeries.Offices.Query().With(r.Newest, r.Earliest, r.TopEarner).
-		Where(orm.KeyEq(officequeries.Offices.ID, f.alpha.ID)))
+		Where(orm.Eq(officequeries.Offices.ID, f.alpha.ID)))
 	if err != nil || len(loaded) != 1 {
 		t.Fatal(err)
 	}
@@ -165,14 +165,14 @@ func TestOneOfManyAndAdHocAggregates(t *testing.T) {
 		t.Fatal("one-of-many choices", one(loaded[0].Earliest), one(loaded[0].TopEarner), one(loaded[0].Newest))
 	}
 	e := officequeries.Employees
-	cheap, err := orm.All(ctx, f.db, officequeries.Offices.Query().With(r.TopEarner.Where(orm.NumberLt(e.Salary, 25))).
-		Where(orm.KeyEq(officequeries.Offices.ID, f.alpha.ID)))
+	cheap, err := orm.All(ctx, f.db, officequeries.Offices.Query().With(r.TopEarner.Where(orm.Lt(e.Salary, 25))).
+		Where(orm.Eq(officequeries.Offices.ID, f.alpha.ID)))
 	if err != nil || one(cheap[0].TopEarner) != "cid" {
 		t.Fatal("filters take part in the one-of-many choice", err)
 	}
 	headcount := expr.RelatedValue(r.Colleagues, expr.Count[officequeries.Employee]())
-	payroll := expr.RelatedValue(r.Colleagues, expr.Sum(orm.NumberExpr(e.Salary)))
-	ranked, err := rows.ReadRecord(rows.WithValue(expr.OrderBy(officequeries.Offices.Query(), expr.Desc(headcount), expr.Asc(expr.Value(orm.TextExpr(officequeries.Offices.Name)))), payroll)).All(ctx, f.db)
+	payroll := expr.RelatedValue(r.Colleagues, expr.Sum(e.Salary))
+	ranked, err := rows.ReadRecord(rows.WithValue(expr.OrderBy(officequeries.Offices.Query(), expr.Desc(headcount), expr.Asc(expr.Value(officequeries.Offices.Name))), payroll)).All(ctx, f.db)
 	if err != nil || len(ranked) != 3 || ranked[0].Model.ID != f.alpha.ID {
 		t.Fatal("ordering by relation count", ranked, err)
 	}
@@ -204,7 +204,7 @@ func TestPolymorphicRelationshipsUseTypedMorphNames(t *testing.T) {
 	note("office", f.north.Code, "no such office")
 
 	offices, err := orm.All(ctx, f.db, officequeries.Offices.Query().With(officequeries.OfficeLinks.Notes).
-		Where(orm.KeyEq(officequeries.Offices.ID, f.alpha.ID)))
+		Where(orm.Eq(officequeries.Offices.ID, f.alpha.ID)))
 	if err != nil || len(offices) != 1 {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestPolymorphicRelationshipsUseTypedMorphNames(t *testing.T) {
 		t.Fatal("morph-many ignored the morph name", notes)
 	}
 	regions, err := orm.All(ctx, f.db, officequeries.Regions.Query().With(officequeries.RegionLinks.Notes).
-		Where(orm.KeyEq(officequeries.Regions.ID, f.north.ID)))
+		Where(orm.Eq(officequeries.Regions.ID, f.north.ID)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestPolymorphicRelationshipsUseTypedMorphNames(t *testing.T) {
 	}
 	r := officequeries.NoteLinks
 	notes, err := orm.All(ctx, f.db, officequeries.Notes.Query().With(r.Region, r.Office).
-		OrderBy(orm.TextAsc(officequeries.Notes.Body)))
+		OrderBy(orm.Asc(officequeries.Notes.Body)))
 	if err != nil || len(notes) != 3 {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestPolymorphicRelationshipsUseTypedMorphNames(t *testing.T) {
 		t.Fatal("morph-to existence", withRegion, err)
 	}
 
-	label, err := orm.Insert(ctx, f.db, officequeries.Labels.Table, orm.TextSet(officequeries.Labels.Name, "remote"))
+	label, err := orm.Insert(ctx, f.db, officequeries.Labels.Table, orm.Set(officequeries.Labels.Name, "remote"))
 	if err != nil {
 		t.Fatal(err)
 	}

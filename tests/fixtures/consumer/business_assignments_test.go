@@ -18,11 +18,11 @@ func TestCurrentEmailAssignmentSuppliesExactInput(t *testing.T) {
 			inspectInsertAssignments(t, models.Users.Table, []orm.Assignment[models.User]{assignment}, func(write *orm.Write[models.User]) {
 				actual, present := orm.WriteGet(write, func() func(arg0 string) orm.Assignment[models.User] {
 					receiver := models.Users.Email
-					return func(arg0 string) orm.Assignment[models.User] { return orm.TextSet(receiver, arg0) }
+					return func(arg0 string) orm.Assignment[models.User] { return orm.Set(receiver, arg0) }
 				}()).Get()
 				if !present || !orm.WriteIsSet(write, func() func(arg0 string) orm.Assignment[models.User] {
 					receiver := models.Users.Email
-					return func(arg0 string) orm.Assignment[models.User] { return orm.TextSet(receiver, arg0) }
+					return func(arg0 string) orm.Assignment[models.User] { return orm.Set(receiver, arg0) }
 				}()) || actual != email {
 					t.Error("email assignment lost presence or its captured value")
 				}
@@ -44,11 +44,11 @@ func TestCreatorAssignmentSuppliesExactUserKey(t *testing.T) {
 			inspectInsertAssignments(t, models.Users.Table, []orm.Assignment[models.User]{assignment}, func(write *orm.Write[models.User]) {
 				actual, present := orm.WriteGet(write, func() func(arg0 model.ID[models.User]) orm.Assignment[models.User] {
 					receiver := models.Users.ID
-					return func(arg0 model.ID[models.User]) orm.Assignment[models.User] { return orm.KeySet(receiver, arg0) }
+					return func(arg0 model.ID[models.User]) orm.Assignment[models.User] { return orm.Set(receiver, arg0) }
 				}()).Get()
 				if !present || !orm.WriteIsSet(write, func() func(arg0 model.ID[models.User]) orm.Assignment[models.User] {
 					receiver := models.Users.ID
-					return func(arg0 model.ID[models.User]) orm.Assignment[models.User] { return orm.KeySet(receiver, arg0) }
+					return func(arg0 model.ID[models.User]) orm.Assignment[models.User] { return orm.Set(receiver, arg0) }
 				}()) || actual != id {
 					t.Error("creator assignment lost presence or its captured User key")
 				}

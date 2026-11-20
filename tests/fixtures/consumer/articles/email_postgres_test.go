@@ -18,7 +18,7 @@ func TestStoredModelAttachmentsCanBeEmailed(t *testing.T) {
 	var row articles.Article
 	s.read(t, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		row, err = orm.Require(ctx, tx, articles.Articles.Query().With(s.x.Logo.Relation(articles.Articles.Logo), s.x.Galleries.Relation(articles.Articles.Galleries)).Where(orm.KeyEq(articles.Articles.Key(), s.full.ID)))
+		row, err = orm.Require(ctx, tx, articles.Articles.Query().With(s.x.Logo.Relation(articles.Articles.Logo), s.x.Galleries.Relation(articles.Articles.Galleries)).Where(orm.Eq(articles.Articles.Key(), s.full.ID)))
 		return err
 	})
 	from, err := email.ParseAddress("sender@example.test")

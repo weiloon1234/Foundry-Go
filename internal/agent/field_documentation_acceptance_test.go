@@ -38,10 +38,10 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 	}
 	probes := []fieldDocProbe{
 		{"sensitive-password-field", "passwords/account_postgres_test.go", "return account.", "Digest", "/passwords/account.go", []string{"Sensitive stored password hash", "password.Codec", "redacted", "Compare-and-swap"}},
-		{"raw-field-both", "mutatorqueries/accessors_test.go", "storedEmail := member.", "Email", "/mutatorqueries/member.go", []string{"Email is the delivery address stored in email_address", "Call AccessEmail explicitly", "MutateEmail runs during persistence through orm.InputTextSet(Members.Email", "assigning this field does not invoke it"}},
+		{"raw-field-both", "mutatorqueries/accessors_test.go", "storedEmail := member.", "Email", "/mutatorqueries/member.go", []string{"Email is the delivery address stored in email_address", "Call AccessEmail explicitly", "MutateEmail runs during persistence through orm.Set(Members.Email", "assigning this field does not invoke it"}},
 		{"raw-field-getter", "mutatorqueries/accessors_test.go", "if member.", "ID", "/mutatorqueries/member.go", []string{"ID is the database identity", "Stored reads keep the key", "call AccessID explicitly for presentation"}},
-		{"raw-field-setter", "mutatorqueries/accessors_test.go", "|| member.", "Attempts", "/mutatorqueries/member.go", []string{"Attempts stores the persisted count", "MutateAttempts runs during persistence through orm.InputNumberSet(Members.Attempts", "Direct assignment"}},
-		{"query-field", "mutatorqueries/mutators_postgres_test.go", "q.Query().Where(orm.InputTextEq(f.", "Email", "/mutatorqueries/orm.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail", "delivery address."}},
+		{"raw-field-setter", "mutatorqueries/accessors_test.go", "|| member.", "Attempts", "/mutatorqueries/member.go", []string{"Attempts stores the persisted count", "MutateAttempts runs during persistence through orm.Set(Members.Attempts", "Direct assignment"}},
+		{"query-field", "mutatorqueries/mutators_postgres_test.go", "q.Query().Where(orm.Eq(f.", "Email", "/mutatorqueries/orm.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail", "delivery address."}},
 		{"extension-slot-field", "articles/cleanup_postgres_test.go", "if article.", "Title", "/articles/article.go", []string{"Extension slot, not a column", "foundry_model_translations", "ArticleSlots.Title", "From(runtime)", "localized article heading shown to readers"}},
 		{"draft-setter", "mutatorqueries/mutators_postgres_test.go", "mutatorqueries.Members.", "Email", "/mutatorqueries/orm.go", []string{"MutateEmail", "not during assignment construction", "delivery address."}},
 		{"config-group", "startupconfig/settings_test.go", "Overrides: []config.Override[startupconfig.Settings]{keys.", "HTTP", "/startupconfig/settings_foundry.gen.go", []string{"public listener", "request timeout"}},
@@ -51,7 +51,7 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		{"projection-selection", "projectionqueries/projections_postgres_test.go", "rows.Map(reports.UserSummaries.", "Email", "/reports/rows.go", []string{"buyer contact address selected for this report"}},
 		{"orm-row-selection", "reporting/members.go", "rows.MapSelected(MemberRows.", "Name", "/reporting/rows.go", []string{"Display name selected for the member report"}},
 		{"extension-descriptor", "articles/loading_postgres_test.go", "s.x.", "Title", "/articles/tables.go", []string{"localized article heading shown to readers", "keeps its locale input and owner", "ArticleSlots.Title.Rule"}},
-		{"changes-field", "mutatorqueries/changes_postgres_test.go", "orm.ChangeOf(changes, orm.InputTextExpr(q.", "Email", "/mutatorqueries/orm.go", []string{"delivery address.", "stored values", "MutateEmail"}},
+		{"changes-field", "mutatorqueries/changes_postgres_test.go", "orm.ChangeOf(changes, q.", "Email", "/mutatorqueries/orm.go", []string{"delivery address.", "stored values", "MutateEmail"}},
 		{"json-property", "jsonqueries/path_postgres_test.go", "expr.JSONProperty(prefs, jsonqueries.", "Theme", "/jsonqueries/tables.go", []string{"reader appearance", "omitted uses the application default"}},
 	}
 
@@ -229,14 +229,14 @@ func TestRealGoplsStoredFieldCapabilities(t *testing.T) {
 		name, file, prefix, symbol, insert string
 		functions, forbidden               []string
 	}{
-		{"text-methodless", "mutatorqueries/mutators_postgres_test.go", "orm.InputTextEq(f.Email", ",", ".", nil, nil},
-		{"numeric-methodless", "mutatorqueries/mutators_postgres_test.go", "orm.InputNumberSet(mutatorqueries.Members.Attempts", ",", ".", nil, nil},
-		{"nullable-methodless", "generated_test.go", "orm.NullableTextSetNull(fields.Nickname", ")", ".", nil, nil},
-		{"required-methodless", "generated_test.go", "orm.TextSet(fields.Email", ",", ".", nil, nil},
-		{"text-functions", "mutatorqueries/mutators_postgres_test.go", "orm.", "InputTextEq", "", []string{"InputTextEq", "InputTextLike", "InputTextContains", "InputTextSet"}, []string{"InputTextSetNull"}},
-		{"numeric-functions", "mutatorqueries/mutators_postgres_test.go", "orm.", "InputNumberSet", "", []string{"InputNumberEq", "InputNumberGte", "InputNumberSet", "InputNumberAsc"}, []string{"InputNumberLike"}},
-		{"nullable-clearing", "generated_test.go", "orm.", "NullableTextSetNull", "", []string{"NullableTextSet", "NullableTextSetNull"}, nil},
-		{"required-no-clearing", "generated_test.go", "orm.", "TextSet", "", []string{"TextSet"}, []string{"TextSetNull"}},
+		{"text-methodless", "mutatorqueries/mutators_postgres_test.go", "orm.Eq(f.Email", ",", ".", nil, nil},
+		{"numeric-methodless", "mutatorqueries/mutators_postgres_test.go", "orm.Set(mutatorqueries.Members.Attempts", ",", ".", nil, nil},
+		{"nullable-methodless", "generated_test.go", "orm.SetNull(fields.Nickname", ")", ".", nil, nil},
+		{"required-methodless", "generated_test.go", "orm.Set(fields.Email", ",", ".", nil, nil},
+		{"text-functions", "mutatorqueries/mutators_postgres_test.go", "orm.", "Eq", "", []string{"Eq", "Like", "Contains", "Set"}, []string{"InputTextSet", "TextEq"}},
+		{"numeric-functions", "mutatorqueries/mutators_postgres_test.go", "orm.", "Set", "", []string{"Eq", "Gte", "Set", "Asc"}, []string{"InputNumberSet", "NumberGte"}},
+		{"nullable-clearing", "generated_test.go", "orm.", "SetNull", "", []string{"Set", "SetNull"}, []string{"NullableTextSetNull"}},
+		{"required-no-clearing", "generated_test.go", "orm.", "Set", "", []string{"Set"}, []string{"TextSet", "TextSetNull"}},
 	} {
 		t.Run(probe.name, func(t *testing.T) {
 			parallelRealGopls(t)

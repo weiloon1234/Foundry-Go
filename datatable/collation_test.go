@@ -8,7 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/orm"
+
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -29,7 +29,7 @@ func TestUnionTextCollationSkipsMarkedResult(t *testing.T) {
 	})
 	source := rows.From(enumSortModels.Query())
 	plain := rows.RecordOf(rows.Select(source, schema, rows.MapSelected(schema.Status, expr.RawWithCodec[enumSortRecord](codec.Nullable(codec.String[enumSortStatus]()), "NULL"))))
-	marked := rows.RecordOf(rows.Select(source, schema, rows.Map(schema.Status, expr.Value(orm.NullableEnumExpr(enumSortModels.OptStatus)))))
+	marked := rows.RecordOf(rows.Select(source, schema, rows.Map(schema.Status, expr.Value(enumSortModels.OptStatus))))
 	for _, set := range []rows.SetQuery[result]{rows.Union(plain, marked), rows.Union(marked, plain)} {
 		selected := expr.AsSelected(rows.At(set.Scope(), schema.Status))
 		query := rows.SelectScalar(set, selected)

@@ -168,17 +168,17 @@ func (f Field[M, K]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, ow
 		localeNames[i] = string(id)
 	}
 	fields := store.Translations
-	base := store.Translations.Query().Where(orm.TextEq(fields.Scope, f.definition.owner.Scope()), orm.TextIn(fields.SubjectKey, keys...), orm.TextEq(fields.Field, string(f.Name())), orm.TextIn(fields.Locale, localeNames...))
+	base := store.Translations.Query().Where(orm.Eq(fields.Scope, f.definition.owner.Scope()), orm.In(fields.SubjectKey, keys...), orm.Eq(fields.Field, string(f.Name())), orm.In(fields.Locale, localeNames...))
 	// UNIQUE(scope,subject_key,field,locale) bounds the pages structurally.
 	limit := len(keys) * len(ids)
 	rows, bytes, after := 0, 0, ""
 	for {
 		page := base
 		if after != "" {
-			page = page.Where(orm.TextGt(fields.KeyColumn, after))
+			page = page.Where(orm.Gt(fields.KeyColumn, after))
 		}
 		count := 0
-		err := orm.Each(ctx, tx, page.OrderBy(orm.TextAsc(fields.KeyColumn)).Limit(MaxBatchRows), func(row store.Translation) error {
+		err := orm.Each(ctx, tx, page.OrderBy(orm.Asc(fields.KeyColumn)).Limit(MaxBatchRows), func(row store.Translation) error {
 			count++
 			rows++
 			after = row.Key

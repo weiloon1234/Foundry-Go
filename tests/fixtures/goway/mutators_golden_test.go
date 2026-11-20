@@ -27,7 +27,7 @@ func TestMutatorsOldAndNewAgree(t *testing.T) {
 		if err := orm.Check(q); err != nil {
 			t.Fatal(err)
 		}
-		member, err := orm.Insert(t.Context(), db, q.Table, orm.KeySet(q.Key(), 7), orm.InputTextSet(q.Email, coremodels.EmailInput{Address: " ADA@EXAMPLE.TEST "}), orm.InputTextSet(q.Name, " Ada "), orm.InputColumnSet(q.Body, coremodels.BinaryInput{1, 2}), orm.ColumnSet(q.Enabled, false))
+		member, err := orm.Insert(t.Context(), db, q.Table, orm.Set(q.Key(), 7), orm.Set(q.Email, coremodels.EmailInput{Address: " ADA@EXAMPLE.TEST "}), orm.Set(q.Name, " Ada "), orm.Set(q.Body, coremodels.BinaryInput{1, 2}), orm.Set(q.Enabled, false))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,11 +35,11 @@ func TestMutatorsOldAndNewAgree(t *testing.T) {
 		if err != nil || link != "mailto:ada@example.test" {
 			t.Fatal("new accessor", err)
 		}
-		_, err = orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 7, orm.NullableInputTextSet(q.Note, coremodels.LabelInput{Text: " note "}))
+		_, err = orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 7, orm.Set(q.Note, coremodels.LabelInput{Text: " note "}))
 		if err != nil {
 			t.Fatal(err)
 		}
-		member, err = orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 7, orm.NullableInputTextSetNull(q.Note))
+		member, err = orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 7, orm.SetNull(q.Note))
 		if err != nil || !member.Note.IsNull() {
 			t.Fatal("new null", err)
 		}
@@ -70,7 +70,7 @@ func TestInputPrimaryKeyOldAndNewAgree(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := orm.Insert(t.Context(), db, q.Table, orm.InputKeySet(q.ID, newmodels.FreshID{Value: id}))
+		got, err := orm.Insert(t.Context(), db, q.Table, orm.Set(q.ID, newmodels.FreshID{Value: id}))
 		if err != nil || got.ID != id {
 			t.Fatal("new key input", err)
 		}

@@ -33,17 +33,17 @@ func compilerTable(name string) compilerFields {
 func TestQueryAndBindingsAreIndependent(t *testing.T) {
 	f := compilerTable("users")
 	values := []int{1, 2}
-	p := NumberIn(f.Age, values...)
+	p := In(f.Age, values...)
 	values[0] = 99
 	s, err := Compile(f.Query().Where(p))
 	if err != nil || !reflect.DeepEqual(s.Arguments(), []any{"{1,2}"}) {
 		t.Fatal("membership borrowed inputs", s.Arguments(), err)
 	}
-	base := f.Query().Where(TextEq(f.Name, "base")).OrderBy(TextAsc(f.Name))
+	base := f.Query().Where(Eq(f.Name, "base")).OrderBy(Asc(f.Name))
 	var group sync.WaitGroup
 	for i := range 32 {
 		group.Go(func() {
-			q := base.Where(NumberGte(f.Age, i)).OrderBy(NumberDesc(f.Age))
+			q := base.Where(Gte(f.Age, i)).OrderBy(Desc(f.Age))
 			if _, err := Compile(q); err != nil {
 				t.Error(err)
 			}
@@ -56,13 +56,13 @@ func TestQueryAndBindingsAreIndependent(t *testing.T) {
 	if len(base.state.ast.Predicates) != 1 || len(base.state.ast.Orders) != 1 {
 		t.Fatal("base query mutated")
 	}
-	if _, err := Compile(f.Query().Where(Or(TextContains(f.Name, "literal_%"), Not(And(NumberGt(f.Age, 1), NumberLt(f.Age, 10)))))); err != nil {
+	if _, err := Compile(f.Query().Where(Or(Contains(f.Name, "literal_%"), Not(And(Gt(f.Age, 1), Lt(f.Age, 10)))))); err != nil {
 		t.Fatal(err)
 	}
 }
 func TestCompilerBindsValuesQuotesNamesAndPreservesPrecedence(t *testing.T) {
 	f := compilerTable("public.users")
-	q := f.Query().Where(Not(Or(TextContains(f.Name, "a_%!'"), NumberIn(f.Age, 18, 21))), NumberGte(f.Age, 1)).OrderBy(TextDesc(f.Name)).Limit(10).Offset(2)
+	q := f.Query().Where(Not(Or(Contains(f.Name, "a_%!'"), In(f.Age, 18, 21))), Gte(f.Age, 1)).OrderBy(Desc(f.Name)).Limit(10).Offset(2)
 	compiled, err := Compile(q)
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +84,7 @@ func TestCompilerBindsValuesQuotesNamesAndPreservesPrecedence(t *testing.T) {
 	if compiled.Arguments()[0] == "changed" {
 		t.Fatal("argument snapshot aliases statement")
 	}
-	empty, err := Compile(f.Query().Where(Not(NumberIn(f.Age))))
+	empty, err := Compile(f.Query().Where(Not(In(f.Age))))
 	if err != nil || !strings.HasSuffix(empty.SQL(), " WHERE (NOT FALSE)") || len(empty.Arguments()) != 0 {
 		t.Fatal("empty membership semantics changed", empty.SQL(), err)
 	}
@@ -92,7 +92,7 @@ func TestCompilerBindsValuesQuotesNamesAndPreservesPrecedence(t *testing.T) {
 func TestInvalidDeclarationBoundaries(t *testing.T) {
 	f := compilerTable("users")
 	other := compilerTable("orders")
-	for name, q := range map[string]Query[compilerRecord]{"zero": {}, "unsafe table": compilerTable("users;drop table users").Query(), "zero predicate": f.Query().Where(Predicate[compilerRecord]{}), "zero column": f.Query().Where(NumberEq(Number[compilerRecord, int]{}, 1)), "foreign column": f.Query().Where(NumberEq(other.Age, 1)), "zero order": f.Query().OrderBy(Order[compilerRecord]{})} {
+	for name, q := range map[string]Query[compilerRecord]{"zero": {}, "unsafe table": compilerTable("users;drop table users").Query(), "zero predicate": f.Query().Where(Predicate[compilerRecord]{}), "zero column": f.Query().Where(Eq(Number[compilerRecord, int]{}, 1)), "foreign column": f.Query().Where(Eq(other.Age, 1)), "zero order": f.Query().OrderBy(Order[compilerRecord]{})} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := Compile(q); !errors.Is(err, fault.Invalid) {
 				t.Fatal("invalid declaration accepted", err)
@@ -114,14 +114,14 @@ func TestInvalidDeclarationBoundaries(t *testing.T) {
 		table := TableOf(b, &r.ID)
 		return recordTable{Table: table, ID: table.Key(), Name: TextOf(b, &r.Name), Note: NullableTextOf(b, &r.Note), Amount: NumberOf(b, &r.Amount)}
 	})
-	if statement, err := Compile(nullable.Query().Where(NullableTextIsNull(nullable.Note))); err != nil || !strings.Contains(statement.SQL(), `"public"."records"."note" IS NULL`) {
+	if statement, err := Compile(nullable.Query().Where(IsNull(nullable.Note))); err != nil || !strings.Contains(statement.SQL(), `"public"."records"."note" IS NULL`) {
 		t.Fatal("qualified nullable field rejected", statement.SQL(), err)
 	}
 
 }
 func TestCompilerRejectsInvalidBoundariesAndResources(t *testing.T) {
 	f := compilerTable("users")
-	deep := NumberEq(f.Age, 1)
+	deep := Eq(f.Age, 1)
 	for range querycore.MaxExpressionDepth + 1 {
 		deep = Not(deep)
 	}
@@ -131,7 +131,7 @@ func TestCompilerRejectsInvalidBoundariesAndResources(t *testing.T) {
 	zeroCodec := Define("zero_codec", func(b Builder[compilerRecord], m *compilerRecord) compilerFields {
 		return compilerFields{TableOf(b, &m.ID), TextOf(b, &m.Name, Codec(codec.Codec[string]{})), NumberOf(b, &m.Age)}
 	})
-	for name, q := range map[string]Query[compilerRecord]{"zero codec": zeroCodec.Query(), "negative limit": f.Query().Limit(-1), "negative offset": f.Query().Offset(-1), "deep": f.Query().Where(deep), "bad codec": bad.Query().Where(TextEq(bad.Name, "invalid"))} {
+	for name, q := range map[string]Query[compilerRecord]{"zero codec": zeroCodec.Query(), "negative limit": f.Query().Limit(-1), "negative offset": f.Query().Offset(-1), "deep": f.Query().Where(deep), "bad codec": bad.Query().Where(Eq(bad.Name, "invalid"))} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := Compile(q); !errors.Is(err, fault.Invalid) {
 				t.Fatal("invalid boundary accepted", err)
@@ -141,11 +141,11 @@ func TestCompilerRejectsInvalidBoundariesAndResources(t *testing.T) {
 }
 func TestConcurrentQueryDerivationAndWindowAggregates(t *testing.T) {
 	f := compilerTable("public.users")
-	base := f.Query().Where(TextEq(f.Name, "unchanged"))
+	base := f.Query().Where(Eq(f.Name, "unchanged"))
 	var group sync.WaitGroup
 	for i := range 16 {
 		group.Go(func() {
-			q := base.Limit(i).Offset(i).OrderBy(TextAsc(f.Name))
+			q := base.Limit(i).Offset(i).OrderBy(Asc(f.Name))
 			for _, kind := range []querycore.ReadKind{querycore.ReadModels, querycore.ReadCount, querycore.ReadExists} {
 				statement, err := compileRead(q.state, kind)
 				if err != nil {

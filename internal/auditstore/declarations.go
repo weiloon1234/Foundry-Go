@@ -15,55 +15,55 @@ type EntryTable struct {
 	// Table provides model queries and writes. Example: orm.First(ctx, tx, Entries.Query()).
 	orm.Table[Entry, model.ID[Entry]]
 	// ID binds Entry.ID.
-	// Example: orm.KeySet(Entries.ID, id).
+	// Example: orm.Set(Entries.ID, id).
 	ID orm.Key[Entry, model.ID[Entry]]
 	// Sequence binds Entry.Sequence. Omission retains the database default.
-	// Example: orm.NumberSet(Entries.Sequence, sequence).
+	// Example: orm.Set(Entries.Sequence, sequence).
 	Sequence orm.Number[Entry, int64]
 	// Area binds Entry.Area.
-	// Example: orm.TextSet(Entries.Area, area).
+	// Example: orm.Set(Entries.Area, area).
 	Area orm.Text[Entry, string]
 	// Operation binds Entry.Operation.
-	// Example: orm.ColumnSet(Entries.Operation, operation).
+	// Example: orm.Set(Entries.Operation, operation).
 	Operation orm.Column[Entry, lifecycle.Operation]
 	// Action binds Entry.Action.
-	// Example: orm.TextSet(Entries.Action, action).
+	// Example: orm.Set(Entries.Action, action).
 	Action orm.Text[Entry, string]
 	// Version binds Entry.Version.
-	// Example: orm.NumberSet(Entries.Version, version).
+	// Example: orm.Set(Entries.Version, version).
 	Version orm.Number[Entry, uint32]
 	// Subject binds Entry.Subject.
-	// Example: orm.NullableJSONSetNull(Entries.Subject).
+	// Example: orm.SetNull(Entries.Subject).
 	Subject orm.NullableJSON[Entry, model.Identity]
 	// SubjectKey binds Entry.SubjectKey. Omission retains the database default.
-	// Example: orm.NullableTextSetNull(Entries.SubjectKey).
+	// Example: orm.SetNull(Entries.SubjectKey).
 	SubjectKey orm.NullableText[Entry, string]
 	// Payload binds Entry.Payload.
-	// Example: encoded, err := value.NewJSON(payload); if err == nil { _ = orm.JSONSet(Entries.Payload, encoded) }.
+	// Example: encoded, err := value.NewJSON(payload); if err == nil { _ = orm.Set(Entries.Payload, encoded) }.
 	Payload orm.JSON[Entry, json.RawMessage]
 	// Redacted binds Entry.Redacted.
-	// Example: orm.ColumnSet(Entries.Redacted, redacted).
+	// Example: orm.Set(Entries.Redacted, redacted).
 	Redacted orm.Column[Entry, bool]
 	// Redaction binds Entry.Redaction.
-	// Example: orm.NumberSet(Entries.Redaction, redaction).
+	// Example: orm.Set(Entries.Redaction, redaction).
 	Redaction orm.Number[Entry, uint8]
 	// Origin binds Entry.Origin.
-	// Example: encoded, err := value.NewJSON(origin); if err == nil { _ = orm.JSONSet(Entries.Origin, encoded) }.
+	// Example: encoded, err := value.NewJSON(origin); if err == nil { _ = orm.Set(Entries.Origin, encoded) }.
 	Origin orm.JSON[Entry, attribution.Origin]
 	// ActorKey binds Entry.ActorKey. Omission retains the database default.
-	// Example: orm.NullableTextSetNull(Entries.ActorKey).
+	// Example: orm.SetNull(Entries.ActorKey).
 	ActorKey orm.NullableText[Entry, string]
 	// Correlation binds Entry.Correlation.
-	// Example: orm.NullableTextSetNull(Entries.Correlation).
+	// Example: orm.SetNull(Entries.Correlation).
 	Correlation orm.NullableText[Entry, string]
 	// RequestMethod binds Entry.RequestMethod.
-	// Example: orm.TextSet(Entries.RequestMethod, requestMethod).
+	// Example: orm.Set(Entries.RequestMethod, requestMethod).
 	RequestMethod orm.Text[Entry, string]
 	// RequestRoute binds Entry.RequestRoute.
-	// Example: orm.TextSet(Entries.RequestRoute, requestRoute).
+	// Example: orm.Set(Entries.RequestRoute, requestRoute).
 	RequestRoute orm.Text[Entry, string]
 	// CreatedAt preserves an explicit creation time; omitted values use the database default.
-	// Example: orm.TimeSet(Entries.CreatedAt, createdAt).
+	// Example: orm.Set(Entries.CreatedAt, createdAt).
 	CreatedAt orm.Time[Entry, temporal.DateTime]
 }
 

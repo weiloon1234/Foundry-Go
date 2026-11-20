@@ -10,5 +10,5 @@ import (
 
 func F() {
 	var tx database.Transactor
-	orm.Insert(context.Background(), tx, models.Orders.Table, orm.TextSet(models.Users.Email, "x"))
+	orm.Insert(context.Background(), tx, models.Orders.Table, orm.Set(models.Users.Email, "x"))
 }

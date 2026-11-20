@@ -62,7 +62,7 @@ func TestModelObserverDispatchesTypedEventsOnlyAfterActualCommit(t *testing.T) {
 			return err
 		}
 		var err error
-		saved, err = orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.TextSet(observerqueries.Plains.Name, "committed"))
+		saved, err = orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.Set(observerqueries.Plains.Name, "committed"))
 		if err != nil {
 			return err
 		}
@@ -82,7 +82,7 @@ func TestModelObserverDispatchesTypedEventsOnlyAfterActualCommit(t *testing.T) {
 		if _, err := tx.Exec(ctx, path); err != nil {
 			return err
 		}
-		if _, err := orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.TextSet(observerqueries.Plains.Name, "rolled back")); err != nil {
+		if _, err := orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.Set(observerqueries.Plains.Name, "rolled back")); err != nil {
 			return err
 		}
 		return rollback
@@ -96,7 +96,7 @@ func TestModelObserverDispatchesTypedEventsOnlyAfterActualCommit(t *testing.T) {
 		if _, err := tx.Exec(ctx, path); err != nil {
 			return err
 		}
-		item, err := orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.TextSet(observerqueries.Plains.Name, "retained"))
+		item, err := orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.Set(observerqueries.Plains.Name, "retained"))
 		retained = item.ID
 		return err
 	})

@@ -68,7 +68,7 @@ The example and its imports are in the [compiled migration package](../../tests/
 | Primary insert-select target | `PrimaryOf(b, table.Key())` | Explicitly enables SQL insertion into an unmutated primary key. |
 | Mutated primary input | `InputKeyOf` | Accepts typed key input; stored-key lookup remains unchanged. |
 
-`PrimaryOf` is needed only when an application maps a primary key in insert-select. Ordinary models need only `TableOf` and its key. `PrimaryOf` and `InputKeyOf` are mutually exclusive. `NumberKey`, `TextKey` and key adapters preserve the primary role; they cannot turn a key into an ordinary update target.
+`PrimaryOf` is needed only when an application maps a primary key in insert-select. Ordinary models need only `TableOf` and its key. `PrimaryOf` and `InputKeyOf` are mutually exclusive. `NumberKey` and `TextKey` preserve the key's role; they cannot turn a key into an ordinary update target.
 
 Managed time carriers support ordinary time predicates, ordering and expressions. Declaring a managed pair through `TimeOf` fails startup with the field name and required carrier. `NoTimestamps()` opts out when both fields use ordinary declarations; it conflicts with explicit managed roles. `NoSoftDeletes()` similarly conflicts with `SoftDeleteOf`.
 
@@ -89,7 +89,7 @@ func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
 
 ## SQL assignment constraints
 
-`rows.MapInsert` requires an `orm.InsertTarget`. `rows.MapUpdate` requires an `orm.UpdateTarget`. Input columns and managed update timestamps cannot satisfy either target. Primary columns satisfy insertion only when declared through `PrimaryOf`; they never satisfy update. A lookup-only `KeyColumn` cannot erase those restrictions. Separate source-match, insert-mapping and update-mapping types retain their phase and nullability.
+`rows.MapInsert` requires an `orm.InsertableRole` column handle. `rows.MapUpdate` requires an `orm.UpdatableRole` column handle. Input columns and managed update timestamps carry roles (`orm.InputRole`, `orm.InputKeyRole`, `orm.UpdatedRole`) that satisfy neither constraint. Primary columns satisfy insertion only when declared through `PrimaryOf` (`orm.PrimaryRole`); they never satisfy update. A lookup-only key (`orm.LookupKeyRole`) cannot erase those restrictions. Separate source-match, insert-mapping and update-mapping types retain their phase and nullability.
 
 Ordinary source reads, joins, projections and aggregates retain the stored field capabilities. These roles restrict assignment paths without changing the database schema or serialized contracts.
 

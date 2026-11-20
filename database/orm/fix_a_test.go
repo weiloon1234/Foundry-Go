@@ -40,7 +40,7 @@ func TestForceDeleteKeyPreservesDefaultAndExplicitVisibility(t *testing.T) {
 	} {
 		var statements []string
 		db := testDB(t, testConnector{statements: &statements})
-		n, err := ForceDeleteAll(t.Context(), db, tc.q.Where(KeyEq(r.Key(), 1)), SoftDeletes(r.DeletedAt))
+		n, err := ForceDeleteAll(t.Context(), db, tc.q.Where(Eq(r.Key(), 1)), SoftDeletes(r.DeletedAt))
 		if err != nil || n != 1 || !reflect.DeepEqual(statements, []string{tc.want}) {
 			t.Fatalf("ForceDeleteAll: %d, %v, %v", n, err, statements)
 		}
@@ -52,7 +52,7 @@ func TestAdjustmentZeroBoundRejectedBeforeSQL(t *testing.T) {
 	var statements []string
 	begins := 0
 	db := testDB(t, testConnector{statements: &statements, onBegin: func() { begins++ }})
-	for _, a := range []Assignment[numeric]{NumberIncrement(r.Signed, 1, Bound[int64]{}), NumberDecrement(r.Signed, 1, Bound[int64]{}), NullableNumberIncrement(r.Nullable, 1, Bound[int64]{})} {
+	for _, a := range []Assignment[numeric]{Increment(r.Signed, 1, Bound[int64]{}), Decrement(r.Signed, 1, Bound[int64]{}), Increment(r.Nullable, 1, Bound[int64]{})} {
 		_, err := Update(t.Context(), db, r.Table.Query(), r.Table.Key(), 1, a)
 		if !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "uninitialized adjustment bound") {
 			t.Fatal(err)
@@ -99,13 +99,13 @@ func TestAdjustmentTargetsValidatedBeforeTransactionAndClock(t *testing.T) {
 	var statements []string
 	begins, calls := 0, 0
 	db := testDB(t, testConnector{statements: &statements, onBegin: func() { begins++ }}, database.WithClock(observedClock{&calls}))
-	managed := NumberIncrement(r.Amount, 1)
+	managed := Increment(r.Amount, 1)
 	managed.adjust.Field.Column = r.core.model.Timestamps.Updated
 	for _, as := range [][]Assignment[item]{
 		{managed},
-		{adjustment[item](r.Key().key, int64(1), false, nil)},
-		{NumberSet(r.Amount, 10), NumberIncrement(r.Amount, 1)},
-		{NumberIncrement(r.Amount, 1), NumberSet(r.Amount, 10)},
+		{adjustment[item](r.Key().stored, int64(1), false, nil)},
+		{Set(r.Amount, 10), Increment(r.Amount, 1)},
+		{Increment(r.Amount, 1), Set(r.Amount, 10)},
 	} {
 		if _, err := Update(t.Context(), db, r.Table.Query(), r.Table.Key(), 1, as...); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)

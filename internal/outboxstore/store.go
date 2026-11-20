@@ -52,7 +52,7 @@ func Append(ctx context.Context, tx *database.Tx, address Address, payload strin
 	if err != nil {
 		return Message{}, err
 	}
-	return orm.Insert(ctx, tx, Messages.Table, orm.TextSet(Messages.Kind, address.Kind), orm.TextSet(Messages.Destination, address.Destination), orm.TextSet(Messages.Name, address.Name), orm.NumberSet(Messages.Version, address.Version), orm.JSONSet(Messages.Payload, body), orm.JSONSet(Messages.Origin, capturedOrigin))
+	return orm.Insert(ctx, tx, Messages.Table, orm.Set(Messages.Kind, address.Kind), orm.Set(Messages.Destination, address.Destination), orm.Set(Messages.Name, address.Name), orm.Set(Messages.Version, address.Version), orm.Set(Messages.Payload, body), orm.Set(Messages.Origin, capturedOrigin))
 }
 
 // Find requires the entire routing address in addition to the physical ID. An
@@ -67,9 +67,9 @@ func Find(ctx context.Context, executor database.Executor, address Address, id m
 	}
 	fields := Messages
 	return orm.First(ctx, executor, Messages.Query().Where(
-		orm.TextEq(fields.Kind, address.Kind),
-		orm.TextEq(fields.Destination, address.Destination),
-		orm.TextEq(fields.Name, address.Name),
-		orm.NumberEq(fields.Version, address.Version),
-		orm.KeyEq(fields.ID, id)))
+		orm.Eq(fields.Kind, address.Kind),
+		orm.Eq(fields.Destination, address.Destination),
+		orm.Eq(fields.Name, address.Name),
+		orm.Eq(fields.Version, address.Version),
+		orm.Eq(fields.ID, id)))
 }

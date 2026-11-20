@@ -1,7 +1,5 @@
 package invalid
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/goway/models/jsonpaths"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -9,7 +7,7 @@ import (
 )
 
 func root() expr.JSONPath[jsonpaths.Document, jsonpaths.Preferences] {
-	return expr.JSONRoot(expr.Value(orm.JSONExpr(jsonpaths.Documents.Settings)))
+	return expr.JSONRoot(expr.Value(jsonpaths.Documents.Settings))
 }
 func invalid() {
 	_ = expr.NullableTextLike[jsonpaths.Document, string](expr.OrderNullableRow(expr.JSONScalar(expr.JSONOptional(expr.JSONProperty(root(), jsonpaths.Quota)), codec.Decimal())), "%")

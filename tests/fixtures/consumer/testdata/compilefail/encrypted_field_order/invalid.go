@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func bad() { _ = orm.TextAsc(vault.Entries.Token) }
+func bad() { _ = orm.Asc(vault.Entries.Token) }

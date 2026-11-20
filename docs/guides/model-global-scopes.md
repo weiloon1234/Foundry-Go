@@ -9,7 +9,7 @@ Global scopes attach typed, additive predicates to a model declaration. A scope 
 func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[reads.Member], error) {
 		id, err := tenantID(ctx)
-		return orm.NumberEq(t.TenantID, id), err
+		return orm.Eq(t.TenantID, id), err
 	})
 }
 ```

@@ -25,7 +25,7 @@ func (b *Backend) Consume(ctx context.Context, address challenge.Address, hash c
 	scope, _ := address.Key()
 	var result value.Optional[challenge.Record]
 	err := b.within(ctx, func(tx *database.Tx) error {
-		candidate, err := orm.First(ctx, tx, entries(scope, "").Where(orm.TextEq(challengestore.Entries.SecretHash, hash.Hex())))
+		candidate, err := orm.First(ctx, tx, entries(scope, "").Where(orm.Eq(challengestore.Entries.SecretHash, hash.Hex())))
 		if err != nil {
 			return err
 		}
@@ -40,7 +40,7 @@ func (b *Backend) Consume(ctx context.Context, address challenge.Address, hash c
 		if !present {
 			return safeerror.NewFault(fault.Invalid, "stored challenge has no subject")
 		}
-		current, err := orm.FirstLocked(ctx, tx, orm.Lock(entries(scope, subject.Key).Where(orm.KeyEq(challengestore.Entries.ID, original.ID))))
+		current, err := orm.FirstLocked(ctx, tx, orm.Lock(entries(scope, subject.Key).Where(orm.Eq(challengestore.Entries.ID, original.ID))))
 		if err != nil {
 			return err
 		}

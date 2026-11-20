@@ -110,11 +110,11 @@ func seedArticles(tb testing.TB, store *extensions.Store, runtime slots.Runtime,
 	for i := range count {
 		var article articles.Article
 		if err := store.Write(tb.Context(), func(ctx context.Context, tx *database.Tx) error {
-			author, err := orm.Insert(ctx, tx, articles.Authors.Table, orm.TextSet(articles.Authors.Name, "Author"))
+			author, err := orm.Insert(ctx, tx, articles.Authors.Table, orm.Set(articles.Authors.Name, "Author"))
 			if err != nil {
 				return err
 			}
-			article, err = orm.Insert(ctx, tx, articles.Articles.Table, orm.TextSet(articles.Articles.Slug, fmt.Sprintf("slug-%05d", i)), orm.ColumnSet(articles.Articles.AuthorID, author.ID))
+			article, err = orm.Insert(ctx, tx, articles.Articles.Table, orm.Set(articles.Articles.Slug, fmt.Sprintf("slug-%05d", i)), orm.Set(articles.Articles.AuthorID, author.ID))
 			if err != nil {
 				return err
 			}

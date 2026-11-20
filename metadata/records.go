@@ -97,7 +97,7 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 		}
 		f := store.Metadata
 		var budget extensionvalue.BatchBudget
-		return orm.Each(ctx, tx, store.Metadata.Query().Where(orm.TextEq(f.Scope, owner.Scope()), orm.TextEq(f.SubjectKey, subject)).OrderBy(orm.TextAsc(f.Name)).Limit(MaxKeysPerOwner+1), func(row store.Meta) error {
+		return orm.Each(ctx, tx, store.Metadata.Query().Where(orm.Eq(f.Scope, owner.Scope()), orm.Eq(f.SubjectKey, subject)).OrderBy(orm.Asc(f.Name)).Limit(MaxKeysPerOwner+1), func(row store.Meta) error {
 			if len(result) >= MaxKeysPerOwner {
 				return invalid()
 			}
@@ -137,7 +137,7 @@ func (k Key[M, K, V]) matchingKeys(ctx context.Context, m *Manager, input V) ([]
 			return err
 		}
 		f := store.Metadata
-		rows, err := rows.Read(store.MetadataIndex(store.Metadata.Query().Where(orm.TextEq(f.Scope, k.definition.owner.Scope()), orm.TextEq(f.Name, string(k.Name())), orm.NumberEq(f.Version, uint32(k.Version())), orm.JSONEq(f.Value, snapshot)).OrderBy(orm.TextAsc(f.KeyColumn)).Limit(querycore.MaxIdentityBatch+1))).All(ctx, tx)
+		rows, err := rows.Read(store.MetadataIndex(store.Metadata.Query().Where(orm.Eq(f.Scope, k.definition.owner.Scope()), orm.Eq(f.Name, string(k.Name())), orm.Eq(f.Version, uint32(k.Version())), orm.Eq(f.Value, snapshot)).OrderBy(orm.Asc(f.KeyColumn)).Limit(querycore.MaxIdentityBatch+1))).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -185,7 +185,7 @@ func DeleteAll[M any, K comparable](ctx context.Context, m *Manager, owner exten
 }
 func deleteSubject(ctx context.Context, tx *database.Tx, subject extensions.Subject) (int, error) {
 	f := store.Metadata
-	rows, err := orm.DeleteEach(ctx, tx, store.Metadata.Query().Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key)), MaxKeysPerOwner)
+	rows, err := orm.DeleteEach(ctx, tx, store.Metadata.Query().Where(orm.Eq(f.Scope, subject.Scope), orm.Eq(f.SubjectKey, subject.Key)), MaxKeysPerOwner)
 	return len(rows), err
 }
 

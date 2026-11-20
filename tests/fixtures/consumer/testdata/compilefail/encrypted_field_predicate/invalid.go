@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func bad() { _ = orm.ColumnEq(vault.Entries.Token, encrypted.NewText("x")) }
+func bad() { _ = orm.Eq(vault.Entries.Token, encrypted.NewText("x")) }

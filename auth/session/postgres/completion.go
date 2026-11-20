@@ -119,7 +119,7 @@ func (b *Backend) ResumeActor(ctx context.Context, address session.Address, expe
 		if err != nil || !live {
 			return err
 		}
-		draft := []orm.Assignment[sessionstore.Entry]{orm.TextSet(sessionstore.Entries.SecretHash, next.Hex()), orm.TimeSet(sessionstore.Entries.LastSeenAt, touched.LastSeenAt), orm.TimeSet(sessionstore.Entries.IdleExpiresAt, touched.IdleExpiresAt)}
+		draft := []orm.Assignment[sessionstore.Entry]{orm.Set(sessionstore.Entries.SecretHash, next.Hex()), orm.Set(sessionstore.Entries.LastSeenAt, touched.LastSeenAt), orm.Set(sessionstore.Entries.IdleExpiresAt, touched.IdleExpiresAt)}
 		row, err = orm.Update(ctx, tx, entries(subject.Scope, subject.Key), sessionstore.Entries.ID, row.ID, draft...)
 		if err != nil {
 			return err

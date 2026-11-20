@@ -1,7 +1,5 @@
 package inner_test
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"testing"
 
@@ -24,14 +22,14 @@ func TestPostgresInnerJoinsAndGrouping(t *testing.T) {
 		// Inner joins preserve non-nullable fields and support aggregates in the joined scope.
 		purchases := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
 		p := rows.Scope(purchases)
-		inner := rows.InnerJoin(purchases, referrals, rows.OnEqual(expr.At(p, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(r, orm.KeyExpr(models.Users.ID))))
+		inner := rows.InnerJoin(purchases, referrals, rows.OnEqual(expr.At(p, models.Orders.BuyerID), expr.At(r, models.Users.ID)))
 		order := rows.LeftScope(inner, rows.Scope(purchases))
 		buyer := rows.RightScope(inner, rows.Scope(referrals))
 		orderReport := rows.OrderBy(rows.Select(inner, reports.OrderBuyerRows,
-			rows.Map(reports.OrderBuyerRows.OrderID, expr.At(order, orm.KeyExpr(models.Orders.ID))),
-			rows.Map(reports.OrderBuyerRows.BuyerID, expr.At(buyer, orm.KeyExpr(models.Users.ID))),
-			rows.Map(reports.OrderBuyerRows.BuyerEmail, expr.At(buyer, orm.TextExpr(models.Users.Email))),
-			rows.Map(reports.OrderBuyerRows.TotalCents, expr.At(order, orm.NumberExpr(models.Orders.TotalCents)))), expr.Asc(expr.At(order, orm.NumberExpr(models.Orders.TotalCents))))
+			rows.Map(reports.OrderBuyerRows.OrderID, expr.At(order, models.Orders.ID)),
+			rows.Map(reports.OrderBuyerRows.BuyerID, expr.At(buyer, models.Users.ID)),
+			rows.Map(reports.OrderBuyerRows.BuyerEmail, expr.At(buyer, models.Users.Email)),
+			rows.Map(reports.OrderBuyerRows.TotalCents, expr.At(order, models.Orders.TotalCents))), expr.Asc(expr.At(order, models.Orders.TotalCents)))
 		orders, err := rows.Read(orderReport).All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -39,13 +37,13 @@ func TestPostgresInnerJoinsAndGrouping(t *testing.T) {
 		if len(orders) != 3 || orders[2].BuyerID != users[1].ID || orders[0].BuyerEmail != users[0].Email {
 			t.Error("inner joined projection decoded the wrong source")
 		}
-		total := expr.SumAt(order, orm.NumberExpr(models.Orders.TotalCents))
-		count := expr.CountFieldAt(order, orm.KeyExpr(models.Orders.ID))
+		total := expr.SumAt(order, models.Orders.TotalCents)
+		count := expr.CountFieldAt(order, models.Orders.ID)
 		totals := rows.OrderBy(rows.Having(rows.GroupBy(rows.Select(inner, reports.BuyerTotalRows,
-			rows.Map(reports.BuyerTotalRows.BuyerID, expr.At(buyer, orm.KeyExpr(models.Users.ID))),
+			rows.Map(reports.BuyerTotalRows.BuyerID, expr.At(buyer, models.Users.ID)),
 			rows.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(total)),
 			rows.MapSelected(reports.BuyerTotalRows.Orders, expr.AsSelected(count)),
-			rows.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.AvgAt(order, orm.NumberExpr(models.Orders.TotalCents))))), expr.Group(expr.At(buyer, orm.KeyExpr(models.Users.ID)))), expr.GtValue(count, 1)), expr.DescValue(total))
+			rows.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.AvgAt(order, models.Orders.TotalCents)))), expr.Group(expr.At(buyer, models.Users.ID))), expr.GtValue(count, 1)), expr.DescValue(total))
 		groups, err := rows.Read(totals).All(t.Context(), counter)
 		if err != nil {
 			return err

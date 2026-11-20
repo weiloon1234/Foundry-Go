@@ -7,4 +7,4 @@ import (
 	outbox "github.com/weiloon1234/Foundry-Go/outbox"
 )
 
-var _ = orm.ColumnSet(c.Records.MessageID, outbox.ID[string]{})
+var _ = orm.Set(c.Records.MessageID, outbox.ID[string]{})

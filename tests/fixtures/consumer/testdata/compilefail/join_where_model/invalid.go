@@ -16,5 +16,5 @@ type outsideTag struct{}
 var a = rows.As[leftTag](models.Users.Query(), "a")
 var b = rows.As[rightTag](models.Users.Query(), "b")
 var af, bf = rows.Scope(a), rows.Scope(b)
-var j = rows.LeftJoin(a, b, rows.On(expr.At(af, orm.NullableColumnExpr(models.Users.IntroducerID)), expr.At(bf, orm.KeyExpr(models.Users.ID))))
-var invalid = rows.Select(j, reports.ReferralRows).Where(orm.TextEq(models.Users.Email, "x"))
+var j = rows.LeftJoin(a, b, rows.On(expr.At(af, models.Users.IntroducerID), expr.At(bf, models.Users.ID)))
+var invalid = rows.Select(j, reports.ReferralRows).Where(orm.Eq(models.Users.Email, "x"))

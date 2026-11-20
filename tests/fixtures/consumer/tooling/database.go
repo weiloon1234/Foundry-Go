@@ -12,7 +12,7 @@ import (
 
 func Records() (*factory.Factory[models.WriteRecord, []orm.Assignment[models.WriteRecord]], error) {
 	return factory.Define(models.WriteRecords.Table, func(_ context.Context, n factory.Sequence) ([]orm.Assignment[models.WriteRecord], error) {
-		return []orm.Assignment[models.WriteRecord]{orm.TextSet(models.WriteRecords.Name, fmt.Sprintf("record-%d", n))}, nil
+		return []orm.Assignment[models.WriteRecord]{orm.Set(models.WriteRecords.Name, fmt.Sprintf("record-%d", n))}, nil
 	})
 }
 func UserPlan(ctx context.Context, executor database.Executor) (orm.Plan, error) {

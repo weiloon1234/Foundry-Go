@@ -18,10 +18,10 @@ import (
 
 func TestSelectRecordKeepsColumnsWindowsAndJoinMultiplicity(t *testing.T) {
 	m := declareMembers()
-	a, b := As[left](m.Query().Where(orm.KeyNe(m.ID, 2)).Limit(3), "a"), As[right](m.Query(), "b")
-	j := InnerJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))))
+	a, b := As[left](m.Query().Where(orm.Ne(m.ID, 2)).Limit(3), "a"), As[right](m.Query(), "b")
+	j := InnerJoin(a, b, On(expr.At(Scope(a), m.ID), expr.At(Scope(b), m.ID)))
 	scope := LeftScope(j, Scope(a))
-	id := expr.At(scope, orm.KeyExpr(m.ID))
+	id := expr.At(scope, m.ID)
 	q := SelectRecord(j, scope).Where(expr.Ne(id, 4)).OrderBy(expr.Desc(id)).Limit(5)
 	s, e := CompileRead(ReadRecord(q))
 	want := `SELECT "a"."id", "a"."name", "a"."nickname" FROM (SELECT "members"."id", "members"."name", "members"."nickname" FROM "members" WHERE ("members"."id" <> $1) LIMIT $2) AS "a" INNER JOIN "members" AS "b" ON ("a"."id" = "b"."id") WHERE ("a"."id" <> $3) ORDER BY "a"."id" DESC LIMIT $4`
@@ -46,7 +46,7 @@ func TestSelectRecordKeepsColumnsWindowsAndJoinMultiplicity(t *testing.T) {
 func TestSelectRecordPreservedJoinSides(t *testing.T) {
 	m := declareMembers()
 	a, b, c := As[left](m.Query(), "a"), As[right](m.Query(), "b"), As[latestTag](m.Query(), "c")
-	on := On(expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID)))
+	on := On(expr.At(Scope(a), m.ID), expr.At(Scope(b), m.ID))
 	l, r := LeftJoin(a, b, on), RightJoin(a, b, on)
 	if _, e := CompileRead(ReadRecord(SelectRecord(l, LeftScope(l, Scope(a))))); e != nil {
 		t.Fatal(e)
@@ -54,7 +54,7 @@ func TestSelectRecordPreservedJoinSides(t *testing.T) {
 	if _, e := CompileRead(ReadRecord(SelectRecord(r, RightScope(r, Scope(b))))); e != nil {
 		t.Fatal(e)
 	}
-	chain := InnerJoin(l, c, On(expr.At(LeftScope(l, Scope(a)), orm.KeyExpr(m.ID)), expr.At(Scope(c), orm.KeyExpr(m.ID))))
+	chain := InnerJoin(l, c, On(expr.At(LeftScope(l, Scope(a)), m.ID), expr.At(Scope(c), m.ID)))
 	if _, e := CompileRead(ReadRecord(SelectRecord(chain, LeftScope(chain, LeftScope(l, Scope(a)))))); e != nil {
 		t.Fatal(e)
 	}

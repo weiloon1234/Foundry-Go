@@ -1,7 +1,5 @@
 package records
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"context"
 	"foundry.test/goway/models"
@@ -15,7 +13,7 @@ type tag struct{}
 
 func Model(ctx context.Context, db *database.DB) ([]models.Order, error) {
 	a := rows.AsRecord[tag](rows.ModelRecord(models.Orders.Query().Limit(5)), "orders")
-	return rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a)).Where(expr.Eq(expr.At(rows.Scope(a), orm.NumberExpr(models.Orders.TotalCents)), 0))).All(ctx, db)
+	return rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a)).Where(expr.Eq(expr.At(rows.Scope(a), models.Orders.TotalCents), 0))).All(ctx, db)
 }
 func Projected(ctx context.Context, db *database.DB) ([]reporting.OrderRow, error) {
 	a := rows.AsRecord[tag](rows.RecordOf(reporting.SelectOrders(1)), "report")

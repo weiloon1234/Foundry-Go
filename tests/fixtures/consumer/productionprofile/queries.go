@@ -14,14 +14,14 @@ func Check() error {
 	}
 	// doc-example:end check-table-registry
 	f := Records
-	base := f.Query().Where(orm.ColumnEq(f.Active, true), orm.NumberGte(f.Score, 10)).OrderBy(orm.NumberDesc(f.Score), orm.KeyAsc(f.ID)).Limit(25)
+	base := f.Query().Where(orm.Eq(f.Active, true), orm.Gte(f.Score, 10)).OrderBy(orm.Desc(f.Score), orm.Asc(f.ID)).Limit(25)
 	if _, err := orm.Compile(base); err != nil {
 		return err
 	}
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query().Where(orm.ColumnEq(f.Active, true))), expr.AsSelected(expr.Sum(orm.NumberExpr(f.Score)))))); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query().Where(orm.Eq(f.Active, true))), expr.AsSelected(expr.Sum(f.Score))))); err != nil {
 		return err
 	}
-	_ = []orm.Assignment[Record]{orm.TextSet(f.Name, "profile"), orm.ColumnSet(f.Payload, []byte("owned"))}
+	_ = []orm.Assignment[Record]{orm.Set(f.Name, "profile"), orm.Set(f.Payload, []byte("owned"))}
 	return nil
 }
 
@@ -32,15 +32,15 @@ type resourceRight struct{}
 func CheckJoinedFields() error {
 	left := rows.As[resourceLeft](Records.Query(), "left_records")
 	right := rows.As[resourceRight](Records.Query(), "right_records")
-	joined := rows.LeftJoin(left, right, rows.On(expr.At(rows.Scope(left), orm.KeyExpr(Records.ID)), expr.At(rows.Scope(right), orm.KeyExpr(Records.ID))))
+	joined := rows.LeftJoin(left, right, rows.On(expr.At(rows.Scope(left), Records.ID), expr.At(rows.Scope(right), Records.ID)))
 	fields := rows.LeftScope(joined, rows.Scope(left))
 	nullable := rows.NullableRightScope(joined, rows.Scope(right))
-	caption := expr.Coalesce(expr.AtNullable(nullable, orm.TextExpr(Records.Name)), expr.At(fields, orm.TextExpr(Records.Name)))
+	caption := expr.Coalesce(expr.AtNullable(nullable, Records.Name), expr.At(fields, Records.Name))
 	text := rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(joined, expr.AsSelected(expr.Lower(caption))),
-		expr.Eq(expr.At(fields, orm.ColumnExpr(Records.Active)), true), expr.IsNotNull(expr.AtNullable(nullable, orm.NumberExpr(Records.Score))))).OrderBy(expr.Asc(caption), expr.Asc(expr.At(fields, orm.KeyExpr(Records.ID))))
+		expr.Eq(expr.At(fields, Records.Active), true), expr.IsNotNull(expr.AtNullable(nullable, Records.Score)))).OrderBy(expr.Asc(caption), expr.Asc(expr.At(fields, Records.ID)))
 	if _, err := rows.CompileRead(text); err != nil {
 		return err
 	}
-	_, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(joined, expr.AsSelected(expr.Row(expr.Coalesce(expr.AtNullable(nullable, orm.ColumnExpr(Records.Payload)), expr.At(fields, orm.ColumnExpr(Records.Payload))))))))
+	_, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(joined, expr.AsSelected(expr.Row(expr.Coalesce(expr.AtNullable(nullable, Records.Payload), expr.At(fields, Records.Payload)))))))
 	return err
 }

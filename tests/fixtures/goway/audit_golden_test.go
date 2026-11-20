@@ -50,7 +50,7 @@ func TestAuditOldAndNewAgree(t *testing.T) {
 
 		declaration, err = orm.NewObserver[n.Member]("audit").Declare(func() orm.Hooks[n.Member] {
 			write := func(ctx context.Context, tx *database.Tx, c orm.Changes[n.Member]) error {
-				history, err := orm.Audit(n.Members.Table, c, orm.AuditPolicyOf(n.Members.Table, orm.AuditField(orm.ColumnExpr(n.Members.Body), record.Exclude)))
+				history, err := orm.Audit(n.Members.Table, c, orm.AuditPolicyOf(n.Members.Table, orm.AuditField(n.Members.Body, record.Exclude)))
 				if err != nil {
 					return err
 				}
@@ -75,8 +75,8 @@ func TestAuditOldAndNewAgree(t *testing.T) {
 		t.Cleanup(func() { check(db.Close(context.Background())) })
 
 		q := n.Members
-		capture.show(must(orm.Insert(ctx, db, q.Table, orm.KeySet(q.Key(), 1), orm.InputTextSet(q.Name, " stored "), orm.ColumnSet(q.Body, []byte{1, 2}))))
-		capture.show(must(orm.Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Name, " new "), orm.NullableInputTextSetNull(q.Note))))
+		capture.show(must(orm.Insert(ctx, db, q.Table, orm.Set(q.Key(), 1), orm.Set(q.Name, " stored "), orm.Set(q.Body, []byte{1, 2}))))
+		capture.show(must(orm.Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, orm.Set(q.Name, " new "), orm.SetNull(q.Note))))
 		capture.show(must(orm.Delete(ctx, db, q.Table.Query(), q.Table.Key(), 1)))
 		capture.show(must(orm.Restore(ctx, db, q.Table, 1)))
 		capture.show(must(orm.ForceDelete(ctx, db, q.Table.Query(), q.Soft, q.Table.Key(), 1)))

@@ -20,34 +20,34 @@ func TestConflictPersistsDefaultsAndRollsBackAtomicFailures(t *testing.T) {
 	must(t, err)
 	calls := 0
 	table := h.Declare(func() orm.Hooks[h.Member] { calls++; return orm.Hooks[h.Member]{} })
-	incoming := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(table.Key()))).DoUpdate(orm.ConflictIncoming(orm.InputTextExpr(table.Name)), orm.ConflictIncoming(orm.NullableInputTextExpr(table.Note)))
-	got, err := orm.Upsert(ctx, db, table.Query(), incoming, orm.KeySet(table.Key(), 1), orm.InputTextSet(table.Name, " original "), orm.ColumnSet(table.Body, []byte{1}))
+	incoming := orm.OnConflict(orm.ConflictKey(table.Key())).DoUpdate(orm.ConflictIncoming(table.Name), orm.ConflictIncoming(table.Note))
+	got, err := orm.Upsert(ctx, db, table.Query(), incoming, orm.Set(table.Key(), 1), orm.Set(table.Name, " original "), orm.Set(table.Body, []byte{1}))
 	must(t, err)
 	first, ok := got.Get()
 	if !ok || first.Name != "original" {
 		t.Fatal(first)
 	}
-	got, err = orm.Upsert(ctx, db, table.Query(), incoming, orm.KeySet(table.Key(), 1), orm.ColumnSet(table.Body, []byte{2}))
+	got, err = orm.Upsert(ctx, db, table.Query(), incoming, orm.Set(table.Key(), 1), orm.Set(table.Body, []byte{2}))
 	must(t, err)
 	stored, ok := got.Get()
 	if !ok || stored.Name != "database" || stored.Note.IsNull() == false || !stored.CreatedAt.Equal(first.CreatedAt) {
 		t.Fatal(stored)
 	}
-	skipped, err := orm.Upsert(ctx, db, table.Query(), orm.OnConflictConstraint[h.Member]("hook_members_pkey").DoNothing(), orm.KeySet(table.Key(), 1), orm.ColumnSet(table.Body, []byte{3}))
+	skipped, err := orm.Upsert(ctx, db, table.Query(), orm.OnConflictConstraint[h.Member]("hook_members_pkey").DoNothing(), orm.Set(table.Key(), 1), orm.Set(table.Body, []byte{3}))
 	must(t, err)
 	if skipped.IsSet() {
 		t.Fatal("DO NOTHING returned a model")
 	}
-	skipped, err = orm.Upsert(ctx, db, table.Query(), incoming.Where(orm.InputTextEq(table.Name, "absent")), orm.KeySet(table.Key(), 1), orm.InputTextSet(table.Name, "changed"), orm.ColumnSet(table.Body, []byte{3}))
+	skipped, err = orm.Upsert(ctx, db, table.Query(), incoming.Where(orm.Eq(table.Name, "absent")), orm.Set(table.Key(), 1), orm.Set(table.Name, "changed"), orm.Set(table.Body, []byte{3}))
 	must(t, err)
 	if skipped.IsSet() {
 		t.Fatal("false update condition returned a model")
 	}
 	// PostgreSQL rejects repeated conflict targets in the same DO UPDATE statement.
 	_, err = orm.UpsertMany(ctx, db, table.Query(), incoming, [][]orm.Assignment[h.Member]{
-		{orm.KeySet(table.Key(), 2), orm.InputTextSet(table.Name, "new"), orm.ColumnSet(table.Body, []byte{2})},
-		{orm.KeySet(table.Key(), 1), orm.InputTextSet(table.Name, "changed"), orm.ColumnSet(table.Body, []byte{3})},
-		{orm.KeySet(table.Key(), 1), orm.InputTextSet(table.Name, "again"), orm.ColumnSet(table.Body, []byte{4})},
+		{orm.Set(table.Key(), 2), orm.Set(table.Name, "new"), orm.Set(table.Body, []byte{2})},
+		{orm.Set(table.Key(), 1), orm.Set(table.Name, "changed"), orm.Set(table.Body, []byte{3})},
+		{orm.Set(table.Key(), 1), orm.Set(table.Name, "again"), orm.Set(table.Body, []byte{4})},
 	})
 	if err == nil {
 		t.Fatal("repeated target accepted")
@@ -59,7 +59,7 @@ func TestConflictPersistsDefaultsAndRollsBackAtomicFailures(t *testing.T) {
 	}
 	veto := errors.New("rollback enclosing transaction")
 	err = db.Transaction(ctx, func(tx *database.Tx) error {
-		_, err := orm.Upsert(ctx, tx, table.Query(), incoming, orm.KeySet(table.Key(), 1), orm.InputTextSet(table.Name, "rolled back"), orm.ColumnSet(table.Body, []byte{5}))
+		_, err := orm.Upsert(ctx, tx, table.Query(), incoming, orm.Set(table.Key(), 1), orm.Set(table.Name, "rolled back"), orm.Set(table.Body, []byte{5}))
 		if err != nil {
 			return err
 		}
@@ -98,17 +98,17 @@ func TestConflictTenantSuppressionRollsBackOtherBatchRows(t *testing.T) {
 			if !ok {
 				return orm.Predicate[conflictTenant]{}, errors.New("tenant missing")
 			}
-			return orm.NumberEq(t.Tenant, id), nil
+			return orm.Eq(t.Tenant, id), nil
 		})}
 	}))
 	_, err := db.Exec(ctx, `CREATE TABLE conflict_tenants(id bigint PRIMARY KEY,tenant bigint NOT NULL,name text NOT NULL)`)
 	must(t, err)
-	_, err = orm.Insert(ctx, db, table.Table, orm.KeySet(table.Key(), 1), orm.NumberSet(table.Tenant, 9), orm.TextSet(table.Name, "private"))
+	_, err = orm.Insert(ctx, db, table.Table, orm.Set(table.Key(), 1), orm.Set(table.Tenant, 9), orm.Set(table.Name, "private"))
 	must(t, err)
-	policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(table.Key()))).DoUpdate(orm.ConflictIncoming(orm.TextExpr(table.Name)))
+	policy := orm.OnConflict(orm.ConflictKey(table.Key())).DoUpdate(orm.ConflictIncoming(table.Name))
 	_, err = orm.UpsertMany(ctx, db, table.Query(), policy, [][]orm.Assignment[conflictTenant]{
-		{orm.KeySet(table.Key(), 2), orm.NumberSet(table.Tenant, 7), orm.TextSet(table.Name, "new")},
-		{orm.KeySet(table.Key(), 1), orm.NumberSet(table.Tenant, 7), orm.TextSet(table.Name, "forbidden")},
+		{orm.Set(table.Key(), 2), orm.Set(table.Tenant, 7), orm.Set(table.Name, "new")},
+		{orm.Set(table.Key(), 1), orm.Set(table.Tenant, 7), orm.Set(table.Name, "forbidden")},
 	})
 	if !errors.Is(err, fault.Conflict) {
 		t.Fatal("tenant violation", err)
@@ -118,7 +118,7 @@ func TestConflictTenantSuppressionRollsBackOtherBatchRows(t *testing.T) {
 	if len(rows) != 1 || rows[0].Name != "private" {
 		t.Fatal("scope failure partially committed", rows)
 	}
-	_, err = orm.Upsert(t.Context(), db, table.Query(), policy, orm.KeySet(table.Key(), 3), orm.NumberSet(table.Tenant, 7), orm.TextSet(table.Name, "missing context"))
+	_, err = orm.Upsert(t.Context(), db, table.Query(), policy, orm.Set(table.Key(), 3), orm.Set(table.Tenant, 7), orm.Set(table.Name, "missing context"))
 	if err == nil {
 		t.Fatal("missing tenant accepted")
 	}

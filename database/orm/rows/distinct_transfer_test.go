@@ -16,7 +16,7 @@ import (
 
 func TestDistinctKeepsSelectedRowsAndParameters(t *testing.T) {
 	d := declareMembers()
-	id := expr.Value(orm.KeyExpr(d.ID))
+	id := expr.Value(d.ID)
 	base := rows.FromModel(d.Query())
 	q := rows.Offset(rows.Limit(rows.OrderBy(rows.Distinct(base.Where(expr.Ne(id, 7))), expr.Desc(id)), 2), 1)
 	s, err := rows.CompileRead(rows.Read(q))
@@ -44,7 +44,7 @@ func TestDistinctKeepsSelectedRowsAndParameters(t *testing.T) {
 }
 func TestDistinctOrderingReusesSelectedScalarBindings(t *testing.T) {
 	d := declareMembers()
-	id := expr.Value(orm.KeyExpr(d.ID))
+	id := expr.Value(d.ID)
 	base := rows.From(d.Query())
 	inner := rows.LimitScalar(rows.WhereScalar(rows.SelectScalar(base, expr.AsSelected(expr.Row(id))), expr.Ne(id, 9)), 1)
 	scalar := expr.AsSelected(rows.ScalarRowQuery(base, inner))
@@ -57,8 +57,8 @@ func TestDistinctOrderingReusesSelectedScalarBindings(t *testing.T) {
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.DistinctScalar(rows.SelectScalar(base, scalar)), expr.AscValue(wrong)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("different scalar bindings matched", err)
 	}
-	a := rows.AsRecord[left](rows.CTE("filtered", rows.ModelRecord(d.Query().Where(orm.KeyNe(d.ID, 3)))), "a")
-	aid := expr.At(rows.Scope(a), orm.KeyExpr(d.ID))
+	a := rows.AsRecord[left](rows.CTE("filtered", rows.ModelRecord(d.Query().Where(orm.Ne(d.ID, 3)))), "a")
+	aid := expr.At(rows.Scope(a), d.ID)
 	if _, err := rows.CompileRead(rows.ReadRecord(rows.DistinctRecord(rows.SelectRecord(a, rows.Scope(a))).OrderBy(expr.Asc(aid)))); err != nil {
 		t.Fatal("CTE arguments changed ordinal", err)
 	}
@@ -72,7 +72,7 @@ func TestDistinctOrderingReusesSelectedScalarBindings(t *testing.T) {
 }
 func TestDistinctOnKeysOrderingAndReplacement(t *testing.T) {
 	d := declareMembers()
-	id, rank := expr.Value(orm.KeyExpr(d.ID)), expr.Value(orm.NullableTextExpr(d.Nickname))
+	id, rank := expr.Value(d.ID), expr.Value(d.Nickname)
 	base := rows.FromModel(d.Query())
 	q := rows.OrderBy(rows.DistinctOn(base, expr.Group(rank)), expr.Asc(rank), expr.Desc(id))
 	s, err := rows.CompileRead(rows.Read(q))
@@ -97,13 +97,13 @@ func TestDistinctOnKeysOrderingAndReplacement(t *testing.T) {
 }
 func TestDistinctRejectsInvalidSelectionsBeforeExecution(t *testing.T) {
 	d, other := declareMembers(), declareMembers()
-	id, rank := expr.Value(orm.KeyExpr(d.ID)), expr.Value(orm.NullableTextExpr(d.Nickname))
+	id, rank := expr.Value(d.ID), expr.Value(d.Nickname)
 	base := rows.FromModel(d.Query())
 	invalidKind := rows.Distinct(base)
 	rows.QuerySource(&invalidKind).Node.Distinct.Kind = 99
 	for name, q := range map[string]rows.Query[member, member]{
 		"empty keys": rows.DistinctOn(base), "zero key": rows.DistinctOn(base, expr.GroupKey[member]{}), "duplicate": rows.DistinctOn(base, expr.Group(id), expr.Group(id)),
-		"foreign": rows.DistinctOn(base, expr.Group(expr.Value(orm.KeyExpr(other.ID)))), "missing metadata": rows.Distinct(rows.FromModel(orm.Query[member]{})),
+		"foreign": rows.DistinctOn(base, expr.Group(expr.Value(other.ID))), "missing metadata": rows.Distinct(rows.FromModel(orm.Query[member]{})),
 		"too many": rows.DistinctOn(base, make([]expr.GroupKey[member], querycore.MaxExpressionNodes+1)...),
 		"prefix":   rows.OrderBy(rows.DistinctOn(base, expr.Group(rank)), expr.Asc(id), expr.Asc(rank)), "unknown kind": invalidKind,
 	} {
@@ -123,8 +123,8 @@ func TestDistinctCorrelatedKeysFollowOuterQualification(t *testing.T) {
 	base := rows.From(d.Query())
 	a := rows.As[left](d.Query(), "inner_record")
 	link := rows.Correlate(base, a)
-	outer := expr.At(rows.OuterScope(link, rows.ModelScope(d.Query())), orm.KeyExpr(d.ID))
-	inner := expr.At(rows.InnerScope(link, rows.Scope(a)), orm.KeyExpr(d.ID))
+	outer := expr.At(rows.OuterScope(link, rows.ModelScope(d.Query())), d.ID)
+	inner := expr.At(rows.InnerScope(link, rows.Scope(a)), d.ID)
 	q := rows.DistinctOnCorrelatedScalar(rows.SelectCorrelatedScalar(link, expr.AsSelected(expr.Row(inner))).Where(expr.Equal(inner, outer)), expr.Group(outer)).OrderBy(expr.Asc(outer), expr.Asc(inner))
 	sub := expr.FoundrySelected(expr.AsSelected(rows.CorrelatedScalarRowQuery(q)), sqlowner.Expressions()).Node.(querycore.ScalarSubquery).Query
 	changed := querycore.RequalifyCorrelation(sub, "qualified")

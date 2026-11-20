@@ -1,7 +1,5 @@
 package invalid
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/goway/reporting"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -9,4 +7,4 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-var invalid = datatable.Where[reporting.Member, string](foundryhttp.StringQuery[string](), expr.OrderRow(expr.Value(orm.NumberExpr(reporting.Members.Balance))))
+var invalid = datatable.Where[reporting.Member, string](foundryhttp.StringQuery[string](), expr.OrderRow(expr.Value(reporting.Members.Balance)))

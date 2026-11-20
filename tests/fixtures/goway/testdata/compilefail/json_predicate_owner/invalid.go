@@ -8,4 +8,4 @@ import (
 	value "github.com/weiloon1234/Foundry-Go/value"
 )
 
-var _ = m.Users.Query().Where(orm.JSONEq(c.Records.Settings, value.JSON[c.Preferences]{}))
+var _ = m.Users.Query().Where(orm.Eq(c.Records.Settings, value.JSON[c.Preferences]{}))

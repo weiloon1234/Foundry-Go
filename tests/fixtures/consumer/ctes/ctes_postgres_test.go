@@ -37,12 +37,12 @@ func TestPostgresTypedCTEs(t *testing.T) {
 func checkSharedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
 	// doc-example:begin model-ctes
 	u := models.Users
-	eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.NumberGte(u.Age, 21)))).Materialized()
+	eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.Gte(u.Age, 21)))).Materialized()
 	first, second := rowset.AsRecord[eligibleAlias](eligible, "first_user"), rowset.AsRecord[otherAlias](eligible, "second_user")
 	a, b := rowset.Scope(first), rowset.Scope(second)
-	joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, orm.KeyExpr(models.Users.ID)), expr.At(b, orm.KeyExpr(models.Users.ID))))
+	joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, models.Users.ID), expr.At(b, models.Users.ID)))
 	fields := rowset.LeftScope(joined, rowset.Scope(first))
-	names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, orm.TextExpr(models.Users.Email))))), expr.Asc(expr.At(fields, orm.TextExpr(models.Users.Email)))) // doc-example:end model-ctes
+	names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, models.Users.Email)))), expr.Asc(expr.At(fields, models.Users.Email))) // doc-example:end model-ctes
 	s, err := rowset.CompileRead(rowset.ReadScalar(names))
 	if err != nil {
 		return err
@@ -61,7 +61,7 @@ func checkSharedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
 	dependent := rowset.CTE("dependent_users", eligible)
 	d := rowset.AsRecord[eligibleAlias](dependent, "dependent")
 	df := rowset.Scope(d)
-	statuses := rowset.WhereScalar(rowset.SelectScalar(d, expr.AsSelected(expr.Row(expr.At(df, orm.EnumExpr(models.Users.Status))))), expr.Eq(expr.At(df, orm.EnumExpr(models.Users.Status)), models.StatusActive))
+	statuses := rowset.WhereScalar(rowset.SelectScalar(d, expr.AsSelected(expr.Row(expr.At(df, models.Users.Status)))), expr.Eq(expr.At(df, models.Users.Status), models.StatusActive))
 	if n, err := rowset.ReadScalar(statuses).Count(t.Context(), tx); err != nil || n != 2 {
 		t.Error("dependent CTE lost enum codec or input", err)
 	}
@@ -86,16 +86,16 @@ func checkSharedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
 func checkProjectedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
 	o := models.Orders
 	totals := rowset.Limit(rowset.OrderBy(rowset.Having(rowset.GroupBy(rowset.Select(rowset.From(models.Orders.Query()), reports.BuyerTotalRows.Row,
-		rowset.Map(reports.BuyerTotalRows.BuyerID, expr.Value(orm.ColumnExpr(o.BuyerID))),
-		rowset.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(expr.Sum(orm.NumberExpr(o.TotalCents)))),
+		rowset.Map(reports.BuyerTotalRows.BuyerID, expr.Value(o.BuyerID)),
+		rowset.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(expr.Sum(o.TotalCents))),
 		rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.AsSelected(expr.Count[models.Order]())),
-		rowset.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.Avg(orm.NumberExpr(o.TotalCents)))),
-	), expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID)))), expr.GteValue(expr.Count[models.Order](), 2)), expr.DescValue(expr.Count[models.Order]())), 1)
+		rowset.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.Avg(o.TotalCents))),
+	), expr.Group(expr.Value(o.BuyerID))), expr.GteValue(expr.Count[models.Order](), 2)), expr.DescValue(expr.Count[models.Order]())), 1)
 	definition := rowset.CTE("buyer_totals", rowset.RecordOf(totals)).NotMaterialized()
 	source := rowset.AsRecord[totalsAlias](definition, "totals")
 	f := rowset.Scope(source)
 	buyers := rowset.WhereScalar(rowset.SelectScalar(source, expr.AsSelected(expr.Row(rowset.At(f, reports.BuyerTotalRows.BuyerID)))), expr.NullableGt(expr.OrderNullableRow(rowset.At(f, reports.BuyerTotalRows.Total)), decimal.FromInt64(2)))
-	selected, err := orm.All(t.Context(), tx, expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(orm.KeyExpr(models.Users.ID)), buyers)))
+	selected, err := orm.All(t.Context(), tx, expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(models.Users.ID), buyers)))
 	if err != nil {
 		return err
 	}
@@ -104,15 +104,15 @@ func checkProjectedCTEs(t *testing.T, tx *database.Tx, users []models.User) erro
 	}
 	// A CTE record keeps declared aliases and codecs through outer joins.
 	u := rowset.As[eligibleAlias](models.Users.Query(), "buyer")
-	joined := rowset.LeftJoin(u, source, rowset.OnEqual(expr.At(rowset.Scope(u), orm.KeyExpr(models.Users.ID)), rowset.At(f, reports.BuyerTotalRows.BuyerID)))
+	joined := rowset.LeftJoin(u, source, rowset.OnEqual(expr.At(rowset.Scope(u), models.Users.ID), rowset.At(f, reports.BuyerTotalRows.BuyerID)))
 	user := rowset.LeftScope(joined, rowset.Scope(u))
 	stats := rowset.NullableRightScope(joined, rowset.Scope(source))
 	report := rowset.OrderBy(rowset.Select(joined, reports.UserOrderStatsRows.Row,
-		rowset.Map(reports.UserOrderStatsRows.ID, expr.At(user, orm.KeyExpr(models.Users.ID))),
-		rowset.Map(reports.UserOrderStatsRows.Email, expr.At(user, orm.TextExpr(models.Users.Email))),
+		rowset.Map(reports.UserOrderStatsRows.ID, expr.At(user, models.Users.ID)),
+		rowset.Map(reports.UserOrderStatsRows.Email, expr.At(user, models.Users.Email)),
 		rowset.MapSelected(reports.UserOrderStatsRows.Total, expr.AsSelected(expr.Row(rowset.AtNullableValue(stats, reports.BuyerTotalRows.Total)))),
 		rowset.MapSelected(reports.UserOrderStatsRows.Orders, expr.AsSelected(expr.Row(rowset.AtNullable(stats, reports.BuyerTotalRows.Orders)))),
-	), expr.Asc(expr.At(user, orm.TextExpr(models.Users.Email))))
+	), expr.Asc(expr.At(user, models.Users.Email)))
 	rows, err := rowset.Read(report).All(t.Context(), tx)
 	if err != nil {
 		return err
@@ -130,9 +130,9 @@ func checkProjectedCTEs(t *testing.T, tx *database.Tx, users []models.User) erro
 		t.Error("CTE outer join lost nullability")
 	}
 	// Hoisted definitions may contain their own explicit row correlations.
-	filtered := rowset.CTE("buyers_with_orders", rowset.ModelRecord(models.Users.Query().Where(orm.Has(models.UserLinks.Orders.Where(orm.NumberGt(o.TotalCents, 2))))))
+	filtered := rowset.CTE("buyers_with_orders", rowset.ModelRecord(models.Users.Query().Where(orm.Has(models.UserLinks.Orders.Where(orm.Gt(o.TotalCents, 2))))))
 	a := rowset.AsRecord[otherAlias](filtered, "filtered")
-	if ids, err := rowset.ReadScalar(rowset.SelectScalar(a, expr.AsSelected(expr.Row(expr.At(rowset.Scope(a), orm.KeyExpr(models.Users.ID)))))).All(t.Context(), tx); err != nil || len(ids) != 1 || ids[0] != users[1].ID {
+	if ids, err := rowset.ReadScalar(rowset.SelectScalar(a, expr.AsSelected(expr.Row(expr.At(rowset.Scope(a), models.Users.ID))))).All(t.Context(), tx); err != nil || len(ids) != 1 || ids[0] != users[1].ID {
 		t.Error("CTE lost its internal relationship correlation", err)
 	}
 	return nil
@@ -140,21 +140,21 @@ func checkProjectedCTEs(t *testing.T, tx *database.Tx, users []models.User) erro
 
 func checkCTEModelFilters(t *testing.T, tx *database.Tx, users []models.User) error {
 	u, o := models.Users, models.Orders
-	eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.NumberGte(u.Age, 21))))
+	eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.Gte(u.Age, 21))))
 	a := rowset.AsRecord[eligibleAlias](eligible, "eligible")
 	f := rowset.Scope(a)
-	ids := rowset.SelectScalar(a, expr.AsSelected(expr.Row(expr.At(f, orm.KeyExpr(models.Users.ID)))))
+	ids := rowset.SelectScalar(a, expr.AsSelected(expr.Row(expr.At(f, models.Users.ID))))
 	// CTE references can live in an explicitly correlated inner expr.
 
 	correlation := rowset.Correlate(rowset.From(models.Orders.Query()), a)
 	inner := rowset.InnerScope(correlation, rowset.Scope(a))
 	outer := rowset.OuterScope(correlation, rowset.ModelScope(models.Orders.Query()))
-	match := correlation.Where(expr.Equal(expr.At(inner, orm.KeyExpr(models.Users.ID)), expr.At(outer, orm.ColumnExpr(models.Orders.BuyerID)))).Exists()
+	match := correlation.Where(expr.Equal(expr.At(inner, models.Users.ID), expr.At(outer, models.Orders.BuyerID))).Exists()
 	if n, err := orm.Count(t.Context(), tx, expr.Where(models.Orders.Query(), match)); err != nil || n != 1 {
 		t.Error("CTE correlation returned wrong orders", err)
 	}
 	// Automatic relation aliases must not capture names inside CTE definitions.
-	referrals := models.UserLinks.Referrals.Where(expr.RelationFilter(models.UserLinks.Referrals, rowset.InQuery(expr.Value(orm.KeyExpr(u.ID)), ids)))
+	referrals := models.UserLinks.Referrals.Where(expr.RelationFilter(models.UserLinks.Referrals, rowset.InQuery(expr.Value(u.ID), ids)))
 	loaded, err := orm.All(t.Context(), tx, models.Users.Query().Where(orm.Has(referrals)).With(referrals))
 	if err != nil {
 		return err
@@ -168,15 +168,15 @@ func checkCTEModelFilters(t *testing.T, tx *database.Tx, users []models.User) er
 	if err := queryfixture.CreateFriendshipTable(t.Context(), tx); err != nil {
 		return err
 	}
-	if _, err := orm.Insert(t.Context(), tx, models.Friendships.Table, orm.ColumnSet(models.Friendships.FromID, users[0].ID), orm.ColumnSet(models.Friendships.ToID, users[1].ID), orm.TextSet(models.Friendships.Note, "active")); err != nil {
+	if _, err := orm.Insert(t.Context(), tx, models.Friendships.Table, orm.Set(models.Friendships.FromID, users[0].ID), orm.Set(models.Friendships.ToID, users[1].ID), orm.Set(models.Friendships.Note, "active")); err != nil {
 		return err
 	}
-	friends := models.UserLinks.Friends.Where(expr.RelationFilter(models.UserLinks.Friends, rowset.InQuery(expr.Value(orm.KeyExpr(u.ID)), ids)))
+	friends := models.UserLinks.Friends.Where(expr.RelationFilter(models.UserLinks.Friends, rowset.InQuery(expr.Value(u.ID), ids)))
 	if rows, err := orm.All(t.Context(), tx, models.Users.Query().Where(orm.Has(friends)).With(friends)); err != nil || len(rows) != 1 {
 		t.Error("CTE through filter failed", err)
 	}
-	count := models.Users.OrderCount.Using(expr.Related(models.UserLinks.Orders.Where(expr.RelationFilter(models.UserLinks.Orders, rowset.InQuery(expr.Value(orm.ColumnExpr(o.BuyerID)), ids))), expr.Count[models.Order]()))
-	counted, err := orm.All(t.Context(), tx, models.Users.Query().With(count).OrderBy(orm.TextAsc(u.Email)))
+	count := models.Users.OrderCount.Using(expr.Related(models.UserLinks.Orders.Where(expr.RelationFilter(models.UserLinks.Orders, rowset.InQuery(expr.Value(o.BuyerID), ids))), expr.Count[models.Order]()))
+	counted, err := orm.All(t.Context(), tx, models.Users.Query().With(count).OrderBy(orm.Asc(u.Email)))
 	if err != nil {
 		return err
 	}
@@ -189,11 +189,11 @@ func checkCTEModelFilters(t *testing.T, tx *database.Tx, users []models.User) er
 		}
 	}
 	// CTE-bound predicates share the mutation's parameter numbering and transaction.
-	builder := expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(orm.KeyExpr(u.ID)), ids))
-	if updated, err := orm.Update(t.Context(), tx, builder, u.Key(), users[1].ID, orm.NumberSet(u.Age, 25)); err != nil || updated.Age != 25 {
+	builder := expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(u.ID), ids))
+	if updated, err := orm.Update(t.Context(), tx, builder, u.Key(), users[1].ID, orm.Set(u.Age, 25)); err != nil || updated.Age != 25 {
 		t.Error("CTE-scoped update failed", err)
 	}
-	if _, err := orm.Update(t.Context(), tx, builder, u.Key(), users[0].ID, orm.NumberSet(u.Age, 25)); !errors.Is(err, database.NotFound) {
+	if _, err := orm.Update(t.Context(), tx, builder, u.Key(), users[0].ID, orm.Set(u.Age, 25)); !errors.Is(err, database.NotFound) {
 		t.Error("CTE filter did not constrain update", err)
 	}
 	if _, err := orm.Delete(t.Context(), tx, builder, u.Key(), users[2].ID); err != nil {
@@ -208,19 +208,19 @@ func checkCTEModelFilters(t *testing.T, tx *database.Tx, users []models.User) er
 func TestInvalidCTEsNeverExecute(t *testing.T) {
 	for _, definition := range []rowset.CommonTable[models.User]{
 		{}, rowset.CTE[models.User]("empty", nil), rowset.CTE("users", rowset.ModelRecord(models.Users.Query())),
-		rowset.CTE("bad", rowset.ModelRecord(models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.Status("invalid"))))),
+		rowset.CTE("bad", rowset.ModelRecord(models.Users.Query().Where(orm.Eq(models.Users.Status, models.Status("invalid"))))),
 	} {
 		source := rowset.AsRecord[eligibleAlias](definition, "eligible")
-		ids := rowset.SelectScalar(source, expr.AsSelected(expr.Row(expr.At(rowset.Scope(source), orm.KeyExpr(models.Users.ID)))))
+		ids := rowset.SelectScalar(source, expr.AsSelected(expr.Row(expr.At(rowset.Scope(source), models.Users.ID))))
 		if rows, err := rowset.ReadScalar(ids).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 			t.Error("invalid CTE reached executor", err)
 		}
 	}
 	first := rowset.CTE("same_name", rowset.ModelRecord(models.Users.Query()))
-	second := rowset.CTE("same_name", rowset.ModelRecord(models.Users.Query().Where(orm.NumberGt(models.Users.Age, 18))))
+	second := rowset.CTE("same_name", rowset.ModelRecord(models.Users.Query().Where(orm.Gt(models.Users.Age, 18))))
 	a, b := rowset.AsRecord[eligibleAlias](first, "a"), rowset.AsRecord[otherAlias](second, "b")
-	joined := rowset.InnerJoin(a, b, rowset.On(expr.At(rowset.Scope(a), orm.KeyExpr(models.Users.ID)), expr.At(rowset.Scope(b), orm.KeyExpr(models.Users.ID))))
-	ids := rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(rowset.LeftScope(joined, rowset.Scope(a)), orm.KeyExpr(models.Users.ID)))))
+	joined := rowset.InnerJoin(a, b, rowset.On(expr.At(rowset.Scope(a), models.Users.ID), expr.At(rowset.Scope(b), models.Users.ID)))
+	ids := rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(rowset.LeftScope(joined, rowset.Scope(a)), models.Users.ID))))
 	if rows, err := rowset.ReadScalar(ids).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Error("conflicting CTE definitions reached executor", err)
 	}

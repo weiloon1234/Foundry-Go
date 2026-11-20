@@ -1,7 +1,5 @@
 package projection_type
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/goway/models"
 	"foundry.test/goway/reporting"
@@ -11,5 +9,5 @@ import (
 
 func F() {
 	u := rows.As[struct{}](models.Users.Query(), "u")
-	rows.Map(reporting.OrderRows.Amount, expr.At(rows.Scope(u), orm.TextExpr(models.Users.Email)))
+	rows.Map(reporting.OrderRows.Amount, expr.At(rows.Scope(u), models.Users.Email))
 }

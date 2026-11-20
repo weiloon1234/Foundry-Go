@@ -6,4 +6,4 @@ import (
 	j "foundry.test/goway/models/joined"
 )
 
-var _ = j.Peers.WherePivot(orm.TextEq(j.Targets.Name, "member"))
+var _ = j.Peers.WherePivot(orm.Eq(j.Targets.Name, "member"))

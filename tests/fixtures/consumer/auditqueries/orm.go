@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
-// AccountTable declares stored columns and their write roles. Example: orm.KeyEq(Accounts.Key(), key).
+// AccountTable declares stored columns and their write roles. Example: orm.Eq(Accounts.Key(), key).
 type AccountTable struct {
 	orm.Table[Account, model.ID[Account]]
 	Email        orm.InputText[Account, string, string]
@@ -37,7 +37,7 @@ var Accounts = orm.Define("audited_accounts", func(b orm.Builder[Account], m *Ac
 	}
 }, orm.WithHooks(ormAccountHooks))
 
-// LabelTable declares stored columns and their write roles. Example: orm.KeyEq(Labels.Key(), key).
+// LabelTable declares stored columns and their write roles. Example: orm.Eq(Labels.Key(), key).
 type LabelTable struct {
 	orm.Table[Label, LabelCode]
 	Name orm.Text[Label, string]

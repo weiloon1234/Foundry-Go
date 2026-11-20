@@ -46,7 +46,7 @@ var personColumns = []string{"id", "manager_id", "name", "deleted_at"}
 
 func TestRelationsBatchAndFillNullableSlots(t *testing.T) {
 	p := people()
-	manager := BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))
+	manager := BelongsToOf(p.Manager, p.ManagerID, p.ID)
 	if err := Check(p, manager); err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestRelationsBatchAndFillNullableSlots(t *testing.T) {
 }
 func TestLoadManyCopiesParentsAndFillsDuplicateKeys(t *testing.T) {
 	p := people()
-	reports := HasManyOf(p.Reports, KeyExpr(p.ID), NullableNumberExpr(p.ManagerID))
+	reports := HasManyOf(p.Reports, p.ID, p.ManagerID)
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements, columns: personColumns, values: [][]driver.Value{{int64(2), int64(1), "a", nil}, {int64(3), int64(1), "b", nil}}})
 	parents := []relationPerson{{ID: 1}, {ID: 1}, {ID: 5}}
@@ -122,7 +122,7 @@ func TestLoadManyCopiesParentsAndFillsDuplicateKeys(t *testing.T) {
 }
 func TestRelationKeyBatchingAndSharedBudgets(t *testing.T) {
 	p := people()
-	manager := BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))
+	manager := BelongsToOf(p.Manager, p.ManagerID, p.ID)
 	parents := make([]relationPerson, 501)
 	for i := range parents {
 		parents[i].ManagerID = value.Of(int64(i + 1))
@@ -150,7 +150,7 @@ func TestRelationKeyBatchingAndSharedBudgets(t *testing.T) {
 }
 func TestRelationsRejectCardinalityAndUnexpectedKeys(t *testing.T) {
 	p := people()
-	manager := BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))
+	manager := BelongsToOf(p.Manager, p.ManagerID, p.ID)
 	for _, tc := range []struct {
 		name string
 		rows [][]driver.Value
@@ -170,14 +170,14 @@ func TestRelationsRejectCardinalityAndUnexpectedKeys(t *testing.T) {
 }
 func TestRelationStartupAndQueryOwnershipErrors(t *testing.T) {
 	p, other := people(), people()
-	valid := BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))
-	wrong := BelongsToOf(p.Manager, NullableNumberExpr(other.ManagerID), KeyExpr(p.ID))
+	valid := BelongsToOf(p.Manager, p.ManagerID, p.ID)
+	wrong := BelongsToOf(p.Manager, other.ManagerID, p.ID)
 	if err := Check(wrong); err == nil || !strings.Contains(err.Error(), "local key") {
 		t.Fatal(err)
 	}
 	wrongSlot := *p.Manager.core
 	wrongSlot.target = reflect.TypeFor[record]()
-	mismatch := BelongsToOf(One[relationPerson, relationPerson]{core: &wrongSlot}, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))
+	mismatch := BelongsToOf(One[relationPerson, relationPerson]{core: &wrongSlot}, p.ManagerID, p.ID)
 	if err := Check(mismatch); err == nil || !strings.Contains(err.Error(), "slot/model mismatch") {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestRelationStartupAndQueryOwnershipErrors(t *testing.T) {
 	}
 	var extra relationPerson
 	escaped := OneOf(Builder[relationPerson]{}, &extra.Manager)
-	if Check(BelongsToOf(escaped, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))) == nil {
+	if Check(BelongsToOf(escaped, p.ManagerID, p.ID)) == nil {
 		t.Fatal("ownerless slot accepted")
 	}
 }
@@ -214,9 +214,9 @@ func TestRelationTargetGlobalScopeUsesExecutionContext(t *testing.T) {
 		if ctx.Value("tenant") != int64(7) {
 			return nil, fmt.Errorf("missing execution context")
 		}
-		return querycore.PredicateNode(TextEq(p.Name, "scoped").expression), nil
+		return querycore.PredicateNode(Eq(p.Name, "scoped").expression), nil
 	}}}
-	rel := BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))
+	rel := BelongsToOf(p.Manager, p.ManagerID, p.ID)
 	var statements []string
 	var bindings [][]any
 	db := testDB(t, testConnector{statements: &statements, bindings: &bindings, columns: personColumns})
@@ -231,8 +231,8 @@ func TestRelationTargetGlobalScopeUsesExecutionContext(t *testing.T) {
 
 func TestRelationBudgetsAreSharedAcrossDescriptors(t *testing.T) {
 	p := people()
-	manager := BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))
-	reports := HasManyOf(p.Reports, KeyExpr(p.ID), NullableNumberExpr(p.ManagerID))
+	manager := BelongsToOf(p.Manager, p.ManagerID, p.ID)
+	reports := HasManyOf(p.Reports, p.ID, p.ManagerID)
 	parents := make([]relationPerson, 6000)
 	for i := range parents {
 		parents[i] = relationPerson{ID: 2, ManagerID: value.Of(int64(1))}
@@ -254,7 +254,7 @@ func TestRelationBudgetsAreSharedAcrossDescriptors(t *testing.T) {
 }
 func TestSimplePageLoadsOnlyReturnedRows(t *testing.T) {
 	p := people()
-	manager := BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))
+	manager := BelongsToOf(p.Manager, p.ManagerID, p.ID)
 	var bindings [][]any
 	db := testDB(t, testConnector{bindings: &bindings, respond: func(sql string) ([]string, [][]driver.Value) {
 		if strings.Contains(sql, "ANY(") {
@@ -273,8 +273,8 @@ func TestSimplePageLoadsOnlyReturnedRows(t *testing.T) {
 
 func TestLoadRejectsMixedDeclarationOwners(t *testing.T) {
 	a, b := people(), people()
-	manager := BelongsToOf(a.Manager, NullableNumberExpr(a.ManagerID), KeyExpr(a.ID))
-	reports := HasManyOf(b.Reports, KeyExpr(b.ID), NullableNumberExpr(b.ManagerID))
+	manager := BelongsToOf(a.Manager, a.ManagerID, a.ID)
+	reports := HasManyOf(b.Reports, b.ID, b.ManagerID)
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
 	for _, parents := range [][]relationPerson{nil, {{ID: 1}}} {

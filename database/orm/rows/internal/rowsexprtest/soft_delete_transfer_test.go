@@ -38,7 +38,7 @@ func TestSoftDeleteScopesReachAliasesAndModelMutations(t *testing.T) {
 		if e != nil || strings.Contains(s.SQL(), `"deleted_at" IS `) != (i != 1) {
 			t.Fatal(s.SQL(), e)
 		}
-		core := orm.FoundrySource(q.Where(orm.KeyEq(d.Key(), 7)), sqlowner.Metadata()).Node
+		core := orm.FoundrySource(q.Where(orm.Eq(d.Key(), 7)), sqlowner.Metadata()).Node
 		for _, kind := range []querycore.MutationKind{querycore.UpdateModel, querycore.DeleteModel} {
 			model := querycore.ModelDefinition{Table: "soft_records", Primary: "id", Columns: core.Source.Columns, SoftDelete: &querycore.SoftDeleteColumn{Name: "deleted_at"}}
 			ast := querycore.QueryCore{Table: "soft_records", Model: &model, SoftDeleteScope: []querycore.SoftDeleteScope{querycore.ActiveRecords, querycore.AllRecords, querycore.TrashedRecords}[i], Predicates: []querycore.Expression{querycore.Comparison{Operand: querycore.FieldRef{Table: "soft_records", Column: "id"}, Operator: querycore.Equal, Values: querycore.RetainComparisonValues([]any{int64(7)}), Bind: func(v any) (driver.Value, error) { return v, nil }}}}
@@ -72,7 +72,7 @@ func TestSoftDeleteScopesReachAliasesAndModelMutations(t *testing.T) {
 	}
 	plain := declareMembers()
 	for _, q := range []orm.Query[member]{plain.Query().WithTrashed(), plain.Query().OnlyTrashed()} {
-		if _, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(plain.ID))))))); !errors.Is(e, fault.Invalid) {
+		if _, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(plain.ID)))))); !errors.Is(e, fault.Invalid) {
 			t.Fatal("projection lost visibility failure", e)
 		}
 	}

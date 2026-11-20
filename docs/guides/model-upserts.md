@@ -8,10 +8,10 @@
 ```go
 func upsertUser(ctx context.Context, tx *database.Tx) (value.Optional[models.User], error) {
 	f := models.Users
-	policy := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Email))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(f.Age)))
+	policy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(orm.ConflictIncoming(f.Age))
 	return orm.Upsert(ctx, tx, f.Query(), policy,
-		orm.TextSet(f.Email, "ada@example.test"), orm.NumberSet(f.Age, 30),
-		orm.EnumSet(f.Status, models.StatusActive), orm.EnumSet(f.Level, models.LevelBasic))
+		orm.Set(f.Email, "ada@example.test"), orm.Set(f.Age, 30),
+		orm.Set(f.Status, models.StatusActive), orm.Set(f.Level, models.LevelBasic))
 }
 ```
 
@@ -29,10 +29,10 @@ Active destination scopes join conflict update conditions. An unconditional upda
 ```go
 func excluded() orm.Conflict[models.User] {
 	r := rows.ConflictRowsOf(models.Users.Query())
-	stored := expr.At(r.Stored(), orm.NumberExpr(models.Users.Age))
-	proposed := expr.At(r.Proposed(), orm.NumberExpr(models.Users.Age))
-	return orm.OnConflict(orm.ConflictKey(orm.TextExpr(models.Users.Email))).DoUpdate(
-		rows.SetConflictValue(orm.NumberExpr(models.Users.Age), expr.Add(stored, proposed)))
+	stored := expr.At(r.Stored(), models.Users.Age)
+	proposed := expr.At(r.Proposed(), models.Users.Age)
+	return orm.OnConflict(orm.ConflictKey(models.Users.Email)).DoUpdate(
+		rows.SetConflictValue(models.Users.Age, expr.Add(stored, proposed)))
 }
 ```
 

@@ -64,7 +64,7 @@ func seedRetentionRun(ctx context.Context, tx *database.Tx, now, until temporal.
 	if err != nil {
 		return id, err
 	}
-	_, err = orm.Insert(ctx, tx, runs.Table, orm.KeySet(runs.Key(), id), orm.TextSet(runs.Instance, Instance("retention-test")), orm.TextSet(runs.Release, Release("test")), orm.TimeSet(runs.StartedAt, now), orm.TimeSet(runs.HeartbeatAt, now), orm.TimeSet(runs.RetainUntil, until), orm.JSONSet(runs.Runtime, payload))
+	_, err = orm.Insert(ctx, tx, runs.Table, orm.Set(runs.Key(), id), orm.Set(runs.Instance, Instance("retention-test")), orm.Set(runs.Release, Release("test")), orm.Set(runs.StartedAt, now), orm.Set(runs.HeartbeatAt, now), orm.Set(runs.RetainUntil, until), orm.Set(runs.Runtime, payload))
 	return id, err
 }
 
@@ -76,7 +76,7 @@ func seedRetentionMetrics(ctx context.Context, tx *database.Tx, run model.ID[run
 	drafts := make([][]orm.Assignment[metricRow], 0, count)
 	for i := range count {
 		key := store.MetricKey(digest(fmt.Sprintf("%s-%d", prefix, i)))
-		drafts = append(drafts, []orm.Assignment[metricRow]{orm.KeySet(metrics.Key(), key), orm.ColumnSet(metrics.RunID, run), orm.TimeSet(metrics.BucketAt, at), orm.NumberSet(metrics.IntervalSeconds, interval), orm.TextSet(metrics.Route, http.RouteID("retention.test")), orm.TextSet(metrics.RoutePath, "/retention"), orm.TextSet(metrics.Method, http.GET), orm.NumberSet(metrics.Status, 200), orm.TextSet(metrics.Outcome, observability.Succeeded), orm.JSONSet(metrics.Histogram, histogram)})
+		drafts = append(drafts, []orm.Assignment[metricRow]{orm.Set(metrics.Key(), key), orm.Set(metrics.RunID, run), orm.Set(metrics.BucketAt, at), orm.Set(metrics.IntervalSeconds, interval), orm.Set(metrics.Route, http.RouteID("retention.test")), orm.Set(metrics.RoutePath, "/retention"), orm.Set(metrics.Method, http.GET), orm.Set(metrics.Status, 200), orm.Set(metrics.Outcome, observability.Succeeded), orm.Set(metrics.Histogram, histogram)})
 	}
 	return insertRetentionRows(ctx, tx, metrics.Table, drafts)
 }
@@ -94,8 +94,8 @@ func seedRetentionIssues(ctx context.Context, tx *database.Tx, prefix string, so
 		if err != nil {
 			return err
 		}
-		issueDrafts = append(issueDrafts, []orm.Assignment[issueRow]{orm.KeySet(issues.Key(), key), orm.EnumSet(issues.Source, source), orm.TextSet(issues.Code, "retention.test"), orm.TextSet(issues.Route, http.RouteID("retention.test")), orm.TextSet(issues.Release, Release("test")), orm.NumberSet(issues.Count, int64(1)), orm.TimeSet(issues.FirstAt, at), orm.TimeSet(issues.LastAt, at), orm.JSONSet(issues.Detail, detail)})
-		eventDrafts = append(eventDrafts, []orm.Assignment[eventRow]{orm.KeySet(events.Key(), id), orm.TextSet(events.Fingerprint, key), orm.EnumSet(events.Source, source), orm.TimeSet(events.CreatedAt, at), orm.JSONSet(events.Detail, detail)})
+		issueDrafts = append(issueDrafts, []orm.Assignment[issueRow]{orm.Set(issues.Key(), key), orm.Set(issues.Source, source), orm.Set(issues.Code, "retention.test"), orm.Set(issues.Route, http.RouteID("retention.test")), orm.Set(issues.Release, Release("test")), orm.Set(issues.Count, int64(1)), orm.Set(issues.FirstAt, at), orm.Set(issues.LastAt, at), orm.Set(issues.Detail, detail)})
+		eventDrafts = append(eventDrafts, []orm.Assignment[eventRow]{orm.Set(events.Key(), id), orm.Set(events.Fingerprint, key), orm.Set(events.Source, source), orm.Set(events.CreatedAt, at), orm.Set(events.Detail, detail)})
 	}
 	if err := insertRetentionRows(ctx, tx, issues.Table, issueDrafts); err != nil {
 		return err
@@ -114,7 +114,7 @@ func seedRetentionReceipts(ctx context.Context, tx *database.Tx, run model.ID[ru
 		if err != nil {
 			return err
 		}
-		drafts = append(drafts, []orm.Assignment[flushRow]{orm.KeySet(flushes.Key(), id), orm.ColumnSet(flushes.RunID, run), orm.TimeSet(flushes.CreatedAt, stored), orm.TimeSet(flushes.StoredAt, stored), orm.TimeSet(flushes.RetainUntil, until), orm.JSONSet(flushes.Result, payload)})
+		drafts = append(drafts, []orm.Assignment[flushRow]{orm.Set(flushes.Key(), id), orm.Set(flushes.RunID, run), orm.Set(flushes.CreatedAt, stored), orm.Set(flushes.StoredAt, stored), orm.Set(flushes.RetainUntil, until), orm.Set(flushes.Result, payload)})
 	}
 	return insertRetentionRows(ctx, tx, flushes.Table, drafts)
 }
@@ -168,7 +168,7 @@ func TestPostgresTelemetryPruneUsesSourceAndBucketCutoffs(t *testing.T) {
 			return fmt.Errorf("pruning removed the storage control row")
 		}
 		for _, name := range []string{"kept-backend", "kept-browser", "recent-security"} {
-			exists, err := orm.Exists(t.Context(), tx, issues.Query().Where(orm.KeyEq(issues.Key(), Fingerprint(digest(name+"-0")))))
+			exists, err := orm.Exists(t.Context(), tx, issues.Query().Where(orm.Eq(issues.Key(), Fingerprint(digest(name+"-0")))))
 			if err != nil {
 				return err
 			}
@@ -262,10 +262,10 @@ func TestPostgresTelemetryReceiptHorizonSurvivesClockSkewAndShorterPruner(t *tes
 	expired := retentionAt(t, now, -time.Hour)
 	olderThanShortHorizon := retentionAt(t, now, -10*time.Minute)
 	storageTransaction(t, db, schema, func(tx *database.Tx) error {
-		if _, err := orm.UpdateAll(t.Context(), tx, runs.Query().Where(orm.KeyEq(runs.Key(), s.runKey())), orm.TimeSet(runs.RetainUntil, expired)); err != nil {
+		if _, err := orm.UpdateAll(t.Context(), tx, runs.Query().Where(orm.Eq(runs.Key(), s.runKey())), orm.Set(runs.RetainUntil, expired)); err != nil {
 			return err
 		}
-		_, err := orm.UpdateAll(t.Context(), tx, flushes.Query().Where(orm.KeyEq(flushes.Key(), receipt.ID)), orm.TimeSet(flushes.StoredAt, olderThanShortHorizon))
+		_, err := orm.UpdateAll(t.Context(), tx, flushes.Query().Where(orm.Eq(flushes.Key(), receipt.ID)), orm.Set(flushes.StoredAt, olderThanShortHorizon))
 		return err
 	})
 	got, err := short.prune(t.Context())
@@ -277,7 +277,7 @@ func TestPostgresTelemetryReceiptHorizonSurvivesClockSkewAndShorterPruner(t *tes
 	}
 	stored := retentionAt(t, now, -3*time.Hour)
 	storageTransaction(t, db, schema, func(tx *database.Tx) error {
-		_, err := orm.UpdateAll(t.Context(), tx, flushes.Query().Where(orm.KeyEq(flushes.Key(), receipt.ID)), orm.TimeSet(flushes.StoredAt, stored), orm.TimeSet(flushes.RetainUntil, expired))
+		_, err := orm.UpdateAll(t.Context(), tx, flushes.Query().Where(orm.Eq(flushes.Key(), receipt.ID)), orm.Set(flushes.StoredAt, stored), orm.Set(flushes.RetainUntil, expired))
 		return err
 	})
 	got, err = short.prune(t.Context())
@@ -335,7 +335,7 @@ func TestPostgresTelemetryRunCascadeHonorsLoweredChildCaps(t *testing.T) {
 			}
 			if kind == "metrics" {
 				storageTransaction(t, db, schema, func(tx *database.Tx) error {
-					_, err := orm.UpdateAll(t.Context(), tx, metrics.Query().Where(orm.KeyEq(metrics.Key(), store.MetricKey(digest(kind+"-0")))), orm.TimeSet(metrics.BucketAt, old))
+					_, err := orm.UpdateAll(t.Context(), tx, metrics.Query().Where(orm.Eq(metrics.Key(), store.MetricKey(digest(kind+"-0")))), orm.Set(metrics.BucketAt, old))
 					return err
 				})
 				want = PruneResult{Metrics: 101, Runs: 1}

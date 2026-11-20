@@ -26,7 +26,7 @@ func (m *Manager) Inspect(ctx context.Context, id OperationID) (ReconcileResult,
 	var result ReconcileResult
 	err := m.reads.Run(ctx, "attachment intent inspection", func(ctx context.Context) error {
 		return m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-			row, err := orm.Require(ctx, tx, store.Files.Query().Where(orm.KeyEq(store.Files.Key(), fileID(id))))
+			row, err := orm.Require(ctx, tx, store.Files.Query().Where(orm.Eq(store.Files.Key(), fileID(id))))
 			if err != nil {
 				return err
 			}

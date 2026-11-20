@@ -41,7 +41,7 @@ func TestStoreUUIDAndEachWrites(t *testing.T) {
 	must(t, err)
 	_, err = db.Exec(ctx, `INSERT INTO store_records VALUES($1,'first'),($2,'second')`, a.String(), b.String())
 	must(t, err)
-	page, err := orm.All(ctx, db, d.Query().Where(orm.UUIDGreater(orm.KeyExpr(d.Key()), a)).OrderBy(orm.KeyAsc(d.Key())))
+	page, err := orm.All(ctx, db, d.Query().Where(orm.UUIDGreater(d.Key(), a)).OrderBy(orm.Asc(d.Key())))
 	must(t, err)
 	if len(page) != 1 || page[0].ID != b {
 		t.Fatal(page)
@@ -51,7 +51,7 @@ func TestStoreUUIDAndEachWrites(t *testing.T) {
 		if r.ID == b {
 			return nil, sentinel
 		}
-		return []orm.Assignment[storeRecord]{orm.TextSet(d.Name, "changed")}, nil
+		return []orm.Assignment[storeRecord]{orm.Set(d.Name, "changed")}, nil
 	})
 	if !errors.Is(err, sentinel) || commits != 0 {
 		t.Fatal(err, commits)
@@ -109,7 +109,7 @@ func TestEachWritesWaitForCompleteCandidateSet(t *testing.T) {
 			launched, received := false, false
 			var batch result
 			lockErr := db.Transaction(ctx, func(locker *database.Tx) error {
-				if _, err := orm.RequireLocked(ctx, locker, orm.Lock(d.Query().Where(orm.KeyEq(d.Key(), 1)))); err != nil {
+				if _, err := orm.RequireLocked(ctx, locker, orm.Lock(d.Query().Where(orm.Eq(d.Key(), 1)))); err != nil {
 					return err
 				}
 				var blocker int64
@@ -131,7 +131,7 @@ func TestEachWritesWaitForCompleteCandidateSet(t *testing.T) {
 						} else {
 							rows, err = orm.UpdateEach(ctx, writer, d.Query(), 1, func(context.Context, *database.Tx, recordItem) ([]orm.Assignment[recordItem], error) {
 								callbacks++
-								return []orm.Assignment[recordItem]{orm.TextSet(d.Name, "changed")}, nil
+								return []orm.Assignment[recordItem]{orm.Set(d.Name, "changed")}, nil
 							})
 						}
 						return err
@@ -187,7 +187,7 @@ func TestEachWritesWaitForCompleteCandidateSet(t *testing.T) {
 			if !errors.Is(batch.err, fault.Invalid) || batch.rows != nil || callbacks != 0 {
 				t.Errorf("overflow must fail before callbacks: err=%v rows=%v callbacks=%d", batch.err, batch.rows, callbacks)
 			}
-			unchanged, err := orm.All(ctx, db, d.Query().OrderBy(orm.KeyAsc(d.Key())))
+			unchanged, err := orm.All(ctx, db, d.Query().OrderBy(orm.Asc(d.Key())))
 			must(t, err)
 			if !reflect.DeepEqual(unchanged, []recordItem{{ID: 1, Name: "first"}, {ID: 2, Name: "second"}}) {
 				t.Fatal("partial batch persisted", unchanged)

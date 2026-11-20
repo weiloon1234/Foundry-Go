@@ -20,7 +20,7 @@ func existingKeys[M any, K comparable](ctx context.Context, tx *database.Tx, tab
 	result := make(map[K]bool, len(keys))
 	for len(keys) > 0 {
 		n := min(len(keys), orm.MaxMembershipValues)
-		selected, err := rows.Read(rows.SelectValue(table.Query().Where(orm.KeyIn(table.Key(), keys[:n]...)), orm.KeyExpr(table.Key()))).All(ctx, tx)
+		selected, err := rows.Read(rows.SelectValue(table.Query().Where(orm.In(table.Key(), keys[:n]...)), table.Key())).All(ctx, tx)
 		if err != nil {
 			return nil, err
 		}
@@ -69,9 +69,9 @@ func (s *storage) writeMetrics(ctx context.Context, tx *database.Tx, b batch) (u
 		if err != nil {
 			return 0, err
 		}
-		drafts = append(drafts, []orm.Assignment[metricRow]{orm.KeySet(metrics.Key(), key), orm.ColumnSet(metrics.RunID, s.runKey()), orm.TimeSet(metrics.BucketAt, at), orm.NumberSet(metrics.IntervalSeconds, int(entry.Interval/time.Second)), orm.TextSet(metrics.Route, m.Route), orm.TextSet(metrics.RoutePath, entry.Path), orm.TextSet(metrics.Method, m.Method), orm.NumberSet(metrics.Status, m.Result.Status), orm.TextSet(metrics.Outcome, m.Result.Outcome), orm.JSONSet(metrics.Histogram, hist)})
+		drafts = append(drafts, []orm.Assignment[metricRow]{orm.Set(metrics.Key(), key), orm.Set(metrics.RunID, s.runKey()), orm.Set(metrics.BucketAt, at), orm.Set(metrics.IntervalSeconds, int(entry.Interval/time.Second)), orm.Set(metrics.Route, m.Route), orm.Set(metrics.RoutePath, entry.Path), orm.Set(metrics.Method, m.Method), orm.Set(metrics.Status, m.Result.Status), orm.Set(metrics.Outcome, m.Result.Outcome), orm.Set(metrics.Histogram, hist)})
 	}
-	conflict := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(metrics.Key()))).DoUpdate(orm.ConflictIncoming(orm.JSONExpr(metrics.Histogram)))
+	conflict := orm.OnConflict(orm.ConflictKey(metrics.Key())).DoUpdate(orm.ConflictIncoming(metrics.Histogram))
 	for len(drafts) > 0 {
 		n := min(len(drafts), orm.MaxInsertRows)
 		if _, err := orm.UpsertMany(ctx, tx, metrics.Query(), conflict, drafts[:n]); err != nil {
@@ -146,7 +146,7 @@ func (s *storage) writeIssues(ctx context.Context, tx *database.Tx, b batch) (ui
 			continue
 		}
 		eventCount++
-		eventDrafts = append(eventDrafts, []orm.Assignment[eventRow]{orm.KeySet(events.Key(), eventID(b.id, entry.index)), orm.TextSet(events.Fingerprint, key), orm.EnumSet(events.Source, issue.Source), orm.TimeSet(events.CreatedAt, issue.At), orm.JSONSet(events.Detail, detail)})
+		eventDrafts = append(eventDrafts, []orm.Assignment[eventRow]{orm.Set(events.Key(), eventID(b.id, entry.index)), orm.Set(events.Fingerprint, key), orm.Set(events.Source, issue.Source), orm.Set(events.CreatedAt, issue.At), orm.Set(events.Detail, detail)})
 	}
 	for len(eventDrafts) > 0 {
 		n := min(len(eventDrafts), orm.MaxInsertRows)
@@ -157,12 +157,12 @@ func (s *storage) writeIssues(ctx context.Context, tx *database.Tx, b batch) (ui
 	}
 	q := issues.Query()
 	cr := rows.ConflictRowsOf(q)
-	storedCount, proposedCount := expr.At(cr.Stored(), orm.NumberExpr(issues.Count)), expr.At(cr.Proposed(), orm.NumberExpr(issues.Count))
-	storedFirst, proposedFirst := expr.At(cr.Stored(), orm.TimeExpr(issues.FirstAt)), expr.At(cr.Proposed(), orm.TimeExpr(issues.FirstAt))
-	storedLast, proposedLast := expr.At(cr.Stored(), orm.TimeExpr(issues.LastAt)), expr.At(cr.Proposed(), orm.TimeExpr(issues.LastAt))
-	storedDetail, proposedDetail := expr.At(cr.Stored(), orm.JSONExpr(issues.Detail)), expr.At(cr.Proposed(), orm.JSONExpr(issues.Detail))
+	storedCount, proposedCount := expr.At(cr.Stored(), issues.Count), expr.At(cr.Proposed(), issues.Count)
+	storedFirst, proposedFirst := expr.At(cr.Stored(), issues.FirstAt), expr.At(cr.Proposed(), issues.FirstAt)
+	storedLast, proposedLast := expr.At(cr.Stored(), issues.LastAt), expr.At(cr.Proposed(), issues.LastAt)
+	storedDetail, proposedDetail := expr.At(cr.Stored(), issues.Detail), expr.At(cr.Proposed(), issues.Detail)
 	newer := expr.Greater(proposedLast, storedLast)
-	conflict := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(issues.Key()))).DoUpdate(rows.SetConflictValue(orm.NumberExpr(issues.Count), expr.Add(storedCount, proposedCount)), rows.SetConflictValue(orm.TimeExpr(issues.FirstAt), expr.When(expr.Less(proposedFirst, storedFirst), proposedFirst).Else(storedFirst)), rows.SetConflictValue(orm.TimeExpr(issues.LastAt), expr.When(newer, proposedLast).Else(storedLast)), rows.SetConflictValue(orm.JSONExpr(issues.Detail), expr.When(newer, proposedDetail).Else(storedDetail)))
+	conflict := orm.OnConflict(orm.ConflictKey(issues.Key())).DoUpdate(rows.SetConflictValue(issues.Count, expr.Add(storedCount, proposedCount)), rows.SetConflictValue(issues.FirstAt, expr.When(expr.Less(proposedFirst, storedFirst), proposedFirst).Else(storedFirst)), rows.SetConflictValue(issues.LastAt, expr.When(newer, proposedLast).Else(storedLast)), rows.SetConflictValue(issues.Detail, expr.When(newer, proposedDetail).Else(storedDetail)))
 	keys = keys[:0]
 	for key := range groups {
 		keys = append(keys, key)
@@ -171,7 +171,7 @@ func (s *storage) writeIssues(ctx context.Context, tx *database.Tx, b batch) (ui
 	drafts := make([][]orm.Assignment[issueRow], 0, len(groups))
 	for _, key := range keys {
 		g := groups[key]
-		drafts = append(drafts, []orm.Assignment[issueRow]{orm.KeySet(issues.Key(), key), orm.EnumSet(issues.Source, g.Source), orm.TextSet(issues.Code, g.Code), orm.TextSet(issues.Route, g.Route), orm.TextSet(issues.Release, g.Release), orm.NumberSet(issues.Count, g.Count), orm.TimeSet(issues.FirstAt, g.FirstAt), orm.TimeSet(issues.LastAt, g.LastAt), orm.JSONSet(issues.Detail, g.Detail)})
+		drafts = append(drafts, []orm.Assignment[issueRow]{orm.Set(issues.Key(), key), orm.Set(issues.Source, g.Source), orm.Set(issues.Code, g.Code), orm.Set(issues.Route, g.Route), orm.Set(issues.Release, g.Release), orm.Set(issues.Count, g.Count), orm.Set(issues.FirstAt, g.FirstAt), orm.Set(issues.LastAt, g.LastAt), orm.Set(issues.Detail, g.Detail)})
 	}
 	for len(drafts) > 0 {
 		n := min(len(drafts), orm.MaxInsertRows)

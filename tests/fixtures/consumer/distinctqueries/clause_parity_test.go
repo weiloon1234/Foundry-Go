@@ -21,8 +21,8 @@ func assertClauseParity(t *testing.T, got orm.Statement) {
 func TestScalarGroupingDistinctSQLParity(t *testing.T) {
 	q := models.Users.Query()
 	count := expr.Count[models.User]()
-	selected := rows.SelectScalar(rows.From(q.Where(orm.NumberGt(models.Users.Age, 18))), expr.AsSelected(count))
-	grouped := rows.HavingScalar(rows.GroupByScalar(selected, expr.Group(expr.Value(orm.KeyExpr(models.Users.ID)))), expr.GtValue(count, 0))
+	selected := rows.SelectScalar(rows.From(q.Where(orm.Gt(models.Users.Age, 18))), expr.AsSelected(count))
+	grouped := rows.HavingScalar(rows.GroupByScalar(selected, expr.Group(expr.Value(models.Users.ID))), expr.GtValue(count, 0))
 
 	for _, tc := range []struct {
 		name    string
@@ -45,8 +45,8 @@ func TestScalarGroupingDistinctSQLParity(t *testing.T) {
 func TestScalarDistinctOnUnselectedKeySQLParity(t *testing.T) {
 	q := models.Orders.Query()
 	o := models.Orders
-	selected := rows.OrderScalar(rows.DistinctOnScalar(rows.SelectScalar(rows.From(q.Where(orm.NumberGt(o.TotalCents, 0))), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))))), expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID)))), expr.Asc(expr.Value(orm.ColumnExpr(o.BuyerID))), expr.Desc(expr.Value(orm.NumberExpr(o.TotalCents))))
-	got, err := orm.Compile(expr.Where(q, rows.InQuery(expr.Value(orm.NumberExpr(o.TotalCents)), selected)))
+	selected := rows.OrderScalar(rows.DistinctOnScalar(rows.SelectScalar(rows.From(q.Where(orm.Gt(o.TotalCents, 0))), expr.AsSelected(expr.Row(expr.Value(o.TotalCents)))), expr.Group(expr.Value(o.BuyerID))), expr.Asc(expr.Value(o.BuyerID)), expr.Desc(expr.Value(o.TotalCents)))
+	got, err := orm.Compile(expr.Where(q, rows.InQuery(expr.Value(o.TotalCents), selected)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestRecordAndSetDistinctSQLParity(t *testing.T) {
 
 func TestValueSetDistinctSQLParity(t *testing.T) {
 	q := models.Users.Query()
-	source := rows.DistinctScalar(rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))))))
+	source := rows.DistinctScalar(rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(models.Users.Nickname)))))
 	combined := rows.DistinctValues(rows.UnionAllValues(rows.Values(source), rows.Values(source)))
 	combined = combined.OrderBy(expr.Asc(combined.Value())).Offset(1).Limit(2)
 	got, err := orm.Compile(expr.Where(q, rows.ExistsQuery(rows.From(q), combined)))

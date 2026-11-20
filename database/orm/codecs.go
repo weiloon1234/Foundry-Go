@@ -71,12 +71,14 @@ func invalid(message string) error { return safeerror.NewFault(fault.Invalid, "o
 
 // IDOf declares a model-owned foreign ID column. Example: IDOf(b, &o.BuyerID).
 func IDOf[M, T any](b Builder[M], ptr *model.ID[T]) Column[M, model.ID[T]] {
-	return Column[M, model.ID[T]]{column: bindModel[M](b.state, ptr, codec.ID[T](), false)}
+	c := bindModel[M](b.state, ptr, codec.ID[T](), false)
+	return Column[M, model.ID[T]]{stored: c, input: c.assign}
 }
 
 // NullableIDOf declares a nullable model-owned ID. Example: NullableIDOf(b, &u.IntroducerID).
 func NullableIDOf[M, T any](b Builder[M], ptr *value.Nullable[model.ID[T]]) NullableColumn[M, model.ID[T]] {
-	return NullableColumn[M, model.ID[T]]{nullableColumn: bindNullableModel[M](b.state, ptr, codec.ID[T]())}
+	c := bindNullableModel[M](b.state, ptr, codec.ID[T]())
+	return NullableColumn[M, model.ID[T]]{stored: c, input: c.assign}
 }
 
 // Key selection happens once. Exact model IDs retain the original codec's

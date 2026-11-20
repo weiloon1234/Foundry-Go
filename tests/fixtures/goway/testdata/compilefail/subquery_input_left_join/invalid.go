@@ -10,7 +10,7 @@ import (
 
 type rightSide struct{}
 
-var left = rows.From(models.Users.Query().Where(orm.NumberGt(models.Users.Age, 18)).Limit(1).Offset(1))
+var left = rows.From(models.Users.Query().Where(orm.Gt(models.Users.Age, 18)).Limit(1).Offset(1))
 var right = rows.As[rightSide](models.Users.Query(), "right_user")
-var on = rows.OnEqual(expr.Value(orm.NumberExpr(models.Users.Age)), expr.At(rows.Scope(right), orm.NumberExpr(models.Users.Age)))
+var on = rows.OnEqual(expr.Value(models.Users.Age), expr.At(rows.Scope(right), models.Users.Age))
 var _ = rows.LeftJoin[models.User, rows.Alias[rightSide, models.User]](left, right, on)

@@ -61,8 +61,7 @@ package identity, JSON tags and descriptor names when migrating a report.
 ## Select typed values
 
 `rows.Select(rows.From(modelQuery), schema, mappings...)` selects a complete result.
-Use `rows.Map(destination, expr.Value(orm.TextExpr(column)))` for a text column
-and the matching per-kind adapter for other column families. Use
+Use `rows.Map(destination, expr.Value(column))` for any queryable column. Use
 `rows.MapSelected(destination, selected)` for computations, aggregates and windows.
 Mappings must cover every result field exactly once. Missing, duplicate, foreign
 or incompatible mappings fail before SQL. `expr.Nullable` explicitly widens a
@@ -76,13 +75,13 @@ no model mutations or eager loading. For a reusable query source, wrap it in
 ```go
 func SummaryPage(ctx context.Context, db database.Executor, page orm.PageRequest) (orm.PageResult[UserSummary], error) {
 	users := models.Users
-	query := users.Query().Where(orm.EnumEq(users.Status, models.StatusActive)).
-		OrderBy(orm.TextAsc(users.Email), orm.KeyAsc(users.Key()))
+	query := users.Query().Where(orm.Eq(users.Status, models.StatusActive)).
+		OrderBy(orm.Asc(users.Email), orm.Asc(users.Key()))
 	selected := rows.Select(rows.From(query), UserSummaries,
-		rows.Map(UserSummaries.ID, expr.Value(orm.KeyExpr(users.Key()))),
-		rows.Map(UserSummaries.Email, expr.Value(orm.TextExpr(users.Email))),
-		rows.Map(UserSummaries.Nickname, expr.Value(orm.NullableTextExpr(users.Nickname))),
-		rows.Map(UserSummaries.Status, expr.Value(orm.EnumExpr(users.Status))),
+		rows.Map(UserSummaries.ID, expr.Value(users.Key())),
+		rows.Map(UserSummaries.Email, expr.Value(users.Email)),
+		rows.Map(UserSummaries.Nickname, expr.Value(users.Nickname)),
+		rows.Map(UserSummaries.Status, expr.Value(users.Status)),
 	)
 	return rows.Read(selected).Paginate(ctx, db, page)
 }
@@ -97,11 +96,11 @@ func SummaryPage(ctx context.Context, db database.Executor, page orm.PageRequest
 ```go
 o := models.Orders
 totals := rowset.GroupBy(rowset.Select(rowset.From(models.Orders.Query()), reports.BuyerTotalRows.Row,
-	rowset.Map(reports.BuyerTotalRows.BuyerID, expr.Value(orm.ColumnExpr(o.BuyerID))),
-	rowset.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(expr.Sum(orm.NumberExpr(o.TotalCents)))),
+	rowset.Map(reports.BuyerTotalRows.BuyerID, expr.Value(o.BuyerID)),
+	rowset.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(expr.Sum(o.TotalCents))),
 	rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.AsSelected(expr.Count[models.Order]())),
-	rowset.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.Avg(orm.NumberExpr(o.TotalCents)))),
-), expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID))))
+	rowset.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.Avg(o.TotalCents))),
+), expr.Group(expr.Value(o.BuyerID)))
 ```
 
 The `rowset` import names `database/orm/rows`. `rows.GroupBy` requires every selected
@@ -127,14 +126,14 @@ subqueries keep their explicit nullable type:
 
 <!-- compiled-source: tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go#scalar-projection -->
 ```go
-last := rowset.LimitScalar(rowset.OrderScalar(buyers, expr.Desc(expr.Value(orm.NumberExpr(o.TotalCents)))), 1)
-nicknames := rowset.SelectScalar(rowset.From(models.Users.Query().Where(orm.KeyEq(u.ID, users[1].ID))), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname)))))
+last := rowset.LimitScalar(rowset.OrderScalar(buyers, expr.Desc(expr.Value(o.TotalCents))), 1)
+nicknames := rowset.SelectScalar(rowset.From(models.Users.Query().Where(orm.Eq(u.ID, users[1].ID))), expr.AsSelected(expr.Row(expr.Value(u.Nickname))))
 report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), reports.ScalarReports.Row,
-	rowset.Map(reports.ScalarReports.ID, expr.Value(orm.KeyExpr(u.ID))),
+	rowset.Map(reports.ScalarReports.ID, expr.Value(u.ID)),
 	rowset.MapSelected(reports.ScalarReports.BuyerID, expr.AsSelected(rowset.ScalarRowQuery(rowset.From(models.Users.Query()), last))),
 	rowset.MapSelected(reports.ScalarReports.Nickname, expr.AsSelected(rowset.ScalarNullableRowQuery(rowset.From(models.Users.Query()), nicknames))),
 	rowset.MapSelected(reports.ScalarReports.Orders, expr.AsSelected(rowset.ScalarRowQuery(rowset.From(models.Users.Query()), count))),
-), expr.Asc(expr.Value(orm.TextExpr(u.Email))))
+), expr.Asc(expr.Value(u.Email)))
 scalars, err := rowset.Read(report).All(t.Context(), tx)
 if err != nil {
 	return err

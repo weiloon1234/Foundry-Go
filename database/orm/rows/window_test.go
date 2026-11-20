@@ -2,8 +2,6 @@ package rows_test
 
 import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"database/sql/driver"
 	"errors"
@@ -22,7 +20,7 @@ import (
 func TestWindowsBindingsNamesAndImmutability(t *testing.T) {
 	d := declareAggregateRecords()
 	source := rows.FromModel(d.Query())
-	v := expr.Value(orm.NumberExpr(d.Exact))
+	v := expr.Value(d.Exact)
 	w := expr.WindowFor(rows.ModelScope(d.Query())).PartitionBy(expr.Group(v)).OrderBy(expr.Desc(v)).RowsBetween(expr.Preceding(2), expr.CurrentRow()).ExcludeTies()
 	previous := expr.LagOr(expr.AsSelected(expr.Row(v)), 1, int64(99), w)
 	q := rows.OrderBy(rows.Distinct(expressionQuery(source, previous, codec.Signed[int64]()).Where(expr.Ne(v, 7))), expr.AscValue(previous))
@@ -32,7 +30,7 @@ func TestWindowsBindingsNamesAndImmutability(t *testing.T) {
 	if s.SQLText != want || !reflect.DeepEqual(s.Bindings, []any{int64(1), int64(99), int64(2), int64(7), int64(4)}) {
 		t.Fatal(s.SQLText, s.Bindings)
 	}
-	_ = w.PartitionBy(expr.Group(expr.Value(orm.TextExpr(d.Name)))).RowsBetween(expr.CurrentRow(), expr.Following(1)).ExcludeNone().OrderBy(expr.Asc(v))
+	_ = w.PartitionBy(expr.Group(expr.Value(d.Name))).RowsBetween(expr.CurrentRow(), expr.Following(1)).ExcludeNone().OrderBy(expr.Asc(v))
 	again := expressionSQL(t, q)
 	if !reflect.DeepEqual(s, again) {
 		t.Fatal("window derivation mutated its source")
@@ -52,16 +50,16 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 	d := declareAggregateRecords()
 	other := declareAggregateRecords()
 	source := rows.FromModel(d.Query())
-	v := expr.Value(orm.NumberExpr(d.Exact))
+	v := expr.Value(d.Exact)
 	base := expr.WindowFor(rows.ModelScope(d.Query()))
 	w := base.OrderBy(expr.Asc(v))
 	r := expr.NumericRange(base, expr.AsSelected(expr.Row(v)))
-	fr := expr.NumericRange(base, expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(d.Approx)))))
+	fr := expr.NumericRange(base, expr.AsSelected(expr.Row(expr.Value(d.Approx))))
 	invalid := map[string]expr.Window[aggregateRecord]{
 		"missing scope":              expr.WindowFor(expr.Scope[aggregateRecord, aggregateRecord]{}),
 		"foreign declaration":        expr.WindowFor(rows.ModelScope(other.Query())),
-		"foreign partition":          base.PartitionBy(expr.Group(expr.Value(orm.NumberExpr(other.Exact)))),
-		"foreign selected partition": base.PartitionByValues(expr.Key(expr.AsSelected(expr.Sum(orm.NumberExpr(other.Exact))))),
+		"foreign partition":          base.PartitionBy(expr.Group(expr.Value(other.Exact))),
+		"foreign selected partition": base.PartitionByValues(expr.Key(expr.AsSelected(expr.Sum(other.Exact)))),
 		"zero partition":             w.PartitionBy(expr.GroupKey[aggregateRecord]{}),
 		"duplicate partition":        w.PartitionBy(expr.Group(v), expr.Group(v)),
 		"nil order":                  w.OrderBy(nil),
@@ -96,7 +94,7 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 		})
 	}
 	for name, e := range map[string]expr.Selected[aggregateRecord, int64]{
-		"distinct aggregate": expr.Over(expr.CountDistinctField(orm.NumberExpr(d.Exact)), w),
+		"distinct aggregate": expr.Over(expr.CountDistinctField(d.Exact), w),
 		"nil aggregate":      expr.Over[aggregateRecord, int64](nil, w),
 		"nested value":       expr.LagOr(expr.RowNumber(w), 1, int64(0), w),
 		"named collision":    expr.AddValue(expr.RowNumber(w.Named("same")), expr.RowNumber(w.Named("same"))),
@@ -122,13 +120,13 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 func TestWindowsResultFamiliesAndHydration(t *testing.T) {
 	d := declareAggregateRecords()
 	source := rows.FromModel(d.Query())
-	w := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Asc(expr.Value(orm.NumberExpr(d.Exact))))
-	v := expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(d.Exact))))
-	n := expr.AsSelected(expr.Row(expr.Value(orm.NullableNumberExpr(d.MaybeExact))))
+	w := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Asc(expr.Value(d.Exact)))
+	v := expr.AsSelected(expr.Row(expr.Value(d.Exact)))
+	n := expr.AsSelected(expr.Row(expr.Value(d.MaybeExact)))
 	for name, e := range map[string]expr.Selected[aggregateRecord, value.Nullable[int64]]{
 		"lag": expr.Lag(v, 1, w), "lead": expr.Lead(v, -1, w), "first": expr.FirstValue(v, w), "last": expr.LastValue(v, w), "nth": expr.NthValue(v, 2, w),
 		"lag nullable": expr.LagNullable(n, 1, w), "lead nullable": expr.LeadNullable(n, 1, w), "first nullable": expr.FirstNullableValue(n, w), "last nullable": expr.LastNullableValue(n, w), "nth nullable": expr.NthNullableValue(n, 2, w),
-		"min": expr.Over(expr.Min(orm.NumberExpr(d.Exact)), w), "max": expr.Over(expr.Max(orm.NumberExpr(d.Exact)), w),
+		"min": expr.Over(expr.Min(d.Exact), w), "max": expr.Over(expr.Max(d.Exact), w),
 	} {
 		t.Run(name, func(t *testing.T) {
 			q := expressionQuery(source, e, codec.Nullable(codec.Signed[int64]()))
@@ -142,7 +140,7 @@ func TestWindowsResultFamiliesAndHydration(t *testing.T) {
 			}
 		})
 	}
-	for _, e := range []expr.Selected[aggregateRecord, int64]{expr.RowNumber(w), expr.Rank(w), expr.DenseRank(w), expr.LeadOr(v, 1, int64(0), w), expr.Over(expr.Filter(expr.CountField(orm.NumberExpr(d.Exact)), expr.Ne(expr.Value(orm.NumberExpr(d.Exact)), 0)), w)} {
+	for _, e := range []expr.Selected[aggregateRecord, int64]{expr.RowNumber(w), expr.Rank(w), expr.DenseRank(w), expr.LeadOr(v, 1, int64(0), w), expr.Over(expr.Filter(expr.CountField(d.Exact), expr.Ne(expr.Value(d.Exact), 0)), w)} {
 		expressionSQL(t, expressionQuery(source, e, codec.Signed[int64]()))
 	}
 	for _, e := range []expr.Selected[aggregateRecord, float64]{expr.PercentRank(w), expr.CumeDist(w)} {

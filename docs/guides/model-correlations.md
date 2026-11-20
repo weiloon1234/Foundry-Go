@@ -22,9 +22,9 @@ its outer row. Lift each side through `rows.OuterScope` and `rows.InnerScope`;
 link := rowset.Correlate(rowset.From(models.Users.Query()), rowset.From(models.Orders.Query()))
 buyer := rowset.OuterScope(link, rowset.ModelScope(models.Users.Query()))
 order := rowset.InnerScope(link, rowset.ModelScope(models.Orders.Query()))
-matched := link.Where(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(buyer, orm.KeyExpr(models.Users.ID))))
-counts := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.CountFieldAt(order, orm.KeyExpr(models.Orders.ID))))
-totals := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.SumAt(order, orm.NumberExpr(models.Orders.TotalCents))))
+matched := link.Where(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(buyer, models.Users.ID)))
+counts := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.CountFieldAt(order, models.Orders.ID)))
+totals := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.SumAt(order, models.Orders.TotalCents)))
 ```
 
 The `rowset` import is `database/orm/rows`. `matched.Exists()` is a predicate of
@@ -46,9 +46,9 @@ Multiple rows cause a database cardinality error; no implicit limit is added.
 ```go
 r := reports.UserOrderStatsRows
 report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), r.Row,
-	rowset.Map(r.ID, expr.Value(orm.KeyExpr(u.ID))), rowset.Map(r.Email, expr.Value(orm.TextExpr(u.Email))),
+	rowset.Map(r.ID, expr.Value(u.ID)), rowset.Map(r.Email, expr.Value(u.Email)),
 	rowset.MapSelected(r.Orders, expr.AsSelected(rowset.CorrelatedScalarRowQuery(counts))),
-	rowset.MapSelected(r.Total, expr.AsSelected(rowset.CorrelatedScalarNullableRowQuery(totals)))), expr.Asc(expr.Value(orm.TextExpr(u.Email))))
+	rowset.MapSelected(r.Total, expr.AsSelected(rowset.CorrelatedScalarNullableRowQuery(totals)))), expr.Asc(expr.Value(u.Email)))
 rows, err := rowset.Read(report).All(t.Context(), tx)
 if err != nil {
 	return err

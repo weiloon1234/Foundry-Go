@@ -4,9 +4,9 @@ Declare columns once with `orm.Define` and the appropriate typed constructors.
 Use package functions from `database/orm/expr` to construct optional computations;
 columns do not need a separate summary-method family for each owner/value pair.
 
-In the table below, `column` is a sealed expression adapter, such as
-`orm.TextExpr(Users.Email)` or `orm.NumberExpr(Orders.TotalCents)`, rather than
-the methodless column handle itself. Choose the adapter for the declared kind.
+In the table below, `column` is a declared queryable column handle directly,
+such as `Users.Email` or `Orders.TotalCents`. Declared kinds and roles enforce
+the allowed operations at compile time.
 
 | Purpose | Function |
 | --- | --- |
@@ -28,8 +28,8 @@ accept an alias scope and a capable column. For a derived rows operand, use the
 Capabilities come from the declaration, not only the underlying Go type. An enum
 backed by a string does not gain text pattern or ordered comparisons. A derived
 field must retain the required capability and codec; invalid or foreign metadata
-fails before execution. The same checks apply to adapters such as `TextRow`,
-`OrderRow` and `CompareRow`.
+fails before execution. The same checks apply to typed row helpers such as
+`TextRow`, `OrderedColumn` and `CompareColumn`.
 
 See [result types and empty input](model-aggregates.md#loading-and-result-types),
 [conditional expressions](conditional-expressions.md) and

@@ -13,8 +13,8 @@ import (
 func AuthorSeeder(id model.ID[Author], name string) seed.Definition {
 	return seed.Definition{ID: "articles.author", Run: func(ctx context.Context, tx *database.Tx) error {
 		_, err := orm.Upsert(ctx, tx, Authors.Query(),
-			orm.OnConflict(orm.ConflictKey(orm.KeyExpr(Authors.Key()))).DoNothing(),
-			orm.KeySet(Authors.Key(), id), orm.TextSet(Authors.Name, name))
+			orm.OnConflict(orm.ConflictKey(Authors.Key())).DoNothing(),
+			orm.Set(Authors.Key(), id), orm.Set(Authors.Name, name))
 		return err
 	}}
 }

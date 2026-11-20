@@ -81,26 +81,26 @@ func encode(record mfa.Record) ([]orm.Assignment[mfastore.Factor], error) {
 		return nil, err
 	}
 	draft := []orm.Assignment[mfastore.Factor]{
-		orm.TextSet(mfastore.Factors.Scope, scope),
-		orm.JSONSet(mfastore.Factors.Identity, identity),
-		orm.ColumnSet(mfastore.Factors.Generation, model.IDFromBytes[mfastore.Factor](record.ID.Bytes())),
-		orm.TextSet(mfastore.Factors.Ciphertext, record.Ciphertext.Encoded()),
-		orm.TimeSet(mfastore.Factors.CreatedAt, record.CreatedAt),
+		orm.Set(mfastore.Factors.Scope, scope),
+		orm.Set(mfastore.Factors.Identity, identity),
+		orm.Set(mfastore.Factors.Generation, model.IDFromBytes[mfastore.Factor](record.ID.Bytes())),
+		orm.Set(mfastore.Factors.Ciphertext, record.Ciphertext.Encoded()),
+		orm.Set(mfastore.Factors.CreatedAt, record.CreatedAt),
 	}
 	if v, ok := record.PendingUntil.Get(); ok {
-		draft = append(draft, orm.NullableTimeSet(mfastore.Factors.PendingUntil, v))
+		draft = append(draft, orm.Set(mfastore.Factors.PendingUntil, v))
 	} else {
-		draft = append(draft, orm.NullableTimeSetNull(mfastore.Factors.PendingUntil))
+		draft = append(draft, orm.SetNull(mfastore.Factors.PendingUntil))
 	}
 	if v, ok := record.ConfirmedAt.Get(); ok {
-		draft = append(draft, orm.NullableTimeSet(mfastore.Factors.ConfirmedAt, v))
+		draft = append(draft, orm.Set(mfastore.Factors.ConfirmedAt, v))
 	} else {
-		draft = append(draft, orm.NullableTimeSetNull(mfastore.Factors.ConfirmedAt))
+		draft = append(draft, orm.SetNull(mfastore.Factors.ConfirmedAt))
 	}
 	if v, ok := record.LastStep.Get(); ok {
-		draft = append(draft, orm.NullableNumberSet(mfastore.Factors.LastStep, v))
+		draft = append(draft, orm.Set(mfastore.Factors.LastStep, v))
 	} else {
-		draft = append(draft, orm.NullableNumberSetNull(mfastore.Factors.LastStep))
+		draft = append(draft, orm.SetNull(mfastore.Factors.LastStep))
 	}
-	return append(draft, orm.JSONSet(mfastore.Factors.RecoveryHashes, stored)), nil
+	return append(draft, orm.Set(mfastore.Factors.RecoveryHashes, stored)), nil
 }

@@ -26,8 +26,8 @@ func TestPostgresTypedUpsertAndBatchDefaults(t *testing.T) {
 		q := models.WriteRecords
 		f := models.WriteRecords
 		initial, err := orm.InsertMany(t.Context(), tx, q.Table, [][]orm.Assignment[models.WriteRecord]{
-			{orm.TextSet(models.WriteRecords.Name, "one"), orm.NullableTextSet(models.WriteRecords.Note, "kept")},
-			{orm.TextSet(models.WriteRecords.Name, "two"), orm.ColumnSet(models.WriteRecords.Enabled, false), orm.NullableTextSetNull(models.WriteRecords.Note)},
+			{orm.Set(models.WriteRecords.Name, "one"), orm.Set(models.WriteRecords.Note, "kept")},
+			{orm.Set(models.WriteRecords.Name, "two"), orm.Set(models.WriteRecords.Enabled, false), orm.SetNull(models.WriteRecords.Note)},
 		})
 		if err != nil {
 			return err
@@ -43,8 +43,8 @@ func TestPostgresTypedUpsertAndBatchDefaults(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		policy := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(f.Amount))).Where(orm.ColumnEq(f.Enabled, true))
-		result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.TextSet(models.WriteRecords.Name, "one"), orm.NumberSet(models.WriteRecords.Amount, amount))
+		policy := orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(orm.ConflictIncoming(f.Amount)).Where(orm.Eq(f.Enabled, true))
+		result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.Set(models.WriteRecords.Name, "one"), orm.Set(models.WriteRecords.Amount, amount))
 		if err != nil {
 			return err
 		}
@@ -53,21 +53,21 @@ func TestPostgresTypedUpsertAndBatchDefaults(t *testing.T) {
 		if !present || updated.Code != byName["one"].Code || updated.Amount.String() != "42.5" || !hasNote || note != "kept" {
 			t.Fatal("upsert changed unrelated fields or identity", updated.Amount.String())
 		}
-		_, err = orm.Upsert(t.Context(), tx, q.Query(), orm.OnConflictConstraint[models.WriteRecord]("write_records_name_key").DoUpdate(orm.ConflictNull(orm.NullableTextExpr(f.Note)), orm.ConflictSet(orm.ColumnExpr(f.Enabled), false)), orm.TextSet(models.WriteRecords.Name, "one"))
+		_, err = orm.Upsert(t.Context(), tx, q.Query(), orm.OnConflictConstraint[models.WriteRecord]("write_records_name_key").DoUpdate(orm.ConflictNull(f.Note), orm.ConflictSet(f.Enabled, false)), orm.Set(models.WriteRecords.Name, "one"))
 		if err != nil {
 			return err
 		}
-		skipped, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.TextSet(models.WriteRecords.Name, "one"), orm.NumberSet(models.WriteRecords.Amount, amount))
+		skipped, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.Set(models.WriteRecords.Name, "one"), orm.Set(models.WriteRecords.Amount, amount))
 		if err != nil || skipped.IsSet() {
 			t.Fatal("false update condition returned a model", err)
 		}
 		mixed, err := orm.UpsertMany(t.Context(), tx, q.Query(), orm.OnConflict[models.WriteRecord]().DoNothing(), [][]orm.Assignment[models.WriteRecord]{
-			{orm.TextSet(models.WriteRecords.Name, "one")}, {orm.TextSet(models.WriteRecords.Name, "three")},
+			{orm.Set(models.WriteRecords.Name, "one")}, {orm.Set(models.WriteRecords.Name, "three")},
 		})
 		if err != nil || len(mixed) != 1 || mixed[0].Name != "three" {
 			t.Fatal("skipped batch rows lost identity", err)
 		}
-		_, err = orm.UpsertMany(t.Context(), tx, q.Query(), orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(orm.ConflictIncoming(orm.NullableTextExpr(f.Note))), [][]orm.Assignment[models.WriteRecord]{{orm.TextSet(models.WriteRecords.Name, "one")}, {orm.TextSet(models.WriteRecords.Name, "two")}})
+		_, err = orm.UpsertMany(t.Context(), tx, q.Query(), orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(orm.ConflictIncoming(f.Note)), [][]orm.Assignment[models.WriteRecord]{{orm.Set(models.WriteRecords.Name, "one")}, {orm.Set(models.WriteRecords.Name, "two")}})
 		if err != nil {
 			return err
 		}
@@ -82,23 +82,23 @@ func TestPostgresTypedUpsertAndBatchDefaults(t *testing.T) {
 		}
 		// Repeated update targets must fail the whole statement, not become
 		// multiple hidden writes whose last input silently wins.
-		_, err = orm.UpsertMany(t.Context(), tx, q.Query(), orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(f.Amount))), [][]orm.Assignment[models.WriteRecord]{{orm.TextSet(models.WriteRecords.Name, "duplicate")}, {orm.TextSet(models.WriteRecords.Name, "duplicate")}})
+		_, err = orm.UpsertMany(t.Context(), tx, q.Query(), orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(orm.ConflictIncoming(f.Amount)), [][]orm.Assignment[models.WriteRecord]{{orm.Set(models.WriteRecords.Name, "duplicate")}, {orm.Set(models.WriteRecords.Name, "duplicate")}})
 		var dbErr *database.Error
 		if !errors.As(err, &dbErr) || dbErr.SQLState() != "21000" {
 			t.Fatal("duplicate upsert target did not report PostgreSQL cardinality", err)
 		}
-		if n, err := orm.Count(t.Context(), tx, q.Query().Where(orm.TextEq(f.Name, "duplicate"))); err != nil || n != 0 {
+		if n, err := orm.Count(t.Context(), tx, q.Query().Where(orm.Eq(f.Name, "duplicate"))); err != nil || n != 0 {
 			t.Fatal("failed upsert batch partially persisted", err)
 		}
 		// A codec failure after an earlier RETURNING row rolls back the batch.
 		if _, err := tx.Exec(t.Context(), `ALTER TABLE write_records ALTER COLUMN amount SET DEFAULT 'NaN'`); err != nil {
 			return err
 		}
-		items, err := orm.InsertMany(t.Context(), tx, q.Table, [][]orm.Assignment[models.WriteRecord]{{orm.TextSet(models.WriteRecords.Name, "valid-before-failure"), orm.NumberSet(models.WriteRecords.Amount, amount)}, {orm.TextSet(models.WriteRecords.Name, "invalid-decimal")}})
+		items, err := orm.InsertMany(t.Context(), tx, q.Table, [][]orm.Assignment[models.WriteRecord]{{orm.Set(models.WriteRecords.Name, "valid-before-failure"), orm.Set(models.WriteRecords.Amount, amount)}, {orm.Set(models.WriteRecords.Name, "invalid-decimal")}})
 		if err == nil || items != nil {
 			t.Fatal("failed returning decode published partial models")
 		}
-		if n, err := orm.Count(t.Context(), tx, q.Query().Where(orm.TextIn(f.Name, "valid-before-failure", "invalid-decimal"))); err != nil || n != 0 {
+		if n, err := orm.Count(t.Context(), tx, q.Query().Where(orm.In(f.Name, "valid-before-failure", "invalid-decimal"))); err != nil || n != 0 {
 			t.Fatal("failed returning decode committed rows", err)
 		}
 		return nil
@@ -112,7 +112,7 @@ func TestPostgresUpsertCompositeKeysAndReservedTarget(t *testing.T) {
 		}
 		f := models.Users
 		draft := userDraft(users[0].Email, 99)
-		result, err := orm.Upsert(t.Context(), tx, models.Users.Query(), orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Email)), orm.ConflictKey(orm.EnumExpr(f.Level))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(f.Age))), draft...)
+		result, err := orm.Upsert(t.Context(), tx, models.Users.Query(), orm.OnConflict(orm.ConflictKey(f.Email), orm.ConflictKey(f.Level)).DoUpdate(orm.ConflictIncoming(f.Age)), draft...)
 		if err != nil {
 			return err
 		}
@@ -126,7 +126,7 @@ func TestPostgresUpsertCompositeKeysAndReservedTarget(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		identity, err := orm.ChangeOf(changes, orm.KeyExpr(models.Users.Key()))
+		identity, err := orm.ChangeOf(changes, models.Users.Key())
 		if err != nil {
 			return err
 		}
@@ -138,11 +138,11 @@ func TestPostgresUpsertCompositeKeysAndReservedTarget(t *testing.T) {
 		}
 		r := upsertqueries.ExcludedRecords
 		q := upsertqueries.ExcludedRecords
-		first, err := orm.Insert(t.Context(), tx, q.Table, orm.TextSet(q.Name, "before"))
+		first, err := orm.Insert(t.Context(), tx, q.Table, orm.Set(q.Name, "before"))
 		if err != nil {
 			return err
 		}
-		after, err := orm.Upsert(t.Context(), tx, q.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(r.Key()))).DoUpdate(orm.ConflictIncoming(orm.TextExpr(r.Name))).Where(orm.TextEq(r.Name, "before")), orm.KeySet(q.Key(), first.ID), orm.TextSet(q.Name, "after"))
+		after, err := orm.Upsert(t.Context(), tx, q.Query(), orm.OnConflict(orm.ConflictKey(r.Key())).DoUpdate(orm.ConflictIncoming(r.Name)).Where(orm.Eq(r.Name, "before")), orm.Set(q.Key(), first.ID), orm.Set(q.Name, "after"))
 		if err != nil {
 			return err
 		}
@@ -159,7 +159,7 @@ func TestPostgresUpsertCompositeKeysAndReservedTarget(t *testing.T) {
 }
 
 func userDraft(email string, age int) []orm.Assignment[models.User] {
-	return []orm.Assignment[models.User]{orm.TextSet(models.Users.Email, email), orm.NumberSet(models.Users.Age, age), orm.EnumSet(models.Users.Status, models.StatusActive), orm.EnumSet(models.Users.Level, models.LevelBasic)}
+	return []orm.Assignment[models.User]{orm.Set(models.Users.Email, email), orm.Set(models.Users.Age, age), orm.Set(models.Users.Status, models.StatusActive), orm.Set(models.Users.Level, models.LevelBasic)}
 }
 
 func TestPostgresConcurrentUpsertsShareOneIdentity(t *testing.T) {
@@ -198,7 +198,7 @@ func TestPostgresConcurrentUpsertsShareOneIdentity(t *testing.T) {
 					return ctx.Err()
 				}
 				f := models.Users
-				result, err := orm.Upsert(ctx, tx, models.Users.Query(), orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Email))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(f.Age))), userDraft("same@example.test", age)...)
+				result, err := orm.Upsert(ctx, tx, models.Users.Query(), orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(orm.ConflictIncoming(f.Age)), userDraft("same@example.test", age)...)
 				if err != nil {
 					return err
 				}
@@ -255,7 +255,7 @@ func TestUpsertInvalidAndEmptyBatchesUseNoDatabase(t *testing.T) {
 	if items, err := orm.InsertMany(t.Context(), writer, q.Table, nil); err != nil || items == nil || len(items) != 0 {
 		t.Fatal("empty insert failed", err)
 	}
-	if items, err := orm.UpsertMany(t.Context(), writer, q.Query(), orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(orm.ConflictIncoming(orm.NullableTextExpr(f.Note))), nil); err != nil || items == nil || len(items) != 0 {
+	if items, err := orm.UpsertMany(t.Context(), writer, q.Query(), orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(orm.ConflictIncoming(f.Note)), nil); err != nil || items == nil || len(items) != 0 {
 		t.Fatal("empty upsert failed", err)
 	}
 	for _, run := range []func() error{
@@ -268,11 +268,11 @@ func TestUpsertInvalidAndEmptyBatchesUseNoDatabase(t *testing.T) {
 			return err
 		},
 		func() error {
-			_, err := orm.UpsertMany(t.Context(), writer, q.Query().Where(orm.TextEq(f.Name, "ignored")), orm.OnConflict[models.WriteRecord]().DoNothing(), nil)
+			_, err := orm.UpsertMany(t.Context(), writer, q.Query().Where(orm.Eq(f.Name, "ignored")), orm.OnConflict[models.WriteRecord]().DoNothing(), nil)
 			return err
 		},
 		func() error {
-			_, err := orm.Upsert(t.Context(), writer, q.Query(), orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(orm.ConflictIncoming(orm.KeyExpr(f.Code))), orm.TextSet(models.WriteRecords.Name, "one"))
+			_, err := orm.Upsert(t.Context(), writer, q.Query(), orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(orm.ConflictIncoming(f.Code)), orm.Set(models.WriteRecords.Name, "one"))
 			return err
 		},
 	} {

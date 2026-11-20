@@ -18,7 +18,7 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 
 	uf, of := models.Users, models.Orders
 	ur, or := models.UserRelations, models.OrderRelations
-	orders, err := orm.All(ctx, db, of.Query().With(or.Buyer.Where(orm.NumberGt(uf.Age, 18)).OrderBy(orm.TextDesc(uf.Email)).With(ur.Introducer.Where(orm.EnumEq(uf.Status, models.StatusActive)))))
+	orders, err := orm.All(ctx, db, of.Query().With(or.Buyer.Where(orm.Gt(uf.Age, 18)).OrderBy(orm.Desc(uf.Email)).With(ur.Introducer.Where(orm.Eq(uf.Status, models.StatusActive)))))
 	if err != nil || len(orders) != 1 {
 		t.Fatal(err, len(orders))
 	}
@@ -28,7 +28,7 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 	if !present || !m.Introducer.IsLoaded() {
 		t.Fatal("nested belongs-to missing")
 	}
-	users, err := orm.All(ctx, db, uf.Query().With(ur.Orders.Where(orm.NumberGt(of.TotalCents, 100)).OrderBy(orm.NumberDesc(of.TotalCents)).With(or.Buyer)))
+	users, err := orm.All(ctx, db, uf.Query().With(ur.Orders.Where(orm.Gt(of.TotalCents, 100)).OrderBy(orm.Desc(of.TotalCents)).With(or.Buyer)))
 	if err != nil || len(users) != 1 || !users[0].Orders.IsLoaded() {
 		t.Fatal(err)
 	}
@@ -38,13 +38,13 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 			t.Fatal("nested collection target missing")
 		}
 	}
-	hasOne := orm.HasOneOf(uf.Introducer, orm.KeyExpr(uf.ID), orm.NullableColumnExpr(uf.IntroducerID))
+	hasOne := orm.HasOneOf(uf.Introducer, uf.ID, uf.IntroducerID)
 	loaded, err := orm.LoadFrom(ctx, db, models.Users.Query().With(hasOne), []models.User{{ID: must(model.ParseID[models.User](buyerID))}})
 	if err != nil || !loaded[0].Introducer.IsLoaded() {
 		t.Fatal(err)
 	}
 	g.showHydrated(loaded)
-	nested := orm.Has(or.Buyer, orm.NumberGt(uf.Age, 18))
+	nested := orm.Has(or.Buyer, orm.Gt(uf.Age, 18))
 	if _, err = orm.All(ctx, db, uf.Query().Where(orm.Has(ur.Orders, nested))); err != nil {
 		t.Fatal(err)
 	}

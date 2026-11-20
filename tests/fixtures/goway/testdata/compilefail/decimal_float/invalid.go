@@ -6,4 +6,4 @@ import (
 	m "foundry.test/goway/models"
 )
 
-var _ = orm.NumberSet(m.LedgerEntries.Amount, 1.25)
+var _ = orm.Set(m.LedgerEntries.Amount, 1.25)

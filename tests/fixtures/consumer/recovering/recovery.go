@@ -26,7 +26,7 @@ func Members(db database.Executor) Provider {
 	}, func(_ context.Context, member Member) (bool, error) { return member.Enabled, nil })
 }
 func lock(ctx context.Context, tx *database.Tx, id model.ID[Member]) (value.Optional[Member], error) {
-	return orm.FirstLocked(ctx, tx, orm.Lock(MemberRecords.Query().Where(orm.KeyEq(MemberRecords.Key(), id))))
+	return orm.FirstLocked(ctx, tx, orm.Lock(MemberRecords.Query().Where(orm.Eq(MemberRecords.Key(), id))))
 }
 func email(member Member) string                             { return member.Email }
 func emailRevision(member Member) challenge.Revision[Member] { return member.EmailRevision }
@@ -38,7 +38,7 @@ func NewReset(store *challenge.Store, provider Provider, hasher *password.Hasher
 	return passwordreset.New(store, provider, hasher, passwordreset.Model[Member, model.ID[Member]]{
 		Lock: lock, Email: email, EmailRevision: emailRevision, Hash: func(member Member) password.Hash { return member.Password },
 		SetPassword: func(ctx context.Context, tx *database.Tx, member Member, next password.Hash) (Member, error) {
-			return orm.Update(ctx, tx, MemberRecords.Table.Query(), MemberRecords.Table.Key(), member.ID, orm.ColumnSet(MemberRecords.Password, next))
+			return orm.Update(ctx, tx, MemberRecords.Table.Query(), MemberRecords.Table.Key(), member.ID, orm.Set(MemberRecords.Password, next))
 		},
 		ValidatePassword: func(_ context.Context, plain password.Plaintext) error {
 			if len(plain.Secret().Reveal()) < 12 {
@@ -53,7 +53,7 @@ func NewVerification(store *challenge.Store, provider Provider) (*Verification, 
 	return emailverification.New(store, provider, emailverification.Model[Member, model.ID[Member]]{
 		Lock: lock, Email: email, EmailRevision: emailRevision, Verified: func(member Member) bool { return member.EmailVerified },
 		MarkVerified: func(ctx context.Context, tx *database.Tx, member Member) (Member, error) {
-			return orm.Update(ctx, tx, MemberRecords.Table.Query(), MemberRecords.Table.Key(), member.ID, orm.ColumnSet(MemberRecords.EmailVerified, true))
+			return orm.Update(ctx, tx, MemberRecords.Table.Query(), MemberRecords.Table.Key(), member.ID, orm.Set(MemberRecords.EmailVerified, true))
 		},
 	}, emailverification.DefaultLifetime)
 }

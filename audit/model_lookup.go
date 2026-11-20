@@ -30,7 +30,7 @@ func FindModel[M, K any](ctx context.Context, executor database.Executor, record
 		return value.Optional[ModelRecord[M, K]]{}, safeerror.NewFault(fault.Invalid, "model audit lookup requires a nonzero ID")
 	}
 	f := auditstore.Entries
-	selected, err := orm.First(ctx, executor, auditstore.Entries.Query().Where(orm.TextEq(f.Area, string(area)), orm.ColumnNe(f.Operation, 0)).Where(orm.KeyEq(auditstore.Entries.Key(), model.IDFromBytes[auditstore.Entry](id.Bytes()))))
+	selected, err := orm.First(ctx, executor, auditstore.Entries.Query().Where(orm.Eq(f.Area, string(area)), orm.Ne(f.Operation, 0)).Where(orm.Eq(auditstore.Entries.Key(), model.IDFromBytes[auditstore.Entry](id.Bytes()))))
 	if err != nil {
 		return value.Optional[ModelRecord[M, K]]{}, err
 	}

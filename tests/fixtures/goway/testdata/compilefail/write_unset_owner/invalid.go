@@ -8,6 +8,6 @@ type other struct{}
 func bad(w *orm.Write[member], field orm.Text[other, string]) {
 	_ = orm.WriteUnset(w, func() func(arg0 string) orm.Assignment[other] {
 		receiver := field
-		return func(arg0 string) orm.Assignment[other] { return orm.TextSet(receiver, arg0) }
+		return func(arg0 string) orm.Assignment[other] { return orm.Set(receiver, arg0) }
 	}())
 }

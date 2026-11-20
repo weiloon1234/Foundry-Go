@@ -52,10 +52,10 @@ func TestAuditRowsShareRollbackAndRestoreTypedHistory(t *testing.T) {
 		}
 		return orm.Hooks[h.Member]{Created: write, Updated: write, Deleted: write, Restored: write}
 	})
-	_, err = orm.Insert(ctx, db, table.Table, orm.KeySet(table.Key(), 1), orm.InputTextSet(table.Name, " stored "), orm.ColumnSet(table.Body, []byte{1}))
+	_, err = orm.Insert(ctx, db, table.Table, orm.Set(table.Key(), 1), orm.Set(table.Name, " stored "), orm.Set(table.Body, []byte{1}))
 	must(t, err)
 	// The rejected model and its already inserted audit row must both disappear.
-	_, err = orm.Insert(ctx, db, table.Table, orm.KeySet(table.Key(), 2), orm.InputTextSet(table.Name, " reject "), orm.ColumnSet(table.Body, []byte{2}))
+	_, err = orm.Insert(ctx, db, table.Table, orm.Set(table.Key(), 2), orm.Set(table.Name, " reject "), orm.Set(table.Body, []byte{2}))
 	if !errors.Is(err, veto) {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestAuditRowsShareRollbackAndRestoreTypedHistory(t *testing.T) {
 	if count != 1 {
 		t.Fatal("audit row escaped rollback", count)
 	}
-	_, err = orm.Update(ctx, db, table.Table.Query(), table.Table.Key(), 1, orm.InputTextSet(table.Name, " updated "))
+	_, err = orm.Update(ctx, db, table.Table.Query(), table.Table.Key(), 1, orm.Set(table.Name, " updated "))
 	must(t, err)
 	subject, err := captured.Subject()
 	must(t, err)
@@ -83,7 +83,7 @@ func TestAuditRowsShareRollbackAndRestoreTypedHistory(t *testing.T) {
 	if len(history.Items) != 2 {
 		t.Fatal("stored history", len(history.Items))
 	}
-	field, err := orm.AuditRead(history.Items[0].Changes(), orm.InputTextExpr(table.Name))
+	field, err := orm.AuditRead(history.Items[0].Changes(), table.Name)
 	must(t, err)
 	name, ok := field.Get()
 	if !ok {
@@ -95,7 +95,7 @@ func TestAuditRowsShareRollbackAndRestoreTypedHistory(t *testing.T) {
 	if v != "updated" {
 		t.Fatal("historical codec", v)
 	}
-	body, err := orm.AuditRead(history.Items[0].Changes(), orm.ColumnExpr(table.Body))
+	body, err := orm.AuditRead(history.Items[0].Changes(), table.Body)
 	must(t, err)
 	if body.IsSet() {
 		t.Fatal("untouched body retained")

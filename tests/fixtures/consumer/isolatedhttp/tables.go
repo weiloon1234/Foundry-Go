@@ -7,11 +7,11 @@ import (
 
 // RecordTable declares the stored record fields. Example: RecordRows.Query().
 type RecordTable struct {
-	// Table owns the primary key. Example: orm.KeyEq(RecordRows.Key(), id).
+	// Table owns the primary key. Example: orm.Eq(RecordRows.Key(), id).
 	orm.Table[Record, model.ID[Record]]
-	// Name binds the Name field. Example: orm.TextSet(RecordRows.Name, "fixture").
+	// Name binds the Name field. Example: orm.Set(RecordRows.Name, "fixture").
 	Name orm.Text[Record, string]
-	// Text binds the Text field. Example: orm.TextSet(RecordRows.Text, "text").
+	// Text binds the Text field. Example: orm.Set(RecordRows.Text, "text").
 	Text orm.Text[Record, string]
 }
 

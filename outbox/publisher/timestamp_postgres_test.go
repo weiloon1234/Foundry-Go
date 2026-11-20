@@ -32,7 +32,7 @@ func appendPublicationAt(t *testing.T, writer outboxtest.Writer, address outboxs
 		if err != nil {
 			return err
 		}
-		_, err = orm.Update(t.Context(), tx, outboxstore.Messages.Table.Query(), outboxstore.Messages.Table.Key(), row.ID, orm.TimeSet(outboxstore.Messages.PublishAfter, instant))
+		_, err = orm.Update(t.Context(), tx, outboxstore.Messages.Table.Query(), outboxstore.Messages.Table.Key(), row.ID, orm.Set(outboxstore.Messages.PublishAfter, instant))
 		return err
 	}); err != nil {
 		t.Fatal(err)

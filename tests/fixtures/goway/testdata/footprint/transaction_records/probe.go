@@ -25,5 +25,5 @@ func Model(ctx context.Context, tx *database.Tx) ([]models.Order, error) {
 }
 func Projected(ctx context.Context, tx *database.Tx) ([]summary, error) {
 	a := rows.AsTransaction[tag](rows.TransactionOf(rows.ModelRecord(models.Orders.Query())), "orders")
-	return rows.SelectTransaction(a, schema, rows.Map(schema.Amount, expr.At(rows.TransactionScope(a), orm.NumberExpr(models.Orders.TotalCents)))).All(ctx, tx)
+	return rows.SelectTransaction(a, schema, rows.Map(schema.Amount, expr.At(rows.TransactionScope(a), models.Orders.TotalCents))).All(ctx, tx)
 }

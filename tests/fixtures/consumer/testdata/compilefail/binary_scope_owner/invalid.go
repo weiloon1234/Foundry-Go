@@ -7,4 +7,4 @@ import (
 	"foundry.test/consumer/linkqueries"
 )
 
-var _ = linkqueries.Members.Query().Where(orm.InputColumnEq(binarymodels.Records.Body, binarymodels.Payload{1}))
+var _ = linkqueries.Members.Query().Where(orm.Eq(binarymodels.Records.Body, binarymodels.Payload{1}))

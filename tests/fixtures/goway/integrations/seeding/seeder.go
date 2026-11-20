@@ -13,7 +13,7 @@ import (
 // RecordSeeder retains the caller's transaction and normal ORM write pipeline.
 func RecordSeeder(name string) seed.Definition {
 	return seed.Definition{ID: "fixture.records", Run: func(ctx context.Context, tx *database.Tx) error {
-		_, err := orm.Insert(ctx, tx, models.WriteRecords.Table, orm.TextSet(models.WriteRecords.Name, name))
+		_, err := orm.Insert(ctx, tx, models.WriteRecords.Table, orm.Set(models.WriteRecords.Name, name))
 		return err
 	}}
 }

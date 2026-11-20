@@ -5,7 +5,6 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
-	"reflect"
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -26,7 +25,7 @@ type KeyLookup[M any, K comparable] struct {
 // inside unexported fields, but does not dereference their private state pointers.
 type keyLookupState[K comparable] struct {
 	state   queryState
-	field   columnData[K]
+	field   *columnData[K]
 	primary bool
 	err     error
 }
@@ -34,16 +33,16 @@ type keyLookupState[K comparable] struct {
 // Keyed retains filters, eager loads, soft-delete scope and retrieval hooks.
 // Example: modelbinding.ByKey(db,orm.Keyed(Users.Query(),Users.Key()),pathKey).
 func Keyed[M any, K comparable](q Query[M], key Key[M, K]) KeyLookup[M, K] {
-	return KeyLookup[M, K]{core: &keyLookupState[K]{state: q.state, field: key.key, primary: true}}
+	return KeyLookup[M, K]{core: &keyLookupState[K]{state: q.state, field: key.stored, primary: true}}
 }
 
 // Unique binds a stored alternate key, rejecting a second matching row.
-// Example: orm.Unique(Users.Query(),orm.TextExpr(Users.Email)).Find(ctx,db,email).
-func Unique[M any, K comparable](q Query[M], field KeyColumn[M, K]) KeyLookup[M, K] {
-	if !lookupColumn(field) {
+// Example: orm.Unique(Users.Query(), Users.Email).Find(ctx, db, email).
+func Unique[M any, K comparable, I, P any, Kind ColumnKind, R ColumnRole](q Query[M], field ColumnHandle[M, K, I, P, Kind, R]) KeyLookup[M, K] {
+	if field.stored == nil || field.stored.core == nil {
 		return KeyLookup[M, K]{core: &keyLookupState[K]{err: invalid("unique lookup requires a stored field")}}
 	}
-	return KeyLookup[M, K]{core: &keyLookupState[K]{state: q.state, field: field.ormColumn(nil)}}
+	return KeyLookup[M, K]{core: &keyLookupState[K]{state: q.state, field: field.stored}}
 }
 
 // Validate checks the declaration without SQL. Example: lookup.Validate().
@@ -54,7 +53,7 @@ func (l KeyLookup[M, K]) Validate() error {
 	if l.core.err != nil {
 		return l.core.err
 	}
-	if l.core.state.table == nil || l.core.field.core == nil || l.core.field.core.owner != l.core.state.table {
+	if l.core.state.table == nil || l.core.field == nil || l.core.field.core == nil || l.core.field.core.owner != l.core.state.table {
 		return invalid("lookup requires its model's stored field")
 	}
 	if l.core.primary && l.core.state.table.primary != l.core.field.core {
@@ -72,7 +71,7 @@ func (l KeyLookup[M, K]) Find(ctx context.Context, ex database.Executor, key K) 
 	if err := l.Validate(); err != nil {
 		return value.Optional[M]{}, err
 	}
-	q := where(l.core.state, []Predicate[M]{comparison[M](l.core.field, querycore.Equal, []K{key})})
+	q := where(l.core.state, []Predicate[M]{comparison[M](l.core.field, querycore.Equal, []K{key}, false)})
 	if l.core.primary {
 		return first[M](ctx, ex, q)
 	}
@@ -111,7 +110,7 @@ type DirectRelation[P, M any] interface {
 }
 
 // RelatedLookup retains the parent, target and alternate-key types.
-// Example: orm.RelatedUnique(TeamRelations.Projects,orm.TextExpr(Projects.Slug)).
+// Example: orm.RelatedUnique(TeamRelations.Projects,Projects.Slug).
 type RelatedLookup[P, M any, K comparable] struct {
 	_      [0]*P
 	_      [0]*M
@@ -120,8 +119,8 @@ type RelatedLookup[P, M any, K comparable] struct {
 }
 
 // RelatedUnique scopes a unique lookup through a loaded parent without a fallback query.
-// Example: orm.RelatedUnique(TeamRelations.Projects,orm.TextExpr(Projects.Slug)).Find(ctx,db,team,slug).
-func RelatedUnique[P, M any, K comparable, R DirectRelation[P, M]](relation R, field KeyColumn[M, K]) RelatedLookup[P, M, K] {
+// Example: orm.RelatedUnique(TeamRelations.Projects, Projects.Slug).Find(ctx, db, team, slug).
+func RelatedUnique[P, M any, K comparable, Rel DirectRelation[P, M], I, Pr any, Kind ColumnKind, R ColumnRole](relation Rel, field ColumnHandle[M, K, I, Pr, Kind, R]) RelatedLookup[P, M, K] {
 	var p *relationPlan
 	switch r := any(relation).(type) {
 	case BelongsTo[P, M]:
@@ -183,29 +182,6 @@ func (l RelatedLookup[P, M, K]) Find(ctx context.Context, ex database.Executor, 
 		return value.Optional[M]{}, nil
 	}
 	return (KeyLookup[M, K]{core: &q}).Find(ctx, ex, key)
-}
-
-// Validate the concrete framework family before invoking a promoted private method.
-func lookupColumn(field any) bool {
-	v := reflect.ValueOf(field)
-	if !v.IsValid() {
-		return false
-	}
-	if v.Kind() == reflect.Pointer {
-		if v.IsNil() {
-			return false
-		}
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct || v.Type().PkgPath() != reflect.TypeFor[columnCore]().PkgPath() {
-		return false
-	}
-	for i := 0; i < v.NumField(); i++ {
-		if v.Type().Field(i).Anonymous {
-			return false
-		}
-	}
-	return true
 }
 
 // Format redacts scope literals and model metadata. Example: fmt.Sprintf("%+v", lookup).

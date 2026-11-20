@@ -51,4 +51,4 @@ func Tables() []orm.CheckedTable {
 
 var ProjectLinks = struct {
 	Members orm.ThroughRelation[Project, Person, Assignment]
-}{orm.ManyToManyOf(Projects.Members, orm.KeyExpr(Projects.ID), orm.ColumnExpr(Assignments.ProjectID), orm.ColumnExpr(Assignments.PersonID), orm.KeyExpr(People.ID))}
+}{orm.ManyToManyOf(Projects.Members, orm.JoinKeys(Projects.ID, Assignments.ProjectID), orm.JoinKeys(Assignments.PersonID, People.ID))}

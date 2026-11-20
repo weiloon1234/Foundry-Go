@@ -34,77 +34,77 @@ func Insert(ctx context.Context, tx *database.Tx, captures []Capture) error {
 	drafts := make([][]orm.Assignment[Capture], 0, len(captures))
 	for _, row := range captures {
 		drafts = append(drafts, []orm.Assignment[Capture]{
-			orm.KeySet(c.ID, row.ID),
-			orm.ColumnSet(c.OperationID, row.OperationID),
-			orm.NumberSet(c.Attempt, row.Attempt),
-			orm.ColumnSet(c.Retried, row.Retried),
-			orm.TextSet(c.Client, row.Client),
-			orm.TimeSet(c.StartedAt, row.StartedAt),
+			orm.Set(c.ID, row.ID),
+			orm.Set(c.OperationID, row.OperationID),
+			orm.Set(c.Attempt, row.Attempt),
+			orm.Set(c.Retried, row.Retried),
+			orm.Set(c.Client, row.Client),
+			orm.Set(c.StartedAt, row.StartedAt),
 			nullableNumber(c.HeadersMS, row.HeadersMS),
-			orm.NumberSet(c.DurationMS, row.DurationMS),
-			orm.TextSet(c.Result, row.Result),
+			orm.Set(c.DurationMS, row.DurationMS),
+			orm.Set(c.Result, row.Result),
 			nullableText(c.RequestID, row.RequestID),
 			nullableText(c.TraceID, row.TraceID),
 			nullableText(c.Route, row.Route),
-			orm.TextSet(c.Method, row.Method),
-			orm.TextSet(c.Scheme, row.Scheme),
-			orm.TextSet(c.Host, row.Host),
-			orm.TextSet(c.Path, row.Path),
-			orm.JSONSet(c.QueryFields, row.Query),
-			orm.JSONSet(c.RequestHeaders, row.RequestHeaders),
-			orm.TextSet(c.BodyMode, row.BodyMode),
-			orm.TextSet(c.RequestBodyState, row.RequestBodyState),
+			orm.Set(c.Method, row.Method),
+			orm.Set(c.Scheme, row.Scheme),
+			orm.Set(c.Host, row.Host),
+			orm.Set(c.Path, row.Path),
+			orm.Set(c.QueryFields, row.Query),
+			orm.Set(c.RequestHeaders, row.RequestHeaders),
+			orm.Set(c.BodyMode, row.BodyMode),
+			orm.Set(c.RequestBodyState, row.RequestBodyState),
 			nullableText(c.RequestBodyOmission, row.RequestBodyOmission),
-			orm.ColumnSet(c.RequestBody, row.RequestBody),
+			orm.Set(c.RequestBody, row.RequestBody),
 			nullableNumber(c.RequestDeclaredBytes, row.RequestDeclaredBytes),
-			orm.NumberSet(c.RequestSentBytes, row.RequestSentBytes),
-			orm.ColumnSet(c.RequestBodyComplete, row.RequestBodyComplete),
+			orm.Set(c.RequestSentBytes, row.RequestSentBytes),
+			orm.Set(c.RequestBodyComplete, row.RequestBodyComplete),
 			nullableNumber(c.Status, row.Status),
 			nullableText(c.Protocol, row.Protocol),
 			nullableText(c.RemoteIP, row.RemoteIP),
 			nullableBool(c.ConnectionReused, row.ConnectionReused),
-			orm.JSONSet(c.ResponseHeaders, row.ResponseHeaders),
-			orm.TextSet(c.ResponseBodyState, row.ResponseBodyState),
+			orm.Set(c.ResponseHeaders, row.ResponseHeaders),
+			orm.Set(c.ResponseBodyState, row.ResponseBodyState),
 			nullableText(c.ResponseBodyOmission, row.ResponseBodyOmission),
-			orm.ColumnSet(c.ResponseBody, row.ResponseBody),
+			orm.Set(c.ResponseBody, row.ResponseBody),
 			nullableNumber(c.ResponseDeclaredBytes, row.ResponseDeclaredBytes),
-			orm.NumberSet(c.ResponseReadBytes, row.ResponseReadBytes),
-			orm.ColumnSet(c.ResponseBodyComplete, row.ResponseBodyComplete),
-			orm.JSONSet(c.Omissions, row.Omissions),
-			orm.NumberSet(c.DroppedBefore, row.DroppedBefore),
+			orm.Set(c.ResponseReadBytes, row.ResponseReadBytes),
+			orm.Set(c.ResponseBodyComplete, row.ResponseBodyComplete),
+			orm.Set(c.Omissions, row.Omissions),
+			orm.Set(c.DroppedBefore, row.DroppedBefore),
 		})
 	}
 	if len(drafts) == 0 {
 		return nil
 	}
-	_, err := orm.UpsertMany(ctx, tx, c.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(c.ID))).DoNothing(), drafts)
+	_, err := orm.UpsertMany(ctx, tx, c.Query(), orm.OnConflict(orm.ConflictKey(c.ID)).DoNothing(), drafts)
 	return err
 }
 
 func nullableText(column orm.NullableText[Capture, string], v interface{ Get() (string, bool) }) orm.Assignment[Capture] {
 	if text, present := v.Get(); present {
-		return orm.NullableTextSet(column, text)
+		return orm.Set(column, text)
 	}
-	return orm.NullableTextSetNull(column)
+	return orm.SetNull(column)
 }
 
 func nullableNumber[V orm.NumberValue](column orm.NullableNumber[Capture, V], v interface{ Get() (V, bool) }) orm.Assignment[Capture] {
 	if number, present := v.Get(); present {
-		return orm.NullableNumberSet(column, number)
+		return orm.Set(column, number)
 	}
-	return orm.NullableNumberSetNull(column)
+	return orm.SetNull(column)
 }
 
 func nullableBool(column orm.NullableColumn[Capture, bool], v interface{ Get() (bool, bool) }) orm.Assignment[Capture] {
 	if flag, present := v.Get(); present {
-		return orm.NullableColumnSet(column, flag)
+		return orm.Set(column, flag)
 	}
-	return orm.NullableColumnSetNull(column)
+	return orm.SetNull(column)
 }
 
 // Find loads one capture still inside retention, or database.NotFound.
 func Find(ctx context.Context, tx *database.Tx, id model.ID[Capture], retained temporal.DateTime) (Capture, error) {
-	return orm.Require(ctx, tx, Captures.Query().Where(orm.KeyEq(Captures.ID, id), orm.TimeGte(Captures.StartedAt, retained)))
+	return orm.Require(ctx, tx, Captures.Query().Where(orm.Eq(Captures.ID, id), orm.Gte(Captures.StartedAt, retained)))
 }
 
 // Page reads one newest-first keyset page of the narrow projection. q holds
@@ -121,6 +121,6 @@ func Page(ctx context.Context, tx *database.Tx, q orm.Query[Capture], request or
 // attempt first.
 func Siblings(ctx context.Context, tx *database.Tx, operation model.ID[Operation], retained temporal.DateTime) ([]Summary, error) {
 	c := Captures
-	q := c.Query().Where(orm.ColumnEq(c.OperationID, operation), orm.TimeGte(c.StartedAt, retained)).OrderBy(orm.NumberAsc(c.Attempt), orm.KeyAsc(c.ID)).Limit(MaxSiblings)
+	q := c.Query().Where(orm.Eq(c.OperationID, operation), orm.Gte(c.StartedAt, retained)).OrderBy(orm.Asc(c.Attempt), orm.Asc(c.ID)).Limit(MaxSiblings)
 	return rows.Read(Summaries(q)).All(ctx, tx)
 }

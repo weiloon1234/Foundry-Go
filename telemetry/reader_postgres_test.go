@@ -37,13 +37,13 @@ func seedReaderMetric(ctx context.Context, tx *database.Tx, run model.ID[runRow]
 		return err
 	}
 	_, err = orm.Insert(ctx, tx, metrics.Table,
-		orm.KeySet(metrics.Key(), store.MetricKey(digest(name))), orm.ColumnSet(metrics.RunID, run), orm.TimeSet(metrics.BucketAt, at), orm.NumberSet(metrics.IntervalSeconds, interval),
-		orm.TextSet(metrics.Route, route), orm.TextSet(metrics.RoutePath, "/declared"), orm.TextSet(metrics.Method, http.GET), orm.NumberSet(metrics.Status, status), orm.TextSet(metrics.Outcome, observability.Succeeded), orm.JSONSet(metrics.Histogram, payload))
+		orm.Set(metrics.Key(), store.MetricKey(digest(name))), orm.Set(metrics.RunID, run), orm.Set(metrics.BucketAt, at), orm.Set(metrics.IntervalSeconds, interval),
+		orm.Set(metrics.Route, route), orm.Set(metrics.RoutePath, "/declared"), orm.Set(metrics.Method, http.GET), orm.Set(metrics.Status, status), orm.Set(metrics.Outcome, observability.Succeeded), orm.Set(metrics.Histogram, payload))
 	return err
 }
 
 func seedReaderAlert(ctx context.Context, tx *database.Tx, run model.ID[runRow], name string, at temporal.DateTime, state AlertState) error {
-	_, err := orm.Insert(ctx, tx, alerts.Table, orm.KeySet(alerts.Key(), AlertKey(digest(name))), orm.ColumnSet(alerts.RunID, run), orm.EnumSet(alerts.Rule, RuleLatency), orm.EnumSet(alerts.State, state), orm.NumberSet(alerts.Episode, Episode(1)), orm.TimeSet(alerts.FirstAt, at), orm.TimeSet(alerts.LastAt, at), orm.NullableTimeSetNull(alerts.RecoveredAt))
+	_, err := orm.Insert(ctx, tx, alerts.Table, orm.Set(alerts.Key(), AlertKey(digest(name))), orm.Set(alerts.RunID, run), orm.Set(alerts.Rule, RuleLatency), orm.Set(alerts.State, state), orm.Set(alerts.Episode, Episode(1)), orm.Set(alerts.FirstAt, at), orm.Set(alerts.LastAt, at), orm.SetNull(alerts.RecoveredAt))
 	return err
 }
 
@@ -81,7 +81,7 @@ func TestPostgresReaderSourceRetentionAndStablePages(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		_, err = orm.UpdateAll(t.Context(), tx, issues.Query().Where(orm.KeyEq(issues.Key(), key)), orm.JSONSet(issues.Detail, detail))
+		_, err = orm.UpdateAll(t.Context(), tx, issues.Query().Where(orm.Eq(issues.Key(), key)), orm.Set(issues.Detail, detail))
 		return err
 	})
 	query := IssueQuery{Source: SourceBackend, Page: orm.Page(1, 2)}
@@ -360,7 +360,7 @@ func TestPostgresReaderRejectsCorruptHistogramStorage(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				_, err = orm.UpdateAll(t.Context(), tx, metrics.Query().Where(orm.KeyEq(metrics.Key(), store.MetricKey(digest("corrupt")))), orm.JSONSet(metrics.Histogram, payload))
+				_, err = orm.UpdateAll(t.Context(), tx, metrics.Query().Where(orm.Eq(metrics.Key(), store.MetricKey(digest("corrupt")))), orm.Set(metrics.Histogram, payload))
 				return err
 			})
 			out, err := r.Traffic(t.Context(), TrafficQuery{Window: Window{Minutes: 15}})
@@ -531,7 +531,7 @@ func TestPostgresReaderEventsUseStableKeysWithoutAnIssueGroup(t *testing.T) {
 				return err
 			}
 			want = append(want, id.String())
-			if _, err := orm.Insert(t.Context(), tx, events.Table, orm.KeySet(events.Key(), id), orm.TextSet(events.Fingerprint, key), orm.EnumSet(events.Source, SourceBackend), orm.TimeSet(events.CreatedAt, now), orm.JSONSet(events.Detail, detail)); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, events.Table, orm.Set(events.Key(), id), orm.Set(events.Fingerprint, key), orm.Set(events.Source, SourceBackend), orm.Set(events.CreatedAt, now), orm.Set(events.Detail, detail)); err != nil {
 				return err
 			}
 		}
@@ -570,7 +570,7 @@ func TestPostgresReaderRuntimeAndEventSnapshotsAreOwned(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := orm.UpdateAll(t.Context(), tx, runs.Query().Where(orm.KeyEq(runs.Key(), run)), orm.JSONSet(runs.Runtime, payload)); err != nil {
+		if _, err := orm.UpdateAll(t.Context(), tx, runs.Query().Where(orm.Eq(runs.Key(), run)), orm.Set(runs.Runtime, payload)); err != nil {
 			return err
 		}
 		return seedRetentionIssues(t.Context(), tx, "owned", SourceBackend, now, 1)
@@ -632,7 +632,7 @@ func TestPostgresReaderIssueUsesSourceRetentionAndOwnedDetails(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		_, err = orm.UpdateAll(t.Context(), tx, issues.Query().Where(orm.KeyEq(issues.Key(), key)), orm.JSONSet(issues.Detail, payload))
+		_, err = orm.UpdateAll(t.Context(), tx, issues.Query().Where(orm.Eq(issues.Key(), key)), orm.Set(issues.Detail, payload))
 		return err
 	})
 	item, err := r.Issue(t.Context(), key)

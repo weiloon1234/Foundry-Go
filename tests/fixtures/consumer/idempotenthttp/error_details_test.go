@@ -32,7 +32,7 @@ func TestDetailedRejectionRollsBackAndReexecutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	existing, err := orm.Insert(t.Context(), db, Orders.Table, orm.NumberSet(Orders.WorkspaceID, 1), orm.NumberSet(Orders.Caller, 1), orm.TextSet(Orders.Name, "first state"))
+	existing, err := orm.Insert(t.Context(), db, Orders.Table, orm.Set(Orders.WorkspaceID, 1), orm.Set(Orders.Caller, 1), orm.Set(Orders.Name, "first state"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestDetailedRejectionRollsBackAndReexecutes(t *testing.T) {
 	const body = `{"name":"attempt"}`
 	for i, name := range []string{"first state", "current state"} {
 		if i > 0 {
-			if _, err := orm.Update(t.Context(), db, Orders.Query(), Orders.Key(), existingID, orm.TextSet(Orders.Name, name)); err != nil {
+			if _, err := orm.Update(t.Context(), db, Orders.Query(), Orders.Key(), existingID, orm.Set(Orders.Name, name)); err != nil {
 				t.Fatal(err)
 			}
 		}

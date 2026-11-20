@@ -7,5 +7,5 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var key orm.KeyColumn[h.Member, int64] = h.Members.ID
-var _ = rows.MapUpdate(key, expr.Value(orm.KeyExpr(h.Members.ID)))
+var key orm.Key[h.Member, int64] = h.Members.Key()
+var _ = rows.MapUpdate(key, expr.Value(h.Members.ID))

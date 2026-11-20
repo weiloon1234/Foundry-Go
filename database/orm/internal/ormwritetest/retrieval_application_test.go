@@ -60,7 +60,7 @@ func TestRetrievalObserversAreApplicationOwnedWithoutLocalFactory(t *testing.T) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		rows, err := orm.All(t.Context(), db, table.Query().Where(orm.KeyEq(table.Key(), 1), orm.TextEq(table.Name, "name")))
+		rows, err := orm.All(t.Context(), db, table.Query().Where(orm.Eq(table.Key(), 1), orm.Eq(table.Name, "name")))
 		if err != nil || len(rows) != 1 || invoked != i || seen != i {
 			t.Fatal("retrieval-only application dispatch", err, invoked, seen)
 		}

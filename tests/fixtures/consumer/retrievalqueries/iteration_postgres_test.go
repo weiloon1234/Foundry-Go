@@ -17,12 +17,12 @@ func TestPostgresRetrievalIterationClosesBoundedBatches(t *testing.T) {
 		q := retrievalqueries.Members.Query()
 		f := retrievalqueries.Members
 		for i := range orm.DefaultChunkSize + 3 {
-			if _, err := orm.Insert(t.Context(), tx, retrievalqueries.Members.Table, orm.InputTextSet(retrievalqueries.Members.Name, fmt.Sprintf("stream %03d", i))); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, retrievalqueries.Members.Table, orm.Set(retrievalqueries.Members.Name, fmt.Sprintf("stream %03d", i))); err != nil {
 				return err
 			}
 		}
-		base := q.Where(orm.InputTextLike(f.Name, "stream %"))
-		window := base.OrderBy(orm.InputTextAsc(f.Name)).Offset(1).Limit(orm.DefaultChunkSize + 1)
+		base := q.Where(orm.Like(f.Name, "stream %"))
+		window := base.OrderBy(orm.Asc(f.Name)).Offset(1).Limit(orm.DefaultChunkSize + 1)
 
 		for _, test := range []struct {
 			name string

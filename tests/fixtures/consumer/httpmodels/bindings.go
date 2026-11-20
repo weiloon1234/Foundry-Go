@@ -29,7 +29,7 @@ type Service interface {
 
 // doc-example:begin http-model-binding-user-by-id
 func UserByID(db database.Executor) modelbinding.Resolver[httpkernel.UserPath, models.User] {
-	return modelbinding.ByKey(db, orm.Keyed(models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.StatusActive)), models.Users.Key()),
+	return modelbinding.ByKey(db, orm.Keyed(models.Users.Query().Where(orm.Eq(models.Users.Status, models.StatusActive)), models.Users.Key()),
 		func(p httpkernel.UserPath) model.ID[models.User] { return p.User })
 }
 
@@ -65,6 +65,6 @@ type OrderPath struct {
 // doc-example:begin http-model-binding-order-within-user
 func OrderWithinUser(db database.Executor) modelbinding.Resolver[OrderPath, models.Order] {
 	return modelbinding.Define(func(ctx context.Context, p OrderPath) (value.Optional[models.Order], error) {
-		return orm.Keyed(models.Orders.Query().Where(orm.ColumnEq(models.Orders.BuyerID, p.User)), models.Orders.Key()).Find(ctx, db, p.Order)
+		return orm.Keyed(models.Orders.Query().Where(orm.Eq(models.Orders.BuyerID, p.User)), models.Orders.Key()).Find(ctx, db, p.Order)
 	})
 } // doc-example:end http-model-binding-order-within-user

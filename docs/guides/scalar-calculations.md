@@ -6,8 +6,8 @@ Row calculations preserve their model or alias scope and compose with handwritte
 
 <!-- compiled-source: tests/fixtures/consumer/scalarqueries/scalars_postgres_test.go#scalar-calculations -->
 ```go
-quantity := expr.Value(orm.NumberExpr(f.Quantity))
-incremented := expr.Add(quantity, expr.Param(orm.NumberExpr(f.Quantity), 1))
+quantity := expr.Value(f.Quantity)
+incremented := expr.Add(quantity, expr.Param(f.Quantity, 1))
 if rows, err := orm.All(t.Context(), tx, expr.Where(scalarqueries.Samples.Query(), expr.Gte(incremented, 3))); err != nil || len(rows) != 2 {
 	t.Fatal("typed arithmetic predicate", rows, err)
 }
@@ -68,7 +68,7 @@ Parameters and constants explicitly cast to SQL `text` remain collatable while r
 
 <!-- compiled-source: tests/fixtures/consumer/scalarqueries/collation_test.go#collated-ordering -->
 ```go
-name := expr.Collate(expr.Value(orm.TextExpr(f.Name)), expr.CollationUnicode)
+name := expr.Collate(expr.Value(f.Name), expr.CollationUnicode)
 query := expr.OrderBy(f.Query(), expr.Asc(name))
 ```
 

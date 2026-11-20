@@ -5,14 +5,14 @@ import (
 	"testing"
 
 	"foundry.test/consumer/trigramqueries"
-	"github.com/weiloon1234/Foundry-Go/database/orm"
+
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 func TestTrigramExpressionFromConsumer(t *testing.T) {
 	f := trigramqueries.Declare("example")
-	name := expr.Value(orm.TextExpr(f.Names.Normalized))
+	name := expr.Value(f.Names.Normalized)
 	score := expr.TrigramSimilarity(name, trigramqueries.Normalized("words"))
 	q := expr.Where(f.Names.Query(), expr.TrigramMatch(name, trigramqueries.Normalized("words")), expr.Gte(score, 0.6))
 	statement, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.AsSelected(score))))

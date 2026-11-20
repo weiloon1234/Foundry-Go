@@ -18,17 +18,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-// Insert creates and hydrates one model. Example: orm.Insert(ctx, tx, Orders.Table, orm.NumberSet(Orders.TotalCents, 10), orm.ColumnSet(Orders.BuyerID, buyer)).
+// Insert creates and hydrates one model. Example: orm.Insert(ctx, tx, Orders.Table, orm.Set(Orders.TotalCents, 10), orm.Set(Orders.BuyerID, buyer)).
 func Insert[M any, K comparable](ctx context.Context, tx database.Transactor, t Table[M, K], as ...Assignment[M]) (M, error) {
 	return writeOne[M](ctx, tx, newQuery(t.core), querycore.InsertModel, as)
 }
 
-// UpdateAll patches every matching row. Example: orm.UpdateAll(ctx, tx, Orders.Query().Where(orm.NumberEq(Orders.TotalCents, 0)), orm.NumberSet(Orders.TotalCents, 1)).
+// UpdateAll patches every matching row. Example: orm.UpdateAll(ctx, tx, Orders.Query().Where(orm.Eq(Orders.TotalCents, 0)), orm.Set(Orders.TotalCents, 1)).
 func UpdateAll[M any](ctx context.Context, tx database.Transactor, q Query[M], as ...Assignment[M]) (int64, error) {
 	return writeAll(ctx, tx, q.state, querycore.UpdateModel, as)
 }
 
-// DeleteAll removes matching rows, respecting soft deletion. Example: orm.DeleteAll(ctx, tx, Orders.Query().Where(orm.KeyEq(Orders.ID, id))).
+// DeleteAll removes matching rows, respecting soft deletion. Example: orm.DeleteAll(ctx, tx, Orders.Query().Where(orm.Eq(Orders.ID, id))).
 func DeleteAll[M any](ctx context.Context, tx database.Transactor, q Query[M]) (int64, error) {
 	return writeAll[M](ctx, tx, q.state, querycore.DeleteModel, nil)
 }
@@ -676,7 +676,7 @@ func writeContext(ctx context.Context, writer database.Transactor) error {
 
 // Restore clears the deletion instant of one deleted key.
 func Restore[M any, K comparable](ctx context.Context, tx database.Transactor, t Table[M, K], key K) (M, error) {
-	return writeOne[M](ctx, tx, t.Query().Where(KeyEq(t.Key(), key)).state, querycore.RestoreModel, nil)
+	return writeOne[M](ctx, tx, t.Query().Where(Eq(t.Key(), key)).state, querycore.RestoreModel, nil)
 }
 
 // ForceDeleteAll physically deletes matching rows within the selected scope.

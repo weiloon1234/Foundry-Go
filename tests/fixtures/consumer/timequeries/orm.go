@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// MemberTable declares stored columns and their write roles. Example: orm.KeyEq(Members.Key(), key).
+// MemberTable declares stored columns and their write roles. Example: orm.Eq(Members.Key(), key).
 type MemberTable struct {
 	orm.Table[Member, model.ID[Member]]
 	Name      orm.InputText[Member, string, string]
@@ -30,7 +30,7 @@ func declareMembers() MemberTable {
 	return fields
 }
 
-// ManualTable declares stored columns and their write roles. Example: orm.KeyEq(Manuals.Key(), key).
+// ManualTable declares stored columns and their write roles. Example: orm.Eq(Manuals.Key(), key).
 type ManualTable struct {
 	orm.Table[Manual, model.ID[Manual]]
 	CreatedAt orm.Time[Manual, time.Time]

@@ -1,12 +1,10 @@
 package invalid
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/goway/models/jsonpaths"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
 func invalid() {
-	_ = expr.JSONIndex(expr.JSONRoot(expr.Value(orm.JSONExpr(jsonpaths.Documents.Tags))), "zero")
+	_ = expr.JSONIndex(expr.JSONRoot(expr.Value(jsonpaths.Documents.Tags)), "zero")
 }

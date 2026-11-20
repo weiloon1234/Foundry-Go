@@ -27,7 +27,7 @@ func TestModelHookFactoriesRollbackPanicsAndGoexit(t *testing.T) {
 				runtime.Goexit()
 				return orm.Hooks[mutationRecord]{}
 			}))
-			got, err := orm.Insert(t.Context(), db, q.Table, orm.TextSet(q.Name, "private record name"))
+			got, err := orm.Insert(t.Context(), db, q.Table, orm.Set(q.Name, "private record name"))
 			if !errors.Is(err, fault.Panicked) || got != (mutationRecord{}) || state.rolledBack.Load() != 1 || state.rowsClosed.Load() != 0 {
 				t.Fatalf("factory failure escaped transaction isolation: %v", err)
 			}
@@ -53,7 +53,7 @@ func TestModelHooksRejectAmbiguousLockedRowsBeforeCallbacks(t *testing.T) {
 			db := open(t, state, nil)
 			calls := 0
 			q := mutationDefinition(orm.WithHooks(func() orm.Hooks[mutationRecord] { calls++; return orm.Hooks[mutationRecord]{} }))
-			got, err := orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 1, orm.TextSet(q.Name, "private record name"))
+			got, err := orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 1, orm.Set(q.Name, "private record name"))
 			if !errors.Is(err, test.want) || got != (mutationRecord{}) || calls != 0 || state.rolledBack.Load() != 1 || state.rowsClosed.Load() != 1 {
 				t.Fatalf("invalid locked row ran factory or escaped rollback: %v", err)
 			}
@@ -99,7 +99,7 @@ func TestModelHooksCloseRowsAndPreserveCommitCandidates(t *testing.T) {
 					},
 				}
 			}))
-			got, err := orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 42, orm.TextSet(q.Name, "private record name"))
+			got, err := orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 42, orm.Set(q.Name, "private record name"))
 			if outcome == "success" {
 				if err != nil || got.ID != 42 || afterCommits != 1 {
 					t.Fatalf("successful hook write failed: %v", err)

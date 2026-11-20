@@ -1,7 +1,5 @@
 package goway_test
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"context"
 	"database/sql/driver"
@@ -61,17 +59,17 @@ func readTerminalParity[S, V any](t *testing.T,
 	}
 }
 func TestStage9ReadScalarCompileParity(t *testing.T) {
-	n := expr.Value(orm.TextExpr(scalars.Records.Name))
+	n := expr.Value(scalars.Records.Name)
 	t.Run("conditional", func(t *testing.T) {
-		compileReadParity(t, expr.AsSelected(expr.Row(expr.When(expr.Eq(n, "Ada"), expr.Param(orm.TextExpr(scalars.Records.Name), "yes")).Else(expr.Param(orm.TextExpr(scalars.Records.Name), "no")))), "yes")
+		compileReadParity(t, expr.AsSelected(expr.Row(expr.When(expr.Eq(n, "Ada"), expr.Param(scalars.Records.Name, "yes")).Else(expr.Param(scalars.Records.Name, "no")))), "yes")
 	})
 	t.Run("text", func(t *testing.T) { compileReadParity(t, expr.AsSelected(expr.Lower(n)), "ada") })
 
 	t.Run("geographic", func(t *testing.T) {
-		compileReadParity(t, expr.AsSelected(expr.SphericalDistance(expr.Value(orm.NumberExpr(scalars.Records.Latitude)), expr.Value(orm.NumberExpr(scalars.Records.Latitude)), expr.GeographicPoint{})), float64(4.5))
+		compileReadParity(t, expr.AsSelected(expr.SphericalDistance(expr.Value(scalars.Records.Latitude), expr.Value(scalars.Records.Latitude), expr.GeographicPoint{})), float64(4.5))
 	})
 
-	nw := expr.WindowFor(rowset.ModelScope(scalars.Records.Query())).PartitionBy(expr.Group(expr.Param(orm.TextExpr(scalars.Records.Name), "same"))).Named("partitioned").OrderBy(expr.Asc(n)).Named("ordered").RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
+	nw := expr.WindowFor(rowset.ModelScope(scalars.Records.Query())).PartitionBy(expr.Group(expr.Param(scalars.Records.Name, "same"))).Named("partitioned").OrderBy(expr.Asc(n)).Named("ordered").RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
 	t.Run("named_frame", func(t *testing.T) {
 		newRepeated := expr.AddValue(expr.Over(expr.Count[scalars.Record](), nw), expr.RowNumber(nw))
 		compileReadParity(t, newRepeated, int64(2))
@@ -81,7 +79,7 @@ func TestStage9ReadScalarCompileParity(t *testing.T) {
 		}
 	})
 
-	nb := expr.When(expr.Eq(n, "Ada"), expr.Param(orm.TextExpr(scalars.Records.Name), "yes")).Else(expr.Param(orm.TextExpr(scalars.Records.Name), "no"))
+	nb := expr.When(expr.Eq(n, "Ada"), expr.Param(scalars.Records.Name, "yes")).Else(expr.Param(scalars.Records.Name, "no"))
 	t.Run("computed_key", func(t *testing.T) {
 		compileReadParity(t, expr.RowNumber(expr.WindowFor(rowset.ModelScope(scalars.Records.Query())).PartitionByValues(expr.Key(expr.AsSelected(expr.Row(nb)))).OrderBy(expr.Asc(n))), int64(1))
 	})
@@ -89,7 +87,7 @@ func TestStage9ReadScalarCompileParity(t *testing.T) {
 
 func TestStage9ReadCTEScalarAndValueSetParity(t *testing.T) {
 	newCTE := rowset.AsRecord[expressionSide](rowset.CTE("eligible", rowset.ModelRecord(scalars.Records.Query().Limit(9))), "r")
-	newName := expr.At(rowset.Scope(newCTE), orm.TextExpr(scalars.Records.Name))
+	newName := expr.At(rowset.Scope(newCTE), scalars.Records.Name)
 
 	newScalar := rowset.ReadScalar(rowset.SelectScalar(newCTE, expr.AsSelected(expr.Row(newName)))).OrderBy(expr.Asc(newName)).Limit(3).Offset(1)
 	t.Run("cte", func(t *testing.T) { readTerminalParity(t, newScalar, "Ada") })

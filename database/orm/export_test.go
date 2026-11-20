@@ -116,7 +116,7 @@ func writeRelationTables(opts ...Option) (writeParentTable, writeTargetTable, wr
 		t := TableOf(b, &m.ID)
 		return writePivotTable{t, t.Key(), NumberOf(b, &m.ParentID), NumberOf(b, &m.TargetID), TextOf(b, &m.Role), SoftDeleteOf(b, &m.DeletedAt)}
 	}, opts...)
-	return a, z, p, ManyToManyOf(a.Links, KeyExpr(a.ID), NumberExpr(p.ParentID), NumberExpr(p.TargetID), KeyExpr(z.ID))
+	return a, z, p, ManyToManyOf(a.Links, JoinKeys(a.ID, p.ParentID), JoinKeys(p.TargetID, z.ID))
 }
 
 func pivotTestRows(n int) [][]driver.Value {

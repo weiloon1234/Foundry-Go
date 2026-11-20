@@ -1,7 +1,5 @@
 package invalid
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -9,4 +7,4 @@ import (
 )
 
 var records = rows.ConflictRowsOf(models.Users.Query())
-var _ = models.Users.Query().Where(expr.Eq(expr.At(records.Proposed(), orm.NumberExpr(models.Users.Age)), 10))
+var _ = models.Users.Query().Where(expr.Eq(expr.At(records.Proposed(), models.Users.Age), 10))

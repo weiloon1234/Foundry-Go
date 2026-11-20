@@ -12,8 +12,8 @@ import (
 func TestPostgresComputedRelationOrder(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {
 		f := models.Users
-		relation := models.UserLinks.Referrals.OrderBy(expr.RelationOrder(models.UserLinks.Referrals, expr.Asc(expr.Negate(expr.Value(orm.NumberExpr(f.Age))))))
-		rows, err := orm.All(t.Context(), tx, models.Users.Query().Where(orm.KeyEq(f.ID, users[0].ID)).With(relation))
+		relation := models.UserLinks.Referrals.OrderBy(expr.RelationOrder(models.UserLinks.Referrals, expr.Asc(expr.Negate(expr.Value(f.Age)))))
+		rows, err := orm.All(t.Context(), tx, models.Users.Query().Where(orm.Eq(f.ID, users[0].ID)).With(relation))
 		if err != nil || len(rows) != 1 {
 			t.Fatal(rows, err)
 		}
@@ -31,17 +31,17 @@ func TestPostgresComputedManyToManyOrdering(t *testing.T) {
 			return err
 		}
 		for i, note := range []string{"B", "a"} {
-			if _, err := orm.Insert(t.Context(), tx, models.Friendships.Table, orm.ColumnSet(models.Friendships.FromID, users[0].ID), orm.ColumnSet(models.Friendships.ToID, users[i+1].ID), orm.TextSet(models.Friendships.Note, note)); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Friendships.Table, orm.Set(models.Friendships.FromID, users[0].ID), orm.Set(models.Friendships.ToID, users[i+1].ID), orm.Set(models.Friendships.Note, note)); err != nil {
 				return err
 			}
 		}
 		u := models.Users
 		p := models.Friendships
 		for _, rel := range []orm.ThroughRelation[models.User, models.User, models.Friendship]{
-			models.UserLinks.Friends.OrderBy(expr.RelationOrder(models.UserLinks.Friends, expr.Asc(expr.Negate(expr.Value(orm.NumberExpr(u.Age)))))),
-			models.UserLinks.Friends.OrderByPivot(expr.RelationPivotOrder(models.UserLinks.Friends, expr.Asc(expr.Lower(expr.Value(orm.TextExpr(p.Note)))))),
+			models.UserLinks.Friends.OrderBy(expr.RelationOrder(models.UserLinks.Friends, expr.Asc(expr.Negate(expr.Value(u.Age))))),
+			models.UserLinks.Friends.OrderByPivot(expr.RelationPivotOrder(models.UserLinks.Friends, expr.Asc(expr.Lower(expr.Value(p.Note))))),
 		} {
-			rows, err := orm.All(t.Context(), tx, models.Users.Query().Where(orm.KeyEq(u.ID, users[0].ID)).With(rel))
+			rows, err := orm.All(t.Context(), tx, models.Users.Query().Where(orm.Eq(u.ID, users[0].ID)).With(rel))
 			if err != nil || len(rows) != 1 {
 				t.Fatal(rows, err)
 			}

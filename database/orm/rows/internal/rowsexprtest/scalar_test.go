@@ -2,8 +2,6 @@ package rowsexprtest
 
 import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"errors"
 	"math"
@@ -28,7 +26,7 @@ func rejectScalar[S, V any](t *testing.T, source rows.SelectionSource[S], v expr
 func TestScalarValidationBeforeExecution(t *testing.T) {
 	d := declareAggregateRecords()
 	source := rows.FromModel(d.Query().Limit(0))
-	instant := expr.FromUnixMillis(expr.Value(orm.NumberExpr(d.Exact)))
+	instant := expr.FromUnixMillis(expr.Value(d.Exact))
 	local := expr.LocalAt(instant, expr.UTCZone())
 	date := expr.DateOf(local)
 	clock := expr.TimeOf(local)
@@ -40,8 +38,8 @@ func TestScalarValidationBeforeExecution(t *testing.T) {
 	rejectScalar(t, source, expr.AsSelected(expr.AddClockElapsed(clock, time.Nanosecond)), codec.WallTime())
 	rejectScalar(t, source, expr.AsSelected(expr.Year[aggregateRecord, temporal.Date](nil)), codec.Signed[int64]())
 	rejectScalar(t, source, expr.AsSelected(expr.TransactionTime(expr.Scope[aggregateRecord, aggregateRecord]{})), codec.DateTime())
-	rejectScalar(t, source, expr.AsSelected(expr.Substring(expr.Value(orm.TextExpr(d.Name)), 1, -1)), codec.String[string]())
-	rejectScalar(t, source, expr.AsSelected(expr.SubstringNullable(expr.Value(orm.NullableTextExpr(d.MaybeName)), 1, -1)), codec.Nullable(codec.String[string]()))
+	rejectScalar(t, source, expr.AsSelected(expr.Substring(expr.Value(d.Name), 1, -1)), codec.String[string]())
+	rejectScalar(t, source, expr.AsSelected(expr.SubstringNullable(expr.Value(d.MaybeName), 1, -1)), codec.Nullable(codec.String[string]()))
 	for _, zone := range []string{"", "Local", "../etc/passwd", "not/a/timezone", strings.Repeat("x", 256)} {
 		if _, err := expr.LoadTimeZone(zone); !errors.Is(err, fault.Invalid) {
 			t.Fatal(zone, err)
@@ -60,13 +58,13 @@ func TestScalarValidationBeforeExecution(t *testing.T) {
 func TestScalarRuntimeOwnershipAndPhase(t *testing.T) {
 	d, foreign := declareAggregateRecords(), declareAggregateRecords()
 	source := rows.FromModel(d.Query())
-	rejectScalar(t, source, expr.AsSelected(expr.Lower(expr.Value(orm.TextExpr(foreign.Name)))), codec.String[string]())
-	rejectScalar(t, source, expr.AsSelected(expr.Year(expr.LocalAt(expr.FromUnixMillis(expr.Value(orm.NumberExpr(foreign.Exact))), expr.UTCZone()))), codec.Signed[int64]())
-	rejectScalar(t, source, expr.AsSelected(expr.AddIntervals(expr.Value(orm.IntervalExpr(d.Period)), expr.Value(orm.IntervalExpr(foreign.Period)))), codec.Interval())
-	rejectScalar(t, source, expr.AsSelected(expr.SphericalDistance(expr.Value(orm.NumberExpr(d.Approx)), expr.Value(orm.NumberExpr(foreign.Approx)), expr.GeographicPoint{})), codec.Float[float64]())
+	rejectScalar(t, source, expr.AsSelected(expr.Lower(expr.Value(foreign.Name))), codec.String[string]())
+	rejectScalar(t, source, expr.AsSelected(expr.Year(expr.LocalAt(expr.FromUnixMillis(expr.Value(foreign.Exact)), expr.UTCZone()))), codec.Signed[int64]())
+	rejectScalar(t, source, expr.AsSelected(expr.AddIntervals(expr.Value(d.Period), expr.Value(foreign.Period))), codec.Interval())
+	rejectScalar(t, source, expr.AsSelected(expr.SphericalDistance(expr.Value(d.Approx), expr.Value(foreign.Approx), expr.GeographicPoint{})), codec.Float[float64]())
 	rejectScalar(t, source, expr.AsSelected(expr.TransactionTime(rows.ModelScope(foreign.Query()))), codec.DateTime())
 	// A rejected scoped operand must remain rejected after both calculation and Param.
-	bad := expr.At(rows.ModelScope(d.Query()), orm.TextExpr(foreign.Name))
+	bad := expr.At(rows.ModelScope(d.Query()), foreign.Name)
 	rejectScalar(t, source, expr.AsSelected(expr.ParamOf(expr.Lower(bad), "x")), codec.String[string]())
 	w := expr.WindowFor(rows.ModelScope(d.Query()))
 	windowTime := expr.FromUnixMillisValue(expr.RowNumber(w))
@@ -76,13 +74,13 @@ func TestScalarRuntimeOwnershipAndPhase(t *testing.T) {
 		t.Fatal("window hidden in HAVING", err, state.sql)
 	}
 	// Nullable aggregate input is still legal in a selected calculation.
-	expressionSQL(t, rows.Having(expressionQuery(source, expr.LowerNullableValue(expr.AsSelected(expr.Min(orm.TextExpr(d.Name)))), codec.Nullable(codec.String[string]())), expr.TextIContainsValue(expr.TextNullableValue(expr.LowerNullableValue(expr.AsSelected(expr.Min(orm.TextExpr(d.Name))))), "_%")))
+	expressionSQL(t, rows.Having(expressionQuery(source, expr.LowerNullableValue(expr.AsSelected(expr.Min(d.Name))), codec.Nullable(codec.String[string]())), expr.TextIContainsValue(expr.TextNullableValue(expr.LowerNullableValue(expr.AsSelected(expr.Min(d.Name)))), "_%")))
 }
 func TestScalarTextPredicatesAndComposition(t *testing.T) {
 	d := declareAggregateRecords()
 	source := rows.FromModel(d.Query())
-	name := expr.Lower(expr.Value(orm.TextExpr(d.Name)))
-	maybe := expr.LowerNullable(expr.Value(orm.NullableTextExpr(d.MaybeName)))
+	name := expr.Lower(expr.Value(d.Name))
+	maybe := expr.LowerNullable(expr.Value(d.MaybeName))
 	predicates := []expr.Predicate[aggregateRecord]{expr.TextLike(name, "a%"), expr.TextContains(name, "a_%"), expr.TextIContains(name, "a_%"), expr.TextStartsWith(name, "a_%"), expr.TextEndsWith(name, "a_%"), expr.TextIStartsWith(name, "a_%"), expr.TextIEndsWith(name, "a_%"), expr.TextILike(name, "a%"), expr.NullableTextLike(maybe, "a%"), expr.NullableTextContains(maybe, "a_%"), expr.NullableTextIContains(maybe, "a_%"), expr.NullableTextStartsWith(maybe, "a_%"), expr.NullableTextEndsWith(maybe, "a_%"), expr.NullableTextIStartsWith(maybe, "a_%"), expr.NullableTextIEndsWith(maybe, "a_%"), expr.NullableTextILike(maybe, "a%")}
 	for _, p := range predicates {
 		s := expressionSQL(t, expressionQuery(source, expr.AsSelected(name), codec.String[string]()).Where(p))
@@ -94,6 +92,6 @@ func TestScalarTextPredicatesAndComposition(t *testing.T) {
 	q := rows.Having(group, expr.TextLikeValue(expr.TextValue(expr.AsSelected(name)), "a%"))
 	expressionSQL(t, rows.OrderBy(q, expr.AscValue(expr.AsSelected(name))))
 	// Selected phase retains windows while text/nullability conversions remain explicit.
-	e := expr.LowerNullableValue(expr.FirstValue(expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(d.Name)))), expr.WindowFor(rows.ModelScope(d.Query()))))
+	e := expr.LowerNullableValue(expr.FirstValue(expr.AsSelected(expr.Row(expr.Value(d.Name))), expr.WindowFor(rows.ModelScope(d.Query()))))
 	expressionSQL(t, expressionQuery(source, e, codec.Nullable(codec.String[string]())))
 }

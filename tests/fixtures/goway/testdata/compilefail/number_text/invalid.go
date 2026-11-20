@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func F() { orm.TextContains(models.Orders.TotalCents, "x") }
+func F() { orm.Contains(models.Orders.TotalCents, "x") }

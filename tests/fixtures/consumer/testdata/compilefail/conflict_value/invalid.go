@@ -6,4 +6,4 @@ import (
 	m "foundry.test/consumer/models"
 )
 
-var _ = orm.NumberSet(m.Users.Age, "thirty")
+var _ = orm.Set(m.Users.Age, "thirty")

@@ -23,16 +23,16 @@ var totals = rows.Define(func(b rows.Builder[total], r *total) totalFields {
 func Scalar() orm.Query[models.User] {
 	q := models.Users.Query()
 	alias := rows.AsRecord[a](rows.CTE("eligible", rows.ModelRecord(q)), "eligible")
-	age := expr.At(rows.Scope(alias), orm.NumberExpr(models.Users.Age))
+	age := expr.At(rows.Scope(alias), models.Users.Age)
 	selected := rows.LimitScalar(rows.OffsetScalar(rows.OrderScalar(rows.SelectScalar(alias, expr.AsSelected(expr.Row(age))), expr.Asc(age)), 1), 1)
-	return expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(orm.NumberExpr(models.Users.Age))), rows.ScalarRowQuery(rows.From(q), selected)))
+	return expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(models.Users.Age)), rows.ScalarRowQuery(rows.From(q), selected)))
 }
 func Correlated() orm.Query[models.User] {
 	q := models.Users.Query()
 	outer, inner := rows.As[a](q, "a"), rows.As[b](q, "b")
 	c := rows.Correlate(outer, inner)
 	scope := rows.InnerScope(c, rows.Scope(inner))
-	age := expr.At(scope, orm.NumberExpr(models.Users.Age))
+	age := expr.At(scope, models.Users.Age)
 	scalar := rows.DistinctOnCorrelatedScalar(rows.SelectCorrelatedScalar(c, expr.AsSelected(expr.Row(age))), expr.Group(age)).OrderBy(expr.Asc(age))
 	return expr.Where(q, rows.ExistsQuery(rows.From(q), rows.SelectScalar(outer, expr.AsSelected(rows.CorrelatedScalarRowQuery(scalar)))))
 }

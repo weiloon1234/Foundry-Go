@@ -49,7 +49,7 @@ func (g newGolden) stage1b(ctx context.Context, db *database.DB) {
 	fmt.Fprintln(&g.output, "report-join-projection")
 	g.show(must(ormrows.Read(reporting.SelectOrders(7)).All(ctx, db)))
 	fmt.Fprintln(&g.output, "select-value")
-	g.show(must(ormrows.Read(ormrows.SelectValue(models.Orders.Query(), orm.NumberExpr(models.Orders.TotalCents))).All(ctx, db)))
+	g.show(must(ormrows.Read(ormrows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)).All(ctx, db)))
 	fmt.Fprintln(&g.output, "soft-delete-read")
 	g.show(must(orm.All(ctx, db, reporting.Orders.Query())))
 	fmt.Fprintln(&g.output, "soft-delete")

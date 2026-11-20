@@ -47,7 +47,7 @@ func expressionSQL[S, R any](t *testing.T, q rows.Query[S, R]) querycore.Stateme
 func TestExpressionParametersAndNullableProjection(t *testing.T) {
 	m := declareMembers()
 	a := rows.As[left](m.Query(), "m")
-	n := expr.At(rows.Scope(a), orm.NullableTextExpr(m.Nickname))
+	n := expr.At(rows.Scope(a), m.Nickname)
 	s := expressionSchema(codec.Nullable(codec.String[string]()))
 	q := rows.Select(a, s, rows.MapSelected(s.Value, expr.AsSelected(expr.Row(n))))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"Ada"}}}
@@ -63,7 +63,7 @@ func TestExpressionParametersAndNullableProjection(t *testing.T) {
 func TestExpressionArithmeticAndParameters(t *testing.T) {
 	o := declareOrders()
 	a := rows.As[right](o.Query(), "o")
-	id := expr.At(rows.Scope(a), orm.NumberExpr(o.MemberID))
+	id := expr.At(rows.Scope(a), o.MemberID)
 	input := expr.Add(id, id)
 	q := rows.OrderBy(expressionQuery(a, expr.AsSelected(expr.Divide(input, expr.ParamOf(input, 2))), codec.Signed[int64]()).Where(expr.Gt(input, 0)), expr.Asc(expr.Negate(id)))
 	s := expressionSQL(t, q)
@@ -106,7 +106,7 @@ func TestReferenceFreeCountAndExists(t *testing.T) {
 func TestExpressionRejectsZeroAndForeignDeclarations(t *testing.T) {
 	o, other := declareOrders(), declareOrders()
 	a := rows.As[right](o.Query(), "o")
-	own, foreign := expr.At(rows.Scope(a), orm.NumberExpr(o.MemberID)), expr.At(rows.Scope(a), orm.NumberExpr(other.MemberID))
+	own, foreign := expr.At(rows.Scope(a), o.MemberID), expr.At(rows.Scope(a), other.MemberID)
 	var missing expr.RowExpression[rows.Alias[right, order], int64]
 	for _, v := range []expr.Selected[rows.Alias[right, order], int64]{expr.AsSelected(expr.Add(own, foreign)), expr.AsSelected(expr.Add(own, missing)), {}} {
 		state := &driverState{}
@@ -129,7 +129,7 @@ func TestParameterSnapshotsAndCasts(t *testing.T) {
 		return declaration{orm.TableOf(b, &r.ID), orm.BytesOf(b, &r.Data)}
 	})
 	payload := []byte("before")
-	p := expr.Param(orm.ColumnExpr(d.Data), payload)
+	p := expr.Param(d.Data, payload)
 	payload[0] = 'X'
 	core := expr.FoundrySelected(expr.AsSelected(p), sqlowner.Expressions())
 	c := querycore.NewCompiler(nil)
@@ -139,7 +139,7 @@ func TestParameterSnapshotsAndCasts(t *testing.T) {
 	}
 	o := declareOrders()
 	source := rows.As[right](o.Query(), "o")
-	v := expr.At(rows.Scope(source), orm.NumberExpr(o.MemberID))
+	v := expr.At(rows.Scope(source), o.MemberID)
 	exact := expressionQuery(source, expr.AsSelected(expr.DecimalOf(v)), codec.Decimal())
 	s := expressionSQL(t, exact)
 	if !strings.Contains(s.SQLText, " AS numeric)") {
@@ -154,14 +154,14 @@ func TestParameterSnapshotsAndCasts(t *testing.T) {
 
 func TestModelComputedRowClauses(t *testing.T) {
 	o, other := declareOrders(), declareOrders()
-	amount := expr.Value(orm.NumberExpr(o.MemberID))
-	q := expr.OrderBy(expr.Where(o.Query(), expr.GreaterColumn(orm.NumberExpr(o.MemberID), orm.NumberExpr(o.MemberID)), expr.Gt(expr.Add(amount, amount), 0)), expr.Desc(expr.Negate(amount)))
+	amount := expr.Value(o.MemberID)
+	q := expr.OrderBy(expr.Where(o.Query(), expr.GreaterColumn(o.MemberID, o.MemberID), expr.Gt(expr.Add(amount, amount), 0)), expr.Desc(expr.Negate(amount)))
 	state := &driverState{columns: []string{"id", "member_id"}, rows: [][]driver.Value{{int64(1), int64(2)}}}
 	got, err := orm.All(t.Context(), openTest(t, state), q)
 	if err != nil || len(got) != 1 || got[0].ID != 1 || !strings.Contains(state.sql, "ORDER BY") {
 		t.Fatal(got, err, state.sql)
 	}
-	for _, invalid := range []orm.Query[order]{expr.Where(o.Query(), expr.Eq(expr.Value(orm.NumberExpr(other.MemberID)), 1)), expr.OrderBy(o.Query(), expr.Asc(expr.Negate(expr.Value(orm.NumberExpr(other.MemberID))))), expr.Where(o.Query(), expr.Predicate[order]{})} {
+	for _, invalid := range []orm.Query[order]{expr.Where(o.Query(), expr.Eq(expr.Value(other.MemberID), 1)), expr.OrderBy(o.Query(), expr.Asc(expr.Negate(expr.Value(other.MemberID)))), expr.Where(o.Query(), expr.Predicate[order]{})} {
 		state := &driverState{}
 		out, err := orm.All(t.Context(), openTest(t, state), invalid)
 		if err == nil || out != nil || state.sql != "" {
@@ -173,9 +173,9 @@ func TestModelComputedRowClauses(t *testing.T) {
 func TestParameterOwnershipSurvivesReferenceFreeConstruction(t *testing.T) {
 	o, other := declareOrders(), declareOrders()
 	m := declareMembers()
-	direct := expr.FoundryPredicate(expr.Eq(expr.Param(orm.NumberExpr(o.MemberID), 1), 1), sqlowner.Expressions())
+	direct := expr.FoundryPredicate(expr.Eq(expr.Param(o.MemberID, 1), 1), sqlowner.Expressions())
 	count := expr.FoundryPredicate(expr.Eq(expr.ParamOf(expr.Count[order](), 1), 1), sqlowner.Expressions())
-	cast := expr.FoundryPredicate(expr.Eq(expr.ParamOf(expr.DecimalOf(expr.Value(orm.NumberExpr(o.MemberID))), decimal.FromInt64(1)), decimal.FromInt64(1)), sqlowner.Expressions())
+	cast := expr.FoundryPredicate(expr.Eq(expr.ParamOf(expr.DecimalOf(expr.Value(o.MemberID)), decimal.FromInt64(1)), decimal.FromInt64(1)), sqlowner.Expressions())
 	for _, predicate := range []ormcore.Predicate{direct, count, cast} {
 		if !predicate.ReferenceFree || len(predicate.Refs) == 0 {
 			t.Fatal("parameter lost construction ownership", predicate)
@@ -195,7 +195,7 @@ func TestParameterOwnershipSurvivesReferenceFreeConstruction(t *testing.T) {
 
 func TestExpressionReferencesStayBoundedAfter64SelfDoublings(t *testing.T) {
 	o := declareOrders()
-	x := expr.OrderRow(expr.Value(orm.NumberExpr(o.MemberID)))
+	x := expr.OrderRow(expr.Value(o.MemberID))
 	for range 64 {
 		x = expr.Add(x, x)
 		c := expr.FoundrySelected(expr.AsSelected(x), sqlowner.Expressions())
@@ -216,7 +216,7 @@ func TestExpressionReferencesStayBoundedAfter64SelfDoublings(t *testing.T) {
 func TestParamPreservesInvalidScopedExemplar(t *testing.T) {
 	o, other := declareOrders(), declareOrders()
 	source := rows.As[right](o.Query(), "o")
-	foreign := expr.At(rows.Scope(source), orm.NumberExpr(other.MemberID))
+	foreign := expr.At(rows.Scope(source), other.MemberID)
 	for name, selected := range map[string]expr.Selected[rows.Alias[right, order], int64]{
 		"row":      expr.AsSelected(expr.ParamOf(expr.Add(foreign, foreign), 1)),
 		"selected": expr.AsSelected(expr.ParamOf(expr.AsSelected(expr.Row(foreign)), 1)),

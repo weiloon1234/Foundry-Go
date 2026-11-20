@@ -111,11 +111,11 @@ func TestEncryptedOpenFailurePublication(t *testing.T) {
 			return len(v.Items), e
 		}},
 		{"Insert", true, 0, func(db *database.DB) (int, error) {
-			v, e := orm.Insert(ctx, db, r.Table, orm.EncryptedSet(r.Secret, encrypted.NewText("assigned")))
+			v, e := orm.Insert(ctx, db, r.Table, orm.Set(r.Secret, encrypted.NewText("assigned")))
 			return one(v), e
 		}},
 		{"Update", true, 0, func(db *database.DB) (int, error) {
-			v, e := orm.Update(ctx, db, r.Table.Query(), r.Table.Key(), other, orm.EncryptedSet(r.Secret, encrypted.NewText("assigned")))
+			v, e := orm.Update(ctx, db, r.Table.Query(), r.Table.Key(), other, orm.Set(r.Secret, encrypted.NewText("assigned")))
 			return one(v), e
 		}},
 		{"Delete", true, 0, func(db *database.DB) (int, error) {
@@ -123,7 +123,7 @@ func TestEncryptedOpenFailurePublication(t *testing.T) {
 			return one(v), e
 		}},
 		{"InsertMany", false, 0, func(db *database.DB) (int, error) {
-			v, e := orm.InsertMany(ctx, db, r.Table, [][]orm.Assignment[secureRecord]{{orm.EncryptedSet(r.Secret, encrypted.NewText("one"))}, {orm.EncryptedSet(r.Secret, encrypted.NewText("two"))}, {orm.EncryptedSet(r.Secret, encrypted.NewText("three"))}})
+			v, e := orm.InsertMany(ctx, db, r.Table, [][]orm.Assignment[secureRecord]{{orm.Set(r.Secret, encrypted.NewText("one"))}, {orm.Set(r.Secret, encrypted.NewText("two"))}, {orm.Set(r.Secret, encrypted.NewText("three"))}})
 			return len(v), e
 		}},
 	}
@@ -167,7 +167,7 @@ func TestEncryptedEagerOpenFailureDoesNotPublishParents(t *testing.T) {
 	p := orm.Define("secure_parents", func(b orm.Builder[secureParent], p *secureParent) secureParents {
 		return secureParents{orm.TableOf(b, &p.ID), orm.IDOf(b, &p.RecordID), orm.OneOf(b, &p.Record)}
 	})
-	rel := orm.BelongsToOf(p.Record, orm.ColumnExpr(p.RecordID), orm.KeyExpr(r.Key()))
+	rel := orm.BelongsToOf(p.Record, p.RecordID, r.Key())
 	if err := orm.Check(p, r, rel); err != nil {
 		t.Fatal(err)
 	}

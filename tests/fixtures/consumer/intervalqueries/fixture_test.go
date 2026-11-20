@@ -67,9 +67,9 @@ func runIntervals(t *testing.T, check func(*database.Tx, []intervalqueries.Sampl
 		var samples []intervalqueries.Sample
 		for i, period := range []temporal.Interval{temporal.Months(1), temporal.Days(30), interval(t, 0, 0, 720*time.Hour), {}} {
 			f := intervalqueries.Samples
-			assignments := []orm.Assignment[intervalqueries.Sample]{orm.KeySet(f.ID, i+1), orm.IntervalSet(f.Period, period), orm.TimeSet(f.Start, start), orm.TimeSet(f.End, end), orm.TimeSet(f.LocalStart, localStart), orm.TimeSet(f.LocalEnd, localEnd), orm.TimeSet(f.ClockStart, clockStart), orm.TimeSet(f.ClockEnd, clockEnd), orm.TimeSet(f.Date, date)}
+			assignments := []orm.Assignment[intervalqueries.Sample]{orm.Set(f.ID, i+1), orm.Set(f.Period, period), orm.Set(f.Start, start), orm.Set(f.End, end), orm.Set(f.LocalStart, localStart), orm.Set(f.LocalEnd, localEnd), orm.Set(f.ClockStart, clockStart), orm.Set(f.ClockEnd, clockEnd), orm.Set(f.Date, date)}
 			if i != 1 {
-				assignments = append(assignments, orm.NullableIntervalSet(f.MaybePeriod, period))
+				assignments = append(assignments, orm.Set(f.MaybePeriod, period))
 			}
 			sample, err := orm.Insert(t.Context(), tx, intervalqueries.Samples.Table, assignments...)
 			if err != nil {
@@ -86,7 +86,7 @@ func runIntervals(t *testing.T, check func(*database.Tx, []intervalqueries.Sampl
 
 func intervalOne[V any](t *testing.T, tx *database.Tx, selected expr.Selected[intervalqueries.Sample, V]) V {
 	t.Helper()
-	result, err := rows.ReadScalar(rows.SelectScalar(rows.From(intervalqueries.Samples.Query().OrderBy(orm.KeyAsc(intervalqueries.Samples.ID)).Limit(1)), selected)).RequireFirst(t.Context(), tx)
+	result, err := rows.ReadScalar(rows.SelectScalar(rows.From(intervalqueries.Samples.Query().OrderBy(orm.Asc(intervalqueries.Samples.ID)).Limit(1)), selected)).RequireFirst(t.Context(), tx)
 	if err != nil {
 		t.Fatal(err)
 	}

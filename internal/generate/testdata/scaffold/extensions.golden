@@ -28,7 +28,7 @@ type Article struct {
 
 // ArticleTable holds the model's typed fields. Example: Articles.Query().
 type ArticleTable struct {
-	// Table owns the primary key and operations. Example: orm.KeyEq(Articles.Key(), id).
+	// Table owns the primary key and operations. Example: orm.Eq(Articles.Key(), id).
 	orm.Table[Article, model.ID[Article]]
 	// TitleSlot binds the external value. Example: extensions.BindSlot(Articles.Key(),Articles.TitleSlot).
 	TitleSlot orm.Slot[Article, translations.Text]

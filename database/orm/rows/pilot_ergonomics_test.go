@@ -1,7 +1,5 @@
 package rows
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"reflect"
 	"testing"
@@ -28,8 +26,8 @@ func TestBooleanAndFrameworkEnumConstructors(t *testing.T) {
 func TestConstantCaseAndScopedRowParameterParity(t *testing.T) {
 	d := declareAggregateRecords()
 	source := As[left](d.Query(), "a")
-	condition := expr.Eq(expr.At(Scope(source), orm.NumberExpr(d.Exact)), 1)
-	scoped := expr.At(Scope(source), orm.NumberExpr(d.Exact))
+	condition := expr.Eq(expr.At(Scope(source), d.Exact), 1)
+	scoped := expr.At(Scope(source), d.Exact)
 	before := expr.When(condition, expr.ParamOf(expr.AsSelected(expr.Row(scoped)), int64(2))).Else(expr.ParamOf(expr.AsSelected(expr.Row(scoped)), int64(0)))
 	after := expr.When(condition, expr.Constant[Alias[left, aggregateRecord]](codec.Signed[int64](), 2)).Else(expr.ParamOf(expr.Row(scoped), 0))
 	a := expressionSQL(t, expressionQuery(source, expr.AsSelected(before), codec.Signed[int64]()))

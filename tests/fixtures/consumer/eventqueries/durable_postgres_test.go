@@ -92,7 +92,7 @@ func TestModelAndTypedOutboxCommitAndRollBackTogether(t *testing.T) {
 	var saved observerqueries.Plain
 	if err := consumer.within(ctx, func(tx *database.Tx) error {
 		var err error
-		saved, err = orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.TextSet(observerqueries.Plains.Name, "committed"))
+		saved, err = orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.Set(observerqueries.Plains.Name, "committed"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -117,10 +117,10 @@ func TestModelAndTypedOutboxCommitAndRollBackTogether(t *testing.T) {
 		if payload.ID != saved.ID {
 			return errors.New("event lost the concrete persisted model key")
 		}
-		if _, err := orm.Insert(t.Context(), tx, eventqueries.Links.Table, orm.KeySet(eventqueries.Links.Key(), 1), orm.ColumnSet(eventqueries.Links.MessageID, stored.ID())); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, eventqueries.Links.Table, orm.Set(eventqueries.Links.Key(), 1), orm.Set(eventqueries.Links.MessageID, stored.ID())); err != nil {
 			return err
 		}
-		link, err := orm.Require(t.Context(), tx, eventqueries.Links.Query().Where(orm.ColumnEq(eventqueries.Links.MessageID, ids[0])))
+		link, err := orm.Require(t.Context(), tx, eventqueries.Links.Query().Where(orm.Eq(eventqueries.Links.MessageID, ids[0])))
 		if err != nil {
 			return err
 		}
@@ -135,7 +135,7 @@ func TestModelAndTypedOutboxCommitAndRollBackTogether(t *testing.T) {
 	rollback := errors.New("rollback business transaction")
 	var discarded model.ID[observerqueries.Plain]
 	if err := consumer.within(ctx, func(tx *database.Tx) error {
-		item, err := orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.TextSet(observerqueries.Plains.Name, "discarded"))
+		item, err := orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.Set(observerqueries.Plains.Name, "discarded"))
 		discarded = item.ID
 		if err != nil {
 			return err
@@ -171,7 +171,7 @@ func TestFailureAfterEnqueueRollsBackTheModelAndMessage(t *testing.T) {
 	rejected := errors.New("later observer failure")
 	consumer.trace.Reject(rejected)
 	if err := consumer.within(t.Context(), func(tx *database.Tx) error {
-		_, err := orm.Insert(t.Context(), tx, observerqueries.Plains.Table, orm.TextSet(observerqueries.Plains.Name, "rejected"))
+		_, err := orm.Insert(t.Context(), tx, observerqueries.Plains.Table, orm.Set(observerqueries.Plains.Name, "rejected"))
 		return err
 	}); !errors.Is(err, rejected) {
 		t.Fatal("observer failure was lost", err)
@@ -201,7 +201,7 @@ func TestFailureAfterEnqueueRollsBackTheModelAndMessage(t *testing.T) {
 func TestOutboxStorageFailureRollsBackTheModelWrite(t *testing.T) {
 	consumer := prepareDurableConsumer(t, false)
 	if err := consumer.within(t.Context(), func(tx *database.Tx) error {
-		_, err := orm.Insert(t.Context(), tx, observerqueries.Plains.Table, orm.TextSet(observerqueries.Plains.Name, "missing outbox"))
+		_, err := orm.Insert(t.Context(), tx, observerqueries.Plains.Table, orm.Set(observerqueries.Plains.Name, "missing outbox"))
 		return err
 	}); err == nil {
 		t.Fatal("missing outbox table did not reject the model write")

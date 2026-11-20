@@ -1,7 +1,5 @@
 package rows
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -14,7 +12,7 @@ import (
 func TestMultipleTypedLockClausesAndImmutablePolicies(t *testing.T) {
 	m := declareMembers()
 	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
-	j := InnerJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))))
+	j := InnerJoin(a, b, On(expr.At(Scope(a), m.ID), expr.At(Scope(b), m.ID)))
 	l, r := Target(LeftScope(j, Scope(a))), Target(RightScope(j, Scope(b)))
 	source := ReadRecord(SelectRecord(j, LeftScope(j, Scope(a))))
 	locked := LockRows(source, UpdateLock(l), KeyShareLock(r).NoWait())
@@ -64,7 +62,7 @@ func TestLockClauseStrengthsAndOwnedInputs(t *testing.T) {
 			t.Fatal(s, e)
 		}
 	}
-	scalar := LockRows(ReadScalar(SelectScalar(a, expr.AsSelected(expr.Row(expr.At(Scope(a), orm.KeyExpr(m.ID)))))), KeyShareLock(target))
+	scalar := LockRows(ReadScalar(SelectScalar(a, expr.AsSelected(expr.Row(expr.At(Scope(a), m.ID))))), KeyShareLock(target))
 	if s, e := ormcore.CompileRecord(t.Context(), scalar.core); e != nil || !strings.HasSuffix(s.SQLText, ` FOR KEY SHARE OF "a"`) {
 		t.Fatal(s, e)
 	}
@@ -79,7 +77,7 @@ func TestLockClauseStrengthsAndOwnedInputs(t *testing.T) {
 func TestLockClausesRejectWindowsInsideCalculations(t *testing.T) {
 	m := declareMembers()
 	source := From(m.Query())
-	id := expr.Value(orm.KeyExpr(m.ID))
+	id := expr.Value(m.ID)
 	rank := expr.RowNumber(expr.WindowFor(ModelScope(m.Query())))
 	calculation := expr.AddValue(rank, rank)
 	conditional := expr.WhenValue(expr.EqualValue(rank, rank), expr.AsSelected(expr.Row(id))).Else(expr.AsSelected(expr.Row(id)))
@@ -104,7 +102,7 @@ func TestLockClausesRejectWindowsInsideCalculations(t *testing.T) {
 func TestLockedProjectionScopesAndDerivedSourceValidation(t *testing.T) {
 	m := declareMembers()
 	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
-	j := LeftJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))))
+	j := LeftJoin(a, b, On(expr.At(Scope(a), m.ID), expr.At(Scope(b), m.ID)))
 	leftTarget := Target(LeftScope(j, Scope(a)))
 	projection := ReadRecord(SelectRecord(j, LeftScope(j, Scope(a))))
 	locked := ForUpdate(projection).Of(leftTarget).NoWait()
@@ -138,7 +136,7 @@ func TestLockedProjectionScopesAndDerivedSourceValidation(t *testing.T) {
 		}
 	}
 	source := From(m.Query())
-	id := expr.Value(orm.KeyExpr(m.ID))
+	id := expr.Value(m.ID)
 	scalar := SelectScalar(source, expr.AsSelected(expr.Row(id)))
 	for _, q := range []Scalar[member, int64]{DistinctScalar(scalar), GroupByScalar(scalar, expr.Group(id)), SelectScalar(source, expr.AsSelected(expr.Count[member]())), SelectScalar(source, expr.RowNumber(expr.WindowFor(ModelScope(m.Query())).OrderBy(expr.Asc(id))))} {
 		if _, e := ormcore.CompileRecord(t.Context(), ForUpdate(ReadScalar(q)).core); !errors.Is(e, fault.Invalid) {

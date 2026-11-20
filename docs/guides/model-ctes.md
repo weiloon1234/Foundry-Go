@@ -9,12 +9,12 @@ a handwritten rows projection. Alias the definition with `rows.AsRecord[Tag]`.
 <!-- compiled-source: tests/fixtures/consumer/ctes/ctes_postgres_test.go#model-ctes -->
 ```go
 u := models.Users
-eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.NumberGte(u.Age, 21)))).Materialized()
+eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.Gte(u.Age, 21)))).Materialized()
 first, second := rowset.AsRecord[eligibleAlias](eligible, "first_user"), rowset.AsRecord[otherAlias](eligible, "second_user")
 a, b := rowset.Scope(first), rowset.Scope(second)
-joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, orm.KeyExpr(models.Users.ID)), expr.At(b, orm.KeyExpr(models.Users.ID))))
+joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, models.Users.ID), expr.At(b, models.Users.ID)))
 fields := rowset.LeftScope(joined, rowset.Scope(first))
-names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, orm.TextExpr(models.Users.Email))))), expr.Asc(expr.At(fields, orm.TextExpr(models.Users.Email))))
+names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, models.Users.Email)))), expr.Asc(expr.At(fields, models.Users.Email)))
 ```
 
 The `rowset` import names `database/orm/rows`; the linked package declares both

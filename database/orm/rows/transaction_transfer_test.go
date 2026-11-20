@@ -39,7 +39,7 @@ func TestTransactionCorrelatedSourceValidationAndImmutability(t *testing.T) {
 	a, b := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "parent"), AsTransaction[right](TransactionOf(ModelRecord(m.Query())), "child")
 	c := TransactionCorrelate(a, b)
 	inner, outer := TransactionInnerScope(c, TransactionScope(b)), TransactionOuterScope(c, TransactionScope(a))
-	field := expr.At(inner, orm.KeyExpr(m.ID))
+	field := expr.At(inner, m.ID)
 	base := SelectTransactionCorrelatedScalar(c, expr.AsSelected(expr.Row(field)))
 	locked := base.ForUpdate().Of(Target(inner))
 	q := SelectTransactionRecord(a, TransactionScope(a))
@@ -88,8 +88,8 @@ func TestTransactionCorrelatedSourceValidationAndImmutability(t *testing.T) {
 func TestTransactionComputedMembershipQualificationAndBindings(t *testing.T) {
 	m := declareMembers()
 	a := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "outer_records")
-	f := expr.At(TransactionScope(a), orm.KeyExpr(m.ID))
-	inner := TransactionValueOf(Values(WhereScalar(SelectScalar(From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))), expr.Greater(expr.Value(orm.KeyExpr(m.ID)), expr.Param(orm.KeyExpr(m.ID), 9)))))
+	f := expr.At(TransactionScope(a), m.ID)
+	inner := TransactionValueOf(Values(WhereScalar(SelectScalar(From(m.Query()), expr.AsSelected(expr.Row(expr.Value(m.ID)))), expr.Greater(expr.Value(m.ID), expr.Param(m.ID, 9)))))
 	p := TransactionInQuery(expr.Add(f, expr.ParamOf(expr.Row(f), 7)), inner)
 	q := SelectTransactionRecord(a, TransactionScope(a)).Where(p)
 	s, e := querycore.CompileRead(q.core.Source.Node, t.Context(), true, q.core.Source.Err, true)
@@ -121,7 +121,7 @@ func TestTransactionComputedMembershipQualificationAndBindings(t *testing.T) {
 		t.Fatal("missing IN became EXISTS", e)
 	}
 	b := AsTransaction[right](LockedRecord(orm.Lock(m.Query())), "inner_records")
-	locked := SelectTransactionValue(b, expr.AsSelected(expr.Row(expr.At(TransactionScope(b), orm.KeyExpr(m.ID)))))
+	locked := SelectTransactionValue(b, expr.AsSelected(expr.Row(expr.At(TransactionScope(b), m.ID))))
 	for _, s := range []querycore.SelectNode{SelectTransactionValue(a, expr.AsSelected(TransactionScalarRowQuery(a, locked))).core.Source.Node, q.Where(TransactionInQuery(f, locked)).core.Source.Node, q.Where(TransactionExistsQuery(a, locked)).core.Source.Node} {
 		if _, e := querycore.CompileRead(s, t.Context(), false, nil, true); !errors.Is(e, fault.Invalid) || !strings.Contains(e.Error(), "transaction-scoped") {
 			t.Fatal("ordinary locked value", e)

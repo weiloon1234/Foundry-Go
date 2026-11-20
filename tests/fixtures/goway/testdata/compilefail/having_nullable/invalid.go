@@ -1,7 +1,5 @@
 package having_nullable
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -9,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-var _ = expr.GtValue(expr.Sum(orm.NumberExpr(models.Orders.TotalCents)), value.Null[decimal.Decimal]())
+var _ = expr.GtValue(expr.Sum(models.Orders.TotalCents), value.Null[decimal.Decimal]())

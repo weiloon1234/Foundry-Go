@@ -25,9 +25,9 @@ func insertMutatorFixture(t *testing.T) (*database.DB, m.Member, orm.Assignment[
 	q := m.Members
 	must(t, orm.Check(q))
 	input := coremodels.BinaryInput{1, 2}
-	body := orm.InputColumnSet(q.Body, input)
+	body := orm.Set(q.Body, input)
 	input[0] = 9
-	got, err := orm.Insert(ctx, db, q.Table, orm.KeySet(q.Key(), 1), orm.InputTextSet(q.Email, coremodels.EmailInput{Address: " ADA@EXAMPLE.TEST "}), body, orm.ColumnSet(q.Enabled, false))
+	got, err := orm.Insert(ctx, db, q.Table, orm.Set(q.Key(), 1), orm.Set(q.Email, coremodels.EmailInput{Address: " ADA@EXAMPLE.TEST "}), body, orm.Set(q.Enabled, false))
 	must(t, err)
 	return db, got, body
 }
@@ -44,7 +44,7 @@ func TestMutators(t *testing.T) {
 	if stored.Email != got.Email {
 		t.Fatal("persisted mutated email differs")
 	}
-	_, err = orm.Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Name, " Ada "), orm.NullableInputTextSet(q.Note, coremodels.LabelInput{Text: " note "}))
+	_, err = orm.Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, orm.Set(q.Name, " Ada "), orm.Set(q.Note, coremodels.LabelInput{Text: " note "}))
 	must(t, err)
 	got, err = orm.RequireKey(ctx, db, q.Table, 1)
 	must(t, err)
@@ -52,14 +52,14 @@ func TestMutators(t *testing.T) {
 	if !ok || note != "note" || got.Name != "Ada" {
 		t.Fatal("mutated update hydration")
 	}
-	_, err = orm.Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, orm.NullableInputTextSetNull(q.Note))
+	_, err = orm.Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, orm.SetNull(q.Note))
 	must(t, err)
 	err = db.Transaction(ctx, func(tx *database.Tx) error {
-		_, err := orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Name, " rolled back "))
+		_, err := orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), 1, orm.Set(q.Name, " rolled back "))
 		if err != nil {
 			return err
 		}
-		_, err = orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Email, coremodels.EmailInput{Address: "reject"}))
+		_, err = orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), 1, orm.Set(q.Email, coremodels.EmailInput{Address: "reject"}))
 		return err
 	})
 	if !errors.Is(err, coremodels.MutatorVeto) {
@@ -71,8 +71,8 @@ func TestMutators(t *testing.T) {
 		t.Fatal("failed transaction persisted")
 	}
 	_, err = orm.InsertMany(ctx, db, q.Table, [][]orm.Assignment[m.Member]{
-		{orm.KeySet(q.Key(), 2), orm.InputTextSet(q.Email, coremodels.EmailInput{Address: " SECOND "}), body},
-		{orm.KeySet(q.Key(), 3), orm.InputTextSet(q.Email, coremodels.EmailInput{Address: "reject"}), body},
+		{orm.Set(q.Key(), 2), orm.Set(q.Email, coremodels.EmailInput{Address: " SECOND "}), body},
+		{orm.Set(q.Key(), 3), orm.Set(q.Email, coremodels.EmailInput{Address: "reject"}), body},
 	})
 	if !errors.Is(err, coremodels.MutatorVeto) {
 		t.Fatal("batch veto", err)
@@ -82,7 +82,7 @@ func TestMutators(t *testing.T) {
 	if n != 1 {
 		t.Fatal("failed batch persisted")
 	}
-	_, err = orm.UpdateAll(ctx, db, q.Query().Where(orm.KeyEq(q.Key(), 1)), orm.InputTextSet(q.Name, " set "))
+	_, err = orm.UpdateAll(ctx, db, q.Query().Where(orm.Eq(q.Key(), 1)), orm.Set(q.Name, " set "))
 	must(t, err)
 	got, err = orm.RequireKey(ctx, db, q.Table, 1)
 	must(t, err)
@@ -100,7 +100,7 @@ func TestDistinctInputPrimaryKey(t *testing.T) {
 	must(t, orm.Check(q))
 	id, err := model.NewIDAt[m.KeyRecord](time.Now())
 	must(t, err)
-	got, err := orm.Insert(ctx, db, q.Table, orm.InputKeySet(q.ID, m.FreshID{Value: id}))
+	got, err := orm.Insert(ctx, db, q.Table, orm.Set(q.ID, m.FreshID{Value: id}))
 	must(t, err)
 	if got.ID != id {
 		t.Fatal("input primary key changed")

@@ -25,7 +25,7 @@ var reports = rows.Define(func(b rows.Builder[report], r *report) fields {
 type alias struct{}
 
 func Compile() (orm.Statement, error) {
-	q := rows.Select(rows.From(models.Users.Query()), reports.Row, rows.Map(reports.Age, expr.Value(orm.NumberExpr(models.Users.Age))), rows.MapSelected(reports.MaybeAge, expr.AsSelected(expr.Row(expr.NullableRow(expr.Value(orm.NumberExpr(models.Users.Age)))))))
+	q := rows.Select(rows.From(models.Users.Query()), reports.Row, rows.Map(reports.Age, expr.Value(models.Users.Age)), rows.MapSelected(reports.MaybeAge, expr.AsSelected(expr.Row(expr.NullableRow(expr.Value(models.Users.Age))))))
 	a := rows.AsRecord[alias](rows.RecordOf(q), "totals")
 	n, m := rows.At(rows.Scope(a), reports.Age), rows.At(rows.Scope(a), reports.MaybeAge)
 	sum := expr.Filter(expr.SumRow(n), expr.Gt(expr.OrderRow(n), 0))

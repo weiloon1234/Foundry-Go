@@ -32,17 +32,28 @@ func TestInferredZeroBridgeCapabilitiesFailClosed(t *testing.T) {
 		}
 	}
 	q := models.Users.Query()
-	age := expr.Value(orm.NumberExpr(models.Users.Age))
+	age := expr.Value(models.Users.Age)
 	source := openBridge(orm.FoundrySource[models.User], q)
 	requireInvalid(source.Err)
 	if len(source.Owners) != 0 || source.Node.Source.Name() != "" {
 		t.Fatal("source metadata escaped")
 	}
-	c, p := openColumnBridge(orm.FoundryColumn[models.User, int, int], orm.ExpressionColumn[models.User, int, int](orm.NumberExpr(models.Users.Age)))
+	c, p := openColumnBridge(orm.FoundryHandle[models.User, int, int, int, orm.RequiredNumberKind, orm.OrdinaryRole], models.Users.Age)
 	requireInvalid(c.Err)
 	requireInvalid(p.Err)
 	if c.Bind != nil || c.Clone != nil || c.Scan != nil || c.Owner != nil || p.Bind != nil || p.Scan != nil {
 		t.Fatal("column capabilities escaped")
+	}
+	comp := openBridge(orm.FoundryComparisonHandle[models.User, int, int, int, orm.RequiredNumberKind, orm.OrdinaryRole], models.Users.Age)
+	requireInvalid(comp.Err)
+	if comp.Bind != nil || comp.Clone != nil || comp.Scan != nil || comp.Owner != nil {
+		t.Fatal("comparison column capabilities escaped")
+	}
+	nc, np := openColumnBridge(orm.FoundryNullableHandle[models.User, string, string, value.Nullable[string], orm.NullableTextKind, orm.OrdinaryRole], models.Users.Nickname)
+	requireInvalid(nc.Err)
+	requireInvalid(np.Err)
+	if nc.Bind != nil || nc.Clone != nil || nc.Scan != nil || nc.Owner != nil || np.Bind != nil || np.Scan != nil {
+		t.Fatal("nullable column capabilities escaped")
 	}
 	unsealedCodec := openBridge(orm.FoundryCodec[int], orm.Codec(codec.Signed[int]()))
 	requireInvalid(unsealedCodec.Validate())
@@ -56,12 +67,12 @@ func TestInferredZeroBridgeCapabilitiesFailClosed(t *testing.T) {
 	if selected.Node != nil {
 		t.Fatal("selected metadata escaped")
 	}
-	predicate := openBridge(expr.FoundryPredicate[models.User], expr.Eq(expr.Param(orm.NumberExpr(models.Users.Age), 1), 1))
+	predicate := openBridge(expr.FoundryPredicate[models.User], expr.Eq(expr.Param(models.Users.Age, 1), 1))
 	requireInvalid(predicate.Err)
 	if predicate.Node != nil {
 		t.Fatal("predicate metadata escaped")
 	}
-	order := openBridge(expr.FoundryOrder[models.User], expr.Asc(expr.Param(orm.NumberExpr(models.Users.Age), 1)))
+	order := openBridge(expr.FoundryOrder[models.User], expr.Asc(expr.Param(models.Users.Age, 1)))
 	requireInvalid(order.Err)
 	if order.Node.Expression != nil {
 		t.Fatal("ordering metadata escaped")
@@ -74,7 +85,7 @@ func TestInferredZeroBridgeCapabilitiesFailClosed(t *testing.T) {
 		t.Fatal("scope metadata escaped")
 	}
 	forgedScope := openBridge(expr.FoundryScope[models.User, models.User], scope)
-	rejectedScope := expr.At(forgedScope, orm.NumberExpr(models.Users.Age))
+	rejectedScope := expr.At(forgedScope, models.Users.Age)
 	rejectedExpression := openBridge(expr.FoundryExpression[models.User, int, int], rejectedScope)
 	requireInvalid(rejectedExpression.Err)
 	capture := &goldenCapture{}
@@ -149,7 +160,7 @@ func TestInferredCapabilityCatchersNeverReceiveAuthority(t *testing.T) {
 		t.Helper()
 		id := must(model.ParseID[models.Order](orderID))
 		buyer := must(model.ParseID[models.User](buyerID))
-		row, err := orm.Insert(t.Context(), writer, models.Orders.Table, orm.KeySet(models.Orders.ID, id), orm.ColumnSet(models.Orders.BuyerID, buyer), orm.NumberSet(models.Orders.TotalCents, 500))
+		row, err := orm.Insert(t.Context(), writer, models.Orders.Table, orm.Set(models.Orders.ID, id), orm.Set(models.Orders.BuyerID, buyer), orm.Set(models.Orders.TotalCents, 500))
 		if err != nil || row.ID != id {
 			t.Fatal(row, err)
 		}
@@ -181,13 +192,13 @@ func TestStage6a3InferredZeroCapabilitiesFailClosed(t *testing.T) {
 	if !errors.Is(source.Err, fault.Invalid) || decode != nil || len(source.Owners) != 0 {
 		t.Fatal("model bridge exposed decoder/source", source.Err)
 	}
-	var aggregate expr.AggregateExpression[models.Order, value.Nullable[decimal.Decimal]] = expr.Sum(orm.NumberExpr(models.Orders.TotalCents))
+	var aggregate expr.AggregateExpression[models.Order, value.Nullable[decimal.Decimal]] = expr.Sum(models.Orders.TotalCents)
 	metadata, column := openColumnBridge(expr.FoundryAggregate[models.Order, value.Nullable[decimal.Decimal]], aggregate)
 	if !errors.Is(metadata.Err, fault.Invalid) || !errors.Is(column.Err, fault.Invalid) || metadata.Node != nil || column.Scan != nil {
 		t.Fatal("aggregate bridge exposed metadata/codec", metadata.Err, column.Err)
 	}
-	group := openBridge(expr.FoundryGroup[models.User], expr.Group(expr.Value(orm.NumberExpr(models.Users.Age))))
-	key := openBridge(expr.FoundryKey[models.User], expr.Key(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))))))
+	group := openBridge(expr.FoundryGroup[models.User], expr.Group(expr.Value(models.Users.Age)))
+	key := openBridge(expr.FoundryKey[models.User], expr.Key(expr.AsSelected(expr.Row(expr.Value(models.Users.Age)))))
 	having := openBridge(expr.FoundryHaving[models.User], expr.GtValue(expr.Count[models.User](), 0))
 	var order expr.ProjectionOrder[models.User] = expr.DescValue(expr.Count[models.User]())
 	ordering := openBridge(expr.FoundryProjectionOrder[models.User], order)

@@ -35,7 +35,7 @@ func TestPostgresORMManyToMany(t *testing.T) {
 			if i == 1 {
 				memberStatus = models.StatusDisabled
 			}
-			draft := []orm.Assignment[models.User]{orm.TextSet(models.Users.Email, "through-fixture"), orm.NumberSet(models.Users.Age, 20+i), orm.EnumSet(models.Users.Status, memberStatus), orm.EnumSet(models.Users.Level, models.LevelBasic)}
+			draft := []orm.Assignment[models.User]{orm.Set(models.Users.Email, "through-fixture"), orm.Set(models.Users.Age, 20+i), orm.Set(models.Users.Status, memberStatus), orm.Set(models.Users.Level, models.LevelBasic)}
 			user, err := orm.Insert(t.Context(), tx, models.Users.Table, draft...)
 			if err != nil {
 				return err
@@ -47,7 +47,7 @@ func TestPostgresORMManyToMany(t *testing.T) {
 			if i == 2 {
 				name = "third"
 			}
-			if _, err := orm.Insert(t.Context(), tx, models.Groups.Table, orm.KeySet(models.Groups.Code, code), orm.TextSet(models.Groups.Name, name), orm.ColumnSet(models.Groups.OwnerID, users[i].ID)); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Groups.Table, orm.Set(models.Groups.Code, code), orm.Set(models.Groups.Name, name), orm.Set(models.Groups.OwnerID, users[i].ID)); err != nil {
 				return err
 			}
 		}
@@ -60,9 +60,9 @@ func TestPostgresORMManyToMany(t *testing.T) {
 			{"a", 0, "a", 2}, {"b", 0, "b", 1}, {"c", 0, "a", 1}, {"d", 1, "a", 3}, {"e", 2, "c", 1},
 			{"null", 0, "", 1}, {"orphan", 0, "missing", 1},
 		} {
-			draft := []orm.Assignment[models.Membership]{orm.KeySet(models.Memberships.ID, edge.id), orm.ColumnSet(models.Memberships.UserID, users[edge.owner].ID), orm.TextSet(models.Memberships.Lookup, "same"), orm.NumberSet(models.Memberships.Priority, edge.priority), orm.EnumSet(models.Memberships.Level, models.LevelBasic), orm.NullableColumnSet(models.Memberships.InviterID, users[1].ID)}
+			draft := []orm.Assignment[models.Membership]{orm.Set(models.Memberships.ID, edge.id), orm.Set(models.Memberships.UserID, users[edge.owner].ID), orm.Set(models.Memberships.Lookup, "same"), orm.Set(models.Memberships.Priority, edge.priority), orm.Set(models.Memberships.Level, models.LevelBasic), orm.Set(models.Memberships.InviterID, users[1].ID)}
 			if edge.group != "" {
-				draft = append(draft, orm.NullableTextSet(models.Memberships.GroupCode, edge.group))
+				draft = append(draft, orm.Set(models.Memberships.GroupCode, edge.group))
 			}
 			if _, err := orm.Insert(t.Context(), tx, models.Memberships.Table, draft...); err != nil {
 				return err
@@ -71,8 +71,8 @@ func TestPostgresORMManyToMany(t *testing.T) {
 		counter := &queryfixture.QueryCounter{Executor: tx}
 		limits := orm.DefaultRelationLimits()
 		limits.BatchSize = 2
-		groups := models.UserLinks.Groups.OrderByPivot(orm.NumberAsc(models.Memberships.Priority)).OrderBy(orm.KeyDesc(models.Groups.Code))
-		base := orm.WithRelationLimits(models.Users.Query().OrderBy(orm.NumberAsc(models.Users.Age)), limits)
+		groups := models.UserLinks.Groups.OrderByPivot(orm.Asc(models.Memberships.Priority)).OrderBy(orm.Desc(models.Groups.Code))
+		base := orm.WithRelationLimits(models.Users.Query().OrderBy(orm.Asc(models.Users.Age)), limits)
 		loaded, err := orm.All(t.Context(), counter, base.With(groups))
 		if err != nil {
 			return err
@@ -119,7 +119,7 @@ func TestPostgresORMManyToMany(t *testing.T) {
 		}
 
 		counter.Queries.Store(0)
-		nested := groups.With(models.GroupLinks.Owner.Where(orm.EnumEq(models.Users.Status, models.StatusActive))).WithPivot(models.MembershipLinks.Inviter)
+		nested := groups.With(models.GroupLinks.Owner.Where(orm.Eq(models.Users.Status, models.StatusActive))).WithPivot(models.MembershipLinks.Inviter)
 		loaded, err = orm.All(t.Context(), counter, base.With(nested))
 		if err != nil {
 			return err
@@ -134,7 +134,7 @@ func TestPostgresORMManyToMany(t *testing.T) {
 		if !ownerLoaded || owner.IsSet() || !inviterLoaded || !inviterPresent || inviterModel.ID != users[1].ID {
 			t.Error("target/pivot nested scopes or loaded states incorrect")
 		}
-		filtered, err := orm.All(t.Context(), counter, base.With(groups.Where(orm.KeyEq(models.Groups.Code, "a")).WherePivot(orm.NumberGt(models.Memberships.Priority, 1))))
+		filtered, err := orm.All(t.Context(), counter, base.With(groups.Where(orm.Eq(models.Groups.Code, "a")).WherePivot(orm.Gt(models.Memberships.Priority, 1))))
 		if err != nil {
 			return err
 		}
@@ -143,11 +143,11 @@ func TestPostgresORMManyToMany(t *testing.T) {
 		}
 
 		for _, link := range []struct{ from, to int }{{0, 1}, {0, 2}, {1, 0}} {
-			if _, err := orm.Insert(t.Context(), tx, models.Friendships.Table, orm.ColumnSet(models.Friendships.FromID, users[link.from].ID), orm.ColumnSet(models.Friendships.ToID, users[link.to].ID), orm.TextSet(models.Friendships.Note, "friend")); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Friendships.Table, orm.Set(models.Friendships.FromID, users[link.from].ID), orm.Set(models.Friendships.ToID, users[link.to].ID), orm.Set(models.Friendships.Note, "friend")); err != nil {
 				return err
 			}
 		}
-		friends := models.UserLinks.Friends.Where(orm.EnumEq(models.Users.Status, models.StatusActive)).OrderBy(orm.NumberAsc(models.Users.Age))
+		friends := models.UserLinks.Friends.Where(orm.Eq(models.Users.Status, models.StatusActive)).OrderBy(orm.Asc(models.Users.Age))
 		self, err := orm.All(t.Context(), counter, base.With(friends.With(friends)))
 		if err != nil {
 			return err
@@ -201,7 +201,7 @@ func assertThroughFailures(t *testing.T, tx *database.Tx, counter *queryfixture.
 	}
 	// A declared alternate key need not be unique in the physical schema. A
 	// pivot that joins two targets must fail instead of selecting an arbitrary one.
-	ambiguous := orm.ManyToManyOf(models.Users.Groups, orm.KeyExpr(models.Users.ID), orm.ColumnExpr(models.Memberships.UserID), orm.TextExpr(models.Memberships.Lookup), orm.TextExpr(models.Groups.Name)).WherePivot(orm.KeyEq(models.Memberships.ID, "a"))
+	ambiguous := orm.ManyToManyOf(models.Users.Groups, orm.JoinKeys(models.Users.ID, models.Memberships.UserID), orm.JoinKeys(models.Memberships.Lookup, models.Groups.Name)).WherePivot(orm.Eq(models.Memberships.ID, "a"))
 	if result, err := orm.LoadFrom(t.Context(), counter, base.With(ambiguous), users); !errors.Is(err, database.TooManyRows) || result != nil {
 		t.Error("ambiguous pivot join did not reject duplicate target rows")
 	}

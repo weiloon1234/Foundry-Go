@@ -37,7 +37,7 @@ func TestPostgresORMRelationAggregates(t *testing.T) {
 		}
 		var users []models.User
 		for i := range 4 {
-			u, err := orm.Insert(t.Context(), tx, models.Users.Table, orm.TextSet(models.Users.Email, "aggregate-fixture"), orm.NumberSet(models.Users.Age, i+20), orm.EnumSet(models.Users.Status, models.StatusActive), orm.EnumSet(models.Users.Level, models.LevelBasic))
+			u, err := orm.Insert(t.Context(), tx, models.Users.Table, orm.Set(models.Users.Email, "aggregate-fixture"), orm.Set(models.Users.Age, i+20), orm.Set(models.Users.Status, models.StatusActive), orm.Set(models.Users.Level, models.LevelBasic))
 			if err != nil {
 				return err
 			}
@@ -47,19 +47,19 @@ func TestPostgresORMRelationAggregates(t *testing.T) {
 			owner  int
 			amount int64
 		}{{0, math.MaxInt64}, {0, math.MaxInt64}, {1, 1}, {1, 2}} {
-			if _, err := orm.Insert(t.Context(), tx, models.Orders.Table, orm.ColumnSet(models.Orders.BuyerID, users[order.owner].ID), orm.NumberSet(models.Orders.TotalCents, order.amount)); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Orders.Table, orm.Set(models.Orders.BuyerID, users[order.owner].ID), orm.Set(models.Orders.TotalCents, order.amount)); err != nil {
 				return err
 			}
 		}
 		for _, code := range []models.GroupCode{"a", "b"} {
-			if _, err := orm.Insert(t.Context(), tx, models.Groups.Table, orm.KeySet(models.Groups.Code, code), orm.TextSet(models.Groups.Name, "same"), orm.ColumnSet(models.Groups.OwnerID, users[0].ID)); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Groups.Table, orm.Set(models.Groups.Code, code), orm.Set(models.Groups.Name, "same"), orm.Set(models.Groups.OwnerID, users[0].ID)); err != nil {
 				return err
 			}
 		}
 		for i, code := range []models.GroupCode{"a", "a", "b", "missing", ""} {
-			draft := []orm.Assignment[models.Membership]{orm.KeySet(models.Memberships.ID, string(rune('a'+i))), orm.ColumnSet(models.Memberships.UserID, users[0].ID), orm.TextSet(models.Memberships.Lookup, "same"), orm.NumberSet(models.Memberships.Priority, i+1), orm.EnumSet(models.Memberships.Level, models.LevelBasic)}
+			draft := []orm.Assignment[models.Membership]{orm.Set(models.Memberships.ID, string(rune('a'+i))), orm.Set(models.Memberships.UserID, users[0].ID), orm.Set(models.Memberships.Lookup, "same"), orm.Set(models.Memberships.Priority, i+1), orm.Set(models.Memberships.Level, models.LevelBasic)}
 			if code != "" {
-				draft = append(draft, orm.NullableTextSet(models.Memberships.GroupCode, code))
+				draft = append(draft, orm.Set(models.Memberships.GroupCode, code))
 			}
 			if _, err := orm.Insert(t.Context(), tx, models.Memberships.Table, draft...); err != nil {
 				return err
@@ -70,13 +70,13 @@ func TestPostgresORMRelationAggregates(t *testing.T) {
 			if i == 3 {
 				owner = 1
 			}
-			draft := []orm.Assignment[models.Measurement]{orm.ColumnSet(models.Measurements.UserID, users[owner].ID), orm.TextSet(models.Measurements.Label, []string{"z", "a", "m", "empty"}[i])}
+			draft := []orm.Assignment[models.Measurement]{orm.Set(models.Measurements.UserID, users[owner].ID), orm.Set(models.Measurements.Label, []string{"z", "a", "m", "empty"}[i])}
 			if amount != "" {
 				v, err := decimal.Parse(amount)
 				if err != nil {
 					return err
 				}
-				draft = append(draft, orm.NullableNumberSet(models.Measurements.Amount, v), orm.NullableNumberSet(models.Measurements.Score, float64(i+1)/10))
+				draft = append(draft, orm.Set(models.Measurements.Amount, v), orm.Set(models.Measurements.Score, float64(i+1)/10))
 			}
 			if _, err := orm.Insert(t.Context(), tx, models.Measurements.Table, draft...); err != nil {
 				return err
@@ -85,7 +85,7 @@ func TestPostgresORMRelationAggregates(t *testing.T) {
 		counter := &queryfixture.QueryCounter{Executor: tx}
 		limits := orm.DefaultRelationLimits()
 		limits.BatchSize = 2
-		base := orm.WithRelationLimits(models.Users.Query().OrderBy(orm.NumberAsc(models.Users.Age)), limits)
+		base := orm.WithRelationLimits(models.Users.Query().OrderBy(orm.Asc(models.Users.Age)), limits)
 		aggregates := models.UserValues
 		loaded, err := orm.All(t.Context(), counter, base.With(models.UserValues.OrderCount, aggregates.OrderTotal, aggregates.OrderAverage, aggregates.OrderMinimum, aggregates.OrderMaximum))
 		if err != nil {
@@ -142,8 +142,8 @@ func TestPostgresORMRelationAggregates(t *testing.T) {
 		if counter.Queries.Load() != 1 || len(dupes) != 2 {
 			t.Error("aggregate source keys were not deduplicated")
 		}
-		scoped := aggregates.OrderCount.Using(expr.Related(models.UserLinks.Orders.Where(orm.NumberGt(models.Orders.TotalCents, 1)), expr.Count[models.Order]()))
-		filtered, err := orm.All(t.Context(), counter, base.Where(orm.NumberLt(models.Users.Age, 22)).With(scoped))
+		scoped := aggregates.OrderCount.Using(expr.Related(models.UserLinks.Orders.Where(orm.Gt(models.Orders.TotalCents, 1)), expr.Count[models.Order]()))
+		filtered, err := orm.All(t.Context(), counter, base.Where(orm.Lt(models.Users.Age, 22)).With(scoped))
 		if err != nil {
 			return err
 		}
@@ -177,8 +177,8 @@ func TestPostgresORMRelationAggregates(t *testing.T) {
 		if present, computed := loaded[1].HasGroups.Get(); !computed || present {
 			t.Error("empty aggregate exists is not false")
 		}
-		pivotScope := models.UserLinks.Groups.Where(orm.KeyEq(models.Groups.Code, "a")).WherePivot(orm.NumberGt(models.Memberships.Priority, 1))
-		scopedPriority := aggregates.GroupPriority.Using(expr.Related(orm.Pivot(pivotScope), expr.Sum(orm.NumberExpr(models.Memberships.Priority))))
+		pivotScope := models.UserLinks.Groups.Where(orm.Eq(models.Groups.Code, "a")).WherePivot(orm.Gt(models.Memberships.Priority, 1))
+		scopedPriority := aggregates.GroupPriority.Using(expr.Related(orm.Pivot(pivotScope), expr.Sum(models.Memberships.Priority)))
 		one, err := orm.LoadFrom(t.Context(), counter, base.With(scopedPriority), users[:1])
 		if err != nil {
 			return err
@@ -236,11 +236,11 @@ func assertFilteredThroughAggregates(t *testing.T, tx *database.Tx, users []mode
 	link := rowset.Correlate(rowset.From(models.Groups.Query()), rowset.From(models.Orders.Query()))
 	group := rowset.OuterScope(link, rowset.ModelScope(models.Groups.Query()))
 	order := rowset.InnerScope(link, rowset.ModelScope(models.Orders.Query()))
-	ownersWithOrders := link.Where(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(group, orm.ColumnExpr(models.Groups.OwnerID)))).Exists()
+	ownersWithOrders := link.Where(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(group, models.Groups.OwnerID))).Exists()
 	rows, err := orm.LoadFrom(t.Context(), tx, models.Users.Query().With(
-		a.GroupCount.Using(expr.Related(r.Groups, expr.Filter(expr.Count[models.Group](), expr.ModelPredicate(orm.KeyEq(g.Code, "a"))))),
-		a.GroupDistinct.Using(expr.Related(r.Groups, expr.Filter(expr.CountDistinctField(orm.KeyExpr(g.Code)), ownersWithOrders))),
-		a.GroupPriority.Using(expr.Related(orm.Pivot(r.Groups), expr.Filter(expr.Sum(orm.NumberExpr(p.Priority)), expr.ModelPredicate(orm.NumberGt(p.Priority, 1))))),
+		a.GroupCount.Using(expr.Related(r.Groups, expr.Filter(expr.Count[models.Group](), expr.ModelPredicate(orm.Eq(g.Code, "a"))))),
+		a.GroupDistinct.Using(expr.Related(r.Groups, expr.Filter(expr.CountDistinctField(g.Code), ownersWithOrders))),
+		a.GroupPriority.Using(expr.Related(orm.Pivot(r.Groups), expr.Filter(expr.Sum(p.Priority), expr.ModelPredicate(orm.Gt(p.Priority, 1))))),
 	), users)
 	if err != nil {
 		return err
@@ -253,12 +253,12 @@ func assertFilteredThroughAggregates(t *testing.T, tx *database.Tx, users []mode
 	assertDecimalAggregate(t, rows[0].GroupPriority, "5")
 	// Conditional values must follow target/pivot qualification, including
 	// outer fields captured inside a correlated conditional predicate.
-	ownerMatch := expr.When(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(group, orm.ColumnExpr(models.Groups.OwnerID))), expr.At(group, orm.KeyExpr(models.Groups.Code))).Else(expr.ParamOf(expr.AsSelected(expr.Row(expr.At(group, orm.KeyExpr(models.Groups.Code)))), "missing"))
+	ownerMatch := expr.When(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(group, models.Groups.OwnerID)), expr.At(group, models.Groups.Code)).Else(expr.ParamOf(expr.AsSelected(expr.Row(expr.At(group, models.Groups.Code))), "missing"))
 	conditionalOwners := link.Where(expr.Ne(ownerMatch, "missing")).Exists()
 	rows, err = orm.LoadFrom(t.Context(), tx, models.Users.Query().With(
-		a.GroupCount.Using(expr.Related(r.Groups, expr.Filter(expr.Count[models.Group](), expr.Eq(expr.When(expr.ModelPredicate(orm.KeyEq(g.Code, "a")), expr.Value(orm.KeyExpr(g.Code))).Else(expr.Param(orm.KeyExpr(g.Code), "other")), "a")))),
-		a.GroupDistinct.Using(expr.Related(r.Groups, expr.Filter(expr.CountDistinctField(orm.KeyExpr(g.Code)), conditionalOwners))),
-		a.GroupPriority.Using(expr.Related(orm.Pivot(r.Groups), expr.Filter(expr.Sum(orm.NumberExpr(p.Priority)), expr.Eq(expr.When(expr.ModelPredicate(orm.NumberGt(p.Priority, 1)), expr.Param(orm.NumberExpr(p.Priority), 1)).Else(expr.Param(orm.NumberExpr(p.Priority), 0)), 1)))),
+		a.GroupCount.Using(expr.Related(r.Groups, expr.Filter(expr.Count[models.Group](), expr.Eq(expr.When(expr.ModelPredicate(orm.Eq(g.Code, "a")), expr.Value(g.Code)).Else(expr.Param(g.Code, "other")), "a")))),
+		a.GroupDistinct.Using(expr.Related(r.Groups, expr.Filter(expr.CountDistinctField(g.Code), conditionalOwners))),
+		a.GroupPriority.Using(expr.Related(orm.Pivot(r.Groups), expr.Filter(expr.Sum(p.Priority), expr.Eq(expr.When(expr.ModelPredicate(orm.Gt(p.Priority, 1)), expr.Param(p.Priority, 1)).Else(expr.Param(p.Priority, 0)), 1)))),
 	), users)
 	if err != nil {
 		return err
@@ -298,15 +298,15 @@ func assertAggregateFailures(t *testing.T, tx *database.Tx, counter *queryfixtur
 	if rows, err := orm.LoadFrom(t.Context(), counter, base.With(singular), users); !errors.Is(err, database.TooManyRows) || rows != nil {
 		t.Error("singular aggregate ignored relation cardinality")
 	}
-	filteredSingular := singular.Using(expr.Related(models.UserLinks.SingleOrder, expr.Filter(expr.Count[models.Order](), expr.ModelPredicate(orm.NumberLt(models.Orders.TotalCents, 0)))))
+	filteredSingular := singular.Using(expr.Related(models.UserLinks.SingleOrder, expr.Filter(expr.Count[models.Order](), expr.ModelPredicate(orm.Lt(models.Orders.TotalCents, 0)))))
 	if rows, err := orm.LoadFrom(t.Context(), counter, base.With(filteredSingular), users); !errors.Is(err, database.TooManyRows) || rows != nil {
 		t.Error("empty filtered measure concealed singular cardinality violation")
 	}
-	ambiguous := orm.ManyToManyOf(models.Users.Groups, orm.KeyExpr(models.Users.ID), orm.ColumnExpr(models.Memberships.UserID), orm.TextExpr(models.Memberships.Lookup), orm.TextExpr(models.Groups.Name)).WherePivot(orm.KeyEq(models.Memberships.ID, "a"))
+	ambiguous := orm.ManyToManyOf(models.Users.Groups, orm.JoinKeys(models.Users.ID, models.Memberships.UserID), orm.JoinKeys(models.Memberships.Lookup, models.Groups.Name)).WherePivot(orm.Eq(models.Memberships.ID, "a"))
 	if rows, err := orm.LoadFrom(t.Context(), counter, base.With(a.GroupCount.Using(expr.Related(ambiguous, expr.Count[models.Group]()))), users); !errors.Is(err, database.TooManyRows) || rows != nil {
 		t.Error("many-to-many aggregate accepted ambiguous join")
 	}
-	if rows, err := orm.LoadFrom(t.Context(), counter, base.With(a.GroupCount.Using(expr.Related(ambiguous, expr.Filter(expr.Count[models.Group](), expr.ModelPredicate(orm.KeyEq(models.Groups.Code, "missing")))))), users); !errors.Is(err, database.TooManyRows) || rows != nil {
+	if rows, err := orm.LoadFrom(t.Context(), counter, base.With(a.GroupCount.Using(expr.Related(ambiguous, expr.Filter(expr.Count[models.Group](), expr.ModelPredicate(orm.Eq(models.Groups.Code, "missing")))))), users); !errors.Is(err, database.TooManyRows) || rows != nil {
 		t.Error("empty filtered measure concealed ambiguous through join")
 	}
 	if _, err := tx.Exec(t.Context(), `UPDATE measurements SET score = 'Infinity' WHERE label = $1`, "z"); err != nil {

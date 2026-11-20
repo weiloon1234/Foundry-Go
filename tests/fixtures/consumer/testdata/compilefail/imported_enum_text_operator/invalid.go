@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var invalid = orm.TextLike(catalog.Products.Status, "available%")
+var invalid = orm.Like(catalog.Products.Status, "available%")

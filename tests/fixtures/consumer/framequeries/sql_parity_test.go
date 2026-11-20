@@ -17,7 +17,7 @@ func TestNamedFrameSQLParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := f.Query()
-	window := expr.WindowFor(rows.ModelScope(q)).PartitionBy(expr.Group(expr.Param(orm.NumberKeyExpr(f.ID), 1))).OrderBy(expr.Asc(expr.Value(orm.NumberKeyExpr(f.ID)))).RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
+	window := expr.WindowFor(rows.ModelScope(q)).PartitionBy(expr.Group(expr.Param(f.ID, 1))).OrderBy(expr.Asc(expr.Value(f.ID))).RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
 	selected := rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(q), expr.Over(expr.Count[framequeries.Sample](), window)), expr.AscValue(expr.RowNumber(window))))
 	if err := rows.PreflightRead(t.Context(), selected); err != nil {
 		t.Fatal(err)

@@ -8,17 +8,17 @@ Use `orm.CreateEach`, `orm.UpdateEach`, `orm.DeleteEach`, `orm.RestoreEach` and 
 ```go
 func updateMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
-	return orm.UpdateEach(ctx, tx, f.Query().Where(orm.InputTextEq(f.Name, "guest")), 100,
+	return orm.UpdateEach(ctx, tx, f.Query().Where(orm.Eq(f.Name, "guest")), 100,
 		func(_ context.Context, _ *database.Tx, current hooks.Member) ([]orm.Assignment[hooks.Member], error) {
-			return []orm.Assignment[hooks.Member]{orm.InputTextSet(f.Name, "member-"+current.Name)}, nil
+			return []orm.Assignment[hooks.Member]{orm.Set(f.Name, "member-"+current.Name)}, nil
 		})
 }
 
 func createMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
 	return orm.CreateEach(ctx, tx, f.Query(), [][]orm.Assignment[hooks.Member]{
-		{orm.KeySet(f.Key(), 1), orm.InputTextSet(f.Name, "first"), orm.ColumnSet(f.Body, []byte{})},
-		{orm.KeySet(f.Key(), 2), orm.InputTextSet(f.Name, "second"), orm.ColumnSet(f.Body, []byte{})},
+		{orm.Set(f.Key(), 1), orm.Set(f.Name, "first"), orm.Set(f.Body, []byte{})},
+		{orm.Set(f.Key(), 2), orm.Set(f.Name, "second"), orm.Set(f.Body, []byte{})},
 	})
 }
 ```
@@ -35,7 +35,7 @@ The update callback receives the stored model and the operation's actual transac
 ```go
 func restoreMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
-	return orm.RestoreEach(ctx, tx, f.Query().Where(orm.InputTextEq(f.Name, "guest")), f.Soft, 100)
+	return orm.RestoreEach(ctx, tx, f.Query().Where(orm.Eq(f.Name, "guest")), f.Soft, 100)
 }
 
 func removeMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
@@ -59,7 +59,7 @@ Cancellation, panic and `runtime.Goexit` follow ordinary lifecycle failure handl
 <!-- orm-example: set-writes-after -->
 ```go
 func setWrite(ctx context.Context, tx *database.Tx) error {
-	_, err := orm.UpdateAll(ctx, tx, orm.WithoutModelHooks(hooks.Members.Query()), orm.InputTextSet(hooks.Members.Name, "guest"))
+	_, err := orm.UpdateAll(ctx, tx, orm.WithoutModelHooks(hooks.Members.Query()), orm.Set(hooks.Members.Name, "guest"))
 	return err
 }
 ```
@@ -74,7 +74,7 @@ func setWrite(ctx context.Context, tx *database.Tx) error {
 ```go
 func addCredit(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := models.Orders
-	return orm.UpdateAll(ctx, tx, f.Query().Where(orm.NumberLt(f.TotalCents, 1000)), orm.NumberIncrement(f.TotalCents, 100, orm.AtMost[int64](1000)))
+	return orm.UpdateAll(ctx, tx, f.Query().Where(orm.Lt(f.TotalCents, 1000)), orm.Increment(f.TotalCents, 100, orm.AtMost[int64](1000)))
 }
 ```
 

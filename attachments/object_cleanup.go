@@ -27,7 +27,7 @@ func (m *Manager) fenceOriginal(ctx context.Context, id model.ID[store.File], di
 	var retiredAt temporal.DateTime
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
 		ended = false
-		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.KeyEq(store.Files.Key(), id)))
+		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.Eq(store.Files.Key(), id)))
 		if err != nil {
 			return err
 		}
@@ -42,7 +42,7 @@ func (m *Manager) fenceOriginal(ctx context.Context, id model.ID[store.File], di
 			if err != nil {
 				return err
 			}
-			row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.TextSet(store.Files.State, string(Cleaned)), orm.TextSet(store.Files.LastFailure, "writer_fenced"), orm.TimeSet(store.Files.UpdatedAt, now))
+			row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.Set(store.Files.State, string(Cleaned)), orm.Set(store.Files.LastFailure, "writer_fenced"), orm.Set(store.Files.UpdatedAt, now))
 			if err != nil {
 				return err
 			}
@@ -71,7 +71,7 @@ func (m *Manager) fenceVariant(ctx context.Context, original store.File, id mode
 	var retiredAt temporal.DateTime
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
 		ended = false
-		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Variants.Query()).Where(orm.KeyEq(store.Variants.Key(), id)))
+		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Variants.Query()).Where(orm.Eq(store.Variants.Key(), id)))
 		if err != nil {
 			return err
 		}
@@ -86,7 +86,7 @@ func (m *Manager) fenceVariant(ctx context.Context, original store.File, id mode
 			if err != nil {
 				return err
 			}
-			row, err = orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, orm.TextSet(store.Variants.State, string(VariantCleaned)), orm.TextSet(store.Variants.LastFailure, "writer_fenced"), orm.TimeSet(store.Variants.UpdatedAt, now))
+			row, err = orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, orm.Set(store.Variants.State, string(VariantCleaned)), orm.Set(store.Variants.LastFailure, "writer_fenced"), orm.Set(store.Variants.UpdatedAt, now))
 			if err != nil {
 				return err
 			}
@@ -277,13 +277,13 @@ var objectJournalColumns = rows.Define(func(b rows.Builder[objectJournal], r *ob
 // keys are unknown, not retired. A nonterminal reference always protects a key.
 func objectReferences(ctx context.Context, tx *database.Tx, disk storage.DiskID, keys []string) (map[string]objectReference, error) {
 	f, v, c := store.Files, store.Variants, objectJournalColumns
-	files := f.Query().Where(orm.TextEq(f.Disk, string(disk)), orm.TextIn(f.ObjectKey, keys...)).Limit(storage.MaxPageSize + 1)
-	variants := v.Query().Where(orm.TextEq(v.Disk, string(disk)), orm.TextIn(v.ObjectKey, keys...)).Limit(storage.MaxPageSize + 1)
-	originals, err := rows.Read(rows.Select(rows.From(files), c, rows.Map(c.Key, expr.Value(orm.TextExpr(f.ObjectKey))), rows.Map(c.State, expr.Value(orm.TextExpr(f.State))), rows.Map(c.UpdatedAt, expr.Value(orm.TimeExpr(f.UpdatedAt))))).All(ctx, tx)
+	files := f.Query().Where(orm.Eq(f.Disk, string(disk)), orm.In(f.ObjectKey, keys...)).Limit(storage.MaxPageSize + 1)
+	variants := v.Query().Where(orm.Eq(v.Disk, string(disk)), orm.In(v.ObjectKey, keys...)).Limit(storage.MaxPageSize + 1)
+	originals, err := rows.Read(rows.Select(rows.From(files), c, rows.Map(c.Key, expr.Value(f.ObjectKey)), rows.Map(c.State, expr.Value(f.State)), rows.Map(c.UpdatedAt, expr.Value(f.UpdatedAt)))).All(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
-	derived, err := rows.Read(rows.Select(rows.From(variants), c, rows.Map(c.Key, expr.Value(orm.TextExpr(v.ObjectKey))), rows.Map(c.State, expr.Value(orm.TextExpr(v.State))), rows.Map(c.UpdatedAt, expr.Value(orm.TimeExpr(v.UpdatedAt))))).All(ctx, tx)
+	derived, err := rows.Read(rows.Select(rows.From(variants), c, rows.Map(c.Key, expr.Value(v.ObjectKey)), rows.Map(c.State, expr.Value(v.State)), rows.Map(c.UpdatedAt, expr.Value(v.UpdatedAt)))).All(ctx, tx)
 	if err != nil {
 		return nil, err
 	}

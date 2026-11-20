@@ -6,4 +6,4 @@ import (
 	s "foundry.test/goway/models/sensitive"
 )
 
-var _ = orm.ColumnSet(s.Accounts.Digest, "plaintext")
+var _ = orm.Set(s.Accounts.Digest, "plaintext")

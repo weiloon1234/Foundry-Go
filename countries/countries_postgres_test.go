@@ -40,7 +40,7 @@ func TestPostgresCountrySeedIsExplicitTypedAndPreservesApplicationFields(t *test
 		t.Fatal(err)
 	}
 	if err := fixture.Store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := orm.Update(ctx, tx, Countries.Table.Query(), Countries.Table.Key(), Code("MY"), orm.TextSet(Countries.Name, "outdated"), orm.EnumSet(Countries.Status, EnabledStatus), orm.NullableColumnSet(Countries.ConversionRate, rate), orm.ColumnSet(Countries.IsDefault, true))
+		_, err := orm.Update(ctx, tx, Countries.Table.Query(), Countries.Table.Key(), Code("MY"), orm.Set(Countries.Name, "outdated"), orm.Set(Countries.Status, EnabledStatus), orm.Set(Countries.ConversionRate, rate), orm.Set(Countries.IsDefault, true))
 		return err
 	}); err != nil {
 		t.Fatal(err)

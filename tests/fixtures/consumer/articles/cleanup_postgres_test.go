@@ -178,9 +178,9 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	// The cleanup observer observes only deletions, so on every connection a
 	// set-based update needs no WithoutModelHooks while a set-based deletion,
 	// which would skip cleanup, still requires the acknowledgement.
-	only := articles.Articles.Query().Where(orm.KeyEq(articles.Articles.Key(), article.ID))
+	only := articles.Articles.Query().Where(orm.Eq(articles.Articles.Key(), article.ID))
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		_, err := orm.UpdateAll(ctx, tx, only, orm.TextSet(articles.Articles.Slug, article.Slug))
+		_, err := orm.UpdateAll(ctx, tx, only, orm.Set(articles.Articles.Slug, article.Slug))
 		return err
 	}); err != nil {
 		t.Fatal("a set-based update was refused because of the deletion observer", err)
@@ -211,7 +211,7 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 		if _, err := orm.ForceDelete(ctx, tx, articles.Articles.Table.Query(), articles.Articles.Soft, articles.Articles.Table.Key(), article.ID); err != nil {
 			return err
 		}
-		_, err := orm.Insert(ctx, tx, articles.Articles.Table, orm.KeySet(articles.Articles.Key(), article.ID), orm.TextSet(articles.Articles.Slug, article.Slug), orm.ColumnSet(articles.Articles.AuthorID, article.AuthorID))
+		_, err := orm.Insert(ctx, tx, articles.Articles.Table, orm.Set(articles.Articles.Key(), article.ID), orm.Set(articles.Articles.Slug, article.Slug), orm.Set(articles.Articles.AuthorID, article.AuthorID))
 		return err
 	}); err != nil {
 		t.Fatal(err)

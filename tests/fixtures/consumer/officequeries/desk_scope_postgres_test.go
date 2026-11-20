@@ -29,7 +29,7 @@ func TestRelationExistenceGlobalScope(t *testing.T) {
 		office officequeries.Office
 		label  string
 	}{{f.alpha, "a1"}, {f.alpha, "a2"}, {f.beta, "b1"}} {
-		if _, err := orm.Insert(ctx, f.db, officequeries.Desks.Table, orm.ColumnSet(officequeries.Desks.OfficeID, desk.office.ID), orm.TextSet(officequeries.Desks.Label, desk.label)); err != nil {
+		if _, err := orm.Insert(ctx, f.db, officequeries.Desks.Table, orm.Set(officequeries.Desks.OfficeID, desk.office.ID), orm.Set(officequeries.Desks.Label, desk.label)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -73,7 +73,7 @@ func TestRelationExistenceGlobalScope(t *testing.T) {
 		t.Fatal("desk scope inside WhereHas", len(withDesks), err)
 	}
 	// Scoped writes cannot reach desks outside the scope.
-	changed, err := orm.UpdateAll(ctx, f.db, officequeries.Desks.Query(), orm.TextSet(officequeries.Desks.Label, "moved"))
+	changed, err := orm.UpdateAll(ctx, f.db, officequeries.Desks.Query(), orm.Set(officequeries.Desks.Label, "moved"))
 	if err != nil || changed != 2 {
 		t.Fatal("scoped update", changed, err)
 	}

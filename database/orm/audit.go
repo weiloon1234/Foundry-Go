@@ -8,7 +8,6 @@ import (
 
 	auditrecord "github.com/weiloon1234/Foundry-Go/audit/record"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/encrypted"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -16,7 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-// AuditRule retains the model owner of a field disclosure. Example: AuditField(NullableTextExpr(Orders.Note), record.Exclude).
+// AuditRule retains the model owner of a field disclosure. Example: orm.AuditField(Orders.Note, record.Exclude).
 type AuditRule[M any] struct {
 	_          [0]*M
 	field      *columnCore
@@ -24,7 +23,7 @@ type AuditRule[M any] struct {
 }
 
 // AuditPolicy is an immutable model-owned disclosure policy; zero means Automatic for every field.
-// Example: AuditPolicyOf(Orders.Table, AuditField(NullableTextExpr(Orders.Note), record.Exclude)).
+// Example: orm.AuditPolicyOf(Orders.Table, orm.AuditField(Orders.Note, record.Exclude)).
 type AuditPolicy[M any] struct {
 	_     [0]*M
 	owner *tableCore
@@ -32,26 +31,15 @@ type AuditPolicy[M any] struct {
 	err   error
 }
 
-// AuditField selects disclosure for a declared stored column, including nullable and distinct-input columns.
-// Example: AuditField(NullableTextExpr(Orders.Note), record.Redact).
-func AuditField[M, V any](field interface{ ormColumn(*M) columnData[V] }, disclosure auditrecord.Disclosure) AuditRule[M] {
-	return AuditRule[M]{field: field.ormColumn(nil).core, disclosure: disclosure}
-}
-
-// AuditEncryptedField selects Exclude, Ignore or Redact for an encrypted field; Automatic always redacts.
-// Example: AuditEncryptedField(Vaults.Secret, record.Exclude).
-func AuditEncryptedField[M any, V encrypted.Value[V]](field Encrypted[M, V], disclosure auditrecord.Disclosure) AuditRule[M] {
-	return AuditRule[M]{field: field.encrypted.core, disclosure: disclosure}
-}
-
-// AuditNullableEncryptedField selects disclosure for a nullable encrypted field.
-// Example: AuditNullableEncryptedField(Vaults.Backup, record.Exclude).
-func AuditNullableEncryptedField[M any, V encrypted.Value[V]](field NullableEncrypted[M, V], disclosure auditrecord.Disclosure) AuditRule[M] {
-	return AuditRule[M]{field: field.encrypted.base.core, disclosure: disclosure}
+// AuditField selects disclosure for any declared stored column, including nullable, encrypted, and distinct-input columns.
+// For encrypted columns, Automatic always redacts.
+// Example: orm.AuditField(Orders.Note, record.Redact).
+func AuditField[M, V, I, P any, K AnyColumnKind, R ColumnRole](field ColumnHandle[M, V, I, P, K, R], disclosure auditrecord.Disclosure) AuditRule[M] {
+	return AuditRule[M]{field: columnCoreOf(field.stored), disclosure: disclosure}
 }
 
 // AuditPolicyOf snapshots field policies; duplicates, foreign fields and hidden primary keys fail registration or capture.
-// Example: AuditPolicyOf(Orders.Table, AuditField(NullableTextExpr(Orders.Note), record.Exclude)).
+// Example: orm.AuditPolicyOf(Orders.Table, orm.AuditField(Orders.Note, record.Exclude)).
 func AuditPolicyOf[M any, K comparable](table Table[M, K], rules ...AuditRule[M]) AuditPolicy[M] {
 	p := AuditPolicy[M]{owner: table.core, rules: make(map[*columnCore]auditrecord.Disclosure), err: tableError(table.core)}
 	for _, rule := range rules {
@@ -111,7 +99,10 @@ func Audit[M any, K comparable](table Table[M, K], changes Changes[M], policy Au
 	if snapshot == nil {
 		return zero, safeerror.NewFault(fault.Missing, "audit requires a stored model snapshot")
 	}
-	key := table.Key().key
+	key := table.Key().stored
+	if key == nil || key.core == nil {
+		return zero, invalid("uninitialized table key")
+	}
 	stored := *(*K)(unsafe.Add(snapshot, key.core.offset))
 	reference := model.NewReference[M](table.core.model.Table, stored, auditKeyCodec[K]{bind: key.bind, decode: key.decode})
 	builder, err := auditrecord.NewBuilder(reference, operation, table.core.model.Primary, policy.rules[table.core.primary])

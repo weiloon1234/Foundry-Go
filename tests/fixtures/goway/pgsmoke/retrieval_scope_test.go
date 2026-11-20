@@ -37,7 +37,7 @@ func TestRetrievalClosedTransactionAndTenantIsolation(t *testing.T) {
 	}, orm.WithGlobalScopes(func(t fields) []orm.GlobalScope[member] {
 		return []orm.GlobalScope[member]{orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[member], error) {
 			id, err := coremodels.TenantID(ctx)
-			return orm.NumberEq(t.TenantID, id), err
+			return orm.Eq(t.TenantID, id), err
 		})}
 	}), orm.WithRetrievalHooks(func() orm.RetrievalHooks[member] {
 		factories++
@@ -68,7 +68,7 @@ func TestRetrievalClosedTransactionAndTenantIsolation(t *testing.T) {
 	if _, err := orm.All(ctx, db, table.Query()); err == nil {
 		t.Fatal("missing tenant opened read")
 	}
-	_, err = orm.Update(tenant, db, table.Table.Query(), table.Table.Key(), 2, orm.TextSet(table.Name, "forbidden"))
+	_, err = orm.Update(tenant, db, table.Table.Query(), table.Table.Key(), 2, orm.Set(table.Name, "forbidden"))
 	if !errors.Is(err, database.NotFound) {
 		t.Fatal("tenant write escaped", err)
 	}

@@ -49,8 +49,8 @@ func compileTransferBatch[M any](q Query[M], rows [][]Assignment[M], policy *Con
 }
 func TestInsertBatchDefaultsAndConflictBindings(t *testing.T) {
 	d := insertTransferModels()
-	rows := [][]Assignment[insertTransferModel]{{TextSet(d.Name, "first"), ColumnSet(d.Enabled, false)}, {TextSet(d.Name, "second"), NullableTextSetNull(d.Note)}}
-	policy := OnConflict(ConflictKey(TextExpr(d.Name))).DoUpdate(ConflictIncoming(ColumnExpr(d.Enabled)), ConflictSet(NullableTextExpr(d.Note), "literal '; --")).Where(ColumnEq(d.Enabled, false))
+	rows := [][]Assignment[insertTransferModel]{{Set(d.Name, "first"), Set(d.Enabled, false)}, {Set(d.Name, "second"), SetNull(d.Note)}}
+	policy := OnConflict(ConflictKey(d.Name)).DoUpdate(ConflictIncoming(d.Enabled), ConflictSet(d.Note, "literal '; --")).Where(Eq(d.Enabled, false))
 	s, err := compileTransferBatch(d.Query(), rows, &policy)
 	if err != nil || !strings.Contains(s.SQLText, `("name", "enabled", "note") VALUES ($1, $2, DEFAULT), ($3, DEFAULT, $4) ON CONFLICT ("name") DO UPDATE SET "enabled" = "excluded"."enabled", "note" = $5 WHERE ("foundry_upsert"."enabled" = $6) RETURNING "foundry_upsert"."id"`) || !reflect.DeepEqual(s.Bindings, []any{"first", false, "second", nil, "literal '; --", false}) {
 		t.Fatal(s, err)
@@ -58,11 +58,11 @@ func TestInsertBatchDefaultsAndConflictBindings(t *testing.T) {
 	if strings.Contains(s.SQLText, "literal") {
 		t.Fatal("literal interpolated")
 	}
-	derived := policy.Where(TextEq(d.Name, "extra")).DoUpdate(ConflictIncoming(NullableTextExpr(d.Note)))
+	derived := policy.Where(Eq(d.Name, "extra")).DoUpdate(ConflictIncoming(d.Note))
 	if len(policy.state.core.Condition) != 1 || len(policy.state.core.Updates) != 2 || len(derived.state.core.Condition) != 2 {
 		t.Fatal("policy derivation mutated source")
 	}
-	for _, p := range []Conflict[insertTransferModel]{OnConflict[insertTransferModel]().DoNothing(), OnConflictConstraint[insertTransferModel]("users_name_key").DoNothing(), OnConflict(ConflictKey(TextExpr(d.Name))).DoUpdate(ConflictNull(NullableTextExpr(d.Note)))} {
+	for _, p := range []Conflict[insertTransferModel]{OnConflict[insertTransferModel]().DoNothing(), OnConflictConstraint[insertTransferModel]("users_name_key").DoNothing(), OnConflict(ConflictKey(d.Name)).DoUpdate(ConflictNull(d.Note))} {
 		if _, err := compileTransferBatch(d.Query(), rows, &p); err != nil {
 			t.Fatal(err)
 		}
@@ -79,21 +79,30 @@ func TestInsertBatchDefaultsAndConflictBindings(t *testing.T) {
 func TestInsertRejectsInvalidConflictAndEmptyBatchContracts(t *testing.T) {
 	d, foreign := insertTransferModels(), insertTransferModels()
 	unknown := d.Name
-	core := *d.Name.text.core
+	unknownData := *d.Name.stored
+	core := *unknownData.core
 	core.metadata.Name = "unknown"
-	unknown.text.core = &core
+	unknownData.core = &core
+	unknown.stored = &unknownData
 	pretendNullable := d.Note
-	nc := *d.Note.nullableText.base.core
+	pretendData := *d.Note.stored
+	nc := *pretendData.core
 	nc.metadata.Name = "name"
-	pretendNullable.nullableText.base.core = &nc
-	pretendNullable.nullableText.nullable = func() columnData[value.Nullable[string]] { c := d.Note.nullableText.nullable(); c.core = &nc; return c }
-	valid := []Assignment[insertTransferModel]{TextSet(d.Name, "first")}
+	origProj := d.Note.stored.core.nullableProjection.(func() columnData[value.Nullable[string]])
+	nc.nullableProjection = func() columnData[value.Nullable[string]] {
+		c := origProj()
+		c.core = &nc
+		return c
+	}
+	pretendData.core = &nc
+	pretendNullable.stored = &pretendData
+	valid := []Assignment[insertTransferModel]{Set(d.Name, "first")}
 	for i, p := range []Conflict[insertTransferModel]{
-		{}, OnConflict(ConflictKey(TextExpr(d.Name))), OnConflictConstraint[insertTransferModel]("").DoNothing(), OnConflictConstraint[insertTransferModel]("bad; --").DoNothing(),
-		OnConflict(ConflictKey(TextExpr(d.Name)), ConflictKey(TextExpr(d.Name))).DoNothing(), OnConflict(ConflictKey(TextExpr(foreign.Name))).DoNothing(), OnConflict(ConflictKey(TextExpr(unknown))).DoNothing(), OnConflict(ConflictColumn[insertTransferModel]{}).DoNothing(),
-		OnConflict[insertTransferModel]().DoUpdate(ConflictIncoming(TextExpr(d.Name))), OnConflict(ConflictKey(TextExpr(d.Name))).DoUpdate(),
-		OnConflict(ConflictKey(TextExpr(d.Name))).DoUpdate(ConflictIncoming(KeyExpr(d.Key()))), OnConflict(ConflictKey(TextExpr(d.Name))).DoUpdate(ConflictIncoming(TextExpr(d.Name)), ConflictIncoming(TextExpr(d.Name))), OnConflict(ConflictKey(TextExpr(d.Name))).DoUpdate(ConflictIncoming(TextExpr(foreign.Name))), OnConflict(ConflictKey(TextExpr(d.Name))).DoUpdate(ConflictUpdate[insertTransferModel]{}),
-		OnConflict(ConflictKey(TextExpr(d.Name))).DoUpdate(ConflictNull(NullableTextExpr(pretendNullable))), OnConflict(ConflictKey(TextExpr(d.Name))).DoNothing().Where(TextEq(d.Name, "invalid")), OnConflict(ConflictKey(TextExpr(d.Name))).DoUpdate(ConflictIncoming(TextExpr(d.Name))).Where(TextEq(foreign.Name, "invalid")),
+		{}, OnConflict(ConflictKey(d.Name)), OnConflictConstraint[insertTransferModel]("").DoNothing(), OnConflictConstraint[insertTransferModel]("bad; --").DoNothing(),
+		OnConflict(ConflictKey(d.Name), ConflictKey(d.Name)).DoNothing(), OnConflict(ConflictKey(foreign.Name)).DoNothing(), OnConflict(ConflictKey(unknown)).DoNothing(), OnConflict(ConflictColumn[insertTransferModel]{}).DoNothing(),
+		OnConflict[insertTransferModel]().DoUpdate(ConflictIncoming(d.Name)), OnConflict(ConflictKey(d.Name)).DoUpdate(),
+		OnConflict(ConflictKey(d.Name)).DoUpdate(ConflictIncoming(d.Key())), OnConflict(ConflictKey(d.Name)).DoUpdate(ConflictIncoming(d.Name), ConflictIncoming(d.Name)), OnConflict(ConflictKey(d.Name)).DoUpdate(ConflictIncoming(foreign.Name)), OnConflict(ConflictKey(d.Name)).DoUpdate(ConflictUpdate[insertTransferModel]{}),
+		OnConflict(ConflictKey(d.Name)).DoUpdate(ConflictNull(pretendNullable)), OnConflict(ConflictKey(d.Name)).DoNothing().Where(Eq(d.Name, "invalid")), OnConflict(ConflictKey(d.Name)).DoUpdate(ConflictIncoming(d.Name)).Where(Eq(foreign.Name, "invalid")),
 	} {
 		for _, rows := range [][][]Assignment[insertTransferModel]{{valid}, nil} {
 			if _, err := compileTransferBatch(d.Query(), rows, &p); !errors.Is(err, fault.Invalid) {
@@ -104,7 +113,7 @@ func TestInsertRejectsInvalidConflictAndEmptyBatchContracts(t *testing.T) {
 	if _, err := compileTransferBatch(d.Query(), [][]Assignment[insertTransferModel]{valid, {}}, nil); !errors.Is(err, fault.Missing) {
 		t.Fatal("missing later row", err)
 	}
-	if _, err := compileTransferBatch(d.Query().Where(TextEq(d.Name, "scope")), nil, nil); !errors.Is(err, fault.Invalid) {
+	if _, err := compileTransferBatch(d.Query().Where(Eq(d.Name, "scope")), nil, nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal("empty batch lost filters", err)
 	}
 	if s, err := compileTransferBatch(d.Query(), nil, nil); err != nil || s.SQLText != "" {

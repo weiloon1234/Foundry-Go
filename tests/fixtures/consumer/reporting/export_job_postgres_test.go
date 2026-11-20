@@ -153,7 +153,7 @@ func TestQueuedExportReloadsCurrentPermissionsBeforeEveryAttempt(t *testing.T) {
 	}))
 	id := queue.dispatch(t, exportPayload(f))
 	if err := f.transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := orm.Update(t.Context(), tx, reporting.OperatorModels.Table.Query(), reporting.OperatorModels.Table.Key(), f.operator, orm.ColumnSet(reporting.OperatorModels.CanExport, false))
+		_, err := orm.Update(t.Context(), tx, reporting.OperatorModels.Table.Query(), reporting.OperatorModels.Table.Key(), f.operator, orm.Set(reporting.OperatorModels.CanExport, false))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -165,7 +165,7 @@ func TestQueuedExportReloadsCurrentPermissionsBeforeEveryAttempt(t *testing.T) {
 	}
 	assertNoExportFiles(t, f)
 	if err := f.transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := orm.Update(t.Context(), tx, reporting.OperatorModels.Table.Query(), reporting.OperatorModels.Table.Key(), f.operator, orm.ColumnSet(reporting.OperatorModels.CanExport, true))
+		_, err := orm.Update(t.Context(), tx, reporting.OperatorModels.Table.Query(), reporting.OperatorModels.Table.Key(), f.operator, orm.Set(reporting.OperatorModels.CanExport, true))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -234,7 +234,7 @@ func TestQueuedExportRedeliveryUsesStableStorageIdentityAndClosesArtifacts(t *te
 	// A second export may observe new source values; storage must still retain
 	// the first complete delivery for this same execution identity.
 	if err := f.transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := orm.Update(t.Context(), tx, reporting.MemberModels.Table.Query(), reporting.MemberModels.Table.Key(), f.members[0], orm.TextSet(reporting.MemberModels.Name, "Changed"))
+		_, err := orm.Update(t.Context(), tx, reporting.MemberModels.Table.Query(), reporting.MemberModels.Table.Key(), f.members[0], orm.Set(reporting.MemberModels.Name, "Changed"))
 		return err
 	}); err != nil {
 		t.Fatal(err)

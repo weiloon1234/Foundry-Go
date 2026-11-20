@@ -1,7 +1,5 @@
 package invalid
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/recursivequeries"
@@ -13,5 +11,5 @@ type parentAlias struct{}
 
 func invalid(self rows.RecursiveSelf[recursivequeries.Node]) {
 	parent := rows.AsRecord[parentAlias](self, "parent")
-	_ = expr.Eq(expr.At(rows.Scope(parent), orm.TextExpr(recursivequeries.Nodes.Code)), models.User{}.ID)
+	_ = expr.Eq(expr.At(rows.Scope(parent), recursivequeries.Nodes.Code), models.User{}.ID)
 }

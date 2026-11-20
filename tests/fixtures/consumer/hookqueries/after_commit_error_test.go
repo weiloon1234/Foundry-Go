@@ -101,7 +101,7 @@ func TestORMAfterCommitNeverFormatsLocalOrObserverErrors(t *testing.T) {
 				if err = db.Start(t.Context()); err != nil {
 					t.Fatal(err)
 				}
-				_, err = orm.Insert(hookqueries.WithTrace(t.Context(), trace), db, hookqueries.Members.Table, orm.KeySet(hookqueries.Members.Key(), id), orm.InputTextSet(hookqueries.Members.Email, "stored@example.test"), orm.NullableColumnSet(hookqueries.Members.IntroducerID, id))
+				_, err = orm.Insert(hookqueries.WithTrace(t.Context(), trace), db, hookqueries.Members.Table, orm.Set(hookqueries.Members.Key(), id), orm.Set(hookqueries.Members.Email, "stored@example.test"), orm.Set(hookqueries.Members.IntroducerID, id))
 				var original *privateAfterCommitError
 				var outcome *database.Error
 				identity := errors.As(err, &original) && original == application

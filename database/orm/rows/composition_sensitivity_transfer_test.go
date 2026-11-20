@@ -34,7 +34,7 @@ func rejectComputedSensitiveCursor[S, V any](t *testing.T, q rows.Scalar[S, V]) 
 func TestComputedCursorSensitivityWithoutModelFields(t *testing.T) {
 	m := declareMembers()
 	q := rows.From(m.Query())
-	ordinary := expr.Value(orm.TextExpr(m.Name))
+	ordinary := expr.Value(m.Name)
 	// The expression codec alone supplies sensitivity; model metadata stays public.
 	core := expr.FoundryRowValue(ordinary, sqlowner.Expressions())
 	col := expr.FoundrySelectedColumn(expr.AsSelected(expr.Row(ordinary)), sqlowner.Expressions())
@@ -43,17 +43,17 @@ func TestComputedCursorSensitivityWithoutModelFields(t *testing.T) {
 	core.Node = querycore.SensitiveValue{Value: core.Node}
 	field := expr.FoundryRowExpression[member](core, col, sqlowner.Expressions())
 	optional := expr.NullableRow(field)
-	fallback := expr.Param(orm.TextExpr(m.Name), "public")
+	fallback := expr.Param(m.Name, "public")
 	for name, expression := range map[string]expr.Selected[member, string]{
-		"column comparison": expr.AsSelected(expr.When(expr.Equal(field, ordinary), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other"))),
-		"membership":        expr.AsSelected(expr.When(rows.InQuery(field, rows.SelectScalar(q, expr.AsSelected(fallback))), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other"))),
+		"column comparison": expr.AsSelected(expr.When(expr.Equal(field, ordinary), fallback).Else(expr.Param(m.Name, "other"))),
+		"membership":        expr.AsSelected(expr.When(rows.InQuery(field, rows.SelectScalar(q, expr.AsSelected(fallback))), fallback).Else(expr.Param(m.Name, "other"))),
 		"lower":             expr.AsSelected(expr.Lower(field)),
 		"nested operations": expr.AsSelected(expr.Lower(expr.Concat(ordinary, field))),
 		"coalesce":          expr.AsSelected(expr.Coalesce(optional, fallback)),
 		"selected coalesce": expr.CoalesceValue(expr.AsSelected(optional), expr.AsSelected(fallback)),
 		"case result":       expr.AsSelected(expr.When(expr.Eq(ordinary, "x"), fallback).Else(field)),
 		"selected case":     expr.WhenValue(expr.Grouped(expr.Eq(ordinary, "x")), expr.AsSelected(fallback)).Else(expr.AsSelected(field)),
-		"case condition":    expr.AsSelected(expr.When(expr.Eq(field, "x"), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other"))),
+		"case condition":    expr.AsSelected(expr.When(expr.Eq(field, "x"), fallback).Else(expr.Param(m.Name, "other"))),
 	} {
 		t.Run(name, func(t *testing.T) { rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expression)) })
 	}
@@ -73,7 +73,7 @@ func TestComputedCursorSensitivityWithoutModelFields(t *testing.T) {
 	stored := core
 	stored.Node = querycore.UnwrapSensitivity(stored.Node)
 	rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expr.AsSelected(expr.CountRow(expr.FoundryRowExpression[member](stored, col, sqlowner.Expressions())))))
-	numeric, numberColumn := expr.FoundryAggregate(expr.Sum(orm.NumberKeyExpr(orm.NumberKey(m.ID))), sqlowner.Expressions())
+	numeric, numberColumn := expr.FoundryAggregate(expr.Sum(orm.NumberKey(m.ID)), sqlowner.Expressions())
 	sum := numeric.Node.(querycore.AggregateNode)
 	sum.Sensitive = true
 	numeric.Node = sum
@@ -108,9 +108,9 @@ func TestRelatedAggregateConditionalCursorSensitivity(t *testing.T) {
 		d := orm.Define("sensitivity_relations", func(b orm.Builder[sensitivityRelationModel], m *sensitivityRelationModel) sensitivityRelationTable {
 			return sensitivityRelationTable{orm.TableOf(b, &m.ID), orm.NullableNumberOf(b, &m.Rank, orm.Codec(columnCodec)), orm.ManyOf(b, &m.Children), orm.ThroughOf(b, &m.Links)}
 		})
-		direct := orm.HasManyOf(d.Children, orm.KeyExpr(d.Key()), orm.KeyExpr(d.Key()))
-		through := orm.ManyToManyOf(d.Links, orm.KeyExpr(d.Key()), orm.KeyExpr(d.Key()), orm.KeyExpr(d.Key()), orm.KeyExpr(d.Key()))
-		measure := expr.Min(orm.NullableNumberExpr(d.Rank))
+		direct := orm.HasManyOf(d.Children, d.Key(), d.Key())
+		through := orm.ManyToManyOf(d.Links, orm.JoinKeys(d.Key(), d.Key()), orm.JoinKeys(d.Key(), d.Key()))
+		measure := expr.Min(d.Rank)
 		core, col := expr.FoundryAggregate(measure, sqlowner.Expressions())
 		// Vary the two independent provenance sources: declaration metadata or
 		// the aggregate's input codec. The result codec itself remains public.
@@ -123,11 +123,11 @@ func TestRelatedAggregateConditionalCursorSensitivity(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/metadata=%v", name, metadata), func(t *testing.T) {
 				related := orm.FoundryRelatedValue(source, core, col, sqlowner.Expressions())
 				minimum := expr.FoundryRowExpression[sensitivityRelationModel](related, col, sqlowner.Expressions())
-				selected := expr.Coalesce(minimum, expr.Param(orm.KeyExpr(d.Key()), int64(0)))
+				selected := expr.Coalesce(minimum, expr.Param(d.Key(), int64(0)))
 				rejectComputedSensitiveCursor(t, rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(selected)))
 			})
 		}
-		safe := expr.Coalesce(expr.RelatedValue(direct, expr.Min(orm.NumberKeyExpr(orm.NumberKey(d.Key())))), expr.Param(orm.KeyExpr(d.Key()), int64(0)))
+		safe := expr.Coalesce(expr.RelatedValue(direct, expr.Min(orm.NumberKey(d.Key()))), expr.Param(d.Key(), int64(0)))
 		cursor := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(safe))))
 		cursor = cursor.UniqueBy(expr.Group(cursor.Value()))
 		if _, err := ormcore.PlanResultCursor(t.Context(), rows.ValueCursorQueryCore(cursor), 1, "", false, false); err != nil {

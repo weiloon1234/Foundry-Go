@@ -38,7 +38,9 @@ func TestIdentityDescriptorRejectsNonPrimaryAndScopedQueries(t *testing.T) {
 		t.Fatal(e)
 	}
 	nonprimary := identity
-	nonprimary.key.core = d.Name.text.core
+	nonprimaryKey := *identity.key
+	nonprimaryKey.core = d.Name.stored.core
+	nonprimary.key = &nonprimaryKey
 	for _, bad := range []ModelIdentity[identityTransferRecord, int64]{{}, IdentityOf(d.Table, identityTransferFields().Key()), IdentityOf(d.Table, Key[identityTransferRecord, int64]{}), nonprimary} {
 		if e := bad.Validate(); !errors.Is(e, fault.Invalid) {
 			t.Fatal("nonprimary or foreign identity", e)
@@ -115,7 +117,7 @@ func TestPostgresInsertOrFirstResolvesConcurrentCreation(t *testing.T) {
 	if _, e := db.Exec(t.Context(), `CREATE TABLE scope_records(id bigint PRIMARY KEY,rank bigint NOT NULL UNIQUE)`); e != nil {
 		t.Fatal(e)
 	}
-	q := d.Query().Where(NumberEq(d.Rank, 7))
+	q := d.Query().Where(Eq(d.Rank, 7))
 	type outcome struct {
 		row scopeTransferRow
 		err error
@@ -123,7 +125,7 @@ func TestPostgresInsertOrFirstResolvesConcurrentCreation(t *testing.T) {
 	out := make(chan outcome, 4)
 	for i := range 4 {
 		go func() {
-			r, e := CreateOrFirst(t.Context(), db, q, KeySet(d.Key(), int64(i+1)), NumberSet(d.Rank, 7))
+			r, e := CreateOrFirst(t.Context(), db, q, Set(d.Key(), int64(i+1)), Set(d.Rank, 7))
 			out <- outcome{r, e}
 		}()
 	}
@@ -140,11 +142,11 @@ func TestPostgresInsertOrFirstResolvesConcurrentCreation(t *testing.T) {
 			t.Fatal("different winners", v.row, winner)
 		}
 	}
-	if _, e := CreateOrFirst(t.Context(), db, d.Query().Where(NumberEq(d.Rank, 8)), KeySet(d.Key(), winner), NumberSet(d.Rank, 8)); !errors.Is(e, database.UniqueViolation) {
+	if _, e := CreateOrFirst(t.Context(), db, d.Query().Where(Eq(d.Rank, 8)), Set(d.Key(), winner), Set(d.Rank, 8)); !errors.Is(e, database.UniqueViolation) {
 		t.Fatal("unselected conflict hidden", e)
 	}
 	if e := db.Transaction(t.Context(), func(tx *database.Tx) error {
-		r, e := CreateOrFirst(t.Context(), tx, q, KeySet(d.Key(), 99), NumberSet(d.Rank, 7))
+		r, e := CreateOrFirst(t.Context(), tx, q, Set(d.Key(), 99), Set(d.Rank, 7))
 		if e != nil {
 			return e
 		}

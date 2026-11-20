@@ -29,7 +29,7 @@ func TestORMDeclarationsAndReadParity(t *testing.T) {
 	if err := json.Unmarshal(frozen, &old); err != nil {
 		t.Fatal(err)
 	}
-	statement, err := orm.Compile(linkqueries.Members.Query().Where(orm.TextEq(linkqueries.Members.Name, "Ada")).OrderBy(orm.TextAsc(linkqueries.Members.Name)).Limit(5))
+	statement, err := orm.Compile(linkqueries.Members.Query().Where(orm.Eq(linkqueries.Members.Name, "Ada")).OrderBy(orm.Asc(linkqueries.Members.Name)).Limit(5))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,15 +64,15 @@ func TestPostgresORMPivotLifecycle(t *testing.T) {
 	var trace linkqueries.Trace
 	ctx := linkqueries.WithTrace(t.Context(), &trace)
 	err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		member, err := orm.Insert(ctx, tx, linkqueries.Members.Table, orm.TextSet(linkqueries.Members.Name, "member"))
+		member, err := orm.Insert(ctx, tx, linkqueries.Members.Table, orm.Set(linkqueries.Members.Name, "member"))
 		if err != nil {
 			return err
 		}
-		group, err := orm.Insert(ctx, tx, linkqueries.Groups.Table, orm.KeySet(linkqueries.Groups.Key(), "staff"), orm.TextSet(linkqueries.Groups.Name, "staff"))
+		group, err := orm.Insert(ctx, tx, linkqueries.Groups.Table, orm.Set(linkqueries.Groups.Key(), "staff"), orm.Set(linkqueries.Groups.Name, "staff"))
 		if err != nil {
 			return err
 		}
-		pivot, err := orm.Attach(ctx, tx, linkqueries.MemberLinks.Groups, member, group, orm.InputTextSet(linkqueries.Memberships.Role, " ADMIN "))
+		pivot, err := orm.Attach(ctx, tx, linkqueries.MemberLinks.Groups, member, group, orm.Set(linkqueries.Memberships.Role, " ADMIN "))
 		if err != nil {
 			return err
 		}

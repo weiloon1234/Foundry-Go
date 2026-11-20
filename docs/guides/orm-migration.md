@@ -12,6 +12,25 @@ coordinated generation barrier. Keep DTO, enum, configuration and client generat
 Do not edit generated files or ownership manifests by hand. Model and projection
 generation and the former query runtime are retired.
 
+## Unified ORM column handles and operators
+
+Every declared model column type (`orm.Column`, `orm.Key`, `orm.Primary`, `orm.Number`, `orm.Text`, `orm.Time`, `orm.Enum`, `orm.JSON`, `orm.Interval`, `orm.CreatedAt`, `orm.UpdatedAt`, `orm.SoftDelete`, `orm.Nullable*`, `orm.Input*`, `orm.Encrypted`, `orm.NullableEncrypted`) is now a type alias over the 6-parameter, methodless carrier `orm.ColumnHandle[M, V, I, P, K, R]`. Pass column handles directly to unified operators, expressions, row mappings, relations, conflict policies, audit/change helpers, validation lookups, model bindings, and datatable constructors without `*Expr` wrappers.
+
+| Family (removed) | Unified replacement | Notes |
+| --- | --- | --- |
+| `orm.<Kind>Eq`, `<Kind>Ne`, `<Kind>In`, `<Kind>NotIn` | `orm.Eq`, `orm.Ne`, `orm.In`, `orm.NotIn` | Requires `orm.ColumnKind` (rejects encrypted). |
+| `orm.<Kind>Gt`, `<Kind>Gte`, `<Kind>Lt`, `<Kind>Lte`, `<Kind>Between` | `orm.Gt`, `orm.Gte`, `orm.Lt`, `orm.Lte`, `orm.Between` | Requires `orm.OrderedKind` (Number, NumberKey, Text, Time, Interval). |
+| `orm.<Kind>Like`, `<Kind>ILike`, `<Kind>Contains`, `<Kind>IContains`, `<Kind>StartsWith`, `<Kind>IStartsWith`, `<Kind>EndsWith`, `<Kind>IEndsWith` | `orm.Like`, `orm.ILike`, `orm.Contains`, `orm.IContains`, `orm.StartsWith`, `orm.IStartsWith`, `orm.EndsWith`, `orm.IEndsWith` | Requires `orm.TextColumnKind` (rejects string-backed enums and keys). |
+| `orm.<Kind>JSONContains`, `<Kind>JSONContainedBy`, `<Kind>JSONIsJSONNull` | `orm.ContainsDocument`, `orm.ContainedByDocument`, `orm.IsJSONNull` | Requires `orm.JSONColumnKind`. |
+| `orm.<Kind>IsNull`, `<Kind>IsNotNull`, `<Kind>SetNull` | `orm.IsNull`, `orm.IsNotNull`, `orm.SetNull` | Requires `orm.NullableColumnKind` (includes `NullableEncrypted`). |
+| `orm.<Kind>Set` | `orm.Set`, `orm.SetIfPresent` | Requires `orm.AnyColumnKind` (includes `Encrypted`); `Set` takes input `I`. |
+| `orm.<Kind>Asc`, `<Kind>Desc` | `orm.Asc`, `orm.Desc` | Requires `orm.ColumnKind`. |
+| `orm.NumberIncrement`, `NullableNumberIncrement`, `NumberDecrement`, `NullableNumberDecrement` | `orm.Increment`, `orm.Decrement` | Requires `orm.NumberColumnKind` and `orm.AdjustableRole`. |
+| `orm.<Kind>Expr(col)` (all 33 wrappers) and `*Adapter` / `KeyColumn` / `ExpressionColumn` / `InsertTarget` / `UpdateTarget` | Pass `col` directly | Expressions, row mappings, conflict keys, lookups, and model bindings accept `ColumnHandle` directly. |
+| `orm.ManyToManyOf`, `HasOneThroughOf`, `HasManyThroughOf`, `MorphOneOf`, `MorphManyOf`, `MorphToOf`, `MorphToManyOf` (flat key args) | Wrap each key pair in `orm.JoinKeys(a, b)` | `BelongsToOf`, `HasOneOf`, `HasManyOf` keep direct `(slot, local, foreign)`. |
+| `orm.AuditEncryptedField`, `AuditNullableEncryptedField`, `AuditReadEncrypted`, `AuditReadNullableEncrypted`, `EncryptedChangeOf`, `NullableEncryptedChangeOf` | `orm.AuditField`, `orm.AuditRead`, `orm.AuditReadNullable`, `orm.ChangeOf`, `orm.NullableChangeOf` | `AuditRead` and `ChangeOf` now enforce non-null columns (`orm.RequiredAnyColumnKind`) at compile time. |
+| Direct single-column `datatable.DefineColumn` wiring | `datatable.Text`, `Number`, `Time`, `Enum`, `Bool`, `NullableText`, `NullableNumber`, `NullableTime`, `NullableEnum` | Enable sort, filter, export, and (for text) search by default; opt out via `datatable.NoSort`, `NoFilter`, `NoSearch`, `NoExport`. Keep `DefineColumn` for joined, computed, or custom-codec columns. |
+
 ## Removed API spellings
 
 This documentation-only migration table covers the retirement denial ledger and
@@ -309,7 +328,7 @@ var DeveloperEvents = orm.Define("developer_events", func(b orm.Builder[Develope
 }, orm.NoTimestamps())
 
 func insertDeveloperEvent(ctx context.Context, tx *database.Tx, createdAt time.Time) error {
-	_, err := orm.Insert(ctx, tx, DeveloperEvents.Table, orm.TimeSet(DeveloperEvents.CreatedAt, createdAt))
+	_, err := orm.Insert(ctx, tx, DeveloperEvents.Table, orm.Set(DeveloperEvents.CreatedAt, createdAt))
 	return err
 }
 ```
@@ -345,7 +364,7 @@ After:
 <!-- orm-example: inputs-after -->
 ```go
 func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
-	return orm.InputTextSet(mutators.Members.Email, input)
+	return orm.Set(mutators.Members.Email, input)
 }
 ```
 
@@ -363,7 +382,7 @@ After:
 <!-- orm-example: input-key-after -->
 ```go
 func inputKey(id model.ID[mutators.KeyRecord]) orm.Assignment[mutators.KeyRecord] {
-	return orm.InputKeySet(mutators.KeyRecords.ID, mutators.FreshID{Value: id})
+	return orm.Set(mutators.KeyRecords.ID, mutators.FreshID{Value: id})
 }
 ```
 
@@ -416,7 +435,7 @@ After:
 <!-- orm-example: reads-after -->
 ```go
 func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) error {
-	_, err := orm.All(ctx, db, models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100)))
+	_, err := orm.All(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))
 	if err != nil {
 		return err
 	}
@@ -424,7 +443,7 @@ func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) 
 	if err != nil {
 		return err
 	}
-	_, err = orm.Require(ctx, db, models.Orders.Query().Where(orm.KeyEq(models.Orders.ID, id)))
+	_, err = orm.Require(ctx, db, models.Orders.Query().Where(orm.Eq(models.Orders.ID, id)))
 	return err
 }
 ```
@@ -453,7 +472,7 @@ After:
 <!-- orm-example: insert-after -->
 ```go
 func insert(ctx context.Context, tx *database.Tx) error {
-	_, err := orm.Insert(ctx, tx, models.Users.Table, orm.TextSet(models.Users.Email, "ada@example.test"))
+	_, err := orm.Insert(ctx, tx, models.Users.Table, orm.Set(models.Users.Email, "ada@example.test"))
 	return err
 }
 ```
@@ -474,7 +493,7 @@ After:
 <!-- orm-example: writes-after -->
 ```go
 func write(ctx context.Context, tx *database.Tx, id int64) error {
-	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "Ada"), orm.NullableInputTextSetNull(hooks.Members.Note))
+	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))
 	return err
 }
 ```
@@ -504,7 +523,7 @@ After:
 <!-- orm-example: set-writes-after -->
 ```go
 func setWrite(ctx context.Context, tx *database.Tx) error {
-	_, err := orm.UpdateAll(ctx, tx, orm.WithoutModelHooks(hooks.Members.Query()), orm.InputTextSet(hooks.Members.Name, "guest"))
+	_, err := orm.UpdateAll(ctx, tx, orm.WithoutModelHooks(hooks.Members.Query()), orm.Set(hooks.Members.Name, "guest"))
 	return err
 }
 ```
@@ -563,7 +582,7 @@ After:
 
 <!-- orm-example: relations-after -->
 ```go
-var OrderBuyer = orm.BelongsToOf(models.Orders.Buyer, orm.ColumnExpr(models.Orders.BuyerID), orm.KeyExpr(models.Users.ID))
+var OrderBuyer = orm.BelongsToOf(models.Orders.Buyer, models.Orders.BuyerID, models.Users.ID)
 
 func relations(ctx context.Context, db database.Executor, existing []models.Order) error {
 	_, err := orm.All(ctx, db, models.Orders.Query().With(OrderBuyer))
@@ -612,9 +631,9 @@ func memberHooks() orm.Hooks[hooks.Member] {
 	return orm.Hooks[hooks.Member]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[hooks.Member]) error {
 		if !orm.WriteIsSet(draft, func() func(arg0 string) orm.Assignment[hooks.Member] {
 			receiver := hooks.Members.Name
-			return func(arg0 string) orm.Assignment[hooks.Member] { return orm.InputTextSet(receiver, arg0) }
+			return func(arg0 string) orm.Assignment[hooks.Member] { return orm.Set(receiver, arg0) }
 		}()) {
-			return orm.WriteSet(draft, orm.InputTextSet(hooks.Members.Name, "guest"))
+			return orm.WriteSet(draft, orm.Set(hooks.Members.Name, "guest"))
 		}
 		return nil
 	}}
@@ -628,7 +647,7 @@ AfterCommit retain their operation-specific behavior. Local callbacks run before
 observer callbacks. Hooks share the effective write; after callbacks receive stored
 changes, not speculative input.
 
-Pass a typed setter callback, such as `func(v string) orm.Assignment[User] { return orm.TextSet(Users.Email, v) }`,
+Pass a typed setter callback, such as `func(v string) orm.Assignment[User] { return orm.Set(Users.Email, v) }`,
 to `WriteGet`, `WriteNullableGet`, or `WriteIsSet`; assign
 with `WriteSet`. Unset restores omission rather than assigning NULL or a zero:
 
@@ -647,7 +666,7 @@ func unset(draft *orm.Write[hooks.Member]) error {
 	return orm.WriteUnset(draft, func() func(arg0 coremodels.LabelInput) orm.Assignment[hooks.Member] {
 		receiver := hooks.Members.Note
 		return func(arg0 coremodels.LabelInput) orm.Assignment[hooks.Member] {
-			return orm.NullableInputTextSet(receiver, arg0)
+			return orm.Set(receiver, arg0)
 		}
 	}())
 }
@@ -665,7 +684,7 @@ After:
 <!-- orm-example: changes-after -->
 ```go
 func changes(changes orm.Changes[hooks.Member]) (bool, error) {
-	field, err := orm.ChangeOf(changes, orm.InputTextExpr(hooks.Members.Name))
+	field, err := orm.ChangeOf(changes, hooks.Members.Name)
 	return field.Changed(), err
 }
 ```
@@ -755,7 +774,7 @@ After:
 func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[reads.Member], error) {
 		id, err := tenantID(ctx)
-		return orm.NumberEq(t.TenantID, id), err
+		return orm.Eq(t.TenantID, id), err
 	})
 }
 ```
@@ -814,8 +833,8 @@ After:
 ```go
 func upsert(ctx context.Context, tx *database.Tx) error {
 	f := models.Users
-	policy := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Email))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(f.Age)))
-	_, err := orm.Upsert(ctx, tx, f.Query(), policy, orm.TextSet(f.Email, "ada@example.test"), orm.NumberSet(f.Age, 30))
+	policy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(orm.ConflictIncoming(f.Age))
+	_, err := orm.Upsert(ctx, tx, f.Query(), policy, orm.Set(f.Email, "ada@example.test"), orm.Set(f.Age, 30))
 	return err
 }
 ```
@@ -839,10 +858,10 @@ After:
 ```go
 func excluded() orm.Conflict[models.User] {
 	r := rows.ConflictRowsOf(models.Users.Query())
-	stored := expr.At(r.Stored(), orm.NumberExpr(models.Users.Age))
-	proposed := expr.At(r.Proposed(), orm.NumberExpr(models.Users.Age))
-	return orm.OnConflict(orm.ConflictKey(orm.TextExpr(models.Users.Email))).DoUpdate(
-		rows.SetConflictValue(orm.NumberExpr(models.Users.Age), expr.Add(stored, proposed)))
+	stored := expr.At(r.Stored(), models.Users.Age)
+	proposed := expr.At(r.Proposed(), models.Users.Age)
+	return orm.OnConflict(orm.ConflictKey(models.Users.Email)).DoUpdate(
+		rows.SetConflictValue(models.Users.Age, expr.Add(stored, proposed)))
 }
 ```
 
@@ -871,7 +890,7 @@ After:
 <!-- orm-example: lookup-after -->
 ```go
 func lookup(ctx context.Context, tx *database.Tx) error {
-	_, err := orm.FirstOrCreate(ctx, tx, models.Users.Query().Where(orm.TextEq(models.Users.Email, "ada@example.test")))
+	_, err := orm.FirstOrCreate(ctx, tx, models.Users.Query().Where(orm.Eq(models.Users.Email, "ada@example.test")))
 	return err
 }
 ```
@@ -905,8 +924,8 @@ After:
 func insertSelect(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
 	plan := rows.InsertFrom(rows.From(f.Query()), f.Query(),
-		rows.MapInsert(orm.KeyExpr(f.ID), expr.Value(orm.KeyExpr(f.Key()))), rows.MapInsert(orm.ColumnExpr(f.Body), expr.Value(orm.ColumnExpr(f.Body))),
-		rows.MapInsert(orm.TimeExpr(f.CreatedAt), expr.Value(orm.TimeExpr(f.CreatedAt)))).Values(orm.InputTextSet(f.Name, "copy"))
+		rows.MapInsert(f.ID, expr.Value(f.Key())), rows.MapInsert(f.Body, expr.Value(f.Body)),
+		rows.MapInsert(f.CreatedAt, expr.Value(f.CreatedAt))).Values(orm.Set(f.Name, "copy"))
 	_, err := plan.Exec(ctx, tx)
 	return err
 }
@@ -931,8 +950,8 @@ After:
 func updateFrom(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
 	_, err := rows.UpdateFrom(f.Query(), rows.From(f.Query())).
-		Match(rows.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).
-		Select(rows.MapUpdate(orm.ColumnExpr(f.Body), expr.Value(orm.ColumnExpr(f.Body)))).Values(orm.InputTextSet(f.Name, "updated")).Exec(ctx, tx)
+		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).
+		Select(rows.MapUpdate(f.Body, expr.Value(f.Body))).Values(orm.Set(f.Name, "updated")).Exec(ctx, tx)
 	return err
 }
 ```
@@ -956,7 +975,7 @@ func deleteUsing(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
 	q := f.Query().WithTrashed()
 	_, err := rows.ForceDeleteUsing(q, f.Soft, rows.From(q)).
-		Match(rows.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).Exec(ctx, tx)
+		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).Exec(ctx, tx)
 	return err
 }
 ```
@@ -987,7 +1006,7 @@ After:
 <!-- orm-example: scalar-after -->
 ```go
 func scalar(ctx context.Context, db database.Executor) error {
-	_, err := rows.Read(rows.SelectValue(models.Orders.Query(), orm.NumberExpr(models.Orders.TotalCents))).All(ctx, db)
+	_, err := rows.Read(rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)).All(ctx, db)
 	return err
 }
 ```
@@ -1011,9 +1030,9 @@ After:
 func report() rows.Query[reports.Member, reports.MemberRow] {
 	f, r := reports.Members, reports.MemberRows
 	return rows.Select(rows.From(f.Query()), r,
-		rows.Map(r.ID, expr.Value(orm.KeyExpr(f.ID))), rows.Map(r.Name, expr.Value(orm.TextExpr(f.Name))),
-		rows.Map(r.Nickname, expr.Value(orm.NullableTextExpr(f.Nickname))), rows.Map(r.State, expr.Value(orm.EnumExpr(f.State))),
-		rows.Map(r.Balance, expr.Value(orm.NumberExpr(f.Balance))))
+		rows.Map(r.ID, expr.Value(f.ID)), rows.Map(r.Name, expr.Value(f.Name)),
+		rows.Map(r.Nickname, expr.Value(f.Nickname)), rows.Map(r.State, expr.Value(f.State)),
+		rows.Map(r.Balance, expr.Value(f.Balance)))
 }
 ```
 
@@ -1054,7 +1073,7 @@ After:
 func aggregate(ctx context.Context, db database.Executor) error {
 	count := expr.Count[models.Order]()
 	q := rows.GroupByScalar(rows.SelectScalar(rows.From(models.Orders.Query()), expr.AsSelected(count)),
-		expr.Group(expr.Value(orm.ColumnExpr(models.Orders.BuyerID))))
+		expr.Group(expr.Value(models.Orders.BuyerID)))
 	_, err := rows.ReadScalar(rows.HavingScalar(q, expr.GtValue(count, 1))).All(ctx, db)
 	return err
 }
@@ -1080,8 +1099,8 @@ After:
 func window(ctx context.Context, db database.Executor) error {
 	a := rows.As[orderSide](models.Orders.Query(), "o")
 	s := rows.Scope(a)
-	window := expr.WindowFor(s).PartitionBy(expr.Group(expr.At(s, orm.ColumnExpr(models.Orders.BuyerID)))).
-		OrderBy(expr.Desc(expr.At(s, orm.NumberExpr(models.Orders.TotalCents))))
+	window := expr.WindowFor(s).PartitionBy(expr.Group(expr.At(s, models.Orders.BuyerID))).
+		OrderBy(expr.Desc(expr.At(s, models.Orders.TotalCents)))
 	_, err := rows.ReadScalar(rows.SelectScalar(a, expr.RowNumber(window))).All(ctx, db)
 	return err
 }
@@ -1104,7 +1123,7 @@ After:
 <!-- orm-example: cte-after -->
 ```go
 func cte(ctx context.Context, db database.Executor) error {
-	cte := rows.CTE("eligible", rows.ModelRecord(models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100))))
+	cte := rows.CTE("eligible", rows.ModelRecord(models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100))))
 	a := rows.AsRecord[orderSide](cte, "o")
 	_, err := rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a))).All(ctx, db)
 	return err
@@ -1144,7 +1163,7 @@ After:
 <!-- orm-example: sets-after -->
 ```go
 func sets(ctx context.Context, db database.Executor) error {
-	a := models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100))
+	a := models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100))
 	_, err := rows.ReadSet(rows.Union(rows.ModelRecord(a), rows.ModelRecord(models.Orders.Query()))).All(ctx, db)
 	if err != nil {
 		return err
@@ -1180,7 +1199,7 @@ After:
 var Theme = expr.JSONFieldOf(func(p *jsonpaths.Preferences) *value.Optional[string] { return &p.Theme })
 
 func jsonTheme() expr.NullableTextRowExpression[jsonpaths.Document, string] {
-	root := expr.JSONRoot(expr.Value(orm.JSONExpr(jsonpaths.Documents.Settings)))
+	root := expr.JSONRoot(expr.Value(jsonpaths.Documents.Settings))
 	theme := expr.JSONOptional(expr.JSONProperty(root, Theme))
 	return expr.JSONTextScalar(theme, codec.String[string]())
 }
@@ -1223,18 +1242,18 @@ func tableSource[A any](spec datatable.Spec[reports.Member, reports.MemberRow, A
 		if err != nil {
 			return rows.Query[reports.Member, reports.MemberRow]{}, err
 		}
-		return report().Where(expr.Eq(expr.Value(orm.NumberExpr(reports.Members.TenantID)), id)), nil
+		return report().Where(expr.Eq(expr.Value(reports.Members.TenantID), id)), nil
 	}
-	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Asc(expr.Value(orm.KeyExpr(reports.Members.ID)))}
+	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Asc(expr.Value(reports.Members.ID))}
 	return spec
 }
 ```
 
 Pass an authorized, tenant-constrained native source and retain the existing Spec
 ID, DTO descriptor, columns, labels, filters and export capabilities. Column
-`SortBy` accepts `expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(Members.Name))))` or `expr.AsSelected` on a comparison adapter
-for enums (`expr.AsSelected(expr.CompareRow(expr.Value(orm.EnumExpr(Members.State))))`), while `Stable`
-takes the short `expr.Asc(expr.Value(orm.KeyExpr(MemberModels.ID)))` spelling. The complete
+`SortBy` accepts `expr.AsSelected(expr.Row(expr.Value(Members.Name)))` or `expr.AsSelected` on a comparison adapter
+for enums (`expr.AsSelected(expr.CompareRow(expr.Value(Members.State)))`), while `Stable`
+takes the short `expr.Asc(expr.Value(MemberModels.ID))` spelling. The complete
 [datatable fixture](../../tests/fixtures/consumer/reporting/members.go) uses
 `rows.Select`, `expr.AsSelected(expr.Row(row))`, `expr.TextRow`, nullable filters and typed related filters.
 Do not bypass actor resolution or reconciliation to adapt a
@@ -1249,16 +1268,16 @@ ORM declaration. `RowEquality` and `RowNullable` are interfaces, not constructor
 
 | Before | After |
 | --- | --- |
-| Generated field sorting | `datatable.SortBy(expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(f.Username)))))`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
-| `datatable.Where(text, f.Username)` | `datatable.Where(text, expr.TextFilter(expr.TextRow(orm.TextExpr(f.Username))))`. |
-| `datatable.NullableWhere(text, f.Email)` | `datatable.NullableWhere(text, expr.NullableTextFilter(expr.TextNullableRow(orm.NullableTextExpr(f.Email))))`. |
-| Equality-only or enum `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.CompareFilter(expr.Value(orm.EnumExpr(f.State))))` for an enum; use `orm.ColumnExpr` for a generic equality column. Computed row values use `expr.CompareFilter(row)` directly. Nullable row values use `NullableCompareFilter` and `NullableWhere` with a present-value codec. |
-| Ordered numeric `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.OrderFilter(expr.OrderRow(expr.Value(orm.NumberExpr(f.Amount)))))`; nullable numbers use `NullableNumberExpr`, `OrderNullableRow`, `NullableOrderFilter` and `NullableWhere`. Choose by the column's declared capabilities, not its underlying Go type. |
-| Generated stable order | `Stable: []expr.ProjectionOrder[M]{expr.Asc(expr.Value(orm.KeyExpr(f.ID)))}`. Use `f.Key()` when the declaration has no named ID carrier. |
+| Generated field sorting | `datatable.SortBy(expr.AsSelected(expr.Row(expr.Value(f.Username))))`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
+| `datatable.Where(text, f.Username)` | `datatable.Where(text, expr.TextFilter(expr.TextRow(f.Username)))`. |
+| `datatable.NullableWhere(text, f.Email)` | `datatable.NullableWhere(text, expr.NullableTextFilter(expr.TextNullableRow(f.Email)))`. |
+| Equality-only or enum `datatable.Where(codec, f.X)` | `datatable.Enum(wire.State, label, f.State, codec)` for direct columns, or `datatable.Where(codec, expr.CompareFilter(expr.CompareColumn(f.State)))` with `DefineColumn`. Computed row values use `expr.CompareFilter(row)` directly. Nullable columns use `datatable.NullableEnum` or `NullableCompareFilter` and `NullableWhere` with a present-value codec. |
+| Ordered numeric `datatable.Where(codec, f.X)` | `datatable.Number(wire.Amount, label, f.Amount, codec)` for direct columns, or `datatable.Where(codec, expr.OrderFilter(expr.OrderedColumn(f.Amount)))`; nullable numbers use `datatable.NullableNumber` or `expr.NullableOrderedColumn`, `NullableOrderFilter` and `NullableWhere`. Choose by the column's declared capabilities, not its underlying Go type. |
+| Generated stable order | `Stable: []expr.ProjectionOrder[M]{expr.Asc(expr.Value(f.ID))}`. Use `f.Key()` when the declaration has no named ID carrier. |
 | Generated projection and selection | `rows.Query[M,R]`, `rows.Select(rows.From(source), XRows, rows.Map(...))`. Use `MapSelected` for computed selected values. |
 | Generated joined-field sort | `expr.AsSelected(expr.Row(expr.At(joinedScope, field)))`. The Spec's first type parameter is the joined scope, not one model. |
 | Correlated `CorrelatedScalarRowQuery(...).Value()` sort | `expr.AsSelected(expr.Row(rows.CorrelatedScalarRowQuery(...)))`; use `CorrelatedScalarNullableRowQuery` when the inner value is already nullable. |
-| `datatable.Having` / `NullableHaving` | Supply typed adapters: `expr.OrderValueFilter(expr.Count[M]())` or `expr.NullableOrderValueFilter(expr.Sum(orm.NumberExpr(f.Amount)))`. |
+| `datatable.Having` / `NullableHaving` | Supply typed adapters: `expr.OrderValueFilter(expr.Count[M]())` or `expr.NullableOrderValueFilter(expr.Sum(f.Amount))`. |
 | `datatable.Related(child, exists)` | Keep `Related`; its callback now maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, for example with `expr.Has`. |
 
 Text adapters retain text operators. Equality adapters preserve enum restrictions.
@@ -1303,7 +1322,7 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 	a := rows.As[auditAdminSide](Admins.Query(), "a")
 	c := rows.As[auditCountrySide](countries.Countries.Query(), "c")
 	as, cs := rows.Scope(a), rows.Scope(c)
-	joined := rows.LeftJoin(a, c, rows.On(expr.At(as, orm.ColumnExpr(Admins.CountryCode)), expr.At(cs, orm.KeyExpr(countries.Countries.ISO2))))
+	joined := rows.LeftJoin(a, c, rows.On(expr.At(as, Admins.CountryCode), expr.At(cs, countries.Countries.ISO2)))
 	admin := rows.LeftScope(joined, as)
 	country := rows.NullableRightScope(joined, cs)
 	correlateName := func() rows.CorrelatedScalar[AuditScope, countries.Country, string] {
@@ -1311,22 +1330,22 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 		correlation := rows.Correlate(joined, rows.From(q))
 		outer := rows.OuterScope(correlation, admin)
 		inner := rows.InnerScope(correlation, rows.ModelScope(q))
-		return rows.SelectCorrelatedScalar(correlation, expr.AsSelected(expr.Row(expr.At(inner, orm.TextExpr(countries.Countries.Name))))).
-			Where(expr.Equal(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)), expr.At(outer, orm.ColumnExpr(Admins.CountryCode)))).
-			OrderBy(expr.Asc(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)))).Limit(1)
+		return rows.SelectCorrelatedScalar(correlation, expr.AsSelected(expr.Row(expr.At(inner, countries.Countries.Name)))).
+			Where(expr.Equal(expr.At(inner, countries.Countries.ISO2), expr.At(outer, Admins.CountryCode))).
+			OrderBy(expr.Asc(expr.At(inner, countries.Countries.ISO2))).Limit(1)
 	}
 	sortedCountry := expr.AsSelected(expr.Row(rows.CorrelatedScalarRowQuery(correlateName())))
 	statusFilter := datatable.NullableWhere(
 		foundryhttp.EnumQuery[countries.Status, *countries.Status](countries.EnabledStatus.EnumDescriptor()),
-		expr.NullableCompareFilter(expr.CompareNullableRow(expr.AtNullable(country, orm.EnumExpr(countries.Countries.Status)))))
+		expr.NullableCompareFilter(expr.CompareNullableRow(expr.AtNullable(country, countries.Countries.Status))))
 	latitudeFilter := datatable.NullableWhere(
 		foundryhttp.FloatQuery[float64](),
-		expr.NullableOrderFilter(expr.OrderNullableRow(expr.AtNullableValue(country, orm.NullableNumberExpr(countries.Countries.Latitude)))))
+		expr.NullableOrderFilter(expr.OrderNullableRow(expr.AtNullableValue(country, countries.Countries.Latitude))))
 	base := rows.Select(joined, AuditRows,
-		rows.Map(AuditRows.ID, expr.At(admin, orm.KeyExpr(Admins.Key()))),
+		rows.Map(AuditRows.ID, expr.At(admin, Admins.Key())),
 		rows.MapSelected(AuditRows.Country, sortedCountry),
-		rows.Map(AuditRows.Status, expr.AtNullable(country, orm.EnumExpr(countries.Countries.Status))),
-		rows.Map(AuditRows.Latitude, expr.AtNullableValue(country, orm.NullableNumberExpr(countries.Countries.Latitude))))
+		rows.Map(AuditRows.Status, expr.AtNullable(country, countries.Countries.Status)),
+		rows.Map(AuditRows.Latitude, expr.AtNullableValue(country, countries.Countries.Latitude)))
 	spec.Columns = []datatable.ColumnRegistration[AuditScope, AuditRow]{
 		datatable.DefineColumn[AuditScope](validation.DefineField("country", func(r AuditRow) value.Nullable[string] { return r.Country }), "audit.country",
 			datatable.SortBy(sortedCountry)),
@@ -1335,13 +1354,13 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 		datatable.DefineColumn[AuditScope](validation.DefineField("latitude", func(r AuditRow) value.Nullable[float64] { return r.Latitude }), "audit.latitude",
 			datatable.FilterBy(latitudeFilter)),
 	}
-	spec.Stable = []expr.ProjectionOrder[AuditScope]{expr.Asc(expr.At(admin, orm.KeyExpr(Admins.Key())))}
+	spec.Stable = []expr.ProjectionOrder[AuditScope]{expr.Asc(expr.At(admin, Admins.Key()))}
 	spec.Source = func(ctx context.Context, actor A) (rows.Query[AuditScope, AuditRow], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
 			return rows.Query[AuditScope, AuditRow]{}, err
 		}
-		return base.Where(expr.Eq(expr.At(admin, orm.NumberExpr(Admins.TenantID)), id)), nil
+		return base.Where(expr.Eq(expr.At(admin, Admins.TenantID), id)), nil
 	}
 	return spec
 }
@@ -1420,24 +1439,11 @@ for filters. Keep the application's other registrations, labels and export codec
 <!-- orm-example: pilot-columns -->
 ```go
 func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
-	text := foundryhttp.StringQuery[string]()
 	username := validation.DefineField("username", func(r AdminRow) string { return r.Username })
 	email := validation.DefineField("email", func(r AdminRow) value.Nullable[string] { return r.Email })
-	uExpr := expr.TextRow(orm.TextExpr(Admins.Username))
-	eExpr := expr.TextNullableRow(orm.NullableTextExpr(Admins.Email))
 	return []datatable.ColumnRegistration[Admin, AdminRow]{
-		datatable.DefineColumn[Admin](username, "admins.fields.username",
-			datatable.SortBy(expr.AsSelected(uExpr)),
-			datatable.FilterBy(datatable.Where(text, expr.TextFilter(uExpr))),
-			datatable.Searchable(uExpr),
-			datatable.ExportAs(expr.AsSelected(uExpr), datatable.ScalarCell(text)),
-		),
-		datatable.DefineColumn[Admin](email, "admins.fields.email",
-			datatable.SortBy(expr.AsSelected(eExpr)),
-			datatable.FilterBy(datatable.NullableWhere(text, expr.NullableTextFilter(eExpr))),
-			datatable.Searchable(eExpr),
-			datatable.ExportAs(expr.AsSelected(eExpr), datatable.NullableCell(text)),
-		),
+		datatable.Text(username, "admins.fields.username", Admins.Username),
+		datatable.NullableText(email, "admins.fields.email", Admins.Email),
 	}
 }
 ```
@@ -1451,20 +1457,20 @@ context. A UI filter must not replace that resolver.
 <!-- orm-example: pilot-source -->
 ```go
 func adminSource(tenantID int64, archived bool) rows.Query[Admin, AdminRow] {
-	source := Admins.Query().Where(orm.NumberEq(Admins.TenantID, tenantID))
+	source := Admins.Query().Where(orm.Eq(Admins.TenantID, tenantID))
 	if archived {
 		source = source.OnlyTrashed()
 	}
 	return rows.Select(rows.From(source), AdminRows,
-		rows.Map(AdminRows.ID, expr.Value(orm.KeyExpr(Admins.Key()))),
-		rows.Map(AdminRows.Username, expr.Value(orm.TextExpr(Admins.Username))),
-		rows.Map(AdminRows.Email, expr.Value(orm.NullableTextExpr(Admins.Email))))
+		rows.Map(AdminRows.ID, expr.Value(Admins.Key())),
+		rows.Map(AdminRows.Username, expr.Value(Admins.Username)),
+		rows.Map(AdminRows.Email, expr.Value(Admins.Email)))
 }
 
 func adminTable[A any](spec datatable.Spec[Admin, AdminRow, A], tenant func(context.Context, A) (int64, error), archived bool) datatable.Spec[Admin, AdminRow, A] {
 	// Retain the caller's Row descriptor, Authorize, ID, labels and export policy.
 	spec.Columns = adminColumns()
-	spec.Stable = []expr.ProjectionOrder[Admin]{expr.Asc(expr.Value(orm.KeyExpr(Admins.Key())))}
+	spec.Stable = []expr.ProjectionOrder[Admin]{expr.Asc(expr.Value(Admins.Key()))}
 	spec.Source = func(ctx context.Context, actor A) (rows.Query[Admin, AdminRow], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
@@ -1492,14 +1498,14 @@ The [aggregate example above](#aggregates-windows-and-ctes) shows selected mappi
 ```go
 func orderGroupFilters() (datatable.FilterSource[models.Order, int64], datatable.FilterSource[models.Order, value.Nullable[decimal.Decimal]]) {
 	count := expr.Count[models.Order]()
-	total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents))
+	total := expr.Sum(models.Orders.TotalCents)
 	return datatable.Having(foundryhttp.IntegerQuery[int64](), expr.OrderValueFilter(count)),
 		datatable.NullableHaving(foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal](), expr.NullableOrderValueFilter(total))
 }
 
 func relatedOrderFilter() datatable.FilterSource[models.User, int64] {
 	return datatable.Related(
-		datatable.Where(foundryhttp.IntegerQuery[int64](), expr.OrderFilter(expr.OrderRow(expr.Value(orm.NumberExpr(models.Orders.TotalCents))))),
+		datatable.Where(foundryhttp.IntegerQuery[int64](), expr.OrderFilter(expr.OrderRow(expr.Value(models.Orders.TotalCents)))),
 		func(p expr.Predicate[models.Order]) expr.Predicate[models.User] {
 			return expr.Has(models.UserRelations.Orders, p)
 		})
@@ -1507,7 +1513,7 @@ func relatedOrderFilter() datatable.FilterSource[models.User, int64] {
 
 func statusFilter() datatable.FilterSource[models.User, models.Status] {
 	return datatable.Where(foundryhttp.EnumQuery[models.Status, *models.Status](models.StatusActive.EnumDescriptor()),
-		expr.CompareFilter(expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status)))))
+		expr.CompareFilter(expr.CompareRow(expr.Value(models.Users.Status))))
 }
 ```
 
@@ -1558,22 +1564,22 @@ type officialNameFilter[S any] struct {
 }
 
 func (f officialNameFilter[S]) Eq(v string) expr.Predicate[S] {
-	return f.exists(orm.NullableTextEq(countries.Countries.OfficialName, v))
+	return f.exists(orm.Eq(countries.Countries.OfficialName, v))
 }
 func (f officialNameFilter[S]) Ne(v string) expr.Predicate[S] {
-	return f.exists(orm.NullableTextNe(countries.Countries.OfficialName, v))
+	return f.exists(orm.Ne(countries.Countries.OfficialName, v))
 }
 func (f officialNameFilter[S]) In(v ...string) expr.Predicate[S] {
-	return f.exists(orm.NullableTextIn(countries.Countries.OfficialName, v...))
+	return f.exists(orm.In(countries.Countries.OfficialName, v...))
 }
 func (f officialNameFilter[S]) IContains(v string) expr.Predicate[S] {
-	return f.exists(orm.NullableTextIContains(countries.Countries.OfficialName, v))
+	return f.exists(orm.IContains(countries.Countries.OfficialName, v))
 }
 func (f officialNameFilter[S]) IsNull() expr.Predicate[S] {
 	return expr.Not(f.IsNotNull())
 }
 func (f officialNameFilter[S]) IsNotNull() expr.Predicate[S] {
-	return f.exists(orm.NullableTextIsNotNull(countries.Countries.OfficialName))
+	return f.exists(orm.IsNotNull(countries.Countries.OfficialName))
 }
 ```
 
@@ -1590,43 +1596,43 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 	a := rows.As[adminSide](Admins.Query(), "a")
 	c := rows.As[countrySide](countries.Countries.Query(), "c")
 	as, cs := rows.Scope(a), rows.Scope(c)
-	joined := rows.InnerJoin(a, c, rows.On(expr.At(as, orm.ColumnExpr(Admins.CountryCode)), expr.At(cs, orm.KeyExpr(countries.Countries.ISO2))))
+	joined := rows.InnerJoin(a, c, rows.On(expr.At(as, Admins.CountryCode), expr.At(cs, countries.Countries.ISO2)))
 	admin, country := rows.LeftScope(joined, as), rows.RightScope(joined, cs)
 	correlate := func(ps ...orm.Predicate[countries.Country]) rows.CorrelatedScalar[DirectoryScope, countries.Country, value.Nullable[string]] {
 		q := countries.Countries.Query().Where(ps...)
 		correlation := rows.Correlate(joined, rows.From(q))
 		outer := rows.OuterScope(correlation, admin)
 		inner := rows.InnerScope(correlation, rows.ModelScope(q))
-		return rows.SelectCorrelatedScalar(correlation, expr.AsSelected(expr.Row(expr.At(inner, orm.NullableTextExpr(countries.Countries.OfficialName))))).
-			Where(expr.Equal(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)), expr.At(outer, orm.ColumnExpr(Admins.CountryCode)))).
-			OrderBy(expr.Asc(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)))).Limit(1)
+		return rows.SelectCorrelatedScalar(correlation, expr.AsSelected(expr.Row(expr.At(inner, countries.Countries.OfficialName)))).
+			Where(expr.Equal(expr.At(inner, countries.Countries.ISO2), expr.At(outer, Admins.CountryCode))).
+			OrderBy(expr.Asc(expr.At(inner, countries.Countries.ISO2))).Limit(1)
 	}
 	selected := expr.AsSelected(expr.Row(rows.CorrelatedScalarNullableRowQuery(correlate())))
 	filter := officialNameFilter[DirectoryScope]{exists: func(p orm.Predicate[countries.Country]) expr.Predicate[DirectoryScope] {
 		return correlate(p).Exists()
 	}}
 	base := rows.Select(joined, DirectoryRows,
-		rows.Map(DirectoryRows.ID, expr.At(admin, orm.KeyExpr(Admins.Key()))),
-		rows.Map(DirectoryRows.Country, expr.At(country, orm.TextExpr(countries.Countries.Name))),
+		rows.Map(DirectoryRows.ID, expr.At(admin, Admins.Key())),
+		rows.Map(DirectoryRows.Country, expr.At(country, countries.Countries.Name)),
 		rows.MapSelected(DirectoryRows.OfficialName, selected))
 	text := foundryhttp.StringQuery[string]()
 	spec.Columns = []datatable.ColumnRegistration[DirectoryScope, DirectoryRow]{
 		datatable.DefineColumn[DirectoryScope](validation.DefineField("country", func(r DirectoryRow) string { return r.Country }), "admins.country",
-			datatable.SortBy(expr.AsSelected(expr.Row(expr.At(country, orm.TextExpr(countries.Countries.Name))))),
-			datatable.FilterBy(datatable.Where(text, expr.TextFilter(expr.TextRowAt(country, orm.TextExpr(countries.Countries.Name))))),
+			datatable.SortBy(expr.AsSelected(expr.Row(expr.At(country, countries.Countries.Name)))),
+			datatable.FilterBy(datatable.Where(text, expr.TextFilter(expr.TextRowAt(country, countries.Countries.Name)))),
 		),
 		datatable.DefineColumn[DirectoryScope](validation.DefineField("officialName", func(r DirectoryRow) value.Nullable[string] { return r.OfficialName }), "admins.officialName",
 			datatable.SortBy(selected),
 			datatable.FilterBy(datatable.NullableWhere(text, filter)),
 		),
 	}
-	spec.Stable = []expr.ProjectionOrder[DirectoryScope]{expr.Asc(expr.At(admin, orm.KeyExpr(Admins.Key())))}
+	spec.Stable = []expr.ProjectionOrder[DirectoryScope]{expr.Asc(expr.At(admin, Admins.Key()))}
 	spec.Source = func(ctx context.Context, actor A) (rows.Query[DirectoryScope, DirectoryRow], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
 			return rows.Query[DirectoryScope, DirectoryRow]{}, err
 		}
-		return base.Where(expr.Eq(expr.At(admin, orm.NumberExpr(Admins.TenantID)), id)), nil
+		return base.Where(expr.Eq(expr.At(admin, Admins.TenantID), id)), nil
 	}
 	return spec
 }
@@ -1651,7 +1657,7 @@ remain unchanged. Import aliases such as `reference` do not change the mapping.
 | `reference.QueryFoundryCountries()` | `reference.Countries.Query()`. |
 | `reference.CountryFields()` | `reference.Countries`. |
 | `QueryFoundryCountries().Find(ctx, db, code)` | `orm.Find(ctx, db, Countries.Table, code)`. |
-| `CountryDraft{}.SetStatus(status).SetConversionRate(rate)` | Separate assignments `orm.EnumSet(Countries.Status, status)`, `orm.NullableColumnSet(Countries.ConversionRate, rate)`. |
+| `CountryDraft{}.SetStatus(status).SetConversionRate(rate)` | Separate assignments `orm.Set(Countries.Status, status)`, `orm.Set(Countries.ConversionRate, rate)`. |
 | `QueryFoundryCountries().Update(ctx, tx, code, draft)` | `orm.Update(ctx, tx, Countries.Query(), Countries.Key(), code, assignments...)`. |
 
 <!-- orm-example: pilot-countries -->
@@ -1662,18 +1668,18 @@ func countryRead(ctx context.Context, db *database.DB, code countries.Code) (val
 		return country, err
 	}
 	f := countries.Countries
-	_, err = orm.All(ctx, db.Primary(), f.Query().Where(orm.EnumEq(f.Status, countries.EnabledStatus)).
-		OrderBy(orm.TextAsc(f.Name), orm.KeyAsc(f.ISO2)).Limit(countries.MaxCountries))
+	_, err = orm.All(ctx, db.Primary(), f.Query().Where(orm.Eq(f.Status, countries.EnabledStatus)).
+		OrderBy(orm.Asc(f.Name), orm.Asc(f.ISO2)).Limit(countries.MaxCountries))
 	return country, err
 }
 
 func countryWrite(ctx context.Context, tx *database.Tx, code countries.Code, rate decimal.Decimal) error {
 	f := countries.Countries
-	_, err := orm.FirstLocked(ctx, tx, orm.Lock(f.Query().Where(orm.KeyEq(f.ISO2, code))))
+	_, err := orm.FirstLocked(ctx, tx, orm.Lock(f.Query().Where(orm.Eq(f.ISO2, code))))
 	if err != nil {
 		return err
 	}
-	_, err = orm.Update(ctx, tx, f.Table.Query(), f.Table.Key(), code, orm.EnumSet(f.Status, countries.EnabledStatus), orm.NullableColumnSet(f.ConversionRate, rate))
+	_, err = orm.Update(ctx, tx, f.Table.Query(), f.Table.Key(), code, orm.Set(f.Status, countries.EnabledStatus), orm.Set(f.ConversionRate, rate))
 	return err
 }
 ```
@@ -1697,8 +1703,9 @@ func UniqueUsername[M any](executor database.Executor, source query.ModelQuerySo
 // caller: UniqueUsername(tx, models.QueryAdmins().WithTrashed(), models.AdminFields().Username)
 ```
 
-The native source is `orm.Query[M]`; the field parameter is
-`orm.KeyColumn[M,string]`. `KeyColumn` admits a declared lookup-capable field such
+The native source is `orm.Query[M]`; the field parameter is a queryable
+`orm.ColumnHandle[M, string, I, P, K, R]` (constrained by `K orm.ColumnKind, R orm.ColumnRole`).
+It admits any declared non-encrypted lookup-capable field such
 as `Admins.Username`, not just the table's primary key. The result of `Lookup`
 continues to implement `validation.Lookup[string]`, so keep an application's
 canonicalizing lookup wrapper around it when one existed before. This helper
@@ -1714,12 +1721,12 @@ func (c canonical) Exists(ctx context.Context, v string) (bool, error) {
 	return c.Lookup.Exists(ctx, strings.ToLower(v))
 }
 
-func UniqueUsername[M any](executor database.Executor, source orm.Query[M], column orm.KeyColumn[M, string], username validation.Rule[string]) validation.Rule[string] {
+func UniqueUsername[M, I, P any, K orm.ColumnKind, R orm.ColumnRole](executor database.Executor, source orm.Query[M], column orm.ColumnHandle[M, string, I, P, K, R], username validation.Rule[string]) validation.Rule[string] {
 	return validation.Bail(username, validation.Unique(canonical{validationdb.Lookup(executor, source, column)}))
 }
 
 func adminUsernameRule(tx *database.Tx, username validation.Rule[string]) validation.Rule[string] {
-	return UniqueUsername(tx, Admins.Query().WithTrashed(), orm.TextExpr(Admins.Username), username)
+	return UniqueUsername(tx, Admins.Query().WithTrashed(), Admins.Username, username)
 }
 ```
 
@@ -1839,7 +1846,7 @@ After:
 ```go
 func seeder() seed.Definition {
 	return seed.Definition{ID: "app.users", Run: func(ctx context.Context, tx *database.Tx) error {
-		_, err := orm.Insert(ctx, tx, models.Users.Table, orm.TextSet(models.Users.Email, "ada@example.test"))
+		_, err := orm.Insert(ctx, tx, models.Users.Table, orm.Set(models.Users.Email, "ada@example.test"))
 		return err
 	}}
 }
@@ -1904,7 +1911,7 @@ For a locked lookup by key, use `Where` with a typed key predicate and `Require`
 <!-- orm-example: pilot-recipe-locked-find -->
 ```go
 func requireAdminForUpdate(ctx context.Context, tx *database.Tx, id int64) (Admin, error) {
-	return orm.RequireLocked(ctx, tx, orm.Lock(Admins.Query().Where(orm.KeyEq(Admins.Key(), id))))
+	return orm.RequireLocked(ctx, tx, orm.Lock(Admins.Query().Where(orm.Eq(Admins.Key(), id))))
 }
 ```
 
@@ -1956,17 +1963,15 @@ Construct an assignment slice and conditionally append optional values rather th
 ```go
 func insertAdmin(ctx context.Context, tx *database.Tx, tenantID int64, username string, email value.Optional[string]) (Admin, error) {
 	assignments := []orm.Assignment[Admin]{
-		orm.NumberSet(Admins.TenantID, tenantID),
-		orm.TextSet(Admins.Username, username),
+		orm.Set(Admins.TenantID, tenantID),
+		orm.Set(Admins.Username, username),
 	}
-	if v, ok := email.Get(); ok {
-		assignments = append(assignments, orm.NullableTextSet(Admins.Email, v))
-	}
+	assignments = orm.SetIfPresent(assignments, Admins.Email, email)
 	return orm.Insert(ctx, tx, Admins.Table, assignments...)
 }
 ```
 
-Omitted fields are not passed to `Insert`, allowing database default values to apply. To explicitly write a SQL NULL on a nullable column, use the nullable family function, such as `orm.NullableTextSetNull(column)`.
+Omitted fields are not passed to `Insert`, allowing database default values to apply. To explicitly write a SQL NULL on a nullable column, use the nullable family function, such as `orm.SetNull(column)`.
 
 ## Use native shared contracts and limits
 
@@ -1993,7 +1998,7 @@ or maintain a copied constant to bound its inputs.
 
 Numeric Increment/Decrement use positive finite magnitudes; AtMost bounds increments
 and AtLeast bounds decrements. Keys, managed timestamps and input columns cannot gain
-adjustment capability through adapters. Use PruneBatch or ForcePruneBatch with explicit
+adjustment capability. Use PruneBatch or ForcePruneBatch with explicit
 bounds and mass/per-model selection; the prune registry exposes ORMModel/ORMSoftModel.
 Explain is read-only planning; ExplainAnalyze executes the statement. Typed explain
 results and errors are redacted by default; explicit JSON/root access exposes plans.
@@ -2020,14 +2025,14 @@ be demoted with `Row`; keep column-based `expr.Param` for comparison-typed input
 <!-- orm-example: pilot2-row-constant -->
 ```go
 func enabledAdmins() rows.Scalar[Admin, bool] {
-	enabled := expr.When(expr.Eq(expr.Value(orm.TextExpr(Admins.Username)), "active"),
+	enabled := expr.When(expr.Eq(expr.Value(Admins.Username), "active"),
 		expr.Constant[Admin](codec.Bool[bool](), true)).Else(expr.Constant[Admin](codec.Bool[bool](), false))
 	return rows.SelectScalar(rows.From(Admins.Query()), expr.AsSelected(enabled))
 }
 func scopedUsername() {
 	type adminScope struct{}
 	source := rows.As[adminScope](Admins.Query(), "admin")
-	parameter := expr.ParamOf(expr.Row(expr.At(rows.Scope(source), orm.TextExpr(Admins.Username))), "Ada")
+	parameter := expr.ParamOf(expr.Row(expr.At(rows.Scope(source), Admins.Username)), "Ada")
 	_ = parameter
 }
 ```
@@ -2226,7 +2231,7 @@ uses the same expression to infer the option types:
 func usernameColumn() datatable.ColumnRegistration[Admin, AdminRow] {
 	text := foundryhttp.StringQuery[string]()
 	field := validation.DefineField("username", func(row AdminRow) string { return row.Username })
-	username := expr.TextRow(orm.TextExpr(Admins.Username))
+	username := expr.TextRow(Admins.Username)
 	return datatable.DefineColumn[Admin](field, "admins.fields.username",
 		datatable.SortBy(expr.AsSelected(username)),
 		datatable.FilterBy(datatable.Where(text, expr.TextFilter(username))),

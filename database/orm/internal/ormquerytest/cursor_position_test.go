@@ -27,7 +27,7 @@ func TestEditedCursorPositionPreservesPredicates(t *testing.T) {
 		orm.SoftDeleteOf(b, &m.DeletedAt)
 		return orm.TableOf(b, &m.ID)
 	})
-	q := r.Query().Where(orm.NumberEq(tenant, 7)).OrderBy(orm.KeyAsc(r.Key()))
+	q := r.Query().Where(orm.Eq(tenant, 7)).OrderBy(orm.Asc(r.Key()))
 	initial := testDB(t, testConnector{columns: []string{"id", "tenant", "deleted_at"}, values: [][]driver.Value{{int64(1), int64(7), nil}, {int64(40), int64(7), nil}}})
 	first, err := orm.CursorPaginate(t.Context(), initial, q, orm.CursorRequest[positionRecord]{Size: 1})
 	if err != nil {

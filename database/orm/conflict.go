@@ -4,25 +4,21 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
-	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// ConflictColumn is a model-owned unique-index column. Example: orm.ConflictKey(orm.TextExpr(Users.Email)).
+// ConflictColumn is a model-owned unique-index column. Example: orm.ConflictKey(Users.Email).
 type ConflictColumn[M any] struct {
 	_      [0]*M
 	column *columnCore
 }
 
 // ConflictKey selects a declared column for unique-index inference.
-// Example: orm.OnConflict(orm.ConflictKey(orm.TextExpr(Users.Email))).DoNothing().
-func ConflictKey[M, V any](field interface{ ormColumn(*M) columnData[V] }) ConflictColumn[M] {
-	if nilInterface(field) {
-		return ConflictColumn[M]{}
-	}
-	return ConflictColumn[M]{column: field.ormColumn(nil).core}
+// Example: orm.OnConflict(orm.ConflictKey(Users.Email)).DoNothing().
+func ConflictKey[M, V, I, P any, K ColumnKind, R ColumnRole](field ColumnHandle[M, V, I, P, K, R]) ConflictColumn[M] {
+	return ConflictColumn[M]{column: columnCoreOf(field.stored)}
 }
 
-// ConflictUpdate is a model-owned assignment in DO UPDATE. Example: orm.ConflictIncoming(orm.TextExpr(Users.Email)).
+// ConflictUpdate is a model-owned assignment in DO UPDATE. Example: orm.ConflictIncoming(Users.Email).
 type ConflictUpdate[M any] struct {
 	_     [0]*M
 	state conflictUpdate
@@ -34,7 +30,7 @@ type conflictUpdate struct {
 	err    error
 }
 
-// String redacts literal inputs. Example: fmt.Sprint(orm.ConflictSet(orm.TextExpr(Users.Email),"ada@example.test")).
+// String redacts literal inputs. Example: fmt.Sprint(orm.ConflictSet(Users.Email,"ada@example.test")).
 func (ConflictUpdate[M]) String() string { return "orm conflict update" }
 
 // GoString redacts literal inputs. Example: fmt.Sprintf("%#v",update).
@@ -42,37 +38,30 @@ func (ConflictUpdate[M]) GoString() string { return "orm conflict update" }
 
 // ConflictSet captures the column's write input, including distinct mutator inputs.
 // Encrypted fields have no conflict assignment capability.
-// Example: orm.ConflictSet(orm.InputTextExpr(Members.Email),EmailInput{Address:"ada@example.test"}).
-func ConflictSet[M, I, V any, F conflictAssignment[M, I, V]](field F, input I) ConflictUpdate[M] {
-	if nilInterface(field) {
-		return ConflictUpdate[M]{state: conflictUpdate{err: invalid("missing conflict field")}}
-	}
-	a := field.ormSet(input)
+// Example: orm.ConflictSet(Members.Email, EmailInput{Address:"ada@example.test"}).
+func ConflictSet[M, I, V, P any, K ColumnKind, R ConflictSetRole](field ColumnHandle[M, V, I, P, K, R], input I) ConflictUpdate[M] {
+	a := Set(field, input)
 	return ConflictUpdate[M]{state: conflictUpdate{owner: a.owner, err: a.err, update: querycore.ConflictUpdate{Field: a.core.Field, Literal: &a.core.AssignmentValue}}}
 }
 
 // ConflictNull clears a nullable field without invoking its mutator.
-// Example: orm.ConflictNull(orm.NullableTextExpr(Users.Nickname)).
-func ConflictNull[M, V any](field ExpressionColumn[M, V, value.Nullable[V]]) ConflictUpdate[M] {
-	if nilInterface(field) {
-		return ConflictUpdate[M]{state: conflictUpdate{err: invalid("missing conflict field")}}
-	}
-	c, _ := field.expressionColumn(nil)
-	owner, ok := c.Owner.(*tableCore)
-	if !ok || owner == nil || c.Err != nil {
+// Example: orm.ConflictNull(Users.Nickname).
+func ConflictNull[M, V, I, P any, K NullableComparableKind, R ConflictSetRole](field ColumnHandle[M, V, I, P, K, R]) ConflictUpdate[M] {
+	c := columnCoreOf(field.stored)
+	if c == nil || c.owner == nil || c.nullableProjection == nil {
 		return ConflictUpdate[M]{state: conflictUpdate{err: invalid("uninitialized conflict field")}}
 	}
-	return ConflictUpdate[M]{state: conflictUpdate{owner: owner, update: querycore.ConflictUpdate{Field: c.Field, Null: true}}}
+	if err := declarationCoreError(c.owner); err != nil {
+		return ConflictUpdate[M]{state: conflictUpdate{err: invalid("uninitialized conflict field")}}
+	}
+	return ConflictUpdate[M]{state: conflictUpdate{owner: c.owner, update: querycore.ConflictUpdate{Field: querycore.FieldRef{Table: c.owner.model.Table, Column: c.metadata.Name}, Null: true}}}
 }
 
 // ConflictIncoming copies the destination's own EXCLUDED value, already transformed.
 // Omitted insert values copy the database default or NULL. Encrypted fields are excluded.
-// Example: orm.ConflictIncoming(orm.TextExpr(Users.Email)).
-func ConflictIncoming[M, V any](field interface{ ormColumn(*M) columnData[V] }) ConflictUpdate[M] {
-	if nilInterface(field) {
-		return ConflictUpdate[M]{state: conflictUpdate{err: invalid("missing conflict field")}}
-	}
-	c := field.ormColumn(nil).core
+// Example: orm.ConflictIncoming(Users.Email).
+func ConflictIncoming[M, V, I, P any, K ColumnKind, R ColumnRole](field ColumnHandle[M, V, I, P, K, R]) ConflictUpdate[M] {
+	c := columnCoreOf(field.stored)
 	if c == nil || c.owner == nil {
 		return ConflictUpdate[M]{state: conflictUpdate{err: invalid("uninitialized conflict field")}}
 	}
@@ -80,7 +69,7 @@ func ConflictIncoming[M, V any](field interface{ ormColumn(*M) columnData[V] }) 
 }
 
 // Conflict is an immutable model-owned upsert policy; its zero value is invalid.
-// Example: orm.OnConflict(orm.ConflictKey(orm.TextExpr(Users.Email))).DoUpdate(orm.ConflictIncoming(orm.TextExpr(Users.Name))).
+// Example: orm.OnConflict(orm.ConflictKey(Users.Email)).DoUpdate(orm.ConflictIncoming(Users.Name)).
 type Conflict[M any] struct {
 	_     [0]*M
 	state conflictPolicy
@@ -99,7 +88,7 @@ func (Conflict[M]) String() string { return "orm conflict policy" }
 func (Conflict[M]) GoString() string { return "orm conflict policy" }
 
 // OnConflict infers a unique index from typed columns. Empty targets support DO NOTHING.
-// Example: orm.OnConflict(orm.ConflictKey(orm.TextExpr(Users.Email))).DoNothing().
+// Example: orm.OnConflict(orm.ConflictKey(Users.Email)).DoNothing().
 func OnConflict[M any](fields ...ConflictColumn[M]) Conflict[M] {
 	p := conflictPolicy{}
 	for _, field := range fields {
@@ -129,7 +118,7 @@ func (p Conflict[M]) DoNothing() Conflict[M] {
 }
 
 // DoUpdate replaces the policy's update assignments. Primary-key updates are rejected.
-// Example: policy.DoUpdate(orm.ConflictIncoming(orm.TextExpr(Users.Name))).
+// Example: policy.DoUpdate(orm.ConflictIncoming(Users.Name)).
 func (p Conflict[M]) DoUpdate(updates ...ConflictUpdate[M]) Conflict[M] {
 	p.state.core.Action = querycore.ConflictDoUpdate
 	p.state.core.Updates = make([]querycore.ConflictUpdate, len(updates))
@@ -144,7 +133,7 @@ func (p Conflict[M]) DoUpdate(updates ...ConflictUpdate[M]) Conflict[M] {
 }
 
 // Where adds stored-row conditions; false conditions skip RETURNING but keep row locks.
-// Example: policy.Where(orm.ColumnEq(Users.Active, true)).
+// Example: policy.Where(orm.Eq(Users.Active, true)).
 func (p Conflict[M]) Where(predicates ...Predicate[M]) Conflict[M] {
 	p.state.core.Condition = slices.Clone(p.state.core.Condition)
 	for _, predicate := range predicates {
@@ -168,7 +157,7 @@ func (p conflictPolicy) ownedBy(owner *tableCore) conflictPolicy {
 }
 
 // TargetWhere declares a partial unique index predicate, separate from update conditions.
-// Fixed target values are rendered as schema constants. Example: policy.TargetWhere(orm.ColumnEq(Users.Active, true)).
+// Fixed target values are rendered as schema constants. Example: policy.TargetWhere(orm.Eq(Users.Active, true)).
 func (p Conflict[M]) TargetWhere(predicates ...Predicate[M]) Conflict[M] {
 	p.state.core.TargetCondition = slices.Clone(p.state.core.TargetCondition)
 	for _, predicate := range predicates {

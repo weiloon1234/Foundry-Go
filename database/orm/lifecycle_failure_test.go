@@ -67,7 +67,7 @@ func TestLifecycleHookErrorsRedactModelValues(t *testing.T) {
 					declarations = append(declarations, declaration)
 				}
 				db := hookDB(t, testConnector{columns: hookColumns, values: hookValues(modelValue, nil, nil)}, declarations...)
-				got, err := orm.Insert(t.Context(), db, q.Table, orm.KeySet(q.Key(), 1), orm.InputTextSet(q.Name, modelValue), orm.ColumnSet(q.Body, []byte{1, 2}))
+				got, err := orm.Insert(t.Context(), db, q.Table, orm.Set(q.Key(), 1), orm.Set(q.Name, modelValue), orm.Set(q.Body, []byte{1, 2}))
 				requireSafeLifecycleError(t, err, cause)
 				if got.ID != 0 {
 					t.Fatal("failed hook published a model")
@@ -114,7 +114,7 @@ func TestORMComparisonErrorsRedactOriginalAndResultingValues(t *testing.T) {
 				t.Fatal(err)
 			}
 			reject = true
-			_, err = orm.ChangeOf(changes, orm.TextExpr(q.Name))
+			_, err = orm.ChangeOf(changes, q.Name)
 			requireSafeLifecycleError(t, err, cause)
 		})
 	}
@@ -143,7 +143,7 @@ func TestWriteChangeCaptureErrorsAreRedactedAndAbortBeforeAfterHooks(t *testing.
 		return orm.Hooks[row]{Created: func(context.Context, *database.Tx, orm.Changes[row]) error { afterCalled = true; return nil }}
 	}))
 	db := hookDB(t, testConnector{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), modelValue}}})
-	got, err := orm.Insert(t.Context(), db, q.Table, orm.KeySet(q.Key(), 1), orm.TextSet(q.Name, "ordinary"))
+	got, err := orm.Insert(t.Context(), db, q.Table, orm.Set(q.Key(), 1), orm.Set(q.Name, "ordinary"))
 	requireSafeLifecycleError(t, err, cause)
 	if got.ID != 0 || afterCalled {
 		t.Fatal("failed change capture published state or ran after hooks")
@@ -168,13 +168,13 @@ func TestHookModifiedPrimaryKeyRejectedBeforeMutatorsAndMutationSQL(t *testing.T
 		return table{orm.TableOf(b, &m.ID), orm.InputTextOf(b, &m.Name, func(v string) (string, error) { mutatorCalls++; return v, nil })}
 	}, orm.WithHooks(func() orm.Hooks[row] {
 		return orm.Hooks[row]{Updating: func(ctx context.Context, tx *database.Tx, before row, w *orm.Write[row]) error {
-			return orm.WriteSet(w, orm.KeySet(q.Key(), 2), orm.InputTextSet(q.Name, "hook value"))
+			return orm.WriteSet(w, orm.Set(q.Key(), 2), orm.Set(q.Name, "hook value"))
 		}}
 	}))
 	now := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
 	var statements []string
 	db := hookDB(t, testConnector{statements: &statements, columns: []string{"id", "name", "created_at", "updated_at"}, values: [][]driver.Value{{int64(1), "original", now, now}}})
-	got, err := orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Name, "input"))
+	got, err := orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 1, orm.Set(q.Name, "input"))
 	if !errors.Is(err, fault.Invalid) || got.ID != 0 {
 		t.Fatal("invalid effective draft accepted", err)
 	}

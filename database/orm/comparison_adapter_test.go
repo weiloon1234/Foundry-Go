@@ -43,10 +43,10 @@ func TestCompileInterfaceComparisonNilValuesReachCodec(t *testing.T) {
 		predicate         Predicate[interfaceComparisonRow]
 		inputs, arguments []any
 	}{
-		{"equality", ColumnEq(table.Value, nil), []any{nil}, []any{"encoded nil"}},
-		{"membership", ColumnIn(table.Value, "first", nil, "last"), []any{"first", nil, "last"}, []any{`{"first","encoded nil","last"}`}},
-		{"inequality", ColumnNe(table.Value, nil), []any{nil}, []any{"encoded nil"}},
-		{"not membership", ColumnNotIn(table.Value, nil, "last"), []any{nil, "last"}, []any{`{"encoded nil","last"}`}},
+		{"equality", Eq(table.Value, nil), []any{nil}, []any{"encoded nil"}},
+		{"membership", In(table.Value, "first", nil, "last"), []any{"first", nil, "last"}, []any{`{"first","encoded nil","last"}`}},
+		{"inequality", Ne(table.Value, nil), []any{nil}, []any{"encoded nil"}},
+		{"not membership", NotIn(table.Value, nil, "last"), []any{nil, "last"}, []any{`{"encoded nil","last"}`}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			inputs = nil
@@ -60,7 +60,7 @@ func TestCompileInterfaceComparisonNilValuesReachCodec(t *testing.T) {
 
 func TestCompileInterfaceNullComparisonKeepsValidation(t *testing.T) {
 	table := interfaceComparisons(func(v any) (driver.Value, error) { return v, nil })
-	for _, predicate := range []Predicate[interfaceComparisonRow]{ColumnEq(table.Value, nil), ColumnIn(table.Value, "first", nil, "last")} {
+	for _, predicate := range []Predicate[interfaceComparisonRow]{Eq(table.Value, nil), In(table.Value, "first", nil, "last")} {
 		statement, err := Compile(table.Query().Where(predicate))
 		if !errors.Is(err, fault.Invalid) || errors.Is(err, fault.Panicked) || err.Error() != "invalid: NULL comparison requires IsNull or IsNotNull" || statement.SQL() != "" || len(statement.Arguments()) != 0 {
 			t.Fatal("codec-owned NULL rejection changed classification, diagnostic or partial bindings")
@@ -73,9 +73,9 @@ func TestCompileCachedComparisonTypeMismatchKeepsContainedDiagnostic(t *testing.
 	for _, membership := range []bool{false, true} {
 		for _, wrong := range []any{nil, int64(7)} {
 			t.Run(fmt.Sprintf("membership=%v/nil=%v", membership, wrong == nil), func(t *testing.T) {
-				predicate := TextEq(table.Name, "private literal")
+				predicate := Eq(table.Name, "private literal")
 				if membership {
-					predicate = TextIn(table.Name, "first", "private literal")
+					predicate = In(table.Name, "first", "private literal")
 				}
 				// Simulate a stale/mismatched retained value, then exercise the
 				// public compiler rather than invoking the adapter directly.

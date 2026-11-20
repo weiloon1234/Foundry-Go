@@ -63,7 +63,7 @@ func TestPostgresObserverScopeAllowsTypedCallbackIOOnOneConnection(t *testing.T)
 							return errors.New("stored hydration failed or closing rows canceled observer work")
 						}
 						q := observerqueries.Effects
-						created, err := orm.Insert(ctx, tx, q.Table, orm.TextSet(observerqueries.Effects.Label, name))
+						created, err := orm.Insert(ctx, tx, q.Table, orm.Set(observerqueries.Effects.Label, name))
 						if err != nil {
 							return err
 						}

@@ -63,7 +63,7 @@ func scopeOptions() []orm.Option {
 // guide:stored-comparison
 func compareStored(before, after hooks.Member) (orm.Changes[hooks.Member], error) {
 	return orm.Compare(hooks.Members.Table, value.Set(before), value.Set(after),
-		orm.InputTextSet(hooks.Members.Name, after.Name))
+		orm.Set(hooks.Members.Name, after.Name))
 }
 
 // guide:end
@@ -71,17 +71,17 @@ func compareStored(before, after hooks.Member) (orm.Changes[hooks.Member], error
 // guide:each-writes
 func updateMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
-	return orm.UpdateEach(ctx, tx, f.Query().Where(orm.InputTextEq(f.Name, "guest")), 100,
+	return orm.UpdateEach(ctx, tx, f.Query().Where(orm.Eq(f.Name, "guest")), 100,
 		func(_ context.Context, _ *database.Tx, current hooks.Member) ([]orm.Assignment[hooks.Member], error) {
-			return []orm.Assignment[hooks.Member]{orm.InputTextSet(f.Name, "member-"+current.Name)}, nil
+			return []orm.Assignment[hooks.Member]{orm.Set(f.Name, "member-"+current.Name)}, nil
 		})
 }
 
 func createMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
 	return orm.CreateEach(ctx, tx, f.Query(), [][]orm.Assignment[hooks.Member]{
-		{orm.KeySet(f.Key(), 1), orm.InputTextSet(f.Name, "first"), orm.ColumnSet(f.Body, []byte{})},
-		{orm.KeySet(f.Key(), 2), orm.InputTextSet(f.Name, "second"), orm.ColumnSet(f.Body, []byte{})},
+		{orm.Set(f.Key(), 1), orm.Set(f.Name, "first"), orm.Set(f.Body, []byte{})},
+		{orm.Set(f.Key(), 2), orm.Set(f.Name, "second"), orm.Set(f.Body, []byte{})},
 	})
 }
 
@@ -90,7 +90,7 @@ func createMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error)
 // guide:each-soft-writes
 func restoreMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
-	return orm.RestoreEach(ctx, tx, f.Query().Where(orm.InputTextEq(f.Name, "guest")), f.Soft, 100)
+	return orm.RestoreEach(ctx, tx, f.Query().Where(orm.Eq(f.Name, "guest")), f.Soft, 100)
 }
 
 func removeMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
@@ -103,7 +103,7 @@ func removeMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error)
 // guide:adjustments
 func addCredit(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := models.Orders
-	return orm.UpdateAll(ctx, tx, f.Query().Where(orm.NumberLt(f.TotalCents, 1000)), orm.NumberIncrement(f.TotalCents, 100, orm.AtMost[int64](1000)))
+	return orm.UpdateAll(ctx, tx, f.Query().Where(orm.Lt(f.TotalCents, 1000)), orm.Increment(f.TotalCents, 100, orm.AtMost[int64](1000)))
 }
 
 // guide:end
@@ -111,15 +111,15 @@ func addCredit(ctx context.Context, tx *database.Tx) (int64, error) {
 // guide:lookup-branches
 func createOrFindUser(ctx context.Context, tx *database.Tx) (models.User, error) {
 	f := models.Users
-	return orm.CreateOrFirst(ctx, tx, f.Query().Where(orm.TextEq(f.Email, "ada@example.test")), orm.NumberSet(f.Age, 30), orm.EnumSet(f.Status, models.StatusActive), orm.EnumSet(f.Level, models.LevelBasic))
+	return orm.CreateOrFirst(ctx, tx, f.Query().Where(orm.Eq(f.Email, "ada@example.test")), orm.Set(f.Age, 30), orm.Set(f.Status, models.StatusActive), orm.Set(f.Level, models.LevelBasic))
 }
 
 func updateOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, error) {
 	f := models.Users
-	return orm.UpdateOrCreate(ctx, tx, f.Query().Where(orm.TextEq(f.Email, "ada@example.test")),
-		[]orm.Assignment[models.User]{orm.NumberSet(f.Age, 30), orm.EnumSet(f.Status, models.StatusActive), orm.EnumSet(f.Level, models.LevelBasic)},
+	return orm.UpdateOrCreate(ctx, tx, f.Query().Where(orm.Eq(f.Email, "ada@example.test")),
+		[]orm.Assignment[models.User]{orm.Set(f.Age, 30), orm.Set(f.Status, models.StatusActive), orm.Set(f.Level, models.LevelBasic)},
 		func(context.Context, *database.Tx, models.User) ([]orm.Assignment[models.User], error) {
-			return []orm.Assignment[models.User]{orm.NumberSet(f.Age, 31)}, nil
+			return []orm.Assignment[models.User]{orm.Set(f.Age, 31)}, nil
 		})
 }
 
@@ -156,10 +156,10 @@ var Archives = orm.Define("member_archives", func(b orm.Builder[ArchivedMember],
 func copyMembers(ctx context.Context, tx *database.Tx) (int64, error) {
 	source, destination := hooks.Members, Archives
 	return rows.InsertFrom(rows.From(source.Query()), destination.Query(),
-		rows.MapInsert(orm.KeyExpr(destination.ID), expr.Value(orm.KeyExpr(source.Key()))),
-		rows.MapInsert(orm.ColumnExpr(destination.Body), expr.Value(orm.ColumnExpr(source.Body))),
-		rows.MapInsert(orm.TimeExpr(destination.CreatedAt), expr.Value(orm.TimeExpr(source.CreatedAt)))).
-		Values(orm.InputTextSet(destination.Name, "copy")).Exec(ctx, tx)
+		rows.MapInsert(destination.ID, expr.Value(source.Key())),
+		rows.MapInsert(destination.Body, expr.Value(source.Body)),
+		rows.MapInsert(destination.CreatedAt, expr.Value(source.CreatedAt))).
+		Values(orm.Set(destination.Name, "copy")).Exec(ctx, tx)
 }
 
 // guide:end
@@ -169,9 +169,9 @@ func updateMemberBodies(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := hooks.Members
 	destination := f.Query()
 	return rows.UpdateFrom(destination, rows.From(f.Query())).
-		Match(rows.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).
-		Select(rows.MapUpdate(orm.ColumnExpr(f.Body), expr.Value(orm.ColumnExpr(f.Body)))).
-		Values(orm.InputTextSet(f.Name, "updated")).Exec(ctx, tx)
+		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).
+		Select(rows.MapUpdate(f.Body, expr.Value(f.Body))).
+		Values(orm.Set(f.Name, "updated")).Exec(ctx, tx)
 }
 
 // guide:end
@@ -181,7 +181,7 @@ func deleteMatchingMembers(ctx context.Context, tx *database.Tx) (int64, error) 
 	f := hooks.Members
 	destination := f.Query().OnlyTrashed()
 	return rows.ForceDeleteUsing(destination, f.Soft, rows.From(f.Query().OnlyTrashed())).
-		Match(rows.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).Exec(ctx, tx)
+		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).Exec(ctx, tx)
 }
 
 // guide:end
@@ -190,7 +190,7 @@ func deleteMatchingMembers(ctx context.Context, tx *database.Tx) (int64, error) 
 func pruneMembers(ctx context.Context, db database.Transactor, cutoff time.Time) (prune.Result, error) {
 	f := hooks.Members
 	registry, err := prune.New(prune.ORMSoftModel("app.old_members",
-		f.Query().OnlyTrashed().Where(orm.TimeLt(f.UpdatedAt, cutoff)), f.Soft, prune.Lifecycle))
+		f.Query().OnlyTrashed().Where(orm.Lt(f.UpdatedAt, cutoff)), f.Soft, prune.Lifecycle))
 	if err != nil {
 		return prune.Result{}, err
 	}
@@ -201,7 +201,7 @@ func pruneMembers(ctx context.Context, db database.Transactor, cutoff time.Time)
 
 // guide:explain
 func inspectOrders(ctx context.Context, db database.Executor) (orm.Plan, error) {
-	return orm.Explain(ctx, db, models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100)))
+	return orm.Explain(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))
 }
 
 func analyzeOrders(ctx context.Context, tx *database.Tx) (orm.Plan, error) {
@@ -214,7 +214,7 @@ func analyzeOrders(ctx context.Context, tx *database.Tx) (orm.Plan, error) {
 // doc-example:begin audit-registration
 func registerAudit(r *foundation.Registrar, pool foundation.Key[*database.DB], history foundation.Key[*audit.Recorder]) error {
 	f := hooks.Members
-	policy := orm.AuditPolicyOf(f.Table, orm.AuditField(orm.NullableInputTextExpr(f.Note), record.Exclude))
+	policy := orm.AuditPolicyOf(f.Table, orm.AuditField(f.Note, record.Exclude))
 	return audit.Register(r, pool, history,
 		audit.Config{Area: "accounts", RetentionDays: 90}, orm.Auditing(f.Table, policy))
 } // doc-example:end audit-registration
@@ -240,7 +240,7 @@ func memberHistory(ctx context.Context, db database.Executor, recorder *audit.Re
 
 // guide:audit-field
 func historicalName(history record.Model[hooks.Member, int64]) (value.Optional[record.FieldChange[string]], error) {
-	return orm.AuditRead(history, orm.InputTextExpr(hooks.Members.Name))
+	return orm.AuditRead(history, hooks.Members.Name)
 }
 
 // guide:end
@@ -274,7 +274,7 @@ func approve(ctx context.Context, tx *database.Tx, recorder *audit.Recorder, mem
 // doc-example:begin insert-member
 func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
 	f := hooks.Members
-	return orm.Insert(ctx, tx, f.Table, orm.KeySet(f.Key(), id), orm.InputTextSet(f.Name, "Ada"), orm.ColumnSet(f.Body, []byte{}))
+	return orm.Insert(ctx, tx, f.Table, orm.Set(f.Key(), id), orm.Set(f.Name, "Ada"), orm.Set(f.Body, []byte{}))
 } // doc-example:end insert-member
 
 // guide:end
@@ -282,10 +282,10 @@ func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member,
 // guide:upsert-user
 func upsertUser(ctx context.Context, tx *database.Tx) (value.Optional[models.User], error) {
 	f := models.Users
-	policy := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Email))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(f.Age)))
+	policy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(orm.ConflictIncoming(f.Age))
 	return orm.Upsert(ctx, tx, f.Query(), policy,
-		orm.TextSet(f.Email, "ada@example.test"), orm.NumberSet(f.Age, 30),
-		orm.EnumSet(f.Status, models.StatusActive), orm.EnumSet(f.Level, models.LevelBasic))
+		orm.Set(f.Email, "ada@example.test"), orm.Set(f.Age, 30),
+		orm.Set(f.Status, models.StatusActive), orm.Set(f.Level, models.LevelBasic))
 }
 
 // guide:end
@@ -293,8 +293,8 @@ func upsertUser(ctx context.Context, tx *database.Tx) (value.Optional[models.Use
 // guide:first-or-create-user
 func firstOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, error) {
 	f := models.Users
-	return orm.FirstOrCreate(ctx, tx, f.Query().Where(orm.TextEq(f.Email, "ada@example.test")),
-		orm.NumberSet(f.Age, 30), orm.EnumSet(f.Status, models.StatusActive), orm.EnumSet(f.Level, models.LevelBasic))
+	return orm.FirstOrCreate(ctx, tx, f.Query().Where(orm.Eq(f.Email, "ada@example.test")),
+		orm.Set(f.Age, 30), orm.Set(f.Status, models.StatusActive), orm.Set(f.Level, models.LevelBasic))
 }
 
 // guide:end

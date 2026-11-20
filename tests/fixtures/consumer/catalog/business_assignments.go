@@ -8,5 +8,5 @@ import (
 // CreatorAssignment supplies the creator's key as a User assignment.
 // Example: orm.Insert(ctx, db, models.Users.Table, product.CreatorAssignment()).
 func (p Product) CreatorAssignment() orm.Assignment[models.User] {
-	return orm.KeySet(models.Users.ID, p.CreatorID)
+	return orm.Set(models.Users.ID, p.CreatorID)
 }

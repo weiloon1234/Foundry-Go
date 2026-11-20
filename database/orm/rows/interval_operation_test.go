@@ -19,7 +19,7 @@ import (
 
 func TestNestedEpochConversionsHaveLinearSQLGrowth(t *testing.T) {
 	f := declareAggregateRecords()
-	var v expr.RowValue[aggregateRecord, int64] = expr.Value(orm.NumberExpr(f.Exact))
+	var v expr.RowValue[aggregateRecord, int64] = expr.Value(f.Exact)
 	for range 30 {
 		v = expr.UnixMilliseconds(expr.FromUnixMillis(v))
 	}
@@ -30,7 +30,7 @@ func TestNestedEpochConversionsHaveLinearSQLGrowth(t *testing.T) {
 }
 func TestIntervalScalarExpansionHasBoundedWork(t *testing.T) {
 	f := declareAggregateRecords()
-	var v expr.RowValue[aggregateRecord, temporal.Interval] = expr.Value(orm.IntervalExpr(f.Period))
+	var v expr.RowValue[aggregateRecord, temporal.Interval] = expr.Value(f.Period)
 	for range 24 {
 		v = expr.InstantDifference(expr.FromUnixMillis(expr.IntervalMonths(v)), expr.TransactionTime(rows.ModelScope(f.Query())))
 	}
@@ -41,7 +41,7 @@ func TestIntervalScalarExpansionHasBoundedWork(t *testing.T) {
 }
 func TestScalarSQLPlanningSharesCompilationBudget(t *testing.T) {
 	f := declareAggregateRecords()
-	node := expr.FoundrySelected(expr.AsSelected(expr.IntervalMonths(expr.Param(orm.IntervalExpr(f.Period), temporal.Months(1)))), sqlowner.Expressions()).Node
+	node := expr.FoundrySelected(expr.AsSelected(expr.IntervalMonths(expr.Param(f.Period, temporal.Months(1)))), sqlowner.Expressions()).Node
 	var bytes int
 	for _, tracked := range []bool{false, true} {
 		var c querycore.Compiler
@@ -64,13 +64,13 @@ func TestScalarSQLPlanningSharesCompilationBudget(t *testing.T) {
 func TestIntervalSQLValidationAndAggregates(t *testing.T) {
 	f := declareAggregateRecords()
 	q := rows.From(f.Query())
-	sum := expr.SumInterval(orm.IntervalExpr(f.Period))
+	sum := expr.SumInterval(f.Period)
 	s, err := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(q, expr.AsSelected(sum)), expr.GtValue(sum, temporal.Interval{}))))
 	if err != nil || !strings.Contains(s.SQL(), "SUM(CAST(") || !strings.Contains(s.SQL(), "AS interval)") {
 		t.Fatal(s.SQL(), err)
 	}
-	window := expr.WindowFor(rows.ModelScope(f.Query())).OrderBy(expr.Asc(expr.Value(orm.IntervalExpr(f.Period))))
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.Over(expr.Filter(expr.AvgInterval(orm.IntervalExpr(f.Period)), expr.ModelPredicate(orm.IntervalNe(f.Period, temporal.Interval{}))), window)))); err != nil {
+	window := expr.WindowFor(rows.ModelScope(f.Query())).OrderBy(expr.Asc(expr.Value(f.Period)))
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.Over(expr.Filter(expr.AvgInterval(f.Period), expr.ModelPredicate(orm.Ne(f.Period, temporal.Interval{}))), window)))); err != nil {
 		t.Fatal(err)
 	}
 	// Malformed AST validation is owned by the shared compiler, even with LIMIT 0.

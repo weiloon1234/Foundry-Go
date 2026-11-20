@@ -58,32 +58,33 @@ type tableCore struct {
 }
 
 type columnCore struct {
-	owner            *tableCore
-	field            reflect.StructField
-	metadata         querycore.Column
-	operand          querycore.ValueExpression
-	offset           uintptr
-	scan             func(unsafe.Pointer) any
-	get              func(unsafe.Pointer) (driver.Value, error)
-	automatic        func(any) (querycore.AssignmentValue, error)
-	storedAssignment func(any) (querycore.AssignmentValue, error)
-	kind             codec.ParameterType
-	collatable       bool
-	role             string
-	uuid             bool
-	open             func(database.Row, func() (driver.Value, error), unsafe.Pointer) error
-	sensitive        bool
-	check            func() error
-	stored           reflect.Type
-	bindMutator      func(any) error
-	bindNamedMutator func(any) error
-	mutator          querycore.FieldMutator
-	explicitMutator  bool
-	requiresMutator  bool
-	primaryMapping   bool
-	snapshot         func(unsafe.Pointer, unsafe.Pointer)
-	equal            func(unsafe.Pointer, unsafe.Pointer) bool
-	nullablePolicy   any
+	owner              *tableCore
+	field              reflect.StructField
+	metadata           querycore.Column
+	operand            querycore.ValueExpression
+	offset             uintptr
+	scan               func(unsafe.Pointer) any
+	get                func(unsafe.Pointer) (driver.Value, error)
+	automatic          func(any) (querycore.AssignmentValue, error)
+	storedAssignment   func(any) (querycore.AssignmentValue, error)
+	kind               codec.ParameterType
+	collatable         bool
+	role               string
+	uuid               bool
+	open               func(database.Row, func() (driver.Value, error), unsafe.Pointer) error
+	sensitive          bool
+	check              func() error
+	stored             reflect.Type
+	bindMutator        func(any) error
+	bindNamedMutator   func(any) error
+	mutator            querycore.FieldMutator
+	explicitMutator    bool
+	requiresMutator    bool
+	primaryMapping     bool
+	snapshot           func(unsafe.Pointer, unsafe.Pointer)
+	equal              func(unsafe.Pointer, unsafe.Pointer) bool
+	nullablePolicy     any
+	nullableProjection any
 }
 
 // Option configures a declaration. Example: Define("logs", declare, NoTimestamps()).

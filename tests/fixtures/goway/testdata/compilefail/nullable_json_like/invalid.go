@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.NullableTextLike(c.Records.MaybeSettings, "%x%")
+var _ = orm.Like(c.Records.MaybeSettings, "%x%")

@@ -16,10 +16,10 @@ import (
 func TestPostgresRelationshipFilters(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		u, o := models.Users, models.Orders
-		orders := models.UserLinks.Orders.Where(orm.NumberGt(o.TotalCents, 1)).OrderBy(orm.NumberDesc(o.TotalCents))
+		orders := models.UserLinks.Orders.Where(orm.Gt(o.TotalCents, 1)).OrderBy(orm.Desc(o.TotalCents))
 		counter := &queryCounter{Executor: tx}
 		builder := models.Users.Query().Where(orm.Has(orders))
-		selected, err := orm.All(t.Context(), counter, builder.OrderBy(orm.TextAsc(u.Email)))
+		selected, err := orm.All(t.Context(), counter, builder.OrderBy(orm.Asc(u.Email)))
 		if err != nil {
 			return err
 		}
@@ -27,7 +27,7 @@ func TestPostgresRelationshipFilters(t *testing.T) {
 			t.Fatal("existence did not filter parents in one query without loading children")
 		}
 		// The typed model query remains available after relationship filtering.
-		if user, err := orm.Require(t.Context(), tx, builder.Where(orm.KeyEq(models.Users.ID, users[1].ID))); err != nil || user.ID != users[1].ID {
+		if user, err := orm.Require(t.Context(), tx, builder.Where(orm.Eq(models.Users.ID, users[1].ID))); err != nil || user.ID != users[1].ID {
 			t.Error("relationship filter lost typed Find", err)
 		}
 		for _, test := range []struct {
@@ -40,7 +40,7 @@ func TestPostgresRelationshipFilters(t *testing.T) {
 			{orm.Has(models.UserLinks.Introducer), 1},
 			{orm.Not(orm.Has(models.UserLinks.Introducer)), 2},
 			{orm.Has(models.UserLinks.Referrals.Where(orm.Has(orders))), 1},
-			{orm.Or(orm.Has(models.UserLinks.Orders.Where(orm.NumberGt(o.TotalCents, 2))), orm.KeyEq(u.ID, users[2].ID)), 2},
+			{orm.Or(orm.Has(models.UserLinks.Orders.Where(orm.Gt(o.TotalCents, 2))), orm.Eq(u.ID, users[2].ID)), 2},
 		} {
 			if n, err := orm.Count(t.Context(), tx, models.Users.Query().Where(test.predicate)); err != nil || n != test.want {
 				t.Error("relationship predicate returned wrong parent count", n, test.want, err)
@@ -54,7 +54,7 @@ func TestPostgresRelationshipFilters(t *testing.T) {
 		}
 		// Reuse the descriptor for eager loading; the filter query does not alter it.
 		counter.calls = 0
-		loaded, err := orm.All(t.Context(), counter, builder.With(orders).OrderBy(orm.TextAsc(u.Email)))
+		loaded, err := orm.All(t.Context(), counter, builder.With(orders).OrderBy(orm.Asc(u.Email)))
 		if err != nil {
 			return err
 		}
@@ -64,10 +64,10 @@ func TestPostgresRelationshipFilters(t *testing.T) {
 		if children, ok := loaded[0].Orders.Get(); !ok || len(children) != 1 || children[0].TotalCents != 2 {
 			t.Error("reused descriptor lost child filter")
 		}
-		if updated, err := orm.Update(t.Context(), tx, builder, models.Users.Key(), users[0].ID, orm.NumberSet(models.Users.Age, 31)); err != nil || updated.Age != 31 {
+		if updated, err := orm.Update(t.Context(), tx, builder, models.Users.Key(), users[0].ID, orm.Set(models.Users.Age, 31)); err != nil || updated.Age != 31 {
 			t.Error("relation-scoped update failed", err)
 		}
-		if _, err := orm.Update(t.Context(), tx, builder, models.Users.Key(), users[2].ID, orm.NumberSet(models.Users.Age, 31)); !errors.Is(err, database.NotFound) {
+		if _, err := orm.Update(t.Context(), tx, builder, models.Users.Key(), users[2].ID, orm.Set(models.Users.Age, 31)); !errors.Is(err, database.NotFound) {
 			t.Error("relation scope failed to constrain update", err)
 		}
 		ctx, cancel := context.WithCancel(t.Context())
@@ -75,7 +75,7 @@ func TestPostgresRelationshipFilters(t *testing.T) {
 		if _, err := orm.All(ctx, queryfixture.NoQueries(t), builder); !errors.Is(err, context.Canceled) {
 			t.Error("canceled filter reached executor", err)
 		}
-		if _, err := orm.All(t.Context(), queryfixture.NoQueries(t), models.Users.Query().Where(orm.Has(models.UserLinks.Introducer.Where(orm.EnumEq(u.Status, models.Status("bad")))))); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.All(t.Context(), queryfixture.NoQueries(t), models.Users.Query().Where(orm.Has(models.UserLinks.Introducer.Where(orm.Eq(u.Status, models.Status("bad")))))); !errors.Is(err, fault.Invalid) {
 			t.Error("invalid related enum reached executor", err)
 		}
 		if err := checkThroughFilters(t, tx, users); err != nil {
@@ -90,12 +90,12 @@ func checkThroughFilters(t *testing.T, tx *database.Tx, users []models.User) err
 		return err
 	}
 	for _, edge := range [][2]int{{0, 1}, {0, 1}, {1, 2}} {
-		if _, err := orm.Insert(t.Context(), tx, models.Friendships.Table, orm.ColumnSet(models.Friendships.FromID, users[edge[0]].ID), orm.ColumnSet(models.Friendships.ToID, users[edge[1]].ID), orm.TextSet(models.Friendships.Note, "active")); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, models.Friendships.Table, orm.Set(models.Friendships.FromID, users[edge[0]].ID), orm.Set(models.Friendships.ToID, users[edge[1]].ID), orm.Set(models.Friendships.Note, "active")); err != nil {
 			return err
 		}
 	}
 	u := models.Users
-	grandchildren := models.UserLinks.Friends.Where(orm.Has(models.UserLinks.Friends.Where(orm.KeyEq(u.ID, users[2].ID))))
+	grandchildren := models.UserLinks.Friends.Where(orm.Has(models.UserLinks.Friends.Where(orm.Eq(u.ID, users[2].ID))))
 	selected, err := orm.All(t.Context(), tx, models.Users.Query().Where(orm.Has(grandchildren)))
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func checkThroughFilters(t *testing.T, tx *database.Tx, users []models.User) err
 	if len(selected) != 1 || selected[0].ID != users[0].ID {
 		t.Error("nested self-pivot relation lost aliases or multiplied parents")
 	}
-	if n, err := orm.Count(t.Context(), tx, models.Users.Query().Where(orm.Has(models.UserLinks.Friends.WherePivot(orm.TextEq(models.Friendships.Note, "inactive"))))); err != nil || n != 0 {
+	if n, err := orm.Count(t.Context(), tx, models.Users.Query().Where(orm.Has(models.UserLinks.Friends.WherePivot(orm.Eq(models.Friendships.Note, "inactive"))))); err != nil || n != 0 {
 		t.Error("pivot filter was lost", err)
 	}
 	// Natural target keys, nullable pivot keys, duplicate links and absent targets.
@@ -116,29 +116,29 @@ func checkThroughFilters(t *testing.T, tx *database.Tx, users []models.User) err
 		}
 	}
 	for i, code := range []models.GroupCode{"main", "other"} {
-		if _, err := orm.Insert(t.Context(), tx, models.Groups.Table, orm.KeySet(models.Groups.Code, code), orm.TextSet(models.Groups.Name, string(code)), orm.ColumnSet(models.Groups.OwnerID, users[i].ID)); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, models.Groups.Table, orm.Set(models.Groups.Code, code), orm.Set(models.Groups.Name, string(code)), orm.Set(models.Groups.OwnerID, users[i].ID)); err != nil {
 			return err
 		}
 	}
 	for _, draft := range [][]orm.Assignment[models.Membership]{
-		{orm.KeySet(models.Memberships.ID, "a"), orm.ColumnSet(models.Memberships.UserID, users[0].ID), orm.NullableTextSet(models.Memberships.GroupCode, "main"), orm.NumberSet(models.Memberships.Priority, 2), orm.NullableColumnSet(models.Memberships.InviterID, users[1].ID)},
-		{orm.KeySet(models.Memberships.ID, "b"), orm.ColumnSet(models.Memberships.UserID, users[0].ID), orm.NullableTextSet(models.Memberships.GroupCode, "main"), orm.NumberSet(models.Memberships.Priority, 3), orm.NullableColumnSet(models.Memberships.InviterID, users[0].ID)},
-		{orm.KeySet(models.Memberships.ID, "c"), orm.ColumnSet(models.Memberships.UserID, users[1].ID), orm.NullableTextSet(models.Memberships.GroupCode, "other"), orm.NumberSet(models.Memberships.Priority, 0)},
-		{orm.KeySet(models.Memberships.ID, "d"), orm.ColumnSet(models.Memberships.UserID, users[2].ID), orm.NullableTextSetNull(models.Memberships.GroupCode), orm.NumberSet(models.Memberships.Priority, 5), orm.NullableColumnSet(models.Memberships.InviterID, users[0].ID)},
-		{orm.KeySet(models.Memberships.ID, "e"), orm.ColumnSet(models.Memberships.UserID, users[2].ID), orm.NullableTextSet(models.Memberships.GroupCode, "missing"), orm.NumberSet(models.Memberships.Priority, 5), orm.NullableColumnSet(models.Memberships.InviterID, users[0].ID)},
+		{orm.Set(models.Memberships.ID, "a"), orm.Set(models.Memberships.UserID, users[0].ID), orm.Set(models.Memberships.GroupCode, "main"), orm.Set(models.Memberships.Priority, 2), orm.Set(models.Memberships.InviterID, users[1].ID)},
+		{orm.Set(models.Memberships.ID, "b"), orm.Set(models.Memberships.UserID, users[0].ID), orm.Set(models.Memberships.GroupCode, "main"), orm.Set(models.Memberships.Priority, 3), orm.Set(models.Memberships.InviterID, users[0].ID)},
+		{orm.Set(models.Memberships.ID, "c"), orm.Set(models.Memberships.UserID, users[1].ID), orm.Set(models.Memberships.GroupCode, "other"), orm.Set(models.Memberships.Priority, 0)},
+		{orm.Set(models.Memberships.ID, "d"), orm.Set(models.Memberships.UserID, users[2].ID), orm.SetNull(models.Memberships.GroupCode), orm.Set(models.Memberships.Priority, 5), orm.Set(models.Memberships.InviterID, users[0].ID)},
+		{orm.Set(models.Memberships.ID, "e"), orm.Set(models.Memberships.UserID, users[2].ID), orm.Set(models.Memberships.GroupCode, "missing"), orm.Set(models.Memberships.Priority, 5), orm.Set(models.Memberships.InviterID, users[0].ID)},
 	} {
-		if _, err := orm.Insert(t.Context(), tx, models.Memberships.Table, append(draft, orm.TextSet(models.Memberships.Lookup, "filter"), orm.EnumSet(models.Memberships.Level, models.LevelBasic))...); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, models.Memberships.Table, append(draft, orm.Set(models.Memberships.Lookup, "filter"), orm.Set(models.Memberships.Level, models.LevelBasic))...); err != nil {
 			return err
 		}
 	}
-	groups := models.UserLinks.Groups.Where(orm.KeyEq(models.Groups.Code, "main")).WherePivot(orm.NumberGte(models.Memberships.Priority, 2))
+	groups := models.UserLinks.Groups.Where(orm.Eq(models.Groups.Code, "main")).WherePivot(orm.Gte(models.Memberships.Priority, 2))
 	for _, test := range []struct {
 		relation orm.ExistenceRelation[models.User, models.Group]
 		want     int64
 	}{
 		{models.UserLinks.Groups, 2}, {groups, 1},
 		{groups.Where(orm.Has(models.GroupLinks.Owner.Where(orm.Has(models.UserLinks.Orders)))), 1},
-		{models.UserLinks.Groups.WherePivot(orm.Has(models.MembershipLinks.Inviter.Where(orm.KeyEq(u.ID, users[0].ID)))), 1},
+		{models.UserLinks.Groups.WherePivot(orm.Has(models.MembershipLinks.Inviter.Where(orm.Eq(u.ID, users[0].ID)))), 1},
 	} {
 		if n, err := orm.Count(t.Context(), tx, models.Users.Query().Where(orm.Has(test.relation))); err != nil || n != test.want {
 			t.Error("natural-key or nested target/pivot filter mismatch", n, test.want, err)
@@ -153,13 +153,13 @@ func checkThroughFilters(t *testing.T, tx *database.Tx, users []models.User) err
 func checkNestedSelfFilters(t *testing.T, tx *database.Tx, users []models.User) error {
 	parent := users[1]
 	for _, email := range []string{"d@example.test", "e@example.test", "f@example.test"} {
-		created, err := orm.Insert(t.Context(), tx, models.Users.Table, orm.TextSet(models.Users.Email, email), orm.NumberSet(models.Users.Age, 18), orm.EnumSet(models.Users.Status, models.StatusActive), orm.EnumSet(models.Users.Level, models.LevelBasic), orm.NullableColumnSet(models.Users.IntroducerID, parent.ID))
+		created, err := orm.Insert(t.Context(), tx, models.Users.Table, orm.Set(models.Users.Email, email), orm.Set(models.Users.Age, 18), orm.Set(models.Users.Status, models.StatusActive), orm.Set(models.Users.Level, models.LevelBasic), orm.Set(models.Users.IntroducerID, parent.ID))
 		if err != nil {
 			return err
 		}
 		parent = created
 	}
-	branch := models.UserLinks.Referrals.Where(orm.TextEq(models.Users.Email, parent.Email))
+	branch := models.UserLinks.Referrals.Where(orm.Eq(models.Users.Email, parent.Email))
 	for range 3 {
 		branch = models.UserLinks.Referrals.Where(orm.Has(branch))
 	}

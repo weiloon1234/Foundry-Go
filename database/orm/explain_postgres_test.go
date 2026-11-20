@@ -45,7 +45,7 @@ func TestPostgresExplainDoesNotExecuteAndAnalyzeUsesActualTransaction(t *testing
 			}
 		}
 		fields := explainTable(t)
-		q := fields.Query().Where(orm.KeyEq(fields.Key(), 7))
+		q := fields.Query().Where(orm.Eq(fields.Key(), 7))
 		statement, err := orm.Compile(q)
 		if err != nil {
 			return err

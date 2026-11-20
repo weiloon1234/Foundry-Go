@@ -123,7 +123,7 @@ func (k Key[V]) Find(ctx context.Context, m *Manager) (value.Optional[Record], e
 	var result value.Optional[Record]
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		f := store.Settings
-		row, err := orm.First(ctx, tx, store.Settings.Query().Where(orm.TextEq(f.Name, string(k.Name()))))
+		row, err := orm.First(ctx, tx, store.Settings.Query().Where(orm.Eq(f.Name, string(k.Name()))))
 		if err != nil {
 			return err
 		}
@@ -200,14 +200,14 @@ func (m *Manager) listNames(filter Filter) ([]string, error) {
 }
 func (m *Manager) listQuery(names []string, filter Filter) orm.Query[store.Setting] {
 	f := store.Settings
-	q := store.Settings.Query().Where(orm.TextIn(f.Name, names...))
+	q := store.Settings.Query().Where(orm.In(f.Name, names...))
 	if filter.Group != "" {
-		q = q.Where(orm.TextEq(f.GroupName, string(filter.Group)))
+		q = q.Where(orm.Eq(f.GroupName, string(filter.Group)))
 	}
 	if filter.PublicOnly {
-		q = q.Where(orm.ColumnEq(f.IsPublic, true))
+		q = q.Where(orm.Eq(f.IsPublic, true))
 	}
-	return q.OrderBy(orm.TextAsc(f.GroupName), orm.NumberAsc(f.SortOrder), orm.TextAsc(f.Name))
+	return q.OrderBy(orm.Asc(f.GroupName), orm.Asc(f.SortOrder), orm.Asc(f.Name))
 }
 
 // ListPage returns up to limit registered settings (DefaultPageSize when zero,
@@ -239,7 +239,7 @@ func ListPage(ctx context.Context, m *Manager, filter Filter, after Cursor, limi
 		q := m.listQuery(names, filter)
 		if !after.IsZero() {
 			g, o, n := string(after.Group), after.Order, string(after.Name)
-			q = q.Where(orm.Or(orm.TextGt(f.GroupName, g), orm.And(orm.TextEq(f.GroupName, g), orm.Or(orm.NumberGt(f.SortOrder, o), orm.And(orm.NumberEq(f.SortOrder, o), orm.TextGt(f.Name, n))))))
+			q = q.Where(orm.Or(orm.Gt(f.GroupName, g), orm.And(orm.Eq(f.GroupName, g), orm.Or(orm.Gt(f.SortOrder, o), orm.And(orm.Eq(f.SortOrder, o), orm.Gt(f.Name, n))))))
 		}
 		var budget extensionvalue.BatchBudget
 		err := orm.Each(ctx, tx, q.Limit(limit+1), func(row store.Setting) error {
@@ -433,7 +433,7 @@ func (m *Manager) load(ctx context.Context, names []Name) (Batch, error) {
 		}
 		f := store.Settings
 		retained := 0
-		return orm.Each(ctx, tx, store.Settings.Query().Where(orm.TextIn(f.Name, missing...)).OrderBy(orm.TextAsc(f.Name)), func(row store.Setting) error {
+		return orm.Each(ctx, tx, store.Settings.Query().Where(orm.In(f.Name, missing...)).OrderBy(orm.Asc(f.Name)), func(row store.Setting) error {
 			record, err := m.record(ctx, row)
 			if err != nil {
 				return err

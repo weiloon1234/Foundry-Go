@@ -19,4 +19,4 @@ var _ context.Context
 var _ *database.Tx
 
 var other = rows.AsTransaction[b](rows.TransactionOf(rows.ModelRecord(f.Records.Query())), "other")
-var _ = rows.InnerJoin(source, other, rows.OnEqual(expr.At(rows.TransactionScope(source), orm.KeyExpr(f.Records.ID)), expr.At(rows.TransactionScope(other), orm.KeyExpr(f.Records.ID))))
+var _ = rows.InnerJoin(source, other, rows.OnEqual(expr.At(rows.TransactionScope(source), f.Records.ID), expr.At(rows.TransactionScope(other), f.Records.ID)))

@@ -6,4 +6,4 @@ import (
 	"foundry.test/goway/models"
 )
 
-func F() { models.Orders.Query().Where(orm.NumberGt(models.Users.Age, 1)) }
+func F() { models.Orders.Query().Where(orm.Gt(models.Users.Age, 1)) }

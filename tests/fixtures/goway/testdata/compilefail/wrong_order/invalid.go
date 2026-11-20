@@ -6,4 +6,4 @@ import (
 	"foundry.test/goway/models"
 )
 
-func F() { models.Orders.Query().OrderBy(orm.NumberDesc(models.Users.Age)) }
+func F() { models.Orders.Query().OrderBy(orm.Desc(models.Users.Age)) }

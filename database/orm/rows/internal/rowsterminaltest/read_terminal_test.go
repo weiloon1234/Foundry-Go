@@ -20,7 +20,7 @@ func TestReadTerminalsScalarAndDTOStreams(t *testing.T) {
 	table := orm.Define("members", func(b orm.Builder[streamRecord], m *streamRecord) streamTable {
 		return streamTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)}
 	})
-	scalar := rows.SelectScalar(rows.From(table.Query()), expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(table.Name)))))
+	scalar := rows.SelectScalar(rows.From(table.Query()), expr.AsSelected(expr.Row(expr.Value(table.Name))))
 	values := rows.Values(scalar)
 	cte := rows.AsRecord[readAlias](rows.CTE("names", rows.ModelRecord(table.Query())), "n")
 	for _, kind := range []string{"scalar", "values", "cte"} {
@@ -66,7 +66,7 @@ func TestReadTerminalsScalarAndDTOStreams(t *testing.T) {
 				case "values":
 					err = rows.EachRead(ctx, db, rows.ReadValues(rows.UnionAllValues(values, values)), yield)
 				case "cte":
-					err = rows.EachRead(ctx, db, rows.ReadScalar(rows.SelectScalar(cte, expr.AsSelected(expr.Row(expr.At(rows.Scope(cte), orm.TextExpr(table.Name)))))), yield)
+					err = rows.EachRead(ctx, db, rows.ReadScalar(rows.SelectScalar(cte, expr.AsSelected(expr.Row(expr.At(rows.Scope(cte), table.Name))))), yield)
 				}
 				switch mode {
 				case "stop", "close":
@@ -183,12 +183,12 @@ func TestReadPreflightAndIterationUseExecutingContext(t *testing.T) {
 			if !ok {
 				return orm.Predicate[streamRecord]{}, errors.New("tenant required")
 			}
-			return orm.KeyEq(table.Key(), id), nil
+			return orm.Eq(table.Key(), id), nil
 		})}
 	}))
 	bound := context.WithValue(t.Context(), tenantKey{}, int64(1))
 	executing := context.WithValue(t.Context(), tenantKey{}, int64(2))
-	q := rows.ReadScalar(rows.SelectScalar(rows.From(orm.WithScopeContext(table.Query(), bound)), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(table.Key()))))))
+	q := rows.ReadScalar(rows.SelectScalar(rows.From(orm.WithScopeContext(table.Query(), bound)), expr.AsSelected(expr.Row(expr.Value(table.Key())))))
 	if err := rows.PreflightRead(t.Context(), q); err == nil {
 		t.Fatal("preflight used bound context")
 	}

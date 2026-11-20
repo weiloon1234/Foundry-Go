@@ -36,7 +36,7 @@ func RelationFilter[M, N any](r orm.ExistenceRelation[M, N], p Predicate[N]) orm
 
 // RowComparison exposes only equality and membership, including for enums.
 //
-// Example: expr.In(expr.CompareRow(expr.Value(orm.EnumExpr(Users.State))), Active, Pending)
+// Example: expr.In(expr.CompareRow(expr.Value(Users.State)), Active, Pending)
 type RowComparison[S, V any] = rowComparison[*S, V]
 
 type rowComparison[S, V any] struct {
@@ -56,7 +56,7 @@ func (e rowComparison[S, V]) rowValue(S) rowData[V] { return e.data }
 
 // NullableRowComparison retains present-value equality and SQL null tests.
 //
-// Example: expr.NullableEq(expr.CompareNullableRow(expr.Value(orm.NullableEnumExpr(Users.OptionalState))), Active)
+// Example: expr.NullableEq(expr.CompareNullableRow(expr.Value(Users.OptionalState)), Active)
 type NullableRowComparison[S, V any] = nullableRowComparison[*S, V]
 
 type nullableRowComparison[S, V any] struct {
@@ -409,31 +409,79 @@ func NullableCompareFilter[S, V any](e RowValue[S, value.Nullable[V]]) NullableC
 // TextRow preserves a required text column capability.
 //
 // Example: expr.TextRow(column)
-func TextRow[S any, V ~string](column orm.TextExpressionColumn[S, V, V]) TextRowExpression[S, V] {
-	data := checkedTextColumn(rowInput(Value(column)).data)
-	return TextRowExpression[S, V]{data: data}
+func TextRow[M any, V ~string, I, P any, K orm.RequiredTextColumnKind, R orm.ColumnRole](column orm.ColumnHandle[M, V, I, P, K, R]) TextRowExpression[M, V] {
+	c := orm.FoundryComparisonHandle(column, sqlowner.Metadata())
+	return TextRowExpression[M, V]{data: checkedTextColumn(rowData[V]{column: c, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: c.Err}})}
 }
 
 // TextNullableRow preserves a nullable text column capability.
 //
 // Example: expr.TextNullableRow(column)
-func TextNullableRow[S any, V ~string](column orm.TextExpressionColumn[S, V, value.Nullable[V]]) NullableTextRowExpression[S, V] {
-	data := checkedTextColumn(rowInput(Value(column)).data)
-	return NullableTextRowExpression[S, V]{data: data}
+func TextNullableRow[M any, V ~string, I, P any, K orm.NullableTextColumnKind, R orm.ColumnRole](column orm.ColumnHandle[M, V, I, P, K, R]) NullableTextRowExpression[M, V] {
+	c, p := orm.FoundryNullableHandle(column, sqlowner.Metadata())
+	return NullableTextRowExpression[M, V]{data: checkedTextColumn(rowData[value.Nullable[V]]{column: p, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: c.Err}})}
 }
 
 // TextRowAt preserves a required text column in a joined or aliased scope.
 //
 // Example: expr.TextRowAt(scope, column)
-func TextRowAt[S, M any, V ~string](scope Scope[S, M], column orm.TextExpressionColumn[M, V, V]) TextRowExpression[S, V] {
-	return TextRowExpression[S, V]{data: checkedTextColumn(rowInput(At(scope, column)).data)}
+func TextRowAt[S, M any, V ~string, I, P any, K orm.RequiredTextColumnKind, R orm.ColumnRole](scope Scope[S, M], column orm.ColumnHandle[M, V, I, P, K, R]) TextRowExpression[S, V] {
+	c, err := scopedComparison(scope, column)
+	return TextRowExpression[S, V]{data: checkedTextColumn(rowData[V]{column: c, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: err}})}
 }
 
 // TextNullableRowAt preserves nullable text in a joined or aliased scope.
 //
 // Example: expr.TextNullableRowAt(scope, column)
-func TextNullableRowAt[S, M any, V ~string](scope Scope[S, M], column orm.TextExpressionColumn[M, V, value.Nullable[V]]) NullableTextRowExpression[S, V] {
-	return NullableTextRowExpression[S, V]{data: checkedTextColumn(rowInput(At(scope, column)).data)}
+func TextNullableRowAt[S, M any, V ~string, I, P any, K orm.NullableTextColumnKind, R orm.ColumnRole](scope Scope[S, M], column orm.ColumnHandle[M, V, I, P, K, R]) NullableTextRowExpression[S, V] {
+	c, p := orm.FoundryNullableHandle(column, sqlowner.Metadata())
+	err := safeerror.Join("operation failed", c.Err, scope.core.Err)
+	if scope.core.Owner == nil || scope.core.Owner != c.Owner || scope.core.Table == "" {
+		err = safeerror.Join("operation failed", err, ormcore.Invalid("column belongs to a different model scope"))
+	}
+	c.Field.Table = scope.core.Table
+	c.Reference = scope.core.Reference
+	p.Reference = scope.core.Reference
+	for _, output := range scope.core.Columns {
+		if output.Name == c.Field.Column {
+			c.Collatable = !ormcore.MergeNonCollatable(!c.Collatable, output.NonCollatable)
+			p.Collatable = !ormcore.MergeNonCollatable(!p.Collatable, output.NonCollatable)
+			break
+		}
+	}
+	return NullableTextRowExpression[S, V]{data: checkedTextColumn(rowData[value.Nullable[V]]{column: p, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: err}})}
+}
+
+// OrderedColumn wraps a required ordered model column directly as an OrderedRowExpression.
+//
+// Example: expr.OrderedColumn(Orders.TotalCents)
+func OrderedColumn[M any, V orderedScalar, P, I any, K orm.RequiredOrderedKind, R orm.ColumnRole](column orm.ColumnHandle[M, V, I, P, K, R]) OrderedRowExpression[M, V] {
+	c := orm.FoundryComparisonHandle(column, sqlowner.Metadata())
+	return OrderedRowExpression[M, V]{data: rowData[V]{column: c, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: c.Err}}}
+}
+
+// NullableOrderedColumn wraps a nullable ordered model column directly as a NullableOrderedRowExpression.
+//
+// Example: expr.NullableOrderedColumn(Orders.PaidAt)
+func NullableOrderedColumn[M any, V orderedScalar, P, I any, K orm.NullableOrderedKind, R orm.ColumnRole](column orm.ColumnHandle[M, V, I, P, K, R]) NullableOrderedRowExpression[M, V] {
+	c, p := orm.FoundryNullableHandle(column, sqlowner.Metadata())
+	return NullableOrderedRowExpression[M, V]{data: rowData[value.Nullable[V]]{column: p, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: c.Err}}}
+}
+
+// CompareColumn wraps a required queryable model column directly as a RowComparison.
+//
+// Example: expr.CompareColumn(Users.Status)
+func CompareColumn[M, V, P, I any, K orm.RequiredColumnKind, R orm.ColumnRole](column orm.ColumnHandle[M, V, I, P, K, R]) RowComparison[M, V] {
+	c := orm.FoundryComparisonHandle(column, sqlowner.Metadata())
+	return RowComparison[M, V]{data: rowData[V]{column: c, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: c.Err}}}
+}
+
+// NullableCompareColumn wraps a nullable queryable model column directly as a RowComparison.
+//
+// Example: expr.NullableCompareColumn(Users.Role)
+func NullableCompareColumn[M, V, P, I any, K orm.NullableComparableKind, R orm.ColumnRole](column orm.ColumnHandle[M, V, I, P, K, R]) RowComparison[M, value.Nullable[V]] {
+	c, p := orm.FoundryNullableHandle(column, sqlowner.Metadata())
+	return RowComparison[M, value.Nullable[V]]{data: rowData[value.Nullable[V]]{column: p, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: c.Err}}}
 }
 
 func checkedTextColumn[V any](data rowData[V]) rowData[V] {

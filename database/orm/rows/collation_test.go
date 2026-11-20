@@ -43,8 +43,8 @@ func TestProjectionRebindingRetainsSQLCollationCapability(t *testing.T) {
 		})
 		// Map and MapSelected must both retain the source SQL capability.
 		return Select(From(m.Query()), schema,
-			Map(schema.Status, expr.Value(orm.TextExpr(m.Status))),
-			MapSelected(schema.Optional, expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(m.Optional))))))
+			Map(schema.Status, expr.Value(m.Status)),
+			MapSelected(schema.Optional, expr.AsSelected(expr.Row(expr.Value(m.Optional)))))
 	}
 	text := project(codec.String[status]())
 	native := project(codec.String[status]().WithoutCollation())
@@ -179,7 +179,7 @@ func TestModelSetRetainsOtherOperandsCollationMark(t *testing.T) {
 	}
 	plain, marked := declare(codec.String[string]()), declare(codec.String[string]().WithoutCollation())
 	set := Union(ModelRecord(plain.Query()), ModelRecord(marked.Query()))
-	name := expr.AsSelected(expr.Row(expr.At(set.Scope(), orm.TextExpr(plain.Name))))
+	name := expr.AsSelected(expr.Row(expr.At(set.Scope(), plain.Name)))
 	if _, err := CompileRead(ReadScalar(SelectScalar(set, expr.CollateValue(name, expr.CollationC)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("model set lost the other operand's mark", err)
 	}

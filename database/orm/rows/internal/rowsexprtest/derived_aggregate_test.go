@@ -46,15 +46,15 @@ func derivedAggregateSource() (rows.Aliased[left, aggregateRecord], aggregateRow
 		}
 	})
 	q := rows.Select(rows.From(d.Query()), r.Row,
-		rows.Map(r.ID, expr.Value(orm.KeyExpr(d.Key()))),
-		rows.Map(r.Exact, expr.Value(orm.NumberExpr(d.Exact))),
-		rows.Map(r.MaybeExact, expr.Value(orm.NullableNumberExpr(d.MaybeExact))),
-		rows.Map(r.Approx, expr.Value(orm.NumberExpr(d.Approx))),
-		rows.Map(r.MaybeApprox, expr.Value(orm.NullableNumberExpr(d.MaybeApprox))),
-		rows.Map(r.Period, expr.Value(orm.IntervalExpr(d.Period))),
-		rows.Map(r.MaybePeriod, expr.Value(orm.NullableIntervalExpr(d.MaybePeriod))),
-		rows.Map(r.Name, expr.Value(orm.TextExpr(d.Name))),
-		rows.Map(r.MaybeName, expr.Value(orm.NullableTextExpr(d.MaybeName))),
+		rows.Map(r.ID, expr.Value(d.Key())),
+		rows.Map(r.Exact, expr.Value(d.Exact)),
+		rows.Map(r.MaybeExact, expr.Value(d.MaybeExact)),
+		rows.Map(r.Approx, expr.Value(d.Approx)),
+		rows.Map(r.MaybeApprox, expr.Value(d.MaybeApprox)),
+		rows.Map(r.Period, expr.Value(d.Period)),
+		rows.Map(r.MaybePeriod, expr.Value(d.MaybePeriod)),
+		rows.Map(r.Name, expr.Value(d.Name)),
+		rows.Map(r.MaybeName, expr.Value(d.MaybeName)),
 	)
 	return rows.AsRecord[left](rows.RecordOf(q), "derived"), r
 }

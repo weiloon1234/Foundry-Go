@@ -15,5 +15,5 @@ var _ *foundation.Registrar
 var _ h.Member
 var _ n.Member
 var _ = orm.GlobalScope[h.KeyedMember](orm.Scope(h.Members.Table, "tenant", func(context.Context) (orm.Predicate[h.Member], error) {
-	return orm.InputTextEq(h.Members.Name, "name"), nil
+	return orm.Eq(h.Members.Name, "name"), nil
 }))

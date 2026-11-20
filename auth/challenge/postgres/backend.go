@@ -83,9 +83,9 @@ func (b *Backend) now() (temporal.DateTime, error) {
 }
 func entries(scope, subject string) orm.Query[challengestore.Entry] {
 	f := challengestore.Entries
-	q := challengestore.Entries.Query().Where(orm.TextEq(f.Scope, scope))
+	q := challengestore.Entries.Query().Where(orm.Eq(f.Scope, scope))
 	if subject != "" {
-		q = q.Where(orm.TextEq(f.SubjectKey, subject))
+		q = q.Where(orm.Eq(f.SubjectKey, subject))
 	}
 	return q
 }

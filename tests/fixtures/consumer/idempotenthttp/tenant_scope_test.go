@@ -49,7 +49,7 @@ func TestWorkspaceTenantScopeBeforeExecutionAndReplay(t *testing.T) {
 	if !bytes.Equal(original.body, replay.body) || calls.Load() != 1 {
 		t.Fatal("same-tenant replay changed or repeated the business callback")
 	}
-	if _, err := orm.Update(t.Context(), db, Workspaces.Query(), Workspaces.Key(), 1, orm.TextSet(Workspaces.Tenant, "tenant-b")); err != nil {
+	if _, err := orm.Update(t.Context(), db, Workspaces.Query(), Workspaces.Key(), 1, orm.Set(Workspaces.Tenant, "tenant-b")); err != nil {
 		t.Fatal(err)
 	}
 	foreignReplay := app.send(t.Context(), "/workspaces/1/orders", "alice", key, body)
@@ -58,7 +58,7 @@ func TestWorkspaceTenantScopeBeforeExecutionAndReplay(t *testing.T) {
 		t.Fatal("replay bypassed current tenant scope")
 	}
 	if _, err := orm.Update(t.Context(), db, Workspaces.Query(), Workspaces.Key(), 1,
-		orm.TextSet(Workspaces.Tenant, "tenant-a"), orm.ColumnSet(Workspaces.Enabled, false)); err != nil {
+		orm.Set(Workspaces.Tenant, "tenant-a"), orm.Set(Workspaces.Enabled, false)); err != nil {
 		t.Fatal(err)
 	}
 	assertResponse(t, app.send(t.Context(), "/workspaces/1/orders", "alice", key, body), 403)

@@ -1,7 +1,5 @@
 package lateral_predicate_owner
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -17,7 +15,7 @@ var a = rows.As[parentTag](models.Users.Query(), "a")
 var b = rows.As[childTag](models.Orders.Query(), "b")
 var link = rows.Correlate(a, b)
 var inner = rows.InnerScope(link, rows.Scope(b))
-var innerID = expr.At(inner, orm.KeyExpr(models.Orders.ID))
+var innerID = expr.At(inner, models.Orders.ID)
 var record = rows.SelectCorrelatedRecord(link, inner)
 var lateral = rows.AsLateral[namedTag](record, "lateral_record")
 
@@ -29,4 +27,4 @@ type fields struct {
 
 var schema = rows.Define(func(b rows.Builder[result], r *result) fields { return fields{b.Row(), rows.NumberOf(b, &r.Count)} })
 
-var _ = record.Where(expr.Eq(expr.Value(orm.NumberExpr(models.Orders.TotalCents)), 1))
+var _ = record.Where(expr.Eq(expr.Value(models.Orders.TotalCents), 1))

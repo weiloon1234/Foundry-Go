@@ -108,7 +108,7 @@ func (r *Reader) Overview(ctx context.Context, q OverviewQuery) (Overview, error
 		if err != nil {
 			return err
 		}
-		found, err := orm.All(ctx, tx, runs.Query().Where(orm.TimeGte(runs.HeartbeatAt, hour)).OrderBy(orm.TimeDesc(runs.HeartbeatAt), orm.KeyAsc(runs.Key())).Limit(r.config.Reads.MaxOverviewRuns+1))
+		found, err := orm.All(ctx, tx, runs.Query().Where(orm.Gte(runs.HeartbeatAt, hour)).OrderBy(orm.Desc(runs.HeartbeatAt), orm.Asc(runs.Key())).Limit(r.config.Reads.MaxOverviewRuns+1))
 		if err != nil {
 			return err
 		}
@@ -120,7 +120,7 @@ func (r *Reader) Overview(ctx context.Context, q OverviewQuery) (Overview, error
 			}
 			out.Runs = append(out.Runs, Run{ID: model.IDFromBytes[Run](row.ID.Bytes()), Instance: row.Instance, Release: row.Release, StartedAt: row.StartedAt, HeartbeatAt: row.HeartbeatAt, Stale: now.UTC().Sub(row.HeartbeatAt.UTC()) > 3*r.config.FlushInterval, Runtime: runtime})
 		}
-		incidents, err := orm.All(ctx, tx, retainedAlerts(hour).OrderBy(orm.TimeDesc(alerts.LastAt), orm.KeyAsc(alerts.Key())).Limit(r.config.Reads.MaxOverviewAlerts+1))
+		incidents, err := orm.All(ctx, tx, retainedAlerts(hour).OrderBy(orm.Desc(alerts.LastAt), orm.Asc(alerts.Key())).Limit(r.config.Reads.MaxOverviewAlerts+1))
 		if err != nil {
 			return err
 		}
@@ -133,9 +133,9 @@ func (r *Reader) Overview(ctx context.Context, q OverviewQuery) (Overview, error
 			return err
 		}
 		oldest, err := rows.Read(rows.SelectValue(metrics.Query().Where(orm.Or(
-			orm.And(orm.NumberEq(metrics.IntervalSeconds, 60), orm.TimeGte(metrics.BucketAt, minute)),
-			orm.And(orm.NumberEq(metrics.IntervalSeconds, 3600), orm.TimeGte(metrics.BucketAt, hour)),
-		)).OrderBy(orm.TimeAsc(metrics.BucketAt), orm.KeyAsc(metrics.Key())).Limit(1), orm.TimeExpr(metrics.BucketAt))).All(ctx, tx)
+			orm.And(orm.Eq(metrics.IntervalSeconds, 60), orm.Gte(metrics.BucketAt, minute)),
+			orm.And(orm.Eq(metrics.IntervalSeconds, 3600), orm.Gte(metrics.BucketAt, hour)),
+		)).OrderBy(orm.Asc(metrics.BucketAt), orm.Asc(metrics.Key())).Limit(1), metrics.BucketAt)).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func (r *Reader) Issues(ctx context.Context, q IssueQuery) (orm.PageResult[Issue
 		if err != nil {
 			return err
 		}
-		page, err := orm.Paginate(ctx, tx, query.Where(orm.EnumEq(issues.Source, q.Source)).OrderBy(orm.TimeDesc(issues.LastAt), orm.KeyAsc(issues.Key())), q.Page)
+		page, err := orm.Paginate(ctx, tx, query.Where(orm.Eq(issues.Source, q.Source)).OrderBy(orm.Desc(issues.LastAt), orm.Asc(issues.Key())), q.Page)
 		if err != nil {
 			return err
 		}
@@ -199,7 +199,7 @@ func (r *Reader) Issue(ctx context.Context, fingerprint Fingerprint) (Issue, err
 		if err != nil {
 			return err
 		}
-		selected, err := orm.First(ctx, tx, query.Where(orm.KeyEq(issues.Key(), fingerprint)))
+		selected, err := orm.First(ctx, tx, query.Where(orm.Eq(issues.Key(), fingerprint)))
 		if err != nil {
 			return err
 		}
@@ -230,8 +230,8 @@ func (r *Reader) retainedIssues(now temporal.DateTime) (orm.Query[issueRow], err
 		return orm.Query[issueRow]{}, err
 	}
 	return issues.Query().Where(orm.Or(
-		orm.And(orm.EnumEq(issues.Source, SourceSecurity), orm.TimeGte(issues.LastAt, security)),
-		orm.And(orm.EnumNe(issues.Source, SourceSecurity), orm.TimeGte(issues.LastAt, cutoff)),
+		orm.And(orm.Eq(issues.Source, SourceSecurity), orm.Gte(issues.LastAt, security)),
+		orm.And(orm.Ne(issues.Source, SourceSecurity), orm.Gte(issues.LastAt, cutoff)),
 	)), nil
 }
 
@@ -262,10 +262,10 @@ func (r *Reader) Events(ctx context.Context, q EventQuery) (orm.PageResult[Event
 		if err != nil {
 			return err
 		}
-		query := events.Query().Where(orm.TextEq(events.Fingerprint, q.Fingerprint), orm.Or(
-			orm.And(orm.EnumEq(events.Source, SourceSecurity), orm.TimeGte(events.CreatedAt, security)),
-			orm.And(orm.EnumNe(events.Source, SourceSecurity), orm.TimeGte(events.CreatedAt, cutoff)),
-		)).OrderBy(orm.TimeDesc(events.CreatedAt), orm.KeyAsc(events.Key()))
+		query := events.Query().Where(orm.Eq(events.Fingerprint, q.Fingerprint), orm.Or(
+			orm.And(orm.Eq(events.Source, SourceSecurity), orm.Gte(events.CreatedAt, security)),
+			orm.And(orm.Ne(events.Source, SourceSecurity), orm.Gte(events.CreatedAt, cutoff)),
+		)).OrderBy(orm.Desc(events.CreatedAt), orm.Asc(events.Key()))
 		page, err := orm.Paginate(ctx, tx, query, q.Page)
 		if err != nil {
 			return err
@@ -303,9 +303,9 @@ func (r *Reader) Alerts(ctx context.Context, q AlertQuery) (orm.PageResult[Alert
 		if err != nil {
 			return err
 		}
-		query := retainedAlerts(cutoff).OrderBy(orm.TimeDesc(alerts.LastAt), orm.KeyAsc(alerts.Key()))
+		query := retainedAlerts(cutoff).OrderBy(orm.Desc(alerts.LastAt), orm.Asc(alerts.Key()))
 		if state, ok := q.State.Get(); ok {
-			query = query.Where(orm.EnumEq(alerts.State, state))
+			query = query.Where(orm.Eq(alerts.State, state))
 		}
 		page, err := orm.Paginate(ctx, tx, query, q.Page)
 		if err != nil {
@@ -325,11 +325,11 @@ func (r *Reader) Alerts(ctx context.Context, q AlertQuery) (orm.PageResult[Alert
 
 func retainedAlerts(cutoff temporal.DateTime) orm.Query[alertRow] {
 	query := alerts.Query()
-	parent := runs.Query().Where(orm.TimeGte(runs.HeartbeatAt, cutoff))
+	parent := runs.Query().Where(orm.Gte(runs.HeartbeatAt, cutoff))
 	live := rows.Correlate(rows.From(query), rows.From(parent))
 	live = live.Where(expr.Equal(
-		expr.At(rows.InnerScope(live, rows.ModelScope(parent)), orm.KeyExpr(runs.Key())),
-		expr.At(rows.OuterScope(live, rows.ModelScope(query)), orm.ColumnExpr(alerts.RunID)),
+		expr.At(rows.InnerScope(live, rows.ModelScope(parent)), runs.Key()),
+		expr.At(rows.OuterScope(live, rows.ModelScope(query)), alerts.RunID),
 	))
 	return expr.Where(query, live.Exists())
 }

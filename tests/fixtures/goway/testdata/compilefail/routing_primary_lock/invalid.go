@@ -9,5 +9,5 @@ import (
 )
 
 func invalid(ctx context.Context, db *database.DB) {
-	_, _ = orm.RequireLocked(ctx, db.Primary(), orm.Lock(models.Users.Query().Where(orm.KeyEq(models.Users.ID, models.User{}.ID))))
+	_, _ = orm.RequireLocked(ctx, db.Primary(), orm.Lock(models.Users.Query().Where(orm.Eq(models.Users.ID, models.User{}.ID))))
 }

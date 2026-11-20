@@ -14,7 +14,7 @@ type Widget struct {
 
 // WidgetTable holds the model's typed fields. Example: Widgets.Query().
 type WidgetTable struct {
-	// Table owns the primary key and operations. Example: orm.KeyEq(Widgets.Key(), id).
+	// Table owns the primary key and operations. Example: orm.Eq(Widgets.Key(), id).
 	orm.Table[Widget, model.ID[Widget]]
 }
 

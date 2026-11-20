@@ -34,7 +34,7 @@ func TestExplainRetainsBindingsFailuresAndTransactionCapability(t *testing.T) {
 	sentinel := errors.New("selected executor failed")
 	executor := &planExecutor{failure: sentinel}
 	fields := records()
-	query := fields.Query().Where(orm.KeyEq(fields.ID, 42))
+	query := fields.Query().Where(orm.Eq(fields.ID, 42))
 	compiled, err := orm.Compile(query)
 	if err != nil {
 		t.Fatal(err)

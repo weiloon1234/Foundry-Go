@@ -38,8 +38,8 @@ func TestReportProjectionGolden(t *testing.T) {
 					db := g.open(t.Context())
 					defer db.Close(t.Context())
 
-					f := expr.Value(orm.NumberExpr(models.Orders.TotalCents))
-					q := rowset.OrderBy(rowset.Select(rowset.From(models.Orders.Query()), reportSchema, rowset.Map(reportSchema.Amount, f)).Where(expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 100))), expr.Desc(f))
+					f := expr.Value(models.Orders.TotalCents)
+					q := rowset.OrderBy(rowset.Select(rowset.From(models.Orders.Query()), reportSchema, rowset.Map(reportSchema.Amount, f)).Where(expr.ModelPredicate(orm.Gt(models.Orders.TotalCents, 100))), expr.Desc(f))
 					switch shape {
 					case "group":
 						q = rowset.Having(rowset.GroupBy(q, expr.Group(f)), expr.GtValue(expr.Count[models.Order](), 0))
@@ -82,8 +82,8 @@ func TestReportProjectionGolden(t *testing.T) {
 }
 
 func TestReportFilterAdaptersGolden(t *testing.T) {
-	text := expr.TextNullableRow(orm.NullableTextExpr(models.Users.Nickname))
-	enum := expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status)))
+	text := expr.TextNullableRow(models.Users.Nickname)
+	enum := expr.CompareRow(expr.Value(models.Users.Status))
 
 	newPs := []expr.Predicate[models.User]{
 		expr.Or(expr.Not(expr.NullableEq(text, "Ada")), expr.IsNull(text)),
@@ -91,9 +91,9 @@ func TestReportFilterAdaptersGolden(t *testing.T) {
 		expr.Or(expr.Not(expr.NullableIn(text, "Ada", "Bob")), expr.IsNull(text)),
 		expr.NullableTextContains(text, `A%_`), expr.NullableTextIContains(text, `A%_`), expr.NullableTextLike(text, "A%"),
 		expr.In(enum, models.StatusActive, models.StatusDisabled),
-		expr.NullableEq(expr.CompareNullableRow(expr.Value(orm.NullableTextExpr(models.Users.Nickname))), "Ada"),
-		expr.TextContains(expr.TextRow(orm.TextExpr(models.Users.Email)), "Ada"), expr.TextLike(expr.TextRow(orm.TextExpr(models.Users.Email)), "A%"), expr.Gt(expr.TextRow(orm.TextExpr(models.Users.Email)), "Ada"), expr.NullableGt(text, "Ada"),
-		expr.Has(models.UserRelations.Orders, expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 100))),
+		expr.NullableEq(expr.CompareNullableRow(expr.Value(models.Users.Nickname)), "Ada"),
+		expr.TextContains(expr.TextRow(models.Users.Email), "Ada"), expr.TextLike(expr.TextRow(models.Users.Email), "A%"), expr.Gt(expr.TextRow(models.Users.Email), "Ada"), expr.NullableGt(text, "Ada"),
+		expr.Has(models.UserRelations.Orders, expr.ModelPredicate(orm.Gt(models.Orders.TotalCents, 100))),
 	}
 
 	for _, p := range newPs {

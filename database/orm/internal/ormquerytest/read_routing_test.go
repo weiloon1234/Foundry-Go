@@ -20,14 +20,14 @@ func TestCursorChunksAndLockedLookupRouting(t *testing.T) {
 	if _, err := orm.CursorPaginate(t.Context(), db, r.Query(), orm.CursorRequest[record]{Size: 2}); err != nil {
 		t.Fatal(err)
 	}
-	if err := orm.ChunkByKey(t.Context(), db, r.Query().Limit(1), orm.KeyExpr(r.ID), 2, func([]record) error { return nil }); err != nil {
+	if err := orm.ChunkByKey(t.Context(), db, r.Query().Limit(1), r.ID, 2, func([]record) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if len(replica) != 2 || len(primary) != 0 {
 		t.Fatal("unlocked reads did not route to read pool", primary, replica)
 	}
 	if err := db.Transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(t.Context(), tx, orm.Lock(r.Query().Where(orm.KeyEq(r.ID, 1))))
+		_, err := orm.RequireLocked(t.Context(), tx, orm.Lock(r.Query().Where(orm.Eq(r.ID, 1))))
 		return err
 	}); err != nil {
 		t.Fatal(err)

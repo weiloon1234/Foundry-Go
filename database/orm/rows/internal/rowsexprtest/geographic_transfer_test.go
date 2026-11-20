@@ -22,7 +22,7 @@ func TestGeographicPointAndTypedDistance(t *testing.T) {
 	}
 	d := declareAggregateRecords()
 	origin, _ := expr.NewGeographicPoint(3.14, 101.68)
-	lat := expr.Value(orm.NumberExpr(d.Exact))
+	lat := expr.Value(d.Exact)
 	distance := expr.SphericalDistance(lat, lat, origin)
 	q := rows.SelectScalar(rows.From(expr.OrderBy(expr.Where(d.Query(), expr.Lte(distance, 500)), expr.Asc(distance))), expr.AsSelected(distance))
 	s, err := rows.CompileRead(rows.ReadScalar(q))
@@ -54,11 +54,11 @@ func TestPostgresSphericalDistance(t *testing.T) {
 				return err
 			}
 		}
-		f := expr.Value(orm.NumberExpr(d.Latitude))
+		f := expr.Value(d.Latitude)
 		source := rows.FromModel(d.Query())
 		origin := expr.GeographicPoint{}
 		for _, tc := range []struct{ lat, lon, want, tolerance float64 }{{0, 0, 0, 0.001}, {0, 1, 111195.0802335, 0.01}, {0, 180, math.Pi * 6371008.8, 0.1}, {90, 180, math.Pi * 6371008.8 / 2, 0.1}, {0, -179.9, 179.9 * math.Pi / 180 * 6371008.8, 0.1}} {
-			got, err := rows.ReadScalar(rows.SelectScalar(source, expr.AsSelected(expr.SphericalDistance(expr.Param(orm.NumberExpr(d.Latitude), tc.lat), expr.Param(orm.NumberExpr(d.Latitude), tc.lon), origin)))).RequireFirst(t.Context(), tx)
+			got, err := rows.ReadScalar(rows.SelectScalar(source, expr.AsSelected(expr.SphericalDistance(expr.Param(d.Latitude, tc.lat), expr.Param(d.Latitude, tc.lon), origin)))).RequireFirst(t.Context(), tx)
 			if err != nil {
 				return err
 			}
@@ -66,7 +66,7 @@ func TestPostgresSphericalDistance(t *testing.T) {
 				t.Fatalf("distance %v,%v = %v, want %v", tc.lat, tc.lon, got, tc.want)
 			}
 		}
-		nullable := expr.SphericalDistanceNullable(expr.ParamOf(expr.NullableRow(f), value.Null[float64]()), expr.NullableRow(expr.Param(orm.NumberExpr(d.Latitude), 1)), origin)
+		nullable := expr.SphericalDistanceNullable(expr.ParamOf(expr.NullableRow(f), value.Null[float64]()), expr.NullableRow(expr.Param(d.Latitude, 1)), origin)
 		got, err := rows.ReadScalar(rows.SelectScalar(source, expr.AsSelected(nullable))).RequireFirst(t.Context(), tx)
 		if err != nil {
 			return err
@@ -75,7 +75,7 @@ func TestPostgresSphericalDistance(t *testing.T) {
 			t.Fatal("NULL coordinates became distance")
 		}
 		crossing, _ := expr.NewGeographicPoint(0, 179.9)
-		actual, err := rows.ReadScalar(rows.SelectScalar(source, expr.AsSelected(expr.SphericalDistance(expr.Param(orm.NumberExpr(d.Latitude), 0), expr.Param(orm.NumberExpr(d.Latitude), -179.9), crossing)))).RequireFirst(t.Context(), tx)
+		actual, err := rows.ReadScalar(rows.SelectScalar(source, expr.AsSelected(expr.SphericalDistance(expr.Param(d.Latitude, 0), expr.Param(d.Latitude, -179.9), crossing)))).RequireFirst(t.Context(), tx)
 		if err != nil {
 			return err
 		}

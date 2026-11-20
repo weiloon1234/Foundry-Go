@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.ColumnEq(s.Vaults.Token, "plaintext")
+var _ = orm.Eq(s.Vaults.Token, "plaintext")

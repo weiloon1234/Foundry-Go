@@ -7,4 +7,4 @@ import (
 	m "foundry.test/goway/models/mutators"
 )
 
-var _ = orm.NullableInputTextSet(m.Members.Note, c.StoredLabel("stored"))
+var _ = orm.Set(m.Members.Note, c.StoredLabel("stored"))

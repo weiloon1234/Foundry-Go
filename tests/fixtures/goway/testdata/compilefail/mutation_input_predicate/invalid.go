@@ -7,4 +7,4 @@ import (
 	m "foundry.test/goway/models/mutators"
 )
 
-var _ = orm.InputTextEq(m.Members.Email, c.EmailInput{})
+var _ = orm.Eq(m.Members.Email, c.EmailInput{})

@@ -50,7 +50,7 @@ page after reading it does not order the full matching dataset.
 <!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#reads-after -->
 ```go
 func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) error {
-	_, err := orm.All(ctx, db, models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100)))
+	_, err := orm.All(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) 
 	if err != nil {
 		return err
 	}
-	_, err = orm.Require(ctx, db, models.Orders.Query().Where(orm.KeyEq(models.Orders.ID, id)))
+	_, err = orm.Require(ctx, db, models.Orders.Query().Where(orm.Eq(models.Orders.ID, id)))
 	return err
 }
 ```
@@ -74,10 +74,11 @@ outcomes through the framework's typed errors.
 <a id="recipe-filter-expressions"></a>
 ## Typed predicates and expression ordering
 
-Methodless column handles use per-kind functions, such as `orm.TextEq(column, value)`
-and `orm.NumberGt(column, value)`. Go does not overload functions by argument
-type. Separate operators keep concrete column types and avoid value boxing or
-runtime type dispatch. Each family preserves its declared equality/membership,
+Methodless column handles use one generic function per operation, such as
+`orm.Eq(column, value)` and `orm.Gt(column, value)`. A type constraint on the
+column's kind decides which columns each function accepts, so a wrong pairing
+fails to compile. Concrete column types are kept; values are not boxed and
+nothing is dispatched at run time. Each family preserves its declared equality/membership,
 NULL checks, ordered comparisons or text patterns. Enums remain equality-only;
 model IDs retain their model owner. Empty membership is false. NULL comparisons
 follow SQL three-valued logic; use explicit NULL checks for absence. Empty
@@ -88,10 +89,10 @@ NULL rows should match.
 `Contains`, `StartsWith` and `EndsWith` escape pattern metacharacters for literal
 search. `Like`/`ILike` accept SQL patterns. Values are bound, never interpolated.
 Use `expr.Where` and `expr.OrderBy` to apply computed row predicates/orders; adapt
-a model predicate with `expr.ModelPredicate` when composing expressions. Pass an
-explicit sealed adapter when an expression API accepts a column, for example
-`expr.Value(orm.TextExpr(Users.Email))`. Adapters preserve the column family,
-model, value and role constraints.
+a model predicate with `expr.ModelPredicate` when composing expressions. Pass
+the column directly when an expression API accepts one, for example
+`expr.Value(Users.Email)`. Its column family, model, value and role constraints
+are preserved.
 
 Use `expr.TextRowValue(v)` or `expr.TextNullableRowValue(v)` to compare a
 computed `RowValue`, including a correlated scalar, as text. These lifts preserve
@@ -110,8 +111,8 @@ func noteSearch(term scalarqueries.Label) orm.Query[scalarqueries.Sample] {
 	outer := rows.OuterScope(correlation, rows.ModelScope(scalarqueries.Samples.Query()))
 	inner := rows.InnerScope(correlation, rows.Scope(lookup))
 	scalar := rows.SelectCorrelatedScalar(correlation,
-		expr.AsSelected(expr.Row(expr.At(inner, orm.NullableTextExpr(scalarqueries.Samples.Note))))).
-		Where(expr.Equal(expr.At(inner, orm.NumberKeyExpr(scalarqueries.Samples.ID)), expr.At(outer, orm.NumberKeyExpr(scalarqueries.Samples.ID)))).Limit(1)
+		expr.AsSelected(expr.Row(expr.At(inner, scalarqueries.Samples.Note)))).
+		Where(expr.Equal(expr.At(inner, scalarqueries.Samples.ID), expr.At(outer, scalarqueries.Samples.ID))).Limit(1)
 	text := expr.TextNullableRowValue(rows.CorrelatedScalarNullableRowQuery(scalar))
 	return expr.Where(scalarqueries.Samples.Query(), expr.NullableTextIContains(text, term))
 }

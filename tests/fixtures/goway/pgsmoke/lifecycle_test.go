@@ -30,9 +30,9 @@ func TestLifecyclePersistedChangesRollbackAndCommit(t *testing.T) {
 			Creating: func(ctx context.Context, tx *database.Tx, w *orm.Write[h.Member]) error {
 				if !orm.WriteIsSet(w, func() func(arg0 string) orm.Assignment[h.Member] {
 					receiver := q.Name
-					return func(arg0 string) orm.Assignment[h.Member] { return orm.InputTextSet(receiver, arg0) }
+					return func(arg0 string) orm.Assignment[h.Member] { return orm.Set(receiver, arg0) }
 				}()) {
-					return orm.WriteSet(w, orm.InputTextSet(q.Name, " supplied "))
+					return orm.WriteSet(w, orm.Set(q.Name, " supplied "))
 				}
 				return nil
 			},
@@ -51,12 +51,12 @@ func TestLifecyclePersistedChangesRollbackAndCommit(t *testing.T) {
 			AfterCommit: func(context.Context, lifecycle.Operation, orm.Changes[h.Member]) error { commits++; return nil },
 		}
 	})
-	got, err := orm.Insert(ctx, db, q.Table, orm.KeySet(q.Key(), 1), orm.ColumnSet(q.Body, []byte{1, 2}))
+	got, err := orm.Insert(ctx, db, q.Table, orm.Set(q.Key(), 1), orm.Set(q.Body, []byte{1, 2}))
 	must(t, err)
 	if got.Name != "supplied" || got.CreatedAt.IsZero() || got.UpdatedAt.IsZero() || commits != 1 {
 		t.Fatal("hook/convention integration")
 	}
-	_, err = orm.Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Name, " reject "))
+	_, err = orm.Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, orm.Set(q.Name, " reject "))
 	if !errors.Is(err, veto) {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestLifecyclePersistedChangesRollbackAndCommit(t *testing.T) {
 		t.Fatal("outbox-style transaction effect escaped rollback")
 	}
 	must(t, db.Transaction(ctx, func(tx *database.Tx) error {
-		_, err := orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Name, " changed "))
+		_, err := orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), 1, orm.Set(q.Name, " changed "))
 		if err != nil {
 			return err
 		}
@@ -88,16 +88,16 @@ func TestLifecyclePersistedChangesRollbackAndCommit(t *testing.T) {
 	}))
 	before, _ := captured.Before().Get()
 	after, _ := captured.After().Get()
-	name, err := orm.ChangeOf(captured, orm.InputTextExpr(q.Name))
+	name, err := orm.ChangeOf(captured, q.Name)
 	must(t, err)
 	if before.Name != "supplied" || after.Name != "changed" || !name.Assigned() || !name.Changed() || commits != 2 {
 		t.Fatal("locked original/returning/commit")
 	}
-	_, err = orm.UpdateAll(ctx, db, q.Query(), orm.InputTextSet(q.Name, "set"))
+	_, err = orm.UpdateAll(ctx, db, q.Query(), orm.Set(q.Name, "set"))
 	if !errors.Is(err, fault.Invalid) {
 		t.Fatal("silent set bypass")
 	}
-	count, err = orm.UpdateAll(ctx, db, orm.WithoutModelHooks(q.Query()), orm.InputTextSet(q.Name, "set"))
+	count, err = orm.UpdateAll(ctx, db, orm.WithoutModelHooks(q.Query()), orm.Set(q.Name, "set"))
 	must(t, err)
 	if count != 1 || commits != 2 {
 		t.Fatal("set acknowledgement")

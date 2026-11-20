@@ -100,7 +100,7 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 		}
 		f := store.Translations
 		bytes := 0
-		return orm.Each(ctx, tx, store.Translations.Query().Where(orm.TextEq(f.Scope, owner.Scope()), orm.TextEq(f.SubjectKey, subject)).OrderBy(orm.TextAsc(f.Field), orm.TextAsc(f.Locale)).Limit(MaxRowsPerOwner+1), func(row store.Translation) error {
+		return orm.Each(ctx, tx, store.Translations.Query().Where(orm.Eq(f.Scope, owner.Scope()), orm.Eq(f.SubjectKey, subject)).OrderBy(orm.Asc(f.Field), orm.Asc(f.Locale)).Limit(MaxRowsPerOwner+1), func(row store.Translation) error {
 			bytes += len(row.Value)
 			if len(result) >= MaxRowsPerOwner || bytes > MaxBatchBytes {
 				return safeerror.NewFault(fault.Conflict, "translation result exceeds its row or byte limit")
@@ -139,7 +139,7 @@ func (f Field[M, K]) matchingKeys(ctx context.Context, m *Manager, locale i18n.L
 		fields := store.Translations
 		// The value hash index (000002_index_translation_values) serves the
 		// equality; only ownership/index columns are selected, never the text.
-		return rows.EachRead(ctx, tx, rows.Read(store.TranslationsIndex(store.Translations.Query().Where(orm.TextEq(fields.Scope, f.definition.owner.Scope()), orm.TextEq(fields.Field, string(f.Name())), orm.TextEq(fields.Locale, string(locale)), orm.TextEq(fields.Value, text)).OrderBy(orm.TextAsc(fields.KeyColumn)).Limit(querycore.MaxIdentityBatch+1))), func(row store.TranslationIndex) error {
+		return rows.EachRead(ctx, tx, rows.Read(store.TranslationsIndex(store.Translations.Query().Where(orm.Eq(fields.Scope, f.definition.owner.Scope()), orm.Eq(fields.Field, string(f.Name())), orm.Eq(fields.Locale, string(locale)), orm.Eq(fields.Value, text)).OrderBy(orm.Asc(fields.KeyColumn)).Limit(querycore.MaxIdentityBatch+1))), func(row store.TranslationIndex) error {
 			if len(keys) >= querycore.MaxIdentityBatch {
 				return safeerror.NewFault(fault.Conflict, "translation matching scope exceeds its limit")
 			}
@@ -188,7 +188,7 @@ func (f Field[M, K]) clear(ctx context.Context, tx *database.Tx, m *Manager, ref
 		return 0, err
 	}
 	fields := store.Translations
-	return deleteRows(ctx, tx, store.Translations.Query().Where(orm.TextEq(fields.Scope, subject.Scope), orm.TextEq(fields.SubjectKey, subject.Key), orm.TextEq(fields.Field, string(f.Name()))))
+	return deleteRows(ctx, tx, store.Translations.Query().Where(orm.Eq(fields.Scope, subject.Scope), orm.Eq(fields.SubjectKey, subject.Key), orm.Eq(fields.Field, string(f.Name()))))
 }
 
 // DeleteAll locks the owner and deletes all its translations in a write transaction.
@@ -212,7 +212,7 @@ func DeleteAll[M any, K comparable](ctx context.Context, m *Manager, owner exten
 }
 func deleteSubject(ctx context.Context, tx *database.Tx, subject extensions.Subject) (int, error) {
 	f := store.Translations
-	return deleteRows(ctx, tx, store.Translations.Query().Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key)))
+	return deleteRows(ctx, tx, store.Translations.Query().Where(orm.Eq(f.Scope, subject.Scope), orm.Eq(f.SubjectKey, subject.Key)))
 }
 
 // deleteRows removes every row selected by q in one set-based DELETE USING,
@@ -220,7 +220,7 @@ func deleteSubject(ctx context.Context, tx *database.Tx, subject extensions.Subj
 // lock the owner first (or run after its deletion); per-owner rows are bounded
 // by MaxRowsPerOwner at write time.
 func deleteRows(ctx context.Context, tx *database.Tx, q orm.Query[store.Translation]) (int, error) {
-	count, err := rows.DeleteUsing(q, rows.From(q)).Match(rows.MatchSource(orm.TextExpr(store.Translations.KeyColumn), expr.Value(orm.TextExpr(store.Translations.KeyColumn)))).Exec(ctx, tx)
+	count, err := rows.DeleteUsing(q, rows.From(q)).Match(rows.MatchSource(store.Translations.KeyColumn, expr.Value(store.Translations.KeyColumn))).Exec(ctx, tx)
 	if err != nil {
 		return 0, err
 	}

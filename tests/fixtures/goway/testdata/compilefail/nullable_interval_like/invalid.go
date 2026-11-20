@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.NullableTextLike(c.Records.MaybePeriod, "%day%")
+var _ = orm.Like(c.Records.MaybePeriod, "%day%")

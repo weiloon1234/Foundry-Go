@@ -51,7 +51,7 @@ func storedIncident(t *testing.T, db *database.DB, schema string, c *Collector, 
 	var result value.Optional[alertRow]
 	storageTransaction(t, db, schema, func(tx *database.Tx) error {
 		var err error
-		result, err = orm.First(t.Context(), tx, alerts.Query().Where(orm.KeyEq(alerts.Key(), AlertKey(digest(c.runID.String()+"|"+string(rule))))))
+		result, err = orm.First(t.Context(), tx, alerts.Query().Where(orm.Eq(alerts.Key(), AlertKey(digest(c.runID.String()+"|"+string(rule))))))
 		return err
 	})
 	return result
@@ -289,7 +289,7 @@ func TestPostgresTelemetryIncidentEpisodeOverflowAndBackwardsTime(t *testing.T) 
 		t.Fatal("backwards capture time regressed the incident")
 	}
 	storageTransaction(t, db, schema, func(tx *database.Tx) error {
-		_, err := orm.Update(t.Context(), tx, alerts.Query(), alerts.Key(), reopened.Key, orm.EnumSet(alerts.State, AlertStateRecovered), orm.NumberSet(alerts.Episode, Episode(math.MaxInt64)))
+		_, err := orm.Update(t.Context(), tx, alerts.Query(), alerts.Key(), reopened.Key, orm.Set(alerts.State, AlertStateRecovered), orm.Set(alerts.Episode, Episode(math.MaxInt64)))
 		return err
 	})
 	captureIncident(t, s.collector, .95, 0, 0)
@@ -348,7 +348,7 @@ func TestPostgresTelemetryAcknowledgementSharesActorTransactionAndEpisodes(t *te
 		if _, err := tx.Exec(t.Context(), `CREATE TABLE telemetry_test_attributions (key text PRIMARY KEY, episode bigint NOT NULL, actor text NOT NULL REFERENCES telemetry_test_actors(key))`); err != nil {
 			return err
 		}
-		_, err := orm.Insert(t.Context(), tx, incidentActors.Table, orm.KeySet(incidentActors.Key(), "developer"), orm.ColumnSet(incidentActors.Allowed, true))
+		_, err := orm.Insert(t.Context(), tx, incidentActors.Table, orm.Set(incidentActors.Key(), "developer"), orm.Set(incidentActors.Allowed, true))
 		return err
 	})
 	captureIncident(t, s.collector, .95, 0, 0)
@@ -363,7 +363,7 @@ func TestPostgresTelemetryAcknowledgementSharesActorTransactionAndEpisodes(t *te
 			if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+schema+`", pg_catalog`); err != nil {
 				return err
 			}
-			actor, err := orm.RequireLocked(t.Context(), tx, orm.Lock(incidentActors.Query()).Where(orm.KeyEq(incidentActors.Key(), "developer")))
+			actor, err := orm.RequireLocked(t.Context(), tx, orm.Lock(incidentActors.Query()).Where(orm.Eq(incidentActors.Key(), "developer")))
 			if err != nil {
 				return err
 			}
@@ -384,8 +384,8 @@ func TestPostgresTelemetryAcknowledgementSharesActorTransactionAndEpisodes(t *te
 			if before != after {
 				return errors.New("acknowledgement changed caller schema scope")
 			}
-			conflict := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(incidentAttributions.Key()))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(incidentAttributions.Episode)), orm.ConflictIncoming(orm.TextExpr(incidentAttributions.Actor)))
-			if _, err := orm.Upsert(t.Context(), tx, incidentAttributions.Query(), conflict, orm.KeySet(incidentAttributions.Key(), result.Key), orm.NumberSet(incidentAttributions.Episode, result.Episode), orm.TextSet(incidentAttributions.Actor, actor.Key)); err != nil {
+			conflict := orm.OnConflict(orm.ConflictKey(incidentAttributions.Key())).DoUpdate(orm.ConflictIncoming(incidentAttributions.Episode), orm.ConflictIncoming(incidentAttributions.Actor))
+			if _, err := orm.Upsert(t.Context(), tx, incidentAttributions.Query(), conflict, orm.Set(incidentAttributions.Key(), result.Key), orm.Set(incidentAttributions.Episode, result.Episode), orm.Set(incidentAttributions.Actor, actor.Key)); err != nil {
 				return err
 			}
 			if rollback {
@@ -434,7 +434,7 @@ func TestPostgresTelemetryAcknowledgementSharesActorTransactionAndEpisodes(t *te
 		if attribution.Episode == reopened.Episode || attribution.Episode != 1 {
 			return errors.New("reopen did not invalidate the prior actor attribution")
 		}
-		_, err = orm.Update(t.Context(), tx, incidentActors.Query(), incidentActors.Key(), "developer", orm.ColumnSet(incidentActors.Allowed, false))
+		_, err = orm.Update(t.Context(), tx, incidentActors.Query(), incidentActors.Key(), "developer", orm.Set(incidentActors.Allowed, false))
 		return err
 	})
 	if _, err := acknowledge(false); !errors.Is(err, errActorRevoked) {
@@ -442,7 +442,7 @@ func TestPostgresTelemetryAcknowledgementSharesActorTransactionAndEpisodes(t *te
 	}
 	requireIncident(t, db, schema, s.collector, RulePoolPressure, AlertStateOpen, 2)
 	storageTransaction(t, db, schema, func(tx *database.Tx) error {
-		_, err := orm.Update(t.Context(), tx, incidentActors.Query(), incidentActors.Key(), "developer", orm.ColumnSet(incidentActors.Allowed, true))
+		_, err := orm.Update(t.Context(), tx, incidentActors.Query(), incidentActors.Key(), "developer", orm.Set(incidentActors.Allowed, true))
 		return err
 	})
 	ack, err := acknowledge(false)

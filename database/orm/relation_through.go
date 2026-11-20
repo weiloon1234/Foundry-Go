@@ -25,7 +25,7 @@ func ThroughOf[M, N, P any](b Builder[M], ptr *relation.Through[N, P]) Through[M
 }
 
 // ThroughRelation retains source, target and pivot owners in a thin immutable plan.
-// Example: UserRelations.Groups.WherePivot(orm.InputTextEq(Memberships.Role, "admin")).
+// Example: UserRelations.Groups.WherePivot(orm.Eq(Memberships.Role, "admin")).
 type ThroughRelation[M, N, P any] struct {
 	_    [0]*M
 	_    [0]*N
@@ -36,26 +36,21 @@ type ThroughRelation[M, N, P any] struct {
 func (r ThroughRelation[M, N, P]) relationPlan(*M) *relationPlan { return r.plan }
 func (r ThroughRelation[M, N, P]) relationTarget(*N)             {}
 func (r ThroughRelation[M, N, P]) ormError() error               { return validateRelation(r.plan, nil) }
-func relationColumn[M any, K comparable](c KeyColumn[M, K]) columnData[K] {
-	if nilInterface(c) {
-		return columnData[K]{}
-	}
-	return c.ormColumn(nil)
-}
 
 // ManyToManyOf unifies both key pairs and binds a concrete pivot slot.
-// Example: orm.ManyToManyOf(Users.Groups,orm.KeyExpr(Users.ID),orm.ColumnExpr(Memberships.UserID),orm.ColumnExpr(Memberships.GroupID),orm.KeyExpr(Groups.ID)).
-func ManyToManyOf[M, N, P any, A, B comparable](slot Through[M, N, P], local KeyColumn[M, A], pivotLocal KeyColumn[P, A], pivotForeign KeyColumn[P, B], foreign KeyColumn[N, B]) ThroughRelation[M, N, P] {
-	a, pa, pb, b := relationColumn(local), relationColumn(pivotLocal), relationColumn(pivotForeign), relationColumn(foreign)
-	p := newRelationCore(slot.core, a.core, b.core, reflect.TypeFor[M](), reflect.TypeFor[N]())
-	if pa.core == nil || pb.core == nil || pa.core.owner == nil || pa.core.owner != pb.core.owner {
+// Example: orm.ManyToManyOf(Users.Groups, orm.JoinKeys(Users.ID, Memberships.UserID), orm.JoinKeys(Memberships.GroupID, Groups.ID)).
+func ManyToManyOf[M, N, P any, A, B comparable](slot Through[M, N, P], parentToPivot KeyLink[M, P, A], pivotToTarget KeyLink[P, N, B]) ThroughRelation[M, N, P] {
+	a, pa, pb, b := parentToPivot.local, parentToPivot.foreign, pivotToTarget.local, pivotToTarget.foreign
+	paCore, pbCore := columnCoreOf(pa), columnCoreOf(pb)
+	p := newRelationCore(slot.core, columnCoreOf(a), columnCoreOf(b), reflect.TypeFor[M](), reflect.TypeFor[N]())
+	if paCore == nil || pbCore == nil || paCore.owner == nil || paCore.owner != pbCore.owner {
 		p.err = safeerror.Join("operation failed", p.err, invalid("pivot keys must belong to one bound model"))
 	} else {
-		if slot.core == nil || slot.core.pivot != reflect.TypeFor[P]() || pa.core.owner.typ != reflect.TypeFor[P]() {
+		if slot.core == nil || slot.core.pivot != reflect.TypeFor[P]() || paCore.owner.typ != reflect.TypeFor[P]() {
 			p.err = safeerror.Join("operation failed", p.err, invalid("pivot slot/model mismatch"))
 		}
-		p.join = &relationJoin{pivot: newQuery(pa.core.owner), first: querycore.FieldRef{Table: pa.core.owner.model.Table, Column: pa.core.metadata.Name}, second: querycore.FieldRef{Table: pb.core.owner.model.Table, Column: pb.core.metadata.Name}}
-		p.err = safeerror.Join("operation failed", p.err, declarationCoreError(pa.core.owner))
+		p.join = &relationJoin{pivot: newQuery(paCore.owner), first: querycore.FieldRef{Table: paCore.owner.model.Table, Column: paCore.metadata.Name}, second: querycore.FieldRef{Table: pbCore.owner.model.Table, Column: pbCore.metadata.Name}}
+		p.err = safeerror.Join("operation failed", p.err, declarationCoreError(paCore.owner))
 	}
 	if p.err == nil {
 		p.loaded = func(base unsafe.Pointer) bool {
@@ -68,13 +63,13 @@ func ManyToManyOf[M, N, P any, A, B comparable](slot Through[M, N, P], local Key
 	return ThroughRelation[M, N, P]{plan: p}
 }
 
-// Where derives an immutable joined descriptor for its typed side. Example: links.Where(orm.TextEq(Groups.Name, "maintainers")).
+// Where derives an immutable joined descriptor for its typed side. Example: links.Where(orm.Eq(Groups.Name, "maintainers")).
 func (r ThroughRelation[M, N, P]) Where(ps ...Predicate[N]) ThroughRelation[M, N, P] {
 	r.plan = relationWhere(r.plan, ps)
 	return r
 }
 
-// OrderBy derives an immutable joined descriptor for its typed side. Example: links.OrderBy(orm.TextAsc(Groups.Name)).
+// OrderBy derives an immutable joined descriptor for its typed side. Example: links.OrderBy(orm.Asc(Groups.Name)).
 func (r ThroughRelation[M, N, P]) OrderBy(orders ...Order[N]) ThroughRelation[M, N, P] {
 	r.plan = relationThroughOrder(r.plan, orders, false)
 	return r
@@ -86,13 +81,13 @@ func (r ThroughRelation[M, N, P]) With(children ...Relation[N]) ThroughRelation[
 	return r
 }
 
-// WherePivot derives an immutable joined descriptor for its typed side. Example: links.WherePivot(orm.InputTextEq(Memberships.Role, "admin")).
+// WherePivot derives an immutable joined descriptor for its typed side. Example: links.WherePivot(orm.Eq(Memberships.Role, "admin")).
 func (r ThroughRelation[M, N, P]) WherePivot(ps ...Predicate[P]) ThroughRelation[M, N, P] {
 	r.plan = relationPivotWhere(r.plan, ps)
 	return r
 }
 
-// OrderByPivot derives an immutable joined descriptor for its typed side. Example: links.OrderByPivot(orm.KeyAsc(Memberships.ID)).
+// OrderByPivot derives an immutable joined descriptor for its typed side. Example: links.OrderByPivot(orm.Asc(Memberships.ID)).
 func (r ThroughRelation[M, N, P]) OrderByPivot(orders ...Order[P]) ThroughRelation[M, N, P] {
 	r.plan = relationThroughOrder(r.plan, orders, true)
 	return r

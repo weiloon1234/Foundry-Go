@@ -27,7 +27,7 @@ func (c Collection[M, K]) matchingKeys(ctx context.Context, m *Manager) ([]K, er
 				return err
 			}
 			f := store.Files
-			rows, err := rows.Read(store.Index(store.Files.Query().Where(orm.TextEq(f.Scope, c.definition.owner.Scope()), orm.TextEq(f.Collection, string(c.Name())), orm.TextEq(f.Locale, locale), orm.TextEq(f.State, string(Ready))).OrderBy(orm.TextAsc(f.SubjectKey), orm.KeyAsc(f.ID)).Limit(MaxBatchFiles+1))).All(ctx, tx)
+			rows, err := rows.Read(store.Index(store.Files.Query().Where(orm.Eq(f.Scope, c.definition.owner.Scope()), orm.Eq(f.Collection, string(c.Name())), orm.Eq(f.Locale, locale), orm.Eq(f.State, string(Ready))).OrderBy(orm.Asc(f.SubjectKey), orm.Asc(f.ID)).Limit(MaxBatchFiles+1))).All(ctx, tx)
 			if err != nil {
 				return err
 			}

@@ -31,10 +31,10 @@ func TestInputBuffersSurviveCallerAndMutatorChanges(t *testing.T) {
 	var bindings [][]any
 	db := testDB(t, testConnector{bindings: &bindings, columns: []string{"id", "body"}, values: [][]driver.Value{{int64(1), []byte{2, 2}}}})
 	input := inputBytes{1, 2}
-	a := orm.InputColumnSet(fields.Body, input)
+	a := orm.Set(fields.Body, input)
 	input[0] = 9
 	for range 2 {
-		_, err := orm.Insert(t.Context(), db, fields.Table, orm.KeySet(fields.Key(), 1), a)
+		_, err := orm.Insert(t.Context(), db, fields.Table, orm.Set(fields.Key(), 1), a)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -60,7 +60,7 @@ func TestExplicitInputKeyUsesSinglePrimaryDeclaration(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := testDB(t, testConnector{columns: []string{"code"}, values: [][]driver.Value{{"MY"}}})
-	got, err := orm.Insert(t.Context(), db, fields.Table, orm.InputKeySet(fields.Code, naturalKeyInput{Value: "MY"}))
+	got, err := orm.Insert(t.Context(), db, fields.Table, orm.Set(fields.Code, naturalKeyInput{Value: "MY"}))
 	if err != nil || got.Code != "MY" {
 		t.Fatal("explicit natural input key", err)
 	}

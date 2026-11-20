@@ -6,4 +6,4 @@ import (
 	"foundry.test/goway/models"
 )
 
-var _ = models.UserRelations.Orders.Where(orm.NumberGt(models.Users.Age, 18))
+var _ = models.UserRelations.Orders.Where(orm.Gt(models.Users.Age, 18))

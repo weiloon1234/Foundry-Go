@@ -1,7 +1,5 @@
 package invalid
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"context"
 	f "foundry.test/consumer/transactionqueries"
@@ -15,8 +13,8 @@ type b struct{}
 
 var source = rows.AsTransaction[a](rows.TransactionOf(rows.ModelRecord(f.Records.Query())), "records_alias")
 var fields = rows.TransactionScope(source)
-var selected = rows.SelectTransactionValue(source, expr.AsSelected(expr.Row(expr.At(fields, orm.KeyExpr(f.Records.ID)))))
+var selected = rows.SelectTransactionValue(source, expr.AsSelected(expr.Row(expr.At(fields, f.Records.ID))))
 var _ context.Context
 var _ *database.Tx
 
-var _ = rows.TransactionInQuery(expr.At(fields, orm.TextExpr(f.Records.Name)), selected)
+var _ = rows.TransactionInQuery(expr.At(fields, f.Records.Name), selected)

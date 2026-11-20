@@ -51,9 +51,9 @@ func TestFieldMutatorsContainFailuresBeforeWriting(t *testing.T) {
 				var result mutationRecord
 				var err error
 				if operation == "insert" {
-					result, err = orm.Insert(t.Context(), db, model.Table, orm.InputTextSet(model.Name, "private record name"))
+					result, err = orm.Insert(t.Context(), db, model.Table, orm.Set(model.Name, "private record name"))
 				} else {
-					result, err = orm.Update(t.Context(), db, model.Table.Query(), model.Table.Key(), 1, orm.InputTextSet(model.Name, "private record name"))
+					result, err = orm.Update(t.Context(), db, model.Table.Query(), model.Table.Key(), 1, orm.Set(model.Name, "private record name"))
 				}
 				if result != (mutationRecord{}) || err == nil || calls != 1 || sends.Load() != 0 {
 					t.Fatal("mutator failure published a result, retried, or sent a write")

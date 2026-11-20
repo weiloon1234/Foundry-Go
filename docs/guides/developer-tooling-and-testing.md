@@ -574,10 +574,10 @@ The same pattern is compiled for users:
 func usersFactory() (*factory.Factory[models.User, []orm.Assignment[models.User]], error) {
 	return factory.Define(models.Users.Table, func(_ context.Context, n factory.Sequence) ([]orm.Assignment[models.User], error) {
 		return []orm.Assignment[models.User]{
-			orm.TextSet(models.Users.Email, fmt.Sprintf("reader-%d@example.test", n)),
-			orm.NumberSet(models.Users.Age, 18),
-			orm.EnumSet(models.Users.Status, models.StatusActive),
-			orm.EnumSet(models.Users.Level, models.LevelBasic),
+			orm.Set(models.Users.Email, fmt.Sprintf("reader-%d@example.test", n)),
+			orm.Set(models.Users.Age, 18),
+			orm.Set(models.Users.Status, models.StatusActive),
+			orm.Set(models.Users.Level, models.LevelBasic),
 		}, nil
 	})
 }

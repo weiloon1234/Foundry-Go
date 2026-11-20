@@ -16,10 +16,10 @@ func TestScalarGroupingPreservesOwnershipAndInput(t *testing.T) {
 	count := expr.Count[member]()
 	base := rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(count))
 	compile := func(q rows.Scalar[member, int64]) error {
-		_, err := orm.Compile(expr.Where(m.Query(), expr.Equal(expr.Value(orm.KeyExpr(m.ID)), expr.Coalesce(rows.ScalarRowQuery(rows.From(m.Query()), q), expr.Param(orm.KeyExpr(m.ID), 0)))))
+		_, err := orm.Compile(expr.Where(m.Query(), expr.Equal(expr.Value(m.ID), expr.Coalesce(rows.ScalarRowQuery(rows.From(m.Query()), q), expr.Param(m.ID, 0)))))
 		return err
 	}
-	grouped := rows.GroupByScalar(base, expr.Group(expr.Value(orm.KeyExpr(m.ID))))
+	grouped := rows.GroupByScalar(base, expr.Group(expr.Value(m.ID)))
 	selected := rows.OrderScalar(rows.DistinctScalar(rows.HavingScalar(grouped, expr.GtValue(count, 0))), expr.DescValue(count))
 	if err := compile(selected); err != nil {
 		t.Fatal(err)
@@ -33,19 +33,19 @@ func TestScalarGroupingPreservesOwnershipAndInput(t *testing.T) {
 	if len(rows.SourceOf(grouped).Node.Having) != 0 || rows.SourceOf(grouped).Node.Distinct.Kind != 0 {
 		t.Fatal("later scalar clauses changed their input")
 	}
-	id := rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID)))))
+	id := rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(m.ID))))
 	for _, invalid := range []rows.Scalar[member, int64]{
-		rows.GroupByScalar(base, expr.Group(expr.Value(orm.KeyExpr(foreign.ID)))),
-		rows.GroupByScalar(base, expr.Group(expr.Param(orm.KeyExpr(foreign.ID), 1))),
-		rows.HavingScalar(base, expr.GtValue(expr.CountField(orm.KeyExpr(foreign.ID)), 0)),
+		rows.GroupByScalar(base, expr.Group(expr.Value(foreign.ID))),
+		rows.GroupByScalar(base, expr.Group(expr.Param(foreign.ID, 1))),
+		rows.HavingScalar(base, expr.GtValue(expr.CountField(foreign.ID), 0)),
 		rows.HavingScalar(base, expr.HavingPredicate[member]{}),
-		rows.DistinctOnScalar(id, expr.Group(expr.Value(orm.KeyExpr(foreign.ID)))),
+		rows.DistinctOnScalar(id, expr.Group(expr.Value(foreign.ID))),
 		rows.DistinctOnScalar(id, expr.GroupKey[member]{}),
 		rows.DistinctOnScalar(id),
 		rows.DistinctOnScalarValues(base),
-		rows.DistinctOnScalarValues(base, expr.Key(expr.AsSelected(expr.CountField(orm.KeyExpr(foreign.ID))))),
+		rows.DistinctOnScalarValues(base, expr.Key(expr.AsSelected(expr.CountField(foreign.ID)))),
 		rows.DistinctOnScalarValues(base, expr.ProjectionKey[member]{}),
-		rows.OrderScalar(rows.DistinctOnScalar(id, expr.Group(expr.Value(orm.KeyExpr(m.ID)))), expr.Asc(expr.Value(orm.TextExpr(m.Name)))),
+		rows.OrderScalar(rows.DistinctOnScalar(id, expr.Group(expr.Value(m.ID))), expr.Asc(expr.Value(m.Name))),
 		rows.DistinctScalar(rows.Scalar[member, int64]{}),
 	} {
 		if err := compile(invalid); !errors.Is(err, fault.Invalid) {
@@ -53,7 +53,7 @@ func TestScalarGroupingPreservesOwnershipAndInput(t *testing.T) {
 		}
 	}
 	// DISTINCT replaces the key list, so later ordering need not keep its prefix.
-	if err := compile(rows.DistinctScalar(rows.DistinctOnScalar(id, expr.Group(expr.Value(orm.TextExpr(m.Name)))))); err != nil {
+	if err := compile(rows.DistinctScalar(rows.DistinctOnScalar(id, expr.Group(expr.Value(m.Name))))); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -64,7 +64,7 @@ func TestDistinctRecordsAndSetsKeepInputsAndRejectZero(t *testing.T) {
 	record := rows.DistinctRecord(input)
 	set := rows.UnionAll(input, input)
 	distinctSet := rows.DistinctSet(set)
-	scalar := rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))))
+	scalar := rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(m.ID)))))
 	values := rows.UnionAllValues(scalar, scalar)
 	distinctValues := rows.DistinctValues(values)
 	if rows.RecordReadCore(input).Source.Node.Distinct.Kind != 0 || rows.SetQueryCore(set).Source.Node.Distinct.Kind != 0 || rows.ValueSetQueryCore(values).Source.Node.Distinct.Kind != 0 {

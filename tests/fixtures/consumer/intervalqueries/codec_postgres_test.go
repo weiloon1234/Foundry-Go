@@ -33,7 +33,7 @@ func TestPostgresIntervalOutputStyles(t *testing.T) {
 				return err
 			}
 			for _, want := range cases {
-				if got := intervalOne(t, tx, expr.AsSelected(expr.Param(orm.IntervalExpr(f.Period), want))); got != want {
+				if got := intervalOne(t, tx, expr.AsSelected(expr.Param(f.Period, want))); got != want {
 					t.Fatal(style, got, want)
 				}
 			}
@@ -62,21 +62,21 @@ func TestPostgresIntervalWritesAndDecodeFailure(t *testing.T) {
 	runIntervals(t, func(tx *database.Tx, _ []intervalqueries.Sample) error {
 		q := intervalqueries.Samples.Query()
 		f := intervalqueries.Samples
-		got, err := orm.Update(t.Context(), tx, intervalqueries.Samples.Table.Query(), intervalqueries.Samples.Table.Key(), 2, orm.IntervalSet(f.Period, temporal.Days(4)), orm.NullableIntervalSet(f.MaybePeriod, temporal.Interval{}))
+		got, err := orm.Update(t.Context(), tx, intervalqueries.Samples.Table.Query(), intervalqueries.Samples.Table.Key(), 2, orm.Set(f.Period, temporal.Days(4)), orm.Set(f.MaybePeriod, temporal.Interval{}))
 		if err != nil || got.Period != temporal.Days(4) || got.MaybePeriod.IsNull() {
 			t.Fatal(got, err)
 		}
-		got, err = orm.Update(t.Context(), tx, intervalqueries.Samples.Table.Query(), intervalqueries.Samples.Table.Key(), 2, orm.NullableIntervalSetNull(f.MaybePeriod))
+		got, err = orm.Update(t.Context(), tx, intervalqueries.Samples.Table.Query(), intervalqueries.Samples.Table.Key(), 2, orm.SetNull(f.MaybePeriod))
 		if err != nil || got.Period != temporal.Days(4) || !got.MaybePeriod.IsNull() {
 			t.Fatal(got, err)
 		}
 		if _, err := tx.Exec(t.Context(), `UPDATE interval_samples SET period = INTERVAL '9223372036854776 microseconds' WHERE id=4`); err != nil {
 			return err
 		}
-		if rows, err := orm.All(t.Context(), tx, q.OrderBy(orm.KeyAsc(f.ID))); err == nil || rows != nil {
+		if rows, err := orm.All(t.Context(), tx, q.OrderBy(orm.Asc(f.ID))); err == nil || rows != nil {
 			t.Fatal("bad later row published partial models", rows, err)
 		}
-		if rows, err := rows.ReadScalar(rows.SelectScalar(rows.From(q.OrderBy(orm.KeyAsc(f.ID))), expr.AsSelected(expr.Row(expr.Value(orm.IntervalExpr(f.Period)))))).All(t.Context(), tx); err == nil || rows != nil {
+		if rows, err := rows.ReadScalar(rows.SelectScalar(rows.From(q.OrderBy(orm.Asc(f.ID))), expr.AsSelected(expr.Row(expr.Value(f.Period))))).All(t.Context(), tx); err == nil || rows != nil {
 			t.Fatal("bad later row published partial values", rows, err)
 		}
 		return nil

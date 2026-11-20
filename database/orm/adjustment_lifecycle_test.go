@@ -48,11 +48,11 @@ func TestSetUpdateEmptySelectionContract(t *testing.T) {
 			zero := int64(0)
 			db := hookDB(t, testConnector{statements: &statements, affected: &zero, columns: []string{"id", "balance"}}, declarations...)
 			for _, key := range []int64{1, 2} {
-				q := f.Query().Where(KeyEq(f.Key(), key), NumberGte(f.Balance, 2))
+				q := f.Query().Where(Eq(f.Key(), key), Gte(f.Balance, 2))
 				if mode != "plain" {
 					q = WithoutModelHooks(q)
 				}
-				count, err := UpdateAll(t.Context(), db, q, NumberSet(f.Balance, 0))
+				count, err := UpdateAll(t.Context(), db, q, Set(f.Balance, 0))
 				if err != nil || count != 0 || calls != 0 {
 					t.Fatalf("empty set update: count=%d callbacks=%d err=%v", count, calls, err)
 				}
@@ -96,7 +96,7 @@ func TestAdjustmentEmptySelectionLifecycle(t *testing.T) {
 						if !ok {
 							return Predicate[scopedAdjustment]{}, tenantMissing
 						}
-						return NumberEq(f.TenantID, tenant), nil
+						return Eq(f.TenantID, tenant), nil
 					})}
 				})}
 				var declarations []lifecycle.Declaration
@@ -187,7 +187,7 @@ func TestAdjustmentEmptySelectionLifecycle(t *testing.T) {
 					}
 				}
 				db := hookDB(t, connector, declarations...)
-				row, err := Update(ctx, db, f.Query().Where(NumberGt(f.Balance, -10)), f.Key(), int64(1), NumberDecrement(f.Balance, 2, AtLeast(int64(0))))
+				row, err := Update(ctx, db, f.Query().Where(Gt(f.Balance, -10)), f.Key(), int64(1), Decrement(f.Balance, 2, AtLeast(int64(0))))
 				wantStatements, wantFactories := 2, 0
 				switch scenario {
 				case "success":

@@ -15,10 +15,10 @@ import (
 
 func TestResultReadTerminals(t *testing.T) {
 	m := declareMembers()
-	q := Read(SelectValue(m.Query(), orm.TextExpr(m.Name)))
+	q := Read(SelectValue(m.Query(), m.Name))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{"Ada"}, {"Lin"}}}
 	db := openTest(t, state)
-	page, err := q.OrderBy(expr.Asc(expr.Value(orm.KeyExpr(m.ID)))).SimplePaginate(t.Context(), db, orm.PageRequest{Number: 1, Size: 1})
+	page, err := q.OrderBy(expr.Asc(expr.Value(m.ID))).SimplePaginate(t.Context(), db, orm.PageRequest{Number: 1, Size: 1})
 	if err != nil || len(page.Items) != 1 || page.Items[0] != "Ada" || !page.HasMore || !state.closed {
 		t.Fatal(page, err)
 	}
@@ -38,7 +38,7 @@ func TestResultReadTerminals(t *testing.T) {
 		t.Fatal(exists, err, state.sql)
 	}
 	state.sql = ""
-	for _, bad := range []Result[member, string]{q, q.OrderBy(expr.Asc(expr.Value(orm.KeyExpr(m.ID)))).Limit(1), q.OrderBy(expr.Asc(expr.Value(orm.KeyExpr(m.ID)))).Offset(1)} {
+	for _, bad := range []Result[member, string]{q, q.OrderBy(expr.Asc(expr.Value(m.ID))).Limit(1), q.OrderBy(expr.Asc(expr.Value(m.ID))).Offset(1)} {
 		if _, err := bad.Paginate(t.Context(), db, orm.PageRequest{Number: 1, Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 			t.Fatal(err, state.sql)
 		}
@@ -48,7 +48,7 @@ func TestResultReadTerminals(t *testing.T) {
 func TestResultLocksUseSharedCompilerAndPreservedTargets(t *testing.T) {
 	m, o := declareMembers(), declareOrders()
 	a, b := As[left](m.Query(), "m"), As[right](o.Query(), "o")
-	j := LeftJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.NumberExpr(o.MemberID))))
+	j := LeftJoin(a, b, On(expr.At(Scope(a), m.ID), expr.At(Scope(b), o.MemberID)))
 	read := SelectRecord(j, LeftScope(j, Scope(a)))
 	target := Target(LeftScope(j, Scope(a)))
 	q := ForUpdate(read).Of(target).SkipLocked()
@@ -69,7 +69,7 @@ func TestResultLocksUseSharedCompilerAndPreservedTargets(t *testing.T) {
 		t.Fatal(err)
 	}
 	txsource := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "txm")
-	scalar := SelectTransactionValue(txsource, expr.AsSelected(expr.Row(expr.At(TransactionScope(txsource), orm.KeyExpr(m.ID)))))
+	scalar := SelectTransactionValue(txsource, expr.AsSelected(expr.Row(expr.At(TransactionScope(txsource), m.ID))))
 	locked := ForKeyShare(scalar).Of(Target(TransactionScope(txsource)))
 	if s, err := ormcore.CompileRecord(t.Context(), locked.core); err != nil || !strings.Contains(s.SQLText, "FOR KEY SHARE") {
 		t.Fatal(s.SQLText, err)

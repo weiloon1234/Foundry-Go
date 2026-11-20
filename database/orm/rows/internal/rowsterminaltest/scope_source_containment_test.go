@@ -58,14 +58,14 @@ func TestScopeSourceFailureCapturedAndLaterComposition(t *testing.T) {
 				panic("private scope payload")
 			}))
 			plain := scopeFailureFields()
-			rel := orm.HasManyOf(plain.Children, orm.KeyExpr(plain.Key()), orm.KeyExpr(d.Key()))
+			rel := orm.HasManyOf(plain.Children, plain.Key(), d.Key())
 			q := d.Query()
 			compilations := func() map[string]func() error {
 				a, b := rows.As[left](plain.Query(), "a"), rows.As[right](q, "b")
-				joined := rows.InnerJoin(a, b, rows.On(expr.At(rows.Scope(a), orm.KeyExpr(plain.Key())), expr.At(rows.Scope(b), orm.KeyExpr(d.Key()))))
-				projection := rows.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(rows.RightScope(joined, rows.Scope(b)), orm.KeyExpr(d.Key())))))
-				inner := rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(d.Key())))))
-				sub := rows.WhereScalar(rows.SelectScalar(rows.From(plain.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(plain.Key()))))), rows.InQuery(expr.Value(orm.KeyExpr(plain.Key())), inner))
+				joined := rows.InnerJoin(a, b, rows.On(expr.At(rows.Scope(a), plain.Key()), expr.At(rows.Scope(b), d.Key())))
+				projection := rows.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(rows.RightScope(joined, rows.Scope(b)), d.Key()))))
+				inner := rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(d.Key()))))
+				sub := rows.WhereScalar(rows.SelectScalar(rows.From(plain.Query()), expr.AsSelected(expr.Row(expr.Value(plain.Key())))), rows.InQuery(expr.Value(plain.Key()), inner))
 				aggregate := rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Count[scopeFailureRow]()))
 				return map[string]func() error{
 					"read":      func() error { _, e := orm.Compile(q); return e },
@@ -74,7 +74,7 @@ func TestScopeSourceFailureCapturedAndLaterComposition(t *testing.T) {
 					"join":      func() error { _, e := rows.CompileRead(rows.ReadScalar(projection)); return e },
 					"subquery":  func() error { _, e := rows.CompileRead(rows.ReadScalar(sub)); return e },
 					"named removal": func() error {
-						_, e := orm.Compile(orm.WithoutGlobalScope(q, orm.Scope(d.Table, "tenant", func(context.Context) (orm.Predicate[scopeFailureRow], error) { return orm.KeyEq(d.Key(), 1), nil })))
+						_, e := orm.Compile(orm.WithoutGlobalScope(q, orm.Scope(d.Table, "tenant", func(context.Context) (orm.Predicate[scopeFailureRow], error) { return orm.Eq(d.Key(), 1), nil })))
 						return e
 					},
 				}

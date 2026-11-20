@@ -29,13 +29,14 @@ func SlotOf[M, S any](b Builder[M], ptr *S) Slot[M, S] {
 // Example: orm.FoundrySlot(Articles.Key(),Articles.Title,sqlowner.Metadata()).
 func FoundrySlot[M any, K comparable, S any](key Key[M, K], slot Slot[M, S], seal sqlowner.MetadataSeal) (string, func(M) model.Reference[M, K], func(M) S, func(M, S) M, error) {
 	s := slot.core
-	if !seal.Valid() || s == nil || s.err != nil || key.key.core == nil || s.owner != key.key.core.owner || s.owner.primary != key.key.core {
+	kc := columnCoreOf(key.stored)
+	if !seal.Valid() || s == nil || s.err != nil || kc == nil || s.owner != kc.owner || s.owner.primary != kc {
 		return "", nil, nil, nil, invalid("extension slot requires its owner's primary key and metadata capability")
 	}
 	if err := tableError(s.owner); err != nil {
 		return "", nil, nil, nil, err
 	}
-	identity := ModelIdentity[M, K]{table: s.owner, key: key.key}
+	identity := ModelIdentity[M, K]{table: s.owner, key: key.stored}
 	get := func(m M) S { return *(*S)(unsafe.Add(unsafe.Pointer(&m), s.offset)) }
 	set := func(m M, value S) M { *(*S)(unsafe.Add(unsafe.Pointer(&m), s.offset)) = value; return m }
 	return s.name, identity.ReferenceOf, get, set, nil

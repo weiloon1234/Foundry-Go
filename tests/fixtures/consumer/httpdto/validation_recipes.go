@@ -55,7 +55,7 @@ func WholeUnits(amount decimal.Decimal) (int64, error) {
 
 // doc-example:begin typed-validation-lookup
 func EmailLookup(executor database.Executor, scopedUsers orm.Query[models.User]) databasevalidation.ModelLookup[models.User, string] {
-	return databasevalidation.Lookup(executor, scopedUsers, orm.TextExpr(models.Users.Email))
+	return databasevalidation.Lookup(executor, scopedUsers, models.Users.Email)
 }
 
 // doc-example:end typed-validation-lookup

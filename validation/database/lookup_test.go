@@ -46,14 +46,14 @@ func TestUniqueIgnoringStaticCouplingAndValidation(t *testing.T) {
 	slot := validation.NewSlot[int64]()
 	ex := stubExecutor{}
 
-	// Nil key handle is rejected with fault.Invalid
-	nilKeyRule := databasevalidation.UniqueIgnoring[userAccount, string, int64](ex, accounts.Query(), orm.TextExpr(accounts.Email), nil, slot)
-	if err := validation.ValidateRule(nilKeyRule); !errors.Is(err, fault.Invalid) {
-		t.Fatalf("expected fault.Invalid for nil key, got: %v", err)
+	// Uninitialized key handle is rejected with fault.Invalid
+	zeroKeyRule := databasevalidation.UniqueIgnoring(ex, accounts.Query(), accounts.Email, orm.Key[userAccount, int64]{}, slot)
+	if err := validation.ValidateRule(zeroKeyRule); !errors.Is(err, fault.Invalid) {
+		t.Fatalf("expected fault.Invalid for uninitialized key, got: %v", err)
 	}
 
 	// Valid rule requires slot provision before check
-	rule := databasevalidation.UniqueIgnoring(ex, accounts.Query(), orm.TextExpr(accounts.Email), orm.KeyExpr(accounts.Key()), slot)
+	rule := databasevalidation.UniqueIgnoring(ex, accounts.Query(), accounts.Email, accounts.Key(), slot)
 	if err := validation.ValidateRule(rule); err == nil {
 		t.Fatal("expected ValidateRule to fail without enclosing Provide")
 	}

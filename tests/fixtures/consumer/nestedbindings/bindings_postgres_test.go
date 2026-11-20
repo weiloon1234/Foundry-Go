@@ -37,17 +37,17 @@ func seed(ctx context.Context, tx *database.Tx) (fixture, error) {
 		}
 	}
 	for _, name := range []string{"Alpha", "Beta"} {
-		team, err := orm.Insert(ctx, tx, n.TeamRecords.Table, orm.TextSet(n.TeamRecords.Name, name))
+		team, err := orm.Insert(ctx, tx, n.TeamRecords.Table, orm.Set(n.TeamRecords.Name, name))
 		if err != nil {
 			return f, err
 		}
 		f.teams = append(f.teams, team)
-		project, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.ColumnSet(n.ProjectRecords.TeamID, team.ID), orm.TextSet(n.ProjectRecords.Slug, "shared"), orm.ColumnSet(n.ProjectRecords.Enabled, true))
+		project, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.Set(n.ProjectRecords.TeamID, team.ID), orm.Set(n.ProjectRecords.Slug, "shared"), orm.Set(n.ProjectRecords.Enabled, true))
 		if err != nil {
 			return f, err
 		}
 		f.projects = append(f.projects, project)
-		task, err := orm.Insert(ctx, tx, n.TaskRecords.Table, orm.ColumnSet(n.TaskRecords.ProjectID, project.ID), orm.TextSet(n.TaskRecords.Slug, "same"))
+		task, err := orm.Insert(ctx, tx, n.TaskRecords.Table, orm.Set(n.TaskRecords.ProjectID, project.ID), orm.Set(n.TaskRecords.Slug, "same"))
 		if err != nil {
 			return f, err
 		}
@@ -105,7 +105,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 			}
 			return url
 		}
-		if _, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.ColumnSet(n.ProjectRecords.TeamID, f.teams[0].ID), orm.TextSet(n.ProjectRecords.Slug, "disabled"), orm.ColumnSet(n.ProjectRecords.Enabled, false)); err != nil {
+		if _, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.Set(n.ProjectRecords.TeamID, f.teams[0].ID), orm.Set(n.ProjectRecords.Slug, "disabled"), orm.Set(n.ProjectRecords.Enabled, false)); err != nil {
 			return err
 		}
 		missing, err := model.NewIDAt[n.Team](time.Now())
@@ -138,7 +138,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 				return errors.New("nested key escaped its parent")
 			}
 		}
-		onlyBeta, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.ColumnSet(n.ProjectRecords.TeamID, f.teams[1].ID), orm.TextSet(n.ProjectRecords.Slug, "beta-only"), orm.ColumnSet(n.ProjectRecords.Enabled, true))
+		onlyBeta, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.Set(n.ProjectRecords.TeamID, f.teams[1].ID), orm.Set(n.ProjectRecords.Slug, "beta-only"), orm.Set(n.ProjectRecords.Enabled, true))
 		if err != nil {
 			return err
 		}
@@ -162,7 +162,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		if veto.Projects != 1 {
 			return errors.New("retrieval error changed scope behavior")
 		}
-		eager := orm.RelatedUnique(n.TeamLinks.Projects.With(n.ProjectLinks.Team), orm.TextExpr(n.ProjectRecords.Slug))
+		eager := orm.RelatedUnique(n.TeamLinks.Projects.With(n.ProjectLinks.Team), n.ProjectRecords.Slug)
 		before := counter.Queries.Load()
 		loaded, err := eager.Find(ctx, counter, f.teams[0], "shared")
 		if err != nil {
@@ -178,12 +178,12 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 			return err
 		}
 		route(t, router, ctx, location(f.teams[0].ID, "shared", "same"), "", 404)
-		visible := orm.RelatedUnique(n.TeamLinks.Projects.WithTrashed(), orm.TextExpr(n.ProjectRecords.Slug))
+		visible := orm.RelatedUnique(n.TeamLinks.Projects.WithTrashed(), n.ProjectRecords.Slug)
 		if got, err := visible.Find(ctx, tx, f.teams[0], "shared"); err != nil || !got.IsSet() {
 			return errors.New("explicit soft-delete visibility lost")
 		}
 		// A second duplicate inside the same parent fails closed, with no domain call.
-		if _, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.ColumnSet(n.ProjectRecords.TeamID, f.teams[1].ID), orm.TextSet(n.ProjectRecords.Slug, "shared"), orm.ColumnSet(n.ProjectRecords.Enabled, true)); err != nil {
+		if _, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.Set(n.ProjectRecords.TeamID, f.teams[1].ID), orm.Set(n.ProjectRecords.Slug, "shared"), orm.Set(n.ProjectRecords.Enabled, true)); err != nil {
 			return err
 		}
 		route(t, router, ctx, location(f.teams[1].ID, "shared", "same"), "", 500)

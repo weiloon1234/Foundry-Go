@@ -56,7 +56,7 @@ func renderORMModel(pkg string, o ScaffoldOptions) (string, error) {
 		fmt.Fprintf(&s, "// %s holds %s. Example: record.%s.IsLoaded().\n%s %s\n", slot.name, extensionSlotDescription(slot), slot.name, slot.name, valueType(slot))
 	}
 	s.WriteString("}\n\n")
-	fmt.Fprintf(&s, "// %s holds the model's typed fields. Example: %s.Query().\ntype %s struct {\n// Table owns the primary key and operations. Example: orm.KeyEq(%s.Key(), id).\norm.Table[%s,%s]\n", names.tableType, table, names.tableType, table, name, key)
+	fmt.Fprintf(&s, "// %s holds the model's typed fields. Example: %s.Query().\ntype %s struct {\n// Table owns the primary key and operations. Example: orm.Eq(%s.Key(), id).\norm.Table[%s,%s]\n", names.tableType, table, names.tableType, table, name, key)
 	// Slot handles use a suffix so every previously accepted model field name
 	// (including Table, Key and Query) remains usable beside embedded operations.
 	for _, slot := range slots {

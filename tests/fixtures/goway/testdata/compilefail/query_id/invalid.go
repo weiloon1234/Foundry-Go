@@ -7,4 +7,4 @@ import (
 	model "github.com/weiloon1234/Foundry-Go/model"
 )
 
-var _, _ = orm.Require(nil, nil, m.Users.Query().Where(orm.KeyEq(m.Users.ID, model.ID[m.Order]{})))
+var _, _ = orm.Require(nil, nil, m.Users.Query().Where(orm.Eq(m.Users.ID, model.ID[m.Order]{})))

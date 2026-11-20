@@ -2,36 +2,26 @@ package orm
 
 import (
 	auditrecord "github.com/weiloon1234/Foundry-Go/audit/record"
-	"github.com/weiloon1234/Foundry-Go/database/encrypted"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// AuditRead reads a required historical field through its stored codec; omitted fields remain absent.
-// Example: field, err := AuditRead(history, NumberExpr(Orders.TotalCents)).
-func AuditRead[M, K, V any](history auditrecord.Model[M, K], field interface{ ormColumn(*M) columnData[V] }) (value.Optional[auditrecord.FieldChange[V]], error) {
-	c := field.ormColumn(nil)
-	return readAuditField(history, c.core, false, c.decode)
+// AuditRead reads a required historical field through its stored codec (including encrypted redaction state); omitted fields remain absent.
+// Example: field, err := orm.AuditRead(history, Orders.TotalCents).
+func AuditRead[M, K, V, I, P any, Kind RequiredAnyColumnKind, R ColumnRole](history auditrecord.Model[M, K], field ColumnHandle[M, V, I, P, Kind, R]) (value.Optional[auditrecord.FieldChange[V]], error) {
+	core := columnCoreOf(field.stored)
+	var decode func(any) (V, error)
+	if field.stored != nil {
+		decode = field.stored.decode
+	}
+	return readAuditField(history, core, false, decode)
 }
 
-// AuditReadNullable keeps SQL NULL separate from an omitted field or absent model.
-// Example: field, err := AuditReadNullable(history, NullableTextExpr(Orders.Note)).
-func AuditReadNullable[M, K, V any](history auditrecord.Model[M, K], field interface{ ormColumn(*M) columnData[V] }) (value.Optional[auditrecord.FieldChange[value.Nullable[V]]], error) {
-	c := field.ormColumn(nil)
-	return readAuditField(history, c.core, true, nullableAuditDecode[V](c.core))
-}
-
-// AuditReadEncrypted exposes encrypted history's redaction state, never ciphertext or plaintext.
-// Example: field, err := AuditReadEncrypted(history, Vaults.Secret).
-func AuditReadEncrypted[M, K any, V encrypted.Value[V]](history auditrecord.Model[M, K], field Encrypted[M, V]) (value.Optional[auditrecord.FieldChange[V]], error) {
-	return readAuditField(history, field.encrypted.core, false, field.encrypted.decode)
-}
-
-// AuditReadNullableEncrypted reads nullable encrypted history without fabricating a value for redaction.
-// Example: field, err := AuditReadNullableEncrypted(history, Vaults.Backup).
-func AuditReadNullableEncrypted[M, K any, V encrypted.Value[V]](history auditrecord.Model[M, K], field NullableEncrypted[M, V]) (value.Optional[auditrecord.FieldChange[value.Nullable[V]]], error) {
-	c := field.encrypted.base
-	return readAuditField(history, c.core, true, nullableAuditDecode[V](c.core))
+// AuditReadNullable keeps SQL NULL separate from an omitted field or absent model (including nullable encrypted redaction state).
+// Example: field, err := orm.AuditReadNullable(history, Orders.Note).
+func AuditReadNullable[M, K, V, I, P any, Kind NullableColumnKind, R ColumnRole](history auditrecord.Model[M, K], field ColumnHandle[M, V, I, P, Kind, R]) (value.Optional[auditrecord.FieldChange[value.Nullable[V]]], error) {
+	core := columnCoreOf(field.stored)
+	return readAuditField(history, core, true, nullableAuditDecode[V](core))
 }
 
 func nullableAuditDecode[V any](field *columnCore) func(any) (value.Nullable[V], error) {

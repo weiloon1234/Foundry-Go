@@ -12,12 +12,12 @@ func tenantScope(fields DocumentTable) orm.GlobalScope[Document] {
 		if !ok {
 			return orm.Predicate[Document]{}, fault.New(fault.Invalid, "document queries require a tenant")
 		}
-		return orm.TextEq(fields.TenantID, tenant), nil
+		return orm.Eq(fields.TenantID, tenant), nil
 	})
 }
 func publishedScope(fields DocumentTable) orm.GlobalScope[Document] {
 	return orm.Scope(fields.Table, "published", func(context.Context) (orm.Predicate[Document], error) {
-		return orm.ColumnEq(fields.Published, true), nil
+		return orm.Eq(fields.Published, true), nil
 	})
 }
 func documentScopes(fields DocumentTable) []orm.GlobalScope[Document] {

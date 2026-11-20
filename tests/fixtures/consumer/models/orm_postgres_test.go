@@ -14,7 +14,7 @@ import (
 
 func TestPostgresSharedDeclarationRelationParity(t *testing.T) {
 	queryfixture.RunStable(t, func(tx *database.Tx, _ []models.User) error {
-		got, err := orm.All(t.Context(), tx, models.Users.Query().With(models.UserLinks.Introducer, models.UserLinks.Referrals, models.UserLinks.Orders, models.UserValues.OrderCount, models.UserValues.OrderTotal, models.UserValues.OrderAverage, models.UserValues.OrderMinimum, models.UserValues.OrderMaximum).OrderBy(orm.TextAsc(models.Users.Email)))
+		got, err := orm.All(t.Context(), tx, models.Users.Query().With(models.UserLinks.Introducer, models.UserLinks.Referrals, models.UserLinks.Orders, models.UserValues.OrderCount, models.UserValues.OrderTotal, models.UserValues.OrderAverage, models.UserValues.OrderMinimum, models.UserValues.OrderMaximum).OrderBy(orm.Asc(models.Users.Email)))
 		if err != nil {
 			return err
 		}

@@ -733,8 +733,8 @@ Footprint ceilings are retained; dedicated cursor and key-chunk probes are added
 | `q.CursorPaginate(ctx, ex, request)` | `orm.CursorPaginate(ctx, ex, q, request)` | Shared token format/scope and HTTP adapters |
 | `q.ChunkByID(ctx, ex, size, visit)` | `orm.ChunkByKey(ctx, ex, q, table.Key(), size, visit)` | Primary-key seeks, stable progress before callbacks |
 | `q.EachByID(ctx, ex, size, visit)` | `orm.EachByKey(ctx, ex, q, table.Key(), size, visit)` | Individual rows from closed batches |
-| `q.ForUpdate().Find(ctx, tx, id)` | `orm.First(ctx, tx, q.Where(orm.KeyEq(table.Key(), id)).ForUpdate())` | Typed key and transaction retained |
-| Required locked keyed lookup | `orm.Require(ctx, tx, q.Where(orm.KeyEq(table.Key(), id)).ForUpdate())` | Same transaction SQL |
+| `q.ForUpdate().Find(ctx, tx, id)` | `orm.First(ctx, tx, q.Where(orm.Eq(table.Key(), id)).ForUpdate())` | Typed key and transaction retained |
+| Required locked keyed lookup | `orm.Require(ctx, tx, q.Where(orm.Eq(table.Key(), id)).ForUpdate())` | Same transaction SQL |
 
 Acceptance: Go build/vet, scoped races (segmented fixes), generation, fixture tests,
 catalogue and pagination contract checks pass. All 28 probes remain within their
@@ -1503,7 +1503,7 @@ Typed roles close the six deferred source-write cases. Managed timestamp pairs
 use CreatedAt/UpdatedAt and their Of constructors; lone unmanaged timestamps keep
 TimeOf. Mutated fields use Input carriers even for equal input/stored types.
 PrimaryOf is needed only for insert-select primary mapping. NumberKey/TextKey
-retain primary versus lookup roles; erasing to KeyColumn grants no write role.
+retain primary versus lookup roles; passing a key to a relation or lookup grants no write role.
 MapInsert/MapUpdate exclude inputs and UpdatedAt, retain CreatedAt where the old
 validator allows it, and updates reject primary/lookup targets. ForceDelete,
 ForceDeleteUsing and ForceDetach require the exact declaration's SoftDeletable
@@ -1659,7 +1659,7 @@ event, distinct-input, link, mutator and encrypted-vault consumers to ORM.
 without constructing callbacks or exposing private adapters. Tests retain
 registration inspection after row closure, with one adapter family per application.
 
-`orm.WriteUnset` (such as `orm.WriteUnset(write, func(v string) orm.Assignment[Member] { return orm.TextSet(Fields.Email, v) })`) restores omission in a live before-write
+`orm.WriteUnset` (such as `orm.WriteUnset(write, func(v string) orm.Assignment[Member] { return orm.Set(Fields.Email, v) })`) restores omission in a live before-write
 callback. Omission remains distinct from SQL NULL and a supplied zero. Validation
 and sticky errors use the existing draft owner; mutators, defaults and conventions
 retain their existing execution rules. `orm.RestoreEach` and `orm.ForceDeleteEach`

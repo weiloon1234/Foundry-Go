@@ -68,7 +68,7 @@ func TestBindingAndNaturalKey(t *testing.T) {
 	if err := Check(c); err != nil {
 		t.Fatal(err)
 	}
-	s, err := Compile(c.Query().Where(KeyEq(c.Key(), CountryCode("MY"))))
+	s, err := Compile(c.Query().Where(Eq(c.Key(), CountryCode("MY"))))
 	if err != nil || !reflect.DeepEqual(s.Arguments(), []any{"MY"}) {
 		t.Fatalf("natural key: %s %v", s.SQL(), err)
 	}
@@ -163,18 +163,18 @@ func TestSealedAndOwnedDeclarations(t *testing.T) {
 		return recordTable{Table: x, ID: x.Key(), Name: TextOf(b, &m.Name), Note: NullableTextOf(b, &m.Note), Amount: NumberOf(b, &m.Amount)}
 	})
 	late := TextOf(builder, &template.Name)
-	if _, err := Compile(r.Query().Where(TextEq(late, "late"))); err == nil {
+	if _, err := Compile(r.Query().Where(Eq(late, "late"))); err == nil {
 		t.Fatal("sealed builder allowed a usable column")
 	}
 	if err := Check(r); err != nil {
 		t.Fatalf("late declaration mutated original: %v", err)
 	}
 	other := records()
-	if _, err := Compile(r.Query().Where(TextEq(other.Name, "different declaration"))); err == nil {
+	if _, err := Compile(r.Query().Where(Eq(other.Name, "different declaration"))); err == nil {
 		t.Fatal("cross-declaration predicate accepted")
 	}
-	base := r.Query().Where(KeyEq(r.ID, 1))
-	_, _ = Compile(base.Where(TextEq(r.Name, "branch")))
+	base := r.Query().Where(Eq(r.ID, 1))
+	_, _ = Compile(base.Where(Eq(r.Name, "branch")))
 	s, err := Compile(base)
 	if err != nil || strings.Contains(s.SQL(), "display_name\" =") {
 		t.Fatalf("query mutated: %s %v", s.SQL(), err)
@@ -256,7 +256,7 @@ func TestAssignmentSemanticsAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := planWrite(r.Query().state, querycore.InsertModel, []Assignment[record]{TextSet(r.Name, ""), NullableTextSetNull(r.Note), NumberSet(r.Amount, amount)}, false)
+	p, err := planWrite(r.Query().state, querycore.InsertModel, []Assignment[record]{Set(r.Name, ""), SetNull(r.Note), Set(r.Amount, amount)}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,13 +267,13 @@ func TestAssignmentSemanticsAndValidation(t *testing.T) {
 	if strings.Contains(s.SQLText, `("id"`) || !reflect.DeepEqual(s.Bindings, []any{"", nil, "12.5"}) {
 		t.Fatalf("omission/zero/null: %s %#v", s.SQLText, s.Bindings)
 	}
-	empty, _ := planWrite(r.Query().state, querycore.InsertModel, []Assignment[record]{NullableTextSetNull(r.Note)}, false)
+	empty, _ := planWrite(r.Query().state, querycore.InsertModel, []Assignment[record]{SetNull(r.Note)}, false)
 	if _, err := empty.compile(); err == nil {
 		t.Fatal("required fields not checked")
 	}
-	for name, as := range map[string][]Assignment[record]{"duplicate": {TextSet(r.Name, "a"), TextSet(r.Name, "b")}, "key": {KeySet(r.ID, 9)}, "empty": {}} {
+	for name, as := range map[string][]Assignment[record]{"duplicate": {Set(r.Name, "a"), Set(r.Name, "b")}, "key": {Set(r.ID, 9)}, "empty": {}} {
 		t.Run(name, func(t *testing.T) {
-			p, err := planWrite(r.Query().Where(KeyEq(r.ID, 1)).state, querycore.UpdateModel, as, false)
+			p, err := planWrite(r.Query().Where(Eq(r.ID, 1)).state, querycore.UpdateModel, as, false)
 			if err == nil {
 				_, err = p.compile()
 			}
@@ -282,8 +282,8 @@ func TestAssignmentSemanticsAndValidation(t *testing.T) {
 			}
 		})
 	}
-	for _, q := range []Query[record]{r.Query().Limit(1), r.Query().Offset(1), r.Query().OrderBy(KeyAsc(r.ID))} {
-		if _, err := planWrite(q.state, querycore.UpdateModel, []Assignment[record]{TextSet(r.Name, "x")}, true); err == nil {
+	for _, q := range []Query[record]{r.Query().Limit(1), r.Query().Offset(1), r.Query().OrderBy(Asc(r.ID))} {
+		if _, err := planWrite(q.state, querycore.UpdateModel, []Assignment[record]{Set(r.Name, "x")}, true); err == nil {
 			t.Fatal("write discarded a read clause")
 		}
 	}
@@ -299,7 +299,7 @@ func TestAssignmentSemanticsAndValidation(t *testing.T) {
 		return binaryTable{TableOf(b, &m.ID), BytesOf(b, &m.Data)}
 	})
 	data := []byte{1, 2}
-	a := ColumnSet(b.Data, data)
+	a := Set(b.Data, data)
 	data[0] = 9
 	bound, err := a.core.Bind()
 	if err != nil || bound.([]byte)[0] != 1 {
@@ -339,7 +339,7 @@ func TestTimestampsAndSoftDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := planWrite(table.Query().state, querycore.InsertModel, []Assignment[timed]{KeySet(table.Key(), 1), TimeSet(table.CreatedAt, explicit), TimeSet(table.UpdatedAt, explicit)}, false)
+	p, err := planWrite(table.Query().state, querycore.InsertModel, []Assignment[timed]{Set(table.Key(), 1), Set(table.CreatedAt, explicit), Set(table.UpdatedAt, explicit)}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +358,7 @@ func TestTimestampsAndSoftDeletion(t *testing.T) {
 	if err != nil || !strings.Contains(read.SQL(), `"deleted_at" IS NULL`) {
 		t.Fatalf("soft scope: %s %v", read.SQL(), err)
 	}
-	p, err = planWrite(table.Query().Where(KeyEq(table.Key(), 1)).state, querycore.DeleteModel, []Assignment[timed](nil), false)
+	p, err = planWrite(table.Query().Where(Eq(table.Key(), 1)).state, querycore.DeleteModel, []Assignment[timed](nil), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,11 +533,11 @@ func TestReadAndWriteTerminals(t *testing.T) {
 	if err != nil || !found.IsSet() {
 		t.Fatalf("Find: %v", err)
 	}
-	updated, err := Update(t.Context(), db, r.Table.Query(), r.Table.Key(), 7, TextSet(r.Name, "stored"), NullableTextSetNull(r.Note))
+	updated, err := Update(t.Context(), db, r.Table.Query(), r.Table.Key(), 7, Set(r.Name, "stored"), SetNull(r.Note))
 	if err != nil || updated.ID != 7 {
 		t.Fatalf("Update: %v", err)
 	}
-	n, err := UpdateAll(t.Context(), db, r.Query(), NullableTextSetNull(r.Note))
+	n, err := UpdateAll(t.Context(), db, r.Query(), SetNull(r.Note))
 	if err != nil || n != 1 {
 		t.Fatalf("UpdateAll: %v", err)
 	}
@@ -555,7 +555,7 @@ func TestReadAndWriteTerminals(t *testing.T) {
 func TestUnknownCommitRetainsTypedCandidate(t *testing.T) {
 	r := records()
 	db := testDB(t, testConnector{columns: []string{"id", "display_name", "note", "amount"}, values: [][]driver.Value{{int64(7), "stored", nil, "12.5"}}, commitErr: errors.New("commit interrupted")})
-	item, err := Update(t.Context(), db, r.Table.Query(), r.Table.Key(), 7, TextSet(r.Name, "stored"))
+	item, err := Update(t.Context(), db, r.Table.Query(), r.Table.Key(), 7, Set(r.Name, "stored"))
 	var reconciliation *WriteError[record]
 	if item.ID != 0 || !errors.As(err, &reconciliation) || reconciliation.Candidate().ID != 7 {
 		t.Fatalf("candidate lost: %v", err)

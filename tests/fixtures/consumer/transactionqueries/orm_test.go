@@ -25,9 +25,9 @@ func TestTransactionDeclarationSQLParity(t *testing.T) {
 			t.Fatal("frozen legacy comparison differs")
 		}
 	}
-	got, err := orm.CompileLocked(orm.Lock(Records.Query().OrderBy(orm.KeyAsc(Records.ID)).Limit(1)).SkipLocked())
+	got, err := orm.CompileLocked(orm.Lock(Records.Query().OrderBy(orm.Asc(Records.ID)).Limit(1)).SkipLocked())
 	compare(got, err)
-	projected := rows.Select(rows.From(Records.Query()), Summaries, rows.Map(Summaries.ID, expr.Value(orm.KeyExpr(Records.ID))), rows.Map(Summaries.Name, expr.Value(orm.TextExpr(Records.Name))))
+	projected := rows.Select(rows.From(Records.Query()), Summaries, rows.Map(Summaries.ID, expr.Value(Records.ID)), rows.Map(Summaries.Name, expr.Value(Records.Name)))
 	got, err = rows.CompileRead(rows.Read(projected))
 	compare(got, err)
 }

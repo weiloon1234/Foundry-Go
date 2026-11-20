@@ -56,7 +56,7 @@ func variantRows(t *testing.T, f attachmentFixture, id OperationID) []store.Vari
 	err := f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		v := store.Variants
 		var err error
-		rows, err = orm.All(ctx, tx, store.Variants.Query().Where(orm.ColumnEq(v.FileID, fileID(id))).OrderBy(orm.TextAsc(v.Name), orm.TimeAsc(v.CreatedAt)))
+		rows, err = orm.All(ctx, tx, store.Variants.Query().Where(orm.Eq(v.FileID, fileID(id))).OrderBy(orm.Asc(v.Name), orm.Asc(v.CreatedAt)))
 		return err
 	})
 	if err != nil {

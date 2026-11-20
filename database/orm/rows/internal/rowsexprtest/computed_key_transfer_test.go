@@ -2,8 +2,6 @@ package rowsexprtest
 
 import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -15,8 +13,8 @@ import (
 
 func TestComputedGroupKeyBindingsAndBoundaries(t *testing.T) {
 	d := declareMembers()
-	id := expr.Value(orm.KeyExpr(d.ID))
-	key := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(orm.KeyExpr(d.ID), 2)).Else(expr.Param(orm.KeyExpr(d.ID), 3))
+	id := expr.Value(d.ID)
+	key := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(d.ID, 2)).Else(expr.Param(d.ID, 3))
 	q := rows.OrderScalar(rows.HavingScalar(rows.GroupByScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(key)), expr.Group(key)), expr.Grouped(expr.Ne(key, 0))), expr.Desc(key))
 	s, err := rows.CompileRead(rows.ReadScalar(q))
 	fragment := `CASE WHEN ("members"."id" > $1) THEN CAST($2 AS bigint) ELSE CAST($3 AS bigint) END`
@@ -26,8 +24,8 @@ func TestComputedGroupKeyBindingsAndBoundaries(t *testing.T) {
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.GroupByScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(expr.Row(id))), expr.Group(key)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("computed group selected ungrouped input", err)
 	}
-	equal := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(orm.KeyExpr(d.ID), 2)).Else(expr.Param(orm.KeyExpr(d.ID), 3))
-	different := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(orm.KeyExpr(d.ID), 2)).Else(expr.Param(orm.KeyExpr(d.ID), 4))
+	equal := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(d.ID, 2)).Else(expr.Param(d.ID, 3))
+	different := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(d.ID, 2)).Else(expr.Param(d.ID, 4))
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.GroupByScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(equal)), expr.Group(key)))); err != nil {
 		t.Fatal("equivalent declarations differ", err)
 	}
@@ -37,22 +35,22 @@ func TestComputedGroupKeyBindingsAndBoundaries(t *testing.T) {
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.GroupByScalar(q, expr.Group(equal)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("duplicate group", err)
 	}
-	outer := expr.NullIf(key, expr.Param(orm.KeyExpr(d.ID), 2))
+	outer := expr.NullIf(key, expr.Param(d.ID, 2))
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.GroupByScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(outer)), expr.Group(key)))); err != nil {
 		t.Fatal("grouped subexpression missed", err)
 	}
 }
 func TestComputedDistinctAndPartitionKeys(t *testing.T) {
 	d := declareMembers()
-	id := expr.Value(orm.KeyExpr(d.ID))
+	id := expr.Value(d.ID)
 	base := rows.From(d.Query())
-	key := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(orm.KeyExpr(d.ID), 2)).Else(expr.Param(orm.KeyExpr(d.ID), 3))
+	key := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(d.ID, 2)).Else(expr.Param(d.ID, 3))
 	q := rows.OrderBy(rows.DistinctOn(rows.FromModel(d.Query()), expr.Group(key)), expr.Asc(key), expr.Desc(id))
 	s, err := rows.CompileRead(rows.Read(q))
 	if err != nil || len(s.Arguments()) != 3 || !strings.Contains(s.SQL(), "DISTINCT ON (CASE") {
 		t.Fatal(s.SQL(), s.Arguments(), err)
 	}
-	other := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(orm.KeyExpr(d.ID), 2)).Else(expr.Param(orm.KeyExpr(d.ID), 4))
+	other := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(d.ID, 2)).Else(expr.Param(d.ID, 4))
 	if _, err := rows.CompileRead(rows.Read(rows.OrderBy(rows.DistinctOn(rows.FromModel(d.Query()), expr.Group(key)), expr.Asc(other)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("distinct prefix ignored parameters", err)
 	}
@@ -79,17 +77,17 @@ func TestComputedDistinctAndPartitionKeys(t *testing.T) {
 }
 func TestGroupedKeyReuseInsideDistinctAndEmptyMembership(t *testing.T) {
 	d := declareMembers()
-	id := expr.Value(orm.KeyExpr(d.ID))
+	id := expr.Value(d.ID)
 	base := rows.From(d.Query())
-	key := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(orm.KeyExpr(d.ID), 2)).Else(expr.Param(orm.KeyExpr(d.ID), 3))
-	outer := expr.AsSelected(expr.NullIf(key, expr.Param(orm.KeyExpr(d.ID), 4)))
+	key := expr.When(expr.Gt(expr.OrderRow(id), 1), expr.Param(d.ID, 2)).Else(expr.Param(d.ID, 3))
+	outer := expr.AsSelected(expr.NullIf(key, expr.Param(d.ID, 4)))
 	q := rows.OrderScalar(rows.DistinctOnScalarValues(rows.GroupByScalar(rows.SelectScalar(base, outer), expr.Group(key)), expr.Key(outer)), expr.AscValue(outer))
 	s, err := rows.CompileRead(rows.ReadScalar(q))
 	if err != nil || len(s.Arguments()) != 4 {
 		t.Fatal("rebound grouped child", s.SQL(), s.Arguments(), err)
 	}
-	constant := expr.Param(orm.KeyExpr(d.ID), 1)
-	choice := expr.When(expr.In(constant), expr.Param(orm.KeyExpr(d.ID), 9)).Else(expr.Param(orm.KeyExpr(d.ID), 7))
+	constant := expr.Param(d.ID, 1)
+	choice := expr.When(expr.In(constant), expr.Param(d.ID, 9)).Else(expr.Param(d.ID, 7))
 	s, err = rows.CompileRead(rows.ReadScalar(rows.GroupByScalar(rows.SelectScalar(base, expr.AsSelected(choice)), expr.Group(constant))))
 	if err != nil || !reflect.DeepEqual(s.Arguments(), []any{int64(9), int64(7), int64(1)}) || !strings.Contains(s.SQL(), "GROUP BY CAST($3 AS bigint)") {
 		t.Fatal("discarded operand left parameter cache", s.SQL(), s.Arguments(), err)

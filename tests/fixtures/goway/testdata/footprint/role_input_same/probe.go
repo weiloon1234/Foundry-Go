@@ -18,5 +18,5 @@ var Models = orm.Define("role_mutators", func(b orm.Builder[Model], m *Model) Fi
 })
 
 func Read(name string) orm.Query[Model] {
-	return Models.Query().Where(orm.InputTextEq(Models.Name, name))
+	return Models.Query().Where(orm.Eq(Models.Name, name))
 }

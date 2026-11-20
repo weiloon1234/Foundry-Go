@@ -45,7 +45,7 @@ func TestExplainCompilationErrorIsPrivate(t *testing.T) {
 	})
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	_, err := orm.Explain(t.Context(), db, f.Query().Where(orm.TextEq(f.Name, cause.modelValue)))
+	_, err := orm.Explain(t.Context(), db, f.Query().Where(orm.Eq(f.Name, cause.modelValue)))
 	requireSafeLifecycleError(t, err, cause)
 	if len(statements) != 0 {
 		t.Fatal("failed compile sent SQL")
@@ -147,7 +147,7 @@ func TestCreateOrFirstConflictProvenanceAndSavepoint(t *testing.T) {
 				t.Fatal("missing native constraint error")
 			}
 			statements = nil
-			got, err := orm.CreateOrFirst(t.Context(), db, f.Query().Where(orm.TextEq(f.Name, "same")), orm.KeySet(f.Key(), 1))
+			got, err := orm.CreateOrFirst(t.Context(), db, f.Query().Where(orm.Eq(f.Name, "same")), orm.Set(f.Key(), 1))
 			if scenario == "own" || scenario == "created" {
 				if err != nil || got.Name != "same" {
 					t.Fatal(got, err)

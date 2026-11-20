@@ -18,15 +18,15 @@ children := rows.AsTransaction[childTag](
 c := rows.TransactionCorrelate(parents, children)
 outer := rows.TransactionOuterScope(c, rows.TransactionScope(parents))
 inner := rows.TransactionInnerScope(c, rows.TransactionScope(children))
-c = c.Where(expr.Equal(expr.At(inner, orm.ColumnExpr(Orders.BuyerID)), expr.At(outer, orm.KeyExpr(Users.ID))))
+c = c.Where(expr.Equal(expr.At(inner, Orders.BuyerID), expr.At(outer, Users.ID)))
 record := rows.SelectTransactionCorrelatedRecord(c, inner).
-    OrderBy(expr.Desc(expr.At(inner, orm.KeyExpr(Orders.ID)))).Limit(1).
+    OrderBy(expr.Desc(expr.At(inner, Orders.ID))).Limit(1).
     ForUpdate().Of(rows.Target(inner)).SkipLocked()
 latest := rows.AsTransactionLateral[latestTag](record, "latest")
 joined := rows.TransactionLeftJoinLateral(parents, latest)
 ids := rows.SelectTransactionValue(joined, expr.AsSelected(
     expr.AtNullable(rows.NullableRightScope(joined,
-        rows.TransactionLateralScope(latest)), orm.KeyExpr(Orders.ID))))
+        rows.TransactionLateralScope(latest)), Orders.ID)))
 items, err := ids.All(ctx, tx)
 ```
 

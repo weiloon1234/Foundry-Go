@@ -132,19 +132,24 @@ func TestExportedTypesPreventPhaseConversions(t *testing.T) {
 	}
 }
 
-// D2 adapters intentionally retain exactly their own handle's layout. A value
-// conversion grants the same capabilities as its explicit Expr constructor;
-// cross-family, model, value, role and query-phase conversions remain forbidden.
+// ColumnHandle type aliases (orm.Text, orm.Number, orm.CreatedAt, etc.) are literally
+// aliases to ColumnHandle[M, V, I, P, K, R] with concrete K and R markers; instantiating
+// ColumnHandle with the exact same K and R produces the identical type and grants zero
+// capability escalation. Cross-kind, cross-role, model, value, and query-phase conversions
+// remain strictly forbidden by the sweep.
 func explicitColumnAdapterConversion(pair string) bool {
 	for _, name := range []string{
-		"Column", "Enum", "NullableColumn", "NullableNumber", "NullableText", "NullableEnum",
-		"InputColumn", "NullableInputColumn", "InputText", "NullableInputText",
+		"Column", "Key", "Primary", "Number", "Text", "Time", "Enum", "JSON", "Interval",
+		"NumberPrimary", "TextPrimary", "NumberLookupKey", "TextLookupKey",
+		"CreatedAt", "UpdatedAt", "SoftDelete",
+		"NullableColumn", "NullableNumber", "NullableText", "NullableTime", "NullableEnum", "NullableJSON", "NullableInterval",
+		"InputKey", "InputColumn", "NullableInputColumn", "InputText", "NullableInputText",
 		"InputNumber", "NullableInputNumber", "InputTime", "NullableInputTime",
 		"InputEnum", "NullableInputEnum", "InputJSON", "NullableInputJSON",
-		"InputInterval", "NullableInputInterval", "JSON", "NullableJSON",
-		"Interval", "NullableInterval", "Encrypted", "NullableEncrypted", "InputKey",
+		"InputInterval", "NullableInputInterval",
+		"Encrypted", "NullableEncrypted",
 	} {
-		if pair == "orm."+name+" <-> orm."+name+"Adapter" {
+		if pair == "orm.ColumnHandle <-> orm."+name || pair == "orm."+name+" <-> orm.ColumnHandle" {
 			return true
 		}
 	}

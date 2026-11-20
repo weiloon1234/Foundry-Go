@@ -35,12 +35,12 @@ func (e *pageExecutor) Query(ctx context.Context, sql string, args ...any) (*dat
 
 func summaries() rows.Query[models.User, reports.UserSummary] {
 	u, r := models.Users, reports.UserSummaries
-	return rows.OrderBy(rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(u.Key()))))), rows.MapSelected(r.Email, expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(u.Email))))), rows.MapSelected(r.Nickname, expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname))))), rows.MapSelected(r.Status, expr.AsSelected(expr.Row(expr.Value(orm.EnumExpr(u.Status)))))), expr.Asc(expr.Value(orm.TextExpr(u.Email))), expr.Asc(expr.Value(orm.KeyExpr(u.Key()))))
+	return rows.OrderBy(rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.AsSelected(expr.Row(expr.Value(u.Key())))), rows.MapSelected(r.Email, expr.AsSelected(expr.Row(expr.Value(u.Email)))), rows.MapSelected(r.Nickname, expr.AsSelected(expr.Row(expr.Value(u.Nickname)))), rows.MapSelected(r.Status, expr.AsSelected(expr.Row(expr.Value(u.Status))))), expr.Asc(expr.Value(u.Email)), expr.Asc(expr.Value(u.Key())))
 }
 
 func TestPostgresSimpleModelsAndEagerLookahead(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
-		base := models.Users.Query().OrderBy(orm.NumberAsc(models.Users.Age))
+		base := models.Users.Query().OrderBy(orm.Asc(models.Users.Age))
 		for _, number := range []int{1, 2, 3, 4, 99} {
 			e := &pageExecutor{Executor: tx}
 			page, err := orm.SimplePaginate(t.Context(), e, base, orm.PageRequest{Number: number, Size: 1})
@@ -138,7 +138,7 @@ func TestPostgresProjectionPagesAndFailureDisposal(t *testing.T) {
 		if p, err := rows.Read(q).SimplePaginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 1}); err == nil || p.Items != nil {
 			t.Fatal("invalid projection lookahead escaped")
 		}
-		if p, err := orm.SimplePaginate(t.Context(), tx, models.Users.Query().OrderBy(orm.TextAsc(models.Users.Email)), orm.PageRequest{Number: 1, Size: 1}); err == nil || p.Items != nil {
+		if p, err := orm.SimplePaginate(t.Context(), tx, models.Users.Query().OrderBy(orm.Asc(models.Users.Email)), orm.PageRequest{Number: 1, Size: 1}); err == nil || p.Items != nil {
 			t.Fatal("invalid model lookahead escaped")
 		}
 		return nil

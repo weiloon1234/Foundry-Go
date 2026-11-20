@@ -66,7 +66,7 @@ func observerApp(t *testing.T) (*database.DB, *observerqueries.Stats, string) {
 				return func() orm.Hooks[observerqueries.Plain] {
 					stats.Plain.Add(1)
 					return orm.Hooks[observerqueries.Plain]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[observerqueries.Plain]) error {
-						return orm.WriteSet(draft, orm.TextSet(observerqueries.Plains.Name, "registered default"))
+						return orm.WriteSet(draft, orm.Set(observerqueries.Plains.Name, "registered default"))
 					}}
 				}, nil
 			}); err != nil {
@@ -144,7 +144,7 @@ func TestPostgresObserversComposeByStageAndCaptureOnce(t *testing.T) {
 	var create, update, remove observerqueries.Trace
 	var first observerqueries.Record
 	q := observerqueries.Records
-	input := []orm.Assignment[observerqueries.Record]{orm.InputTextSet(observerqueries.Records.Name, " SAMPLE ")}
+	input := []orm.Assignment[observerqueries.Record]{orm.Set(observerqueries.Records.Name, " SAMPLE ")}
 	err := inSchema(t, wrapped{db}, namespace, func(tx *database.Tx) error {
 		if _, err := orm.All(t.Context(), tx, q.Query()); err != nil {
 			return err
@@ -168,7 +168,7 @@ func TestPostgresObserversComposeByStageAndCaptureOnce(t *testing.T) {
 			t.Fatal("after callbacks skipped")
 		}
 		for _, changes := range create.ORMChanges {
-			field, err := orm.ChangeOf(changes, orm.InputTextExpr(observerqueries.Records.Name))
+			field, err := orm.ChangeOf(changes, observerqueries.Records.Name)
 			if err != nil {
 				return err
 			}
@@ -214,12 +214,12 @@ func TestPostgresObserversComposeByStageAndCaptureOnce(t *testing.T) {
 		inspection := observerqueries.Trace{Inspect: func(w *orm.Write[observerqueries.Record]) error {
 			name, ok := orm.WriteGet(w, func() func(arg0 string) orm.Assignment[observerqueries.Record] {
 				receiver := q.Name
-				return func(arg0 string) orm.Assignment[observerqueries.Record] { return orm.InputTextSet(receiver, arg0) }
+				return func(arg0 string) orm.Assignment[observerqueries.Record] { return orm.Set(receiver, arg0) }
 			}()).Get()
 			if !ok || name != " SAMPLE " || orm.WriteIsSet(w, func() func(arg0 model.ID[observerqueries.Record]) orm.Assignment[observerqueries.Record] {
 				receiver := q.Key()
 				return func(arg0 model.ID[observerqueries.Record]) orm.Assignment[observerqueries.Record] {
-					return orm.KeySet(receiver, arg0)
+					return orm.Set(receiver, arg0)
 				}
 			}()) {
 				return errors.New("observer changed original values or omission")
@@ -253,7 +253,7 @@ func TestPostgresRegisteredObserversOnUnannotatedModelsAndBulkSkipping(t *testin
 			if item.Name != "registered default" || stats.Plain.Load() != 1 {
 				t.Fatal("unannotated model skipped registered observer")
 			}
-			batch, err := orm.InsertMany(t.Context(), tx, q.Table, [][]orm.Assignment[observerqueries.Record]{{orm.InputTextSet(observerqueries.Records.Name, " BULK ")}})
+			batch, err := orm.InsertMany(t.Context(), tx, q.Table, [][]orm.Assignment[observerqueries.Record]{{orm.Set(observerqueries.Records.Name, " BULK ")}})
 			if err != nil {
 				return err
 			}
@@ -261,7 +261,7 @@ func TestPostgresRegisteredObserversOnUnannotatedModelsAndBulkSkipping(t *testin
 				t.Fatal("bulk skipped field mutator")
 			}
 			f := observerqueries.Records
-			if _, err := orm.Upsert(t.Context(), wrapped{tx}, q.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoNothing(), orm.KeySet(observerqueries.Records.Key(), batch[0].ID), orm.InputTextSet(observerqueries.Records.Name, " UPSERT ")); err != nil {
+			if _, err := orm.Upsert(t.Context(), wrapped{tx}, q.Query(), orm.OnConflict(orm.ConflictKey(f.Key())).DoNothing(), orm.Set(observerqueries.Records.Key(), batch[0].ID), orm.Set(observerqueries.Records.Name, " UPSERT ")); err != nil {
 				return err
 			}
 			if stats.First.Load() != 0 || stats.Second.Load() != 0 {

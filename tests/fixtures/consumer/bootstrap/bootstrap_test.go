@@ -83,10 +83,10 @@ func TestIndependentBootstrapHTTPActorsAndUpload(t *testing.T) {
 				return err
 			}
 		}
-		if _, err := orm.Insert(t.Context(), tx, Members.Table, orm.KeySet(Members.ID, settings.MemberID), orm.TextSet(Members.Name, "Ada")); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, Members.Table, orm.Set(Members.ID, settings.MemberID), orm.Set(Members.Name, "Ada")); err != nil {
 			return err
 		}
-		_, err := orm.Insert(t.Context(), tx, Operators.Table, orm.KeySet(Operators.ID, settings.OperatorID), orm.TextSet(Operators.Department, "Operations"))
+		_, err := orm.Insert(t.Context(), tx, Operators.Table, orm.Set(Operators.ID, settings.OperatorID), orm.Set(Operators.Department, "Operations"))
 		return err
 	}); err != nil {
 		t.Fatal(err)

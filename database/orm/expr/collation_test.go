@@ -81,8 +81,8 @@ func TestNonCollatableTextDeclarationsRejectExplicitCollation(t *testing.T) {
 		c := orm.Codec(codec.String[textLiftState]().WithoutCollation())
 		return fields{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.State, c), orm.NullableTextOf(b, &m.Nullable, c)}
 	})
-	state := expr.TextRow(orm.TextExpr(table.State))
-	nullable := expr.TextNullableRow(orm.NullableTextExpr(table.Nullable))
+	state := expr.TextRow(table.State)
+	nullable := expr.TextNullableRow(table.Nullable)
 	for _, order := range []expr.Order[textLiftRecord]{expr.Asc(expr.Collate(state, expr.CollationC)), expr.Asc(expr.CollateNullable(nullable, expr.CollationC))} {
 		if _, err := rows.CompileRead(rows.Read(rows.FromModel(expr.OrderBy(table.Query(), order)))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("non-collatable text declaration accepted COLLATE", err)
@@ -112,9 +112,9 @@ func TestEnumProjectionRetainsNonCollatableCapability(t *testing.T) {
 		return fields{b.Row(), rows.NumberOf(b, &m.ID), rows.EnumOf(b, &m.State), rows.NullableEnumOf(b, &m.Nullable)}
 	})
 	selected := rows.Select(rows.From(textLiftTable.Query()), f,
-		rows.Map(f.ID, expr.Value(orm.KeyExpr(textLiftTable.Key()))),
-		rows.Map(f.State, expr.Value(orm.EnumExpr(textLiftTable.State))),
-		rows.Map(f.Nullable, expr.Value(orm.NullableEnumExpr(textLiftTable.Nullable))))
+		rows.Map(f.ID, expr.Value(textLiftTable.Key())),
+		rows.Map(f.State, expr.Value(textLiftTable.State)),
+		rows.Map(f.Nullable, expr.Value(textLiftTable.Nullable)))
 	source := rows.AsRecord[collatedProjection](rows.RecordOf(selected), "enum_values")
 	state := expr.AsSelected(rows.At(rows.Scope(source), f.State))
 	nullable := expr.AsSelected(rows.At(rows.Scope(source), f.Nullable))
@@ -185,8 +185,8 @@ func TestCollationPreservesTypesCodecsAndInputErrors(t *testing.T) {
 		}
 	}
 	for _, p := range []expr.Predicate[textLiftRecord]{
-		expr.TextLike(expr.Collate(expr.Value(orm.EnumExpr(textLiftTable.State)), expr.CollationC), textLiftActive),
-		expr.NullableTextLike(expr.CollateNullable(expr.Value(orm.NullableEnumExpr(textLiftTable.Nullable)), expr.CollationC), textLiftActive),
+		expr.TextLike(expr.Collate(expr.Value(textLiftTable.State), expr.CollationC), textLiftActive),
+		expr.NullableTextLike(expr.CollateNullable(expr.Value(textLiftTable.Nullable), expr.CollationC), textLiftActive),
 	} {
 		if _, err := rows.CompileRead(rows.Read(rows.FromModel(expr.Where(textLiftTable.Query(), p)))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("enum acquired text capability", err)

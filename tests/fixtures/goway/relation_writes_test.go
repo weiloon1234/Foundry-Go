@@ -37,9 +37,9 @@ func TestRelationWriteGoldens(t *testing.T) {
 				db := g.open(t.Context())
 				var err error
 
-				r := j.Peers.Where(orm.NumberGt(j.Targets.Rank, 0)).WherePivot(orm.ColumnEq(j.Pivots.Kind, "parent"))
-				create := []orm.Assignment[j.Pivot]{orm.KeySet(j.Pivots.ID, 100), orm.ColumnSet(j.Pivots.Kind, "parent"), orm.TextSet(j.Pivots.Role, "member")}
-				update := []orm.Assignment[j.Pivot]{orm.TextSet(j.Pivots.Role, "new")}
+				r := j.Peers.Where(orm.Gt(j.Targets.Rank, 0)).WherePivot(orm.Eq(j.Pivots.Kind, "parent"))
+				create := []orm.Assignment[j.Pivot]{orm.Set(j.Pivots.ID, 100), orm.Set(j.Pivots.Kind, "parent"), orm.Set(j.Pivots.Role, "member")}
+				update := []orm.Assignment[j.Pivot]{orm.Set(j.Pivots.Role, "new")}
 				switch mode {
 				case "single_attach":
 					out, e := orm.Attach(t.Context(), db, r, j.Parent{ID: 1}, j.Target{ID: 10}, create...)

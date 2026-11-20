@@ -9,8 +9,6 @@ import (
 type MutationAssignment struct {
 	Field FieldRef
 	AssignmentValue
-	// seal encrypts an encrypted field's plaintext for its row before binding.
-	Seal Sealer
 }
 
 // assignmentValue is shared by model drafts and conflict literals. Keeping the
@@ -20,6 +18,8 @@ type AssignmentValue struct {
 	Bind      func() (driver.Value, error)
 	Value     *InputState // Private type erasure; metadata checks the exact V before mutation.
 	CopyValue func() any
+	// seal encrypts an encrypted field's plaintext for its row before binding.
+	Seal Sealer
 }
 
 func (v AssignmentValue) InputValue() any {

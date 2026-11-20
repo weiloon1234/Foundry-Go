@@ -19,4 +19,4 @@ var _ context.Context
 var _ *database.Tx
 
 var other = rows.AsTransaction[b](rows.TransactionOf(rows.ModelRecord(f.Records.Query())), "other")
-var _ = selected.Where(expr.Eq(expr.At(rows.TransactionScope(other), orm.KeyExpr(f.Records.ID)), 1))
+var _ = selected.Where(expr.Eq(expr.At(rows.TransactionScope(other), f.Records.ID), 1))

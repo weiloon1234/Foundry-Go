@@ -6,4 +6,4 @@ import (
 	m "foundry.test/goway/models"
 )
 
-var _ = orm.TextSet(m.Users.Email, 42)
+var _ = orm.Set(m.Users.Email, 42)

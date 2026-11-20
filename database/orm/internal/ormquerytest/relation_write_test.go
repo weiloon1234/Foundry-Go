@@ -67,7 +67,7 @@ func writeRelationTables(opts ...orm.Option) (writeParentTable, writeTargetTable
 		t := orm.TableOf(b, &m.ID)
 		return writePivotTable{t, t.Key(), orm.NumberOf(b, &m.ParentID), orm.NumberOf(b, &m.TargetID), orm.TextOf(b, &m.Role), orm.SoftDeleteOf(b, &m.DeletedAt)}
 	}, opts...)
-	return a, z, p, orm.ManyToManyOf(a.Links, orm.KeyExpr(a.ID), orm.NumberExpr(p.ParentID), orm.NumberExpr(p.TargetID), orm.KeyExpr(z.ID))
+	return a, z, p, orm.ManyToManyOf(a.Links, orm.JoinKeys(a.ID, p.ParentID), orm.JoinKeys(p.TargetID, z.ID))
 }
 func pivotTestRows(n int) [][]driver.Value {
 	out := make([][]driver.Value, n)
@@ -112,7 +112,7 @@ func TestRelationWriteLifecycleAndStatements(t *testing.T) {
 						}
 						if v, ok := orm.WriteGet(w, func() func(arg0 int64) orm.Assignment[writePivot] {
 							receiver := p.ParentID
-							return func(arg0 int64) orm.Assignment[writePivot] { return orm.NumberSet(receiver, arg0) }
+							return func(arg0 int64) orm.Assignment[writePivot] { return orm.Set(receiver, arg0) }
 						}()).Get(); !ok || v != 1 {
 							t.Fatal("missing refreshed source default")
 						}
@@ -158,7 +158,7 @@ func TestRelationWriteLifecycleAndStatements(t *testing.T) {
 				}
 				return reply(s)
 			}}, declarations...)
-			out, err := orm.AttachMany(t.Context(), db, r, writeParent{ID: 1, Code: 999}, []writeTarget{{ID: 10}, {ID: 11}}, orm.KeySet(p.ID, 100), orm.TextSet(p.Role, "member"))
+			out, err := orm.AttachMany(t.Context(), db, r, writeParent{ID: 1, Code: 999}, []writeTarget{{ID: 10}, {ID: 11}}, orm.Set(p.ID, 100), orm.Set(p.Role, "member"))
 			if err != nil || len(out) != 2 {
 				t.Fatal(out, err)
 			}
@@ -187,7 +187,7 @@ func TestRelationWriteLifecycleAndStatements(t *testing.T) {
 func TestRelationWriteUnknownOutcomeCandidates(t *testing.T) {
 	_, _, p, r := writeRelationTables()
 	db := hookDB(t, testConnector{commitErr: errors.New("lost commit acknowledgement"), respond: pivotTestReply(1)})
-	out, err := orm.Attach(t.Context(), db, r, writeParent{ID: 1}, writeTarget{ID: 10}, orm.KeySet(p.ID, 100), orm.TextSet(p.Role, "member"))
+	out, err := orm.Attach(t.Context(), db, r, writeParent{ID: 1}, writeTarget{ID: 10}, orm.Set(p.ID, 100), orm.Set(p.Role, "member"))
 	var candidate *orm.WriteError[writePivot]
 	var outcome *database.Error
 	if out.ID != 0 || !errors.As(err, &candidate) || candidate.Candidate().ID != 100 || !errors.As(err, &outcome) || outcome.Outcome() != database.Unknown {
@@ -198,7 +198,7 @@ func TestRelationWriteUnknownOutcomeCandidates(t *testing.T) {
 	if removed != nil || !errors.As(err, &many) || len(many.Candidate()) != 1 {
 		t.Fatal(removed, err)
 	}
-	changes, err := orm.Sync(t.Context(), db, r, writeParent{ID: 1}, []writeTarget{{ID: 10}}, nil, []orm.Assignment[writePivot]{orm.TextSet(p.Role, "updated")})
+	changes, err := orm.Sync(t.Context(), db, r, writeParent{ID: 1}, []writeTarget{{ID: 10}}, nil, []orm.Assignment[writePivot]{orm.Set(p.Role, "updated")})
 	var combined *orm.WriteError[orm.PivotChanges[writePivot]]
 	if len(changes.Updated) != 0 || !errors.As(err, &combined) || len(combined.Candidate().Updated) != 1 {
 		t.Fatal(changes, err)
@@ -207,11 +207,11 @@ func TestRelationWriteUnknownOutcomeCandidates(t *testing.T) {
 func TestRelationWriteValidationAndFailures(t *testing.T) {
 	a, z, p, r := writeRelationTables()
 	_, _, other, _ := writeRelationTables()
-	for name, relation := range map[string]orm.ThroughRelation[writeParent, writeTarget, writePivot]{"zero": {}, "order": r.OrderBy(orm.KeyAsc(z.ID)), "pivot_order": r.OrderByPivot(orm.KeyAsc(p.ID)), "limit": orm.WithRelationWriteLimit(r, 0), "same_key": orm.ManyToManyOf(a.Links, orm.KeyExpr(a.ID), orm.NumberExpr(p.ParentID), orm.NumberExpr(p.ParentID), orm.KeyExpr(z.ID))} {
+	for name, relation := range map[string]orm.ThroughRelation[writeParent, writeTarget, writePivot]{"zero": {}, "order": r.OrderBy(orm.Asc(z.ID)), "pivot_order": r.OrderByPivot(orm.Asc(p.ID)), "limit": orm.WithRelationWriteLimit(r, 0), "same_key": orm.ManyToManyOf(a.Links, orm.JoinKeys(a.ID, p.ParentID), orm.JoinKeys(p.ParentID, z.ID))} {
 		t.Run(name, func(t *testing.T) {
 			n := 0
 			db := hookDB(t, testConnector{onBegin: func() { n++ }, respond: pivotTestReply(1)})
-			_, err := orm.Attach(t.Context(), db, relation, writeParent{}, writeTarget{}, orm.KeySet(p.ID, 100))
+			_, err := orm.Attach(t.Context(), db, relation, writeParent{}, writeTarget{}, orm.Set(p.ID, 100))
 			if !errors.Is(err, fault.Invalid) || n != 0 {
 				t.Fatal(err, n)
 			}
@@ -222,17 +222,17 @@ func TestRelationWriteValidationAndFailures(t *testing.T) {
 			var sql []string
 			ctx := t.Context()
 			relation := r
-			assignment := orm.TextSet(p.Role, "member")
+			assignment := orm.Set(p.Role, "member")
 			reply := pivotTestReply(1)
 			if failure == "assignment_owner" {
-				assignment = orm.TextSet(other.Role, "member")
+				assignment = orm.Set(other.Role, "member")
 			}
 			if failure == "callback" {
 				_, _, p1, r1 := writeRelationTables(orm.WithHooks(func() orm.Hooks[writePivot] {
 					return orm.Hooks[writePivot]{Creating: func(context.Context, *database.Tx, *orm.Write[writePivot]) error { return errors.New("veto") }}
 				}))
 				relation = r1
-				assignment = orm.TextSet(p1.Role, "member")
+				assignment = orm.Set(p1.Role, "member")
 			}
 			if failure == "cancel" {
 				c, cancel := context.WithCancel(ctx)
@@ -289,7 +289,7 @@ func TestRelationWriteSavepointsOwnAfterCommit(t *testing.T) {
 		statements = nil
 		err := db.Transaction(t.Context(), func(tx *database.Tx) error {
 			for range 2 {
-				if _, e := orm.Attach(t.Context(), tx, r, writeParent{ID: 1}, writeTarget{ID: 10}, orm.KeySet(p.ID, 100), orm.TextSet(p.Role, "member")); e != nil {
+				if _, e := orm.Attach(t.Context(), tx, r, writeParent{ID: 1}, writeTarget{ID: 10}, orm.Set(p.ID, 100), orm.Set(p.Role, "member")); e != nil {
 					return e
 				}
 			}
@@ -321,11 +321,11 @@ func TestRelationWriteSavepointsOwnAfterCommit(t *testing.T) {
 }
 func TestRelationWriteRefreshesStoredKeysAndBoundsResults(t *testing.T) {
 	a, z, p, _ := writeRelationTables()
-	r := orm.ManyToManyOf(a.Links, orm.NumberExpr(a.Code), orm.NumberExpr(p.ParentID), orm.NumberExpr(p.TargetID), orm.NumberExpr(z.Code))
+	r := orm.ManyToManyOf(a.Links, orm.JoinKeys(a.Code, p.ParentID), orm.JoinKeys(p.TargetID, z.Code))
 	var statements []string
 	var binds [][]any
 	db := hookDB(t, testConnector{statements: &statements, bindings: &binds, respond: pivotTestReply(1)})
-	_, err := orm.Attach(t.Context(), db, r, writeParent{ID: 1, Code: 999}, writeTarget{ID: 10, Code: 888}, orm.KeySet(p.ID, 100), orm.TextSet(p.Role, "member"))
+	_, err := orm.Attach(t.Context(), db, r, writeParent{ID: 1, Code: 999}, writeTarget{ID: 10, Code: 888}, orm.Set(p.ID, 100), orm.Set(p.Role, "member"))
 	if err != nil {
 		t.Fatal(err)
 	}

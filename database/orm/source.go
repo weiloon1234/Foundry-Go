@@ -11,39 +11,70 @@ import (
 	"unsafe"
 )
 
-// ExpressionColumn preserves a column's model and SQL value type.
-// Example: rows.SelectValue(Orders.Query(),orm.NumberExpr(Orders.TotalCents)).
-type ExpressionColumn[M, V, P any] interface {
-	expressionColumn(*M) (ormcore.Column[V], ormcore.Column[P])
-}
-
-func requiredExpression[V any](c columnData[V]) (ormcore.Column[V], ormcore.Column[V]) {
-	v := expressionColumn(c)
-	return v, v
-}
-func expressionColumn[V any](c columnData[V]) ormcore.Column[V] {
-	if c.core == nil || c.core.owner == nil {
+func expressionColumn[V any](c *columnData[V]) ormcore.Column[V] {
+	if c == nil || c.core == nil || c.core.owner == nil {
 		return ormcore.Column[V]{Err: invalid("uninitialized column")}
 	}
 	return ormcore.Column[V]{Reference: ormcore.Reference{Table: c.core.owner.model.Table, Owner: c.core.owner}, Field: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Sensitive: c.core.sensitive, Collatable: c.core.collatable, Kind: c.core.kind, Nullable: c.core.metadata.Nullable, Bind: c.bind, Clone: c.clone, Scan: c.scanValue, Err: declarationCoreError(c.core.owner)}
 }
-func nullableExpression[V any](c nullableColumnData[V]) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
-	if c.nullable == nil {
-		return ormcore.Column[V]{Err: invalid("uninitialized nullable column")}, ormcore.Column[value.Nullable[V]]{Err: invalid("uninitialized nullable column")}
-	}
-	return expressionColumn(c.base), expressionColumn(c.nullable())
-}
 
-// FoundryColumn supplies comparison and projection codecs to expr/rows.
-func FoundryColumn[M, V, P any](column ExpressionColumn[M, V, P], seal sqlowner.MetadataSeal) (ormcore.Column[V], ormcore.Column[P]) {
+// FoundryHandle supplies comparison and projection codecs for a queryable ColumnHandle to expr/rows.
+func FoundryHandle[M, V, I, P any, K ColumnKind, R ColumnRole](c ColumnHandle[M, V, I, P, K, R], seal sqlowner.MetadataSeal) (ormcore.Column[V], ormcore.Column[P]) {
 	if !seal.Valid() {
 		return ormcore.Column[V]{Err: invalid("invalid SQL owner capability")}, ormcore.Column[P]{Err: invalid("invalid SQL owner capability")}
 	}
-
-	if nilInterface(column) {
-		return ormcore.Column[V]{Err: invalid("missing expression column")}, ormcore.Column[P]{Err: invalid("missing expression column")}
+	if c.stored == nil || c.stored.core == nil || c.stored.core.owner == nil {
+		return ormcore.Column[V]{Err: invalid("uninitialized column")}, ormcore.Column[P]{Err: invalid("uninitialized column")}
 	}
-	return column.expressionColumn(nil)
+	_, isText := any(*new(K)).(TextColumnKind)
+	comparison := expressionColumn(c.stored)
+	comparison.Text = isText
+	if !c.stored.core.metadata.Nullable {
+		return comparison, *(*ormcore.Column[P])(unsafe.Pointer(&comparison))
+	}
+	projFn, ok := c.stored.core.nullableProjection.(func() columnData[P])
+	if !ok || projFn == nil {
+		return ormcore.Column[V]{Err: invalid("uninitialized nullable column")}, ormcore.Column[P]{Err: invalid("uninitialized nullable column")}
+	}
+	projected := projFn()
+	projection := expressionColumn(&projected)
+	projection.Text = isText
+	return comparison, projection
+}
+
+// FoundryComparisonHandle supplies the comparison codec for a queryable ColumnHandle to expr/rows.
+func FoundryComparisonHandle[M, V, I, P any, K ColumnKind, R ColumnRole](c ColumnHandle[M, V, I, P, K, R], seal sqlowner.MetadataSeal) ormcore.Column[V] {
+	if !seal.Valid() {
+		return ormcore.Column[V]{Err: invalid("invalid SQL owner capability")}
+	}
+	if c.stored == nil || c.stored.core == nil || c.stored.core.owner == nil {
+		return ormcore.Column[V]{Err: invalid("uninitialized column")}
+	}
+	_, isText := any(*new(K)).(TextColumnKind)
+	comparison := expressionColumn(c.stored)
+	comparison.Text = isText
+	return comparison
+}
+
+// FoundryNullableHandle supplies comparison and nullable-projection codecs for a nullable queryable ColumnHandle.
+func FoundryNullableHandle[M, V, I, P any, K NullableComparableKind, R ColumnRole](c ColumnHandle[M, V, I, P, K, R], seal sqlowner.MetadataSeal) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
+	if !seal.Valid() {
+		return ormcore.Column[V]{Err: invalid("invalid SQL owner capability")}, ormcore.Column[value.Nullable[V]]{Err: invalid("invalid SQL owner capability")}
+	}
+	if c.stored == nil || c.stored.core == nil || c.stored.core.owner == nil || !c.stored.core.metadata.Nullable {
+		return ormcore.Column[V]{Err: invalid("uninitialized nullable column")}, ormcore.Column[value.Nullable[V]]{Err: invalid("uninitialized nullable column")}
+	}
+	projFn, ok := c.stored.core.nullableProjection.(func() columnData[value.Nullable[V]])
+	if !ok || projFn == nil {
+		return ormcore.Column[V]{Err: invalid("uninitialized nullable column")}, ormcore.Column[value.Nullable[V]]{Err: invalid("uninitialized nullable column")}
+	}
+	_, isText := any(*new(K)).(TextColumnKind)
+	comparison := expressionColumn(c.stored)
+	comparison.Text = isText
+	projectedData := projFn()
+	projection := expressionColumn(&projectedData)
+	projection.Text = isText
+	return comparison, projection
 }
 
 // FoundrySource supplies sealed model AST metadata to rows.

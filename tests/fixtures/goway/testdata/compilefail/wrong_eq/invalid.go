@@ -6,4 +6,4 @@ import (
 	"foundry.test/goway/models"
 )
 
-func F() { orm.NumberEq(models.Orders.TotalCents, "x") }
+func F() { orm.Eq(models.Orders.TotalCents, "x") }

@@ -6,4 +6,4 @@ import (
 	c "foundry.test/goway/coremodels"
 )
 
-var _ = orm.IntervalSet(c.Records.Period, "1 day")
+var _ = orm.Set(c.Records.Period, "1 day")

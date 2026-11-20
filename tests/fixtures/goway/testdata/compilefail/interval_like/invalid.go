@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.TextLike(c.Records.Period, "%day%")
+var _ = orm.Like(c.Records.Period, "%day%")

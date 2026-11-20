@@ -154,7 +154,7 @@ func (s *storage) within(ctx context.Context, fn func(*database.Tx) error) (*dat
 		if _, err := tx.Exec(ctx, `SET LOCAL search_path TO "`+s.schema+`", pg_temp`); err != nil {
 			return err
 		}
-		if _, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Controls.Query()).Where(orm.KeyEq(store.Controls.Key(), "storage"))); err != nil {
+		if _, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Controls.Query()).Where(orm.Eq(store.Controls.Key(), "storage"))); err != nil {
 			return err
 		}
 		return fn(tx)
@@ -178,7 +178,7 @@ func (s *storage) persist(ctx context.Context, b batch, staged receiptState) (pe
 		return result, err
 	}
 	tx, err := s.within(ctx, func(tx *database.Tx) error {
-		prior, err := orm.First(ctx, tx, flushes.Query().Where(orm.KeyEq(flushes.Key(), receiptKey(b.id))))
+		prior, err := orm.First(ctx, tx, flushes.Query().Where(orm.Eq(flushes.Key(), receiptKey(b.id))))
 		if err != nil {
 			return err
 		}
@@ -243,7 +243,7 @@ func (s *storage) persist(ctx context.Context, b batch, staged receiptState) (pe
 		if err != nil {
 			return err
 		}
-		if _, err = orm.Insert(ctx, tx, flushes.Table, orm.KeySet(flushes.Key(), receiptKey(b.id)), orm.ColumnSet(flushes.RunID, s.runKey()), orm.TimeSet(flushes.CreatedAt, b.at), orm.TimeSet(flushes.StoredAt, now), orm.TimeSet(flushes.RetainUntil, until), orm.JSONSet(flushes.Result, payload)); err != nil {
+		if _, err = orm.Insert(ctx, tx, flushes.Table, orm.Set(flushes.Key(), receiptKey(b.id)), orm.Set(flushes.RunID, s.runKey()), orm.Set(flushes.CreatedAt, b.at), orm.Set(flushes.StoredAt, now), orm.Set(flushes.RetainUntil, until), orm.Set(flushes.Result, payload)); err != nil {
 			return err
 		}
 		if err = ctx.Err(); err != nil {
@@ -266,7 +266,7 @@ func (s *storage) persist(ctx context.Context, b batch, staged receiptState) (pe
 }
 
 func (s *storage) writeRun(ctx context.Context, tx *database.Tx, b batch, now temporal.DateTime) error {
-	exists, err := orm.Exists(ctx, tx, runs.Query().Where(orm.KeyEq(runs.Key(), s.runKey())))
+	exists, err := orm.Exists(ctx, tx, runs.Query().Where(orm.Eq(runs.Key(), s.runKey())))
 	if err != nil {
 		return err
 	}
@@ -289,10 +289,10 @@ func (s *storage) writeRun(ctx context.Context, tx *database.Tx, b batch, now te
 	}
 	q := runs.Query()
 	cr := rows.ConflictRowsOf(q)
-	stored := expr.At(cr.Stored(), orm.TimeExpr(runs.RetainUntil))
-	proposed := expr.At(cr.Proposed(), orm.TimeExpr(runs.RetainUntil))
-	conflict := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(runs.Key()))).DoUpdate(orm.ConflictIncoming(orm.TimeExpr(runs.HeartbeatAt)), orm.ConflictIncoming(orm.JSONExpr(runs.Runtime)), rows.SetConflictValue(orm.TimeExpr(runs.RetainUntil), expr.When(expr.Greater(proposed, stored), proposed).Else(stored)))
-	_, err = orm.Upsert(ctx, tx, q, conflict, orm.KeySet(runs.Key(), s.runKey()), orm.TextSet(runs.Instance, s.collector.config.Instance), orm.TextSet(runs.Release, s.collector.config.Release), orm.TimeSet(runs.StartedAt, s.collector.started), orm.TimeSet(runs.HeartbeatAt, b.at), orm.TimeSet(runs.RetainUntil, until), orm.JSONSet(runs.Runtime, payload))
+	stored := expr.At(cr.Stored(), runs.RetainUntil)
+	proposed := expr.At(cr.Proposed(), runs.RetainUntil)
+	conflict := orm.OnConflict(orm.ConflictKey(runs.Key())).DoUpdate(orm.ConflictIncoming(runs.HeartbeatAt), orm.ConflictIncoming(runs.Runtime), rows.SetConflictValue(runs.RetainUntil, expr.When(expr.Greater(proposed, stored), proposed).Else(stored)))
+	_, err = orm.Upsert(ctx, tx, q, conflict, orm.Set(runs.Key(), s.runKey()), orm.Set(runs.Instance, s.collector.config.Instance), orm.Set(runs.Release, s.collector.config.Release), orm.Set(runs.StartedAt, s.collector.started), orm.Set(runs.HeartbeatAt, b.at), orm.Set(runs.RetainUntil, until), orm.Set(runs.Runtime, payload))
 	return err
 }
 

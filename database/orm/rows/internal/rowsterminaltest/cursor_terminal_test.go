@@ -16,8 +16,8 @@ import (
 
 func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
 	m := declareMembers()
-	base := rows.CursorFor(rows.ModelRecord(m.Query().Where(orm.KeyNe(m.ID, 0)).OrderBy(orm.KeyDesc(m.ID)).Limit(8).Offset(1)))
-	id := expr.At(base.Scope(), orm.KeyExpr(m.ID))
+	base := rows.CursorFor(rows.ModelRecord(m.Query().Where(orm.Ne(m.ID, 0)).OrderBy(orm.Desc(m.ID)).Limit(8).Offset(1)))
+	id := expr.At(base.Scope(), m.ID)
 	valid := base.UniqueBy(expr.Group(id))
 	s, err := rows.CompileCursor(valid)
 	if err != nil {
@@ -41,7 +41,7 @@ func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
 	for _, bad := range []rows.CursorQuery[member]{
 		{}, base, base.UniqueBy(expr.Group(id), expr.Group(id)),
 		base.UniqueBy(expr.Group(expr.ParamOf(expr.AsSelected(expr.Row(id)), 1))),
-		base.UniqueBy(expr.Group(expr.At(base.Scope(), orm.KeyExpr(foreign.ID)))),
+		base.UniqueBy(expr.Group(expr.At(base.Scope(), foreign.ID))),
 		valid.OrderBy(expr.Asc(expr.Negate(id))),
 		valid.OrderBy(expr.Asc(id).NullsLast()),
 	} {
@@ -56,7 +56,7 @@ func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
 	if err != nil || again.SQL() != s.SQL() {
 		t.Fatal("validation mutated cursor", err)
 	}
-	scalar := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname)))))))
+	scalar := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(m.Nickname))))))
 	scalar = scalar.UniqueBy(expr.Group(scalar.Value()))
 	if _, err := rows.CompileValueCursor(scalar); err != nil {
 		t.Fatal(err)
@@ -89,12 +89,12 @@ func TestCursorPreflightUsesCurrentScopeContext(t *testing.T) {
 			if !ok {
 				return orm.Predicate[member]{}, errors.New("missing tenant")
 			}
-			return orm.KeyEq(d.ID, id), nil
+			return orm.Eq(d.ID, id), nil
 		})}
 	}))
 	bound := context.WithValue(t.Context(), reportTenantKey{}, int64(1))
 	cursor := rows.CursorFor(rows.ModelRecord(orm.WithScopeContext(m.Query(), bound)))
-	cursor = cursor.UniqueBy(expr.Group(expr.At(cursor.Scope(), orm.KeyExpr(m.ID))))
+	cursor = cursor.UniqueBy(expr.Group(expr.At(cursor.Scope(), m.ID)))
 	statement, err := rows.CompileCursor(cursor)
 	if err != nil || statement.Arguments()[0] != int64(1) {
 		t.Fatal(statement, err)

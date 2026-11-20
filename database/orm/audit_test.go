@@ -80,11 +80,11 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 			}
 			var as []Assignment[auditRow]
 			if right != nil {
-				as = []Assignment[auditRow]{TextSet(table.Name, "stored"), NullableTextSetNull(table.Note)}
+				as = []Assignment[auditRow]{Set(table.Name, "stored"), SetNull(table.Note)}
 			}
 			changes := auditChanges(t, table, op, left, right, as...)
 			bindings = 0
-			policy := AuditPolicyOf(table.Table, AuditField(TextExpr(table.Quiet), auditrecord.Exclude))
+			policy := AuditPolicyOf(table.Table, AuditField(table.Quiet, auditrecord.Exclude))
 			history, err := Audit(table.Table, changes, policy)
 			if err != nil {
 				t.Fatal(err)
@@ -100,7 +100,7 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 			if err != nil || subject.Key() != 7 {
 				t.Fatal("persisted identity", err)
 			}
-			n, err := AuditRead(history, TextExpr(table.Name))
+			n, err := AuditRead(history, table.Name)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -118,7 +118,7 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 			if v, ok := nval.Get(); right != nil && (!ok || v != "stored") {
 				t.Fatal("stored value changed")
 			}
-			note, err := AuditReadNullable(history, NullableTextExpr(table.Note))
+			note, err := AuditReadNullable(history, table.Note)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -133,7 +133,7 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 					t.Fatal("NULL confused with absence")
 				}
 			}
-			digest, err := AuditRead(history, ColumnExpr(table.Digest))
+			digest, err := AuditRead(history, table.Digest)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -154,7 +154,7 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 					t.Fatal("redaction fabricated value")
 				}
 			}
-			secret, err := AuditReadEncrypted(history, table.Secret)
+			secret, err := AuditRead(history, table.Secret)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -167,7 +167,7 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 					t.Fatal("unsealed encryption was bound")
 				}
 			}
-			jsonField, err := AuditRead(history, JSONExpr(table.Prefs))
+			jsonField, err := AuditRead(history, table.Prefs)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -192,7 +192,7 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = AuditRead(restored, KeyExpr(table.Key())); err != nil {
+			if _, err = AuditRead(restored, table.Key()); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -205,12 +205,12 @@ func TestAuditRejectsInvalidPolicyAndStandaloneChanges(t *testing.T) {
 	m := auditRow{ID: 1}
 	state := Changes[auditRow]{state: &changeState{table: table.core, after: unsafe.Pointer(&m), operation: value.Set(lifecycle.Create)}}
 	for _, p := range []AuditPolicy[auditRow]{
-		AuditPolicyOf(table.Table, AuditField(KeyExpr(table.Key()), auditrecord.Exclude)),
-		AuditPolicyOf(table.Table, AuditField(KeyExpr(table.Key()), auditrecord.Ignore)),
-		AuditPolicyOf(table.Table, AuditField(KeyExpr(table.Key()), auditrecord.Redact)),
-		AuditPolicyOf(table.Table, AuditField(TextExpr(table.Name), auditrecord.Disclosure(99))),
-		AuditPolicyOf(table.Table, AuditField(TextExpr(other.Name), auditrecord.Automatic)),
-		AuditPolicyOf(table.Table, AuditField(TextExpr(table.Name), auditrecord.Redact), AuditField(TextExpr(table.Name), auditrecord.Exclude)),
+		AuditPolicyOf(table.Table, AuditField(table.Key(), auditrecord.Exclude)),
+		AuditPolicyOf(table.Table, AuditField(table.Key(), auditrecord.Ignore)),
+		AuditPolicyOf(table.Table, AuditField(table.Key(), auditrecord.Redact)),
+		AuditPolicyOf(table.Table, AuditField(table.Name, auditrecord.Disclosure(99))),
+		AuditPolicyOf(table.Table, AuditField(other.Name, auditrecord.Automatic)),
+		AuditPolicyOf(table.Table, AuditField(table.Name, auditrecord.Redact), AuditField(table.Name, auditrecord.Exclude)),
 		AuditPolicyOf(other.Table),
 	} {
 		if _, err := Audit(table.Table, state, p); err == nil {
@@ -227,16 +227,16 @@ func TestAuditCodecErrorsAreSafeAndDoNotRebindUntouchedFields(t *testing.T) {
 	table := auditFields(&calls)
 	before := auditRow{ID: 1, Name: "same"}
 	after := before
-	state := &changeState{table: table.core, before: unsafe.Pointer(&before), after: unsafe.Pointer(&after), operation: value.Set(lifecycle.Update), fields: map[*columnCore]changeFlags{table.Name.text.core: {assigned: true}}}
+	state := &changeState{table: table.core, before: unsafe.Pointer(&before), after: unsafe.Pointer(&after), operation: value.Set(lifecycle.Update), fields: map[*columnCore]changeFlags{table.Name.stored.core: {assigned: true}}}
 	private := errors.New("private bound value")
-	table.Name.text.core.get = func(unsafe.Pointer) (driver.Value, error) { return nil, private }
-	table.Quiet.text.core.get = func(unsafe.Pointer) (driver.Value, error) { t.Error("untouched field rebound"); return nil, nil }
+	table.Name.stored.core.get = func(unsafe.Pointer) (driver.Value, error) { return nil, private }
+	table.Quiet.stored.core.get = func(unsafe.Pointer) (driver.Value, error) { t.Error("untouched field rebound"); return nil, nil }
 	_, err := Audit(table.Table, Changes[auditRow]{state: state}, AuditPolicy[auditRow]{})
 	if !errors.Is(err, private) || strings.Contains(fmt.Sprintf("%v %+v %#v", err, err, err), private.Error()) {
 		t.Fatal("unsafe codec error", err)
 	}
 	// Explicit redaction also suppresses an otherwise failing binder.
-	if _, err = Audit(table.Table, Changes[auditRow]{state: state}, AuditPolicyOf(table.Table, AuditField(TextExpr(table.Name), auditrecord.Redact))); err != nil {
+	if _, err = Audit(table.Table, Changes[auditRow]{state: state}, AuditPolicyOf(table.Table, AuditField(table.Name, auditrecord.Redact))); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -269,7 +269,7 @@ func TestAuditKeepsPersistedPrimaryCodec(t *testing.T) {
 	if err != nil || subject.Key() != m.ID {
 		t.Fatal("typed subject codec", err)
 	}
-	field, err := AuditRead(history, KeyExpr(table.Key()))
+	field, err := AuditRead(history, table.Key())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,16 +296,16 @@ func TestAuditNullableEncryptionDoesNotBindUnsealedValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, disclosure := range []auditrecord.Disclosure{auditrecord.Automatic, auditrecord.Exclude, auditrecord.Ignore} {
-		policy := AuditPolicyOf(table.Table, AuditEncryptedField(table.Secret, disclosure), AuditNullableEncryptedField(table.Backup, disclosure))
+		policy := AuditPolicyOf(table.Table, AuditField(table.Secret, disclosure), AuditField(table.Backup, disclosure))
 		history, err := Audit(table.Table, Changes[secureRecord]{state: state}, policy)
 		if err != nil {
 			t.Fatal(err)
 		}
-		field, err := AuditReadNullableEncrypted(history, table.Backup)
+		field, err := AuditReadNullable(history, table.Backup)
 		if err != nil {
 			t.Fatal(err)
 		}
-		required, err := AuditReadEncrypted(history, table.Secret)
+		required, err := AuditRead(history, table.Secret)
 		if err != nil || (disclosure != auditrecord.Automatic && (required.IsSet() || field.IsSet())) {
 			t.Fatal("excluded/ignored encrypted field remained visible", err)
 		}
@@ -323,9 +323,9 @@ func TestAuditNullableEncryptionDoesNotBindUnsealedValues(t *testing.T) {
 func TestAuditIgnoreUsesAssignedAndChangedFlags(t *testing.T) {
 	table := hookedFields(nil)
 	policy := AuditPolicyOf(table.Table,
-		AuditField(NullableInputTextExpr(table.Note), auditrecord.Ignore),
-		AuditField(InputTextExpr(table.Name), auditrecord.Exclude),
-		AuditField(TimeExpr(table.Updated), auditrecord.Ignore))
+		AuditField(table.Note, auditrecord.Ignore),
+		AuditField(table.Name, auditrecord.Exclude),
+		AuditField(table.Updated, auditrecord.Ignore))
 	before := hookedRow{
 		ID: 1, Name: "same", Note: value.Of(hookedStored("same")), Body: []byte{},
 		CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -338,8 +338,8 @@ func TestAuditIgnoreUsesAssignedAndChangedFlags(t *testing.T) {
 		keep     bool
 	}{
 		{"changed ignored", func(m *hookedRow) { m.Note = value.Of(hookedStored("changed")) }, nil, false},
-		{"assigned unchanged ignored", nil, []Assignment[hookedRow]{NullableInputTextSet(table.Note, hookedInput{"same"})}, false},
-		{"ignored and assigned unchanged excluded", nil, []Assignment[hookedRow]{NullableInputTextSet(table.Note, hookedInput{"same"}), InputTextSet(table.Name, "same")}, true},
+		{"assigned unchanged ignored", nil, []Assignment[hookedRow]{Set(table.Note, hookedInput{"same"})}, false},
+		{"ignored and assigned unchanged excluded", nil, []Assignment[hookedRow]{Set(table.Note, hookedInput{"same"}), Set(table.Name, "same")}, true},
 		{"only updated_at even if ignored", func(m *hookedRow) { m.UpdatedAt = m.UpdatedAt.Add(time.Hour) }, nil, true},
 		{"ignored and created_at", func(m *hookedRow) {
 			m.CreatedAt = m.CreatedAt.Add(-time.Hour)

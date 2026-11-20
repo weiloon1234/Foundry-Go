@@ -118,7 +118,7 @@ func mfaSetup(t *testing.T) *mfaFixture {
 		if _, err := tx.Exec(t.Context(), `CREATE TABLE mfa_accounts(id uuid PRIMARY KEY,email text NOT NULL,password text NOT NULL,enabled boolean NOT NULL,mfa_enabled boolean NOT NULL,require_mfa boolean NOT NULL)`); err != nil {
 			return err
 		}
-		s.account, err = orm.Insert(t.Context(), tx, multifactor.AccountRecords.Table, orm.TextSet(multifactor.AccountRecords.Email, "member@example.test"), orm.ColumnSet(multifactor.AccountRecords.Password, hash), orm.ColumnSet(multifactor.AccountRecords.Enabled, true), orm.ColumnSet(multifactor.AccountRecords.MFAEnabled, false), orm.ColumnSet(multifactor.AccountRecords.RequireMFA, false))
+		s.account, err = orm.Insert(t.Context(), tx, multifactor.AccountRecords.Table, orm.Set(multifactor.AccountRecords.Email, "member@example.test"), orm.Set(multifactor.AccountRecords.Password, hash), orm.Set(multifactor.AccountRecords.Enabled, true), orm.Set(multifactor.AccountRecords.MFAEnabled, false), orm.Set(multifactor.AccountRecords.RequireMFA, false))
 		return err
 	})
 	if err != nil {
@@ -500,7 +500,7 @@ func TestPostgresMFAPrunesOnlyPendingAndPreservesRequiredPolicy(t *testing.T) {
 		t.Fatal("confirmed factor pruned", removed, err)
 	}
 	err = s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.ColumnSet(multifactor.AccountRecords.RequireMFA, true))
+		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.Set(multifactor.AccountRecords.RequireMFA, true))
 		return err
 	})
 	if err != nil {

@@ -20,10 +20,10 @@ import (
 
 func TestAggregateFilterIsolationAndBindings(t *testing.T) {
 	d := declareAggregateRecords()
-	f := expr.Value(orm.NumberExpr(d.Exact))
-	base := expr.Sum(orm.NumberExpr(d.Exact))
+	f := expr.Value(d.Exact)
+	base := expr.Sum(d.Exact)
 	filtered := expr.Filter(expr.Filter(base, expr.Gt(expr.OrderRow(f), 2)), expr.Or(expr.Lt(expr.OrderRow(f), 8), expr.Eq(f, 10)))
-	q := rows.SelectScalar(rows.From(d.Query().Where(orm.NumberNe(d.Exact, 4))), expr.AsSelected(filtered))
+	q := rows.SelectScalar(rows.From(d.Query().Where(orm.Ne(d.Exact, 4))), expr.AsSelected(filtered))
 	q = rows.OrderScalar(rows.HavingScalar(q, expr.GtValue(filtered, decimal.FromInt64(5))), expr.DescValue(filtered))
 	s, err := rows.CompileRead(rows.ReadScalar(q))
 	if err != nil {
@@ -49,7 +49,7 @@ func TestAggregateFilterIsolationAndBindings(t *testing.T) {
 
 func TestAggregateFilterWindowAndValidation(t *testing.T) {
 	d := declareAggregateRecords()
-	f := expr.Value(orm.NumberExpr(d.Exact))
+	f := expr.Value(d.Exact)
 	source := rows.From(d.Query())
 	w := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Asc(f)).RowsBetween(expr.Preceding(2), expr.CurrentRow())
 	s, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, expr.Over(expr.Filter(expr.Exists[aggregateRecord](), expr.Gt(expr.OrderRow(f), 1)), w))))
@@ -63,7 +63,7 @@ func TestAggregateFilterWindowAndValidation(t *testing.T) {
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.GroupByScalar(filtered, expr.Group(f)))); err != nil {
 		t.Fatal(err)
 	}
-	for name, p := range map[string]expr.Predicate[aggregateRecord]{"zero": {}, "foreign": expr.Eq(expr.Value(orm.NumberExpr(declareAggregateRecords().Exact)), 0)} {
+	for name, p := range map[string]expr.Predicate[aggregateRecord]{"zero": {}, "foreign": expr.Eq(expr.Value(declareAggregateRecords().Exact), 0)} {
 		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, expr.AsSelected(expr.Filter(expr.Count[aggregateRecord](), p))))); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
 		}
@@ -93,11 +93,11 @@ func TestAggregateFilterCorrelationOwnership(t *testing.T) {
 	d := declareAggregateRecords()
 	a, b := rows.As[left](d.Query(), "parent"), rows.As[right](d.Query(), "child")
 	link := rows.Correlate(a, b)
-	x := expr.At(rows.OuterScope(link, rows.Scope(a)), orm.NumberExpr(d.Exact))
-	y := expr.At(rows.InnerScope(link, rows.Scope(b)), orm.NumberExpr(d.Exact))
+	x := expr.At(rows.OuterScope(link, rows.Scope(a)), d.Exact)
+	y := expr.At(rows.InnerScope(link, rows.Scope(b)), d.Exact)
 	type scope = rows.Correlation[rows.Alias[left, aggregateRecord], rows.Alias[right, aggregateRecord]]
 	count := expr.Count[scope]()
-	for name, aggregate := range map[string]expr.OrderedAggregate[scope, int64]{"outer only": expr.Filter(count, expr.Ne(x, 0)), "local": expr.Filter(count, expr.Ne(y, 0)), "mixed": expr.Filter(count, expr.Equal(y, x)), "local argument": expr.Filter(expr.CountFieldAt(rows.InnerScope(link, rows.Scope(b)), orm.NumberExpr(d.Exact)), expr.Ne(x, 0))} {
+	for name, aggregate := range map[string]expr.OrderedAggregate[scope, int64]{"outer only": expr.Filter(count, expr.Ne(x, 0)), "local": expr.Filter(count, expr.Ne(y, 0)), "mixed": expr.Filter(count, expr.Equal(y, x)), "local argument": expr.Filter(expr.CountFieldAt(rows.InnerScope(link, rows.Scope(b)), d.Exact), expr.Ne(x, 0))} {
 		_, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(rows.CorrelatedScalarRowQuery(rows.SelectCorrelatedScalar(link, expr.AsSelected(aggregate)))))))
 		if name == "outer only" {
 			if !errors.Is(err, fault.Invalid) {
@@ -110,9 +110,9 @@ func TestAggregateFilterCorrelationOwnership(t *testing.T) {
 	type third struct{}
 	child := rows.As[third](d.Query(), "nested")
 	nested := rows.Correlate(link, child)
-	grandparent := expr.At(rows.OuterScope(nested, rows.OuterScope(link, rows.Scope(a))), orm.NumberExpr(d.Exact))
-	parent := expr.At(rows.OuterScope(nested, rows.InnerScope(link, rows.Scope(b))), orm.NumberExpr(d.Exact))
-	inner := expr.At(rows.InnerScope(nested, rows.Scope(child)), orm.NumberExpr(d.Exact))
+	grandparent := expr.At(rows.OuterScope(nested, rows.OuterScope(link, rows.Scope(a))), d.Exact)
+	parent := expr.At(rows.OuterScope(nested, rows.InnerScope(link, rows.Scope(b))), d.Exact)
+	inner := expr.At(rows.InnerScope(nested, rows.Scope(child)), d.Exact)
 	for name, p := range map[string]expr.Predicate[scope]{"outer only": nested.Where(expr.Equal(inner, grandparent)).Exists(), "local": nested.Where(expr.Equal(inner, parent)).Exists()} {
 		_, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(rows.CorrelatedScalarRowQuery(rows.SelectCorrelatedScalar(link, expr.AsSelected(expr.Filter(count, p))))))))
 		if name == "outer only" && !errors.Is(err, fault.Invalid) {

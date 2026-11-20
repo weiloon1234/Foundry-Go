@@ -19,5 +19,5 @@ var _ context.Context
 var _ *database.Tx
 
 var other = rows.AsTransaction[b](rows.TransactionOf(rows.ModelRecord(f.Records.Query())), "other")
-var joined = rows.TransactionLeftJoin(source, other, rows.OnEqual(expr.At(rows.TransactionScope(source), orm.KeyExpr(f.Records.ID)), expr.At(rows.TransactionScope(other), orm.KeyExpr(f.Records.ID))))
+var joined = rows.TransactionLeftJoin(source, other, rows.OnEqual(expr.At(rows.TransactionScope(source), f.Records.ID), expr.At(rows.TransactionScope(other), f.Records.ID)))
 var _ = rows.UpdateLock(rows.Target(rows.NullableRightScope(joined, rows.TransactionScope(other))))

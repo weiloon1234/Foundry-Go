@@ -48,7 +48,7 @@ func TestColumnKindSQLAndHydration(t *testing.T) {
 		t.Fatal(err)
 	}
 	interval := temporal.Days(2)
-	statement, err := Compile(r.Query().Where(JSONEq(r.Document, document), IntervalGt(r.Period, interval), NullableJSONIsNull(r.MaybeDocument), NullableIntervalIsNotNull(r.MaybePeriod), TextIContains(r.Name, `A%_\`), NullableTextIContains(r.MaybeName, `A%_\`)))
+	statement, err := Compile(r.Query().Where(Eq(r.Document, document), Gt(r.Period, interval), IsNull(r.MaybeDocument), IsNotNull(r.MaybePeriod), IContains(r.Name, `A%_\`), IContains(r.MaybeName, `A%_\`)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,14 +75,14 @@ func TestNewColumnAssignmentsAndMalformedRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := planWrite(r.Query().Where(KeyEq(r.Key(), 1)).state, querycore.UpdateModel, []Assignment[kindRecord]{NullableJSONSet(r.MaybeDocument, document), NullableIntervalSet(r.MaybePeriod, temporal.Months(1))}, true)
+	plan, err := planWrite(r.Query().Where(Eq(r.Key(), 1)).state, querycore.UpdateModel, []Assignment[kindRecord]{Set(r.MaybeDocument, document), Set(r.MaybePeriod, temporal.Months(1))}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(plan.assignments) != 2 {
 		t.Fatal("nullable assignments missing")
 	}
-	for _, assignment := range []Assignment[kindRecord]{NullableJSONSetNull(r.MaybeDocument), NullableIntervalSetNull(r.MaybePeriod)} {
+	for _, assignment := range []Assignment[kindRecord]{SetNull(r.MaybeDocument), SetNull(r.MaybePeriod)} {
 		bound, err := assignment.core.Bind()
 		if err != nil || bound != nil {
 			t.Fatalf("SetNull: %v", err)
@@ -108,7 +108,7 @@ func TestJSONContainmentUsesSharedCompiler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := Compile(r.Query().Where(JSONContains(r.Document, v), NullableJSONContainedBy(r.MaybeDocument, v)))
+	s, err := Compile(r.Query().Where(ContainsDocument(r.Document, v), ContainedByDocument(r.MaybeDocument, v)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,21 +120,21 @@ func TestJSONContainmentUsesSharedCompiler(t *testing.T) {
 	}
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	if _, err = Count(t.Context(), db, r.Query().Where(JSONContains(r.Document, value.JSON[string]{}))); err == nil {
+	if _, err = Count(t.Context(), db, r.Query().Where(ContainsDocument(r.Document, value.JSON[string]{}))); err == nil {
 		t.Fatal("invalid JSON accepted")
 	}
 	if len(statements) != 0 {
 		t.Fatal("invalid JSON sent SQL")
 	}
 	var unbound NullableJSON[kindRecord, string]
-	if _, err = Compile(r.Query().Where(NullableJSONContains(unbound, v))); err == nil {
+	if _, err = Compile(r.Query().Where(ContainsDocument(unbound, v))); err == nil {
 		t.Fatal("unbound nullable JSON accepted")
 	}
 }
 
 func TestJSONOrderingAndNullUseSharedCompiler(t *testing.T) {
 	r := kindTable()
-	s, err := Compile(r.Query().Where(JSONIsJSONNull(r.Document), NullableJSONIsJSONNull(r.MaybeDocument)).OrderBy(JSONAsc(r.Document), NullableJSONDesc(r.MaybeDocument)))
+	s, err := Compile(r.Query().Where(IsJSONNull(r.Document), IsJSONNull(r.MaybeDocument)).OrderBy(Asc(r.Document), Desc(r.MaybeDocument)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestJSONOrderingAndNullUseSharedCompiler(t *testing.T) {
 	var nullable NullableJSON[kindRecord, string]
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	for _, predicate := range []Predicate[kindRecord]{JSONIsJSONNull(unbound), NullableJSONIsJSONNull(nullable)} {
+	for _, predicate := range []Predicate[kindRecord]{IsJSONNull(unbound), IsJSONNull(nullable)} {
 		if _, err := Count(t.Context(), db, r.Query().Where(predicate)); err == nil {
 			t.Fatal("unbound JSON null predicate accepted")
 		}
@@ -159,7 +159,7 @@ func TestJSONOrderingAndNullUseSharedCompiler(t *testing.T) {
 }
 
 // Frozen legacy signatures preserve value/nullability and result capabilities
-// across D2's per-kind package operator functions on methodless column types.
+// across unified package operator functions on methodless ColumnHandle types.
 // Advanced operations remain separate expr/rows package functions.
 func TestColumnKindCoreParity(t *testing.T) {
 	packageOperations := map[string]string{
@@ -168,109 +168,116 @@ func TestColumnKindCoreParity(t *testing.T) {
 		"Kind": "6d", "Length": "6d",
 	}
 	cases := []struct {
-		typ reflect.Type
-		ops map[string]any
+		name string
+		typ  reflect.Type
+		ops  map[string]any
 	}{
 		{
-			typ: reflect.TypeFor[Column[kindRecord, password.Hash]](),
+			name: "Column[github.com/weiloon1234/Foundry-Go/database/orm.kindRecord,github.com/weiloon1234/Foundry-Go/auth/password.Hash]",
+			typ:  reflect.TypeFor[Column[kindRecord, password.Hash]](),
 			ops: map[string]any{
-				"Asc":   ColumnAsc[kindRecord, password.Hash],
-				"Desc":  ColumnDesc[kindRecord, password.Hash],
-				"Eq":    ColumnEq[kindRecord, password.Hash],
-				"In":    ColumnIn[kindRecord, password.Hash],
-				"Ne":    ColumnNe[kindRecord, password.Hash],
-				"NotIn": ColumnNotIn[kindRecord, password.Hash],
-				"Set":   ColumnSet[kindRecord, password.Hash],
+				"Asc":   Asc[kindRecord, password.Hash, password.Hash, password.Hash, RequiredScalarKind, OrdinaryRole],
+				"Desc":  Desc[kindRecord, password.Hash, password.Hash, password.Hash, RequiredScalarKind, OrdinaryRole],
+				"Eq":    Eq[kindRecord, password.Hash, password.Hash, password.Hash, RequiredScalarKind, OrdinaryRole],
+				"In":    In[kindRecord, password.Hash, password.Hash, password.Hash, RequiredScalarKind, OrdinaryRole],
+				"Ne":    Ne[kindRecord, password.Hash, password.Hash, password.Hash, RequiredScalarKind, OrdinaryRole],
+				"NotIn": NotIn[kindRecord, password.Hash, password.Hash, password.Hash, RequiredScalarKind, OrdinaryRole],
+				"Set":   Set[kindRecord, password.Hash, password.Hash, password.Hash, RequiredScalarKind, OrdinaryRole],
 			},
 		},
 		{
-			typ: reflect.TypeFor[NullableColumn[kindRecord, password.Hash]](),
+			name: "NullableColumn[github.com/weiloon1234/Foundry-Go/database/orm.kindRecord,github.com/weiloon1234/Foundry-Go/auth/password.Hash]",
+			typ:  reflect.TypeFor[NullableColumn[kindRecord, password.Hash]](),
 			ops: map[string]any{
-				"Asc":       NullableColumnAsc[kindRecord, password.Hash],
-				"Desc":      NullableColumnDesc[kindRecord, password.Hash],
-				"Eq":        NullableColumnEq[kindRecord, password.Hash],
-				"In":        NullableColumnIn[kindRecord, password.Hash],
-				"IsNotNull": NullableColumnIsNotNull[kindRecord, password.Hash],
-				"IsNull":    NullableColumnIsNull[kindRecord, password.Hash],
-				"Ne":        NullableColumnNe[kindRecord, password.Hash],
-				"NotIn":     NullableColumnNotIn[kindRecord, password.Hash],
-				"Set":       NullableColumnSet[kindRecord, password.Hash],
-				"SetNull":   NullableColumnSetNull[kindRecord, password.Hash],
+				"Asc":       Asc[kindRecord, password.Hash, password.Hash, value.Nullable[password.Hash], NullableScalarKind, OrdinaryRole],
+				"Desc":      Desc[kindRecord, password.Hash, password.Hash, value.Nullable[password.Hash], NullableScalarKind, OrdinaryRole],
+				"Eq":        Eq[kindRecord, password.Hash, password.Hash, value.Nullable[password.Hash], NullableScalarKind, OrdinaryRole],
+				"In":        In[kindRecord, password.Hash, password.Hash, value.Nullable[password.Hash], NullableScalarKind, OrdinaryRole],
+				"IsNotNull": IsNotNull[kindRecord, password.Hash, password.Hash, value.Nullable[password.Hash], NullableScalarKind, OrdinaryRole],
+				"IsNull":    IsNull[kindRecord, password.Hash, password.Hash, value.Nullable[password.Hash], NullableScalarKind, OrdinaryRole],
+				"Ne":        Ne[kindRecord, password.Hash, password.Hash, value.Nullable[password.Hash], NullableScalarKind, OrdinaryRole],
+				"NotIn":     NotIn[kindRecord, password.Hash, password.Hash, value.Nullable[password.Hash], NullableScalarKind, OrdinaryRole],
+				"Set":       Set[kindRecord, password.Hash, password.Hash, value.Nullable[password.Hash], NullableScalarKind, OrdinaryRole],
+				"SetNull":   SetNull[kindRecord, password.Hash, password.Hash, value.Nullable[password.Hash], NullableScalarKind, OrdinaryRole],
 			},
 		},
 		{
-			typ: reflect.TypeFor[Interval[kindRecord]](),
+			name: "Interval[github.com/weiloon1234/Foundry-Go/database/orm.kindRecord]",
+			typ:  reflect.TypeFor[Interval[kindRecord]](),
 			ops: map[string]any{
-				"Asc":     IntervalAsc[kindRecord],
-				"Between": IntervalBetween[kindRecord],
-				"Desc":    IntervalDesc[kindRecord],
-				"Eq":      IntervalEq[kindRecord],
-				"Gt":      IntervalGt[kindRecord],
-				"Gte":     IntervalGte[kindRecord],
-				"In":      IntervalIn[kindRecord],
-				"Lt":      IntervalLt[kindRecord],
-				"Lte":     IntervalLte[kindRecord],
-				"Ne":      IntervalNe[kindRecord],
-				"NotIn":   IntervalNotIn[kindRecord],
-				"Set":     IntervalSet[kindRecord],
+				"Asc":     Asc[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
+				"Between": Between[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
+				"Desc":    Desc[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
+				"Eq":      Eq[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
+				"Gt":      Gt[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
+				"Gte":     Gte[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
+				"In":      In[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
+				"Lt":      Lt[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
+				"Lte":     Lte[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
+				"Ne":      Ne[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
+				"NotIn":   NotIn[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
+				"Set":     Set[kindRecord, temporal.Interval, temporal.Interval, temporal.Interval, RequiredIntervalKind, OrdinaryRole],
 			},
 		},
 		{
-			typ: reflect.TypeFor[NullableInterval[kindRecord]](),
+			name: "NullableInterval[github.com/weiloon1234/Foundry-Go/database/orm.kindRecord]",
+			typ:  reflect.TypeFor[NullableInterval[kindRecord]](),
 			ops: map[string]any{
-				"Asc":       NullableIntervalAsc[kindRecord],
-				"Between":   NullableIntervalBetween[kindRecord],
-				"Desc":      NullableIntervalDesc[kindRecord],
-				"Eq":        NullableIntervalEq[kindRecord],
-				"Gt":        NullableIntervalGt[kindRecord],
-				"Gte":       NullableIntervalGte[kindRecord],
-				"In":        NullableIntervalIn[kindRecord],
-				"IsNotNull": NullableIntervalIsNotNull[kindRecord],
-				"IsNull":    NullableIntervalIsNull[kindRecord],
-				"Lt":        NullableIntervalLt[kindRecord],
-				"Lte":       NullableIntervalLte[kindRecord],
-				"Ne":        NullableIntervalNe[kindRecord],
-				"NotIn":     NullableIntervalNotIn[kindRecord],
-				"Set":       NullableIntervalSet[kindRecord],
-				"SetNull":   NullableIntervalSetNull[kindRecord],
+				"Asc":       Asc[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"Between":   Between[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"Desc":      Desc[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"Eq":        Eq[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"Gt":        Gt[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"Gte":       Gte[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"In":        In[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"IsNotNull": IsNotNull[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"IsNull":    IsNull[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"Lt":        Lt[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"Lte":       Lte[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"Ne":        Ne[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"NotIn":     NotIn[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"Set":       Set[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
+				"SetNull":   SetNull[kindRecord, temporal.Interval, temporal.Interval, value.Nullable[temporal.Interval], NullableIntervalKind, OrdinaryRole],
 			},
 		},
 		{
-			typ: reflect.TypeFor[JSON[kindRecord, string]](),
+			name: "JSON[github.com/weiloon1234/Foundry-Go/database/orm.kindRecord,string]",
+			typ:  reflect.TypeFor[JSON[kindRecord, string]](),
 			ops: map[string]any{
-				"Asc":         JSONAsc[kindRecord, string],
-				"ContainedBy": JSONContainedBy[kindRecord, string],
-				"Contains":    JSONContains[kindRecord, string],
-				"Desc":        JSONDesc[kindRecord, string],
-				"Eq":          JSONEq[kindRecord, string],
-				"In":          JSONIn[kindRecord, string],
-				"IsJSONNull":  JSONIsJSONNull[kindRecord, string],
-				"Ne":          JSONNe[kindRecord, string],
-				"NotIn":       JSONNotIn[kindRecord, string],
-				"Set":         JSONSet[kindRecord, string],
+				"Asc":         Asc[kindRecord, value.JSON[string], value.JSON[string], value.JSON[string], RequiredJSONKind, OrdinaryRole],
+				"ContainedBy": ContainedByDocument[kindRecord, value.JSON[string], value.JSON[string], value.JSON[string], RequiredJSONKind, OrdinaryRole],
+				"Contains":    ContainsDocument[kindRecord, value.JSON[string], value.JSON[string], value.JSON[string], RequiredJSONKind, OrdinaryRole],
+				"Desc":        Desc[kindRecord, value.JSON[string], value.JSON[string], value.JSON[string], RequiredJSONKind, OrdinaryRole],
+				"Eq":          Eq[kindRecord, value.JSON[string], value.JSON[string], value.JSON[string], RequiredJSONKind, OrdinaryRole],
+				"In":          In[kindRecord, value.JSON[string], value.JSON[string], value.JSON[string], RequiredJSONKind, OrdinaryRole],
+				"IsJSONNull":  IsJSONNull[kindRecord, value.JSON[string], value.JSON[string], value.JSON[string], RequiredJSONKind, OrdinaryRole],
+				"Ne":          Ne[kindRecord, value.JSON[string], value.JSON[string], value.JSON[string], RequiredJSONKind, OrdinaryRole],
+				"NotIn":       NotIn[kindRecord, value.JSON[string], value.JSON[string], value.JSON[string], RequiredJSONKind, OrdinaryRole],
+				"Set":         Set[kindRecord, value.JSON[string], value.JSON[string], value.JSON[string], RequiredJSONKind, OrdinaryRole],
 			},
 		},
 		{
-			typ: reflect.TypeFor[NullableJSON[kindRecord, string]](),
+			name: "NullableJSON[github.com/weiloon1234/Foundry-Go/database/orm.kindRecord,string]",
+			typ:  reflect.TypeFor[NullableJSON[kindRecord, string]](),
 			ops: map[string]any{
-				"Asc":         NullableJSONAsc[kindRecord, string],
-				"ContainedBy": NullableJSONContainedBy[kindRecord, string],
-				"Contains":    NullableJSONContains[kindRecord, string],
-				"Desc":        NullableJSONDesc[kindRecord, string],
-				"Eq":          NullableJSONEq[kindRecord, string],
-				"In":          NullableJSONIn[kindRecord, string],
-				"IsJSONNull":  NullableJSONIsJSONNull[kindRecord, string],
-				"IsNotNull":   NullableJSONIsNotNull[kindRecord, string],
-				"IsNull":      NullableJSONIsNull[kindRecord, string],
-				"Ne":          NullableJSONNe[kindRecord, string],
-				"NotIn":       NullableJSONNotIn[kindRecord, string],
-				"Set":         NullableJSONSet[kindRecord, string],
-				"SetNull":     NullableJSONSetNull[kindRecord, string],
+				"Asc":         Asc[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"ContainedBy": ContainedByDocument[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"Contains":    ContainsDocument[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"Desc":        Desc[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"Eq":          Eq[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"In":          In[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"IsJSONNull":  IsJSONNull[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"IsNotNull":   IsNotNull[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"IsNull":      IsNull[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"Ne":          Ne[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"NotIn":       NotIn[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"Set":         Set[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
+				"SetNull":     SetNull[kindRecord, value.JSON[string], value.JSON[string], value.Nullable[value.JSON[string]], NullableJSONKind, OrdinaryRole],
 			},
 		},
 	}
 	for _, tc := range cases {
-		t.Run(tc.typ.Name(), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			if tc.typ.NumMethod() != 0 {
 				t.Fatalf("%s has %d methods; declaration columns must be methodless", tc.typ, tc.typ.NumMethod())
 			}

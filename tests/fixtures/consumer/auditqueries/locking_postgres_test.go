@@ -139,17 +139,17 @@ func TestAuditedBeforeImageLocks(t *testing.T) {
 							return err
 						}
 					}
-					label, err = orm.Insert(ctx, tx, auditqueries.Labels.Table, orm.KeySet(auditqueries.Labels.Key(), "locked"), orm.TextSet(auditqueries.Labels.Name, "original"))
+					label, err = orm.Insert(ctx, tx, auditqueries.Labels.Table, orm.Set(auditqueries.Labels.Key(), "locked"), orm.Set(auditqueries.Labels.Name, "original"))
 					return err
 				}); err != nil {
 					t.Fatal(err)
 				}
 				_, release := holdAuditTransaction(t, ctx, c, func(tx *database.Tx) error {
 					if operation == lifecycle.Delete {
-						_, err := orm.RequireLocked(ctx, tx, orm.ForKeyShare(auditqueries.Labels.Query().Where(orm.KeyEq(auditqueries.Labels.Key(), label.Code))))
+						_, err := orm.RequireLocked(ctx, tx, orm.ForKeyShare(auditqueries.Labels.Query().Where(orm.Eq(auditqueries.Labels.Key(), label.Code))))
 						return err
 					}
-					_, err := orm.RequireLocked(ctx, tx, orm.ForKeyShare(f.Query().WithTrashed().Where(orm.KeyEq(f.Key(), account.ID))))
+					_, err := orm.RequireLocked(ctx, tx, orm.ForKeyShare(f.Query().WithTrashed().Where(orm.Eq(f.Key(), account.ID))))
 					return err
 				})
 				defer release()
@@ -158,23 +158,23 @@ func TestAuditedBeforeImageLocks(t *testing.T) {
 					if each {
 						switch operation {
 						case lifecycle.Update:
-							_, err = orm.UpdateEach(ctx, tx, f.Query().Where(orm.KeyEq(f.Key(), account.ID)), 1, func(context.Context, *database.Tx, auditqueries.Account) ([]orm.Assignment[auditqueries.Account], error) {
-								return []orm.Assignment[auditqueries.Account]{orm.TextSet(f.PasswordHash, "changed")}, nil
+							_, err = orm.UpdateEach(ctx, tx, f.Query().Where(orm.Eq(f.Key(), account.ID)), 1, func(context.Context, *database.Tx, auditqueries.Account) ([]orm.Assignment[auditqueries.Account], error) {
+								return []orm.Assignment[auditqueries.Account]{orm.Set(f.PasswordHash, "changed")}, nil
 							})
 						case lifecycle.SoftDelete:
-							_, err = orm.DeleteEach(ctx, tx, f.Query().Where(orm.KeyEq(f.Key(), account.ID)), 1)
+							_, err = orm.DeleteEach(ctx, tx, f.Query().Where(orm.Eq(f.Key(), account.ID)), 1)
 						case lifecycle.Restore:
-							_, err = orm.RestoreEach(ctx, tx, f.Query().OnlyTrashed().Where(orm.KeyEq(f.Key(), account.ID)), f.Soft, 1)
+							_, err = orm.RestoreEach(ctx, tx, f.Query().OnlyTrashed().Where(orm.Eq(f.Key(), account.ID)), f.Soft, 1)
 						case lifecycle.Delete:
-							_, err = orm.DeleteEach(ctx, tx, auditqueries.Labels.Query().Where(orm.KeyEq(auditqueries.Labels.Key(), label.Code)), 1)
+							_, err = orm.DeleteEach(ctx, tx, auditqueries.Labels.Query().Where(orm.Eq(auditqueries.Labels.Key(), label.Code)), 1)
 						case lifecycle.ForceDelete:
-							_, err = orm.ForceDeleteEach(ctx, tx, f.Query().Where(orm.KeyEq(f.Key(), account.ID)), f.Soft, 1)
+							_, err = orm.ForceDeleteEach(ctx, tx, f.Query().Where(orm.Eq(f.Key(), account.ID)), f.Soft, 1)
 						}
 						return err
 					}
 					switch operation {
 					case lifecycle.Update:
-						_, err = orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.TextSet(f.PasswordHash, "changed"))
+						_, err = orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.Set(f.PasswordHash, "changed"))
 					case lifecycle.SoftDelete:
 						_, err = orm.Delete(ctx, tx, f.Query(), f.Key(), account.ID)
 					case lifecycle.Restore:
@@ -227,7 +227,7 @@ func TestAuditedBeforeImageLocks(t *testing.T) {
 					if page.Total != want || page.Items[0].Changes().Operation() != operation {
 						return errors.New("audited operation missing or duplicated")
 					}
-					stored, err := orm.Require(ctx, tx, f.Query().WithTrashed().Where(orm.KeyEq(f.Key(), account.ID)))
+					stored, err := orm.Require(ctx, tx, f.Query().WithTrashed().Where(orm.Eq(f.Key(), account.ID)))
 					if operation == lifecycle.ForceDelete {
 						if !errors.Is(err, database.NotFound) {
 							return errors.New("force delete retained its row")
@@ -258,13 +258,13 @@ func TestAuditedBeforeImageLocks(t *testing.T) {
 		var label auditqueries.Label
 		if err := c.within(ctx, func(tx *database.Tx) error {
 			var err error
-			label, err = orm.Insert(ctx, tx, f.Table, orm.KeySet(f.Key(), "serialized"), orm.TextSet(f.Name, "original"))
+			label, err = orm.Insert(ctx, tx, f.Table, orm.Set(f.Key(), "serialized"), orm.Set(f.Name, "original"))
 			return err
 		}); err != nil {
 			t.Fatal(err)
 		}
 		blocker, release := holdAuditTransaction(t, ctx, c, func(tx *database.Tx) error {
-			_, err := orm.Update(ctx, tx, f.Query(), f.Key(), label.Code, orm.TextSet(f.Name, "first"))
+			_, err := orm.Update(ctx, tx, f.Query(), f.Key(), label.Code, orm.Set(f.Name, "first"))
 			return err
 		})
 		defer release()
@@ -278,7 +278,7 @@ func TestAuditedBeforeImageLocks(t *testing.T) {
 					return err
 				}
 				ready <- pid
-				_, err = orm.Update(ctx, tx, f.Query(), f.Key(), label.Code, orm.TextSet(f.Name, "second"))
+				_, err = orm.Update(ctx, tx, f.Query(), f.Key(), label.Code, orm.Set(f.Name, "second"))
 				return err
 			})
 		}()
@@ -319,7 +319,7 @@ func TestAuditedBeforeImageLocks(t *testing.T) {
 				return errors.New("serialized writes did not each record once")
 			}
 			for index, want := range []struct{ before, after string }{{"first", "second"}, {"original", "first"}} {
-				field, err := orm.AuditRead(page.Items[index].Changes(), orm.TextExpr(f.Name))
+				field, err := orm.AuditRead(page.Items[index].Changes(), f.Name)
 				if err != nil {
 					return err
 				}
@@ -364,7 +364,7 @@ func TestAuditedLookupAndRejectedAdjustmentAllowKeyShare(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			q := f.Query().Where(orm.KeyEq(f.Key(), account.ID))
+			q := f.Query().Where(orm.Eq(f.Key(), account.ID))
 			_, release := holdAuditTransaction(t, ctx, c, func(tx *database.Tx) error {
 				_, err := orm.RequireLocked(ctx, tx, orm.ForKeyShare(q))
 				return err
@@ -375,11 +375,11 @@ func TestAuditedLookupAndRejectedAdjustmentAllowKeyShare(t *testing.T) {
 					return err
 				}
 				if scenario == "bound-rejected" {
-					_, err := orm.Update(ctx, tx, q, f.Key(), account.ID, orm.NumberIncrement(f.Balance, decimal.FromInt64(1), orm.AtMost(account.Balance)))
+					_, err := orm.Update(ctx, tx, q, f.Key(), account.ID, orm.Increment(f.Balance, decimal.FromInt64(1), orm.AtMost(account.Balance)))
 					return err
 				}
 				_, err := orm.UpdateOrCreate(ctx, tx, q, input, func(context.Context, *database.Tx, auditqueries.Account) ([]orm.Assignment[auditqueries.Account], error) {
-					return []orm.Assignment[auditqueries.Account]{orm.TextSet(f.PasswordHash, "lookup-changed")}, nil
+					return []orm.Assignment[auditqueries.Account]{orm.Set(f.PasswordHash, "lookup-changed")}, nil
 				})
 				return err
 			})

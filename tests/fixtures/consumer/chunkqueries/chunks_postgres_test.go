@@ -30,7 +30,7 @@ func (e *chunkExecutor) Query(ctx context.Context, sql string, args ...any) (*da
 
 func TestPostgresChunkWindowsAndEagerBudgets(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
-		base := models.Users.Query().OrderBy(orm.NumberAsc(models.Users.Age))
+		base := models.Users.Query().OrderBy(orm.Asc(models.Users.Age))
 		for _, test := range []struct{ size, offset, limit int }{{1, 0, 3}, {2, 0, 3}, {3, 1, 1}, {2, 1, 10}, {1, 5, 2}, {2, 0, 0}} {
 			e := &chunkExecutor{Executor: tx}
 			var got []model.ID[models.User]
@@ -85,7 +85,7 @@ func TestPostgresChunkWindowsAndEagerBudgets(t *testing.T) {
 		}
 		// Each automatically uses complete batches when relations are requested.
 		for i := 0; i < orm.DefaultChunkSize; i++ {
-			if _, err := orm.Insert(t.Context(), tx, models.Users.Table, orm.TextSet(models.Users.Email, "chunk@example.test"), orm.NumberSet(models.Users.Age, 50+i), orm.EnumSet(models.Users.Status, models.StatusActive), orm.EnumSet(models.Users.Level, models.LevelBasic)); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Users.Table, orm.Set(models.Users.Email, "chunk@example.test"), orm.Set(models.Users.Age, 50+i), orm.Set(models.Users.Status, models.StatusActive), orm.Set(models.Users.Level, models.LevelBasic)); err != nil {
 				return err
 			}
 		}
@@ -111,16 +111,16 @@ func TestPostgresChunkWindowsAndEagerBudgets(t *testing.T) {
 func TestPostgresPrimaryKeyChunksOwnBoundariesDuringUpdates(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, _ []models.User) error {
 		u := models.Users
-		expected, err := orm.All(t.Context(), tx, models.Users.Query().OrderBy(orm.KeyAsc(u.ID)))
+		expected, err := orm.All(t.Context(), tx, models.Users.Query().OrderBy(orm.Asc(u.ID)))
 		if err != nil {
 			return err
 		}
-		q := models.Users.Query().Where(orm.EnumEq(u.Status, models.StatusActive))
+		q := models.Users.Query().Where(orm.Eq(u.Status, models.StatusActive))
 		var visited []model.ID[models.User]
-		if err := orm.ChunkByKey(t.Context(), tx, q, orm.KeyExpr(models.Users.ID), 1, func(batch []models.User) error {
+		if err := orm.ChunkByKey(t.Context(), tx, q, models.Users.ID, 1, func(batch []models.User) error {
 			for i, user := range batch {
 				visited = append(visited, user.ID)
-				if _, err := orm.Update(t.Context(), tx, models.Users.Table.Query(), models.Users.Table.Key(), user.ID, orm.EnumSet(models.Users.Status, models.StatusDisabled)); err != nil {
+				if _, err := orm.Update(t.Context(), tx, models.Users.Table.Query(), models.Users.Table.Key(), user.ID, orm.Set(models.Users.Status, models.StatusDisabled)); err != nil {
 					return err
 				}
 				batch[i].ID = model.ID[models.User]{}
@@ -141,20 +141,20 @@ func TestPostgresPrimaryKeyChunksOwnBoundariesDuringUpdates(t *testing.T) {
 			return err
 		}
 		for _, code := range []models.CountryCode{"AA", "BB", "CC", "DD"} {
-			if _, err := orm.Insert(t.Context(), tx, models.Countries.Table, orm.KeySet(models.Countries.Code, code), orm.TextSet(models.Countries.Name, "country")); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Countries.Table, orm.Set(models.Countries.Code, code), orm.Set(models.Countries.Name, "country")); err != nil {
 				return err
 			}
 		}
 		var codes []models.CountryCode
-		countries := models.Countries.Query().OrderBy(orm.KeyDesc(models.Countries.Code)).Limit(3)
-		if err := orm.EachByKey(t.Context(), tx, countries, orm.KeyExpr(models.Countries.Code), 2, func(c models.Country) error { codes = append(codes, c.Code); return nil }); err != nil {
+		countries := models.Countries.Query().OrderBy(orm.Desc(models.Countries.Code)).Limit(3)
+		if err := orm.EachByKey(t.Context(), tx, countries, models.Countries.Code, 2, func(c models.Country) error { codes = append(codes, c.Code); return nil }); err != nil {
 			return err
 		}
 		if !slices.Equal(codes, []models.CountryCode{"DD", "CC", "BB"}) {
 			t.Fatal("descending natural-key traversal lost limit", codes)
 		}
 		var retained [][]models.Country
-		if err := orm.ChunkByKey(t.Context(), tx, models.Countries.Query(), orm.KeyExpr(models.Countries.Code), 2, func(batch []models.Country) error { retained = append(retained, batch); return nil }); err != nil {
+		if err := orm.ChunkByKey(t.Context(), tx, models.Countries.Query(), models.Countries.Code, 2, func(batch []models.Country) error { retained = append(retained, batch); return nil }); err != nil {
 			return err
 		}
 		if len(retained) != 2 || retained[0][0].Code != "AA" || retained[1][0].Code != "CC" {
@@ -166,7 +166,7 @@ func TestPostgresPrimaryKeyChunksOwnBoundariesDuringUpdates(t *testing.T) {
 
 func TestPostgresChunkFailureAndCallbackSemantics(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
-		q := models.Users.Query().OrderBy(orm.NumberAsc(models.Users.Age))
+		q := models.Users.Query().OrderBy(orm.Asc(models.Users.Age))
 		stop := errors.New("stop chunk")
 		e := &chunkExecutor{Executor: tx, failAt: 2, err: stop}
 		seen := 0
@@ -216,13 +216,13 @@ func TestChunkInvalidInputsUseNoDatabase(t *testing.T) {
 	for _, run := range []func() error{
 		func() error { return orm.Chunk(t.Context(), queryfixture.NoQueries(t), q, 0, noop) },
 		func() error {
-			return orm.ChunkByKey(t.Context(), queryfixture.NoQueries(t), q.Offset(1), orm.KeyExpr(models.Users.ID), 2, noop)
+			return orm.ChunkByKey(t.Context(), queryfixture.NoQueries(t), q.Offset(1), models.Users.ID, 2, noop)
 		},
 		func() error {
-			return orm.ChunkByKey(t.Context(), queryfixture.NoQueries(t), q.OrderBy(orm.NumberAsc(models.Users.Age)), orm.KeyExpr(models.Users.ID), 2, noop)
+			return orm.ChunkByKey(t.Context(), queryfixture.NoQueries(t), q.OrderBy(orm.Asc(models.Users.Age)), models.Users.ID, 2, noop)
 		},
 		func() error {
-			return orm.ChunkByKey(t.Context(), queryfixture.NoQueries(t), q, orm.KeyExpr(models.Users.ID), 2, nil)
+			return orm.ChunkByKey(t.Context(), queryfixture.NoQueries(t), q, models.Users.ID, 2, nil)
 		},
 	} {
 		if err := run(); err == nil {

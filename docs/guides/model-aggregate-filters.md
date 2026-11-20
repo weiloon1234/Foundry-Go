@@ -8,8 +8,8 @@ with `expr.ModelPredicate`; aliased operands already produce expression predicat
 
 <!-- compiled-source: tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go#model-aggregate-filters -->
 ```go
-predicate := expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 0))
-total := expr.Filter(expr.Sum(orm.NumberExpr(models.Orders.TotalCents)), predicate)
+predicate := expr.ModelPredicate(orm.Gt(models.Orders.TotalCents, 0))
+total := expr.Filter(expr.Sum(models.Orders.TotalCents), predicate)
 count := expr.Filter(expr.Count[models.Order](), predicate)
 exists := expr.Filter(expr.Exists[models.Order](), predicate)
 selected := rows.Select(rows.From(models.Orders.Query()), reports.OrderSummaries,

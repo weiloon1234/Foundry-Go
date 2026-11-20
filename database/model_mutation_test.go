@@ -35,7 +35,7 @@ var mutationFields = mutationDefinition()
 func mutationModel() orm.Query[mutationRecord] { return mutationFields.Query() }
 
 func mutationValues() []orm.Assignment[mutationRecord] {
-	return []orm.Assignment[mutationRecord]{orm.TextSet(mutationFields.Name, "private record name")}
+	return []orm.Assignment[mutationRecord]{orm.Set(mutationFields.Name, "private record name")}
 }
 
 func mutationDriver(values [][]driver.Value) *driverState {

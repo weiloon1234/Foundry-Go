@@ -51,40 +51,40 @@ func TestWriteUnsetPreservesOmissionThroughSQLAndChanges(t *testing.T) {
 							}
 							if !orm.WriteIsSet(w, func() func(arg0 int64) orm.Assignment[unsetRow] {
 								receiver := fields.Revision
-								return func(arg0 int64) orm.Assignment[unsetRow] { return orm.InputNumberSet(receiver, arg0) }
+								return func(arg0 int64) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 							}()) || !orm.WriteIsSet(w, func() func(arg0 string) orm.Assignment[unsetRow] {
 								receiver := fields.Note
-								return func(arg0 string) orm.Assignment[unsetRow] { return orm.NullableInputTextSet(receiver, arg0) }
+								return func(arg0 string) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 							}()) {
 								return errors.New("supplied zero or nullable input was omitted")
 							}
 							if err := orm.WriteUnset(w, func() func(arg0 int64) orm.Assignment[unsetRow] {
 								receiver := fields.Revision
-								return func(arg0 int64) orm.Assignment[unsetRow] { return orm.InputNumberSet(receiver, arg0) }
+								return func(arg0 int64) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 							}()); err != nil {
 								return err
 							}
 							if err := orm.WriteUnset(w, func() func(arg0 string) orm.Assignment[unsetRow] {
 								receiver := fields.Note
-								return func(arg0 string) orm.Assignment[unsetRow] { return orm.NullableInputTextSet(receiver, arg0) }
+								return func(arg0 string) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 							}()); err != nil {
 								return err
 							}
 							if err := orm.WriteUnset(w, func() func(arg0 string) orm.Assignment[unsetRow] {
 								receiver := fields.Note
-								return func(arg0 string) orm.Assignment[unsetRow] { return orm.NullableInputTextSet(receiver, arg0) }
+								return func(arg0 string) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 							}()); err != nil {
 								return err
 							}
 							if orm.WriteGet(w, func() func(arg0 int64) orm.Assignment[unsetRow] {
 								receiver := fields.Revision
-								return func(arg0 int64) orm.Assignment[unsetRow] { return orm.InputNumberSet(receiver, arg0) }
+								return func(arg0 int64) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 							}()).IsSet() || orm.WriteNullableGet(w, func() func(arg0 string) orm.Assignment[unsetRow] {
 								receiver := fields.Note
-								return func(arg0 string) orm.Assignment[unsetRow] { return orm.NullableInputTextSet(receiver, arg0) }
+								return func(arg0 string) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 							}()).IsSet() || orm.WriteIsSet(w, func() func(arg0 string) orm.Assignment[unsetRow] {
 								receiver := fields.Note
-								return func(arg0 string) orm.Assignment[unsetRow] { return orm.NullableInputTextSet(receiver, arg0) }
+								return func(arg0 string) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 							}()) {
 								return errors.New("unset retained an assignment")
 							}
@@ -92,16 +92,16 @@ func TestWriteUnsetPreservesOmissionThroughSQLAndChanges(t *testing.T) {
 						}, Saved: func(_ context.Context, _ *database.Tx, c orm.Changes[unsetRow]) error { captured = c; return nil },
 					}
 				})
-				note := orm.NullableInputTextSet(fields.Note, "submitted")
+				note := orm.Set(fields.Note, "submitted")
 				if null {
-					note = orm.NullableInputTextSetNull(fields.Note)
+					note = orm.SetNull(fields.Note)
 				}
-				input := []orm.Assignment[unsetRow]{orm.InputNumberSet(fields.Revision, 0), note, orm.TextSet(fields.Name, "changed")}
+				input := []orm.Assignment[unsetRow]{orm.Set(fields.Revision, 0), note, orm.Set(fields.Name, "changed")}
 				var statements []string
 				db := hookDB(t, testConnector{statements: &statements, columns: []string{"id", "revision", "note", "name"}, values: [][]driver.Value{{int64(1), int64(42), "stored", "changed"}}})
 				var err error
 				if create {
-					_, err = orm.Insert(t.Context(), db, fields.Table, append([]orm.Assignment[unsetRow]{orm.KeySet(fields.Key(), 1)}, input...)...)
+					_, err = orm.Insert(t.Context(), db, fields.Table, append([]orm.Assignment[unsetRow]{orm.Set(fields.Key(), 1)}, input...)...)
 				} else {
 					_, err = orm.Update(t.Context(), db, fields.Table.Query(), fields.Table.Key(), 1, input...)
 				}
@@ -119,11 +119,11 @@ func TestWriteUnsetPreservesOmissionThroughSQLAndChanges(t *testing.T) {
 						}
 					}
 				}
-				revision, err := orm.ChangeOf(captured, orm.InputNumberExpr(fields.Revision))
+				revision, err := orm.ChangeOf(captured, fields.Revision)
 				if err != nil {
 					t.Fatal(err)
 				}
-				nullable, err := orm.NullableChangeOf(captured, orm.NullableInputTextExpr(fields.Note))
+				nullable, err := orm.NullableChangeOf(captured, fields.Note)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -136,7 +136,7 @@ func TestWriteUnsetPreservesOmissionThroughSQLAndChanges(t *testing.T) {
 				}
 				if err := orm.WriteUnset(held, func() func(arg0 int64) orm.Assignment[unsetRow] {
 					receiver := fields.Revision
-					return func(arg0 int64) orm.Assignment[unsetRow] { return orm.InputNumberSet(receiver, arg0) }
+					return func(arg0 int64) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 				}()); !errors.Is(err, fault.Invalid) {
 					t.Fatal("expired draft accepted unset", err)
 				}
@@ -168,7 +168,7 @@ func TestWriteUnsetCanBeReassignedAndRejectsForeignAccess(t *testing.T) {
 					if mode == "foreign" {
 						_ = orm.WriteUnset(w, func() func(arg0 int64) orm.Assignment[unsetRow] {
 							receiver := foreign.Revision
-							return func(arg0 int64) orm.Assignment[unsetRow] { return orm.InputNumberSet(receiver, arg0) }
+							return func(arg0 int64) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 						}())
 						return nil
 					}
@@ -178,20 +178,20 @@ func TestWriteUnsetCanBeReassignedAndRejectsForeignAccess(t *testing.T) {
 					}
 					if err := orm.WriteUnset(w, func() func(arg0 int64) orm.Assignment[unsetRow] {
 						receiver := fields.Revision
-						return func(arg0 int64) orm.Assignment[unsetRow] { return orm.InputNumberSet(receiver, arg0) }
+						return func(arg0 int64) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 					}()); err != nil {
 						return err
 					}
-					if err := orm.WriteSet(w, orm.InputNumberSet(fields.Revision, 0), orm.NullableInputTextSetNull(fields.Note)); err != nil {
+					if err := orm.WriteSet(w, orm.Set(fields.Revision, 0), orm.SetNull(fields.Note)); err != nil {
 						return err
 					}
 					revision, ok := orm.WriteGet(w, func() func(arg0 int64) orm.Assignment[unsetRow] {
 						receiver := fields.Revision
-						return func(arg0 int64) orm.Assignment[unsetRow] { return orm.InputNumberSet(receiver, arg0) }
+						return func(arg0 int64) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 					}()).Get()
 					note, present := orm.WriteNullableGet(w, func() func(arg0 string) orm.Assignment[unsetRow] {
 						receiver := fields.Note
-						return func(arg0 string) orm.Assignment[unsetRow] { return orm.NullableInputTextSet(receiver, arg0) }
+						return func(arg0 string) orm.Assignment[unsetRow] { return orm.Set(receiver, arg0) }
 					}()).Get()
 					if !ok || revision != 0 || !present || !note.IsNull() {
 						return errors.New("reassignment lost explicit zero/NULL")
@@ -206,7 +206,7 @@ func TestWriteUnsetCanBeReassignedAndRejectsForeignAccess(t *testing.T) {
 				}
 				return []string{"id", "revision", "note", "name"}, [][]driver.Value{{int64(1), int64(0), nil, "name"}}
 			}})
-			_, err := orm.Insert(t.Context(), db, fields.Table, orm.KeySet(fields.Key(), 1), orm.TextSet(fields.Name, "name"), orm.InputNumberSet(fields.Revision, 2))
+			_, err := orm.Insert(t.Context(), db, fields.Table, orm.Set(fields.Key(), 1), orm.Set(fields.Name, "name"), orm.Set(fields.Revision, 2))
 			if mode == "reassign" {
 				if err != nil || writes != 1 || mutations != 1 {
 					t.Fatal("reassignment failed", err, writes, mutations)

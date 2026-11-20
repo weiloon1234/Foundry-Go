@@ -22,8 +22,8 @@ func TestPostgresScalarRowsAndComparisonDiscovery(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		q := models.Users.Query()
 
-		middle := rows.ScalarRowQuery(rows.From(q), rows.LimitScalar(rows.OffsetScalar(rows.OrderScalar(rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))))), expr.Asc(expr.Value(orm.NumberExpr(models.Users.Age)))), 1), 1))
-		items, err := orm.All(t.Context(), tx, expr.Where(q, expr.GreaterNullable(expr.NullableRow(expr.Value(orm.NumberExpr(models.Users.Age))), middle)))
+		middle := rows.ScalarRowQuery(rows.From(q), rows.LimitScalar(rows.OffsetScalar(rows.OrderScalar(rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(models.Users.Age)))), expr.Asc(expr.Value(models.Users.Age))), 1), 1))
+		items, err := orm.All(t.Context(), tx, expr.Where(q, expr.GreaterNullable(expr.NullableRow(expr.Value(models.Users.Age)), middle)))
 		if err != nil || len(items) != 1 || items[0].ID != users[2].ID {
 			t.Fatal(items, err)
 		}
@@ -32,10 +32,10 @@ func TestPostgresScalarRowsAndComparisonDiscovery(t *testing.T) {
 		if n, err := orm.Count(t.Context(), tx, expr.Where(q, expr.Equal(total, expr.NullableRow(expr.ParamOf(count, 3))))); err != nil || n != 3 {
 			t.Fatal("inner aggregate leaked into outer row phase", n, err)
 		}
-		cte := rows.AsRecord[thresholdAlias](rows.CTE("adult_threshold", rows.ModelRecord(q.Where(orm.NumberGt(models.Users.Age, 20)))), "threshold")
+		cte := rows.AsRecord[thresholdAlias](rows.CTE("adult_threshold", rows.ModelRecord(q.Where(orm.Gt(models.Users.Age, 20)))), "threshold")
 		cf := rows.Scope(cte)
-		threshold := rows.ScalarRowQuery(rows.From(q), rows.LimitScalar(rows.OrderScalar(rows.SelectScalar(cte, expr.AsSelected(expr.Row(expr.At(cf, orm.NumberExpr(models.Users.Age))))), expr.Asc(expr.At(cf, orm.NumberExpr(models.Users.Age)))), 1))
-		selected := expr.Where(q, expr.Equal(expr.Value(orm.NumberExpr(models.Users.Age)), expr.Coalesce(threshold, expr.Param(orm.NumberExpr(models.Users.Age), -1))))
+		threshold := rows.ScalarRowQuery(rows.From(q), rows.LimitScalar(rows.OrderScalar(rows.SelectScalar(cte, expr.AsSelected(expr.Row(expr.At(cf, models.Users.Age)))), expr.Asc(expr.At(cf, models.Users.Age))), 1))
+		selected := expr.Where(q, expr.Equal(expr.Value(models.Users.Age), expr.Coalesce(threshold, expr.Param(models.Users.Age, -1))))
 		statement, err := orm.Compile(selected)
 		if err != nil || !strings.HasPrefix(statement.SQL(), "WITH ") {
 			t.Fatal("RHS scalar CTE was not discovered", statement.SQL(), err)
@@ -44,13 +44,13 @@ func TestPostgresScalarRowsAndComparisonDiscovery(t *testing.T) {
 		if err != nil || len(items) != 1 || items[0].ID != users[1].ID {
 			t.Fatal(items, err)
 		}
-		empty := rows.ScalarRowQuery(rows.From(q), rows.SelectScalar(rows.From(q.Limit(0)), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))))))
-		if n, err := orm.Count(t.Context(), tx, expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(orm.NumberExpr(models.Users.Age))), empty))); err != nil || n != 0 {
+		empty := rows.ScalarRowQuery(rows.From(q), rows.SelectScalar(rows.From(q.Limit(0)), expr.AsSelected(expr.Row(expr.Value(models.Users.Age)))))
+		if n, err := orm.Count(t.Context(), tx, expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(models.Users.Age)), empty))); err != nil || n != 0 {
 			t.Fatal("empty scalar lost NULL", n, err)
 		}
 		// No implicit limit may hide invalid scalar cardinality.
 		err = tx.Savepoint(t.Context(), func(inner *database.Tx) error {
-			_, err := orm.All(t.Context(), inner, expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(orm.NumberExpr(models.Users.Age))), rows.ScalarRowQuery(rows.From(q), rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age)))))))))
+			_, err := orm.All(t.Context(), inner, expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(models.Users.Age)), rows.ScalarRowQuery(rows.From(q), rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(models.Users.Age))))))))
 			return err
 		})
 		var dbError *database.Error
@@ -69,17 +69,17 @@ func TestPostgresCorrelatedRowComparisonsAndRelationAliases(t *testing.T) {
 		link := rows.Correlate(rows.From(q), rows.From(orders))
 		buyer := rows.OuterScope(link, rows.ModelScope(q))
 		order := rows.InnerScope(link, rows.ModelScope(orders))
-		matching := link.Where(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(buyer, orm.KeyExpr(models.Users.ID))))
-		countQuery := rows.SelectCorrelatedScalar(matching, expr.AsSelected(expr.CountFieldAt(order, orm.KeyExpr(models.Orders.ID))))
+		matching := link.Where(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(buyer, models.Users.ID)))
+		countQuery := rows.SelectCorrelatedScalar(matching, expr.AsSelected(expr.CountFieldAt(order, models.Orders.ID)))
 		orderCount := rows.CorrelatedScalarRowQuery(countQuery)
 		zero := expr.NullableRow(expr.ParamOf(expr.Count[models.User](), 0))
 		purchased := expr.GreaterNullable(orderCount, zero)
-		items, err := orm.All(t.Context(), tx, expr.Where(q, purchased).OrderBy(orm.NumberAsc(f.Age)))
+		items, err := orm.All(t.Context(), tx, expr.Where(q, purchased).OrderBy(orm.Asc(f.Age)))
 		if err != nil || len(items) != 2 || items[0].ID != users[0].ID || items[1].ID != users[1].ID {
 			t.Fatal(items, err)
 		}
-		total := rows.CorrelatedScalarNullableRowQuery(rows.SelectCorrelatedScalar(matching, expr.AsSelected(expr.SumAt(order, orm.NumberExpr(models.Orders.TotalCents)))))
-		if n, err := orm.Count(t.Context(), tx, expr.Where(q, expr.NotDistinctFrom(total, expr.ParamOf(expr.NullableRow(expr.DecimalOf(expr.Value(orm.NumberExpr(f.Age)))), value.Null[decimal.Decimal]())))); err != nil || n != 2 {
+		total := rows.CorrelatedScalarNullableRowQuery(rows.SelectCorrelatedScalar(matching, expr.AsSelected(expr.SumAt(order, models.Orders.TotalCents))))
+		if n, err := orm.Count(t.Context(), tx, expr.Where(q, expr.NotDistinctFrom(total, expr.ParamOf(expr.NullableRow(expr.DecimalOf(expr.Value(f.Age))), value.Null[decimal.Decimal]())))); err != nil || n != 2 {
 			t.Fatal("nullable correlated total lost NULL", n, err)
 		}
 		items, err = orm.All(t.Context(), tx, q.Where(orm.Has(models.UserLinks.Referrals.Where(expr.RelationFilter(models.UserLinks.Referrals, purchased)))))
@@ -90,11 +90,11 @@ func TestPostgresCorrelatedRowComparisonsAndRelationAliases(t *testing.T) {
 			return err
 		}
 		for _, target := range users[1:3] {
-			if _, err := orm.Insert(t.Context(), tx, models.Friendships.Table, orm.ColumnSet(models.Friendships.FromID, users[0].ID), orm.ColumnSet(models.Friendships.ToID, target.ID), orm.TextSet(models.Friendships.Note, "linked")); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Friendships.Table, orm.Set(models.Friendships.FromID, users[0].ID), orm.Set(models.Friendships.ToID, target.ID), orm.Set(models.Friendships.Note, "linked")); err != nil {
 				return err
 			}
 		}
-		items, err = orm.All(t.Context(), tx, q.Where(orm.KeyEq(f.ID, users[0].ID)).With(models.UserLinks.Friends.Where(expr.RelationFilter(models.UserLinks.Friends, purchased))))
+		items, err = orm.All(t.Context(), tx, q.Where(orm.Eq(f.ID, users[0].ID)).With(models.UserLinks.Friends.Where(expr.RelationFilter(models.UserLinks.Friends, purchased))))
 		if err != nil || len(items) != 1 {
 			t.Fatal(items, err)
 		}

@@ -33,7 +33,7 @@ type otherAlias struct{}
 
 // doc-example:begin transaction-query-composition
 func Claimed(ctx context.Context, tx *database.Tx) ([]Summary, error) {
-	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(Records.Query().OrderBy(orm.KeyAsc(Records.ID)).Limit(1)).SkipLocked()))
+	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(Records.Query().OrderBy(orm.Asc(Records.ID)).Limit(1)).SkipLocked()))
 	source := rows.AsTransaction[claimedAlias](definition, "candidate")
 	fields := recordAt(rows.TransactionScope(source))
 	return rows.SelectTransaction(source, Summaries, rows.MapSelected(Summaries.ID, expr.AsSelected(expr.Row(fields.ID))), rows.MapSelected(Summaries.Name, expr.AsSelected(expr.Row(fields.Name)))).All(ctx, tx)
@@ -53,5 +53,5 @@ func CountClaimed(ctx context.Context, tx *database.Tx) (Totals, error) {
 	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(Records.Query())))
 	source := rows.AsTransaction[claimedAlias](definition, "candidate")
 	fields := recordAt(rows.TransactionScope(source))
-	return rows.SelectTransaction(source, TotalRows, rows.MapSelected(TotalRows.Count, expr.AsSelected(expr.CountFieldAt(fields.scope, orm.KeyExpr(Records.ID))))).RequireFirst(ctx, tx)
+	return rows.SelectTransaction(source, TotalRows, rows.MapSelected(TotalRows.Count, expr.AsSelected(expr.CountFieldAt(fields.scope, Records.ID)))).RequireFirst(ctx, tx)
 }

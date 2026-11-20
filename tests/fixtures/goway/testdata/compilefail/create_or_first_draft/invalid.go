@@ -9,4 +9,4 @@ import (
 )
 
 var db *database.DB
-var _, _ = orm.CreateOrFirst(context.Background(), db, h.Members.Query(), orm.NumberSet(models.Orders.TotalCents, 1))
+var _, _ = orm.CreateOrFirst(context.Background(), db, h.Members.Query(), orm.Set(models.Orders.TotalCents, 1))

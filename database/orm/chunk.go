@@ -8,7 +8,6 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -196,19 +195,16 @@ func runChunks[M any](ctx context.Context, ex database.Executor, p chunkPlan, yi
 // callback. Only key ordering and zero Offset are accepted; Limit bounds total
 // delivery. Keys are captured before callbacks. Keep keys stable: batches do not
 // share a snapshot. Example: orm.ChunkByKey(ctx, db, Orders.Query(), Orders.ID, 500, visit).
-func ChunkByKey[M any, K comparable](ctx context.Context, ex database.Executor, q Query[M], key KeyColumn[M, K], size int, yield func([]M) error) error {
+func ChunkByKey[M any, K comparable, I, P any, Kind ColumnKind, R ColumnRole](ctx context.Context, ex database.Executor, q Query[M], key ColumnHandle[M, K, I, P, Kind, R], size int, yield func([]M) error) error {
 	if err := executionContext(ctx, ex); err != nil {
 		return err
-	}
-	if ormcore.NilDescriptor(key) {
-		return invalid("primary-key chunks require a key column")
 	}
 	q.state.ast.ScopeContext = ctx
 	p, err := newChunkPlan(q.state, size)
 	if err != nil {
 		return err
 	}
-	c := key.ormColumn(nil).core
+	c := columnCoreOf(key.stored)
 	if c == nil || c.owner != q.state.table || c.metadata.Name != q.state.table.model.Primary || p.offset != 0 || len(p.keys) != 1 || len(p.base.ast.Orders) != 1 || p.keys[0] != c {
 		return invalid("primary-key chunks require key ordering and no Offset")
 	}
@@ -217,7 +213,7 @@ func ChunkByKey[M any, K comparable](ctx context.Context, ex database.Executor, 
 
 // EachByKey yields individual models from complete primary-key batches.
 // Example: orm.EachByKey(ctx, db, Orders.Query(), Orders.ID, 500, visit).
-func EachByKey[M any, K comparable](ctx context.Context, ex database.Executor, q Query[M], key KeyColumn[M, K], size int, yield func(M) error) error {
+func EachByKey[M any, K comparable, I, P any, Kind ColumnKind, R ColumnRole](ctx context.Context, ex database.Executor, q Query[M], key ColumnHandle[M, K, I, P, Kind, R], size int, yield func(M) error) error {
 	if yield == nil {
 		return invalid("model iteration requires a callback")
 	}

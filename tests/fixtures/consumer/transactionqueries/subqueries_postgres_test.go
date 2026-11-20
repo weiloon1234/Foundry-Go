@@ -34,7 +34,7 @@ func TestPostgresTransactionMembershipAndExists(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		p := rows.TransactionExistsQuery(outer, rows.LockedRecord(orm.ForShare(Records.Query().Where(orm.KeyEq(Records.ID, 2)))))
+		p := rows.TransactionExistsQuery(outer, rows.LockedRecord(orm.ForShare(Records.Query().Where(orm.Eq(Records.ID, 2)))))
 		items, err := rows.SelectTransactionRecord(outer, rows.TransactionScope(outer)).Where(expr.Eq(a.ID, 1), p).All(ctx, tx)
 		if err != nil {
 			return err
@@ -54,7 +54,7 @@ func TestPostgresTransactionScalarCardinalityAndNulls(t *testing.T) {
 	for _, mode := range []string{"one", "empty", "many", "nullable"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, db, path := transactionFixture(t)
-			outer := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyEq(Records.ID, 1)))), "outer_record")
+			outer := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.Eq(Records.ID, 1)))), "outer_record")
 			inner := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "inner_record")
 			fields := recordAt(rows.TransactionScope(inner))
 			predicate := expr.Eq(fields.ID, 2)

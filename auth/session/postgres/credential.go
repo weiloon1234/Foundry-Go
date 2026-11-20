@@ -31,7 +31,7 @@ func credential(ctx context.Context, tx *database.Tx, address session.Address, h
 		return sessionstore.Subject{}, sessionstore.Entry{}, false, err
 	}
 	f := sessionstore.Entries
-	locator, err := orm.First(ctx, tx, entries(scope, "").Where(orm.TextEq(f.SecretHash, hash.Hex())))
+	locator, err := orm.First(ctx, tx, entries(scope, "").Where(orm.Eq(f.SecretHash, hash.Hex())))
 	if err != nil {
 		return sessionstore.Subject{}, sessionstore.Entry{}, false, err
 	}
@@ -43,7 +43,7 @@ func credential(ctx context.Context, tx *database.Tx, address session.Address, h
 	if err != nil || !present {
 		return sessionstore.Subject{}, sessionstore.Entry{}, false, err
 	}
-	locked, err := orm.FirstLocked(ctx, tx, orm.Lock(entries(scope, subject.Key).Where(orm.TextEq(f.SecretHash, hash.Hex())).Where(orm.KeyEq(sessionstore.Entries.ID, first.ID))))
+	locked, err := orm.FirstLocked(ctx, tx, orm.Lock(entries(scope, subject.Key).Where(orm.Eq(f.SecretHash, hash.Hex())).Where(orm.Eq(sessionstore.Entries.ID, first.ID))))
 	if err != nil {
 		return sessionstore.Subject{}, sessionstore.Entry{}, false, err
 	}
@@ -133,7 +133,7 @@ func (b *Backend) Rotate(ctx context.Context, address session.Address, old, next
 		if err != nil || !live {
 			return err
 		}
-		draft := []orm.Assignment[sessionstore.Entry]{orm.TextSet(sessionstore.Entries.SecretHash, next.Hex()), orm.TimeSet(sessionstore.Entries.LastSeenAt, current.LastSeenAt), orm.TimeSet(sessionstore.Entries.IdleExpiresAt, current.IdleExpiresAt)}
+		draft := []orm.Assignment[sessionstore.Entry]{orm.Set(sessionstore.Entries.SecretHash, next.Hex()), orm.Set(sessionstore.Entries.LastSeenAt, current.LastSeenAt), orm.Set(sessionstore.Entries.IdleExpiresAt, current.IdleExpiresAt)}
 		row, err = orm.Update(ctx, tx, entries(subject.Scope, subject.Key), sessionstore.Entries.ID, row.ID, draft...)
 		if err != nil {
 			return err

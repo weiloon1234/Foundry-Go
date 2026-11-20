@@ -7,8 +7,8 @@
 ```go
 u, r := models.Users, reports.UserSummaries
 report := rows.Select(rows.From(u.Query()), r.Row,
-    rows.Map(r.ID, expr.Value(orm.KeyExpr(u.Key()))), rows.Map(r.Email, expr.Value(orm.TextExpr(u.Email))),
-    rows.Map(r.Nickname, expr.Value(orm.NullableTextExpr(u.Nickname))), rows.Map(r.Status, expr.Value(orm.EnumExpr(u.Status))))
+    rows.Map(r.ID, expr.Value(u.Key())), rows.Map(r.Email, expr.Value(u.Email)),
+    rows.Map(r.Nickname, expr.Value(u.Nickname)), rows.Map(r.Status, expr.Value(u.Status)))
 cursor := rows.CursorFor(rows.RecordOf(report))
 ordered := cursor.OrderBy(expr.Asc(rows.At(cursor.Scope(), r.Nickname))).
     UniqueBy(expr.Group(rows.At(cursor.Scope(), r.ID)))
@@ -35,7 +35,7 @@ The outer order is explicit and independent of an inner order. An inner order ma
 
 ```go
 values := rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()),
-    expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))))))
+    expr.AsSelected(expr.Row(expr.Value(models.Users.Nickname)))))
 cursor := rows.ValueCursorFor(values)
 ordered := cursor.OrderBy(expr.Asc(cursor.Value())).UniqueBy(expr.Group(cursor.Value()))
 page, err := ordered.Paginate(ctx, db, orm.CursorRequest[value.Nullable[string]]{Size: 20})

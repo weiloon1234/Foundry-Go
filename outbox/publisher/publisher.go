@@ -204,7 +204,7 @@ func New(writer database.Transactor, config Config, routes ...Route) (*Publisher
 			return nil, safeerror.NewFault(fault.Duplicate, "outbox publication route already registered")
 		}
 		index[key] = route
-		claims = append(claims, orm.And(orm.TextEq(fields.Kind, route.Kind), orm.TextEq(fields.Destination, route.Destination)))
+		claims = append(claims, orm.And(orm.Eq(fields.Kind, route.Kind), orm.Eq(fields.Destination, route.Destination)))
 	}
 	return &Publisher{writer: writer, config: config, routes: index, claim: orm.Or(claims...), slots: admission.New(config.MaxInFlight)}, nil
 }
@@ -278,7 +278,7 @@ func (p *Publisher) publish(ctx context.Context, limit int, logger *slog.Logger)
 	fields := outboxstore.Messages
 	var results []Result
 	err = p.writer.Transaction(transaction, func(tx *database.Tx) error {
-		rows, err := orm.AllLocked(transaction, tx, orm.Lock(outboxstore.Messages.Query().Where(p.claim, orm.TextEq(fields.PublishState, outbox.Pending), orm.TimeLte(fields.PublishAfter, now)).OrderBy(orm.TimeAsc(fields.CreatedAt), orm.KeyAsc(fields.ID))).SkipLocked().Limit(held))
+		rows, err := orm.AllLocked(transaction, tx, orm.Lock(outboxstore.Messages.Query().Where(p.claim, orm.Eq(fields.PublishState, outbox.Pending), orm.Lte(fields.PublishAfter, now)).OrderBy(orm.Asc(fields.CreatedAt), orm.Asc(fields.ID))).SkipLocked().Limit(held))
 		if err != nil {
 			return err
 		}
@@ -356,14 +356,14 @@ func (p *Publisher) outcome(result *Result, skipped bool) ([]orm.Assignment[outb
 		}
 	}
 	fields := outboxstore.Messages
-	draft := []orm.Assignment[outboxstore.Message]{orm.TextSet(fields.PublishState, result.State), orm.NumberSet(fields.PublishAttempts, result.Attempts)}
+	draft := []orm.Assignment[outboxstore.Message]{orm.Set(fields.PublishState, result.State), orm.Set(fields.PublishAttempts, result.Attempts)}
 	switch result.State {
 	case outbox.Published:
 		finished, err := temporal.NewDateTime(finishedAt.Truncate(time.Microsecond))
 		if err != nil {
 			return draft, err
 		}
-		return append(draft, orm.NullableTimeSet(fields.PublishedAt, finished), orm.TextSet(fields.PublishReason, "")), nil
+		return append(draft, orm.Set(fields.PublishedAt, finished), orm.Set(fields.PublishReason, "")), nil
 	case outbox.Pending:
 		// Add the delay to the original sample, then round the deadline up.
 		// Truncating either operand could publish a retry early.
@@ -375,13 +375,13 @@ func (p *Publisher) outcome(result *Result, skipped bool) ([]orm.Assignment[outb
 		if err != nil {
 			return draft, err
 		}
-		return append(draft, orm.TimeSet(fields.PublishAfter, next), orm.TextSet(fields.PublishReason, "transient")), nil
+		return append(draft, orm.Set(fields.PublishAfter, next), orm.Set(fields.PublishReason, "transient")), nil
 	}
 	reason := "attempt_limit"
 	if permanent {
 		reason = "permanent"
 	}
-	return append(draft, orm.TextSet(fields.PublishReason, reason)), nil
+	return append(draft, orm.Set(fields.PublishReason, reason)), nil
 }
 
 // Run publishes until ctx ends. Transient SQL, transaction and publication

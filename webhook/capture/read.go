@@ -35,21 +35,21 @@ func (s *Store) list(ctx context.Context, filters CapturedRequestFilters, reques
 		return pagination.CursorResult[store.Summary, CapturedRequest]{}, http.BadRequest.WithCause(errWindow)
 	}
 	c := store.Captures
-	q := c.Query().Where(orm.TimeGte(c.ReceivedAt, filters.From))
+	q := c.Query().Where(orm.Gte(c.ReceivedAt, filters.From))
 	if bounded {
-		q = q.Where(orm.TimeLt(c.ReceivedAt, until))
+		q = q.Where(orm.Lt(c.ReceivedAt, until))
 	}
 	if method, set := filters.Method.Get(); set {
-		q = q.Where(orm.TextEq(c.Method, method))
+		q = q.Where(orm.Eq(c.Method, method))
 	}
 	if prefix, set := filters.PathPrefix.Get(); set {
-		q = q.Where(orm.TextStartsWith(c.Path, prefix))
+		q = q.Where(orm.StartsWith(c.Path, prefix))
 	}
 	if status, set := filters.Status.Get(); set {
-		q = q.Where(orm.NullableNumberEq(c.ResponseStatus, status))
+		q = q.Where(orm.Eq(c.ResponseStatus, status))
 	}
 	if mode, set := filters.Mode.Get(); set {
-		q = q.Where(orm.TextEq(c.BodyMode, string(mode)))
+		q = q.Where(orm.Eq(c.BodyMode, string(mode)))
 	}
 	cutoff, err := s.log.Cutoff()
 	if err != nil {

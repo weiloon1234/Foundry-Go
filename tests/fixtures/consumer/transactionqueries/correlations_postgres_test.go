@@ -18,7 +18,7 @@ type correlatedGrandchildAlias struct{}
 func TestPostgresTransactionLateralRowsAndLocks(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
 	// doc-example:begin transaction-correlations
-	parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyIn(Records.ID, 1, 3)))), "parent")
+	parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.In(Records.ID, 1, 3)))), "parent")
 	child := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "child")
 	c := rows.TransactionCorrelate(parent, child)
 	p, f := recordAt(rows.TransactionOuterScope(c, rows.TransactionScope(parent))), recordAt(rows.TransactionInnerScope(c, rows.TransactionScope(child)))
@@ -73,7 +73,7 @@ func TestPostgresTransactionLateralRowsAndLocks(t *testing.T) {
 
 func TestPostgresTransactionLateralSkipLocked(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
-	parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyEq(Records.ID, 1)))), "parent")
+	parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.Eq(Records.ID, 1)))), "parent")
 	child := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "child")
 	c := rows.TransactionCorrelate(parent, child)
 	p, f := recordAt(rows.TransactionOuterScope(c, rows.TransactionScope(parent))), recordAt(rows.TransactionInnerScope(c, rows.TransactionScope(child)))
@@ -82,7 +82,7 @@ func TestPostgresTransactionLateralSkipLocked(t *testing.T) {
 	lateral := rows.AsTransactionLateral[correlatedLateralAlias](record, "chosen")
 	joined := rows.TransactionCrossJoinLateral(parent, lateral)
 	if err := inTransaction(ctx, db, path, func(holder *database.Tx) error {
-		if _, err := orm.RequireLocked(ctx, holder, orm.Lock(Records.Query()).Where(orm.KeyEq(Records.ID, 2))); err != nil {
+		if _, err := orm.RequireLocked(ctx, holder, orm.Lock(Records.Query()).Where(orm.Eq(Records.ID, 2))); err != nil {
 			return err
 		}
 		return inTransaction(ctx, db, path, func(tx *database.Tx) error {
@@ -104,7 +104,7 @@ func TestPostgresTransactionLateralSkipLocked(t *testing.T) {
 
 func TestPostgresTransactionNestedCorrelatedLocks(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
-	parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyEq(Records.ID, 1)))), "parent")
+	parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.Eq(Records.ID, 1)))), "parent")
 	child := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "child")
 	c := rows.TransactionCorrelate(parent, child)
 	p, f := recordAt(rows.TransactionOuterScope(c, rows.TransactionScope(parent))), recordAt(rows.TransactionInnerScope(c, rows.TransactionScope(child)))
@@ -139,7 +139,7 @@ func TestPostgresTransactionNestedCorrelatedLocks(t *testing.T) {
 
 func TestPostgresTransactionCorrelatedScalarFailuresAndMembership(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
-	parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyEq(Records.ID, 1)))), "parent")
+	parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.Eq(Records.ID, 1)))), "parent")
 	child := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "child")
 	c := rows.TransactionCorrelate(parent, child)
 	p, f := recordAt(rows.TransactionOuterScope(c, rows.TransactionScope(parent))), recordAt(rows.TransactionInnerScope(c, rows.TransactionScope(child)))
@@ -170,11 +170,11 @@ func TestPostgresTransactionCorrelatedScalarFailuresAndMembership(t *testing.T) 
 		if _, err := rows.SelectTransactionRecord(parent, rows.TransactionScope(parent)).Where(wrongTarget.Exists()).All(ctx, tx); !errors.Is(err, fault.Invalid) {
 			return errors.New("correlated lock accepted outer target")
 		}
-		grouped := rows.SelectTransactionCorrelatedScalar(c, expr.AsSelected(expr.CountFieldAt(f.scope, orm.KeyExpr(Records.ID)))).ForUpdate()
+		grouped := rows.SelectTransactionCorrelatedScalar(c, expr.AsSelected(expr.CountFieldAt(f.scope, Records.ID))).ForUpdate()
 		if _, err := rows.SelectTransactionValue(parent, expr.AsSelected(rows.TransactionCorrelatedScalarRowQuery(grouped))).All(ctx, tx); !errors.Is(err, fault.Invalid) {
 			return errors.New("correlated aggregate lock reached SQL")
 		}
-		_, err = orm.Require(ctx, tx, Records.Query().Where(orm.KeyEq(Records.ID, 1)))
+		_, err = orm.Require(ctx, tx, Records.Query().Where(orm.Eq(Records.ID, 1)))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -183,7 +183,7 @@ func TestPostgresTransactionCorrelatedScalarFailuresAndMembership(t *testing.T) 
 
 func TestPostgresTransactionCorrelationFromNullableLateral(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
-	parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyIn(Records.ID, 1, 3)))), "parent")
+	parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.In(Records.ID, 1, 3)))), "parent")
 	child := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "child")
 	c := rows.TransactionCorrelate(parent, child)
 	p, f := recordAt(rows.TransactionOuterScope(c, rows.TransactionScope(parent))), recordAt(rows.TransactionInnerScope(c, rows.TransactionScope(child)))

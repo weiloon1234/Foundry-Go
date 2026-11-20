@@ -35,12 +35,12 @@ func TestPostgresORMRelations(t *testing.T) {
 			if i == 1 {
 				memberStatus = models.StatusDisabled
 			}
-			draft := []orm.Assignment[models.User]{orm.TextSet(models.Users.Email, "fixture"), orm.NumberSet(models.Users.Age, i+20), orm.EnumSet(models.Users.Status, memberStatus), orm.EnumSet(models.Users.Level, models.LevelBasic)}
+			draft := []orm.Assignment[models.User]{orm.Set(models.Users.Email, "fixture"), orm.Set(models.Users.Age, i+20), orm.Set(models.Users.Status, memberStatus), orm.Set(models.Users.Level, models.LevelBasic)}
 			if i == 1 || i == 2 {
-				draft = append(draft, orm.NullableColumnSet(models.Users.IntroducerID, users[0].ID))
+				draft = append(draft, orm.Set(models.Users.IntroducerID, users[0].ID))
 			}
 			if i == 3 {
-				draft = append(draft, orm.NullableColumnSet(models.Users.IntroducerID, users[1].ID))
+				draft = append(draft, orm.Set(models.Users.IntroducerID, users[1].ID))
 			}
 			user, err := orm.Insert(t.Context(), tx, models.Users.Table, draft...)
 			if err != nil {
@@ -49,12 +49,12 @@ func TestPostgresORMRelations(t *testing.T) {
 			users = append(users, user)
 		}
 		for i, buyer := range []model.ID[models.User]{users[0].ID, users[0].ID, users[1].ID} {
-			if _, err := orm.Insert(t.Context(), tx, models.Orders.Table, orm.ColumnSet(models.Orders.BuyerID, buyer), orm.NumberSet(models.Orders.TotalCents, int64(i+1))); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Orders.Table, orm.Set(models.Orders.BuyerID, buyer), orm.Set(models.Orders.TotalCents, int64(i+1))); err != nil {
 				return err
 			}
 		}
 		counter := &queryfixture.QueryCounter{Executor: tx}
-		base := models.Users.Query().OrderBy(orm.NumberAsc(models.Users.Age))
+		base := models.Users.Query().OrderBy(orm.Asc(models.Users.Age))
 		loaded, err := orm.All(t.Context(), counter, base.With(models.UserLinks.Introducer))
 		if err != nil {
 			return err
@@ -101,7 +101,7 @@ func TestPostgresORMRelations(t *testing.T) {
 		limits := orm.DefaultRelationLimits()
 		limits.BatchSize = 2
 		counter.Queries.Store(0)
-		collections, err := orm.All(t.Context(), counter, orm.WithRelationLimits(base, limits).With(models.UserLinks.Orders.OrderBy(orm.NumberDesc(models.Orders.TotalCents))))
+		collections, err := orm.All(t.Context(), counter, orm.WithRelationLimits(base, limits).With(models.UserLinks.Orders.OrderBy(orm.Desc(models.Orders.TotalCents))))
 		if err != nil {
 			return err
 		}
@@ -152,7 +152,7 @@ func TestPostgresORMRelations(t *testing.T) {
 				t.Error("nullable inverse key attached wrong referrals")
 			}
 		}
-		scoped, err := orm.All(t.Context(), tx, base.With(models.UserLinks.Introducer.Where(orm.EnumEq(models.Users.Status, models.StatusActive))))
+		scoped, err := orm.All(t.Context(), tx, base.With(models.UserLinks.Introducer.Where(orm.Eq(models.Users.Status, models.StatusActive))))
 		if err != nil {
 			return err
 		}
@@ -162,7 +162,7 @@ func TestPostgresORMRelations(t *testing.T) {
 		if result, err := orm.All(t.Context(), tx, base.With(models.UserLinks.SingleOrder)); !errors.Is(err, database.TooManyRows) || result != nil {
 			t.Error("has-one selected an arbitrary duplicate")
 		}
-		one, err := orm.All(t.Context(), tx, base.With(models.UserLinks.SingleOrder.Where(orm.NumberGt(models.Orders.TotalCents, 1))))
+		one, err := orm.All(t.Context(), tx, base.With(models.UserLinks.SingleOrder.Where(orm.Gt(models.Orders.TotalCents, 1))))
 		if err != nil {
 			return err
 		}
@@ -206,16 +206,16 @@ func TestPostgresORMRelations(t *testing.T) {
 			t.Error("duplicate parent expansion bypassed the relation budget")
 		}
 		for _, code := range []models.CountryCode{"MY", "SG"} {
-			if _, err := orm.Insert(t.Context(), tx, models.Countries.Table, orm.KeySet(models.Countries.Code, code), orm.TextSet(models.Countries.Name, string(code))); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Countries.Table, orm.Set(models.Countries.Code, code), orm.Set(models.Countries.Name, string(code))); err != nil {
 				return err
 			}
 		}
 		for _, code := range []models.LocationCode{"KL", "JB"} {
-			if _, err := orm.Insert(t.Context(), tx, models.Locations.Table, orm.KeySet(models.Locations.Code, code), orm.TextSet(models.Locations.CountryCode, "MY")); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Locations.Table, orm.Set(models.Locations.Code, code), orm.Set(models.Locations.CountryCode, "MY")); err != nil {
 				return err
 			}
 		}
-		countries, err := orm.All(t.Context(), tx, models.Countries.Query().OrderBy(orm.KeyAsc(models.Countries.Code)).With(models.CountryLinks.Locations.With(models.LocationLinks.Country)))
+		countries, err := orm.All(t.Context(), tx, models.Countries.Query().OrderBy(orm.Asc(models.Countries.Code)).With(models.CountryLinks.Locations.With(models.LocationLinks.Country)))
 		if err != nil {
 			return err
 		}

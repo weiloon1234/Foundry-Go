@@ -8,7 +8,7 @@ import (
 
 // GroupKey is a row-phase key for GROUP BY and DISTINCT ON.
 //
-// Example: expr.Group(expr.Value(orm.TextExpr(Users.Email)))
+// Example: expr.Group(expr.Value(Users.Email))
 type GroupKey[S any] struct {
 	rowKeyPhase [0]struct{}
 	_           [0]*S

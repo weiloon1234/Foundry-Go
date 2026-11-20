@@ -15,10 +15,10 @@ func TestCorrelatedDistinctOnSQLParity(t *testing.T) {
 	q := models.Users.Query()
 	a := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
 	c := rows.Correlate(rows.From(q), a)
-	parent := expr.At(rows.OuterScope(c, rows.ModelScope(q)), orm.KeyExpr(models.Users.ID))
+	parent := expr.At(rows.OuterScope(c, rows.ModelScope(q)), models.Users.ID)
 	scope := rows.InnerScope(c, rows.Scope(a))
-	selected := rows.SelectCorrelatedScalar(c.Where(expr.Equal(expr.At(scope, orm.ColumnExpr(models.Orders.BuyerID)), parent)), expr.AsSelected(expr.Row(expr.At(scope, orm.KeyExpr(models.Orders.ID)))))
-	selected = rows.DistinctOnCorrelatedScalar(selected, expr.Group(parent)).OrderBy(expr.Asc(parent), expr.Desc(expr.At(scope, orm.NumberExpr(models.Orders.TotalCents))))
+	selected := rows.SelectCorrelatedScalar(c.Where(expr.Equal(expr.At(scope, models.Orders.BuyerID), parent)), expr.AsSelected(expr.Row(expr.At(scope, models.Orders.ID))))
+	selected = rows.DistinctOnCorrelatedScalar(selected, expr.Group(parent)).OrderBy(expr.Asc(parent), expr.Desc(expr.At(scope, models.Orders.TotalCents)))
 	got, err := orm.Compile(expr.Where(q, selected.Exists()))
 	if err != nil {
 		t.Fatal(err)

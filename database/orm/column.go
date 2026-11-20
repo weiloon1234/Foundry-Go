@@ -15,11 +15,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// Column exposes equality, ordering and assignments. Example: orm.ColumnEq(Orders.BuyerID, id).
-type Column[M, V any] struct {
-	_      [0]*M
-	column columnData[V]
-}
+// Column exposes equality, ordering and assignments. Example: orm.Eq(Orders.BuyerID, id).
+type Column[M, V any] = ColumnHandle[M, V, V, V, RequiredScalarKind, OrdinaryRole]
 
 // columnData has no methods: each public capability owns only its own shells.
 type columnData[V any] struct {
@@ -33,16 +30,10 @@ type columnData[V any] struct {
 	assign      func(V) querycore.AssignmentValue
 }
 
-// Key identifies a table's primary column. Example: orm.KeyEq(Orders.Key(), id).
-type Key[M any, K comparable] = keyColumn[M, K, lookupKeyRole]
+// Key identifies a table's primary column. Example: orm.Eq(Orders.Key(), id).
+type Key[M any, K comparable] = ColumnHandle[M, K, K, K, KeyKind, LookupKeyRole]
 
-type keyColumn[M any, K comparable, R columnRole] struct {
-	_    [0]*M
-	role [0]R
-	key  columnData[K]
-}
-
-// Predicate is a model-owned SQL condition. Example: orm.KeyEq(Orders.ID, id).
+// Predicate is a model-owned SQL condition. Example: orm.Eq(Orders.ID, id).
 type Predicate[M any] struct {
 	_          [0]*M
 	expression *querycore.PredicateState
@@ -51,7 +42,7 @@ type Predicate[M any] struct {
 	err        error
 }
 
-// Order is a model-owned sort direction. Example: orm.KeyAsc(Orders.ID).
+// Order is a model-owned sort direction. Example: orm.Asc(Orders.ID).
 type Order[M any] struct {
 	_     [0]*M
 	core  querycore.QueryOrder
@@ -59,7 +50,7 @@ type Order[M any] struct {
 	err   error
 }
 
-// Assignment preserves omitted/null/value semantics. Example: orm.NumberSet(Orders.TotalCents, 0).
+// Assignment preserves omitted/null/value semantics. Example: orm.Set(Orders.TotalCents, 0).
 type Assignment[M any] struct {
 	_      [0]*M
 	adjust *querycore.Adjustment
@@ -69,21 +60,21 @@ type Assignment[M any] struct {
 	err    error
 }
 
-// String redacts pending values. Example: fmt.Sprint(orm.NumberSet(Orders.TotalCents, 10)).
+// String redacts pending values. Example: fmt.Sprint(orm.Set(Orders.TotalCents, 10)).
 func (Assignment[M]) String() string { return "orm assignment" }
 
 // GoString redacts pending values in diagnostics. Example: fmt.Sprintf("%#v", assignment).
 func (Assignment[M]) GoString() string { return "orm assignment" }
 
-func bindModel[M, V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool, opts ...ColumnOption[V]) columnData[V] {
+func bindModel[M, V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool, opts ...ColumnOption[V]) *columnData[V] {
 	field := bindTyped(d, ptr, c, nullable, opts...)
 	bindNamedMutator[M, V, V](field.core)
-	return field
+	return &field
 }
-func bindNullableModel[M, V any](d *declaration, ptr *value.Nullable[V], c codec.Codec[V], opts ...ColumnOption[V]) nullableColumnData[V] {
+func bindNullableModel[M, V any](d *declaration, ptr *value.Nullable[V], c codec.Codec[V], opts ...ColumnOption[V]) *columnData[V] {
 	field := bindNullable(d, ptr, c, opts...)
 	bindNamedMutator[M, V, V](field.base.core)
-	return field
+	return &field.base
 }
 func bindTyped[V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool, opts ...ColumnOption[V]) columnData[V] {
 	core := bindField(d, unsafe.Pointer(ptr), reflect.TypeFor[V](), nullable, c.ParameterType())
@@ -138,11 +129,11 @@ func columnWithCodec[V any](core *columnCore, c codec.Codec[V]) columnData[V] {
 func capture[V any](c codec.Codec[V], v V) querycore.AssignmentValue {
 	return querycore.CaptureAssignment(c, v)
 }
-func comparison[M, V any](c columnData[V], op querycore.Operator, vs []V, text ...bool) Predicate[M] {
-	if c.core == nil || c.core.owner == nil || c.bind == nil {
+func comparison[M, V any](c *columnData[V], op querycore.Operator, vs []V, text bool) Predicate[M] {
+	if c == nil || c.core == nil || c.core.owner == nil || c.bind == nil {
 		return Predicate[M]{err: invalid("uninitialized column")}
 	}
-	node := querycore.CodecComparison(querycore.Comparison{Operand: c.core.operand, Operator: op, Text: len(text) == 1 && text[0], Kind: c.core.kind}, c.literalBind)
+	node := querycore.CodecComparison(querycore.Comparison{Operand: c.core.operand, Operator: op, Text: text, Kind: c.core.kind}, c.literalBind)
 	state, values := querycore.RetainComparison(node, len(vs))
 	for i, v := range vs {
 		values[i] = c.clone(v)
@@ -150,102 +141,66 @@ func comparison[M, V any](c columnData[V], op querycore.Operator, vs []V, text .
 	return Predicate[M]{owner: c.core.owner, expression: state}
 }
 
-func columnOrder[M, V any](c columnData[V], descending bool) Order[M] {
-	if c.core == nil || c.core.owner == nil {
+func columnOrder[M any](core *columnCore, descending bool) Order[M] {
+	if core == nil || core.owner == nil {
 		return Order[M]{err: invalid("uninitialized column")}
 	}
-	return Order[M]{owner: c.core.owner, core: querycore.QueryOrder{Field: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Descending: descending}}
+	return Order[M]{owner: core.owner, core: querycore.QueryOrder{Field: querycore.FieldRef{Table: core.owner.model.Table, Column: core.metadata.Name}, Descending: descending}}
 }
 
-func columnAssignment[M, V any](c columnData[V], v V) Assignment[M] {
-	if c.core == nil || c.core.owner == nil || c.assign == nil {
+func setHandle[M, V, I any](stored *columnData[V], input func(I) querycore.AssignmentValue, v I) Assignment[M] {
+	if stored == nil || stored.core == nil || stored.core.owner == nil || input == nil {
 		return Assignment[M]{err: invalid("uninitialized column")}
 	}
-	return Assignment[M]{owner: c.core.owner, core: querycore.MutationAssignment{Field: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, AssignmentValue: c.assign(v)}}
+	return Assignment[M]{owner: stored.core.owner, core: querycore.MutationAssignment{Field: querycore.FieldRef{Table: stored.core.owner.model.Table, Column: stored.core.metadata.Name}, AssignmentValue: input(v)}}
 }
 
 // Number exposes ordered numeric comparisons. Example: Number[Order,int64].
-type Number[M any, V NumberValue] = numberColumn[M, V, ordinaryRole]
-
-type numberColumn[M any, V NumberValue, R columnRole] struct {
-	_      [0]*M
-	role   [0]R
-	number columnData[V]
-}
+type Number[M any, V NumberValue] = ColumnHandle[M, V, V, V, RequiredNumberKind, OrdinaryRole]
 
 // Time exposes ordered temporal comparisons. Example: Time[Order,temporal.DateTime].
-type Time[M any, V TimeValue] = timeColumn[M, V, ordinaryRole]
+type Time[M any, V TimeValue] = ColumnHandle[M, V, V, V, RequiredTimeKind, OrdinaryRole]
 
-type timeColumn[M any, V TimeValue, R columnRole] struct {
-	_    [0]*M
-	role [0]R
-	time columnData[V]
-}
+// Text exposes literal and pattern matching. Example: orm.Contains(Users.Email, "@").
+type Text[M any, V ~string] = ColumnHandle[M, V, V, V, RequiredTextKind, OrdinaryRole]
 
-// Text exposes literal and pattern matching. Example: orm.TextContains(Users.Email, "@").
-type Text[M any, V ~string] = textColumn[M, V, ordinaryRole]
+// Enum restricts values to an enum's descriptor. Example: orm.Eq(Users.Status, StatusActive).
+type Enum[M any, E enum.Scalar] = ColumnHandle[M, E, E, E, RequiredEnumKind, OrdinaryRole]
 
-type textColumn[M any, V ~string, R columnRole] struct {
-	_    [0]*M
-	role [0]R
-	text columnData[V]
-}
-
-// Enum restricts values to an enum's descriptor. Example: orm.EnumEq(Users.Status, StatusActive).
-type Enum[M any, E enum.Scalar] struct {
-	_    [0]*M
-	enum columnData[E]
-}
-
-// NullableColumn exposes explicit NULL. Example: orm.NullableColumnSetNull(Users.IntroducerID).
-type NullableColumn[M, V any] struct {
-	_              [0]*M
-	nullableColumn nullableColumnData[V]
-}
+// NullableColumn exposes explicit NULL. Example: orm.SetNull(Users.IntroducerID).
+type NullableColumn[M, V any] = ColumnHandle[M, V, V, value.Nullable[V], NullableScalarKind, OrdinaryRole]
 
 type nullableColumnData[V any] struct {
 	base     columnData[V]
 	nullable func() columnData[value.Nullable[V]]
 }
 
-// NullableNumber exposes nullable numeric values. Example: orm.NullableNumberIsNull(LedgerEntries.Balance).
-type NullableNumber[M any, V NumberValue] struct {
-	_              [0]*M
-	nullableNumber nullableColumnData[V]
-}
+// NullableNumber exposes nullable numeric values. Example: orm.IsNull(LedgerEntries.Balance).
+type NullableNumber[M any, V NumberValue] = ColumnHandle[M, V, V, value.Nullable[V], NullableNumberKind, OrdinaryRole]
 
-// NullableTime exposes nullable temporal values. Example: orm.NullableTimeIsNull(Users.Birthday).
-type NullableTime[M any, V TimeValue] = nullableTimeColumn[M, V, ordinaryRole]
+// NullableTime exposes nullable temporal values. Example: orm.IsNull(Users.Birthday).
+type NullableTime[M any, V TimeValue] = ColumnHandle[M, V, V, value.Nullable[V], NullableTimeKind, OrdinaryRole]
 
-type nullableTimeColumn[M any, V TimeValue, R columnRole] struct {
-	role         [0]R
-	_            [0]*M
-	nullableTime nullableColumnData[V]
-}
+// NullableText exposes nullable text. Example: orm.SetNull(Users.Nickname).
+type NullableText[M any, V ~string] = ColumnHandle[M, V, V, value.Nullable[V], NullableTextKind, OrdinaryRole]
 
-// NullableText exposes nullable text. Example: orm.NullableTextSetNull(Users.Nickname).
-type NullableText[M any, V ~string] struct {
-	_            [0]*M
-	nullableText nullableColumnData[V]
-}
-
-// NullableEnum exposes nullable enums. Example: orm.NullableEnumSetNull(records.Status).
-type NullableEnum[M any, E enum.Scalar] struct {
-	_            [0]*M
-	nullableEnum nullableColumnData[E]
-}
+// NullableEnum exposes nullable enums. Example: orm.SetNull(records.Status).
+type NullableEnum[M any, E enum.Scalar] = ColumnHandle[M, E, E, value.Nullable[E], NullableEnumKind, OrdinaryRole]
 
 // CreatedAt is an explicitly managed creation instant. Example: CreatedAtOf(b,&o.CreatedAt).
-type CreatedAt[M any, V InstantValue] = timeColumn[M, V, createdRole]
+type CreatedAt[M any, V InstantValue] = ColumnHandle[M, V, V, V, RequiredTimeKind, CreatedRole]
 
 // UpdatedAt is an explicitly managed update instant. Example: UpdatedAtOf(b,&o.UpdatedAt).
-type UpdatedAt[M any, V InstantValue] = timeColumn[M, V, updatedRole]
+type UpdatedAt[M any, V InstantValue] = ColumnHandle[M, V, V, V, RequiredTimeKind, UpdatedRole]
 
 // SoftDelete is a nullable deletion instant. Example: SoftDeleteOf(b,&o.DeletedAt).
-type SoftDelete[M any, V InstantValue] = nullableTimeColumn[M, V, deletedRole]
+type SoftDelete[M any, V InstantValue] = ColumnHandle[M, V, V, value.Nullable[V], NullableTimeKind, DeletedRole]
 
-func nullAssignment[M, V any](c columnData[V]) Assignment[M] {
-	if c.core == nil || c.core.owner == nil || c.core.automatic == nil {
+func nullAssignment[M, V any, K NullableColumnKind](c *columnData[V]) Assignment[M] {
+	if c == nil || c.core == nil || c.core.owner == nil || c.core.automatic == nil {
+		if _, ok := any(*new(K)).(NullableEncryptedKind); ok {
+			return Assignment[M]{err: invalid("uninitialized column")}
+		}
 		return Assignment[M]{err: invalid("uninitialized nullable column")}
 	}
 	v, err := c.core.automatic(nil)
@@ -254,28 +209,33 @@ func nullAssignment[M, V any](c columnData[V]) Assignment[M] {
 
 // ColumnOf binds an ordinary field or explicit custom codec. Example: ColumnOf(b,&o.BuyerID).
 func ColumnOf[M, V any](b Builder[M], ptr *V, opts ...ColumnOption[V]) Column[M, V] {
-	return Column[M, V]{column: bindModel[M](b.state, ptr, selectedCodec(opts), false, opts...)}
+	c := bindModel[M](b.state, ptr, selectedCodec(opts), false, opts...)
+	return Column[M, V]{stored: c, input: c.assign}
 }
 
 // BoolOf binds a Boolean field, including defined Boolean types.
 // Example: BoolOf(b, &u.Enabled).
 func BoolOf[M any, V ~bool](b Builder[M], ptr *V, opts ...ColumnOption[V]) Column[M, V] {
-	return Column[M, V]{column: bindModel[M](b.state, ptr, optionCodec(codec.Bool[V](), opts), false, opts...)}
+	c := bindModel[M](b.state, ptr, optionCodec(codec.Bool[V](), opts), false, opts...)
+	return Column[M, V]{stored: c, input: c.assign}
 }
 
 // NumberOf selects a numeric codec at startup. Example: NumberOf(b,&o.TotalCents).
 func NumberOf[M any, V NumberValue](b Builder[M], ptr *V, opts ...ColumnOption[V]) Number[M, V] {
-	return Number[M, V]{number: bindModel[M](b.state, ptr, optionCodec(ormcore.NumberCodec[V](), opts), false, opts...)}
+	c := bindModel[M](b.state, ptr, optionCodec(ormcore.NumberCodec[V](), opts), false, opts...)
+	return Number[M, V]{stored: c, input: c.assign}
 }
 
 // TextOf binds text. Example: TextOf(b,&o.Email).
 func TextOf[M any, V ~string](b Builder[M], ptr *V, opts ...ColumnOption[V]) Text[M, V] {
-	return Text[M, V]{text: bindModel[M](b.state, ptr, optionCodec(codec.String[V](), opts), false, opts...)}
+	c := bindModel[M](b.state, ptr, optionCodec(codec.String[V](), opts), false, opts...)
+	return Text[M, V]{stored: c, input: c.assign}
 }
 
 // TimeOf binds a temporal field. Example: TimeOf(b,&o.OccurredAt).
 func TimeOf[M any, V TimeValue](b Builder[M], ptr *V, opts ...ColumnOption[V]) Time[M, V] {
-	return Time[M, V]{time: bindModel[M](b.state, ptr, optionCodec(ormcore.TimeCodec[V](), opts), false, opts...)}
+	c := bindModel[M](b.state, ptr, optionCodec(ormcore.TimeCodec[V](), opts), false, opts...)
+	return Time[M, V]{stored: c, input: c.assign}
 }
 
 // EnumOf uses generated enum metadata. Example: EnumOf(b,&o.Status).
@@ -287,7 +247,7 @@ func EnumOf[M any, E interface {
 	c := bindModel[M](b.state, ptr, optionCodec(codec, opts), false, opts...)
 	c.core.check = check
 	checkEnumOptions(b.state, c.core, opts)
-	return Enum[M, E]{enum: c}
+	return Enum[M, E]{stored: c, input: c.assign}
 }
 func enumCodec[E interface {
 	enum.Scalar
@@ -298,7 +258,8 @@ func enumCodec[E interface {
 
 // BytesOf binds owned byte buffers. Example: BytesOf(b,&o.Payload).
 func BytesOf[M any, V ~[]byte](b Builder[M], ptr *V, opts ...ColumnOption[V]) Column[M, V] {
-	return Column[M, V]{column: bindModel[M](b.state, ptr, optionCodec(codec.Bytes[V](), opts), false, opts...)}
+	c := bindModel[M](b.state, ptr, optionCodec(codec.Bytes[V](), opts), false, opts...)
+	return Column[M, V]{stored: c, input: c.assign}
 }
 
 type nullableFieldPolicy[V any] struct {
@@ -323,28 +284,34 @@ func bindNullable[V any](d *declaration, ptr *value.Nullable[V], c codec.Codec[V
 	}
 	base := columnWithCodec(field.core, c)
 	field.core.nullablePolicy = nullableFieldPolicy[V]{policy: field.policy, decode: field.decode}
+	proj := func() columnData[value.Nullable[V]] { return field }
+	field.core.nullableProjection = proj
 	base.assign = func(v V) querycore.AssignmentValue { return capture(nullable, value.Of(v)) }
-	return nullableColumnData[V]{base: base, nullable: func() columnData[value.Nullable[V]] { return field }}
+	return nullableColumnData[V]{base: base, nullable: proj}
 }
 
 // NullableColumnOf binds nullable scalar values. Example: NullableColumnOf(b,&o.IntroducerID).
 func NullableColumnOf[M, V any](b Builder[M], ptr *value.Nullable[V], opts ...ColumnOption[V]) NullableColumn[M, V] {
-	return NullableColumn[M, V]{nullableColumn: bindNullableModel[M](b.state, ptr, selectedCodec(opts), opts...)}
+	c := bindNullableModel[M](b.state, ptr, selectedCodec(opts), opts...)
+	return NullableColumn[M, V]{stored: c, input: c.assign}
 }
 
 // NullableTextOf binds nullable text. Example: NullableTextOf(b,&o.Nickname).
 func NullableTextOf[M any, V ~string](b Builder[M], ptr *value.Nullable[V], opts ...ColumnOption[V]) NullableText[M, V] {
-	return NullableText[M, V]{nullableText: bindNullableModel[M](b.state, ptr, optionCodec(codec.String[V](), opts), opts...)}
+	c := bindNullableModel[M](b.state, ptr, optionCodec(codec.String[V](), opts), opts...)
+	return NullableText[M, V]{stored: c, input: c.assign}
 }
 
 // NullableNumberOf binds nullable numeric values. Example: NullableNumberOf(b,&o.Balance).
 func NullableNumberOf[M any, V NumberValue](b Builder[M], ptr *value.Nullable[V], opts ...ColumnOption[V]) NullableNumber[M, V] {
-	return NullableNumber[M, V]{nullableNumber: bindNullableModel[M](b.state, ptr, optionCodec(ormcore.NumberCodec[V](), opts), opts...)}
+	c := bindNullableModel[M](b.state, ptr, optionCodec(ormcore.NumberCodec[V](), opts), opts...)
+	return NullableNumber[M, V]{stored: c, input: c.assign}
 }
 
 // NullableTimeOf binds nullable temporal values. Example: NullableTimeOf(b,&o.Birthday).
 func NullableTimeOf[M any, V TimeValue](b Builder[M], ptr *value.Nullable[V], opts ...ColumnOption[V]) NullableTime[M, V] {
-	return NullableTime[M, V]{nullableTime: bindNullableModel[M](b.state, ptr, optionCodec(ormcore.TimeCodec[V](), opts), opts...)}
+	c := bindNullableModel[M](b.state, ptr, optionCodec(ormcore.TimeCodec[V](), opts), opts...)
+	return NullableTime[M, V]{stored: c, input: c.assign}
 }
 
 // NullableEnumOf binds nullable enums. Example: NullableEnumOf(b,&o.Status).
@@ -354,44 +321,45 @@ func NullableEnumOf[M any, E interface {
 }](b Builder[M], ptr *value.Nullable[E], opts ...ColumnOption[E]) NullableEnum[M, E] {
 	codec, check := enumCodec[E]()
 	c := bindNullableModel[M](b.state, ptr, optionCodec(codec, opts), opts...)
-	c.base.core.check = check
-	checkEnumOptions(b.state, c.base.core, opts)
-	return NullableEnum[M, E]{nullableEnum: c}
+	c.core.check = check
+	checkEnumOptions(b.state, c.core, opts)
+	return NullableEnum[M, E]{stored: c, input: c.assign}
 }
 
 // NullableBytesOf binds nullable binary values. Example: NullableBytesOf(b,&o.Payload).
 func NullableBytesOf[M any, V ~[]byte](b Builder[M], ptr *value.Nullable[V], opts ...ColumnOption[V]) NullableColumn[M, V] {
-	return NullableColumn[M, V]{nullableColumn: bindNullableModel[M](b.state, ptr, optionCodec(codec.Bytes[V](), opts), opts...)}
+	c := bindNullableModel[M](b.state, ptr, optionCodec(codec.Bytes[V](), opts), opts...)
+	return NullableColumn[M, V]{stored: c, input: c.assign}
 }
 
 // CreatedAtOf explicitly marks a creation timestamp. Example: CreatedAtOf(b,&o.CreatedAt).
 func CreatedAtOf[M any, V InstantValue](b Builder[M], ptr *V) CreatedAt[M, V] {
-	c := CreatedAt[M, V]{time: bindModel[M](b.state, ptr, ormcore.TimeCodec[V](), false)}
-	c.time.core.role = "created"
-	return c
+	c := bindModel[M](b.state, ptr, ormcore.TimeCodec[V](), false)
+	c.core.role = "created"
+	return CreatedAt[M, V]{stored: c, input: c.assign}
 }
 
 // UpdatedAtOf explicitly marks an update timestamp. Example: UpdatedAtOf(b,&o.UpdatedAt).
 func UpdatedAtOf[M any, V InstantValue](b Builder[M], ptr *V) UpdatedAt[M, V] {
-	c := UpdatedAt[M, V]{time: bindModel[M](b.state, ptr, ormcore.TimeCodec[V](), false)}
-	c.time.core.role = "updated"
-	return c
+	c := bindModel[M](b.state, ptr, ormcore.TimeCodec[V](), false)
+	c.core.role = "updated"
+	return UpdatedAt[M, V]{stored: c, input: c.assign}
 }
 
 // SoftDeleteOf explicitly marks a deletion timestamp. Example: SoftDeleteOf(b,&o.DeletedAt).
 func SoftDeleteOf[M any, V InstantValue](b Builder[M], ptr *value.Nullable[V]) SoftDelete[M, V] {
-	c := SoftDelete[M, V]{nullableTime: bindNullableModel[M](b.state, ptr, ormcore.TimeCodec[V]())}
-	c.nullableTime.base.core.role = "deleted"
-	return c
+	c := bindNullableModel[M](b.state, ptr, ormcore.TimeCodec[V]())
+	c.core.role = "deleted"
+	return SoftDelete[M, V]{stored: c, input: c.assign}
 }
 
-// And combines model-owned conditions. Example: And(orm.KeyEq(Orders.ID, id),orm.NumberGt(Orders.TotalCents, 0)).
+// And combines model-owned conditions. Example: orm.And(orm.Eq(Orders.ID, id), orm.Gt(Orders.TotalCents, 0)).
 func And[M any](ps ...Predicate[M]) Predicate[M] { return junction(false, ps) }
 
-// Or matches any supplied condition. Example: Or(orm.NumberLt(users.Age, 18), orm.NumberGt(users.Age, 65)).
+// Or matches any supplied condition. Example: orm.Or(orm.Lt(users.Age, 18), orm.Gt(users.Age, 65)).
 func Or[M any](ps ...Predicate[M]) Predicate[M] { return junction(true, ps) }
 
-// Not negates a condition. Example: Not(users.Email.Like("%@example.com")).
+// Not negates a condition. Example: orm.Not(orm.Like(users.Email, "%@example.com")).
 func Not[M any](p Predicate[M]) Predicate[M] {
 	if p.owner == nil && p.rawScope != reflect.TypeFor[M]() {
 		p.err = safeerror.Join("operation failed", p.err, invalid("predicate has no table declaration"))
@@ -431,13 +399,13 @@ func junction[M any](or bool, ps []Predicate[M]) Predicate[M] {
 func NumberKey[M any, K interface {
 	NumberValue
 	comparable
-}, R keyRole](key keyColumn[M, K, R]) numberKeyColumn[M, K, R] {
-	return numberKeyColumn[M, K, R]{number: key.key}
+}, R KeyRole](key ColumnHandle[M, K, K, K, KeyKind, R]) ColumnHandle[M, K, K, K, NumberKeyKind, R] {
+	return ColumnHandle[M, K, K, K, NumberKeyKind, R]{stored: key.stored, input: key.input}
 }
 
 // TextKey derives text capabilities without binding the field again.
-func TextKey[M any, K ~string, R keyRole](key keyColumn[M, K, R]) textColumn[M, K, R] {
-	return textColumn[M, K, R]{text: key.key}
+func TextKey[M any, K ~string, R KeyRole](key ColumnHandle[M, K, K, K, KeyKind, R]) ColumnHandle[M, K, K, K, RequiredTextKind, R] {
+	return ColumnHandle[M, K, K, K, RequiredTextKind, R]{stored: key.stored, input: key.input}
 }
 
 // NullsFirst places NULL before concrete values.
@@ -446,6 +414,6 @@ func (o Order[M]) NullsFirst() Order[M] { o.core.Nulls = querycore.NullsFirst; r
 // NullsLast places NULL after concrete values.
 func (o Order[M]) NullsLast() Order[M] { o.core.Nulls = querycore.NullsLast; return o }
 
-func between[M, V any](c columnData[V], a, b V) Predicate[M] {
-	return And(comparison[M](c, querycore.GreaterOrEqual, []V{a}), comparison[M](c, querycore.LessOrEqual, []V{b}))
+func between[M, V any](c *columnData[V], a, b V) Predicate[M] {
+	return And(comparison[M](c, querycore.GreaterOrEqual, []V{a}, false), comparison[M](c, querycore.LessOrEqual, []V{b}, false))
 }

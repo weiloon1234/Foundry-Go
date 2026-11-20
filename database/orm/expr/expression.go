@@ -1,5 +1,5 @@
 // Package expr provides thin, typed SQL expressions in explicit source scopes.
-// Example: expr.At(rows.Scope(members), orm.TextExpr(Members.Name)).
+// Example: expr.At(rows.Scope(members), Members.Name).
 package expr
 
 import (
@@ -22,7 +22,7 @@ type Scope[S, M any] struct {
 
 // Expression keeps a scoped SQL value and its codec closures.
 //
-// Example: expr.At(scope, orm.KeyExpr(Orders.ID))
+// Example: expr.At(scope, Orders.ID)
 type Expression[S, V, P any] = expression[*S, V, P]
 
 type expression[S, V, P any] struct {
@@ -52,11 +52,29 @@ type Order[S any] struct {
 	core ormcore.Order
 }
 
+func scopedComparison[S, M, V, I, P any, K orm.ColumnKind, R orm.ColumnRole](scope Scope[S, M], column orm.ColumnHandle[M, V, I, P, K, R]) (ormcore.Column[V], error) {
+	c := orm.FoundryComparisonHandle(column, sqlowner.Metadata())
+	err := safeerror.Join("operation failed", c.Err, scope.core.Err)
+	if scope.core.Owner == nil || scope.core.Owner != c.Owner || scope.core.Table == "" {
+		err = safeerror.Join("operation failed", err, ormcore.Invalid("column belongs to a different model scope"))
+	}
+	c.Field.Table = scope.core.Table
+	c.Reference = scope.core.Reference
+	for _, output := range scope.core.Columns {
+		if output.Name == c.Field.Column {
+			c.Collatable = !ormcore.MergeNonCollatable(!c.Collatable, output.NonCollatable)
+			break
+		}
+	}
+	c.Err = err
+	return c, err
+}
+
 // At re-scopes a model column without erasing its value type.
 //
 // Example: expr.At(scope, column)
-func At[S, M, V, P any](scope Scope[S, M], column orm.ExpressionColumn[M, V, P]) Expression[S, V, P] {
-	c, projected := orm.FoundryColumn(column, sqlowner.Metadata())
+func At[S, M, V, P, I any, K orm.ColumnKind, R orm.ColumnRole](scope Scope[S, M], column orm.ColumnHandle[M, V, I, P, K, R]) Expression[S, V, P] {
+	c, projected := orm.FoundryHandle(column, sqlowner.Metadata())
 	err := safeerror.Join("operation failed", c.Err, scope.core.Err)
 	if scope.core.Owner == nil || scope.core.Owner != c.Owner || scope.core.Table == "" {
 		err = safeerror.Join("operation failed", err, ormcore.Invalid("column belongs to a different model scope"))
@@ -77,8 +95,8 @@ func At[S, M, V, P any](scope Scope[S, M], column orm.ExpressionColumn[M, V, P])
 // Value uses a column in its unaliased model scope.
 //
 // Example: expr.Value(column)
-func Value[M, V, P any](column orm.ExpressionColumn[M, V, P]) Expression[M, V, P] {
-	c, projected := orm.FoundryColumn(column, sqlowner.Metadata())
+func Value[M, V, P, I any, K orm.ColumnKind, R orm.ColumnRole](column orm.ColumnHandle[M, V, I, P, K, R]) Expression[M, V, P] {
+	c, projected := orm.FoundryHandle(column, sqlowner.Metadata())
 	return Expression[M, V, P]{column: c, projection: func() ormcore.Column[P] { return projected }, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: c.Err}}
 }
 

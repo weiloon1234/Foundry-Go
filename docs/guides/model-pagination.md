@@ -9,11 +9,11 @@ This is the database counterpart of Laravel's `paginate`: Foundry computes the o
 <!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#model-pagination-numbered -->
 ```go
 func numbered(ctx context.Context, db database.Executor) (orm.PageResult[models.User], error) {
-	return orm.Paginate(ctx, db, models.Users.Query().Where(orm.NumberGte(models.Users.Age, 18)), orm.Page(1, 20))
+	return orm.Paginate(ctx, db, models.Users.Query().Where(orm.Gte(models.Users.Age, 18)), orm.Page(1, 20))
 }
 
 func simple(ctx context.Context, db database.Executor) (orm.SimplePage[models.User], error) {
-	return orm.SimplePaginate(ctx, db, models.Users.Query().Where(orm.NumberGte(models.Users.Age, 18)), orm.Page(1, 20))
+	return orm.SimplePaginate(ctx, db, models.Users.Query().Where(orm.Gte(models.Users.Age, 18)), orm.Page(1, 20))
 }
 ```
 
@@ -48,7 +48,7 @@ An existing limit or nonzero offset on the level being paginated is rejected. De
 <!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#model-pagination-cursor-page -->
 ```go
 func cursorPage(ctx context.Context, db database.Executor, request orm.CursorRequest[models.User]) (orm.CursorPage[models.User], error) {
-	q := models.Users.Query().OrderBy(orm.TextAsc(models.Users.Email))
+	q := models.Users.Query().OrderBy(orm.Asc(models.Users.Email))
 	return orm.CursorPaginate(ctx, db, q, request)
 }
 ```
@@ -59,7 +59,7 @@ func cursorPage(ctx context.Context, db database.Executor, request orm.CursorReq
 
 Multiple sort columns may mix ascending and descending directions. The primary key resolves ties. Nullable fields follow PostgreSQL defaults: NULLs last for ascending, first for descending. Foundry compiles explicit null-aware lexicographic predicates through the shared query AST, reverses ordering when fetching backward, and restores canonical order for the result. When every sort field is declared NOT NULL and all share one direction, the boundary is a single row comparison such as `("created_at", "id") < ($1, $2)`, which a composite index on the same columns in the same direction serves as one range; nullable fields keep the expanded NULL-aware predicate, and NOT NULL fields never add an `IS NULL` alternative. Explicit `NullsFirst`/`NullsLast` placement is rejected for cursor ordering. [PostgreSQL ordering](https://www.postgresql.org/docs/18/queries-order.html)
 
-A cursor binds to the query's filters and their bound values. A filter relative to "now" computed in Go (for example `orm.TimeGt(f.CreatedAt, now.Add(-24 * time.Hour))`) binds a different value on every request, so the next request's query no longer matches the cursor and is rejected.
+A cursor binds to the query's filters and their bound values. A filter relative to "now" computed in Go (for example `orm.Gt(f.CreatedAt, now.Add(-24 * time.Hour))`) binds a different value on every request, so the next request's query no longer matches the cursor and is rejected.
 
 For a fixed relative window, choose the timestamp boundary once and supply the
 same value with every page request. For a window that moves at transaction time,

@@ -7,4 +7,4 @@ import (
 	m "foundry.test/goway/models/mutators"
 )
 
-var _ = orm.InputTextSet(m.Members.Email, c.StoredEmail("stored"))
+var _ = orm.Set(m.Members.Email, c.StoredEmail("stored"))

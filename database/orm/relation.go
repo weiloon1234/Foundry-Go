@@ -78,9 +78,19 @@ func bindSlot(d *declaration, ptr unsafe.Pointer, typ, target reflect.Type) *slo
 	return s
 }
 
-// KeyColumn retains comparable relation key types, including nullable FKs.
-// Example: BelongsToOf(Orders.Buyer,ColumnExpr(Orders.BuyerID),KeyExpr(Users.ID)).
-type KeyColumn[M any, K comparable] interface{ ormColumn(*M) columnData[K] }
+// KeyLink represents a typed key-equality join edge between two models.
+type KeyLink[M, N any, K comparable] struct {
+	_       [0]*M
+	_       [0]*N
+	local   *columnData[K]
+	foreign *columnData[K]
+}
+
+// JoinKeys binds a matching key pair across two models directly from their columns.
+// Example: orm.JoinKeys(Users.ID, Memberships.UserID).
+func JoinKeys[M, N any, K comparable, I1, P1 any, K1 ColumnKind, R1 ColumnRole, I2, P2 any, K2 ColumnKind, R2 ColumnRole](local ColumnHandle[M, K, I1, P1, K1, R1], foreign ColumnHandle[N, K, I2, P2, K2, R2]) KeyLink[M, N, K] {
+	return KeyLink[M, N, K]{local: local.stored, foreign: foreign.stored}
+}
 
 type relationBudget struct {
 	limits                 RelationLimits
@@ -142,25 +152,25 @@ func (r BelongsTo[M, N]) ormError() error               { return validateRelatio
 func (r HasOne[M, N]) ormError() error                  { return validateRelation(r.plan, nil) }
 func (r HasMany[M, N]) ormError() error                 { return validateRelation(r.plan, nil) }
 
-// BelongsToOf unifies local and target key types. Example: BelongsToOf(Orders.Buyer,ColumnExpr(Orders.BuyerID),KeyExpr(Users.ID)).
-func BelongsToOf[M, N any, K comparable](slot One[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) BelongsTo[M, N] {
-	return BelongsTo[M, N]{plan: singularRelation(slot, local, foreign)}
+// BelongsToOf unifies local and target key types. Example: orm.BelongsToOf(Orders.Buyer, Orders.BuyerID, Users.ID).
+func BelongsToOf[M, N any, K comparable, I1, P1 any, K1 ColumnKind, R1 ColumnRole, I2, P2 any, K2 ColumnKind, R2 ColumnRole](slot One[M, N], local ColumnHandle[M, K, I1, P1, K1, R1], foreign ColumnHandle[N, K, I2, P2, K2, R2]) BelongsTo[M, N] {
+	return BelongsTo[M, N]{plan: singularRelation(slot, local.stored, foreign.stored)}
 }
 
 // HasOneOf unifies the parent key and target FK and rejects multiple matches.
-// Example: HasOneOf(Users.Profile,KeyExpr(Users.ID),ColumnExpr(Profiles.UserID)).
-func HasOneOf[M, N any, K comparable](slot One[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) HasOne[M, N] {
-	return HasOne[M, N]{plan: singularRelation(slot, local, foreign)}
+// Example: orm.HasOneOf(Users.Profile, Users.ID, Profiles.UserID).
+func HasOneOf[M, N any, K comparable, I1, P1 any, K1 ColumnKind, R1 ColumnRole, I2, P2 any, K2 ColumnKind, R2 ColumnRole](slot One[M, N], local ColumnHandle[M, K, I1, P1, K1, R1], foreign ColumnHandle[N, K, I2, P2, K2, R2]) HasOne[M, N] {
+	return HasOne[M, N]{plan: singularRelation(slot, local.stored, foreign.stored)}
 }
 
-func singularRelation[M, N any, K comparable](slot One[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) *relationPlan {
-	p := newRelation(slot.core, local, foreign)
+func singularRelation[M, N any, K comparable](slot One[M, N], local *columnData[K], foreign *columnData[K]) *relationPlan {
+	p := newRelationCore(slot.core, columnCoreOf(local), columnCoreOf(foreign), reflect.TypeFor[M](), reflect.TypeFor[N]())
 	p.singular = true
 	if p.err == nil {
 		p.loaded = func(parent unsafe.Pointer) bool {
 			return (*relation.One[N])(unsafe.Add(parent, slot.core.offset)).IsLoaded()
 		}
-		p.load = relationLoader[M, N](local.ormColumn(nil), foreign.ormColumn(nil), func(parent *M, group []N) error {
+		p.load = relationLoader[M, N](local, foreign, func(parent *M, group []N) error {
 			var item value.Optional[N]
 			if len(group) == 1 {
 				item = value.Set(group[0])
@@ -172,27 +182,23 @@ func singularRelation[M, N any, K comparable](slot One[M, N], local KeyColumn[M,
 	return p
 }
 
-// HasManyOf unifies parent keys with target FKs. Example: HasManyOf(Users.Orders,KeyExpr(Users.ID),ColumnExpr(Orders.BuyerID)).
-func HasManyOf[M, N any, K comparable](slot Many[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) HasMany[M, N] {
-	p := newRelation(slot.core, local, foreign)
+// HasManyOf unifies parent keys with target FKs. Example: orm.HasManyOf(Users.Orders, Users.ID, Orders.BuyerID).
+func HasManyOf[M, N any, K comparable, I1, P1 any, K1 ColumnKind, R1 ColumnRole, I2, P2 any, K2 ColumnKind, R2 ColumnRole](slot Many[M, N], local ColumnHandle[M, K, I1, P1, K1, R1], foreign ColumnHandle[N, K, I2, P2, K2, R2]) HasMany[M, N] {
+	return HasMany[M, N]{plan: manyRelation(slot, local.stored, foreign.stored)}
+}
+
+func manyRelation[M, N any, K comparable](slot Many[M, N], local *columnData[K], foreign *columnData[K]) *relationPlan {
+	p := newRelationCore(slot.core, columnCoreOf(local), columnCoreOf(foreign), reflect.TypeFor[M](), reflect.TypeFor[N]())
 	if p.err == nil {
 		p.loaded = func(parent unsafe.Pointer) bool {
 			return (*relation.Many[N])(unsafe.Add(parent, slot.core.offset)).IsLoaded()
 		}
-		p.load = relationLoader[M, N](local.ormColumn(nil), foreign.ormColumn(nil), func(parent *M, group []N) error {
+		p.load = relationLoader[M, N](local, foreign, func(parent *M, group []N) error {
 			*(*relation.Many[N])(unsafe.Add(unsafe.Pointer(parent), slot.core.offset)) = relation.FoundryCollection(sqlowner.Collections(), group)
 			return nil
 		})
 	}
-	return HasMany[M, N]{plan: p}
-}
-func newRelation[M, N any, K comparable](slot *slotCore, local KeyColumn[M, K], foreign KeyColumn[N, K]) *relationPlan {
-
-	if nilInterface(local) || nilInterface(foreign) {
-		return &relationPlan{slot: slot, err: invalid("relation requires a bound slot and typed keys")}
-	}
-	a, b := local.ormColumn(nil), foreign.ormColumn(nil)
-	return newRelationCore(slot, a.core, b.core, reflect.TypeFor[M](), reflect.TypeFor[N]())
+	return p
 }
 func newRelationCore(slot *slotCore, a, b *columnCore, source, target reflect.Type) *relationPlan {
 	p := &relationPlan{slot: slot}

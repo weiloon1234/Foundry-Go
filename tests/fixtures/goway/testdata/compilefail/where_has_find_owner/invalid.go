@@ -8,4 +8,4 @@ import (
 )
 
 var id model.ID[models.Order]
-var _, _ = orm.Require(nil, nil, models.Users.Query().Where(orm.KeyEq(models.Users.ID, id)))
+var _, _ = orm.Require(nil, nil, models.Users.Query().Where(orm.Eq(models.Users.ID, id)))

@@ -51,9 +51,9 @@ func runTemporal(t *testing.T, check func(*database.Tx, []temporalqueries.Sample
 				return err
 			}
 			f := temporalqueries.Samples
-			assignments := []orm.Assignment[temporalqueries.Sample]{orm.NumberKeySet(f.ID, i+1), orm.NumberSet(f.Millis, at.UnixMilli()), orm.TimeSet(f.At, at), orm.TimeSet(f.Instant, instant), orm.TimeSet(f.Date, date), orm.TimeSet(f.Local, local), orm.TimeSet(f.Clock, clock)}
+			assignments := []orm.Assignment[temporalqueries.Sample]{orm.Set(f.ID, i+1), orm.Set(f.Millis, at.UnixMilli()), orm.Set(f.At, at), orm.Set(f.Instant, instant), orm.Set(f.Date, date), orm.Set(f.Local, local), orm.Set(f.Clock, clock)}
 			if i != 1 {
-				assignments = append(assignments, orm.NullableTimeSet(f.MaybeAt, at), orm.NullableTimeSet(f.MaybeDate, date), orm.NullableTimeSet(f.MaybeLocal, local), orm.NullableTimeSet(f.MaybeClock, clock))
+				assignments = append(assignments, orm.Set(f.MaybeAt, at), orm.Set(f.MaybeDate, date), orm.Set(f.MaybeLocal, local), orm.Set(f.MaybeClock, clock))
 			}
 			sample, err := orm.Insert(t.Context(), tx, temporalqueries.Samples.Table, assignments...)
 			if err != nil {
@@ -70,7 +70,7 @@ func runTemporal(t *testing.T, check func(*database.Tx, []temporalqueries.Sample
 
 func temporalValues[V any](t *testing.T, tx *database.Tx, expression expr.Selected[temporalqueries.Sample, V], want []V) {
 	t.Helper()
-	q := temporalqueries.Samples.Query().OrderBy(orm.NumberKeyAsc(temporalqueries.Samples.ID))
+	q := temporalqueries.Samples.Query().OrderBy(orm.Asc(temporalqueries.Samples.ID))
 	got, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expression)).All(t.Context(), tx)
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatal("temporal result", got, want, err)

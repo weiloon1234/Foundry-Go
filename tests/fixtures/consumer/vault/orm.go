@@ -7,7 +7,7 @@ import (
 )
 
 // EntryTable exposes plaintext setters and preserves row-bound encryption.
-// Example: orm.EncryptedSet(Entries.Token, encrypted.NewText("secret")).
+// Example: orm.Set(Entries.Token, encrypted.NewText("secret")).
 type EntryTable struct {
 	orm.Table[Entry, model.ID[Entry]]
 	Label    orm.Text[Entry, string]

@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.NumberIncrement(c.Records.Period, c.Record{}.Period)
+var _ = orm.Increment(c.Records.Period, c.Record{}.Period)

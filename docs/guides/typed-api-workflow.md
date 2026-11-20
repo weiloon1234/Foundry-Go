@@ -29,10 +29,10 @@ validate the prepared concrete DTO. The domain handler explicitly maps:
 | Input | Assignment |
 | --- | --- |
 | Title omitted | No title assignment |
-| Title null | `orm.NullableTextSetNull(Projects.Title)` |
-| Title text, including empty text | `orm.NullableTextSet(Projects.Title, text)` |
+| Title null | `orm.SetNull(Projects.Title)` |
+| Title text, including empty text | `orm.Set(Projects.Title, text)` |
 | Budget omitted | No budget assignment |
-| Budget zero or a positive value | `orm.NumberSet(Projects.Budget, value)` |
+| Budget zero or a positive value | `orm.Set(Projects.Budget, value)` |
 
 An empty patch returns the current view without inventing an empty UPDATE. Actual
 updates use the injected pool's real transaction. Responses contain an explicit

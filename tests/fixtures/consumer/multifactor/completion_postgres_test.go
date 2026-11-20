@@ -301,7 +301,7 @@ func TestPostgresMFACompletionChecksDisabledModelsAndProviderIdentity(t *testing
 		t.Fatal("different provider declaration accepted")
 	}
 	err = s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.ColumnSet(multifactor.AccountRecords.Enabled, false))
+		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.Set(multifactor.AccountRecords.Enabled, false))
 		return err
 	})
 	if err != nil {
@@ -311,7 +311,7 @@ func TestPostgresMFACompletionChecksDisabledModelsAndProviderIdentity(t *testing
 		t.Fatal("disabled model completed MFA", err)
 	}
 	err = s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.ColumnSet(multifactor.AccountRecords.Enabled, true))
+		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.Set(multifactor.AccountRecords.Enabled, true))
 		return err
 	})
 	if err != nil {

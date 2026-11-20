@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var invalid = orm.TextContains(models.Users.Age, "42")
+var invalid = orm.Contains(models.Users.Age, "42")

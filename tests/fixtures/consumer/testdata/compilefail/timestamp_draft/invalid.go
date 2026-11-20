@@ -8,4 +8,4 @@ import (
 	"foundry.test/consumer/timequeries"
 )
 
-var _ = orm.TimeSet(timequeries.Members.UpdatedAt, time.Time{})
+var _ = orm.Set(timequeries.Members.UpdatedAt, time.Time{})

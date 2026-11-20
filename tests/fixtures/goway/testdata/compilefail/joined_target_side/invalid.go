@@ -6,4 +6,4 @@ import (
 	j "foundry.test/goway/models/joined"
 )
 
-var _ = j.Peers.Where(orm.TextEq(j.Pivots.Role, "admin"))
+var _ = j.Peers.Where(orm.Eq(j.Pivots.Role, "admin"))

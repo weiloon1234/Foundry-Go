@@ -67,12 +67,12 @@ func TestRetrievalAndScopeOldAndNewAgree(t *testing.T) {
 		t.Cleanup(func() { check(db.Close(context.Background())) })
 
 		q := n.Members.Query()
-		items, err := orm.All(ctx, db, q.Where(orm.TextEq(n.Members.Name, "explicit")))
+		items, err := orm.All(ctx, db, q.Where(orm.Eq(n.Members.Name, "explicit")))
 		check(err)
 		fmt.Fprintln(&capture.output, oracleSnapshot([]any{items[0].ID, items[0].Name}))
 		_, err = orm.Count(ctx, db, q)
 		check(err)
-		_, err = orm.First(ctx, db, orm.WithoutGlobalScope(q, n.MemberTenant(n.Members)).Where(orm.KeyEq(n.Members.ID, 1)))
+		_, err = orm.First(ctx, db, orm.WithoutGlobalScope(q, n.MemberTenant(n.Members)).Where(orm.Eq(n.Members.ID, 1)))
 		check(err)
 		_, err = orm.All(ctx, db, q.With(n.Manager))
 		check(err)
@@ -80,7 +80,7 @@ func TestRetrievalAndScopeOldAndNewAgree(t *testing.T) {
 		check(err)
 		_, err = orm.All(ctx, db, q.Where(orm.Has(n.MemberGroups)))
 		check(err)
-		_, err = orm.Insert(ctx, db, n.Members.Table, orm.KeySet(n.Members.ID, 1), orm.NumberSet(n.Members.TenantID, 7), orm.TextSet(n.Members.Name, "member"))
+		_, err = orm.Insert(ctx, db, n.Members.Table, orm.Set(n.Members.ID, 1), orm.Set(n.Members.TenantID, 7), orm.Set(n.Members.Name, "member"))
 		check(err)
 
 		fmt.Fprintln(&capture.output, oracleSnapshot([]any{trace}))

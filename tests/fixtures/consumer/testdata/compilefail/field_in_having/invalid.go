@@ -9,4 +9,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var invalid = rows.Having(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows), expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 1)))
+var invalid = rows.Having(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows), expr.ModelPredicate(orm.Gt(models.Orders.TotalCents, 1)))

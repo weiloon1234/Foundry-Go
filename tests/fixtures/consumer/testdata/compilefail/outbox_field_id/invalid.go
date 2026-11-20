@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/outbox"
 )
 
-var invalid = orm.ColumnSet(eventqueries.Links.MessageID, outbox.ID[string]{})
+var invalid = orm.Set(eventqueries.Links.MessageID, outbox.ID[string]{})

@@ -108,7 +108,7 @@ func TestSourceRoleDefenseInDepthBeforeSQL(t *testing.T) {
 	f := hookedFields(func() Hooks[hookedRow] { return Hooks[hookedRow]{} })
 	q := f.Query()
 	source := FoundrySource(q, sqlowner.Metadata())
-	_, id := FoundryColumn(KeyExpr(f.Key()), sqlowner.Metadata())
+	_, id := FoundryHandle(f.Key(), sqlowner.Metadata())
 	key := FoundrySourceKey[hookedRow, hookedRow](ormcore.ModelMapping{Destination: id.Reference, Field: id.Field, Stored: f.core.primary.field.Type, Value: ormcore.Expression{Node: id.Field, Refs: []ormcore.Reference{id.Reference}}}, sqlowner.Expressions())
 	for _, name := range []string{"name", "updated_at", "id"} {
 		for _, insert := range []bool{false, true} {

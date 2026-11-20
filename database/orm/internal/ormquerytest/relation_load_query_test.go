@@ -15,7 +15,7 @@ import (
 
 func TestLoadFromQueryLimitsAndStatementContract(t *testing.T) {
 	p := people()
-	rel := orm.HasManyOf(p.Reports, orm.KeyExpr(p.ID), orm.NullableNumberExpr(p.ManagerID))
+	rel := orm.HasManyOf(p.Reports, p.ID, p.ManagerID)
 	for _, missing := range []bool{false, true} {
 		t.Run(map[bool]string{false: "refresh", true: "missing"}[missing], func(t *testing.T) {
 			run := orm.LoadFrom[relationPerson]
@@ -27,7 +27,7 @@ func TestLoadFromQueryLimitsAndStatementContract(t *testing.T) {
 				db := testDB(t, o.connector())
 				parents := []relationPerson{{ID: 1}, {ID: 2}}
 				// Parent clauses do not filter, reorder or window supplied models.
-				q := p.Query().Where(orm.KeyEq(p.ID, 999)).OrderBy(orm.KeyDesc(p.ID)).Limit(0).With(rel.With(rel))
+				q := p.Query().Where(orm.Eq(p.ID, 999)).OrderBy(orm.Desc(p.ID)).Limit(0).With(rel.With(rel))
 				q = orm.WithRelationLimits(q, orm.RelationLimits{BatchSize: 1, MaxRows: budget, MaxDepth: 2})
 				got, err := run(t.Context(), db, q, parents)
 				if budget < 5 {
@@ -83,7 +83,7 @@ func TestLoadFromQueryLimitsAndStatementContract(t *testing.T) {
 
 func TestLoadFromQueryValidatesDepthAndDeclarationBeforeSQL(t *testing.T) {
 	p, other := people(), people()
-	rel := orm.HasManyOf(p.Reports, orm.KeyExpr(p.ID), orm.NullableNumberExpr(p.ManagerID))
+	rel := orm.HasManyOf(p.Reports, p.ID, p.ManagerID)
 	for _, run := range []func(context.Context, database.Executor, orm.Query[relationPerson], []relationPerson) ([]relationPerson, error){orm.LoadFrom[relationPerson], orm.LoadMissingFrom[relationPerson]} {
 		o := treeOracle()
 		db := testDB(t, o.connector())
@@ -92,7 +92,7 @@ func TestLoadFromQueryValidatesDepthAndDeclarationBeforeSQL(t *testing.T) {
 			orm.WithRelationLimits(p.Query().With(rel.With(rel)), orm.RelationLimits{BatchSize: 1, MaxRows: 10, MaxDepth: 1}),
 			orm.WithRelationLimits(p.Query(), orm.RelationLimits{}),
 			other.Query().With(rel),
-			p.Query().Where(orm.KeyEq(other.ID, 1)).With(rel),
+			p.Query().Where(orm.Eq(other.ID, 1)).With(rel),
 		} {
 			got, err := run(t.Context(), db, q, []relationPerson{{ID: 1}})
 			if got != nil || !errors.Is(err, fault.Invalid) || o.calls != 0 {

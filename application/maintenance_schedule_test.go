@@ -386,7 +386,7 @@ func TestMaintenanceSchedulePrunesConfiguredFrameworkStores(t *testing.T) {
 		// An application-declared prunable model with a cutoff relative to each run.
 		models, err := application.PruneModels(services, "", func(now time.Time) ([]prune.Target, error) {
 			cutoff, err := temporal.NewDateTime(now.Add(-10 * 24 * time.Hour))
-			return []prune.Target{prune.ORMModel("app.stale_failures", maintenanceFailures.Query().Where(orm.TimeLt(maintenanceFailures.FailedAt, cutoff)), prune.Mass)}, err
+			return []prune.Target{prune.ORMModel("app.stale_failures", maintenanceFailures.Query().Where(orm.Lt(maintenanceFailures.FailedAt, cutoff)), prune.Mass)}, err
 		})
 		return application.FeatureDeclarations{Outbox: []publisher.Route{{Kind: "maintenance.fixture", Destination: "primary", Publish: func(context.Context, publisher.Message) error { return nil }}}, Pruning: []application.Pruning{models}}, err
 	}

@@ -47,7 +47,7 @@ func TestWriteDraftRetentionAndExplicitInput(t *testing.T) {
 					if mode == "stored" {
 						v, ok := orm.WriteGet(w, func() func(arg0 string) orm.Assignment[record] {
 							receiver := table.Key()
-							return func(arg0 string) orm.Assignment[record] { return orm.KeySet(receiver, arg0) }
+							return func(arg0 string) orm.Assignment[record] { return orm.Set(receiver, arg0) }
 						}()).Get()
 						if !ok || v != secret {
 							t.Fatal("stored assignment inspection changed")
@@ -55,7 +55,7 @@ func TestWriteDraftRetentionAndExplicitInput(t *testing.T) {
 					} else {
 						v, ok := orm.WriteGet(w, func() func(arg0 input) orm.Assignment[record] {
 							receiver := table.ID
-							return func(arg0 input) orm.Assignment[record] { return orm.InputKeySet(receiver, arg0) }
+							return func(arg0 input) orm.Assignment[record] { return orm.Set(receiver, arg0) }
 						}()).Get()
 						if !ok || v.Text != secret {
 							t.Fatal("mutator input inspection changed")
@@ -66,9 +66,9 @@ func TestWriteDraftRetentionAndExplicitInput(t *testing.T) {
 			}))
 			var sql []string
 			db := hookDB(t, testConnector{statements: &sql})
-			assignment := orm.KeySet(table.Key(), secret)
+			assignment := orm.Set(table.Key(), secret)
 			if mode == "input" {
-				assignment = orm.InputKeySet(table.ID, input{secret})
+				assignment = orm.Set(table.ID, input{secret})
 			}
 			if _, err := orm.Insert(t.Context(), db, table.Table, assignment); !errors.Is(err, stop) || calls != 1 || len(sql) != 0 {
 				t.Fatal("draft inspection did not stop before SQL", calls, err)

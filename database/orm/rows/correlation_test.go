@@ -2,8 +2,6 @@ package rows_test
 
 import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"database/sql/driver"
 	"errors"
@@ -33,13 +31,13 @@ func TestCorrelatedScalarMembershipAndExists(t *testing.T) {
 	m, o := declareMembers(), declareOrders()
 	outer, inner := rows.From(m.Query()), rows.From(o.Query())
 	c := rows.Correlate(outer, inner)
-	parent := expr.At(rows.OuterScope(c, rows.ModelScope(m.Query())), orm.KeyExpr(m.ID))
-	child := expr.At(rows.InnerScope(c, rows.ModelScope(o.Query())), orm.NumberExpr(o.MemberID))
+	parent := expr.At(rows.OuterScope(c, rows.ModelScope(m.Query())), m.ID)
+	child := expr.At(rows.InnerScope(c, rows.ModelScope(o.Query())), o.MemberID)
 	c = c.Where(expr.Equal(child, parent))
 	count := rows.SelectCorrelatedScalar(c, expr.AsSelected(expr.Count[rows.Correlation[member, order]]()))
 	ids := rows.SelectCorrelatedScalar(c, expr.AsSelected(expr.Row(child)))
 	schema := correlationCountSchema()
-	q := rows.Select(outer, schema, rows.MapSelected(schema.Count, expr.AsSelected(rows.CorrelatedScalarRowQuery(count)))).Where(c.Exists(), count.Exists(), rows.InCorrelatedQuery(expr.Value(orm.KeyExpr(m.ID)), ids))
+	q := rows.Select(outer, schema, rows.MapSelected(schema.Count, expr.AsSelected(rows.CorrelatedScalarRowQuery(count)))).Where(c.Exists(), count.Exists(), rows.InCorrelatedQuery(expr.Value(m.ID), ids))
 	state := &driverState{columns: []string{"count"}, rows: [][]driver.Value{{int64(2)}, {nil}}}
 	got, err := rows.Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || got[0].Count != value.Of(int64(2)) || !got[1].Count.IsNull() {
@@ -62,13 +60,13 @@ func TestNestedCorrelationUsesOnlyEnclosingScopes(t *testing.T) {
 	a, b, d := rows.As[left](m.Query(), "a"), rows.As[right](m.Query(), "b"), rows.As[third](m.Query(), "d")
 	first := rows.Correlate(a, b)
 	nested := rows.Correlate(first, d)
-	grandparent := expr.At(rows.OuterScope(nested, rows.OuterScope(first, rows.Scope(a))), orm.KeyExpr(m.ID))
-	parent := expr.At(rows.OuterScope(nested, rows.InnerScope(first, rows.Scope(b))), orm.KeyExpr(m.ID))
-	child := expr.At(rows.InnerScope(nested, rows.Scope(d)), orm.KeyExpr(m.ID))
+	grandparent := expr.At(rows.OuterScope(nested, rows.OuterScope(first, rows.Scope(a))), m.ID)
+	parent := expr.At(rows.OuterScope(nested, rows.InnerScope(first, rows.Scope(b))), m.ID)
+	child := expr.At(rows.InnerScope(nested, rows.Scope(d)), m.ID)
 	nested = nested.Where(expr.Greater(child, grandparent), expr.Less(child, parent)).Limit(1)
 	first = first.Where(nested.Exists())
 	schema := declareRows()
-	q := rows.Select(a, schema, rows.Map(schema.ID, expr.At(rows.Scope(a), orm.KeyExpr(m.ID))), rows.Map(schema.Name, expr.At(rows.Scope(a), orm.TextExpr(m.Name)))).Where(first.Exists())
+	q := rows.Select(a, schema, rows.Map(schema.ID, expr.At(rows.Scope(a), m.ID)), rows.Map(schema.Name, expr.At(rows.Scope(a), m.Name))).Where(first.Exists())
 	state := &driverState{columns: []string{"id", "name"}}
 	if _, err := rows.Read(q).All(t.Context(), openTest(t, state)); err != nil {
 		t.Fatal(err)
@@ -123,10 +121,10 @@ func TestCorrelationRejectsForeignOwnersShadowingAndZeroDescriptors(t *testing.T
 func TestCorrelationNullableScopesAndDeferredChecks(t *testing.T) {
 	m, o := declareMembers(), declareOrders()
 	a, b := rows.As[left](m.Query(), "a"), rows.As[right](m.Query(), "b")
-	j := rows.LeftJoin(a, b, rows.On(expr.At(rows.Scope(a), orm.KeyExpr(m.ID)), expr.At(rows.Scope(b), orm.KeyExpr(m.ID))))
+	j := rows.LeftJoin(a, b, rows.On(expr.At(rows.Scope(a), m.ID), expr.At(rows.Scope(b), m.ID)))
 	c := rows.Correlate(j, rows.From(o.Query()))
 	nullable := rows.OuterNullableScope(c, rows.NullableRightScope(j, rows.Scope(b)))
-	v := expr.AtNullable(nullable, orm.KeyExpr(m.ID))
+	v := expr.AtNullable(nullable, m.ID)
 	if expr.FoundrySelectedColumn(expr.AsSelected(expr.Row(v)), sqlowner.Expressions()).Nullable != true {
 		t.Fatal("outer nullability lost")
 	}
@@ -137,7 +135,7 @@ func TestCorrelationNullableScopesAndDeferredChecks(t *testing.T) {
 	checks := 0
 	rows.CorrelatedSourceCore(&c).Source.Checks = append(rows.CorrelatedSourceCore(&c).Source.Checks, func() error { checks++; return ormcore.Invalid("deferred declaration") })
 	schema := declareRows()
-	q := rows.Select(j, schema, rows.Map(schema.ID, expr.At(rows.LeftScope(j, rows.Scope(a)), orm.KeyExpr(m.ID))), rows.Map(schema.Name, expr.At(rows.LeftScope(j, rows.Scope(a)), orm.TextExpr(m.Name)))).Where(c.Exists())
+	q := rows.Select(j, schema, rows.Map(schema.ID, expr.At(rows.LeftScope(j, rows.Scope(a)), m.ID)), rows.Map(schema.Name, expr.At(rows.LeftScope(j, rows.Scope(a)), m.Name))).Where(c.Exists())
 	if checks != 0 {
 		t.Fatal("eager validation")
 	}

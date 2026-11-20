@@ -15,9 +15,9 @@ import (
 func TestTypedConditionalSQL(t *testing.T) {
 	// doc-example:begin conditional-expressions
 	u := models.Users
-	display := expr.Coalesce(expr.Value(orm.NullableTextExpr(u.Nickname)), expr.Value(orm.TextExpr(u.Email)))
-	choice := expr.When(expr.ModelPredicate(orm.NumberGt(u.Age, 20)), expr.Param(orm.TextExpr(u.Email), "older"))
-	label := choice.When(expr.ModelPredicate(orm.NumberEq(u.Age, 20)), expr.Value(orm.TextExpr(u.Email))).Else(expr.Param(orm.TextExpr(u.Email), "unknown"))
+	display := expr.Coalesce(expr.Value(u.Nickname), expr.Value(u.Email))
+	choice := expr.When(expr.ModelPredicate(orm.Gt(u.Age, 20)), expr.Param(u.Email, "older"))
+	label := choice.When(expr.ModelPredicate(orm.Eq(u.Age, 20)), expr.Value(u.Email)).Else(expr.Param(u.Email, "unknown"))
 	statement, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(expr.Where(models.Users.Query(), expr.Ne(display, ""))), expr.AsSelected(label)), expr.Asc(label)))) // doc-example:end conditional-expressions
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func TestTypedConditionalSQL(t *testing.T) {
 	}
 	// doc-example:begin conditional-expressions-2
 	orders := models.Orders.Query()
-	total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents))
+	total := expr.Sum(models.Orders.TotalCents)
 	computed := expr.CoalesceValue(expr.AsSelected(total), expr.AsSelected(expr.ParamOf(total, decimal.FromInt64(0)))) // doc-example:end conditional-expressions-2
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(orders), computed))); err != nil {
 		t.Fatal(err)

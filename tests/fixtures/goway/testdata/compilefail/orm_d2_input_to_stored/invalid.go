@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.InputTextEq(mutators.Members.Email, coremodels.EmailInput{})
+var _ = orm.Eq(mutators.Members.Email, coremodels.EmailInput{})

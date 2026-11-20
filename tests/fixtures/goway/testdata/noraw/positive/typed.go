@@ -12,7 +12,7 @@ import (
 // Static CI input only: lint must accept every ordinary typed operation even
 // when concrete DB/Tx values are implicitly assigned to executor interfaces.
 func Typed(ctx context.Context, db *database.DB, id model.ID[models.User]) {
-	q := models.Users.Query().Where(orm.KeyEq(models.Users.ID, id))
+	q := models.Users.Query().Where(orm.Eq(models.Users.ID, id))
 	users, _ := orm.All(ctx, db, q)
 	_, _ = orm.First(ctx, db, q)
 	_, _ = orm.Count(ctx, db, q)
@@ -20,10 +20,10 @@ func Typed(ctx context.Context, db *database.DB, id model.ID[models.User]) {
 		return orm.All(ctx, ex, q)
 	}
 	_, _ = all(ctx, db)
-	_, _ = orm.Insert(ctx, db, models.Users.Table, orm.TextSet(models.Users.Email, "new"))
-	_, _ = orm.Update(ctx, db, models.Users.Table.Query(), models.Users.Table.Key(), id, orm.TextSet(models.Users.Email, "updated"))
+	_, _ = orm.Insert(ctx, db, models.Users.Table, orm.Set(models.Users.Email, "new"))
+	_, _ = orm.Update(ctx, db, models.Users.Table.Query(), models.Users.Table.Key(), id, orm.Set(models.Users.Email, "updated"))
 	_, _ = orm.Delete(ctx, db, models.Users.Table.Query(), models.Users.Table.Key(), id)
-	_, _ = orm.UpdateAll(ctx, db, q, orm.NumberSet(models.Users.Age, 21))
+	_, _ = orm.UpdateAll(ctx, db, q, orm.Set(models.Users.Age, 21))
 	_, _ = orm.DeleteAll(ctx, db, q)
 	_, _ = orm.All(ctx, db, models.Orders.Query().With(models.OrderRelations.Buyer))
 	_, _ = orm.LoadFrom(ctx, db, models.Users.Query().With(models.UserRelations.Orders), users)
@@ -34,7 +34,7 @@ func Typed(ctx context.Context, db *database.DB, id model.ID[models.User]) {
 		if err != nil {
 			return err
 		}
-		_, err = orm.Update(ctx, tx, models.Users.Table.Query(), models.Users.Table.Key(), id, orm.TextSet(models.Users.Email, "inside"))
+		_, err = orm.Update(ctx, tx, models.Users.Table.Query(), models.Users.Table.Key(), id, orm.Set(models.Users.Email, "inside"))
 		return err
 	})
 	var unused = db.Query

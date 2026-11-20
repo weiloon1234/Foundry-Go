@@ -89,17 +89,17 @@ func (b *Backend) now() (time.Time, error) {
 }
 func families(scope, subject string) orm.Query[tokenstore.Family] {
 	f := tokenstore.Families
-	q := tokenstore.Families.Query().Where(orm.TextEq(f.Scope, scope))
+	q := tokenstore.Families.Query().Where(orm.Eq(f.Scope, scope))
 	if subject != "" {
-		q = q.Where(orm.TextEq(f.SubjectKey, subject))
+		q = q.Where(orm.Eq(f.SubjectKey, subject))
 	}
 	return q
 }
 func entries(scope string, family model.ID[tokenstore.Family]) orm.Query[tokenstore.Entry] {
 	f := tokenstore.Entries
-	q := tokenstore.Entries.Query().Where(orm.TextEq(f.Scope, scope))
+	q := tokenstore.Entries.Query().Where(orm.Eq(f.Scope, scope))
 	if !family.IsZero() {
-		q = q.Where(orm.ColumnEq(f.FamilyID, family))
+		q = q.Where(orm.Eq(f.FamilyID, family))
 	}
 	return q
 }
@@ -126,7 +126,7 @@ func lockSubject(ctx context.Context, tx *database.Tx, address token.Address, id
 		if err != nil {
 			return tokenstore.Subject{}, false, err
 		}
-		draft := []orm.Assignment[tokenstore.Subject]{orm.KeySet(tokenstore.Subjects.Key(), key), orm.TextSet(tokenstore.Subjects.Scope, scope), orm.JSONSet(tokenstore.Subjects.Identity, data)}
+		draft := []orm.Assignment[tokenstore.Subject]{orm.Set(tokenstore.Subjects.Key(), key), orm.Set(tokenstore.Subjects.Scope, scope), orm.Set(tokenstore.Subjects.Identity, data)}
 		// Both the primary key and (key, scope) are unique. Concurrent first
 		// inserts can conflict on either index; naming only the primary key
 		// leaves the other violation unhandled. Re-read and validate below.
@@ -141,12 +141,12 @@ func subjectByKey(ctx context.Context, tx *database.Tx, address token.Address, k
 	if err != nil {
 		return tokenstore.Subject{}, false, err
 	}
-	q := tokenstore.Subjects.Query().Where(orm.TextEq(tokenstore.Subjects.Scope, scope))
+	q := tokenstore.Subjects.Query().Where(orm.Eq(tokenstore.Subjects.Scope, scope))
 	var found value.Optional[tokenstore.Subject]
 	if lock {
-		found, err = orm.FirstLocked(ctx, tx, orm.Lock(q.Where(orm.KeyEq(tokenstore.Subjects.Key(), key))))
+		found, err = orm.FirstLocked(ctx, tx, orm.Lock(q.Where(orm.Eq(tokenstore.Subjects.Key(), key))))
 	} else {
-		found, err = orm.First(ctx, tx, q.Where(orm.KeyEq(tokenstore.Subjects.Key(), key)))
+		found, err = orm.First(ctx, tx, q.Where(orm.Eq(tokenstore.Subjects.Key(), key)))
 	}
 	if err != nil {
 		return tokenstore.Subject{}, false, err
@@ -218,7 +218,7 @@ func record(address token.Address, subject tokenstore.Subject, family tokenstore
 	return result, result.Validate(address)
 }
 func currentRecord(ctx context.Context, tx *database.Tx, address token.Address, subject tokenstore.Subject, family tokenstore.Family) (token.Record, error) {
-	found, err := orm.First(ctx, tx, entries(family.Scope, family.ID).Where(orm.NumberEq(tokenstore.Entries.Generation, family.Generation)))
+	found, err := orm.First(ctx, tx, entries(family.Scope, family.ID).Where(orm.Eq(tokenstore.Entries.Generation, family.Generation)))
 	if err != nil {
 		return token.Record{}, err
 	}
@@ -236,30 +236,30 @@ func familyDraft(r token.Record, scope, subject string) ([]orm.Assignment[tokens
 		return nil, err
 	}
 	draft := []orm.Assignment[tokenstore.Family]{
-		orm.KeySet(tokenstore.Families.ID, model.IDFromBytes[tokenstore.Family](r.ID.Bytes())),
-		orm.TextSet(tokenstore.Families.Scope, scope),
-		orm.TextSet(tokenstore.Families.SubjectKey, subject),
-		orm.TextSet(tokenstore.Families.Name, r.Name),
-		orm.JSONSet(tokenstore.Families.Scopes, scopes),
-		orm.NumberSet(tokenstore.Families.Mode, uint8(r.Mode)),
-		orm.NumberSet(tokenstore.Families.Assurance, uint8(r.Assurance)),
-		orm.NumberSet(tokenstore.Families.AccessNanos, int64(r.Lifetime.Access)),
-		orm.NumberSet(tokenstore.Families.RefreshIdleNanos, int64(r.Lifetime.RefreshIdle)),
-		orm.NumberSet(tokenstore.Families.RotationLimit, r.RotationLimit),
-		orm.NumberSet(tokenstore.Families.Generation, r.Generation),
-		orm.TimeSet(tokenstore.Families.CreatedAt, r.CreatedAt),
-		orm.TimeSet(tokenstore.Families.ExpiresAt, r.ExpiresAt),
+		orm.Set(tokenstore.Families.ID, model.IDFromBytes[tokenstore.Family](r.ID.Bytes())),
+		orm.Set(tokenstore.Families.Scope, scope),
+		orm.Set(tokenstore.Families.SubjectKey, subject),
+		orm.Set(tokenstore.Families.Name, r.Name),
+		orm.Set(tokenstore.Families.Scopes, scopes),
+		orm.Set(tokenstore.Families.Mode, uint8(r.Mode)),
+		orm.Set(tokenstore.Families.Assurance, uint8(r.Assurance)),
+		orm.Set(tokenstore.Families.AccessNanos, int64(r.Lifetime.Access)),
+		orm.Set(tokenstore.Families.RefreshIdleNanos, int64(r.Lifetime.RefreshIdle)),
+		orm.Set(tokenstore.Families.RotationLimit, r.RotationLimit),
+		orm.Set(tokenstore.Families.Generation, r.Generation),
+		orm.Set(tokenstore.Families.CreatedAt, r.CreatedAt),
+		orm.Set(tokenstore.Families.ExpiresAt, r.ExpiresAt),
 	}
 	// Zero device metadata is stored as NULL.
 	if r.Device.ClientIP.IsValid() {
-		draft = append(draft, orm.NullableTextSet(tokenstore.Families.ClientIP, r.Device.ClientIP.String()))
+		draft = append(draft, orm.Set(tokenstore.Families.ClientIP, r.Device.ClientIP.String()))
 	} else {
-		draft = append(draft, orm.NullableTextSetNull(tokenstore.Families.ClientIP))
+		draft = append(draft, orm.SetNull(tokenstore.Families.ClientIP))
 	}
 	if r.Device.UserAgent != "" {
-		draft = append(draft, orm.NullableTextSet(tokenstore.Families.UserAgent, r.Device.UserAgent))
+		draft = append(draft, orm.Set(tokenstore.Families.UserAgent, r.Device.UserAgent))
 	} else {
-		draft = append(draft, orm.NullableTextSetNull(tokenstore.Families.UserAgent))
+		draft = append(draft, orm.SetNull(tokenstore.Families.UserAgent))
 	}
 	return draft, nil
 }
@@ -269,24 +269,24 @@ func entryDraft(r token.Record, scope string) ([]orm.Assignment[tokenstore.Entry
 		return nil, err
 	}
 	draft := []orm.Assignment[tokenstore.Entry]{
-		orm.KeySet(tokenstore.Entries.ID, id),
-		orm.TextSet(tokenstore.Entries.Scope, scope),
-		orm.ColumnSet(tokenstore.Entries.FamilyID, model.IDFromBytes[tokenstore.Family](r.ID.Bytes())),
-		orm.NumberSet(tokenstore.Entries.Generation, r.Generation),
-		orm.TextSet(tokenstore.Entries.AccessHash, r.AccessHash.Hex()),
-		orm.TimeSet(tokenstore.Entries.IssuedAt, r.IssuedAt),
-		orm.TimeSet(tokenstore.Entries.LastSeenAt, r.LastSeenAt),
-		orm.TimeSet(tokenstore.Entries.AccessExpiresAt, r.AccessExpiresAt),
+		orm.Set(tokenstore.Entries.ID, id),
+		orm.Set(tokenstore.Entries.Scope, scope),
+		orm.Set(tokenstore.Entries.FamilyID, model.IDFromBytes[tokenstore.Family](r.ID.Bytes())),
+		orm.Set(tokenstore.Entries.Generation, r.Generation),
+		orm.Set(tokenstore.Entries.AccessHash, r.AccessHash.Hex()),
+		orm.Set(tokenstore.Entries.IssuedAt, r.IssuedAt),
+		orm.Set(tokenstore.Entries.LastSeenAt, r.LastSeenAt),
+		orm.Set(tokenstore.Entries.AccessExpiresAt, r.AccessExpiresAt),
 	}
 	if hash, present := r.RefreshHash.Get(); present {
-		draft = append(draft, orm.NullableTextSet(tokenstore.Entries.RefreshHash, hash.Hex()))
+		draft = append(draft, orm.Set(tokenstore.Entries.RefreshHash, hash.Hex()))
 	} else {
-		draft = append(draft, orm.NullableTextSetNull(tokenstore.Entries.RefreshHash))
+		draft = append(draft, orm.SetNull(tokenstore.Entries.RefreshHash))
 	}
 	if expiry, present := r.RefreshExpiresAt.Get(); present {
-		draft = append(draft, orm.NullableTimeSet(tokenstore.Entries.RefreshExpiresAt, expiry))
+		draft = append(draft, orm.Set(tokenstore.Entries.RefreshExpiresAt, expiry))
 	} else {
-		draft = append(draft, orm.NullableTimeSetNull(tokenstore.Entries.RefreshExpiresAt))
+		draft = append(draft, orm.SetNull(tokenstore.Entries.RefreshExpiresAt))
 	}
 	return draft, nil
 }

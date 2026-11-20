@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.Has(models.UserRelations.Orders, expr.ModelPredicate(orm.NumberGt(models.Users.Age, 1)))
+var _ = expr.Has(models.UserRelations.Orders, expr.ModelPredicate(orm.Gt(models.Users.Age, 1)))

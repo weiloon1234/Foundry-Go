@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"foundry.test/consumer/jsonqueries"
-	"github.com/weiloon1234/Foundry-Go/database/orm"
+
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/datatable"
@@ -15,10 +15,10 @@ import (
 
 func TestComputedRowComparisonFilters(t *testing.T) {
 	f := jsonqueries.Documents
-	wanted := expr.Param(orm.JSONExpr(f.Settings), document(t, jsonqueries.Preferences{Theme: value.Set("dark")}))
-	matches := expr.CompareFilter(expr.JSONContains(expr.Value(orm.JSONExpr(f.Settings)), wanted))
-	backup := expr.NullableCompareFilter(expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(wanted)))
-	length := expr.CompareFilter(expr.Add(expr.Value(orm.KeyExpr(f.Key())), expr.Param(orm.KeyExpr(f.Key()), 1)))
+	wanted := expr.Param(f.Settings, document(t, jsonqueries.Preferences{Theme: value.Set("dark")}))
+	matches := expr.CompareFilter(expr.JSONContains(expr.Value(f.Settings), wanted))
+	backup := expr.NullableCompareFilter(expr.JSONContainsNullable(expr.Value(f.Backup), expr.NullableRow(wanted)))
+	length := expr.CompareFilter(expr.Add(expr.Value(f.Key()), expr.Param(f.Key(), 1)))
 
 	var _ datatable.RowEquality[jsonqueries.Document, bool] = matches
 	var _ datatable.RowEquality[jsonqueries.Document, int] = length
@@ -69,7 +69,7 @@ func TestComputedRowComparisonFilters(t *testing.T) {
 		{"nullable present", backup.IsNotNull(), backupSQL + ` IS NOT NULL`, []any{`{"theme":"dark"}`}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			statement, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(f.Query(), test.predicate)), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(f.Key())))))))
+			statement, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(f.Query(), test.predicate)), expr.AsSelected(expr.Row(expr.Value(f.Key()))))))
 			if err != nil {
 				t.Fatal(err)
 			}

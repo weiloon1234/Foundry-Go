@@ -27,7 +27,7 @@ func TestTerminalLifecycleLookupPruneAndExplain(t *testing.T) {
 	}))
 	_, err := db.Exec(ctx, `CREATE TABLE terminal_records(id uuid PRIMARY KEY,name text NOT NULL UNIQUE)`)
 	must(t, err)
-	_, err = orm.CreateEach(ctx, db, f.Query(), [][]orm.Assignment[storeRecord]{{orm.TextSet(f.Name, "duplicate")}, {orm.TextSet(f.Name, "duplicate")}})
+	_, err = orm.CreateEach(ctx, db, f.Query(), [][]orm.Assignment[storeRecord]{{orm.Set(f.Name, "duplicate")}, {orm.Set(f.Name, "duplicate")}})
 	if !errors.Is(err, database.UniqueViolation) || commits != 0 {
 		t.Fatal(err, commits)
 	}
@@ -36,15 +36,15 @@ func TestTerminalLifecycleLookupPruneAndExplain(t *testing.T) {
 	if count != 0 {
 		t.Fatal("partial creation persisted")
 	}
-	a, err := orm.FirstOrCreate(ctx, db, f.Query().Where(orm.TextEq(f.Name, "Ada")))
+	a, err := orm.FirstOrCreate(ctx, db, f.Query().Where(orm.Eq(f.Name, "Ada")))
 	must(t, err)
-	again, err := orm.FirstOrCreate(ctx, db, f.Query().Where(orm.TextEq(f.Name, "Ada")), orm.Assignment[storeRecord]{})
+	again, err := orm.FirstOrCreate(ctx, db, f.Query().Where(orm.Eq(f.Name, "Ada")), orm.Assignment[storeRecord]{})
 	must(t, err)
 	if a.ID != again.ID || commits != 1 {
 		t.Fatal(a, again, commits)
 	}
-	updated, err := orm.UpdateOrCreate(ctx, db, f.Query().Where(orm.TextEq(f.Name, "Ada")), nil, func(context.Context, *database.Tx, storeRecord) ([]orm.Assignment[storeRecord], error) {
-		return []orm.Assignment[storeRecord]{orm.TextSet(f.Name, "Grace")}, nil
+	updated, err := orm.UpdateOrCreate(ctx, db, f.Query().Where(orm.Eq(f.Name, "Ada")), nil, func(context.Context, *database.Tx, storeRecord) ([]orm.Assignment[storeRecord], error) {
+		return []orm.Assignment[storeRecord]{orm.Set(f.Name, "Grace")}, nil
 	})
 	must(t, err)
 	if updated.Name != "Grace" || commits != 2 {
@@ -64,7 +64,7 @@ func TestTerminalLifecycleLookupPruneAndExplain(t *testing.T) {
 	if n != 1 || deleted != 1 || commits != 3 {
 		t.Fatal(n, deleted, commits)
 	}
-	_, err = orm.CreateEach(ctx, db, f.Query(), [][]orm.Assignment[storeRecord]{{orm.TextSet(f.Name, "one")}, {orm.TextSet(f.Name, "two")}})
+	_, err = orm.CreateEach(ctx, db, f.Query(), [][]orm.Assignment[storeRecord]{{orm.Set(f.Name, "one")}, {orm.Set(f.Name, "two")}})
 	must(t, err)
 	before := commits
 	n, err = orm.PruneBatch(ctx, db, f.Query(), 1, true)
@@ -84,7 +84,7 @@ func TestForcePruneVisibilityAndOuterRollback(t *testing.T) {
 	_, err := db.Exec(ctx, `CREATE TABLE hook_members(id bigint PRIMARY KEY,name text NOT NULL DEFAULT 'database',note text,body bytea NOT NULL,created_at timestamptz NOT NULL,updated_at timestamptz NOT NULL,deleted_at timestamptz)`)
 	must(t, err)
 	f := h.Declare(func() orm.Hooks[h.Member] { return orm.Hooks[h.Member]{} })
-	_, err = orm.CreateEach(ctx, db, f.Query(), [][]orm.Assignment[h.Member]{{orm.KeySet(f.Key(), 1), orm.ColumnSet(f.Body, []byte{1})}, {orm.KeySet(f.Key(), 2), orm.ColumnSet(f.Body, []byte{2})}})
+	_, err = orm.CreateEach(ctx, db, f.Query(), [][]orm.Assignment[h.Member]{{orm.Set(f.Key(), 1), orm.Set(f.Body, []byte{1})}, {orm.Set(f.Key(), 2), orm.Set(f.Body, []byte{2})}})
 	must(t, err)
 	_, err = orm.Delete(ctx, db, f.Table.Query(), f.Table.Key(), 1)
 	must(t, err)
@@ -155,9 +155,9 @@ func TestLookupAbsenceRaceUsesUniqueConstraint(t *testing.T) {
 					defer workers.Done()
 					var err error
 					if insertFirst {
-						_, err = orm.CreateOrFirst(ctx, db, f.Query().Where(orm.TextEq(f.Name, "same")))
+						_, err = orm.CreateOrFirst(ctx, db, f.Query().Where(orm.Eq(f.Name, "same")))
 					} else {
-						_, err = orm.FirstOrCreate(ctx, db, f.Query().Where(orm.TextEq(f.Name, "same")))
+						_, err = orm.FirstOrCreate(ctx, db, f.Query().Where(orm.Eq(f.Name, "same")))
 					}
 					results <- err
 				}()
@@ -212,18 +212,18 @@ func TestCreateOrFirstNestedSavepointAndProvenance(t *testing.T) {
 	}, orm.WithHooks(func() orm.Hooks[storeRecord] {
 		return orm.Hooks[storeRecord]{AfterCommit: func(context.Context, lifecycle.Operation, orm.Changes[storeRecord]) error { commits++; return nil }}
 	}))
-	original, err := orm.CreateOrFirst(ctx, db, f.Query().Where(orm.TextEq(f.Name, "existing")))
+	original, err := orm.CreateOrFirst(ctx, db, f.Query().Where(orm.Eq(f.Name, "existing")))
 	must(t, err)
 	veto := errors.New("outer rollback")
 	err = db.Transaction(ctx, func(tx *database.Tx) error {
-		competitor, err := orm.CreateOrFirst(ctx, tx, f.Query().Where(orm.TextEq(f.Name, "existing")))
+		competitor, err := orm.CreateOrFirst(ctx, tx, f.Query().Where(orm.Eq(f.Name, "existing")))
 		if err != nil {
 			return err
 		}
 		if competitor.ID != original.ID {
 			t.Error("wrong competitor")
 		}
-		_, err = orm.CreateOrFirst(ctx, tx, f.Query().Where(orm.TextEq(f.Name, "rolled back")))
+		_, err = orm.CreateOrFirst(ctx, tx, f.Query().Where(orm.Eq(f.Name, "rolled back")))
 		if err != nil {
 			return err
 		}
@@ -238,7 +238,7 @@ func TestCreateOrFirstNestedSavepointAndProvenance(t *testing.T) {
 		t.Fatal("outer rollback failed", count)
 	}
 	// A conflicting row outside the lookup predicates must not be returned.
-	_, err = orm.CreateOrFirst(ctx, db, f.Query().Where(orm.TextEq(f.Name, "invisible")), orm.TextSet(f.Name, "existing"))
+	_, err = orm.CreateOrFirst(ctx, db, f.Query().Where(orm.Eq(f.Name, "invisible")), orm.Set(f.Name, "existing"))
 	if !errors.Is(err, database.UniqueViolation) {
 		t.Fatal("unmatched conflict hidden", err)
 	}
@@ -250,7 +250,7 @@ func TestCreateOrFirstNestedSavepointAndProvenance(t *testing.T) {
 	must(t, err)
 	_, err = db.Exec(ctx, `CREATE TRIGGER competitor_before BEFORE INSERT ON competitor_records FOR EACH ROW EXECUTE FUNCTION competitor_trigger()`)
 	must(t, err)
-	_, err = orm.CreateOrFirst(ctx, db, f.Query().Where(orm.TextEq(f.Name, "existing")))
+	_, err = orm.CreateOrFirst(ctx, db, f.Query().Where(orm.Eq(f.Name, "existing")))
 	if !errors.Is(err, database.UniqueViolation) {
 		t.Fatal("foreign-table trigger conflict hidden", err)
 	}
@@ -281,7 +281,7 @@ func TestCreateOrFirstRejectsCrossSchemaSameTableAndIndex(t *testing.T) {
 		Name orm.Text[row, string]
 	}
 	f := orm.Define("collision_members", func(b orm.Builder[row], m *row) table { return table{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)} })
-	got, err := orm.CreateOrFirst(ctx, db, f.Query().Where(orm.TextEq(f.Name, "existing")), orm.KeySet(f.Key(), 2))
+	got, err := orm.CreateOrFirst(ctx, db, f.Query().Where(orm.Eq(f.Name, "existing")), orm.Set(f.Key(), 2))
 	var failure *database.Error
 	if !errors.Is(err, database.UniqueViolation) || !errors.As(err, &failure) || failure.Schema() != foreign.Schema() || failure.Table() != "collision_members" || failure.Constraint() != "same_name_key" || got.ID != 0 {
 		t.Fatal("foreign-schema conflict resolved as success", err)

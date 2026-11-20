@@ -52,7 +52,7 @@ func testAuditDisclosure(t *testing.T, disclosure record.Disclosure) {
 			}, nil
 		})
 	}}
-	policy := orm.AuditPolicyOf(auditqueries.Accounts.Table, orm.AuditField(orm.NullableTextExpr(auditqueries.Accounts.Note), disclosure))
+	policy := orm.AuditPolicyOf(auditqueries.Accounts.Table, orm.AuditField(auditqueries.Accounts.Note, disclosure))
 	c := prepareAccountPolicy(t, policy, observer)
 	ctx := t.Context()
 	input := draft(t, "empty-update@example.test")
@@ -86,10 +86,10 @@ func testAuditDisclosure(t *testing.T, disclosure record.Disclosure) {
 		assignments []orm.Assignment[auditqueries.Account]
 		want        int64
 	}{
-		{"private-only", []orm.Assignment[auditqueries.Account]{orm.NullableTextSet(auditqueries.Accounts.Note, "private-only")}, base},
-		{"recorded-change", []orm.Assignment[auditqueries.Account]{orm.NullableTextSet(auditqueries.Accounts.Note, "recorded-change"), orm.InputTextSet(auditqueries.Accounts.Email, "changed@example.test")}, base + 1},
-		{"recorded-unchanged", []orm.Assignment[auditqueries.Account]{orm.NullableTextSet(auditqueries.Accounts.Note, "recorded-unchanged"), orm.InputTextSet(auditqueries.Accounts.Email, " CHANGED@EXAMPLE.TEST ")}, base + 2},
-		{"redacted", []orm.Assignment[auditqueries.Account]{orm.NullableTextSet(auditqueries.Accounts.Note, "redacted"), orm.TextSet(auditqueries.Accounts.PasswordHash, "changed-private-hash")}, base + 3},
+		{"private-only", []orm.Assignment[auditqueries.Account]{orm.Set(auditqueries.Accounts.Note, "private-only")}, base},
+		{"recorded-change", []orm.Assignment[auditqueries.Account]{orm.Set(auditqueries.Accounts.Note, "recorded-change"), orm.Set(auditqueries.Accounts.Email, "changed@example.test")}, base + 1},
+		{"recorded-unchanged", []orm.Assignment[auditqueries.Account]{orm.Set(auditqueries.Accounts.Note, "recorded-unchanged"), orm.Set(auditqueries.Accounts.Email, " CHANGED@EXAMPLE.TEST ")}, base + 2},
+		{"redacted", []orm.Assignment[auditqueries.Account]{orm.Set(auditqueries.Accounts.Note, "redacted"), orm.Set(auditqueries.Accounts.PasswordHash, "changed-private-hash")}, base + 3},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			before := account
@@ -117,7 +117,7 @@ func testAuditDisclosure(t *testing.T, disclosure record.Disclosure) {
 		page := history(t, c, ctx, tx, account)
 		var unchanged, redacted bool
 		for _, row := range page.Items {
-			note, err := orm.AuditReadNullable(row.Changes(), orm.NullableTextExpr(auditqueries.Accounts.Note))
+			note, err := orm.AuditReadNullable(row.Changes(), auditqueries.Accounts.Note)
 			if err != nil || note.IsSet() {
 				return errors.New("excluded or ignored field entered audit record")
 			}
@@ -128,14 +128,14 @@ func testAuditDisclosure(t *testing.T, disclosure record.Disclosure) {
 			if row.Changes().Operation() != lifecycle.Update {
 				continue
 			}
-			email, err := orm.AuditRead(row.Changes(), orm.InputTextExpr(auditqueries.Accounts.Email))
+			email, err := orm.AuditRead(row.Changes(), auditqueries.Accounts.Email)
 			if err != nil {
 				return err
 			}
 			if field, ok := email.Get(); ok && field.Assigned() && !field.Changed() {
 				unchanged = true
 			}
-			password, err := orm.AuditRead(row.Changes(), orm.TextExpr(auditqueries.Accounts.PasswordHash))
+			password, err := orm.AuditRead(row.Changes(), auditqueries.Accounts.PasswordHash)
 			if err != nil {
 				return err
 			}
@@ -146,7 +146,7 @@ func testAuditDisclosure(t *testing.T, disclosure record.Disclosure) {
 		if !unchanged || !redacted {
 			return errors.New("assigned unchanged or redacted field lost its audit record")
 		}
-		_, err := orm.Update(ctx, tx, auditqueries.Accounts.Query(), auditqueries.Accounts.Key(), account.ID, orm.NullableTextSet(auditqueries.Accounts.Note, "observer-reject"))
+		_, err := orm.Update(ctx, tx, auditqueries.Accounts.Query(), auditqueries.Accounts.Key(), account.ID, orm.Set(auditqueries.Accounts.Note, "observer-reject"))
 		if !errors.Is(err, rejected) {
 			return errors.New("empty audit update skipped another observer")
 		}
@@ -155,7 +155,7 @@ func testAuditDisclosure(t *testing.T, disclosure record.Disclosure) {
 		if _, err := tx.Exec(ctx, `UPDATE audited_accounts SET email = 'reject@example.test'`); err != nil {
 			return err
 		}
-		_, err = orm.Update(ctx, tx, auditqueries.Accounts.Query(), auditqueries.Accounts.Key(), account.ID, orm.NullableTextSet(auditqueries.Accounts.Note, "local-hook-reject"))
+		_, err = orm.Update(ctx, tx, auditqueries.Accounts.Query(), auditqueries.Accounts.Key(), account.ID, orm.Set(auditqueries.Accounts.Note, "local-hook-reject"))
 		if !errors.Is(err, auditqueries.ErrRejected) {
 			return errors.New("empty audit update skipped local Saved hook")
 		}
@@ -175,7 +175,7 @@ func testAuditDisclosure(t *testing.T, disclosure record.Disclosure) {
 
 func TestAutomaticAuditRetainsCreatedAtAndTimestampOnlyUpdates(t *testing.T) {
 	f := auditqueries.Accounts
-	policy := orm.AuditPolicyOf(f.Table, orm.AuditField(orm.NullableTextExpr(f.Note), record.Ignore), orm.AuditField(orm.TimeExpr(f.UpdatedAt), record.Ignore))
+	policy := orm.AuditPolicyOf(f.Table, orm.AuditField(f.Note, record.Ignore), orm.AuditField(f.UpdatedAt, record.Ignore))
 	c := prepareAccountPolicy(t, policy)
 	ctx := t.Context()
 	old, err := temporal.NewDateTime(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -188,7 +188,7 @@ func TestAutomaticAuditRetainsCreatedAtAndTimestampOnlyUpdates(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		account, err = orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.TimeSet(f.CreatedAt, old), orm.NullableTextSet(f.Note, "ignored-backdate"))
+		account, err = orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.Set(f.CreatedAt, old), orm.Set(f.Note, "ignored-backdate"))
 		if err != nil {
 			return err
 		}
@@ -199,7 +199,7 @@ func TestAutomaticAuditRetainsCreatedAtAndTimestampOnlyUpdates(t *testing.T) {
 		if page.Total != 2 || len(page.Items) != 2 {
 			return errors.New("backdating created_at lost history")
 		}
-		field, err := orm.AuditRead(page.Items[0].Changes(), orm.TimeExpr(f.CreatedAt))
+		field, err := orm.AuditRead(page.Items[0].Changes(), f.CreatedAt)
 		if err != nil {
 			return err
 		}
@@ -212,7 +212,7 @@ func TestAutomaticAuditRetainsCreatedAtAndTimestampOnlyUpdates(t *testing.T) {
 			return errors.New("backdated audit value differs from stored value")
 		}
 		// The managed updated_at is Ignore too: it alone must not opt a write out.
-		if _, err := orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.TimeSet(f.UpdatedAt, old)); err != nil {
+		if _, err := orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.Set(f.UpdatedAt, old)); err != nil {
 			return err
 		}
 		if history(t, c, ctx, tx, account).Total != 3 {
@@ -227,16 +227,16 @@ func TestAutomaticAuditRetainsCreatedAtAndTimestampOnlyUpdates(t *testing.T) {
 func TestAutomaticAuditAllIgnoredFieldsStillRecordLifecycle(t *testing.T) {
 	f := auditqueries.Accounts
 	policy := orm.AuditPolicyOf(f.Table,
-		orm.AuditField(orm.InputTextExpr(f.Email), record.Ignore),
-		orm.AuditField(orm.TextExpr(f.PasswordHash), record.Ignore),
-		orm.AuditField(orm.NullableTextExpr(f.Note), record.Ignore),
-		orm.AuditField(orm.NumberExpr(f.Balance), record.Ignore),
-		orm.AuditField(orm.JSONExpr(f.Preferences), record.Ignore),
-		orm.AuditField(orm.TimeExpr(f.CreatedAt), record.Ignore),
-		orm.AuditField(orm.TimeExpr(f.UpdatedAt), record.Ignore),
-		orm.AuditField(orm.NullableTimeExpr(f.DeletedAt), record.Ignore))
+		orm.AuditField(f.Email, record.Ignore),
+		orm.AuditField(f.PasswordHash, record.Ignore),
+		orm.AuditField(f.Note, record.Ignore),
+		orm.AuditField(f.Balance, record.Ignore),
+		orm.AuditField(f.Preferences, record.Ignore),
+		orm.AuditField(f.CreatedAt, record.Ignore),
+		orm.AuditField(f.UpdatedAt, record.Ignore),
+		orm.AuditField(f.DeletedAt, record.Ignore))
 	labels := auditqueries.Labels
-	c := preparePolicies(t, policy, orm.AuditPolicyOf(labels.Table, orm.AuditField(orm.TextExpr(labels.Name), record.Ignore)))
+	c := preparePolicies(t, policy, orm.AuditPolicyOf(labels.Table, orm.AuditField(labels.Name, record.Ignore)))
 	ctx := t.Context()
 	input := draft(t, "all-ignored@example.test")
 	if err := c.within(ctx, func(tx *database.Tx) error {
@@ -261,7 +261,7 @@ func TestAutomaticAuditAllIgnoredFieldsStillRecordLifecycle(t *testing.T) {
 		if err := check(1, lifecycle.Create); err != nil {
 			return err
 		}
-		if _, err := orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.NullableTextSet(f.Note, "ignored")); err != nil {
+		if _, err := orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.Set(f.Note, "ignored")); err != nil {
 			return err
 		}
 		if err := check(1, lifecycle.Create); err != nil {
@@ -287,7 +287,7 @@ func TestAutomaticAuditAllIgnoredFieldsStillRecordLifecycle(t *testing.T) {
 		if err := check(4, lifecycle.ForceDelete); err != nil {
 			return err
 		}
-		label, err := orm.Insert(ctx, tx, labels.Table, orm.KeySet(labels.Key(), "all-ignored"), orm.TextSet(labels.Name, "ignored-label"))
+		label, err := orm.Insert(ctx, tx, labels.Table, orm.Set(labels.Key(), "all-ignored"), orm.Set(labels.Name, "ignored-label"))
 		if err != nil {
 			return err
 		}
@@ -302,7 +302,7 @@ func TestAutomaticAuditAllIgnoredFieldsStillRecordLifecycle(t *testing.T) {
 			return errors.New("all-Ignore physical lifecycle lost history")
 		}
 		for _, row := range page.Items {
-			name, err := orm.AuditRead(row.Changes(), orm.TextExpr(labels.Name))
+			name, err := orm.AuditRead(row.Changes(), labels.Name)
 			if err != nil || name.IsSet() {
 				return errors.New("physical lifecycle disclosed ignored name")
 			}

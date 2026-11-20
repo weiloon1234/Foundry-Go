@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/countries"
 )
 
-func invalid(raw string) { _ = orm.EnumSet(countries.Countries.Status, raw) }
+func invalid(raw string) { _ = orm.Set(countries.Countries.Status, raw) }

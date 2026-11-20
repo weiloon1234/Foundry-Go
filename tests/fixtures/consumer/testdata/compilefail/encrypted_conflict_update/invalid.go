@@ -7,5 +7,5 @@ import (
 )
 
 func bad() {
-	_ = orm.ConflictIncoming[vault.Entry, encrypted.Text](orm.EncryptedExpr(vault.Entries.Token))
+	_ = orm.ConflictIncoming[vault.Entry, encrypted.Text](vault.Entries.Token)
 }

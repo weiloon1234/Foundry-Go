@@ -66,25 +66,25 @@ func TestObserverCatcherCannotProveAbsenceOrCaptureCapability(t *testing.T) {
 				t.Fatal("zero capability opened the concrete-owner bridge")
 			}
 			// A concrete owner can prove absence; a wrapper always requires ack.
-			_, err := UpdateAll(t.Context(), db, q.Query(), InputTextSet(q.Name, "name"))
+			_, err := UpdateAll(t.Context(), db, q.Query(), Set(q.Name, "name"))
 			if registered && !errors.Is(err, fault.Invalid) || !registered && err != nil {
 				t.Fatal("concrete owner lookup", err)
 			}
 			wrapper := catchObservers(db, db.FoundryObservers)
 			before := len(statements)
-			if _, err = UpdateAll(t.Context(), wrapper, q.Query(), InputTextSet(q.Name, "name")); !errors.Is(err, fault.Invalid) {
+			if _, err = UpdateAll(t.Context(), wrapper, q.Query(), Set(q.Name, "name")); !errors.Is(err, fault.Invalid) {
 				t.Fatal("wrapper bypassed set-write acknowledgement", err)
 			}
 			if len(statements) != before || wrapper.transactions != 0 || wrapper.calls != 0 {
 				t.Fatal("unacknowledged set write reached application code or SQL")
 			}
-			if _, err = UpdateAll(t.Context(), wrapper, WithoutModelHooks(q.Query()), InputTextSet(q.Name, "name")); err != nil {
+			if _, err = UpdateAll(t.Context(), wrapper, WithoutModelHooks(q.Query()), Set(q.Name, "name")); err != nil {
 				t.Fatal(err)
 			}
 			if observed != 0 {
 				t.Fatal("acknowledged set write invoked a model observer")
 			}
-			if _, err = Insert(t.Context(), wrapper, q.Table, KeySet(q.Key(), 1), InputTextSet(q.Name, "name"), ColumnSet(q.Body, []byte{1})); err != nil {
+			if _, err = Insert(t.Context(), wrapper, q.Table, Set(q.Key(), 1), Set(q.Name, "name"), Set(q.Body, []byte{1})); err != nil {
 				t.Fatal(err)
 			}
 			wantObserved := 0
@@ -133,7 +133,7 @@ func TestFrameworkOwnerFormsPreserveObservers(t *testing.T) {
 						t.Fatal("owner lost its observer snapshot", known)
 					}
 					before := len(statements)
-					_, err := UpdateAll(t.Context(), writer, q.Query(), InputTextSet(q.Name, "name"))
+					_, err := UpdateAll(t.Context(), writer, q.Query(), Set(q.Name, "name"))
 					if registered {
 						if !errors.Is(err, fault.Invalid) || len(statements) != before {
 							t.Fatal("unacknowledged set write reached SQL", err)
@@ -142,7 +142,7 @@ func TestFrameworkOwnerFormsPreserveObservers(t *testing.T) {
 						t.Fatal("observer-free owner required acknowledgement", err)
 					}
 					beforeObserved := observed
-					if _, err := Insert(t.Context(), writer, q.Table, KeySet(q.Key(), 1), InputTextSet(q.Name, "name"), ColumnSet(q.Body, []byte{1})); err != nil {
+					if _, err := Insert(t.Context(), writer, q.Table, Set(q.Key(), 1), Set(q.Name, "name"), Set(q.Body, []byte{1})); err != nil {
 						t.Fatal(err)
 					}
 					want := beforeObserved

@@ -57,9 +57,9 @@ func (m *Manager) Deliveries(ctx context.Context, state State, limit int, after 
 	var result []DeliveryInfo
 	err = m.within(ctx, func(tx *database.Tx) error {
 		result = nil
-		predicates := []orm.Predicate[store.Delivery]{orm.TextEq(fields.State, string(state))}
+		predicates := []orm.Predicate[store.Delivery]{orm.Eq(fields.State, string(state))}
 		if after.key != "" {
-			anchor, err := orm.First(ctx, tx, store.Deliveries.Query().Where(orm.KeyEq(store.Deliveries.Key(), after.key)))
+			anchor, err := orm.First(ctx, tx, store.Deliveries.Query().Where(orm.Eq(store.Deliveries.Key(), after.key)))
 			if err != nil {
 				return err
 			}
@@ -67,9 +67,9 @@ func (m *Manager) Deliveries(ctx context.Context, state State, limit int, after 
 			if !ok || row.State != string(state) {
 				return ErrDeliveryAnchorMoved
 			}
-			predicates = append(predicates, orm.Or(orm.TimeGt(fields.UpdatedAt, row.UpdatedAt), orm.And(orm.TimeEq(fields.UpdatedAt, row.UpdatedAt), orm.TextGt(fields.KeyColumn, row.Key))))
+			predicates = append(predicates, orm.Or(orm.Gt(fields.UpdatedAt, row.UpdatedAt), orm.And(orm.Eq(fields.UpdatedAt, row.UpdatedAt), orm.Gt(fields.KeyColumn, row.Key))))
 		}
-		rows, err := orm.All(ctx, tx, store.Deliveries.Query().Where(predicates...).OrderBy(orm.TimeAsc(fields.UpdatedAt), orm.TextAsc(fields.KeyColumn)).Limit(limit))
+		rows, err := orm.All(ctx, tx, store.Deliveries.Query().Where(predicates...).OrderBy(orm.Asc(fields.UpdatedAt), orm.Asc(fields.KeyColumn)).Limit(limit))
 		if err != nil {
 			return err
 		}
@@ -129,7 +129,7 @@ func (m *Manager) ResolveDelivery(ctx context.Context, id DeliveryID, expected S
 		if err != nil {
 			return err
 		}
-		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, orm.TextSet(store.Deliveries.State, string(target)), orm.ColumnSet(store.Deliveries.Claim, model.ID[store.Delivery]{}), orm.TimeSet(store.Deliveries.UpdatedAt, now))
+		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, orm.Set(store.Deliveries.State, string(target)), orm.Set(store.Deliveries.Claim, model.ID[store.Delivery]{}), orm.Set(store.Deliveries.UpdatedAt, now))
 		changed = err == nil
 		return err
 	})

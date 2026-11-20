@@ -73,10 +73,10 @@ func runORMLinks(t *testing.T, work func(*database.Tx, *testkit.Clock) error) {
 }
 func ormEndpoints(t *testing.T, tx *database.Tx) (linkqueries.Member, linkqueries.Group, error) {
 	t.Helper()
-	member, err := orm.Insert(t.Context(), tx, linkqueries.Members.Table, orm.TextSet(linkqueries.Members.Name, "member"))
+	member, err := orm.Insert(t.Context(), tx, linkqueries.Members.Table, orm.Set(linkqueries.Members.Name, "member"))
 	if err != nil {
 		return member, linkqueries.Group{}, err
 	}
-	group, err := orm.Insert(t.Context(), tx, linkqueries.Groups.Table, orm.KeySet(linkqueries.Groups.Key(), "staff"), orm.TextSet(linkqueries.Groups.Name, "staff"))
+	group, err := orm.Insert(t.Context(), tx, linkqueries.Groups.Table, orm.Set(linkqueries.Groups.Key(), "staff"), orm.Set(linkqueries.Groups.Name, "staff"))
 	return member, group, err
 }

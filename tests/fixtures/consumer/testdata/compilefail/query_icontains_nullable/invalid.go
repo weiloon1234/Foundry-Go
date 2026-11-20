@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-var invalid = orm.NullableTextIContains(reporting.MemberModels.Nickname, value.Of("name"))
+var invalid = orm.IContains(reporting.MemberModels.Nickname, value.Of("name"))

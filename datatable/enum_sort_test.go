@@ -101,8 +101,8 @@ type enumSortActor struct {
 }
 
 func TestEnumRowSortAndShortStableSpelling(t *testing.T) {
-	statusCmp := expr.CompareRow(expr.Value(orm.EnumExpr(enumSortModels.Status)))
-	optStatusCmp := expr.CompareNullableRow(expr.Value(orm.NullableEnumExpr(enumSortModels.OptStatus)))
+	statusCmp := expr.CompareRow(expr.Value(enumSortModels.Status))
+	optStatusCmp := expr.CompareNullableRow(expr.Value(enumSortModels.OptStatus))
 	statusCodec := foundryhttp.EnumQuery[enumSortStatus, *enumSortStatus](enumSortActive.EnumDescriptor())
 
 	spec := Spec[enumSortRecord, EnumSortRow, enumSortActor]{
@@ -120,12 +120,12 @@ func TestEnumRowSortAndShortStableSpelling(t *testing.T) {
 				FilterBy(NullableWhere(statusCodec, expr.NullableCompareFilter(optStatusCmp))),
 				ExportAs(expr.AsSelected(optStatusCmp), NullableCell(statusCodec))),
 		},
-		Stable: []expr.ProjectionOrder[enumSortRecord]{expr.Asc(expr.Value(orm.KeyExpr(enumSortModels.Key())))},
+		Stable: []expr.ProjectionOrder[enumSortRecord]{expr.Asc(expr.Value(enumSortModels.Key()))},
 		Source: func(ctx context.Context, actor enumSortActor) (rows.Query[enumSortRecord, EnumSortRow], error) {
 			return rows.Select(rows.From(enumSortModels.Query()), enumSortRows,
-				rows.Map(enumSortRows.ID, expr.Value(orm.KeyExpr(enumSortModels.Key()))),
-				rows.Map(enumSortRows.Status, expr.Value(orm.EnumExpr(enumSortModels.Status))),
-				rows.Map(enumSortRows.OptStatus, expr.Value(orm.NullableEnumExpr(enumSortModels.OptStatus))),
+				rows.Map(enumSortRows.ID, expr.Value(enumSortModels.Key())),
+				rows.Map(enumSortRows.Status, expr.Value(enumSortModels.Status)),
+				rows.Map(enumSortRows.OptStatus, expr.Value(enumSortModels.OptStatus)),
 			), nil
 		},
 		Authorize: func(ctx context.Context, actor enumSortActor, action Action) error {

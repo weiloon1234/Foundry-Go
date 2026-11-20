@@ -107,16 +107,16 @@ func TestFactorKeyRotationReencryptsStoredFactors(t *testing.T) {
 				keys = goneRing // Retired key no longer retained.
 			}
 			draft := []orm.Assignment[mfastore.Factor]{
-				orm.KeySet(mfastore.Factors.Key(), owners[i]),
-				orm.TextSet(mfastore.Factors.Scope, strings.Repeat("a", 64)),
-				orm.JSONSet(mfastore.Factors.Identity, stored),
-				orm.ColumnSet(mfastore.Factors.Generation, generation),
-				orm.TextSet(mfastore.Factors.Ciphertext, storedFactor(t, keys, owners[i], generation)),
-				orm.TimeSet(mfastore.Factors.CreatedAt, created),
-				orm.NullableTimeSet(mfastore.Factors.ConfirmedAt, created),
-				orm.NullableNumberSet(mfastore.Factors.LastStep, 1),
-				orm.JSONSet(mfastore.Factors.RecoveryHashes, hashes),
-				orm.NullableTimeSetNull(mfastore.Factors.PendingUntil),
+				orm.Set(mfastore.Factors.Key(), owners[i]),
+				orm.Set(mfastore.Factors.Scope, strings.Repeat("a", 64)),
+				orm.Set(mfastore.Factors.Identity, stored),
+				orm.Set(mfastore.Factors.Generation, generation),
+				orm.Set(mfastore.Factors.Ciphertext, storedFactor(t, keys, owners[i], generation)),
+				orm.Set(mfastore.Factors.CreatedAt, created),
+				orm.Set(mfastore.Factors.ConfirmedAt, created),
+				orm.Set(mfastore.Factors.LastStep, 1),
+				orm.Set(mfastore.Factors.RecoveryHashes, hashes),
+				orm.SetNull(mfastore.Factors.PendingUntil),
 			}
 			if _, err := orm.Insert(t.Context(), tx, mfastore.Factors.Table, draft...); err != nil {
 				return err

@@ -78,11 +78,11 @@ func (c Collection[M, K]) detach(ctx context.Context, outer *database.Tx, m *Man
 				return err
 			}
 			f := store.Files
-			q := store.Files.Query().Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key), orm.TextEq(f.Collection, string(c.Name())), orm.TextEq(f.Locale, locale), orm.TextEq(f.State, string(Ready)))
+			q := store.Files.Query().Where(orm.Eq(f.Scope, subject.Scope), orm.Eq(f.SubjectKey, subject.Key), orm.Eq(f.Collection, string(c.Name())), orm.Eq(f.Locale, locale), orm.Eq(f.State, string(Ready)))
 			if id, ok := only.Get(); ok {
-				q = q.Where(orm.KeyEq(f.ID, model.IDFromBytes[store.File](id.Bytes())))
+				q = q.Where(orm.Eq(f.ID, model.IDFromBytes[store.File](id.Bytes())))
 			}
-			rows, err := orm.All(ctx, tx, q.OrderBy(orm.KeyAsc(f.ID)).Limit(MaxCollectionFiles+1))
+			rows, err := orm.All(ctx, tx, q.OrderBy(orm.Asc(f.ID)).Limit(MaxCollectionFiles+1))
 			if err != nil {
 				return err
 			}
@@ -97,7 +97,7 @@ func (c Collection[M, K]) detach(ctx context.Context, outer *database.Tx, m *Man
 				if _, err := c.attachment(m, row); err != nil {
 					return err
 				}
-				if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, orm.TextSet(store.Files.State, string(CleanupPending)), orm.TimeSet(store.Files.UpdatedAt, now)); err != nil {
+				if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, orm.Set(store.Files.State, string(CleanupPending)), orm.Set(store.Files.UpdatedAt, now)); err != nil {
 					return err
 				}
 				if err := c.queue.enqueue(ctx, tx, operationID(row.ID)); err != nil {
@@ -192,7 +192,7 @@ func (c Collection[M, K]) Reorder(ctx context.Context, m *Manager, owner model.R
 				return err
 			}
 			f := store.Files
-			rows, err := orm.All(ctx, tx, store.Files.Query().Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key), orm.TextEq(f.Collection, string(c.Name())), orm.TextEq(f.Locale, locale), orm.TextEq(f.State, string(Ready))).OrderBy(orm.KeyAsc(f.ID)).Limit(MaxCollectionFiles+1))
+			rows, err := orm.All(ctx, tx, store.Files.Query().Where(orm.Eq(f.Scope, subject.Scope), orm.Eq(f.SubjectKey, subject.Key), orm.Eq(f.Collection, string(c.Name())), orm.Eq(f.Locale, locale), orm.Eq(f.State, string(Ready))).OrderBy(orm.Asc(f.ID)).Limit(MaxCollectionFiles+1))
 			if err != nil {
 				return err
 			}
@@ -212,7 +212,7 @@ func (c Collection[M, K]) Reorder(ctx context.Context, m *Manager, owner model.R
 				return err
 			}
 			for i, id := range ids {
-				row, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.NumberSet(store.Files.SortOrder, int32(i)), orm.TimeSet(store.Files.UpdatedAt, now))
+				row, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.Set(store.Files.SortOrder, int32(i)), orm.Set(store.Files.UpdatedAt, now))
 				if err != nil {
 					return err
 				}
@@ -256,8 +256,8 @@ func (c Collection[M, K]) SetProperties(ctx context.Context, m *Manager, owner m
 				return err
 			}
 			f := store.Files
-			q := store.Files.Query().Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key), orm.TextEq(f.Collection, string(c.Name())), orm.TextEq(f.Locale, locale), orm.TextEq(f.State, string(Ready)))
-			row, err := orm.Require(ctx, tx, q.Where(orm.KeyEq(store.Files.Key(), model.IDFromBytes[store.File](id.Bytes()))))
+			q := store.Files.Query().Where(orm.Eq(f.Scope, subject.Scope), orm.Eq(f.SubjectKey, subject.Key), orm.Eq(f.Collection, string(c.Name())), orm.Eq(f.Locale, locale), orm.Eq(f.State, string(Ready)))
+			row, err := orm.Require(ctx, tx, q.Where(orm.Eq(store.Files.Key(), model.IDFromBytes[store.File](id.Bytes()))))
 			if err != nil {
 				return err
 			}
@@ -268,7 +268,7 @@ func (c Collection[M, K]) SetProperties(ctx context.Context, m *Manager, owner m
 			if err != nil {
 				return err
 			}
-			row, err = orm.Update(ctx, tx, q, store.Files.Key(), row.ID, orm.JSONSet(store.Files.Properties, properties), orm.TimeSet(store.Files.UpdatedAt, now))
+			row, err = orm.Update(ctx, tx, q, store.Files.Key(), row.ID, orm.Set(store.Files.Properties, properties), orm.Set(store.Files.UpdatedAt, now))
 			if err != nil {
 				return err
 			}

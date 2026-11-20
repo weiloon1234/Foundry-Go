@@ -1,6 +1,71 @@
 # Changelog
 
-## Unreleased
+## v0.48.0 — 2026-11-20
+
+### One ORM operator per operation, and direct datatable columns
+
+Every operation on a model column now has one spelling. `orm.Eq`, `orm.Set`,
+`orm.Asc` and the other operators take any column directly, and a type
+constraint on the column's kind rejects a wrong pairing at compile time. The
+per-kind operators (`orm.TextEq`, `orm.NumberSet`, `orm.NullableTextSetNull`, …)
+and the `*Expr` adapters are removed: 262 functions and 36 adapter or interface
+types leave `database/orm`. There are no compatibility aliases. This is a source
+compatibility change; SQL text, persisted data, wire formats and the deployment
+protocol do not change. Convert every call site before updating the pin; the
+[migration guide](docs/guides/orm-migration.md#unified-orm-column-handles-and-operators)
+lists each family.
+
+```go
+// before
+q.Where(orm.ColumnEq(w.Enabled, true), orm.TextILike(w.Name, pattern)).OrderBy(orm.KeyAsc(w.Key()))
+expr.Value(orm.NumberExpr(w.Total))
+
+// after
+q.Where(orm.Eq(w.Enabled, true), orm.ILike(w.Name, pattern)).OrderBy(orm.Asc(w.Key()))
+expr.Value(w.Total)
+```
+
+- Every column type (`orm.Text`, `orm.Number`, `orm.Key`, `orm.Encrypted`, the
+  `Nullable*` and `Input*` families, …) is an alias of one 16-byte carrier,
+  `orm.ColumnHandle[M, V, I, P, K, R]`. Expressions, row mappings, conflict
+  targets, lookups, validation rules and model bindings accept it directly.
+- Relations with more than one key pair, and polymorphic relations, wrap each
+  pair in `orm.JoinKeys(a, b)`.
+- Encrypted columns use the same audit and change functions as other columns
+  (`orm.AuditField`, `orm.AuditRead`, `orm.AuditReadNullable`, `orm.ChangeOf`,
+  `orm.NullableChangeOf`).
+- `datatable` gains nine column constructors that take the model column
+  directly: `Text`, `Number`, `Time`, `Enum`, `Bool`, `NullableText`,
+  `NullableNumber`, `NullableTime`, `NullableEnum`. Sort, filter, export and
+  (for text) search are on by default; `NoSort`, `NoFilter`, `NoSearch` and
+  `NoExport` turn one off. `datatable.DefineColumn` remains for joined, computed
+  and custom-codec columns. `expr.OrderedColumn`, `expr.NullableOrderedColumn`,
+  `expr.CompareColumn` and `expr.NullableCompareColumn` build the row-filter
+  source for a column.
+
+| Family (removed) | Replacement |
+| --- | --- |
+| `orm.<Kind>Eq`, `<Kind>Ne`, `<Kind>In`, `<Kind>NotIn` | `orm.Eq`, `orm.Ne`, `orm.In`, `orm.NotIn` |
+| `orm.<Kind>Gt`, `<Kind>Gte`, `<Kind>Lt`, `<Kind>Lte`, `<Kind>Between` | `orm.Gt`, `orm.Gte`, `orm.Lt`, `orm.Lte`, `orm.Between` |
+| `orm.<Kind>Like`, `<Kind>ILike`, `<Kind>Contains`, `<Kind>IContains`, `<Kind>StartsWith`, `<Kind>IStartsWith`, `<Kind>EndsWith`, `<Kind>IEndsWith` | `orm.Like`, `orm.ILike`, `orm.Contains`, `orm.IContains`, `orm.StartsWith`, `orm.IStartsWith`, `orm.EndsWith`, `orm.IEndsWith` |
+| `orm.<Kind>JSONContains`, `<Kind>JSONContainedBy`, `<Kind>JSONIsJSONNull` | `orm.ContainsDocument`, `orm.ContainedByDocument`, `orm.IsJSONNull` |
+| `orm.<Kind>IsNull`, `<Kind>IsNotNull`, `<Kind>SetNull` | `orm.IsNull`, `orm.IsNotNull`, `orm.SetNull` |
+| `orm.<Kind>Set` | `orm.Set`, `orm.SetIfPresent` |
+| `orm.<Kind>Asc`, `<Kind>Desc` | `orm.Asc`, `orm.Desc` |
+| `orm.NumberIncrement`, `NullableNumberIncrement`, `NumberDecrement`, `NullableNumberDecrement` | `orm.Increment`, `orm.Decrement` |
+| `orm.<Kind>Expr(col)` and `*Adapter` / `KeyColumn` / `ExpressionColumn` / `InsertTarget` / `UpdateTarget` | Pass `col` directly (`ColumnHandle`); multi-pair/morph relations wrap pairs in `orm.JoinKeys(a, b)` |
+| `orm.AuditEncryptedField`, `AuditNullableEncryptedField`, `AuditReadEncrypted`, `AuditReadNullableEncrypted`, `EncryptedChangeOf`, `NullableEncryptedChangeOf` | `orm.AuditField`, `orm.AuditRead`, `orm.AuditReadNullable`, `orm.ChangeOf`, `orm.NullableChangeOf` |
+| Direct single-column `datatable.DefineColumn` wiring | `datatable.Text`, `Number`, `Time`, `Enum`, `Bool`, `NullableText`, `NullableNumber`, `NullableTime`, `NullableEnum` (+ `NoSort`, `NoFilter`, `NoSearch`, `NoExport`) |
+
+- Measured against the previous framework: no extra allocation on 136 paired
+  operator, expression, row and encrypted benchmarks, median latency −1.0% and no
+  reading above +1.5%. Building a predicate is about 5% faster, expression and
+  row entry points about 33% faster, and SQL compile is unchanged. Nine direct
+  datatable columns construct about 5% faster than nine hand-written
+  `DefineColumn` calls, with 545 allocations in place of 622. Cold build cache is
+  0.5% to 0.8% smaller and cold build compiler CPU 1.0% to 3.9% lower on
+  Starter, Boss Club, Semaklah and skin-analyzer; incremental compiles are
+  within +0.5%.
 
 ### Build time
 

@@ -28,7 +28,7 @@ func TestSourceInsertNormalizesLiteralsOnceAndRetainsPlan(t *testing.T) {
 		return strings.TrimSpace(s), nil
 	}
 	f := transformFields(transform, transform, transform)
-	plan := orm.FoundryInsertFrom[transformRow](f.Query(), orm.FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(orm.KeySet(f.Key(), 1), orm.InputTextSet(f.First, " first "), orm.InputTextSet(f.Last, " last "), orm.NullableInputTextSetNull(f.Maybe))
+	plan := orm.FoundryInsertFrom[transformRow](f.Query(), orm.FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(orm.Set(f.Key(), 1), orm.Set(f.First, " first "), orm.Set(f.Last, " last "), orm.SetNull(f.Maybe))
 	var bindings [][]any
 	db := testDB(t, testConnector{onBegin: func() { begun++ }, bindings: &bindings, columns: []string{"id", "first", "maybe", "last"}, values: [][]driver.Value{{int64(1), "first", nil, "last"}, {int64(2), "second", nil, "last"}}})
 	for range 2 {
@@ -53,7 +53,7 @@ func TestSourceInsertDoesNotSynthesizeSharedUUID(t *testing.T) {
 	f := orm.Define("uuid_source", func(b orm.Builder[row], m *row) fields { return fields{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)} })
 	begun := 0
 	db := testDB(t, testConnector{onBegin: func() { begun++ }})
-	_, err := orm.FoundryInsertFrom[row](f.Query(), orm.FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(orm.TextSet(f.Name, "value")).Exec(t.Context(), db)
+	_, err := orm.FoundryInsertFrom[row](f.Query(), orm.FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(orm.Set(f.Name, "value")).Exec(t.Context(), db)
 	if err == nil || begun != 0 {
 		t.Fatal(err, begun)
 	}
@@ -61,7 +61,7 @@ func TestSourceInsertDoesNotSynthesizeSharedUUID(t *testing.T) {
 func TestSourceInsertOutcomeAndClosure(t *testing.T) {
 	identity := func(s string) (string, error) { return s, nil }
 	f := transformFields(identity, identity, identity)
-	plan := orm.FoundryInsertFrom[transformRow](f.Query(), orm.FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(orm.KeySet(f.Key(), 1), orm.InputTextSet(f.First, "first"), orm.InputTextSet(f.Last, "last"))
+	plan := orm.FoundryInsertFrom[transformRow](f.Query(), orm.FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(orm.Set(f.Key(), 1), orm.Set(f.First, "first"), orm.Set(f.Last, "last"))
 	for _, closeFailure := range []bool{false, true} {
 		closed := 0
 		cfg := testConnector{onClose: func() { closed++ }, columns: []string{"id", "first", "maybe", "last"}, values: [][]driver.Value{{int64(1), "first", nil, "last"}}}
@@ -90,7 +90,7 @@ func (noSourceTransaction) Transaction(context.Context, func(*database.Tx) error
 func TestSourceWriteRejectsTransactorWithoutCallback(t *testing.T) {
 	identity := func(s string) (string, error) { return s, nil }
 	f := transformFields(identity, identity, identity)
-	_, err := orm.FoundryInsertFrom[transformRow](f.Query(), orm.FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(orm.KeySet(f.Key(), 1), orm.InputTextSet(f.First, "first"), orm.InputTextSet(f.Last, "last")).Exec(t.Context(), noSourceTransaction{})
+	_, err := orm.FoundryInsertFrom[transformRow](f.Query(), orm.FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(orm.Set(f.Key(), 1), orm.Set(f.First, "first"), orm.Set(f.Last, "last")).Exec(t.Context(), noSourceTransaction{})
 	if err == nil {
 		t.Fatal("false success")
 	}
@@ -112,9 +112,9 @@ func TestSourceWriteRejectsNullableKeyAssignmentsBeforeSQL(t *testing.T) {
 	f := orm.Define("nullable_mapping", func(b orm.Builder[row], m *row) fields {
 		return fields{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name), orm.NullableTextOf(b, &m.Note)}
 	})
-	_, name := orm.FoundryColumn(orm.TextExpr(f.Name), sqlowner.Metadata())
-	_, note := orm.FoundryColumn(orm.NullableTextExpr(f.Note), sqlowner.Metadata())
-	_, id := orm.FoundryColumn(orm.KeyExpr(f.Key()), sqlowner.Metadata())
+	_, name := orm.FoundryHandle(f.Name, sqlowner.Metadata())
+	_, note := orm.FoundryHandle(f.Note, sqlowner.Metadata())
+	_, id := orm.FoundryHandle(f.Key(), sqlowner.Metadata())
 	malformed := ormcore.ModelMapping{
 		Destination: name.Reference, Field: name.Field, Stored: reflect.TypeFor[string](),
 		Value:       ormcore.Expression{Node: note.Field, Refs: []ormcore.Reference{note.Reference}},

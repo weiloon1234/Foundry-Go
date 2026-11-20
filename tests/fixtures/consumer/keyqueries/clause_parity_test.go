@@ -25,13 +25,13 @@ func keyClauseParity(t *testing.T, got orm.Statement) {
 }
 
 func TestCorrelatedSelectedKeySQLParity(t *testing.T) {
-	q := models.Users.Query().Where(orm.NumberGt(models.Users.Age, 18))
-	a := rows.AsRecord[purchaseAlias](rows.CTE("eligible", rows.ModelRecord(models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 0)))), "purchase")
+	q := models.Users.Query().Where(orm.Gt(models.Users.Age, 18))
+	a := rows.AsRecord[purchaseAlias](rows.CTE("eligible", rows.ModelRecord(models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 0)))), "purchase")
 
 	c := rows.Correlate(rows.From(q), a)
-	parent := expr.At(rows.OuterScope(c, rows.ModelScope(q)), orm.KeyExpr(models.Users.ID))
+	parent := expr.At(rows.OuterScope(c, rows.ModelScope(q)), models.Users.ID)
 	child := rows.InnerScope(c, rows.Scope(a))
-	total, buyer := expr.At(child, orm.NumberExpr(models.Orders.TotalCents)), expr.At(child, orm.ColumnExpr(models.Orders.BuyerID))
+	total, buyer := expr.At(child, models.Orders.TotalCents), expr.At(child, models.Orders.BuyerID)
 
 	c = c.Where(expr.Equal(buyer, parent))
 	bucket := expr.When(expr.Gt(expr.OrderRow(total), 1), expr.ParamOf(expr.AsSelected(expr.Row(total)), 1)).Else(expr.ParamOf(expr.AsSelected(expr.Row(total)), 0))
@@ -60,7 +60,7 @@ func TestCorrelatedSelectedKeySQLParity(t *testing.T) {
 
 func TestValueSetSelectedKeySQLParity(t *testing.T) {
 	q := models.Users.Query()
-	scalar := rows.Values(rows.SelectScalar(rows.From(q.Where(orm.NumberGt(models.Users.Age, 18))), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))))))
+	scalar := rows.Values(rows.SelectScalar(rows.From(q.Where(orm.Gt(models.Users.Age, 18))), expr.AsSelected(expr.Row(expr.Value(models.Users.Nickname)))))
 	set := rows.UnionAllValues(scalar, scalar)
 
 	key := expr.AsSelected(expr.Row(set.Value()))
@@ -89,17 +89,17 @@ func TestPostgresORMComputedKeyClauses(t *testing.T) {
 		q := models.Users.Query()
 		a := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
 		c := rows.Correlate(rows.From(q), a)
-		parent := expr.At(rows.OuterScope(c, rows.ModelScope(q)), orm.KeyExpr(models.Users.ID))
+		parent := expr.At(rows.OuterScope(c, rows.ModelScope(q)), models.Users.ID)
 		scope := rows.InnerScope(c, rows.Scope(a))
-		total, buyer := expr.At(scope, orm.NumberExpr(models.Orders.TotalCents)), expr.At(scope, orm.ColumnExpr(models.Orders.BuyerID))
+		total, buyer := expr.At(scope, models.Orders.TotalCents), expr.At(scope, models.Orders.BuyerID)
 		bucket := expr.When(expr.Gt(expr.OrderRow(total), 1), expr.ParamOf(expr.AsSelected(expr.Row(total)), 1)).Else(expr.ParamOf(expr.AsSelected(expr.Row(total)), 0))
 		selected := rows.SelectCorrelatedScalar(c.Where(expr.Equal(buyer, parent)), expr.AsSelected(expr.Row(bucket)))
 		selected = rows.OrderCorrelatedScalar(rows.DistinctOnCorrelatedScalarValues(rows.GroupByCorrelatedScalar(selected, expr.Group(bucket)), expr.Key(expr.AsSelected(expr.Row(bucket)))), expr.Desc(bucket)).Limit(1)
-		outer := rows.OrderScalar(rows.SelectScalar(rows.From(q), expr.AsSelected(rows.CorrelatedScalarRowQuery(selected))), expr.Asc(expr.Value(orm.NumberExpr(models.Users.Age))))
+		outer := rows.OrderScalar(rows.SelectScalar(rows.From(q), expr.AsSelected(rows.CorrelatedScalarRowQuery(selected))), expr.Asc(expr.Value(models.Users.Age)))
 		if got, err := rows.ReadScalar(outer).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(1)), value.Of(int64(1)), value.Null[int64]()}) {
 			t.Fatal("correlated computed keys", got, err)
 		}
-		scalar := rows.Values(rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))))))
+		scalar := rows.Values(rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(models.Users.Age)))))
 		set := rows.UnionAllValues(scalar, scalar)
 		selectedSet := rows.DistinctOnValueSet(set, expr.Key(expr.AsSelected(expr.Row(set.Value())))).OrderBy(expr.Asc(set.Value()))
 		if got, err := rows.ReadValues(selectedSet).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int{20, 21, 22}) {

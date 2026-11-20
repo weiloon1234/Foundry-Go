@@ -75,7 +75,7 @@ func seedReference(ctx context.Context, tx *database.Tx, store *extensions.Store
 		drafts[i] = draft
 	}
 	f := Countries
-	conflict := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.ISO2))).DoUpdate(orm.ConflictIncoming(orm.TextExpr(f.ISO3)), orm.ConflictIncoming(orm.NullableTextExpr(f.ISONumeric)), orm.ConflictIncoming(orm.TextExpr(f.Name)), orm.ConflictIncoming(orm.NullableTextExpr(f.OfficialName)), orm.ConflictIncoming(orm.NullableTextExpr(f.Capital)), orm.ConflictIncoming(orm.NullableTextExpr(f.Region)), orm.ConflictIncoming(orm.NullableTextExpr(f.Subregion)), orm.ConflictIncoming(orm.JSONExpr(f.Currencies)), orm.ConflictIncoming(orm.NullableTextExpr(f.PrimaryCurrencyCode)), orm.ConflictIncoming(orm.NullableTextExpr(f.CallingCode)), orm.ConflictIncoming(orm.NullableTextExpr(f.CallingRoot)), orm.ConflictIncoming(orm.JSONExpr(f.CallingSuffixes)), orm.ConflictIncoming(orm.JSONExpr(f.TLDs)), orm.ConflictIncoming(orm.JSONExpr(f.Timezones)), orm.ConflictIncoming(orm.NullableNumberExpr(f.Latitude)), orm.ConflictIncoming(orm.NullableNumberExpr(f.Longitude)), orm.ConflictIncoming(orm.NullableColumnExpr(f.Independent)), orm.ConflictIncoming(orm.NullableColumnExpr(f.UNMember)), orm.ConflictIncoming(orm.NullableTextExpr(f.FlagEmoji)), orm.ConflictIncoming(orm.TextExpr(f.ReferenceVersion)), orm.ConflictIncoming(orm.TimeExpr(f.UpdatedAt)))
+	conflict := orm.OnConflict(orm.ConflictKey(f.ISO2)).DoUpdate(orm.ConflictIncoming(f.ISO3), orm.ConflictIncoming(f.ISONumeric), orm.ConflictIncoming(f.Name), orm.ConflictIncoming(f.OfficialName), orm.ConflictIncoming(f.Capital), orm.ConflictIncoming(f.Region), orm.ConflictIncoming(f.Subregion), orm.ConflictIncoming(f.Currencies), orm.ConflictIncoming(f.PrimaryCurrencyCode), orm.ConflictIncoming(f.CallingCode), orm.ConflictIncoming(f.CallingRoot), orm.ConflictIncoming(f.CallingSuffixes), orm.ConflictIncoming(f.TLDs), orm.ConflictIncoming(f.Timezones), orm.ConflictIncoming(f.Latitude), orm.ConflictIncoming(f.Longitude), orm.ConflictIncoming(f.Independent), orm.ConflictIncoming(f.UNMember), orm.ConflictIncoming(f.FlagEmoji), orm.ConflictIncoming(f.ReferenceVersion), orm.ConflictIncoming(f.UpdatedAt))
 	stored, err := orm.UpsertMany(ctx, tx, Countries.Query(), conflict, drafts)
 	if err != nil {
 		return SeedResult{}, err
@@ -104,33 +104,33 @@ func referenceDraft(r reference, now temporal.DateTime) ([]orm.Assignment[Countr
 		return nil, err
 	}
 	d := []orm.Assignment[Country]{
-		orm.KeySet(fields.ISO2, r.ISO2),
-		orm.TextSet(fields.ISO3, r.ISO3),
-		orm.TextSet(fields.Name, strings.TrimSpace(r.Name)),
-		orm.JSONSet(fields.Currencies, currencies),
-		orm.JSONSet(fields.CallingSuffixes, suffixes),
-		orm.JSONSet(fields.TLDs, tlds),
-		orm.JSONSet(fields.Timezones, zones),
-		orm.EnumSet(fields.Status, DisabledStatus),
-		orm.NullableColumnSetNull(fields.ConversionRate),
-		orm.ColumnSet(fields.IsDefault, false),
-		orm.TextSet(fields.ReferenceVersion, BuiltinVersion),
-		orm.TimeSet(fields.CreatedAt, now),
-		orm.TimeSet(fields.UpdatedAt, now),
+		orm.Set(fields.ISO2, r.ISO2),
+		orm.Set(fields.ISO3, r.ISO3),
+		orm.Set(fields.Name, strings.TrimSpace(r.Name)),
+		orm.Set(fields.Currencies, currencies),
+		orm.Set(fields.CallingSuffixes, suffixes),
+		orm.Set(fields.TLDs, tlds),
+		orm.Set(fields.Timezones, zones),
+		orm.Set(fields.Status, DisabledStatus),
+		orm.SetNull(fields.ConversionRate),
+		orm.Set(fields.IsDefault, false),
+		orm.Set(fields.ReferenceVersion, BuiltinVersion),
+		orm.Set(fields.CreatedAt, now),
+		orm.Set(fields.UpdatedAt, now),
 	}
-	d = optional(d, trimmed(r.ISONumeric), func(v string) orm.Assignment[Country] { return orm.NullableTextSet(fields.ISONumeric, v) }, func() orm.Assignment[Country] { return orm.NullableTextSetNull(fields.ISONumeric) })
-	d = optional(d, trimmed(r.OfficialName), func(v string) orm.Assignment[Country] { return orm.NullableTextSet(fields.OfficialName, v) }, func() orm.Assignment[Country] { return orm.NullableTextSetNull(fields.OfficialName) })
-	d = optional(d, trimmed(r.Capital), func(v string) orm.Assignment[Country] { return orm.NullableTextSet(fields.Capital, v) }, func() orm.Assignment[Country] { return orm.NullableTextSetNull(fields.Capital) })
-	d = optional(d, trimmed(r.Region), func(v string) orm.Assignment[Country] { return orm.NullableTextSet(fields.Region, v) }, func() orm.Assignment[Country] { return orm.NullableTextSetNull(fields.Region) })
-	d = optional(d, trimmed(r.Subregion), func(v string) orm.Assignment[Country] { return orm.NullableTextSet(fields.Subregion, v) }, func() orm.Assignment[Country] { return orm.NullableTextSetNull(fields.Subregion) })
-	d = optional(d, trimmed(r.PrimaryCurrencyCode), func(v string) orm.Assignment[Country] { return orm.NullableTextSet(fields.PrimaryCurrencyCode, v) }, func() orm.Assignment[Country] { return orm.NullableTextSetNull(fields.PrimaryCurrencyCode) })
-	d = optional(d, trimmed(r.CallingCode), func(v string) orm.Assignment[Country] { return orm.NullableTextSet(fields.CallingCode, v) }, func() orm.Assignment[Country] { return orm.NullableTextSetNull(fields.CallingCode) })
-	d = optional(d, trimmed(r.CallingRoot), func(v string) orm.Assignment[Country] { return orm.NullableTextSet(fields.CallingRoot, v) }, func() orm.Assignment[Country] { return orm.NullableTextSetNull(fields.CallingRoot) })
-	d = optional(d, trimmed(r.FlagEmoji), func(v string) orm.Assignment[Country] { return orm.NullableTextSet(fields.FlagEmoji, v) }, func() orm.Assignment[Country] { return orm.NullableTextSetNull(fields.FlagEmoji) })
-	d = optional(d, r.Latitude, func(v float64) orm.Assignment[Country] { return orm.NullableNumberSet(fields.Latitude, v) }, func() orm.Assignment[Country] { return orm.NullableNumberSetNull(fields.Latitude) })
-	d = optional(d, r.Longitude, func(v float64) orm.Assignment[Country] { return orm.NullableNumberSet(fields.Longitude, v) }, func() orm.Assignment[Country] { return orm.NullableNumberSetNull(fields.Longitude) })
-	d = optional(d, r.Independent, func(v bool) orm.Assignment[Country] { return orm.NullableColumnSet(fields.Independent, v) }, func() orm.Assignment[Country] { return orm.NullableColumnSetNull(fields.Independent) })
-	d = optional(d, r.UNMember, func(v bool) orm.Assignment[Country] { return orm.NullableColumnSet(fields.UNMember, v) }, func() orm.Assignment[Country] { return orm.NullableColumnSetNull(fields.UNMember) })
+	d = optional(d, trimmed(r.ISONumeric), func(v string) orm.Assignment[Country] { return orm.Set(fields.ISONumeric, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.ISONumeric) })
+	d = optional(d, trimmed(r.OfficialName), func(v string) orm.Assignment[Country] { return orm.Set(fields.OfficialName, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.OfficialName) })
+	d = optional(d, trimmed(r.Capital), func(v string) orm.Assignment[Country] { return orm.Set(fields.Capital, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.Capital) })
+	d = optional(d, trimmed(r.Region), func(v string) orm.Assignment[Country] { return orm.Set(fields.Region, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.Region) })
+	d = optional(d, trimmed(r.Subregion), func(v string) orm.Assignment[Country] { return orm.Set(fields.Subregion, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.Subregion) })
+	d = optional(d, trimmed(r.PrimaryCurrencyCode), func(v string) orm.Assignment[Country] { return orm.Set(fields.PrimaryCurrencyCode, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.PrimaryCurrencyCode) })
+	d = optional(d, trimmed(r.CallingCode), func(v string) orm.Assignment[Country] { return orm.Set(fields.CallingCode, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.CallingCode) })
+	d = optional(d, trimmed(r.CallingRoot), func(v string) orm.Assignment[Country] { return orm.Set(fields.CallingRoot, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.CallingRoot) })
+	d = optional(d, trimmed(r.FlagEmoji), func(v string) orm.Assignment[Country] { return orm.Set(fields.FlagEmoji, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.FlagEmoji) })
+	d = optional(d, r.Latitude, func(v float64) orm.Assignment[Country] { return orm.Set(fields.Latitude, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.Latitude) })
+	d = optional(d, r.Longitude, func(v float64) orm.Assignment[Country] { return orm.Set(fields.Longitude, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.Longitude) })
+	d = optional(d, r.Independent, func(v bool) orm.Assignment[Country] { return orm.Set(fields.Independent, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.Independent) })
+	d = optional(d, r.UNMember, func(v bool) orm.Assignment[Country] { return orm.Set(fields.UNMember, v) }, func() orm.Assignment[Country] { return orm.SetNull(fields.UNMember) })
 	return d, nil
 }
 func optional[T any](d []orm.Assignment[Country], input *T, set func(T) orm.Assignment[Country], clear func() orm.Assignment[Country]) []orm.Assignment[Country] {

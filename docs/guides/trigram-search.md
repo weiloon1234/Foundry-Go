@@ -8,8 +8,8 @@
 ## Overview
 
 `expr.TrigramMatch(text, search)` compiles to `text OPERATOR(public.%) $n`.
-It accepts typed text row operands, including `expr.Value(orm.TextExpr(column))`
-and joined `expr.At(scope, orm.TextExpr(column))` operands. The search keeps the
+It accepts typed text row operands, including `expr.Value(column)`
+and joined `expr.At(scope, column)` operands. The search keeps the
 column's concrete `V ~string` type and codec and is bound as a parameter.
 Use the returned predicate with `expr.Where` on models or `.Where` on a rows
 projection. Declaration ownership, query budgets and transaction lock rules
@@ -107,31 +107,31 @@ func FindDuplicates(ctx context.Context, tx *database.Tx, tables Tables, search 
 	n := rows.As[nameSide](tables.Names.Query(), "n")
 	e := rows.As[entitySide](tables.Entities.Query(), "e")
 	a := rows.As[addressSide](tables.Addresses.Query(), "a")
-	names := rows.InnerJoin(n, e, rows.On(expr.At(rows.Scope(n), orm.NumberExpr(tables.Names.EntityID)), expr.At(rows.Scope(e), orm.KeyExpr(tables.Entities.Key()))))
+	names := rows.InnerJoin(n, e, rows.On(expr.At(rows.Scope(n), tables.Names.EntityID), expr.At(rows.Scope(e), tables.Entities.Key())))
 	entity := rows.RightScope(names, rows.Scope(e))
-	joined := rows.InnerJoin(names, a, rows.On(expr.At(entity, orm.KeyExpr(tables.Entities.Key())), expr.At(rows.Scope(a), orm.NumberExpr(tables.Addresses.EntityID))))
+	joined := rows.InnerJoin(names, a, rows.On(expr.At(entity, tables.Entities.Key()), expr.At(rows.Scope(a), tables.Addresses.EntityID)))
 	nameScope := rows.LeftScope(joined, rows.LeftScope(names, rows.Scope(n)))
 	entityScope := rows.LeftScope(joined, entity)
 	addressScope := rows.RightScope(joined, rows.Scope(a))
-	normalized := expr.At(nameScope, orm.TextExpr(tables.Names.Normalized))
+	normalized := expr.At(nameScope, tables.Names.Normalized)
 	score := expr.TrigramSimilarity(normalized, search)
-	entityID := expr.At(entityScope, orm.KeyExpr(tables.Entities.Key()))
+	entityID := expr.At(entityScope, tables.Entities.Key())
 	result := rows.Select(joined, Duplicates,
 		rows.Map(Duplicates.ID, entityID),
 		rows.Map(Duplicates.Normalized, normalized),
 		rows.MapSelected(Duplicates.Similarity, expr.AsSelected(score)),
-		rows.Map(Duplicates.Latitude, expr.At(addressScope, orm.NumberExpr(tables.Addresses.Latitude))),
-		rows.Map(Duplicates.Longitude, expr.At(addressScope, orm.NumberExpr(tables.Addresses.Longitude))),
+		rows.Map(Duplicates.Latitude, expr.At(addressScope, tables.Addresses.Latitude)),
+		rows.Map(Duplicates.Longitude, expr.At(addressScope, tables.Addresses.Longitude)),
 	).Where(
 		expr.TrigramMatch(normalized, search), expr.Gte(score, 0.6),
-		expr.Eq(expr.At(entityScope, orm.TextExpr(tables.Entities.Country)), country),
+		expr.Eq(expr.At(entityScope, tables.Entities.Country), country),
 		expr.Ne(entityID, except),
 	)
 	result = rows.Limit(result, 1001)
 	result = rows.OrderBy(result,
 		expr.Asc(entityID),
-		expr.Asc(expr.At(nameScope, orm.KeyExpr(tables.Names.Key()))),
-		expr.Asc(expr.At(addressScope, orm.KeyExpr(tables.Addresses.Key()))),
+		expr.Asc(expr.At(nameScope, tables.Names.Key())),
+		expr.Asc(expr.At(addressScope, tables.Addresses.Key())),
 	)
 	return rows.Read(result).All(ctx, tx)
 }
@@ -142,9 +142,9 @@ The second query reuses that transaction threshold.
 <!-- compiled-source: tests/fixtures/consumer/trigramqueries/search.go#similar-reviews -->
 ```go
 func SimilarReviews(ctx context.Context, tx *database.Tx, reviews ReviewTable, search string, except int64) ([]string, error) {
-	body := expr.Value(orm.TextExpr(reviews.Body))
-	query := expr.Where(reviews.Query().Where(orm.KeyNe(reviews.Key(), except)), expr.TrigramMatch(body, search))
-	query = expr.OrderBy(query, expr.Asc(expr.Value(orm.KeyExpr(reviews.Key())))).Limit(101)
+	body := expr.Value(reviews.Body)
+	query := expr.Where(reviews.Query().Where(orm.Ne(reviews.Key(), except)), expr.TrigramMatch(body, search))
+	query = expr.OrderBy(query, expr.Asc(expr.Value(reviews.Key()))).Limit(101)
 	return rows.ReadScalar(rows.SelectScalar(rows.From(query), expr.AsSelected(expr.Row(body)))).All(ctx, tx)
 }
 ```

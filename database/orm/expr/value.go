@@ -15,7 +15,7 @@ import (
 
 // RowValue is a sealed value evaluated before grouping.
 //
-// Example: expr.Add(expr.Value(orm.NumberExpr(Users.Age)), expr.Value(orm.NumberExpr(Users.Age)))
+// Example: expr.Add(expr.Value(Users.Age), expr.Value(Users.Age))
 type RowValue[S, V any] interface{ rowValue(*S) rowData[V] }
 
 type rowData[V any] struct {
@@ -32,7 +32,7 @@ func (d rowData[V]) expression() ormcore.Expression {
 
 // RowExpression is a computed row value with exact owner and result types.
 //
-// Example: expr.Param(orm.NumberExpr(Users.Age), 2)
+// Example: expr.Param(Users.Age, 2)
 type RowExpression[S, V any] = rowExpression[*S, V]
 
 type rowExpression[S, V any] struct {
@@ -82,8 +82,8 @@ func Constant[S, V any](c codec.Codec[V], v V) RowExpression[S, V] {
 // Param snapshots a bound non-null value using a column's comparison codec.
 //
 // Example: expr.Param(column, v)
-func Param[S, V, P any](column orm.ExpressionColumn[S, V, P], v V) RowExpression[S, V] {
-	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
+func Param[S, V, P, I any, K orm.ColumnKind, R orm.ColumnRole](column orm.ColumnHandle[S, V, I, P, K, R], v V) RowExpression[S, V] {
+	c := orm.FoundryComparisonHandle(column, sqlowner.Metadata())
 	return parameter[S](rowData[V]{column: c, core: ormcore.Expression{Refs: []ormcore.Reference{c.Reference}, Err: c.Err}}, v)
 }
 

@@ -42,7 +42,7 @@ func TestIsolatedCompleteHTTPApplications(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				found, err := orm.Require(ctx, db, RecordRows.Query().Where(orm.TextEq(RecordRows.Name, receipt.Name)))
+				found, err := orm.Require(ctx, db, RecordRows.Query().Where(orm.Eq(RecordRows.Name, receipt.Name)))
 				if err != nil {
 					return err
 				}
@@ -126,7 +126,7 @@ func TestIsolatedCompleteHTTPApplications(t *testing.T) {
 					t.Fatal("parallel app read another scope", err)
 				}
 			}
-			if found, err := orm.First(t.Context(), db, RecordRows.Query().Where(orm.TextEq(RecordRows.Name, "rolled-back"))); err != nil || found.IsSet() {
+			if found, err := orm.First(t.Context(), db, RecordRows.Query().Where(orm.Eq(RecordRows.Name, "rolled-back"))); err != nil || found.IsSet() {
 				t.Fatal("HTTP rollback persisted", err)
 			}
 			var count int64

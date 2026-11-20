@@ -397,7 +397,7 @@ func (s textSlot[M, K]) syncWithTx(ctx context.Context, outer *database.Tx, owne
 			return err
 		}
 		fields := store.Translations
-		_, err = deleteRows(ctx, tx, store.Translations.Query().Where(orm.TextEq(fields.Scope, owner.Scope()), orm.TextEq(fields.SubjectKey, subject), orm.TextEq(fields.Field, string(s.field.Name())), orm.TextIn(fields.Locale, removed...)))
+		_, err = deleteRows(ctx, tx, store.Translations.Query().Where(orm.Eq(fields.Scope, owner.Scope()), orm.Eq(fields.SubjectKey, subject), orm.Eq(fields.Field, string(s.field.Name())), orm.In(fields.Locale, removed...)))
 		return err
 	})
 }

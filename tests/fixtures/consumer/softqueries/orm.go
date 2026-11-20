@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// MemberTable declares stored columns and their write roles. Example: orm.KeyEq(Members.Key(), key).
+// MemberTable declares stored columns and their write roles. Example: orm.Eq(Members.Key(), key).
 type MemberTable struct {
 	orm.Table[Member, model.ID[Member]]
 	Name       orm.InputText[Member, string, string]
@@ -42,7 +42,7 @@ var Members = orm.Define("soft_members", func(b orm.Builder[Member], m *Member) 
 	}
 }, orm.WithHooks(ormMemberHooks))
 
-// GroupTable declares stored columns and their write roles. Example: orm.KeyEq(Groups.Key(), key).
+// GroupTable declares stored columns and their write roles. Example: orm.Eq(Groups.Key(), key).
 type GroupTable struct {
 	orm.Table[Group, GroupCode]
 	Name      orm.Text[Group, string]
@@ -60,7 +60,7 @@ var Groups = orm.Define("soft_groups", func(b orm.Builder[Group], m *Group) Grou
 	}
 })
 
-// MembershipTable declares stored columns and their write roles. Example: orm.KeyEq(Memberships.Key(), key).
+// MembershipTable declares stored columns and their write roles. Example: orm.Eq(Memberships.Key(), key).
 type MembershipTable struct {
 	orm.Table[Membership, model.ID[Membership]]
 	MemberID  orm.Column[Membership, model.ID[Member]]
@@ -85,7 +85,7 @@ var MemberLinks = struct {
 	Parent   orm.BelongsTo[Member, Member]
 	Children orm.HasMany[Member, Member]
 	Groups   orm.ThroughRelation[Member, Group, Membership]
-}{orm.BelongsToOf(Members.Parent, orm.NullableColumnExpr(Members.ParentID), orm.KeyExpr(Members.Key())), orm.HasManyOf(Members.Children, orm.KeyExpr(Members.Key()), orm.NullableColumnExpr(Members.ParentID)), orm.ManyToManyOf(Members.Groups, orm.KeyExpr(Members.Key()), orm.ColumnExpr(Memberships.MemberID), orm.TextExpr(Memberships.GroupCode), orm.KeyExpr(Groups.Key()))}
+}{orm.BelongsToOf(Members.Parent, Members.ParentID, Members.Key()), orm.HasManyOf(Members.Children, Members.Key(), Members.ParentID), orm.ManyToManyOf(Members.Groups, orm.JoinKeys(Members.Key(), Memberships.MemberID), orm.JoinKeys(Memberships.GroupCode, Groups.Key()))}
 
 // MemberCounts binds aggregate slots. Example: Members.Query().With(MemberCounts.Children).
 var MemberCounts = struct {

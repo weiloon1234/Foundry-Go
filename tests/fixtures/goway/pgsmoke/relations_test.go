@@ -61,9 +61,9 @@ func TestDirectEagerTreesAndExistence(t *testing.T) {
 	must(t, err)
 	n := eagerTable()
 	must(t, orm.Check(n))
-	children := orm.HasManyOf(n.Children, orm.KeyExpr(n.ID), orm.NullableNumberExpr(n.ParentID))
-	tree := children.Where(orm.TextIn(n.Label, "keep", "only")).OrderBy(orm.TextDesc(n.Label)).With(children)
-	q := orm.WithRelationLimits(n.Query().Where(orm.KeyIn(n.ID, 1, 2, 3)).OrderBy(orm.KeyAsc(n.ID)).With(tree), orm.RelationLimits{BatchSize: 2, MaxRows: 100, MaxDepth: 3})
+	children := orm.HasManyOf(n.Children, n.ID, n.ParentID)
+	tree := children.Where(orm.In(n.Label, "keep", "only")).OrderBy(orm.Desc(n.Label)).With(children)
+	q := orm.WithRelationLimits(n.Query().Where(orm.In(n.ID, 1, 2, 3)).OrderBy(orm.Asc(n.ID)).With(tree), orm.RelationLimits{BatchSize: 2, MaxRows: 100, MaxDepth: 3})
 	scoped, scope := detector.Begin(ctx)
 	parents, err := orm.All(scoped, db, q)
 	must(t, err)
@@ -97,8 +97,8 @@ func TestDirectEagerTreesAndExistence(t *testing.T) {
 	dbassert.AssertStatementShapes(t, scope)
 
 	queries = 0
-	hasOne := orm.HasOneOf(n.Featured, orm.KeyExpr(n.ID), orm.NullableNumberExpr(n.ParentID)).Where(orm.TextEq(n.Label, "only"))
-	one, err := orm.All(ctx, db, n.Query().Where(orm.KeyIn(n.ID, 1, 2, 3)).OrderBy(orm.KeyAsc(n.ID)).With(hasOne))
+	hasOne := orm.HasOneOf(n.Featured, n.ID, n.ParentID).Where(orm.Eq(n.Label, "only"))
+	one, err := orm.All(ctx, db, n.Query().Where(orm.In(n.ID, 1, 2, 3)).OrderBy(orm.Asc(n.ID)).With(hasOne))
 	must(t, err)
 	if queries != 2 {
 		t.Fatal("has-one statement count", queries)
@@ -109,7 +109,7 @@ func TestDirectEagerTreesAndExistence(t *testing.T) {
 			t.Fatal("has-one loaded state")
 		}
 	}
-	bad, err := orm.All(ctx, db, n.Query().Where(orm.KeyEq(n.ID, 1)).With(orm.HasOneOf(n.Featured, orm.KeyExpr(n.ID), orm.NullableNumberExpr(n.ParentID))))
+	bad, err := orm.All(ctx, db, n.Query().Where(orm.Eq(n.ID, 1)).With(orm.HasOneOf(n.Featured, n.ID, n.ParentID)))
 	if bad != nil || !errors.Is(err, database.TooManyRows) {
 		t.Fatal("has-one cardinality", bad, err)
 	}
@@ -141,13 +141,13 @@ func TestDirectEagerTreesAndExistence(t *testing.T) {
 	for _, negative := range []bool{false, true} {
 		queries = 0
 		scoped, scope = detector.Begin(ctx)
-		predicate := orm.Has(children, orm.Has(children, orm.TextEq(n.Label, "grand")))
+		predicate := orm.Has(children, orm.Has(children, orm.Eq(n.Label, "grand")))
 		expected := []int64{1, 2}
 		if negative {
-			predicate = orm.Not(orm.Has(children, orm.Has(children, orm.TextEq(n.Label, "grand"))))
+			predicate = orm.Not(orm.Has(children, orm.Has(children, orm.Eq(n.Label, "grand"))))
 			expected = []int64{3}
 		}
-		got, err := orm.All(scoped, db, n.Query().Where(orm.KeyIn(n.ID, 1, 2, 3), predicate).OrderBy(orm.KeyAsc(n.ID)))
+		got, err := orm.All(scoped, db, n.Query().Where(orm.In(n.ID, 1, 2, 3), predicate).OrderBy(orm.Asc(n.ID)))
 		must(t, err)
 		ids := make([]int64, len(got))
 		for i, m := range got {
@@ -161,7 +161,7 @@ func TestDirectEagerTreesAndExistence(t *testing.T) {
 		}
 		dbassert.AssertStatementShapes(t, scope)
 	}
-	live, err := orm.All(ctx, db, n.Query().Where(orm.KeyIn(n.ID, 1, 2, 3), orm.Has(children, orm.TextEq(n.Label, "keep"))))
+	live, err := orm.All(ctx, db, n.Query().Where(orm.In(n.ID, 1, 2, 3), orm.Has(children, orm.Eq(n.Label, "keep"))))
 	must(t, err)
 	if len(live) != 1 || live[0].ID != 1 {
 		t.Fatal("existence failed related soft-delete scope")

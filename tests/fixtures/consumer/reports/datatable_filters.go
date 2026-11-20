@@ -2,7 +2,7 @@ package reports
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/orm"
+
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/datatable"
@@ -19,13 +19,13 @@ func ReferralTextFilters() (datatable.FilterSource[ReferralScope, value.Nullable
 	referrals := rows.As[referralAlias](models.Users.Query(), "referral")
 	sponsors := rows.As[sponsorAlias](models.Users.Query(), "sponsor")
 	joined := rows.LeftJoin(referrals, sponsors, rows.On(
-		expr.At(rows.Scope(referrals), orm.NullableColumnExpr(models.Users.IntroducerID)),
-		expr.At(rows.Scope(sponsors), orm.KeyExpr(models.Users.ID)),
+		expr.At(rows.Scope(referrals), models.Users.IntroducerID),
+		expr.At(rows.Scope(sponsors), models.Users.ID),
 	))
 	sponsor := rows.NullableRightScope(joined, rows.Scope(sponsors))
 	text := http.StringQuery[string]()
-	email := expr.TextNullableRowValue(expr.AtNullable(sponsor, orm.TextExpr(models.Users.Email)))
-	nickname := expr.TextNullableRowValue(expr.AtNullableValue(sponsor, orm.NullableTextExpr(models.Users.Nickname)))
+	email := expr.TextNullableRowValue(expr.AtNullable(sponsor, models.Users.Email))
+	nickname := expr.TextNullableRowValue(expr.AtNullableValue(sponsor, models.Users.Nickname))
 	return datatable.NullableWhere(text, expr.NullableTextFilter(email)),
 		datatable.NullableWhere(text, expr.NullableTextFilter(nickname))
 }
@@ -34,7 +34,7 @@ func ReferralTextFilters() (datatable.FilterSource[ReferralScope, value.Nullable
 
 // doc-example:begin nullable-ordered-filter
 func MeasurementScoreFilter() datatable.FilterSource[models.Measurement, value.Nullable[float64]] {
-	score := expr.OrderNullableRow(expr.Value(orm.NullableNumberExpr(models.Measurements.Score)))
+	score := expr.OrderNullableRow(expr.Value(models.Measurements.Score))
 	return datatable.NullableWhere(http.FloatQuery[float64](), expr.NullableOrderFilter(score))
 }
 

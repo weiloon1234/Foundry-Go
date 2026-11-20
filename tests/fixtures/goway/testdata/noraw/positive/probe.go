@@ -18,7 +18,7 @@ func Run(ctx context.Context, db database.Executor) error {
 	Raw()
 	service{}.Exec()
 	_ = service{}.Query("ordinary application value")
-	_, err := orm.All(ctx, db, models.Users.Query().Where(orm.TextEq(models.Users.Email, "Ada")))
+	_, err := orm.All(ctx, db, models.Users.Query().Where(orm.Eq(models.Users.Email, "Ada")))
 	return err
 }
 

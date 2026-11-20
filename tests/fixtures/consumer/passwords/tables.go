@@ -10,15 +10,15 @@ import (
 // Example: AccountRecords.Query().
 // doc-example:begin password-hashing-account-table
 type AccountTable struct {
-	// Table owns the concrete account key. Example: orm.KeyEq(AccountRecords.Key(), id).
+	// Table owns the concrete account key. Example: orm.Eq(AccountRecords.Key(), id).
 	orm.Table[Account, model.ID[Account]]
-	// Email binds the stored field. Example: orm.TextSet(AccountRecords.Email, "member@example.test").
+	// Email binds the stored field. Example: orm.Set(AccountRecords.Email, "member@example.test").
 	Email orm.Text[Account, string]
-	// Digest binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.ColumnSet(AccountRecords.Digest, hash).
+	// Digest binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.Set(AccountRecords.Digest, hash).
 	Digest orm.Column[Account, password.Hash]
-	// Backup binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.NullableColumnSet(AccountRecords.Backup, hash).
+	// Backup binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.Set(AccountRecords.Backup, hash).
 	Backup orm.NullableColumn[Account, password.Hash]
-	// Enabled binds the stored field. Example: orm.ColumnSet(AccountRecords.Enabled, true).
+	// Enabled binds the stored field. Example: orm.Set(AccountRecords.Enabled, true).
 	Enabled orm.Column[Account, bool]
 }
 

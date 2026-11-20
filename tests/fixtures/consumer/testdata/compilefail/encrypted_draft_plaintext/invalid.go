@@ -6,4 +6,4 @@ import (
 	"foundry.test/consumer/vault"
 )
 
-func bad() { _ = orm.EncryptedSet(vault.Entries.Token, "plaintext") }
+func bad() { _ = orm.Set(vault.Entries.Token, "plaintext") }

@@ -21,7 +21,7 @@ func OrderRoute(db database.Executor, endpoint http.AuthenticatedEndpoint[Path, 
 		if err != nil {
 			return value.Optional[Workspace]{}, err
 		}
-		workspaces := Workspaces.Query().Where(orm.TextEq(Workspaces.Tenant, actor.Tenant))
+		workspaces := Workspaces.Query().Where(orm.Eq(Workspaces.Tenant, actor.Tenant))
 		return orm.Keyed(workspaces, Workspaces.Key()).Find(ctx, db, path.Workspace)
 	})
 
@@ -50,9 +50,9 @@ func OrderRoute(db database.Executor, endpoint http.AuthenticatedEndpoint[Path, 
 // doc-example:begin create-order-transaction
 func CreateOrder(ctx context.Context, tx *database.Tx, actor Actor, in BoundRequest, producer *events.Outbox) (Receipt, error) {
 	order, err := orm.Insert(ctx, tx, Orders.Table,
-		orm.NumberSet(Orders.WorkspaceID, in.Model.ID),
-		orm.NumberSet(Orders.Caller, actor.ID),
-		orm.TextSet(Orders.Name, in.Request.Body.Name),
+		orm.Set(Orders.WorkspaceID, in.Model.ID),
+		orm.Set(Orders.Caller, actor.ID),
+		orm.Set(Orders.Name, in.Request.Body.Name),
 	)
 	if err != nil {
 		return Receipt{}, err

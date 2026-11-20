@@ -6,5 +6,5 @@ import (
 )
 
 func F() {
-	orm.HasManyOf(models.Users.Orders, orm.KeyExpr(models.Users.ID), orm.KeyExpr(models.Users.ID))
+	orm.HasManyOf(models.Users.Orders, models.Users.ID, models.Users.ID)
 }

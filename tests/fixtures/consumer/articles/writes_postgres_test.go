@@ -53,7 +53,7 @@ func TestSlotWrites(t *testing.T) {
 		var loaded articles.Article
 		if err := f.store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 			var err error
-			loaded, err = orm.Require(ctx, tx, articles.Articles.Query().With(x.Title.Relation(articles.Articles.Title), x.SEO.Relation(articles.Articles.SEO)).Where(orm.KeyEq(articles.Articles.Key(), article.ID)))
+			loaded, err = orm.Require(ctx, tx, articles.Articles.Query().With(x.Title.Relation(articles.Articles.Title), x.SEO.Relation(articles.Articles.SEO)).Where(orm.Eq(articles.Articles.Key(), article.ID)))
 			return err
 		}); err != nil {
 			t.Fatal(err)
@@ -182,7 +182,7 @@ func TestSlotMetadataVersionMismatchFailsTheLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = f.store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := orm.Require(ctx, tx, articles.Articles.Query().With(x.SEO.Relation(articles.Articles.SEO)).Where(orm.KeyEq(articles.Articles.Key(), article.ID)))
+		_, err := orm.Require(ctx, tx, articles.Articles.Query().With(x.SEO.Relation(articles.Articles.SEO)).Where(orm.Eq(articles.Articles.Key(), article.ID)))
 		return err
 	})
 	if !errors.Is(err, fault.Conflict) {
@@ -236,11 +236,11 @@ func TestSlotAttachmentsPublishInsideTheCallersTransaction(t *testing.T) {
 	}
 	var article articles.Article
 	if err := f.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		author, err := orm.Insert(ctx, tx, articles.Authors.Table, orm.TextSet(articles.Authors.Name, "Author in transaction"))
+		author, err := orm.Insert(ctx, tx, articles.Authors.Table, orm.Set(articles.Authors.Name, "Author in transaction"))
 		if err != nil {
 			return err
 		}
-		if article, err = orm.Insert(ctx, tx, articles.Articles.Table, orm.KeySet(articles.Articles.Key(), id), orm.TextSet(articles.Articles.Slug, "in-transaction"), orm.ColumnSet(articles.Articles.AuthorID, author.ID)); err != nil {
+		if article, err = orm.Insert(ctx, tx, articles.Articles.Table, orm.Set(articles.Articles.Key(), id), orm.Set(articles.Articles.Slug, "in-transaction"), orm.Set(articles.Articles.AuthorID, author.ID)); err != nil {
 			return err
 		}
 		if result, err := x.Logo.ReplaceIn(ctx, tx, article, first); err != nil || result.Publication != attachments.Published {
@@ -258,7 +258,7 @@ func TestSlotAttachmentsPublishInsideTheCallersTransaction(t *testing.T) {
 	var loaded articles.Article
 	if err := f.store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		loaded, err = orm.Require(ctx, tx, articles.Articles.Query().With(x.Logo.Relation(articles.Articles.Logo), x.Galleries.Relation(articles.Articles.Galleries)).Where(orm.KeyEq(articles.Articles.Key(), article.ID)))
+		loaded, err = orm.Require(ctx, tx, articles.Articles.Query().With(x.Logo.Relation(articles.Articles.Logo), x.Galleries.Relation(articles.Articles.Galleries)).Where(orm.Eq(articles.Articles.Key(), article.ID)))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -453,7 +453,7 @@ func TestPrepareLocksAnExistingOwner(t *testing.T) {
 	x := articles.ArticleSlots.From(runtime)
 	article := f.createArticle(t, "locked")
 	if err := f.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		if _, err := orm.RequireLocked(ctx, tx, orm.Lock(articles.Articles.Query()).Where(orm.KeyEq(articles.Articles.Key(), article.ID))); err != nil {
+		if _, err := orm.RequireLocked(ctx, tx, orm.Lock(articles.Articles.Query()).Where(orm.Eq(articles.Articles.Key(), article.ID))); err != nil {
 			return err
 		}
 		waiting, cancel := context.WithTimeout(ctx, 300*time.Millisecond)

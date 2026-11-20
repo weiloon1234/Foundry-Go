@@ -31,15 +31,15 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 	table := orm.Define("predicate_owners", func(b orm.Builder[predicateOwner], m *predicateOwner) orm.Table[predicateOwner, string] {
 		return orm.TableOf(b, &m.ID)
 	})
-	p := orm.KeyEq(table.Key(), secret)
+	p := orm.Eq(table.Key(), secret)
 	q := table.Query().Where(p)
-	value := expr.Value(orm.KeyExpr(table.Key()))
-	param := expr.Param(orm.KeyExpr(table.Key()), secret)
+	value := expr.Value(table.Key())
+	param := expr.Param(table.Key(), secret)
 	projected := expr.ModelPredicate(p)
 	source := rows.From(q)
 	scalar := rows.SelectScalar(source, expr.AsSelected(param))
 	record := rows.ModelRecord(q)
-	report := rows.SelectValue(q, orm.KeyExpr(table.Key()))
+	report := rows.SelectValue(q, table.Key())
 	window := expr.Window[predicateOwner]{}.PartitionBy(expr.Group(param)).OrderBy(expr.Asc(param))
 	agg := expr.Filter(expr.Count[predicateOwner](), projected)
 
@@ -47,7 +47,7 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapted, err := rows.CompileRead(rows.Read(rows.SelectValue(table.Query(), orm.KeyExpr(table.Key())).Where(projected)))
+	adapted, err := rows.CompileRead(rows.Read(rows.SelectValue(table.Query(), table.Key()).Where(projected)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 	assertRetentionRedacted(t, "rows/transaction-subquery", rows.TransactionSubqueryOf(source), secret)
 	assertRetentionRedacted(t, "rows/transaction-cte", rows.TransactionCTE("private_records", rows.TransactionOf(record)), secret)
 	left, right := rows.As[retentionLeft](q, "l"), rows.As[retentionRight](q, "r")
-	lv, rv := expr.At(rows.Scope(left), orm.KeyExpr(table.Key())), expr.At(rows.Scope(right), orm.KeyExpr(table.Key()))
+	lv, rv := expr.At(rows.Scope(left), table.Key()), expr.At(rows.Scope(right), table.Key())
 	on := rows.OnEqual(lv, rv).WhereLeft(expr.Eq(lv, secret)).WhereRight(expr.Eq(rv, secret))
 	assertRetentionRedacted(t, "rows/alias", left, secret)
 	assertRetentionRedacted(t, "rows/join-on", on, secret)

@@ -134,8 +134,8 @@ type Entry struct {
 
 The [handwritten table](../../tests/fixtures/consumer/vault/orm.go) uses
 `orm.EncryptedTextOf` and `orm.NullableEncryptedJSONOf`. Write through
-`orm.Insert` with `orm.EncryptedSet(vault.Entries.Token, encrypted.NewText(apiToken))`
-and `orm.NullableEncryptedSetNull(vault.Entries.Settings)`. The returned model
+`orm.Insert` with `orm.Set(vault.Entries.Token, encrypted.NewText(apiToken))`
+and `orm.SetNull(vault.Entries.Settings)`. The returned model
 exposes plaintext through `Token.Reveal()`; the column holds an envelope.
 
 Configured applications give every database connection the application key ring
@@ -157,7 +157,7 @@ changing a primary key, needs re-encryption.
 
 Every write uses a fresh random nonce, so encrypted fields have no `Eq`, `Like`,
 ordering, conflict-update, `rows.Select` mapping or aggregate operations; the compiler
-rejects them, and a nullable field offers only `orm.NullableEncryptedIsNull`/`orm.NullableEncryptedIsNotNull`. Set-based
+rejects them, and a nullable field offers only `orm.IsNull`/`orm.IsNotNull`. Set-based
 writes (`orm.UpdateAll`, `Values` on insert-from or update-from) reject encrypted
 assignments, because one envelope cannot belong to many rows; per-model writes
 such as `orm.CreateEach` bind each row to its own key. An upsert seals the

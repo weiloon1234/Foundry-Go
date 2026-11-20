@@ -7,4 +7,4 @@ import (
 	value "github.com/weiloon1234/Foundry-Go/value"
 )
 
-var _ = orm.NullableTextIContains(m.Users.Nickname, value.Of("name"))
+var _ = orm.IContains(m.Users.Nickname, value.Of("name"))

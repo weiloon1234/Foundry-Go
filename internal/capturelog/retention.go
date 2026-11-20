@@ -114,7 +114,7 @@ func (l *Log[S, M]) Prune(ctx context.Context, cutoff temporal.DateTime, capped 
 		if !more {
 			return removed, false, nil
 		}
-		if done, err = capScope(t.Query().Where(orm.TextEq(*t.Partition, partition))); err != nil || !done {
+		if done, err = capScope(t.Query().Where(orm.Eq(*t.Partition, partition))); err != nil || !done {
 			return removed, !done && err == nil, err
 		}
 		last = next
@@ -152,13 +152,13 @@ func (l *Log[S, M]) Estimate(ctx context.Context, cutoff temporal.DateTime, capp
 	t := l.table
 	var total int64
 	err := l.Transaction(ctx, true, func(tx *database.Tx) error {
-		expired, err := orm.Count(ctx, tx, t.Query().Where(orm.TimeLt(t.At, cutoff)))
+		expired, err := orm.Count(ctx, tx, t.Query().Where(orm.Lt(t.At, cutoff)))
 		total = expired
 		if err != nil || !capped {
 			return err
 		}
 		over := func(scope orm.Query[M]) error {
-			retained, err := orm.Count(ctx, tx, scope.Where(orm.TimeGte(t.At, cutoff)))
+			retained, err := orm.Count(ctx, tx, scope.Where(orm.Gte(t.At, cutoff)))
 			total += max(0, retained-int64(l.limits.MaxRows))
 			return err
 		}
@@ -172,7 +172,7 @@ func (l *Log[S, M]) Estimate(ctx context.Context, cutoff temporal.DateTime, capp
 			if err != nil || !more {
 				return err
 			}
-			if err := over(t.Query().Where(orm.TextEq(*t.Partition, partition))); err != nil {
+			if err := over(t.Query().Where(orm.Eq(*t.Partition, partition))); err != nil {
 				return err
 			}
 			last = next
@@ -184,22 +184,22 @@ func (l *Log[S, M]) Estimate(ctx context.Context, cutoff temporal.DateTime, capp
 // deleteBefore removes up to limit rows of scope captured before cutoff,
 // oldest first, in one statement that never loads payloads.
 func deleteBefore[M any](ctx context.Context, tx *database.Tx, t Table[M], scope orm.Query[M], cutoff temporal.DateTime, limit int) (int64, error) {
-	oldest := rows.SelectScalar(rows.From(scope.Where(orm.TimeLt(t.At, cutoff)).OrderBy(orm.TimeAsc(t.At), orm.KeyAsc(t.ID)).Limit(limit)), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(t.ID)))))
-	return orm.DeleteAll(ctx, tx, expr.Where(t.Query(), rows.InQuery(expr.Value(orm.KeyExpr(t.ID)), oldest)))
+	oldest := rows.SelectScalar(rows.From(scope.Where(orm.Lt(t.At, cutoff)).OrderBy(orm.Asc(t.At), orm.Asc(t.ID)).Limit(limit)), expr.AsSelected(expr.Row(expr.Value(t.ID))))
+	return orm.DeleteAll(ctx, tx, expr.Where(t.Query(), rows.InQuery(expr.Value(t.ID), oldest)))
 }
 
 // overflow returns the capture time of the newest row of scope beyond keep,
 // when it holds more than keep rows. Rows captured at or before it exceed
 // the cap; rows sharing that microsecond with a kept row are removed too.
 func overflow[M any](ctx context.Context, tx *database.Tx, t Table[M], scope orm.Query[M], keep int) (value.Optional[temporal.DateTime], error) {
-	return rows.Read(rows.SelectValue(scope.OrderBy(orm.TimeDesc(t.At), orm.KeyDesc(t.ID)).Offset(keep).Limit(1), orm.TimeExpr(t.At))).First(ctx, tx)
+	return rows.Read(rows.SelectValue(scope.OrderBy(orm.Desc(t.At), orm.Desc(t.ID)).Offset(keep).Limit(1), t.At)).First(ctx, tx)
 }
 
 // nextPartition returns the smallest partition value after last.
 func nextPartition[M any](ctx context.Context, tx *database.Tx, t Table[M], last value.Optional[string]) (value.Optional[string], error) {
 	q := t.Query()
 	if after, set := last.Get(); set {
-		q = q.Where(orm.TextGt(*t.Partition, after))
+		q = q.Where(orm.Gt(*t.Partition, after))
 	}
-	return rows.Read(rows.SelectValue(q.OrderBy(orm.TextAsc(*t.Partition)).Limit(1), orm.TextExpr(*t.Partition))).First(ctx, tx)
+	return rows.Read(rows.SelectValue(q.OrderBy(orm.Asc(*t.Partition)).Limit(1), *t.Partition)).First(ctx, tx)
 }

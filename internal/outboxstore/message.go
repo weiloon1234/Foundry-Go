@@ -42,43 +42,43 @@ type MessageTable struct {
 	// Table provides Message queries and writes. Example: Messages.Query().Limit(10).
 	orm.Table[Message, model.ID[Message]]
 	// ID binds the persisted Message.ID column.
-	// Example: orm.KeyEq(Messages.ID, id).
+	// Example: orm.Eq(Messages.ID, id).
 	ID orm.Key[Message, model.ID[Message]]
 	// Kind binds the persisted Message.Kind column.
-	// Example: orm.TextSet(Messages.Kind, kind).
+	// Example: orm.Set(Messages.Kind, kind).
 	Kind orm.Text[Message, string]
 	// Destination binds the persisted Message.Destination column.
-	// Example: orm.TextSet(Messages.Destination, destination).
+	// Example: orm.Set(Messages.Destination, destination).
 	Destination orm.Text[Message, outbox.Destination]
 	// Name binds the persisted Message.Name column.
-	// Example: orm.TextSet(Messages.Name, name).
+	// Example: orm.Set(Messages.Name, name).
 	Name orm.Text[Message, string]
 	// Version binds the persisted Message.Version column.
-	// Example: orm.NumberSet(Messages.Version, version).
+	// Example: orm.Set(Messages.Version, version).
 	Version orm.Number[Message, uint32]
 	// Payload binds the persisted Message.Payload column.
-	// Example: encoded, err := value.NewJSON(payload); if err == nil { _ = orm.JSONSet(Messages.Payload, encoded) }.
+	// Example: encoded, err := value.NewJSON(payload); if err == nil { _ = orm.Set(Messages.Payload, encoded) }.
 	Payload orm.JSON[Message, json.RawMessage]
 	// Origin binds the persisted Message.Origin column.
-	// Example: encoded, err := value.NewJSON(origin); if err == nil { _ = orm.JSONSet(Messages.Origin, encoded) }.
+	// Example: encoded, err := value.NewJSON(origin); if err == nil { _ = orm.Set(Messages.Origin, encoded) }.
 	Origin orm.JSON[Message, attribution.Origin]
 	// CreatedAt preserves an explicitly assigned creation time; when omitted on insert, the database supplies its default.
-	// Example: orm.TimeSet(Messages.CreatedAt, createdAt).
+	// Example: orm.Set(Messages.CreatedAt, createdAt).
 	CreatedAt orm.Time[Message, temporal.DateTime]
 	// PublishState binds the persisted Message.PublishState column.
-	// Example: orm.TextSet(Messages.PublishState, publishState).
+	// Example: orm.Set(Messages.PublishState, publishState).
 	PublishState orm.Text[Message, outbox.PublicationState]
 	// PublishAttempts binds the persisted Message.PublishAttempts column.
-	// Example: orm.NumberSet(Messages.PublishAttempts, publishAttempts).
+	// Example: orm.Set(Messages.PublishAttempts, publishAttempts).
 	PublishAttempts orm.Number[Message, uint32]
 	// PublishAfter binds the persisted Message.PublishAfter column.
-	// Example: orm.TimeSet(Messages.PublishAfter, publishAfter).
+	// Example: orm.Set(Messages.PublishAfter, publishAfter).
 	PublishAfter orm.Time[Message, temporal.DateTime]
 	// PublishedAt binds the persisted Message.PublishedAt column.
-	// Example: orm.NullableTimeSetNull(Messages.PublishedAt).
+	// Example: orm.SetNull(Messages.PublishedAt).
 	PublishedAt orm.NullableTime[Message, temporal.DateTime]
 	// PublishReason binds the persisted Message.PublishReason column.
-	// Example: orm.TextSet(Messages.PublishReason, publishReason).
+	// Example: orm.Set(Messages.PublishReason, publishReason).
 	PublishReason orm.Text[Message, string]
 }
 

@@ -28,7 +28,7 @@ func (b *Backend) Prune(ctx context.Context, address mfa.Address, limit int) (ui
 			return err
 		}
 		fields := mfastore.Factors
-		rows, err := orm.AllLocked(ctx, tx, orm.Lock(factors(scope).Where(orm.NullableTimeLte(fields.PendingUntil, now)).OrderBy(orm.KeyAsc(fields.Key())).Limit(limit)).SkipLocked())
+		rows, err := orm.AllLocked(ctx, tx, orm.Lock(factors(scope).Where(orm.Lte(fields.PendingUntil, now)).OrderBy(orm.Asc(fields.Key())).Limit(limit)).SkipLocked())
 		if err != nil {
 			return err
 		}

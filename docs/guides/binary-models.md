@@ -15,16 +15,16 @@ SQL NULL. Decoding accepts driver `[]byte`, copies its buffer, and rejects text
 coercion. Binding owns its returned buffer. The existing custom-codec boundary
 still normalizes a custom encoder's nil byte slice to SQL NULL.
 
-Binary fields expose `orm.ColumnEq`, `orm.ColumnNe`, `orm.ColumnIn`, `orm.ColumnAsc`,
-`orm.ColumnDesc`, `orm.ColumnExpr`, `orm.ColumnSet`, counts, typed subquery membership
-and conflict operations. Nullable fields add `orm.NullableColumnIsNull`,
-`orm.NullableColumnIsNotNull` and `orm.NullableColumnSetNull`; their selected value retains
+Binary fields expose `orm.Eq`, `orm.Ne`, `orm.In`, `orm.Asc`,
+`orm.Desc`, `expr.Value`, `orm.Set`, counts, typed subquery membership
+and conflict operations. Nullable fields add `orm.IsNull`,
+`orm.IsNotNull` and `orm.SetNull`; their selected value retains
 `value.Nullable[T]`. Binary equality uses stored bytes, not slice identity.
 Text matching, numeric arithmetic and relation-key APIs are not exposed.
 
 Assignments copy binary inputs, and getters return independent copies.
-`orm.ColumnSet(Records.RawBytes, []byte{})` selects an empty value,
-`orm.NullableInputColumnSetNull(Records.Note)` selects NULL for a nullable field,
+`orm.Set(Records.RawBytes, []byte{})` selects an empty value,
+`orm.SetNull(Records.Note)` selects NULL for a nullable field,
 and omitting the assignment omits a write. Same-type and distinct-input
 mutators retain the existing once-per-write lifecycle. A byte-slice input to a
 string or other stored field receives the same copying behavior.

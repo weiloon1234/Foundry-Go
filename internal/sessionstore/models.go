@@ -54,10 +54,10 @@ type SubjectTable struct {
 	// Table provides Subject queries and writes. Example: Subjects.Query().Limit(10).
 	orm.Table[Subject, string]
 	// Scope binds the persisted Subject.Scope column.
-	// Example: orm.TextSet(Subjects.Scope, scope).
+	// Example: orm.Set(Subjects.Scope, scope).
 	Scope orm.Text[Subject, string]
 	// Identity binds the persisted Subject.Identity column.
-	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.JSONSet(Subjects.Identity, encoded) }.
+	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.Set(Subjects.Identity, encoded) }.
 	Identity orm.JSON[Subject, model.Identity]
 }
 
@@ -75,58 +75,58 @@ type EntryTable struct {
 	// Table provides Entry queries and writes. Example: Entries.Query().Limit(10).
 	orm.Table[Entry, model.ID[Entry]]
 	// ID binds the persisted Entry.ID column.
-	// Example: orm.KeyEq(Entries.ID, id).
+	// Example: orm.Eq(Entries.ID, id).
 	ID orm.Key[Entry, model.ID[Entry]]
 	// Scope binds the persisted Entry.Scope column.
-	// Example: orm.TextSet(Entries.Scope, scope).
+	// Example: orm.Set(Entries.Scope, scope).
 	Scope orm.Text[Entry, string]
 	// SubjectKey binds the persisted Entry.SubjectKey column.
-	// Example: orm.TextSet(Entries.SubjectKey, subjectKey).
+	// Example: orm.Set(Entries.SubjectKey, subjectKey).
 	SubjectKey orm.Text[Entry, string]
 	// SecretHash binds the persisted Entry.SecretHash column.
-	// Example: orm.TextSet(Entries.SecretHash, secretHash).
+	// Example: orm.Set(Entries.SecretHash, secretHash).
 	SecretHash orm.Text[Entry, string]
 	// Assurance binds the persisted Entry.Assurance column.
-	// Example: orm.NumberSet(Entries.Assurance, assurance).
+	// Example: orm.Set(Entries.Assurance, assurance).
 	Assurance orm.Number[Entry, uint8]
 	// Remember binds the persisted Entry.Remember column.
-	// Example: orm.ColumnSet(Entries.Remember, remember).
+	// Example: orm.Set(Entries.Remember, remember).
 	Remember orm.Column[Entry, bool]
 	// Sliding binds the persisted Entry.Sliding column.
-	// Example: orm.ColumnSet(Entries.Sliding, sliding).
+	// Example: orm.Set(Entries.Sliding, sliding).
 	Sliding orm.Column[Entry, bool]
 	// IdleNanos binds the persisted Entry.IdleNanos column.
-	// Example: orm.NumberSet(Entries.IdleNanos, idleNanos).
+	// Example: orm.Set(Entries.IdleNanos, idleNanos).
 	IdleNanos orm.Number[Entry, int64]
 	// CreatedAt binds the caller-supplied creation time; the ORM does not automatically populate or refresh it.
-	// Example: orm.TimeSet(Entries.CreatedAt, createdAt).
+	// Example: orm.Set(Entries.CreatedAt, createdAt).
 	CreatedAt orm.Time[Entry, temporal.DateTime]
 	// LastSeenAt binds the persisted Entry.LastSeenAt column.
-	// Example: orm.TimeSet(Entries.LastSeenAt, lastSeenAt).
+	// Example: orm.Set(Entries.LastSeenAt, lastSeenAt).
 	LastSeenAt orm.Time[Entry, temporal.DateTime]
 	// IdleExpiresAt binds the persisted Entry.IdleExpiresAt column.
-	// Example: orm.TimeSet(Entries.IdleExpiresAt, idleExpiresAt).
+	// Example: orm.Set(Entries.IdleExpiresAt, idleExpiresAt).
 	IdleExpiresAt orm.Time[Entry, temporal.DateTime]
 	// ExpiresAt binds the persisted Entry.ExpiresAt column.
-	// Example: orm.TimeSet(Entries.ExpiresAt, expiresAt).
+	// Example: orm.Set(Entries.ExpiresAt, expiresAt).
 	ExpiresAt orm.Time[Entry, temporal.DateTime]
 	// ClientIP binds the persisted Entry.ClientIP column.
-	// Example: orm.NullableTextSetNull(Entries.ClientIP).
+	// Example: orm.SetNull(Entries.ClientIP).
 	ClientIP orm.NullableText[Entry, string]
 	// UserAgent binds the persisted Entry.UserAgent column.
-	// Example: orm.NullableTextSetNull(Entries.UserAgent).
+	// Example: orm.SetNull(Entries.UserAgent).
 	UserAgent orm.NullableText[Entry, string]
 	// ConfirmedAt binds the persisted Entry.ConfirmedAt column.
-	// Example: orm.NullableTimeSetNull(Entries.ConfirmedAt).
+	// Example: orm.SetNull(Entries.ConfirmedAt).
 	ConfirmedAt orm.NullableTime[Entry, temporal.DateTime]
 	// ImpersonatorIdentity binds the persisted Entry.ImpersonatorIdentity column.
-	// Example: orm.NullableTextSetNull(Entries.ImpersonatorIdentity).
+	// Example: orm.SetNull(Entries.ImpersonatorIdentity).
 	ImpersonatorIdentity orm.NullableText[Entry, string]
 	// ImpersonatorGuard binds the persisted Entry.ImpersonatorGuard column.
-	// Example: orm.NullableTextSetNull(Entries.ImpersonatorGuard).
+	// Example: orm.SetNull(Entries.ImpersonatorGuard).
 	ImpersonatorGuard orm.NullableText[Entry, string]
 	// ImpersonatorSession binds the persisted Entry.ImpersonatorSession column.
-	// Example: orm.NullableColumnSetNull(Entries.ImpersonatorSession).
+	// Example: orm.SetNull(Entries.ImpersonatorSession).
 	ImpersonatorSession orm.NullableColumn[Entry, model.ID[Entry]]
 }
 

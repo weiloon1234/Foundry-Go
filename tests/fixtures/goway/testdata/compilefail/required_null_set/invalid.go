@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func F() { orm.NullableNumberSetNull(models.Orders.TotalCents) }
+func F() { orm.SetNull(models.Orders.TotalCents) }

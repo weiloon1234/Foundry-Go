@@ -57,8 +57,8 @@ func TestRelationAndProjectionTypesRejectWrongOwners(t *testing.T) {
  var text rows.Field[Order,string]
  var member=rows.As[L](uq,"m")
  var order=rows.As[R](oq,"o")
- var joined=rows.InnerJoin(member,order,rows.On(expr.At(rows.Scope(member),orm.KeyExpr(uid)),expr.At(rows.Scope(order),orm.ColumnExpr(fk))))
- var _=orm.BelongsToOf(slot,orm.ColumnExpr(fk),orm.KeyExpr(uid))
+ var joined=rows.InnerJoin(member,order,rows.On(expr.At(rows.Scope(member),uid),expr.At(rows.Scope(order),fk)))
+ var _=orm.BelongsToOf(slot,fk,uid)
  var _=text
  var _=oid
  `
@@ -66,31 +66,31 @@ func TestRelationAndProjectionTypesRejectWrongOwners(t *testing.T) {
 		name, extra string
 		invalid     bool
 	}{
-		{"nullable join", `var _=rows.On(expr.At(rows.Scope(order),orm.NullableColumnExpr(nfk)),expr.At(rows.Scope(member),orm.KeyExpr(uid)));var _=expr.NullableEq(expr.At(rows.Scope(order),orm.NullableColumnExpr(nfk)), model.ID[User]{})`, false},
-		{"nullable null comparison", `var _=expr.NullableEq(expr.At(rows.Scope(order),orm.NullableColumnExpr(nfk)), value.Null[model.ID[User]]())`, true},
-		{"noncomparable join", `var _=rows.On(expr.At(rows.Scope(order),orm.ColumnExpr(bytes)),expr.At(rows.Scope(order),orm.ColumnExpr(bytes)))`, true},
+		{"nullable join", `var _=rows.On(expr.At(rows.Scope(order),nfk),expr.At(rows.Scope(member),uid));var _=expr.NullableEq(expr.At(rows.Scope(order),nfk), model.ID[User]{})`, false},
+		{"nullable null comparison", `var _=expr.NullableEq(expr.At(rows.Scope(order),nfk), value.Null[model.ID[User]]())`, true},
+		{"noncomparable join", `var _=rows.On(expr.At(rows.Scope(order),bytes),expr.At(rows.Scope(order),bytes))`, true},
 		{"joined right", `var _=rows.InnerJoin(member,joined,rows.JoinOn[rows.Alias[L,User],rows.Inner[rows.Alias[L,User],rows.Alias[R,Order]]]{})`, true},
 		{"returned column values", `
  var table orm.Table[User,int]
  var texts orm.Table[User,string]
- var _ = orm.KeyEq(table.Key(), 1)
- var _ = orm.NumberKeyGt(orm.NumberKey(table.Key()), 1)
- var _ = orm.TextContains(orm.TextKey(texts.Key()), "x")
- var _ = orm.NumberSet((func()orm.Number[User,int]{ return orm.Number[User,int]{} })(), 1)
- var _ = orm.NullableTextSetNull((func()orm.NullableText[User,string]{ return orm.NullableText[User,string]{} })())
- var _ = orm.Lock(table.Query().Where(orm.KeyEq(table.Key(), 1)).Limit(1))
+ var _ = orm.Eq(table.Key(), 1)
+ var _ = orm.Gt(orm.NumberKey(table.Key()), 1)
+ var _ = orm.Contains(orm.TextKey(texts.Key()), "x")
+ var _ = orm.Set((func()orm.Number[User,int]{ return orm.Number[User,int]{} })(), 1)
+ var _ = orm.SetNull((func()orm.NullableText[User,string]{ return orm.NullableText[User,string]{} })())
+ var _ = orm.Lock(table.Query().Where(orm.Eq(table.Key(), 1)).Limit(1))
  `, false},
 		{"column owner conversion", `var _ = orm.Number[Order,int](orm.Number[User,int]{})`, true},
 		{"enum capability conversion", `var _ = orm.Number[User,int](orm.Enum[User,int]{})`, true},
 		{"nullable capability conversion", `var _ = orm.NullableText[User,string](orm.NullableEnum[User,string]{})`, true},
-		{"valid", `var _=expr.At(rows.RightScope(joined,rows.Scope(order)),orm.KeyExpr(oid))`, false},
-		{"wrong model", `var _=expr.At(rows.Scope(member),orm.KeyExpr(oid))`, true},
+		{"valid", `var _=expr.At(rows.RightScope(joined,rows.Scope(order)),oid)`, false},
+		{"wrong model", `var _=expr.At(rows.Scope(member),oid)`, true},
 		{"wrong side", `var _=rows.LeftScope(joined,rows.Scope(order))`, true},
-		{"wrong row value", `var _=rows.Map(text,expr.At(rows.Scope(order),orm.KeyExpr(oid)))`, true},
-		{"relation local model", `var _=orm.BelongsToOf(slot,orm.KeyExpr(uid),orm.KeyExpr(uid))`, true},
-		{"relation foreign model", `var many orm.Many[User,Order]; var _=orm.HasManyOf(many,orm.KeyExpr(uid),orm.KeyExpr(uid))`, true},
-		{"relation nullable model", `var local orm.NullableColumn[User,model.ID[User]]; var _=orm.BelongsToOf(slot,orm.NullableColumnExpr(local),orm.KeyExpr(uid))`, true},
-		{"wrong relation key", `var _=orm.BelongsToOf(slot,orm.KeyExpr(oid),orm.KeyExpr(uid))`, true},
+		{"wrong row value", `var _=rows.Map(text,expr.At(rows.Scope(order),oid))`, true},
+		{"relation local model", `var _=orm.BelongsToOf(slot,uid,uid)`, true},
+		{"relation foreign model", `var many orm.Many[User,Order]; var _=orm.HasManyOf(many,uid,uid)`, true},
+		{"relation nullable model", `var local orm.NullableColumn[User,model.ID[User]]; var _=orm.BelongsToOf(slot,local,uid)`, true},
+		{"wrong relation key", `var _=orm.BelongsToOf(slot,oid,uid)`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fset := token.NewFileSet()

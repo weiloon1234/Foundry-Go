@@ -82,7 +82,7 @@ func TestAuditRegistrationOwnsRecorderAndRollsBackWithBusinessWrite(t *testing.T
 		}
 		for _, fail := range []bool{false, true} {
 			reject = fail
-			_, err = orm.Insert(t.Context(), db, table.Table, orm.KeySet(table.Key(), 7), orm.TextSet(table.Name, "input"), orm.TextSet(table.Token, "private-token"))
+			_, err = orm.Insert(t.Context(), db, table.Table, orm.Set(table.Key(), 7), orm.Set(table.Name, "input"), orm.Set(table.Token, "private-token"))
 			if fail {
 				if !errors.Is(err, veto) {
 					t.Fatal(err)

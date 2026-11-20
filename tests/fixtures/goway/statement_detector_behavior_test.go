@@ -71,7 +71,7 @@ func BenchmarkStatementDetectorConsumer(b *testing.B) {
 			}
 			db := g.open(ctx)
 			defer db.Close(context.Background())
-			q := models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100))
+			q := models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100))
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {

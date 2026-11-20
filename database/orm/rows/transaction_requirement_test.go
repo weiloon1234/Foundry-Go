@@ -47,9 +47,9 @@ func testTransactionMarkerMembership[M TransactionScopeType](t *testing.T, outer
 	m := declareMembers()
 	a := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "a")
 	b := AsTransaction[right](TransactionOf(ModelRecord(m.Query())), "b")
-	id := expr.AsSelected(expr.Row(expr.At(TransactionScope(a), orm.KeyExpr(m.ID))))
-	on := On(expr.At(TransactionScope(a), orm.KeyExpr(m.ID)), expr.At(TransactionScope(b), orm.KeyExpr(m.ID)))
-	ordinary := expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))
+	id := expr.AsSelected(expr.Row(expr.At(TransactionScope(a), m.ID)))
+	on := On(expr.At(TransactionScope(a), m.ID), expr.At(TransactionScope(b), m.ID))
+	ordinary := expr.AsSelected(expr.Row(expr.Value(m.ID)))
 	inputs := map[string]transactionMembershipInputs{
 		"selected":   {SelectTransactionValue(a, id), SelectTransactionValue(a, expr.Nullable(id))},
 		"lifted":     {TransactionValueOf(Values(SelectScalar(From(m.Query()), ordinary))), TransactionValueOf(Values(SelectScalar(From(m.Query()), expr.Nullable(ordinary))))},
@@ -63,8 +63,8 @@ func testTransactionMarkerMembership[M TransactionScopeType](t *testing.T, outer
 	db := openTest(t, state)
 	for name, input := range inputs {
 		for variant, p := range map[string]expr.Predicate[M]{
-			"nonnullable": TransactionInQuery(expr.Value(orm.KeyExpr(outer.Key())), input.value),
-			"nullable":    TransactionInNullableQuery(expr.Value(orm.KeyExpr(outer.Key())), input.nullable),
+			"nonnullable": TransactionInQuery(expr.Value(outer.Key()), input.value),
+			"nullable":    TransactionInNullableQuery(expr.Value(outer.Key()), input.nullable),
 		} {
 			t.Run(name+"/"+variant, func(t *testing.T) {
 				q := expr.Where(outer.Query(), p)
@@ -86,7 +86,7 @@ func testTransactionMarkerMembership[M TransactionScopeType](t *testing.T, outer
 	// A valid transaction selection still accepts the same unlocked operands.
 	for name, input := range inputs {
 		t.Run(name+"/transaction", func(t *testing.T) {
-			q := SelectTransactionValue(a, id).Where(TransactionInQuery(expr.At(TransactionScope(a), orm.KeyExpr(m.ID)), input.value), TransactionInNullableQuery(expr.At(TransactionScope(a), orm.KeyExpr(m.ID)), input.nullable))
+			q := SelectTransactionValue(a, id).Where(TransactionInQuery(expr.At(TransactionScope(a), m.ID), input.value), TransactionInNullableQuery(expr.At(TransactionScope(a), m.ID), input.nullable))
 			compileTransaction(t, q.core.Source)
 		})
 	}
@@ -102,7 +102,7 @@ func TestTransactionRecordIsStampedAtConstruction(t *testing.T) {
 	a := AsRecord[left](escaped, "escaped")
 	cte := AsRecord[left](CTE("escaped_cte", escaped), "escaped")
 	cursor := CursorFor(escaped)
-	cursor = cursor.UniqueBy(expr.Group(expr.At(cursor.Scope(), orm.KeyExpr(m.ID))))
+	cursor = cursor.UniqueBy(expr.Group(expr.At(cursor.Scope(), m.ID)))
 	for name, compile := range map[string]func() error{
 		"set":   func() error { _, err := CompileRead(ReadSet(escaped)); return err },
 		"alias": func() error { _, err := CompileRead(SelectRecord(a, Scope(a))); return err },

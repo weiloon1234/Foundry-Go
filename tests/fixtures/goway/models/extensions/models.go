@@ -27,7 +27,7 @@ type Author struct{ ID int64 }
 
 // ArticleTable binds persisted and extension fields. Example: Articles.Query().
 type ArticleTable struct {
-	// Table owns the primary key. Example: orm.KeyEq(Articles.Key(), 1).
+	// Table owns the primary key. Example: orm.Eq(Articles.Key(), 1).
 	orm.Table[Article, int64]
 	// Title binds translated text. Example: extensions.BindSlot(Articles.Key(),Articles.Title).
 	Title orm.Slot[Article, translations.Text]

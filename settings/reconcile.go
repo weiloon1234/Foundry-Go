@@ -51,7 +51,7 @@ func Reconcile(ctx context.Context, m *Manager) (Reconciliation, error) {
 		}
 		f := store.Settings
 		q := store.Settings.Query()
-		states, err := rows.ForUpdate(rows.Read(store.SettingStates(q.Where(orm.TextIn(f.Name, names...)).OrderBy(orm.TextAsc(f.Name)).Limit(MaxKeys+1)))).All(ctx, tx)
+		states, err := rows.ForUpdate(rows.Read(store.SettingStates(q.Where(orm.In(f.Name, names...)).OrderBy(orm.Asc(f.Name)).Limit(MaxKeys+1)))).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -86,7 +86,7 @@ func Reconcile(ctx context.Context, m *Manager) (Reconciliation, error) {
 			return err
 		}
 		for _, name := range upgrades {
-			row, err := orm.Require(ctx, tx, q.Where(orm.KeyEq(store.Settings.Key(), string(name))))
+			row, err := orm.Require(ctx, tx, q.Where(orm.Eq(store.Settings.Key(), string(name))))
 			if err != nil {
 				return err
 			}
@@ -94,12 +94,12 @@ func Reconcile(ctx context.Context, m *Manager) (Reconciliation, error) {
 			if err != nil {
 				return err
 			}
-			if _, err := orm.Update(ctx, tx, q, store.Settings.Key(), string(name), orm.JSONSet(store.Settings.Value, converted), orm.NumberSet(store.Settings.Version, uint32(m.keys[name].version)), orm.TimeSet(store.Settings.UpdatedAt, now)); err != nil {
+			if _, err := orm.Update(ctx, tx, q, store.Settings.Key(), string(name), orm.Set(store.Settings.Value, converted), orm.Set(store.Settings.Version, uint32(m.keys[name].version)), orm.Set(store.Settings.UpdatedAt, now)); err != nil {
 				return err
 			}
 		}
 		for _, name := range presented {
-			if _, err := orm.Update(ctx, tx, q, store.Settings.Key(), string(name), append(presentationDraft([]orm.Assignment[store.Setting]{}, m.keys[name].presentation), orm.TimeSet(store.Settings.UpdatedAt, now))...); err != nil {
+			if _, err := orm.Update(ctx, tx, q, store.Settings.Key(), string(name), append(presentationDraft([]orm.Assignment[store.Setting]{}, m.keys[name].presentation), orm.Set(store.Settings.UpdatedAt, now))...); err != nil {
 				return err
 			}
 		}

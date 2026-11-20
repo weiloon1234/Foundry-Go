@@ -16,17 +16,17 @@ func TestPredicateExtensionsCompile(t *testing.T) {
 		sql       string
 		arguments []any
 	}{
-		{NumberNotIn(age), "WHERE TRUE ", nil},
-		{NumberIn(age), "WHERE FALSE ", nil},
-		{And(NumberNotIn(age), NumberGt(age, 1)), `WHERE (TRUE AND ("public"."users"."age" > $1))`, []any{int64(1)}},
-		{NumberNotIn(age, 1, 2), `WHERE ("public"."users"."age" <> ALL($1))`, []any{"{1,2}"}},
-		{NumberNotIn(age), "WHERE TRUE ", nil},
-		{NumberBetween(age, 1, 9), `WHERE (("public"."users"."age" >= $1) AND ("public"."users"."age" <= $2))`, []any{int64(1), int64(9)}},
-		{TextStartsWith(name, "a_%!"), `WHERE ("public"."users"."name" LIKE $1 ESCAPE '!')`, []any{"a!_!%!!%"}},
-		{TextEndsWith(name, "z"), `WHERE ("public"."users"."name" LIKE $1 ESCAPE '!')`, []any{"%z"}},
-		{TextIStartsWith(name, "Ab"), `WHERE ("public"."users"."name" ILIKE $1 ESCAPE '!')`, []any{"Ab%"}},
-		{TextIEndsWith(name, "Ab"), `WHERE ("public"."users"."name" ILIKE $1 ESCAPE '!')`, []any{"%Ab"}},
-		{TextILike(name, "a%"), `WHERE ("public"."users"."name" ILIKE $1)`, []any{"a%"}},
+		{NotIn(age), "WHERE TRUE ", nil},
+		{In(age), "WHERE FALSE ", nil},
+		{And(NotIn(age), Gt(age, 1)), `WHERE (TRUE AND ("public"."users"."age" > $1))`, []any{int64(1)}},
+		{NotIn(age, 1, 2), `WHERE ("public"."users"."age" <> ALL($1))`, []any{"{1,2}"}},
+		{NotIn(age), "WHERE TRUE ", nil},
+		{Between(age, 1, 9), `WHERE (("public"."users"."age" >= $1) AND ("public"."users"."age" <= $2))`, []any{int64(1), int64(9)}},
+		{StartsWith(name, "a_%!"), `WHERE ("public"."users"."name" LIKE $1 ESCAPE '!')`, []any{"a!_!%!!%"}},
+		{EndsWith(name, "z"), `WHERE ("public"."users"."name" LIKE $1 ESCAPE '!')`, []any{"%z"}},
+		{IStartsWith(name, "Ab"), `WHERE ("public"."users"."name" ILIKE $1 ESCAPE '!')`, []any{"Ab%"}},
+		{IEndsWith(name, "Ab"), `WHERE ("public"."users"."name" ILIKE $1 ESCAPE '!')`, []any{"%Ab"}},
+		{ILike(name, "a%"), `WHERE ("public"."users"."name" ILIKE $1)`, []any{"a%"}},
 	} {
 		statement, err := Compile(f.Query().Where(test.predicate).Limit(1))
 		if err != nil {
@@ -41,7 +41,7 @@ func TestPredicateExtensionsCompile(t *testing.T) {
 			t.Fatalf("%s bound %v", sql, arguments)
 		}
 	}
-	statement, err := Compile(f.Query().OrderBy(NumberAsc(age).NullsFirst(), TextDesc(name).NullsLast()))
+	statement, err := Compile(f.Query().OrderBy(Asc(age).NullsFirst(), Desc(name).NullsLast()))
 	if err != nil || !strings.HasSuffix(statement.SQL(), `ORDER BY "public"."users"."age" ASC NULLS FIRST, "public"."users"."name" DESC NULLS LAST`) {
 		t.Fatal("explicit NULL placement lost", statement.SQL(), err)
 	}
@@ -53,7 +53,7 @@ func TestPredicateExtensionsCompile(t *testing.T) {
 		}
 	}
 	r := records()
-	if _, err := newCursorPlan(r.Query().OrderBy(NullableTextAsc(r.Note).NullsFirst()).state, 1, "", false, false); err == nil || !strings.Contains(err.Error(), "NULL") {
+	if _, err := newCursorPlan(r.Query().OrderBy(Asc(r.Note).NullsFirst()).state, 1, "", false, false); err == nil || !strings.Contains(err.Error(), "NULL") {
 		t.Fatal("cursor accepted explicit NULL placement", err)
 	}
 }

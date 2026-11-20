@@ -17,9 +17,9 @@ func TestRelationWriteMorphDefaultsAndSingleStatements(t *testing.T) {
 			var err error
 			switch mode {
 			case "attach":
-				_, err = orm.Attach(t.Context(), db, j.Peers, j.Parent{ID: 1}, j.Target{ID: 10}, orm.KeySet(j.Pivots.ID, 100), orm.ColumnSet(j.Pivots.Kind, "parent"), orm.TextSet(j.Pivots.Role, "member"))
+				_, err = orm.Attach(t.Context(), db, j.Peers, j.Parent{ID: 1}, j.Target{ID: 10}, orm.Set(j.Pivots.ID, 100), orm.Set(j.Pivots.Kind, "parent"), orm.Set(j.Pivots.Role, "member"))
 			case "morph":
-				_, err = orm.Attach(t.Context(), db, j.MorphPeers, j.Parent{ID: 1}, j.Target{ID: 10}, orm.KeySet(j.Pivots.ID, 100), orm.TextSet(j.Pivots.Role, "member"))
+				_, err = orm.Attach(t.Context(), db, j.MorphPeers, j.Parent{ID: 1}, j.Target{ID: 10}, orm.Set(j.Pivots.ID, 100), orm.Set(j.Pivots.Role, "member"))
 			case "detach":
 				_, err = orm.Detach(t.Context(), db, j.Peers, j.Parent{ID: 1}, j.Target{ID: 10})
 			case "force":

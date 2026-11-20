@@ -33,7 +33,7 @@ func TestScopeSourceFailureNeverReachesSQL(t *testing.T) {
 				var all, count, cursor, chunk, remove, update, setUpdate, setDelete func() error
 				table := hookedFields(nil, orm.WithGlobalScopes(func(table hookedTable) []orm.GlobalScope[hookedRow] {
 					fail()
-					return []orm.GlobalScope[hookedRow]{orm.Scope(table.Table, "tenant", func(context.Context) (orm.Predicate[hookedRow], error) { return orm.KeyEq(table.Key(), 7), nil })}
+					return []orm.GlobalScope[hookedRow]{orm.Scope(table.Table, "tenant", func(context.Context) (orm.Predicate[hookedRow], error) { return orm.Eq(table.Key(), 7), nil })}
 				}))
 				q := table.Query()
 				all = func() error { _, err := orm.All(ctx, db, q); return err }
@@ -45,10 +45,10 @@ func TestScopeSourceFailureNeverReachesSQL(t *testing.T) {
 				chunk = func() error { return orm.Chunk(ctx, db, q, 2, func([]hookedRow) error { return nil }) }
 				remove = func() error { _, err := orm.Delete(ctx, db, table.Table.Query(), table.Table.Key(), 1); return err }
 				update = func() error {
-					_, err := orm.Update(ctx, db, table.Table.Query(), table.Table.Key(), 1, orm.InputTextSet(table.Name, "changed"))
+					_, err := orm.Update(ctx, db, table.Table.Query(), table.Table.Key(), 1, orm.Set(table.Name, "changed"))
 					return err
 				}
-				setUpdate = func() error { _, err := orm.UpdateAll(ctx, db, q, orm.InputTextSet(table.Name, "changed")); return err }
+				setUpdate = func() error { _, err := orm.UpdateAll(ctx, db, q, orm.Set(table.Name, "changed")); return err }
 				setDelete = func() error { _, err := orm.DeleteAll(ctx, db, q); return err }
 				for _, terminal := range []struct {
 					name string

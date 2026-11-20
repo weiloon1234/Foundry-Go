@@ -169,7 +169,7 @@ type GroupEquality[S, V any] interface {
 
 // GroupNullable adds SQL null tests to exact typed HAVING comparisons.
 //
-// Example: expr.NullableOrderValueFilter(expr.Sum(orm.NumberExpr(Orders.Total)))
+// Example: expr.NullableOrderValueFilter(expr.Sum(Orders.Total))
 type GroupNullable[S, V any] interface {
 	GroupEquality[S, V]
 	// IsNull tests SQL nullness within the declared HAVING scope.

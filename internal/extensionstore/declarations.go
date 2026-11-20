@@ -13,34 +13,34 @@ type MetaTable struct {
 	// Table provides model queries and writes. Example: orm.First(ctx, tx, Metadata.Query()).
 	orm.Table[Meta, string]
 	// KeyColumn binds Meta.Key.
-	// Example: orm.TextSet(Metadata.KeyColumn, key).
+	// Example: orm.Set(Metadata.KeyColumn, key).
 	KeyColumn orm.TextLookupKey[Meta, string]
 	// Owner binds Meta.Owner.
-	// Example: orm.TextSet(Metadata.Owner, owner).
+	// Example: orm.Set(Metadata.Owner, owner).
 	Owner orm.Text[Meta, string]
 	// Scope binds Meta.Scope.
-	// Example: orm.TextSet(Metadata.Scope, scope).
+	// Example: orm.Set(Metadata.Scope, scope).
 	Scope orm.Text[Meta, string]
 	// SubjectKey binds Meta.SubjectKey.
-	// Example: orm.TextSet(Metadata.SubjectKey, subjectKey).
+	// Example: orm.Set(Metadata.SubjectKey, subjectKey).
 	SubjectKey orm.Text[Meta, string]
 	// Identity binds Meta.Identity.
-	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.JSONSet(Metadata.Identity, encoded) }.
+	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.Set(Metadata.Identity, encoded) }.
 	Identity orm.JSON[Meta, model.Identity]
 	// Name binds Meta.Name.
-	// Example: orm.TextSet(Metadata.Name, name).
+	// Example: orm.Set(Metadata.Name, name).
 	Name orm.Text[Meta, string]
 	// Version binds Meta.Version.
-	// Example: orm.NumberSet(Metadata.Version, version).
+	// Example: orm.Set(Metadata.Version, version).
 	Version orm.Number[Meta, uint32]
 	// Value binds Meta.Value.
-	// Example: encoded, err := value.NewJSON(value); if err == nil { _ = orm.JSONSet(Metadata.Value, encoded) }.
+	// Example: encoded, err := value.NewJSON(value); if err == nil { _ = orm.Set(Metadata.Value, encoded) }.
 	Value orm.JSON[Meta, json.RawMessage]
 	// CreatedAt preserves an explicit creation time; the owning clock supplies omitted values.
-	// Example: orm.TimeSet(Metadata.CreatedAt, createdAt).
+	// Example: orm.Set(Metadata.CreatedAt, createdAt).
 	CreatedAt orm.CreatedAt[Meta, temporal.DateTime]
 	// UpdatedAt is replaced by the owning clock after before-write hooks and before mutators.
-	// Example: orm.TimeSet(Metadata.UpdatedAt, updatedAt).
+	// Example: orm.Set(Metadata.UpdatedAt, updatedAt).
 	UpdatedAt orm.UpdatedAt[Meta, temporal.DateTime]
 }
 
@@ -55,43 +55,43 @@ type SettingTable struct {
 	// Table provides model queries and writes. Example: orm.First(ctx, tx, Settings.Query()).
 	orm.Table[Setting, string]
 	// Name binds Setting.Name.
-	// Example: orm.TextSet(Settings.Name, name).
+	// Example: orm.Set(Settings.Name, name).
 	Name orm.TextLookupKey[Setting, string]
 	// Version binds Setting.Version.
-	// Example: orm.NumberSet(Settings.Version, version).
+	// Example: orm.Set(Settings.Version, version).
 	Version orm.Number[Setting, uint32]
 	// Value binds Setting.Value.
-	// Example: encoded, err := value.NewJSON(value); if err == nil { _ = orm.JSONSet(Settings.Value, encoded) }.
+	// Example: encoded, err := value.NewJSON(value); if err == nil { _ = orm.Set(Settings.Value, encoded) }.
 	Value orm.JSON[Setting, json.RawMessage]
 	// Kind binds Setting.Kind.
-	// Example: orm.TextSet(Settings.Kind, kind).
+	// Example: orm.Set(Settings.Kind, kind).
 	Kind orm.Text[Setting, string]
 	// Parameters binds Setting.Parameters.
-	// Example: encoded, err := value.NewJSON(parameters); if err == nil { _ = orm.JSONSet(Settings.Parameters, encoded) }.
+	// Example: encoded, err := value.NewJSON(parameters); if err == nil { _ = orm.Set(Settings.Parameters, encoded) }.
 	Parameters orm.JSON[Setting, json.RawMessage]
 	// GroupName binds Setting.GroupName.
-	// Example: orm.TextSet(Settings.GroupName, groupName).
+	// Example: orm.Set(Settings.GroupName, groupName).
 	GroupName orm.Text[Setting, string]
 	// Label binds Setting.Label.
-	// Example: orm.TextSet(Settings.Label, label).
+	// Example: orm.Set(Settings.Label, label).
 	Label orm.Text[Setting, string]
 	// Description binds Setting.Description.
-	// Example: orm.TextSet(Settings.Description, description).
+	// Example: orm.Set(Settings.Description, description).
 	Description orm.Text[Setting, string]
 	// SortOrder binds Setting.SortOrder.
-	// Example: orm.NumberSet(Settings.SortOrder, sortOrder).
+	// Example: orm.Set(Settings.SortOrder, sortOrder).
 	SortOrder orm.Number[Setting, int32]
 	// IsPublic binds Setting.IsPublic.
-	// Example: orm.ColumnSet(Settings.IsPublic, isPublic).
+	// Example: orm.Set(Settings.IsPublic, isPublic).
 	IsPublic orm.Column[Setting, bool]
 	// PresentationDeclared binds Setting.PresentationDeclared.
-	// Example: orm.ColumnSet(Settings.PresentationDeclared, presentationDeclared).
+	// Example: orm.Set(Settings.PresentationDeclared, presentationDeclared).
 	PresentationDeclared orm.Column[Setting, bool]
 	// CreatedAt preserves an explicit creation time; the owning clock supplies omitted values.
-	// Example: orm.TimeSet(Settings.CreatedAt, createdAt).
+	// Example: orm.Set(Settings.CreatedAt, createdAt).
 	CreatedAt orm.CreatedAt[Setting, temporal.DateTime]
 	// UpdatedAt is replaced by the owning clock after before-write hooks and before mutators.
-	// Example: orm.TimeSet(Settings.UpdatedAt, updatedAt).
+	// Example: orm.Set(Settings.UpdatedAt, updatedAt).
 	UpdatedAt orm.UpdatedAt[Setting, temporal.DateTime]
 }
 
@@ -106,34 +106,34 @@ type TranslationTable struct {
 	// Table provides model queries and writes. Example: orm.First(ctx, tx, Translations.Query()).
 	orm.Table[Translation, string]
 	// KeyColumn binds Translation.Key.
-	// Example: orm.TextSet(Translations.KeyColumn, key).
+	// Example: orm.Set(Translations.KeyColumn, key).
 	KeyColumn orm.TextLookupKey[Translation, string]
 	// Owner binds Translation.Owner.
-	// Example: orm.TextSet(Translations.Owner, owner).
+	// Example: orm.Set(Translations.Owner, owner).
 	Owner orm.Text[Translation, string]
 	// Scope binds Translation.Scope.
-	// Example: orm.TextSet(Translations.Scope, scope).
+	// Example: orm.Set(Translations.Scope, scope).
 	Scope orm.Text[Translation, string]
 	// SubjectKey binds Translation.SubjectKey.
-	// Example: orm.TextSet(Translations.SubjectKey, subjectKey).
+	// Example: orm.Set(Translations.SubjectKey, subjectKey).
 	SubjectKey orm.Text[Translation, string]
 	// Identity binds Translation.Identity.
-	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.JSONSet(Translations.Identity, encoded) }.
+	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.Set(Translations.Identity, encoded) }.
 	Identity orm.JSON[Translation, model.Identity]
 	// Field binds Translation.Field.
-	// Example: orm.TextSet(Translations.Field, field).
+	// Example: orm.Set(Translations.Field, field).
 	Field orm.Text[Translation, string]
 	// Locale binds Translation.Locale.
-	// Example: orm.TextSet(Translations.Locale, locale).
+	// Example: orm.Set(Translations.Locale, locale).
 	Locale orm.Text[Translation, string]
 	// Value binds Translation.Value.
-	// Example: orm.TextSet(Translations.Value, value).
+	// Example: orm.Set(Translations.Value, value).
 	Value orm.Text[Translation, string]
 	// CreatedAt preserves an explicit creation time; the owning clock supplies omitted values.
-	// Example: orm.TimeSet(Translations.CreatedAt, createdAt).
+	// Example: orm.Set(Translations.CreatedAt, createdAt).
 	CreatedAt orm.CreatedAt[Translation, temporal.DateTime]
 	// UpdatedAt is replaced by the owning clock after before-write hooks and before mutators.
-	// Example: orm.TimeSet(Translations.UpdatedAt, updatedAt).
+	// Example: orm.Set(Translations.UpdatedAt, updatedAt).
 	UpdatedAt orm.UpdatedAt[Translation, temporal.DateTime]
 }
 

@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.NullableInputTextSetNull(m.Members.Email)
+var _ = orm.SetNull(m.Members.Email)

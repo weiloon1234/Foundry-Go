@@ -25,9 +25,9 @@ func transactionFixture(t *testing.T) (context.Context, *database.DB, string) {
 			return err
 		}
 		_, err := orm.InsertEach(ctx, tx, Records.Table, [][]orm.Assignment[Record]{
-			{orm.KeySet(Records.ID, 1), orm.TextSet(Records.Name, "Alpha")},
-			{orm.KeySet(Records.ID, 2), orm.TextSet(Records.Name, "Beta")},
-			{orm.KeySet(Records.ID, 3), orm.TextSet(Records.Name, "Gamma")},
+			{orm.Set(Records.ID, 1), orm.Set(Records.Name, "Alpha")},
+			{orm.Set(Records.ID, 2), orm.Set(Records.Name, "Beta")},
+			{orm.Set(Records.ID, 3), orm.Set(Records.Name, "Gamma")},
 		})
 		return err
 	}); err != nil {
@@ -50,7 +50,7 @@ func inTransaction(ctx context.Context, db *database.DB, path string, fn func(*d
 func assertIndependentLock(t *testing.T, ctx context.Context, db *database.DB, path string, q orm.LockedQuery[Record], id int64, blocked bool) {
 	t.Helper()
 	err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, q.NoWait().Where(orm.KeyEq(Records.ID, id)))
+		_, err := orm.RequireLocked(ctx, tx, q.NoWait().Where(orm.Eq(Records.ID, id)))
 		return err
 	})
 	if !blocked {
@@ -73,7 +73,7 @@ func recordCTE(q rows.TransactionRecordSource[Record]) rows.TransactionRead[rows
 func TestPostgresTransactionCTESkipLockedAndProjection(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
 	err := inTransaction(ctx, db, path, func(holder *database.Tx) error {
-		if _, err := orm.RequireLocked(ctx, holder, orm.Lock(Records.Query()).Where(orm.KeyEq(Records.ID, 1))); err != nil {
+		if _, err := orm.RequireLocked(ctx, holder, orm.Lock(Records.Query()).Where(orm.Eq(Records.ID, 1))); err != nil {
 			return err
 		}
 		return inTransaction(ctx, db, path, func(claimant *database.Tx) error {
@@ -100,7 +100,7 @@ func TestPostgresTransactionCTEAggregatesAndExistence(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			ctx, db, path := transactionFixture(t)
 			if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-				q := orm.Lock(Records.Query().OrderBy(orm.KeyAsc(Records.ID)))
+				q := orm.Lock(Records.Query().OrderBy(orm.Asc(Records.ID)))
 				switch mode {
 				case "count":
 					count, err := recordCTE(rows.LockedRecord(q)).Count(ctx, tx)
@@ -139,11 +139,11 @@ func TestPostgresTransactionCTEAggregatesAndExistence(t *testing.T) {
 
 func TestPostgresTransactionDerivedAndNestedJoinLocks(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
-	first := orm.ForNoKeyUpdate(Records.Query().Where(orm.KeyEq(Records.ID, 1)))
+	first := orm.ForNoKeyUpdate(Records.Query().Where(orm.Eq(Records.ID, 1)))
 	inner := rows.AsTransaction[claimedAlias](rows.TransactionCTE("first_claim", rows.LockedRecord(first)).Materialized(), "inner_claim")
 	nested := rows.TransactionCTE("second_claim", rows.SelectTransactionRecord(inner, rows.TransactionScope(inner))).NotMaterialized()
 	left := rows.AsTransaction[claimedAlias](nested, "candidate")
-	right := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyEq(Records.ID, 2)))), "other")
+	right := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.Eq(Records.ID, 2)))), "other")
 	a, b := recordAt(rows.TransactionScope(left)), recordAt(rows.TransactionScope(right))
 	joined := rows.TransactionInnerJoin(left, right, rows.OnEqual(expr.Add(a.ID, expr.ParamOf(expr.AsSelected(expr.Row(a.ID)), 1)), b.ID))
 	leftScope, rightScope := rows.LeftScope(joined, rows.TransactionScope(left)), rows.RightScope(joined, rows.TransactionScope(right))
@@ -183,7 +183,7 @@ func TestPostgresTransactionComposedSavepoints(t *testing.T) {
 	rollback := errors.New("roll back composed lock")
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 		err := tx.Transaction(ctx, func(nested *database.Tx) error {
-			if _, err := recordCTE(rows.LockedRecord(orm.Lock(Records.Query().Where(orm.KeyEq(Records.ID, 1))))).All(ctx, nested); err != nil {
+			if _, err := recordCTE(rows.LockedRecord(orm.Lock(Records.Query().Where(orm.Eq(Records.ID, 1))))).All(ctx, nested); err != nil {
 				return err
 			}
 			return rollback
@@ -192,7 +192,7 @@ func TestPostgresTransactionComposedSavepoints(t *testing.T) {
 			return errors.New("savepoint lost rollback error")
 		}
 		if err := tx.Transaction(ctx, func(nested *database.Tx) error {
-			_, err := recordCTE(rows.LockedRecord(orm.Lock(Records.Query().Where(orm.KeyEq(Records.ID, 2))))).All(ctx, nested)
+			_, err := recordCTE(rows.LockedRecord(orm.Lock(Records.Query().Where(orm.Eq(Records.ID, 2))))).All(ctx, nested)
 			return err
 		}); err != nil {
 			return err
@@ -208,7 +208,7 @@ func TestPostgresTransactionComposedSavepoints(t *testing.T) {
 
 func TestPostgresTransactionComposedCancellationAndValidation(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
-	q := recordCTE(rows.LockedRecord(orm.Lock(Records.Query().Where(orm.KeyEq(Records.ID, 1)))))
+	q := recordCTE(rows.LockedRecord(orm.Lock(Records.Query().Where(orm.Eq(Records.ID, 1)))))
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 		if _, err := q.All(ctx, tx); err != nil {
 			return err

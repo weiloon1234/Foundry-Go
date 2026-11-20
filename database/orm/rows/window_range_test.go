@@ -45,7 +45,7 @@ func TestWindowRangeTypedDistancesAndCapture(t *testing.T) {
 	})
 	source := rows.FromModel(d.Query())
 	w := expr.WindowFor(rows.ModelScope(d.Query()))
-	r := expr.NumericRange(w, expr.AsSelected(expr.Row(expr.Value(orm.ColumnExpr(d.Amount)))))
+	r := expr.NumericRange(w, expr.AsSelected(expr.Row(expr.Value(d.Amount))))
 	bound := r.Preceding(decimal.FromInt64(1))
 	encoded[0] = '9'
 	q := expressionQuery(source, expr.RowNumber(r.Desc().Between(bound, r.CurrentRow())), codec.Signed[int64]())
@@ -56,15 +56,15 @@ func TestWindowRangeTypedDistancesAndCapture(t *testing.T) {
 		}
 		s.Bindings[0].([]byte)[0] = '7'
 	}
-	tr := expr.TemporalRange(w, expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(d.Date)))))
-	nr := expr.NullableTemporalRange(w, expr.AsSelected(expr.Row(expr.Value(orm.NullableTimeExpr(d.MaybeDate)))))
+	tr := expr.TemporalRange(w, expr.AsSelected(expr.Row(expr.Value(d.Date))))
+	nr := expr.NullableTemporalRange(w, expr.AsSelected(expr.Row(expr.Value(d.MaybeDate))))
 	for _, window := range []expr.Window[windowRangeRecord]{tr.Between(tr.Preceding(temporal.Days(2)), tr.CurrentRow()), nr.Between(nr.Preceding(temporal.Days(2)), nr.CurrentRow())} {
 		s := expressionSQL(t, expressionQuery(source, expr.RowNumber(window), codec.Signed[int64]()))
 		if !strings.Contains(s.SQLText, "CAST($1 AS interval) PRECEDING") || !reflect.DeepEqual(s.Bindings, []any{temporal.Days(2).String()}) {
 			t.Fatal(s.SQLText, s.Bindings)
 		}
 	}
-	cr := expr.TemporalRange(w, expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(d.Clock)))))
+	cr := expr.TemporalRange(w, expr.AsSelected(expr.Row(expr.Value(d.Clock))))
 	for _, window := range []expr.Window[windowRangeRecord]{tr.Between(tr.Preceding(temporal.Days(-1)), tr.CurrentRow()), tr.Between(tr.Preceding(temporal.Months(-1)), tr.CurrentRow()), cr.Between(cr.Preceding(temporal.Days(1)), cr.CurrentRow())} {
 		q := expressionQuery(source, expr.RowNumber(window), codec.Signed[int64]())
 		if _, err := querycore.CompileRead(rows.SourceOf(q).Node, t.Context(), false, rows.SourceOf(q).Err, true); !errors.Is(err, fault.Invalid) {
@@ -79,7 +79,7 @@ func TestTemporalRangeComponentsAndSign(t *testing.T) {
 	})
 	source := rows.FromModel(d.Query())
 	w := expr.WindowFor(rows.ModelScope(d.Query()))
-	r := expr.TemporalRange(w, expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(d.Date)))))
+	r := expr.TemporalRange(w, expr.AsSelected(expr.Row(expr.Value(d.Date))))
 	mixed, err := temporal.NewInterval(-1, 31, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -88,7 +88,7 @@ func TestTemporalRangeComponentsAndSign(t *testing.T) {
 	if !strings.Contains(s.SQLText, "CAST($1 AS interval) PRECEDING") || !reflect.DeepEqual(s.Bindings, []any{mixed.String()}) {
 		t.Fatal(s.SQLText, s.Bindings)
 	}
-	clock := expr.TemporalRange(w, expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(d.Clock)))))
+	clock := expr.TemporalRange(w, expr.AsSelected(expr.Row(expr.Value(d.Clock))))
 	hour, err := temporal.Elapsed(time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func TestTypedNumericRangeFrames(t *testing.T) {
 	d := declareAggregateRecords()
 	q := rows.From(d.Query())
 	w := expr.WindowFor(rows.ModelScope(d.Query()))
-	id := expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(d.Exact))))
+	id := expr.AsSelected(expr.Row(expr.Value(d.Exact)))
 	r := expr.NumericRange(w, id).Desc()
 	framed := r.Between(r.Preceding(2), r.Following(3))
 	s, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.Over(expr.Count[aggregateRecord](), framed))))
@@ -116,7 +116,7 @@ func TestTypedNumericRangeFrames(t *testing.T) {
 			t.Fatal("invalid numeric RANGE", err)
 		}
 	}
-	fr := expr.NumericRange(w, expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(d.Approx)))))
+	fr := expr.NumericRange(w, expr.AsSelected(expr.Row(expr.Value(d.Approx))))
 	for _, v := range []float64{-1, math.Inf(1), math.NaN()} {
 		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.RowNumber(fr.Between(fr.Preceding(v), fr.CurrentRow()))))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid float distance", err)

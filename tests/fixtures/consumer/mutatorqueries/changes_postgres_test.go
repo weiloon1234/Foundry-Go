@@ -23,12 +23,12 @@ func TestPostgresStoredFieldChangesAfterMutators(t *testing.T) {
 			}
 		}
 		q := mutatorqueries.Members
-		createDraft := []orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(q.Email, " ADA@EXAMPLE.TEST ")}
+		createDraft := []orm.Assignment[mutatorqueries.Member]{orm.Set(q.Email, " ADA@EXAMPLE.TEST ")}
 		before, err := orm.Insert(t.Context(), tx, q.Table, createDraft...)
 		if err != nil {
 			return err
 		}
-		patch := []orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(q.Email, "  ADA@example.test  "), orm.NullableInputTextSet(q.Nickname, "")}
+		patch := []orm.Assignment[mutatorqueries.Member]{orm.Set(q.Email, "  ADA@example.test  "), orm.Set(q.Nickname, "")}
 		after, err := orm.Update(t.Context(), tx, q.Table.Query(), q.Table.Key(), before.ID, patch...)
 		if err != nil {
 			return err
@@ -38,14 +38,14 @@ func TestPostgresStoredFieldChangesAfterMutators(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		email, err := orm.ChangeOf(changes, orm.InputTextExpr(q.Email))
+		email, err := orm.ChangeOf(changes, q.Email)
 		if err != nil {
 			return err
 		}
 		if !email.Assigned() || email.Changed() {
 			t.Fatal("normalized assignment should not change stored email")
 		}
-		nickname, err := orm.NullableChangeOf(changes, orm.NullableInputTextExpr(q.Nickname))
+		nickname, err := orm.NullableChangeOf(changes, q.Nickname)
 		if err != nil {
 			return err
 		}
@@ -57,15 +57,15 @@ func TestPostgresStoredFieldChangesAfterMutators(t *testing.T) {
 		}
 		// Create supplied an omitted UUID. The comparison boundary accepts the
 		// effective assignment draft; the hook pipeline will reconstruct it.
-		created, err := orm.Compare(q.Table, value.Optional[mutatorqueries.Member]{}, value.Set(before), append(createDraft, orm.KeySet(q.Key(), before.ID))...)
+		created, err := orm.Compare(q.Table, value.Optional[mutatorqueries.Member]{}, value.Set(before), append(createDraft, orm.Set(q.Key(), before.ID))...)
 		if err != nil {
 			return err
 		}
-		createdDefault, err := orm.ChangeOf(created, orm.InputNumberExpr(q.Attempts))
+		createdDefault, err := orm.ChangeOf(created, q.Attempts)
 		if err != nil {
 			return err
 		}
-		createdID, err := orm.ChangeOf(created, orm.KeyExpr(q.Key()))
+		createdID, err := orm.ChangeOf(created, q.Key())
 		if err != nil {
 			return err
 		}
@@ -77,7 +77,7 @@ func TestPostgresStoredFieldChangesAfterMutators(t *testing.T) {
 			return err
 		}
 		deleted, err := orm.Compare(q.Table, value.Set(removed), value.Optional[mutatorqueries.Member]{})
-		deletedID, fieldErr := orm.ChangeOf(deleted, orm.KeyExpr(q.Key()))
+		deletedID, fieldErr := orm.ChangeOf(deleted, q.Key())
 		if err != nil || fieldErr != nil || !deleted.Changed() || deleted.Assigned() || deleted.After().IsSet() || !deletedID.Changed() {
 			t.Fatalf("deletion lost persisted snapshot or existence change: %v", err)
 		}

@@ -15,20 +15,20 @@ import (
 func TestPostgresIntervalRelationEquality(t *testing.T) {
 	runIntervals(t, func(tx *database.Tx, samples []intervalqueries.Sample) error {
 		for i, period := range []temporal.Interval{temporal.Months(1), temporal.Days(30), temporal.Days(2)} {
-			if _, err := orm.Insert(t.Context(), tx, intervalqueries.Plans.Table, orm.KeySet(intervalqueries.Plans.ID, i+1), orm.IntervalSet(intervalqueries.Plans.Period, period)); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, intervalqueries.Plans.Table, orm.Set(intervalqueries.Plans.ID, i+1), orm.Set(intervalqueries.Plans.Period, period)); err != nil {
 				return err
 			}
 		}
 		labels := intervalqueries.Labels
 		lf := intervalqueries.Labels
-		if _, err := orm.Insert(t.Context(), tx, labels.Table, orm.KeySet(lf.ID, temporal.Months(1)), orm.TextSet(lf.Name, "month")); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, labels.Table, orm.Set(lf.ID, temporal.Months(1)), orm.Set(lf.Name, "month")); err != nil {
 			return err
 		}
-		if _, err := orm.Insert(t.Context(), tx, intervalqueries.Links.Table, orm.KeySet(intervalqueries.Links.ID, temporal.Months(2)), orm.IntervalSet(intervalqueries.Links.PlanPeriod, temporal.Days(30)), orm.IntervalSet(intervalqueries.Links.LabelID, interval(t, 0, 0, 720*time.Hour))); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, intervalqueries.Links.Table, orm.Set(intervalqueries.Links.ID, temporal.Months(2)), orm.Set(intervalqueries.Links.PlanPeriod, temporal.Days(30)), orm.Set(intervalqueries.Links.LabelID, interval(t, 0, 0, 720*time.Hour))); err != nil {
 			return err
 		}
 		rel, agg := intervalqueries.PlanLinks, intervalqueries.PlanValues
-		parents, err := orm.All(t.Context(), tx, intervalqueries.Plans.Query().OrderBy(orm.KeyAsc(intervalqueries.Plans.ID)).With(rel.Samples.OrderBy(orm.KeyAsc(intervalqueries.Samples.ID)), rel.Labels, agg.SampleCount, agg.TotalPeriod))
+		parents, err := orm.All(t.Context(), tx, intervalqueries.Plans.Query().OrderBy(orm.Asc(intervalqueries.Plans.ID)).With(rel.Samples.OrderBy(orm.Asc(intervalqueries.Samples.ID)), rel.Labels, agg.SampleCount, agg.TotalPeriod))
 		if err != nil || len(parents) != 3 {
 			t.Fatal(parents, err)
 		}
@@ -61,7 +61,7 @@ func TestPostgresIntervalRelationEquality(t *testing.T) {
 		if err != nil || found.ID != temporal.Months(1) {
 			t.Fatal(found, err)
 		}
-		updated, err := orm.Upsert(t.Context(), tx, labels.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(lf.ID))).DoUpdate(orm.ConflictIncoming(orm.TextExpr(lf.Name))), orm.KeySet(lf.ID, temporal.Days(30)), orm.TextSet(lf.Name, "changed"))
+		updated, err := orm.Upsert(t.Context(), tx, labels.Query(), orm.OnConflict(orm.ConflictKey(lf.ID)).DoUpdate(orm.ConflictIncoming(lf.Name)), orm.Set(lf.ID, temporal.Days(30)), orm.Set(lf.Name, "changed"))
 		record, ok := updated.Get()
 		if err != nil || !ok || record.ID != temporal.Months(1) || record.Name != "changed" {
 			t.Fatal(record, err)
@@ -76,7 +76,7 @@ func TestPostgresIntervalRelationEquality(t *testing.T) {
 
 func TestPostgresIntervalCursorEquality(t *testing.T) {
 	runIntervals(t, func(tx *database.Tx, _ []intervalqueries.Sample) error {
-		q := intervalqueries.Samples.Query().OrderBy(orm.IntervalAsc(intervalqueries.Samples.Period))
+		q := intervalqueries.Samples.Query().OrderBy(orm.Asc(intervalqueries.Samples.Period))
 		request := orm.CursorRequest[intervalqueries.Sample]{Size: 1}
 		var ids []int
 		for step := 0; step < 5; step++ {

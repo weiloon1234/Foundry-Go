@@ -91,9 +91,9 @@ func TestScopedKeyedWriteParity(t *testing.T) {
 							}))
 						}
 						fields := keyedFields(opts...)
-						q := fields.Query().Where(TextEq(fields.Scope, "tenant"))
+						q := fields.Query().Where(Eq(fields.Scope, "tenant"))
 						if operation == "update" {
-							row, err = Update(t.Context(), tx, q, fields.Key(), 7, TextSet(fields.Name, "assigned"))
+							row, err = Update(t.Context(), tx, q, fields.Key(), 7, Set(fields.Name, "assigned"))
 						} else {
 							row, err = Delete(t.Context(), tx, q, fields.Key(), 7)
 						}
@@ -159,7 +159,7 @@ func TestScopedKeyedWriteRejectsForeignKeyBeforeTransaction(t *testing.T) {
 	begins := 0
 	db := hookDB(t, testConnector{onBegin: func() { begins++ }})
 	for _, key := range []Key[keyedRow, int64]{foreign.Key(), {}} {
-		if _, err := Update(t.Context(), db, fields.Query(), key, 7, TextSet(fields.Name, "x")); !errors.Is(err, fault.Invalid) {
+		if _, err := Update(t.Context(), db, fields.Query(), key, 7, Set(fields.Name, "x")); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 		if _, err := Delete(t.Context(), db, fields.Query(), key, 7); !errors.Is(err, fault.Invalid) {
@@ -179,9 +179,9 @@ func TestScopedKeyedUnknownCandidate(t *testing.T) {
 		var row keyedRow
 		var err error
 		if remove {
-			row, err = Delete(t.Context(), db, fields.Query().Where(TextEq(fields.Scope, "tenant")), fields.Key(), 7)
+			row, err = Delete(t.Context(), db, fields.Query().Where(Eq(fields.Scope, "tenant")), fields.Key(), 7)
 		} else {
-			row, err = Update(t.Context(), db, fields.Query().Where(TextEq(fields.Scope, "tenant")), fields.Key(), 7, TextSet(fields.Name, "assigned"))
+			row, err = Update(t.Context(), db, fields.Query().Where(Eq(fields.Scope, "tenant")), fields.Key(), 7, Set(fields.Name, "assigned"))
 		}
 		var failure *WriteError[keyedRow]
 		var outcome *database.Error

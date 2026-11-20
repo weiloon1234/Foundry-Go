@@ -215,7 +215,7 @@ func TestPostgresTelemetryMigrationRejectsInvalidPayloadVersions(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		_, err = orm.Insert(t.Context(), tx, runs.Table, orm.KeySet(runs.Key(), id), orm.TextSet(runs.Instance, Instance("test")), orm.TextSet(runs.Release, Release("test")), orm.TimeSet(runs.StartedAt, now), orm.TimeSet(runs.HeartbeatAt, now), orm.TimeSet(runs.RetainUntil, until), orm.JSONSet(runs.Runtime, payload))
+		_, err = orm.Insert(t.Context(), tx, runs.Table, orm.Set(runs.Key(), id), orm.Set(runs.Instance, Instance("test")), orm.Set(runs.Release, Release("test")), orm.Set(runs.StartedAt, now), orm.Set(runs.HeartbeatAt, now), orm.Set(runs.RetainUntil, until), orm.Set(runs.Runtime, payload))
 		return err
 	})
 	// Direct fixtures bypass typed JSON decoding to exercise SQL CHECK semantics.

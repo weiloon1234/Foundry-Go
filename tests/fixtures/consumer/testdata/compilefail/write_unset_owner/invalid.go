@@ -9,6 +9,6 @@ import (
 func invalid(write *orm.Write[inputqueries.Member]) {
 	_ = orm.WriteUnset(write, func() func(arg0 string) orm.Assignment[observerqueries.Plain] {
 		receiver := observerqueries.Plains.Name
-		return func(arg0 string) orm.Assignment[observerqueries.Plain] { return orm.TextSet(receiver, arg0) }
+		return func(arg0 string) orm.Assignment[observerqueries.Plain] { return orm.Set(receiver, arg0) }
 	}())
 }

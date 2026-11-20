@@ -20,7 +20,7 @@ import (
 
 func summaries() rows.Query[models.User, reports.UserSummary] {
 	u, r := models.Users, reports.UserSummaries
-	return rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(u.Key()))))), rows.MapSelected(r.Email, expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(u.Email))))), rows.MapSelected(r.Nickname, expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname))))), rows.MapSelected(r.Status, expr.AsSelected(expr.Row(expr.Value(orm.EnumExpr(u.Status))))))
+	return rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.AsSelected(expr.Row(expr.Value(u.Key())))), rows.MapSelected(r.Email, expr.AsSelected(expr.Row(expr.Value(u.Email)))), rows.MapSelected(r.Nickname, expr.AsSelected(expr.Row(expr.Value(u.Nickname)))), rows.MapSelected(r.Status, expr.AsSelected(expr.Row(expr.Value(u.Status)))))
 }
 
 // Traverse both directions, including an empty page after the terminal row.
@@ -65,7 +65,7 @@ func TestPostgresProjectionCursors(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		cursor := rows.CursorFor(rows.RecordOf(summaries()))
 		ordered := cursor.OrderBy(expr.Asc(rows.At(cursor.Scope(), reports.UserSummaries.Nickname)), expr.Desc(rows.At(cursor.Scope(), reports.UserSummaries.Email))).UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID)))
-		want, err := rows.Read(rows.OrderBy(summaries(), expr.Asc(expr.Value(orm.NullableTextExpr(models.Users.Nickname))), expr.Desc(expr.Value(orm.TextExpr(models.Users.Email))))).All(t.Context(), tx)
+		want, err := rows.Read(rows.OrderBy(summaries(), expr.Asc(expr.Value(models.Users.Nickname)), expr.Desc(expr.Value(models.Users.Email)))).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -86,7 +86,7 @@ func TestPostgresProjectionCursors(t *testing.T) {
 		}
 		// Input ordering/windows identify a bounded dataset independently of
 		// the order used to traverse it. No inner limit/offset is discarded.
-		input := rows.Offset(rows.Limit(rows.OrderBy(summaries(), expr.Asc(expr.Value(orm.TextExpr(models.Users.Email)))), 2), 1)
+		input := rows.Offset(rows.Limit(rows.OrderBy(summaries(), expr.Asc(expr.Value(models.Users.Email))), 2), 1)
 		bounded := rows.CursorFor(rows.RecordOf(input))
 		boundedWant, err := rows.Read(input).All(t.Context(), tx)
 		if err != nil {
@@ -107,7 +107,7 @@ func TestPostgresRecordCursorMetadataSurvivesComposition(t *testing.T) {
 		cte := rows.CTE("foundry_cursor", rows.RecordOf(input))
 		a := rows.AsRecord[reportAlias](cte, "summary")
 		combined := rows.Union(rows.RecordOf(input), rows.RecordOf(input))
-		want, err := rows.Read(rows.OrderBy(input, expr.Asc(expr.Value(orm.TextExpr(models.Users.Email))))).All(t.Context(), tx)
+		want, err := rows.Read(rows.OrderBy(input, expr.Asc(expr.Value(models.Users.Email)))).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -118,11 +118,11 @@ func TestPostgresRecordCursorMetadataSurvivesComposition(t *testing.T) {
 		users := models.Users.Query()
 		for _, source := range []rows.RecordSource[models.User]{rows.ModelRecord(users), rows.SelectRecord(rows.From(users), rows.ModelScope(users)), rows.CTE("cursor_users", rows.ModelRecord(users)), rows.Union(rows.ModelRecord(users), rows.ModelRecord(users))} {
 			cursor := rows.CursorFor(source)
-			want, err := orm.All(t.Context(), tx, users.OrderBy(orm.TextAsc(models.Users.Email)))
+			want, err := orm.All(t.Context(), tx, users.OrderBy(orm.Asc(models.Users.Email)))
 			if err != nil {
 				return err
 			}
-			checkTraversal(t, tx, cursor.OrderBy(expr.Asc(expr.At(cursor.Scope(), orm.TextExpr(models.Users.Email)))).UniqueBy(expr.Group(expr.At(cursor.Scope(), orm.KeyExpr(models.Users.Key())))), want)
+			checkTraversal(t, tx, cursor.OrderBy(expr.Asc(expr.At(cursor.Scope(), models.Users.Email))).UniqueBy(expr.Group(expr.At(cursor.Scope(), models.Users.Key()))), want)
 		}
 		return nil
 	})
@@ -131,14 +131,14 @@ func TestPostgresRecordCursorMetadataSurvivesComposition(t *testing.T) {
 func TestPostgresRecursiveResultCursor(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		u := models.Users
-		tree := rows.RecursiveCTE("cursor_tree", rows.ModelRecord(models.Users.Query().Where(orm.KeyEq(u.Key(), users[0].ID))), func(self rows.RecursiveSelf[models.User]) rows.RecordSource[models.User] {
+		tree := rows.RecursiveCTE("cursor_tree", rows.ModelRecord(models.Users.Query().Where(orm.Eq(u.Key(), users[0].ID))), func(self rows.RecursiveSelf[models.User]) rows.RecordSource[models.User] {
 			parent := rows.AsRecord[buyerAlias](self, "parent")
 			child := rows.As[orderAlias](models.Users.Query(), "child")
-			joined := rows.InnerJoin(child, parent, rows.On(expr.At(rows.Scope(child), orm.NullableColumnExpr(models.Users.IntroducerID)), expr.At(rows.Scope(parent), orm.KeyExpr(models.Users.Key()))))
+			joined := rows.InnerJoin(child, parent, rows.On(expr.At(rows.Scope(child), models.Users.IntroducerID), expr.At(rows.Scope(parent), models.Users.Key())))
 			return rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child)))
 		})
 		cursor := rows.CursorFor(tree)
-		checkTraversal(t, tx, cursor.OrderBy(expr.Asc(expr.At(cursor.Scope(), orm.TextExpr(models.Users.Email)))).UniqueBy(expr.Group(expr.At(cursor.Scope(), orm.KeyExpr(models.Users.Key())))), users[:2])
+		checkTraversal(t, tx, cursor.OrderBy(expr.Asc(expr.At(cursor.Scope(), models.Users.Email))).UniqueBy(expr.Group(expr.At(cursor.Scope(), models.Users.Key()))), users[:2])
 		return nil
 	})
 }

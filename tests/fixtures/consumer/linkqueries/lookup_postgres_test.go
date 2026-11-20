@@ -25,8 +25,8 @@ func TestPostgresLookupWritesChooseOneLifecycleBranch(t *testing.T) {
 		ctx := linkqueries.WithTrace(t.Context(), trace)
 		q := linkqueries.Memberships
 		fields := linkqueries.Memberships
-		draft := []orm.Assignment[linkqueries.Membership]{orm.ColumnSet(linkqueries.Memberships.MemberID, member.ID), orm.TextSet(linkqueries.Memberships.GroupCode, group.Code), orm.InputTextSet(linkqueries.Memberships.Role, " ADMIN ")}
-		selected := q.Query().Where(orm.InputTextEq(fields.Role, "admin"))
+		draft := []orm.Assignment[linkqueries.Membership]{orm.Set(linkqueries.Memberships.MemberID, member.ID), orm.Set(linkqueries.Memberships.GroupCode, group.Code), orm.Set(linkqueries.Memberships.Role, " ADMIN ")}
+		selected := q.Query().Where(orm.Eq(fields.Role, "admin"))
 		created, err := orm.FirstOrCreate(ctx, wrappedTransactor{tx}, selected, draft...)
 		if err != nil {
 			return err
@@ -52,7 +52,7 @@ func TestPostgresLookupWritesChooseOneLifecycleBranch(t *testing.T) {
 			if count, err := orm.Count(ctx, owner, q.Query()); err != nil || count != 1 {
 				return []orm.Assignment[linkqueries.Membership]{}, errors.New("lookup callback lost its usable transaction")
 			}
-			return []orm.Assignment[linkqueries.Membership]{orm.InputTextSet(linkqueries.Memberships.Role, " EDITOR ")}, nil
+			return []orm.Assignment[linkqueries.Membership]{orm.Set(linkqueries.Memberships.Role, " EDITOR ")}, nil
 		}
 		updated, err := orm.UpdateOrCreate(ctx, wrappedTransactor{tx}, selected, []orm.Assignment[linkqueries.Membership]{}, update)
 		if err != nil {
@@ -67,8 +67,8 @@ func TestPostgresLookupWritesChooseOneLifecycleBranch(t *testing.T) {
 			return errors.New("updated model did not leave its original scope")
 		}
 		trace.Steps = nil
-		missing := q.Query().Where(orm.InputTextEq(fields.Role, "new"))
-		next, err := orm.UpdateOrCreate(ctx, tx, missing, []orm.Assignment[linkqueries.Membership]{draft[0], draft[1], orm.InputTextSet(linkqueries.Memberships.Role, " NEW ")}, func(context.Context, *database.Tx, linkqueries.Membership) ([]orm.Assignment[linkqueries.Membership], error) {
+		missing := q.Query().Where(orm.Eq(fields.Role, "new"))
+		next, err := orm.UpdateOrCreate(ctx, tx, missing, []orm.Assignment[linkqueries.Membership]{draft[0], draft[1], orm.Set(linkqueries.Memberships.Role, " NEW ")}, func(context.Context, *database.Tx, linkqueries.Membership) ([]orm.Assignment[linkqueries.Membership], error) {
 			calls++
 			return []orm.Assignment[linkqueries.Membership]{}, errors.New("missing branch invoked update callback")
 		})
@@ -97,10 +97,10 @@ func TestPostgresLookupScopesAndFailuresRollback(t *testing.T) {
 				}
 				q := linkqueries.Memberships
 				fields := linkqueries.Memberships
-				draft := []orm.Assignment[linkqueries.Membership]{orm.ColumnSet(linkqueries.Memberships.MemberID, member.ID), orm.TextSet(linkqueries.Memberships.GroupCode, group.Code), orm.InputTextSet(linkqueries.Memberships.Role, "admin")}
+				draft := []orm.Assignment[linkqueries.Membership]{orm.Set(linkqueries.Memberships.MemberID, member.ID), orm.Set(linkqueries.Memberships.GroupCode, group.Code), orm.Set(linkqueries.Memberships.Role, "admin")}
 				ctx := linkqueries.WithTrace(t.Context(), trace)
 				if mode == "creation_scope" {
-					_, err := orm.FirstOrCreate(ctx, tx, q.Query().Where(orm.InputTextEq(fields.Role, "different")), draft...)
+					_, err := orm.FirstOrCreate(ctx, tx, q.Query().Where(orm.Eq(fields.Role, "different")), draft...)
 					if !errors.Is(err, fault.Invalid) {
 						return errors.New("creation escaped its lookup predicates")
 					}
@@ -116,11 +116,11 @@ func TestPostgresLookupScopesAndFailuresRollback(t *testing.T) {
 				if mode == "after_hook" {
 					trace.VetoAt = "local.saved"
 				}
-				_, err = orm.UpdateOrCreate(ctx, tx, q.Query().Where(orm.KeyEq(fields.Key(), current.ID)), []orm.Assignment[linkqueries.Membership]{}, func(context.Context, *database.Tx, linkqueries.Membership) ([]orm.Assignment[linkqueries.Membership], error) {
+				_, err = orm.UpdateOrCreate(ctx, tx, q.Query().Where(orm.Eq(fields.Key(), current.ID)), []orm.Assignment[linkqueries.Membership]{}, func(context.Context, *database.Tx, linkqueries.Membership) ([]orm.Assignment[linkqueries.Membership], error) {
 					if mode == "callback" {
 						return []orm.Assignment[linkqueries.Membership]{}, linkqueries.ErrVeto
 					}
-					return []orm.Assignment[linkqueries.Membership]{orm.InputTextSet(linkqueries.Memberships.Role, "changed")}, nil
+					return []orm.Assignment[linkqueries.Membership]{orm.Set(linkqueries.Memberships.Role, "changed")}, nil
 				})
 				if !errors.Is(err, linkqueries.ErrVeto) {
 					return errors.New("lookup write lost callback or hook failure")
@@ -149,7 +149,7 @@ func TestPostgresLookupPrimaryOrderAndSoftVisibility(t *testing.T) {
 		}
 		q := linkqueries.Memberships
 		fields := linkqueries.Memberships
-		draft := []orm.Assignment[linkqueries.Membership]{orm.ColumnSet(linkqueries.Memberships.MemberID, member.ID), orm.TextSet(linkqueries.Memberships.GroupCode, group.Code), orm.InputTextSet(linkqueries.Memberships.Role, "same")}
+		draft := []orm.Assignment[linkqueries.Membership]{orm.Set(linkqueries.Memberships.MemberID, member.ID), orm.Set(linkqueries.Memberships.GroupCode, group.Code), orm.Set(linkqueries.Memberships.Role, "same")}
 		if _, err := orm.InsertMany(t.Context(), tx, q.Table, [][]orm.Assignment[linkqueries.Membership]{draft, draft}); err != nil {
 			return err
 		}
@@ -174,7 +174,7 @@ func TestPostgresLookupPrimaryOrderAndSoftVisibility(t *testing.T) {
 		if found.ID != first.ID || found.DeletedAt.IsNull() {
 			return errors.New("lookup ignored explicit trashed visibility")
 		}
-		replacement, err := orm.FirstOrCreate(t.Context(), tx, q.Query().Where(orm.KeyEq(fields.Key(), first.ID)), append(slices.Clone(draft), orm.KeySet(linkqueries.Memberships.Key(), first.ID))...)
+		replacement, err := orm.FirstOrCreate(t.Context(), tx, q.Query().Where(orm.Eq(fields.Key(), first.ID)), append(slices.Clone(draft), orm.Set(linkqueries.Memberships.Key(), first.ID))...)
 		if !errors.Is(err, database.UniqueViolation) || replacement.ID != (linkqueries.Membership{}).ID {
 			return errors.New("hidden deleted key did not retain ordinary uniqueness failure")
 		}
@@ -182,7 +182,7 @@ func TestPostgresLookupPrimaryOrderAndSoftVisibility(t *testing.T) {
 			return errors.New("lookup conflict damaged the parent transaction")
 		}
 		// Natural identities stay concrete and an existing row does not need its creation key again.
-		natural, err := orm.FirstOrCreate(t.Context(), tx, linkqueries.Groups.Query().Where(orm.KeyEq(linkqueries.Groups.Key(), group.Code)))
+		natural, err := orm.FirstOrCreate(t.Context(), tx, linkqueries.Groups.Query().Where(orm.Eq(linkqueries.Groups.Key(), group.Code)))
 		if err != nil {
 			return err
 		}

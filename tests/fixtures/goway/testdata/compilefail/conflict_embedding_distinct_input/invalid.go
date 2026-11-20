@@ -7,11 +7,11 @@ import (
 )
 
 type wrapper struct {
-	orm.NullableInputTextAdapter[n.Member, coremodels.LabelInput, coremodels.StoredLabel]
+	orm.NullableInputText[n.Member, coremodels.LabelInput, coremodels.StoredLabel]
 }
 
 func (w wrapper) Set(v coremodels.StoredLabel) orm.Assignment[n.Member] {
-	return orm.InputTextSet(n.Members.Name, string(v))
+	return orm.Set(n.Members.Name, string(v))
 }
 
-var _ = orm.ConflictSet(wrapper{orm.NullableInputTextExpr(n.Members.Note)}, coremodels.StoredLabel("stored"))
+var _ = orm.ConflictSet(wrapper{n.Members.Note}, coremodels.StoredLabel("stored"))

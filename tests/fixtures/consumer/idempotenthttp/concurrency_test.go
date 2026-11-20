@@ -81,7 +81,7 @@ func TestTwoApplicationsOneCommittedHTTPOutcome(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	// Current resource state is loaded even when the submission has a stored result.
-	if _, err := orm.Update(t.Context(), db, Workspaces.Table.Query(), Workspaces.Table.Key(), 1, orm.ColumnSet(Workspaces.Enabled, false)); err != nil {
+	if _, err := orm.Update(t.Context(), db, Workspaces.Table.Query(), Workspaces.Table.Key(), 1, orm.Set(Workspaces.Enabled, false)); err != nil {
 		t.Fatal(err)
 	}
 	assertResponse(t, second.send(t.Context(), path, "alice", key, `{"name":"concurrent","memo":null}`), 403)

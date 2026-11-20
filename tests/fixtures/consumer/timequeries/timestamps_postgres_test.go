@@ -33,11 +33,11 @@ func TestPostgresManagedTimestampsAndHookChanges(t *testing.T) {
 		if len(state.ORMChanges) != 1 {
 			return errors.New("create did not capture timestamp changes")
 		}
-		createdAt, err := orm.ChangeOf(state.ORMChanges[0], orm.TimeExpr(q.CreatedAt))
+		createdAt, err := orm.ChangeOf(state.ORMChanges[0], q.CreatedAt)
 		if err != nil {
 			return err
 		}
-		createdUpdatedAt, err := orm.ChangeOf(state.ORMChanges[0], orm.TimeExpr(q.UpdatedAt))
+		createdUpdatedAt, err := orm.ChangeOf(state.ORMChanges[0], q.UpdatedAt)
 		if err != nil {
 			return err
 		}
@@ -54,11 +54,11 @@ func TestPostgresManagedTimestampsAndHookChanges(t *testing.T) {
 		if !member.CreatedAt.Equal(originalCreated) || !member.UpdatedAt.UTC().Equal(clock.stored().Add(2*time.Second)) || clock.calls.Load() != 2 {
 			return errors.New("timestamp-only update lost clock time or returned trigger values")
 		}
-		updatedAt, err := orm.ChangeOf(state.ORMChanges[0], orm.TimeExpr(q.UpdatedAt))
+		updatedAt, err := orm.ChangeOf(state.ORMChanges[0], q.UpdatedAt)
 		if err != nil {
 			return err
 		}
-		updatedCreatedAt, err := orm.ChangeOf(state.ORMChanges[0], orm.TimeExpr(q.CreatedAt))
+		updatedCreatedAt, err := orm.ChangeOf(state.ORMChanges[0], q.CreatedAt)
 		if err != nil {
 			return err
 		}
@@ -69,7 +69,7 @@ func TestPostgresManagedTimestampsAndHookChanges(t *testing.T) {
 		old := clock.stored().Add(-24 * time.Hour)
 		ignored, _ := temporal.NewDateTime(old)
 		state.ORMChanges = nil
-		explicit, err := orm.Insert(ctx, tx, q.Table, orm.InputTextSet(timequeries.Members.Name, " explicit "), orm.TimeSet(timequeries.Members.CreatedAt, old), orm.TimeSet(timequeries.Members.UpdatedAt, ignored))
+		explicit, err := orm.Insert(ctx, tx, q.Table, orm.Set(timequeries.Members.Name, " explicit "), orm.Set(timequeries.Members.CreatedAt, old), orm.Set(timequeries.Members.UpdatedAt, ignored))
 		if err != nil {
 			return err
 		}
@@ -100,13 +100,13 @@ func TestPostgresManagedTimestampsAndHookChanges(t *testing.T) {
 func TestPostgresTimestampFailuresAndNestedClockOwnership(t *testing.T) {
 	runTimed(t, func(tx *database.Tx, clock *countingClock) error {
 		q := timequeries.Members
-		member, err := orm.Insert(t.Context(), tx, q.Table, orm.InputTextSet(timequeries.Members.Name, "original"))
+		member, err := orm.Insert(t.Context(), tx, q.Table, orm.Set(timequeries.Members.Name, "original"))
 		if err != nil {
 			return err
 		}
 		clock.source.Advance(time.Hour)
 		veto := &timequeries.State{VetoAfter: true}
-		if _, err := orm.Update(timequeries.WithState(t.Context(), veto), tx, q.Table.Query(), q.Table.Key(), member.ID, orm.InputTextSet(timequeries.Members.Name, "changed")); !errors.Is(err, timequeries.Veto) {
+		if _, err := orm.Update(timequeries.WithState(t.Context(), veto), tx, q.Table.Query(), q.Table.Key(), member.ID, orm.Set(timequeries.Members.Name, "changed")); !errors.Is(err, timequeries.Veto) {
 			return errors.New("timestamp post-write veto did not abort")
 		}
 		current, err := orm.RequireKey(t.Context(), tx, q.Table, member.ID)
@@ -119,7 +119,7 @@ func TestPostgresTimestampFailuresAndNestedClockOwnership(t *testing.T) {
 		rollback := errors.New("outer savepoint veto")
 		if err := tx.Savepoint(t.Context(), func(child *database.Tx) error {
 			clock.source.Advance(time.Hour)
-			updated, err := orm.Update(t.Context(), child, q.Table.Query(), q.Table.Key(), member.ID, orm.InputTextSet(timequeries.Members.Name, "nested"))
+			updated, err := orm.Update(t.Context(), child, q.Table.Query(), q.Table.Key(), member.ID, orm.Set(timequeries.Members.Name, "nested"))
 			if err != nil {
 				return err
 			}
@@ -152,10 +152,10 @@ func TestPostgresTimestampFailuresAndNestedClockOwnership(t *testing.T) {
 			return errors.New("out-of-range clock time persisted")
 		}
 		clock.source.Set(valid)
-		if _, err := orm.Insert(t.Context(), tx, q.Table, orm.InputTextSet(timequeries.Members.Name, "submicro"), orm.TimeSet(timequeries.Members.CreatedAt, valid)); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.Insert(t.Context(), tx, q.Table, orm.Set(timequeries.Members.Name, "submicro"), orm.Set(timequeries.Members.CreatedAt, valid)); !errors.Is(err, fault.Invalid) {
 			return errors.New("manual sub-microsecond timestamp was silently truncated")
 		}
-		if _, err := orm.Insert(t.Context(), tx, q.Table, orm.InputTextSet(timequeries.Members.Name, "reject")); !errors.Is(err, timequeries.Veto) {
+		if _, err := orm.Insert(t.Context(), tx, q.Table, orm.Set(timequeries.Members.Name, "reject")); !errors.Is(err, timequeries.Veto) {
 			return errors.New("timestamp convention bypassed a field mutator veto")
 		}
 		current, err = orm.RequireKey(t.Context(), tx, q.Table, member.ID)
@@ -174,7 +174,7 @@ func TestPostgresTimestampBulkUpsertAndOptOut(t *testing.T) {
 		state := &timequeries.State{VetoAfter: true}
 		ctx := timequeries.WithState(t.Context(), state)
 		q, f := timequeries.Members, timequeries.Members
-		members, err := orm.InsertMany(ctx, tx, q.Table, [][]orm.Assignment[timequeries.Member]{{orm.InputTextSet(timequeries.Members.Name, "first")}, {orm.InputTextSet(timequeries.Members.Name, "second")}})
+		members, err := orm.InsertMany(ctx, tx, q.Table, [][]orm.Assignment[timequeries.Member]{{orm.Set(timequeries.Members.Name, "first")}, {orm.Set(timequeries.Members.Name, "second")}})
 		if err != nil {
 			return err
 		}
@@ -188,8 +188,8 @@ func TestPostgresTimestampBulkUpsertAndOptOut(t *testing.T) {
 		}
 		member := members[0]
 		clock.source.Advance(time.Hour)
-		policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoUpdate(orm.ConflictIncoming(orm.InputTextExpr(f.Name)))
-		result, err := orm.Upsert(ctx, tx, q.Query(), policy, orm.KeySet(timequeries.Members.Key(), member.ID), orm.InputTextSet(timequeries.Members.Name, "updated"))
+		policy := orm.OnConflict(orm.ConflictKey(f.Key())).DoUpdate(orm.ConflictIncoming(f.Name))
+		result, err := orm.Upsert(ctx, tx, q.Query(), policy, orm.Set(timequeries.Members.Key(), member.ID), orm.Set(timequeries.Members.Name, "updated"))
 		if err != nil {
 			return err
 		}
@@ -198,7 +198,7 @@ func TestPostgresTimestampBulkUpsertAndOptOut(t *testing.T) {
 			return errors.New("upsert did not retain creation time or normalized proposed update time")
 		}
 		clock.source.Advance(time.Hour)
-		skipped, err := orm.Upsert(ctx, tx, q.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoNothing(), orm.KeySet(timequeries.Members.Key(), member.ID), orm.InputTextSet(timequeries.Members.Name, "skip"))
+		skipped, err := orm.Upsert(ctx, tx, q.Query(), orm.OnConflict(orm.ConflictKey(f.Key())).DoNothing(), orm.Set(timequeries.Members.Key(), member.ID), orm.Set(timequeries.Members.Name, "skip"))
 		if err != nil || skipped.IsSet() {
 			return errors.New("timestamp DO NOTHING changed conflict semantics")
 		}
@@ -221,7 +221,7 @@ func TestPostgresTimestampBulkUpsertAndOptOut(t *testing.T) {
 		}
 		explicit := clock.stored().Add(-24 * time.Hour)
 		explicitUpdated, _ := temporal.NewDateTime(explicit.Add(time.Hour))
-		manual, err := orm.Insert(t.Context(), tx, timequeries.Manuals.Table, orm.TimeSet(timequeries.Manuals.CreatedAt, explicit), orm.TimeSet(timequeries.Manuals.UpdatedAt, explicitUpdated))
+		manual, err := orm.Insert(t.Context(), tx, timequeries.Manuals.Table, orm.Set(timequeries.Manuals.CreatedAt, explicit), orm.Set(timequeries.Manuals.UpdatedAt, explicitUpdated))
 		if err != nil {
 			return err
 		}

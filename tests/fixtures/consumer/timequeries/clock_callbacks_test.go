@@ -15,7 +15,7 @@ import (
 func TestPostgresTimestampClockCallbackFailures(t *testing.T) {
 	runTimed(t, func(tx *database.Tx, clock *countingClock) error {
 		q, f := timequeries.Members, timequeries.Members
-		member, err := orm.Insert(t.Context(), tx, q.Table, orm.InputTextSet(timequeries.Members.Name, "original"))
+		member, err := orm.Insert(t.Context(), tx, q.Table, orm.Set(timequeries.Members.Name, "original"))
 		if err != nil {
 			return err
 		}
@@ -25,13 +25,13 @@ func TestPostgresTimestampClockCallbackFailures(t *testing.T) {
 				before := clock.calls.Load()
 				clock.nextAction.Store(action)
 				if bulk {
-					result, failure := orm.Upsert(t.Context(), tx, q.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoUpdate(orm.ConflictIncoming(orm.InputTextExpr(f.Name))), orm.KeySet(timequeries.Members.Key(), member.ID), orm.InputTextSet(timequeries.Members.Name, "failed"))
+					result, failure := orm.Upsert(t.Context(), tx, q.Query(), orm.OnConflict(orm.ConflictKey(f.Key())).DoUpdate(orm.ConflictIncoming(f.Name)), orm.Set(timequeries.Members.Key(), member.ID), orm.Set(timequeries.Members.Name, "failed"))
 					if result.IsSet() {
 						return errors.New("failed clock returned an upsert result")
 					}
 					err = failure
 				} else {
-					result, failure := orm.Update(t.Context(), tx, q.Table.Query(), q.Table.Key(), member.ID, orm.InputTextSet(timequeries.Members.Name, "failed"))
+					result, failure := orm.Update(t.Context(), tx, q.Table.Query(), q.Table.Key(), member.ID, orm.Set(timequeries.Members.Name, "failed"))
 					if result != (timequeries.Member{}) {
 						return errors.New("failed clock returned a model")
 					}
@@ -49,7 +49,7 @@ func TestPostgresTimestampClockCallbackFailures(t *testing.T) {
 				}
 			}
 		}
-		updated, err := orm.Update(t.Context(), tx, q.Table.Query(), q.Table.Key(), member.ID, orm.InputTextSet(timequeries.Members.Name, "recovered"))
+		updated, err := orm.Update(t.Context(), tx, q.Table.Query(), q.Table.Key(), member.ID, orm.Set(timequeries.Members.Name, "recovered"))
 		if err != nil {
 			return err
 		}

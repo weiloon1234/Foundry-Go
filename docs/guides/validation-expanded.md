@@ -134,8 +134,8 @@ type Assignment struct{ Assignee model.ID[models.User] }
 func assignees(db database.Executor) validation.Rule[[]Assignment] {
 	field := validation.DefineField("assignee_id", func(a Assignment) model.ID[models.User] { return a.Assignee })
 	return databasevalidation.ExistsEach(db,
-		models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.StatusActive)),
-		orm.KeyExpr(models.Users.Key()), field)
+		models.Users.Query().Where(orm.Eq(models.Users.Status, models.StatusActive)),
+		models.Users.Key(), field)
 }
 ```
 

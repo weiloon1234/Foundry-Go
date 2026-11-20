@@ -82,7 +82,7 @@ func TestSlotsLoadThroughWith(t *testing.T) {
 				var err error
 				list, err = orm.All(ctx, executor(tx), articles.Articles.Query().
 					With(articles.ArticleAuthor, s.x.Title.Relation(articles.Articles.Title), s.x.Summary.Relation(articles.Articles.Summary), s.x.Logo.Relation(articles.Articles.Logo), s.x.Galleries.Relation(articles.Articles.Galleries), s.x.SEO.Relation(articles.Articles.SEO)).
-					OrderBy(orm.TextAsc(fields.Slug)))
+					OrderBy(orm.Asc(fields.Slug)))
 				return err
 			})
 			if len(list) != 2 {
@@ -150,7 +150,7 @@ func TestSlotsLoadThroughWith(t *testing.T) {
 	var plain articles.Article
 	s.read(t, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		plain, err = orm.Require(ctx, tx, articles.Articles.Query().Where(orm.KeyEq(articles.Articles.Key(), s.full.ID)))
+		plain, err = orm.Require(ctx, tx, articles.Articles.Query().Where(orm.Eq(articles.Articles.Key(), s.full.ID)))
 		return err
 	})
 	if plain.Title.IsLoaded() || plain.Galleries.IsLoaded() {
@@ -171,7 +171,7 @@ func TestSlotLinksMatchCollectionLinks(t *testing.T) {
 	}
 	var full, empty articles.Article
 	s.read(t, func(ctx context.Context, tx *database.Tx) error {
-		loaded, err := orm.All(ctx, tx, articles.Articles.Query().With(s.x.Logo.Relation(articles.Articles.Logo), s.x.Galleries.Relation(articles.Articles.Galleries)).OrderBy(orm.TextAsc(articles.Articles.Slug)))
+		loaded, err := orm.All(ctx, tx, articles.Articles.Query().With(s.x.Logo.Relation(articles.Articles.Logo), s.x.Galleries.Relation(articles.Articles.Galleries)).OrderBy(orm.Asc(articles.Articles.Slug)))
 		if err == nil {
 			full, empty = loaded[0], loaded[1]
 		}
@@ -222,21 +222,21 @@ func TestSlotsLoadThroughEveryRelationPath(t *testing.T) {
 		if !missing[0].Title.IsLoaded() {
 			t.Fatal("LoadMissing dropped a loaded slot")
 		}
-		page, err := orm.Paginate(ctx, tx, articles.Articles.Query().With(s.x.SEO.Relation(articles.Articles.SEO)).OrderBy(orm.TextAsc(fields.Slug)), orm.PageRequest{Number: 1, Size: 1})
+		page, err := orm.Paginate(ctx, tx, articles.Articles.Query().With(s.x.SEO.Relation(articles.Articles.SEO)).OrderBy(orm.Asc(fields.Slug)), orm.PageRequest{Number: 1, Size: 1})
 		if err != nil {
 			return err
 		}
 		if len(page.Items) != 1 || !page.Items[0].SEO.IsLoaded() || page.Total != 2 {
 			t.Fatal("paginated slot loading")
 		}
-		simple, err := orm.SimplePaginate(ctx, tx, articles.Articles.Query().With(s.x.SEO.Relation(articles.Articles.SEO)).OrderBy(orm.TextAsc(fields.Slug)), orm.PageRequest{Number: 1, Size: 1})
+		simple, err := orm.SimplePaginate(ctx, tx, articles.Articles.Query().With(s.x.SEO.Relation(articles.Articles.SEO)).OrderBy(orm.Asc(fields.Slug)), orm.PageRequest{Number: 1, Size: 1})
 		if err != nil {
 			return err
 		}
 		if len(simple.Items) != 1 || !simple.Items[0].SEO.IsLoaded() || !simple.HasMore {
 			t.Fatal("simple paginated slot loading")
 		}
-		cursor, err := orm.CursorPaginate(ctx, tx, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).OrderBy(orm.TextAsc(fields.Slug)), orm.CursorRequest[articles.Article]{Size: 1})
+		cursor, err := orm.CursorPaginate(ctx, tx, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).OrderBy(orm.Asc(fields.Slug)), orm.CursorRequest[articles.Article]{Size: 1})
 		if err != nil {
 			return err
 		}
@@ -244,7 +244,7 @@ func TestSlotsLoadThroughEveryRelationPath(t *testing.T) {
 		if len(cursor.Items) != 1 || !cursor.Items[0].Title.IsLoaded() || !more {
 			t.Fatal("cursor paginated slot loading")
 		}
-		following, err := orm.CursorPaginate(ctx, tx, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).OrderBy(orm.TextAsc(fields.Slug)), orm.CursorRequest[articles.Article]{Size: 1, After: value.Set(next)})
+		following, err := orm.CursorPaginate(ctx, tx, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).OrderBy(orm.Asc(fields.Slug)), orm.CursorRequest[articles.Article]{Size: 1, After: value.Set(next)})
 		if err != nil {
 			return err
 		}
@@ -340,7 +340,7 @@ func TestSlotLoadingReadsTheCallersTransaction(t *testing.T) {
 		if err := translations.FieldOf(s.x.Title).SetIn(ctx, tx, runtime.Translations, articles.ArticleIdentity.ReferenceOf(s.empty), "en", "Draft"); err != nil {
 			return err
 		}
-		joined, err := orm.Require(ctx, tx, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).Where(orm.KeyEq(articles.Articles.Key(), s.empty.ID)))
+		joined, err := orm.Require(ctx, tx, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).Where(orm.Eq(articles.Articles.Key(), s.empty.ID)))
 		if err != nil {
 			return err
 		}
@@ -349,7 +349,7 @@ func TestSlotLoadingReadsTheCallersTransaction(t *testing.T) {
 		} else if draft, _ := text.Get(); draft != "Draft" {
 			t.Fatal("the joined load missed its own write", err)
 		}
-		separate, err := orm.Require(ctx, &queryfixture.QueryCounter{Executor: tx}, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).Where(orm.KeyEq(articles.Articles.Key(), s.empty.ID)))
+		separate, err := orm.Require(ctx, &queryfixture.QueryCounter{Executor: tx}, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).Where(orm.Eq(articles.Articles.Key(), s.empty.ID)))
 		if err != nil {
 			return err
 		}

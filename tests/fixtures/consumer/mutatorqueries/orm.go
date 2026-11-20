@@ -8,7 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-// MemberTable keeps write inputs separate from stored predicate values. Example: orm.InputTextSet(Members.Email, " ADA@EXAMPLE.TEST ").
+// MemberTable keeps write inputs separate from stored predicate values. Example: orm.Set(Members.Email, " ADA@EXAMPLE.TEST ").
 type MemberTable struct {
 	orm.Table[Member, model.ID[Member]]
 	// Email is the delivery address. ChangeOf compares stored values after MutateEmail.

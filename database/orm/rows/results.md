@@ -5,7 +5,7 @@ scope describes output fields, independently of the original input scope:
 
 ```go
 c := rows.CursorFor(rows.ModelRecord(Orders.Query().Limit(200)))
-id := expr.At(c.Scope(), orm.KeyExpr(Orders.ID))
+id := expr.At(c.Scope(), Orders.ID)
 c = c.OrderBy(expr.Asc(id)).UniqueBy(expr.Group(id))
 page, err := c.Paginate(ctx, db, orm.CursorRequest[Order]{Size: 20})
 ```

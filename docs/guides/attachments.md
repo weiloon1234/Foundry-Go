@@ -268,11 +268,11 @@ func (s *Service) ReplaceLogo(ctx context.Context, visible orm.Query[Article], a
 		return result, err
 	}
 	err = s.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		locked, err := orm.RequireLocked(ctx, tx, orm.Lock(visible.Where(orm.KeyEq(Articles.Key(), article.ID))))
+		locked, err := orm.RequireLocked(ctx, tx, orm.Lock(visible.Where(orm.Eq(Articles.Key(), article.ID))))
 		if err != nil {
 			return err
 		}
-		if _, err := orm.Update(ctx, tx, visible, Articles.Key(), locked.ID, orm.TextSet(Articles.Slug, slug)); err != nil {
+		if _, err := orm.Update(ctx, tx, visible, Articles.Key(), locked.ID, orm.Set(Articles.Slug, slug)); err != nil {
 			return err
 		}
 		result, err = s.x.Logo.ReplaceIn(ctx, tx, locked, prepared)
@@ -681,7 +681,7 @@ func (s Services) ClearDocumentsIn(ctx context.Context, tx *database.Tx, profile
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#clear-slot-files -->
 ```go
 func (s *Service) ClearFiles(ctx context.Context, tx *database.Tx, visible orm.Query[Article], id model.ID[Article]) error {
-	article, err := orm.RequireLocked(ctx, tx, orm.Lock(visible.Where(orm.KeyEq(Articles.Key(), id))))
+	article, err := orm.RequireLocked(ctx, tx, orm.Lock(visible.Where(orm.Eq(Articles.Key(), id))))
 	if err != nil {
 		return err
 	}

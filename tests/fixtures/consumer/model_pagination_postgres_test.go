@@ -34,9 +34,9 @@ func TestPostgresGeneratedModelPagination(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			draft := []orm.Assignment[models.WriteRecord]{orm.KeySet(models.WriteRecords.Code, models.RecordKey(i)), orm.TextSet(models.WriteRecords.Name, []string{"a", "a", "b"}[i%3]), orm.NumberSet(models.WriteRecords.Amount, amount), orm.ColumnSet(models.WriteRecords.Enabled, i%2 == 0)}
+			draft := []orm.Assignment[models.WriteRecord]{orm.Set(models.WriteRecords.Code, models.RecordKey(i)), orm.Set(models.WriteRecords.Name, []string{"a", "a", "b"}[i%3]), orm.Set(models.WriteRecords.Amount, amount), orm.Set(models.WriteRecords.Enabled, i%2 == 0)}
 			if i%3 != 0 {
-				draft = append(draft, orm.NullableTextSet(models.WriteRecords.Note, []string{"", "x", "x"}[i%3]))
+				draft = append(draft, orm.Set(models.WriteRecords.Note, []string{"", "x", "x"}[i%3]))
 			}
 			if _, err := orm.Insert(t.Context(), tx, models.WriteRecords.Table, draft...); err != nil {
 				return err
@@ -67,7 +67,7 @@ func TestPostgresGeneratedModelPagination(t *testing.T) {
 				t.Error("simple page lost natural-key ordering or lookahead")
 			}
 		}
-		empty, err := orm.Paginate(t.Context(), tx, q.Where(orm.KeyEq(fields.Code, 999)), orm.PageRequest{Number: 1, Size: 3})
+		empty, err := orm.Paginate(t.Context(), tx, q.Where(orm.Eq(fields.Code, 999)), orm.PageRequest{Number: 1, Size: 3})
 		if err != nil {
 			return err
 		}
@@ -78,15 +78,15 @@ func TestPostgresGeneratedModelPagination(t *testing.T) {
 			t.Error("offset overflow reached the database")
 		}
 		for index, orders := range [][]orm.Order[models.WriteRecord]{
-			nil, {orm.TextAsc(fields.Name)}, {orm.NullableTextAsc(fields.Note)}, {orm.NullableTextDesc(fields.Note)},
-			{orm.ColumnDesc(fields.Enabled), orm.NullableTextAsc(fields.Note), orm.NumberDesc(fields.Amount)},
-			{orm.NumberAsc(fields.Amount), orm.KeyDesc(fields.Code)},
+			nil, {orm.Asc(fields.Name)}, {orm.Asc(fields.Note)}, {orm.Desc(fields.Note)},
+			{orm.Desc(fields.Enabled), orm.Asc(fields.Note), orm.Desc(fields.Amount)},
+			{orm.Asc(fields.Amount), orm.Desc(fields.Code)},
 		} {
 			base := q.OrderBy(orders...)
 			// Match the documented appended primary tie-breaker unless supplied.
 			expectedQuery := base
 			if index != 5 {
-				expectedQuery = expectedQuery.OrderBy(orm.KeyAsc(fields.Code))
+				expectedQuery = expectedQuery.OrderBy(orm.Asc(fields.Code))
 			}
 			expected, err := orm.All(t.Context(), tx, expectedQuery)
 			if err != nil {
@@ -143,7 +143,7 @@ func TestPostgresGeneratedModelPagination(t *testing.T) {
 		if !ok {
 			return errors.New("first page has no next cursor")
 		}
-		if _, err := orm.CursorPaginate(t.Context(), tx, q.Where(orm.ColumnEq(fields.Enabled, true)), orm.CursorRequest[models.WriteRecord]{Size: 2, After: value.Set(next)}); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.CursorPaginate(t.Context(), tx, q.Where(orm.Eq(fields.Enabled, true)), orm.CursorRequest[models.WriteRecord]{Size: 2, After: value.Set(next)}); !errors.Is(err, fault.Invalid) {
 			t.Error("changed query accepted old cursor")
 		}
 		wrongModel, err := orm.ParseCursor[models.Country](next.Token())
@@ -155,7 +155,7 @@ func TestPostgresGeneratedModelPagination(t *testing.T) {
 		}
 		// Inserts before an existing keyset position must not shift its boundary.
 		for _, key := range []models.RecordKey{0, 100} {
-			if _, err := orm.Insert(t.Context(), tx, models.WriteRecords.Table, orm.KeySet(models.WriteRecords.Code, key), orm.TextSet(models.WriteRecords.Name, "later")); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.WriteRecords.Table, orm.Set(models.WriteRecords.Code, key), orm.Set(models.WriteRecords.Name, "later")); err != nil {
 				return err
 			}
 		}

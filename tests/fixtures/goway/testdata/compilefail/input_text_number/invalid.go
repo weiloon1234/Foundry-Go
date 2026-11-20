@@ -4,4 +4,4 @@ import orm "github.com/weiloon1234/Foundry-Go/database/orm"
 
 import m "foundry.test/goway/models/mutators"
 
-var _ = orm.InputTextEq(m.Members.Email, 1)
+var _ = orm.Eq(m.Members.Email, 1)

@@ -6,5 +6,5 @@ import (
 )
 
 func F() {
-	orm.BelongsToOf(models.Orders.Buyer, orm.KeyExpr(models.Users.ID), orm.KeyExpr(models.Users.ID))
+	orm.BelongsToOf(models.Orders.Buyer, models.Users.ID, models.Users.ID)
 }

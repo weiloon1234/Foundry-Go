@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-var _, _ = orm.FirstLocked(nil, nil, orm.Lock(models.Users.Query()).NoWait().Where(orm.KeyEq(models.Users.ID, model.ID[models.Order]{})))
+var _, _ = orm.FirstLocked(nil, nil, orm.Lock(models.Users.Query()).NoWait().Where(orm.Eq(models.Users.ID, model.ID[models.Order]{})))

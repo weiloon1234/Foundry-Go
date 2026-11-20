@@ -11,4 +11,4 @@ type Country struct{ Code CountryCode }
 var countries = orm.Define("countries", func(b orm.Builder[Country], c *Country) orm.Table[Country, CountryCode] {
 	return orm.TableOf(b, &c.Code)
 })
-var _, _ = orm.RequireLocked(nil, nil, orm.Lock(countries.Query().Where(orm.KeyEq(countries.Key(), LocationCode("A")))).SkipLocked())
+var _, _ = orm.RequireLocked(nil, nil, orm.Lock(countries.Query().Where(orm.Eq(countries.Key(), LocationCode("A")))).SkipLocked())

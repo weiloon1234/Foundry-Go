@@ -56,7 +56,7 @@ func TestPostgresORMObserversComposeAndRollback(t *testing.T) {
 		if plain.Name != "registered default" || stats.Plain.Load() != 1 {
 			return errors.New("unannotated model skipped observer")
 		}
-		item, err := orm.Insert(ctx, tx, observerqueries.Records.Table, orm.InputTextSet(observerqueries.Records.Name, " SAMPLE "))
+		item, err := orm.Insert(ctx, tx, observerqueries.Records.Table, orm.Set(observerqueries.Records.Name, " SAMPLE "))
 		if err != nil {
 			return err
 		}
@@ -65,7 +65,7 @@ func TestPostgresORMObserversComposeAndRollback(t *testing.T) {
 			return errors.New("shared draft, mutator or capture changed")
 		}
 		for _, changes := range trace.ORMChanges {
-			field, err := orm.ChangeOf(changes, orm.InputTextExpr(observerqueries.Records.Name))
+			field, err := orm.ChangeOf(changes, observerqueries.Records.Name)
 			if err != nil {
 				return err
 			}

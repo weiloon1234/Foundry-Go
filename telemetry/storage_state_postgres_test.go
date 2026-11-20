@@ -162,7 +162,7 @@ func holdTelemetryLock(t *testing.T, db *database.DB, schema string) (<-chan str
 			if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+schema+`", pg_temp`); err != nil {
 				return err
 			}
-			if _, err := orm.RequireLocked(t.Context(), tx, orm.Lock(store.Controls.Query()).Where(orm.KeyEq(store.Controls.Key(), "storage"))); err != nil {
+			if _, err := orm.RequireLocked(t.Context(), tx, orm.Lock(store.Controls.Query()).Where(orm.Eq(store.Controls.Key(), "storage"))); err != nil {
 				return err
 			}
 			close(locked)

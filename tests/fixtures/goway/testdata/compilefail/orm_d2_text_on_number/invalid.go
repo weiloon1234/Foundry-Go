@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.TextLike(models.Users.Age, "%")
+var _ = orm.Like(models.Users.Age, "%")

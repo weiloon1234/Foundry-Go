@@ -30,7 +30,7 @@ func hookTenant(t hookedTable) orm.GlobalScope[hookedRow] {
 		if !ok {
 			return orm.Predicate[hookedRow]{}, tenantMissing
 		}
-		return orm.KeyEq(t.Key(), id), nil
+		return orm.Eq(t.Key(), id), nil
 	})
 }
 func scopedHooks(factory func() orm.RetrievalHooks[hookedRow], calls *atomic.Int32) hookedTable {
@@ -58,7 +58,7 @@ func TestScopesAreLazyImmutableFailClosedAndContextFresh(t *testing.T) {
 	if _, err := orm.Compile(orm.WithScopeContext(q.Query(), t.Context())); !errors.Is(err, tenantMissing) {
 		t.Fatal("missing tenant opened scope", err)
 	}
-	original := orm.WithScopeContext(q.Query().Where(orm.InputTextEq(q.Name, "explicit")), tenantContext(t.Context(), 1))
+	original := orm.WithScopeContext(q.Query().Where(orm.Eq(q.Name, "explicit")), tenantContext(t.Context(), 1))
 	s, err := orm.Compile(original)
 	if err != nil || !reflect.DeepEqual(s.Arguments(), []any{"explicit", int64(1)}) {
 		t.Fatal(s.Arguments(), err)
@@ -111,7 +111,7 @@ func TestScopeFailuresAndInvalidDeclarationsNeverReachSQL(t *testing.T) {
 					case "zero":
 						return orm.Predicate[hookedRow]{}, nil
 					case "wrong-owner":
-						return orm.KeyEq(other.Key(), 1), nil
+						return orm.Eq(other.Key(), 1), nil
 					case "resolve-panic":
 						panic("private model")
 					}
@@ -119,7 +119,7 @@ func TestScopeFailuresAndInvalidDeclarationsNeverReachSQL(t *testing.T) {
 					if !ok {
 						return orm.Predicate[hookedRow]{}, tenantMissing
 					}
-					return orm.KeyEq(table.Key(), id), nil
+					return orm.Eq(table.Key(), id), nil
 				}
 				if mode == "nil" {
 					resolver = nil
@@ -133,7 +133,7 @@ func TestScopeFailuresAndInvalidDeclarationsNeverReachSQL(t *testing.T) {
 			q := hookedFields(nil, orm.WithGlobalScopes(source))
 			query := q.Query()
 			if mode == "unknown-removal" {
-				query = orm.WithoutGlobalScope(query, orm.Scope(q.Table, "missing", func(context.Context) (orm.Predicate[hookedRow], error) { return orm.KeyEq(q.Key(), 1), nil }))
+				query = orm.WithoutGlobalScope(query, orm.Scope(q.Table, "missing", func(context.Context) (orm.Predicate[hookedRow], error) { return orm.Eq(q.Key(), 1), nil }))
 			}
 			var statements []string
 			db := hookDB(t, testConnector{statements: &statements, columns: hookColumns, values: hookValues("stored", nil, nil)})
@@ -187,7 +187,7 @@ func TestScopesApplyAcrossReadAndWriteTerminalsAndRawBypasses(t *testing.T) {
 	if _, err := orm.Exists(ctx, db, q.Query()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := orm.Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Name, "updated")); err != nil {
+	if _, err := orm.Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, orm.Set(q.Name, "updated")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := orm.DeleteAll(ctx, db, orm.WithoutModelHooks(q.Query())); err != nil {
@@ -205,7 +205,7 @@ func TestScopesApplyAcrossReadAndWriteTerminalsAndRawBypasses(t *testing.T) {
 	}
 	// Inserts do not resolve scopes, and write hydration skips retrieval.
 	before := retrieved
-	if _, err := orm.Insert(t.Context(), db, q.Table, orm.KeySet(q.Key(), 1), orm.InputTextSet(q.Name, "stored"), orm.ColumnSet(q.Body, []byte{1})); err != nil || retrieved != before {
+	if _, err := orm.Insert(t.Context(), db, q.Table, orm.Set(q.Key(), 1), orm.Set(q.Name, "stored"), orm.Set(q.Body, []byte{1})); err != nil || retrieved != before {
 		t.Fatal("insert resolved a scope or retrieved", err)
 	}
 	if _, err := orm.Raw(t.Context(), db, q.Table, "SELECT * FROM hooked"); err != nil || retrieved != before+1 {

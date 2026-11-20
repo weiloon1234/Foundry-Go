@@ -13,7 +13,7 @@ these aliases. Use `expr.At` for model fields and `rows.At` for projection field
 
 ```go
 summary := rows.Select(rows.From(Orders.Query()), Summary,
-    rows.Map(Summary.Amount, expr.Value(orm.NumberExpr(Orders.TotalCents))))
+    rows.Map(Summary.Amount, expr.Value(Orders.TotalCents)))
 a := rows.AsRecord[summarySide](rows.RecordOf(rows.Limit(summary, 10)), "summary")
 result := rows.SelectRecord(a, rows.Scope(a)).
     OrderBy(expr.Asc(rows.At(rows.Scope(a), Summary.Amount)))
@@ -48,7 +48,7 @@ complete := rows.SelectTransactionRecord(claim, scope)
 items, err := complete.All(ctx, tx) // requires *database.Tx
 
 summary := rows.SelectTransaction(claim, Summary,
-    rows.Map(Summary.Amount, expr.At(scope, orm.NumberExpr(Orders.TotalCents))))
+    rows.Map(Summary.Amount, expr.At(scope, Orders.TotalCents)))
 rows, err := summary.All(ctx, tx)
 ```
 

@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ orm.KeyColumn[binarymodels.Record, binarymodels.Payload]
+var _ orm.Key[binarymodels.Record, binarymodels.Payload]

@@ -19,7 +19,7 @@ func TestPostgresFactoryUsesORMDraftsHooksAndTransaction(t *testing.T) {
 	trace := &softqueries.Trace{}
 	runSoft(t, func(tx *database.Tx, clock *testkit.Clock) error {
 		members, err := factory.Define(softqueries.Members.Table, func(_ context.Context, n factory.Sequence) ([]orm.Assignment[softqueries.Member], error) {
-			return []orm.Assignment[softqueries.Member]{orm.InputTextSet(softqueries.Members.Name, fmt.Sprintf(" member-%d ", n))}, nil
+			return []orm.Assignment[softqueries.Member]{orm.Set(softqueries.Members.Name, fmt.Sprintf(" member-%d ", n))}, nil
 		})
 		if err != nil {
 			return err
@@ -40,7 +40,7 @@ func TestPostgresFactoryUsesORMDraftsHooksAndTransaction(t *testing.T) {
 			return errors.New("factory committed before its caller")
 		}
 		duplicate, err := members.WithStates(func(_ context.Context, d []orm.Assignment[softqueries.Member]) ([]orm.Assignment[softqueries.Member], error) {
-			return []orm.Assignment[softqueries.Member]{orm.InputTextSet(softqueries.Members.Name, "duplicate")}, nil
+			return []orm.Assignment[softqueries.Member]{orm.Set(softqueries.Members.Name, "duplicate")}, nil
 		})
 		if err != nil {
 			return err
@@ -75,7 +75,7 @@ func TestPostgresFactoryUsesORMDraftsHooksAndTransaction(t *testing.T) {
 func TestPostgresFactoryHookFailureLeavesNoRows(t *testing.T) {
 	runSoft(t, func(tx *database.Tx, _ *testkit.Clock) error {
 		members, err := factory.Define(softqueries.Members.Table, func(_ context.Context, n factory.Sequence) ([]orm.Assignment[softqueries.Member], error) {
-			return []orm.Assignment[softqueries.Member]{orm.InputTextSet(softqueries.Members.Name, fmt.Sprintf("hooked-%d", n))}, nil
+			return []orm.Assignment[softqueries.Member]{orm.Set(softqueries.Members.Name, fmt.Sprintf("hooked-%d", n))}, nil
 		})
 		if err != nil {
 			return err

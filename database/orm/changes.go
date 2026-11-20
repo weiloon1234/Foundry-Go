@@ -6,7 +6,6 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/encrypted"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/internal/lifecore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -66,26 +65,28 @@ func (Changes[M]) String() string { return "orm changes" }
 // GoString redacts snapshots. Example: fmt.Sprintf("%#v",changes).
 func (Changes[M]) GoString() string { return "orm changes" }
 
-// ChangeOf selects a required persisted field with its stored type. Example: ChangeOf(changes, NumberExpr(Orders.TotalCents)).
-func ChangeOf[M, V any](changes Changes[M], field interface{ ormColumn(*M) columnData[V] }) (lifecycle.FieldChange[V], error) {
-	c := field.ormColumn(nil)
-	if err := changeField(changes.state, c.core, false); err != nil {
+// ChangeOf selects a required persisted field with its stored type (including encrypted fields using decoded equality).
+// Example: orm.ChangeOf(changes, Orders.TotalCents).
+func ChangeOf[M, V, I, P any, K RequiredAnyColumnKind, R ColumnRole](changes Changes[M], field ColumnHandle[M, V, I, P, K, R]) (lifecycle.FieldChange[V], error) {
+	core := columnCoreOf(field.stored)
+	if err := changeField(changes.state, core, false); err != nil {
 		return lifecycle.FieldChange[V]{}, err
 	}
-	return compareTypedField(c.core, c.policy, changes.state)
+	return compareTypedField(core, field.stored.policy, changes.state)
 }
 
-// NullableChangeOf retains SQL NULL independently of model existence. Example: NullableChangeOf(changes, NullableInputTextExpr(Members.Note)).
-func NullableChangeOf[M, V any](changes Changes[M], field interface{ ormColumn(*M) columnData[V] }) (lifecycle.FieldChange[value.Nullable[V]], error) {
-	c := field.ormColumn(nil)
-	if err := changeField(changes.state, c.core, true); err != nil {
+// NullableChangeOf retains SQL NULL independently of model existence (including nullable encrypted fields).
+// Example: orm.NullableChangeOf(changes, Members.Note).
+func NullableChangeOf[M, V, I, P any, K NullableColumnKind, R ColumnRole](changes Changes[M], field ColumnHandle[M, V, I, P, K, R]) (lifecycle.FieldChange[value.Nullable[V]], error) {
+	core := columnCoreOf(field.stored)
+	if err := changeField(changes.state, core, true); err != nil {
 		return lifecycle.FieldChange[value.Nullable[V]]{}, err
 	}
-	policy, ok := c.core.nullablePolicy.(nullableFieldPolicy[V])
+	policy, ok := core.nullablePolicy.(nullableFieldPolicy[V])
 	if !ok {
 		return lifecycle.FieldChange[value.Nullable[V]]{}, invalid("change field has a different stored type")
 	}
-	return compareTypedField(c.core, policy.policy, changes.state)
+	return compareTypedField(core, policy.policy, changes.state)
 }
 func changeField(state *changeState, field *columnCore, nullable bool) error {
 	if state == nil || field == nil || field.owner != state.table || field.metadata.Nullable != nullable {
@@ -141,7 +142,7 @@ func compareStoredField(c *columnCore, before, after unsafe.Pointer, assigned bo
 }
 
 // Compare compares stored snapshots without running hooks, accessors or mutators.
-// Example: Compare(Orders.Table, value.Set(before), value.Set(after), orm.NumberSet(Orders.TotalCents, 0)).
+// Example: Compare(Orders.Table, value.Set(before), value.Set(after), orm.Set(Orders.TotalCents, 0)).
 func Compare[M any, K comparable](table Table[M, K], before, after value.Optional[M], assigned ...Assignment[M]) (Changes[M], error) {
 	if err := tableError(table.core); err != nil {
 		return Changes[M]{}, err
@@ -208,28 +209,4 @@ func captureChanges(table *tableCore, before, after unsafe.Pointer, assigned []q
 		state.changed = state.changed || changed
 	}
 	return state, nil
-}
-
-// EncryptedChangeOf selects an encrypted field using decoded equality, without binding ciphertext.
-// Example: EncryptedChangeOf(changes, Vaults.Secret).
-func EncryptedChangeOf[M any, V encrypted.Value[V]](changes Changes[M], field Encrypted[M, V]) (lifecycle.FieldChange[V], error) {
-	c := field.encrypted
-	if err := changeField(changes.state, c.core, false); err != nil {
-		return lifecycle.FieldChange[V]{}, err
-	}
-	return compareTypedField(c.core, c.policy, changes.state)
-}
-
-// NullableEncryptedChangeOf retains nullable encrypted snapshots without exposing predicates.
-// Example: NullableEncryptedChangeOf(changes, Vaults.Backup).
-func NullableEncryptedChangeOf[M any, V encrypted.Value[V]](changes Changes[M], field NullableEncrypted[M, V]) (lifecycle.FieldChange[value.Nullable[V]], error) {
-	c := field.encrypted.base
-	if err := changeField(changes.state, c.core, true); err != nil {
-		return lifecycle.FieldChange[value.Nullable[V]]{}, err
-	}
-	policy, ok := c.core.nullablePolicy.(nullableFieldPolicy[V])
-	if !ok {
-		return lifecycle.FieldChange[value.Nullable[V]]{}, invalid("change field has a different stored type")
-	}
-	return compareTypedField(c.core, policy.policy, changes.state)
 }

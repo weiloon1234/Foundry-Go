@@ -204,7 +204,7 @@ func TestORMScaffoldHandwrittenRolesAndRelations(t *testing.T) {
  type Child struct{ID model.ID[Child];WidgetID model.ID[Widget]}
  type ChildTable struct{orm.Table[Child,model.ID[Child]];WidgetID orm.Column[Child,model.ID[Widget]]}
  var Children=orm.Define("children",func(b orm.Builder[Child],m *Child)ChildTable{return ChildTable{orm.TableOf(b,&m.ID),orm.ColumnOf(b,&m.WidgetID)}})
- var WidgetChildren=orm.HasManyOf(Widgets.Children,orm.KeyExpr(Widgets.Key()),orm.ColumnExpr(Children.WidgetID))
+ var WidgetChildren=orm.HasManyOf(Widgets.Children,Widgets.Key(),Children.WidgetID)
  `
 	write(t, dir, filepath.Base(path), source)
 	write(t, dir, "roles_test.go", `package sample
@@ -212,7 +212,7 @@ func TestORMScaffoldHandwrittenRolesAndRelations(t *testing.T) {
  func TestRoles(t *testing.T){
   if err:=orm.Check(append(WidgetTables(),Children)...);err!=nil{t.Fatal(err)}
   if _,err:=orm.Compile(Widgets.Query().With(WidgetChildren));err!=nil{t.Fatal(err)}
-  _=orm.InputTextSet(Widgets.Name,NameInput{Text:"  normalized  "})
+  _=orm.Set(Widgets.Name,NameInput{Text:"  normalized  "})
  }
  `)
 	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {

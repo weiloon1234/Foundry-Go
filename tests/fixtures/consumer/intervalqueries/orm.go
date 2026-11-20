@@ -77,8 +77,8 @@ var PlanLinks = struct {
 	Samples orm.HasMany[Plan, Sample]
 	Labels  orm.ThroughRelation[Plan, Label, Link]
 }{
-	Samples: orm.HasManyOf(Plans.Samples, orm.IntervalExpr(Plans.Period), orm.IntervalExpr(Samples.Period)),
-	Labels:  orm.ManyToManyOf(Plans.Labels, orm.IntervalExpr(Plans.Period), orm.IntervalExpr(Links.PlanPeriod), orm.IntervalExpr(Links.LabelID), orm.KeyExpr(Labels.ID)),
+	Samples: orm.HasManyOf(Plans.Samples, Plans.Period, Samples.Period),
+	Labels:  orm.ManyToManyOf(Plans.Labels, orm.JoinKeys(Plans.Period, Links.PlanPeriod), orm.JoinKeys(Links.LabelID, Labels.ID)),
 }
 
 var PlanValues = struct {
@@ -86,7 +86,7 @@ var PlanValues = struct {
 	TotalPeriod orm.AggregateRelation[Plan, value.Nullable[temporal.Interval]]
 }{
 	SampleCount: Plans.SampleCount.Using(expr.Related(PlanLinks.Samples, expr.Count[Sample]())),
-	TotalPeriod: Plans.TotalPeriod.Using(expr.Related(PlanLinks.Samples, expr.SumInterval(orm.IntervalExpr(Samples.Period)))),
+	TotalPeriod: Plans.TotalPeriod.Using(expr.Related(PlanLinks.Samples, expr.SumInterval(Samples.Period))),
 }
 
 type SummaryColumns struct {

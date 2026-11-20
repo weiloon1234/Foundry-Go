@@ -10,15 +10,15 @@ func updateMemberBodies(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := hooks.Members
 	destination := f.Query()
 	return rows.UpdateFrom(destination, rows.From(f.Query())).
-		Match(rows.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).
-		Select(rows.MapUpdate(orm.ColumnExpr(f.Body), expr.Value(orm.ColumnExpr(f.Body)))).
-		Values(orm.InputTextSet(f.Name, "updated")).Exec(ctx, tx)
+		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).
+		Select(rows.MapUpdate(f.Body, expr.Value(f.Body))).
+		Values(orm.Set(f.Name, "updated")).Exec(ctx, tx)
 }
 ```
 
 `rows.MatchSource` matches a stored expression to the destination primary key without assigning it. `MatchNullableSource` permits nullable source keys, such as an outer join; SQL NULL matches nothing. A key match is a distinct type from an assignment and cannot be converted into one.
 
-`rows.MapUpdate` requires the exact stored value and nullable shape and an `orm.UpdateTarget`. Primary keys, managed update timestamps and mutation-input fields cannot be targets. Adapters cannot erase those roles. SQL mappings do not call Go getters or transformations.
+`rows.MapUpdate` requires the exact stored value and nullable shape and an `orm.UpdatableRole` column handle. Primary keys, managed update timestamps and mutation-input fields cannot be targets. SQL mappings do not call Go getters or transformations.
 
 Destination predicates, scopes and soft-delete visibility stay effective. Source windows belong to the source; read ordering, limits and eager-load options on the destination are rejected.
 
@@ -36,7 +36,7 @@ func deleteMatchingMembers(ctx context.Context, tx *database.Tx) (int64, error) 
 	f := hooks.Members
 	destination := f.Query().OnlyTrashed()
 	return rows.ForceDeleteUsing(destination, f.Soft, rows.From(f.Query().OnlyTrashed())).
-		Match(rows.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).Exec(ctx, tx)
+		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).Exec(ctx, tx)
 }
 ```
 

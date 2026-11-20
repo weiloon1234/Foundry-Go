@@ -34,10 +34,10 @@ var Archives = orm.Define("member_archives", func(b orm.Builder[ArchivedMember],
 func copyMembers(ctx context.Context, tx *database.Tx) (int64, error) {
 	source, destination := hooks.Members, Archives
 	return rows.InsertFrom(rows.From(source.Query()), destination.Query(),
-		rows.MapInsert(orm.KeyExpr(destination.ID), expr.Value(orm.KeyExpr(source.Key()))),
-		rows.MapInsert(orm.ColumnExpr(destination.Body), expr.Value(orm.ColumnExpr(source.Body))),
-		rows.MapInsert(orm.TimeExpr(destination.CreatedAt), expr.Value(orm.TimeExpr(source.CreatedAt)))).
-		Values(orm.InputTextSet(destination.Name, "copy")).Exec(ctx, tx)
+		rows.MapInsert(destination.ID, expr.Value(source.Key())),
+		rows.MapInsert(destination.Body, expr.Value(source.Body)),
+		rows.MapInsert(destination.CreatedAt, expr.Value(source.CreatedAt))).
+		Values(orm.Set(destination.Name, "copy")).Exec(ctx, tx)
 }
 ```
 
@@ -47,7 +47,7 @@ The destination is a separate archive table; its key retains the source identity
 
 SQL mappings append. `Values(assignments...)` replaces the fixed inputs for every selected row. Repeated mappings or a column present in both mappings and fixed values fail validation. Nullable expressions cannot populate required destinations; explicit nullable widening is available through the expression API.
 
-`MapInsert` accepts only `orm.InsertTarget` columns. Go-mutated fields require fixed `Values` inputs and cannot accept SQL mappings. Managed update time is also excluded. Mapping an unmutated primary requires `PrimaryOf`; a lookup key alone does not grant this permission. Complete [typed roles](model-declarations.md) retain these restrictions through adapters.
+`MapInsert` accepts only `orm.InsertableRole` column handles. Go-mutated fields require fixed `Values` inputs and cannot accept SQL mappings. Managed update time is also excluded. Mapping an unmutated primary requires `PrimaryOf`; a lookup key alone does not grant this permission. Complete [typed roles](model-declarations.md) enforce these restrictions directly on `orm.ColumnHandle`.
 
 SQL mappings do not call Go accessors or mutators. Fixed inputs transform once per attempt inside the transaction. Omitted input remains omitted, NULL skips scalar mutators, and supplied zero remains a value. Use bounded `CreateEach` when every source row needs Go transformations or lifecycle callbacks.
 

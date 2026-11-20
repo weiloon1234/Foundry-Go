@@ -9,4 +9,4 @@ import (
 
 type Other struct{}
 
-var _ = orm.ColumnSet(recovering.MemberRecords.EmailRevision, challenge.Revision[Other]{})
+var _ = orm.Set(recovering.MemberRecords.EmailRevision, challenge.Revision[Other]{})

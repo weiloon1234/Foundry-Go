@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-func invalid() { _ = orm.JSONContains(jsonpaths.Documents.Settings, value.JSON[[]string]{}) }
+func invalid() { _ = orm.ContainsDocument(jsonpaths.Documents.Settings, value.JSON[[]string]{}) }

@@ -9,7 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// MemberTable separates fresh inputs from stored values. Example: orm.InputTextSet(Members.Email, EmailInput{Address:"Ada@example.test"}).
+// MemberTable separates fresh inputs from stored values. Example: orm.Set(Members.Email, EmailInput{Address:"Ada@example.test"}).
 type MemberTable struct {
 	orm.Table[Member, model.ID[Member]]
 	Email orm.InputText[Member, EmailInput, StoredEmail]
@@ -17,7 +17,7 @@ type MemberTable struct {
 }
 
 // Members preserves omitted/null/value inputs and explicit AccessEmail presentation.
-// Example: Members.Query().Where(orm.InputTextEq(Members.Email, StoredEmail("ada@example.test"))).
+// Example: Members.Query().Where(orm.Eq(Members.Email, StoredEmail("ada@example.test"))).
 var Members = declareMembers()
 
 func declareMembers() MemberTable {
@@ -48,7 +48,7 @@ func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 				}
 				state.BeforeInput = orm.WriteGet(draft, func() func(arg0 EmailInput) orm.Assignment[Member] {
 					receiver := fields.Email
-					return func(arg0 EmailInput) orm.Assignment[Member] { return orm.InputTextSet(receiver, arg0) }
+					return func(arg0 EmailInput) orm.Assignment[Member] { return orm.Set(receiver, arg0) }
 				}())
 			}
 			return nil
@@ -56,9 +56,9 @@ func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 		Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[Member]) error {
 			if !orm.WriteIsSet(draft, func() func(arg0 EmailInput) orm.Assignment[Member] {
 				receiver := fields.Email
-				return func(arg0 EmailInput) orm.Assignment[Member] { return orm.InputTextSet(receiver, arg0) }
+				return func(arg0 EmailInput) orm.Assignment[Member] { return orm.Set(receiver, arg0) }
 			}()) {
-				return orm.WriteSet(draft, orm.InputTextSet(fields.Email, EmailInput{Address: " DEFAULT@EXAMPLE.TEST "}))
+				return orm.WriteSet(draft, orm.Set(fields.Email, EmailInput{Address: " DEFAULT@EXAMPLE.TEST "}))
 			}
 			return nil
 		}, Created: after, Updated: after, Deleted: after,

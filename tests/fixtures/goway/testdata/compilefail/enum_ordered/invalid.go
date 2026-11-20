@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func F() { orm.NumberGt(models.Users.Status, models.StatusActive) }
+func F() { orm.Gt(models.Users.Status, models.StatusActive) }

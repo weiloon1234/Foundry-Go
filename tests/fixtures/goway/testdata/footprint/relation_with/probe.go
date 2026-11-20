@@ -24,7 +24,7 @@ var Parents = orm.Define("parents", func(b orm.Builder[Parent], m *Parent) Paren
 var Children = orm.Define("children", func(b orm.Builder[Child], m *Child) ChildFields {
 	return ChildFields{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.ParentID), orm.OneOf(b, &m.Parent)}
 })
-var ParentRelation = orm.BelongsToOf(Children.Parent, orm.NumberExpr(Children.ParentID), orm.KeyExpr(Parents.Key()))
+var ParentRelation = orm.BelongsToOf(Children.Parent, Children.ParentID, Parents.Key())
 
 func F(ctx context.Context, db database.Executor) ([]Child, error) {
 	return orm.All(ctx, db, Children.Query().With(ParentRelation))

@@ -20,7 +20,7 @@ func TestPruningRemovesSelectedModelsInBoundedBatches(t *testing.T) {
 	keep := seedDocument(t, db, alpha, "keep", true)
 	documents := tenantqueries.Documents.Query()
 	f := tenantqueries.Documents
-	if _, err := orm.DeleteAll(ctx, db, documents.Where(orm.TextNe(f.Title, "keep"))); err != nil {
+	if _, err := orm.DeleteAll(ctx, db, documents.Where(orm.Ne(f.Title, "keep"))); err != nil {
 		t.Fatal(err)
 	}
 	registry, err := prune.New(
@@ -46,13 +46,13 @@ func TestPruningRemovesSelectedModelsInBoundedBatches(t *testing.T) {
 		t.Fatal("prune removed the wrong documents", remaining, err)
 	}
 	// Lifecycle mode removes each pivot through its ordinary delete.
-	if _, err := orm.Insert(ctx, db, tenantqueries.Tags.Table, orm.KeySet(tenantqueries.Tags.Key(), "x"), orm.TextSet(tenantqueries.Tags.Name, "x")); err != nil {
+	if _, err := orm.Insert(ctx, db, tenantqueries.Tags.Table, orm.Set(tenantqueries.Tags.Key(), "x"), orm.Set(tenantqueries.Tags.Name, "x")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := orm.AttachMany(ctx, db, tenantqueries.DocumentLinks, keep, []tenantqueries.Tag{{Code: "x"}}, orm.NumberSet(tenantqueries.DocumentTags.Weight, 0)); err != nil {
+	if _, err := orm.AttachMany(ctx, db, tenantqueries.DocumentLinks, keep, []tenantqueries.Tag{{Code: "x"}}, orm.Set(tenantqueries.DocumentTags.Weight, 0)); err != nil {
 		t.Fatal(err)
 	}
-	links, err := prune.New(prune.ORMModel("app.weightless_links", tenantqueries.DocumentTags.Query().Where(orm.NumberEq(tenantqueries.DocumentTags.Weight, 0)), prune.Lifecycle))
+	links, err := prune.New(prune.ORMModel("app.weightless_links", tenantqueries.DocumentTags.Query().Where(orm.Eq(tenantqueries.DocumentTags.Weight, 0)), prune.Lifecycle))
 	if err != nil {
 		t.Fatal(err)
 	}

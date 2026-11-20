@@ -44,19 +44,19 @@ func runRecordNew(g *goldenCapture, kind string) {
 	defer db.Close(ctx)
 	q := models.Orders.Query()
 	if kind == "window" {
-		q = q.Where(orm.NumberGt(models.Orders.TotalCents, 10)).OrderBy(orm.NumberDesc(models.Orders.TotalCents)).Limit(3).Offset(1)
+		q = q.Where(orm.Gt(models.Orders.TotalCents, 10)).OrderBy(orm.Desc(models.Orders.TotalCents)).Limit(3).Offset(1)
 	}
 	if kind == "projection" {
-		projected := rowset.Offset(rowset.Limit(rowset.OrderBy(rowset.Select(rowset.From(q), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))))))), expr.Desc(expr.Value(orm.NumberExpr(models.Orders.TotalCents)))), 3), 1)
+		projected := rowset.Offset(rowset.Limit(rowset.OrderBy(rowset.Select(rowset.From(q), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.AsSelected(expr.Row(expr.Value(models.Orders.TotalCents)))))), expr.Desc(expr.Value(models.Orders.TotalCents))), 3), 1)
 		a := rowset.AsRecord[joinA](rowset.RecordOf(projected), "r")
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.ReadRecord(rowset.SelectRecord(a, rowset.Scope(a)).Limit(2)).All(ctx, db))}))
 		return
 	}
 	if kind == "transaction_model" || kind == "transaction_projection" {
 		check(db.Transaction(ctx, func(tx *database.Tx) error {
-			a := rowset.AsTransaction[joinA](rowset.LockedRecord(orm.Lock(q.Where(orm.NumberGt(models.Orders.TotalCents, 10))).SkipLocked()), "r")
+			a := rowset.AsTransaction[joinA](rowset.LockedRecord(orm.Lock(q.Where(orm.Gt(models.Orders.TotalCents, 10))).SkipLocked()), "r")
 			if kind == "transaction_projection" {
-				selected := rowset.SelectTransaction(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.AsSelected(expr.Row(expr.At(rowset.TransactionScope(a), orm.NumberExpr(models.Orders.TotalCents)))))))
+				selected := rowset.SelectTransaction(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.AsSelected(expr.Row(expr.At(rowset.TransactionScope(a), models.Orders.TotalCents))))))
 				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(selected.Limit(2).All(ctx, tx))}))
 			} else {
 				got := must(rowset.SelectTransactionRecord(a, rowset.TransactionScope(a)).Limit(2).All(ctx, tx))

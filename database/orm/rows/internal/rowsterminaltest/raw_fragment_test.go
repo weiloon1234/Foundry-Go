@@ -18,7 +18,7 @@ import (
 
 func TestRawFragmentsComposeAndHydrate(t *testing.T) {
 	o := declareOrders()
-	source := rows.FromModel(o.Query().Where(orm.And(orm.KeyEq(o.ID, 1), orm.Not(orm.WhereRaw[order]("member_id = ?", 2)))))
+	source := rows.FromModel(o.Query().Where(orm.And(orm.Eq(o.ID, 1), orm.Not(orm.WhereRaw[order]("member_id = ?", 2)))))
 	selected := expr.Raw[order, int64]("COALESCE(member_id, ?)", 0)
 	q := expressionQuery(source, selected, codec.Signed[int64]())
 	q = rows.OrderBy(q, expr.AscValue(selected))

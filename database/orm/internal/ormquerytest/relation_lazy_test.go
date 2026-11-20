@@ -46,7 +46,7 @@ func TestRelationExistenceDefersTargetEnumChecks(t *testing.T) {
 	parents := orm.Define("lazy_parents", func(b orm.Builder[parent], m *parent) parentFields {
 		return parentFields{orm.TableOf(b, &m.ID), orm.ManyOf(b, &m.Children)}
 	})
-	r := orm.HasManyOf(parents.Children, orm.KeyExpr(parents.Key()), orm.NumberExpr(children.OwnerID))
+	r := orm.HasManyOf(parents.Children, parents.Key(), children.OwnerID)
 	q := parents.Query().Where(orm.Has(r))
 	if relationEnumCalls != 0 {
 		t.Fatal("relation construction resolved enum descriptor")

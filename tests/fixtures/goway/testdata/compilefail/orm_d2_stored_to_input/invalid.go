@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.InputTextSet(mutators.Members.Email, coremodels.StoredEmail("stored"))
+var _ = orm.Set(mutators.Members.Email, coremodels.StoredEmail("stored"))

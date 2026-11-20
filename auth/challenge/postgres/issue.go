@@ -71,13 +71,13 @@ func (b *Backend) Issue(ctx context.Context, address challenge.Address, identity
 			return err
 		}
 		draft := []orm.Assignment[challengestore.Entry]{
-			orm.KeySet(challengestore.Entries.ID, id),
-			orm.TextSet(challengestore.Entries.Scope, subject.Scope),
-			orm.TextSet(challengestore.Entries.SubjectKey, subject.Key),
-			orm.TextSet(challengestore.Entries.SecretHash, hash.Hex()),
-			orm.TextSet(challengestore.Entries.BindingHash, binding.Hex()),
-			orm.TimeSet(challengestore.Entries.CreatedAt, now),
-			orm.TimeSet(challengestore.Entries.ExpiresAt, expiry),
+			orm.Set(challengestore.Entries.ID, id),
+			orm.Set(challengestore.Entries.Scope, subject.Scope),
+			orm.Set(challengestore.Entries.SubjectKey, subject.Key),
+			orm.Set(challengestore.Entries.SecretHash, hash.Hex()),
+			orm.Set(challengestore.Entries.BindingHash, binding.Hex()),
+			orm.Set(challengestore.Entries.CreatedAt, now),
+			orm.Set(challengestore.Entries.ExpiresAt, expiry),
 		}
 		row, err := orm.Insert(ctx, tx, challengestore.Entries.Table, draft...)
 		if err != nil {

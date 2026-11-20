@@ -65,7 +65,7 @@ func (b *Backend) Prune(ctx context.Context, address challenge.Address, limit in
 			return err
 		}
 		fields := challengestore.Entries
-		candidates, err := rows.Read(rows.Select(rows.From(entries(scope, "").Where(orm.TimeLte(fields.ExpiresAt, now)).OrderBy(orm.TextAsc(fields.SubjectKey), orm.KeyAsc(fields.ID)).Limit(limit)), challengestore.PruneCandidateRows, rows.Map(challengestore.PruneCandidateRows.ID, expr.Value(orm.KeyExpr(fields.ID))), rows.Map(challengestore.PruneCandidateRows.SubjectKey, expr.Value(orm.TextExpr(fields.SubjectKey))))).All(ctx, tx)
+		candidates, err := rows.Read(rows.Select(rows.From(entries(scope, "").Where(orm.Lte(fields.ExpiresAt, now)).OrderBy(orm.Asc(fields.SubjectKey), orm.Asc(fields.ID)).Limit(limit)), challengestore.PruneCandidateRows, rows.Map(challengestore.PruneCandidateRows.ID, expr.Value(fields.ID)), rows.Map(challengestore.PruneCandidateRows.SubjectKey, expr.Value(fields.SubjectKey)))).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -77,7 +77,7 @@ func (b *Backend) Prune(ctx context.Context, address challenge.Address, limit in
 			if !present {
 				return safeerror.NewFault(fault.Invalid, "stored challenge has no subject")
 			}
-			found, err := orm.FirstLocked(ctx, tx, orm.Lock(entries(scope, subject.Key).Where(orm.KeyEq(challengestore.Entries.ID, candidate.ID))))
+			found, err := orm.FirstLocked(ctx, tx, orm.Lock(entries(scope, subject.Key).Where(orm.Eq(challengestore.Entries.ID, candidate.ID))))
 			if err != nil {
 				return err
 			}

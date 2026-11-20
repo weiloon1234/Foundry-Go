@@ -42,7 +42,7 @@ on another payload. Optional, nullable, pointer and nested document layers use
 
 <!-- compiled-source: tests/fixtures/consumer/jsonqueries/path_sql_test.go#json-models-2 -->
 ```go
-profile := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(orm.JSONExpr(f.Settings))), jsonqueries.ProfileField))
+profile := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(f.Settings)), jsonqueries.ProfileField))
 age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, jsonqueries.AgeField), codec.Signed[int64]()))
 selected := rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(f.Query(), expr.NullableEq(age, 42))), expr.AsSelected(age)))
 ```

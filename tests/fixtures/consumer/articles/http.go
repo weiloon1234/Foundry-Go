@@ -163,18 +163,18 @@ func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
 func (s *Service) Create(ctx context.Context, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, ArticleInput]) (ArticleView, error) {
 	var article Article
 	err := s.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		author, err := orm.Insert(ctx, tx, Authors.Table, orm.TextSet(Authors.Name, in.Body.Author))
+		author, err := orm.Insert(ctx, tx, Authors.Table, orm.Set(Authors.Name, in.Body.Author))
 		if err != nil {
 			return err
 		}
-		created, err := orm.Insert(ctx, tx, Articles.Table, orm.TextSet(Articles.Slug, in.Body.Slug), orm.ColumnSet(Articles.AuthorID, author.ID))
+		created, err := orm.Insert(ctx, tx, Articles.Table, orm.Set(Articles.Slug, in.Body.Slug), orm.Set(Articles.AuthorID, author.ID))
 		if err != nil {
 			return err
 		}
 		if err := s.writeText(ctx, tx, created, in.Body); err != nil {
 			return err
 		}
-		article, err = orm.Require(ctx, tx, Articles.Query().With(s.x.All()...).Where(orm.KeyEq(Articles.Key(), created.ID)))
+		article, err = orm.Require(ctx, tx, Articles.Query().With(s.x.All()...).Where(orm.Eq(Articles.Key(), created.ID)))
 		return err
 	})
 	if err != nil {
@@ -188,18 +188,18 @@ func (s *Service) Create(ctx context.Context, in foundryhttp.Input[foundryhttp.N
 func (s *Service) Update(ctx context.Context, in foundryhttp.Input[ArticlePath, foundryhttp.NoQuery, ArticleInput]) (ArticleView, error) {
 	var article Article
 	err := s.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		existing, err := orm.Require(ctx, tx, Articles.Query().Where(orm.KeyEq(Articles.Key(), in.Path.Article)))
+		existing, err := orm.Require(ctx, tx, Articles.Query().Where(orm.Eq(Articles.Key(), in.Path.Article)))
 		if err != nil {
 			return err
 		}
-		updated, err := orm.Update(ctx, tx, Articles.Table.Query(), Articles.Table.Key(), existing.ID, orm.TextSet(Articles.Slug, in.Body.Slug))
+		updated, err := orm.Update(ctx, tx, Articles.Table.Query(), Articles.Table.Key(), existing.ID, orm.Set(Articles.Slug, in.Body.Slug))
 		if err != nil {
 			return err
 		}
 		if err := s.writeText(ctx, tx, updated, in.Body); err != nil {
 			return err
 		}
-		article, err = orm.Require(ctx, tx, Articles.Query().With(s.x.All()...).Where(orm.KeyEq(Articles.Key(), updated.ID)))
+		article, err = orm.Require(ctx, tx, Articles.Query().With(s.x.All()...).Where(orm.Eq(Articles.Key(), updated.ID)))
 		return err
 	})
 	if err != nil {
@@ -262,7 +262,7 @@ func (s *Service) List(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPa
 	var list []Article
 	if err := s.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		list, err = orm.All(ctx, tx, Articles.Query().With(s.x.Title.Relation(Articles.Title), s.x.Summary.Relation(Articles.Summary), s.x.Logo.Relation(Articles.Logo), s.x.Galleries.Relation(Articles.Galleries), s.x.SEO.Relation(Articles.SEO)).OrderBy(orm.TextAsc(Articles.Slug)))
+		list, err = orm.All(ctx, tx, Articles.Query().With(s.x.Title.Relation(Articles.Title), s.x.Summary.Relation(Articles.Summary), s.x.Logo.Relation(Articles.Logo), s.x.Galleries.Relation(Articles.Galleries), s.x.SEO.Relation(Articles.SEO)).OrderBy(orm.Asc(Articles.Slug)))
 		return err
 	}); err != nil {
 		return ArticleList{}, err
@@ -290,7 +290,7 @@ func (s *Service) find(ctx context.Context, id model.ID[Article], relations ...o
 	var article Article
 	err := s.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		article, err = orm.Require(ctx, tx, Articles.Query().With(relations...).Where(orm.KeyEq(Articles.Key(), id)))
+		article, err = orm.Require(ctx, tx, Articles.Query().With(relations...).Where(orm.Eq(Articles.Key(), id)))
 		return err
 	})
 	return article, notFound(err)

@@ -13,7 +13,7 @@ import (
 
 // Constructors compile the typed bridge once; importers carry thin plans. All
 // target batches are collected before nested branches run over the whole set.
-func relationLoader[M, N any, K comparable](local columnData[K], foreign columnData[K], assign func(*M, []N) error) func(context.Context, database.Executor, *relationPlan, unsafe.Pointer, int, *relationBudget, int, bool) error {
+func relationLoader[M, N any, K comparable](local *columnData[K], foreign *columnData[K], assign func(*M, []N) error) func(context.Context, database.Executor, *relationPlan, unsafe.Pointer, int, *relationBudget, int, bool) error {
 	return func(ctx context.Context, ex database.Executor, p *relationPlan, base unsafe.Pointer, count int, budget *relationBudget, depth int, missing bool) error {
 		parents := unsafe.Slice((*M)(base), count)
 		positions, unique, seen, err := querycore.RelationKeys(ctx, count, budget.limits.BatchSize, func(i int) (K, sqlvalue.Value, bool, error) {
@@ -37,7 +37,7 @@ func relationLoader[M, N any, K comparable](local columnData[K], foreign columnD
 		var rows []N
 		err = querycore.FetchRelationBatches(len(unique), budget.limits.BatchSize, &budget.remaining, func(start, end, limit int) (int, error) {
 			if p.join == nil {
-				q := where(target, []Predicate[N]{comparison[N](foreign, querycore.In, unique[start:end])})
+				q := where(target, []Predicate[N]{comparison[N](foreign, querycore.In, unique[start:end], false)})
 				q.ast.Limit = value.Set(limit)
 				batch, err := allRows[N](ctx, ex, q)
 				if err != nil {
@@ -50,7 +50,7 @@ func relationLoader[M, N any, K comparable](local columnData[K], foreign columnD
 			if err != nil {
 				return 0, err
 			}
-			node.Predicates = append(node.Predicates, querycore.Requalify(querycore.PredicateNode(comparison[N](foreign, querycore.In, unique[start:end]).expression), querycore.RelationHopAlias))
+			node.Predicates = append(node.Predicates, querycore.Requalify(querycore.PredicateNode(comparison[N](foreign, querycore.In, unique[start:end], false).expression), querycore.RelationHopAlias))
 			node.Selections = append(node.Selections, querycore.SelectItem{Expression: querycore.FieldRef{Table: querycore.RelationHopAlias, Column: p.join.first.Column}, Alias: "foundry_parent_key"})
 			node.Limit = value.Set(limit)
 			n := len(p.target.columns)
@@ -127,7 +127,7 @@ func relationLoader[M, N any, K comparable](local columnData[K], foreign columnD
 		return nil
 	}
 }
-func readRelationKey[V any](column columnData[V], base unsafe.Pointer) (V, sqlvalue.Value, bool, error) {
+func readRelationKey[V any](column *columnData[V], base unsafe.Pointer) (V, sqlvalue.Value, bool, error) {
 	raw, err := column.core.get(base)
 	if err != nil || raw == nil {
 		return *new(V), sqlvalue.Value{}, false, err

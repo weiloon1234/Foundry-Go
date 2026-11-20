@@ -6,11 +6,11 @@ import (
 )
 
 type wrapper struct {
-	orm.InputTextAdapter[n.Member, string, string]
+	orm.InputText[n.Member, string, string]
 }
 
 func (w wrapper) SetNull() orm.Assignment[n.Member] {
-	return orm.InputTextSet(n.Members.Name, "redirected")
+	return orm.Set(n.Members.Name, "redirected")
 }
 
-var _ = orm.ConflictNull(wrapper{orm.InputTextExpr(n.Members.Name)})
+var _ = orm.ConflictNull(wrapper{n.Members.Name})

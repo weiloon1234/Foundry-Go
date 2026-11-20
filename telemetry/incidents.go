@@ -117,14 +117,14 @@ func (s *storage) writeIncidents(ctx context.Context, tx *database.Tx, b batch) 
 	}
 	for _, decision := range decisions {
 		key := AlertKey(digest(s.collector.runID.String() + "|" + string(decision.rule)))
-		found, err := orm.FirstLocked(ctx, tx, orm.Lock(alerts.Query()).Where(orm.KeyEq(alerts.Key(), key)))
+		found, err := orm.FirstLocked(ctx, tx, orm.Lock(alerts.Query()).Where(orm.Eq(alerts.Key(), key)))
 		if err != nil {
 			return nil, err
 		}
 		current, exists := found.Get()
 		if !exists {
 			if decision.bad {
-				_, err = orm.Insert(ctx, tx, alerts.Table, orm.KeySet(alerts.Key(), key), orm.ColumnSet(alerts.RunID, s.runKey()), orm.EnumSet(alerts.Rule, decision.rule), orm.EnumSet(alerts.State, AlertStateOpen), orm.NumberSet(alerts.Episode, Episode(1)), orm.TimeSet(alerts.FirstAt, b.at), orm.TimeSet(alerts.LastAt, b.at), orm.NullableTimeSetNull(alerts.RecoveredAt))
+				_, err = orm.Insert(ctx, tx, alerts.Table, orm.Set(alerts.Key(), key), orm.Set(alerts.RunID, s.runKey()), orm.Set(alerts.Rule, decision.rule), orm.Set(alerts.State, AlertStateOpen), orm.Set(alerts.Episode, Episode(1)), orm.Set(alerts.FirstAt, b.at), orm.Set(alerts.LastAt, b.at), orm.SetNull(alerts.RecoveredAt))
 				if err != nil {
 					return nil, err
 				}
@@ -135,14 +135,14 @@ func (s *storage) writeIncidents(ctx context.Context, tx *database.Tx, b batch) 
 		if at.UTC().Before(current.LastAt.UTC()) {
 			at = current.LastAt
 		}
-		draft := []orm.Assignment[alertRow]{orm.TimeSet(alerts.LastAt, at)}
+		draft := []orm.Assignment[alertRow]{orm.Set(alerts.LastAt, at)}
 		if decision.bad && current.State == AlertStateRecovered {
 			if current.Episode >= math.MaxInt64 {
 				return nil, safeerror.NewFault(fault.Conflict, "telemetry incident episode exhausted")
 			}
-			draft = append(draft, orm.EnumSet(alerts.State, AlertStateOpen), orm.NumberSet(alerts.Episode, current.Episode+1), orm.TimeSet(alerts.FirstAt, at), orm.NullableTimeSetNull(alerts.RecoveredAt))
+			draft = append(draft, orm.Set(alerts.State, AlertStateOpen), orm.Set(alerts.Episode, current.Episode+1), orm.Set(alerts.FirstAt, at), orm.SetNull(alerts.RecoveredAt))
 		} else if !decision.bad && current.State != AlertStateRecovered {
-			draft = append(draft, orm.EnumSet(alerts.State, AlertStateRecovered), orm.NullableTimeSet(alerts.RecoveredAt, at))
+			draft = append(draft, orm.Set(alerts.State, AlertStateRecovered), orm.Set(alerts.RecoveredAt, at))
 		}
 		if _, err := orm.Update(ctx, tx, alerts.Query(), alerts.Key(), key, draft...); err != nil {
 			return nil, err
@@ -172,14 +172,14 @@ func (e *Engine) AcknowledgeIn(ctx context.Context, tx *database.Tx, key AlertKe
 	defer e.operations.leave()
 	var result Acknowledgement
 	err := sqlscope.InSchema(ctx, tx, e.deps.DB, e.deps.Schema, func(child *database.Tx) error {
-		current, err := orm.RequireLocked(ctx, child, orm.Lock(alerts.Query()).Where(orm.KeyEq(alerts.Key(), key)))
+		current, err := orm.RequireLocked(ctx, child, orm.Lock(alerts.Query()).Where(orm.Eq(alerts.Key(), key)))
 		if err != nil {
 			return err
 		}
 		if current.State == AlertStateRecovered {
 			return safeerror.NewFault(fault.Conflict, "telemetry incident has recovered")
 		}
-		if _, err := orm.Update(ctx, child, alerts.Query(), alerts.Key(), key, orm.EnumSet(alerts.State, AlertStateAcknowledged)); err != nil {
+		if _, err := orm.Update(ctx, child, alerts.Query(), alerts.Key(), key, orm.Set(alerts.State, AlertStateAcknowledged)); err != nil {
 			return err
 		}
 		result = Acknowledgement{Key: key, Episode: current.Episode}

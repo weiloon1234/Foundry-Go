@@ -142,7 +142,7 @@ func TestPublicModelExtensionConsumerAndORMLifecycle(t *testing.T) {
 	var profile profiles.Profile
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		profile, err = orm.Insert(ctx, tx, profiles.Profiles.Table, orm.TextSet(profiles.Profiles.Name, "Consumer"))
+		profile, err = orm.Insert(ctx, tx, profiles.Profiles.Table, orm.Set(profiles.Profiles.Name, "Consumer"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -229,7 +229,7 @@ func TestPublicModelExtensionConsumerAndORMLifecycle(t *testing.T) {
 			if err != nil || count != 1 {
 				t.Fatal("extension match", count, err)
 			}
-			count, err = orm.Count(ctx, tx, profiles.Profiles.Query().Where(predicate, orm.TextEq(profiles.Profiles.Name, "not this profile")))
+			count, err = orm.Count(ctx, tx, profiles.Profiles.Query().Where(predicate, orm.Eq(profiles.Profiles.Name, "not this profile")))
 			if err != nil || count != 0 {
 				t.Fatal("matching lost caller filter", count, err)
 			}

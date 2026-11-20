@@ -95,7 +95,7 @@ func TestVerifiedWebhookReauthenticatesEveryReplay(t *testing.T) {
 		return idempotency.NewScope(string(delivery.Provider()), strconv.FormatInt(int64(account), 10))
 	}, func(ctx context.Context, tx *database.Tx, in input) (http.NoContent, error) {
 		calls.Add(1)
-		_, err := orm.Insert(ctx, tx, Orders.Table, orm.NumberSet(Orders.WorkspaceID, 1), orm.NumberSet(Orders.Caller, 99), orm.TextSet(Orders.Name, in.Body.Name))
+		_, err := orm.Insert(ctx, tx, Orders.Table, orm.Set(Orders.WorkspaceID, 1), orm.Set(Orders.Caller, 99), orm.Set(Orders.Name, in.Body.Name))
 		return http.NoContent{}, err
 	}))
 	if err != nil {

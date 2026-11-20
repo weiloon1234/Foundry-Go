@@ -83,10 +83,10 @@ func TestTablesRedactCompiledAndCapturedBindingErrors(t *testing.T) {
 			if cause.formatted != 0 {
 				t.Fatal("table structure validation executed binding")
 			}
-			direct := orm.HasManyOf(fields.Children, orm.KeyExpr(fields.Key()), orm.NumberExpr(fields.ParentID))
-			through := orm.HasManyThroughOf(fields.Children, orm.KeyExpr(fields.Key()), orm.NumberExpr(fields.ParentID), orm.KeyExpr(fields.Key()), orm.NumberExpr(fields.ParentID)).Where(orm.ColumnEq(fields.Name, "private input"))
-			filtered := fields.Count.Using(expr.Related(direct, expr.Filter(expr.Count[row](), expr.Eq(expr.Value(orm.ColumnExpr(fields.Name)), "private input"))))
-			captured := fields.Count.Using(expr.Related(direct, expr.Filter(expr.Count[row](), expr.IsNull(expr.Param(orm.ColumnExpr(fields.Name), "private input")))))
+			direct := orm.HasManyOf(fields.Children, fields.Key(), fields.ParentID)
+			through := orm.HasManyThroughOf(fields.Children, orm.JoinKeys(fields.Key(), fields.ParentID), orm.JoinKeys(fields.Key(), fields.ParentID)).Where(orm.Eq(fields.Name, "private input"))
+			filtered := fields.Count.Using(expr.Related(direct, expr.Filter(expr.Count[row](), expr.Eq(expr.Value(fields.Name), "private input"))))
+			captured := fields.Count.Using(expr.Related(direct, expr.Filter(expr.Count[row](), expr.IsNull(expr.Param(fields.Name, "private input")))))
 			for _, tc := range []struct {
 				name        string
 				declaration orm.CheckedTable
@@ -112,7 +112,7 @@ func TestTablesRedactCompiledAndCapturedBindingErrors(t *testing.T) {
 				})
 			}
 			executor := &bindingExecutor{}
-			_, err := orm.All(t.Context(), executor, fields.Query().Where(orm.ColumnEq(fields.Name, "private input")))
+			_, err := orm.All(t.Context(), executor, fields.Query().Where(orm.Eq(fields.Name, "private input")))
 			assertPrivateBindingError(t, err, cause)
 			if executor.calls != 0 {
 				t.Fatal("invalid predicate acquired database resources")

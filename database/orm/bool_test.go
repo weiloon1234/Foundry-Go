@@ -27,17 +27,17 @@ func TestBoolOfPreservesCodecAndFalse(t *testing.T) {
 		t.Fatal(err)
 	}
 	draft := &Write[booleanModel]{state: &draftState{table: fields.Table.core, open: true}}
-	if err := WriteSet(draft, ColumnSet(fields.Enabled, false)); err != nil {
+	if err := WriteSet(draft, Set(fields.Enabled, false)); err != nil {
 		t.Fatal(err)
 	}
 	input, present := WriteGet(draft, func() func(arg0 booleanFlag) Assignment[booleanModel] {
 		receiver := fields.Enabled
-		return func(arg0 booleanFlag) Assignment[booleanModel] { return ColumnSet(receiver, arg0) }
+		return func(arg0 booleanFlag) Assignment[booleanModel] { return Set(receiver, arg0) }
 	}()).Get()
 	if !present || bool(input) {
 		t.Fatal("false assignment lost presence/value")
 	}
-	statement, err := Compile(fields.Query().Where(ColumnEq(fields.Enabled, false)))
+	statement, err := Compile(fields.Query().Where(Eq(fields.Enabled, false)))
 	if err != nil || !reflect.DeepEqual(statement.Arguments(), []any{false}) {
 		t.Fatal("false predicate lost", err)
 	}
@@ -58,7 +58,7 @@ func TestBoolOfPreservesCodecAndFalse(t *testing.T) {
 	if err := Check(custom); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Compile(custom.Query().Where(ColumnEq(custom.Enabled, false))); !errors.Is(err, rejected) {
+	if _, err := Compile(custom.Query().Where(Eq(custom.Enabled, false))); !errors.Is(err, rejected) {
 		t.Fatal("custom Boolean codec was ignored", err)
 	}
 	mutated := Define("mutated_boolean_models", func(b Builder[mutatedBooleanModel], m *mutatedBooleanModel) Table[mutatedBooleanModel, int64] {

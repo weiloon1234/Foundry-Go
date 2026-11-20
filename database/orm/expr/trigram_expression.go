@@ -17,7 +17,7 @@ import (
 // It honours the transaction's similarity threshold (PostgreSQL default 0.3).
 // The application must install pg_trgm in public and declare its trigram index.
 //
-// Example: expr.TrigramMatch(expr.Value(orm.TextExpr(Names.Normalized)), search)
+// Example: expr.TrigramMatch(expr.Value(Names.Normalized), search)
 func TrigramMatch[S any, V ~string](input RowValue[S, V], search V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(checkedTextColumn(rowInput(input).data), querycore.TrigramMatch, search)}
 }
@@ -25,7 +25,7 @@ func TrigramMatch[S any, V ~string](input RowValue[S, V], search V) Predicate[S]
 // TrigramSimilarity returns public.similarity as float64, retaining the row owner.
 // Use TrigramMatch alongside a score comparison to allow a trigram index scan.
 //
-// Example: expr.TrigramSimilarity(expr.Value(orm.TextExpr(Names.Normalized)), search)
+// Example: expr.TrigramSimilarity(expr.Value(Names.Normalized), search)
 func TrigramSimilarity[S any, V ~string](input RowValue[S, V], search V) OrderedRowExpression[S, float64] {
 	return orderedRow(TrigramSimilarityValue(AsSelected(rowInput(input)), search))
 }
@@ -39,7 +39,7 @@ func TrigramSimilarityValue[S any, V ~string](input Selected[S, V], search V) Se
 
 // TrigramSimilarityNullable propagates SQL NULL from the text operand.
 //
-// Example: expr.TrigramSimilarityNullable(expr.Value(orm.NullableTextExpr(Reviews.Body)), search)
+// Example: expr.TrigramSimilarityNullable(expr.Value(Reviews.Body), search)
 func TrigramSimilarityNullable[S any, V ~string](input RowValue[S, value.Nullable[V]], search V) NullableOrderedRowExpression[S, float64] {
 	return nullableOrderedRow(TrigramSimilarityNullableValue(AsSelected(rowInput(input)), search))
 }

@@ -46,15 +46,15 @@ func TestAdvancedConflictIndexDefaultsCorrelationAndTenancy(t *testing.T) {
 			if !ok {
 				return orm.Predicate[advancedCounter]{}, errors.New("tenant required")
 			}
-			return orm.NumberEq(t.Tenant, tenant), nil
+			return orm.Eq(t.Tenant, tenant), nil
 		})}
 	}))
 	records := r.ConflictRowsOf(f.Query())
-	stored, proposed := expr.At(records.Stored(), orm.NumberExpr(f.Count)), expr.At(records.Proposed(), orm.NumberExpr(f.Count))
-	id := expr.Value(orm.KeyExpr(f.Key()))
-	policy := r.OnConflictKeys(expr.Group(expr.Add(id, id))).TargetWhere(orm.ColumnEq(f.Enabled, true)).DoUpdate(r.SetConflictValue(orm.NumberExpr(f.Count), expr.Add(stored, proposed)), r.SetConflictValue(orm.NullableNumberExpr(f.Note), expr.At(records.Proposed(), orm.NullableNumberExpr(f.Note))))
+	stored, proposed := expr.At(records.Stored(), f.Count), expr.At(records.Proposed(), f.Count)
+	id := expr.Value(f.Key())
+	policy := r.OnConflictKeys(expr.Group(expr.Add(id, id))).TargetWhere(orm.Eq(f.Enabled, true)).DoUpdate(r.SetConflictValue(f.Count, expr.Add(stored, proposed)), r.SetConflictValue(f.Note, expr.At(records.Proposed(), f.Note)))
 	for _, want := range []int64{3, 6} {
-		item, e := orm.Upsert(ctx, db, f.Query(), policy, orm.KeySet(f.Key(), 1), orm.NumberSet(f.Tenant, 1))
+		item, e := orm.Upsert(ctx, db, f.Query(), policy, orm.Set(f.Key(), 1), orm.Set(f.Tenant, 1))
 		must(t, e)
 		got, ok := item.Get()
 		if !ok || got.Count != want || !got.Note.IsNull() {
@@ -62,31 +62,31 @@ func TestAdvancedConflictIndexDefaultsCorrelationAndTenancy(t *testing.T) {
 		}
 	}
 	conditional := r.ConflictWhereRows(policy, expr.Greater(proposed, stored))
-	item, err := orm.Upsert(ctx, db, f.Query(), conditional, orm.KeySet(f.Key(), 1), orm.NumberSet(f.Tenant, 1))
+	item, err := orm.Upsert(ctx, db, f.Query(), conditional, orm.Set(f.Key(), 1), orm.Set(f.Tenant, 1))
 	must(t, err)
 	if item.IsSet() {
 		t.Fatal("false condition returned a row")
 	}
-	_, err = orm.Upsert(context.WithValue(ctx, advancedTenantKey{}, int64(2)), db, f.Query(), policy, orm.KeySet(f.Key(), 1), orm.NumberSet(f.Tenant, 2))
+	_, err = orm.Upsert(context.WithValue(ctx, advancedTenantKey{}, int64(2)), db, f.Query(), policy, orm.Set(f.Key(), 1), orm.Set(f.Tenant, 2))
 	if !errors.Is(err, fault.Conflict) {
 		t.Fatal("tenant suppression accepted", err)
 	}
-	_, err = orm.Upsert(ctx, db, f.Query(), policy, orm.KeySet(f.Key(), 2), orm.NumberSet(f.Tenant, 1), orm.NumberSet(f.Count, 7))
+	_, err = orm.Upsert(ctx, db, f.Query(), policy, orm.Set(f.Key(), 2), orm.Set(f.Tenant, 1), orm.Set(f.Count, 7))
 	must(t, err)
-	lookup := r.As[advancedLookup](f.Query().Where(orm.KeyEq(f.Key(), 2)), "lookup")
+	lookup := r.As[advancedLookup](f.Query().Where(orm.Eq(f.Key(), 2)), "lookup")
 	c := r.Correlate(records, lookup)
-	outer := expr.At(r.OuterScope(c, records.Stored()), orm.NumberExpr(f.Count))
-	inner := expr.At(r.InnerScope(c, r.Scope(lookup)), orm.NumberExpr(f.Count))
+	outer := expr.At(r.OuterScope(c, records.Stored()), f.Count)
+	inner := expr.At(r.InnerScope(c, r.Scope(lookup)), f.Count)
 	selected := r.SelectCorrelatedScalar(c, expr.AsSelected(expr.Row(inner))).Where(expr.Greater(inner, outer)).Limit(1)
-	scalarPolicy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoUpdate(r.SetConflictValue(orm.NullableNumberExpr(f.Note), r.CorrelatedScalarRowQuery(selected)))
-	item, err = orm.Upsert(ctx, db, f.Query(), scalarPolicy, orm.KeySet(f.Key(), 1), orm.NumberSet(f.Tenant, 1))
+	scalarPolicy := orm.OnConflict(orm.ConflictKey(f.Key())).DoUpdate(r.SetConflictValue(f.Note, r.CorrelatedScalarRowQuery(selected)))
+	item, err = orm.Upsert(ctx, db, f.Query(), scalarPolicy, orm.Set(f.Key(), 1), orm.Set(f.Tenant, 1))
 	must(t, err)
 	got, ok := item.Get()
 	note, hasNote := got.Note.Get()
 	if !ok || !hasNote || note != 7 || got.Count != 6 || got.Tenant != 1 || calls != 0 {
 		t.Fatal(got, calls)
 	}
-	_, err = orm.Upsert(t.Context(), db, f.Query(), scalarPolicy, orm.KeySet(f.Key(), 1), orm.NumberSet(f.Tenant, 1))
+	_, err = orm.Upsert(t.Context(), db, f.Query(), scalarPolicy, orm.Set(f.Key(), 1), orm.Set(f.Tenant, 1))
 	if err == nil {
 		t.Fatal("missing tenant accepted")
 	}

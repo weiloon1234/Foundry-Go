@@ -11,7 +11,7 @@ import (
 
 func TestLockedModelCompilerStrengthsWindowsAndImmutability(t *testing.T) {
 	f := compilerTable("records")
-	base := f.Query().Where(NumberGt(f.Age, 3)).OrderBy(NumberDesc(f.Age)).Limit(2).Offset(1)
+	base := f.Query().Where(Gt(f.Age, 3)).OrderBy(Desc(f.Age)).Limit(2).Offset(1)
 	for _, test := range []struct {
 		q      LockedQuery[compilerRecord]
 		suffix string

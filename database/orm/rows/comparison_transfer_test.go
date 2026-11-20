@@ -16,8 +16,8 @@ import (
 
 func TestValueComparisonsShareSQLAndBindings(t *testing.T) {
 	m := declareMembers()
-	id := expr.Value(orm.KeyExpr(m.ID))
-	v := expr.Param(orm.KeyExpr(m.ID), 2)
+	id := expr.Value(m.ID)
+	v := expr.Param(m.ID, 2)
 	for _, test := range []struct {
 		p  expr.Predicate[member]
 		op string
@@ -29,11 +29,11 @@ func TestValueComparisonsShareSQLAndBindings(t *testing.T) {
 			t.Fatal(s.SQL(), s.Arguments(), e)
 		}
 	}
-	s, e := orm.Compile(expr.Where(m.Query(), expr.Equal(expr.Add(id, v), expr.Multiply(id, expr.Param(orm.KeyExpr(m.ID), 3)))))
+	s, e := orm.Compile(expr.Where(m.Query(), expr.Equal(expr.Add(id, v), expr.Multiply(id, expr.Param(m.ID, 3)))))
 	if e != nil || !reflect.DeepEqual(s.Arguments(), []any{int64(2), int64(3)}) || !strings.Contains(s.SQL(), " + ") || !strings.Contains(s.SQL(), " * ") {
 		t.Fatal(s.SQL(), s.Arguments(), e)
 	}
-	s, e = orm.Compile(expr.Where(m.Query(), expr.Like(expr.Lower(expr.Value(orm.TextExpr(m.Name))), expr.Param(orm.TextExpr(m.Name), "%_!"))))
+	s, e = orm.Compile(expr.Where(m.Query(), expr.Like(expr.Lower(expr.Value(m.Name)), expr.Param(m.Name, "%_!"))))
 	if e != nil || !strings.Contains(s.SQL(), " LIKE CAST($1 AS text)") || !reflect.DeepEqual(s.Arguments(), []any{"%_!"}) {
 		t.Fatal(s.SQL(), s.Arguments(), e)
 	}
@@ -41,9 +41,9 @@ func TestValueComparisonsShareSQLAndBindings(t *testing.T) {
 func TestValueComparisonPhasesAndInvalidOperands(t *testing.T) {
 	m := declareMembers()
 	base := rows.From(m.Query())
-	id := expr.Value(orm.KeyExpr(m.ID))
+	id := expr.Value(m.ID)
 	count := expr.Count[member]()
-	for _, p := range []expr.HavingPredicate[member]{expr.GreaterValue(expr.AsSelected(count), expr.AsSelected(expr.ParamOf(count, 1))), expr.EqualValue(expr.AsSelected(count), expr.AsSelected(count)), expr.LessNullableValue(expr.AsSelected(expr.Min(orm.NullableTextExpr(m.Nickname))), expr.AsSelected(expr.Min(orm.NullableTextExpr(m.Nickname))))} {
+	for _, p := range []expr.HavingPredicate[member]{expr.GreaterValue(expr.AsSelected(count), expr.AsSelected(expr.ParamOf(count, 1))), expr.EqualValue(expr.AsSelected(count), expr.AsSelected(count)), expr.LessNullableValue(expr.AsSelected(expr.Min(m.Nickname)), expr.AsSelected(expr.Min(m.Nickname)))} {
 		if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(base, expr.AsSelected(count)), p))); e != nil {
 			t.Fatal(e)
 		}
@@ -57,7 +57,7 @@ func TestValueComparisonPhasesAndInvalidOperands(t *testing.T) {
 			t.Fatal("window HAVING", e)
 		}
 	}
-	for _, p := range []expr.Predicate[member]{expr.Equal[member, int64](nil, id), expr.Equal[member, int64](id, nil), expr.Equal(id, expr.Value(orm.KeyExpr(declareMembers().ID))), expr.Equal(rows.ScalarRowQuery(base, rows.Scalar[member, int64]{}), expr.NullableRow(id))} {
+	for _, p := range []expr.Predicate[member]{expr.Equal[member, int64](nil, id), expr.Equal[member, int64](id, nil), expr.Equal(id, expr.Value(declareMembers().ID)), expr.Equal(rows.ScalarRowQuery(base, rows.Scalar[member, int64]{}), expr.NullableRow(id))} {
 		if _, e := orm.Compile(expr.Where(m.Query().Limit(0), p)); !errors.Is(e, fault.Invalid) {
 			t.Fatal("invalid operand", e)
 		}
@@ -76,8 +76,8 @@ func TestValueComparisonPhasesAndInvalidOperands(t *testing.T) {
 }
 func TestBinaryComparisonRequalificationOwnsStructure(t *testing.T) {
 	m := declareMembers()
-	id := expr.Value(orm.KeyExpr(m.ID))
-	original := expr.FoundryPredicate(expr.Equal(expr.Add(id, expr.Param(orm.KeyExpr(m.ID), 1)), expr.Subtract(id, expr.Param(orm.KeyExpr(m.ID), 2))), sqlowner.Expressions()).Node
+	id := expr.Value(m.ID)
+	original := expr.FoundryPredicate(expr.Equal(expr.Add(id, expr.Param(m.ID, 1)), expr.Subtract(id, expr.Param(m.ID, 2))), sqlowner.Expressions()).Node
 	changed := querycore.Requalify(original, "other")
 	collect := func(p querycore.Expression) []string {
 		var names []string

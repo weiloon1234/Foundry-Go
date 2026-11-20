@@ -48,33 +48,33 @@ func (s *storage) prune(ctx context.Context) (PruneResult, error) {
 		}
 
 		metricQuery := metrics.Query().Where(orm.Or(
-			orm.And(orm.NumberEq(metrics.IntervalSeconds, 60), orm.TimeLt(metrics.BucketAt, minute)),
-			orm.And(orm.NumberEq(metrics.IntervalSeconds, 3600), orm.TimeLt(metrics.BucketAt, hour)),
-		)).OrderBy(orm.TimeAsc(metrics.BucketAt), orm.KeyAsc(metrics.Key())).Limit(maxPruneKeys)
+			orm.And(orm.Eq(metrics.IntervalSeconds, 60), orm.Lt(metrics.BucketAt, minute)),
+			orm.And(orm.Eq(metrics.IntervalSeconds, 3600), orm.Lt(metrics.BucketAt, hour)),
+		)).OrderBy(orm.Asc(metrics.BucketAt), orm.Asc(metrics.Key())).Limit(maxPruneKeys)
 		result.Metrics, err = pruneSelected(attempt, tx, metrics.Table, metricQuery)
 		if err != nil {
 			return err
 		}
 		issueQuery := issues.Query().Where(orm.Or(
-			orm.And(orm.EnumEq(issues.Source, SourceSecurity), orm.TimeLt(issues.LastAt, security)),
-			orm.And(orm.EnumNe(issues.Source, SourceSecurity), orm.TimeLt(issues.LastAt, issue)),
-		)).OrderBy(orm.TimeAsc(issues.LastAt), orm.KeyAsc(issues.Key())).Limit(maxPruneKeys)
+			orm.And(orm.Eq(issues.Source, SourceSecurity), orm.Lt(issues.LastAt, security)),
+			orm.And(orm.Ne(issues.Source, SourceSecurity), orm.Lt(issues.LastAt, issue)),
+		)).OrderBy(orm.Asc(issues.LastAt), orm.Asc(issues.Key())).Limit(maxPruneKeys)
 		result.Issues, err = pruneSelected(attempt, tx, issues.Table, issueQuery)
 		if err != nil {
 			return err
 		}
 		eventQuery := events.Query().Where(orm.Or(
-			orm.And(orm.EnumEq(events.Source, SourceSecurity), orm.TimeLt(events.CreatedAt, security)),
-			orm.And(orm.EnumNe(events.Source, SourceSecurity), orm.TimeLt(events.CreatedAt, issue)),
-		)).OrderBy(orm.TimeAsc(events.CreatedAt), orm.KeyAsc(events.Key())).Limit(maxPruneKeys)
+			orm.And(orm.Eq(events.Source, SourceSecurity), orm.Lt(events.CreatedAt, security)),
+			orm.And(orm.Ne(events.Source, SourceSecurity), orm.Lt(events.CreatedAt, issue)),
+		)).OrderBy(orm.Asc(events.CreatedAt), orm.Asc(events.Key())).Limit(maxPruneKeys)
 		result.Events, err = pruneSelected(attempt, tx, events.Table, eventQuery)
 		if err != nil {
 			return err
 		}
 		// RetainUntil belongs to the writer that admitted the batch. A pruner
 		// configured with a shorter retry lifetime cannot shorten that horizon.
-		receiptQuery := flushes.Query().Where(orm.TimeLte(flushes.RetainUntil, now)).
-			OrderBy(orm.TimeAsc(flushes.RetainUntil), orm.KeyAsc(flushes.Key())).Limit(maxPruneKeys)
+		receiptQuery := flushes.Query().Where(orm.Lte(flushes.RetainUntil, now)).
+			OrderBy(orm.Asc(flushes.RetainUntil), orm.Asc(flushes.Key())).Limit(maxPruneKeys)
 		result.Receipts, err = pruneSelected(attempt, tx, flushes.Table, receiptQuery)
 		if err != nil {
 			return err
@@ -98,37 +98,37 @@ func (s *storage) prune(ctx context.Context) (PruneResult, error) {
 // pruneSelected reads only bounded primary keys, then deletes exactly those keys
 // in the same locked transaction. Selection ordering/limits never enter DELETE.
 func pruneSelected[M any, K comparable](ctx context.Context, tx *database.Tx, table orm.Table[M, K], query orm.Query[M]) (int64, error) {
-	keys, err := rows.Read(rows.SelectValue(query, orm.KeyExpr(table.Key()))).All(ctx, tx)
+	keys, err := rows.Read(rows.SelectValue(query, table.Key())).All(ctx, tx)
 	if err != nil || len(keys) == 0 {
 		return 0, err
 	}
-	return orm.DeleteAll(ctx, tx, table.Query().Where(orm.KeyIn(table.Key(), keys...)))
+	return orm.DeleteAll(ctx, tx, table.Query().Where(orm.In(table.Key(), keys...)))
 }
 
 func (s *storage) pruneRuns(ctx context.Context, tx *database.Tx, now temporal.DateTime, result *PruneResult) error {
-	query := runs.Query().Where(orm.TimeLte(runs.RetainUntil, now)).
-		OrderBy(orm.TimeAsc(runs.RetainUntil), orm.KeyAsc(runs.Key())).Limit(maxPruneRuns)
+	query := runs.Query().Where(orm.Lte(runs.RetainUntil, now)).
+		OrderBy(orm.Asc(runs.RetainUntil), orm.Asc(runs.Key())).Limit(maxPruneRuns)
 	outer := rows.From(query)
-	inner := rows.From(flushes.Query().Where(orm.TimeGt(flushes.RetainUntil, now)))
+	inner := rows.From(flushes.Query().Where(orm.Gt(flushes.RetainUntil, now)))
 	live := rows.Correlate(outer, inner)
 	live = live.Where(expr.Equal(
-		expr.At(rows.InnerScope(live, rows.ModelScope(flushes.Query())), orm.ColumnExpr(flushes.RunID)),
-		expr.At(rows.OuterScope(live, rows.ModelScope(query)), orm.KeyExpr(runs.Key())),
+		expr.At(rows.InnerScope(live, rows.ModelScope(flushes.Query())), flushes.RunID),
+		expr.At(rows.OuterScope(live, rows.ModelScope(query)), runs.Key()),
 	))
 	query = expr.Where(query, expr.Not(live.Exists()))
-	keys, err := rows.Read(rows.SelectValue(query, orm.KeyExpr(runs.Key()))).All(ctx, tx)
+	keys, err := rows.Read(rows.SelectValue(query, runs.Key())).All(ctx, tx)
 	if err != nil || len(keys) == 0 {
 		return err
 	}
-	metricCount, err := orm.Count(ctx, tx, metrics.Query().Where(orm.ColumnIn(metrics.RunID, keys...)))
+	metricCount, err := orm.Count(ctx, tx, metrics.Query().Where(orm.In(metrics.RunID, keys...)))
 	if err != nil {
 		return err
 	}
-	receiptCount, err := orm.Count(ctx, tx, flushes.Query().Where(orm.ColumnIn(flushes.RunID, keys...)))
+	receiptCount, err := orm.Count(ctx, tx, flushes.Query().Where(orm.In(flushes.RunID, keys...)))
 	if err != nil {
 		return err
 	}
-	alertCount, err := orm.Count(ctx, tx, alerts.Query().Where(orm.ColumnIn(alerts.RunID, keys...)))
+	alertCount, err := orm.Count(ctx, tx, alerts.Query().Where(orm.In(alerts.RunID, keys...)))
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func (s *storage) pruneRuns(ctx context.Context, tx *database.Tx, now temporal.D
 	if metricCount > int64(s.config.Retention.MaxMetricRows) || receiptCount > int64(s.config.Retention.MaxReceiptRows) || alertCount > int64(s.config.Retention.MaxRuns)*int64(len(RuleValues())) {
 		return nil
 	}
-	deleted, err := orm.DeleteAll(ctx, tx, runs.Query().Where(orm.KeyIn(runs.Key(), keys...)))
+	deleted, err := orm.DeleteAll(ctx, tx, runs.Query().Where(orm.In(runs.Key(), keys...)))
 	if err != nil {
 		return err
 	}

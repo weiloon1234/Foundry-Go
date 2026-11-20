@@ -39,7 +39,7 @@ func (r *Reader) Traffic(ctx context.Context, q TrafficQuery) (Traffic, error) {
 		}
 		groups := make(map[trafficGroup]store.Histogram)
 		read := 0
-		query := metrics.Query().Where(orm.NumberEq(metrics.IntervalSeconds, int(interval/time.Second)), orm.TimeGte(metrics.BucketAt, since)).OrderBy(orm.TimeAsc(metrics.BucketAt), orm.KeyAsc(metrics.Key())).Limit(r.config.Reads.MaxTrafficRows + 1)
+		query := metrics.Query().Where(orm.Eq(metrics.IntervalSeconds, int(interval/time.Second)), orm.Gte(metrics.BucketAt, since)).OrderBy(orm.Asc(metrics.BucketAt), orm.Asc(metrics.Key())).Limit(r.config.Reads.MaxTrafficRows + 1)
 		err = orm.Each(ctx, tx, query, func(row metricRow) error {
 			read++
 			if read > r.config.Reads.MaxTrafficRows {

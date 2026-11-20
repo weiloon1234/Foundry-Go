@@ -49,15 +49,15 @@ func TestJSONPathOwnershipAndValidation(t *testing.T) {
 	d, f := jsonTestDeclare(), jsonTestDeclare()
 	src := rows.FromModel(d.Query().Limit(0))
 	field := expr.JSONFieldOf(func(p *jsonTestPayload) *value.Optional[string] { return &p.Name })
-	foreign := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(orm.JSONExpr(f.Doc))), field))
+	foreign := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(f.Doc)), field))
 	rejectScalar(t, src, expr.AsSelected(expr.JSONTextScalar(foreign, codec.String[string]())), codec.Nullable(codec.String[string]()))
-	bad := expr.At(rows.ModelScope(d.Query()), orm.JSONExpr(f.Doc))
+	bad := expr.At(rows.ModelScope(d.Query()), f.Doc)
 	path := expr.JSONProperty(expr.JSONRoot(bad), field)
 	rejectScalar(t, src, expr.AsSelected(expr.ParamOf(path.JSON(), value.Null[value.JSON[value.Optional[string]]]())), codec.Nullable(codec.JSON[value.Optional[string]]()))
-	root := expr.JSONRoot(expr.Value(orm.JSONExpr(d.Doc)))
+	root := expr.JSONRoot(expr.Value(d.Doc))
 	zero := expr.JSONProperty(root, expr.JSONField[jsonTestPayload, string]{})
 	rejectScalar(t, src, expr.AsSelected(zero.JSON()), codec.Nullable(codec.JSON[string]()))
-	rejectScalar(t, src, expr.AsSelected(expr.JSONIndex(expr.JSONRoot(expr.Value(orm.JSONExpr(d.Bytes))), 0).JSON()), codec.Nullable(codec.JSON[byte]()))
+	rejectScalar(t, src, expr.AsSelected(expr.JSONIndex(expr.JSONRoot(expr.Value(d.Bytes)), 0).JSON()), codec.Nullable(codec.JSON[byte]()))
 	keys := expr.JSONProperty(root, expr.JSONFieldOf(func(p *jsonTestPayload) *map[int]string { return &p.Keys }))
 	rejectScalar(t, src, expr.AsSelected(expr.JSONScalar(keys, codec.Codec[map[int]string]{})), codec.Nullable(codec.Codec[map[int]string]{}))
 	labels := expr.JSONProperty(root, expr.JSONFieldOf(func(p *jsonTestPayload) *map[string]string { return &p.Labels }))
@@ -77,7 +77,7 @@ func TestJSONPathOwnershipAndValidation(t *testing.T) {
 	// Zero paths and invalid enum values must also fail before a LIMIT 0 short circuit.
 	rejectScalar(t, src, expr.AsSelected(expr.JSONTypeNullable(expr.JSONPath[jsonTestRecord, string]{}.JSON())), codec.Nullable(codec.String[database.JSONKind]()))
 	rejectScalar(t, src, expr.AsSelected(expr.ParamOf(expr.JSONOptional(expr.JSONPath[jsonTestRecord, value.Optional[string]]{}).JSON(), value.Null[value.JSON[string]]())), codec.Nullable(codec.JSON[string]()))
-	kind := expr.JSONType(expr.Value(orm.JSONExpr(d.Doc)))
+	kind := expr.JSONType(expr.Value(d.Doc))
 	state = &driverState{}
 	_, err = rows.Read(expressionQuery(src, expr.AsSelected(kind), codec.String[database.JSONKind]()).Where(expr.Eq(kind, database.JSONKind("bad")))).All(t.Context(), openTest(t, state))
 	if !errors.Is(err, fault.Invalid) || state.sql != "" {
@@ -88,7 +88,7 @@ func TestJSONPathOwnershipAndValidation(t *testing.T) {
 func TestJSONPathSQLAndNullDecoding(t *testing.T) {
 	d := jsonTestDeclare()
 	src := rows.FromModel(d.Query())
-	root := expr.JSONRoot(expr.Value(orm.JSONExpr(d.Doc)))
+	root := expr.JSONRoot(expr.Value(d.Doc))
 	name := expr.JSONOptional(expr.JSONProperty(root, expr.JSONFieldOf(func(p *jsonTestPayload) *value.Optional[string] { return &p.Name })))
 	age := expr.JSONProperty(root, expr.JSONFieldOf(func(p *jsonTestPayload) *int64 { return &p.Age }))
 	keys := expr.JSONProperty(root, expr.JSONFieldOf(func(p *jsonTestPayload) *map[int]string { return &p.Keys }))
@@ -137,7 +137,7 @@ func TestJSONPathSQLAndNullDecoding(t *testing.T) {
 func TestJSONContainsSnapshotsFragment(t *testing.T) {
 	d := jsonTestDeclare()
 	src := rows.FromModel(d.Query())
-	root := expr.JSONRoot(expr.Value(orm.JSONExpr(d.Doc)))
+	root := expr.JSONRoot(expr.Value(d.Doc))
 	values := expr.JSONProperty(root, expr.JSONFieldOf(func(p *jsonTestPayload) *[]int64 { return &p.Values }))
 	fragment := []int64{1, 2}
 	document, err := value.NewJSON(fragment)
@@ -183,7 +183,7 @@ func TestJSONContainmentCaptureRejectsInvalidFragmentBeforeSQL(t *testing.T) {
 	if err := orm.Check(d.Table); err != nil {
 		t.Fatal("fragment test declaration must be valid", err)
 	}
-	path := expr.JSONRoot(expr.Value(orm.JSONExpr(d.Doc)))
+	path := expr.JSONRoot(expr.Value(d.Doc))
 	q := rows.FromModel(d.Query().Limit(0)).Where(expr.Eq(expr.JSONContainsNullable(path.JSON(), expr.ParamOf(path.JSON(), value.Of(document))), value.Of(true)))
 	state := &driverState{}
 	if _, err := rows.Read(q).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
@@ -205,17 +205,17 @@ func TestJSONPathParametersAndBoundaries(t *testing.T) {
 		Doc orm.JSON[model, payload]
 	}
 	d := orm.Define("records", func(b orm.Builder[model], m *model) table { return table{orm.TableOf(b, &m.ID), orm.JSONOf(b, &m.Doc)} })
-	root := expr.JSONRoot(expr.Value(orm.JSONExpr(d.Doc)))
+	root := expr.JSONRoot(expr.Value(d.Doc))
 	property := expr.JSONProperty(root, expr.JSONFieldOf(func(p *payload) *[]string { return &p.Odd }))
 	scalar := expr.JSONTextScalar(expr.JSONIndex(property, -1), codec.String[string]())
 	// Select only the key so the path appears once in the predicate.
-	qID := rows.WhereScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(d.Key()))))), expr.NullableTextLike(scalar, "%go%"))
+	qID := rows.WhereScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(expr.Row(expr.Value(d.Key())))), expr.NullableTextLike(scalar, "%go%"))
 	s, err := rows.CompileRead(rows.ReadScalar(qID))
 	if err != nil || !strings.Contains(s.SQL(), `-> CAST(CAST(E'odd_%' AS text) AS text)`) || strings.Contains(s.SQL(), "%go%") || !strings.Contains(s.SQL(), " AS integer)") || !reflect.DeepEqual(s.Arguments(), []any{int64(-1), "%go%"}) {
 		t.Fatal(s.SQL(), s.Arguments(), err)
 	}
 	keyed := expr.JSONMapKey(expr.JSONProperty(root, expr.JSONFieldOf(func(p *payload) *map[string][]string { return &p.Map })), "runtime'key")
-	s, err = rows.CompileRead(rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(d.Key()))))), expr.IsNotNull(keyed.JSON()))))
+	s, err = rows.CompileRead(rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(expr.Row(expr.Value(d.Key())))), expr.IsNotNull(keyed.JSON()))))
 	if err != nil || strings.Contains(s.SQL(), "runtime") || !reflect.DeepEqual(s.Arguments(), []any{"runtime'key"}) {
 		t.Fatal("runtime key not bound", s.SQL(), s.Arguments(), err)
 	}
@@ -226,7 +226,7 @@ func TestJSONOperationsBindAndValidate(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	q := expr.Where(d.Query(), expr.Eq(expr.JSONContains(expr.Value(orm.JSONExpr(d.Doc)), expr.Param(orm.JSONExpr(d.Doc), document)), true))
+	q := expr.Where(d.Query(), expr.Eq(expr.JSONContains(expr.Value(d.Doc), expr.Param(d.Doc, document)), true))
 	s, e := orm.Compile(q)
 	want, e2 := codec.JSON[jsonTestPayload]().Bind(document)
 	if e != nil || e2 != nil || !strings.Contains(s.SQL(), " @> ") || strings.Contains(s.SQL(), "safe") || !reflect.DeepEqual(s.Arguments(), []any{want, true}) {
@@ -239,7 +239,7 @@ func TestJSONOperationsBindAndValidate(t *testing.T) {
 			t.Fatal("invalid JSON type", e)
 		}
 	}
-	if _, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, expr.AsSelected(expr.JSONContains(expr.Value(orm.JSONExpr(d.Doc)), expr.Param(orm.JSONExpr(d.Doc), value.JSON[jsonTestPayload]{})))))); !errors.Is(e, fault.Invalid) {
+	if _, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, expr.AsSelected(expr.JSONContains(expr.Value(d.Doc), expr.Param(d.Doc, value.JSON[jsonTestPayload]{})))))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("zero JSON bound", e)
 	}
 }

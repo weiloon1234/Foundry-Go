@@ -13,8 +13,8 @@ func TestSetBasedMutationsCompileWithoutPrimaryKeys(t *testing.T) {
 	d := scopeTransferFields(WithGlobalScopes(func(d scopeTransferTable) []GlobalScope[scopeTransferRow] {
 		return []GlobalScope[scopeTransferRow]{transferPositive(d)}
 	}))
-	q := WithScopeContext(d.Query().Where(NumberKeyGt(NumberKey(d.Key()), 10)), t.Context())
-	assignment := NumberSet(d.Rank, 3)
+	q := WithScopeContext(d.Query().Where(Gt(NumberKey(d.Key()), 10)), t.Context())
+	assignment := Set(d.Rank, 3)
 	for _, test := range []struct {
 		kind   querycore.MutationKind
 		assign []Assignment[scopeTransferRow]
@@ -22,8 +22,8 @@ func TestSetBasedMutationsCompileWithoutPrimaryKeys(t *testing.T) {
 		args   []any
 	}{
 		{querycore.UpdateModel, []Assignment[scopeTransferRow]{assignment}, `UPDATE "scope_records" SET "rank" = $1 WHERE ("scope_records"."id" > $2) AND (("scope_records"."rank" > $3))`, []any{int64(3), int64(10), int64(0)}},
-		{querycore.UpdateModel, []Assignment[scopeTransferRow]{NumberIncrement(d.Rank, 2)}, `SET "rank" = "rank" + $1 WHERE`, []any{int64(2), int64(10), int64(0)}},
-		{querycore.UpdateModel, []Assignment[scopeTransferRow]{NumberDecrement(d.Rank, 2)}, `SET "rank" = "rank" - $1`, []any{int64(2), int64(10), int64(0)}},
+		{querycore.UpdateModel, []Assignment[scopeTransferRow]{Increment(d.Rank, 2)}, `SET "rank" = "rank" + $1 WHERE`, []any{int64(2), int64(10), int64(0)}},
+		{querycore.UpdateModel, []Assignment[scopeTransferRow]{Decrement(d.Rank, 2)}, `SET "rank" = "rank" - $1`, []any{int64(2), int64(10), int64(0)}},
 		{querycore.DeleteModel, nil, `DELETE FROM "scope_records" WHERE ("scope_records"."id" > $1) AND (("scope_records"."rank" > $2))`, []any{int64(10), int64(0)}},
 	} {
 		p, e := planWrite(q.state, test.kind, test.assign, true)
@@ -35,9 +35,9 @@ func TestSetBasedMutationsCompileWithoutPrimaryKeys(t *testing.T) {
 			t.Fatal(s.SQLText, s.Bindings, e)
 		}
 	}
-	keyAdjust := NumberIncrement(d.Rank, 1)
+	keyAdjust := Increment(d.Rank, 1)
 	keyAdjust.adjust = &querycore.Adjustment{Field: querycore.FieldRef{Table: "scope_records", Column: "id"}, Bind: keyAdjust.adjust.Bind}
-	for _, as := range [][]Assignment[scopeTransferRow]{{assignment, NumberIncrement(d.Rank, 1)}, {keyAdjust}, nil} {
+	for _, as := range [][]Assignment[scopeTransferRow]{{assignment, Increment(d.Rank, 1)}, {keyAdjust}, nil} {
 		p, e := planWrite(q.state, querycore.UpdateModel, as, true)
 		if e == nil {
 			_, e = p.compile()
@@ -46,7 +46,7 @@ func TestSetBasedMutationsCompileWithoutPrimaryKeys(t *testing.T) {
 			t.Fatal("invalid set update", e)
 		}
 	}
-	if _, e := planWrite(q.OrderBy(KeyAsc(d.Key())).state, querycore.DeleteModel, []Assignment[scopeTransferRow](nil), true); !errors.Is(e, fault.Invalid) {
+	if _, e := planWrite(q.OrderBy(Asc(d.Key())).state, querycore.DeleteModel, []Assignment[scopeTransferRow](nil), true); !errors.Is(e, fault.Invalid) {
 		t.Fatal("ordered delete", e)
 	}
 	if _, e := planWrite(q.state, querycore.UpdateModel, []Assignment[scopeTransferRow]{assignment}, false); !errors.Is(e, fault.Invalid) {

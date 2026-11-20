@@ -6,4 +6,4 @@ import (
 	j "foundry.test/goway/models/joined"
 )
 
-var _ = j.Peers.OrderByPivot(orm.TextAsc(j.Targets.Name))
+var _ = j.Peers.OrderByPivot(orm.Asc(j.Targets.Name))

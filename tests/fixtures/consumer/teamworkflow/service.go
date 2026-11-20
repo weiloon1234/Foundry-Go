@@ -44,14 +44,12 @@ func (s *Service) Patch(ctx context.Context, _ Actor, in PatchRequest) (ActionEn
 	var draft []orm.Assignment[Project]
 	if title, supplied := in.Request.Body.Title.Get(); supplied {
 		if text, present := title.Get(); present {
-			draft = append(draft, orm.NullableTextSet(Projects.Title, text))
+			draft = append(draft, orm.Set(Projects.Title, text))
 		} else {
-			draft = append(draft, orm.NullableTextSetNull(Projects.Title))
+			draft = append(draft, orm.SetNull(Projects.Title))
 		}
 	}
-	if budget, supplied := in.Request.Body.Budget.Get(); supplied {
-		draft = append(draft, orm.NumberSet(Projects.Budget, budget))
-	}
+	draft = orm.SetIfPresent(draft, Projects.Budget, in.Request.Body.Budget)
 	project := in.Model.Child
 	if len(draft) != 0 {
 		err := s.db.Transaction(ctx, func(tx *database.Tx) error {
@@ -70,7 +68,7 @@ func (s *Service) Submit(ctx context.Context, tx *database.Tx, _ Actor, in Submi
 	if s.hooks.Calls != nil {
 		s.hooks.Calls.Add(1)
 	}
-	row, err := orm.Insert(ctx, tx, Submissions.Table, orm.ColumnSet(Submissions.ProjectID, in.Model.Child.ID), orm.TextSet(Submissions.Name, in.Request.Body.Name))
+	row, err := orm.Insert(ctx, tx, Submissions.Table, orm.Set(Submissions.ProjectID, in.Model.Child.ID), orm.Set(Submissions.Name, in.Request.Body.Name))
 	if err != nil {
 		return ActionEnvelope{}, err
 	}

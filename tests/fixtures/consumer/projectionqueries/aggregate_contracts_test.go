@@ -16,8 +16,8 @@ import (
 
 func TestFilteredAggregatePhaseSQLParity(t *testing.T) {
 	// doc-example:begin model-aggregate-filters
-	predicate := expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 0))
-	total := expr.Filter(expr.Sum(orm.NumberExpr(models.Orders.TotalCents)), predicate)
+	predicate := expr.ModelPredicate(orm.Gt(models.Orders.TotalCents, 0))
+	total := expr.Filter(expr.Sum(models.Orders.TotalCents), predicate)
 	count := expr.Filter(expr.Count[models.Order](), predicate)
 	exists := expr.Filter(expr.Exists[models.Order](), predicate)
 	selected := rows.Select(rows.From(models.Orders.Query()), reports.OrderSummaries,
@@ -35,7 +35,7 @@ func TestFilteredAggregatePhaseSQLParity(t *testing.T) {
 			"frozen legacy comparison differs")
 	}
 
-	row := expr.OrderBy(expr.Where(models.Orders.Query(), predicate), expr.Desc(expr.Value(orm.NumberExpr(models.Orders.TotalCents))))
+	row := expr.OrderBy(expr.Where(models.Orders.Query(), predicate), expr.Desc(expr.Value(models.Orders.TotalCents)))
 	if _, err := orm.Compile(row); err != nil {
 		t.Fatalf("ordinary row phase rejected: %v", err)
 	}

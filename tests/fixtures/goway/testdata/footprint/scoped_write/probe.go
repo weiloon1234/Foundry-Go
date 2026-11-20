@@ -10,8 +10,8 @@ import (
 )
 
 func Write(ctx context.Context, db *database.DB, id model.ID[models.User]) error {
-	q := models.Users.Query().Where(orm.TextEq(models.Users.Email, "Ada"))
-	_, err := orm.Update(ctx, db, q, models.Users.Key(), id, orm.TextSet(models.Users.Email, "Grace"))
+	q := models.Users.Query().Where(orm.Eq(models.Users.Email, "Ada"))
+	_, err := orm.Update(ctx, db, q, models.Users.Key(), id, orm.Set(models.Users.Email, "Grace"))
 	if err != nil {
 		return err
 	}

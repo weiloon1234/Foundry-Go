@@ -8,7 +8,7 @@ import (
 )
 
 type wrapped struct {
-	orm.ExpressionColumn[models.User, string, string]
+	orm.Text[models.User, string]
 }
 
-var _ = rows.MapUpdate(wrapped{orm.TextExpr(models.Users.Email)}, expr.Value(orm.TextExpr(models.Users.Email)))
+var _ = rows.MapUpdate(wrapped{models.Users.Email}, expr.Value(models.Users.Email))

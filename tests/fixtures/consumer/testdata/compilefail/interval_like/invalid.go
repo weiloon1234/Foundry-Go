@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func invalid() { _ = orm.TextLike(intervalqueries.Samples.Period, "%day%") }
+func invalid() { _ = orm.Like(intervalqueries.Samples.Period, "%day%") }

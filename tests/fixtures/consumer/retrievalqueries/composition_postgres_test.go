@@ -20,24 +20,24 @@ func TestPostgresRetrievalCompositionAndProjectionBoundaries(t *testing.T) {
 	err := inSchema(t.Context(), db, namespace, func(tx *database.Tx) error {
 		q := retrievalqueries.Members.Query()
 		f := retrievalqueries.Members
-		root, err := orm.Require(t.Context(), tx, q.Where(orm.InputTextEq(f.Name, "root")))
+		root, err := orm.Require(t.Context(), tx, q.Where(orm.Eq(f.Name, "root")))
 		if err != nil {
 			return err
 		}
 		child := rows.As[selectedMember](q, "child")
 		parent := rows.As[parentMember](q, "parent")
-		childParent := expr.At(rows.Scope(child), orm.NullableColumnExpr(f.ParentID))
-		parentKey := expr.At(rows.Scope(parent), orm.KeyExpr(f.Key()))
+		childParent := expr.At(rows.Scope(child), f.ParentID)
+		parentKey := expr.At(rows.Scope(parent), f.Key())
 		joined := rows.InnerJoin(child, parent, rows.On(childParent, parentKey))
 		selected := rows.SelectRecord(joined, rows.RightScope(joined, rows.Scope(parent)))
 		common := rows.AsRecord[selectedMember](rows.CTE("retrieved_members", rows.ModelRecord(q)), "selected")
-		set := rows.Union(rows.ModelRecord(q.Where(orm.InputTextEq(f.Name, "root"))), rows.ModelRecord(q.Where(orm.InputTextEq(f.Name, "child"))))
-		locked := orm.Lock(q.OrderBy(orm.InputTextAsc(f.Name)).Limit(1))
+		set := rows.Union(rows.ModelRecord(q.Where(orm.Eq(f.Name, "root"))), rows.ModelRecord(q.Where(orm.Eq(f.Name, "child"))))
+		locked := orm.Lock(q.OrderBy(orm.Asc(f.Name)).Limit(1))
 		lockedCTE := rows.AsTransaction[selectedMember](rows.TransactionCTE("locked_members", rows.LockedRecord(locked)), "selected")
 		cursor := rows.CursorFor(selected)
-		cursorKey := expr.At(cursor.Scope(), orm.KeyExpr(f.Key()))
+		cursorKey := expr.At(cursor.Scope(), f.Key())
 		cursor = cursor.UniqueBy(expr.Group(cursorKey))
-		projection := rows.Select(rows.From(q), retrievalqueries.MemberLabels, rows.Map(retrievalqueries.MemberLabels.ID, expr.Value(orm.KeyExpr(f.Key()))), rows.Map(retrievalqueries.MemberLabels.Name, expr.Value(orm.InputTextExpr(f.Name))))
+		projection := rows.Select(rows.From(q), retrievalqueries.MemberLabels, rows.Map(retrievalqueries.MemberLabels.ID, expr.Value(f.Key())), rows.Map(retrievalqueries.MemberLabels.Name, expr.Value(f.Name)))
 
 		for _, test := range []struct {
 			name     string
@@ -45,7 +45,7 @@ func TestPostgresRetrievalCompositionAndProjectionBoundaries(t *testing.T) {
 			read     func(context.Context) error
 		}{
 			{"empty", 0, func(ctx context.Context) error {
-				_, err := orm.All(ctx, tx, q.Where(orm.InputTextEq(f.Name, "missing")))
+				_, err := orm.All(ctx, tx, q.Where(orm.Eq(f.Name, "missing")))
 				return err
 			}},
 			{"first", 1, func(ctx context.Context) error { _, err := orm.First(ctx, tx, q); return err }},
@@ -55,11 +55,11 @@ func TestPostgresRetrievalCompositionAndProjectionBoundaries(t *testing.T) {
 			}},
 			{"count", 0, func(ctx context.Context) error { _, err := orm.Count(ctx, tx, q); return err }},
 			{"scalar", 0, func(ctx context.Context) error {
-				_, err := rows.Read(rows.SelectValue(q, orm.InputTextExpr(f.Name))).All(ctx, tx)
+				_, err := rows.Read(rows.SelectValue(q, f.Name)).All(ctx, tx)
 				return err
 			}},
 			{"declared-dto", 0, func(ctx context.Context) error {
-				labels, err := rows.Read(rows.OrderBy(projection, expr.Asc(expr.Value(orm.InputTextExpr(f.Name))))).All(ctx, tx)
+				labels, err := rows.Read(rows.OrderBy(projection, expr.Asc(expr.Value(f.Name)))).All(ctx, tx)
 				if err == nil && (len(labels) != 2 || labels[0].Name != "child" || labels[1].Name != "root") {
 					return errors.New("DTO selection silently evaluated getters or changed stored fields")
 				}

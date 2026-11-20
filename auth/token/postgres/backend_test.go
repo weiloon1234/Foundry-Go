@@ -420,7 +420,7 @@ func TestTokenRefreshChecksExpiryAfterSubjectLock(t *testing.T) {
 			if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+s.schema+`"`); err != nil {
 				return err
 			}
-			if _, err := orm.FirstLocked(t.Context(), tx, orm.Lock(tokenstore.Subjects.Query().Where(orm.KeyEq(tokenstore.Subjects.Key(), family.SubjectKey)))); err != nil {
+			if _, err := orm.FirstLocked(t.Context(), tx, orm.Lock(tokenstore.Subjects.Query().Where(orm.Eq(tokenstore.Subjects.Key(), family.SubjectKey)))); err != nil {
 				return err
 			}
 			close(locked)

@@ -24,7 +24,7 @@ func (m *Manager) RemoveBackingObject(ctx context.Context, token attachmenttest.
 		var row store.File
 		if err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 			var err error
-			row, err = orm.Require(ctx, tx, store.Files.Query().Where(orm.KeyEq(store.Files.Key(), fileID(id))))
+			row, err = orm.Require(ctx, tx, store.Files.Query().Where(orm.Eq(store.Files.Key(), fileID(id))))
 			if err != nil {
 				return err
 			}

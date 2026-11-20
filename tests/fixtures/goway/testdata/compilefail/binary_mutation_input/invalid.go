@@ -7,4 +7,4 @@ import (
 	m "foundry.test/goway/models/mutators"
 )
 
-var _ = orm.InputColumnSet(m.Members.Body, c.StoredBody{1})
+var _ = orm.Set(m.Members.Body, c.StoredBody{1})

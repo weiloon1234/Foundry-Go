@@ -43,7 +43,7 @@ func orderedUpdates() orderedUpdateTable {
 func TestUpdateAssignmentOrder(t *testing.T) {
 	f := orderedUpdates()
 	now := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
-	first := []Assignment[orderedUpdateRow]{TextSet(f.Name, "Ada"), NumberSet(f.Amount, 7)}
+	first := []Assignment[orderedUpdateRow]{Set(f.Name, "Ada"), Set(f.Amount, 7)}
 	for _, kind := range []string{"key", "scoped key", "all", "each", "upsert", "upsert batch", "source"} {
 		t.Run(kind, func(t *testing.T) {
 			var expectedSQL []string
@@ -57,7 +57,7 @@ func TestUpdateAssignmentOrder(t *testing.T) {
 				var bindings [][]any
 				affected := int64(1)
 				db := testDB(t, testConnector{affected: &affected, statements: &statements, bindings: &bindings, columns: []string{"id", "created_at", "name", "updated_at", "amount"}, values: [][]driver.Value{{int64(1), now, "Ada", now, int64(7)}}}, database.WithClock(testkit.NewClock(now)))
-				q := f.Query().Where(NumberGte(f.Amount, 0))
+				q := f.Query().Where(Gte(f.Amount, 0))
 				var err error
 				switch kind {
 				case "key":
@@ -71,12 +71,12 @@ func TestUpdateAssignmentOrder(t *testing.T) {
 						return assignments, nil
 					})
 				case "upsert", "upsert batch":
-					updates := []ConflictUpdate[orderedUpdateRow]{ConflictSet(TextExpr(f.Name), "Ada"), ConflictSet(NumberExpr(f.Amount), int64(7))}
+					updates := []ConflictUpdate[orderedUpdateRow]{ConflictSet(f.Name, "Ada"), ConflictSet(f.Amount, int64(7))}
 					if reversed {
 						slices.Reverse(updates)
 					}
-					policy := OnConflict(ConflictKey(KeyExpr(f.Key()))).DoUpdate(updates...)
-					row := append([]Assignment[orderedUpdateRow]{KeySet(f.Key(), 1)}, assignments...)
+					policy := OnConflict(ConflictKey(f.Key())).DoUpdate(updates...)
+					row := append([]Assignment[orderedUpdateRow]{Set(f.Key(), 1)}, assignments...)
 					if kind == "upsert" {
 						_, err = Upsert(t.Context(), db, f.Query(), policy, row...)
 					} else {
@@ -111,14 +111,14 @@ func TestUpdateAssignmentOrder(t *testing.T) {
 		})
 	}
 	// Validation still runs before rendering or I/O, including repeated fields.
-	_, err := planWrite(f.Query().Where(KeyEq(f.Key(), 1)).state, querycore.UpdateModel, []Assignment[orderedUpdateRow]{TextSet(f.Name, "one"), TextSet(f.Name, "two")}, false)
+	_, err := planWrite(f.Query().Where(Eq(f.Key(), 1)).state, querycore.UpdateModel, []Assignment[orderedUpdateRow]{Set(f.Name, "one"), Set(f.Name, "two")}, false)
 	if !errors.Is(err, fault.Invalid) {
 		t.Fatal("duplicate assignment accepted", err)
 	}
 }
 
 func modelKeyMappingForOrder(f orderedUpdateTable) ormcore.ModelMapping {
-	_, key := FoundryColumn(KeyExpr(f.Key()), sqlowner.Metadata())
+	_, key := FoundryHandle(f.Key(), sqlowner.Metadata())
 	return ormcore.ModelMapping{Destination: key.Reference, Field: key.Field, Stored: reflect.TypeFor[int64](), Value: ormcore.Expression{Node: key.Field, Refs: []ormcore.Reference{key.Reference}}}
 }
 
@@ -128,15 +128,15 @@ func TestUpdateCompileBindingsAndAdjustmentOrder(t *testing.T) {
 	for _, adjustment := range []bool{false, true} {
 		var expected querycore.Statement
 		for _, reversed := range []bool{false, true} {
-			amount := NumberSet(f.Amount, 7)
+			amount := Set(f.Amount, 7)
 			if adjustment {
-				amount = NumberIncrement(f.Amount, 7)
+				amount = Increment(f.Amount, 7)
 			}
-			assignments := []Assignment[orderedUpdateRow]{TextSet(f.Name, "Ada"), amount}
+			assignments := []Assignment[orderedUpdateRow]{Set(f.Name, "Ada"), amount}
 			if reversed {
 				slices.Reverse(assignments)
 			}
-			p, err := planWrite(f.Query().Where(KeyEq(f.Key(), 1)).state, querycore.UpdateModel, assignments, true)
+			p, err := planWrite(f.Query().Where(Eq(f.Key(), 1)).state, querycore.UpdateModel, assignments, true)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -164,7 +164,7 @@ func TestRelationUpdateAssignmentOrder(t *testing.T) {
 	var expectedSQL []string
 	var expectedBindings [][]any
 	for _, reverse := range []bool{false, true} {
-		assignments := []Assignment[writePivot]{NumberSet(p.ParentID, 1), TextSet(p.Role, "member")}
+		assignments := []Assignment[writePivot]{Set(p.ParentID, 1), Set(p.Role, "member")}
 		if reverse {
 			slices.Reverse(assignments)
 		}

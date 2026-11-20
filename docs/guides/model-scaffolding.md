@@ -91,7 +91,7 @@ Creation time preserves supplied input and uses the owning clock when omitted.
 Update time is managed by the write pipeline. Document both on fields and handles.
 `SoftDeletes` derives the capability needed for physical deletion. `InputTextOf`
 keeps the stored string separate from `NameInput`; predicates accept the stored
-string, while `orm.InputTextSet` accepts the input type. A nil transform selects a named model
+string, while `orm.Set` accepts the input type. A nil transform selects a named model
 mutator. Other `Input*` families preserve their corresponding storage types.
 
 <a id="recipe-add-relations"></a>
@@ -115,7 +115,7 @@ type ChildTable struct {
 var Children = orm.Define("children", func(b orm.Builder[Child], m *Child) ChildTable {
 	return ChildTable{orm.TableOf(b, &m.ID), orm.ColumnOf(b, &m.WidgetID)}
 })
-var WidgetChildren = orm.HasManyOf(Widgets.Children, orm.KeyExpr(Widgets.Key()), orm.ColumnExpr(Children.WidgetID))
+var WidgetChildren = orm.HasManyOf(Widgets.Children, Widgets.Key(), Children.WidgetID)
 
 func WidgetTables() []orm.CheckedTable { return []orm.CheckedTable{Widgets} }
 func ChildTables() []orm.CheckedTable  { return []orm.CheckedTable{Children} }

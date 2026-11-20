@@ -26,13 +26,9 @@ func OrderBy[M any](q orm.Query[M], orders ...Order[M]) orm.Query[M] {
 	return q
 }
 
-type orderedColumn[M, V, P any] interface {
-	orm.OrderedExpressionColumn[M, V, P]
-}
-
 // GreaterColumn compares same-owner ordered stored columns; enums lack this capability.
 //
 // Example: expr.GreaterColumn(left, right)
-func GreaterColumn[M, V, P any, L orderedColumn[M, V, P], R orderedColumn[M, V, P]](left L, right R) Predicate[M] {
+func GreaterColumn[M, V, P, I1, I2 any, K1, K2 orm.OrderedKind, R1, R2 orm.ColumnRole](left orm.ColumnHandle[M, V, I1, P, K1, R1], right orm.ColumnHandle[M, V, I2, P, K2, R2]) Predicate[M] {
 	return compareRowValues(Value(left), Value(right), querycore.Greater)
 }

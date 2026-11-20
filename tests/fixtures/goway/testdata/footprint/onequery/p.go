@@ -9,5 +9,5 @@ import (
 )
 
 func F(ctx context.Context, db database.Executor) ([]models.Order, error) {
-	return orm.All(ctx, db, models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100)).Limit(10))
+	return orm.All(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)).Limit(10))
 }

@@ -211,7 +211,7 @@ func TestPostgresTranslationMatchingUsesValueHashIndex(t *testing.T) {
 			return err
 		}
 		f := store.Translations
-		statement, err := orm.Compile(orm.WithScopeContext(store.Translations.Query().Where(orm.TextEq(f.Value, "Red")), ctx))
+		statement, err := orm.Compile(orm.WithScopeContext(store.Translations.Query().Where(orm.Eq(f.Value, "Red")), ctx))
 		if err != nil {
 			return err
 		}

@@ -33,12 +33,12 @@ func TestPersistence(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	u, err := orm.Insert(ctx, db, models.Users.Table, orm.TextSet(models.Users.Email, "smoke@example.test"), orm.NumberSet(models.Users.Age, 30), orm.EnumSet(models.Users.Status, models.StatusActive), orm.EnumSet(models.Users.Level, models.LevelBasic))
+	u, err := orm.Insert(ctx, db, models.Users.Table, orm.Set(models.Users.Email, "smoke@example.test"), orm.Set(models.Users.Age, 30), orm.Set(models.Users.Status, models.StatusActive), orm.Set(models.Users.Level, models.LevelBasic))
 	must(t, err)
 	if u.ID.IsZero() || u.Email != "smoke@example.test" {
 		t.Fatal("insert RETURNING user")
 	}
-	o, err := orm.Insert(ctx, db, models.Orders.Table, orm.ColumnSet(models.Orders.BuyerID, u.ID), orm.NumberSet(models.Orders.TotalCents, 100))
+	o, err := orm.Insert(ctx, db, models.Orders.Table, orm.Set(models.Orders.BuyerID, u.ID), orm.Set(models.Orders.TotalCents, 100))
 	must(t, err)
 	if o.ID.IsZero() || o.TotalCents != 100 {
 		t.Fatal("insert RETURNING order")
@@ -49,9 +49,9 @@ func TestPersistence(t *testing.T) {
 	if !ok || v.ID != o.ID || v.TotalCents != 100 {
 		t.Fatal("find persisted order")
 	}
-	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberSet(models.Orders.TotalCents, 120))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.Set(models.Orders.TotalCents, 120))
 	must(t, err)
-	n, err := orm.UpdateAll(ctx, db, models.Orders.Query().Where(orm.ColumnEq(models.Orders.BuyerID, u.ID)), orm.NumberSet(models.Orders.TotalCents, 150))
+	n, err := orm.UpdateAll(ctx, db, models.Orders.Query().Where(orm.Eq(models.Orders.BuyerID, u.ID)), orm.Set(models.Orders.TotalCents, 150))
 	must(t, err)
 	if n != 1 {
 		t.Fatal("update-all count", n)
@@ -67,22 +67,22 @@ func TestPersistence(t *testing.T) {
 	assertTotal(150)
 	// Approved security contract: floor guards apply to Decrement, ceiling guards
 	// to Increment. An Increment with AtLeast is invalid, not an alternate API.
-	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberIncrement(models.Orders.TotalCents, 1, orm.AtLeast[int64](0)))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.Increment(models.Orders.TotalCents, 1, orm.AtLeast[int64](0)))
 	if !errors.Is(err, fault.Invalid) {
 		t.Fatal("increment floor must reject", err)
 	}
-	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberDecrement(models.Orders.TotalCents, 50, orm.AtLeast[int64](100)))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.Decrement(models.Orders.TotalCents, 50, orm.AtLeast[int64](100)))
 	must(t, err)
 	assertTotal(100)
-	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberDecrement(models.Orders.TotalCents, 1, orm.AtLeast[int64](100)))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.Decrement(models.Orders.TotalCents, 1, orm.AtLeast[int64](100)))
 	if !errors.Is(err, orm.ErrBoundExceeded) || !errors.Is(err, fault.Conflict) {
 		t.Fatal("bound conflict", err)
 	}
 	assertTotal(100)
-	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberIncrement(models.Orders.TotalCents, 20, orm.AtMost[int64](120)))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.Increment(models.Orders.TotalCents, 20, orm.AtMost[int64](120)))
 	must(t, err)
 	assertTotal(120)
-	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberIncrement(models.Orders.TotalCents, 1, orm.AtMost[int64](120)))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.Increment(models.Orders.TotalCents, 1, orm.AtMost[int64](120)))
 	if !errors.Is(err, orm.ErrBoundExceeded) {
 		t.Fatal("ceiling violation", err)
 	}
@@ -112,23 +112,23 @@ func TestPersistence(t *testing.T) {
 		t.Fatal("eager orders")
 	}
 	amount := decimal.FromInt64(25)
-	ledger, err := orm.Insert(ctx, db, models.LedgerEntries.Table, orm.NumberSet(models.LedgerEntries.Amount, amount))
+	ledger, err := orm.Insert(ctx, db, models.LedgerEntries.Table, orm.Set(models.LedgerEntries.Amount, amount))
 	must(t, err)
 	storedLedger, err := orm.RequireKey(ctx, db, models.LedgerEntries.Table, ledger.ID)
 	must(t, err)
 	if storedLedger.Amount.Cmp(amount) != 0 || !storedLedger.Balance.IsNull() {
 		t.Fatal("decimal/null persistence")
 	}
-	wr, err := orm.Insert(ctx, db, models.WriteRecords.Table, orm.TextSet(models.WriteRecords.Name, "defaults"))
+	wr, err := orm.Insert(ctx, db, models.WriteRecords.Table, orm.Set(models.WriteRecords.Name, "defaults"))
 	must(t, err)
 	storedWrite, err := orm.RequireKey(ctx, db, models.WriteRecords.Table, wr.Code)
 	must(t, err)
 	if !storedWrite.Enabled || storedWrite.Code <= 0 || !storedWrite.Amount.IsZero() {
 		t.Fatal("database defaults")
 	}
-	m, err := orm.Insert(ctx, db, reporting.Members.Table, orm.NumberSet(reporting.Members.TenantID, 7), orm.TextSet(reporting.Members.Name, "Member"), orm.EnumSet(reporting.Members.State, reporting.Active), orm.NumberSet(reporting.Members.Balance, amount))
+	m, err := orm.Insert(ctx, db, reporting.Members.Table, orm.Set(reporting.Members.TenantID, 7), orm.Set(reporting.Members.Name, "Member"), orm.Set(reporting.Members.State, reporting.Active), orm.Set(reporting.Members.Balance, amount))
 	must(t, err)
-	ro, err := orm.Insert(ctx, db, reporting.Orders.Table, orm.NumberSet(reporting.Orders.TenantID, 7), orm.ColumnSet(reporting.Orders.MemberID, m.ID), orm.TextSet(reporting.Orders.Label, "Report"), orm.NumberSet(reporting.Orders.Amount, amount))
+	ro, err := orm.Insert(ctx, db, reporting.Orders.Table, orm.Set(reporting.Orders.TenantID, 7), orm.Set(reporting.Orders.MemberID, m.ID), orm.Set(reporting.Orders.Label, "Report"), orm.Set(reporting.Orders.Amount, amount))
 	must(t, err)
 	projected, err := rows.Read(reporting.SelectOrders(7)).All(ctx, db)
 	must(t, err)
@@ -142,7 +142,7 @@ func TestPersistence(t *testing.T) {
 	if gone.IsSet() {
 		t.Fatal("soft deleted row visible")
 	}
-	deleted, err := orm.Require(ctx, db, reporting.Orders.Query().WithTrashed().Where(orm.KeyEq(reporting.Orders.ID, ro.ID)))
+	deleted, err := orm.Require(ctx, db, reporting.Orders.Query().WithTrashed().Where(orm.Eq(reporting.Orders.ID, ro.ID)))
 	must(t, err)
 	if deleted.DeletedAt.IsNull() {
 		t.Fatal("soft delete not persisted")
@@ -155,14 +155,14 @@ func TestPersistence(t *testing.T) {
 		t.Fatal("restore not persisted")
 	}
 	must(t, db.Transaction(ctx, func(tx *database.Tx) error {
-		locked, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Orders.Query().Where(orm.KeyEq(models.Orders.ID, o.ID))))
+		locked, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Orders.Query().Where(orm.Eq(models.Orders.ID, o.ID))))
 		if err != nil {
 			return err
 		}
 		if locked.TotalCents != 120 {
 			return errors.New("locked read changed value")
 		}
-		shared, err := orm.AllLocked(ctx, tx, orm.ForShare(models.Orders.Query().Where(orm.KeyEq(models.Orders.ID, o.ID))))
+		shared, err := orm.AllLocked(ctx, tx, orm.ForShare(models.Orders.Query().Where(orm.Eq(models.Orders.ID, o.ID))))
 		if err != nil {
 			return err
 		}

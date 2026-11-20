@@ -17,7 +17,7 @@ The [complete declaration](model-declarations.md) uses `InputText[User, EmailInp
 <!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#inputs-after -->
 ```go
 func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
-	return orm.InputTextSet(mutators.Members.Email, input)
+	return orm.Set(mutators.Members.Email, input)
 }
 ```
 
@@ -31,7 +31,7 @@ The receiver is a zero-valued type marker. Transform the argument rather than re
 
 ## Different input and stored types
 
-Omitted fields skip the transform, including database defaults and untouched update fields. `orm.NullableInputTextSetNull(column)` preserves SQL NULL for a nullable input text column and skips a nullable field's scalar transform. Zero, false and empty string are supplied inputs and do run it.
+Omitted fields skip the transform, including database defaults and untouched update fields. `orm.SetNull(column)` preserves SQL NULL for a nullable input text column and skips a nullable field's scalar transform. Zero, false and empty string are supplied inputs and do run it.
 
 Before-write hooks read `value.Optional[Input]` through `WriteGet` and `value.Optional[value.Nullable[Input]]` through `WriteNullableGet`. `WriteSet` replaces inputs; `WriteUnset` restores omission. After-write changes contain stored types, never fresh inputs.
 

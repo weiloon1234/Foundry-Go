@@ -7,4 +7,4 @@ import (
 	model "github.com/weiloon1234/Foundry-Go/model"
 )
 
-var _ = orm.ColumnSet(c.Records.Revision, model.ID[c.Record]{})
+var _ = orm.Set(c.Records.Revision, model.ID[c.Record]{})

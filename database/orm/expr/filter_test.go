@@ -47,7 +47,7 @@ var filterTestTable = orm.Define("filter_test_records", func(b orm.Builder[filte
 })
 
 func TestRowComparisonValue(t *testing.T) {
-	cmp := expr.CompareRow(expr.Value(orm.EnumExpr(filterTestTable.State)))
+	cmp := expr.CompareRow(expr.Value(filterTestTable.State))
 	val := expr.AsSelected(cmp)
 
 	var _ expr.Selected[filterTestRecord, recordState] = val
@@ -77,7 +77,7 @@ func TestRowComparisonValue(t *testing.T) {
 }
 
 func TestNullableRowComparisonValue(t *testing.T) {
-	cmp := expr.CompareNullableRow(expr.Value(orm.NullableEnumExpr(filterTestTable.Nullable)))
+	cmp := expr.CompareNullableRow(expr.Value(filterTestTable.Nullable))
 	val := expr.AsSelected(cmp)
 
 	var _ expr.Selected[filterTestRecord, value.Nullable[recordState]] = val

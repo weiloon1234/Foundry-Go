@@ -149,11 +149,11 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 		return store.Envelope{}, err
 	}
 	r := captured.registration
-	draft := []orm.Assignment[store.Envelope]{orm.KeySet(store.Envelopes.ID, captured.id), orm.TextSet(store.Envelopes.Recipient, string(r.key.recipient)), orm.TextSet(store.Envelopes.Scope, r.scope), orm.TextSet(store.Envelopes.SubjectKey, captured.subject), orm.JSONSet(store.Envelopes.Identity, captured.identity), orm.JSONSet(store.Envelopes.Origin, captured.origin), orm.TextSet(store.Envelopes.Name, string(r.key.name)), orm.NumberSet(store.Envelopes.Version, uint32(r.key.version)), orm.JSONSet(store.Envelopes.Payload, captured.input), orm.TextSet(store.Envelopes.Fingerprint, captured.fingerprint), orm.TimeSet(store.Envelopes.CreatedAt, now)}
-	if _, err := orm.Upsert(ctx, tx, store.Envelopes.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(store.Envelopes.ID))).DoNothing(), draft...); err != nil {
+	draft := []orm.Assignment[store.Envelope]{orm.Set(store.Envelopes.ID, captured.id), orm.Set(store.Envelopes.Recipient, string(r.key.recipient)), orm.Set(store.Envelopes.Scope, r.scope), orm.Set(store.Envelopes.SubjectKey, captured.subject), orm.Set(store.Envelopes.Identity, captured.identity), orm.Set(store.Envelopes.Origin, captured.origin), orm.Set(store.Envelopes.Name, string(r.key.name)), orm.Set(store.Envelopes.Version, uint32(r.key.version)), orm.Set(store.Envelopes.Payload, captured.input), orm.Set(store.Envelopes.Fingerprint, captured.fingerprint), orm.Set(store.Envelopes.CreatedAt, now)}
+	if _, err := orm.Upsert(ctx, tx, store.Envelopes.Query(), orm.OnConflict(orm.ConflictKey(store.Envelopes.ID)).DoNothing(), draft...); err != nil {
 		return store.Envelope{}, err
 	}
-	row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Envelopes.Query()).Where(orm.KeyEq(store.Envelopes.Key(), captured.id)))
+	row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Envelopes.Query()).Where(orm.Eq(store.Envelopes.Key(), captured.id)))
 	if err != nil {
 		return store.Envelope{}, err
 	}
@@ -164,7 +164,7 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 		// A notification captured before its binding's channel set changed keeps
 		// its original channels. Compare the input against the stored channel
 		// list; a differing input is still a conflict.
-		deliveries, err := orm.All(ctx, tx, store.Deliveries.Query().Where(orm.ColumnEq(store.Deliveries.NotificationID, captured.id)).Limit(MaxChannels+1))
+		deliveries, err := orm.All(ctx, tx, store.Deliveries.Query().Where(orm.Eq(store.Deliveries.NotificationID, captured.id)).Limit(MaxChannels+1))
 		if err != nil {
 			return store.Envelope{}, err
 		}
@@ -181,8 +181,8 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 	}
 	for _, channel := range r.channels {
 		key := deliveryKey(captured.id, channel.id)
-		draft := []orm.Assignment[store.Delivery]{orm.TextSet(store.Deliveries.KeyColumn, key), orm.ColumnSet(store.Deliveries.NotificationID, captured.id), orm.TextSet(store.Deliveries.Channel, string(channel.id)), orm.TextSet(store.Deliveries.Kind, channel.kind), orm.TextSet(store.Deliveries.State, string(Pending)), orm.JSONSet(store.Deliveries.Payload, empty), orm.ColumnSet(store.Deliveries.Claim, model.ID[store.Delivery]{}), orm.NumberSet(store.Deliveries.Attempts, 0), orm.TimeSet(store.Deliveries.UpdatedAt, now)}
-		if _, err := orm.Upsert(ctx, tx, store.Deliveries.Query(), orm.OnConflict(orm.ConflictKey(orm.TextExpr(store.Deliveries.KeyColumn))).DoNothing(), draft...); err != nil {
+		draft := []orm.Assignment[store.Delivery]{orm.Set(store.Deliveries.KeyColumn, key), orm.Set(store.Deliveries.NotificationID, captured.id), orm.Set(store.Deliveries.Channel, string(channel.id)), orm.Set(store.Deliveries.Kind, channel.kind), orm.Set(store.Deliveries.State, string(Pending)), orm.Set(store.Deliveries.Payload, empty), orm.Set(store.Deliveries.Claim, model.ID[store.Delivery]{}), orm.Set(store.Deliveries.Attempts, 0), orm.Set(store.Deliveries.UpdatedAt, now)}
+		if _, err := orm.Upsert(ctx, tx, store.Deliveries.Query(), orm.OnConflict(orm.ConflictKey(store.Deliveries.KeyColumn)).DoNothing(), draft...); err != nil {
 			return store.Envelope{}, err
 		}
 	}

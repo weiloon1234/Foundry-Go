@@ -18,15 +18,15 @@ import (
 // independently of their nullable and selected-phase lowering.
 func literalTextCases() map[string]rows.Query[member, record] {
 	m, r := declareMembers(), declareRows()
-	selected := rows.Select(rows.From(m.Query()), r, rows.Map(r.ID, expr.Value(orm.KeyExpr(m.ID))), rows.Map(r.Name, expr.Value(orm.TextExpr(m.Name))))
-	grouped := rows.GroupBy(selected, expr.Group(expr.Value(orm.KeyExpr(m.ID))), expr.Group(expr.Value(orm.TextExpr(m.Name))), expr.Group(expr.Value(orm.NullableTextExpr(m.Nickname))))
+	selected := rows.Select(rows.From(m.Query()), r, rows.Map(r.ID, expr.Value(m.ID)), rows.Map(r.Name, expr.Value(m.Name)))
+	grouped := rows.GroupBy(selected, expr.Group(expr.Value(m.ID)), expr.Group(expr.Value(m.Name)), expr.Group(expr.Value(m.Nickname)))
 	return map[string]rows.Query[member, record]{
-		"field":                 rows.Select(rows.From(m.Query().Where(orm.TextIContains(m.Name, "aLPHa %_!"))), r, rows.Map(r.ID, expr.Value(orm.KeyExpr(m.ID))), rows.Map(r.Name, expr.Value(orm.TextExpr(m.Name)))),
-		"nullable field":        rows.Select(rows.From(m.Query().Where(orm.NullableTextIContains(m.Nickname, "aLPHa %_!"))), r, rows.Map(r.ID, expr.Value(orm.KeyExpr(m.ID))), rows.Map(r.Name, expr.Value(orm.TextExpr(m.Name)))),
-		"computed row":          selected.Where(expr.TextIContains(expr.Trim(expr.Value(orm.TextExpr(m.Name))), "aLPHa %_!")),
-		"nullable computed row": selected.Where(expr.NullableTextIContains(expr.TrimNullable(expr.Value(orm.NullableTextExpr(m.Nickname))), "aLPHa %_!")),
-		"group":                 rows.Having(grouped, expr.TextIContainsValue(expr.TextValue(expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(m.Name))))), "aLPHa %_!")),
-		"nullable group":        rows.Having(grouped, expr.TextIContainsValue(expr.TextNullableValue(expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))))), "aLPHa %_!")),
+		"field":                 rows.Select(rows.From(m.Query().Where(orm.IContains(m.Name, "aLPHa %_!"))), r, rows.Map(r.ID, expr.Value(m.ID)), rows.Map(r.Name, expr.Value(m.Name))),
+		"nullable field":        rows.Select(rows.From(m.Query().Where(orm.IContains(m.Nickname, "aLPHa %_!"))), r, rows.Map(r.ID, expr.Value(m.ID)), rows.Map(r.Name, expr.Value(m.Name))),
+		"computed row":          selected.Where(expr.TextIContains(expr.Trim(expr.Value(m.Name)), "aLPHa %_!")),
+		"nullable computed row": selected.Where(expr.NullableTextIContains(expr.TrimNullable(expr.Value(m.Nickname)), "aLPHa %_!")),
+		"group":                 rows.Having(grouped, expr.TextIContainsValue(expr.TextValue(expr.AsSelected(expr.Row(expr.Value(m.Name)))), "aLPHa %_!")),
+		"nullable group":        rows.Having(grouped, expr.TextIContainsValue(expr.TextNullableValue(expr.AsSelected(expr.Row(expr.Value(m.Nickname)))), "aLPHa %_!")),
 	}
 }
 
@@ -61,10 +61,10 @@ func TestPostgresCaseInsensitiveContainsKeepsWildcardsAndNullLiteral(t *testing.
 		}
 		m := declareMembers()
 		for name, q := range map[string]rows.Scalar[member, int64]{
-			"pattern": rows.SelectScalar(rows.From(m.Query().Where(orm.NullableTextILike(m.Nickname, "%alpha %_!%"))), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))),
-			"null":    rows.SelectScalar(rows.From(m.Query().Where(orm.NullableTextIsNull(m.Nickname))), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))),
+			"pattern": rows.SelectScalar(rows.From(m.Query().Where(orm.ILike(m.Nickname, "%alpha %_!%"))), expr.AsSelected(expr.Row(expr.Value(m.ID)))),
+			"null":    rows.SelectScalar(rows.From(m.Query().Where(orm.IsNull(m.Nickname))), expr.AsSelected(expr.Row(expr.Value(m.ID)))),
 		} {
-			got, err := rows.ReadScalar(rows.OrderScalar(q, expr.Asc(expr.Value(orm.KeyExpr(m.ID))))).All(t.Context(), tx)
+			got, err := rows.ReadScalar(rows.OrderScalar(q, expr.Asc(expr.Value(m.ID)))).All(t.Context(), tx)
 			if err != nil {
 				return err
 			}

@@ -42,7 +42,7 @@ type TextValueOperand[S any, V ~string] interface {
 
 // NullValueOperand supplies SQL null tests in HAVING.
 //
-// Example: var source expr.NullValueOperand[Order, decimal.Decimal] = expr.Sum(orm.NumberExpr(Orders.Total))
+// Example: var source expr.NullValueOperand[Order, decimal.Decimal] = expr.Sum(Orders.Total)
 type NullValueOperand[S, V any] interface {
 	ValueOperand[S, V]
 	compareValueNull(*S, querycore.Operator) ormcore.Predicate
@@ -317,14 +317,14 @@ func GteValue[S, V any](source OrderedValueOperand[S, V], v V) HavingPredicate[S
 
 // IsNullValue tests SQL nullness in HAVING.
 //
-// Example: expr.IsNullValue(expr.Sum(orm.NumberExpr(Orders.Total)))
+// Example: expr.IsNullValue(expr.Sum(Orders.Total))
 func IsNullValue[S, V any](source NullValueOperand[S, V]) HavingPredicate[S] {
 	return compareSelectedNull(source, querycore.IsNull)
 }
 
 // IsNotNullValue tests SQL presence in HAVING.
 //
-// Example: expr.IsNotNullValue(expr.Sum(orm.NumberExpr(Orders.Total)))
+// Example: expr.IsNotNullValue(expr.Sum(Orders.Total))
 func IsNotNullValue[S, V any](source NullValueOperand[S, V]) HavingPredicate[S] {
 	return compareSelectedNull(source, querycore.IsNotNull)
 }

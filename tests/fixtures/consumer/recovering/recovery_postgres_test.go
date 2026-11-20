@@ -78,7 +78,7 @@ func prepare(t *testing.T) *fixture {
 		if _, err := tx.Exec(t.Context(), `CREATE TABLE recovery_members(id uuid PRIMARY KEY,email text NOT NULL,email_revision uuid NOT NULL,password text NOT NULL,email_verified boolean NOT NULL,enabled boolean NOT NULL)`); err != nil {
 			return err
 		}
-		s.member, err = orm.Insert(t.Context(), tx, recovering.MemberRecords.Table, orm.TextSet(recovering.MemberRecords.Email, "member@example.test"), orm.ColumnSet(recovering.MemberRecords.Password, old), orm.ColumnSet(recovering.MemberRecords.EmailVerified, false), orm.ColumnSet(recovering.MemberRecords.Enabled, true))
+		s.member, err = orm.Insert(t.Context(), tx, recovering.MemberRecords.Table, orm.Set(recovering.MemberRecords.Email, "member@example.test"), orm.Set(recovering.MemberRecords.Password, old), orm.Set(recovering.MemberRecords.EmailVerified, false), orm.Set(recovering.MemberRecords.Enabled, true))
 		return err
 	})
 	if err != nil {
@@ -269,15 +269,15 @@ func TestRecoveryRejectsChangedEmailPasswordAndDisabledModels(t *testing.T) {
 			}
 			switch change {
 			case "email":
-				update(t, s, []orm.Assignment[recovering.Member]{orm.TextSet(recovering.MemberRecords.Email, "changed@example.test")})
+				update(t, s, []orm.Assignment[recovering.Member]{orm.Set(recovering.MemberRecords.Email, "changed@example.test")})
 			case "password":
 				hash, err := s.hasher.Hash(t.Context(), plain(t, "other long password"))
 				if err != nil {
 					t.Fatal(err)
 				}
-				update(t, s, []orm.Assignment[recovering.Member]{orm.ColumnSet(recovering.MemberRecords.Password, hash)})
+				update(t, s, []orm.Assignment[recovering.Member]{orm.Set(recovering.MemberRecords.Password, hash)})
 			case "disabled":
-				update(t, s, []orm.Assignment[recovering.Member]{orm.ColumnSet(recovering.MemberRecords.Enabled, false)})
+				update(t, s, []orm.Assignment[recovering.Member]{orm.Set(recovering.MemberRecords.Enabled, false)})
 			}
 			if _, err := s.reset.Complete(t.Context(), reset.Token(), plain(t, "new long password")); !errors.Is(err, auth.Unauthenticated) {
 				t.Fatal("stale reset accepted", err)
@@ -334,7 +334,7 @@ func TestRevocationAndPruningSeparatePurposeAndBoundWork(t *testing.T) {
 	if _, err := s.verification.Complete(t.Context(), verify.Token()); err != nil {
 		t.Fatal("reset revoke affected verification", err)
 	}
-	update(t, s, []orm.Assignment[recovering.Member]{orm.ColumnSet(recovering.MemberRecords.EmailVerified, false)})
+	update(t, s, []orm.Assignment[recovering.Member]{orm.Set(recovering.MemberRecords.EmailVerified, false)})
 	_ = issue(t, s)
 	if _, err := s.verification.Issue(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member)); err != nil {
 		t.Fatal(err)

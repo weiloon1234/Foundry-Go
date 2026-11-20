@@ -60,7 +60,7 @@ func TestSourceWritesPersistScopesConventionsAndRollback(t *testing.T) {
 			if !ok {
 				return orm.Predicate[sourceEntry]{}, errors.New("missing tenant")
 			}
-			return orm.NumberEq(f.Tenant, v), nil
+			return orm.Eq(f.Tenant, v), nil
 		})}
 	}))
 	mutations, callbacks := 0, 0
@@ -74,13 +74,13 @@ func TestSourceWritesPersistScopesConventionsAndRollback(t *testing.T) {
 			if !ok {
 				return orm.Predicate[sourceArchive]{}, errors.New("missing tenant")
 			}
-			return orm.NumberEq(f.Tenant, v), nil
+			return orm.Eq(f.Tenant, v), nil
 		})}
 	}))
 	_, err = db.Exec(ctx, `INSERT INTO source_entries VALUES(1,10,1,'first'),(2,20,1,'second'),(3,30,2,'other')`)
 	must(t, err)
-	src := r.From(s.Query().OrderBy(orm.KeyAsc(s.Key())).Limit(3))
-	insertion := r.InsertFrom(src, d.Query(), r.MapInsert(orm.KeyExpr(d.ID), expr.Value(orm.NumberExpr(s.Target))), r.MapInsert(orm.NumberExpr(d.Tenant), expr.Value(orm.NumberExpr(s.Tenant))), r.MapInsert(orm.TextExpr(d.Name), expr.Value(orm.TextExpr(s.Name)))).Values(orm.InputTextSet(d.Tag, " trimmed "))
+	src := r.From(s.Query().OrderBy(orm.Asc(s.Key())).Limit(3))
+	insertion := r.InsertFrom(src, d.Query(), r.MapInsert(d.ID, expr.Value(s.Target)), r.MapInsert(d.Tenant, expr.Value(s.Tenant)), r.MapInsert(d.Name, expr.Value(s.Name))).Values(orm.Set(d.Tag, " trimmed "))
 	got, err := insertion.Returning(ctx, db, 3)
 	must(t, err)
 	if len(got) != 2 || mutations != 1 || callbacks != 0 {
@@ -91,17 +91,17 @@ func TestSourceWritesPersistScopesConventionsAndRollback(t *testing.T) {
 			t.Fatal(m)
 		}
 	}
-	zero, e := r.DeleteUsing(d.Query(), r.From(s.Query())).Match(r.MatchNullableSource(orm.KeyExpr(d.Key()), expr.ParamOf(expr.NullableRow(expr.Value(orm.NumberExpr(s.Target))), value.Null[int64]()))).Exec(ctx, db)
+	zero, e := r.DeleteUsing(d.Query(), r.From(s.Query())).Match(r.MatchNullableSource(d.Key(), expr.ParamOf(expr.NullableRow(expr.Value(s.Target)), value.Null[int64]()))).Exec(ctx, db)
 	must(t, e)
 	if zero != 0 {
 		t.Fatal("NULL source key matched a destination", zero)
 	}
-	key := r.MatchSource(orm.KeyExpr(d.Key()), expr.Value(orm.NumberExpr(s.Target)))
+	key := r.MatchSource(d.Key(), expr.Value(s.Target))
 	update := r.UpdateFrom(d.Query(), r.From(s.Query())).Match(key)
 	_, err = db.Exec(ctx, `INSERT INTO source_entries VALUES(4,10,1,'duplicate')`)
 	must(t, err)
 	for _, returning := range []bool{false, true} {
-		mapped := update.Select(r.MapUpdate(orm.TextExpr(d.Name), expr.Value(orm.TextExpr(s.Name))))
+		mapped := update.Select(r.MapUpdate(d.Name, expr.Value(s.Name)))
 		if returning {
 			_, err = mapped.Returning(ctx, db, 5)
 		} else {
@@ -116,7 +116,7 @@ func TestSourceWritesPersistScopesConventionsAndRollback(t *testing.T) {
 			t.Fatal("ambiguous update persisted", persisted)
 		}
 	}
-	_, err = update.Values(orm.TextSet(d.Name, "overflow")).Returning(ctx, db, 1)
+	_, err = update.Values(orm.Set(d.Name, "overflow")).Returning(ctx, db, 1)
 	if !errors.Is(err, database.TooManyRows) {
 		t.Fatal("overflow accepted", err)
 	}
@@ -125,7 +125,7 @@ func TestSourceWritesPersistScopesConventionsAndRollback(t *testing.T) {
 	if persisted.Name != "first" {
 		t.Fatal(persisted)
 	}
-	n, err := update.Values(orm.TextSet(d.Name, "fixed"), orm.InputTextSet(d.Tag, " changed ")).Exec(ctx, db)
+	n, err := update.Values(orm.Set(d.Name, "fixed"), orm.Set(d.Tag, " changed ")).Exec(ctx, db)
 	must(t, err)
 	if n != 2 {
 		t.Fatal(n)
@@ -137,7 +137,7 @@ func TestSourceWritesPersistScopesConventionsAndRollback(t *testing.T) {
 	}
 	stop := errors.New("abort enclosing transaction")
 	err = db.Transaction(ctx, func(tx *database.Tx) error {
-		_, e := update.Values(orm.TextSet(d.Name, "rollback")).Exec(ctx, tx)
+		_, e := update.Values(orm.Set(d.Name, "rollback")).Exec(ctx, tx)
 		if e != nil {
 			return e
 		}
@@ -151,18 +151,18 @@ func TestSourceWritesPersistScopesConventionsAndRollback(t *testing.T) {
 	if persisted.Name != "fixed" {
 		t.Fatal("outer rollback failed", persisted)
 	}
-	if _, err = update.Values(orm.TextSet(d.Name, "unscoped")).Exec(t.Context(), db); err == nil {
+	if _, err = update.Values(orm.Set(d.Name, "unscoped")).Exec(t.Context(), db); err == nil {
 		t.Fatal("missing tenant accepted")
 	}
 	// Destination scopes apply independently even when source scopes are bypassed.
 	_, err = db.Exec(ctx, `INSERT INTO source_archives VALUES(30,2,'other','tag',7,NOW(),NOW(),NULL)`)
 	must(t, err)
-	n, err = r.UpdateFrom(d.Query(), r.From(orm.WithoutGlobalScopes(s.Query()))).Match(key).Values(orm.TextSet(d.Name, "scoped")).Exec(ctx, db)
+	n, err = r.UpdateFrom(d.Query(), r.From(orm.WithoutGlobalScopes(s.Query()))).Match(key).Values(orm.Set(d.Name, "scoped")).Exec(ctx, db)
 	must(t, err)
 	if n != 2 {
 		t.Fatal(n)
 	}
-	other, e := orm.All(context.WithValue(ctx, writeTenant{}, int64(2)), db, d.Query().Where(orm.KeyEq(d.Key(), 30)).WithTrashed())
+	other, e := orm.All(context.WithValue(ctx, writeTenant{}, int64(2)), db, d.Query().Where(orm.Eq(d.Key(), 30)).WithTrashed())
 	must(t, e)
 	if len(other) != 1 || other[0].Name != "other" {
 		t.Fatal(other)

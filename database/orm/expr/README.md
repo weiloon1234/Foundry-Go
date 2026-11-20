@@ -1,7 +1,6 @@
 # Scoped expressions
 
-Choose the adapter matching the declared column family. For a text column,
-use `expr.Value(orm.TextExpr(column))` for a model scope and `expr.At(rows.Scope(alias), orm.TextExpr(column))`
+Pass any queryable column handle directly: use `expr.Value(column)` for a model scope and `expr.At(rows.Scope(alias), column)`
 for an alias. `Expression[S,V,P]` distinguishes the present comparison value `V` from the
 projected value `P`, including `value.Nullable[V]`.
 
@@ -12,8 +11,8 @@ values with `expr.AsSelected(row)`. Use
 field. `rows.Map` retains its existing column-expression signature.
 
 ```go
-age := expr.Value(orm.NumberExpr(Users.Age))
-q := expr.Where(Users.Query(), expr.Gt(expr.Add(age, expr.Param(orm.NumberExpr(Users.Age), 2)), 18))
+age := expr.Value(Users.Age)
+q := expr.Where(Users.Query(), expr.Gt(expr.Add(age, expr.Param(Users.Age, 2)), 18))
 q = expr.OrderBy(q, expr.Asc(expr.Negate(age)))
 ```
 
@@ -62,10 +61,10 @@ adds one nullable layer; use `NullIfNullable` for inputs already nullable.
 The `*Value` variants accept `Selected` values and retain the selected phase.
 
 ```go
-nickname := expr.Value(orm.NullableTextExpr(Users.Nickname))
-email := expr.Value(orm.TextExpr(Users.Email))
+nickname := expr.Value(Users.Nickname)
+email := expr.Value(Users.Email)
 label := expr.When(expr.IsNull(nickname), email).
-    When(expr.Eq(email, ""), expr.Param(orm.TextExpr(Users.Email), "anonymous")).
+    When(expr.Eq(email, ""), expr.Param(Users.Email, "anonymous")).
     Else(expr.Coalesce(nickname, email))
 ```
 
@@ -112,8 +111,8 @@ slots and ad-hoc values: it retains native aggregate metadata, complete ownershi
 result codec/scanner. Selected calculations do not implement this interface.
 
 ```go
-buyer := expr.Value(orm.ColumnExpr(Orders.BuyerID))
-total := expr.Sum(orm.NumberExpr(Orders.TotalCents))
+buyer := expr.Value(Orders.BuyerID)
+total := expr.Sum(Orders.TotalCents)
 q := rows.Select(rows.FromModel(Orders.Query()), Totals,
     rows.Map(Totals.Buyer, buyer), rows.MapSelected(Totals.Amount, expr.AsSelected(total)))
 q = rows.GroupBy(q, expr.Group(buyer))
@@ -225,15 +224,15 @@ Construct a window from an existing scope; it does not copy the source query's
 ordering, pagination or rows:
 
 ```go
-amount := expr.Value(orm.NumberExpr(Orders.TotalCents))
+amount := expr.Value(Orders.TotalCents)
 w := expr.WindowFor(rows.ModelScope(Orders.Query())).
-    PartitionBy(expr.Group(expr.Value(orm.ColumnExpr(Orders.BuyerID)))).
+    PartitionBy(expr.Group(expr.Value(Orders.BuyerID))).
     OrderBy(expr.Asc(amount)).
     RowsBetween(expr.UnboundedPreceding(), expr.CurrentRow())
 
 q := rows.Select(rows.FromModel(Orders.Query()), ReportRows,
     rows.MapSelected(ReportRows.Rank, expr.RowNumber(w)),
-    rows.MapSelected(ReportRows.Total, expr.Over(expr.Sum(orm.NumberExpr(Orders.TotalCents)), w)),
+    rows.MapSelected(ReportRows.Total, expr.Over(expr.Sum(Orders.TotalCents), w)),
     rows.MapSelected(ReportRows.Previous, expr.Lag(expr.AsSelected(amount), 1, w)),
 )
 ```
@@ -254,7 +253,7 @@ ordering when the surrounding grouping is valid.
 
 `PartitionBy` takes row `GroupKey`s; `PartitionByValues` takes selected
 `ProjectionKey`s. `OrderBy` accepts row and selected expression orders. Use
-`expr.Asc(expr.Value(orm.TextExpr(column)))` for a column order. Final result ordering is separate.
+`expr.Asc(expr.Value(column))` for a column order. Final result ordering is separate.
 Named windows (`w.Named("by_buyer")`) emit each referenced definition once.
 PostgreSQL's inheritance rules apply: extending a framed definition, replacing
 its order or adding a partition fails compilation. Derivation is immutable.
@@ -280,7 +279,7 @@ this adds no manifest, OpenAPI or TypeScript schema source.
 ## Text, temporal, interval, geographic and trigram calculations
 
 Scalar functions use the same SQL compiler and codecs as the shared `internal/querycore` compiler.
-Pass `expr.Value(orm.TextExpr(column))` (or `expr.At(scope, orm.TextExpr(column))`) to row functions; promote
+Pass `expr.Value(column)` (or `expr.At(scope, column)`) to row functions; promote
 with `expr.AsSelected` for `rows.MapSelected`. The `Value` suffixed variants accept
 selected values, including aggregates and windows. They never become WHERE
 predicates. Use `expr.TextValue` or `expr.TextNullableValue` for selected text
@@ -294,7 +293,7 @@ that transaction. See [trigram search](../../../docs/guides/trigram-search.md)
 for extension installation, GIN indexes, supported thresholds and nullable inputs.
 
 ```go
-name := expr.Lower(expr.Trim(expr.Value(orm.TextExpr(Users.Email))))
+name := expr.Lower(expr.Trim(expr.Value(Users.Email)))
 filtered := expr.Where(Users.Query(), expr.TextIContains(name, "example_"))
 // Contains/IContains/StartsWith/EndsWith treat wildcards literally;
 // Like/ILike accept SQL patterns. Collation belongs to the database.
@@ -342,7 +341,7 @@ var Theme = expr.JSONFieldOf(func(p *Preferences) *value.Optional[string] {
 })
 // During application startup, check Theme.Validate() along with orm.Check tables.
 
-root := expr.JSONRoot(expr.Value(orm.JSONExpr(Documents.Settings)))
+root := expr.JSONRoot(expr.Value(Documents.Settings))
 path := expr.JSONOptional(expr.JSONProperty(root, Theme))
 theme := expr.JSONTextScalar(path, codec.String[string]())
 q := expr.Where(Documents.Query(), expr.Eq(theme, "dark"))
@@ -390,14 +389,14 @@ manifest, OpenAPI or TypeScript schemas; those remain explicitly declared.
 
 UUID seeks use `UUIDLess`, `UUIDLessOrEqual`, `UUIDGreater` and
 `UUIDGreaterOrEqual` on row expressions, for example
-`expr.UUIDGreater(expr.At(scope, orm.KeyExpr(Files.Key())), after)`. The UUID's model owner
+`expr.UUIDGreater(expr.At(scope, Files.Key()), after)`. The UUID's model owner
 and expression scope remain distinct types. Nullable row expressions use the
 `Nullable` variants and compare a present UUID. Ordering is PostgreSQL bytewise
 UUID ordering, not a guarantee about UUID generation time.
 
 ## Projection filter adapters
 
-`ModelPredicate(orm.EnumEq(Users.State, Active))` retains model declaration ownership in a
+`ModelPredicate(orm.Eq(Users.State, Active))` retains model declaration ownership in a
 projection's row phase. `Has(UserRelations.Orders, childPredicate)` lifts expression
 predicates through the existing scoped relation EXISTS compiler. A child from
 another declaration fails validation even when its Go model type matches. The
@@ -410,14 +409,14 @@ present-value comparisons and adds null tests for nullable fields. Use `OrderRow
 `OrderNullableRow` for computed ordered values. Use `TextRowValue` or
 `TextNullableRowValue` for computed text row values, including correlated scalars.
 They preserve scope, codecs and NULL semantics without applying `lower()`.
-Stored text adapters take the column itself: `TextRow(Users.Name)` and `TextNullableRow(Users.Nickname)`. Their
-`orm.TextExpressionColumn` input rejects direct non-text handles; `Value`
-erases that static capability and cannot be passed to these adapters. Both
-adapters validate the retrieved column's own text metadata before granting
+Stored text row expressions take the column handle directly: `TextRow(Users.Name)` and `TextNullableRow(Users.Nickname)`. Their
+`orm.RequiredTextColumnKind` / `orm.NullableTextColumnKind` constraints reject non-text handles at compile time; `Value`
+erases that static capability and cannot be passed to them. Both
+validate the column's own text metadata before granting
 operations. Nested embedding cannot borrow a text marker from another handle:
-an invalid adapter retains its error through comparisons, ordering, selection
+an invalid handle retains its error through comparisons, ordering, selection
 and parameters. String-backed enums cannot acquire text or ordered comparisons
-through these adapters. Computed text functions already return text
+through them. Computed text functions already return text
 comparison handles. Present values remain the inputs for nullable comparisons.
 The compiler also rejects literal and expression LIKE predicates without a text
 capability, independently of the codec's string representation.
@@ -443,13 +442,13 @@ selected/HAVING predicates and predicates for a different target cannot be passe
 ```go
 orders := UserRelations.Orders
 orders = orders.Where(expr.RelationFilter(orders,
-    expr.GreaterColumn(orm.NumberExpr(Orders.Total), orm.NumberExpr(Orders.Paid))))
+    expr.GreaterColumn(Orders.Total, Orders.Paid)))
 users, err := orm.All(ctx, db, Users.Query().Where(orm.Has(orders)).With(orders))
 ```
 
 The adapter retains correlated references and uses the same owner validation as
 `expr.Has`. It also permits JSON operators on a natural primary key through
-`expr.Value(orm.KeyExpr(Policies.Key()))`, without binding the primary field a second time.
+`expr.Value(Policies.Key())`, without binding the primary field a second time.
 
 `RelatedValue(source, computation)` returns a row expression with the aggregate's
 exact nullability. Use existing `OrderBy`/`Where` adapters to rank and filter models,
@@ -457,7 +456,7 @@ and `rows.WithValue` to read a complete model alongside the value. See the
 [complete model and computed value recipe](../rows/records.md).
 
 Computed relation ordering uses `relation.OrderBy(expr.RelationOrder(relation,
-expr.Asc(expr.Negate(expr.Value(orm.NumberExpr(Orders.Total))))))`. For pivot fields, use
+expr.Asc(expr.Negate(expr.Value(Orders.Total)))))`. For pivot fields, use
 `relation.OrderByPivot(expr.RelationPivotOrder(relation, order))`. Both adapters
 validate the relation's actual source/target metadata and the field declaration;
 pivot ordering additionally validates the bound pivot. These row-phase adapters

@@ -33,31 +33,31 @@ type FactorTable struct {
 	// Table provides Factor queries and writes. Example: Factors.Query().Limit(10).
 	orm.Table[Factor, string]
 	// Scope binds the persisted Factor.Scope column.
-	// Example: orm.TextSet(Factors.Scope, scope).
+	// Example: orm.Set(Factors.Scope, scope).
 	Scope orm.Text[Factor, string]
 	// Identity binds the persisted Factor.Identity column.
-	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.JSONSet(Factors.Identity, encoded) }.
+	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.Set(Factors.Identity, encoded) }.
 	Identity orm.JSON[Factor, model.Identity]
 	// Generation binds the persisted Factor.Generation column.
-	// Example: orm.ColumnSet(Factors.Generation, generation).
+	// Example: orm.Set(Factors.Generation, generation).
 	Generation orm.Column[Factor, model.ID[Factor]]
 	// Ciphertext binds the persisted Factor.Ciphertext column.
-	// Example: orm.TextSet(Factors.Ciphertext, ciphertext).
+	// Example: orm.Set(Factors.Ciphertext, ciphertext).
 	Ciphertext orm.Text[Factor, string]
 	// CreatedAt binds the caller-supplied creation time; the ORM does not automatically populate or refresh it.
-	// Example: orm.TimeSet(Factors.CreatedAt, createdAt).
+	// Example: orm.Set(Factors.CreatedAt, createdAt).
 	CreatedAt orm.Time[Factor, temporal.DateTime]
 	// PendingUntil binds the persisted Factor.PendingUntil column.
-	// Example: orm.NullableTimeSetNull(Factors.PendingUntil).
+	// Example: orm.SetNull(Factors.PendingUntil).
 	PendingUntil orm.NullableTime[Factor, temporal.DateTime]
 	// ConfirmedAt binds the persisted Factor.ConfirmedAt column.
-	// Example: orm.NullableTimeSetNull(Factors.ConfirmedAt).
+	// Example: orm.SetNull(Factors.ConfirmedAt).
 	ConfirmedAt orm.NullableTime[Factor, temporal.DateTime]
 	// LastStep binds the persisted Factor.LastStep column.
-	// Example: orm.NullableNumberSetNull(Factors.LastStep).
+	// Example: orm.SetNull(Factors.LastStep).
 	LastStep orm.NullableNumber[Factor, int64]
 	// RecoveryHashes binds the persisted Factor.RecoveryHashes column.
-	// Example: encoded, err := value.NewJSON(recoveryHashes); if err == nil { _ = orm.JSONSet(Factors.RecoveryHashes, encoded) }.
+	// Example: encoded, err := value.NewJSON(recoveryHashes); if err == nil { _ = orm.Set(Factors.RecoveryHashes, encoded) }.
 	RecoveryHashes orm.JSON[Factor, []string]
 }
 

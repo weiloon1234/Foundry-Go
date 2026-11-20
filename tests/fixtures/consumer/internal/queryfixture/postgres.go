@@ -29,9 +29,9 @@ func RunStable(t *testing.T, check func(*database.Tx, []models.User) error) {
 func runDefault(t *testing.T, stable bool, check func(*database.Tx, []models.User) error) {
 	t.Helper()
 	run(t, 3, stable, func(i int, users []models.User, assignments []orm.Assignment[models.User]) []orm.Assignment[models.User] {
-		assignments = append(assignments, orm.EnumSet(models.Users.Status, models.StatusActive))
+		assignments = append(assignments, orm.Set(models.Users.Status, models.StatusActive))
 		if i == 1 {
-			assignments = append(assignments, orm.NullableColumnSet(models.Users.IntroducerID, users[0].ID), orm.NullableTextSet(models.Users.Nickname, "Bee"))
+			assignments = append(assignments, orm.Set(models.Users.IntroducerID, users[0].ID), orm.Set(models.Users.Nickname, "Bee"))
 		}
 		return assignments
 	}, check)
@@ -43,15 +43,15 @@ func RunJoins(t *testing.T, check func(*database.Tx, []models.User) error) {
 	t.Helper()
 	run(t, 4, false, func(i int, users []models.User, assignments []orm.Assignment[models.User]) []orm.Assignment[models.User] {
 		if i == 1 {
-			assignments = append(assignments, orm.EnumSet(models.Users.Status, models.StatusDisabled))
+			assignments = append(assignments, orm.Set(models.Users.Status, models.StatusDisabled))
 		} else {
-			assignments = append(assignments, orm.EnumSet(models.Users.Status, models.StatusActive))
+			assignments = append(assignments, orm.Set(models.Users.Status, models.StatusActive))
 		}
 		if i == 1 || i == 2 {
-			assignments = append(assignments, orm.NullableColumnSet(models.Users.IntroducerID, users[0].ID))
+			assignments = append(assignments, orm.Set(models.Users.IntroducerID, users[0].ID))
 		}
 		if i == 3 {
-			assignments = append(assignments, orm.NullableColumnSet(models.Users.IntroducerID, users[1].ID))
+			assignments = append(assignments, orm.Set(models.Users.IntroducerID, users[1].ID))
 		}
 		return assignments
 	}, check)
@@ -73,13 +73,13 @@ func run(t *testing.T, userCount int, stable bool, customize func(int, []models.
 		}
 		var users []models.User
 		for i, email := range []string{"a@example.test", "b@example.test", "c@example.test", "d@example.test"}[:userCount] {
-			assignments := []orm.Assignment[models.User]{(models.User{Email: email}).CurrentEmailAssignment(), orm.NumberSet(models.Users.Age, 20+i), orm.EnumSet(models.Users.Level, models.LevelBasic)}
+			assignments := []orm.Assignment[models.User]{(models.User{Email: email}).CurrentEmailAssignment(), orm.Set(models.Users.Age, 20+i), orm.Set(models.Users.Level, models.LevelBasic)}
 			if stable {
 				id, err := model.ParseID[models.User](fmt.Sprintf("10000000-0000-0000-0000-%012d", i+1))
 				if err != nil {
 					return err
 				}
-				assignments = append(assignments, orm.KeySet(models.Users.Key(), id))
+				assignments = append(assignments, orm.Set(models.Users.Key(), id))
 			}
 			assignments = customize(i, users, assignments)
 			u, err := orm.Insert(t.Context(), tx, models.Users.Table, assignments...)
@@ -89,13 +89,13 @@ func run(t *testing.T, userCount int, stable bool, customize func(int, []models.
 			users = append(users, u)
 		}
 		for i, buyer := range []model.ID[models.User]{users[0].ID, users[0].ID, users[1].ID} {
-			assignments := []orm.Assignment[models.Order]{orm.ColumnSet(models.Orders.BuyerID, buyer), orm.NumberSet(models.Orders.TotalCents, int64(i+1))}
+			assignments := []orm.Assignment[models.Order]{orm.Set(models.Orders.BuyerID, buyer), orm.Set(models.Orders.TotalCents, int64(i+1))}
 			if stable {
 				id, err := model.ParseID[models.Order](fmt.Sprintf("20000000-0000-0000-0000-%012d", i+1))
 				if err != nil {
 					return err
 				}
-				assignments = append(assignments, orm.KeySet(models.Orders.Key(), id))
+				assignments = append(assignments, orm.Set(models.Orders.Key(), id))
 			}
 			if _, err := orm.Insert(t.Context(), tx, models.Orders.Table, assignments...); err != nil {
 				return err

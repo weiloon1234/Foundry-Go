@@ -66,7 +66,7 @@ func TestPostgresModelFirstPasswordLoginAndRehash(t *testing.T) {
 		if result.Proof().Assurance() != auth.PendingMFA || result.Subject().Digest != current.Digest {
 			return errors.New("MFA policy ignored or current hash rewritten")
 		}
-		if _, err := orm.Update(t.Context(), tx, passwords.AccountRecords.Table.Query(), passwords.AccountRecords.Table.Key(), account.ID, orm.ColumnSet(passwords.AccountRecords.Enabled, false)); err != nil {
+		if _, err := orm.Update(t.Context(), tx, passwords.AccountRecords.Table.Query(), passwords.AccountRecords.Table.Key(), account.ID, orm.Set(passwords.AccountRecords.Enabled, false)); err != nil {
 			return err
 		}
 		result, err = passwords.Authenticate(t.Context(), login, request)

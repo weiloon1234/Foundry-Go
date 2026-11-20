@@ -16,7 +16,7 @@ import (
 func TestTrigramModelSQLAndLocks(t *testing.T) {
 	d := declareMembers()
 	search := "O'Reilly_%\\'; SELECT private"
-	name := expr.Value(orm.TextExpr(d.Name))
+	name := expr.Value(d.Name)
 	q := expr.Where(d.Query(), expr.TrigramMatch(name, search))
 	statement, err := orm.Compile(q)
 	want := `SELECT "members"."id", "members"."name", "members"."nickname" FROM "members" WHERE ("members"."name" OPERATOR(public.%) $1)`
@@ -42,8 +42,8 @@ func TestTrigramModelSQLAndLocks(t *testing.T) {
 func TestTrigramJoinedProjectionSQL(t *testing.T) {
 	m, o := declareMembers(), declareOrders()
 	a, b := rows.As[left](m.Query(), "m"), rows.As[right](o.Query(), "o")
-	joined := rows.InnerJoin(a, b, rows.On(expr.At(rows.Scope(a), orm.KeyExpr(m.ID)), expr.At(rows.Scope(b), orm.NumberExpr(o.MemberID))))
-	name := expr.At(rows.LeftScope(joined, rows.Scope(a)), orm.TextExpr(m.Name))
+	joined := rows.InnerJoin(a, b, rows.On(expr.At(rows.Scope(a), m.ID), expr.At(rows.Scope(b), o.MemberID)))
+	name := expr.At(rows.LeftScope(joined, rows.Scope(a)), m.Name)
 	score := expr.TrigramSimilarity(name, "word")
 	q := rows.WhereScalar(rows.SelectScalar(joined, expr.AsSelected(score)), expr.TrigramMatch(name, "word"), expr.Gte(score, 0.6))
 	statement, err := rows.CompileRead(rows.ReadScalar(q))
@@ -59,7 +59,7 @@ func TestTrigramJoinedProjectionSQL(t *testing.T) {
 
 func TestTrigramNullableAndSelectedSQL(t *testing.T) {
 	d := declareAggregateRecords()
-	input := expr.Value(orm.NullableTextExpr(d.MaybeName))
+	input := expr.Value(d.MaybeName)
 	score := expr.TrigramSimilarityNullable(input, aggregateName("word"))
 	q := rows.WhereScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(score)), expr.NullableGte(score, 0.6))
 	statement, err := rows.CompileRead(rows.ReadScalar(q))
@@ -67,7 +67,7 @@ func TestTrigramNullableAndSelectedSQL(t *testing.T) {
 	if err != nil || statement.SQL() != want || !reflect.DeepEqual(statement.Arguments(), []any{"word", "word", 0.6}) {
 		t.Fatal(statement.SQL(), statement.Arguments(), err)
 	}
-	selected := expr.TrigramSimilarityNullableValue(expr.AsSelected(expr.Min(orm.TextExpr(d.Name))), aggregateName("word"))
+	selected := expr.TrigramSimilarityNullableValue(expr.AsSelected(expr.Min(d.Name)), aggregateName("word"))
 	statement, err = rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(d.Query()), selected)))
 	if err != nil || statement.SQL() != `SELECT public.similarity(MIN("aggregate_records"."name"), $1) AS "value" FROM "aggregate_records"` {
 		t.Fatal(statement.SQL(), err)
@@ -77,7 +77,7 @@ func TestTrigramNullableAndSelectedSQL(t *testing.T) {
 func TestTrigramInvalidInputBeforeIO(t *testing.T) {
 	d, foreign := declareAggregateRecords(), declareAggregateRecords()
 	source := rows.From(d.Query())
-	for _, input := range []expr.RowValue[aggregateRecord, aggregateName]{nil, expr.RowExpression[aggregateRecord, aggregateName]{}, expr.Value(orm.TextExpr(foreign.Name)), expr.Constant[aggregateRecord](codec.String[aggregateName]().WithParameterType(codec.TypeInteger), "word")} {
+	for _, input := range []expr.RowValue[aggregateRecord, aggregateName]{nil, expr.RowExpression[aggregateRecord, aggregateName]{}, expr.Value(foreign.Name), expr.Constant[aggregateRecord](codec.String[aggregateName]().WithParameterType(codec.TypeInteger), "word")} {
 		rejectScalar(t, source, expr.AsSelected(expr.TrigramSimilarity(input, aggregateName("word"))), codec.Float[float64]())
 		state := &driverState{}
 		_, err := orm.All(t.Context(), openTest(t, state), expr.Where(d.Query(), expr.TrigramMatch(input, aggregateName("word"))))

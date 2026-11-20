@@ -27,7 +27,7 @@ func TableOf[M any, K comparable](b Builder[M], ptr *K, opts ...ColumnOption[K])
 	if b.state != nil && !b.state.sealed {
 		b.state.tableBound = true
 	}
-	return Table[M, K]{core: k.key.core.owner, key: func() Key[M, K] { return k }}
+	return Table[M, K]{core: k.stored.core.owner, key: func() Key[M, K] { return k }}
 }
 
 func keyOf[M any, K comparable](b Builder[M], ptr *K, opts ...ColumnOption[K]) Key[M, K] {
@@ -49,12 +49,12 @@ func keyOf[M any, K comparable](b Builder[M], ptr *K, opts ...ColumnOption[K]) K
 			b.state.core.model.Primary = c.core.metadata.Name
 		}
 	}
-	return Key[M, K]{key: c}
+	return Key[M, K]{stored: c, input: c.assign}
 }
 func (t *Table[M, K]) ormAttach(core *tableCore) *tableCore { old := t.core; t.core = core; return old }
 func (t Table[M, K]) ormError() error                       { return tableError(t.core) }
 
-// Key returns the already bound primary column. Example: orm.KeySet(tbl.Key(), id).
+// Key returns the already bound primary column. Example: orm.Set(tbl.Key(), id).
 func (t Table[M, K]) Key() Key[M, K] {
 	if t.key == nil {
 		return Key[M, K]{}
@@ -67,15 +67,15 @@ func (t Table[M, K]) Query() Query[M] { return Query[M]{state: newQuery(t.core)}
 
 // Find selects by a typed primary key. Example: orm.Find(ctx, db, Orders.Table, id).
 func Find[M any, K comparable](ctx context.Context, ex database.Executor, t Table[M, K], key K) (value.Optional[M], error) {
-	return First(ctx, ex, t.Query().Where(KeyEq(t.Key(), key)))
+	return First(ctx, ex, t.Query().Where(Eq(t.Key(), key)))
 }
 
 // RequireKey selects a key or returns database.NotFound. Example: orm.RequireKey(ctx, db, Orders.Table, id).
 func RequireKey[M any, K comparable](ctx context.Context, ex database.Executor, t Table[M, K], key K) (M, error) {
-	return Require(ctx, ex, t.Query().Where(KeyEq(t.Key(), key)))
+	return Require(ctx, ex, t.Query().Where(Eq(t.Key(), key)))
 }
 
-// Query stores only a model-independent AST and table binding. Example: Orders.Query().Where(orm.KeyEq(Orders.ID, id)).
+// Query stores only a model-independent AST and table binding. Example: Orders.Query().Where(orm.Eq(Orders.ID, id)).
 type Query[M any] struct {
 	_     [0]*M
 	state queryState
@@ -118,7 +118,7 @@ func validateQuery(q queryState) error {
 	return safeerror.Join("operation failed", tableError(q.table), q.err, q.ast.Validate(), validateRelations(q))
 }
 
-// Where appends AND predicates. Example: Orders.Query().Where(orm.NumberGt(Orders.TotalCents, 0)).
+// Where appends AND predicates. Example: Orders.Query().Where(orm.Gt(Orders.TotalCents, 0)).
 func (q Query[M]) Where(ps ...Predicate[M]) Query[M] { q.state = where(q.state, ps); return q }
 func where[M any](q queryState, ps []Predicate[M]) queryState {
 	q.ast.Predicates = slices.Clone(q.ast.Predicates)
@@ -134,7 +134,7 @@ func where[M any](q queryState, ps []Predicate[M]) queryState {
 	return q
 }
 
-// OrderBy appends sort directions. Example: Orders.Query().OrderBy(orm.KeyAsc(Orders.ID)).
+// OrderBy appends sort directions. Example: Orders.Query().OrderBy(orm.Asc(Orders.ID)).
 func (q Query[M]) OrderBy(os ...Order[M]) Query[M] {
 	q.state = orderBy(q.state, os)
 	return q

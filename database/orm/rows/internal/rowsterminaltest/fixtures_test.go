@@ -72,10 +72,10 @@ func declareRows() fields {
 func projection() rows.Query[rows.Inner[rows.Alias[left, member], rows.Alias[right, order]], record] {
 	m, o := declareMembers(), declareOrders()
 	a, b := rows.As[left](m.Query(), "m"), rows.As[right](o.Query(), "o")
-	j := rows.InnerJoin(a, b, rows.On(expr.At(rows.Scope(a), orm.KeyExpr(m.ID)), expr.At(rows.Scope(b), orm.NumberExpr(o.MemberID))))
+	j := rows.InnerJoin(a, b, rows.On(expr.At(rows.Scope(a), m.ID), expr.At(rows.Scope(b), o.MemberID)))
 	schema := declareRows()
-	id := expr.At(rows.RightScope(j, rows.Scope(b)), orm.KeyExpr(o.ID))
-	name := expr.At(rows.LeftScope(j, rows.Scope(a)), orm.TextExpr(m.Name))
+	id := expr.At(rows.RightScope(j, rows.Scope(b)), o.ID)
+	name := expr.At(rows.LeftScope(j, rows.Scope(a)), m.Name)
 	return rows.OrderBy(rows.Select(j, schema, rows.Map(schema.Name, name), rows.Map(schema.ID, id)).Where(expr.Eq(name, "Ada")), expr.Asc(id))
 }
 

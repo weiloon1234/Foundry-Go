@@ -6,4 +6,4 @@ import (
 	"foundry.test/goway/models"
 )
 
-var _, _ = orm.UpdateAll(nil, nil, orm.Lock(models.Users.Query()), orm.TextSet(models.Users.Email, "x"))
+var _, _ = orm.UpdateAll(nil, nil, orm.Lock(models.Users.Query()), orm.Set(models.Users.Email, "x"))

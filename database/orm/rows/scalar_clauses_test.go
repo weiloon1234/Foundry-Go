@@ -14,14 +14,14 @@ type promotedClauseOrder[S any] struct{ expr.Order[S] }
 func TestScalarClausesPreserveSourceAndRejectForeignOrders(t *testing.T) {
 	m := declareMembers()
 	a := AsRecord[left](CTE("eligible", ModelRecord(m.Query())), "chosen")
-	field := expr.At(Scope(a), orm.KeyExpr(m.ID))
+	field := expr.At(Scope(a), m.ID)
 	base := SelectScalar(a, expr.AsSelected(expr.Row(field)))
 	selected := LimitScalar(OffsetScalar(OrderScalar(base, expr.Desc(field)), 2), 1)
 	if base.source.Node.Limit.IsSet() || base.source.Node.Offset != 0 || len(base.source.Node.Orders) != 0 {
 		t.Fatal("scalar clauses mutated their input")
 	}
 	compile := func(q Scalar[Alias[left, member], int64]) error {
-		_, err := orm.Compile(expr.Where(m.Query(), expr.Equal(expr.Value(orm.KeyExpr(m.ID)), expr.Coalesce(ScalarRowQuery(From(m.Query()), q), expr.Param(orm.KeyExpr(m.ID), 0)))))
+		_, err := orm.Compile(expr.Where(m.Query(), expr.Equal(expr.Value(m.ID), expr.Coalesce(ScalarRowQuery(From(m.Query()), q), expr.Param(m.ID, 0)))))
 		return err
 	}
 	if err := compile(selected); err != nil {
@@ -30,7 +30,7 @@ func TestScalarClausesPreserveSourceAndRejectForeignOrders(t *testing.T) {
 	other := declareMembers()
 	foreign := AsRecord[left](CTE("eligible", ModelRecord(other.Query())), "chosen")
 	for _, q := range []Scalar[Alias[left, member], int64]{
-		OrderScalar(base, promotedClauseOrder[Alias[left, member]]{expr.Asc(expr.At(Scope(foreign), orm.KeyExpr(other.ID)))}),
+		OrderScalar(base, promotedClauseOrder[Alias[left, member]]{expr.Asc(expr.At(Scope(foreign), other.ID))}),
 		OrderScalar(base, nil), LimitScalar(base, -1), OffsetScalar(base, -1),
 		LimitScalar(Scalar[Alias[left, member], int64]{}, 1),
 	} {
@@ -44,8 +44,8 @@ func TestCorrelatedClausesKeepCapabilitiesAndErrors(t *testing.T) {
 	m := declareMembers()
 	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
 	c := Correlate(a, b)
-	parent := expr.At(OuterScope(c, Scope(a)), orm.KeyExpr(m.ID))
-	child := expr.At(InnerScope(c, Scope(b)), orm.KeyExpr(m.ID))
+	parent := expr.At(OuterScope(c, Scope(a)), m.ID)
+	child := expr.At(InnerScope(c, Scope(b)), m.ID)
 	scalar := SelectCorrelatedScalar(c.Where(expr.Less(child, parent)), expr.AsSelected(expr.Row(child)))
 	distinct := DistinctOnCorrelatedScalar(scalar, expr.Group(parent)).OrderBy(expr.Asc(parent), expr.Desc(child))
 	if scalar.core.Source.Node.Distinct.Kind != 0 {

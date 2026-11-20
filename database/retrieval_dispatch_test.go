@@ -201,7 +201,7 @@ func TestRetrievalDispatchPreservesCompleteRecordSources(t *testing.T) {
 	recursiveAlias := rows.AsRecord[retrievalFixtureAlias](recursive, "r")
 	set := rows.Union(rows.ModelRecord(q), rows.ModelRecord(q))
 	cursor := rows.CursorFor(rows.ModelRecord(q))
-	cursorID := expr.At(cursor.Scope(), orm.KeyExpr(table.Key()))
+	cursorID := expr.At(cursor.Scope(), table.Key())
 	cursor = cursor.UniqueBy(expr.Group(cursorID))
 	for name, read := range map[string]func(context.Context, database.Executor) ([]retrievalFixtureRecord, error){
 		"model": func(ctx context.Context, ex database.Executor) ([]retrievalFixtureRecord, error) {
@@ -305,10 +305,10 @@ func TestRetrievalDispatchSharesLifecycleDepthAndSkipsWriteHydration(t *testing.
 		reads++
 		return orm.RetrievalHooks[mutationRecord]{}
 	}), orm.WithHooks(func() orm.Hooks[mutationRecord] { writeFactories++; return orm.Hooks[mutationRecord]{} }))
-	if _, err := orm.Insert(t.Context(), writeDB, writes.Table, orm.TextSet(writes.Name, "private record name")); err != nil || reads != 0 {
+	if _, err := orm.Insert(t.Context(), writeDB, writes.Table, orm.Set(writes.Name, "private record name")); err != nil || reads != 0 {
 		t.Fatal("write RETURNING invoked retrieval hooks", reads, err)
 	}
-	if _, err := orm.Update(t.Context(), writeDB, writes.Table.Query(), writes.Table.Key(), 42, orm.TextSet(writes.Name, "private record name")); err != nil || reads != 0 || writeFactories != 2 || writeState.rowsClosed.Load() != 3 {
+	if _, err := orm.Update(t.Context(), writeDB, writes.Table.Query(), writes.Table.Key(), 42, orm.Set(writes.Name, "private record name")); err != nil || reads != 0 || writeFactories != 2 || writeState.rowsClosed.Load() != 3 {
 		t.Fatal("write snapshots/RETURNING invoked retrieval or skipped write hooks", reads, writeFactories, err)
 	}
 
@@ -423,7 +423,7 @@ func TestRetrievalDispatchExcludesScalarsAndDeclaredDTOs(t *testing.T) {
 	dto := rows.Define(func(b rows.Builder[retrievalFixtureRecord], m *retrievalFixtureRecord) retrievalDTO {
 		return retrievalDTO{b.Row(), rows.NumberOf(b, &m.ID), rows.TextOf(b, &m.Name)}
 	})
-	projection := rows.Select(rows.From(q), dto, rows.Map(dto.ID, expr.Value(orm.KeyExpr(table.Key()))), rows.Map(dto.Name, expr.Value(orm.TextExpr(table.Name))))
+	projection := rows.Select(rows.From(q), dto, rows.Map(dto.ID, expr.Value(table.Key())), rows.Map(dto.Name, expr.Value(table.Name)))
 	if items, err := rows.Read(projection).All(t.Context(), db); err != nil || len(items) != 1 || factories != 0 {
 		t.Fatal("scalar/DTO reads acquired model retrieval callbacks", factories, err)
 	}

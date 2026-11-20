@@ -41,7 +41,7 @@ func temporalTransferNode[S, V any](s expr.Selected[S, V]) querycore.ValueExpres
 }
 func TestTemporalOperationsValidateBeforeZeroLimit(t *testing.T) {
 	d := temporalTransferFields()
-	date, local, at, clock := expr.Value(orm.TimeExpr(d.Day)), expr.Value(orm.TimeExpr(d.Local)), expr.Value(orm.TimeExpr(d.At)), expr.Value(orm.TimeExpr(d.Clock))
+	date, local, at, clock := expr.Value(d.Day), expr.Value(d.Local), expr.Value(d.At), expr.Value(d.Clock)
 	rejectTemporalTransfer(t, d, "date unit zero", expr.AsSelected(expr.TruncateDate(date, 0)))
 	rejectTemporalTransfer(t, d, "date clock unit", expr.AsSelected(expr.TruncateDate(date, expr.DateUnit(expr.TimestampHour))))
 	rejectTemporalTransfer(t, d, "timestamp unit", expr.AsSelected(expr.TruncateLocal(local, 255)))
@@ -73,7 +73,7 @@ func TestTemporalOperationsValidateBeforeZeroLimit(t *testing.T) {
 }
 func TestTemporalCompilerRetainsScopePhaseAndParameters(t *testing.T) {
 	d := temporalTransferFields()
-	year := expr.Year(expr.LocalAt(expr.Value(orm.TimeExpr(d.At)), expr.UTCZone()))
+	year := expr.Year(expr.LocalAt(expr.Value(d.At), expr.UTCZone()))
 	q := rows.OrderScalar(rows.GroupByScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(year)), expr.Group(year)), expr.Asc(year))
 	s, e := rows.CompileRead(rows.ReadScalar(q))
 	if e != nil || !strings.Contains(s.SQL(), "EXTRACT(year FROM") || !strings.Contains(s.SQL(), "TIMEZONE(") {
@@ -94,7 +94,7 @@ func TestTemporalCompilerRetainsScopePhaseAndParameters(t *testing.T) {
 	if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(expr.Count[temporalTransferRow]())), p))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("window hidden in HAVING", e)
 	}
-	v := expr.UnixMillisecondsNullableValue(expr.AsSelected(expr.Min(orm.TimeExpr(d.At))))
+	v := expr.UnixMillisecondsNullableValue(expr.AsSelected(expr.Min(d.At)))
 	if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(rows.From(d.Query()), v), expr.GtValue(expr.OrderNullableValue(v), 0)))); e != nil {
 		t.Fatal("aggregate phase lost", e)
 	}

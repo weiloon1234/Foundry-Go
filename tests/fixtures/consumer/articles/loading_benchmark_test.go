@@ -33,7 +33,7 @@ func BenchmarkSlotListLoading(b *testing.B) {
 		b.Run(fmt.Sprintf("parents-only/%d", size), func(b *testing.B) {
 			for b.Loop() {
 				read(b, func(ctx context.Context, tx *database.Tx) error {
-					_, err := orm.All(ctx, tx, articles.Articles.Query().OrderBy(orm.TextAsc(fields.Slug)).Limit(size))
+					_, err := orm.All(ctx, tx, articles.Articles.Query().OrderBy(orm.Asc(fields.Slug)).Limit(size))
 					return err
 				})
 			}
@@ -41,7 +41,7 @@ func BenchmarkSlotListLoading(b *testing.B) {
 		b.Run(fmt.Sprintf("slots/%d", size), func(b *testing.B) {
 			for b.Loop() {
 				read(b, func(ctx context.Context, tx *database.Tx) error {
-					_, err := orm.All(ctx, tx, articles.Articles.Query().With(x.Title.Relation(articles.Articles.Title), x.Summary.Relation(articles.Articles.Summary), x.SEO.Relation(articles.Articles.SEO)).OrderBy(orm.TextAsc(fields.Slug)).Limit(size))
+					_, err := orm.All(ctx, tx, articles.Articles.Query().With(x.Title.Relation(articles.Articles.Title), x.Summary.Relation(articles.Articles.Summary), x.SEO.Relation(articles.Articles.SEO)).OrderBy(orm.Asc(fields.Slug)).Limit(size))
 					return err
 				})
 			}
@@ -51,7 +51,7 @@ func BenchmarkSlotListLoading(b *testing.B) {
 				var list []articles.Article
 				read(b, func(ctx context.Context, tx *database.Tx) error {
 					var err error
-					list, err = orm.All(ctx, tx, articles.Articles.Query().OrderBy(orm.TextAsc(fields.Slug)).Limit(size))
+					list, err = orm.All(ctx, tx, articles.Articles.Query().OrderBy(orm.Asc(fields.Slug)).Limit(size))
 					return err
 				})
 				references := make([]model.Reference[articles.Article, model.ID[articles.Article]], len(list))

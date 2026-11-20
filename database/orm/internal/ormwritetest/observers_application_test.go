@@ -78,7 +78,7 @@ func TestORMObserversAreApplicationOwnedWithoutLocalFactories(t *testing.T) {
 		if err = app.Start(t.Context()); err != nil {
 			t.Fatal(err)
 		}
-		_, err = orm.Insert(t.Context(), db, table.Table, orm.KeySet(table.Key(), 1), orm.TextSet(table.Name, "input"))
+		_, err = orm.Insert(t.Context(), db, table.Table, orm.Set(table.Key(), 1), orm.Set(table.Name, "input"))
 		if err != nil || invoked != i || observed != i {
 			t.Fatal("observer-only CRUD", err)
 		}

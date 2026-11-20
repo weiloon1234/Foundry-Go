@@ -64,7 +64,7 @@ func TestSensitiveOldAndNewAgree(t *testing.T) {
 		}
 		{
 			v := newmodels.Vaults
-			_, err = orm.Insert(t.Context(), db, v.Table, orm.KeySet(v.Key(), newID), orm.EncryptedSet(v.Token, encrypted.NewText("first")), orm.NullableEncryptedSet(v.Backup, encrypted.NewText("backup")), orm.EncryptedSet(v.Settings, newJSON), orm.NullableEncryptedSet(v.Optional, newJSON))
+			_, err = orm.Insert(t.Context(), db, v.Table, orm.Set(v.Key(), newID), orm.Set(v.Token, encrypted.NewText("first")), orm.Set(v.Backup, encrypted.NewText("backup")), orm.Set(v.Settings, newJSON), orm.Set(v.Optional, newJSON))
 		}
 		if err != nil {
 			t.Fatal(err)
@@ -78,7 +78,7 @@ func TestSensitiveOldAndNewAgree(t *testing.T) {
 		}
 		{
 			v := newmodels.Vaults
-			_, err = orm.Update(t.Context(), db, v.Table.Query(), v.Table.Key(), newID, orm.EncryptedSet(v.Token, encrypted.NewText("second")), orm.NullableEncryptedSetNull(v.Backup), orm.NullableEncryptedSetNull(v.Optional))
+			_, err = orm.Update(t.Context(), db, v.Table.Query(), v.Table.Key(), newID, orm.Set(v.Token, encrypted.NewText("second")), orm.SetNull(v.Backup), orm.SetNull(v.Optional))
 		}
 		if err != nil {
 			t.Fatal(err)
@@ -133,17 +133,17 @@ func TestPasswordOldAndNewAgree(t *testing.T) {
 		db := sensitiveDB(t, store, fieldTestKeys(t))
 		{
 			a := newmodels.Accounts
-			_, err = orm.Insert(t.Context(), db, a.Table, orm.KeySet(a.Key(), newID), orm.ColumnSet(a.Digest, hash), orm.NullableColumnSet(a.Backup, hash))
+			_, err = orm.Insert(t.Context(), db, a.Table, orm.Set(a.Key(), newID), orm.Set(a.Digest, hash), orm.Set(a.Backup, hash))
 		}
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		a := newmodels.Accounts
-		if _, err := orm.Require(t.Context(), db, a.Query().Where(orm.ColumnEq(a.Digest, hash)).OrderBy(orm.ColumnAsc(a.Digest)).Where(orm.KeyEq(a.Key(), newID))); err != nil {
+		if _, err := orm.Require(t.Context(), db, a.Query().Where(orm.Eq(a.Digest, hash)).OrderBy(orm.Asc(a.Digest)).Where(orm.Eq(a.Key(), newID))); err != nil {
 			t.Fatal(err)
 		}
-		current, err := orm.Require(t.Context(), db, a.Query().Where(orm.ColumnEq(a.Digest, hash), orm.KeyEq(a.Key(), newID)).OrderBy(orm.ColumnAsc(a.Digest)))
+		current, err := orm.Require(t.Context(), db, a.Query().Where(orm.Eq(a.Digest, hash), orm.Eq(a.Key(), newID)).OrderBy(orm.Asc(a.Digest)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +168,7 @@ func TestSensitiveStreamingFailureParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	v := newmodels.Vaults
-	inserted, err := orm.Insert(t.Context(), db, v.Table, orm.EncryptedSet(v.Token, encrypted.NewText("private")), orm.EncryptedSet(v.Settings, doc))
+	inserted, err := orm.Insert(t.Context(), db, v.Table, orm.Set(v.Token, encrypted.NewText("private")), orm.Set(v.Settings, doc))
 	if err != nil {
 		t.Fatal(err)
 	}

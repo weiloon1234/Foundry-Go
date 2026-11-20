@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ orm.KeyColumn[n.Project, n.Slug] = n.TeamRecords.Name
+var _ orm.Text[n.Project, n.Slug] = n.TeamRecords.Name

@@ -54,9 +54,9 @@ func runSamples(t *testing.T, instants []string, check func(*database.Tx) error)
 				return err
 			}
 			f := framequeries.Samples
-			draft := []orm.Assignment[framequeries.Sample]{orm.NumberKeySet(f.ID, i+1), orm.NumberSet(f.Band, []int16{10, 11, 13, 14}[i]), orm.NumberSet(f.Amount, amount), orm.TimeSet(f.At, at), orm.TimeSet(f.Date, date), orm.TimeSet(f.Local, local), orm.TimeSet(f.Clock, clock)}
+			draft := []orm.Assignment[framequeries.Sample]{orm.Set(f.ID, i+1), orm.Set(f.Band, []int16{10, 11, 13, 14}[i]), orm.Set(f.Amount, amount), orm.Set(f.At, at), orm.Set(f.Date, date), orm.Set(f.Local, local), orm.Set(f.Clock, clock)}
 			if i < 2 {
-				draft = append(draft, orm.NullableNumberSet(f.Score, []float32{1, 1.5}[i]))
+				draft = append(draft, orm.Set(f.Score, []float32{1, 1.5}[i]))
 			}
 			if _, err := orm.Insert(t.Context(), tx, framequeries.Samples.Table, draft...); err != nil {
 				return err
@@ -72,7 +72,7 @@ func runSamples(t *testing.T, instants []string, check func(*database.Tx) error)
 func frameCounts(t *testing.T, tx *database.Tx, w expr.Window[framequeries.Sample], want []int64) {
 	t.Helper()
 	q := framequeries.Samples.Query()
-	got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), expr.Over(expr.Count[framequeries.Sample](), w)), expr.Asc(expr.Value(orm.NumberKeyExpr(framequeries.Samples.ID))))).All(t.Context(), tx)
+	got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), expr.Over(expr.Count[framequeries.Sample](), w)), expr.Asc(expr.Value(framequeries.Samples.ID)))).All(t.Context(), tx)
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatal("window counts", got, want, err)
 	}
@@ -83,21 +83,21 @@ func TestPostgresTypedNumericRanges(t *testing.T) {
 		// doc-example:begin window-ranges-and-names
 		q := framequeries.Samples.Query()
 		f := framequeries.Samples
-		r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.NumberKeyExpr(f.ID)))))
+		r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.ID))))
 		frameCounts(t, tx, r.Between(r.Preceding(1), r.CurrentRow()), []int64{1, 2, 2, 2}) // doc-example:end window-ranges-and-names
 		frameCounts(t, tx, r.Desc().Between(r.Preceding(1), r.CurrentRow()), []int64{2, 2, 2, 1})
 		frameCounts(t, tx, r.Between(r.Preceding(7), r.Preceding(8)), []int64{0, 0, 0, 0})
 		frameCounts(t, tx, r.Between(r.CurrentRow(), r.Following(1)).ExcludeCurrentRow(), []int64{1, 1, 1, 0})
-		band := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(f.Band)))))
+		band := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.Band))))
 		frameCounts(t, tx, band.Between(band.Preceding(1), band.CurrentRow()), []int64{1, 2, 1, 2})
-		money := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(f.Amount)))))
+		money := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.Amount))))
 		distance, _ := decimal.Parse("0.15")
 		frameCounts(t, tx, money.Between(money.Preceding(distance), money.CurrentRow()), []int64{1, 2, 1, 2})
-		score := expr.NullableNumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.NullableNumberExpr(f.Score)))))
+		score := expr.NullableNumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.Score))))
 		frameCounts(t, tx, score.Between(score.Preceding(0.5), score.CurrentRow()), []int64{1, 2, 2, 2})
 		frameCounts(t, tx, score.Between(score.Preceding(0), score.CurrentRow()), []int64{1, 1, 2, 2})
 		// Selected numeric calculations retain their concrete distance type.
-		bucket := expr.When(expr.ModelPredicate(orm.NumberKeyGt(f.ID, 2)), expr.Param(orm.NumberKeyExpr(f.ID), 1)).Else(expr.Param(orm.NumberKeyExpr(f.ID), 0))
+		bucket := expr.When(expr.ModelPredicate(orm.Gt(f.ID, 2)), expr.Param(f.ID, 1)).Else(expr.Param(f.ID, 0))
 		computed := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(bucket))
 		frameCounts(t, tx, computed.Between(computed.Preceding(0), computed.CurrentRow()), []int64{2, 2, 2, 2})
 		// A RANGE can order the grouped rows by a selected ordinary aggregate.
@@ -106,7 +106,7 @@ func TestPostgresTypedNumericRanges(t *testing.T) {
 		if got, err := rowset.ReadScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), groupCount), expr.Group(bucket))).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{2, 2}) {
 			t.Fatal("RANGE over grouped counts", got, err)
 		}
-		sumRange := expr.NullableNumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Sum(orm.NumberExpr(f.Amount))))
+		sumRange := expr.NullableNumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Sum(f.Amount)))
 		half, _ := decimal.Parse("0.5")
 		sumCount := expr.Over(expr.Count[framequeries.Sample](), sumRange.Between(sumRange.Preceding(half), sumRange.CurrentRow()))
 		if got, err := rowset.ReadScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), sumCount), expr.Group(bucket))).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{1, 1}) {
@@ -121,18 +121,18 @@ func TestPostgresTypedTemporalRanges(t *testing.T) {
 		q := framequeries.Samples.Query()
 		f := framequeries.Samples
 		// doc-example:begin window-ranges-and-names-2
-		r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(f.At)))))
+		r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.At))))
 		day, _ := temporal.Elapsed(24 * time.Hour)
 		frameCounts(t, tx, r.Between(r.Preceding(temporal.Days(1)), r.CurrentRow()), []int64{1, 1, 2, 2})
 		frameCounts(t, tx, r.Between(r.Preceding(day), r.CurrentRow()), []int64{1, 2, 2, 2}) // doc-example:end window-ranges-and-names-2
-		local := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(f.Local)))))
+		local := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.Local))))
 		frameCounts(t, tx, local.Between(local.Preceding(temporal.Days(1)), local.CurrentRow()), []int64{1, 1, 2, 2})
-		date := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(f.Date)))))
+		date := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.Date))))
 		frameCounts(t, tx, date.Between(date.Preceding(temporal.Days(1)), date.CurrentRow()), []int64{1, 2, 3, 3})
-		maybeDate := expr.When(expr.ModelPredicate(orm.NumberKeyGt(f.ID, 2)), expr.Value(orm.TimeExpr(f.Date))).ElseNull()
+		maybeDate := expr.When(expr.ModelPredicate(orm.Gt(f.ID, 2)), expr.Value(f.Date)).ElseNull()
 		nullable := expr.NullableTemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(maybeDate))
 		frameCounts(t, tx, nullable.Between(nullable.Preceding(temporal.Days(1)), nullable.CurrentRow()), []int64{2, 2, 2, 2})
-		clock := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(f.Clock)))))
+		clock := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.Clock))))
 		halfHour, _ := temporal.Elapsed(30 * time.Minute)
 		frameCounts(t, tx, clock.Between(clock.Preceding(halfHour), clock.CurrentRow()), []int64{2, 3, 2, 2})
 		// Explicit component signs preserve meaning under different interval styles.
@@ -144,7 +144,7 @@ func TestPostgresTypedTemporalRanges(t *testing.T) {
 	})
 	runSamples(t, []string{"2024-02-29T12:00:00Z", "2024-03-30T12:00:00Z", "2024-03-31T12:00:00Z", "2024-04-30T12:00:00Z"}, func(tx *database.Tx) error {
 		q := framequeries.Samples.Query()
-		r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(framequeries.Samples.Date)))))
+		r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(framequeries.Samples.Date))))
 		frameCounts(t, tx, r.Between(r.Preceding(temporal.Months(1)), r.CurrentRow()), []int64{1, 2, 3, 3})
 		return nil
 	})
@@ -153,12 +153,12 @@ func TestPostgresTypedTemporalRanges(t *testing.T) {
 func TestRangeFailuresBeforeExecution(t *testing.T) {
 	q := framequeries.Samples.Query()
 	f := framequeries.Samples
-	r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.NumberKeyExpr(f.ID)))))
-	score := expr.NullableNumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.NullableNumberExpr(f.Score)))))
-	clock := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(f.Clock)))))
+	r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.ID))))
+	score := expr.NullableNumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.Score))))
+	clock := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.Clock))))
 	for _, w := range []expr.Window[framequeries.Sample]{
 		r.Between(r.Preceding(-1), r.CurrentRow()),
-		r.Between(r.Preceding(1), r.CurrentRow()).OrderBy(expr.Asc(expr.Value(orm.NumberExpr(f.Amount)))),
+		r.Between(r.Preceding(1), r.CurrentRow()).OrderBy(expr.Asc(expr.Value(f.Amount))),
 		score.Between(score.Preceding(float32(math.Inf(1))), score.CurrentRow()),
 		clock.Between(clock.Preceding(temporal.Days(1)), clock.CurrentRow()),
 	} {

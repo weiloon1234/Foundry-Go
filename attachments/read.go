@@ -122,13 +122,13 @@ func (c Collection[M, K]) scanRows(ctx context.Context, tx *database.Tx, m *Mana
 	}
 	slices.Sort(keys)
 	f := store.Files
-	q := store.Files.Query().Where(orm.TextEq(f.Scope, c.definition.owner.Scope()), orm.TextIn(f.SubjectKey, keys...), orm.TextEq(f.Collection, string(c.Name())), orm.TextIn(f.Locale, locales...), orm.TextEq(f.State, string(Ready)))
+	q := store.Files.Query().Where(orm.Eq(f.Scope, c.definition.owner.Scope()), orm.In(f.SubjectKey, keys...), orm.Eq(f.Collection, string(c.Name())), orm.In(f.Locale, locales...), orm.Eq(f.State, string(Ready)))
 	if id, ok := only.Get(); ok {
-		q = q.Where(orm.KeyEq(f.ID, model.IDFromBytes[store.File](id.Bytes())))
+		q = q.Where(orm.Eq(f.ID, model.IDFromBytes[store.File](id.Bytes())))
 	}
 	count, bytes := 0, 0
 	counts := make(map[string]map[string]int, len(active))
-	err = orm.Each(ctx, tx, q.OrderBy(orm.TextAsc(f.SubjectKey), orm.TextAsc(f.Locale), orm.NumberAsc(f.SortOrder), orm.KeyAsc(f.ID)).Limit(MaxBatchFiles+1), func(row store.File) error {
+	err = orm.Each(ctx, tx, q.OrderBy(orm.Asc(f.SubjectKey), orm.Asc(f.Locale), orm.Asc(f.SortOrder), orm.Asc(f.ID)).Limit(MaxBatchFiles+1), func(row store.File) error {
 		count++
 		properties, err := row.Properties.Text()
 		if err != nil {

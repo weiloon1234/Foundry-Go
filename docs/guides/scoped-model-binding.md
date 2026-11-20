@@ -11,7 +11,7 @@ contains complete typed declarations and a three-level handler.
 ```go
 func Projects(db database.Executor) modelbinding.Resolver[Path, TeamProject] {
 	teams := modelbinding.ByKey(db, orm.Keyed(TeamRecords.Query(), TeamRecords.Key()), func(path Path) model.ID[Team] { return path.Team })
-	return modelbinding.ThroughRelation(db, teams, TeamLinks.Projects.Where(orm.ColumnEq(ProjectRecords.Enabled, true)), orm.TextExpr(ProjectRecords.Slug), func(path Path) Slug { return path.Project })
+	return modelbinding.ThroughRelation(db, teams, TeamLinks.Projects.Where(orm.Eq(ProjectRecords.Enabled, true)), ProjectRecords.Slug, func(path Path) Slug { return path.Project })
 }
 ```
 
@@ -41,7 +41,7 @@ with an explicit typed custom resolver when the domain relationship is different
 func Resolve(db database.Executor) modelbinding.Resolver[Path, Resources] {
 	teamsEndpoint := Projects(db)
 
-	return modelbinding.ThroughSelectedRelation(db, teamsEndpoint, func(previous TeamProject) Project { return previous.Child }, ProjectLinks.Tasks, orm.TextExpr(TaskRecords.Slug), func(path Path) Slug { return path.Task })
+	return modelbinding.ThroughSelectedRelation(db, teamsEndpoint, func(previous TeamProject) Project { return previous.Child }, ProjectLinks.Tasks, TaskRecords.Slug, func(path Path) Slug { return path.Task })
 }
 ```
 

@@ -1,7 +1,5 @@
 package invalid
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"context"
 	"foundry.test/goway/models"
@@ -14,4 +12,4 @@ import (
 var executor database.Executor
 var _ = context.Background
 var _ model.ID[models.Order]
-var _ = databasevalidation.Exists[models.User, string](executor, models.Users.Query(), orm.TextExpr(reads.Groups.Name))
+var _ = databasevalidation.Exists[models.User, string](executor, models.Users.Query(), reads.Groups.Name)

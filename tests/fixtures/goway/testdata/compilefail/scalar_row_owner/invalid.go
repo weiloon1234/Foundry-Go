@@ -1,7 +1,5 @@
 package scalar_row_owner
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -15,10 +13,10 @@ type cTag struct{}
 var a = rows.As[aTag](models.Users.Query(), "a")
 var b = rows.As[bTag](models.Users.Query(), "b")
 var c = rows.As[cTag](models.Users.Query(), "c")
-var ageA = expr.At(rows.Scope(a), orm.NumberExpr(models.Users.Age))
-var ageB = expr.At(rows.Scope(b), orm.NumberExpr(models.Users.Age))
+var ageA = expr.At(rows.Scope(a), models.Users.Age)
+var ageB = expr.At(rows.Scope(b), models.Users.Age)
 var outer = rows.From(models.Users.Query())
-var inner = rows.SelectScalar(outer, expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(models.Users.ID)))))
-var ages = rows.SelectScalar(outer, expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age)))))
+var inner = rows.SelectScalar(outer, expr.AsSelected(expr.Row(expr.Value(models.Users.ID))))
+var ages = rows.SelectScalar(outer, expr.AsSelected(expr.Row(expr.Value(models.Users.Age))))
 var scalar = rows.ScalarRowQuery(rows.From(models.Orders.Query()), ages)
-var _ = expr.GreaterNullable(expr.NullableRow(expr.Value(orm.NumberExpr(models.Users.Age))), scalar)
+var _ = expr.GreaterNullable(expr.NullableRow(expr.Value(models.Users.Age)), scalar)

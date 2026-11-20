@@ -345,7 +345,7 @@ func TestPostgresTelemetryRunCapacityAllowsExistingRun(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			drafts = append(drafts, []orm.Assignment[runRow]{orm.KeySet(runs.Key(), id), orm.TextSet(runs.Instance, Instance("seed")), orm.TextSet(runs.Release, Release("development")), orm.TimeSet(runs.StartedAt, at), orm.TimeSet(runs.HeartbeatAt, at), orm.TimeSet(runs.RetainUntil, until), orm.JSONSet(runs.Runtime, payload)})
+			drafts = append(drafts, []orm.Assignment[runRow]{orm.Set(runs.Key(), id), orm.Set(runs.Instance, Instance("seed")), orm.Set(runs.Release, Release("development")), orm.Set(runs.StartedAt, at), orm.Set(runs.HeartbeatAt, at), orm.Set(runs.RetainUntil, until), orm.Set(runs.Runtime, payload)})
 		}
 		_, err := orm.InsertMany(t.Context(), tx, runs.Table, drafts)
 		return err

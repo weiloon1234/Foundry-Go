@@ -18,10 +18,10 @@ type promotedSelectedClauseOrder[S any] struct{ expr.SelectedOrder[S] }
 func TestCorrelatedSelectedKeysKeepOwnershipPhaseAndOrdering(t *testing.T) {
 	m, o, foreign := declareMembers(), declareOrders(), declareOrders()
 	c := rows.Correlate(rows.From(m.Query()), rows.From(o.Query()))
-	parent := expr.At(rows.OuterScope(c, rows.ModelScope(m.Query())), orm.KeyExpr(m.ID))
-	child := expr.At(rows.InnerScope(c, rows.ModelScope(o.Query())), orm.NumberExpr(o.MemberID))
+	parent := expr.At(rows.OuterScope(c, rows.ModelScope(m.Query())), m.ID)
+	child := expr.At(rows.InnerScope(c, rows.ModelScope(o.Query())), o.MemberID)
 	other := rows.Correlate(rows.From(m.Query()), rows.From(foreign.Query()))
-	foreignChild := expr.At(rows.InnerScope(other, rows.ModelScope(foreign.Query())), orm.NumberExpr(foreign.MemberID))
+	foreignChild := expr.At(rows.InnerScope(other, rows.ModelScope(foreign.Query())), foreign.MemberID)
 	count := expr.Count[rows.Correlation[member, order]]()
 	base := rows.SelectCorrelatedScalar(c.Where(expr.Equal(child, parent)), expr.AsSelected(count))
 	grouped := rows.GroupByCorrelatedScalar(base, expr.Group(child))
@@ -66,7 +66,7 @@ func TestCorrelatedSelectedKeysKeepOwnershipPhaseAndOrdering(t *testing.T) {
 
 func TestValueSetSelectedKeysKeepCodecInputsAndRejectForeignKeys(t *testing.T) {
 	m := declareMembers()
-	input := rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))))))
+	input := rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(m.Nickname)))))
 	base := rows.UnionAllValues(input, input)
 	key := expr.AsSelected(expr.Row(base.Value()))
 	selected := rows.DistinctOnValueSet(base, expr.Key(key)).OrderBy(expr.AscValue(key).NullsLast()).Offset(1).Limit(2)
@@ -78,7 +78,7 @@ func TestValueSetSelectedKeysKeepCodecInputsAndRejectForeignKeys(t *testing.T) {
 	if err != nil || len(got) != 2 || got[0] != value.Of("name") || !got[1].IsNull() {
 		t.Fatal("nullable codec changed", got, err)
 	}
-	otherInput := rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))))))
+	otherInput := rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(m.Nickname)))))
 	other := rows.UnionAllValues(otherInput, otherInput)
 	for name, q := range map[string]rows.ValueSetQuery[value.Nullable[string]]{
 		"foreign key":         rows.DistinctOnValueSet(base, expr.Key(expr.AsSelected(expr.Row(other.Value())))),

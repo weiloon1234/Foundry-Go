@@ -8,4 +8,4 @@ import (
 
 var field orm.NullableEnum[models.User, models.Status]
 
-var _ = expr.NullableTextContains(expr.TextNullableRow(orm.NullableEnumExpr(field)), models.StatusActive)
+var _ = expr.NullableTextContains(expr.TextNullableRow(field), models.StatusActive)

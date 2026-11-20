@@ -7,7 +7,7 @@ import (
 )
 
 // RecordTable separates mutation input from stored binary values.
-// Example: orm.InputColumnSet(Records.Body, Input{1,2}); orm.InputColumnEq(Records.Body, Payload{1,2}).
+// Example: orm.Set(Records.Body, Input{1,2}); orm.Eq(Records.Body, Payload{1,2}).
 type RecordTable struct {
 	orm.Table[Record, int]
 	Body     orm.InputColumn[Record, Input, Payload]
@@ -27,7 +27,7 @@ func declareRecords(options ...orm.Option) RecordTable {
 }
 
 // ViewRow declares an explicit DTO; a partial selection never hydrates Record.
-// Example: rows.Map(Views.Body,expr.Value(orm.InputColumnExpr(Records.Body))).
+// Example: rows.Map(Views.Body,expr.Value(Records.Body)).
 type ViewRow struct {
 	rows.Row[View]
 	Body rows.Field[View, Payload]

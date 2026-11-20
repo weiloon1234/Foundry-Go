@@ -30,7 +30,7 @@ func TestDeclarationIdentityBindingAndFactory(t *testing.T) {
 		return adapterTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Tenant)}
 	})
 	f, err := factory.Define(records.Table, func(_ context.Context, n factory.Sequence) ([]orm.Assignment[adapterRecord], error) {
-		return []orm.Assignment[adapterRecord]{orm.KeySet(records.Key(), int64(n)), orm.TextSet(records.Tenant, "allowed")}, nil
+		return []orm.Assignment[adapterRecord]{orm.Set(records.Key(), int64(n)), orm.Set(records.Tenant, "allowed")}, nil
 	})
 	must(t, err)
 	created, err := f.CreateMany(ctx, db, 3)
@@ -44,7 +44,7 @@ func TestDeclarationIdentityBindingAndFactory(t *testing.T) {
 	if len(keys) != 3 {
 		t.Fatal("identity cardinality")
 	}
-	resolver := modelbinding.ByKey(db, orm.Keyed(records.Query().Where(orm.TextEq(records.Tenant, "allowed")), records.Key()), func(id int64) int64 { return id })
+	resolver := modelbinding.ByKey(db, orm.Keyed(records.Query().Where(orm.Eq(records.Tenant, "allowed")), records.Key()), func(id int64) int64 { return id })
 	found, err := modelbinding.Resolve(resolver, ctx, 2)
 	must(t, err)
 	if found.ID != 2 {

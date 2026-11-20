@@ -1,7 +1,5 @@
 package natural_test
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"testing"
 
@@ -38,10 +36,10 @@ func TestPostgresNaturalKeyJoins(t *testing.T) {
 		locations := rows.As[locationAlias](models.Locations.Query(), "location")
 		country := rows.Scope(countries)
 		location := rows.Scope(locations)
-		natural := rows.InnerJoin(countries, locations, rows.On(expr.At(country, orm.KeyExpr(models.Countries.Code)), expr.At(location, orm.TextExpr(models.Locations.CountryCode))))
+		natural := rows.InnerJoin(countries, locations, rows.On(expr.At(country, models.Countries.Code), expr.At(location, models.Locations.CountryCode)))
 		nc := rows.LeftScope(natural, rows.Scope(countries))
 		nl := rows.RightScope(natural, rows.Scope(locations))
-		naturalReport := rows.Select(natural, reports.LocationRows, rows.MapSelected(reports.LocationRows.CountryCode, expr.AsSelected(expr.Row(expr.At(nc, orm.KeyExpr(models.Countries.Code))))), rows.MapSelected(reports.LocationRows.LocationCode, expr.AsSelected(expr.Row(expr.At(nl, orm.KeyExpr(models.Locations.Code))))), rows.MapSelected(reports.LocationRows.CountryName, expr.AsSelected(expr.Row(expr.At(nc, orm.TextExpr(models.Countries.Name))))))
+		naturalReport := rows.Select(natural, reports.LocationRows, rows.MapSelected(reports.LocationRows.CountryCode, expr.AsSelected(expr.Row(expr.At(nc, models.Countries.Code)))), rows.MapSelected(reports.LocationRows.LocationCode, expr.AsSelected(expr.Row(expr.At(nl, models.Locations.Code)))), rows.MapSelected(reports.LocationRows.CountryName, expr.AsSelected(expr.Row(expr.At(nc, models.Countries.Name)))))
 		naturalRows, err := rows.Read(naturalReport).All(t.Context(), counter)
 		if err != nil {
 			return err

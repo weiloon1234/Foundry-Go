@@ -67,7 +67,7 @@ func TestJoinedBatchTreeCountsAndPivotOwnership(t *testing.T) {
 	q := orm.WithRelationLimits(j.Parents.Query().With(r), orm.RelationLimits{BatchSize: 1, MaxRows: 100, MaxDepth: 3})
 	// Load uses defaults, so use a query to exercise the custom batch size, then
 	// inspect the same tree using explicit parent loading without a parent read.
-	parents, err := orm.All(ctx, db, q.Where(orm.KeyIn(j.Parents.ID, 1, 2)))
+	parents, err := orm.All(ctx, db, q.Where(orm.In(j.Parents.ID, 1, 2)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestJoinedFailuresPublishNoPartialParents(t *testing.T) {
 				}
 				want = nil
 			case "duplicate_order":
-				r = r.OrderByPivot(orm.TextAsc(j.Pivots.Role), orm.TextDesc(j.Pivots.Role))
+				r = r.OrderByPivot(orm.Asc(j.Pivots.Role), orm.Desc(j.Pivots.Role))
 			}
 			if mode == "of_many_empty" {
 				_, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Chosen.OfMany()), []j.Parent{{ID: 1}})
@@ -204,7 +204,7 @@ func TestInvalidMorphDiscriminatorFailsBeforeSQL(t *testing.T) {
 	table := orm.Define("invalid_morph", func(b orm.Builder[invalidJoinedMorph], m *invalidJoinedMorph) fields {
 		return fields{orm.TableOf(b, &m.ID), orm.ManyOf(b, &m.Children)}
 	})
-	r := orm.MorphManyOf(table.Children, orm.KeyExpr(table.Key()), orm.NullableNumberExpr(j.Pivots.ParentID), orm.ColumnExpr(j.Pivots.Kind))
+	r := orm.MorphManyOf(table.Children, orm.JoinKeys(table.Key(), j.Pivots.ParentID), j.Pivots.Kind)
 	g := &goldenCapture{reply: joinedReply}
 	ctx := t.Context()
 	db := g.open(ctx)
@@ -222,7 +222,7 @@ func TestJoinedLockedTransactionAndEmptySets(t *testing.T) {
 	db := g.open(ctx)
 	t.Cleanup(func() { _ = db.Close(context.Background()) })
 	err := db.Transaction(ctx, func(tx *database.Tx) error {
-		rows, err := orm.AllLocked(ctx, tx, orm.Lock(j.Parents.Query().Where(orm.KeyEq(j.Parents.ID, 1)).With(j.Peers)))
+		rows, err := orm.AllLocked(ctx, tx, orm.Lock(j.Parents.Query().Where(orm.Eq(j.Parents.ID, 1)).With(j.Peers)))
 		if err != nil {
 			return err
 		}

@@ -27,12 +27,12 @@ func uuidFields() uuidTable {
 func TestUUIDComparisonDeclarationOwnership(t *testing.T) {
 	d, foreign := uuidFields(), uuidFields()
 	id := model.ID[uuidRecord]{}
-	for _, p := range []orm.Predicate[uuidRecord]{orm.UUIDGreater(orm.KeyExpr(foreign.Key()), id), orm.UUIDLess(orm.KeyExpr(orm.Key[uuidRecord, model.ID[uuidRecord]]{}), id), orm.UUIDGreater[uuidRecord, uuidRecord](nil, id)} {
+	for _, p := range []orm.Predicate[uuidRecord]{orm.UUIDGreater(foreign.Key(), id), orm.UUIDLess(orm.Key[uuidRecord, model.ID[uuidRecord]]{}, id), orm.UUIDGreater(orm.NullableColumn[uuidRecord, model.ID[uuidRecord]]{}, id)} {
 		if _, err := orm.Compile(d.Query().Where(p)); err == nil {
 			t.Fatal("foreign/zero UUID comparison accepted")
 		}
 	}
-	for _, p := range []orm.Predicate[uuidRecord]{orm.UUIDLess(orm.KeyExpr(d.Key()), id), orm.UUIDLessOrEqual(orm.NullableColumnExpr(d.Other), id), orm.UUIDGreater(orm.KeyExpr(d.Key()), id), orm.UUIDGreaterOrEqual(orm.NullableColumnExpr(d.Other), id)} {
+	for _, p := range []orm.Predicate[uuidRecord]{orm.UUIDLess(d.Key(), id), orm.UUIDLessOrEqual(d.Other, id), orm.UUIDGreater(d.Key(), id), orm.UUIDGreaterOrEqual(d.Other, id)} {
 		s, err := orm.Compile(d.Query().Where(p))
 		if err != nil || !strings.Contains(s.SQL(), "$1") {
 			t.Fatal(s, err)

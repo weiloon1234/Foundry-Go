@@ -43,10 +43,10 @@ type SubjectTable struct {
 	// Table provides Subject queries and writes. Example: Subjects.Query().Limit(10).
 	orm.Table[Subject, string]
 	// Scope binds the persisted Subject.Scope column.
-	// Example: orm.TextSet(Subjects.Scope, scope).
+	// Example: orm.Set(Subjects.Scope, scope).
 	Scope orm.Text[Subject, string]
 	// Identity binds the persisted Subject.Identity column.
-	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.JSONSet(Subjects.Identity, encoded) }.
+	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.Set(Subjects.Identity, encoded) }.
 	Identity orm.JSON[Subject, model.Identity]
 }
 
@@ -64,25 +64,25 @@ type EntryTable struct {
 	// Table provides Entry queries and writes. Example: Entries.Query().Limit(10).
 	orm.Table[Entry, model.ID[Entry]]
 	// ID binds the persisted Entry.ID column.
-	// Example: orm.KeyEq(Entries.ID, id).
+	// Example: orm.Eq(Entries.ID, id).
 	ID orm.Key[Entry, model.ID[Entry]]
 	// Scope binds the persisted Entry.Scope column.
-	// Example: orm.TextSet(Entries.Scope, scope).
+	// Example: orm.Set(Entries.Scope, scope).
 	Scope orm.Text[Entry, string]
 	// SubjectKey binds the persisted Entry.SubjectKey column.
-	// Example: orm.TextSet(Entries.SubjectKey, subjectKey).
+	// Example: orm.Set(Entries.SubjectKey, subjectKey).
 	SubjectKey orm.Text[Entry, string]
 	// SecretHash binds the persisted Entry.SecretHash column.
-	// Example: orm.TextSet(Entries.SecretHash, secretHash).
+	// Example: orm.Set(Entries.SecretHash, secretHash).
 	SecretHash orm.Text[Entry, string]
 	// BindingHash binds the persisted Entry.BindingHash column.
-	// Example: orm.TextSet(Entries.BindingHash, bindingHash).
+	// Example: orm.Set(Entries.BindingHash, bindingHash).
 	BindingHash orm.Text[Entry, string]
 	// CreatedAt binds the caller-supplied creation time; the ORM does not automatically populate or refresh it.
-	// Example: orm.TimeSet(Entries.CreatedAt, createdAt).
+	// Example: orm.Set(Entries.CreatedAt, createdAt).
 	CreatedAt orm.Time[Entry, temporal.DateTime]
 	// ExpiresAt binds the persisted Entry.ExpiresAt column.
-	// Example: orm.TimeSet(Entries.ExpiresAt, expiresAt).
+	// Example: orm.Set(Entries.ExpiresAt, expiresAt).
 	ExpiresAt orm.Time[Entry, temporal.DateTime]
 }
 

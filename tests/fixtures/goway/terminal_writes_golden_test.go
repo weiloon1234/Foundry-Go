@@ -79,20 +79,20 @@ func TestTerminalWritesGolden(t *testing.T) {
 
 				f := n.Members
 				q := f.Query()
-				draft := []orm.Assignment[n.Member]{orm.KeySet(f.Key(), 1), orm.InputTextSet(f.Name, " input "), orm.ColumnSet(f.Body, []byte{1})}
+				draft := []orm.Assignment[n.Member]{orm.Set(f.Key(), 1), orm.Set(f.Name, " input "), orm.Set(f.Body, []byte{1})}
 				switch operation {
 				case "create_each":
 					_, err := orm.CreateEach(ctx, db, q, [][]orm.Assignment[n.Member]{draft, draft})
 					check(err)
 				case "create_or_first", "create_or_first_conflict":
-					_, err := orm.CreateOrFirst(ctx, db, q.Where(orm.KeyEq(f.ID, 1)), draft...)
+					_, err := orm.CreateOrFirst(ctx, db, q.Where(orm.Eq(f.ID, 1)), draft...)
 					check(err)
 				case "lookup_found", "lookup_create":
-					_, err := orm.FirstOrCreate(ctx, db, q.Where(orm.KeyEq(f.ID, 1)), draft...)
+					_, err := orm.FirstOrCreate(ctx, db, q.Where(orm.Eq(f.ID, 1)), draft...)
 					check(err)
 				case "lookup_update":
-					_, err := orm.UpdateOrCreate(ctx, db, q.Where(orm.KeyEq(f.ID, 1)), draft, func(context.Context, *database.Tx, n.Member) ([]orm.Assignment[n.Member], error) {
-						return []orm.Assignment[n.Member]{orm.InputTextSet(f.Name, " changed ")}, nil
+					_, err := orm.UpdateOrCreate(ctx, db, q.Where(orm.Eq(f.ID, 1)), draft, func(context.Context, *database.Tx, n.Member) ([]orm.Assignment[n.Member], error) {
+						return []orm.Assignment[n.Member]{orm.Set(f.Name, " changed ")}, nil
 					})
 					check(err)
 				case "prune", "mass_prune":

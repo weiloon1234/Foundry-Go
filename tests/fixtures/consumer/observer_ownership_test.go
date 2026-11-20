@@ -33,7 +33,7 @@ func TestPostgresObserverOwnershipFromProviders(t *testing.T) {
 			return func() orm.Hooks[models.User] {
 				instantiated = append(instantiated, name)
 				return orm.Hooks[models.User]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[models.User]) error {
-					return orm.WriteSet(draft, orm.TextSet(models.Users.Email, email))
+					return orm.WriteSet(draft, orm.Set(models.Users.Email, email))
 				}}
 			}, nil
 		})
@@ -63,7 +63,7 @@ func TestPostgresObserverOwnershipFromProviders(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+namespace+`"`); err != nil {
 			return err
 		}
-		item, err := orm.Insert(t.Context(), tx, models.Users.Table, orm.TextSet(models.Users.Email, "original"), orm.NumberSet(models.Users.Age, 0), orm.EnumSet(models.Users.Status, models.StatusActive), orm.EnumSet(models.Users.Level, models.LevelBasic))
+		item, err := orm.Insert(t.Context(), tx, models.Users.Table, orm.Set(models.Users.Email, "original"), orm.Set(models.Users.Age, 0), orm.Set(models.Users.Status, models.StatusActive), orm.Set(models.Users.Level, models.LevelBasic))
 		if err != nil {
 			return err
 		}

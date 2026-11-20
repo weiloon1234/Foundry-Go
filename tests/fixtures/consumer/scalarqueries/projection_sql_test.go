@@ -17,10 +17,10 @@ import (
 func TestCalculationProjectionSQLParity(t *testing.T) {
 	f, r := scalarqueries.Samples, scalarqueries.Calculations
 	selected := rows.Select(rows.From(f.Query()), r.Row,
-		rows.Map(r.ID, expr.Value(orm.NumberKeyExpr(f.ID))),
-		rows.MapSelected(r.Caption, expr.AsSelected(expr.Lower(expr.Trim(expr.Value(orm.TextExpr(f.Name)))))),
-		rows.MapSelected(r.LineTotal, expr.AsSelected(expr.Multiply(expr.DecimalOf(expr.Value(orm.NumberExpr(f.Quantity))), expr.Value(orm.NumberExpr(f.Amount))))),
-		rows.MapSelected(r.AmountWithTax, expr.AsSelected(expr.AddNullable(expr.NullableRow(expr.Value(orm.NumberExpr(f.Amount))), expr.Value(orm.NullableNumberExpr(f.Tax))))))
+		rows.Map(r.ID, expr.Value(f.ID)),
+		rows.MapSelected(r.Caption, expr.AsSelected(expr.Lower(expr.Trim(expr.Value(f.Name))))),
+		rows.MapSelected(r.LineTotal, expr.AsSelected(expr.Multiply(expr.DecimalOf(expr.Value(f.Quantity)), expr.Value(f.Amount)))),
+		rows.MapSelected(r.AmountWithTax, expr.AsSelected(expr.AddNullable(expr.NullableRow(expr.Value(f.Amount)), expr.Value(f.Tax)))))
 	got, err := rows.CompileRead(rows.Read(selected))
 	if err != nil {
 		t.Fatal(err)
@@ -33,10 +33,10 @@ func TestCalculationProjectionSQLParity(t *testing.T) {
 
 func TestDerivedAggregateSQLParity(t *testing.T) {
 	f, r := scalarqueries.Samples, scalarqueries.Calculations
-	selected := rows.Select(rows.From(f.Query().Where(orm.NumberGt(f.Quantity, 0))), r.Row,
-		rows.Map(r.ID, expr.Value(orm.NumberKeyExpr(f.ID))), rows.MapSelected(r.Caption, expr.AsSelected(expr.Lower(expr.Trim(expr.Value(orm.TextExpr(f.Name)))))),
-		rows.MapSelected(r.LineTotal, expr.AsSelected(expr.Multiply(expr.DecimalOf(expr.Value(orm.NumberExpr(f.Quantity))), expr.Value(orm.NumberExpr(f.Amount))))),
-		rows.MapSelected(r.AmountWithTax, expr.AsSelected(expr.AddNullable(expr.NullableRow(expr.Value(orm.NumberExpr(f.Amount))), expr.Value(orm.NullableNumberExpr(f.Tax))))))
+	selected := rows.Select(rows.From(f.Query().Where(orm.Gt(f.Quantity, 0))), r.Row,
+		rows.Map(r.ID, expr.Value(f.ID)), rows.MapSelected(r.Caption, expr.AsSelected(expr.Lower(expr.Trim(expr.Value(f.Name))))),
+		rows.MapSelected(r.LineTotal, expr.AsSelected(expr.Multiply(expr.DecimalOf(expr.Value(f.Quantity)), expr.Value(f.Amount)))),
+		rows.MapSelected(r.AmountWithTax, expr.AsSelected(expr.AddNullable(expr.NullableRow(expr.Value(f.Amount)), expr.Value(f.Tax)))))
 	derived := rows.AsRecord[computedLines](rows.CTE("computed_lines", rows.RecordOf(selected)), "lines")
 	line, tax := rows.At(rows.Scope(derived), r.LineTotal), rows.At(rows.Scope(derived), r.AmountWithTax)
 
@@ -70,9 +70,9 @@ func TestDerivedAggregateSQLParity(t *testing.T) {
 func TestDerivedCountSQLParity(t *testing.T) {
 	f, r := scalarqueries.Samples, scalarqueries.Calculations
 	selected := rows.Select(rows.From(f.Query()), r.Row,
-		rows.Map(r.ID, expr.Value(orm.NumberKeyExpr(f.ID))), rows.MapSelected(r.Caption, expr.AsSelected(expr.Lower(expr.Trim(expr.Value(orm.TextExpr(f.Name)))))),
-		rows.MapSelected(r.LineTotal, expr.AsSelected(expr.Multiply(expr.DecimalOf(expr.Value(orm.NumberExpr(f.Quantity))), expr.Value(orm.NumberExpr(f.Amount))))),
-		rows.MapSelected(r.AmountWithTax, expr.AsSelected(expr.AddNullable(expr.NullableRow(expr.Value(orm.NumberExpr(f.Amount))), expr.Value(orm.NullableNumberExpr(f.Tax))))))
+		rows.Map(r.ID, expr.Value(f.ID)), rows.MapSelected(r.Caption, expr.AsSelected(expr.Lower(expr.Trim(expr.Value(f.Name))))),
+		rows.MapSelected(r.LineTotal, expr.AsSelected(expr.Multiply(expr.DecimalOf(expr.Value(f.Quantity)), expr.Value(f.Amount)))),
+		rows.MapSelected(r.AmountWithTax, expr.AsSelected(expr.AddNullable(expr.NullableRow(expr.Value(f.Amount)), expr.Value(f.Tax)))))
 	derived := rows.AsRecord[computedLines](rows.CTE("computed_lines", rows.RecordOf(selected)), "lines")
 	tax := rows.At(rows.Scope(derived), r.AmountWithTax)
 

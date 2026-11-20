@@ -11,7 +11,7 @@ import (
 // Window is an immutable scope-owned partition, order and frame. Its zero value
 // means OVER ().
 //
-// Example: expr.Window[User]{}.OrderBy(expr.Asc(expr.Value(orm.KeyExpr(Users.ID))))
+// Example: expr.Window[User]{}.OrderBy(expr.Asc(expr.Value(Users.ID)))
 type Window[S any] struct {
 	_    [0]*S
 	data ormcore.Window

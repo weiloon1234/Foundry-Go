@@ -6,4 +6,4 @@ import (
 	"foundry.test/consumer/inputqueries"
 )
 
-var _ = orm.InputTextSet(inputqueries.Members.Email, inputqueries.StoredEmail("stored"))
+var _ = orm.Set(inputqueries.Members.Email, inputqueries.StoredEmail("stored"))

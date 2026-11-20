@@ -20,7 +20,7 @@ func TestWhereRawKeepsScopesAndTransaction(t *testing.T) {
 		if ctx.Value(tenantKey{}) != int64(7) {
 			return nil, errors.New("missing tenant")
 		}
-		return querycore.PredicateNode(KeyEq(r.Key(), 7).expression), nil
+		return querycore.PredicateNode(Eq(r.Key(), 7).expression), nil
 	}}}
 	began := false
 	calls := 0
@@ -52,12 +52,12 @@ func TestWhereRawCompositionRetainsOwnership(t *testing.T) {
 	good := WhereRaw[rawRecord]("true")
 	bad := good
 	bad.rawScope = reflect.TypeFor[int]()
-	for _, p := range []Predicate[rawRecord]{good, And(good, KeyEq(r.Key(), 1)), And(KeyEq(r.Key(), 1), good), Or(good, Not(good))} {
+	for _, p := range []Predicate[rawRecord]{good, And(good, Eq(r.Key(), 1)), And(Eq(r.Key(), 1), good), Or(good, Not(good))} {
 		if err := validateQuery(r.Query().Where(p).state); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, p := range []Predicate[rawRecord]{bad, Not(bad), And(bad, KeyEq(r.Key(), 1)), And(good, KeyEq(r.Key(), 1), KeyEq(other.Key(), 1)), And(good, Predicate[rawRecord]{})} {
+	for _, p := range []Predicate[rawRecord]{bad, Not(bad), And(bad, Eq(r.Key(), 1)), And(good, Eq(r.Key(), 1), Eq(other.Key(), 1)), And(good, Predicate[rawRecord]{})} {
 		if err := validateQuery(r.Query().Where(p).state); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid ownership accepted", err)
 		}

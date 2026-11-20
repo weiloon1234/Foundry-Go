@@ -9,7 +9,7 @@ current database target. Consult the relevant query/model guide for the operatio
 
 - Preserve [typed declaration roles](../docs/guides/model-declarations.md):
   `CreatedAtOf`/`UpdatedAtOf` for managed timestamps, `Input*` for every mutated
-  field, and primary roles through key adapters. `PrimaryOf` is needed only for
+  field, and primary roles through `NumberKey`/`TextKey`. `PrimaryOf` is needed only for
   primary insert-select targets. Require the exact declaration's `SoftDeletable`
   token for force-delete paths; it never grants visibility or authorization.
 - Extend the existing AST, declaration metadata, PostgreSQL compiler and executor.

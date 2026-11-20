@@ -40,10 +40,10 @@ func TestORMPruneRegistryRollbackAndMassAcknowledgement(t *testing.T) {
 	_, err := db.Exec(ctx, `CREATE TABLE prune_registry_records(id uuid PRIMARY KEY,name text NOT NULL)`)
 	must(t, err)
 	for _, name := range []string{"expired", "expired", "retained"} {
-		_, err := orm.Insert(ctx, db, f.Table, orm.TextSet(f.Name, name))
+		_, err := orm.Insert(ctx, db, f.Table, orm.Set(f.Name, name))
 		must(t, err)
 	}
-	selection := f.Query().Where(orm.TextEq(f.Name, "expired"))
+	selection := f.Query().Where(orm.Eq(f.Name, "expired"))
 	r, err := prune.New(prune.ORMModel("app.records", selection, prune.Lifecycle))
 	must(t, err)
 	result, err := r.Run(ctx, db, prune.Options{BatchSize: 2, MaxBatches: 1})

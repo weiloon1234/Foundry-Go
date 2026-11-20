@@ -6,4 +6,4 @@ import (
 	"foundry.test/consumer/inputqueries"
 )
 
-var _ = orm.InputTextEq(inputqueries.Members.Email, inputqueries.EmailInput{})
+var _ = orm.Eq(inputqueries.Members.Email, inputqueries.EmailInput{})

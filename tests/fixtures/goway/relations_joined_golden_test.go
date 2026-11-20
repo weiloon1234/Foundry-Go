@@ -44,7 +44,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Peers.Where(orm.NumberGt(j.Targets.Rank, 0)).WherePivot(orm.TextEq(j.Pivots.Role, "admin")).OrderByPivot(orm.TextDesc(j.Pivots.Role)).OrderBy(orm.TextAsc(j.Targets.Name)).With(j.TargetParent).WithPivot(j.PivotParent)), []j.Parent{{ID: 1}, {ID: 2}})
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Peers.Where(orm.Gt(j.Targets.Rank, 0)).WherePivot(orm.Eq(j.Pivots.Role, "admin")).OrderByPivot(orm.Desc(j.Pivots.Role)).OrderBy(orm.Asc(j.Targets.Name)).With(j.TargetParent).WithPivot(j.PivotParent)), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -113,7 +113,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Chosen.OfMany(orm.NumberDesc(j.Targets.Rank))), []j.Parent{{ID: 1}, {ID: 2}})
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Chosen.OfMany(orm.Desc(j.Targets.Rank))), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -315,9 +315,9 @@ func TestJoinedExistenceSQLMatchesOldAPI(t *testing.T) {
 
 				switch family {
 				case "pivot":
-					_, err = orm.Count(ctx, db, j.Parents.Query().Where(orm.Has(j.Peers.WherePivot(orm.TextEq(j.Pivots.Role, "admin")), orm.NumberGt(j.Targets.Rank, 1))))
+					_, err = orm.Count(ctx, db, j.Parents.Query().Where(orm.Has(j.Peers.WherePivot(orm.Eq(j.Pivots.Role, "admin")), orm.Gt(j.Targets.Rank, 1))))
 				case "hop":
-					_, err = orm.Count(ctx, db, j.Parents.Query().Where(orm.Not(orm.Has(j.TargetsThrough, orm.NumberGt(j.Targets.Rank, 1)))))
+					_, err = orm.Count(ctx, db, j.Parents.Query().Where(orm.Not(orm.Has(j.TargetsThrough, orm.Gt(j.Targets.Rank, 1)))))
 				case "morph_pivot":
 					_, err = orm.Count(ctx, db, j.Parents.Query().Where(orm.Has(j.MorphPeers)))
 				case "morph_to":

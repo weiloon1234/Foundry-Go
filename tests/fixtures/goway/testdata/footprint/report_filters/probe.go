@@ -8,9 +8,9 @@ import (
 )
 
 func Compile() (orm.Statement, error) {
-	note := expr.TextNullableRow(orm.NullableTextExpr(models.Users.Nickname))
-	state := expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status)))
-	nullable := expr.CompareNullableRow(expr.Value(orm.NullableTextExpr(models.Users.Nickname)))
-	p := expr.And(expr.In(state, models.StatusActive), expr.Or(expr.NullableNe(nullable, ""), expr.IsNull(nullable)), expr.Or(expr.Not(expr.NullableTextContains(note, "Ada")), expr.IsNull(note)), expr.Has(models.UserRelations.Orders, expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 100))))
+	note := expr.TextNullableRow(models.Users.Nickname)
+	state := expr.CompareRow(expr.Value(models.Users.Status))
+	nullable := expr.CompareNullableRow(expr.Value(models.Users.Nickname))
+	p := expr.And(expr.In(state, models.StatusActive), expr.Or(expr.NullableNe(nullable, ""), expr.IsNull(nullable)), expr.Or(expr.Not(expr.NullableTextContains(note, "Ada")), expr.IsNull(note)), expr.Has(models.UserRelations.Orders, expr.ModelPredicate(orm.Gt(models.Orders.TotalCents, 100))))
 	return rows.CompileRead(rows.Read(rows.FromModel(models.Users.Query()).Where(p)))
 }

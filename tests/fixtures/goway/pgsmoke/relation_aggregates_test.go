@@ -33,7 +33,7 @@ func TestStage4dRelationAggregatePostgres(t *testing.T) {
 		must(t, err)
 	}
 	statements = 0
-	parents, err := orm.All(ctx, db, orm.WithRelationLimits(j.Parents.Query().OrderBy(orm.KeyAsc(j.Parents.ID)).With(j.ParentAggregates.Count, j.ParentAggregates.Total), orm.RelationLimits{BatchSize: 2, MaxRows: 100, MaxDepth: 3}))
+	parents, err := orm.All(ctx, db, orm.WithRelationLimits(j.Parents.Query().OrderBy(orm.Asc(j.Parents.ID)).With(j.ParentAggregates.Count, j.ParentAggregates.Total), orm.RelationLimits{BatchSize: 2, MaxRows: 100, MaxDepth: 3}))
 	must(t, err)
 	if statements != 5 || len(parents) != 3 {
 		t.Fatal("per-slot batches", statements, len(parents))
@@ -83,19 +83,19 @@ func TestStage4dRelationAggregatePostgres(t *testing.T) {
 			t.Fatal("edge counts", i, n, m)
 		}
 	}
-	distinct := j.Parents.Count.Using(expr.Related(j.Peers, expr.CountDistinctField(orm.KeyExpr(j.Targets.ID))))
+	distinct := j.Parents.Count.Using(expr.Related(j.Peers, expr.CountDistinctField(j.Targets.ID)))
 	peers, err = orm.LoadFrom(ctx, db, j.Parents.Query().With(distinct), parents)
 	must(t, err)
 	if n, _ := peers[0].Count.Get(); n != 2 {
 		t.Fatal("distinct targets", n)
 	}
-	filtered := j.ParentAggregates.Count.Using(expr.Related(j.DirectTargets, expr.Filter(expr.Count[j.Target](), expr.Gt(expr.OrderRow(expr.Value(orm.NumberExpr(j.Targets.Rank))), 8))))
+	filtered := j.ParentAggregates.Count.Using(expr.Related(j.DirectTargets, expr.Filter(expr.Count[j.Target](), expr.Gt(expr.OrderRow(expr.Value(j.Targets.Rank)), 8))))
 	peers, err = orm.LoadFrom(ctx, db, j.Parents.Query().With(filtered), parents)
 	must(t, err)
 	if n, _ := peers[0].Count.Get(); n != 1 {
 		t.Fatal("aggregate FILTER", n)
 	}
-	if _, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Parents.Count.Using(expr.Related(j.Chosen, expr.Filter(expr.Count[j.Target](), expr.Eq(expr.Value(orm.NumberExpr(j.Targets.Rank)), -1))))), parents); !errors.Is(err, database.TooManyRows) {
+	if _, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Parents.Count.Using(expr.Related(j.Chosen, expr.Filter(expr.Count[j.Target](), expr.Eq(expr.Value(j.Targets.Rank), -1))))), parents); !errors.Is(err, database.TooManyRows) {
 		t.Fatal("FILTER concealed singular cardinality", err)
 	}
 	statements = 0
@@ -125,12 +125,12 @@ func TestStage4dRelationAggregatePostgres(t *testing.T) {
 	}
 	rollback := errors.New("rollback aggregate fixture")
 	err = db.Transaction(ctx, func(tx *database.Tx) error {
-		_, err := orm.Insert(ctx, tx, j.Targets.Table, orm.KeySet(j.Targets.ID, 14), orm.NumberSet(j.Targets.ParentID, 1), orm.TextSet(j.Targets.Name, "new"), orm.NumberSet(j.Targets.Rank, 1))
+		_, err := orm.Insert(ctx, tx, j.Targets.Table, orm.Set(j.Targets.ID, 14), orm.Set(j.Targets.ParentID, 1), orm.Set(j.Targets.Name, "new"), orm.Set(j.Targets.Rank, 1))
 		if err != nil {
 			return err
 		}
 		statements = 0
-		out, err := orm.AllLocked(ctx, tx, orm.Lock(j.Parents.Query().Where(orm.KeyEq(j.Parents.ID, 1)).With(j.ParentAggregates.Count)))
+		out, err := orm.AllLocked(ctx, tx, orm.Lock(j.Parents.Query().Where(orm.Eq(j.Parents.ID, 1)).With(j.ParentAggregates.Count)))
 		if err != nil {
 			return err
 		}

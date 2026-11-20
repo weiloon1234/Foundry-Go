@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/orm"
+
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -17,10 +17,10 @@ import (
 func TestConditionalCollationRequiresEveryResultInput(t *testing.T) {
 	plain := expr.Constant[textLiftRecord](codec.String[textLiftState](), textLiftActive)
 	nullablePlain := expr.NullableRow(plain)
-	marked := expr.Row(expr.Value(orm.EnumExpr(textLiftTable.State)))
-	nullableMarked := expr.Row(expr.Value(orm.NullableEnumExpr(textLiftTable.Nullable)))
+	marked := expr.Row(expr.Value(textLiftTable.State))
+	nullableMarked := expr.Row(expr.Value(textLiftTable.Nullable))
 	p, n, m, mn := expr.AsSelected(plain), expr.AsSelected(nullablePlain), expr.AsSelected(marked), expr.AsSelected(nullableMarked)
-	condition := expr.Eq(expr.Value(orm.KeyExpr(textLiftTable.Key())), int64(1))
+	condition := expr.Eq(expr.Value(textLiftTable.Key()), int64(1))
 	groupCondition := expr.Grouped(condition)
 	window := expr.WindowFor(rows.ModelScope(textLiftTable.Query()))
 	for name, input := range map[string]expr.Selected[textLiftRecord, value.Nullable[textLiftState]]{
@@ -94,7 +94,7 @@ func TestTextCastParametersIgnoreExemplarCollationMark(t *testing.T) {
 			t.Fatal("cast lost decoding validation", err)
 		}
 	}
-	parameter := expr.Param(orm.EnumExpr(textLiftTable.State), textLiftActive)
+	parameter := expr.Param(textLiftTable.State, textLiftActive)
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(textLiftTable.Query()), expr.AsSelected(expr.Collate(parameter, expr.CollationC))))); err != nil {
 		t.Fatal("text-cast enum parameter rejected collation", err)
 	}

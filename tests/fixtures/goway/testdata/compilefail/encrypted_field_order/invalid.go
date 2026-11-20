@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.TextAsc(s.Vaults.Token)
+var _ = orm.Asc(s.Vaults.Token)

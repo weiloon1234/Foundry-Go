@@ -33,14 +33,14 @@ func Accounts(db database.Executor) AccountProvider {
 func NewLogin(db AccountStore, provider AccountProvider, hasher *password.Hasher, requiresMFA func(context.Context, Account) (bool, error)) (*Login, error) {
 	return auth.NewPasswordLogin(provider, hasher, auth.PasswordModel[Account, string]{
 		Lock: func(ctx context.Context, tx *database.Tx, account Account) (value.Optional[Account], error) {
-			return orm.FirstLocked(ctx, tx, orm.Lock(AccountRecords.Query().Where(orm.KeyEq(AccountRecords.Key(), account.ID))))
+			return orm.FirstLocked(ctx, tx, orm.Lock(AccountRecords.Query().Where(orm.Eq(AccountRecords.Key(), account.ID))))
 		},
 		Lookup: func(ctx context.Context, email string) (value.Optional[Account], error) {
-			return orm.First(ctx, db, AccountRecords.Query().Where(orm.TextEq(AccountRecords.Email, email)))
+			return orm.First(ctx, db, AccountRecords.Query().Where(orm.Eq(AccountRecords.Email, email)))
 		},
 		Hash: func(account Account) password.Hash { return account.Digest },
 		Rehash: func(ctx context.Context, account Account, old, next password.Hash) (value.Optional[Account], error) {
-			updated, err := orm.Update(ctx, db, AccountRecords.Query().Where(orm.ColumnEq(AccountRecords.Digest, old)), AccountRecords.Key(), account.ID, orm.ColumnSet(AccountRecords.Digest, next))
+			updated, err := orm.Update(ctx, db, AccountRecords.Query().Where(orm.Eq(AccountRecords.Digest, old)), AccountRecords.Key(), account.ID, orm.Set(AccountRecords.Digest, next))
 			if errors.Is(err, database.NotFound) {
 				return value.Optional[Account]{}, nil
 			}

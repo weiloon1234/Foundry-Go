@@ -14,4 +14,4 @@ import (
 var executor database.Executor
 var _ = context.Background
 var _ model.ID[models.Order]
-var _ = databasevalidation.Unique[models.User, string](executor, orm.Lock(modelvalidation.Users.Query()), orm.TextExpr(modelvalidation.Users.Email))
+var _ = databasevalidation.Unique[models.User, string](executor, orm.Lock(modelvalidation.Users.Query()), modelvalidation.Users.Email)

@@ -31,7 +31,7 @@ func TestSensitivePersistence(t *testing.T) {
 	v := newmodels.Vaults
 	doc, err := encrypted.NewJSON(newmodels.Settings{Region: "west"})
 	must(t, err)
-	inserted, err := orm.Insert(ctx, db, v.Table, orm.EncryptedSet(v.Token, encrypted.NewText("private")), orm.NullableEncryptedSet(v.Backup, encrypted.NewText("backup")), orm.EncryptedSet(v.Settings, doc), orm.NullableEncryptedSet(v.Optional, doc))
+	inserted, err := orm.Insert(ctx, db, v.Table, orm.Set(v.Token, encrypted.NewText("private")), orm.Set(v.Backup, encrypted.NewText("backup")), orm.Set(v.Settings, doc), orm.Set(v.Optional, doc))
 	must(t, err)
 	rawModels, err := orm.Raw(ctx, db, v.Table, `SELECT optional,settings,backup,token,id FROM sensitive_vaults WHERE id=$1`, inserted.ID.String())
 	must(t, err)
@@ -81,7 +81,7 @@ func TestSensitivePersistence(t *testing.T) {
 	}
 	secondDoc, err := encrypted.NewJSON(newmodels.Settings{Region: "east"})
 	must(t, err)
-	second, err := orm.Insert(ctx, db, v.Table, orm.EncryptedSet(v.Token, encrypted.NewText("second private")), orm.EncryptedSet(v.Settings, secondDoc))
+	second, err := orm.Insert(ctx, db, v.Table, orm.Set(v.Token, encrypted.NewText("second private")), orm.Set(v.Settings, secondDoc))
 	must(t, err)
 	secondID := second.ID
 	current, err := orm.RequireKey(ctx, db, v.Table, secondID)
@@ -89,14 +89,14 @@ func TestSensitivePersistence(t *testing.T) {
 	if current.Token.Reveal() != "second private" || !current.Backup.IsNull() || !current.Optional.IsNull() {
 		t.Fatal("omitted nullable encrypted fields")
 	}
-	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), inserted.ID, orm.EncryptedSet(v.Token, encrypted.NewText("changed first")), orm.NullableEncryptedSetNull(v.Backup), orm.NullableEncryptedSetNull(v.Optional))
+	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), inserted.ID, orm.Set(v.Token, encrypted.NewText("changed first")), orm.SetNull(v.Backup), orm.SetNull(v.Optional))
 	must(t, err)
 	current, err = orm.RequireKey(ctx, db, v.Table, inserted.ID)
 	must(t, err)
 	if current.Token.Reveal() != "changed first" || !current.Backup.IsNull() || !current.Optional.IsNull() {
 		t.Fatal("encrypted update and explicit null hydration")
 	}
-	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), secondID, orm.EncryptedSet(v.Token, encrypted.NewText("changed second")), orm.NullableEncryptedSet(v.Backup, encrypted.NewText("new backup")), orm.NullableEncryptedSet(v.Optional, doc))
+	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), secondID, orm.Set(v.Token, encrypted.NewText("changed second")), orm.Set(v.Backup, encrypted.NewText("new backup")), orm.Set(v.Optional, doc))
 	must(t, err)
 	second, err = orm.RequireKey(ctx, db, v.Table, second.ID)
 	must(t, err)
@@ -104,9 +104,9 @@ func TestSensitivePersistence(t *testing.T) {
 	if !ok || backup.Reveal() != "new backup" || second.Token.Reveal() != "changed second" {
 		t.Fatal("encrypted update hydration")
 	}
-	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), inserted.ID, orm.NullableEncryptedSet(v.Backup, encrypted.NewText("clear me")), orm.NullableEncryptedSet(v.Optional, doc))
+	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), inserted.ID, orm.Set(v.Backup, encrypted.NewText("clear me")), orm.Set(v.Optional, doc))
 	must(t, err)
-	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), inserted.ID, orm.NullableEncryptedSetNull(v.Backup), orm.NullableEncryptedSetNull(v.Optional))
+	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), inserted.ID, orm.SetNull(v.Backup), orm.SetNull(v.Optional))
 	must(t, err)
 	current, err = orm.RequireKey(ctx, db, v.Table, inserted.ID)
 	must(t, err)
@@ -143,7 +143,7 @@ func TestSensitivePersistence(t *testing.T) {
 	hash, err := hasher.Hash(ctx, plain)
 	must(t, err)
 	a := newmodels.Accounts
-	account, err := orm.Insert(ctx, db, a.Table, orm.ColumnSet(a.Digest, hash))
+	account, err := orm.Insert(ctx, db, a.Table, orm.Set(a.Digest, hash))
 	must(t, err)
 	if !account.Backup.IsNull() {
 		t.Fatal("nullable hash did not retain SQL NULL")
@@ -155,9 +155,9 @@ func TestSensitivePersistence(t *testing.T) {
 	if !match {
 		t.Fatal("stored password round trip")
 	}
-	_, err = orm.Update(ctx, db, a.Table.Query(), a.Table.Key(), account.ID, orm.NullableColumnSet(a.Backup, hash))
+	_, err = orm.Update(ctx, db, a.Table.Query(), a.Table.Key(), account.ID, orm.Set(a.Backup, hash))
 	must(t, err)
-	account, err = orm.Require(ctx, db, a.Query().Where(orm.KeyEq(a.Key(), account.ID), orm.ColumnEq(a.Digest, hash)).OrderBy(orm.ColumnAsc(a.Digest)))
+	account, err = orm.Require(ctx, db, a.Query().Where(orm.Eq(a.Key(), account.ID), orm.Eq(a.Digest, hash)).OrderBy(orm.Asc(a.Digest)))
 	must(t, err)
 	stored, ok := account.Backup.Get()
 	if !ok {

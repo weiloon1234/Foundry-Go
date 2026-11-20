@@ -43,7 +43,7 @@ func TestEachWritePreflight(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, q := range []Query[eachRow]{{}, d.Query().OrderBy(KeyAsc(d.Key())), d.Query().Limit(0), d.Query().Offset(1), WithoutModelHooks(d.Query()), WithRelationLimits(d.Query(), DefaultRelationLimits())} {
+	for _, q := range []Query[eachRow]{{}, d.Query().OrderBy(Asc(d.Key())), d.Query().Limit(0), d.Query().Offset(1), WithoutModelHooks(d.Query()), WithRelationLimits(d.Query(), DefaultRelationLimits())} {
 		if _, err := DeleteEach(t.Context(), w, q, 1); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
@@ -84,7 +84,7 @@ func TestEachWriteBoundsAndIdentityBeforeCallbacks(t *testing.T) {
 			}
 			_, err := UpdateEach(t.Context(), db, d.Query(), limit, func(context.Context, *database.Tx, eachRow) ([]Assignment[eachRow], error) {
 				calls++
-				return []Assignment[eachRow]{TextSet(d.Name, "x")}, nil
+				return []Assignment[eachRow]{Set(d.Name, "x")}, nil
 			})
 			if !errors.Is(err, test.want) || calls != 0 || len(statements) != 1 {
 				t.Fatal(err, calls, statements)
@@ -133,13 +133,13 @@ func TestEachWriteLifecycleAndNoPerRowSavepoints(t *testing.T) {
 	var got []eachRow
 	err := db.Transaction(t.Context(), func(tx *database.Tx) error {
 		var err error
-		got, err = UpdateEach(t.Context(), tx, d.Query().Where(TextNe(d.Name, "excluded")), 2, func(ctx context.Context, actual *database.Tx, m eachRow) ([]Assignment[eachRow], error) {
+		got, err = UpdateEach(t.Context(), tx, d.Query().Where(Ne(d.Name, "excluded")), 2, func(ctx context.Context, actual *database.Tx, m eachRow) ([]Assignment[eachRow], error) {
 			if actual == nil || (batchTx != nil && actual != batchTx) {
 				t.Error("batch transaction replaced")
 			}
 			batchTx = actual
 			trace = append(trace, "draft")
-			return []Assignment[eachRow]{TextSet(d.Name, "changed")}, nil
+			return []Assignment[eachRow]{Set(d.Name, "changed")}, nil
 		})
 		if len(trace) != 6 {
 			t.Fatal(trace)
@@ -194,10 +194,10 @@ func TestEachWriteFailureAndCancellation(t *testing.T) {
 					case "cancel":
 						cancel()
 					case "foreign":
-						return []Assignment[eachRow]{TextSet(foreign.Name, "x")}, nil
+						return []Assignment[eachRow]{Set(foreign.Name, "x")}, nil
 					}
 				}
-				return []Assignment[eachRow]{TextSet(d.Name, "x")}, nil
+				return []Assignment[eachRow]{Set(d.Name, "x")}, nil
 			})
 			if err == nil || rows != nil || commits != 0 || calls != 2 {
 				t.Fatal(rows, err, commits, calls)
@@ -305,7 +305,7 @@ func TestEachWriteRejectsIncomingLockState(t *testing.T) {
 			callbacks := 0
 			got, err := UpdateEach(t.Context(), w, q, 1, func(context.Context, *database.Tx, eachRow) ([]Assignment[eachRow], error) {
 				callbacks++
-				return []Assignment[eachRow]{TextSet(d.Name, "changed")}, nil
+				return []Assignment[eachRow]{Set(d.Name, "changed")}, nil
 			})
 			if !errors.Is(err, fault.Invalid) || got != nil {
 				t.Fatal(got, err)

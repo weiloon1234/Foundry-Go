@@ -6,4 +6,4 @@ import (
 	j "foundry.test/goway/models/joined"
 )
 
-var _ = j.Peers.OnlyTrashedPivot().WherePivot(orm.TextEq(j.Parents.Name, "wrong model"))
+var _ = j.Peers.OnlyTrashedPivot().WherePivot(orm.Eq(j.Parents.Name, "wrong model"))

@@ -33,40 +33,40 @@ type RecordTable struct {
 	// Table provides Record queries and writes. Example: Records.Query().Limit(10).
 	orm.Table[Record, model.ID[Record]]
 	// ID binds the persisted Record.ID column.
-	// Example: orm.KeyEq(Records.ID, id).
+	// Example: orm.Eq(Records.ID, id).
 	ID orm.Key[Record, model.ID[Record]]
 	// Namespace binds the persisted Record.Namespace column.
-	// Example: orm.TextSet(Records.Namespace, namespace).
+	// Example: orm.Set(Records.Namespace, namespace).
 	Namespace orm.Text[Record, string]
 	// Operation binds the persisted Record.Operation column.
-	// Example: orm.TextSet(Records.Operation, operation).
+	// Example: orm.Set(Records.Operation, operation).
 	Operation orm.Text[Record, string]
 	// Version binds the persisted Record.Version column.
-	// Example: orm.NumberSet(Records.Version, version).
+	// Example: orm.Set(Records.Version, version).
 	Version orm.Number[Record, uint32]
 	// ScopeDigest binds the persisted Record.ScopeDigest column.
-	// Example: orm.TextSet(Records.ScopeDigest, scopeDigest).
+	// Example: orm.Set(Records.ScopeDigest, scopeDigest).
 	ScopeDigest orm.Text[Record, string]
 	// KeyDigest binds the persisted Record.KeyDigest column.
-	// Example: orm.TextSet(Records.KeyDigest, keyDigest).
+	// Example: orm.Set(Records.KeyDigest, keyDigest).
 	KeyDigest orm.Text[Record, string]
 	// Fingerprint binds the persisted Record.Fingerprint column.
-	// Example: orm.TextSet(Records.Fingerprint, fingerprint).
+	// Example: orm.Set(Records.Fingerprint, fingerprint).
 	Fingerprint orm.Text[Record, string]
 	// ResultSchema binds the persisted Record.ResultSchema column.
-	// Example: orm.TextSet(Records.ResultSchema, resultSchema).
+	// Example: orm.Set(Records.ResultSchema, resultSchema).
 	ResultSchema orm.Text[Record, string]
 	// ResultHash binds the persisted Record.ResultHash column.
-	// Example: orm.TextSet(Records.ResultHash, resultHash).
+	// Example: orm.Set(Records.ResultHash, resultHash).
 	ResultHash orm.Text[Record, string]
 	// Representation binds the persisted Record.Representation column.
-	// Example: orm.ColumnSet(Records.Representation, representation).
+	// Example: orm.Set(Records.Representation, representation).
 	Representation orm.Column[Record, []byte]
 	// CompletedAt binds the persisted Record.CompletedAt column.
-	// Example: orm.NullableTimeSetNull(Records.CompletedAt).
+	// Example: orm.SetNull(Records.CompletedAt).
 	CompletedAt orm.NullableTime[Record, temporal.DateTime]
 	// ExpiresAt binds the persisted Record.ExpiresAt column.
-	// Example: orm.NullableTimeSetNull(Records.ExpiresAt).
+	// Example: orm.SetNull(Records.ExpiresAt).
 	ExpiresAt orm.NullableTime[Record, temporal.DateTime]
 }
 

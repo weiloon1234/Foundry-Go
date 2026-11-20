@@ -66,7 +66,7 @@ func ormBenchmarkStore(t testing.TB) (*database.DB, *sql.DB) {
 
 func ormBenchmarkQuery(size int) orm.Query[models.User] {
 	f := models.Users
-	return models.Users.Query().Where(orm.NumberGte(f.Age, 1), orm.EnumEq(f.Status, models.StatusActive)).OrderBy(orm.NumberAsc(f.Age)).Limit(size)
+	return models.Users.Query().Where(orm.Gte(f.Age, 1), orm.Eq(f.Status, models.StatusActive)).OrderBy(orm.Asc(f.Age)).Limit(size)
 }
 
 // Keep concrete scanners identical to the persisted types in the declaration.
@@ -187,7 +187,7 @@ func BenchmarkORMCompile(b *testing.B) {
 	}{
 		{"list", func() orm.Query[models.User] { return ormBenchmarkQuery(100) }},
 		{"filters", func() orm.Query[models.User] {
-			return models.Users.Query().Where(orm.Or(orm.TextContains(f.Email, "_%!'"), orm.NumberIn(f.Age, 21, 35, 42)), orm.NullableTextIsNotNull(f.Nickname), orm.NullableTimeGte(f.Birthday, date)).OrderBy(orm.NumberDesc(f.Age), orm.KeyAsc(f.ID)).Limit(100).Offset(20)
+			return models.Users.Query().Where(orm.Or(orm.Contains(f.Email, "_%!'"), orm.In(f.Age, 21, 35, 42)), orm.IsNotNull(f.Nickname), orm.Gte(f.Birthday, date)).OrderBy(orm.Desc(f.Age), orm.Asc(f.ID)).Limit(100).Offset(20)
 		}},
 	} {
 		b.Run(variant.name, func(b *testing.B) {

@@ -17,7 +17,7 @@ import (
 func (g newGolden) fixB(ctx context.Context, db *database.DB) {
 	fmt.Fprintln(&g.output, "direct-join")
 	orders, users := ormrows.As[orderSide](models.Orders.Query(), "o"), ormrows.As[memberSide](models.Users.Query(), "u")
-	joined := ormrows.InnerJoin(orders, users, ormrows.On(expr.At(ormrows.Scope(orders), orm.ColumnExpr(models.Orders.BuyerID)), expr.At(ormrows.Scope(users), orm.KeyExpr(models.Users.ID))))
+	joined := ormrows.InnerJoin(orders, users, ormrows.On(expr.At(ormrows.Scope(orders), models.Orders.BuyerID), expr.At(ormrows.Scope(users), models.Users.ID)))
 	type fields struct {
 		ormrows.Row[EmailRow]
 		Email ormrows.Field[EmailRow, string]
@@ -25,7 +25,7 @@ func (g newGolden) fixB(ctx context.Context, db *database.DB) {
 	schema := ormrows.Define(func(b ormrows.Builder[EmailRow], r *EmailRow) fields {
 		return fields{b.Row(), ormrows.TextOf(b, &r.Email)}
 	})
-	g.show(must(ormrows.Read(ormrows.Select(joined, schema, ormrows.Map(schema.Email, expr.At(ormrows.RightScope(joined, ormrows.Scope(users)), orm.TextExpr(models.Users.Email))))).All(ctx, db)))
+	g.show(must(ormrows.Read(ormrows.Select(joined, schema, ormrows.Map(schema.Email, expr.At(ormrows.RightScope(joined, ormrows.Scope(users)), models.Users.Email)))).All(ctx, db)))
 	fmt.Fprintln(&g.output, "load-duplicate-and-missing")
 	buyer := must(model.ParseID[models.User](buyerID))
 	missing := must(model.ParseID[models.User]("01890f47-1a00-7000-8000-000000000009"))

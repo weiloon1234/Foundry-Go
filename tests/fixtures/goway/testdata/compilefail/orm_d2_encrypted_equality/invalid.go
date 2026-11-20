@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.ColumnEq(sensitive.Vaults.Token, encrypted.NewText("secret"))
+var _ = orm.Eq(sensitive.Vaults.Token, encrypted.NewText("secret"))

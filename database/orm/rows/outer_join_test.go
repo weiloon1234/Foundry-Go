@@ -33,12 +33,12 @@ func outerSchema() outerFields {
 func TestOuterJoinNullabilityAndKinds(t *testing.T) {
 	m := declareMembers()
 	a, b := rows.As[left](m.Query(), "a"), rows.As[right](m.Query(), "b")
-	on := rows.On(expr.At(rows.Scope(a), orm.KeyExpr(m.ID)), expr.At(rows.Scope(b), orm.KeyExpr(m.ID)))
+	on := rows.On(expr.At(rows.Scope(a), m.ID), expr.At(rows.Scope(b), m.ID))
 	l, r, f := rows.LeftJoin(a, b, on), rows.RightJoin(a, b, on), rows.FullJoin(a, b, on)
 	s := outerSchema()
 	project := func(source rows.Source[rows.Left[rows.Alias[left, member], rows.Alias[right, member]]]) rows.Query[rows.Left[rows.Alias[left, member], rows.Alias[right, member]], outerRecord] {
 		scope := rows.NullableRightScope(l, rows.Scope(b))
-		return rows.Select(source, s, rows.Map(s.ID, expr.AtNullable(scope, orm.KeyExpr(m.ID))), rows.Map(s.Nickname, expr.AtNullableValue(scope, orm.NullableTextExpr(m.Nickname))))
+		return rows.Select(source, s, rows.Map(s.ID, expr.AtNullable(scope, m.ID)), rows.Map(s.Nickname, expr.AtNullableValue(scope, m.Nickname)))
 	}
 	state := &driverState{columns: []string{"id", "nickname"}, rows: [][]driver.Value{{nil, nil}, {int64(3), "nick"}}}
 	got, err := rows.Read(project(l)).All(t.Context(), openTest(t, state))
@@ -54,12 +54,12 @@ func TestOuterJoinNullabilityAndKinds(t *testing.T) {
 	}{
 		{"RIGHT", func(state *driverState) error {
 			scope := rows.NullableLeftScope(r, rows.Scope(a))
-			_, err := rows.Read(rows.Select(r, s, rows.Map(s.ID, expr.AtNullable(scope, orm.KeyExpr(m.ID))), rows.Map(s.Nickname, expr.AtNullableValue(scope, orm.NullableTextExpr(m.Nickname))))).All(t.Context(), openTest(t, state))
+			_, err := rows.Read(rows.Select(r, s, rows.Map(s.ID, expr.AtNullable(scope, m.ID)), rows.Map(s.Nickname, expr.AtNullableValue(scope, m.Nickname)))).All(t.Context(), openTest(t, state))
 			return err
 		}},
 		{"FULL", func(state *driverState) error {
 			x, y := rows.NullableLeftScope(f, rows.Scope(a)), rows.NullableRightScope(f, rows.Scope(b))
-			_, err := rows.Read(rows.Select(f, s, rows.Map(s.ID, expr.AtNullable(x, orm.KeyExpr(m.ID))), rows.Map(s.Nickname, expr.AtNullableValue(y, orm.NullableTextExpr(m.Nickname))))).All(t.Context(), openTest(t, state))
+			_, err := rows.Read(rows.Select(f, s, rows.Map(s.ID, expr.AtNullable(x, m.ID)), rows.Map(s.Nickname, expr.AtNullableValue(y, m.Nickname)))).All(t.Context(), openTest(t, state))
 			return err
 		}},
 	}
@@ -75,8 +75,8 @@ func TestOuterJoinNullabilityAndKinds(t *testing.T) {
 func TestNullableScopeChainAndSourceBoundaries(t *testing.T) {
 	m := declareMembers()
 	o := declareOrders()
-	a, b := rows.As[left](m.Query().Where(orm.TextEq(m.Name, "Ada")).Limit(2), "a"), rows.As[right](o.Query().Where(orm.NumberGt(o.MemberID, 0)), "b")
-	joined := rows.LeftJoin(a, b, rows.On(expr.At(rows.Scope(a), orm.KeyExpr(m.ID)), expr.At(rows.Scope(b), orm.NumberExpr(o.MemberID))))
+	a, b := rows.As[left](m.Query().Where(orm.Eq(m.Name, "Ada")).Limit(2), "a"), rows.As[right](o.Query().Where(orm.Gt(o.MemberID, 0)), "b")
+	joined := rows.LeftJoin(a, b, rows.On(expr.At(rows.Scope(a), m.ID), expr.At(rows.Scope(b), o.MemberID)))
 	type third struct{}
 	c := rows.As[third](m.Query(), "c")
 	chain := rows.CrossJoin(joined, c)
@@ -87,7 +87,7 @@ func TestNullableScopeChainAndSourceBoundaries(t *testing.T) {
 		ID rows.Field[one, value.Nullable[int64]]
 	}
 	schema := rows.Define(func(b rows.Builder[one], r *one) fields { return fields{b.Row(), rows.NullableNumberOf(b, &r.ID)} })
-	e := expr.AtNullable(scope, orm.KeyExpr(o.ID))
+	e := expr.AtNullable(scope, o.ID)
 	core := expr.FoundryExpression(e, sqlowner.Expressions())
 	if err := ormcore.CheckReferences(rows.SourceOf(chain), core.Refs); err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestNullableScopeChainAndSourceBoundaries(t *testing.T) {
 	}
 	state = &driverState{}
 	other := declareOrders()
-	bad := rows.Select(chain, schema, rows.Map(schema.ID, expr.AtNullable(scope, orm.KeyExpr(other.ID))))
+	bad := rows.Select(chain, schema, rows.Map(schema.ID, expr.AtNullable(scope, other.ID)))
 	if _, err := rows.Read(bad).All(t.Context(), openTest(t, state)); err == nil || state.sql != "" {
 		t.Fatal("foreign declaration accepted", err)
 	}
@@ -111,11 +111,11 @@ func TestJoinRuntimeOwnershipFailures(t *testing.T) {
 	m := declareMembers()
 	a := rows.As[left](m.Query(), "a")
 	b := rows.As[right](m.Query(), "b")
-	on := rows.On(expr.At(rows.Scope(a), orm.KeyExpr(m.ID)), expr.At(rows.Scope(b), orm.KeyExpr(m.ID)))
+	on := rows.On(expr.At(rows.Scope(a), m.ID), expr.At(rows.Scope(b), m.ID))
 	for _, j := range []rows.LeftJoined[rows.Alias[left, member], rows.Alias[right, member]]{
 		rows.LeftJoin(a, rows.As[right](m.Query(), "a"), on),
 		rows.LeftJoin(a, b, rows.JoinOn[rows.Alias[left, member], rows.Alias[right, member]]{}),
-		rows.LeftJoin(a, b, rows.On(expr.At(rows.Scope(rows.As[left](m.Query(), "other")), orm.KeyExpr(m.ID)), expr.At(rows.Scope(b), orm.KeyExpr(m.ID)))),
+		rows.LeftJoin(a, b, rows.On(expr.At(rows.Scope(rows.As[left](m.Query(), "other")), m.ID), expr.At(rows.Scope(b), m.ID))),
 	} {
 		if rows.SourceOf(j).Err == nil {
 			t.Fatal("invalid join accepted")

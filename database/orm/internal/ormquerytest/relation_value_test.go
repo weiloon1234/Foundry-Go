@@ -16,7 +16,7 @@ import (
 
 func TestRelatedValueCapabilitiesAndEmbeddedSources(t *testing.T) {
 	table := aggregateModels()
-	relation := orm.HasManyOf(table.Children, orm.KeyExpr(table.Key()), orm.NumberExpr(table.ParentID))
+	relation := orm.HasManyOf(table.Children, table.Key(), table.ParentID)
 	e := ormcore.Expression{Node: querycore.AggregateNode{Kind: querycore.CountAll}, Refs: []ormcore.Reference{{Scope: reflect.TypeFor[aggregateModel]()}}, ReferenceFree: true}
 	c := ormcore.Column[int64]{Scan: func(v *int64) any { return codec.Signed[int64]().Scan(v) }}
 	type embedded struct {

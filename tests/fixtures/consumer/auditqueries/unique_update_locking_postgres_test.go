@@ -47,7 +47,7 @@ func TestAuditedUniqueUpdateCanTakeForUpdateBeforeReading(t *testing.T) {
 			case <-ctx.Done():
 				return ctx.Err()
 			}
-			_, err = orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.TextSet(f.PasswordHash, "child-writer"))
+			_, err = orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.Set(f.PasswordHash, "child-writer"))
 			return err
 		})
 	}()
@@ -72,10 +72,10 @@ func TestAuditedUniqueUpdateCanTakeForUpdateBeforeReading(t *testing.T) {
 			uniqueReady <- pid
 			// orm.Lock is this API's explicit FOR UPDATE. Acquire it before the
 			// hooked before-image read can take NO KEY UPDATE and later upgrade.
-			if _, err := orm.RequireLocked(ctx, tx, orm.Lock(f.Query().Where(orm.KeyEq(f.Key(), account.ID)))); err != nil {
+			if _, err := orm.RequireLocked(ctx, tx, orm.Lock(f.Query().Where(orm.Eq(f.Key(), account.ID)))); err != nil {
 				return err
 			}
-			_, err = orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.InputTextSet(f.Email, "unique-after@example.test"))
+			_, err = orm.Update(ctx, tx, f.Query(), f.Key(), account.ID, orm.Set(f.Email, "unique-after@example.test"))
 			return err
 		})
 	}()
@@ -114,7 +114,7 @@ func TestAuditedUniqueUpdateCanTakeForUpdateBeforeReading(t *testing.T) {
 		if page.Total != 3 || len(page.Items) != 3 {
 			return errors.New("competing parent writes lost history")
 		}
-		field, err := orm.AuditRead(page.Items[0].Changes(), orm.InputTextExpr(f.Email))
+		field, err := orm.AuditRead(page.Items[0].Changes(), f.Email)
 		if err != nil {
 			return err
 		}

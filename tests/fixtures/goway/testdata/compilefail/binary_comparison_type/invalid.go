@@ -6,4 +6,4 @@ import (
 	c "foundry.test/goway/coremodels"
 )
 
-var _ = orm.ColumnEq(c.Records.Body, "text")
+var _ = orm.Eq(c.Records.Body, "text")

@@ -31,8 +31,8 @@ func TestPostgresPerModelBatchLifecycle(t *testing.T) {
 		ctx := linkqueries.WithTrace(t.Context(), trace)
 		q := linkqueries.Memberships.Query()
 		fields := linkqueries.Memberships
-		draft := []orm.Assignment[linkqueries.Membership]{orm.ColumnSet(linkqueries.Memberships.MemberID, member.ID), orm.TextSet(linkqueries.Memberships.GroupCode, group.Code)}
-		inputs := [][]orm.Assignment[linkqueries.Membership]{append(slices.Clone(draft), orm.InputTextSet(linkqueries.Memberships.Role, " ADMIN ")), append(slices.Clone(draft), orm.InputTextSet(linkqueries.Memberships.Role, " VIEWER "))}
+		draft := []orm.Assignment[linkqueries.Membership]{orm.Set(linkqueries.Memberships.MemberID, member.ID), orm.Set(linkqueries.Memberships.GroupCode, group.Code)}
+		inputs := [][]orm.Assignment[linkqueries.Membership]{append(slices.Clone(draft), orm.Set(linkqueries.Memberships.Role, " ADMIN ")), append(slices.Clone(draft), orm.Set(linkqueries.Memberships.Role, " VIEWER "))}
 		trace.OnPhase = func(_ context.Context, phase string) error {
 			if phase == "local.creating" {
 				clock.Advance(time.Second)
@@ -56,20 +56,20 @@ func TestPostgresPerModelBatchLifecycle(t *testing.T) {
 			trace.InspectMembership = func(w *orm.Write[linkqueries.Membership]) error {
 				role, ok := orm.WriteGet(w, func() func(arg0 string) orm.Assignment[linkqueries.Membership] {
 					receiver := fields.Role
-					return func(arg0 string) orm.Assignment[linkqueries.Membership] { return orm.InputTextSet(receiver, arg0) }
+					return func(arg0 string) orm.Assignment[linkqueries.Membership] { return orm.Set(receiver, arg0) }
 				}()).Get()
 				if !ok || role != []string{" ADMIN ", " VIEWER "}[i] || orm.WriteIsSet(w, func() func(arg0 model.ID[linkqueries.Membership]) orm.Assignment[linkqueries.Membership] {
 					receiver := fields.Key()
 					return func(arg0 model.ID[linkqueries.Membership]) orm.Assignment[linkqueries.Membership] {
-						return orm.KeySet(receiver, arg0)
+						return orm.Set(receiver, arg0)
 					}
 				}()) || orm.WriteIsSet(w, func() func(arg0 time.Time) orm.Assignment[linkqueries.Membership] {
 					receiver := fields.CreatedAt
-					return func(arg0 time.Time) orm.Assignment[linkqueries.Membership] { return orm.TimeSet(receiver, arg0) }
+					return func(arg0 time.Time) orm.Assignment[linkqueries.Membership] { return orm.Set(receiver, arg0) }
 				}()) || orm.WriteIsSet(w, func() func(arg0 temporal.DateTime) orm.Assignment[linkqueries.Membership] {
 					receiver := fields.UpdatedAt
 					return func(arg0 temporal.DateTime) orm.Assignment[linkqueries.Membership] {
-						return orm.TimeSet(receiver, arg0)
+						return orm.Set(receiver, arg0)
 					}
 				}()) {
 					return errors.New("batch creation changed its input draft")
@@ -83,7 +83,7 @@ func TestPostgresPerModelBatchLifecycle(t *testing.T) {
 				return errors.New("batch input inspection failed")
 			}
 		}
-		ordered, err := orm.All(t.Context(), tx, q.OrderBy(orm.KeyAsc(fields.Key())))
+		ordered, err := orm.All(t.Context(), tx, q.OrderBy(orm.Asc(fields.Key())))
 		if err != nil {
 			return err
 		}
@@ -98,7 +98,7 @@ func TestPostgresPerModelBatchLifecycle(t *testing.T) {
 			if count, err := orm.Count(ctx, owner, q); err != nil || count != 2 {
 				return []orm.Assignment[linkqueries.Membership]{}, errors.New("callback lost its usable transaction")
 			}
-			return []orm.Assignment[linkqueries.Membership]{orm.InputTextSet(linkqueries.Memberships.Role, " OWNER-"+current.Role+" ")}, nil
+			return []orm.Assignment[linkqueries.Membership]{orm.Set(linkqueries.Memberships.Role, " OWNER-"+current.Role+" ")}, nil
 		}
 		trace.Steps = nil
 		if rows, err := orm.UpdateEach(ctx, tx, q, 1, callback); !errors.Is(err, fault.Invalid) || rows != nil {
@@ -188,7 +188,7 @@ func TestPostgresPerModelCallbackFailuresAreAtomic(t *testing.T) {
 					return err
 				}
 				q := linkqueries.Memberships.Query()
-				draft := []orm.Assignment[linkqueries.Membership]{orm.ColumnSet(linkqueries.Memberships.MemberID, member.ID), orm.TextSet(linkqueries.Memberships.GroupCode, group.Code), orm.InputTextSet(linkqueries.Memberships.Role, "admin")}
+				draft := []orm.Assignment[linkqueries.Membership]{orm.Set(linkqueries.Memberships.MemberID, member.ID), orm.Set(linkqueries.Memberships.GroupCode, group.Code), orm.Set(linkqueries.Memberships.Role, "admin")}
 				if _, err := orm.CreateEach(t.Context(), tx, q, [][]orm.Assignment[linkqueries.Membership]{draft, draft}); err != nil {
 					return err
 				}
@@ -213,7 +213,7 @@ func TestPostgresPerModelCallbackFailuresAreAtomic(t *testing.T) {
 							cancel()
 						}
 					}
-					return []orm.Assignment[linkqueries.Membership]{orm.InputTextSet(linkqueries.Memberships.Role, "changed")}, nil
+					return []orm.Assignment[linkqueries.Membership]{orm.Set(linkqueries.Memberships.Role, "changed")}, nil
 				})
 				want := linkqueries.ErrVeto
 				if mode == "panic" || mode == "goexit" {
@@ -267,7 +267,7 @@ func TestPostgresPerModelCreationAfterHookFailureRollsBack(t *testing.T) {
 			return err
 		}
 		q := linkqueries.Memberships.Query()
-		draft := []orm.Assignment[linkqueries.Membership]{orm.ColumnSet(linkqueries.Memberships.MemberID, member.ID), orm.TextSet(linkqueries.Memberships.GroupCode, group.Code), orm.InputTextSet(linkqueries.Memberships.Role, "admin")}
+		draft := []orm.Assignment[linkqueries.Membership]{orm.Set(linkqueries.Memberships.MemberID, member.ID), orm.Set(linkqueries.Memberships.GroupCode, group.Code), orm.Set(linkqueries.Memberships.Role, "admin")}
 		rows, err := orm.CreateEach(linkqueries.WithTrace(t.Context(), trace), tx, q, [][]orm.Assignment[linkqueries.Membership]{draft, draft})
 		if !errors.Is(err, linkqueries.ErrVeto) || rows != nil || createdCallbacks != 2 {
 			return errors.New("later post-insert hook did not fail the creation batch")
@@ -293,14 +293,14 @@ func TestPostgresEachSoftFailuresRollBackStoredModels(t *testing.T) {
 						return err
 					}
 					fields := linkqueries.Memberships
-					draft := []orm.Assignment[linkqueries.Membership]{orm.ColumnSet(fields.MemberID, member.ID), orm.TextSet(fields.GroupCode, group.Code), orm.InputTextSet(fields.Role, "member")}
+					draft := []orm.Assignment[linkqueries.Membership]{orm.Set(fields.MemberID, member.ID), orm.Set(fields.GroupCode, group.Code), orm.Set(fields.Role, "member")}
 					if _, err := orm.CreateEach(t.Context(), tx, fields.Query(), [][]orm.Assignment[linkqueries.Membership]{draft, draft}); err != nil {
 						return err
 					}
 					if _, err := orm.DeleteEach(t.Context(), tx, fields.Query(), 2); err != nil {
 						return err
 					}
-					before, err := orm.All(t.Context(), tx, fields.Query().OnlyTrashed().OrderBy(orm.KeyAsc(fields.Key())))
+					before, err := orm.All(t.Context(), tx, fields.Query().OnlyTrashed().OrderBy(orm.Asc(fields.Key())))
 					if err != nil {
 						return err
 					}
@@ -354,7 +354,7 @@ func TestPostgresEachSoftFailuresRollBackStoredModels(t *testing.T) {
 					if mode == "bound" && len(trace.Steps) != 0 {
 						return errors.New("oversized soft batch invoked hooks")
 					}
-					after, err := orm.All(t.Context(), tx, fields.Query().WithTrashed().OrderBy(orm.KeyAsc(fields.Key())))
+					after, err := orm.All(t.Context(), tx, fields.Query().WithTrashed().OrderBy(orm.Asc(fields.Key())))
 					if err != nil {
 						return err
 					}

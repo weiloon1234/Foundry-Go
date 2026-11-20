@@ -76,7 +76,7 @@ func TestRetrievalSkipsEmptyFailedAndWriteBatches(t *testing.T) {
 			var err error
 			switch mode {
 			case "write":
-				_, err = orm.Insert(t.Context(), db, q.Table, orm.KeySet(q.Key(), 1), orm.InputTextSet(q.Name, "stored"), orm.ColumnSet(q.Body, []byte{1}))
+				_, err = orm.Insert(t.Context(), db, q.Table, orm.Set(q.Key(), 1), orm.Set(q.Name, "stored"), orm.Set(q.Body, []byte{1}))
 			case "scalar":
 				_, err = orm.Count(t.Context(), db, q.Query())
 			default:

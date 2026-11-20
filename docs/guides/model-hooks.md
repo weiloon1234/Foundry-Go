@@ -18,9 +18,9 @@ func memberHooks() orm.Hooks[hooks.Member] {
 	return orm.Hooks[hooks.Member]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[hooks.Member]) error {
 		if !orm.WriteIsSet(draft, func() func(arg0 string) orm.Assignment[hooks.Member] {
 			receiver := hooks.Members.Name
-			return func(arg0 string) orm.Assignment[hooks.Member] { return orm.InputTextSet(receiver, arg0) }
+			return func(arg0 string) orm.Assignment[hooks.Member] { return orm.Set(receiver, arg0) }
 		}()) {
-			return orm.WriteSet(draft, orm.InputTextSet(hooks.Members.Name, "guest"))
+			return orm.WriteSet(draft, orm.Set(hooks.Members.Name, "guest"))
 		}
 		return nil
 	}}
@@ -70,7 +70,7 @@ Create runs `Saving`, `Creating`, conventions, mutators/encryption, SQL, `Create
 
 ## Read and change the pending draft
 
-`orm.WriteGet(write, setter)` reads an optional typed input. The setter is a typed callback, such as `func(v string) orm.Assignment[hooks.Member] { return orm.InputTextSet(hooks.Members.Name, v) }`. `WriteNullableGet` preserves omitted, NULL and value separately. `WriteIsSet` tests assignment presence. `WriteSet` replaces pending assignments and `WriteUnset` restores omission:
+`orm.WriteGet(write, setter)` reads an optional typed input. The setter is a typed callback, such as `func(v string) orm.Assignment[hooks.Member] { return orm.Set(hooks.Members.Name, v) }`. `WriteNullableGet` preserves omitted, NULL and value separately. `WriteIsSet` tests assignment presence. `WriteSet` replaces pending assignments and `WriteUnset` restores omission:
 
 <!-- orm-example: unset-after -->
 ```go
@@ -78,7 +78,7 @@ func unset(draft *orm.Write[hooks.Member]) error {
 	return orm.WriteUnset(draft, func() func(arg0 coremodels.LabelInput) orm.Assignment[hooks.Member] {
 		receiver := hooks.Members.Note
 		return func(arg0 coremodels.LabelInput) orm.Assignment[hooks.Member] {
-			return orm.NullableInputTextSet(receiver, arg0)
+			return orm.Set(receiver, arg0)
 		}
 	}())
 }

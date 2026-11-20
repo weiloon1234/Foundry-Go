@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var invalid = expr.GtValue(expr.Filter(expr.Exists[models.Order](), expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 0))), true)
+var invalid = expr.GtValue(expr.Filter(expr.Exists[models.Order](), expr.ModelPredicate(orm.Gt(models.Orders.TotalCents, 0))), true)

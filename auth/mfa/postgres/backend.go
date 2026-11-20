@@ -84,7 +84,7 @@ func (b *Backend) now() (temporal.DateTime, error) {
 	return now, nil
 }
 func factors(scope string) orm.Query[mfastore.Factor] {
-	return mfastore.Factors.Query().Where(orm.TextEq(mfastore.Factors.Scope, scope))
+	return mfastore.Factors.Query().Where(orm.Eq(mfastore.Factors.Scope, scope))
 }
 
 // Within locks the application model before the factor, validates and persists one
@@ -124,7 +124,7 @@ func (b *Backend) mutate(ctx context.Context, address mfa.Address, identity mode
 		if err := prepare(ctx, tx); err != nil {
 			return err
 		}
-		found, err := orm.FirstLocked(ctx, tx, orm.Lock(factors(scope).Where(orm.KeyEq(mfastore.Factors.Key(), key))))
+		found, err := orm.FirstLocked(ctx, tx, orm.Lock(factors(scope).Where(orm.Eq(mfastore.Factors.Key(), key))))
 		if err != nil {
 			return err
 		}
@@ -166,7 +166,7 @@ func (b *Backend) mutate(ctx context.Context, address mfa.Address, identity mode
 			if found.IsSet() {
 				row, err = orm.Update(ctx, tx, factors(scope), mfastore.Factors.Key(), key, draft...)
 			} else {
-				row, err = orm.Insert(ctx, tx, mfastore.Factors.Table, append(draft, orm.KeySet(mfastore.Factors.Key(), key))...)
+				row, err = orm.Insert(ctx, tx, mfastore.Factors.Table, append(draft, orm.Set(mfastore.Factors.Key(), key))...)
 			}
 			if err != nil {
 				return err

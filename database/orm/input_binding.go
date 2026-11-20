@@ -71,12 +71,6 @@ func bindNullableInput[I, V any](d *declaration, ptr *value.Nullable[V], c codec
 	}
 	return stored, func(v I) querycore.AssignmentValue { return querycore.CaptureInput(value.Of(v), nullableClone) }
 }
-func inputAssignment[M, I any](core *columnCore, capture func(I) querycore.AssignmentValue, v I) Assignment[M] {
-	if core == nil || core.owner == nil || capture == nil {
-		return Assignment[M]{err: invalid("uninitialized input column")}
-	}
-	return Assignment[M]{owner: core.owner, core: querycore.MutationAssignment{Field: querycore.FieldRef{Table: core.owner.model.Table, Column: core.metadata.Name}, AssignmentValue: capture(v)}}
-}
 func checkInputType(d *declaration, c *columnCore, t reflect.Type) {
 	if d != nil && !d.sealed && !modelmeta.ValidMutatorInput(t) {
 		d.fail(c.field.Name, "mutator input must be concrete and non-null")

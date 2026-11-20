@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.InsertFrom(rows.From(models.Users.Query()), models.Users.Query()).Values(orm.NumberSet(models.Orders.TotalCents, 1))
+var _ = rows.InsertFrom(rows.From(models.Users.Query()), models.Users.Query()).Values(orm.Set(models.Orders.TotalCents, 1))

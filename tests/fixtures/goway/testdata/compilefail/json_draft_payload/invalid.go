@@ -7,4 +7,4 @@ import (
 	value "github.com/weiloon1234/Foundry-Go/value"
 )
 
-var _ = orm.JSONSet(c.Records.Settings, value.JSON[string]{})
+var _ = orm.Set(c.Records.Settings, value.JSON[string]{})

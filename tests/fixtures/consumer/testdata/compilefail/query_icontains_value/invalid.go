@@ -6,4 +6,4 @@ import (
 	"foundry.test/consumer/reporting"
 )
 
-var invalid = orm.TextIContains(reporting.MemberModels.Name, 42)
+var invalid = orm.IContains(reporting.MemberModels.Name, 42)

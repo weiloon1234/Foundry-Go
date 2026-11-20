@@ -1,30 +1,33 @@
 package orm
 
 import (
+	"reflect"
+	"unsafe"
+
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
-	"reflect"
-	"unsafe"
 )
 
-func hopRelation[M, I, N any, A, B comparable](slot *slotCore, local KeyColumn[M, A], first KeyColumn[I, A], second KeyColumn[I, B], foreign KeyColumn[N, B]) (*relationPlan, columnData[A], columnData[A]) {
-	a, f, s, b := relationColumn(local), relationColumn(first), relationColumn(second), relationColumn(foreign)
-	p := newRelationCore(slot, a.core, b.core, reflect.TypeFor[M](), reflect.TypeFor[N]())
-	if f.core == nil || s.core == nil || f.core.owner == nil || f.core.owner != s.core.owner {
-		p.err = safeerror.Join("operation failed", p.err, invalid("through keys must belong to one intermediate model"))
+func hopRelation[M, I, N any, A, B comparable](slot *slotCore, firstHop KeyLink[M, I, A], secondHop KeyLink[I, N, B]) (*relationPlan, *columnData[A], *columnData[A]) {
+	a, fa, fb, b := firstHop.local, firstHop.foreign, secondHop.local, secondHop.foreign
+	faCore, fbCore := columnCoreOf(fa), columnCoreOf(fb)
+	p := newRelationCore(slot, columnCoreOf(a), columnCoreOf(b), reflect.TypeFor[M](), reflect.TypeFor[N]())
+	if faCore == nil || fbCore == nil || faCore.owner == nil || faCore.owner != fbCore.owner || faCore.owner.typ != reflect.TypeFor[I]() {
+		p.err = safeerror.Join("operation failed", p.err, invalid("through keys must belong to one bound intermediate model"))
 	} else {
-		p.join = &relationJoin{hop: true, pivot: newQuery(f.core.owner), first: querycore.FieldRef{Table: f.core.owner.model.Table, Column: f.core.metadata.Name}, second: querycore.FieldRef{Table: s.core.owner.model.Table, Column: s.core.metadata.Name}}
-		p.err = safeerror.Join("operation failed", p.err, declarationCoreError(f.core.owner))
+		p.join = &relationJoin{hop: true, pivot: newQuery(faCore.owner), first: querycore.FieldRef{Table: faCore.owner.model.Table, Column: faCore.metadata.Name}, second: querycore.FieldRef{Table: fbCore.owner.model.Table, Column: fbCore.metadata.Name}}
+		p.err = safeerror.Join("operation failed", p.err, declarationCoreError(faCore.owner))
 	}
-	return p, a, f
+	return p, a, fa
 }
 
-// HasManyThroughOf unifies both key pairs via an intermediate model. Example: orm.HasManyThroughOf(Countries.Posts, Countries.ID, Users.CountryID, orm.KeyExpr(Users.ID), Posts.UserID).
-func HasManyThroughOf[M, I, N any, A, B comparable](slot Many[M, N], local KeyColumn[M, A], first KeyColumn[I, A], second KeyColumn[I, B], foreign KeyColumn[N, B]) HasMany[M, N] {
-	p, a, f := hopRelation(slot.core, local, first, second, foreign)
+// HasManyThroughOf unifies both key pairs via an intermediate model.
+// Example: orm.HasManyThroughOf(Countries.Posts, orm.JoinKeys(Countries.ID, Users.CountryID), orm.JoinKeys(Users.ID, Posts.UserID)).
+func HasManyThroughOf[M, I, N any, A, B comparable](slot Many[M, N], firstHop KeyLink[M, I, A], secondHop KeyLink[I, N, B]) HasMany[M, N] {
+	p, a, f := hopRelation[M, I, N](slot.core, firstHop, secondHop)
 	if p.err == nil {
 		p.loaded = func(base unsafe.Pointer) bool {
 			return (*relation.Many[N])(unsafe.Add(base, slot.core.offset)).IsLoaded()
@@ -37,9 +40,10 @@ func HasManyThroughOf[M, I, N any, A, B comparable](slot Many[M, N], local KeyCo
 	return HasMany[M, N]{plan: p}
 }
 
-// HasOneThroughOf loads at most one target per source via an intermediate. Example: orm.HasOneThroughOf(Countries.LatestPost, Countries.ID, Users.CountryID, orm.KeyExpr(Users.ID), Posts.UserID).
-func HasOneThroughOf[M, I, N any, A, B comparable](slot One[M, N], local KeyColumn[M, A], first KeyColumn[I, A], second KeyColumn[I, B], foreign KeyColumn[N, B]) HasOne[M, N] {
-	p, a, f := hopRelation(slot.core, local, first, second, foreign)
+// HasOneThroughOf loads at most one target per source via an intermediate.
+// Example: orm.HasOneThroughOf(Countries.LatestPost, orm.JoinKeys(Countries.ID, Users.CountryID), orm.JoinKeys(Users.ID, Posts.UserID)).
+func HasOneThroughOf[M, I, N any, A, B comparable](slot One[M, N], firstHop KeyLink[M, I, A], secondHop KeyLink[I, N, B]) HasOne[M, N] {
+	p, a, f := hopRelation[M, I, N](slot.core, firstHop, secondHop)
 	p.singular = true
 	if p.err == nil {
 		p.loaded = func(base unsafe.Pointer) bool {

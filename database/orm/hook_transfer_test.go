@@ -39,7 +39,7 @@ func TestModelHookFactoryRunsInsideWriteAndAfterShapeValidation(t *testing.T) {
 	}
 	active = false
 	foreign := hookedFields(nil)
-	for _, input := range [][]Assignment[hookedRow]{{InputTextSet(d.Name, "a"), InputTextSet(d.Name, "b")}, {InputTextSet(foreign.Name, "x")}} {
+	for _, input := range [][]Assignment[hookedRow]{{Set(d.Name, "a"), Set(d.Name, "b")}, {Set(foreign.Name, "x")}} {
 		if _, e := Insert(t.Context(), db, d.Table, input...); !errors.Is(e, fault.Invalid) {
 			t.Fatal(e)
 		}

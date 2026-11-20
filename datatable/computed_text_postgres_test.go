@@ -3,7 +3,6 @@ package datatable
 import (
 	"testing"
 
-	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
@@ -32,8 +31,8 @@ func TestPostgresDatatableComputedNullableTextFilter(t *testing.T) {
 	correlation := rows.Correlate(outer, innerQuery)
 	inner := rows.InnerScope(correlation, rows.Scope(innerQuery))
 	parent := rows.OuterScope(correlation, rows.ModelScope(reportModels.Query()))
-	scalar := rows.SelectCorrelatedScalar(correlation, expr.AsSelected(expr.Row(expr.At(inner, orm.NullableTextExpr(reportModels.Note))))).
-		Where(expr.Equal(expr.At(inner, orm.KeyExpr(reportModels.ID)), expr.At(parent, orm.KeyExpr(reportModels.ID)))).Limit(1)
+	scalar := rows.SelectCorrelatedScalar(correlation, expr.AsSelected(expr.Row(expr.At(inner, reportModels.Note)))).
+		Where(expr.Equal(expr.At(inner, reportModels.ID), expr.At(parent, reportModels.ID))).Limit(1)
 	text := expr.TextNullableRowValue(rows.CorrelatedScalarNullableRowQuery(scalar))
 	filter := correlatedNoteFilter{expr.NullableTextFilter(text), text}
 	spec := reportSpec()

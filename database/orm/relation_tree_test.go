@@ -96,7 +96,7 @@ func (o *relationOracle) connector() testConnector {
 
 func TestDirectEagerTreeStatementContract(t *testing.T) {
 	p := people()
-	base := HasManyOf(p.Reports, KeyExpr(p.ID), NullableNumberExpr(p.ManagerID))
+	base := HasManyOf(p.Reports, p.ID, p.ManagerID)
 	for depth := 1; depth <= 3; depth++ {
 		t.Run(fmt.Sprint(depth), func(t *testing.T) {
 			for _, mode := range []string{"pool", "transaction", "locked"} {
@@ -115,7 +115,7 @@ func TestDirectEagerTreeStatementContract(t *testing.T) {
 					if depth == 3 {
 						r = r.With(base.With(base))
 					}
-					q := WithRelationLimits(p.Query().Where(KeyIn(p.ID, 1, 2)), RelationLimits{BatchSize: 2, MaxRows: 100, MaxDepth: 3}).With(r.Where(TextStartsWith(p.Name, "child")).OrderBy(TextDesc(p.Name)))
+					q := WithRelationLimits(p.Query().Where(In(p.ID, 1, 2)), RelationLimits{BatchSize: 2, MaxRows: 100, MaxDepth: 3}).With(r.Where(StartsWith(p.Name, "child")).OrderBy(Desc(p.Name)))
 					var parents []relationPerson
 					if mode == "pool" {
 						parents, err = All(ctx, db, q)
@@ -177,7 +177,7 @@ func TestDirectEagerTreeStatementContract(t *testing.T) {
 
 func TestLoadMissingSkipsLoadedEmptyAndSharedNullableKeys(t *testing.T) {
 	p := people()
-	manager := BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))
+	manager := BelongsToOf(p.Manager, p.ManagerID, p.ID)
 	o := treeOracle()
 	db := testDB(t, o.connector())
 	parents := []relationPerson{
@@ -187,7 +187,7 @@ func TestLoadMissingSkipsLoadedEmptyAndSharedNullableKeys(t *testing.T) {
 		{ID: 4},
 		{ID: 5, ManagerID: value.Of(int64(10))},
 	}
-	result, err := LoadMissingFrom(t.Context(), db, p.Query().With(manager.With(HasManyOf(p.Reports, KeyExpr(p.ID), NullableNumberExpr(p.ManagerID)))), parents)
+	result, err := LoadMissingFrom(t.Context(), db, p.Query().With(manager.With(HasManyOf(p.Reports, p.ID, p.ManagerID))), parents)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestLoadMissingSkipsLoadedEmptyAndSharedNullableKeys(t *testing.T) {
 
 func TestHasOneCardinalityAndNoParentStatement(t *testing.T) {
 	p := people()
-	r := HasOneOf(p.Manager, KeyExpr(p.ID), NullableNumberExpr(p.ManagerID))
+	r := HasOneOf(p.Manager, p.ID, p.ManagerID)
 	for _, id := range []int64{1, 2, 3} {
 		o := treeOracle()
 		db := testDB(t, o.connector())
@@ -259,7 +259,7 @@ func TestHasOneCardinalityAndNoParentStatement(t *testing.T) {
 
 func TestRelationTreesValidateBeforeParentSQL(t *testing.T) {
 	p, other := people(), people()
-	r := HasManyOf(p.Reports, KeyExpr(p.ID), NullableNumberExpr(p.ManagerID))
+	r := HasManyOf(p.Reports, p.ID, p.ManagerID)
 	var nilRel *HasMany[relationPerson, relationPerson]
 	tooDeep := r
 	for range 8 {
@@ -272,8 +272,8 @@ func TestRelationTreesValidateBeforeParentSQL(t *testing.T) {
 	offset.plan = copyRelationPlan(r.plan)
 	offset.plan.query.ast.Offset = 1
 	cases := []Query[relationPerson]{
-		p.Query().With(r.With(r, r)), p.Query().With(r.OrderBy(TextAsc(p.Name), TextDesc(p.Name))), p.Query().With(tooDeep), p.Query().With(nilRel), p.Query().With(limited), p.Query().With(offset),
-		p.Query().With(r.Where(TextEq(other.Name, "wrong declaration"))),
+		p.Query().With(r.With(r, r)), p.Query().With(r.OrderBy(Asc(p.Name), Desc(p.Name))), p.Query().With(tooDeep), p.Query().With(nilRel), p.Query().With(limited), p.Query().With(offset),
+		p.Query().With(r.Where(Eq(other.Name, "wrong declaration"))),
 		WithRelationLimits(p.Query().With(r.With(r.With(r))), RelationLimits{BatchSize: 2, MaxRows: 100, MaxDepth: 2}),
 		WithRelationLimits(p.Query(), RelationLimits{}),
 	}
@@ -287,8 +287,8 @@ func TestRelationTreesValidateBeforeParentSQL(t *testing.T) {
 	if o.calls != 0 {
 		t.Fatal("validation sent SQL", o.calls)
 	}
-	captured := p.Query().Where(KeyEq(p.ID, 1)).With(&r)
-	r = r.Where(TextEq(p.Name, "absent"))
+	captured := p.Query().Where(Eq(p.ID, 1)).With(&r)
+	r = r.Where(Eq(p.Name, "absent"))
 	if len(captured.state.relations[0].query.ast.Predicates) != 0 {
 		t.Fatal("With retained descriptor variable")
 	}
@@ -296,11 +296,11 @@ func TestRelationTreesValidateBeforeParentSQL(t *testing.T) {
 
 func TestRelationTreeSharedBudgetNoPartialParents(t *testing.T) {
 	p := people()
-	r := HasManyOf(p.Reports, KeyExpr(p.ID), NullableNumberExpr(p.ManagerID))
+	r := HasManyOf(p.Reports, p.ID, p.ManagerID)
 	for _, budget := range []int{1, 3, 4} {
 		o := treeOracle()
 		db := testDB(t, o.connector())
-		q := WithRelationLimits(p.Query().Where(KeyIn(p.ID, 1, 2)).With(r.With(r)), RelationLimits{BatchSize: 2, MaxRows: budget, MaxDepth: 3})
+		q := WithRelationLimits(p.Query().Where(In(p.ID, 1, 2)).With(r.With(r)), RelationLimits{BatchSize: 2, MaxRows: budget, MaxDepth: 3})
 		if result, err := All(t.Context(), db, q); result != nil || !errors.Is(err, fault.Invalid) {
 			t.Fatal("shared budget accepted partial parents", result, err)
 		}
@@ -312,7 +312,7 @@ func TestRelationTreeSharedBudgetNoPartialParents(t *testing.T) {
 	o := treeOracle()
 	db := testDB(t, o.connector())
 	input := []relationPerson{{ID: 1, Reports: relation.Collection([]relationPerson{{ID: 99}})}}
-	single := HasOneOf(p.Manager, KeyExpr(p.ID), NullableNumberExpr(p.ManagerID))
+	single := HasOneOf(p.Manager, p.ID, p.ManagerID)
 	if result, err := LoadFrom(t.Context(), db, p.Query().With(r, single), input); result != nil || !errors.Is(err, database.TooManyRows) {
 		t.Fatal(result, err)
 	}
@@ -324,11 +324,11 @@ func TestRelationTreeSharedBudgetNoPartialParents(t *testing.T) {
 
 func TestRelationExistenceCompilesNestedScopesWithoutRoundTrips(t *testing.T) {
 	p := people()
-	r := HasManyOf(p.Reports, KeyExpr(p.ID), NullableNumberExpr(p.ManagerID))
+	r := HasManyOf(p.Reports, p.ID, p.ManagerID)
 	for _, negative := range []bool{false, true} {
-		predicate := Has(r, Has(r, TextEq(p.Name, "great")))
+		predicate := Has(r, Has(r, Eq(p.Name, "great")))
 		if negative {
-			predicate = Not(Has(r, Has(r, TextEq(p.Name, "great"))))
+			predicate = Not(Has(r, Has(r, Eq(p.Name, "great"))))
 		}
 		o := treeOracle()
 		db := testDB(t, o.connector())
@@ -347,7 +347,7 @@ func TestRelationExistenceCompilesNestedScopesWithoutRoundTrips(t *testing.T) {
 	other := people()
 	o := treeOracle()
 	db := testDB(t, o.connector())
-	for _, q := range []Query[relationPerson]{other.Query().Where(Has(r)), p.Query().Where(Has(r, TextEq(other.Name, "wrong")))} {
+	for _, q := range []Query[relationPerson]{other.Query().Where(Has(r)), p.Query().Where(Has(r, Eq(other.Name, "wrong")))} {
 		if _, err := All(t.Context(), db, q); !errors.Is(err, fault.Invalid) {
 			t.Fatal("wrong declaration accepted", err)
 		}
@@ -359,7 +359,7 @@ func TestRelationExistenceCompilesNestedScopesWithoutRoundTrips(t *testing.T) {
 
 func TestEagerEachAndChunkStatementWindows(t *testing.T) {
 	p := people()
-	manager := BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))
+	manager := BelongsToOf(p.Manager, p.ManagerID, p.ID)
 	for _, mode := range []string{"each", "chunk"} {
 		calls, closed := 0, 0
 		db := testDB(t, testConnector{onClose: func() { closed++ }, respondBound: func(sql string, args []driver.NamedValue) ([]string, [][]driver.Value, error) {
@@ -406,7 +406,7 @@ func TestEagerEachAndChunkStatementWindows(t *testing.T) {
 	o := treeOracle()
 	db := testDB(t, o.connector())
 	seen := 0
-	if err := Each(context.Background(), db, p.Query().Where(KeyIn(p.ID, 1, 2)).Limit(2).With(manager), func(m relationPerson) error {
+	if err := Each(context.Background(), db, p.Query().Where(In(p.ID, 1, 2)).Limit(2).With(manager), func(m relationPerson) error {
 		seen++
 		if !m.Manager.IsLoaded() {
 			t.Fatal("missing eager slot")

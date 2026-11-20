@@ -13,7 +13,7 @@ import (
 
 func TestStatementDetectorFindsLoopButAcceptsEagerBatch(t *testing.T) {
 	p := people()
-	manager := orm.BelongsToOf(p.Manager, orm.NullableNumberExpr(p.ManagerID), orm.KeyExpr(p.ID))
+	manager := orm.BelongsToOf(p.Manager, p.ManagerID, p.ID)
 	d, _ := database.NewStatementDetector(database.StatementDetectorConfig{Threshold: 2, MaxShapes: 16})
 	db := testDB(t, testConnector{respond: func(sql string) ([]string, [][]driver.Value) {
 		if strings.Contains(sql, "ANY(") || strings.Contains(sql, `"id" =`) {

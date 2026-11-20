@@ -18,12 +18,12 @@ import (
 type ModelIdentity[M any, K comparable] struct {
 	_     [0]*M
 	table *tableCore
-	key   columnData[K]
+	key   *columnData[K]
 }
 
 // IdentityOf binds the model's own primary handle. Example: orm.IdentityOf(Users.Table, Users.Key()).
 func IdentityOf[M any, K comparable](table Table[M, K], key Key[M, K]) ModelIdentity[M, K] {
-	return ModelIdentity[M, K]{table: table.core, key: key.key}
+	return ModelIdentity[M, K]{table: table.core, key: key.stored}
 }
 
 // Validate rejects zero declarations and keys from another declaration. Example: identity.Validate().
@@ -31,7 +31,7 @@ func (d ModelIdentity[M, K]) Validate() error {
 	if err := tableError(d.table); err != nil {
 		return err
 	}
-	if d.key.core == nil || d.key.core != d.table.primary || d.key.core.sensitive {
+	if d.key == nil || d.key.core == nil || d.key.core != d.table.primary || d.key.core.sensitive {
 		return invalid("model identity requires its declared non-sensitive primary key")
 	}
 	return nil
@@ -102,7 +102,7 @@ func (d ModelIdentity[M, K]) Scope(keys ...K) Predicate[M] {
 	if len(keys) > querycore.MaxIdentityBatch {
 		return Predicate[M]{err: invalid("model identity batch exceeds its limit")}
 	}
-	return comparison[M](d.key, querycore.In, keys)
+	return comparison[M](d.key, querycore.In, keys, false)
 }
 
 // ActiveKeys selects currently visible keys in one bounded statement. Example: identity.ActiveKeys(ctx,db,ids).
@@ -136,7 +136,7 @@ func identityKeys[M any, K comparable](ctx context.Context, ex database.Executor
 	if len(keys) == 0 {
 		return []K{}, nil
 	}
-	q := Query[M]{state: newQuery(d.table)}.Where(d.Scope(keys...)).OrderBy(KeyAsc(Key[M, K]{key: d.key}))
+	q := Query[M]{state: newQuery(d.table)}.Where(d.Scope(keys...)).OrderBy(columnOrder[M](d.key.core, false))
 	if retained && d.table.model.SoftDelete != nil {
 		q = q.WithTrashed()
 	}

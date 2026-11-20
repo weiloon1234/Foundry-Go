@@ -81,12 +81,12 @@ func TestRelationWriteNullableStoredKeysWithDistinctInputs(t *testing.T) {
 							}{{func() func(arg0 pivotKeyInput) orm.Assignment[inputKeyPivot] {
 								receiver := p.ParentID
 								return func(arg0 pivotKeyInput) orm.Assignment[inputKeyPivot] {
-									return orm.NullableInputNumberSet(receiver, arg0)
+									return orm.Set(receiver, arg0)
 								}
 							}(), "91"}, {func() func(arg0 pivotKeyInput) orm.Assignment[inputKeyPivot] {
 								receiver := p.TargetID
 								return func(arg0 pivotKeyInput) orm.Assignment[inputKeyPivot] {
-									return orm.NullableInputNumberSet(receiver, arg0)
+									return orm.Set(receiver, arg0)
 								}
 							}(), "81"}} {
 								input, set := orm.WriteNullableGet(w, field.setter).Get()
@@ -95,14 +95,14 @@ func TestRelationWriteNullableStoredKeysWithDistinctInputs(t *testing.T) {
 									t.Fatal("hook lost typed input", v, set, nonNull)
 								}
 							}
-							return orm.WriteSet(w, orm.NullableInputNumberSet(p.TargetID, "81"))
+							return orm.WriteSet(w, orm.Set(p.TargetID, "81"))
 						}}
 					}))
 				}
 				p = orm.Define("input_key_pivots", func(b orm.Builder[inputKeyPivot], m *inputKeyPivot) inputKeyPivotTable {
 					return inputKeyPivotTable{orm.TableOf(b, &m.ID), orm.NullableInputNumberOf(b, &m.ParentID, transform), orm.NullableInputNumberOf(b, &m.TargetID, transform)}
 				}, opts...)
-				r := orm.ManyToManyOf(a.Links, orm.NullableInputNumberExpr(a.Code), orm.NullableInputNumberExpr(p.ParentID), orm.NullableInputNumberExpr(p.TargetID), orm.NullableInputNumberExpr(z.Code))
+				r := orm.ManyToManyOf(a.Links, orm.JoinKeys(a.Code, p.ParentID), orm.JoinKeys(p.TargetID, z.Code))
 				var statements []string
 				var binds [][]any
 				db := hookDB(t, testConnector{statements: &statements, bindings: &binds, respond: func(s string) ([]string, [][]driver.Value) {
@@ -122,16 +122,16 @@ func TestRelationWriteNullableStoredKeysWithDistinctInputs(t *testing.T) {
 					}
 				}})
 				source, target := inputKeyParent{ID: 1, Code: value.Of(storedPivotKey(999))}, inputKeyTarget{ID: 10, Code: value.Of(storedPivotKey(888))}
-				create := []orm.Assignment[inputKeyPivot]{orm.KeySet(p.Key(), 100)}
+				create := []orm.Assignment[inputKeyPivot]{orm.Set(p.Key(), 100)}
 				switch mode {
 				case "missing_parent":
-					create = append(create, orm.NullableInputNumberSet(p.TargetID, "81"))
+					create = append(create, orm.Set(p.TargetID, "81"))
 				case "missing_target":
-					create = append(create, orm.NullableInputNumberSet(p.ParentID, "91"))
+					create = append(create, orm.Set(p.ParentID, "91"))
 				case "explicit", "hook_override":
-					create = append(create, orm.NullableInputNumberSet(p.ParentID, "91"), orm.NullableInputNumberSet(p.TargetID, "81"))
+					create = append(create, orm.Set(p.ParentID, "91"), orm.Set(p.TargetID, "81"))
 				case "invalid_input":
-					create = append(create, orm.NullableInputNumberSet(p.ParentID, "invalid"), orm.NullableInputNumberSet(p.TargetID, "81"))
+					create = append(create, orm.Set(p.ParentID, "invalid"), orm.Set(p.TargetID, "81"))
 				}
 				var err error
 				var attached []inputKeyPivot
@@ -270,8 +270,8 @@ func TestAttachRechecksBothEndpointIdentitiesAfterHooks(t *testing.T) {
 			}})
 			// A non-primary relation key ensures the target check uses its original ID,
 			// rather than allowing a replacement target with the same relation key.
-			r := orm.ManyToManyOf(a.Links, orm.KeyExpr(a.Key()), orm.NumberExpr(p.ParentID), orm.NumberExpr(p.TargetID), orm.NumberExpr(z.Code))
-			out, err := orm.Attach(t.Context(), db, r, softWriteParent{ID: 1}, writeTarget{ID: 10}, orm.KeySet(p.ID, 100), orm.TextSet(p.Role, "member"))
+			r := orm.ManyToManyOf(a.Links, orm.JoinKeys(a.Key(), p.ParentID), orm.JoinKeys(p.TargetID, z.Code))
+			out, err := orm.Attach(t.Context(), db, r, softWriteParent{ID: 1}, writeTarget{ID: 10}, orm.Set(p.ID, 100), orm.Set(p.Role, "member"))
 			if !errors.Is(err, fault.Invalid) || out.ID != 0 || !hookRan {
 				t.Fatal(out, err, hookRan)
 			}
@@ -346,14 +346,14 @@ func TestRelationWriteSameTypeDefaultsStillRunMutators(t *testing.T) {
 				table := orm.TableOf(b, &m.ID)
 				return inputPivotTable{table, table.Key(), orm.InputNumberOf(b, &m.ParentID, mutate), orm.InputNumberOf(b, &m.TargetID, mutate), orm.TextOf(b, &m.Role), orm.SoftDeleteOf(b, &m.DeletedAt)}
 			})
-			r := orm.ManyToManyOf(a.Links, orm.KeyExpr(a.ID), orm.InputNumberExpr(p.ParentID), orm.InputNumberExpr(p.TargetID), orm.KeyExpr(z.ID))
+			r := orm.ManyToManyOf(a.Links, orm.JoinKeys(a.ID, p.ParentID), orm.JoinKeys(p.TargetID, z.ID))
 			var statements []string
 			db := hookDB(t, testConnector{statements: &statements, respond: pivotTestReply(1)})
 			var err error
 			if bulk {
-				_, err = orm.AttachMany(t.Context(), db, r, writeParent{ID: 1}, []writeTarget{{ID: 10}}, orm.KeySet(p.ID, 100), orm.TextSet(p.Role, "member"))
+				_, err = orm.AttachMany(t.Context(), db, r, writeParent{ID: 1}, []writeTarget{{ID: 10}}, orm.Set(p.ID, 100), orm.Set(p.Role, "member"))
 			} else {
-				_, err = orm.Attach(t.Context(), db, r, writeParent{ID: 1}, writeTarget{ID: 10}, orm.KeySet(p.ID, 100), orm.TextSet(p.Role, "member"))
+				_, err = orm.Attach(t.Context(), db, r, writeParent{ID: 1}, writeTarget{ID: 10}, orm.Set(p.ID, 100), orm.Set(p.Role, "member"))
 			}
 			if err != nil || calls != 2 || len(statements) != 4 {
 				t.Fatal(err, calls, statements)

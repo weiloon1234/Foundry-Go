@@ -101,10 +101,10 @@ func TestPostgresTrigramSearch(t *testing.T) {
 			t.Fatal("joined duplicate search", duplicates)
 		}
 
-		body := expr.Value(orm.TextExpr(f.Reviews.Body))
+		body := expr.Value(f.Reviews.Body)
 		score := expr.TrigramSimilarity(body, "words")
-		source := rows.From(f.Reviews.Query().Where(orm.KeyNe(f.Reviews.Key(), 4)))
-		ordered := rows.OrderScalar(rows.SelectScalar(source, expr.AsSelected(expr.Row(body))), expr.Desc(score), expr.Asc(expr.Value(orm.KeyExpr(f.Reviews.Key()))))
+		source := rows.From(f.Reviews.Query().Where(orm.Ne(f.Reviews.Key(), 4)))
+		ordered := rows.OrderScalar(rows.SelectScalar(source, expr.AsSelected(expr.Row(body))), expr.Desc(score), expr.Asc(expr.Value(f.Reviews.Key())))
 		got, err := rows.ReadScalar(ordered).All(t.Context(), tx)
 		if err != nil || !reflect.DeepEqual(got, []string{"words", "word", "zebra"}) {
 			t.Fatal("similarity ordering", got, err)
@@ -118,7 +118,7 @@ func TestPostgresTrigramSearch(t *testing.T) {
 			t.Fatal("per-query cutoff", got, err)
 		}
 
-		nullable := expr.TrigramSimilarityNullable(expr.Value(orm.NullableTextExpr(f.Reviews.OptionalBody)), "words")
+		nullable := expr.TrigramSimilarityNullable(expr.Value(f.Reviews.OptionalBody), "words")
 		nullableQuery := rows.OrderScalar(rows.SelectScalar(source, expr.AsSelected(nullable)), expr.DescValue(expr.AsSelected(nullable)).NullsLast())
 		nullableValues, err := rows.ReadScalar(nullableQuery).All(t.Context(), tx)
 		if err != nil || len(nullableValues) != 3 {
@@ -137,9 +137,9 @@ func TestPostgresTrigramSearch(t *testing.T) {
 		type left struct{}
 		type right struct{}
 		n, e := rows.As[left](f.Names.Query(), "n"), rows.As[right](f.Entities.Query(), "e")
-		joined := rows.InnerJoin(n, e, rows.On(expr.At(rows.Scope(n), orm.NumberExpr(f.Names.EntityID)), expr.At(rows.Scope(e), orm.KeyExpr(f.Entities.Key()))))
+		joined := rows.InnerJoin(n, e, rows.On(expr.At(rows.Scope(n), f.Names.EntityID), expr.At(rows.Scope(e), f.Entities.Key())))
 		ns, es := rows.LeftScope(joined, rows.Scope(n)), rows.RightScope(joined, rows.Scope(e))
-		names := rows.SelectRecord(joined, ns).Where(expr.TrigramMatch(expr.At(ns, orm.TextExpr(f.Names.Normalized)), trigramqueries.Normalized("words")))
+		names := rows.SelectRecord(joined, ns).Where(expr.TrigramMatch(expr.At(ns, f.Names.Normalized), trigramqueries.Normalized("words")))
 		both := rows.LockRows(rows.ReadRecord(names), rows.NoKeyUpdateLock(rows.Target(ns)), rows.KeyShareLock(rows.Target(es)).NoWait())
 		matches, err := both.All(t.Context(), tx)
 		if err != nil || len(matches) != 5 {

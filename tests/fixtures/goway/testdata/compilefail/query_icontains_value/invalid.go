@@ -6,4 +6,4 @@ import (
 	m "foundry.test/goway/models"
 )
 
-var _ = orm.TextIContains(m.Users.Email, 42)
+var _ = orm.IContains(m.Users.Email, 42)

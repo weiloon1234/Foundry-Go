@@ -110,7 +110,7 @@ func (a Action[P]) record(ctx context.Context, tx *database.Tx, recorder *Record
 	if err != nil {
 		return ActionID[P]{}, err
 	}
-	row, err := auditstore.Append(ctx, tx, append(draft, orm.ColumnSet(auditstore.Entries.Operation, 0), orm.TextSet(auditstore.Entries.Action, string(a.name)), orm.NumberSet(auditstore.Entries.Version, uint32(a.version)), orm.ColumnSet(auditstore.Entries.Redacted, captured.Redacted())))
+	row, err := auditstore.Append(ctx, tx, append(draft, orm.Set(auditstore.Entries.Operation, 0), orm.Set(auditstore.Entries.Action, string(a.name)), orm.Set(auditstore.Entries.Version, uint32(a.version)), orm.Set(auditstore.Entries.Redacted, captured.Redacted())))
 	if err != nil {
 		return ActionID[P]{}, err
 	}
@@ -153,7 +153,7 @@ func (a Action[P]) Find(ctx context.Context, executor database.Executor, recorde
 	if id.IsZero() {
 		return value.Optional[ActionRecord[P]]{}, safeerror.NewFault(fault.Invalid, "audit lookup requires a nonzero ID")
 	}
-	selected, err := orm.First(ctx, executor, q.Where(orm.KeyEq(auditstore.Entries.Key(), model.IDFromBytes[auditstore.Entry](id.Bytes()))))
+	selected, err := orm.First(ctx, executor, q.Where(orm.Eq(auditstore.Entries.Key(), model.IDFromBytes[auditstore.Entry](id.Bytes()))))
 	if err != nil {
 		return value.Optional[ActionRecord[P]]{}, err
 	}
@@ -191,7 +191,7 @@ func ActionTimelineFor[M, K, P any](ctx context.Context, executor database.Execu
 		return Timeline[ActionRecord[P]]{}, err
 	}
 	f := auditstore.Entries
-	return readTimeline(ctx, executor, q.Where(orm.TextEq(f.Action, string(action.name)), orm.NumberEq(f.Version, uint32(action.version)), orm.ColumnEq(f.Operation, 0)), request, restoreAction[P])
+	return readTimeline(ctx, executor, q.Where(orm.Eq(f.Action, string(action.name)), orm.Eq(f.Version, uint32(action.version)), orm.Eq(f.Operation, 0)), request, restoreAction[P])
 }
 
 func (a Action[P]) history(ctx context.Context, recorder *Recorder) (orm.Query[auditstore.Entry], error) {
@@ -203,7 +203,7 @@ func (a Action[P]) history(ctx context.Context, recorder *Recorder) (orm.Query[a
 		return orm.Query[auditstore.Entry]{}, err
 	}
 	f := auditstore.Entries
-	return auditstore.Entries.Query().Where(orm.TextEq(f.Area, string(area)), orm.TextEq(f.Action, string(a.name)), orm.NumberEq(f.Version, uint32(a.version)), orm.ColumnEq(f.Operation, 0)), nil
+	return auditstore.Entries.Query().Where(orm.Eq(f.Area, string(area)), orm.Eq(f.Action, string(a.name)), orm.Eq(f.Version, uint32(a.version)), orm.Eq(f.Operation, 0)), nil
 }
 
 func restoreAction[P any](row auditstore.Entry) (ActionRecord[P], error) {

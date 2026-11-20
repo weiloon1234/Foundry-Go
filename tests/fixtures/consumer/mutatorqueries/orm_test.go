@@ -22,15 +22,15 @@ func TestORMMutatorDeclarationPreservesStoredIdentityAndChanges(t *testing.T) {
 	before := mutatorqueries.Member{ID: id, Email: "ada@example.test", State: mutatorqueries.Active}
 	after := before
 	after.Nickname = value.Of("!")
-	changes, err := orm.Compare(mutatorqueries.Members.Table, value.Set(before), value.Set(after), orm.InputTextSet(mutatorqueries.Members.Email, " ADA@EXAMPLE.TEST "), orm.NullableInputTextSet(mutatorqueries.Members.Nickname, ""))
+	changes, err := orm.Compare(mutatorqueries.Members.Table, value.Set(before), value.Set(after), orm.Set(mutatorqueries.Members.Email, " ADA@EXAMPLE.TEST "), orm.Set(mutatorqueries.Members.Nickname, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
-	email, err := orm.ChangeOf(changes, orm.InputTextExpr(mutatorqueries.Members.Email))
+	email, err := orm.ChangeOf(changes, mutatorqueries.Members.Email)
 	if err != nil {
 		t.Fatal(err)
 	}
-	nickname, err := orm.NullableChangeOf(changes, orm.NullableInputTextExpr(mutatorqueries.Members.Nickname))
+	nickname, err := orm.NullableChangeOf(changes, mutatorqueries.Members.Nickname)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestORMMutatorDeclarationPreservesStoredIdentityAndChanges(t *testing.T) {
 	if err != nil || parsed.Key() != id {
 		t.Fatal("identity codec changed", err)
 	}
-	if _, err := orm.Compile(mutatorqueries.Members.Query().Where(orm.InputTextEq(mutatorqueries.Members.Email, before.Email), orm.InputEnumEq(mutatorqueries.Members.State, mutatorqueries.Active))); err != nil {
+	if _, err := orm.Compile(mutatorqueries.Members.Query().Where(orm.Eq(mutatorqueries.Members.Email, before.Email), orm.Eq(mutatorqueries.Members.State, mutatorqueries.Active))); err != nil {
 		t.Fatal(err)
 	}
 	response, err := responseForMember(before)

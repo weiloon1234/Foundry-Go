@@ -6,4 +6,4 @@ import (
 	"foundry.test/consumer/models"
 )
 
-var _, _ = orm.UpdateAll(nil, nil, orm.Lock(models.Users.Query()), orm.NumberSet(models.Users.Age, 20))
+var _, _ = orm.UpdateAll(nil, nil, orm.Lock(models.Users.Query()), orm.Set(models.Users.Age, 20))

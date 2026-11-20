@@ -5,7 +5,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-// MemberTable declares stored columns and their write roles. Example: orm.KeyEq(Members.Key(), key).
+// MemberTable declares stored columns and their write roles. Example: orm.Eq(Members.Key(), key).
 type MemberTable struct {
 	orm.Table[Member, model.ID[Member]]
 	Email        orm.InputText[Member, string, string]
@@ -32,7 +32,7 @@ func declareMembers() MemberTable {
 	return fields
 }
 
-// LogTable declares stored columns and their write roles. Example: orm.KeyEq(Logs.Key(), key).
+// LogTable declares stored columns and their write roles. Example: orm.Eq(Logs.Key(), key).
 type LogTable struct {
 	orm.Table[Log, model.ID[Log]]
 	Label orm.Text[Log, string]

@@ -11,7 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
-// MemberTable declares stored columns and relation slots. Example: orm.TextEq(Members.Name, "Ada").
+// MemberTable declares stored columns and relation slots. Example: orm.Eq(Members.Name, "Ada").
 type MemberTable struct {
 	orm.Table[Member, model.ID[Member]]
 	ID          orm.Primary[Member, model.ID[Member]]
@@ -34,7 +34,7 @@ var Members = orm.Define("link_members", func(b orm.Builder[Member], m *Member) 
 	return orm.RetrievalHooks[Member]{Retrieved: func(ctx context.Context, _ database.Executor, _ Member) error { recordRead(ctx); return nil }}
 }))
 
-// GroupTable retains the named natural primary key. Example: orm.KeyEq(Groups.Key(), GroupCode("staff")).
+// GroupTable retains the named natural primary key. Example: orm.Eq(Groups.Key(), GroupCode("staff")).
 type GroupTable struct {
 	orm.Table[Group, GroupCode]
 	Name      orm.Text[Group, string]
@@ -50,7 +50,7 @@ var Groups = orm.Define("link_groups", func(b orm.Builder[Group], m *Group) Grou
 	return orm.RetrievalHooks[Group]{Retrieved: func(ctx context.Context, _ database.Executor, _ Group) error { recordRead(ctx); return nil }}
 }))
 
-// MembershipTable keeps pivot inputs and managed timestamp roles. Example: orm.InputTextSet(Memberships.Role, "staff").
+// MembershipTable keeps pivot inputs and managed timestamp roles. Example: orm.Set(Memberships.Role, "staff").
 type MembershipTable struct {
 	orm.Table[Membership, model.ID[Membership]]
 	MemberID  orm.Column[Membership, model.ID[Member]]
@@ -74,7 +74,7 @@ func declareMemberships() MembershipTable {
 	return fields
 }
 
-// NaturalLinkTable declares non-primary pivot keys. Example: orm.TextEq(NaturalLinks.MemberName, "Ada").
+// NaturalLinkTable declares non-primary pivot keys. Example: orm.Eq(NaturalLinks.MemberName, "Ada").
 type NaturalLinkTable struct {
 	orm.Table[NaturalLink, model.ID[NaturalLink]]
 	MemberName orm.Text[NaturalLink, string]
@@ -86,7 +86,7 @@ var NaturalLinks = orm.Define("link_natural", func(b orm.Builder[NaturalLink], m
 	return NaturalLinkTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.MemberName), orm.TextOf(b, &m.GroupName)}
 })
 
-// NullableLinkTable preserves nullable link keys. Example: orm.NullableTextIsNull(NullableLinks.MemberAlias).
+// NullableLinkTable preserves nullable link keys. Example: orm.IsNull(NullableLinks.MemberAlias).
 type NullableLinkTable struct {
 	orm.Table[NullableLink, model.ID[NullableLink]]
 	MemberAlias orm.NullableText[NullableLink, string]
@@ -98,7 +98,7 @@ var NullableLinks = orm.Define("link_nullable", func(b orm.Builder[NullableLink]
 	return NullableLinkTable{orm.TableOf(b, &m.ID), orm.NullableTextOf(b, &m.MemberAlias), orm.NullableTextOf(b, &m.GroupName)}
 })
 
-// FriendshipTable retains both model-owned endpoints. Example: orm.ColumnEq(Friendships.FromID, member.ID).
+// FriendshipTable retains both model-owned endpoints. Example: orm.Eq(Friendships.FromID, member.ID).
 type FriendshipTable struct {
 	orm.Table[Friendship, model.ID[Friendship]]
 	FromID orm.Column[Friendship, model.ID[Member]]
@@ -117,13 +117,13 @@ var MemberLinks = struct {
 	AliasGroups orm.ThroughRelation[Member, Group, NullableLink]
 	Friends     orm.ThroughRelation[Member, Member, Friendship]
 }{
-	orm.ManyToManyOf(Members.Groups, orm.KeyExpr(Members.Key()), orm.ColumnExpr(Memberships.MemberID), orm.TextExpr(Memberships.GroupCode), orm.KeyExpr(Groups.Key())),
-	orm.ManyToManyOf(Members.NamedGroups, orm.TextExpr(Members.Name), orm.TextExpr(NaturalLinks.MemberName), orm.TextExpr(NaturalLinks.GroupName), orm.TextExpr(Groups.Name)),
-	orm.ManyToManyOf(Members.AliasGroups, orm.NullableTextExpr(Members.Alias), orm.NullableTextExpr(NullableLinks.MemberAlias), orm.NullableTextExpr(NullableLinks.GroupName), orm.TextExpr(Groups.Name)),
-	orm.ManyToManyOf(Members.Friends, orm.KeyExpr(Members.Key()), orm.ColumnExpr(Friendships.FromID), orm.ColumnExpr(Friendships.ToID), orm.KeyExpr(Members.Key())),
+	orm.ManyToManyOf(Members.Groups, orm.JoinKeys(Members.Key(), Memberships.MemberID), orm.JoinKeys(Memberships.GroupCode, Groups.Key())),
+	orm.ManyToManyOf(Members.NamedGroups, orm.JoinKeys(Members.Name, NaturalLinks.MemberName), orm.JoinKeys(NaturalLinks.GroupName, Groups.Name)),
+	orm.ManyToManyOf(Members.AliasGroups, orm.JoinKeys(Members.Alias, NullableLinks.MemberAlias), orm.JoinKeys(NullableLinks.GroupName, Groups.Name)),
+	orm.ManyToManyOf(Members.Friends, orm.JoinKeys(Members.Key(), Friendships.FromID), orm.JoinKeys(Friendships.ToID, Members.Key())),
 }
 
-// ArchiveTable preserves database defaults and distinct mutation input. Example: orm.InputTextSet(Archives.Tag, ArchiveTagInput{Text:"new"}).
+// ArchiveTable preserves database defaults and distinct mutation input. Example: orm.Set(Archives.Tag, ArchiveTagInput{Text:"new"}).
 type ArchiveTable struct {
 	orm.Table[Archive, model.ID[Archive]]
 	ID        orm.Primary[Archive, model.ID[Archive]]
@@ -138,7 +138,7 @@ type ArchiveTable struct {
 	UpdatedAt orm.UpdatedAt[Archive, temporal.DateTime]
 }
 
-// Archives supports typed insert-select mappings for its primary key. Example: orm.NumberSet(Archives.Counter, 0).
+// Archives supports typed insert-select mappings for its primary key. Example: orm.Set(Archives.Counter, 0).
 var Archives = orm.Define("link_archives", func(b orm.Builder[Archive], m *Archive) ArchiveTable {
 	table := orm.TableOf(b, &m.ID)
 	return ArchiveTable{table, orm.PrimaryOf(b, table.Key()), orm.ColumnOf(b, &m.MemberID), orm.TextOf(b, &m.Name), orm.NullableTextOf(b, &m.Alias), orm.InputTextOf[Archive, ArchiveTagInput](b, &m.Tag, nil), orm.NumberOf(b, &m.Counter), orm.NumberOf(b, &m.Amount), orm.JSONOf(b, &m.Payload), orm.CreatedAtOf(b, &m.CreatedAt), orm.UpdatedAtOf(b, &m.UpdatedAt)}

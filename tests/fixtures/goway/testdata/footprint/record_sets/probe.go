@@ -12,9 +12,9 @@ import (
 )
 
 func Read(ctx context.Context, db *database.DB) ([]models.Order, error) {
-	a, b := rows.ModelRecord(models.Orders.Query().Limit(5)), rows.ModelRecord(models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 1)))
+	a, b := rows.ModelRecord(models.Orders.Query().Limit(5)), rows.ModelRecord(models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 1)))
 	q := rows.Except(rows.UnionAll(a, b), rows.Intersect(a, b))
-	return rows.ReadSet(q.Where(expr.Eq(expr.At(q.Scope(), orm.NumberExpr(models.Orders.TotalCents)), 0)).OrderBy(expr.Asc(expr.At(q.Scope(), orm.NumberExpr(models.Orders.TotalCents)))).Limit(10)).All(ctx, db)
+	return rows.ReadSet(q.Where(expr.Eq(expr.At(q.Scope(), models.Orders.TotalCents), 0)).OrderBy(expr.Asc(expr.At(q.Scope(), models.Orders.TotalCents))).Limit(10)).All(ctx, db)
 }
 func Projected(ctx context.Context, db *database.DB) ([]reporting.OrderRow, error) {
 	q := rows.Union(rows.RecordOf(reporting.SelectOrders(1)), rows.RecordOf(reporting.SelectOrders(2)))

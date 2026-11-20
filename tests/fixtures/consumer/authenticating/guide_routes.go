@@ -55,7 +55,7 @@ func ScopedOrderRoute(db database.Executor, binding foundryhttp.GuardBinding[mod
 		if err != nil {
 			return value.Optional[models.Order]{}, err
 		}
-		return orm.Keyed(models.Orders.Query().Where(orm.ColumnEq(models.Orders.BuyerID, actor.ID)), models.Orders.Key()).Find(ctx, db, path.Order)
+		return orm.Keyed(models.Orders.Query().Where(orm.Eq(models.Orders.BuyerID, actor.ID)), models.Orders.Key()).Find(ctx, db, path.Order)
 	})
 
 	endpointBinding := foundryhttp.ForAuthenticatedBinding(endpoint)

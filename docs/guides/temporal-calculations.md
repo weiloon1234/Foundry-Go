@@ -12,8 +12,8 @@ Calendar extraction accepts dates or local date-times. Clock extraction accepts 
 
 <!-- compiled-source: tests/fixtures/consumer/temporalqueries/orm_test.go#temporal-calculations -->
 ```go
-year := expr.Year(expr.Value(orm.TimeExpr(Samples.Date)))
-report := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, expr.AsSelected(year)), rows.MapSelected(CalendarSummaries.Rows, expr.AsSelected(expr.Count[Sample]())), rows.MapSelected(CalendarSummaries.Latest, expr.AsSelected(expr.Max(orm.TimeExpr(Samples.Date))))), expr.Group(year)), expr.Asc(year))
+year := expr.Year(expr.Value(Samples.Date))
+report := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, expr.AsSelected(year)), rows.MapSelected(CalendarSummaries.Rows, expr.AsSelected(expr.Count[Sample]())), rows.MapSelected(CalendarSummaries.Latest, expr.AsSelected(expr.Max(Samples.Date)))), expr.Group(year)), expr.Asc(year))
 ```
 
 The example is a grouped rows projection over the handwritten `Samples` declaration. Extraction and ordering run in PostgreSQL; sorting an already-loaded slice is a separate Go operation.
@@ -25,7 +25,7 @@ Integral components return `int64`. `Second`, `Milliseconds`, `JulianDay` and `U
 ## Truncation and timezone resolution
 
 These functions live in `expr`; `field` below is a row operand such as
-`expr.Value(orm.TimeExpr(Samples.Date))`. Selected forms take `expr.Selected` values instead.
+`expr.Value(Samples.Date)`. Selected forms take `expr.Selected` values instead.
 
 | Operation | Input | Result |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ Calendar months clip to the destination month's final day. A calendar day across
 
 Each temporal operation has a nullable counterpart, such as `YearNullable` and `AddInstantIntervalNullable`. SQL NULL propagates. Binary nullable operations require explicit widening of any non-null input using `NullableRow`. Use `Coalesce` for a declared fallback.
 
-The `Value` forms accept selected expressions, including aggregates and windows. For example, `expr.YearNullableValue(expr.AsSelected(expr.Max(orm.TimeExpr(f.Date))))` retains aggregate semantics, while `UnixMillisecondsValue(FromUnixMillisValue(expr.RowNumber(window)))` retains window semantics. Row constructors cannot accept selected expressions. Existing grouping, HAVING and nested SELECT checks still apply.
+The `Value` forms accept selected expressions, including aggregates and windows. For example, `expr.YearNullableValue(expr.AsSelected(expr.Max(f.Date)))` retains aggregate semantics, while `UnixMillisecondsValue(FromUnixMillisValue(expr.RowNumber(window)))` retains window semantics. Row constructors cannot accept selected expressions. Existing grouping, HAVING and nested SELECT checks still apply.
 
 Dates and timestamps retain Foundry's years 1–9999 and whole-microsecond codec contracts. PostgreSQL can represent values outside this range, but result decoding rejects them and collected reads publish no partial slice. Database arithmetic overflow remains a database error; callers can use a savepoint when recovering within a transaction. Invalid units, zero zones, unsupported resolution policies and sub-microsecond elapsed values fail before I/O. Cancellation follows the normal query runtime.
 

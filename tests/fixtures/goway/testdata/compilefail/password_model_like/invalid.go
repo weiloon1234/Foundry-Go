@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.TextLike(s.Accounts.Digest, "%hash%")
+var _ = orm.Like(s.Accounts.Digest, "%hash%")

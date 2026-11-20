@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func F() { orm.NumberIncrement(models.Users.Email, 1) }
+func F() { orm.Increment(models.Users.Email, 1) }

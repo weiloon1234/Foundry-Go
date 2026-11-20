@@ -177,7 +177,7 @@ func journal(t *testing.T, f attachmentFixture, id OperationID) store.File {
 	var row store.File
 	err := f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		row, err = orm.Require(ctx, tx, store.Files.Query().Where(orm.KeyEq(store.Files.Key(), fileID(id))))
+		row, err = orm.Require(ctx, tx, store.Files.Query().Where(orm.Eq(store.Files.Key(), fileID(id))))
 		return err
 	})
 	if err != nil {

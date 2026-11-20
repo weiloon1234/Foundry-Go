@@ -11,5 +11,5 @@ import (
 )
 
 func Run(ctx context.Context, db database.Executor, after, through model.ID[models.Order]) ([]models.Order, error) {
-	return orm.All(ctx, db, expr.Where(models.Orders.Query().Where(orm.UUIDGreater(orm.KeyExpr(models.Orders.ID), after)), expr.UUIDLessOrEqual(expr.Value(orm.KeyExpr(models.Orders.ID)), through)).OrderBy(orm.KeyAsc(models.Orders.ID)).Limit(100))
+	return orm.All(ctx, db, expr.Where(models.Orders.Query().Where(orm.UUIDGreater(models.Orders.ID, after)), expr.UUIDLessOrEqual(expr.Value(models.Orders.ID), through)).OrderBy(orm.Asc(models.Orders.ID)).Limit(100))
 }

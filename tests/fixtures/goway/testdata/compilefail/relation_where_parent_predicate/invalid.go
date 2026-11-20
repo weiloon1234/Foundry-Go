@@ -6,4 +6,4 @@ import (
 	"foundry.test/goway/models"
 )
 
-var _ = models.OrderRelations.Buyer.Where(orm.NumberGt(models.Orders.TotalCents, 1))
+var _ = models.OrderRelations.Buyer.Where(orm.Gt(models.Orders.TotalCents, 1))

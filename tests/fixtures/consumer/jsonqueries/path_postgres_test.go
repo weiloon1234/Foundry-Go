@@ -16,14 +16,14 @@ import (
 func TestPostgresGeneratedJSONPaths(t *testing.T) {
 	runJSON(t, func(tx *database.Tx, original []jsonqueries.Document) error {
 		q, f := jsonqueries.Documents.Query(), jsonqueries.Documents
-		prefs := expr.JSONRoot(expr.Value(orm.JSONExpr(f.Settings)))
+		prefs := expr.JSONRoot(expr.Value(f.Settings))
 		price, err := decimal.Parse("9007199254740993.123456789")
 		if err != nil {
 			return err
 		}
 		profile := jsonqueries.Profile{Name: "Ada", Age: 42, Scores: []int64{1, 7}, Attributes: map[int]string{2: "two"}, Next: &jsonqueries.Profile{Name: "next"}, Quoted: "quoted\"value", Odd: "safe'_%"}
 		updated := document(t, jsonqueries.Preferences{Theme: value.Set("dark"), Labels: value.Set(map[string]string{"lang": "en"}), Quota: value.Set(price), Profile: value.Set(profile)})
-		if _, err := orm.Update(t.Context(), tx, q, f.Key(), 1, orm.JSONSet(f.Settings, updated)); err != nil {
+		if _, err := orm.Update(t.Context(), tx, q, f.Key(), 1, orm.Set(f.Settings, updated)); err != nil {
 			return err
 		}
 		p := expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.ProfileField))
@@ -36,8 +36,8 @@ func TestPostgresGeneratedJSONPaths(t *testing.T) {
 			{expr.IsNull(expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.Theme)).JSON()), 1},
 			{expr.NullableEq(expr.JSONTextScalar(expr.JSONMapKey(expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.LabelsField)), "lang"), codec.String[string]()), "en"), 1},
 			{expr.NullableEq(expr.OrderNullableRow(expr.JSONScalar(expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.QuotaField)), codec.Decimal())), price), 1},
-			{expr.NullableEq(expr.JSONTextScalar(expr.JSONIndex(expr.JSONRoot(expr.Value(orm.JSONExpr(f.Tags))), -1), codec.String[string]()), "go"), 2},
-			{expr.IsNull(expr.JSONIndex(expr.JSONRoot(expr.Value(orm.JSONExpr(f.Tags))), 100).JSON()), 3},
+			{expr.NullableEq(expr.JSONTextScalar(expr.JSONIndex(expr.JSONRoot(expr.Value(f.Tags)), -1), codec.String[string]()), "go"), 2},
+			{expr.IsNull(expr.JSONIndex(expr.JSONRoot(expr.Value(f.Tags)), 100).JSON()), 3},
 			{expr.NullableEq(expr.JSONTextScalar(expr.JSONProperty(p, jsonqueries.NameField), codec.String[string]()), "Ada"), 1},
 			{expr.NullableEq(expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(p, jsonqueries.AgeField), codec.Signed[int64]())), 42), 1},
 			{expr.Eq(expr.JSONTypeNullable(expr.JSONProperty(p, jsonqueries.NicknameField).JSON()), value.Of(database.JSONNull)), 1},
@@ -49,14 +49,14 @@ func TestPostgresGeneratedJSONPaths(t *testing.T) {
 			{expr.NullableEq(expr.JSONTextScalar(expr.JSONProperty(expr.JSONPointer(expr.JSONProperty(p, jsonqueries.NextField)), jsonqueries.NameField), codec.String[string]()), "next"), 1},
 			{expr.NullableEq(expr.JSONTextScalar(expr.JSONProperty(p, jsonqueries.QuotedField), codec.String[string]()), "quoted\"value"), 1},
 			{expr.NullableEq(expr.JSONTextScalar(expr.JSONProperty(p, jsonqueries.OddField), codec.String[string]()), "safe'_%"), 1},
-			{expr.NullableEq(expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(expr.JSONNullableRoot(expr.Value(orm.NullableJSONExpr(f.Backup))), jsonqueries.Theme)), codec.String[string]()), "dark"), 1},
+			{expr.NullableEq(expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(expr.JSONNullableRoot(expr.Value(f.Backup)), jsonqueries.Theme)), codec.String[string]()), "dark"), 1},
 		} {
 			got, err := orm.Count(t.Context(), tx, expr.Where(q, test.predicate))
 			if err != nil || got != test.want {
 				t.Fatal("JSON path count", got, test.want, err)
 			}
 		}
-		snapshots, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(q.OrderBy(orm.KeyAsc(f.Key()))), expr.AsSelected(expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.ProfileField)).JSON()))).All(t.Context(), tx)
+		snapshots, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(q.OrderBy(orm.Asc(f.Key()))), expr.AsSelected(expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.ProfileField)).JSON()))).All(t.Context(), tx)
 		if err != nil || len(snapshots) != 3 || !snapshots[1].IsNull() || !snapshots[2].IsNull() {
 			t.Fatal(snapshots, err)
 		}
@@ -65,7 +65,7 @@ func TestPostgresGeneratedJSONPaths(t *testing.T) {
 		if !ok || err != nil || decoded.Name != "Ada" || decoded.Age != 42 {
 			t.Fatal(decoded, err)
 		}
-		nulls, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(q.OrderBy(orm.KeyAsc(f.Key()))), expr.AsSelected(expr.JSONProperty(p, jsonqueries.NicknameField).JSON()))).All(t.Context(), tx)
+		nulls, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(q.OrderBy(orm.Asc(f.Key()))), expr.AsSelected(expr.JSONProperty(p, jsonqueries.NicknameField).JSON()))).All(t.Context(), tx)
 		if err != nil || len(nulls) != 3 || !nulls[1].IsNull() {
 			t.Fatal(nulls, err)
 		}
@@ -73,7 +73,7 @@ func TestPostgresGeneratedJSONPaths(t *testing.T) {
 		if !present || !first.IsJSONNull() {
 			t.Fatal("JSON null lost", nulls)
 		}
-		ages, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(q.Where(orm.KeyEq(f.Key(), 1))), expr.AsSelected(expr.JSONProperty(p, jsonqueries.AgeField).JSON()))).All(t.Context(), tx)
+		ages, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(q.Where(orm.Eq(f.Key(), 1))), expr.AsSelected(expr.JSONProperty(p, jsonqueries.AgeField).JSON()))).All(t.Context(), tx)
 		if err != nil || len(ages) != 1 {
 			t.Fatal(ages, err)
 		}

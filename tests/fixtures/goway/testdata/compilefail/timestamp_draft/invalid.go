@@ -9,4 +9,4 @@ import (
 type M struct{}
 
 var field orm.UpdatedAt[M, temporal.DateTime]
-var _ = orm.TimeSet(field, time.Time{})
+var _ = orm.Set(field, time.Time{})

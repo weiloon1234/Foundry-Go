@@ -11,22 +11,22 @@ type EndpointTable struct {
 	// Table provides model queries and writes. Example: orm.First(ctx, tx, Endpoints.Query()).
 	orm.Table[Endpoint, model.ID[Endpoint]]
 	// ID binds Endpoint.ID.
-	// Example: orm.KeySet(Endpoints.ID, id).
+	// Example: orm.Set(Endpoints.ID, id).
 	ID orm.Key[Endpoint, model.ID[Endpoint]]
 	// URL binds Endpoint.URL.
-	// Example: orm.TextSet(Endpoints.URL, url).
+	// Example: orm.Set(Endpoints.URL, url).
 	URL orm.Text[Endpoint, string]
 	// Events binds Endpoint.Events.
-	// Example: encoded, err := value.NewJSON(events); if err == nil { _ = orm.JSONSet(Endpoints.Events, encoded) }.
+	// Example: encoded, err := value.NewJSON(events); if err == nil { _ = orm.Set(Endpoints.Events, encoded) }.
 	Events orm.JSON[Endpoint, []string]
 	// Active binds Endpoint.Active.
-	// Example: orm.ColumnSet(Endpoints.Active, active).
+	// Example: orm.Set(Endpoints.Active, active).
 	Active orm.Column[Endpoint, bool]
 	// CreatedAt preserves an explicit creation time; the owning clock supplies omitted values.
-	// Example: orm.TimeSet(Endpoints.CreatedAt, createdAt).
+	// Example: orm.Set(Endpoints.CreatedAt, createdAt).
 	CreatedAt orm.CreatedAt[Endpoint, temporal.DateTime]
 	// UpdatedAt is replaced by the owning clock after before-write hooks and before mutators.
-	// Example: orm.TimeSet(Endpoints.UpdatedAt, updatedAt).
+	// Example: orm.Set(Endpoints.UpdatedAt, updatedAt).
 	UpdatedAt orm.UpdatedAt[Endpoint, temporal.DateTime]
 }
 
@@ -41,19 +41,19 @@ type SecretTable struct {
 	// Table provides model queries and writes. Example: orm.First(ctx, tx, Secrets.Query()).
 	orm.Table[Secret, model.ID[Secret]]
 	// ID binds Secret.ID.
-	// Example: orm.KeySet(Secrets.ID, id).
+	// Example: orm.Set(Secrets.ID, id).
 	ID orm.Key[Secret, model.ID[Secret]]
 	// EndpointID binds Secret.EndpointID.
-	// Example: orm.ColumnSet(Secrets.EndpointID, endpointID).
+	// Example: orm.Set(Secrets.EndpointID, endpointID).
 	EndpointID orm.Column[Secret, model.ID[Endpoint]]
 	// Ciphertext binds Secret.Ciphertext.
-	// Example: orm.TextSet(Secrets.Ciphertext, ciphertext).
+	// Example: orm.Set(Secrets.Ciphertext, ciphertext).
 	Ciphertext orm.Text[Secret, string]
 	// ExpiresAt binds Secret.ExpiresAt.
-	// Example: orm.NullableTimeSetNull(Secrets.ExpiresAt).
+	// Example: orm.SetNull(Secrets.ExpiresAt).
 	ExpiresAt orm.NullableTime[Secret, temporal.DateTime]
 	// CreatedAt preserves an explicit creation time; callers supply this timestamp.
-	// Example: orm.TimeSet(Secrets.CreatedAt, createdAt).
+	// Example: orm.Set(Secrets.CreatedAt, createdAt).
 	CreatedAt orm.Time[Secret, temporal.DateTime]
 }
 
@@ -68,37 +68,37 @@ type DeliveryTable struct {
 	// Table provides model queries and writes. Example: orm.First(ctx, tx, Deliveries.Query()).
 	orm.Table[Delivery, model.ID[Delivery]]
 	// ID binds Delivery.ID.
-	// Example: orm.KeySet(Deliveries.ID, id).
+	// Example: orm.Set(Deliveries.ID, id).
 	ID orm.Key[Delivery, model.ID[Delivery]]
 	// EndpointID binds Delivery.EndpointID.
-	// Example: orm.ColumnSet(Deliveries.EndpointID, endpointID).
+	// Example: orm.Set(Deliveries.EndpointID, endpointID).
 	EndpointID orm.Column[Delivery, model.ID[Endpoint]]
 	// Event binds Delivery.Event.
-	// Example: orm.TextSet(Deliveries.Event, event).
+	// Example: orm.Set(Deliveries.Event, event).
 	Event orm.Text[Delivery, string]
 	// Payload binds Delivery.Payload.
-	// Example: orm.TextSet(Deliveries.Payload, payload).
+	// Example: orm.Set(Deliveries.Payload, payload).
 	Payload orm.Text[Delivery, string]
 	// State binds Delivery.State.
-	// Example: orm.TextSet(Deliveries.State, state).
+	// Example: orm.Set(Deliveries.State, state).
 	State orm.Text[Delivery, string]
 	// Attempts binds Delivery.Attempts.
-	// Example: orm.NumberSet(Deliveries.Attempts, attempts).
+	// Example: orm.Set(Deliveries.Attempts, attempts).
 	Attempts orm.Number[Delivery, uint32]
 	// LastStatus binds Delivery.LastStatus.
-	// Example: orm.NumberSet(Deliveries.LastStatus, lastStatus).
+	// Example: orm.Set(Deliveries.LastStatus, lastStatus).
 	LastStatus orm.Number[Delivery, int32]
 	// LastFailure binds Delivery.LastFailure.
-	// Example: orm.TextSet(Deliveries.LastFailure, lastFailure).
+	// Example: orm.Set(Deliveries.LastFailure, lastFailure).
 	LastFailure orm.Text[Delivery, string]
 	// CreatedAt preserves an explicit creation time; the owning clock supplies omitted values.
-	// Example: orm.TimeSet(Deliveries.CreatedAt, createdAt).
+	// Example: orm.Set(Deliveries.CreatedAt, createdAt).
 	CreatedAt orm.CreatedAt[Delivery, temporal.DateTime]
 	// UpdatedAt is replaced by the owning clock after before-write hooks and before mutators.
-	// Example: orm.TimeSet(Deliveries.UpdatedAt, updatedAt).
+	// Example: orm.Set(Deliveries.UpdatedAt, updatedAt).
 	UpdatedAt orm.UpdatedAt[Delivery, temporal.DateTime]
 	// DeliveredAt binds Delivery.DeliveredAt.
-	// Example: orm.NullableTimeSetNull(Deliveries.DeliveredAt).
+	// Example: orm.SetNull(Deliveries.DeliveredAt).
 	DeliveredAt orm.NullableTime[Delivery, temporal.DateTime]
 }
 

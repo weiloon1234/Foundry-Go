@@ -16,5 +16,5 @@ var Models = orm.Define("role_keys", func(b orm.Builder[Model], m *Model) Fields
 })
 
 func Read(id int64) orm.Query[Model] {
-	return Models.Query().Where(orm.NumberKeyEq(Models.ID, id)).OrderBy(orm.NumberKeyAsc(Models.ID))
+	return Models.Query().Where(orm.Eq(Models.ID, id)).OrderBy(orm.Asc(Models.ID))
 }

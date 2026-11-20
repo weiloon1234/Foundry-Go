@@ -6,4 +6,4 @@ import (
 	s "foundry.test/goway/models/sensitive"
 )
 
-var _ = orm.EncryptedSet(s.Vaults.Token, "plaintext")
+var _ = orm.Set(s.Vaults.Token, "plaintext")

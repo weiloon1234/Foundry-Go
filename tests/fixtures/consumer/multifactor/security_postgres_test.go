@@ -184,7 +184,7 @@ func TestPostgresMFARetirementSharesOuterRollbackAndAcceptsDisabledAccounts(t *t
 	}
 	// A disabled account can still be retired by an authorized administrator.
 	if err := s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.ColumnSet(multifactor.AccountRecords.Enabled, false), orm.ColumnSet(multifactor.AccountRecords.RequireMFA, true))
+		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.Set(multifactor.AccountRecords.Enabled, false), orm.Set(multifactor.AccountRecords.RequireMFA, true))
 		return err
 	}); err != nil {
 		t.Fatal(err)

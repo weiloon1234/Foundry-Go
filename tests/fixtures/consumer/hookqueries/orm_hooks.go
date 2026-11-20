@@ -42,21 +42,21 @@ func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 			}
 			if !orm.WriteIsSet(draft, func() func(arg0 string) orm.Assignment[Member] {
 				receiver := fields.Email
-				return func(arg0 string) orm.Assignment[Member] { return orm.InputTextSet(receiver, arg0) }
+				return func(arg0 string) orm.Assignment[Member] { return orm.Set(receiver, arg0) }
 			}()) {
-				if err := orm.WriteSet(draft, orm.InputTextSet(fields.Email, " DEFAULT@EXAMPLE.TEST ")); err != nil {
+				if err := orm.WriteSet(draft, orm.Set(fields.Email, " DEFAULT@EXAMPLE.TEST ")); err != nil {
 					return err
 				}
 			}
 			if !orm.WriteIsSet(draft, func() func(arg0 model.ID[Member]) orm.Assignment[Member] {
 				receiver := fields.IntroducerID
-				return func(arg0 model.ID[Member]) orm.Assignment[Member] { return orm.NullableColumnSet(receiver, arg0) }
+				return func(arg0 model.ID[Member]) orm.Assignment[Member] { return orm.Set(receiver, arg0) }
 			}()) {
-				introducer, err := orm.Require(ctx, tx, fields.Query().Where(orm.ColumnEq(fields.IsIntroducer, true)))
+				introducer, err := orm.Require(ctx, tx, fields.Query().Where(orm.Eq(fields.IsIntroducer, true)))
 				if err != nil {
 					return err
 				}
-				if err := orm.WriteSet(draft, orm.NullableColumnSet(fields.IntroducerID, introducer.ID)); err != nil {
+				if err := orm.WriteSet(draft, orm.Set(fields.IntroducerID, introducer.ID)); err != nil {
 					return err
 				}
 			}
@@ -69,24 +69,24 @@ func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 			// A hook may supply an otherwise empty patch using the locked model.
 			if !orm.WriteIsSet(draft, func() func(arg0 model.ID[Member]) orm.Assignment[Member] {
 				receiver := fields.Key()
-				return func(arg0 model.ID[Member]) orm.Assignment[Member] { return orm.KeySet(receiver, arg0) }
+				return func(arg0 model.ID[Member]) orm.Assignment[Member] { return orm.Set(receiver, arg0) }
 			}()) && !orm.WriteIsSet(draft, func() func(arg0 string) orm.Assignment[Member] {
 				receiver := fields.Email
-				return func(arg0 string) orm.Assignment[Member] { return orm.InputTextSet(receiver, arg0) }
+				return func(arg0 string) orm.Assignment[Member] { return orm.Set(receiver, arg0) }
 			}()) && !orm.WriteIsSet(draft, func() func(arg0 string) orm.Assignment[Member] {
 				receiver := fields.Nickname
-				return func(arg0 string) orm.Assignment[Member] { return orm.NullableInputTextSet(receiver, arg0) }
+				return func(arg0 string) orm.Assignment[Member] { return orm.Set(receiver, arg0) }
 			}()) && !orm.WriteIsSet(draft, func() func(arg0 model.ID[Member]) orm.Assignment[Member] {
 				receiver := fields.IntroducerID
-				return func(arg0 model.ID[Member]) orm.Assignment[Member] { return orm.NullableColumnSet(receiver, arg0) }
+				return func(arg0 model.ID[Member]) orm.Assignment[Member] { return orm.Set(receiver, arg0) }
 			}()) && !orm.WriteIsSet(draft, func() func(arg0 bool) orm.Assignment[Member] {
 				receiver := fields.IsIntroducer
-				return func(arg0 bool) orm.Assignment[Member] { return orm.ColumnSet(receiver, arg0) }
+				return func(arg0 bool) orm.Assignment[Member] { return orm.Set(receiver, arg0) }
 			}()) && !orm.WriteIsSet(draft, func() func(arg0 int) orm.Assignment[Member] {
 				receiver := fields.Rank
-				return func(arg0 int) orm.Assignment[Member] { return orm.NumberSet(receiver, arg0) }
+				return func(arg0 int) orm.Assignment[Member] { return orm.Set(receiver, arg0) }
 			}()) {
-				if err := orm.WriteSet(draft, orm.NumberSet(fields.Rank, before.Rank+1)); err != nil {
+				if err := orm.WriteSet(draft, orm.Set(fields.Rank, before.Rank+1)); err != nil {
 					return err
 				}
 			}
@@ -140,7 +140,7 @@ func record(ctx context.Context, tx *database.Tx, name string) error {
 		trace.Calls = append(trace.Calls, name)
 	}
 	if tx != nil {
-		if _, err := orm.Insert(ctx, tx, Logs.Table, orm.TextSet(Logs.Label, name)); err != nil {
+		if _, err := orm.Insert(ctx, tx, Logs.Table, orm.Set(Logs.Label, name)); err != nil {
 			return err
 		}
 	}

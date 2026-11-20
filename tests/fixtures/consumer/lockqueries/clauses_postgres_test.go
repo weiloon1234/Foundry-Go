@@ -18,7 +18,7 @@ func TestPostgresIndependentInputLockStrengths(t *testing.T) {
 	countries := rows.As[countryAlias](models.Countries.Query(), "country")
 	locations := rows.As[locationAlias](models.Locations.Query(), "location")
 	c, l := rows.Scope(countries), rows.Scope(locations)
-	joined := rows.InnerJoin(countries, locations, rows.On(expr.At(c, orm.KeyExpr(models.Countries.Code)), expr.At(l, orm.TextExpr(models.Locations.CountryCode))))
+	joined := rows.InnerJoin(countries, locations, rows.On(expr.At(c, models.Countries.Code), expr.At(l, models.Locations.CountryCode)))
 	country := rows.LeftScope(joined, rows.Scope(countries))
 	location := rows.RightScope(joined, rows.Scope(locations))
 	selected := rows.LockRows(rows.SelectRecord(joined, country), rows.UpdateLock(rows.Target(country)), rows.KeyShareLock(rows.Target(location)))
@@ -27,17 +27,17 @@ func TestPostgresIndependentInputLockStrengths(t *testing.T) {
 		return err
 	})
 	assertLockError(t, inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.ForKeyShare(models.Countries.Query()).NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.ForKeyShare(models.Countries.Query()).NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		return err
 	}))
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.ForNoKeyUpdate(models.Locations.Query()).NoWait().Where(orm.KeyEq(models.Locations.Code, models.LocationCode("one"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.ForNoKeyUpdate(models.Locations.Query()).NoWait().Where(orm.Eq(models.Locations.Code, models.LocationCode("one"))))
 		return err
 	}); err != nil {
 		t.Fatal("key-share clause became a stronger lock", err)
 	}
 	assertLockError(t, inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Locations.Query()).NoWait().Where(orm.KeyEq(models.Locations.Code, models.LocationCode("one"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Locations.Query()).NoWait().Where(orm.Eq(models.Locations.Code, models.LocationCode("one"))))
 		return err
 	}))
 	finish()
@@ -50,16 +50,16 @@ func TestPostgresIndependentInputLockPolicies(t *testing.T) {
 			countries := rows.As[countryAlias](models.Countries.Query(), "country")
 			locations := rows.As[locationAlias](models.Locations.Query(), "location")
 			c, l := rows.Scope(countries), rows.Scope(locations)
-			joined := rows.InnerJoin(countries, locations, rows.On(expr.At(c, orm.KeyExpr(models.Countries.Code)), expr.At(l, orm.TextExpr(models.Locations.CountryCode))))
+			joined := rows.InnerJoin(countries, locations, rows.On(expr.At(c, models.Countries.Code), expr.At(l, models.Locations.CountryCode)))
 			country := rows.LeftScope(joined, rows.Scope(countries))
 			location := rows.RightScope(joined, rows.Scope(locations))
 			selected := rows.LockRows(rows.SelectRecord(joined, country), rows.UpdateLock(rows.Target(country)).SkipLocked(), rows.KeyShareLock(rows.Target(location)).NoWait())
 			finish := holdLock(t, ctx, db, path, func(tx *database.Tx) error {
 				if held == "country" {
-					_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+					_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 					return err
 				}
-				_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Locations.Query()).Where(orm.KeyEq(models.Locations.Code, models.LocationCode("one"))))
+				_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Locations.Query()).Where(orm.Eq(models.Locations.Code, models.LocationCode("one"))))
 				return err
 			})
 			defer finish()
@@ -89,7 +89,7 @@ func TestPostgresOverlappingInputLockPrecedence(t *testing.T) {
 		return err
 	})
 	assertLockError(t, inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.ForKeyShare(models.Countries.Query()).NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.ForKeyShare(models.Countries.Query()).NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		return err
 	}))
 	finish()

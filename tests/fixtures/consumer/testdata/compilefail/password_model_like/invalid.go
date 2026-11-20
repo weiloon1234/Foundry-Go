@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func bad() { _ = orm.TextLike(passwords.AccountRecords.Digest, "%hash%") }
+func bad() { _ = orm.Like(passwords.AccountRecords.Digest, "%hash%") }

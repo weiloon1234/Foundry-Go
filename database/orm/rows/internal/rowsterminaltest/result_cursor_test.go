@@ -17,8 +17,8 @@ import (
 
 func TestResultCursorWindowAndBidirectionalNavigation(t *testing.T) {
 	m := declareMembers()
-	c := rows.CursorFor(rows.ModelRecord(m.Query().Where(orm.KeyNe(m.ID, 0)).OrderBy(orm.KeyDesc(m.ID)).Limit(8).Offset(1)))
-	id := expr.At(c.Scope(), orm.KeyExpr(m.ID))
+	c := rows.CursorFor(rows.ModelRecord(m.Query().Where(orm.Ne(m.ID, 0)).OrderBy(orm.Desc(m.ID)).Limit(8).Offset(1)))
+	id := expr.At(c.Scope(), m.ID)
 	c = c.UniqueBy(expr.Group(id))
 	state := &driverState{columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "one", nil}, {int64(2), "two", nil}}}
 	db := openTest(t, state)
@@ -49,7 +49,7 @@ func TestResultCursorWindowAndBidirectionalNavigation(t *testing.T) {
 
 func TestResultCursorNullableValueAndInvalidDeclarations(t *testing.T) {
 	m := declareMembers()
-	c := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname)))))))
+	c := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(m.Nickname))))))
 	c = c.UniqueBy(expr.Group(c.Value()))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"nick"}}}
 	db := openTest(t, state)
@@ -66,9 +66,9 @@ func TestResultCursorNullableValueAndInvalidDeclarations(t *testing.T) {
 		t.Fatal(err, state.sql)
 	}
 	base := rows.CursorFor(rows.ModelRecord(m.Query()))
-	id := expr.At(base.Scope(), orm.KeyExpr(m.ID))
+	id := expr.At(base.Scope(), m.ID)
 	foreign := rows.CursorFor(rows.ModelRecord(declareMembers().Query()))
-	cases := []rows.CursorQuery[member]{base, base.UniqueBy(expr.Group(id), expr.Group(id)), base.UniqueBy(expr.Group(id)).OrderBy(expr.Asc(id), expr.Desc(id)), base.UniqueBy(expr.Group(expr.At(foreign.Scope(), orm.KeyExpr(m.ID)))), base.UniqueBy(expr.Group(id)).OrderBy(expr.Asc(id).NullsLast()), {}, base.UniqueBy(expr.Group(id)).OrderBy(expr.AscValue(expr.AddValue(expr.AsSelected(expr.Row(id)), expr.AsSelected(expr.Row(id)))))}
+	cases := []rows.CursorQuery[member]{base, base.UniqueBy(expr.Group(id), expr.Group(id)), base.UniqueBy(expr.Group(id)).OrderBy(expr.Asc(id), expr.Desc(id)), base.UniqueBy(expr.Group(expr.At(foreign.Scope(), m.ID))), base.UniqueBy(expr.Group(id)).OrderBy(expr.Asc(id).NullsLast()), {}, base.UniqueBy(expr.Group(id)).OrderBy(expr.AscValue(expr.AddValue(expr.AsSelected(expr.Row(id)), expr.AsSelected(expr.Row(id)))))}
 	for i, bad := range cases {
 		if _, err := bad.Paginate(t.Context(), db, orm.CursorRequest[member]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 			t.Fatal(i, err, state.sql)
@@ -79,7 +79,7 @@ func TestResultCursorNullableValueAndInvalidDeclarations(t *testing.T) {
 func TestResultCursorFailureDiscardsPageAndRejectsSensitiveKeys(t *testing.T) {
 	m := declareMembers()
 	c := rows.CursorFor(rows.ModelRecord(m.Query()))
-	c = c.UniqueBy(expr.Group(expr.At(c.Scope(), orm.KeyExpr(m.ID))))
+	c = c.UniqueBy(expr.Group(expr.At(c.Scope(), m.ID)))
 	for _, state := range []*driverState{{columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "one", nil}}, closeErr: errors.New("close failure")}, {columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "one", nil}, {"bad", "two", nil}}}} {
 		page, err := c.Paginate(t.Context(), openTest(t, state), orm.CursorRequest[member]{Size: 1})
 		if err == nil || page.Items != nil || page.Next.IsSet() || !state.closed {
@@ -97,7 +97,7 @@ func TestResultCursorFailureDiscardsPageAndRejectsSensitiveKeys(t *testing.T) {
 	table := orm.Define("secrets", func(b orm.Builder[secret], s *secret) secretFields {
 		return secretFields{orm.TableOf(b, &s.ID), orm.ColumnOf(b, &s.Name, orm.Codec(codec.String[string]().WithSensitiveValues()))}
 	})
-	scalar := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(table.Query()), expr.AsSelected(expr.Row(expr.Value(orm.ColumnExpr(table.Name)))))))
+	scalar := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(table.Query()), expr.AsSelected(expr.Row(expr.Value(table.Name))))))
 	state := &driverState{}
 	if _, err := scalar.UniqueBy(expr.Group(scalar.Value())).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal(err, state.sql)
@@ -107,7 +107,7 @@ func TestResultCursorFailureDiscardsPageAndRejectsSensitiveKeys(t *testing.T) {
 func TestResultCursorProjectionFieldCodecs(t *testing.T) {
 	m := declareMembers()
 	schema := declareRows()
-	report := rows.Select(rows.From(m.Query()), schema, rows.Map(schema.ID, expr.Value(orm.KeyExpr(m.ID))), rows.Map(schema.Name, expr.Value(orm.TextExpr(m.Name))))
+	report := rows.Select(rows.From(m.Query()), schema, rows.Map(schema.ID, expr.Value(m.ID)), rows.Map(schema.Name, expr.Value(m.Name)))
 	c := rows.CursorFor(rows.RecordOf(report))
 	c = c.UniqueBy(expr.Group(rows.At(c.Scope(), schema.ID)))
 	state := &driverState{columns: []string{"id", "name"}, rows: [][]driver.Value{{int64(1), "one"}, {int64(2), "two"}}}

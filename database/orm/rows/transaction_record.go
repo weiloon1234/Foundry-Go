@@ -96,7 +96,7 @@ func AsTransaction[A, R any](source TransactionRecordSource[R], alias string) Tr
 }
 
 // TransactionScope exposes preserved transaction-owned model or projection fields.
-// Example: expr.At(rows.TransactionScope(source), orm.KeyExpr(Orders.ID)).
+// Example: expr.At(rows.TransactionScope(source), Orders.ID).
 func TransactionScope[A, R any](source TransactionAliased[A, R]) expr.Scope[TransactionAlias[A, R], R] {
 	s := source.core.Source
 	return expr.FoundryScope[TransactionAlias[A, R], R](ormcore.Scope{Reference: ormcore.Reference{Table: s.Node.Source.Name(), Owner: s.Owners[s.Node.Source.Name()]}, Columns: s.Node.Source.Columns, Err: s.Err}, sqlowner.Expressions())

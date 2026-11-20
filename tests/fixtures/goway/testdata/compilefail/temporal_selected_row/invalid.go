@@ -1,7 +1,5 @@
 package invalid
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/goway/models/scalars"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -9,4 +7,4 @@ import (
 
 type other struct{}
 
-func invalid() { _ = expr.Year(expr.AsSelected(expr.Max(orm.TimeExpr(scalars.Records.Date)))) }
+func invalid() { _ = expr.Year(expr.AsSelected(expr.Max(scalars.Records.Date))) }

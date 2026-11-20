@@ -12,4 +12,4 @@ type sample struct {
 }
 
 var period orm.Interval[sample]
-var _ = expr.Where((orm.Table[sample, int64]{}).Query(), expr.GtValue(expr.SumInterval(orm.IntervalExpr(period)), temporal.Days(1)))
+var _ = expr.Where((orm.Table[sample, int64]{}).Query(), expr.GtValue(expr.SumInterval(period), temporal.Days(1)))

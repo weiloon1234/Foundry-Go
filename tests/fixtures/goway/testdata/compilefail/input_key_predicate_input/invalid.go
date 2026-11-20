@@ -4,4 +4,4 @@ import orm "github.com/weiloon1234/Foundry-Go/database/orm"
 
 import m "foundry.test/goway/models/mutators"
 
-var _ = orm.InputKeyEq(m.KeyRecords.ID, m.FreshID{})
+var _ = orm.Eq(m.KeyRecords.ID, m.FreshID{})

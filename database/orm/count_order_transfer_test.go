@@ -9,7 +9,7 @@ import (
 
 func TestCountOmitsOrderingThatCannotChangeIt(t *testing.T) {
 	m := compilerTable("records")
-	ordered := m.Query().OrderBy(TextDesc(m.Name))
+	ordered := m.Query().OrderBy(Desc(m.Name))
 	for _, tc := range []struct {
 		name    string
 		q       Query[compilerRecord]

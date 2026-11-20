@@ -104,17 +104,17 @@ func retrievalApp(t *testing.T) (*database.DB, *factoryStats, string) {
 				return err
 			}
 		}
-		root, err := orm.Insert(t.Context(), tx, retrievalqueries.Members.Table, orm.InputTextSet(retrievalqueries.Members.Name, " ROOT "), orm.NullableTextSet(retrievalqueries.Members.Nickname, "boss"))
+		root, err := orm.Insert(t.Context(), tx, retrievalqueries.Members.Table, orm.Set(retrievalqueries.Members.Name, " ROOT "), orm.Set(retrievalqueries.Members.Nickname, "boss"))
 		if err != nil {
 			return err
 		}
-		if _, err := orm.Insert(t.Context(), tx, retrievalqueries.Members.Table, orm.InputTextSet(retrievalqueries.Members.Name, " Child "), orm.NullableColumnSet(retrievalqueries.Members.ParentID, root.ID)); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, retrievalqueries.Members.Table, orm.Set(retrievalqueries.Members.Name, " Child "), orm.Set(retrievalqueries.Members.ParentID, root.ID)); err != nil {
 			return err
 		}
-		if _, err := orm.Insert(t.Context(), tx, retrievalqueries.Groups.Table, orm.KeySet(retrievalqueries.Groups.Key(), "team"), orm.TextSet(retrievalqueries.Groups.Name, "stored group")); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, retrievalqueries.Groups.Table, orm.Set(retrievalqueries.Groups.Key(), "team"), orm.Set(retrievalqueries.Groups.Name, "stored group")); err != nil {
 			return err
 		}
-		_, err = orm.Insert(t.Context(), tx, retrievalqueries.Memberships.Table, orm.ColumnSet(retrievalqueries.Memberships.MemberID, root.ID), orm.NullableTextSet(retrievalqueries.Memberships.GroupCode, "team"))
+		_, err = orm.Insert(t.Context(), tx, retrievalqueries.Memberships.Table, orm.Set(retrievalqueries.Memberships.MemberID, root.ID), orm.Set(retrievalqueries.Memberships.GroupCode, "team"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func TestPostgresRetrievalOrderStoredValuesAndWrapperIO(t *testing.T) {
 	ctx := retrievalqueries.WithTrace(t.Context(), &trace)
 	err := inSchema(ctx, db, namespace, func(tx *database.Tx) error {
 		reader := &readWrapper{Executor: tx}
-		items, err := orm.All(ctx, reader, retrievalqueries.Members.Query().OrderBy(orm.InputTextAsc(retrievalqueries.Members.Name)))
+		items, err := orm.All(ctx, reader, retrievalqueries.Members.Query().OrderBy(orm.Asc(retrievalqueries.Members.Name)))
 		if err != nil {
 			return err
 		}
@@ -183,7 +183,7 @@ func TestPostgresRetrievalDirectThroughAndExplicitLoad(t *testing.T) {
 	var trace retrievalqueries.Trace
 	ctx := retrievalqueries.WithTrace(t.Context(), &trace)
 	err := inSchema(ctx, db, namespace, func(tx *database.Tx) error {
-		q := retrievalqueries.Members.Query().Where(orm.InputTextEq(retrievalqueries.Members.Name, "root"))
+		q := retrievalqueries.Members.Query().Where(orm.Eq(retrievalqueries.Members.Name, "root"))
 		relations := retrievalqueries.MemberLinks
 		items, err := orm.All(ctx, tx, q.With(relations.Children, relations.Groups))
 		if err != nil {
@@ -233,10 +233,10 @@ func TestPostgresRetrievalFailureRollsBackOwningWrite(t *testing.T) {
 			trace := retrievalqueries.Trace{FailAt: "first", Mode: mode, Cancel: cancel}
 			ctx = retrievalqueries.WithTrace(ctx, &trace)
 			err := inSchema(ctx, db, namespace, func(tx *database.Tx) error {
-				if _, err := orm.Insert(ctx, tx, retrievalqueries.Members.Table, orm.InputTextSet(retrievalqueries.Members.Name, "rollback candidate")); err != nil {
+				if _, err := orm.Insert(ctx, tx, retrievalqueries.Members.Table, orm.Set(retrievalqueries.Members.Name, "rollback candidate")); err != nil {
 					return err
 				}
-				items, err := orm.All(ctx, tx, retrievalqueries.Members.Query().Where(orm.InputTextEq(retrievalqueries.Members.Name, "rollback candidate")))
+				items, err := orm.All(ctx, tx, retrievalqueries.Members.Query().Where(orm.Eq(retrievalqueries.Members.Name, "rollback candidate")))
 				if items != nil {
 					return errors.New("failed retrieval published a partial collection")
 				}
@@ -253,7 +253,7 @@ func TestPostgresRetrievalFailureRollsBackOwningWrite(t *testing.T) {
 				t.Fatal("callback failure or stop order changed", trace.Calls, err)
 			}
 			if err := inSchema(t.Context(), db, namespace, func(tx *database.Tx) error {
-				n, err := orm.Count(t.Context(), tx, retrievalqueries.Members.Query().Where(orm.InputTextEq(retrievalqueries.Members.Name, "rollback candidate")))
+				n, err := orm.Count(t.Context(), tx, retrievalqueries.Members.Query().Where(orm.Eq(retrievalqueries.Members.Name, "rollback candidate")))
 				if err == nil && n != 0 {
 					return errors.New("read failure committed its owning write")
 				}

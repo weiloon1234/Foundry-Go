@@ -39,36 +39,36 @@ func (s *Store) list(ctx context.Context, filters OutboundCaptureFilters, reques
 		return none, http.BadRequest.WithCause(errWindow)
 	}
 	c := store.Captures
-	q := c.Query().Where(orm.TimeGte(c.StartedAt, filters.From))
+	q := c.Query().Where(orm.Gte(c.StartedAt, filters.From))
 	if bounded {
-		q = q.Where(orm.TimeLt(c.StartedAt, until))
+		q = q.Where(orm.Lt(c.StartedAt, until))
 	}
 	if client, set := filters.Client.Get(); set {
-		q = q.Where(orm.TextEq(c.Client, string(client)))
+		q = q.Where(orm.Eq(c.Client, string(client)))
 	}
 	if host, set := filters.Host.Get(); set {
-		q = q.Where(orm.TextEq(c.Host, host))
+		q = q.Where(orm.Eq(c.Host, host))
 	}
 	if method, set := filters.Method.Get(); set {
-		q = q.Where(orm.TextEq(c.Method, method))
+		q = q.Where(orm.Eq(c.Method, method))
 	}
 	if status, set := filters.Status.Get(); set {
 		if status < 100 || status > 599 {
 			return none, http.BadRequest.WithCause(errStatus)
 		}
-		q = q.Where(orm.NullableNumberEq(c.Status, int16(status)))
+		q = q.Where(orm.Eq(c.Status, int16(status)))
 	}
 	if result, set := filters.Result.Get(); set {
-		q = q.Where(orm.TextEq(c.Result, string(result)))
+		q = q.Where(orm.Eq(c.Result, string(result)))
 	}
 	if problems, set := filters.Problems.Get(); set && problems {
-		q = q.Where(orm.Or(orm.TextNe(c.Result, string(ResultCompleted)), orm.NullableNumberGte(c.Status, int16(400))))
+		q = q.Where(orm.Or(orm.Ne(c.Result, string(ResultCompleted)), orm.Gte(c.Status, int16(400))))
 	}
 	if id, set := filters.RequestID.Get(); set {
-		q = q.Where(orm.NullableTextEq(c.RequestID, string(id)))
+		q = q.Where(orm.Eq(c.RequestID, string(id)))
 	}
 	if operation, set := filters.Operation.Get(); set {
-		q = q.Where(orm.ColumnEq(c.OperationID, model.IDFromBytes[store.Operation](operation.Bytes())))
+		q = q.Where(orm.Eq(c.OperationID, model.IDFromBytes[store.Operation](operation.Bytes())))
 	}
 	cutoff, err := s.log.Cutoff()
 	if err != nil {

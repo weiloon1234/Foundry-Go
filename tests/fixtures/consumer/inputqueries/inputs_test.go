@@ -22,13 +22,13 @@ func TestPostgresMutationInputDraftKeepsTypesAndRedactsDiagnostics(t *testing.T)
 		var email value.Optional[inputqueries.EmailInput] = orm.WriteGet(draft, func() func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
 			receiver := inputqueries.Members.Email
 			return func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
-				return orm.InputTextSet(receiver, arg0)
+				return orm.Set(receiver, arg0)
 			}
 		}())
 		var note value.Optional[value.Nullable[inputqueries.LabelInput]] = orm.WriteNullableGet(draft, func() func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
 			receiver := inputqueries.Members.Note
 			return func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
-				return orm.NullableInputTextSet(receiver, arg0)
+				return orm.Set(receiver, arg0)
 			}
 		}())
 		if input, ok := email.Get(); !ok || input.Address != private {
@@ -49,7 +49,7 @@ func TestPostgresMutationInputDraftKeepsTypesAndRedactsDiagnostics(t *testing.T)
 		if err := orm.WriteUnset(draft, func() func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
 			receiver := inputqueries.Members.Email
 			return func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
-				return orm.InputTextSet(receiver, arg0)
+				return orm.Set(receiver, arg0)
 			}
 		}()); err != nil {
 			return err
@@ -57,7 +57,7 @@ func TestPostgresMutationInputDraftKeepsTypesAndRedactsDiagnostics(t *testing.T)
 		if err := orm.WriteUnset(draft, func() func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
 			receiver := inputqueries.Members.Note
 			return func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
-				return orm.NullableInputTextSet(receiver, arg0)
+				return orm.Set(receiver, arg0)
 			}
 		}()); err != nil {
 			return err
@@ -65,12 +65,12 @@ func TestPostgresMutationInputDraftKeepsTypesAndRedactsDiagnostics(t *testing.T)
 		if orm.WriteIsSet(draft, func() func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
 			receiver := inputqueries.Members.Email
 			return func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
-				return orm.InputTextSet(receiver, arg0)
+				return orm.Set(receiver, arg0)
 			}
 		}()) || orm.WriteIsSet(draft, func() func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
 			receiver := inputqueries.Members.Note
 			return func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
-				return orm.NullableInputTextSet(receiver, arg0)
+				return orm.Set(receiver, arg0)
 			}
 		}()) {
 			t.Fatal("input omission changed")
@@ -78,7 +78,7 @@ func TestPostgresMutationInputDraftKeepsTypesAndRedactsDiagnostics(t *testing.T)
 		return stop
 	}}
 	runInputs(t, func(tx *database.Tx) error {
-		_, err := orm.Insert(inputqueries.WithState(t.Context(), state), tx, inputqueries.Members.Table, orm.InputTextSet(inputqueries.Members.Email, inputqueries.EmailInput{Address: private}), orm.NullableInputTextSetNull(inputqueries.Members.Note))
+		_, err := orm.Insert(inputqueries.WithState(t.Context(), state), tx, inputqueries.Members.Table, orm.Set(inputqueries.Members.Email, inputqueries.EmailInput{Address: private}), orm.SetNull(inputqueries.Members.Note))
 		if !errors.Is(err, stop) || calls != 1 {
 			t.Fatal("draft inspection failed", err, calls)
 		}

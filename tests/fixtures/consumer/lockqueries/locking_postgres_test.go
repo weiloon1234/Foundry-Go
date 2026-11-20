@@ -32,10 +32,10 @@ func lockFixture(t *testing.T) (context.Context, *database.DB, string) {
 				return err
 			}
 		}
-		if _, err := orm.InsertMany(ctx, tx, models.Countries.Table, [][]orm.Assignment[models.Country]{{orm.KeySet(models.Countries.Code, "A"), orm.TextSet(models.Countries.Name, "Alpha")}, {orm.KeySet(models.Countries.Code, "B"), orm.TextSet(models.Countries.Name, "Beta")}}); err != nil {
+		if _, err := orm.InsertMany(ctx, tx, models.Countries.Table, [][]orm.Assignment[models.Country]{{orm.Set(models.Countries.Code, "A"), orm.Set(models.Countries.Name, "Alpha")}, {orm.Set(models.Countries.Code, "B"), orm.Set(models.Countries.Name, "Beta")}}); err != nil {
 			return err
 		}
-		_, err := orm.Insert(ctx, tx, models.Locations.Table, orm.KeySet(models.Locations.Code, models.LocationCode("one")), orm.TextSet(models.Locations.CountryCode, models.CountryCode("A")))
+		_, err := orm.Insert(ctx, tx, models.Locations.Table, orm.Set(models.Locations.Code, models.LocationCode("one")), orm.Set(models.Locations.CountryCode, models.CountryCode("A")))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -101,16 +101,16 @@ func TestPostgresLockedModelContentionAndRelease(t *testing.T) {
 	ctx, db, path := lockFixture(t)
 	lockedCountry := orm.Lock(models.Countries.Query())
 	finish := holdLock(t, ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, lockedCountry.Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		_, err := orm.RequireLocked(ctx, tx, lockedCountry.Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		return err
 	})
 	err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.FirstLocked(ctx, tx, lockedCountry.NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		_, err := orm.FirstLocked(ctx, tx, lockedCountry.NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		return err
 	})
 	assertLockError(t, err)
 	err = inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		missing, err := orm.FirstLocked(ctx, tx, lockedCountry.SkipLocked().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		missing, err := orm.FirstLocked(ctx, tx, lockedCountry.SkipLocked().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		if err != nil {
 			return err
 		}
@@ -124,7 +124,7 @@ func TestPostgresLockedModelContentionAndRelease(t *testing.T) {
 		if len(items) != 1 || items[0].Code != "B" {
 			return errors.New("SkipLocked lost available items")
 		}
-		_, err = orm.RequireLocked(ctx, tx, lockedCountry.SkipLocked().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		_, err = orm.RequireLocked(ctx, tx, lockedCountry.SkipLocked().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		if !errors.Is(err, database.NotFound) {
 			return errors.New("RequireFind missing contention result is not NotFound")
 		}
@@ -142,7 +142,7 @@ func TestPostgresLockedModelContentionAndRelease(t *testing.T) {
 		if first.Code != "A" {
 			return errors.New("commit did not release first row or natural-key ordering changed")
 		}
-		_, err = orm.Update(ctx, tx, models.Countries.Table.Query(), models.Countries.Table.Key(), first.Code, orm.TextSet(models.Countries.Name, first.Name+" updated"))
+		_, err = orm.Update(ctx, tx, models.Countries.Table.Query(), models.Countries.Table.Key(), first.Code, orm.Set(models.Countries.Name, first.Name+" updated"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -163,12 +163,12 @@ func TestPostgresLockStrengthCompatibility(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, db, path := lockFixture(t)
 			finish := holdLock(t, ctx, db, path, func(tx *database.Tx) error {
-				_, err := orm.RequireLocked(ctx, tx, test.held.Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+				_, err := orm.RequireLocked(ctx, tx, test.held.Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 				return err
 			})
 			defer finish()
 			err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-				_, err := orm.RequireLocked(ctx, tx, test.attempt.NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+				_, err := orm.RequireLocked(ctx, tx, test.attempt.NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 				return err
 			})
 			if test.conflicts {
@@ -185,7 +185,7 @@ func TestPostgresLockSavepointAndOffsetSemantics(t *testing.T) {
 	rollback := errors.New("rollback lock savepoint")
 	finish := holdLock(t, ctx, db, path, func(tx *database.Tx) error {
 		err := tx.Transaction(ctx, func(nested *database.Tx) error {
-			if _, err := orm.RequireLocked(ctx, nested, orm.Lock(models.Countries.Query()).Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A")))); err != nil {
+			if _, err := orm.RequireLocked(ctx, nested, orm.Lock(models.Countries.Query()).Where(orm.Eq(models.Countries.Code, models.CountryCode("A")))); err != nil {
 				return err
 			}
 			return rollback
@@ -194,28 +194,28 @@ func TestPostgresLockSavepointAndOffsetSemantics(t *testing.T) {
 			return errors.New("savepoint rollback lost error")
 		}
 		return tx.Transaction(ctx, func(nested *database.Tx) error {
-			_, err := orm.RequireLocked(ctx, nested, orm.Lock(models.Countries.Query()).Where(orm.KeyEq(models.Countries.Code, models.CountryCode("B"))))
+			_, err := orm.RequireLocked(ctx, nested, orm.Lock(models.Countries.Query()).Where(orm.Eq(models.Countries.Code, models.CountryCode("B"))))
 			return err
 		})
 	})
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		return err
 	}); err != nil {
 		t.Fatal("rolled-back savepoint retained row lock", err)
 	}
 	assertLockError(t, inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("B"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("B"))))
 		return err
 	}))
 	finish()
 	finish = holdLock(t, ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query().OrderBy(orm.KeyAsc(models.Countries.Code)).Offset(1)))
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query().OrderBy(orm.Asc(models.Countries.Code)).Offset(1)))
 		return err
 	})
 	defer finish()
 	assertLockError(t, inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		return err
 	}))
 }
@@ -223,7 +223,7 @@ func TestPostgresLockSavepointAndOffsetSemantics(t *testing.T) {
 func TestPostgresLockCancellationZeroLimitAndRecovery(t *testing.T) {
 	ctx, db, path := lockFixture(t)
 	finish := holdLock(t, ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		return err
 	})
 	defer finish()
@@ -236,11 +236,11 @@ func TestPostgresLockCancellationZeroLimitAndRecovery(t *testing.T) {
 			return errors.New("zero limit selected a row")
 		}
 		err = tx.Transaction(ctx, func(nested *database.Tx) error {
-			_, err := orm.RequireLocked(ctx, nested, orm.Lock(models.Countries.Query()).NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+			_, err := orm.RequireLocked(ctx, nested, orm.Lock(models.Countries.Query()).NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 			return err
 		})
 		assertLockError(t, err)
-		_, err = orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("B"))))
+		_, err = orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("B"))))
 		return err
 	}); err != nil {
 		t.Fatal("savepoint lock failure poisoned outer transaction", err)
@@ -248,7 +248,7 @@ func TestPostgresLockCancellationZeroLimitAndRecovery(t *testing.T) {
 	err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
 		short, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 		defer cancel()
-		_, err := orm.RequireLocked(short, tx, orm.Lock(models.Countries.Query()).Wait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		_, err := orm.RequireLocked(short, tx, orm.Lock(models.Countries.Query()).Wait().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		return err
 	})
 	if !errors.Is(err, context.DeadlineExceeded) {
@@ -264,7 +264,7 @@ func TestPostgresLockTypedJoinTargetsAndValues(t *testing.T) {
 	countries := rows.As[countryAlias](models.Countries.Query(), "country")
 	locations := rows.As[locationAlias](models.Locations.Query(), "location")
 	c, l := rows.Scope(countries), rows.Scope(locations)
-	joined := rows.LeftJoin(countries, locations, rows.On(expr.At(c, orm.KeyExpr(models.Countries.Code)), expr.At(l, orm.TextExpr(models.Locations.CountryCode))))
+	joined := rows.LeftJoin(countries, locations, rows.On(expr.At(c, models.Countries.Code), expr.At(l, models.Locations.CountryCode)))
 	countryScope := rows.LeftScope(joined, rows.Scope(countries))
 	selected := rows.ForUpdate(rows.SelectRecord(joined, countryScope)).Of(rows.Target(countryScope))
 	finish := holdLock(t, ctx, db, path, func(tx *database.Tx) error {
@@ -279,18 +279,18 @@ func TestPostgresLockTypedJoinTargetsAndValues(t *testing.T) {
 	})
 	defer finish()
 	assertLockError(t, inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		return err
 	}))
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Locations.Query()).NoWait().Where(orm.KeyEq(models.Locations.Code, models.LocationCode("one"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Locations.Query()).NoWait().Where(orm.Eq(models.Locations.Code, models.LocationCode("one"))))
 		return err
 	}); err != nil {
 		t.Fatal("Of locked unrelated join side", err)
 	}
 	finish()
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		values := rows.ReadScalar(rows.SelectScalar(rows.From(models.Countries.Query().OrderBy(orm.KeyAsc(models.Countries.Code))), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(models.Countries.Code))))))
+		values := rows.ReadScalar(rows.SelectScalar(rows.From(models.Countries.Query().OrderBy(orm.Asc(models.Countries.Code))), expr.AsSelected(expr.Row(expr.Value(models.Countries.Code)))))
 		codes, err := rows.ForKeyShare(values).All(ctx, tx)
 		if err != nil {
 			return err
@@ -311,7 +311,7 @@ func TestPostgresLockTypedJoinTargetsAndValues(t *testing.T) {
 func TestPostgresLockedEagerRelationsAndStreaming(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		q := orm.Lock(models.Users.Query().With(models.UserLinks.Orders))
-		first, err := orm.RequireLocked(t.Context(), tx, q.Where(orm.KeyEq(models.Users.ID, users[0].ID)))
+		first, err := orm.RequireLocked(t.Context(), tx, q.Where(orm.Eq(models.Users.ID, users[0].ID)))
 		if err != nil {
 			return err
 		}
@@ -338,27 +338,27 @@ func TestPostgresLockedEagerRelationsAndStreaming(t *testing.T) {
 func TestPostgresLockDerivedSourcesCTEPredicatesAndReadOnlyFailure(t *testing.T) {
 	ctx, db, path := lockFixture(t)
 	f := models.Countries
-	derived := rows.As[countryAlias](models.Countries.Query().Where(orm.KeyEq(f.Code, models.CountryCode("A"))).Limit(1), "candidate")
+	derived := rows.As[countryAlias](models.Countries.Query().Where(orm.Eq(f.Code, models.CountryCode("A"))).Limit(1), "candidate")
 	finish := holdLock(t, ctx, db, path, func(tx *database.Tx) error {
 		_, err := rows.ForUpdate(rows.SelectRecord(derived, rows.Scope(derived))).Of(rows.Target(rows.Scope(derived))).RequireFirst(ctx, tx)
 		return err
 	})
 	assertLockError(t, inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("A"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("A"))))
 		return err
 	}))
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("B"))))
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Countries.Query()).NoWait().Where(orm.Eq(models.Countries.Code, models.CountryCode("B"))))
 		return err
 	}); err != nil {
 		t.Fatal("derived filter locked an unrelated row", err)
 	}
 	finish()
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		definition := rows.CTE("eligible", rows.ModelRecord(models.Countries.Query().Where(orm.KeyEq(f.Code, models.CountryCode("A")))))
+		definition := rows.CTE("eligible", rows.ModelRecord(models.Countries.Query().Where(orm.Eq(f.Code, models.CountryCode("A")))))
 		source := rows.AsRecord[countryAlias](definition, "eligible_rows")
-		codes := rows.SelectScalar(source, expr.AsSelected(expr.Row(expr.At(rows.Scope(source), orm.KeyExpr(models.Countries.Code)))))
-		row, err := orm.RequireLocked(ctx, tx, orm.Lock(expr.Where(models.Countries.Query(), rows.InQuery(expr.Value(orm.KeyExpr(f.Code)), codes))))
+		codes := rows.SelectScalar(source, expr.AsSelected(expr.Row(expr.At(rows.Scope(source), models.Countries.Code))))
+		row, err := orm.RequireLocked(ctx, tx, orm.Lock(expr.Where(models.Countries.Query(), rows.InQuery(expr.Value(f.Code), codes))))
 		if err != nil {
 			return err
 		}

@@ -75,7 +75,7 @@ func PresentMember(member mutatorqueries.Member) (MemberResponse, error) {
 func memberQuery(filters MemberFilters) orm.Query[mutatorqueries.Member] {
 	builder := mutatorqueries.Members.Query()
 	if email, set := filters.Email.Get(); set {
-		builder = builder.Where(orm.InputTextEq(mutatorqueries.Members.Email, email))
+		builder = builder.Where(orm.Eq(mutatorqueries.Members.Email, email))
 	}
 	return builder
 }

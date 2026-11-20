@@ -66,7 +66,7 @@ func (r *Recorder) RecordModel(ctx context.Context, tx *database.Tx, entry recor
 	if err != nil {
 		return err
 	}
-	_, err = auditstore.Append(ctx, tx, append(draft, orm.ColumnSet(auditstore.Entries.Operation, entry.Operation()), orm.TextSet(auditstore.Entries.Action, ""), orm.NumberSet(auditstore.Entries.Version, 0), orm.ColumnSet(auditstore.Entries.Redacted, false)))
+	_, err = auditstore.Append(ctx, tx, append(draft, orm.Set(auditstore.Entries.Operation, entry.Operation()), orm.Set(auditstore.Entries.Action, ""), orm.Set(auditstore.Entries.Version, 0), orm.Set(auditstore.Entries.Redacted, false)))
 	return err
 }
 
@@ -80,7 +80,7 @@ func ModelHistory[M, K any](ctx context.Context, executor database.Executor, rec
 		return orm.PageResult[ModelRecord[M, K]]{}, err
 	}
 	f := auditstore.Entries
-	page, err := auditstore.Page(ctx, executor, q.Where(orm.ColumnNe(f.Operation, 0)), request)
+	page, err := auditstore.Page(ctx, executor, q.Where(orm.Ne(f.Operation, 0)), request)
 	if err != nil {
 		return orm.PageResult[ModelRecord[M, K]]{}, err
 	}
@@ -107,7 +107,7 @@ func ModelTimeline[M, K any](ctx context.Context, executor database.Executor, re
 		return Timeline[ModelRecord[M, K]]{}, err
 	}
 	f := auditstore.Entries
-	return readTimeline(ctx, executor, q.Where(orm.ColumnNe(f.Operation, 0)), request, func(row auditstore.Entry) (ModelRecord[M, K], error) {
+	return readTimeline(ctx, executor, q.Where(orm.Ne(f.Operation, 0)), request, func(row auditstore.Entry) (ModelRecord[M, K], error) {
 		return restoreModel(subject, row)
 	})
 }
@@ -132,7 +132,7 @@ func subjectHistory[M, K any](ctx context.Context, recorder *Recorder, subject m
 		return orm.Query[auditstore.Entry]{}, err
 	}
 	f := auditstore.Entries
-	return auditstore.Entries.Query().Where(orm.TextEq(f.Area, string(area)), orm.NullableTextEq(f.SubjectKey, key), orm.NullableJSONEq(f.Subject, stored)), nil
+	return auditstore.Entries.Query().Where(orm.Eq(f.Area, string(area)), orm.Eq(f.SubjectKey, key), orm.Eq(f.Subject, stored)), nil
 }
 
 func restoreModel[M, K any](template model.Reference[M, K], row auditstore.Entry) (ModelRecord[M, K], error) {
@@ -187,17 +187,17 @@ func capturedDraft(ctx context.Context, area Area, payload string, subject value
 	if err != nil {
 		return []orm.Assignment[auditstore.Entry]{}, err
 	}
-	draft := []orm.Assignment[auditstore.Entry]{orm.TextSet(auditstore.Entries.Area, string(area)), orm.JSONSet(auditstore.Entries.Payload, body), orm.JSONSet(auditstore.Entries.Origin, source), orm.NumberSet(auditstore.Entries.Redaction, uint8(redaction))}
+	draft := []orm.Assignment[auditstore.Entry]{orm.Set(auditstore.Entries.Area, string(area)), orm.Set(auditstore.Entries.Payload, body), orm.Set(auditstore.Entries.Origin, source), orm.Set(auditstore.Entries.Redaction, uint8(redaction))}
 	if correlation, present := CorrelationFromContext(ctx).Get(); present {
 		if err := correlation.Validate(); err != nil {
 			return []orm.Assignment[auditstore.Entry]{}, err
 		}
-		draft = append(draft, orm.NullableTextSet(auditstore.Entries.Correlation, string(correlation)))
+		draft = append(draft, orm.Set(auditstore.Entries.Correlation, string(correlation)))
 	} else {
-		draft = append(draft, orm.NullableTextSetNull(auditstore.Entries.Correlation))
+		draft = append(draft, orm.SetNull(auditstore.Entries.Correlation))
 	}
 	route, _ := attribution.RouteFromContext(ctx)
-	draft = append(draft, orm.TextSet(auditstore.Entries.RequestMethod, route.Method), orm.TextSet(auditstore.Entries.RequestRoute, route.Name))
+	draft = append(draft, orm.Set(auditstore.Entries.RequestMethod, route.Method), orm.Set(auditstore.Entries.RequestRoute, route.Name))
 	if identity, present := subject.Get(); present {
 		if err := identity.Validate(); err != nil {
 			return []orm.Assignment[auditstore.Entry]{}, err
@@ -206,7 +206,7 @@ func capturedDraft(ctx context.Context, area Area, payload string, subject value
 		if err != nil {
 			return []orm.Assignment[auditstore.Entry]{}, err
 		}
-		return append(draft, orm.NullableJSONSet(auditstore.Entries.Subject, key)), nil
+		return append(draft, orm.Set(auditstore.Entries.Subject, key)), nil
 	}
-	return append(draft, orm.NullableJSONSetNull(auditstore.Entries.Subject)), nil
+	return append(draft, orm.SetNull(auditstore.Entries.Subject)), nil
 }

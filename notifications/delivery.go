@@ -23,7 +23,7 @@ func (m *Manager) load(ctx context.Context, id model.ID[store.Envelope]) (store.
 	var deliveries []store.Delivery
 	err := m.within(ctx, func(tx *database.Tx) error {
 		var err error
-		envelope, err = orm.Require(ctx, tx, store.Envelopes.Query().Where(orm.KeyEq(store.Envelopes.Key(), id)))
+		envelope, err = orm.Require(ctx, tx, store.Envelopes.Query().Where(orm.Eq(store.Envelopes.Key(), id)))
 		if err != nil {
 			return err
 		}
@@ -40,7 +40,7 @@ func (m *Manager) load(ctx context.Context, id model.ID[store.Envelope]) (store.
 		if err != nil {
 			return err
 		}
-		deliveries, err = orm.All(ctx, tx, store.Deliveries.Query().Where(orm.ColumnEq(store.Deliveries.NotificationID, id)).Limit(MaxChannels+1))
+		deliveries, err = orm.All(ctx, tx, store.Deliveries.Query().Where(orm.Eq(store.Deliveries.NotificationID, id)).Limit(MaxChannels+1))
 		if err != nil {
 			return err
 		}
@@ -67,7 +67,7 @@ func (m *Manager) outcomes(ctx context.Context, id model.ID[store.Envelope]) ([]
 	var deliveries []store.Delivery
 	err := m.within(ctx, func(tx *database.Tx) error {
 		var err error
-		deliveries, err = orm.All(ctx, tx, store.Deliveries.Query().Where(orm.ColumnEq(store.Deliveries.NotificationID, id)).Limit(MaxChannels+1))
+		deliveries, err = orm.All(ctx, tx, store.Deliveries.Query().Where(orm.Eq(store.Deliveries.NotificationID, id)).Limit(MaxChannels+1))
 		if err != nil {
 			return err
 		}
@@ -193,7 +193,7 @@ func (m *Manager) attempt(ctx context.Context, envelope store.Envelope, identity
 			if err != nil {
 				return err
 			}
-			row, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, orm.JSONSet(store.Deliveries.Payload, snapshot), orm.TextSet(store.Deliveries.State, string(Prepared)), orm.TimeSet(store.Deliveries.UpdatedAt, now))
+			row, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, orm.Set(store.Deliveries.Payload, snapshot), orm.Set(store.Deliveries.State, string(Prepared)), orm.Set(store.Deliveries.UpdatedAt, now))
 			return err
 		})
 		if err != nil {
@@ -256,7 +256,7 @@ func (m *Manager) attempt(ctx context.Context, envelope store.Envelope, identity
 		if err != nil {
 			return err
 		}
-		row, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, orm.ColumnSet(store.Deliveries.Claim, claim), orm.TextSet(store.Deliveries.State, string(Running)), orm.NumberSet(store.Deliveries.Attempts, current.Attempts+1), orm.TimeSet(store.Deliveries.UpdatedAt, now))
+		row, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, orm.Set(store.Deliveries.Claim, claim), orm.Set(store.Deliveries.State, string(Running)), orm.Set(store.Deliveries.Attempts, current.Attempts+1), orm.Set(store.Deliveries.UpdatedAt, now))
 		owned = err == nil
 		return err
 	})
@@ -297,13 +297,13 @@ func (m *Manager) attempt(ctx context.Context, envelope store.Envelope, identity
 		if err != nil {
 			return err
 		}
-		_, err = orm.Update(cleanup, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, orm.TextSet(store.Deliveries.State, string(state)), orm.TimeSet(store.Deliveries.UpdatedAt, now))
+		_, err = orm.Update(cleanup, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, orm.Set(store.Deliveries.State, string(state)), orm.Set(store.Deliveries.UpdatedAt, now))
 		return err
 	})
 }
 
 func lockDelivery(ctx context.Context, tx *database.Tx, key string) (store.Delivery, error) {
-	return orm.RequireLocked(ctx, tx, orm.Lock(store.Deliveries.Query()).Where(orm.KeyEq(store.Deliveries.Key(), key)))
+	return orm.RequireLocked(ctx, tx, orm.Lock(store.Deliveries.Query()).Where(orm.Eq(store.Deliveries.Key(), key)))
 }
 func (m *Manager) finishUnclaimed(ctx context.Context, key string, expected, state State) error {
 	return m.within(ctx, func(tx *database.Tx) error {
@@ -315,7 +315,7 @@ func (m *Manager) finishUnclaimed(ctx context.Context, key string, expected, sta
 		if err != nil {
 			return err
 		}
-		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), key, orm.TextSet(store.Deliveries.State, string(state)), orm.TimeSet(store.Deliveries.UpdatedAt, now))
+		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), key, orm.Set(store.Deliveries.State, string(state)), orm.Set(store.Deliveries.UpdatedAt, now))
 		return err
 	})
 }
@@ -332,11 +332,11 @@ func (m *Manager) completeDatabase(ctx context.Context, envelope store.Envelope,
 		if err != nil {
 			return err
 		}
-		draft := []orm.Assignment[store.Inbox]{orm.KeySet(store.Inboxes.ID, model.IDFromBytes[store.Inbox](envelope.ID.Bytes())), orm.TextSet(store.Inboxes.Scope, envelope.Scope), orm.TextSet(store.Inboxes.SubjectKey, envelope.SubjectKey), orm.TextSet(store.Inboxes.Name, envelope.Name), orm.NumberSet(store.Inboxes.Version, envelope.Version), orm.JSONSet(store.Inboxes.Data, row.Payload), orm.TimeSet(store.Inboxes.CreatedAt, envelope.CreatedAt)}
+		draft := []orm.Assignment[store.Inbox]{orm.Set(store.Inboxes.ID, model.IDFromBytes[store.Inbox](envelope.ID.Bytes())), orm.Set(store.Inboxes.Scope, envelope.Scope), orm.Set(store.Inboxes.SubjectKey, envelope.SubjectKey), orm.Set(store.Inboxes.Name, envelope.Name), orm.Set(store.Inboxes.Version, envelope.Version), orm.Set(store.Inboxes.Data, row.Payload), orm.Set(store.Inboxes.CreatedAt, envelope.CreatedAt)}
 		if _, err := orm.Insert(ctx, tx, store.Inboxes.Table, draft...); err != nil {
 			return err
 		}
-		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, orm.TextSet(store.Deliveries.State, string(Delivered)), orm.NumberSet(store.Deliveries.Attempts, row.Attempts+1), orm.TimeSet(store.Deliveries.UpdatedAt, now))
+		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, orm.Set(store.Deliveries.State, string(Delivered)), orm.Set(store.Deliveries.Attempts, row.Attempts+1), orm.Set(store.Deliveries.UpdatedAt, now))
 		return err
 	})
 }

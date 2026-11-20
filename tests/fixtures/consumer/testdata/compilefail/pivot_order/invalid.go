@@ -4,4 +4,4 @@ import orm "github.com/weiloon1234/Foundry-Go/database/orm"
 
 import "foundry.test/consumer/models"
 
-var invalid = models.UserLinks.Groups.OrderByPivot(orm.TextAsc(models.Groups.Name))
+var invalid = models.UserLinks.Groups.OrderByPivot(orm.Asc(models.Groups.Name))

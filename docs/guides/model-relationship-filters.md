@@ -6,7 +6,7 @@
 
 ```go
 orders := models.UserLinks.Orders.
-    Where(orm.NumberGte(models.Orders.TotalCents, 1000))
+    Where(orm.Gte(models.Orders.TotalCents, 1000))
 
 buyers, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(orders)))
 others, err := orm.All(ctx, db, models.Users.Query().Where(orm.Not(orm.Has(orders))))
@@ -26,7 +26,7 @@ Existence asks whether any matching row exists. It does not hydrate a singular r
 u := models.Users
 users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Or(
     orm.Has(orders),
-    orm.EnumEq(u.Status, models.StatusActive),
+    orm.Eq(u.Status, models.StatusActive),
 )))
 ```
 
@@ -35,7 +35,7 @@ Nested related filters use the same descriptors:
 ```go
 referralsWithOrders := models.UserLinks.Referrals.
     Where(orm.Has(models.UserLinks.Orders.
-        Where(orm.NumberGte(models.Orders.TotalCents, 1000))))
+        Where(orm.Gte(models.Orders.TotalCents, 1000))))
 
 introducers, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(referralsWithOrders)))
 ```
@@ -46,8 +46,8 @@ Each `Where` accepts the related model's predicates. Nested self-relations work 
 
 ```go
 groups := models.UserLinks.Groups.
-    Where(orm.TextLike(models.Groups.Name, "team%")).
-    WherePivot(orm.NumberGte(models.Memberships.Priority, 2))
+    Where(orm.Like(models.Groups.Name, "team%")).
+    WherePivot(orm.Gte(models.Memberships.Priority, 2))
 
 members, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(groups)))
 ```

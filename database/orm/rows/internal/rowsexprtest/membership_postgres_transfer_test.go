@@ -56,8 +56,8 @@ func membershipFields() membershipTable {
 }
 func membershipIDs(t *testing.T, ctx context.Context, ex database.Executor, q orm.Query[membershipRow], d membershipTable) []int64 {
 	t.Helper()
-	selected := rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(d.Key())))))
-	got, e := rows.ReadScalar(rows.OrderScalar(selected, expr.Asc(expr.Value(orm.KeyExpr(d.Key()))))).All(ctx, ex)
+	selected := rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(d.Key()))))
+	got, e := rows.ReadScalar(rows.OrderScalar(selected, expr.Asc(expr.Value(d.Key())))).All(ctx, ex)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -98,17 +98,17 @@ func TestPostgresMembershipBindsOneTypedArray(t *testing.T) {
 		predicate orm.Predicate[membershipRow]
 		want      []int64
 	}{
-		"integer":    {orm.NumberIn(d.Rank, 20, 99), []int64{3}},
-		"text":       {orm.TextIn(d.Label, `a,"b}`, "NULL", ""), []int64{1, 2, 3}},
-		"not in":     {orm.TextNotIn(d.Label, "NULL", ""), []int64{1}},
-		"boolean":    {orm.ColumnIn(d.OK, false), []int64{2}},
-		"numeric":    {orm.NumberIn(d.Amount, amounts...), []int64{1, 3}},
-		"date":       {orm.TimeIn(d.Day, day), []int64{2}},
-		"instant":    {orm.TimeIn(d.At, at), []int64{1}},
-		"uuid":       {orm.ColumnIn(d.UID, uid), []int64{1}},
-		"enum":       {orm.TextNotIn(d.Mood, "happy"), []int64{2, 3}},
-		"empty not":  {orm.NumberNotIn(d.Rank), []int64{1, 2, 3}},
-		"empty list": {orm.NumberIn(d.Rank), []int64{}},
+		"integer":    {orm.In(d.Rank, 20, 99), []int64{3}},
+		"text":       {orm.In(d.Label, `a,"b}`, "NULL", ""), []int64{1, 2, 3}},
+		"not in":     {orm.NotIn(d.Label, "NULL", ""), []int64{1}},
+		"boolean":    {orm.In(d.OK, false), []int64{2}},
+		"numeric":    {orm.In(d.Amount, amounts...), []int64{1, 3}},
+		"date":       {orm.In(d.Day, day), []int64{2}},
+		"instant":    {orm.In(d.At, at), []int64{1}},
+		"uuid":       {orm.In(d.UID, uid), []int64{1}},
+		"enum":       {orm.NotIn(d.Mood, "happy"), []int64{2, 3}},
+		"empty not":  {orm.NotIn(d.Rank), []int64{1, 2, 3}},
+		"empty list": {orm.In(d.Rank), []int64{}},
 	} {
 		statement, err = orm.Compile(d.Query().Where(test.predicate))
 		if err != nil {
@@ -124,8 +124,8 @@ func TestPostgresMembershipBindsOneTypedArray(t *testing.T) {
 
 	// A declared JSON property is a SQL literal, so a generic plan (the plan
 	// a cached prepared statement switches to) can still use the expression index.
-	name := expr.JSONTextScalar(expr.JSONNullable(expr.JSONProperty(expr.JSONRoot(expr.Value(orm.JSONExpr(d.Doc))), expr.JSONFieldOf(func(p *membershipDocument) *value.Nullable[string] { return &p.Name }))), codec.String[string]())
-	statement, err = rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(d.Query(), expr.NullableEq(name, "alice"))), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(d.Key())))))))
+	name := expr.JSONTextScalar(expr.JSONNullable(expr.JSONProperty(expr.JSONRoot(expr.Value(d.Doc)), expr.JSONFieldOf(func(p *membershipDocument) *value.Nullable[string] { return &p.Name }))), codec.String[string]())
+	statement, err = rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(d.Query(), expr.NullableEq(name, "alice"))), expr.AsSelected(expr.Row(expr.Value(d.Key()))))))
 	if err != nil || len(statement.Arguments()) != 1 {
 		t.Fatal(statement.SQL(), err)
 	}
@@ -179,7 +179,7 @@ func TestPostgresChunksContinueByKeyset(t *testing.T) {
 	if _, e := db.Exec(ctx, `CREATE TABLE members(id bigint PRIMARY KEY,rank bigint NOT NULL)`); e != nil {
 		t.Fatal(e)
 	}
-	for index, order := range []orm.Order[record]{orm.NumberAsc(d.Rank), orm.NumberDesc(d.Rank), orm.NumberAsc(d.Rank).NullsFirst()} {
+	for index, order := range []orm.Order[record]{orm.Asc(d.Rank), orm.Desc(d.Rank), orm.Asc(d.Rank).NullsFirst()} {
 		if _, e := db.Exec(ctx, `DELETE FROM members`); e != nil {
 			t.Fatal(e)
 		}
@@ -248,7 +248,7 @@ func TestPostgresJSONLengthAndPathContainment(t *testing.T) {
 	d := orm.Define("members", func(b orm.Builder[record], m *record) fields {
 		return fields{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.Rank), orm.JSONOf(b, &m.Doc)}
 	})
-	tags := expr.JSONProperty(expr.JSONRoot(expr.Value(orm.JSONExpr(d.Doc))), expr.JSONFieldOf(func(p *document) *[]string { return &p.Tags }))
+	tags := expr.JSONProperty(expr.JSONRoot(expr.Value(d.Doc)), expr.JSONFieldOf(func(p *document) *[]string { return &p.Tags }))
 	fragment, err := value.NewJSON(document{Tags: []string{"c"}})
 	if err != nil {
 		t.Fatal(err)
@@ -264,9 +264,9 @@ func TestPostgresJSONLengthAndPathContainment(t *testing.T) {
 		p    expr.Predicate[record]
 		want []int64
 	}{
-		"length": {expr.NullableGte(expr.JSONLengthNullable(tags.JSON()), 1), []int64{1, 4}}, "longest": {expr.NullableGt(expr.JSONLengthNullable(tags.JSON()), 2), []int64{1}}, "contains": {contains("b"), []int64{1, 4}}, "both": {contains("a", "c"), []int64{1}}, "document": {expr.Eq(expr.JSONContains(expr.Value(orm.JSONExpr(d.Doc)), expr.Param(orm.JSONExpr(d.Doc), fragment)), true), []int64{1}},
+		"length": {expr.NullableGte(expr.JSONLengthNullable(tags.JSON()), 1), []int64{1, 4}}, "longest": {expr.NullableGt(expr.JSONLengthNullable(tags.JSON()), 2), []int64{1}}, "contains": {contains("b"), []int64{1, 4}}, "both": {contains("a", "c"), []int64{1}}, "document": {expr.Eq(expr.JSONContains(expr.Value(d.Doc), expr.Param(d.Doc, fragment)), true), []int64{1}},
 	} {
-		q := rows.OrderScalar(rows.WhereScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(d.Key()))))), test.p), expr.Asc(expr.Value(orm.KeyExpr(d.Key()))))
+		q := rows.OrderScalar(rows.WhereScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(expr.Row(expr.Value(d.Key())))), test.p), expr.Asc(expr.Value(d.Key())))
 		got, e := rows.ReadScalar(q).All(ctx, db)
 		if e != nil || !reflect.DeepEqual(got, test.want) {
 			t.Fatal(name, got, e)

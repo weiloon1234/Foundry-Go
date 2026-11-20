@@ -56,7 +56,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		}
 
 		fields := models.Users
-		base := models.Users.Query().OrderBy(orm.NumberAsc(fields.Age))
+		base := models.Users.Query().OrderBy(orm.Asc(fields.Age))
 		users, err := orm.All(t.Context(), tx, base)
 		if err != nil {
 			return err
@@ -68,7 +68,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		if !ok || birthday.String() != "2000-02-29" {
 			t.Error("nullable date hydration failed")
 		}
-		byBirthday := models.Users.Query().OrderBy(orm.NullableTimeAsc(fields.Birthday))
+		byBirthday := models.Users.Query().OrderBy(orm.Asc(fields.Birthday))
 		cursorPage, err := orm.CursorPaginate(t.Context(), tx, byBirthday, orm.CursorRequest[models.User]{Size: 1})
 		if err != nil {
 			return err
@@ -84,35 +84,35 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		if len(lastPage.Items) != 1 || lastPage.Items[0].ID != secondID || lastPage.Next.IsSet() {
 			t.Error("temporal/UUID cursor lost its exact boundary")
 		}
-		match, err := orm.Require(t.Context(), tx, base.Where(orm.TextContains(fields.Email, "_%!'")))
+		match, err := orm.Require(t.Context(), tx, base.Where(orm.Contains(fields.Email, "_%!'")))
 		if err != nil {
 			return err
 		}
 		if match.ID != firstID {
 			t.Error("Contains treated literal wildcard characters as operators")
 		}
-		matches, err := orm.All(t.Context(), tx, base.Where(orm.Or(orm.NumberLt(fields.Age, 22), orm.EnumEq(fields.Status, models.StatusDisabled)), orm.KeyIn(fields.ID, firstID, secondID)))
+		matches, err := orm.All(t.Context(), tx, base.Where(orm.Or(orm.Lt(fields.Age, 22), orm.Eq(fields.Status, models.StatusDisabled)), orm.In(fields.ID, firstID, secondID)))
 		if err != nil {
 			return err
 		}
 		if len(matches) != 2 {
 			t.Error("typed predicate composition changed meaning")
 		}
-		found, err := orm.First(t.Context(), tx, base.Where(orm.NumberGte(fields.Age, 30), orm.KeyEq(fields.ID, secondID)))
+		found, err := orm.First(t.Context(), tx, base.Where(orm.Gte(fields.Age, 30), orm.Eq(fields.ID, secondID)))
 		if err != nil {
 			return err
 		}
 		if v, ok := found.Get(); !ok || v.ID != secondID {
 			t.Error("typed Find lost filters or identity")
 		}
-		missing, err := orm.First(t.Context(), tx, base.Where(orm.NumberLt(fields.Age, 30), orm.KeyEq(fields.ID, secondID)))
+		missing, err := orm.First(t.Context(), tx, base.Where(orm.Lt(fields.Age, 30), orm.Eq(fields.ID, secondID)))
 		if err != nil {
 			return err
 		}
 		if missing.IsSet() {
 			t.Error("missing model used a zero model sentinel")
 		}
-		if _, err := orm.Require(t.Context(), tx, base.Where(orm.NumberLt(fields.Age, 0))); !errors.Is(err, database.NotFound) {
+		if _, err := orm.Require(t.Context(), tx, base.Where(orm.Lt(fields.Age, 0))); !errors.Is(err, database.NotFound) {
 			t.Error("required missing model did not report NotFound")
 		}
 		page := base.Limit(1).Offset(1)
@@ -151,7 +151,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		entry, err := orm.Require(t.Context(), tx, models.LedgerEntries.Query().Where(orm.NumberEq(models.LedgerEntries.Amount, amount), orm.KeyEq(models.LedgerEntries.Key(), entryID)))
+		entry, err := orm.Require(t.Context(), tx, models.LedgerEntries.Query().Where(orm.Eq(models.LedgerEntries.Amount, amount), orm.Eq(models.LedgerEntries.Key(), entryID)))
 		if err != nil {
 			return err
 		}
@@ -166,7 +166,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		if _, err := orm.Count(t.Context(), tx, base); err != nil {
 			return err
 		}
-		if _, err := orm.All(t.Context(), tx, base.Where(orm.EnumEq(fields.Status, models.Status("unknown")))); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.All(t.Context(), tx, base.Where(orm.Eq(fields.Status, models.Status("unknown")))); !errors.Is(err, fault.Invalid) {
 			t.Error("invalid enum binding reached execution")
 		}
 		canceled, cancel := context.WithCancel(t.Context())
@@ -194,7 +194,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 }
 
 func TestORMModelSQLUsesOnlyDeclaredColumns(t *testing.T) {
-	statement, err := orm.Compile(models.Users.Query().Where(orm.TextEq(models.Users.Email, "secret'; --")))
+	statement, err := orm.Compile(models.Users.Query().Where(orm.Eq(models.Users.Email, "secret'; --")))
 	if err != nil {
 		t.Fatal(err)
 	}

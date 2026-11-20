@@ -25,10 +25,10 @@ func TestPostgresCollationOrdering(t *testing.T) {
 				return err
 			}
 		}
-		if _, err := orm.Insert(t.Context(), tx, f.Table, orm.NumberKeySet(f.ID, 4), orm.NumberSet(f.Quantity, 0), orm.NumberSet(f.Amount, decimal.FromInt64(0)), orm.NumberSet(f.Score, 0), orm.TextSet(f.Name, "Émile")); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, f.Table, orm.Set(f.ID, 4), orm.Set(f.Quantity, 0), orm.Set(f.Amount, decimal.FromInt64(0)), orm.Set(f.Score, 0), orm.Set(f.Name, "Émile")); err != nil {
 			return err
 		}
-		name := expr.Value(orm.TextExpr(f.Name))
+		name := expr.Value(f.Name)
 		for _, tc := range []struct {
 			collation expr.Collation
 			want      []scalarqueries.Label
@@ -44,7 +44,7 @@ func TestPostgresCollationOrdering(t *testing.T) {
 			}
 		}
 		// Collation also retains the stored NULL/present distinction and named type.
-		scalarValues(t, tx, expr.CollateNullableValue(expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(f.Note)))), expr.CollationUnicode), []value.Nullable[scalarqueries.Label]{value.Null[scalarqueries.Label](), value.Of(scalarqueries.Label("Écho")), value.Of(scalarqueries.Label("")), value.Null[scalarqueries.Label]()})
+		scalarValues(t, tx, expr.CollateNullableValue(expr.AsSelected(expr.Row(expr.Value(f.Note))), expr.CollationUnicode), []value.Nullable[scalarqueries.Label]{value.Null[scalarqueries.Label](), value.Of(scalarqueries.Label("Écho")), value.Of(scalarqueries.Label("")), value.Null[scalarqueries.Label]()})
 		counter := &queryfixture.QueryCounter{Executor: tx}
 		for _, invalid := range []expr.Collation{"", "bad\x00name", expr.ICUCollation("en_US")} {
 			q := expr.OrderBy(f.Query(), expr.Asc(expr.Collate(name, invalid)))

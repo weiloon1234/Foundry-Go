@@ -34,7 +34,7 @@ func TestStage6d3JSONPaths(t *testing.T) {
 	_, err = db.Exec(ctx, `INSERT INTO json_documents VALUES(1,'{"profile":{"name":"Ada","age":"42","nickname":null,"scores":[1,2,3],"attributes":{"2":"two"},"next":null,"quoted":"\"hello\"","odd%path":"odd"}}',NULL,'["a","b"]','[1,2,3]','null')`)
 	must(t, err)
 	d := jsonpaths.Documents
-	root := expr.JSONRoot(expr.Value(orm.JSONExpr(d.Settings)))
+	root := expr.JSONRoot(expr.Value(d.Settings))
 	profile := expr.JSONOptional(expr.JSONProperty(root, jsonpaths.UserProfile))
 	theme := expr.JSONOptional(expr.JSONProperty(root, jsonpaths.Theme))
 	nick := expr.JSONProperty(profile, jsonpaths.Nickname)
@@ -42,10 +42,10 @@ func TestStage6d3JSONPaths(t *testing.T) {
 	scores := expr.JSONProperty(profile, jsonpaths.Scores)
 	fragment, err := value.NewJSON([]int64{2})
 	must(t, err)
-	if k := readJSON(t, db, expr.AsSelected(expr.JSONType(expr.Value(orm.JSONExpr(d.Settings)))), codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)); k != database.JSONObject {
+	if k := readJSON(t, db, expr.AsSelected(expr.JSONType(expr.Value(d.Settings))), codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)); k != database.JSONObject {
 		t.Fatal(k)
 	}
-	if v := readJSON(t, db, expr.AsSelected(expr.JSONTypeNullable(expr.Value(orm.NullableJSONExpr(d.Backup)))), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
+	if v := readJSON(t, db, expr.AsSelected(expr.JSONTypeNullable(expr.Value(d.Backup))), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
 		t.Fatal(v)
 	}
 	if v := readJSON(t, db, expr.AsSelected(expr.JSONTypeNullable(theme.JSON())), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
@@ -88,7 +88,7 @@ func TestStage6d3JSONPaths(t *testing.T) {
 	for _, json := range []string{`null`, `{}`, `"text"`, `42`, `true`, `[]`, `[null,1]`} {
 		_, err = db.Exec(ctx, `UPDATE json_documents SET tags=$1::jsonb`, json)
 		must(t, err)
-		got := readJSON(t, db, expr.AsSelected(expr.JSONLength(expr.Value(orm.JSONExpr(d.Tags)))), codec.Nullable(codec.Signed[int64]()))
+		got := readJSON(t, db, expr.AsSelected(expr.JSONLength(expr.Value(d.Tags))), codec.Nullable(codec.Signed[int64]()))
 		switch json {
 		case `[]`:
 			if got != value.Of(int64(0)) {

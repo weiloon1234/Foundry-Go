@@ -18,7 +18,7 @@ import (
 // Native hook-free InsertMany on an exact pool uses the autocommit fast path.
 func TestModelUpsertAndBatchReturningFailures(t *testing.T) {
 	name := mutationFields.Name
-	policy := orm.OnConflict(orm.ConflictKey(orm.TextExpr(name))).DoUpdate(orm.ConflictIncoming(orm.TextExpr(name)))
+	policy := orm.OnConflict(orm.ConflictKey(name)).DoUpdate(orm.ConflictIncoming(name))
 	for _, tc := range []struct {
 		name  string
 		rows  [][]driver.Value

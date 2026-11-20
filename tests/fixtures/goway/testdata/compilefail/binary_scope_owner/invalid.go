@@ -7,4 +7,4 @@ import (
 	m "foundry.test/goway/models"
 )
 
-var _ = m.Users.Query().Where(orm.ColumnEq(c.Records.Body, c.Payload{1}))
+var _ = m.Users.Query().Where(orm.Eq(c.Records.Body, c.Payload{1}))

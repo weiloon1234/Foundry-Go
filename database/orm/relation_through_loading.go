@@ -11,7 +11,7 @@ import (
 	"unsafe"
 )
 
-func throughLoader[M, N, P any, A, B comparable](local columnData[A], pivotLocal columnData[A], pivotForeign, foreign columnData[B], assign func(*M, []relation.Link[N, P])) func(context.Context, database.Executor, *relationPlan, unsafe.Pointer, int, *relationBudget, int, bool) error {
+func throughLoader[M, N, P any, A, B comparable](local *columnData[A], pivotLocal *columnData[A], pivotForeign, foreign *columnData[B], assign func(*M, []relation.Link[N, P])) func(context.Context, database.Executor, *relationPlan, unsafe.Pointer, int, *relationBudget, int, bool) error {
 	return func(ctx context.Context, ex database.Executor, p *relationPlan, base unsafe.Pointer, count int, budget *relationBudget, depth int, missing bool) error {
 		parents := unsafe.Slice((*M)(base), count)
 		positions, keys, requested, err := querycore.RelationKeys(ctx, count, budget.limits.BatchSize, func(i int) (A, sqlvalue.Value, bool, error) {
@@ -30,7 +30,7 @@ func throughLoader[M, N, P any, A, B comparable](local columnData[A], pivotLocal
 			if err != nil {
 				return 0, err
 			}
-			node.Predicates = append(node.Predicates, querycore.Requalify(querycore.PredicateNode(comparison[P](pivotLocal, querycore.In, keys[start:end]).expression), querycore.RelationPivotAlias))
+			node.Predicates = append(node.Predicates, querycore.Requalify(querycore.PredicateNode(comparison[P](pivotLocal, querycore.In, keys[start:end], false).expression), querycore.RelationPivotAlias))
 			node.Limit = value.Set(limit)
 			n, pc := len(p.target.columns), len(p.join.pivot.table.columns)
 			fetched := 0

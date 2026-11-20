@@ -20,8 +20,8 @@ func noteSearch(term scalarqueries.Label) orm.Query[scalarqueries.Sample] {
 	outer := rows.OuterScope(correlation, rows.ModelScope(scalarqueries.Samples.Query()))
 	inner := rows.InnerScope(correlation, rows.Scope(lookup))
 	scalar := rows.SelectCorrelatedScalar(correlation,
-		expr.AsSelected(expr.Row(expr.At(inner, orm.NullableTextExpr(scalarqueries.Samples.Note))))).
-		Where(expr.Equal(expr.At(inner, orm.NumberKeyExpr(scalarqueries.Samples.ID)), expr.At(outer, orm.NumberKeyExpr(scalarqueries.Samples.ID)))).Limit(1)
+		expr.AsSelected(expr.Row(expr.At(inner, scalarqueries.Samples.Note)))).
+		Where(expr.Equal(expr.At(inner, scalarqueries.Samples.ID), expr.At(outer, scalarqueries.Samples.ID))).Limit(1)
 	text := expr.TextNullableRowValue(rows.CorrelatedScalarNullableRowQuery(scalar))
 	return expr.Where(scalarqueries.Samples.Query(), expr.NullableTextIContains(text, term))
 } // doc-example:end computed-text

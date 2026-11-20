@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var invalid = orm.TextContains(models.LedgerEntries.Amount, "1")
+var invalid = orm.Contains(models.LedgerEntries.Amount, "1")

@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.NumberIncrement(h.Members.UpdatedAt, 1)
+var _ = orm.Increment(h.Members.UpdatedAt, 1)

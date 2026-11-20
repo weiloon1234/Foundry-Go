@@ -19,7 +19,7 @@ import (
 func TestCompleteRecordAliasesAndWindows(t *testing.T) {
 	m := declareMembers()
 	schema := declareRows()
-	q := Limit(Offset(OrderBy(Select(From(m.Query().Where(orm.KeyNe(m.ID, 0))), schema, Map(schema.Name, expr.Value(orm.TextExpr(m.Name))), Map(schema.ID, expr.Value(orm.KeyExpr(m.ID)))), expr.Desc(expr.Value(orm.KeyExpr(m.ID)))), 2), 3)
+	q := Limit(Offset(OrderBy(Select(From(m.Query().Where(orm.Ne(m.ID, 0))), schema, Map(schema.Name, expr.Value(m.Name)), Map(schema.ID, expr.Value(m.ID))), expr.Desc(expr.Value(m.ID))), 2), 3)
 	a := AsRecord[left](RecordOf(q), "report")
 	selected := SelectRecord(a, Scope(a)).Where(expr.Ne(At(Scope(a), schema.ID), 0)).Limit(1)
 	state := &driverState{columns: []string{"id", "name"}, rows: [][]driver.Value{{int64(3), "Ada"}}}
@@ -44,7 +44,7 @@ func TestCompleteRecordAliasesAndWindows(t *testing.T) {
 func TestSelectRecordPreservedModelAndForeignDeclaration(t *testing.T) {
 	m, o := declareMembers(), declareOrders()
 	a, b := As[left](m.Query(), "a"), As[right](o.Query(), "b")
-	j := LeftJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.NumberExpr(o.MemberID))))
+	j := LeftJoin(a, b, On(expr.At(Scope(a), m.ID), expr.At(Scope(b), o.MemberID)))
 	good := SelectRecord(j, LeftScope(j, Scope(a)))
 	state := &driverState{columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "Ada", nil}}}
 	if got, err := ReadRecord(good).All(t.Context(), openTest(t, state)); err != nil || len(got) != 1 || got[0].Name != "Ada" {
@@ -67,7 +67,7 @@ func TestSelectRecordPreservedModelAndForeignDeclaration(t *testing.T) {
 
 func TestRecordRejectsIncompleteScalarAndWrongRuntimeType(t *testing.T) {
 	m := declareMembers()
-	records := []Record[int64]{RecordOf(SelectValue(m.Query(), orm.KeyExpr(m.ID))), {}}
+	records := []Record[int64]{RecordOf(SelectValue(m.Query(), m.ID)), {}}
 	for _, r := range records {
 		a := AsRecord[left](r, "bad")
 		state := &driverState{}
@@ -169,7 +169,7 @@ func (recordTx) Rollback() error { return nil }
 func TestTransactionRecordsKeepLocksAndUseCallerTransaction(t *testing.T) {
 	m := declareMembers()
 	schema := declareRows()
-	source := AsTransaction[left](LockedRecord(orm.Lock(m.Query().Where(orm.KeyNe(m.ID, 0))).SkipLocked()), "claim")
+	source := AsTransaction[left](LockedRecord(orm.Lock(m.Query().Where(orm.Ne(m.ID, 0))).SkipLocked()), "claim")
 	scope := TransactionScope(source)
 	selected := SelectTransactionRecord(source, scope)
 	statement, err := querycore.CompileRead(selected.core.Source.Node, t.Context(), true, selected.core.Source.Err, true)
@@ -189,7 +189,7 @@ func TestTransactionRecordsKeepLocksAndUseCallerTransaction(t *testing.T) {
 	}
 	t.Cleanup(func() { db.Close(context.Background()) })
 	err = db.Transaction(t.Context(), func(tx *database.Tx) error {
-		q := SelectTransaction(source, schema, Map(schema.Name, expr.At(scope, orm.TextExpr(m.Name))), Map(schema.ID, expr.At(scope, orm.KeyExpr(m.ID)))).Limit(2)
+		q := SelectTransaction(source, schema, Map(schema.Name, expr.At(scope, m.Name)), Map(schema.ID, expr.At(scope, m.ID))).Limit(2)
 		got, err := q.All(t.Context(), tx)
 		if err == nil && !reflect.DeepEqual(got, []record{{1, "Ada"}}) {
 			t.Error(got)
@@ -214,7 +214,7 @@ func TestModelRecordDirectAliasRequiresNoOuterClauses(t *testing.T) {
 	if !ModelRecord(m.Query()).core.Direct {
 		t.Fatal("plain model lost direct alias")
 	}
-	for _, q := range []orm.Query[member]{m.Query().Where(orm.KeyEq(m.ID, 1)), m.Query().OrderBy(orm.KeyAsc(m.ID)), m.Query().Limit(0), m.Query().Offset(1)} {
+	for _, q := range []orm.Query[member]{m.Query().Where(orm.Eq(m.ID, 1)), m.Query().OrderBy(orm.Asc(m.ID)), m.Query().Limit(0), m.Query().Offset(1)} {
 		if ModelRecord(q).core.Direct {
 			t.Fatal("model clause lost its SELECT boundary")
 		}

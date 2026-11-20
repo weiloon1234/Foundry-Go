@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-var invalid = orm.KeyEq(models.Users.ID, model.ID[models.Order]{})
+var invalid = orm.Eq(models.Users.ID, model.ID[models.Order]{})

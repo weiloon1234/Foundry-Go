@@ -1,10 +1,8 @@
 package case_aggregate_condition
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.When(expr.GtValue(expr.Count[models.User](), 0), expr.Value(orm.TextExpr(models.Users.Email)))
+var _ = expr.When(expr.GtValue(expr.Count[models.User](), 0), expr.Value(models.Users.Email))

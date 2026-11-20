@@ -6,4 +6,4 @@ import (
 	"foundry.test/goway/models"
 )
 
-var _ = orm.Lock(models.Users.Query()).Where(orm.NumberGt(models.Orders.TotalCents, 1))
+var _ = orm.Lock(models.Users.Query()).Where(orm.Gt(models.Orders.TotalCents, 1))

@@ -5,6 +5,19 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+## Unified ORM operators and direct datatable columns — v0.48.0
+
+This release replaces the per-kind ORM operator, assignment and adapter functions
+with one function per operation that takes the column directly, and adds nine
+direct column constructors to `datatable`. 262 functions and 36 adapter or
+interface types leave `database/orm`, including `orm.KeyNotIn` (now `orm.NotIn`).
+The [changelog](../CHANGELOG.md) and the [migration guide](guides/orm-migration.md)
+list every removed family and its replacement.
+
+Applications must convert every call site before updating the framework pin;
+there are no compatibility aliases. This is a source compatibility change. SQL
+text, stored data, wire formats and generated clients do not change.
+
 ## Unused public API removal — v0.47.0
 
 This release removes 203 uncalled functions and methods, plus the two request/result
@@ -728,12 +741,12 @@ and the [migration guide](guides/orm-migration.md#removed-api-spellings).
 The [build measurements](guides/query-build-resources.md) retain historical cost
 evidence; they do not describe a second supported runtime.
 
-ORM columns are methodless. Per-kind package functions replace their operators,
-for example `orm.TextEq(column, value)`. Query terminals and table operations are
+ORM columns are methodless. One package function per operation replaces their
+operators, for example `orm.Eq(column, value)`. Query terminals and table operations are
 also package functions, such as `orm.All(ctx, db, query)` and
-`orm.Find(ctx, db, table, key)`. Expression and source APIs require explicit sealed
-adapters, such as `expr.Value(orm.TextExpr(column))`. The old methods have no
-compatibility aliases; migrate callers together. Model, value, input and role
+`orm.Find(ctx, db, table, key)`. Expression and source APIs take the column
+directly, such as `expr.Value(column)`. The old methods, per-kind operator names
+and column adapters have no compatibility aliases; migrate callers together. Model, value, input and role
 constraints remain concrete. Query chains, CASE builders and window builders remain methods; expression comparisons and ordering are package functions.
 
 Cursor request contract IDs now use the native ORM owner. Regenerate manifests,

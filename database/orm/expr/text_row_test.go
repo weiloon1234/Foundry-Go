@@ -61,8 +61,8 @@ func TestTextRowValueRejectsNonTextColumns(t *testing.T) {
 	}
 
 	for _, p := range []expr.Predicate[textLiftRecord]{
-		expr.TextLike(expr.TextRowValue(expr.Value(orm.EnumExpr(textLiftTable.State))), textLiftActive),
-		expr.NullableTextLike(expr.TextNullableRowValue(expr.Value(orm.NullableEnumExpr(textLiftTable.Nullable))), textLiftActive),
+		expr.TextLike(expr.TextRowValue(expr.Value(textLiftTable.State)), textLiftActive),
+		expr.NullableTextLike(expr.TextNullableRowValue(expr.Value(textLiftTable.Nullable)), textLiftActive),
 	} {
 		if _, err := rows.CompileRead(rows.Read(rows.FromModel(expr.Where(textLiftTable.Query(), p)))); err == nil {
 			t.Fatal("non-text column acquired text comparisons")

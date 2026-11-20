@@ -63,7 +63,7 @@ var Users = orm.Define("users", func(b orm.Builder[User], u *User) UserTable {
 // migration:reads-after
 // doc-example:begin reads-after
 func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) error {
-	_, err := orm.All(ctx, db, models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100)))
+	_, err := orm.All(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) 
 	if err != nil {
 		return err
 	}
-	_, err = orm.Require(ctx, db, models.Orders.Query().Where(orm.KeyEq(models.Orders.ID, id)))
+	_, err = orm.Require(ctx, db, models.Orders.Query().Where(orm.Eq(models.Orders.ID, id)))
 	return err
 } // doc-example:end reads-after
 
@@ -81,11 +81,11 @@ func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) 
 // doc-example:begin unique-column-lock
 func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
 	return db.Transaction(ctx, func(tx *database.Tx) error {
-		selected := hooks.Members.Table.Query().Where(orm.KeyEq(hooks.Members.Table.Key(), id))
+		selected := hooks.Members.Table.Query().Where(orm.Eq(hooks.Members.Table.Key(), id))
 		if _, err := orm.RequireLocked(ctx, tx, orm.Lock(selected)); err != nil {
 			return err
 		}
-		_, err := orm.Update(ctx, tx, selected, hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "guest"))
+		_, err := orm.Update(ctx, tx, selected, hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "guest"))
 		return err
 	})
 } // doc-example:end unique-column-lock
@@ -95,7 +95,7 @@ func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
 // migration:writes-after
 // doc-example:begin writes-after
 func write(ctx context.Context, tx *database.Tx, id int64) error {
-	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "Ada"), orm.NullableInputTextSetNull(hooks.Members.Note))
+	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))
 	return err
 } // doc-example:end writes-after
 
@@ -103,7 +103,7 @@ func write(ctx context.Context, tx *database.Tx, id int64) error {
 
 // migration:insert-after
 func insert(ctx context.Context, tx *database.Tx) error {
-	_, err := orm.Insert(ctx, tx, models.Users.Table, orm.TextSet(models.Users.Email, "ada@example.test"))
+	_, err := orm.Insert(ctx, tx, models.Users.Table, orm.Set(models.Users.Email, "ada@example.test"))
 	return err
 }
 
@@ -120,7 +120,7 @@ func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
 
 // migration:relations-after
 // doc-example:begin relations-after
-var OrderBuyer = orm.BelongsToOf(models.Orders.Buyer, orm.ColumnExpr(models.Orders.BuyerID), orm.KeyExpr(models.Users.ID))
+var OrderBuyer = orm.BelongsToOf(models.Orders.Buyer, models.Orders.BuyerID, models.Users.ID)
 
 func relations(ctx context.Context, db database.Executor, existing []models.Order) error {
 	_, err := orm.All(ctx, db, models.Orders.Query().With(OrderBuyer))
@@ -139,9 +139,9 @@ func memberHooks() orm.Hooks[hooks.Member] {
 	return orm.Hooks[hooks.Member]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[hooks.Member]) error {
 		if !orm.WriteIsSet(draft, func() func(arg0 string) orm.Assignment[hooks.Member] {
 			receiver := hooks.Members.Name
-			return func(arg0 string) orm.Assignment[hooks.Member] { return orm.InputTextSet(receiver, arg0) }
+			return func(arg0 string) orm.Assignment[hooks.Member] { return orm.Set(receiver, arg0) }
 		}()) {
-			return orm.WriteSet(draft, orm.InputTextSet(hooks.Members.Name, "guest"))
+			return orm.WriteSet(draft, orm.Set(hooks.Members.Name, "guest"))
 		}
 		return nil
 	}}
@@ -154,7 +154,7 @@ func unset(draft *orm.Write[hooks.Member]) error {
 	return orm.WriteUnset(draft, func() func(arg0 coremodels.LabelInput) orm.Assignment[hooks.Member] {
 		receiver := hooks.Members.Note
 		return func(arg0 coremodels.LabelInput) orm.Assignment[hooks.Member] {
-			return orm.NullableInputTextSet(receiver, arg0)
+			return orm.Set(receiver, arg0)
 		}
 	}())
 }
@@ -163,7 +163,7 @@ func unset(draft *orm.Write[hooks.Member]) error {
 
 // migration:changes-after
 func changes(changes orm.Changes[hooks.Member]) (bool, error) {
-	field, err := orm.ChangeOf(changes, orm.InputTextExpr(hooks.Members.Name))
+	field, err := orm.ChangeOf(changes, hooks.Members.Name)
 	return field.Changed(), err
 }
 
@@ -187,7 +187,7 @@ func retrieval() orm.RetrievalHooks[reads.Member] {
 func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[reads.Member], error) {
 		id, err := tenantID(ctx)
-		return orm.NumberEq(t.TenantID, id), err
+		return orm.Eq(t.TenantID, id), err
 	})
 }
 
@@ -212,7 +212,7 @@ func bypass() orm.Query[reads.Member] {
 
 // migration:set-writes-after
 func setWrite(ctx context.Context, tx *database.Tx) error {
-	_, err := orm.UpdateAll(ctx, tx, orm.WithoutModelHooks(hooks.Members.Query()), orm.InputTextSet(hooks.Members.Name, "guest"))
+	_, err := orm.UpdateAll(ctx, tx, orm.WithoutModelHooks(hooks.Members.Query()), orm.Set(hooks.Members.Name, "guest"))
 	return err
 }
 
@@ -220,7 +220,7 @@ func setWrite(ctx context.Context, tx *database.Tx) error {
 
 // migration:lookup-after
 func lookup(ctx context.Context, tx *database.Tx) error {
-	_, err := orm.FirstOrCreate(ctx, tx, models.Users.Query().Where(orm.TextEq(models.Users.Email, "ada@example.test")))
+	_, err := orm.FirstOrCreate(ctx, tx, models.Users.Query().Where(orm.Eq(models.Users.Email, "ada@example.test")))
 	return err
 }
 
@@ -253,7 +253,7 @@ func configuredApplication(settings application.Settings, pool foundation.Key[*d
 // migration:seed-after
 func seeder() seed.Definition {
 	return seed.Definition{ID: "app.users", Run: func(ctx context.Context, tx *database.Tx) error {
-		_, err := orm.Insert(ctx, tx, models.Users.Table, orm.TextSet(models.Users.Email, "ada@example.test"))
+		_, err := orm.Insert(ctx, tx, models.Users.Table, orm.Set(models.Users.Email, "ada@example.test"))
 		return err
 	}}
 }
@@ -270,7 +270,7 @@ func identity(user models.User) (model.Identity, error) {
 
 // migration:scalar-after
 func scalar(ctx context.Context, db database.Executor) error {
-	_, err := rows.Read(rows.SelectValue(models.Orders.Query(), orm.NumberExpr(models.Orders.TotalCents))).All(ctx, db)
+	_, err := rows.Read(rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)).All(ctx, db)
 	return err
 }
 
@@ -279,7 +279,7 @@ func scalar(ctx context.Context, db database.Executor) error {
 // migration:inputs-after
 // doc-example:begin inputs-after
 func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
-	return orm.InputTextSet(mutators.Members.Email, input)
+	return orm.Set(mutators.Members.Email, input)
 } // doc-example:end inputs-after
 
 // migration:end
@@ -294,7 +294,7 @@ func accessor(member mutators.Member) (coremodels.EmailLink, error) {
 
 // migration:input-key-after
 func inputKey(id model.ID[mutators.KeyRecord]) orm.Assignment[mutators.KeyRecord] {
-	return orm.InputKeySet(mutators.KeyRecords.ID, mutators.FreshID{Value: id})
+	return orm.Set(mutators.KeyRecords.ID, mutators.FreshID{Value: id})
 }
 
 // migration:end

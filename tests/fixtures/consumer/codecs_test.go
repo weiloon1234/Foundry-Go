@@ -31,15 +31,15 @@ func TestConsumerCodecsReuseEnumRulesAndPreserveNamedTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inspectInsertAssignments(t, models.LedgerEntries.Table, []orm.Assignment[models.LedgerEntry]{orm.NumberSet(models.LedgerEntries.Amount, amount)}, func(write *orm.Write[models.LedgerEntry]) {
+	inspectInsertAssignments(t, models.LedgerEntries.Table, []orm.Assignment[models.LedgerEntry]{orm.Set(models.LedgerEntries.Amount, amount)}, func(write *orm.Write[models.LedgerEntry]) {
 		if v, ok := orm.WriteGet(write, func() func(arg0 decimal.Decimal) orm.Assignment[models.LedgerEntry] {
 			receiver := models.LedgerEntries.Amount
-			return func(arg0 decimal.Decimal) orm.Assignment[models.LedgerEntry] { return orm.NumberSet(receiver, arg0) }
+			return func(arg0 decimal.Decimal) orm.Assignment[models.LedgerEntry] { return orm.Set(receiver, arg0) }
 		}()).Get(); !ok || v != amount {
 			t.Error("decimal assignment changed exact value")
 		}
 	})
-	statement, err := orm.Compile(models.LedgerEntries.Query().Where(orm.NumberGte(models.LedgerEntries.Amount, amount), orm.NullableNumberIsNull(models.LedgerEntries.Balance)))
+	statement, err := orm.Compile(models.LedgerEntries.Query().Where(orm.Gte(models.LedgerEntries.Amount, amount), orm.IsNull(models.LedgerEntries.Balance)))
 	if err != nil {
 		t.Fatal(err)
 	}

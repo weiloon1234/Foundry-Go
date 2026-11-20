@@ -22,10 +22,10 @@ func TestMutatorInputsAreReusableAndOwned(t *testing.T) {
 	db := capture.open(t.Context())
 	defer db.Close(context.Background())
 	input := coremodels.BinaryInput{1, 2}
-	assignment := orm.InputColumnSet(m.Body, input)
+	assignment := orm.Set(m.Body, input)
 	input[0] = 9
 	for range 2 {
-		_, err := orm.Insert(t.Context(), db, m.Table, orm.KeySet(m.Key(), 1), orm.InputTextSet(m.Email, coremodels.EmailInput{Address: "stored"}), assignment)
+		_, err := orm.Insert(t.Context(), db, m.Table, orm.Set(m.Key(), 1), orm.Set(m.Email, coremodels.EmailInput{Address: "stored"}), assignment)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -34,7 +34,7 @@ func TestMutatorInputsAreReusableAndOwned(t *testing.T) {
 		t.Fatal("reused input was not written twice")
 	}
 	before := capture.statements
-	_, err := orm.Update(t.Context(), db, m.Table.Query(), m.Table.Key(), 1, orm.InputTextSet(m.Email, coremodels.EmailInput{Address: "reject"}))
+	_, err := orm.Update(t.Context(), db, m.Table.Query(), m.Table.Key(), 1, orm.Set(m.Email, coremodels.EmailInput{Address: "reject"}))
 	if !errors.Is(err, coremodels.MutatorVeto) || capture.statements != before {
 		t.Fatal("mutator failure reached SQL", err)
 	}
@@ -47,7 +47,7 @@ func TestMutatorErrorRedaction(t *testing.T) {
 		db := capture.open(t.Context())
 		var err error
 		q := newmodels.Members
-		_, err = orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Email, coremodels.EmailInput{Address: private}))
+		_, err = orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 1, orm.Set(q.Email, coremodels.EmailInput{Address: private}))
 		var cause *coremodels.MutatorInputError
 		if !errors.As(err, &cause) || cause.Value != private || !errors.Is(err, cause) {
 			t.Fatal("mutator cause unavailable")

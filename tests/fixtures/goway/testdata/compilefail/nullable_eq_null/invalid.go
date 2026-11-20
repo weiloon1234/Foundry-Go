@@ -1,7 +1,5 @@
 package nullable_eq_null
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -12,5 +10,5 @@ import (
 
 func F() {
 	u := rows.As[struct{}](models.Users.Query(), "u")
-	expr.NullableEq[rows.Alias[struct{}, models.User], model.ID[models.User]](expr.At(rows.Scope(u), orm.NullableColumnExpr(models.Users.IntroducerID)), value.Null[model.ID[models.User]]())
+	expr.NullableEq[rows.Alias[struct{}, models.User], model.ID[models.User]](expr.At(rows.Scope(u), models.Users.IntroducerID), value.Null[model.ID[models.User]]())
 }

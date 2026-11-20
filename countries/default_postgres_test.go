@@ -37,7 +37,7 @@ func TestPostgresOnlyOneDefaultCountry(t *testing.T) {
 		t.Fatal("failed SetDefault changed the default", err)
 	}
 	if err := fixture.Store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := orm.Update(ctx, tx, Countries.Table.Query(), Countries.Table.Key(), Code("MY"), orm.ColumnSet(Countries.IsDefault, true))
+		_, err := orm.Update(ctx, tx, Countries.Table.Query(), Countries.Table.Key(), Code("MY"), orm.Set(Countries.IsDefault, true))
 		return err
 	}); err == nil {
 		t.Fatal("a second default country was stored")

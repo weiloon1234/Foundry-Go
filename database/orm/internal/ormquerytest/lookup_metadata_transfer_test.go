@@ -29,16 +29,16 @@ func TestUniqueLookupMetadataAndParameterizedFailure(t *testing.T) {
 	d := people()
 	field := d.Name
 	for _, q := range []orm.Query[relationPerson]{d.Query().Limit(1), d.Query().Limit(0), d.Query().Offset(1), {}} {
-		if e := orm.Unique(q, orm.TextExpr(field)).Validate(); e == nil {
+		if e := orm.Unique(q, field).Validate(); e == nil {
 			t.Fatal("lookup could hide duplicates", e)
 		}
 	}
-	for _, f := range []orm.KeyColumn[relationPerson, string]{nil, orm.TextExpr(orm.Text[relationPerson, string]{}), orm.TextExpr(people().Name)} {
+	for _, f := range []orm.Text[relationPerson, string]{{}, people().Name} {
 		if e := orm.Unique(d.Query(), f).Validate(); e == nil {
 			t.Fatal("unbound or foreign key", e)
 		}
 	}
-	lookup := orm.Unique(d.Query().Where(orm.TextNe(d.Name, "hidden")).OrderBy(orm.TextDesc(d.Name)), orm.TextExpr(field))
+	lookup := orm.Unique(d.Query().Where(orm.Ne(d.Name, "hidden")).OrderBy(orm.Desc(d.Name)), field)
 	if e := lookup.Validate(); e != nil {
 		t.Fatal(e)
 	}
