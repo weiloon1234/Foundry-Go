@@ -97,3 +97,8 @@ func jsonDescriptorNames(name string) (public, cached string) {
 func validationDescriptorNames(name string) (fields, set, cached string) {
 	return name + "ValidationFields", name + "ValidationFieldSet", "foundry" + name + "ValidationFields"
 }
+
+// columnDescriptorNames covers the package symbols of datatable row field bindings.
+func columnDescriptorNames(name string) (columns, set, cached string) {
+	return name + "Columns", name + "ColumnSet", "foundry" + name + "Columns"
+}

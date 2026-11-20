@@ -80,7 +80,9 @@ hover and definition over unsaved buffers.
 multipart and unions share discovery, fresh-checkout support, publication and
 stale-output checks. Enums reuse their generated descriptors. Explicit
 `//foundry:dto role=response` declarations retain their JSON descriptor without
-request-validation fields. Generic DTO descriptors are constructed per concrete
+request-validation fields. `//foundry:dto role=row` declarations, used as
+datatable rows, retain it and emit typed column bindings (`XColumns()`) in place
+of validation fields. Generic DTO descriptors are constructed per concrete
 instantiation. Concrete DTOs can request HTTP body/response helpers with the
 independent `http=body|response|both` key; the default emits none. Multipart
 declarations accept `http=body` and use a directory argument. Helpers reuse

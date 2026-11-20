@@ -29,7 +29,66 @@ Every declared model column type (`orm.Column`, `orm.Key`, `orm.Primary`, `orm.N
 | `orm.<Kind>Expr(col)` (all 33 wrappers) and `*Adapter` / `KeyColumn` / `ExpressionColumn` / `InsertTarget` / `UpdateTarget` | Pass `col` directly | Expressions, row mappings, conflict keys, lookups, and model bindings accept `ColumnHandle` directly. |
 | `orm.ManyToManyOf`, `HasOneThroughOf`, `HasManyThroughOf`, `MorphOneOf`, `MorphManyOf`, `MorphToOf`, `MorphToManyOf` (flat key args) | Wrap each key pair in `orm.JoinKeys(a, b)` | `BelongsToOf`, `HasOneOf`, `HasManyOf` keep direct `(slot, local, foreign)`. |
 | `orm.AuditEncryptedField`, `AuditNullableEncryptedField`, `AuditReadEncrypted`, `AuditReadNullableEncrypted`, `EncryptedChangeOf`, `NullableEncryptedChangeOf` | `orm.AuditField`, `orm.AuditRead`, `orm.AuditReadNullable`, `orm.ChangeOf`, `orm.NullableChangeOf` | `AuditRead` and `ChangeOf` now enforce non-null columns (`orm.RequiredAnyColumnKind`) at compile time. |
-| Direct single-column `datatable.DefineColumn` wiring | `datatable.Text`, `Number`, `Time`, `Enum`, `Bool`, `NullableText`, `NullableNumber`, `NullableTime`, `NullableEnum` | Enable sort, filter, export, and (for text) search by default; opt out via `datatable.NoSort`, `NoFilter`, `NoSearch`, `NoExport`. Keep `DefineColumn` for joined, computed, or custom-codec columns. |
+| Direct single-column `datatable.DefineColumn` wiring | `datatable.Text`, `Number`, `Time`, `Enum`, `Bool`, `NullableText`, `NullableNumber`, `NullableTime`, `NullableEnum` | Enable sort, filter, export, and (for text) search by default; opt out via `datatable.NoSort`, `NoFilter`, `NoSearch`, `NoExport`. `datatable.DefineColumn` is removed; joined, computed, or custom-codec columns use `datatable.Column` (see [datatable columns and sources](#datatable-columns-and-sources)). |
+
+## Datatable columns and sources
+
+A datatable is now its columns plus its base source. Each column selects its own
+row field, so the handwritten `…RowColumns` struct, the `rows.Define` schema and
+the `rows.Select(…, rows.Map(…))` list of a table are removed. `datatable.DefineColumn`
+is removed with no alias; `datatable.Column` is its general form. `rows.Define`,
+`rows.Select` and `rows.Map` remain for SQL results that are not tables (see
+[declared query projections](model-projections.md#recipe-declare-rows)). Convert
+every table before updating the framework pin. SQL text, stored data, wire formats
+and generated clients do not change.
+
+| From | To |
+| --- | --- |
+| `//foundry:dto` on a table's row struct | `//foundry:dto role=row`, then `foundry generate`. The generator emits `XRowColumns()` (typed `validation.Binding` values) in place of `XRowValidationFields()` for that DTO. |
+| `foundry make dto X` for a table row | `foundry make dto X --role row` |
+| Handwritten `…RowColumns` struct and `var …Rows = rows.Define(…)` | Delete both |
+| `w := XRowValidationFields()` | `w := XRowColumns()` (the variable and every `datatable.Text(w.Name, …)` call stay as they are) |
+| `validation.FieldName(w.X)` in `DefaultSort` | `validation.BindingName(w.X)` |
+| `datatable.Text`, `Number`, `Time`, `Enum`, `Bool`, `NullableText`, `NullableNumber`, `NullableTime`, `NullableEnum` | Unchanged at the call site; the first argument is now a binding |
+| `datatable.DefineColumn[S](w.X, label, options...)` | `datatable.Column(w.X, label, selected, options...)`, where `selected` is the `expr.Selected` the column reads (previously the `rows.Map` expression) |
+| A row field that the query selects but no column shows (a key, a foreign key) | `datatable.Hidden(w.ID, Admins.Key())` for a model column, or `datatable.HiddenSelected(w.ID, selected)` for a joined or computed expression |
+| A column whose expression depends on the request (locale label, current time) | `datatable.NewDynamicSlot`, `datatable.DynamicColumn` and `Spec.Dynamic` with `datatable.BindDynamic` |
+| A custom scan codec in `rows.Define` | `datatable.ScanWith[S](orm.Codec(…))` as an option of `Column`, `DynamicColumn` or `HiddenSelected` |
+| `Spec.Source` returning `rows.Select(rows.From(query), XRows, rows.Map(…))` | `Spec.Source` returning `rows.From(query)` or a join |
+| `Spec.Source` returning `rows.Select(…).Where(…)`, `rows.GroupBy(…)`, `rows.Having(…)` or `rows.Distinct(…)` | `rows.WhereSource(source, …)`, `rows.GroupSource(source, …)`, `rows.HavingSource(source, …)` or `rows.DistinctSource(source)` around the base source |
+| `Spec.Source` of type `func(ctx, A) (rows.Query[S, R], error)` | `func(ctx, A) (rows.SelectionSource[S], error)` |
+| A test that calls `spec.Source(ctx, authority)` and compiles the returned query | `datatable.Compile(ctx, table, config, subject, request)`, which returns the row and count statements of a request through the real request path, without a database; see [pin a table's SQL in a test](datatable.md#recipe-compile-table-sql) |
+
+A binding's name must equal the JSON property of the struct field it addresses;
+`datatable.Define` rejects a mismatch. Before:
+
+<!-- orm-example: datatable-columns-before -->
+```go
+//foundry:dto
+type AdminRow struct {
+	ID       model.ID[models.Admin] `json:"id"`
+	Username string                 `json:"username"`
+}
+
+type adminRowColumns struct {
+	rows.Row[AdminRow]
+	ID       rows.Field[AdminRow, model.ID[models.Admin]]
+	Username rows.Field[AdminRow, string]
+}
+
+var adminRows = rows.Define(func(b rows.Builder[AdminRow], r *AdminRow) adminRowColumns {
+	return adminRowColumns{Row: b.Row(), ID: rows.IDOf(b, &r.ID), Username: rows.TextOf(b, &r.Username)}
+})
+
+// In Spec:
+//   Columns: datatable.Text(w.Username, "admins.fields.username", a.Username), …
+//   Source: rows.Select(rows.From(a.Query()), adminRows,
+//       rows.Map(adminRows.ID, expr.Value(a.Key())), rows.Map(adminRows.Username, expr.Value(a.Username)))
+```
+
+After: the [declarations](#replace-the-projection-declaration-and-source-callback)
+below show the converted `AdminRow`, its `datatable.Hidden` and `datatable.Text`
+columns and a `Source` that returns `rows.From(…)`, compiled with the framework.
 
 ## Removed API spellings
 
@@ -1216,7 +1275,8 @@ semantics remain.
 ## Keep datatable authorization and wire contracts
 
 The old Source callback returned a generated ProjectionQuery. The new Spec expects
-`rows.Query[S,R]`; columns and filters use phase-appropriate expr values:
+the unselected base `rows.SelectionSource[S]`; each column declares what it selects,
+and columns and filters use phase-appropriate expr values:
 
 Before:
 
@@ -1237,12 +1297,12 @@ After:
 ```go
 func tableSource[A any](spec datatable.Spec[reports.Member, reports.MemberRow, A], tenant func(context.Context, A) (int64, error)) datatable.Spec[reports.Member, reports.MemberRow, A] {
 	// Keep the existing Spec authorization; tenant resolves the trusted actor scope.
-	spec.Source = func(ctx context.Context, actor A) (rows.Query[reports.Member, reports.MemberRow], error) {
+	spec.Source = func(ctx context.Context, actor A) (rows.SelectionSource[reports.Member], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
-			return rows.Query[reports.Member, reports.MemberRow]{}, err
+			return nil, err
 		}
-		return report().Where(expr.Eq(expr.Value(reports.Members.TenantID), id)), nil
+		return rows.From(reports.Members.Query().Where(orm.Eq(reports.Members.TenantID, id))), nil
 	}
 	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Asc(expr.Value(reports.Members.ID))}
 	return spec
@@ -1255,7 +1315,7 @@ ID, DTO descriptor, columns, labels, filters and export capabilities. Column
 for enums (`expr.AsSelected(expr.CompareRow(expr.Value(Members.State)))`), while `Stable`
 takes the short `expr.Asc(expr.Value(MemberModels.ID))` spelling. The complete
 [datatable fixture](../../tests/fixtures/consumer/reporting/members.go) uses
-`rows.Select`, `expr.AsSelected(expr.Row(row))`, `expr.TextRow`, nullable filters and typed related filters.
+`datatable.Column`, `expr.AsSelected(expr.Row(row))`, `expr.TextRow`, nullable filters and typed related filters.
 Do not bypass actor resolution or reconciliation to adapt a
 source signature. Manifests, OpenAPI, TypeScript and filter/response bytes stay fixed.
 
@@ -1271,10 +1331,10 @@ ORM declaration. `RowEquality` and `RowNullable` are interfaces, not constructor
 | Generated field sorting | `datatable.SortBy(expr.AsSelected(expr.Row(expr.Value(f.Username))))`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
 | `datatable.Where(text, f.Username)` | `datatable.Where(text, expr.TextFilter(expr.TextRow(f.Username)))`. |
 | `datatable.NullableWhere(text, f.Email)` | `datatable.NullableWhere(text, expr.NullableTextFilter(expr.TextNullableRow(f.Email)))`. |
-| Equality-only or enum `datatable.Where(codec, f.X)` | `datatable.Enum(wire.State, label, f.State, codec)` for direct columns, or `datatable.Where(codec, expr.CompareFilter(expr.CompareColumn(f.State)))` with `DefineColumn`. Computed row values use `expr.CompareFilter(row)` directly. Nullable columns use `datatable.NullableEnum` or `NullableCompareFilter` and `NullableWhere` with a present-value codec. |
+| Equality-only or enum `datatable.Where(codec, f.X)` | `datatable.Enum(wire.State, label, f.State, codec)` for direct columns, or `datatable.Where(codec, expr.CompareFilter(expr.CompareColumn(f.State)))` with `datatable.Column`. Computed row values use `expr.CompareFilter(row)` directly. Nullable columns use `datatable.NullableEnum` or `NullableCompareFilter` and `NullableWhere` with a present-value codec. |
 | Ordered numeric `datatable.Where(codec, f.X)` | `datatable.Number(wire.Amount, label, f.Amount, codec)` for direct columns, or `datatable.Where(codec, expr.OrderFilter(expr.OrderedColumn(f.Amount)))`; nullable numbers use `datatable.NullableNumber` or `expr.NullableOrderedColumn`, `NullableOrderFilter` and `NullableWhere`. Choose by the column's declared capabilities, not its underlying Go type. |
 | Generated stable order | `Stable: []expr.ProjectionOrder[M]{expr.Asc(expr.Value(f.ID))}`. Use `f.Key()` when the declaration has no named ID carrier. |
-| Generated projection and selection | `rows.Query[M,R]`, `rows.Select(rows.From(source), XRows, rows.Map(...))`. Use `MapSelected` for computed selected values. |
+| Generated projection and selection | A `role=row` DTO with one `datatable.Text`, `Number`, … or `datatable.Column` per field, and `Source` returning `rows.From(source)`. A projection that is not a table still uses `rows.Query[M,R]` and `rows.Select(rows.From(source), XRows, rows.Map(...))`, with `MapSelected` for computed values. |
 | Generated joined-field sort | `expr.AsSelected(expr.Row(expr.At(joinedScope, field)))`. The Spec's first type parameter is the joined scope, not one model. |
 | Correlated `CorrelatedScalarRowQuery(...).Value()` sort | `expr.AsSelected(expr.Row(rows.CorrelatedScalarRowQuery(...)))`; use `CorrelatedScalarNullableRowQuery` when the inner value is already nullable. |
 | `datatable.Having` / `NullableHaving` | Supply typed adapters: `expr.OrderValueFilter(expr.Count[M]())` or `expr.NullableOrderValueFilter(expr.Sum(f.Amount))`. |
@@ -1300,23 +1360,6 @@ type AuditRow struct {
 	Status   value.Nullable[countries.Status] `json:"status"`
 	Latitude value.Nullable[float64]          `json:"latitude"`
 }
-type AuditColumns struct {
-	rows.Row[AuditRow]
-	ID       rows.Field[AuditRow, int64]
-	Country  rows.Field[AuditRow, value.Nullable[string]]
-	Status   rows.Field[AuditRow, value.Nullable[countries.Status]]
-	Latitude rows.Field[AuditRow, value.Nullable[float64]]
-}
-
-var AuditRows = rows.Define(func(b rows.Builder[AuditRow], r *AuditRow) AuditColumns {
-	return AuditColumns{
-		b.Row(),
-		rows.NumberOf(b, &r.ID),
-		rows.NullableTextOf(b, &r.Country),
-		rows.NullableEnumOf(b, &r.Status),
-		rows.NullableNumberOf(b, &r.Latitude),
-	}
-})
 
 func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func(context.Context, A) (int64, error)) datatable.Spec[AuditScope, AuditRow, A] {
 	a := rows.As[auditAdminSide](Admins.Query(), "a")
@@ -1341,26 +1384,22 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 	latitudeFilter := datatable.NullableWhere(
 		foundryhttp.FloatQuery[float64](),
 		expr.NullableOrderFilter(expr.OrderNullableRow(expr.AtNullableValue(country, countries.Countries.Latitude))))
-	base := rows.Select(joined, AuditRows,
-		rows.Map(AuditRows.ID, expr.At(admin, Admins.Key())),
-		rows.MapSelected(AuditRows.Country, sortedCountry),
-		rows.Map(AuditRows.Status, expr.AtNullable(country, countries.Countries.Status)),
-		rows.Map(AuditRows.Latitude, expr.AtNullableValue(country, countries.Countries.Latitude)))
 	spec.Columns = []datatable.ColumnRegistration[AuditScope, AuditRow]{
-		datatable.DefineColumn[AuditScope](validation.DefineField("country", func(r AuditRow) value.Nullable[string] { return r.Country }), "audit.country",
+		datatable.HiddenSelected(validation.DefineBinding("id", func(r *AuditRow) *int64 { return &r.ID }), expr.AsSelected(expr.Row(expr.At(admin, Admins.Key())))),
+		datatable.Column(validation.DefineBinding("country", func(r *AuditRow) *value.Nullable[string] { return &r.Country }), "audit.country", sortedCountry,
 			datatable.SortBy(sortedCountry)),
-		datatable.DefineColumn[AuditScope](validation.DefineField("status", func(r AuditRow) value.Nullable[countries.Status] { return r.Status }), "audit.status",
+		datatable.Column(validation.DefineBinding("status", func(r *AuditRow) *value.Nullable[countries.Status] { return &r.Status }), "audit.status", expr.AsSelected(expr.Row(expr.AtNullable(country, countries.Countries.Status))),
 			datatable.FilterBy(statusFilter)),
-		datatable.DefineColumn[AuditScope](validation.DefineField("latitude", func(r AuditRow) value.Nullable[float64] { return r.Latitude }), "audit.latitude",
+		datatable.Column(validation.DefineBinding("latitude", func(r *AuditRow) *value.Nullable[float64] { return &r.Latitude }), "audit.latitude", expr.AsSelected(expr.Row(expr.AtNullableValue(country, countries.Countries.Latitude))),
 			datatable.FilterBy(latitudeFilter)),
 	}
 	spec.Stable = []expr.ProjectionOrder[AuditScope]{expr.Asc(expr.At(admin, Admins.Key()))}
-	spec.Source = func(ctx context.Context, actor A) (rows.Query[AuditScope, AuditRow], error) {
+	spec.Source = func(ctx context.Context, actor A) (rows.SelectionSource[AuditScope], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
-			return rows.Query[AuditScope, AuditRow]{}, err
+			return nil, err
 		}
-		return base.Where(expr.Eq(expr.At(admin, Admins.TenantID), id)), nil
+		return rows.WhereSource(joined, expr.Eq(expr.At(admin, Admins.TenantID), id)), nil
 	}
 	return spec
 }
@@ -1384,11 +1423,12 @@ Source: func(ctx context.Context, actor AdminAuthority) (query.ProjectionQuery[m
 ```
 
 Keep `AdminRow` at its original package path. Retain public DTO generation with
-`//foundry:dto` in place of the projection directive, including its original JSON
-names, validation declarations and response descriptor. Add the separate handwritten
-rows schema. Regenerate retained DTO output through the Makefile; do not edit it.
-The standalone example below uses explicit validation fields for its columns. An
-application can keep its existing generated DTO validation fields instead.
+`//foundry:dto role=row` in place of the projection directive, including its original
+JSON names and response descriptor. Declare each field once through a table column;
+there is no separate rows schema. Regenerate retained DTO output through the
+Makefile; do not edit it. The standalone example below builds its bindings with
+`validation.DefineBinding`. An application with a `role=row` DTO uses the generated
+`AdminRowColumns()` bindings instead.
 
 <!-- orm-example: pilot-declarations -->
 ```go
@@ -1421,27 +1461,21 @@ type AdminRow struct {
 	Username string                 `json:"username"`
 	Email    value.Nullable[string] `json:"email"`
 }
-type AdminRowColumns struct {
-	rows.Row[AdminRow]
-	ID       rows.Field[AdminRow, int64]
-	Username rows.Field[AdminRow, string]
-	Email    rows.Field[AdminRow, value.Nullable[string]]
-}
-
-var AdminRows = rows.Define(func(b rows.Builder[AdminRow], r *AdminRow) AdminRowColumns {
-	return AdminRowColumns{b.Row(), rows.NumberOf(b, &r.ID), rows.TextOf(b, &r.Username), rows.NullableTextOf(b, &r.Email)}
-})
 ```
 
 The column registrations now use selected expressions for sorts and row adapters
-for filters. Keep the application's other registrations, labels and export codecs.
+for filters, and each column selects its own field. `Hidden` selects the key into
+the row without displaying it. Keep the application's other registrations, labels
+and export codecs.
 
 <!-- orm-example: pilot-columns -->
 ```go
 func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
-	username := validation.DefineField("username", func(r AdminRow) string { return r.Username })
-	email := validation.DefineField("email", func(r AdminRow) value.Nullable[string] { return r.Email })
+	id := validation.DefineBinding("id", func(r *AdminRow) *int64 { return &r.ID })
+	username := validation.DefineBinding("username", func(r *AdminRow) *string { return &r.Username })
+	email := validation.DefineBinding("email", func(r *AdminRow) *value.Nullable[string] { return &r.Email })
 	return []datatable.ColumnRegistration[Admin, AdminRow]{
+		datatable.Hidden(id, Admins.Key()),
 		datatable.Text(username, "admins.fields.username", Admins.Username),
 		datatable.NullableText(email, "admins.fields.email", Admins.Email),
 	}
@@ -1449,32 +1483,28 @@ func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
 ```
 
 Apply mandatory tenant and visibility scopes before selecting the row. `OnlyTrashed`
-and `WithTrashed` remain model-query operations and survive `rows.From` and
-`rows.Select`. The callback below receives an existing Spec so its authorization
+and `WithTrashed` remain model-query operations and survive `rows.From`. The callback below receives an existing Spec so its authorization
 and DTO descriptor remain caller-owned. The tenant resolver must use trusted actor
 context. A UI filter must not replace that resolver.
 
 <!-- orm-example: pilot-source -->
 ```go
-func adminSource(tenantID int64, archived bool) rows.Query[Admin, AdminRow] {
+func adminSource(tenantID int64, archived bool) rows.SelectionSource[Admin] {
 	source := Admins.Query().Where(orm.Eq(Admins.TenantID, tenantID))
 	if archived {
 		source = source.OnlyTrashed()
 	}
-	return rows.Select(rows.From(source), AdminRows,
-		rows.Map(AdminRows.ID, expr.Value(Admins.Key())),
-		rows.Map(AdminRows.Username, expr.Value(Admins.Username)),
-		rows.Map(AdminRows.Email, expr.Value(Admins.Email)))
+	return rows.From(source)
 }
 
 func adminTable[A any](spec datatable.Spec[Admin, AdminRow, A], tenant func(context.Context, A) (int64, error), archived bool) datatable.Spec[Admin, AdminRow, A] {
 	// Retain the caller's Row descriptor, Authorize, ID, labels and export policy.
 	spec.Columns = adminColumns()
 	spec.Stable = []expr.ProjectionOrder[Admin]{expr.Asc(expr.Value(Admins.Key()))}
-	spec.Source = func(ctx context.Context, actor A) (rows.Query[Admin, AdminRow], error) {
+	spec.Source = func(ctx context.Context, actor A) (rows.SelectionSource[Admin], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
-			return rows.Query[Admin, AdminRow]{}, err
+			return nil, err
 		}
 		return adminSource(id, archived), nil
 	}
@@ -1539,16 +1569,6 @@ type DirectoryRow struct {
 	Country      string                 `json:"country"`
 	OfficialName value.Nullable[string] `json:"officialName"`
 }
-type DirectoryColumns struct {
-	rows.Row[DirectoryRow]
-	ID           rows.Field[DirectoryRow, int64]
-	Country      rows.Field[DirectoryRow, string]
-	OfficialName rows.Field[DirectoryRow, value.Nullable[string]]
-}
-
-var DirectoryRows = rows.Define(func(b rows.Builder[DirectoryRow], r *DirectoryRow) DirectoryColumns {
-	return DirectoryColumns{b.Row(), rows.NumberOf(b, &r.ID), rows.TextOf(b, &r.Country), rows.NullableTextOf(b, &r.OfficialName)}
-})
 ```
 
 A custom nullable adapter implements `Eq`, `Ne`, `In`, `IsNull` and `IsNotNull`,
@@ -1611,28 +1631,26 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 	filter := officialNameFilter[DirectoryScope]{exists: func(p orm.Predicate[countries.Country]) expr.Predicate[DirectoryScope] {
 		return correlate(p).Exists()
 	}}
-	base := rows.Select(joined, DirectoryRows,
-		rows.Map(DirectoryRows.ID, expr.At(admin, Admins.Key())),
-		rows.Map(DirectoryRows.Country, expr.At(country, countries.Countries.Name)),
-		rows.MapSelected(DirectoryRows.OfficialName, selected))
+	countryName := expr.AsSelected(expr.Row(expr.At(country, countries.Countries.Name)))
 	text := foundryhttp.StringQuery[string]()
 	spec.Columns = []datatable.ColumnRegistration[DirectoryScope, DirectoryRow]{
-		datatable.DefineColumn[DirectoryScope](validation.DefineField("country", func(r DirectoryRow) string { return r.Country }), "admins.country",
-			datatable.SortBy(expr.AsSelected(expr.Row(expr.At(country, countries.Countries.Name)))),
+		datatable.HiddenSelected(validation.DefineBinding("id", func(r *DirectoryRow) *int64 { return &r.ID }), expr.AsSelected(expr.Row(expr.At(admin, Admins.Key())))),
+		datatable.Column(validation.DefineBinding("country", func(r *DirectoryRow) *string { return &r.Country }), "admins.country", countryName,
+			datatable.SortBy(countryName),
 			datatable.FilterBy(datatable.Where(text, expr.TextFilter(expr.TextRowAt(country, countries.Countries.Name)))),
 		),
-		datatable.DefineColumn[DirectoryScope](validation.DefineField("officialName", func(r DirectoryRow) value.Nullable[string] { return r.OfficialName }), "admins.officialName",
+		datatable.Column(validation.DefineBinding("officialName", func(r *DirectoryRow) *value.Nullable[string] { return &r.OfficialName }), "admins.official_name", selected,
 			datatable.SortBy(selected),
 			datatable.FilterBy(datatable.NullableWhere(text, filter)),
 		),
 	}
 	spec.Stable = []expr.ProjectionOrder[DirectoryScope]{expr.Asc(expr.At(admin, Admins.Key()))}
-	spec.Source = func(ctx context.Context, actor A) (rows.Query[DirectoryScope, DirectoryRow], error) {
+	spec.Source = func(ctx context.Context, actor A) (rows.SelectionSource[DirectoryScope], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
-			return rows.Query[DirectoryScope, DirectoryRow]{}, err
+			return nil, err
 		}
-		return base.Where(expr.Eq(expr.At(admin, Admins.TenantID), id)), nil
+		return rows.WhereSource(joined, expr.Eq(expr.At(admin, Admins.TenantID), id)), nil
 	}
 	return spec
 }
@@ -1644,7 +1662,8 @@ required fields or `expr.AtNullableValue` for already nullable fields. Change th
 DTO and Spec scope accordingly; do not cast the INNER scope or keep a required DTO
 field for an optional joined value. See [joins](model-joins.md) for the compiled
 outer-join examples. The worked INNER JOIN excludes administrators without a
-matching country; its official name can still be SQL NULL.
+matching country; its official name can still be SQL NULL. The pilot tests assert
+the SQL of both tables through `datatable.Compile`, not by compiling `Source`.
 
 ### Replace Foundry Countries factories and drafts
 
@@ -2207,11 +2226,11 @@ are declared on exported non-alias adapter types and remain visible in `go doc`.
 
 | From (v0.2) | To (v0.3) |
 | --- | --- |
-| `column.SortBy(selected)` | `datatable.SortBy(selected)` in `DefineColumn` |
-| `column.FilterBy(source)` | `datatable.FilterBy(source)` in `DefineColumn` |
-| `column.Searchable()` | `datatable.Searchable(rowExpression)` in `DefineColumn` |
-| `column.ExportAs(cell)` | `datatable.ExportAs(selectedExpression, cell)` in `DefineColumn` |
-| `column.Registration()` | Use the `DefineColumn` result directly |
+| `column.SortBy(selected)` | `datatable.SortBy(selected)` in `datatable.Column` |
+| `column.FilterBy(source)` | `datatable.FilterBy(source)` in `datatable.Column` |
+| `column.Searchable()` | `datatable.Searchable(rowExpression)` in `datatable.Column` |
+| `column.ExportAs(cell)` | `datatable.ExportAs(selectedExpression, cell)` in `datatable.Column` |
+| `column.Registration()` | Use the `datatable.Column` result directly |
 
 <!-- orm-example: column-options-v030-before -->
 ```go
@@ -2230,9 +2249,9 @@ uses the same expression to infer the option types:
 ```go
 func usernameColumn() datatable.ColumnRegistration[Admin, AdminRow] {
 	text := foundryhttp.StringQuery[string]()
-	field := validation.DefineField("username", func(row AdminRow) string { return row.Username })
+	field := validation.DefineBinding("username", func(row *AdminRow) *string { return &row.Username })
 	username := expr.TextRow(Admins.Username)
-	return datatable.DefineColumn[Admin](field, "admins.fields.username",
+	return datatable.Column(field, "admins.fields.username", expr.AsSelected(username),
 		datatable.SortBy(expr.AsSelected(username)),
 		datatable.FilterBy(datatable.Where(text, expr.TextFilter(username))),
 		datatable.Searchable(username),
@@ -2242,7 +2261,7 @@ func usernameColumn() datatable.ColumnRegistration[Admin, AdminRow] {
 ```
 
 `ColumnOption[S, V]` retains both types through registration without assertions or
-value boxing. `DefineColumn[S, R, V]` ties each option to the DTO selector's exact
+value boxing. `datatable.Column[S, R, V]` ties each option to the DTO selector's exact
 `V` and the declared source `S`. `SortBy` takes `Selected[S, V]`; `FilterBy` takes
 `FilterSource[S, V]`. `Searchable` takes `RowValue[S, V]` to infer its two types.
 `ExportAs` takes `Selected[S, V]` and `Cell[V]`, inferring both types without

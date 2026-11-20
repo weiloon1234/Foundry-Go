@@ -8,9 +8,10 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-var balance = expr.AsSelected(expr.Row(expr.Value(reporting.MemberModels.Balance)))
-var invalid = datatable.DefineColumn[reporting.Member, reporting.MemberRow, string](
-	reporting.MemberRowValidationFields().Name,
+var exportBalance = datatable.ExportAs(expr.AsSelected(expr.Row(expr.Value(reporting.MemberModels.Balance))), datatable.ScalarCell(foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()))
+var invalid = datatable.Column(
+	reporting.MemberRowColumns().Name,
 	reporting.MemberNameLabel,
-	datatable.ExportAs(balance, datatable.ScalarCell(foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]())),
+	expr.AsSelected(expr.TextRow(reporting.MemberModels.Name)),
+	exportBalance,
 )

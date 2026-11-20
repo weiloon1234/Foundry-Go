@@ -305,6 +305,7 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 		}
 		defer writer.abort()
 		cells := make([]exportCell, len(columns))
+		var rowBuf R
 		err = m.read(ctx, func(tx *database.Tx) error {
 			return rows.EachRead(ctx, tx, rows.Read(rows.Limit(source.rows, m.config.MaxExportRows+1)), func(row R) error {
 				if err := ctx.Err(); err != nil {
@@ -313,9 +314,10 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 				if artifact.rows >= m.config.MaxExportRows {
 					return invalid("export row limit exceeded")
 				}
+				rowBuf = row
 				rowBytes := 0
 				for i, column := range columns {
-					cell, err := column.cell(ctx, row, presentation)
+					cell, err := column.cell(ctx, &rowBuf, presentation)
 					if err != nil {
 						return err
 					}

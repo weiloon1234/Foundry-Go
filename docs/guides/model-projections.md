@@ -55,7 +55,12 @@ SQL rows and public JSON have separate declarations. Use an ordinary
 `//foundry:dto` on an explicitly public struct, alongside its handwritten rows
 schema. The DTO generator still owns JSON/validation descriptors. Keep type and
 package identity, JSON tags and descriptor names when migrating a report.
-[Reporting](datatable.md) uses this arrangement for Members, Orders and Totals.
+
+A [datatable](datatable.md) is different: it needs no `rows.Define` schema and no
+`rows.Select` mappings. Its row DTO is marked `//foundry:dto role=row`, each
+column declares the expression it selects, and `Spec.Source` returns the base
+source. Use `rows.Define` for a SQL result that is not a table, such as a report
+read with `rows.Read`; use a datatable's columns for rows that a table serves.
 
 <a id="recipe-select-rows"></a>
 ## Select typed values

@@ -11,4 +11,4 @@ import (
 type row struct{ N int64 }
 
 var col orm.Column[models.User, int64]
-var _ = datatable.Number(validation.DefineField("n", func(r row) int64 { return r.N }), "f.n", col, foundryhttp.IntegerQuery[int64]())
+var _ = datatable.Number(validation.DefineBinding("n", func(r *row) *int64 { return &r.N }), "f.n", col, foundryhttp.IntegerQuery[int64]())

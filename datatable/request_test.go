@@ -16,7 +16,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
-	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
 func TestRequestDecodingRejectsAmbiguousAndUndeclaredJSON(t *testing.T) {
@@ -139,7 +138,7 @@ func TestLikeRequiresExplicitOptIn(t *testing.T) {
 	if _, err := table.definition.prepare(Request{Filters: []Filter{{Op: Like, Column: "name", Values: []string{"A%"}}}}, DefaultConfig()); !errors.Is(err, fault.Invalid) {
 		t.Fatal("request used an undeclared like filter", err)
 	}
-	spec.Columns[1] = DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name", SortBy(expr.AsSelected(name)), FilterBy(Where(text, expr.TextFilter(name)).AllowLike()))
+	spec.Columns[1] = Column(reportBindings().Name, "reports.name", expr.AsSelected(name), SortBy(expr.AsSelected(name)), FilterBy(Where(text, expr.TextFilter(name)).AllowLike()))
 	table = Define(spec)
 	if err := table.Validate(); err != nil {
 		t.Fatal(err)
@@ -213,7 +212,7 @@ func TestRequestValidatesEntireShapeBeforeCallingScalarExtensions(t *testing.T) 
 	calls := 0
 	codec := foundryhttp.DescribeURL[int64](countingIntegerCodec{&calls}, contract.DefineScalar[int64](contract.Type{ID: "int64", Kind: contract.IntegerKind, Bits: 64, Signed: true}))
 	id, _, _, _ := reportFields()
-	spec.Columns[0] = DefineColumn[reportRecord](validation.DefineField("id", func(row ReportRow) int64 { return row.ID }), "reports.id", FilterBy(Where(codec, expr.OrderFilter(id))))
+	spec.Columns[0] = Column(reportBindings().ID, "reports.id", expr.AsSelected(id), FilterBy(Where(codec, expr.OrderFilter(id))))
 	table := Define(spec)
 	if err := table.Validate(); err != nil {
 		t.Fatal(err)
@@ -265,7 +264,7 @@ func TestAuthorizationPrecedesSourceAndIsActionSpecific(t *testing.T) {
 	sourceCalls := 0
 	var actions []Action
 	base := spec.Source
-	spec.Source = func(ctx context.Context, a reportActor) (rows.Query[reportRecord, ReportRow], error) {
+	spec.Source = func(ctx context.Context, a reportActor) (rows.SelectionSource[reportRecord], error) {
 		sourceCalls++
 		return base(ctx, a)
 	}

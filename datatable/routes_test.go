@@ -205,7 +205,7 @@ func TestPostgresRoutesTicketLifecycle(t *testing.T) {
 	var localized atomic.Bool
 	spec := reportSpec()
 	source := spec.Source
-	spec.Source = func(ctx context.Context, actor reportActor) (rows.Query[reportRecord, ReportRow], error) {
+	spec.Source = func(ctx context.Context, actor reportActor) (rows.SelectionSource[reportRecord], error) {
 		if actor.Tenant == 8 {
 			localized.Store(true)
 		}

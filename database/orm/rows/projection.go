@@ -11,7 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
-// Mapping binds a row field to a same-typed expression in S. Example: rows.Map(OrderRows.Label,label).
+// Mapping binds a row field to a same-typed expression in S. Example: rows.Map(reports.UserSummaries.Email, expr.Value(models.Users.Email)).
 type Mapping[S, R any] struct {
 	_          [0]*S
 	_          [0]*R
@@ -27,18 +27,18 @@ type Query[S, R any] struct {
 	recordOwner any
 }
 
-// Map requires an exact result-field value type. Example: rows.Map(OrderRows.Amount,amount).
+// Map requires an exact result-field value type. Example: rows.Map(reports.UserSummaries.Status, expr.Value(models.Users.Status)).
 func Map[S, R, V, P any](field Field[R, P], expression expr.Expression[S, V, P]) Mapping[S, R] {
 	return Mapping[S, R]{field: field.core, expression: expr.FoundryExpression(expression, sqlowner.Expressions())}
 }
 
 // MapSelected binds a row field to an exactly typed selected value, including aggregates.
-// Example: rows.MapSelected(Totals.Count,expr.AsSelected(expr.Count[Scope]())).
+// Example: rows.MapSelected(reports.BuyerTotalRows.Orders, expr.AsSelected(expr.Count[models.Order]())).
 func MapSelected[S, R, V any](field Field[R, V], expression expr.Selected[S, V]) Mapping[S, R] {
 	return Mapping[S, R]{field: field.core, expression: expr.FoundrySelected(expression, sqlowner.Expressions())}
 }
 
-// Select maps every declared row field exactly once. Example: rows.Select(joined,OrderRows,rows.Map(OrderRows.ID,id),...).
+// Select maps every declared row field exactly once. Example: rows.Select(rows.From(models.Users.Query()), reports.UserSummaries, mappings...).
 func Select[S, R any](source SelectionSource[S], schema Schema[R], mappings ...Mapping[S, R]) Query[S, R] {
 	q := Query[S, R]{}
 	if ormcore.NilDescriptor(source) || ormcore.NilDescriptor(schema) {
@@ -72,7 +72,7 @@ func Select[S, R any](source SelectionSource[S], schema Schema[R], mappings ...M
 	return q
 }
 
-// SelectValue selects just a column's value type. Example: rows.SelectValue(Orders.Query(), Orders.TotalCents).
+// SelectValue selects just a column's value type. Example: rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents).
 func SelectValue[M, V, P, I any, K orm.ColumnKind, R orm.ColumnRole](source orm.Query[M], column orm.ColumnHandle[M, V, I, P, K, R]) Query[M, P] {
 	s := orm.FoundrySource(source, sqlowner.Metadata())
 	_, c := orm.FoundryHandle(column, sqlowner.Metadata())

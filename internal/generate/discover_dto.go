@@ -30,7 +30,11 @@ type dtoDeclaration struct {
 }
 
 // dtoResponseRole omits request validation descriptors from a response-only DTO.
-const dtoResponseRole = "response"
+// dtoRowRole emits typed datatable row field bindings (Columns/ColumnSet) instead of ValidationFields.
+const (
+	dtoResponseRole = "response"
+	dtoRowRole      = "row"
+)
 
 // quotedTypePrefix names the synthetic node of a scalar encoded as a JSON
 // string; it has no Go type of its own.
@@ -67,8 +71,8 @@ func discoverDTO(p *packageInput, spec *ast.TypeSpec, named *types.Named, args m
 	for key, value := range args {
 		switch key {
 		case "role":
-			if value != dtoResponseRole {
-				return declaration, p.diagnostic(spec.Pos(), "DTO declarations only accept role=response")
+			if value != dtoResponseRole && value != dtoRowRole {
+				return declaration, p.diagnostic(spec.Pos(), "DTO declarations only accept role=response or role=row")
 			}
 			declaration.role = value
 		case "http":
@@ -76,7 +80,15 @@ func discoverDTO(p *packageInput, spec *ast.TypeSpec, named *types.Named, args m
 				return declaration, p.diagnostic(spec.Pos(), "DTO http must be body, response or both")
 			}
 		default:
-			return declaration, p.diagnostic(spec.Pos(), "DTO declarations only accept role=response and http=body|response|both")
+			return declaration, p.diagnostic(spec.Pos(), "DTO declarations only accept role=response|row and http=body|response|both")
+		}
+	}
+	if declaration.role == dtoRowRole {
+		if named.TypeParams().Len() != 0 {
+			return declaration, p.diagnostic(spec.Pos(), "row DTO declarations cannot be generic")
+		}
+		if routecontract.HasBody(args["http"]) {
+			return declaration, p.diagnostic(spec.Pos(), "row DTO declarations cannot use http=body or http=both")
 		}
 	}
 	mode, err := p.httpMode(spec.Pos(), declaration.role, args["http"], named.TypeParams().Len() != 0)
@@ -112,6 +124,14 @@ func dtoTypeID(typ types.Type) contract.TypeID {
 
 func resolveDTOSchema(p *packageInput, declaration *dtoDeclaration) error {
 	if err := resolveJSONGraph(p, &declaration.dtoGraph, declaration.typ, declaration.typ.Obj().Pos(), false); err != nil {
+		return err
+	}
+	if declaration.role == dtoRowRole {
+		if err := validateRowDTOProperties(p, declaration); err != nil {
+			return err
+		}
+		var err error
+		declaration.fieldHelp, err = p.validationHelp(declaration.typ, declaration.properties)
 		return err
 	}
 	if declaration.role != dtoResponseRole {

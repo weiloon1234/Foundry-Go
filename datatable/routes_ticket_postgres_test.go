@@ -73,10 +73,10 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 	spec := reportSpec()
 	source := spec.Source
 	deferred := false
-	spec.Source = func(ctx context.Context, authority reportActor) (rows.Query[reportRecord, ReportRow], error) {
+	spec.Source = func(ctx context.Context, authority reportActor) (rows.SelectionSource[reportRecord], error) {
 		actor, err := tokens.Guard().RequireScopes(ctx, scopes)
 		if err != nil {
-			return rows.Query[reportRecord, ReportRow]{}, err
+			return nil, err
 		}
 		if actor.ID != 7 || authority.Tenant != 8 {
 			t.Error("deferred actor/locale lost")

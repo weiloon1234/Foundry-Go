@@ -46,20 +46,21 @@ type Order struct {
 	Member    relation.One[Member]
 }
 
-// Ordinary DTO declarations own JSON and validation; rows.go owns SQL mappings.
+// Ordinary DTO declarations own JSON and validation; each datatable declaration owns its SQL selections.
 
 // doc-example:begin datatable
 
-//foundry:dto
+//foundry:dto role=row
 type MemberRow struct {
-	ID       model.ID[Member]       `json:"id"`
+	ID model.ID[Member] `json:"id"`
+	// Display name selected for the member report.
 	Name     string                 `json:"name"`
 	Nickname value.Nullable[string] `json:"nickname"`
 	State    State                  `json:"state"`
 	Balance  decimal.Decimal        `json:"balance"`
 } // doc-example:end datatable
 
-//foundry:dto
+//foundry:dto role=row
 type OrderRow struct {
 	ID         model.ID[Order] `json:"id"`
 	MemberName string          `json:"memberName"`
@@ -67,7 +68,7 @@ type OrderRow struct {
 	Amount     decimal.Decimal `json:"amount"`
 }
 
-//foundry:dto
+//foundry:dto role=row
 type MemberTotal struct {
 	MemberID model.ID[Member]                `json:"memberId"`
 	Count    int64                           `json:"count"`

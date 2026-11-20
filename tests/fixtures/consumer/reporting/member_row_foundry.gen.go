@@ -43,44 +43,44 @@ var foundryMemberRowJSON = sync.OnceValue(func() foundrycontract.JSON[MemberRow]
 	}})
 })
 
-// MemberRowValidationFieldSet retains concrete DTO and value types for validation.
-// Example: MemberRowValidationFields()
-type MemberRowValidationFieldSet struct {
-	// Balance validates the declared JSON property "balance".
-	Balance foundryvalidation.Field[MemberRow, decimal.Decimal]
-	// ID validates the declared JSON property "id".
-	ID foundryvalidation.Field[MemberRow, model.ID[Member]]
-	// Name validates the declared JSON property "name".
-	Name foundryvalidation.Field[MemberRow, string]
-	// Nickname validates the declared JSON property "nickname".
-	Nickname foundryvalidation.Field[MemberRow, foundryvalue.Nullable[string]]
-	// State validates the declared JSON property "state".
-	State foundryvalidation.Field[MemberRow, State]
+// MemberRowColumnSet retains concrete row and field types for datatable column bindings.
+// Example: MemberRowColumns()
+type MemberRowColumnSet struct {
+	// Balance binds the declared JSON property "balance".
+	Balance foundryvalidation.Binding[MemberRow, decimal.Decimal]
+	// ID binds the declared JSON property "id".
+	ID foundryvalidation.Binding[MemberRow, model.ID[Member]]
+	// Name binds the declared JSON property "name".
+	//
+	// Display name selected for the member report.
+	//
+	Name foundryvalidation.Binding[MemberRow, string]
+	// Nickname binds the declared JSON property "nickname".
+	Nickname foundryvalidation.Binding[MemberRow, foundryvalue.Nullable[string]]
+	// State binds the declared JSON property "state".
+	State foundryvalidation.Binding[MemberRow, State]
 }
 
-// MemberRowValidationFields returns typed field descriptors.
-// Example: MemberRowValidationFields()
-// Compose rules with these fields; JSON names and selectors are generated.
-func MemberRowValidationFields() MemberRowValidationFieldSet {
-	return *foundryMemberRowValidationFields()
-}
+// MemberRowColumns returns typed transport field bindings for MemberRow.
+// Example: MemberRowColumns()
+func MemberRowColumns() MemberRowColumnSet { return *foundryMemberRowColumns() }
 
-var foundryMemberRowValidationFields = sync.OnceValue(func() *MemberRowValidationFieldSet {
-	return &MemberRowValidationFieldSet{
-		Balance: foundryvalidation.DefineField("balance", func(input MemberRow) decimal.Decimal {
-			return input.Balance
+var foundryMemberRowColumns = sync.OnceValue(func() *MemberRowColumnSet {
+	return &MemberRowColumnSet{
+		Balance: foundryvalidation.DefineBinding("balance", func(input *MemberRow) *decimal.Decimal {
+			return &input.Balance
 		}),
-		ID: foundryvalidation.DefineField("id", func(input MemberRow) model.ID[Member] {
-			return input.ID
+		ID: foundryvalidation.DefineBinding("id", func(input *MemberRow) *model.ID[Member] {
+			return &input.ID
 		}),
-		Name: foundryvalidation.DefineField("name", func(input MemberRow) string {
-			return input.Name
+		Name: foundryvalidation.DefineBinding("name", func(input *MemberRow) *string {
+			return &input.Name
 		}),
-		Nickname: foundryvalidation.DefineField("nickname", func(input MemberRow) foundryvalue.Nullable[string] {
-			return input.Nickname
+		Nickname: foundryvalidation.DefineBinding("nickname", func(input *MemberRow) *foundryvalue.Nullable[string] {
+			return &input.Nickname
 		}),
-		State: foundryvalidation.DefineField("state", func(input MemberRow) State {
-			return input.State
+		State: foundryvalidation.DefineBinding("state", func(input *MemberRow) *State {
+			return &input.State
 		}),
 	}
 })

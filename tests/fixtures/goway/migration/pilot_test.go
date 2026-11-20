@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"foundry.test/goway/models"
+	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/countries"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
@@ -52,24 +53,16 @@ type AdminRow struct {
 	Username string                 `json:"username"`
 	Email    value.Nullable[string] `json:"email"`
 }
-type AdminRowColumns struct {
-	rows.Row[AdminRow]
-	ID       rows.Field[AdminRow, int64]
-	Username rows.Field[AdminRow, string]
-	Email    rows.Field[AdminRow, value.Nullable[string]]
-}
-
-var AdminRows = rows.Define(func(b rows.Builder[AdminRow], r *AdminRow) AdminRowColumns {
-	return AdminRowColumns{b.Row(), rows.NumberOf(b, &r.ID), rows.TextOf(b, &r.Username), rows.NullableTextOf(b, &r.Email)}
-})
 
 // migration:end
 
 // migration:pilot-columns
 func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
-	username := validation.DefineField("username", func(r AdminRow) string { return r.Username })
-	email := validation.DefineField("email", func(r AdminRow) value.Nullable[string] { return r.Email })
+	id := validation.DefineBinding("id", func(r *AdminRow) *int64 { return &r.ID })
+	username := validation.DefineBinding("username", func(r *AdminRow) *string { return &r.Username })
+	email := validation.DefineBinding("email", func(r *AdminRow) *value.Nullable[string] { return &r.Email })
 	return []datatable.ColumnRegistration[Admin, AdminRow]{
+		datatable.Hidden(id, Admins.Key()),
 		datatable.Text(username, "admins.fields.username", Admins.Username),
 		datatable.NullableText(email, "admins.fields.email", Admins.Email),
 	}
@@ -78,25 +71,22 @@ func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
 // migration:end
 
 // migration:pilot-source
-func adminSource(tenantID int64, archived bool) rows.Query[Admin, AdminRow] {
+func adminSource(tenantID int64, archived bool) rows.SelectionSource[Admin] {
 	source := Admins.Query().Where(orm.Eq(Admins.TenantID, tenantID))
 	if archived {
 		source = source.OnlyTrashed()
 	}
-	return rows.Select(rows.From(source), AdminRows,
-		rows.Map(AdminRows.ID, expr.Value(Admins.Key())),
-		rows.Map(AdminRows.Username, expr.Value(Admins.Username)),
-		rows.Map(AdminRows.Email, expr.Value(Admins.Email)))
+	return rows.From(source)
 }
 
 func adminTable[A any](spec datatable.Spec[Admin, AdminRow, A], tenant func(context.Context, A) (int64, error), archived bool) datatable.Spec[Admin, AdminRow, A] {
 	// Retain the caller's Row descriptor, Authorize, ID, labels and export policy.
 	spec.Columns = adminColumns()
 	spec.Stable = []expr.ProjectionOrder[Admin]{expr.Asc(expr.Value(Admins.Key()))}
-	spec.Source = func(ctx context.Context, actor A) (rows.Query[Admin, AdminRow], error) {
+	spec.Source = func(ctx context.Context, actor A) (rows.SelectionSource[Admin], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
-			return rows.Query[Admin, AdminRow]{}, err
+			return nil, err
 		}
 		return adminSource(id, archived), nil
 	}
@@ -115,23 +105,6 @@ type AuditRow struct {
 	Status   value.Nullable[countries.Status] `json:"status"`
 	Latitude value.Nullable[float64]          `json:"latitude"`
 }
-type AuditColumns struct {
-	rows.Row[AuditRow]
-	ID       rows.Field[AuditRow, int64]
-	Country  rows.Field[AuditRow, value.Nullable[string]]
-	Status   rows.Field[AuditRow, value.Nullable[countries.Status]]
-	Latitude rows.Field[AuditRow, value.Nullable[float64]]
-}
-
-var AuditRows = rows.Define(func(b rows.Builder[AuditRow], r *AuditRow) AuditColumns {
-	return AuditColumns{
-		b.Row(),
-		rows.NumberOf(b, &r.ID),
-		rows.NullableTextOf(b, &r.Country),
-		rows.NullableEnumOf(b, &r.Status),
-		rows.NullableNumberOf(b, &r.Latitude),
-	}
-})
 
 func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func(context.Context, A) (int64, error)) datatable.Spec[AuditScope, AuditRow, A] {
 	a := rows.As[auditAdminSide](Admins.Query(), "a")
@@ -156,26 +129,22 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 	latitudeFilter := datatable.NullableWhere(
 		foundryhttp.FloatQuery[float64](),
 		expr.NullableOrderFilter(expr.OrderNullableRow(expr.AtNullableValue(country, countries.Countries.Latitude))))
-	base := rows.Select(joined, AuditRows,
-		rows.Map(AuditRows.ID, expr.At(admin, Admins.Key())),
-		rows.MapSelected(AuditRows.Country, sortedCountry),
-		rows.Map(AuditRows.Status, expr.AtNullable(country, countries.Countries.Status)),
-		rows.Map(AuditRows.Latitude, expr.AtNullableValue(country, countries.Countries.Latitude)))
 	spec.Columns = []datatable.ColumnRegistration[AuditScope, AuditRow]{
-		datatable.DefineColumn[AuditScope](validation.DefineField("country", func(r AuditRow) value.Nullable[string] { return r.Country }), "audit.country",
+		datatable.HiddenSelected(validation.DefineBinding("id", func(r *AuditRow) *int64 { return &r.ID }), expr.AsSelected(expr.Row(expr.At(admin, Admins.Key())))),
+		datatable.Column(validation.DefineBinding("country", func(r *AuditRow) *value.Nullable[string] { return &r.Country }), "audit.country", sortedCountry,
 			datatable.SortBy(sortedCountry)),
-		datatable.DefineColumn[AuditScope](validation.DefineField("status", func(r AuditRow) value.Nullable[countries.Status] { return r.Status }), "audit.status",
+		datatable.Column(validation.DefineBinding("status", func(r *AuditRow) *value.Nullable[countries.Status] { return &r.Status }), "audit.status", expr.AsSelected(expr.Row(expr.AtNullable(country, countries.Countries.Status))),
 			datatable.FilterBy(statusFilter)),
-		datatable.DefineColumn[AuditScope](validation.DefineField("latitude", func(r AuditRow) value.Nullable[float64] { return r.Latitude }), "audit.latitude",
+		datatable.Column(validation.DefineBinding("latitude", func(r *AuditRow) *value.Nullable[float64] { return &r.Latitude }), "audit.latitude", expr.AsSelected(expr.Row(expr.AtNullableValue(country, countries.Countries.Latitude))),
 			datatable.FilterBy(latitudeFilter)),
 	}
 	spec.Stable = []expr.ProjectionOrder[AuditScope]{expr.Asc(expr.At(admin, Admins.Key()))}
-	spec.Source = func(ctx context.Context, actor A) (rows.Query[AuditScope, AuditRow], error) {
+	spec.Source = func(ctx context.Context, actor A) (rows.SelectionSource[AuditScope], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
-			return rows.Query[AuditScope, AuditRow]{}, err
+			return nil, err
 		}
-		return base.Where(expr.Eq(expr.At(admin, Admins.TenantID), id)), nil
+		return rows.WhereSource(joined, expr.Eq(expr.At(admin, Admins.TenantID), id)), nil
 	}
 	return spec
 }
@@ -240,16 +209,6 @@ type DirectoryRow struct {
 	Country      string                 `json:"country"`
 	OfficialName value.Nullable[string] `json:"officialName"`
 }
-type DirectoryColumns struct {
-	rows.Row[DirectoryRow]
-	ID           rows.Field[DirectoryRow, int64]
-	Country      rows.Field[DirectoryRow, string]
-	OfficialName rows.Field[DirectoryRow, value.Nullable[string]]
-}
-
-var DirectoryRows = rows.Define(func(b rows.Builder[DirectoryRow], r *DirectoryRow) DirectoryColumns {
-	return DirectoryColumns{b.Row(), rows.NumberOf(b, &r.ID), rows.TextOf(b, &r.Country), rows.NullableTextOf(b, &r.OfficialName)}
-})
 
 // migration:end
 
@@ -273,28 +232,26 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 	filter := officialNameFilter[DirectoryScope]{exists: func(p orm.Predicate[countries.Country]) expr.Predicate[DirectoryScope] {
 		return correlate(p).Exists()
 	}}
-	base := rows.Select(joined, DirectoryRows,
-		rows.Map(DirectoryRows.ID, expr.At(admin, Admins.Key())),
-		rows.Map(DirectoryRows.Country, expr.At(country, countries.Countries.Name)),
-		rows.MapSelected(DirectoryRows.OfficialName, selected))
+	countryName := expr.AsSelected(expr.Row(expr.At(country, countries.Countries.Name)))
 	text := foundryhttp.StringQuery[string]()
 	spec.Columns = []datatable.ColumnRegistration[DirectoryScope, DirectoryRow]{
-		datatable.DefineColumn[DirectoryScope](validation.DefineField("country", func(r DirectoryRow) string { return r.Country }), "admins.country",
-			datatable.SortBy(expr.AsSelected(expr.Row(expr.At(country, countries.Countries.Name)))),
+		datatable.HiddenSelected(validation.DefineBinding("id", func(r *DirectoryRow) *int64 { return &r.ID }), expr.AsSelected(expr.Row(expr.At(admin, Admins.Key())))),
+		datatable.Column(validation.DefineBinding("country", func(r *DirectoryRow) *string { return &r.Country }), "admins.country", countryName,
+			datatable.SortBy(countryName),
 			datatable.FilterBy(datatable.Where(text, expr.TextFilter(expr.TextRowAt(country, countries.Countries.Name)))),
 		),
-		datatable.DefineColumn[DirectoryScope](validation.DefineField("officialName", func(r DirectoryRow) value.Nullable[string] { return r.OfficialName }), "admins.officialName",
+		datatable.Column(validation.DefineBinding("officialName", func(r *DirectoryRow) *value.Nullable[string] { return &r.OfficialName }), "admins.official_name", selected,
 			datatable.SortBy(selected),
 			datatable.FilterBy(datatable.NullableWhere(text, filter)),
 		),
 	}
 	spec.Stable = []expr.ProjectionOrder[DirectoryScope]{expr.Asc(expr.At(admin, Admins.Key()))}
-	spec.Source = func(ctx context.Context, actor A) (rows.Query[DirectoryScope, DirectoryRow], error) {
+	spec.Source = func(ctx context.Context, actor A) (rows.SelectionSource[DirectoryScope], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
-			return rows.Query[DirectoryScope, DirectoryRow]{}, err
+			return nil, err
 		}
-		return base.Where(expr.Eq(expr.At(admin, Admins.TenantID), id)), nil
+		return rows.WhereSource(joined, expr.Eq(expr.At(admin, Admins.TenantID), id)), nil
 	}
 	return spec
 }
@@ -389,42 +346,28 @@ func TestPilotDeclarationsAndSources(t *testing.T) {
 	if err := orm.Check(Admins.Table, countries.Countries.Table); err != nil {
 		t.Fatal(err)
 	}
+	allow := func(context.Context, struct{}, datatable.Action) error { return nil }
+	tenant := func(context.Context, struct{}) (int64, error) { return 17, nil }
 	for _, archived := range []bool{false, true} {
-		statement, err := rows.CompileRead(rows.Read(adminSource(17, archived)))
-		if err != nil {
-			t.Fatal(err)
-		}
+		admins := datatable.Define(adminTable(datatable.Spec[Admin, AdminRow, struct{}]{ID: "pilot.admins", Row: pilotAdminRowJSON(), Authorize: allow}, tenant, archived))
+		statements := compilePilotTable(t, admins)
 		want := "IS NULL"
 		if archived {
 			want = "IS NOT NULL"
 		}
-		if !strings.Contains(statement.SQL(), "\"deleted_at\" "+want) || len(statement.Arguments()) != 1 || statement.Arguments()[0] != int64(17) {
-			t.Fatal("source lost visibility or tenant", statement.SQL(), statement.Arguments())
+		if !strings.Contains(statements.Count.SQL(), "\"deleted_at\" "+want) || len(statements.Count.Arguments()) != 1 || statements.Count.Arguments()[0] != int64(17) {
+			t.Fatal("source lost visibility or tenant", statements.Count.SQL(), statements.Count.Arguments())
 		}
 	}
-	spec := directoryTable(datatable.Spec[DirectoryScope, DirectoryRow, struct{}]{}, func(context.Context, struct{}) (int64, error) { return 17, nil })
-	q, err := spec.Source(t.Context(), struct{}{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	statement, err := rows.CompileRead(rows.Read(q))
-	if err != nil {
-		t.Fatal(err)
-	}
+	directory := datatable.Define(directoryTable(datatable.Spec[DirectoryScope, DirectoryRow, struct{}]{ID: "pilot.directory", Row: pilotDirectoryRowJSON(), Authorize: allow}, tenant))
+	statement := compilePilotTable(t, directory).Rows
 	for _, part := range []string{"INNER JOIN", "SELECT", "LIMIT", "tenant_id", "deleted_at"} {
 		if !strings.Contains(statement.SQL(), part) {
 			t.Fatal("missing joined/correlated clause", part, statement.SQL())
 		}
 	}
-	auditSpec := auditTable(datatable.Spec[AuditScope, AuditRow, struct{}]{}, func(context.Context, struct{}) (int64, error) { return 17, nil })
-	aq, err := auditSpec.Source(t.Context(), struct{}{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	astatement, err := rows.CompileRead(rows.Read(aq))
-	if err != nil {
-		t.Fatal(err)
-	}
+	audit := datatable.Define(auditTable(datatable.Spec[AuditScope, AuditRow, struct{}]{ID: "pilot.audit", Row: pilotAuditRowJSON(), Authorize: allow}, tenant))
+	astatement := compilePilotTable(t, audit).Rows
 	for _, part := range []string{"LEFT JOIN", "SELECT", "LIMIT", "tenant_id", "deleted_at"} {
 		if !strings.Contains(astatement.SQL(), part) {
 			t.Fatal("missing left-joined/correlated clause", part, astatement.SQL())
@@ -446,4 +389,57 @@ func TestPilotDeclarationsAndSources(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+// compilePilotTable compiles the statements a default Query request runs.
+func compilePilotTable[S, R any](t *testing.T, table datatable.Table[S, R, struct{}]) datatable.Statements {
+	t.Helper()
+	statements, err := datatable.Compile(t.Context(), table, datatable.DefaultConfig(), struct{}{}, datatable.Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return statements
+}
+
+// The pilot rows keep their original declarations, so these tests describe their
+// JSON explicitly; an application generates this descriptor.
+func pilotAdminRowJSON() contract.JSON[AdminRow] {
+	const root contract.TypeID = "foundry.test/goway/migration_test.AdminRow"
+	return contract.DefineJSON[AdminRow](contract.Schema{Root: root, Types: []contract.Type{
+		{ID: root, Kind: contract.ObjectKind, Properties: []contract.Property{
+			{Name: "id", Type: "integer", Required: true}, {Name: "username", Type: "text", Required: true}, {Name: "email", Type: "nullable_text", Required: true},
+		}},
+		{ID: "integer", Kind: contract.IntegerKind, Bits: 64, Signed: true},
+		{ID: "text", Kind: contract.StringKind},
+		{ID: "nullable_text", Kind: contract.AliasKind, Element: "text", Nullable: true},
+	}})
+}
+
+func pilotDirectoryRowJSON() contract.JSON[DirectoryRow] {
+	const root contract.TypeID = "foundry.test/goway/migration_test.DirectoryRow"
+	return contract.DefineJSON[DirectoryRow](contract.Schema{Root: root, Types: []contract.Type{
+		{ID: root, Kind: contract.ObjectKind, Properties: []contract.Property{
+			{Name: "id", Type: "integer", Required: true}, {Name: "country", Type: "text", Required: true}, {Name: "officialName", Type: "nullable_text", Required: true},
+		}},
+		{ID: "integer", Kind: contract.IntegerKind, Bits: 64, Signed: true},
+		{ID: "text", Kind: contract.StringKind},
+		{ID: "nullable_text", Kind: contract.AliasKind, Element: "text", Nullable: true},
+	}})
+}
+
+func pilotAuditRowJSON() contract.JSON[AuditRow] {
+	const root contract.TypeID = "foundry.test/goway/migration_test.AuditRow"
+	return contract.DefineJSON[AuditRow](contract.Schema{Root: root, Types: []contract.Type{
+		{ID: root, Kind: contract.ObjectKind, Properties: []contract.Property{
+			{Name: "id", Type: "integer", Required: true}, {Name: "country", Type: "nullable_text", Required: true},
+			{Name: "status", Type: "nullable_status", Required: true}, {Name: "latitude", Type: "nullable_number", Required: true},
+		}},
+		{ID: "integer", Kind: contract.IntegerKind, Bits: 64, Signed: true},
+		{ID: "text", Kind: contract.StringKind},
+		{ID: "nullable_text", Kind: contract.AliasKind, Element: "text", Nullable: true},
+		contract.EnumType("status", countries.EnabledStatus.EnumDescriptor()),
+		{ID: "nullable_status", Kind: contract.AliasKind, Element: "status", Nullable: true},
+		{ID: "number", Kind: contract.NumberKind, Bits: 64},
+		{ID: "nullable_number", Kind: contract.AliasKind, Element: "number", Nullable: true},
+	}})
 }

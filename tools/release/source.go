@@ -130,6 +130,7 @@ func (policy sourcePolicy) sourceName(path string) bool {
 		"blueprint/goway-data-layer/compilefail-mapping.tsv",
 		"internal/generate/testdata/scaffold/model.golden",
 		"internal/generate/testdata/scaffold/extensions.golden",
+		"internal/generate/testdata/dto/member_row.golden",
 		"database/orm/testdata/joined-has.sql",
 		"database/orm/testdata/public-methods.txt",
 		"typescript/testdata/reserved-names.txt",

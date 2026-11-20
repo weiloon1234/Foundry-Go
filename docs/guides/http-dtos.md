@@ -66,6 +66,13 @@ A DTO that is only ever sent, never decoded from a request, can be declared with
 `//foundry:dto role=response`. Its JSON codec and schema are unchanged; the
 request validation field descriptors (`XValidationFields`) are not generated.
 
+A DTO that a [datatable](datatable.md) returns as its row is declared with
+`//foundry:dto role=row`. Its JSON codec and schema are unchanged. Instead of
+`XValidationFields()` the generator emits `XColumns()`, which returns an
+`XColumnSet` with one typed `validation.Binding` per field. The struct must be
+concrete and declare every field directly: generic structs and embedded fields
+are rejected, and so are `http=body` and `http=both`.
+
 Select generated HTTP pieces independently with `http=body`, `http=response`,
 or `http=both`. Without `http=`, no helper is emitted. For example,
 `//foundry:dto role=response http=response` emits the response helper while

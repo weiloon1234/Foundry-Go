@@ -80,22 +80,6 @@ func enumSortJSON() contract.JSON[EnumSortRow] {
 	}})
 }
 
-type enumSortRowFields struct {
-	rows.Row[EnumSortRow]
-	ID        rows.Field[EnumSortRow, int64]
-	Status    rows.Field[EnumSortRow, enumSortStatus]
-	OptStatus rows.Field[EnumSortRow, value.Nullable[enumSortStatus]]
-}
-
-var enumSortRows = rows.Define(func(b rows.Builder[EnumSortRow], r *EnumSortRow) enumSortRowFields {
-	return enumSortRowFields{
-		Row:       b.Row(),
-		ID:        rows.NumberOf(b, &r.ID),
-		Status:    rows.EnumOf(b, &r.Status),
-		OptStatus: rows.NullableEnumOf(b, &r.OptStatus),
-	}
-})
-
 type enumSortActor struct {
 	Allowed bool
 }
@@ -110,23 +94,19 @@ func TestEnumRowSortAndShortStableSpelling(t *testing.T) {
 		Row:     enumSortJSON(),
 		Exports: false,
 		Columns: []ColumnRegistration[enumSortRecord, EnumSortRow]{
-			DefineColumn[enumSortRecord](validation.DefineField("id", func(r EnumSortRow) int64 { return r.ID }), "test.id"),
-			DefineColumn[enumSortRecord](validation.DefineField("status", func(r EnumSortRow) enumSortStatus { return r.Status }), "test.status",
+			Column(validation.DefineBinding("id", func(r *EnumSortRow) *int64 { return &r.ID }), "test.id", expr.AsSelected(expr.Row(expr.Value(enumSortModels.Key())))),
+			Column(validation.DefineBinding("status", func(r *EnumSortRow) *enumSortStatus { return &r.Status }), "test.status", expr.AsSelected(statusCmp),
 				SortBy(expr.AsSelected(statusCmp)),
 				FilterBy(Where(statusCodec, expr.CompareFilter(statusCmp))),
 				ExportAs(expr.AsSelected(statusCmp), ScalarCell(statusCodec))),
-			DefineColumn[enumSortRecord](validation.DefineField("opt_status", func(r EnumSortRow) value.Nullable[enumSortStatus] { return r.OptStatus }), "test.opt_status",
+			Column(validation.DefineBinding("opt_status", func(r *EnumSortRow) *value.Nullable[enumSortStatus] { return &r.OptStatus }), "test.opt_status", expr.AsSelected(optStatusCmp),
 				SortBy(expr.AsSelected(optStatusCmp)),
 				FilterBy(NullableWhere(statusCodec, expr.NullableCompareFilter(optStatusCmp))),
 				ExportAs(expr.AsSelected(optStatusCmp), NullableCell(statusCodec))),
 		},
 		Stable: []expr.ProjectionOrder[enumSortRecord]{expr.Asc(expr.Value(enumSortModels.Key()))},
-		Source: func(ctx context.Context, actor enumSortActor) (rows.Query[enumSortRecord, EnumSortRow], error) {
-			return rows.Select(rows.From(enumSortModels.Query()), enumSortRows,
-				rows.Map(enumSortRows.ID, expr.Value(enumSortModels.Key())),
-				rows.Map(enumSortRows.Status, expr.Value(enumSortModels.Status)),
-				rows.Map(enumSortRows.OptStatus, expr.Value(enumSortModels.OptStatus)),
-			), nil
+		Source: func(ctx context.Context, actor enumSortActor) (rows.SelectionSource[enumSortRecord], error) {
+			return rows.From(enumSortModels.Query()), nil
 		},
 		Authorize: func(ctx context.Context, actor enumSortActor, action Action) error {
 			return nil

@@ -8,8 +8,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-var invalid = datatable.DefineColumn[reporting.Order, reporting.Member, string](
-	validation.DefineField("name", func(r reporting.Member) string { return r.Name }),
+var option = datatable.FilterBy(datatable.Where(foundryhttp.StringQuery[string](), expr.TextFilter(expr.TextRow(reporting.Orders.Label))))
+var invalid = datatable.Column(
+	validation.DefineBinding("name", func(r *reporting.Member) *string { return &r.Name }),
 	"reports.name",
-	datatable.FilterBy(datatable.Where(foundryhttp.StringQuery[string](), expr.TextFilter(expr.TextRow(reporting.Members.Name)))),
+	expr.AsSelected(expr.Row(expr.Value(reporting.Members.Name))),
+	option,
 )

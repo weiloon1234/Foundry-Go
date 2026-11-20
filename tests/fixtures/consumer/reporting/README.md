@@ -8,12 +8,12 @@ references and queued export actor resolution, including the persisted
 
 The client-contract exports are ready for dependent consumers:
 
-| DTO (unchanged identity) | Handwritten rows schema | Datatable |
+| Row DTO (`role=row`) | Generated column bindings | Datatable |
 | --- | --- | --- |
-| `reporting.MemberRow` | `MemberRows` | `Members` |
-| `reporting.OrderRow` | `OrderRows` | `Orders` |
-| `reporting.MemberTotal` | `MemberTotals` | `Totals` |
-| `reporting.NumericLevelRow` | `NumericLevelRows` | `NumericLevels` |
+| `reporting.MemberRow` | `MemberRowColumns()` | `Members` |
+| `reporting.OrderRow` | `OrderRowColumns()` | `Orders` |
+| `reporting.MemberTotal` | `MemberTotalColumns()` | `Totals` |
+| `reporting.NumericLevelRow` | `NumericLevelRowColumns()` | `NumericLevels` |
 
 `numeric_levels.go` owns the separate `reports.numeric_levels` report. Its
 `AgentLevel` and `WideLevel` columns cover numeric enum cases and labels in the
@@ -25,6 +25,12 @@ existing package paths and wire fields. Reporting queries, exports and authority
 reloads use ORM declarations. Schema setup and deliberately corrupt driver inputs
 remain explicit SQL in integration fixtures.
 
-Models and relation declarations are handwritten. The source goldens and operator
-identity golden keep
-legacy calls as independent compatibility oracles; they are not runtime fallbacks.
+Models and relation declarations are handwritten. Each table declares its row
+selections through its columns and returns only its base source. The source goldens
+compile each table's real Query statements with `datatable.Compile`
+(`source_golden_test.go`), and the operator identity golden keeps legacy calls as
+an independent compatibility oracle; neither is a runtime fallback.
+
+`examples_columns.go` holds the guide's compiled examples for a request-dependent
+column, `ScanWith`, `HiddenSelected` on a joined expression and a `DistinctSource`
+table (`OrderLineRow`, `MemberNameRow`); `examples_columns_test.go` asserts their SQL.

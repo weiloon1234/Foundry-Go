@@ -8,4 +8,4 @@ import (
 
 type row struct{ S string }
 
-var _ datatable.ColumnRegistration[models.User, row] = datatable.Text(validation.DefineField("s", func(r row) string { return r.S }), "f.s", models.WriteRecords.Name)
+var _ datatable.ColumnRegistration[models.User, row] = datatable.Text(validation.DefineBinding("s", func(r *row) *string { return &r.S }), "f.s", models.WriteRecords.Name)

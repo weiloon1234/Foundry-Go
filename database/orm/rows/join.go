@@ -1,5 +1,5 @@
 // Package rows provides typed aliases, joins and complete row projections.
-// Example: rows.Select(joined,OrderRows,rows.Map(OrderRows.ID,orderID)).
+// Example: rows.Select(joined, reports.OrderBuyerRows, rows.Map(reports.OrderBuyerRows.OrderID, expr.At(rows.Scope(orders), models.Orders.ID)), mappings...).
 package rows
 
 import (
@@ -12,19 +12,19 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
-// Alias gives each model occurrence a distinct scope. Example: Alias[memberSide,Member].
+// Alias gives each model occurrence a distinct scope. Example: rows.Alias[buyerSide, models.User].
 type Alias[A, M any] struct {
 	_ [0]*A
 	_ [0]*M
 }
 
-// Inner preserves the scopes of both joined inputs. Example: Inner[Alias[left,Member],Alias[right,Order]].
+// Inner preserves the scopes of both joined inputs. Example: rows.Inner[rows.Alias[buyerSide, models.User], rows.Alias[orderSide, models.Order]].
 type Inner[L, R any] struct {
 	_ [0]*L
 	_ [0]*R
 }
 
-// Aliased is a model source with one typed alias. Example: rows.As[memberSide](Members.Query(),"members").
+// Aliased is a model source with one typed alias. Example: rows.As[buyerSide](models.Users.Query(), "buyers").
 type Aliased[A, M any] struct {
 	_      [0]*A
 	_      [0]*M
@@ -32,7 +32,7 @@ type Aliased[A, M any] struct {
 	scope  ormcore.Scope
 }
 
-// InnerJoined retains both sides for type-safe re-scoping. Example: rows.InnerJoin(members,orders,on).
+// InnerJoined retains both sides for type-safe re-scoping. Example: rows.InnerJoin(buyers, orders, on).
 type InnerJoined[L, R any] struct {
 	_           [0]*L
 	_           [0]*R
@@ -61,7 +61,7 @@ func (a Aliased[A, M]) joinTable(*Alias[A, M]) {}
 func (a Aliased[A, M]) rowSource(*Alias[A, M]) ormcore.Source     { return a.source }
 func (j InnerJoined[L, R]) rowSource(*Inner[L, R]) ormcore.Source { return j.source }
 
-// JoinOn retains the two operand scopes. Example: rows.On(memberID,orderMemberID).
+// JoinOn retains the two operand scopes. Example: rows.On(expr.At(rows.Scope(buyers), models.Users.ID), expr.At(rows.Scope(orders), models.Orders.BuyerID)).
 type JoinOn[L, R any] struct {
 	_    [0]*L
 	_    [0]*R
@@ -69,7 +69,7 @@ type JoinOn[L, R any] struct {
 }
 
 // As aliases a model query, preserving its filters and soft-delete scope.
-// Example: members := rows.As[memberSide](Members.Query(),"members").
+// Example: buyers := rows.As[buyerSide](models.Users.Query(), "buyers").
 func As[A, M any](q orm.Query[M], alias string) Aliased[A, M] {
 	s := orm.FoundrySource(q, sqlowner.Metadata())
 	direct := len(s.Node.Predicates) == 0 && len(s.Node.Orders) == 0 && !s.Node.Limit.IsSet() && s.Node.Offset == 0
@@ -78,24 +78,24 @@ func As[A, M any](q orm.Query[M], alias string) Aliased[A, M] {
 	return Aliased[A, M]{source: ormcore.Source{Scope: reflect.TypeFor[Alias[A, M]](), Node: node.Node, Aliases: node.Aliases, Owners: map[string]any{alias: owner}, Err: node.Err, Checks: s.Checks}, scope: ormcore.Scope{Reference: ormcore.Reference{Table: alias, Owner: owner}, Err: node.Err}}
 }
 
-// Scope selects the model scope of an alias. Example: expr.At(rows.Scope(members),Members.ID).
+// Scope selects the model scope of an alias. Example: expr.At(rows.Scope(buyers), models.Users.ID).
 func Scope[A, M any](a Aliased[A, M]) expr.Scope[Alias[A, M], M] {
 	return expr.FoundryScope[Alias[A, M], M](a.scope, sqlowner.Expressions())
 }
 
-// On joins expressions with the same value type. Example: rows.On(memberID,orderMemberID).
+// On joins expressions with the same value type. Example: rows.On(expr.At(rows.Scope(buyers), models.Users.ID), expr.At(rows.Scope(orders), models.Orders.BuyerID)).
 func On[L, R any, K comparable, LP, RP any](left expr.Expression[L, K, LP], right expr.Expression[R, K, RP]) JoinOn[L, R] {
 	l, r := expr.FoundryExpression(left, sqlowner.Expressions()), expr.FoundryExpression(right, sqlowner.Expressions())
 	return JoinOn[L, R]{core: ormcore.JoinComparison(l, r, querycore.Equal)}
 }
 
-// InnerJoin joins two distinct typed aliases. Example: rows.InnerJoin(members,orders,rows.On(mID,oMemberID)).
+// InnerJoin joins two distinct typed aliases. Example: rows.InnerJoin(buyers, orders, rows.On(buyerID, orderBuyerID)).
 func InnerJoin[L, R any](left Source[L], right JoinTable[R], on JoinOn[L, R]) InnerJoined[L, R] {
 	state := buildJoin(left, right, on, querycore.InnerJoin, reflect.TypeFor[Inner[L, R]]())
 	return InnerJoined[L, R]{source: state.source, left: state.left, right: state.right}
 }
 
-// LeftScope preserves a model from the non-nullable left side. Example: rows.LeftScope(joined,rows.Scope(members)).
+// LeftScope preserves a model from the non-nullable left side. Example: rows.LeftScope(joined, rows.Scope(buyers)).
 func LeftScope[S, L, M any](j preservedLeftSource[S, L], scope expr.Scope[L, M]) expr.Scope[S, M] {
 	b := scopeBoundary{err: ormcore.Invalid("scope requires a join")}
 	if !ormcore.NilDescriptor(j) {
@@ -104,7 +104,7 @@ func LeftScope[S, L, M any](j preservedLeftSource[S, L], scope expr.Scope[L, M])
 	return rescope[S](scope, b.owners, b.err)
 }
 
-// RightScope preserves a model from the non-nullable right side. Example: rows.RightScope(joined,rows.Scope(orders)).
+// RightScope preserves a model from the non-nullable right side. Example: rows.RightScope(joined, rows.Scope(orders)).
 func RightScope[S, R, M any](j preservedRightSource[S, R], scope expr.Scope[R, M]) expr.Scope[S, M] {
 	b := scopeBoundary{err: ormcore.Invalid("scope requires a join")}
 	if !ormcore.NilDescriptor(j) {

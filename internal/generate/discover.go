@@ -227,7 +227,9 @@ func discover(p *packageInput) (metadata, error) {
 			return result, err
 		}
 		suffixes := []string{"JSON"}
-		if declaration.role != dtoResponseRole {
+		if declaration.role == dtoRowRole {
+			suffixes = append(suffixes, "Columns", "ColumnSet")
+		} else if declaration.role != dtoResponseRole {
 			suffixes = append(suffixes, "ValidationFields", "ValidationFieldSet")
 		}
 		if declaration.message != nil {

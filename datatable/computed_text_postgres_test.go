@@ -6,8 +6,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
-	"github.com/weiloon1234/Foundry-Go/validation"
-	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 type computedNoteSide struct{}
@@ -36,7 +34,8 @@ func TestPostgresDatatableComputedNullableTextFilter(t *testing.T) {
 	text := expr.TextNullableRowValue(rows.CorrelatedScalarNullableRowQuery(scalar))
 	filter := correlatedNoteFilter{expr.NullableTextFilter(text), text}
 	spec := reportSpec()
-	spec.Columns[2] = DefineColumn[reportRecord](validation.DefineField("note", func(row ReportRow) value.Nullable[string] { return row.Note }), "reports.note",
+	_, _, note, _ := reportFields()
+	spec.Columns[2] = Column(reportBindings().Note, "reports.note", expr.AsSelected(note),
 		FilterBy(NullableWhere(foundryhttp.StringQuery[string](), filter).AllowLike()))
 	manager, table := reportManager(t, fixture, spec, nil)
 	actor := reportActor{Tenant: 7, Allowed: true}

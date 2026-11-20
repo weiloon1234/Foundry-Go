@@ -7,8 +7,10 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-var invalid = datatable.DefineColumn[reporting.Order, reporting.MemberRow, string](
-	reporting.MemberRowValidationFields().Name,
+var filterMember = datatable.FilterBy(datatable.Where(foundryhttp.StringQuery[string](), expr.TextFilter(expr.TextRow(reporting.MemberModels.Name))))
+var invalid = datatable.Column(
+	reporting.MemberRowColumns().Name,
 	reporting.MemberNameLabel,
-	datatable.FilterBy(datatable.Where(foundryhttp.StringQuery[string](), expr.TextFilter(expr.TextRow(reporting.MemberModels.Name)))),
+	expr.AsSelected(expr.TextRow(reporting.OrderModels.Label)),
+	filterMember,
 )

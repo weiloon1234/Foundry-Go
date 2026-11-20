@@ -10,4 +10,4 @@ import (
 
 type row struct{ T temporal.DateTime }
 
-var _ = datatable.Time(validation.DefineField("t", func(r row) temporal.DateTime { return r.T }), "f.t", models.Users.Age, foundryhttp.TextQuery[temporal.DateTime, *temporal.DateTime]())
+var _ = datatable.Time(validation.DefineBinding("t", func(r *row) *temporal.DateTime { return &r.T }), "f.t", models.Users.Age, foundryhttp.TextQuery[temporal.DateTime, *temporal.DateTime]())

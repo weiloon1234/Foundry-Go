@@ -10,4 +10,4 @@ import (
 
 type row struct{ S value.Nullable[models.Status] }
 
-var _ = datatable.NullableEnum(validation.DefineField("s", func(r row) value.Nullable[models.Status] { return r.S }), "f.s", models.Users.Status, foundryhttp.EnumQuery[models.Status, *models.Status](models.StatusActive.EnumDescriptor()))
+var _ = datatable.NullableEnum(validation.DefineBinding("s", func(r *row) *value.Nullable[models.Status] { return &r.S }), "f.s", models.Users.Status, foundryhttp.EnumQuery[models.Status, *models.Status](models.StatusActive.EnumDescriptor()))

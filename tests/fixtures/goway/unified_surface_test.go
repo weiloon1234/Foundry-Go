@@ -100,16 +100,16 @@ func TestUnifiedPositiveSurface(t *testing.T) {
 	dtCodec := foundryhttp.TextQuery[temporal.DateTime, *temporal.DateTime]()
 
 	_ = []datatable.ColumnRegistration[models.User, userRow]{
-		datatable.Text(validation.DefineField("email", func(r userRow) string { return r.Email }), "u.email", u.Email, datatable.NoSearch),
-		datatable.Number(validation.DefineField("age", func(r userRow) int { return r.Age }), "u.age", u.Age, foundryhttp.IntegerQuery[int](), datatable.NoSort),
-		datatable.Enum(validation.DefineField("status", func(r userRow) models.Status { return r.Status }), "u.status", u.Status, statusCodec, datatable.NoFilter),
-		datatable.NullableText(validation.DefineField("nickname", func(r userRow) value.Nullable[string] { return r.Nickname }), "u.nickname", u.Nickname, datatable.NoExport),
-		datatable.NullableTime(validation.DefineField("birthday", func(r userRow) value.Nullable[temporal.Date] { return r.Birthday }), "u.birthday", u.Birthday, dateCodec),
+		datatable.Text(validation.DefineBinding("email", func(r *userRow) *string { return &r.Email }), "u.email", u.Email, datatable.NoSearch),
+		datatable.Number(validation.DefineBinding("age", func(r *userRow) *int { return &r.Age }), "u.age", u.Age, foundryhttp.IntegerQuery[int](), datatable.NoSort),
+		datatable.Enum(validation.DefineBinding("status", func(r *userRow) *models.Status { return &r.Status }), "u.status", u.Status, statusCodec, datatable.NoFilter),
+		datatable.NullableText(validation.DefineBinding("nickname", func(r *userRow) *value.Nullable[string] { return &r.Nickname }), "u.nickname", u.Nickname, datatable.NoExport),
+		datatable.NullableTime(validation.DefineBinding("birthday", func(r *userRow) *value.Nullable[temporal.Date] { return &r.Birthday }), "u.birthday", u.Birthday, dateCodec),
 	}
 	_ = []datatable.ColumnRegistration[scalars.Record, scalarRow]{
-		datatable.Time(validation.DefineField("instant", func(r scalarRow) temporal.DateTime { return r.Instant }), "s.instant", s.Instant, dtCodec),
-		datatable.NullableNumber(validation.DefineField("maybe_millis", func(r scalarRow) value.Nullable[int64] { return r.MaybeMillis }), "s.maybe_millis", s.MaybeMillis, foundryhttp.IntegerQuery[int64]()),
+		datatable.Time(validation.DefineBinding("instant", func(r *scalarRow) *temporal.DateTime { return &r.Instant }), "s.instant", s.Instant, dtCodec),
+		datatable.NullableNumber(validation.DefineBinding("maybe_millis", func(r *scalarRow) *value.Nullable[int64] { return &r.MaybeMillis }), "s.maybe_millis", s.MaybeMillis, foundryhttp.IntegerQuery[int64]()),
 	}
-	_ = datatable.Bool(validation.DefineField("enabled", func(r boolRow) bool { return r.Enabled }), "w.enabled", models.WriteRecords.Enabled)
-	_ = datatable.NullableEnum(validation.DefineField("opt_status", func(r optEnumRow) value.Nullable[models.Status] { return r.OptStatus }), "u.opt_status", optEnumCol, statusCodec)
+	_ = datatable.Bool(validation.DefineBinding("enabled", func(r *boolRow) *bool { return &r.Enabled }), "w.enabled", models.WriteRecords.Enabled)
+	_ = datatable.NullableEnum(validation.DefineBinding("opt_status", func(r *optEnumRow) *value.Nullable[models.Status] { return &r.OptStatus }), "u.opt_status", optEnumCol, statusCodec)
 }

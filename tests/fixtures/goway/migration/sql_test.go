@@ -145,12 +145,12 @@ func report() rows.Query[reports.Member, reports.MemberRow] {
 // migration:datatable-after
 func tableSource[A any](spec datatable.Spec[reports.Member, reports.MemberRow, A], tenant func(context.Context, A) (int64, error)) datatable.Spec[reports.Member, reports.MemberRow, A] {
 	// Keep the existing Spec authorization; tenant resolves the trusted actor scope.
-	spec.Source = func(ctx context.Context, actor A) (rows.Query[reports.Member, reports.MemberRow], error) {
+	spec.Source = func(ctx context.Context, actor A) (rows.SelectionSource[reports.Member], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
-			return rows.Query[reports.Member, reports.MemberRow]{}, err
+			return nil, err
 		}
-		return report().Where(expr.Eq(expr.Value(reports.Members.TenantID), id)), nil
+		return rows.From(reports.Members.Query().Where(orm.Eq(reports.Members.TenantID, id))), nil
 	}
 	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Asc(expr.Value(reports.Members.ID))}
 	return spec

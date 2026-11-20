@@ -52,6 +52,7 @@ type Column[V any] struct {
 	Bind     func(V) (driver.Value, error)
 	Clone    func(V) V
 	Scan     func(*V) any
+	Check    func() error
 	Err      error
 }
 

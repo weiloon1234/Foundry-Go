@@ -449,7 +449,10 @@ Other scaffolds run no generation.
 The generic DTO scaffold accepts `--http body`, `--http response` or `--http both`.
 Omit it to retain the plain `//foundry:dto` output. `--role response` independently
 omits request validation; together with `--http response` it writes
-`//foundry:dto role=response http=response`. Application command aliases can forward
+`//foundry:dto role=response http=response`. `--role row` writes
+`//foundry:dto role=row` for a datatable row; generation then emits `XColumns()`
+bindings instead of validation fields, and `--role row` rejects `--http body` and
+`--http both`. Application command aliases can forward
 these flags to `foundry make dto`. Internal tooling uses `ScaffoldOptions.HTTP`
 and `ScaffoldOptions.Role`. Unknown values, framework-module destinations and
 helper-name collisions are rejected before the scaffold writes a file. Helpers

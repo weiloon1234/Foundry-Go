@@ -2,6 +2,7 @@ package datatable
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -15,7 +16,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/jsonshape"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
 // Action identifies the operation passed to a table authorization callback.
@@ -30,22 +33,26 @@ const (
 )
 
 // Spec binds one row contract to server-owned authorization and row scope.
-// Source must return the complete unpaginated query with mandatory tenant,
-// visibility and soft-delete policy already applied. Authorize is mandatory even
-// for explicitly public/system reports. A is trusted server context, never
-// decoded from Request. Use auth.Guard[M] when binding an authenticated policy.
-// Stable orders must uniquely identify a result (including grouped/joined rows).
+// Columns declare every row field: displayed columns, Hidden fields and
+// DynamicColumn slots, each bound once in Dynamic. Source must return the
+// complete unpaginated base source, before any selection, with mandatory tenant,
+// visibility and soft-delete policy already applied; the table selects its
+// columns from it. Authorize is mandatory even for explicitly public/system
+// reports. A is trusted server context, never decoded from Request. Use
+// auth.Guard[M] when binding an authenticated policy. Stable orders must
+// uniquely identify a result (including grouped/joined rows).
 //
 // Example: var spec datatable.Spec[User, UserRow, Actor]
 type Spec[S, R, A any] struct {
 	ID          contract.TableID
 	Row         contract.JSON[R]
 	Columns     []ColumnRegistration[S, R]
+	Dynamic     []DynamicBinding[S, A]
 	Filters     []FilterRegistration[S]
 	DefaultSort []Sort
 	Stable      []expr.ProjectionOrder[S]
 	Authorize   func(context.Context, A, Action) error
-	Source      func(context.Context, A) (rows.Query[S, R], error)
+	Source      func(context.Context, A) (rows.SelectionSource[S], error)
 	Exports     bool
 }
 
@@ -60,7 +67,9 @@ type tableDefinition[S, R, A any] struct {
 	metadata  tableMetadata
 	row       contract.JSON[R]
 	authorize func(context.Context, A, Action) error
-	source    func(context.Context, A) (rows.Query[S, R], error)
+	source    func(context.Context, A) (rows.SelectionSource[S], error)
+	plan      rows.FoundryPlan[S, R]
+	dynamic   []func(context.Context, A) rows.FoundryDynamicExpression[S]
 	stable    []expr.ProjectionOrder[S]
 	columns   []columnExecution[S, R]
 	filters   map[string]func(Operator, []string) (condition[S], error)
@@ -103,7 +112,15 @@ func Define[S, R, A any](spec Spec[S, R, A]) Table[S, R, A] {
 	return Table[S, R, A]{definition: d}
 }
 func (d *tableDefinition[S, R, A]) initialize(spec Spec[S, R, A]) error {
-	if !identifier.Semantic(string(spec.ID)) || spec.Authorize == nil || spec.Source == nil || len(spec.Columns) == 0 || len(spec.Columns) > MaxColumns || len(spec.Filters) > MaxColumns || len(spec.Stable) == 0 || len(spec.Stable) > MaxSorts {
+	// MaxColumns bounds the displayed columns. Hidden fields each bind a distinct
+	// row struct field, which bounds them.
+	displayed := 0
+	for _, registration := range spec.Columns {
+		if !registration.declaration.hidden {
+			displayed++
+		}
+	}
+	if !identifier.Semantic(string(spec.ID)) || spec.Authorize == nil || spec.Source == nil || displayed == 0 || displayed > MaxColumns || len(spec.Filters) > MaxColumns || len(spec.Stable) == 0 || len(spec.Stable) > MaxSorts {
 		return invalid("invalid datatable declaration")
 	}
 	for _, order := range spec.Stable {
@@ -120,6 +137,9 @@ func (d *tableDefinition[S, R, A]) initialize(spec Spec[S, R, A]) error {
 	d.filters = make(map[string]func(Operator, []string) (condition[S], error))
 	for _, registration := range spec.Columns {
 		c := registration.declaration
+		if c.hidden {
+			continue
+		}
 		metadata := columnMetadataDeclaration{name: c.name, label: c.label, sortable: c.order != nil, searchable: c.searchable, exportable: c.cell != nil, cellInfo: c.cellInfo, err: c.err}
 		execution := columnExecution[S, R]{order: c.order, cell: c.cell}
 		if c.filter != nil {
@@ -141,7 +161,115 @@ func (d *tableDefinition[S, R, A]) initialize(spec Spec[S, R, A]) error {
 		return err
 	}
 	d.metadata.info.Page = page
-	return d.metadata.initialize(spec.ID, row, spec.Row.DescribeScalarProperty, columns, filters, spec.DefaultSort, spec.Exports)
+	if err := d.metadata.initialize(spec.ID, row, spec.Row.DescribeScalarProperty, columns, filters, spec.DefaultSort, spec.Exports); err != nil {
+		return err
+	}
+	// Displayed column errors were reported above in declaration order; hidden
+	// field errors precede binding, slot and plan errors.
+	for _, registration := range spec.Columns {
+		if c := registration.declaration; c.hidden && c.err != nil {
+			return c.err
+		}
+	}
+	if err := d.pairDynamic(spec); err != nil {
+		return err
+	}
+	properties, err := rowProperties(reflect.TypeFor[R]())
+	if err != nil {
+		return err
+	}
+	var misbound error
+	plan, err := rows.FoundryBuildPlan(sqlowner.Queries(), func(pb rows.FoundryPlanBuilder[S, R], row *R) {
+		for _, registration := range spec.Columns {
+			c := registration.declaration
+			if index := c.bind(pb, row); misbound == nil {
+				misbound = properties.check(index, c.name)
+			}
+		}
+	})
+	if misbound != nil {
+		return misbound
+	}
+	if err != nil {
+		return err
+	}
+	d.plan = plan
+	return nil
+}
+
+// pairDynamic pairs every DynamicColumn slot with exactly one Dynamic binding,
+// without invoking any builder, and requires every column to carry its binding.
+func (d *tableDefinition[S, R, A]) pairDynamic(spec Spec[S, R, A]) error {
+	var slots map[any]int
+	for _, registration := range spec.Columns {
+		c := registration.declaration
+		if c.bind == nil {
+			return invalid("datatable column is missing its SQL selection binding")
+		}
+		if c.dynamicSlot == nil {
+			continue
+		}
+		if slots == nil {
+			slots = make(map[any]int)
+		}
+		if _, exists := slots[c.dynamicSlot]; exists {
+			return safeerror.NewFault(fault.Duplicate, "dynamic column slot is repeated")
+		}
+		slots[c.dynamicSlot] = len(slots)
+	}
+	if len(spec.Dynamic) != len(slots) {
+		return invalid("every dynamic column slot must be bound exactly once in Dynamic")
+	}
+	if len(slots) == 0 {
+		return nil
+	}
+	d.dynamic = make([]func(context.Context, A) rows.FoundryDynamicExpression[S], len(slots))
+	for _, binding := range spec.Dynamic {
+		if binding.err != nil {
+			return binding.err
+		}
+		index, ok := slots[binding.slot]
+		if !ok || binding.build == nil || d.dynamic[index] != nil {
+			return invalid("Dynamic binding does not match a declared dynamic column slot")
+		}
+		d.dynamic[index] = binding.build
+	}
+	return nil
+}
+
+// rowFieldProperties holds the JSON property name of each direct struct field of
+// a row, empty when the field has none.
+type rowFieldProperties []string
+
+// rowProperties applies the shared runtime JSON field rules to a row type once
+// per declaration.
+func rowProperties(typ reflect.Type) (rowFieldProperties, error) {
+	if typ.Kind() != reflect.Struct {
+		return nil, invalid("datatable row must be a struct")
+	}
+	collected, err := jsonshape.Collect(typ, jsonshape.ReflectAdapter(nil))
+	if err != nil {
+		return nil, invalid("datatable row has an invalid or ambiguous JSON field declaration")
+	}
+	properties := make(rowFieldProperties, typ.NumField())
+	for _, property := range collected {
+		if len(property.Index) == 1 {
+			properties[property.Index[0]] = property.Name
+		}
+	}
+	return properties, nil
+}
+
+// check requires a binding's name to equal the JSON property of the struct field
+// its pointer addresses. A negative index bound nothing; the plan reports why.
+func (p rowFieldProperties) check(index int, name string) error {
+	if index < 0 || index >= len(p) || p[index] == name {
+		return nil
+	}
+	if p[index] == "" {
+		return invalid(fmt.Sprintf("row field binding %q addresses a struct field without a JSON property", name))
+	}
+	return invalid(fmt.Sprintf("row field binding %q addresses JSON property %q", name, p[index]))
 }
 
 // Validate reports declaration errors without acquiring query or export resources.

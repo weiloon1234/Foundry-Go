@@ -8,4 +8,4 @@ import (
 
 type row struct{ B bool }
 
-var _ = datatable.Bool(validation.DefineField("b", func(r row) bool { return r.B }), "f.b", models.Users.Age)
+var _ = datatable.Bool(validation.DefineBinding("b", func(r *row) *bool { return &r.B }), "f.b", models.Users.Age)

@@ -131,7 +131,7 @@ func Nullable[S, V any](e Selected[S, V]) Selected[S, value.Nullable[V]] {
 
 func nullableData[V any](e rowData[V]) rowData[value.Nullable[V]] {
 	c := e.column
-	out := ormcore.Column[value.Nullable[V]]{AggregateInput: c.AggregateInput, Text: c.Text, Collatable: c.Collatable, Sensitive: c.Sensitive, Kind: c.Kind, Nullable: true, Err: c.Err}
+	out := ormcore.Column[value.Nullable[V]]{AggregateInput: c.AggregateInput, Text: c.Text, Collatable: c.Collatable, Sensitive: c.Sensitive, Kind: c.Kind, Nullable: true, Check: c.Check, Err: c.Err}
 	out.Scan = func(v *value.Nullable[V]) any { return ormcore.NullableScan(c.Scan, v) }
 	out.Bind = func(v value.Nullable[V]) (driver.Value, error) {
 		x, ok := v.Get()

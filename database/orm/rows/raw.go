@@ -10,7 +10,7 @@ import (
 // Raw hydrates exactly the schema's declared columns, matched by name in any order.
 // It applies NO scopes and uses ex directly without read routing: raw SQL may write.
 // Decode failure discards all results, but does not imply a write rolled back.
-// Example: rows.Raw(ctx, tx, OrderRows, "SELECT id, label FROM orders WHERE id=$1", id).
+// Example: rows.Raw(ctx, tx, reports.UserSummaries, "SELECT id, email_address AS email, nickname, status FROM users WHERE id=$1", id).
 func Raw[R any](ctx context.Context, ex database.Executor, schema Schema[R], sql string, args ...any) ([]R, error) {
 	if ormcore.NilDescriptor(schema) {
 		return nil, ormcore.Invalid("raw requires a row declaration")

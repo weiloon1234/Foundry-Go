@@ -10,4 +10,4 @@ import (
 
 type row struct{ N value.Nullable[int] }
 
-var _ = datatable.NullableNumber(validation.DefineField("n", func(r row) value.Nullable[int] { return r.N }), "f.n", models.Users.Age, foundryhttp.IntegerQuery[int]())
+var _ = datatable.NullableNumber(validation.DefineBinding("n", func(r *row) *value.Nullable[int] { return &r.N }), "f.n", models.Users.Age, foundryhttp.IntegerQuery[int]())

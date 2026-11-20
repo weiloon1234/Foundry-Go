@@ -78,26 +78,51 @@ var reportRows = rows.Define(func(b rows.Builder[ReportRow], r *ReportRow) repor
 	return reportRowColumns{b.Row(), rows.NumberOf(b, &r.ID), rows.TextOf(b, &r.Name), rows.NullableTextOf(b, &r.Note), rows.NumberOf(b, &r.Amount)}
 })
 
+// reportBindingSet mirrors the bindings //foundry:dto role=row generates.
+type reportBindingSet struct {
+	ID     validation.Binding[ReportRow, int64]
+	Name   validation.Binding[ReportRow, string]
+	Note   validation.Binding[ReportRow, value.Nullable[string]]
+	Amount validation.Binding[ReportRow, decimal.Decimal]
+}
+
+func reportBindings() reportBindingSet {
+	return reportBindingSet{
+		ID:     validation.DefineBinding("id", func(r *ReportRow) *int64 { return &r.ID }),
+		Name:   validation.DefineBinding("name", func(r *ReportRow) *string { return &r.Name }),
+		Note:   validation.DefineBinding("note", func(r *ReportRow) *value.Nullable[string] { return &r.Note }),
+		Amount: validation.DefineBinding("amount", func(r *ReportRow) *decimal.Decimal { return &r.Amount }),
+	}
+}
+
 func reportFields() (expr.OrderedRowExpression[reportRecord, int64], expr.TextRowExpression[reportRecord, string], expr.NullableTextRowExpression[reportRecord, string], expr.OrderedRowExpression[reportRecord, decimal.Decimal]) {
 	return expr.OrderRow(expr.Value(reportModels.ID)), expr.TextRow(reportModels.Name), expr.TextNullableRow(reportModels.Note), expr.OrderRow(expr.Value(reportModels.Amount))
 }
+
+// reportBase is the tenant-scoped base source the report table selects from.
+func reportBase(tenant int64) rows.Input[reportRecord] {
+	return rows.From(reportModels.Query().Where(orm.Eq(reportModels.TenantID, tenant)))
+}
+
+// reportSource is the same report selected through rows.Define + rows.Select, for
+// tests that exercise a selected query directly.
 func reportSource(tenant int64) rows.Query[reportRecord, ReportRow] {
-	base := reportModels.Query().Where(orm.Eq(reportModels.TenantID, tenant))
-	return rows.Select(rows.From(base), reportRows, rows.Map(reportRows.ID, expr.Value(reportModels.ID)), rows.Map(reportRows.Name, expr.Value(reportModels.Name)), rows.Map(reportRows.Note, expr.Value(reportModels.Note)), rows.Map(reportRows.Amount, expr.Value(reportModels.Amount)))
+	return rows.Select(reportBase(tenant), reportRows, rows.Map(reportRows.ID, expr.Value(reportModels.ID)), rows.Map(reportRows.Name, expr.Value(reportModels.Name)), rows.Map(reportRows.Note, expr.Value(reportModels.Note)), rows.Map(reportRows.Amount, expr.Value(reportModels.Amount)))
 }
 
 func reportSpec() Spec[reportRecord, ReportRow, reportActor] {
 	id, name, note, amount := reportFields()
+	w := reportBindings()
 	idCodec := foundryhttp.IntegerQuery[int64]()
 	textCodec := foundryhttp.StringQuery[string]()
 	amountCodec := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
 	return Spec[reportRecord, ReportRow, reportActor]{
 		ID: "reports.members", Row: reportJSON(), Exports: true,
 		Columns: []ColumnRegistration[reportRecord, ReportRow]{
-			DefineColumn[reportRecord](validation.DefineField("id", func(row ReportRow) int64 { return row.ID }), "reports.id", SortBy(expr.AsSelected(id)), FilterBy(Where(idCodec, expr.OrderFilter(id))), ExportAs(expr.AsSelected(id), ScalarCell(idCodec))),
-			DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name", SortBy(expr.AsSelected(name)), FilterBy(Where(textCodec, expr.TextFilter(name))), Searchable(name), ExportAs(expr.AsSelected(name), ScalarCell(textCodec))),
-			DefineColumn[reportRecord](validation.DefineField("note", func(row ReportRow) value.Nullable[string] { return row.Note }), "reports.note", SortBy(expr.AsSelected(note)), FilterBy(NullableWhere(textCodec, expr.NullableTextFilter(note))), ExportAs(expr.AsSelected(note), NullableCell(textCodec))),
-			DefineColumn[reportRecord](validation.DefineField("amount", func(row ReportRow) decimal.Decimal { return row.Amount }), "reports.amount", SortBy(expr.AsSelected(amount)), FilterBy(Where(amountCodec, expr.OrderFilter(amount))), ExportAs(expr.AsSelected(amount), ScalarCell(amountCodec))),
+			Column(w.ID, "reports.id", expr.AsSelected(id), SortBy(expr.AsSelected(id)), FilterBy(Where(idCodec, expr.OrderFilter(id))), ExportAs(expr.AsSelected(id), ScalarCell(idCodec))),
+			Column(w.Name, "reports.name", expr.AsSelected(name), SortBy(expr.AsSelected(name)), FilterBy(Where(textCodec, expr.TextFilter(name))), Searchable(name), ExportAs(expr.AsSelected(name), ScalarCell(textCodec))),
+			Column(w.Note, "reports.note", expr.AsSelected(note), SortBy(expr.AsSelected(note)), FilterBy(NullableWhere(textCodec, expr.NullableTextFilter(note))), ExportAs(expr.AsSelected(note), NullableCell(textCodec))),
+			Column(w.Amount, "reports.amount", expr.AsSelected(amount), SortBy(expr.AsSelected(amount)), FilterBy(Where(amountCodec, expr.OrderFilter(amount))), ExportAs(expr.AsSelected(amount), ScalarCell(amountCodec))),
 		},
 		DefaultSort: []Sort{{Column: "name", Direction: Ascending}}, Stable: []expr.ProjectionOrder[reportRecord]{expr.AscValue(expr.AsSelected(id))},
 		Authorize: func(_ context.Context, actor reportActor, _ Action) error {
@@ -106,8 +131,8 @@ func reportSpec() Spec[reportRecord, ReportRow, reportActor] {
 			}
 			return nil
 		},
-		Source: func(_ context.Context, actor reportActor) (rows.Query[reportRecord, ReportRow], error) {
-			return reportSource(actor.Tenant), nil
+		Source: func(_ context.Context, actor reportActor) (rows.SelectionSource[reportRecord], error) {
+			return reportBase(actor.Tenant), nil
 		},
 	}
 }

@@ -5,6 +5,25 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+## Datatable columns and sources — v0.49.0
+
+This release makes a datatable its columns plus its base source. Each column
+selects its own row field, so the handwritten row-column struct, the `rows.Define`
+schema and the `rows.Select(…, rows.Map(…))` list of a table are removed.
+`datatable.DefineColumn` is removed; `datatable.Column` replaces it. `Spec.Source`
+now returns the unselected `rows.SelectionSource[S]` instead of a `rows.Query[S, R]`.
+The nine direct constructors (`Text`, `Number`, `Time`, `Enum`, `Bool` and the four
+`Nullable*` forms) keep their call-site text but take a `validation.Binding`. A row
+DTO is declared `//foundry:dto role=row`, and its generated `XRowColumns()` replaces
+`XRowValidationFields()`. The [changelog](../CHANGELOG.md) lists every removed name and
+the [migration guide](guides/orm-migration.md#datatable-columns-and-sources) gives the
+from → to steps.
+
+Applications must convert every table before updating the framework pin; there are
+no compatibility aliases, and the old and new spellings do not compile together.
+This is a source compatibility change. SQL text, stored data, wire formats and
+generated clients do not change.
+
 ## Unified ORM operators and direct datatable columns — v0.48.0
 
 This release replaces the per-kind ORM operator, assignment and adapter functions

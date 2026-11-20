@@ -28,7 +28,7 @@ const (
 var Members = datatable.Define(memberSpec())
 
 func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
-	fields, wire := MemberModels, MemberRowValidationFields()
+	fields, wire := MemberModels, MemberRowColumns()
 	text := foundryhttp.StringQuery[string]()
 	state := foundryhttp.EnumQuery[State, *State](Active.EnumDescriptor())
 	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
@@ -37,8 +37,8 @@ func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
 	return datatable.Spec[Member, MemberRow, Authority]{
 		ID: "reports.members", Row: MemberRowJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[Member, MemberRow]{
-			datatable.DefineColumn[Member](wire.ID, MemberIDLabel, datatable.SortBy(expr.AsSelected(id)), datatable.ExportAs(expr.AsSelected(id), datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]()))),
-			datatable.DefineColumn[Member](wire.Name, MemberNameLabel, datatable.SortBy(expr.AsSelected(name)), datatable.FilterBy(datatable.Where(text, expr.TextFilter(name))), datatable.Searchable(name), datatable.ExportAs(expr.AsSelected(name), datatable.ScalarCell(text))),
+			datatable.Column(wire.ID, MemberIDLabel, expr.AsSelected(id), datatable.SortBy(expr.AsSelected(id)), datatable.ExportAs(expr.AsSelected(id), datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]()))),
+			datatable.Column(wire.Name, MemberNameLabel, expr.AsSelected(name), datatable.SortBy(expr.AsSelected(name)), datatable.FilterBy(datatable.Where(text, expr.TextFilter(name))), datatable.Searchable(name), datatable.ExportAs(expr.AsSelected(name), datatable.ScalarCell(text))),
 			datatable.NullableText(wire.Nickname, NicknameLabel, fields.Nickname, datatable.NoSearch),
 			datatable.Enum(wire.State, StateLabel, fields.State, state, datatable.NoSort),
 			datatable.Number(wire.Balance, BalanceLabel, fields.Balance, amount),
@@ -48,17 +48,15 @@ func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
 				return expr.Has(MemberModelRelations.Orders, predicate)
 			})),
 		},
-		DefaultSort: []datatable.Sort{{Column: validation.FieldName(wire.Name), Direction: datatable.Ascending}},
+		DefaultSort: []datatable.Sort{{Column: validation.BindingName(wire.Name), Direction: datatable.Ascending}},
 		Stable:      []expr.ProjectionOrder[Member]{expr.Asc(expr.Value(fields.ID))},
 		Authorize:   authorize,
-		Source: func(ctx context.Context, authority Authority) (rows.Query[Member, MemberRow], error) {
+		Source: func(ctx context.Context, authority Authority) (rows.SelectionSource[Member], error) {
 			actor, err := authority.subject(ctx)
 			if err != nil {
-				return rows.Query[Member, MemberRow]{}, err
+				return nil, err
 			}
-			return rows.Select(rows.From(MemberModels.Query().Where(orm.Eq(fields.TenantID, actor.TenantID))), MemberRows,
-				rows.Map(MemberRows.ID, expr.Value(fields.ID)), rows.MapSelected(MemberRows.Name, expr.AsSelected(name)),
-				rows.Map(MemberRows.Nickname, expr.Value(fields.Nickname)), rows.Map(MemberRows.State, expr.Value(fields.State)), rows.Map(MemberRows.Balance, expr.Value(fields.Balance))), nil
+			return rows.From(MemberModels.Query().Where(orm.Eq(fields.TenantID, actor.TenantID))), nil
 		},
 	}
 }

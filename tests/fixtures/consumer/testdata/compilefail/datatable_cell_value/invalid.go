@@ -7,4 +7,5 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-var invalid = datatable.DefineColumn[reporting.Member, reporting.MemberRow, string](reporting.MemberRowValidationFields().Name, reporting.MemberNameLabel, datatable.ExportAs[reporting.Member, string](expr.AsSelected(expr.TextRow(reporting.MemberModels.Name)), datatable.ScalarCell(foundryhttp.IntegerQuery[int64]())))
+var integerCell = datatable.ScalarCell(foundryhttp.IntegerQuery[int64]())
+var invalid = datatable.Column(reporting.MemberRowColumns().Name, reporting.MemberNameLabel, expr.AsSelected(expr.TextRow(reporting.MemberModels.Name)), datatable.ExportAs(expr.AsSelected(expr.TextRow(reporting.MemberModels.Name)), integerCell))

@@ -130,8 +130,8 @@ func TestPostgresTableOperationsPreserveRequestAndServerBoundaries(t *testing.T)
 		assertTableHTTPFailure(t, err, 403)
 	}
 	spec := reportSpec()
-	spec.Source = func(context.Context, reportActor) (rows.Query[reportRecord, ReportRow], error) {
-		return rows.Query[reportRecord, ReportRow]{}, fault.New(fault.Invalid, "private-canary source bug")
+	spec.Source = func(context.Context, reportActor) (rows.SelectionSource[reportRecord], error) {
+		return nil, fault.New(fault.Invalid, "private-canary source bug")
 	}
 	brokenManager, brokenTable := reportManager(t, fixture, spec, nil)
 	for _, call := range calls[:4] {

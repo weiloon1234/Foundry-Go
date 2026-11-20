@@ -15,7 +15,7 @@ func expressionColumn[V any](c *columnData[V]) ormcore.Column[V] {
 	if c == nil || c.core == nil || c.core.owner == nil {
 		return ormcore.Column[V]{Err: invalid("uninitialized column")}
 	}
-	return ormcore.Column[V]{Reference: ormcore.Reference{Table: c.core.owner.model.Table, Owner: c.core.owner}, Field: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Sensitive: c.core.sensitive, Collatable: c.core.collatable, Kind: c.core.kind, Nullable: c.core.metadata.Nullable, Bind: c.bind, Clone: c.clone, Scan: c.scanValue, Err: declarationCoreError(c.core.owner)}
+	return ormcore.Column[V]{Reference: ormcore.Reference{Table: c.core.owner.model.Table, Owner: c.core.owner}, Field: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Sensitive: c.core.sensitive, Collatable: c.core.collatable, Kind: c.core.kind, Nullable: c.core.metadata.Nullable, Bind: c.bind, Clone: c.clone, Scan: c.scanValue, Check: c.core.check, Err: declarationCoreError(c.core.owner)}
 }
 
 // FoundryHandle supplies comparison and projection codecs for a queryable ColumnHandle to expr/rows.

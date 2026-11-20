@@ -35,10 +35,10 @@ func bindingTable(id contract.TableID) datatable.Table[BindingRow, BindingRow, s
 	row := contract.DefineJSON[BindingRow](contract.Schema{Root: root, Types: []contract.Type{{ID: root, Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "id", Type: "int64", Required: true}}}, {ID: "int64", Kind: contract.IntegerKind, Bits: 64, Signed: true}}})
 	field := expr.OrderRow(expr.Value(models.ID))
 	return datatable.Define(datatable.Spec[BindingRow, BindingRow, struct{}]{ID: id, Row: row, Exports: true,
-		Columns:   []datatable.ColumnRegistration[BindingRow, BindingRow]{datatable.DefineColumn[BindingRow](validation.DefineField("id", func(r BindingRow) int64 { return r.ID }), "rows.id", datatable.ExportAs(expr.AsSelected(field), datatable.ScalarCell(foundryhttp.IntegerQuery[int64]())))},
+		Columns:   []datatable.ColumnRegistration[BindingRow, BindingRow]{datatable.Column(validation.DefineBinding("id", func(r *BindingRow) *int64 { return &r.ID }), "rows.id", expr.AsSelected(field), datatable.ExportAs(expr.AsSelected(field), datatable.ScalarCell(foundryhttp.IntegerQuery[int64]())))},
 		Stable:    []expr.ProjectionOrder[BindingRow]{expr.AscValue(expr.AsSelected(field))},
-		Authorize: func(context.Context, struct{}, datatable.Action) error { return nil }, Source: func(context.Context, struct{}) (rows.Query[BindingRow, BindingRow], error) {
-			return rows.Query[BindingRow, BindingRow]{}, nil
+		Authorize: func(context.Context, struct{}, datatable.Action) error { return nil }, Source: func(context.Context, struct{}) (rows.SelectionSource[BindingRow], error) {
+			return rows.From(models.Query()), nil
 		},
 	})
 }

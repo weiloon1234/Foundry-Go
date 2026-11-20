@@ -7,4 +7,5 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-var invalid = datatable.DefineColumn[reporting.Order, reporting.Member, string](validation.DefineField("name", func(r reporting.Member) string { return r.Name }), "reports.name", datatable.SortBy(expr.AsSelected(expr.Row(expr.Value(reporting.Members.Name)))))
+var option = datatable.SortBy(expr.AsSelected(expr.Row(expr.Value(reporting.Orders.Label))))
+var invalid = datatable.Column(validation.DefineBinding("name", func(r *reporting.Member) *string { return &r.Name }), "reports.name", expr.AsSelected(expr.Row(expr.Value(reporting.Members.Name))), option)

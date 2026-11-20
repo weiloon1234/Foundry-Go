@@ -45,7 +45,9 @@ func (e *emitter) emitDTO(declaration dtoDeclaration) {
 		e.line("}")
 	}
 	e.emitHTTPHelpers(declaration.name, public, declaration.http, false)
-	if declaration.role != dtoResponseRole {
+	if declaration.role == dtoRowRole {
+		e.emitDTOColumns(declaration)
+	} else if declaration.role != dtoResponseRole {
 		e.emitDTOValidation(declaration)
 	}
 	if declaration.message != nil {

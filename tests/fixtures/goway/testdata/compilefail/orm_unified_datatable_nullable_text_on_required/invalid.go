@@ -9,4 +9,4 @@ import (
 
 type row struct{ S value.Nullable[string] }
 
-var _ = datatable.NullableText(validation.DefineField("s", func(r row) value.Nullable[string] { return r.S }), "f.s", models.Users.Email)
+var _ = datatable.NullableText(validation.DefineBinding("s", func(r *row) *value.Nullable[string] { return &r.S }), "f.s", models.Users.Email)

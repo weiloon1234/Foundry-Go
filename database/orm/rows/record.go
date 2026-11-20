@@ -68,7 +68,11 @@ func recordDefinition[R any](owner any) ormcore.Record {
 		for i, c := range row.columns {
 			columns[i] = querycore.Column{Name: c.Name, Nullable: c.Nullable}
 		}
-		return ormcore.Record{Fields: func() []ormcore.RecordField { return rowRecordFields(row) }, Type: row.typ, Owner: row, Columns: columns, Err: row.err, Checks: []func() error{row.check}, Scan: func(r database.Row, p unsafe.Pointer) error { return scanDeclaredRow(row, r, p) }}
+		var checks []func() error
+		if row.check != nil {
+			checks = []func() error{row.check}
+		}
+		return ormcore.Record{Fields: func() []ormcore.RecordField { return rowRecordFields(row) }, Type: row.typ, Owner: row, Columns: columns, Err: row.err, Checks: checks, Scan: func(r database.Row, p unsafe.Pointer) error { return scanDeclaredRow(row, r, p) }}
 	}
 	return orm.FoundryRecord[R](ormcore.Scope{Reference: ormcore.Reference{Owner: owner}}, sqlowner.Metadata())
 }

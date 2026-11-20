@@ -54,7 +54,8 @@ func ScaffoldKinds() []ScaffoldKind {
 type ScaffoldOptions struct {
 	// HTTP selects body, response or both for a DTO; empty emits no helper.
 	HTTP string
-	// Role selects response-only DTO validation semantics independently of HTTP.
+	// Role selects a response DTO (no request validation) or a row DTO (datatable
+	// row field bindings) independently of HTTP; empty keeps request validation.
 	Role     string
 	Dir      string
 	Kind     ScaffoldKind
@@ -213,8 +214,11 @@ func scaffoldImports(options ScaffoldOptions) ([]string, error) {
 	if options.HTTP != "" && !routecontract.ValidHTTP(options.HTTP) {
 		return nil, fmt.Errorf("DTO --http must be body, response or both")
 	}
-	if options.Role != "" && options.Role != dtoResponseRole {
-		return nil, fmt.Errorf("DTO --role must be response")
+	if options.Role != "" && options.Role != dtoResponseRole && options.Role != dtoRowRole {
+		return nil, fmt.Errorf("DTO --role must be response or row")
+	}
+	if options.Role == dtoRowRole && routecontract.HasBody(options.HTTP) {
+		return nil, fmt.Errorf("a row DTO cannot use --http body or both")
 	}
 	if len(options.Name) > 128 || !token.IsIdentifier(options.Name) || !ast.IsExported(options.Name) {
 		return nil, fmt.Errorf("scaffold needs an exported Go --name of at most 128 bytes")

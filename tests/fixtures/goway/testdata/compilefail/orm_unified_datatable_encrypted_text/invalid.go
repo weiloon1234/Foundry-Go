@@ -10,4 +10,4 @@ import (
 type row struct{ S string }
 
 var col orm.ColumnHandle[sensitive.Vault, string, string, string, orm.RequiredEncryptedKind, orm.OrdinaryRole]
-var _ = datatable.Text(validation.DefineField("s", func(r row) string { return r.S }), "f.s", col)
+var _ = datatable.Text(validation.DefineBinding("s", func(r *row) *string { return &r.S }), "f.s", col)

@@ -8,4 +8,4 @@ import (
 
 type row struct{ S models.Status }
 
-var _ = datatable.Text(validation.DefineField("s", func(r row) models.Status { return r.S }), "f.s", models.Users.Status)
+var _ = datatable.Text(validation.DefineBinding("s", func(r *row) *models.Status { return &r.S }), "f.s", models.Users.Status)

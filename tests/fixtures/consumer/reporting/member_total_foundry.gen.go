@@ -43,34 +43,31 @@ var foundryMemberTotalJSON = sync.OnceValue(func() foundrycontract.JSON[MemberTo
 	}})
 })
 
-// MemberTotalValidationFieldSet retains concrete DTO and value types for validation.
-// Example: MemberTotalValidationFields()
-type MemberTotalValidationFieldSet struct {
-	// Count validates the declared JSON property "count".
-	Count foundryvalidation.Field[MemberTotal, int64]
-	// MemberID validates the declared JSON property "memberId".
-	MemberID foundryvalidation.Field[MemberTotal, model.ID[Member]]
-	// Total validates the declared JSON property "total".
-	Total foundryvalidation.Field[MemberTotal, foundryvalue.Nullable[decimal.Decimal]]
+// MemberTotalColumnSet retains concrete row and field types for datatable column bindings.
+// Example: MemberTotalColumns()
+type MemberTotalColumnSet struct {
+	// Count binds the declared JSON property "count".
+	Count foundryvalidation.Binding[MemberTotal, int64]
+	// MemberID binds the declared JSON property "memberId".
+	MemberID foundryvalidation.Binding[MemberTotal, model.ID[Member]]
+	// Total binds the declared JSON property "total".
+	Total foundryvalidation.Binding[MemberTotal, foundryvalue.Nullable[decimal.Decimal]]
 }
 
-// MemberTotalValidationFields returns typed field descriptors.
-// Example: MemberTotalValidationFields()
-// Compose rules with these fields; JSON names and selectors are generated.
-func MemberTotalValidationFields() MemberTotalValidationFieldSet {
-	return *foundryMemberTotalValidationFields()
-}
+// MemberTotalColumns returns typed transport field bindings for MemberTotal.
+// Example: MemberTotalColumns()
+func MemberTotalColumns() MemberTotalColumnSet { return *foundryMemberTotalColumns() }
 
-var foundryMemberTotalValidationFields = sync.OnceValue(func() *MemberTotalValidationFieldSet {
-	return &MemberTotalValidationFieldSet{
-		Count: foundryvalidation.DefineField("count", func(input MemberTotal) int64 {
-			return input.Count
+var foundryMemberTotalColumns = sync.OnceValue(func() *MemberTotalColumnSet {
+	return &MemberTotalColumnSet{
+		Count: foundryvalidation.DefineBinding("count", func(input *MemberTotal) *int64 {
+			return &input.Count
 		}),
-		MemberID: foundryvalidation.DefineField("memberId", func(input MemberTotal) model.ID[Member] {
-			return input.MemberID
+		MemberID: foundryvalidation.DefineBinding("memberId", func(input *MemberTotal) *model.ID[Member] {
+			return &input.MemberID
 		}),
-		Total: foundryvalidation.DefineField("total", func(input MemberTotal) foundryvalue.Nullable[decimal.Decimal] {
-			return input.Total
+		Total: foundryvalidation.DefineBinding("total", func(input *MemberTotal) *foundryvalue.Nullable[decimal.Decimal] {
+			return &input.Total
 		}),
 	}
 })

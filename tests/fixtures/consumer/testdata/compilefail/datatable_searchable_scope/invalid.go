@@ -6,9 +6,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/datatable"
 )
 
-var name = expr.TextRow(reporting.MemberModels.Name)
-var invalid = datatable.DefineColumn[reporting.Order, reporting.MemberRow, string](
-	reporting.MemberRowValidationFields().Name,
+var searchMember = datatable.Searchable(expr.TextRow(reporting.MemberModels.Name))
+var invalid = datatable.Column(
+	reporting.MemberRowColumns().Name,
 	reporting.MemberNameLabel,
-	datatable.Searchable(name),
+	expr.AsSelected(expr.TextRow(reporting.OrderModels.Label)),
+	searchMember,
 )

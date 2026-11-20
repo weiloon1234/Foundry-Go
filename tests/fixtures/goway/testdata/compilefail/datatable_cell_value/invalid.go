@@ -8,4 +8,5 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-var invalid = datatable.DefineColumn[reporting.Member, reporting.Member, string](validation.DefineField("name", func(r reporting.Member) string { return r.Name }), "reports.name", datatable.ExportAs[reporting.Member, string](expr.AsSelected(expr.TextRow(reporting.Members.Name)), datatable.ScalarCell(foundryhttp.IntegerQuery[int64]())))
+var cell = datatable.ScalarCell(foundryhttp.IntegerQuery[int64]())
+var invalid = datatable.Column(validation.DefineBinding("name", func(r *reporting.Member) *string { return &r.Name }), "reports.name", expr.AsSelected(expr.TextRow(reporting.Members.Name)), datatable.ExportAs[reporting.Member, string](expr.AsSelected(expr.TextRow(reporting.Members.Name)), cell))

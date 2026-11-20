@@ -37,17 +37,26 @@ func RecordCount(ctx context.Context, ex database.Executor, r RecordSource) (int
 	if err := RecordExecution(ctx, ex, r.Transaction); err != nil {
 		return 0, err
 	}
-	r.Source.Node = querycore.CountNode(r.Source.Node)
-	s, err := CompileRecord(ctx, r)
+	s, err := CompileRecordCount(ctx, r)
 	if err != nil {
 		return 0, err
 	}
-	prefix, suffix := querycore.ReadEnvelope(querycore.ReadCount)
-	s = s.Envelope(prefix, suffix)
 	var n int64
 	err = database.ScanOne(s.Context(ctx), readExecutor{ex}, s.SQLText, s.Bindings, codec.Signed[int64]().Scan(&n))
 	return n, err
 }
+
+// CompileRecordCount compiles the statement RecordCount executes.
+func CompileRecordCount(ctx context.Context, r RecordSource) (querycore.Statement, error) {
+	r.Source.Node = querycore.CountNode(r.Source.Node)
+	s, err := CompileRecord(ctx, r)
+	if err != nil {
+		return querycore.Statement{}, err
+	}
+	prefix, suffix := querycore.ReadEnvelope(querycore.ReadCount)
+	return s.Envelope(prefix, suffix), nil
+}
+
 func RecordExists(ctx context.Context, ex database.Executor, r RecordSource) (bool, error) {
 	if err := RecordExecution(ctx, ex, r.Transaction); err != nil {
 		return false, err

@@ -1142,6 +1142,18 @@ rows.CursorScope
 *rows.CursorScope
 rows.Field
 *rows.Field
+rows.FoundryDynamicExpression
+*rows.FoundryDynamicExpression
+rows.FoundryDynamicSlot
+*rows.FoundryDynamicSlot
+rows.FoundryPlan
+  FoundryApply func(source github.com/weiloon1234/Foundry-Go/database/orm/rows.SelectionSource[S], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.QuerySeal, dynamic ...github.com/weiloon1234/Foundry-Go/database/orm/rows.FoundryDynamicExpression[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+*rows.FoundryPlan
+  FoundryApply func(source github.com/weiloon1234/Foundry-Go/database/orm/rows.SelectionSource[S], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.QuerySeal, dynamic ...github.com/weiloon1234/Foundry-Go/database/orm/rows.FoundryDynamicExpression[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.FoundryPlanBuilder
+*rows.FoundryPlanBuilder
+rows.FoundryScan
+*rows.FoundryScan
 rows.Full
 *rows.Full
 rows.FullJoined

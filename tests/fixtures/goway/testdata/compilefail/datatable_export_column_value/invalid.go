@@ -10,8 +10,10 @@ import (
 )
 
 var balance = expr.AsSelected(expr.Row(expr.Value(reporting.Members.Balance)))
-var invalid = datatable.DefineColumn[reporting.Member, reporting.Member, string](
-	validation.DefineField("name", func(r reporting.Member) string { return r.Name }),
+var option = datatable.ExportAs(balance, datatable.ScalarCell(foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()))
+var invalid = datatable.Column(
+	validation.DefineBinding("name", func(r *reporting.Member) *string { return &r.Name }),
 	"reports.name",
-	datatable.ExportAs(balance, datatable.ScalarCell(foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]())),
+	expr.AsSelected(expr.Row(expr.Value(reporting.Members.Name))),
+	option,
 )

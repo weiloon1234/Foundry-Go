@@ -1,5 +1,87 @@
 # Changelog
 
+## v0.49.0 — 2026-11-20
+
+### A datatable is its columns and its source
+
+A table used to be declared three times: a row DTO, a handwritten row-column
+struct with a `rows.Define` schema, and a `rows.Select` list that mapped each
+field again. Now each column selects its own field, and `Spec.Source` returns only
+the base source. Mark the row DTO `//foundry:dto role=row`; the generator emits
+typed bindings, `XRowColumns()`, in place of `XRowValidationFields()`. The nine
+direct constructors keep their call-site text. A binding's name must equal the
+JSON property of the field it addresses, and `datatable.Define` rejects a
+mismatch. There are no compatibility aliases. This is a source compatibility
+change; SQL text, persisted data, wire formats and the deployment protocol do not
+change. Convert every table before updating the pin; the
+[migration guide](docs/guides/orm-migration.md#datatable-columns-and-sources)
+lists each step.
+
+```go
+// before
+//foundry:dto
+type AdminRow struct { /* fields */ }
+
+type adminRowColumns struct { /* one rows.Field per field */ }
+var adminRows = rows.Define(/* bind every field */)
+
+w := AdminRowValidationFields()
+Columns: []datatable.ColumnRegistration[models.Admin, AdminRow]{
+	datatable.Text(w.Username, "admins.fields.username", a.Username),
+	// …
+},
+DefaultSort: []datatable.Sort{{Column: validation.FieldName(w.CreatedAt), Direction: datatable.Descending}},
+Source: func(ctx context.Context, _ AdminAuthority) (rows.Query[models.Admin, AdminRow], error) {
+	return rows.Select(rows.From(a.Query()), adminRows,
+		rows.Map(adminRows.ID, expr.Value(a.Key())),
+		rows.Map(adminRows.Username, expr.Value(a.Username)) /* … one per field */), nil
+},
+
+// after
+//foundry:dto role=row
+type AdminRow struct { /* fields */ }
+
+w := AdminRowColumns()
+Columns: []datatable.ColumnRegistration[models.Admin, AdminRow]{
+	datatable.Hidden(w.ID, a.Key()),
+	datatable.Text(w.Username, "admins.fields.username", a.Username),
+	// …
+},
+DefaultSort: []datatable.Sort{{Column: validation.BindingName(w.CreatedAt), Direction: datatable.Descending}},
+Source: func(ctx context.Context, _ AdminAuthority) (rows.SelectionSource[models.Admin], error) {
+	return rows.From(a.Query()), nil
+},
+```
+
+| Removed | Replacement |
+| --- | --- |
+| `datatable.DefineColumn[S](w.X, label, options...)` | `datatable.Column(w.X, label, selected, options...)` |
+| `Spec.Source` returning `rows.Query[S, R]` | `Spec.Source` returning `rows.SelectionSource[S]`: `rows.From(query)`, a join, or one of the four source functions |
+| `rows.Select`, `rows.Map` and `rows.Define` in a table's declaration | Delete; each column selects its field |
+| `rows.GroupBy`, `rows.Having`, `rows.Distinct` and `.Where` on a table's selected source | `rows.GroupSource`, `rows.HavingSource`, `rows.DistinctSource`, `rows.WhereSource` on its base source |
+| `XRowValidationFields()` for a table row | `XRowColumns()` on a `//foundry:dto role=row` DTO |
+| `validation.FieldName(w.X)` on a row binding | `validation.BindingName(w.X)` |
+| A row field no column displays | `datatable.Hidden(w.ID, column)` or `datatable.HiddenSelected(w.ID, selected)` |
+| A request-dependent selection | `datatable.NewDynamicSlot`, `datatable.DynamicColumn` and `Spec.Dynamic` with `datatable.BindDynamic` |
+| A custom scan codec in a row schema | `datatable.ScanWith` |
+
+- `datatable.Compile(ctx, table, config, subject, request)` returns the row and
+  count statements a `Query` request would run, through request validation,
+  authorization, the source, dynamic columns, filters and sort, without a
+  database. It replaces compiling `spec.Source(...)` in tests.
+- A DTO field's doc comment appears on its generated binding.
+- `foundry make dto X --role row` writes the `role=row` directive. `role=row`
+  rejects `http=body`, `http=both`, generic structs and embedded fields.
+- A dynamic column's `SortBy` is an explicit static expression, so a table can show
+  a localized label and sort by a stable code.
+- Measured against v0.48.0: SQL compile of a table query is 11.7% faster
+  (23.1 to 20.4 µs, allocations 378 to 336), and CSV export of 1,000 rows is 5.5%
+  faster.
+- Measured on four applications: an incremental compile after editing one
+  datatable file is 8.5% to 11.1% faster, and the cold build cache is 0.16% to
+  0.41% smaller. Descriptors, client artifacts, SQL and arguments are
+  byte-identical on 81 tables and 442 queries.
+
 ## v0.48.0 — 2026-11-20
 
 ### One ORM operator per operation, and direct datatable columns

@@ -11,26 +11,32 @@
 - Bind custom endpoints: [HTTP operation bindings](#recipe-table-operation-bindings)
 - Export: [Bounded artifacts](#recipe-export-table)
 - Consume: [Generated table bindings](client-contracts.md#recipe-table-bindings)
-- Declare SQL rows: [Typed row schemas](model-projections.md#recipe-declare-rows)
+- Declare SQL rows that are not tables: [Typed row schemas](model-projections.md#recipe-declare-rows)
 
 ## Overview
 
-Datatables bind handwritten ORM sources to explicit DTO contracts. Members,
-Orders and Totals in the [reporting consumer](../../tests/fixtures/consumer/reporting/)
+A datatable is its columns plus its base source. Each column names a row DTO
+field, its label, the SQL expression it selects and the capabilities it offers
+(sort, filter, search, export). `Spec.Source` returns only the unselected base
+source, such as `rows.From(query)`, a join, or one of the four source functions
+below. The table builds its SELECT list and row scan from the columns, so a table
+has no separate `rows.Define` schema and no `rows.Select(…, rows.Map(…))` list.
+Members, Orders and Totals in the [reporting consumer](../../tests/fixtures/consumer/reporting/)
 cover model, joined and grouped sources.
 
 <a id="recipe-declare-table"></a>
 ## Declare one row and its columns
 
-Declare an explicit response DTO:
+Declare a row DTO:
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/models.go):
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/models.go#datatable -->
 ```go
-//foundry:dto
+//foundry:dto role=row
 type MemberRow struct {
-	ID       model.ID[Member]       `json:"id"`
+	ID model.ID[Member] `json:"id"`
+	// Display name selected for the member report.
 	Name     string                 `json:"name"`
 	Nickname value.Nullable[string] `json:"nickname"`
 	State    State                  `json:"state"`
@@ -38,33 +44,141 @@ type MemberRow struct {
 }
 ```
 
-The ordinary DTO annotation generates the JSON descriptor and validation field
-selectors. `MemberRowJSON()` owns its wire graph; `MemberRowValidationFields()` owns JSON names and Go getters.
-A handwritten `rows.Define` schema owns SQL output mapping. SQL projections do
-not become public DTOs implicitly. Persistence models, persistence tags and
-unsupported custom codecs remain rejected at DTO boundaries. Use JSON tags for public property names
-and typed projection mappings for the selected SQL expressions.
+`role=row` marks a DTO as a datatable row. The generator emits `MemberRowJSON()`,
+which owns the wire graph, and `MemberRowColumns()`, which returns
+`MemberRowColumnSet`: one typed `validation.Binding` per field. A binding carries
+the JSON property name and a typed pointer to the field, so one binding gives the
+wire name, the scan destination and the export reader. A row DTO is a response,
+so it gets no `MemberRowValidationFields()`. `role=row` rejects `http=body` and
+`http=both`, generic structs and embedded fields; declare every row field
+directly. `foundry make dto Member --role row` writes the directive (see the
+[tooling guide](developer-tooling-and-testing.md)). A DTO that
+does not use the generator can build a binding by hand with
+`validation.DefineBinding("name", func(r *Row) *string { return &r.Name })`.
+
+A binding's name must equal the JSON property of the struct field its pointer
+addresses. `datatable.Define` checks this and reports, for example,
+`row field binding "email" addresses JSON property "username"`. Use
+`validation.BindingName(w.Name)` to refer to a column by its wire name, for
+example in `DefaultSort`.
+
+SQL projections do not become public DTOs implicitly. Persistence models,
+persistence tags and unsupported custom codecs remain rejected at DTO
+boundaries. Use JSON tags for public property names.
 
 For direct model columns, use the short-name constructors directly in `Spec.Columns`:
 
 - Non-null: `datatable.Text`, `datatable.Number`, `datatable.Time`, `datatable.Enum`, `datatable.Bool`
 - Nullable: `datatable.NullableText`, `datatable.NullableNumber`, `datatable.NullableTime`, `datatable.NullableEnum`
 
-Each constructor enables sorting, filtering, export, and (for `Text`/`NullableText`) search by default. Pass `datatable.ColumnFeature` opt-out flags (`datatable.NoSort`, `datatable.NoFilter`, `datatable.NoSearch`, `datatable.NoExport`) to disable individual defaults without dropping back to manual wiring.
+Each constructor takes a row binding, a label and the model column. It selects
+that column, and it enables sorting, filtering, export, and (for `Text` and
+`NullableText`) search by default. Pass `datatable.ColumnFeature` opt-out flags
+(`datatable.NoSort`, `datatable.NoFilter`, `datatable.NoSearch`,
+`datatable.NoExport`) to disable individual defaults.
 
-For joined, computed, or custom-codec columns, `datatable.DefineColumn[Source](wire.Name, label, options...)` returns a typed
-`ColumnRegistration[Source, Row]` directly. Supply functional options
+Every row field must be bound once, whether or not it is displayed. A field that
+the query selects but the table does not show, such as the primary key, is
+declared with `datatable.Hidden(w.ID, models.Admins.Key())` for a model column, or
+`datatable.HiddenSelected(w.LotID, selected)` for a joined or computed
+expression. `HiddenSelected` accepts only the `ScanWith` option. A hidden field
+is not part of the table's column metadata and does not count against
+`MaxColumns`; a table must display at least one column.
+
+For joined, computed, aggregate or custom-codec columns, use the general form
+`datatable.Column(wire.Name, label, selected, options...)`. `selected` is the
+`expr.Selected` value the column reads (for example
+`expr.AsSelected(expr.Row(expr.At(order, Orders.Amount)))`). `Column` enables
+only the capabilities its options name. Supply functional options
 `datatable.SortBy(expression)`, `datatable.FilterBy(source)`,
 `datatable.Searchable(rowExpression)` and
 `datatable.ExportAs(selectedExpression, cell)` only for supported capabilities.
-`ColumnOption[Source, Value]` retains both the table scope and DTO field type;
-mismatched scopes and values fail compilation. `Searchable` infers its types from
-the row expression; `ExportAs` uses a selected expression, such as `expr.AsSelected(name)`
-or `expr.AsSelected(count)`, so neither option repeats `[Source]`. These expressions supply
+`Column` infers its scope, row and value types from the binding and the selected
+expression; mismatched scopes and values fail compilation. `ColumnOption[Source, Value]`
+retains both the table scope and DTO field type. `Searchable` infers its types
+from the row expression, and `ExportAs` uses a selected expression, such as
+`expr.AsSelected(name)` or `expr.AsSelected(count)`. These expressions supply
 types only; exports format the DTO field value.
 The table checks each column against a scalar property in the
 row's existing JSON graph, including enum cases, widths, nullability and formats.
 Arrays, objects and dynamic fields cannot be scalar table columns.
+
+`datatable.ScanWith[S](orm.Codec(codec))` replaces the SQL scan codec of a
+`Column`, `DynamicColumn` or `HiddenSelected` field, for an expression whose
+database type needs a custom codec. Only the scan codec is replaced: the selected
+column's own declaration error and enum check still apply.
+
+<a id="request-dependent-columns"></a>
+### Request-dependent columns
+
+Most expressions are fixed when the table is declared. A few depend on the
+request, such as a label in the caller's locale or an overdue flag computed from
+the current time. Such a column uses a typed slot:
+
+1. `slot := datatable.NewDynamicSlot[Scope, string]()` creates a slot for one
+   value type.
+2. `datatable.DynamicColumn(w.Category, label, slot, options...)` declares the
+   column in `Spec.Columns`.
+3. `Spec.Dynamic` binds the slot once with
+   `datatable.BindDynamic(slot, func(ctx context.Context, authority A) expr.Selected[Scope, string] { … })`.
+
+The slot, the column and the binding must share the same scope and value type.
+This table shows the whole family on the joined orders source. `HiddenSelected`
+selects the order's member key from the joined expression without displaying it,
+`ScanWith` gives the name-length column an explicit scan codec, and the scope
+column is a `DynamicColumn` whose value depends on the caller. Its `SortBy` is
+the static member name:
+
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/examples_columns.go):
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/examples_columns.go#dynamic-table -->
+```go
+func orderLineSpec() datatable.Spec[OrderScope, OrderLineRow, Authority] {
+	joined, member, order := orderJoin()
+	w := OrderLineRowColumns()
+	memberName := expr.TextRowAt(member, MemberModels.Name)
+	scope := datatable.NewDynamicSlot[OrderScope, string]()
+	return datatable.Spec[OrderScope, OrderLineRow, Authority]{
+		ID: "reports.order_lines", Row: OrderLineRowJSON(),
+		Columns: []datatable.ColumnRegistration[OrderScope, OrderLineRow]{
+			datatable.HiddenSelected(w.ID, expr.AsSelected(expr.Row(expr.At(order, OrderModels.ID)))),
+			datatable.HiddenSelected(w.MemberID, expr.AsSelected(expr.Row(expr.At(order, OrderModels.MemberID)))),
+			datatable.Column(w.MemberName, OrderLineMemberLabel, expr.AsSelected(memberName),
+				datatable.SortBy(expr.AsSelected(memberName))),
+			datatable.Column(w.NameLength, OrderLineLengthLabel, expr.LengthValue(expr.AsSelected(memberName)),
+				datatable.ScanWith[OrderScope](orm.Codec(codec.Signed[int64]()))),
+			datatable.DynamicColumn(w.Scope, OrderLineScopeLabel, scope,
+				datatable.SortBy(expr.AsSelected(memberName))),
+		},
+		Dynamic: []datatable.DynamicBinding[OrderScope, Authority]{
+			datatable.BindDynamic(scope, func(ctx context.Context, authority Authority) expr.Selected[OrderScope, string] {
+				operator, _ := authority.subject(ctx) // Authorize has already run
+				return expr.AsSelected(expr.Constant[OrderScope](codec.String[string](), fmt.Sprintf("tenant-%d", operator.TenantID)))
+			}),
+		},
+		Stable:    []expr.ProjectionOrder[OrderScope]{expr.Asc(expr.At(order, OrderModels.ID))},
+		Authorize: authorize,
+		Source: func(ctx context.Context, authority Authority) (rows.SelectionSource[OrderScope], error) {
+			actor, err := authority.subject(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return rows.WhereSource(joined, expr.Eq(expr.At(order, OrderModels.TenantID), actor.TenantID)), nil
+		},
+	}
+}
+```
+
+The [test](../../tests/fixtures/consumer/reporting/examples_columns_test.go) checks
+that `Validate` passes and, through `datatable.Compile`, that the statement
+selects each of these columns.
+
+`Define` checks that every slot used by a `DynamicColumn` is bound exactly once
+and that no other binding exists, without calling any builder. The table calls
+the builder once per query, count or export request, after authorization. A
+wrong scope, value type or authority type fails compilation. A dynamic column's
+`SortBy` is an explicit static expression, so a table can show a localized label
+and sort by a stable code.
 
 Labels use `i18n.MessageKey`, independent of the locale. Keys use the shared
 semantic identifier grammar; constructing a key does not prove catalog
@@ -74,16 +188,17 @@ declarations (`//foundry:enum labels=…`) and locale resolution. Clients consum
 the [generated enum metadata](client-contracts.md#recipe-table-bindings); keep
 unknown received values distinct from the declared choices.
 
-The [row-schema recipe](model-projections.md#recipe-declare-rows) owns handwritten
-SQL destinations. This table combines computed text, enum, nullable and exact
-decimal columns, a relation filter, stable ordering and tenant-scoped reads:
+This table combines computed text, enum, nullable and exact decimal columns, a
+relation filter, stable ordering and a tenant-scoped base source. A
+[handwritten `rows.Define` schema](model-projections.md#recipe-declare-rows)
+is for SQL results that are not tables; a datatable does not use one:
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/members.go#member-table -->
 ```go
 var Members = datatable.Define(memberSpec())
 
 func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
-	fields, wire := MemberModels, MemberRowValidationFields()
+	fields, wire := MemberModels, MemberRowColumns()
 	text := foundryhttp.StringQuery[string]()
 	state := foundryhttp.EnumQuery[State, *State](Active.EnumDescriptor())
 	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
@@ -92,8 +207,8 @@ func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
 	return datatable.Spec[Member, MemberRow, Authority]{
 		ID: "reports.members", Row: MemberRowJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[Member, MemberRow]{
-			datatable.DefineColumn[Member](wire.ID, MemberIDLabel, datatable.SortBy(expr.AsSelected(id)), datatable.ExportAs(expr.AsSelected(id), datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]()))),
-			datatable.DefineColumn[Member](wire.Name, MemberNameLabel, datatable.SortBy(expr.AsSelected(name)), datatable.FilterBy(datatable.Where(text, expr.TextFilter(name))), datatable.Searchable(name), datatable.ExportAs(expr.AsSelected(name), datatable.ScalarCell(text))),
+			datatable.Column(wire.ID, MemberIDLabel, expr.AsSelected(id), datatable.SortBy(expr.AsSelected(id)), datatable.ExportAs(expr.AsSelected(id), datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]()))),
+			datatable.Column(wire.Name, MemberNameLabel, expr.AsSelected(name), datatable.SortBy(expr.AsSelected(name)), datatable.FilterBy(datatable.Where(text, expr.TextFilter(name))), datatable.Searchable(name), datatable.ExportAs(expr.AsSelected(name), datatable.ScalarCell(text))),
 			datatable.NullableText(wire.Nickname, NicknameLabel, fields.Nickname, datatable.NoSearch),
 			datatable.Enum(wire.State, StateLabel, fields.State, state, datatable.NoSort),
 			datatable.Number(wire.Balance, BalanceLabel, fields.Balance, amount),
@@ -103,36 +218,36 @@ func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
 				return expr.Has(MemberModelRelations.Orders, predicate)
 			})),
 		},
-		DefaultSort: []datatable.Sort{{Column: validation.FieldName(wire.Name), Direction: datatable.Ascending}},
+		DefaultSort: []datatable.Sort{{Column: validation.BindingName(wire.Name), Direction: datatable.Ascending}},
 		Stable:      []expr.ProjectionOrder[Member]{expr.Asc(expr.Value(fields.ID))},
 		Authorize:   authorize,
-		Source: func(ctx context.Context, authority Authority) (rows.Query[Member, MemberRow], error) {
+		Source: func(ctx context.Context, authority Authority) (rows.SelectionSource[Member], error) {
 			actor, err := authority.subject(ctx)
 			if err != nil {
-				return rows.Query[Member, MemberRow]{}, err
+				return nil, err
 			}
-			return rows.Select(rows.From(MemberModels.Query().Where(orm.Eq(fields.TenantID, actor.TenantID))), MemberRows,
-				rows.Map(MemberRows.ID, expr.Value(fields.ID)), rows.MapSelected(MemberRows.Name, expr.AsSelected(name)),
-				rows.Map(MemberRows.Nickname, expr.Value(fields.Nickname)), rows.Map(MemberRows.State, expr.Value(fields.State)), rows.Map(MemberRows.Balance, expr.Value(fields.Balance))), nil
+			return rows.From(MemberModels.Query().Where(orm.Eq(fields.TenantID, actor.TenantID))), nil
 		},
 	}
 }
 ```
 
-Regenerate public DTO descriptors after a DTO change. SQL row-schema changes
-alone need no generation. Re-export client contracts after public table metadata
-or route changes; see [export ownership](client-contracts.md#recipe-export-contracts).
+Regenerate the row DTO output after a DTO change, since it owns both the JSON
+descriptor and the column bindings. A change to a column's SQL expression or to
+the source alone needs no generation. Re-export client contracts after public
+table metadata or route changes; see [export ownership](client-contracts.md#recipe-export-contracts).
 
 <a id="recipe-table-filter-adapters"></a>
 ## Migrate report sources to ORM declarations
 
-`Spec.Source` returns `rows.Query[S, R]`. Keep the DTO type, package, JSON
-descriptor and validation fields;
-replace SQL projection selection with a handwritten `rows.Define` schema and
-`rows.Select` mappings. The [report declarations](../../tests/fixtures/consumer/reporting/orm.go)
+`Spec.Source` returns the base `rows.SelectionSource[S]`, before any selection.
+Keep the DTO type, package and JSON descriptor; mark the DTO `role=row` and use
+its generated `…Columns()` bindings. Each column declares the expression it
+selects, so there is no `rows.Define` schema or `rows.Select` mapping list. The
+[report declarations](../../tests/fixtures/consumer/reporting/orm.go)
 use `orm.PrimaryOf` and `orm.SoftDeleteOf` to retain declaration roles; the
-[row schemas](../../tests/fixtures/consumer/reporting/rows.go) retain exact DTO
-field types. Existing generated DTO descriptors continue to own wire metadata.
+[row DTOs](../../tests/fixtures/consumer/reporting/models.go) retain exact field
+types. Generated DTO output owns wire metadata and column bindings.
 
 Use `expr.AsSelected(expr.Row(expr.Value(Users.Name)))` in `datatable.SortBy`, `expr.AsSelected` on an enum or comparison row
 adapter (such as `expr.AsSelected(expr.CompareRow(expr.Value(Users.State)))`),
@@ -178,8 +293,9 @@ row filters. Existing `CompareRow` and `CompareNullableRow` inputs still work.
 
 `Related` maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, normally
 with `expr.Has(ParentRelations.Children, predicate)`. `expr.ModelPredicate`
-adapts an existing `orm.Predicate`. Use `rows.GroupBy` and `rows.Having` for grouped
-reports, and `rows.MapSelected` for aggregates. Text adapters validate the actual
+adapts an existing `orm.Predicate`. Use `rows.GroupSource` and `rows.HavingSource`
+in `Source` for grouped reports, and `datatable.Column` with an aggregate
+`expr.AsSelected` for aggregate columns. Text adapters validate the actual
 column capability, including when the field is embedded or aliased. Enums keep
 their equality-only filter operators; LIKE still requires `AllowLike()`.
 
@@ -192,55 +308,61 @@ collect all rows in memory.
 <a id="recipe-join-group-tables"></a>
 ## Join and group table sources
 
-Joined tables retain both typed scopes. Their stable key identifies a result row:
+Joined tables retain both typed scopes. Their stable key identifies a result row.
+`Source` returns the join, or the join narrowed by `rows.WhereSource`; each joined
+column is a `datatable.Column` or `datatable.HiddenSelected` over an
+`expr.At(scope, column)` expression:
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/orders.go#joined-table -->
 ```go
-func orderSpec() datatable.Spec[OrderScope, OrderRow, Authority] {
+// orderJoin joins members to their orders and returns the joined source with a
+// scope for each side.
+func orderJoin() (rows.SelectionSource[OrderScope], expr.Scope[OrderScope, Member], expr.Scope[OrderScope, Order]) {
 	members := rows.As[memberSide](MemberModels.Query(), "members")
 	orders := rows.As[orderSide](OrderModels.Query(), "orders")
 	m, o := rows.Scope(members), rows.Scope(orders)
 	joined := rows.InnerJoin(members, orders, rows.On(expr.At(m, MemberModels.ID), expr.At(o, OrderModels.MemberID)))
-	member := rows.LeftScope(joined, m)
-	order := rows.RightScope(joined, o)
-	wire := OrderRowValidationFields()
+	return joined, rows.LeftScope(joined, m), rows.RightScope(joined, o)
+}
+
+func orderSpec() datatable.Spec[OrderScope, OrderRow, Authority] {
+	joined, member, order := orderJoin()
+	wire := OrderRowColumns()
 	text := foundryhttp.StringQuery[string]()
 	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
 	memberName := expr.TextRowAt(member, MemberModels.Name)
 	orderLabel := expr.TextRowAt(order, OrderModels.Label)
 	id := expr.Row(expr.At(order, OrderModels.ID))
 	orderAmount := expr.OrderRow(expr.At(order, OrderModels.Amount))
-	base := rows.Select(joined, OrderRows,
-		rows.Map(OrderRows.ID, expr.At(order, OrderModels.ID)), rows.Map(OrderRows.MemberName, expr.At(member, MemberModels.Name)),
-		rows.Map(OrderRows.Label, expr.At(order, OrderModels.Label)), rows.Map(OrderRows.Amount, expr.At(order, OrderModels.Amount)))
 	return datatable.Spec[OrderScope, OrderRow, Authority]{
 		ID: "reports.orders", Row: OrderRowJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[OrderScope, OrderRow]{
-			datatable.DefineColumn[OrderScope](wire.ID, OrderIDLabel, datatable.ExportAs(expr.AsSelected(id), datatable.ScalarCell(foundryhttp.ModelIDQuery[Order]()))),
-			datatable.DefineColumn[OrderScope](wire.MemberName, MemberNameLabel, datatable.SortBy(expr.AsSelected(expr.Row(memberName))), datatable.FilterBy(datatable.Where(text, expr.TextFilter(memberName))), datatable.Searchable(memberName), datatable.ExportAs(expr.AsSelected(memberName), datatable.ScalarCell(text))),
-			datatable.DefineColumn[OrderScope](wire.Label, OrderLabel, datatable.FilterBy(datatable.Where(text, expr.TextFilter(orderLabel))), datatable.Searchable(orderLabel), datatable.ExportAs(expr.AsSelected(orderLabel), datatable.ScalarCell(text))),
-			datatable.DefineColumn[OrderScope](wire.Amount, AmountLabel, datatable.SortBy(expr.AsSelected(orderAmount)), datatable.FilterBy(datatable.Where(amount, expr.OrderFilter(orderAmount))), datatable.ExportAs(expr.AsSelected(orderAmount), datatable.ScalarCell(amount))),
+			datatable.Column(wire.ID, OrderIDLabel, expr.AsSelected(id), datatable.ExportAs(expr.AsSelected(id), datatable.ScalarCell(foundryhttp.ModelIDQuery[Order]()))),
+			datatable.Column(wire.MemberName, MemberNameLabel, expr.AsSelected(memberName), datatable.SortBy(expr.AsSelected(expr.Row(memberName))), datatable.FilterBy(datatable.Where(text, expr.TextFilter(memberName))), datatable.Searchable(memberName), datatable.ExportAs(expr.AsSelected(memberName), datatable.ScalarCell(text))),
+			datatable.Column(wire.Label, OrderLabel, expr.AsSelected(orderLabel), datatable.FilterBy(datatable.Where(text, expr.TextFilter(orderLabel))), datatable.Searchable(orderLabel), datatable.ExportAs(expr.AsSelected(orderLabel), datatable.ScalarCell(text))),
+			datatable.Column(wire.Amount, AmountLabel, expr.AsSelected(orderAmount), datatable.SortBy(expr.AsSelected(orderAmount)), datatable.FilterBy(datatable.Where(amount, expr.OrderFilter(orderAmount))), datatable.ExportAs(expr.AsSelected(orderAmount), datatable.ScalarCell(amount))),
 		},
-		DefaultSort: []datatable.Sort{{Column: validation.FieldName(wire.MemberName), Direction: datatable.Ascending}},
+		DefaultSort: []datatable.Sort{{Column: validation.BindingName(wire.MemberName), Direction: datatable.Ascending}},
 		Stable:      []expr.ProjectionOrder[OrderScope]{expr.Asc(expr.At(order, OrderModels.ID))}, Authorize: authorize,
-		Source: func(ctx context.Context, authority Authority) (rows.Query[OrderScope, OrderRow], error) {
+		Source: func(ctx context.Context, authority Authority) (rows.SelectionSource[OrderScope], error) {
 			actor, err := authority.subject(ctx)
 			if err != nil {
-				return rows.Query[OrderScope, OrderRow]{}, err
+				return nil, err
 			}
-			return base.Where(expr.Eq(expr.At(member, MemberModels.TenantID), actor.TenantID), expr.Eq(expr.At(order, OrderModels.TenantID), actor.TenantID)), nil
+			return rows.WhereSource(joined, expr.Eq(expr.At(member, MemberModels.TenantID), actor.TenantID), expr.Eq(expr.At(order, OrderModels.TenantID), actor.TenantID)), nil
 		},
 	}
 }
 ```
 
-Grouped tables map aggregates with `rows.MapSelected`, filter them with `Having`
-or `NullableHaving`, and use a group key for stable ordering:
+Grouped tables declare each aggregate as a `datatable.Column`, filter it with
+`Having` or `NullableHaving`, return `rows.GroupSource` from `Source`, and use a
+group key for stable ordering:
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/orders.go#grouped-table -->
 ```go
 func totalSpec() datatable.Spec[Order, MemberTotal, Authority] {
-	fields, wire := OrderModels, MemberTotalValidationFields()
+	fields, wire := OrderModels, MemberTotalColumns()
 	count, total := expr.Count[Order](), expr.Sum(fields.Amount)
 	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
 	memberID := foundryhttp.ModelIDQuery[Member]()
@@ -248,20 +370,57 @@ func totalSpec() datatable.Spec[Order, MemberTotal, Authority] {
 	return datatable.Spec[Order, MemberTotal, Authority]{
 		ID: "reports.totals", Row: MemberTotalJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[Order, MemberTotal]{
-			datatable.DefineColumn[Order](wire.MemberID, MemberIDLabel, datatable.FilterBy(datatable.Where(memberID, expr.CompareFilter(member))), datatable.ExportAs(expr.AsSelected(member), datatable.ScalarCell(memberID))),
-			datatable.DefineColumn[Order](wire.Count, CountLabel, datatable.SortBy(expr.AsSelected(count)), datatable.FilterBy(datatable.Having(foundryhttp.IntegerQuery[int64](), expr.OrderValueFilter(count))), datatable.ExportAs(expr.AsSelected(count), datatable.ScalarCell(foundryhttp.IntegerQuery[int64]()))),
-			datatable.DefineColumn[Order](wire.Total, TotalLabel, datatable.SortBy(expr.AsSelected(total)), datatable.FilterBy(datatable.NullableHaving(amount, expr.NullableOrderValueFilter(total))), datatable.ExportAs(expr.AsSelected(total), datatable.NullableCell(amount))),
+			datatable.Column(wire.MemberID, MemberIDLabel, expr.AsSelected(member), datatable.FilterBy(datatable.Where(memberID, expr.CompareFilter(member))), datatable.ExportAs(expr.AsSelected(member), datatable.ScalarCell(memberID))),
+			datatable.Column(wire.Count, CountLabel, expr.AsSelected(count), datatable.SortBy(expr.AsSelected(count)), datatable.FilterBy(datatable.Having(foundryhttp.IntegerQuery[int64](), expr.OrderValueFilter(count))), datatable.ExportAs(expr.AsSelected(count), datatable.ScalarCell(foundryhttp.IntegerQuery[int64]()))),
+			datatable.Column(wire.Total, TotalLabel, expr.AsSelected(total), datatable.SortBy(expr.AsSelected(total)), datatable.FilterBy(datatable.NullableHaving(amount, expr.NullableOrderValueFilter(total))), datatable.ExportAs(expr.AsSelected(total), datatable.NullableCell(amount))),
 		},
-		DefaultSort: []datatable.Sort{{Column: validation.FieldName(wire.Total), Direction: datatable.Descending}},
+		DefaultSort: []datatable.Sort{{Column: validation.BindingName(wire.Total), Direction: datatable.Descending}},
 		Stable:      []expr.ProjectionOrder[Order]{expr.Asc(expr.Value(fields.MemberID))}, Authorize: authorize,
-		Source: func(ctx context.Context, authority Authority) (rows.Query[Order, MemberTotal], error) {
+		Source: func(ctx context.Context, authority Authority) (rows.SelectionSource[Order], error) {
 			actor, err := authority.subject(ctx)
 			if err != nil {
-				return rows.Query[Order, MemberTotal]{}, err
+				return nil, err
 			}
 			source := OrderModels.Query().Where(orm.Eq(fields.TenantID, actor.TenantID), orm.Has(OrderModelRelations.Member, orm.Eq(MemberModels.TenantID, actor.TenantID)))
-			return rows.GroupBy(rows.Select(rows.From(source), MemberTotals,
-				rows.Map(MemberTotals.MemberID, expr.Value(fields.MemberID)), rows.MapSelected(MemberTotals.Count, expr.AsSelected(count)), rows.MapSelected(MemberTotals.Total, expr.AsSelected(total))), expr.Group(expr.Value(fields.MemberID))), nil
+			return rows.GroupSource(rows.From(source), expr.Group(expr.Value(fields.MemberID))), nil
+		},
+	}
+}
+```
+
+A `Source` can narrow its base with four functions from `database/orm/rows`.
+Each takes the unselected source and returns a new one:
+
+| Function | Adds |
+| --- | --- |
+| `rows.WhereSource(source, predicates...)` | scoped row predicates, such as a tenant restriction on a join |
+| `rows.GroupSource(source, keys...)` | row-phase `GROUP BY` keys |
+| `rows.HavingSource(source, predicates...)` | fixed `HAVING` predicates on a grouped source |
+| `rows.DistinctSource(source)` | `SELECT DISTINCT` |
+
+These fixed clauses are part of the table's scope. A client's own filters are
+added outside them, and an outer `DISTINCT` source skips the manager's default
+sort collation as described under [requests](#requests-filtering-and-deterministic-pages).
+The joined and grouped examples above use `rows.WhereSource` and `rows.GroupSource`.
+A table of distinct member names uses `rows.DistinctSource`:
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/examples_columns.go#distinct-table -->
+```go
+func memberNameSpec() datatable.Spec[Member, MemberNameRow, Authority] {
+	w := MemberNameRowColumns()
+	return datatable.Spec[Member, MemberNameRow, Authority]{
+		ID: "reports.member_names", Row: MemberNameRowJSON(),
+		Columns: []datatable.ColumnRegistration[Member, MemberNameRow]{
+			datatable.Text(w.Name, DistinctNameLabel, MemberModels.Name),
+		},
+		Stable:    []expr.ProjectionOrder[Member]{expr.Asc(expr.Value(MemberModels.Name))},
+		Authorize: authorize,
+		Source: func(ctx context.Context, authority Authority) (rows.SelectionSource[Member], error) {
+			actor, err := authority.subject(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return rows.DistinctSource(rows.From(MemberModels.Query().Where(orm.Eq(MemberModels.TenantID, actor.TenantID)))), nil
 		},
 	}
 }
@@ -363,6 +522,45 @@ with the same ID cannot substitute a different authorization callback. Registry
 construction rejects duplicate IDs. `Table.Description()` is trusted assembly
 metadata; use `Inspect(ctx, manager, authority)` when exposing it to clients.
 
+<a id="recipe-compile-table-sql"></a>
+## Pin a table's SQL in a test
+
+`datatable.Compile(ctx, table, config, subject, request)` returns the two
+statements a `Query` request would run, as `datatable.Statements`: the `Rows` field,
+the requested page in the requested and stable order, and the count field, the
+unpaginated total without ordering. It takes the request through the real path:
+request validation, the table's `Authorize`, `Source`, dynamic builders, filters,
+search, sort and the column plan. A forbidden subject, an undeclared sort column
+or a failing `Source` returns the same error `Query` would. Pass the `Config` the
+`Manager` uses, because it sets the page bounds and the default text collation:
+with a different `Config` the result is not what that `Manager` would run. It
+needs no `Manager` and does not check that the table is registered with one.
+The table's `Authorize`, `Source` and dynamic builders run, so their side effects
+happen.
+
+`datatable.Compile` does not open a database connection and executes nothing, so it needs
+no PostgreSQL. It does not read rows, check that the tables exist, or run
+exports. Authorization still applies, so the test needs a subject that the
+table authorizes. The returned `orm.Statement` values expose `SQL()` and
+`Arguments()`.
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/examples_columns_test.go#compile-table -->
+```go
+authority := Authority{resolved: true, actor: Operator{TenantID: 7, Active: true, CanView: true, CanExport: true}}
+statements, err := datatable.Compile(t.Context(), Members, datatable.DefaultConfig(), authority, datatable.Request{Search: "Ada"})
+if err != nil {
+	t.Fatal(err)
+}
+if !strings.Contains(statements.Rows.SQL(), `ILIKE $2 ESCAPE '!'`) || !slices.Contains(statements.Rows.Arguments(), any("%Ada%")) {
+	t.Fatalf("search did not reach the page statement: %s %v", statements.Rows.SQL(), statements.Rows.Arguments())
+}
+```
+
+This replaces compiling `spec.Source(...)` in tests, which no longer exists:
+`Spec.Source` returns an unselected base source, and the table builds the SELECT
+from its columns. A DTO field's doc comment appears on its generated binding, so
+hover and `go doc` on `MemberRowColumns().Name` show it.
+
 ## Requests, filtering and deterministic pages
 
 Decode with `datatable.DecodeRequest(ctx, body)` or the generated
@@ -435,7 +633,7 @@ when the DTO encodes them as JSON strings. An explicit
 `SortBy(expr.AsSelected(expr.Collate(name, expr.CollationC)))` takes precedence;
 the manager does not wrap that value with its default. `Spec.Stable` orders remain
 unchanged. There is no per-table override; use an explicit collation on the sort
-expression when needed. Outer `rows.Distinct` sources skip the manager default for
+expression when needed. A `Source` that returns `rows.DistinctSource(…)` skips the manager default for
 requested sorts, `DefaultSort`, and exports: their orders must match the selected
 expressions, and duplicate elimination remains unchanged. The report pipeline
 does not automatically rebind these expressions into an outer derived-table scope.

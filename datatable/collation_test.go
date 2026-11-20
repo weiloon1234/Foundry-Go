@@ -12,7 +12,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -52,8 +51,8 @@ func TestUnionTextCollationSkipsMarkedResult(t *testing.T) {
 
 func TestDistinctTextCollationSortsAndExports(t *testing.T) {
 	spec := reportSpec()
-	spec.Source = func(_ context.Context, actor reportActor) (rows.Query[reportRecord, ReportRow], error) {
-		return rows.Distinct(reportSource(actor.Tenant)), nil
+	spec.Source = func(_ context.Context, actor reportActor) (rows.SelectionSource[reportRecord], error) {
+		return rows.DistinctSource(reportBase(actor.Tenant)), nil
 	}
 	table := Define(spec)
 	if err := table.Validate(); err != nil {
@@ -129,7 +128,7 @@ func TestTextCollationSortsAndExports(t *testing.T) {
 			spec := reportSpec()
 			_, name, _, _ := reportFields()
 			if tc.explicit {
-				spec.Columns[1] = DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name", SortBy(expr.AsSelected(expr.Collate(name, expr.CollationC))))
+				spec.Columns[1] = Column(reportBindings().Name, "reports.name", expr.AsSelected(name), SortBy(expr.AsSelected(expr.Collate(name, expr.CollationC))))
 			}
 			// Text stable ordering must remain unchanged too, not only the numeric key.
 			spec.Stable = append([]expr.ProjectionOrder[reportRecord]{expr.Asc(name)}, spec.Stable...)

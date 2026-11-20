@@ -10,9 +10,9 @@ import (
 // migration:column-options-v030
 func usernameColumn() datatable.ColumnRegistration[Admin, AdminRow] {
 	text := foundryhttp.StringQuery[string]()
-	field := validation.DefineField("username", func(row AdminRow) string { return row.Username })
+	field := validation.DefineBinding("username", func(row *AdminRow) *string { return &row.Username })
 	username := expr.TextRow(Admins.Username)
-	return datatable.DefineColumn[Admin](field, "admins.fields.username",
+	return datatable.Column(field, "admins.fields.username", expr.AsSelected(username),
 		datatable.SortBy(expr.AsSelected(username)),
 		datatable.FilterBy(datatable.Where(text, expr.TextFilter(username))),
 		datatable.Searchable(username),

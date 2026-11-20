@@ -15,15 +15,7 @@ type Report struct {
 	Email string `json:"email"`
 	Age   int    `json:"age"`
 }
-type fields struct {
-	rows.Row[Report]
-	Email rows.Field[Report, string]
-	Age   rows.Field[Report, int]
-}
 
-var output = rows.Define(func(b rows.Builder[Report], r *Report) fields {
-	return fields{b.Row(), rows.TextOf(b, &r.Email), rows.NumberOf(b, &r.Age)}
-})
 var schema = contract.DefineJSON[Report](contract.Schema{Root: "foundry.test/goway/testdata/footprint/datatable_projection.Report", Types: []contract.Type{
 	{ID: "foundry.test/goway/testdata/footprint/datatable_projection.Report", Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "email", Type: "text", Required: true}, {Name: "age", Type: "integer", Required: true}}},
 	{ID: "text", Kind: contract.StringKind}, {ID: "integer", Kind: contract.IntegerKind, Bits: 64, Signed: true},
@@ -31,14 +23,14 @@ var schema = contract.DefineJSON[Report](contract.Schema{Root: "foundry.test/gow
 var table = datatable.Define(datatable.Spec[models.User, Report, struct{}]{
 	ID: "reports.users", Row: schema, Exports: true,
 	Columns: []datatable.ColumnRegistration[models.User, Report]{
-		datatable.Text(validation.DefineField("email", func(r Report) string { return r.Email }), "reports.email", models.Users.Email),
-		datatable.Number(validation.DefineField("age", func(r Report) int { return r.Age }), "reports.age", models.Users.Age, foundryhttp.IntegerQuery[int]()),
+		datatable.Text(validation.DefineBinding("email", func(r *Report) *string { return &r.Email }), "reports.email", models.Users.Email),
+		datatable.Number(validation.DefineBinding("age", func(r *Report) *int { return &r.Age }), "reports.age", models.Users.Age, foundryhttp.IntegerQuery[int]()),
 	},
 	Filters:   []datatable.FilterRegistration[models.User]{datatable.DefineFilter("state", "reports.state", datatable.Where(foundryhttp.EnumQuery[models.Status, *models.Status](models.StatusActive.EnumDescriptor()), expr.CompareFilter(expr.CompareRow(expr.Value(models.Users.Status)))))},
 	Stable:    []expr.ProjectionOrder[models.User]{expr.Asc(expr.Value(models.Users.ID))},
 	Authorize: func(context.Context, struct{}, datatable.Action) error { return nil },
-	Source: func(context.Context, struct{}) (rows.Query[models.User, Report], error) {
-		return rows.Select(rows.From(models.Users.Query()), output, rows.Map(output.Email, expr.Value(models.Users.Email)), rows.Map(output.Age, expr.Value(models.Users.Age))), nil
+	Source: func(context.Context, struct{}) (rows.SelectionSource[models.User], error) {
+		return rows.From(models.Users.Query()), nil
 	},
 })
 

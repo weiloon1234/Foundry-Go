@@ -13,4 +13,4 @@ type row struct {
 	T value.Nullable[temporal.DateTime]
 }
 
-var _ = datatable.NullableTime(validation.DefineField("t", func(r row) value.Nullable[temporal.DateTime] { return r.T }), "f.t", scalars.Records.Instant, foundryhttp.TextQuery[temporal.DateTime, *temporal.DateTime]())
+var _ = datatable.NullableTime(validation.DefineBinding("t", func(r *row) *value.Nullable[temporal.DateTime] { return &r.T }), "f.t", scalars.Records.Instant, foundryhttp.TextQuery[temporal.DateTime, *temporal.DateTime]())

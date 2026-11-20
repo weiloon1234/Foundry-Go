@@ -589,6 +589,10 @@ export function tableEnumChoices() {
 
 Enum label resolution follows the [enum label owner](#recipe-enum-labels).
 
+A table's row type is a DTO declared with `//foundry:dto role=row`; its
+descriptor and the generated row type are the same as for any response DTO, and
+only the Go-side column bindings differ (see the [datatable guide](datatable.md)).
+
 Declare associations in Go with `datatable.QueryEndpoint`, `BindTicketExport`,
 `BindFileExport`, and `DownloadEndpoint`. These helpers attach
 `contract.TableOperationBinding` to the endpoint. Scoped or unrelated route IDs

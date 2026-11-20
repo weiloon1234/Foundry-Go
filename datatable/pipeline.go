@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
 type prepared[S any] struct {
@@ -140,9 +141,20 @@ func (d *tableDefinition[S, R, A]) scoped(ctx context.Context, subject A, action
 	if err := ctx.Err(); err != nil {
 		return scopedSource[S, R]{}, err
 	}
-	q, err := d.source(ctx, subject)
+	base, err := d.source(ctx, subject)
 	if err != nil {
 		return scopedSource[S, R]{}, err
+	}
+	var q rows.Query[S, R]
+	if len(d.dynamic) == 0 {
+		q = d.plan.FoundryApply(base, sqlowner.Queries())
+	} else {
+		// Each request builds its own dynamic expressions; nothing is retained.
+		dynamic := make([]rows.FoundryDynamicExpression[S], len(d.dynamic))
+		for i, build := range d.dynamic {
+			dynamic[i] = build(ctx, subject)
+		}
+		q = d.plan.FoundryApply(base, sqlowner.Queries(), dynamic...)
 	}
 	filtered := rows.Having(q.Where(p.condition.where...), p.condition.having...)
 	result := scopedSource[S, R]{rows: rows.ReorderUnwindowed(filtered, p.orders...), count: filtered}
@@ -155,4 +167,9 @@ func (d *tableDefinition[S, R, A]) scoped(ctx context.Context, subject A, action
 		return scopedSource[S, R]{}, err
 	}
 	return result, nil
+}
+
+// pageOf reads one numbered page of an ordered source, as Query does.
+func pageOf[S, R any](ordered rows.Query[S, R], page orm.PageRequest) rows.Query[S, R] {
+	return rows.Offset(rows.Limit(ordered, page.Size), (page.Number-1)*page.Size)
 }

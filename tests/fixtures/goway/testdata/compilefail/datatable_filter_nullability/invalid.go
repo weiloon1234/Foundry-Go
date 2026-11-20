@@ -9,4 +9,5 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-var invalid = datatable.DefineColumn[reporting.Member, reporting.Member, value.Nullable[string]](validation.DefineField("nickname", func(r reporting.Member) value.Nullable[string] { return r.Nickname }), "reports.nickname", datatable.FilterBy(datatable.Where(foundryhttp.StringQuery[string](), expr.TextFilter(expr.TextRow(reporting.Members.Name)))))
+var option = datatable.FilterBy(datatable.Where(foundryhttp.StringQuery[string](), expr.TextFilter(expr.TextRow(reporting.Members.Name))))
+var invalid = datatable.Column(validation.DefineBinding("nickname", func(r *reporting.Member) *value.Nullable[string] { return &r.Nickname }), "reports.nickname", expr.AsSelected(expr.Row(expr.Value(reporting.Members.Nickname))), option)

@@ -27,47 +27,35 @@ const (
 	WideLeaderLevel WideLevel = 9007199254740994
 )
 
-//foundry:dto
+//foundry:dto role=row
 type NumericLevelRow struct {
 	ID        model.ID[Member] `json:"id"`
 	Level     AgentLevel       `json:"level"`
 	WideLevel WideLevel        `json:"wideLevel"`
 }
 
-type NumericLevelRowColumns struct {
-	rows.Row[NumericLevelRow]
-	ID        rows.Field[NumericLevelRow, model.ID[Member]]
-	Level     rows.Field[NumericLevelRow, AgentLevel]
-	WideLevel rows.Field[NumericLevelRow, WideLevel]
-}
-
-var NumericLevelRows = rows.Define(func(b rows.Builder[NumericLevelRow], r *NumericLevelRow) NumericLevelRowColumns {
-	return NumericLevelRowColumns{b.Row(), rows.IDOf(b, &r.ID), rows.EnumOf(b, &r.Level), rows.EnumOf(b, &r.WideLevel)}
-})
-
 var NumericLevels = datatable.Define(numericLevelSpec())
 
 func numericLevelSpec() datatable.Spec[Member, NumericLevelRow, Authority] {
-	fields, wire := MemberModels, NumericLevelRowValidationFields()
+	fields, wire := MemberModels, NumericLevelRowColumns()
 	id := expr.Row(expr.Value(fields.ID))
 	level := expr.AsSelected(expr.Constant[Member](AgentLevelCodec(), MemberLevel))
 	wideLevel := expr.AsSelected(expr.Constant[Member](WideLevelCodec(), WideMemberLevel))
 	return datatable.Spec[Member, NumericLevelRow, Authority]{
 		ID: "reports.numeric_levels", Row: NumericLevelRowJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[Member, NumericLevelRow]{
-			datatable.DefineColumn[Member](wire.ID, MemberIDLabel, datatable.ExportAs(expr.AsSelected(id), datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]()))),
-			datatable.DefineColumn[Member](wire.Level, "reports.numeric_levels.level", datatable.ExportAs(level, datatable.ScalarCell(foundryhttp.EnumQuery[AgentLevel, *AgentLevel](MemberLevel.EnumDescriptor())))),
-			datatable.DefineColumn[Member](wire.WideLevel, "reports.numeric_levels.wide_level", datatable.ExportAs(wideLevel, datatable.ScalarCell(foundryhttp.EnumQuery[WideLevel, *WideLevel](WideMemberLevel.EnumDescriptor())))),
+			datatable.Column(wire.ID, MemberIDLabel, expr.AsSelected(id), datatable.ExportAs(expr.AsSelected(id), datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]()))),
+			datatable.Column(wire.Level, "reports.numeric_levels.level", level, datatable.ExportAs(level, datatable.ScalarCell(foundryhttp.EnumQuery[AgentLevel, *AgentLevel](MemberLevel.EnumDescriptor())))),
+			datatable.Column(wire.WideLevel, "reports.numeric_levels.wide_level", wideLevel, datatable.ExportAs(wideLevel, datatable.ScalarCell(foundryhttp.EnumQuery[WideLevel, *WideLevel](WideMemberLevel.EnumDescriptor())))),
 		},
 		Stable:    []expr.ProjectionOrder[Member]{expr.Asc(expr.Value(fields.ID))},
 		Authorize: authorize,
-		Source: func(ctx context.Context, authority Authority) (rows.Query[Member, NumericLevelRow], error) {
+		Source: func(ctx context.Context, authority Authority) (rows.SelectionSource[Member], error) {
 			actor, err := authority.subject(ctx)
 			if err != nil {
-				return rows.Query[Member, NumericLevelRow]{}, err
+				return nil, err
 			}
-			return rows.Select(rows.From(fields.Query().Where(orm.Eq(fields.TenantID, actor.TenantID))), NumericLevelRows,
-				rows.MapSelected(NumericLevelRows.ID, expr.AsSelected(id)), rows.MapSelected(NumericLevelRows.Level, level), rows.MapSelected(NumericLevelRows.WideLevel, wideLevel)), nil
+			return rows.From(fields.Query().Where(orm.Eq(fields.TenantID, actor.TenantID))), nil
 		},
 	}
 }

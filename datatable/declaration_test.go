@@ -75,10 +75,12 @@ func TestTableRejectsMissingAuthorityAndConflictingDeclarations(t *testing.T) {
 		"unknown sort": func(s *Spec[reportRecord, ReportRow, reportActor]) { s.DefaultSort[0].Column = "not_a_column" },
 		"wrong scalar metadata": func(s *Spec[reportRecord, ReportRow, reportActor]) {
 			_, name, _, _ := reportFields()
-			s.Columns[0] = DefineColumn[reportRecord](validation.DefineField("id", func(ReportRow) string { return "forged" }), "reports.id", FilterBy(Where(foundryhttp.StringQuery[string](), expr.TextFilter(name))))
+			s.Columns[0] = Column(validation.DefineBinding("id", func(r *ReportRow) *string { return &r.Name }), "reports.id", expr.AsSelected(name), FilterBy(Where(foundryhttp.StringQuery[string](), expr.TextFilter(name))))
 		},
 		"no exportable column": func(s *Spec[reportRecord, ReportRow, reportActor]) {
-			s.Columns = []ColumnRegistration[reportRecord, ReportRow]{DefineColumn[reportRecord](validation.DefineField("id", func(row ReportRow) int64 { return row.ID }), "reports.id")}
+			id, _, _, _ := reportFields()
+			w := reportBindings()
+			s.Columns = []ColumnRegistration[reportRecord, ReportRow]{Column(w.ID, "reports.id", expr.AsSelected(id)), Hidden(w.Name, reportModels.Name), Hidden(w.Note, reportModels.Note), Hidden(w.Amount, reportModels.Amount)}
 			s.DefaultSort = nil
 		},
 		"overlapping extra filter": func(s *Spec[reportRecord, ReportRow, reportActor]) {

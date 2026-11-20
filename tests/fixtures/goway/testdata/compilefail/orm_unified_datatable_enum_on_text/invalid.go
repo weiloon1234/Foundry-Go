@@ -11,4 +11,4 @@ import (
 type row struct{ S models.Status }
 
 var tc orm.Text[models.User, models.Status]
-var _ = datatable.Enum(validation.DefineField("s", func(r row) models.Status { return r.S }), "f.s", tc, foundryhttp.EnumQuery[models.Status, *models.Status](models.StatusActive.EnumDescriptor()))
+var _ = datatable.Enum(validation.DefineBinding("s", func(r *row) *models.Status { return &r.S }), "f.s", tc, foundryhttp.EnumQuery[models.Status, *models.Status](models.StatusActive.EnumDescriptor()))

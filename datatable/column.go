@@ -5,10 +5,9 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
-	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -79,18 +78,25 @@ type columnDeclaration[S, R any] struct {
 	filter     *filterDeclaration[S]
 	searchable bool
 	cellInfo   *FilterInfo
-	cell       func(context.Context, R, Presentation) (exportCell, error)
-	err        error
+	cell       func(context.Context, *R, Presentation) (exportCell, error)
+	hidden     bool
+	// bind binds the column's row field into the table's plan and returns the
+	// bound struct field index.
+	bind func(rows.FoundryPlanBuilder[S, R], *R) int
+	// dynamicSlot is the DynamicSlot's identity (its plan slot), nil for a
+	// statically selected column.
+	dynamicSlot any
+	err         error
 }
 
 type columnExecution[S, R any] struct {
 	order  func(Direction, expr.Collation) expr.ProjectionOrder[S]
 	filter func(Operator, []string) (condition[S], error)
-	cell   func(context.Context, R, Presentation) (exportCell, error)
+	cell   func(context.Context, *R, Presentation) (exportCell, error)
 }
 
 // ColumnOption preserves the source scope and DTO field type until registration.
-// Construct options with SortBy, FilterBy, Searchable and ExportAs.
+// Construct options with SortBy, FilterBy, Searchable, ExportAs and ScanWith.
 //
 // Example: datatable.SortBy(expr.AsSelected(name))
 type ColumnOption[S, V any] struct {
@@ -98,6 +104,7 @@ type ColumnOption[S, V any] struct {
 	order  func(Direction, expr.Collation) expr.ProjectionOrder[S]
 	source FilterSource[S, V]
 	cell   Cell[V]
+	scan   rows.FoundryScan[V]
 }
 
 type optionKind uint8
@@ -107,31 +114,26 @@ const (
 	optionFilterBy
 	optionSearchable
 	optionExportAs
+	optionScanWith
 )
 
 // SortBy binds a selected value of the same scope and DTO field type.
 //
-// Example: datatable.DefineColumn[UserScope](w.Username, key, datatable.SortBy(expr.AsSelected(name)))
+// Example: datatable.Column(w.Username, "users.fields.username", expr.AsSelected(name), datatable.SortBy(expr.AsSelected(name)))
 func SortBy[S, V any](expression expr.Selected[S, V]) ColumnOption[S, V] {
-	return ColumnOption[S, V]{kind: optionSortBy, order: func(direction Direction, collation expr.Collation) expr.ProjectionOrder[S] {
-		selected := expr.FoundryDefaultCollation(expression, collation, sqlowner.Expressions())
-		if direction == Descending {
-			return expr.DescValue(selected)
-		}
-		return expr.AscValue(selected)
-	}}
+	return ColumnOption[S, V]{kind: optionSortBy, order: makeOrderFunc(expression)}
 }
 
 // FilterBy binds a filter source for the column.
 //
-// Example: datatable.DefineColumn[UserScope](w.Username, key, datatable.FilterBy(datatable.Where(Text, expr.TextFilter(name))))
+// Example: datatable.Column(w.Username, "users.fields.username", expr.AsSelected(name), datatable.FilterBy(datatable.Where(text, expr.TextFilter(name))))
 func FilterBy[S, V any](source FilterSource[S, V]) ColumnOption[S, V] {
 	return ColumnOption[S, V]{kind: optionFilterBy, source: source}
 }
 
 // Searchable marks the column searchable and infers scope and value from its row expression.
 //
-// Example: datatable.DefineColumn[UserScope](w.Username, key, datatable.Searchable(name))
+// Example: datatable.Column(w.Username, "users.fields.username", expr.AsSelected(name), datatable.Searchable(name))
 func Searchable[S, V any](_ expr.RowValue[S, V]) ColumnOption[S, V] {
 	return ColumnOption[S, V]{kind: optionSearchable}
 }
@@ -139,64 +141,15 @@ func Searchable[S, V any](_ expr.RowValue[S, V]) ColumnOption[S, V] {
 // ExportAs binds a cell formatter, inferring scope and value from a selected expression.
 // The expression supplies types only; exports format the DTO field value.
 //
-// Example: datatable.DefineColumn[UserScope](w.Username, key, datatable.ExportAs(expr.AsSelected(name), datatable.ScalarCell(Text)))
+// Example: datatable.Column(w.Username, "users.fields.username", expr.AsSelected(name), datatable.ExportAs(expr.AsSelected(name), datatable.ScalarCell(text)))
 func ExportAs[S, V any](_ expr.Selected[S, V], cell Cell[V]) ColumnOption[S, V] {
 	return ColumnOption[S, V]{kind: optionExportAs, cell: cell}
-}
-
-// DefineColumn binds an exact DTO field to typed source options and snapshots its declaration.
-//
-// Example: datatable.DefineColumn[User](field, label, options...)
-func DefineColumn[S, R, V any](field validation.Field[R, V], label i18n.MessageKey, options ...ColumnOption[S, V]) ColumnRegistration[S, R] {
-	c := columnDeclaration[S, R]{name: validation.FieldName(field), label: label}
-	c.err = validation.ValidateField(field)
-	if err := label.Validate(); err != nil && c.err == nil {
-		c.err = err
-	}
-	for _, opt := range options {
-		switch opt.kind {
-		case optionSearchable:
-			c.searchable = true
-		case optionSortBy:
-			c.order = opt.order
-		case optionFilterBy:
-			source := opt.source
-			err := source.Validate()
-			if err != nil && c.err == nil {
-				c.err = err
-			}
-			c.filter = &filterDeclaration[S]{name: c.name, label: c.label, info: source.info, build: source.enabled(), err: err}
-		case optionExportAs:
-			cell := opt.cell
-			err := cell.err
-			if cell.format == nil && err == nil {
-				err = invalid("cell formatter is not defined")
-			}
-			if err != nil && c.err == nil {
-				c.err = err
-			}
-			c.cellInfo = &FilterInfo{Scalar: cell.scalar, Nullable: cell.nullable}
-			c.cell = func(ctx context.Context, row R, p Presentation) (exportCell, error) {
-				v, err := validation.Select(field, row)
-				if err != nil {
-					return exportCell{}, err
-				}
-				text, err := cell.format(ctx, v, p)
-				return exportCell{text: text, kind: cell.kind}, err
-			}
-		default:
-			if c.err == nil {
-				c.err = invalid("column option is missing")
-			}
-		}
-	}
-	return ColumnRegistration[S, R]{declaration: c}
 }
 
 // ColumnRegistration erases V only after ownership-safe declaration. Columns
 // from a different source scope or response row cannot be registered together.
 //
-// Example: datatable.DefineColumn[User](field, "members.email", datatable.SortBy(expr.AsSelected(name)))
+// Example: datatable.Text(w.Email, "members.email", Members.Email)
 type ColumnRegistration[S, R any] struct{ declaration columnDeclaration[S, R] }
 
 // FilterRegistration retains a named filter's typed source until table registration.

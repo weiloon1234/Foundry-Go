@@ -33,34 +33,31 @@ var foundryNumericLevelRowJSON = sync.OnceValue(func() foundrycontract.JSON[Nume
 	}})
 })
 
-// NumericLevelRowValidationFieldSet retains concrete DTO and value types for validation.
-// Example: NumericLevelRowValidationFields()
-type NumericLevelRowValidationFieldSet struct {
-	// ID validates the declared JSON property "id".
-	ID foundryvalidation.Field[NumericLevelRow, model.ID[Member]]
-	// Level validates the declared JSON property "level".
-	Level foundryvalidation.Field[NumericLevelRow, AgentLevel]
-	// WideLevel validates the declared JSON property "wideLevel".
-	WideLevel foundryvalidation.Field[NumericLevelRow, WideLevel]
+// NumericLevelRowColumnSet retains concrete row and field types for datatable column bindings.
+// Example: NumericLevelRowColumns()
+type NumericLevelRowColumnSet struct {
+	// ID binds the declared JSON property "id".
+	ID foundryvalidation.Binding[NumericLevelRow, model.ID[Member]]
+	// Level binds the declared JSON property "level".
+	Level foundryvalidation.Binding[NumericLevelRow, AgentLevel]
+	// WideLevel binds the declared JSON property "wideLevel".
+	WideLevel foundryvalidation.Binding[NumericLevelRow, WideLevel]
 }
 
-// NumericLevelRowValidationFields returns typed field descriptors.
-// Example: NumericLevelRowValidationFields()
-// Compose rules with these fields; JSON names and selectors are generated.
-func NumericLevelRowValidationFields() NumericLevelRowValidationFieldSet {
-	return *foundryNumericLevelRowValidationFields()
-}
+// NumericLevelRowColumns returns typed transport field bindings for NumericLevelRow.
+// Example: NumericLevelRowColumns()
+func NumericLevelRowColumns() NumericLevelRowColumnSet { return *foundryNumericLevelRowColumns() }
 
-var foundryNumericLevelRowValidationFields = sync.OnceValue(func() *NumericLevelRowValidationFieldSet {
-	return &NumericLevelRowValidationFieldSet{
-		ID: foundryvalidation.DefineField("id", func(input NumericLevelRow) model.ID[Member] {
-			return input.ID
+var foundryNumericLevelRowColumns = sync.OnceValue(func() *NumericLevelRowColumnSet {
+	return &NumericLevelRowColumnSet{
+		ID: foundryvalidation.DefineBinding("id", func(input *NumericLevelRow) *model.ID[Member] {
+			return &input.ID
 		}),
-		Level: foundryvalidation.DefineField("level", func(input NumericLevelRow) AgentLevel {
-			return input.Level
+		Level: foundryvalidation.DefineBinding("level", func(input *NumericLevelRow) *AgentLevel {
+			return &input.Level
 		}),
-		WideLevel: foundryvalidation.DefineField("wideLevel", func(input NumericLevelRow) WideLevel {
-			return input.WideLevel
+		WideLevel: foundryvalidation.DefineBinding("wideLevel", func(input *NumericLevelRow) *WideLevel {
+			return &input.WideLevel
 		}),
 	}
 })

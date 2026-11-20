@@ -113,9 +113,9 @@ func reportManager(t *testing.T, fixture extensiontest.Fixture, spec Spec[report
 }
 
 // textCellFunc replaces a column formatter in tests with custom text output.
-func textCellFunc(format func(context.Context, ReportRow, Presentation) (string, error)) func(context.Context, ReportRow, Presentation) (exportCell, error) {
-	return func(ctx context.Context, row ReportRow, p Presentation) (exportCell, error) {
-		text, err := format(ctx, row, p)
+func textCellFunc(format func(context.Context, ReportRow, Presentation) (string, error)) func(context.Context, *ReportRow, Presentation) (exportCell, error) {
+	return func(ctx context.Context, row *ReportRow, p Presentation) (exportCell, error) {
+		text, err := format(ctx, *row, p)
 		return exportCell{text: text}, err
 	}
 }

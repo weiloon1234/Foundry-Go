@@ -37,37 +37,36 @@ var foundryOrderRowJSON = sync.OnceValue(func() foundrycontract.JSON[OrderRow] {
 	}})
 })
 
-// OrderRowValidationFieldSet retains concrete DTO and value types for validation.
-// Example: OrderRowValidationFields()
-type OrderRowValidationFieldSet struct {
-	// Amount validates the declared JSON property "amount".
-	Amount foundryvalidation.Field[OrderRow, decimal.Decimal]
-	// ID validates the declared JSON property "id".
-	ID foundryvalidation.Field[OrderRow, model.ID[Order]]
-	// Label validates the declared JSON property "label".
-	Label foundryvalidation.Field[OrderRow, string]
-	// MemberName validates the declared JSON property "memberName".
-	MemberName foundryvalidation.Field[OrderRow, string]
+// OrderRowColumnSet retains concrete row and field types for datatable column bindings.
+// Example: OrderRowColumns()
+type OrderRowColumnSet struct {
+	// Amount binds the declared JSON property "amount".
+	Amount foundryvalidation.Binding[OrderRow, decimal.Decimal]
+	// ID binds the declared JSON property "id".
+	ID foundryvalidation.Binding[OrderRow, model.ID[Order]]
+	// Label binds the declared JSON property "label".
+	Label foundryvalidation.Binding[OrderRow, string]
+	// MemberName binds the declared JSON property "memberName".
+	MemberName foundryvalidation.Binding[OrderRow, string]
 }
 
-// OrderRowValidationFields returns typed field descriptors.
-// Example: OrderRowValidationFields()
-// Compose rules with these fields; JSON names and selectors are generated.
-func OrderRowValidationFields() OrderRowValidationFieldSet { return *foundryOrderRowValidationFields() }
+// OrderRowColumns returns typed transport field bindings for OrderRow.
+// Example: OrderRowColumns()
+func OrderRowColumns() OrderRowColumnSet { return *foundryOrderRowColumns() }
 
-var foundryOrderRowValidationFields = sync.OnceValue(func() *OrderRowValidationFieldSet {
-	return &OrderRowValidationFieldSet{
-		Amount: foundryvalidation.DefineField("amount", func(input OrderRow) decimal.Decimal {
-			return input.Amount
+var foundryOrderRowColumns = sync.OnceValue(func() *OrderRowColumnSet {
+	return &OrderRowColumnSet{
+		Amount: foundryvalidation.DefineBinding("amount", func(input *OrderRow) *decimal.Decimal {
+			return &input.Amount
 		}),
-		ID: foundryvalidation.DefineField("id", func(input OrderRow) model.ID[Order] {
-			return input.ID
+		ID: foundryvalidation.DefineBinding("id", func(input *OrderRow) *model.ID[Order] {
+			return &input.ID
 		}),
-		Label: foundryvalidation.DefineField("label", func(input OrderRow) string {
-			return input.Label
+		Label: foundryvalidation.DefineBinding("label", func(input *OrderRow) *string {
+			return &input.Label
 		}),
-		MemberName: foundryvalidation.DefineField("memberName", func(input OrderRow) string {
-			return input.MemberName
+		MemberName: foundryvalidation.DefineBinding("memberName", func(input *OrderRow) *string {
+			return &input.MemberName
 		}),
 	}
 })

@@ -98,6 +98,14 @@ func DefaultConfig() Config {
 	}
 }
 
+// resolved applies the configuration defaults a Manager uses and validates the result.
+func (c Config) resolved() (Config, error) {
+	if c.TimeZone == "" {
+		c.TimeZone = temporal.UTC
+	}
+	return c, c.Validate()
+}
+
 // Validate checks limits, schema, timezone, and collation without acquiring resources.
 func (c Config) Validate() error {
 	if c.TextCollation != "" {
@@ -153,13 +161,11 @@ type Manager struct {
 //
 // Example: datatable.New(dependencies, config, registrations...)
 func New(dependencies Dependencies, config Config, registrations ...Registration) (*Manager, error) {
-	if config.TimeZone == "" {
-		config.TimeZone = temporal.UTC
-	}
 	if dependencies.Database == nil {
 		return nil, invalid("datatables require a database")
 	}
-	if err := config.Validate(); err != nil {
+	config, err := config.resolved()
+	if err != nil {
 		return nil, err
 	}
 	registry, err := NewRegistry(registrations...)
@@ -379,7 +385,7 @@ func (t Table[S, R, A]) Query(ctx context.Context, m *Manager, subject A, reques
 				return err
 			}
 			page := prepared.page
-			items, err := rows.Read(rows.Offset(rows.Limit(source.rows, page.Size), (page.Number-1)*page.Size)).All(ctx, tx)
+			items, err := rows.Read(pageOf(source.rows, page)).All(ctx, tx)
 			if err != nil {
 				return err
 			}
