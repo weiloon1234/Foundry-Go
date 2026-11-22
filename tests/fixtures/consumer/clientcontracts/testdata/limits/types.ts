@@ -61,7 +61,7 @@ void f.account.value;
 // when building the request whether to send it.
 const color: sdk.FieldBinding<string> = f.prefs.color;
 function prefsBody(values: Draft): Body["prefs"] {
-  return values.prefs.color.trim() ? { color: values.prefs.color } : null;
+  return values.prefs.color.trim() ? { color: values.prefs.color, owner_id: values.prefs.owner_id } : null;
 }
 // Rows of fields, and a list inside each row.
 const rowName: sdk.FieldBinding<string> = f.rows.at(0).name;
@@ -145,4 +145,9 @@ const key: sdk.FieldMessageKey = "help.text";
 // @ts-expect-error A key no request field declares is not a field message key.
 const missing: sdk.FieldMessageKey = "fields.nowhere";
 const issue: sdk.Issue = sdk.issueAt(op.field("body", "text"), "taken", "Taken");
-void [text, count, entry, code, checks, consent, share, clearable, isRow, username, email, color, prefsBody, rowName, opens, rows, stateEntry, document, photo, tag, caption, uploadBody, addRow, removeRow, addSlot, row, moreName, address, role, filterName, forged, spread, copied, created, fromItems, fromGeneric, key, missing, issue];
+const ownerId: sdk.FieldBinding<sdk.Identity<"client.OwnerID">> = f.owner_id;
+const pricePlaces: number | undefined = f.price.limits.maxPlaces;
+const checkedPlaces: number | undefined = f.price.checks.limits.maxPlaces;
+const malformed: boolean | undefined = f.price.checks.malformed;
+const parsedPlaces: number | undefined = sdk.decimalPlaces("3.001");
+void [text, count, entry, code, checks, consent, share, clearable, isRow, username, email, color, prefsBody, rowName, opens, rows, stateEntry, document, photo, tag, caption, uploadBody, addRow, removeRow, addSlot, row, moreName, address, role, filterName, forged, spread, copied, created, fromItems, fromGeneric, key, missing, issue, ownerId, pricePlaces, checkedPlaces, malformed, parsedPlaces];

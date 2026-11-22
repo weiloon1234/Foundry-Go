@@ -39,5 +39,5 @@ func (t *Token[M, P]) UnmarshalJSON(data []byte) error {
 func (Token[M, P]) JSONContract() contract.JSON[Token[M, P]] {
 	typ := reflect.TypeFor[Token[M, P]]()
 	id := contract.TypeID(typ.PkgPath() + "." + typ.Name())
-	return contract.DefineJSONValue[Token[M, P]](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind}}})
+	return contract.DefineJSONValue[Token[M, P]](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind, NonEmpty: true}}})
 }

@@ -4,6 +4,9 @@
 package money
 
 import (
+	"reflect"
+
+	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/textvalue"
@@ -95,6 +98,14 @@ func (c *Currency) UnmarshalJSON(data []byte) error {
 	}
 	*c = parsed
 	return nil
+}
+
+// JSONContract describes the currency as a non-empty JSON string whose codec
+// validates ISO 4217 alphabetic codes.
+func (Currency) JSONContract() contract.JSON[Currency] {
+	typ := reflect.TypeFor[Currency]()
+	id := contract.TypeID(typ.PkgPath() + "." + typ.Name())
+	return contract.DefineJSONValue[Currency](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind, NonEmpty: true}}})
 }
 
 func invalidCurrency() error {

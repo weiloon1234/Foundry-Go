@@ -11,9 +11,35 @@ function dateTimeValid(text: string): boolean {
   if (!match || !dateValid(match[1]!)) return false;
   const instant = Date.parse(text); return Number.isFinite(instant) && instant >= -62135596800000 && instant < 253402300800000;
 }
-function decimalValid(text: string): boolean {
-  return text.length <= runtimePolicy.decimalDigits + 2 && /^[+-]?[0-9]+(?:\.[0-9]+)?$/.test(text) && text.replace(/[^0-9]/g, "").length <= runtimePolicy.decimalDigits;
+/**
+ * Canonical significant fractional places of exact decimal text (matching Go's
+ * `decimal.Parse` and `Decimal.Scale`), or `undefined` when malformed: optional
+ * leading `+` or `-`, at least one ASCII digit on each side of an optional `.`,
+ * no whitespace or exponent, and at most `decimal.MaxDigits` total digits
+ * before trimming zeros. Trailing fractional zeros are excluded from the count.
+ */
+export function decimalPlaces(text: string): number | undefined {
+  if (typeof text !== "string" || text.length === 0 || text.length > runtimePolicy.decimalDigits + 2) return undefined;
+  let i = text.charCodeAt(0) === 43 || text.charCodeAt(0) === 45 ? 1 : 0;
+  const start = i;
+  while (i < text.length && text.charCodeAt(i) >= 48 && text.charCodeAt(i) <= 57) i++;
+  const whole = i - start;
+  if (whole === 0) return undefined;
+  if (i === text.length) return whole <= runtimePolicy.decimalDigits ? 0 : undefined;
+  if (text.charCodeAt(i) !== 46) return undefined;
+  const fracStart = ++i;
+  let lastNonZero = fracStart;
+  while (i < text.length) {
+    const c = text.charCodeAt(i);
+    if (c < 48 || c > 57) return undefined;
+    if (c !== 48) lastNonZero = i + 1;
+    i++;
+  }
+  const frac = i - fracStart;
+  if (frac === 0 || whole + frac > runtimePolicy.decimalDigits) return undefined;
+  return lastNonZero - fracStart;
 }
+function decimalValid(text: string): boolean { return decimalPlaces(text) !== undefined; }
 function base64Valid(text: string): boolean {
   if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(text)) return false;
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

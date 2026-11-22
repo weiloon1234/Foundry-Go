@@ -2,7 +2,11 @@
   "version": 1,
   "files": {
     "browser_login_foundry.gen.go": "559d6b3826079ab411033c0a70886a566bcb539ebe2bfdb86cdd42da2c2f6e39",
+    "codec_form_create_foundry.gen.go": "7630a1f2e18d76bc0f0d1229639713bc78b900b854f6deb9f9773767ef7b1ec3",
+    "codec_form_line_foundry.gen.go": "ccbd3868a7121cd32984f4f4d7b0fe4f60e2aac629296fbdb30a79dedd5f78ba",
+    "codec_form_patch_foundry.gen.go": "5a3e1fe7c414c944326d718231c3f9c5a68273da4a675cd40615e3c5a249eddf",
     "create_member_foundry.gen.go": "c24415c14e35f7d9e83b0adc9a7e8d80f77f600eefc61ea4e1c7a7a1e84255a0",
+    "decimal_amount_query_foundry.gen.go": "610c5fe8f7dafb1c9c6e817123a5c0dfe48b94e23021e0019f8331b06fecfe0c",
     "filters_foundry.gen.go": "6262f30dd3c2a1a9fbd833259d505213239cf3c1c9ecea838e196459173e7fe9",
     "item_path_foundry.gen.go": "fd67081cee6f9537e1918259354a0184bfea4d1111e54084588608d18b6bef29",
     "member_conflict_state_foundry.gen.go": "b5934c0c232c54df1b3882091f4ab844c49d9136af9b631c601cd25006dff816",

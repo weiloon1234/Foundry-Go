@@ -62,5 +62,5 @@ func (p *Plaintext) UnmarshalJSON(data []byte) error {
 // wire string shape without exposing the private Go representation.
 func (Plaintext) JSONContract() contract.JSON[Plaintext] {
 	const id contract.TypeID = "github.com/weiloon1234/Foundry-Go/auth/password.Plaintext"
-	return contract.DefineJSONValue[Plaintext](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind}}})
+	return contract.DefineJSONValue[Plaintext](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind, NonEmpty: true}}})
 }

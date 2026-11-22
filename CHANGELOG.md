@@ -1,5 +1,67 @@
 # Changelog
 
+## v0.50.1 — 2026-11-23
+
+### Form bindings publish codec-required wire types and decimal precision (manifest 12)
+
+Previously, a non-optional field of a framework string type whose codec rejects
+empty text (such as `model.ID`, `decimal.Decimal`, `temporal.Date` or
+`password.Plaintext`) reported `required: false` without a separate rule, and
+decimal fields published neither their maximum decimal places nor an exact
+syntax check matching Go's decimal codec. Now the non-empty codec fact lives on
+each Go type's contract (`contract.Type.NonEmpty`), is enforced by the
+framework at every decoding boundary, and is carried as optional `non_empty` in
+**manifest version 12** (v11 readers reject v12 documents and v12 readers reject
+v11 documents; regenerate Go descriptors, manifest, OpenAPI and TypeScript
+together with the matching framework pin). No wire format, stored data or
+deployment protocol changes:
+
+- **Contract-owned, framework-enforced non-empty wire codecs**: a field on a
+  required presence path (not under `Optional`, `Nullable`, a pointer, an
+  `omitzero` tag or an optional/nullable parent, unless an unconditional
+  presence rule such as `Required`, `Present`, `NotNull` or `NotNil` makes it
+  required) whose Go contract declares `NonEmpty: true` now reports
+  `required: true` independently of validation rules, while transformed rules
+  continue to publish no bounds. The framework enforces `NonEmpty: true` itself
+  at JSON body, query, path, multipart text and request header decoding
+  boundaries before calling the type's own codec (emitting the standard HTTP
+  400 `bad_request` / `value` decode issue), so the published fact and Go's
+  behavior cannot diverge. Every framework-owned scalar string codec exportable
+  in generated client contracts that rejects `""` declares this fact:
+  `model.ID`, `mfa.EnrollmentID`, `decimal.Decimal`, `temporal.Date`,
+  `temporal.Time`, `temporal.DateTime` / `time.Time`, `temporal.LocalDateTime`,
+  `temporal.Interval`, `password.Plaintext` (a non-optional `password.Plaintext`
+  field is now required without any rule), `mfa.TOTPCode`, `mfa.RecoveryCode`,
+  `challenge.Token` / `passwordreset.Token` / `emailverification.Token`,
+  `email.Address`, `storage.ObjectKey`, `money.Currency`, `orm.Cursor` and the
+  auth refresh/MFA credential wrappers (`[]byte` / `base64` accepts `""` and is
+  excluded). Application types with custom codecs may declare `NonEmpty: true`
+  through the same public `contract.DefineJSONValue` / `contract.DefineScalar`
+  mechanism (which also enforces empty rejection at all framework decoding
+  boundaries); without it they stay unchanged.
+- **JSON decode issue enrichment for formatless framework types**: on JSON
+  request bodies, an empty string `""` for the formatless framework types
+  (`password.Plaintext`, `mfa.TOTPCode`, `mfa.RecoveryCode`, `challenge.Token`
+  / `passwordreset.Token` / `emailverification.Token`, `email.Address`,
+  `storage.ObjectKey`, `money.Currency`,
+  `authtransport.MFAChallengeCredential`, and `authtransport.RefreshCredential`)
+  still returns HTTP `400` with `error_code: "bad_request"` (no status or error
+  code changes) and now also carries a field-level issue with code `"value"` at
+  the field's path (for example `{"path": "/body/password", "code": "value"}`),
+  where `issues` was previously omitted. Formatted JSON framework types and all
+  URL/query/path/multipart types keep their exact previous status, error code,
+  and `value` issue.
+- **Decimal precision and exact syntax**: `FieldLimits` publishes `maxPlaces`
+  from `DecimalMaxPlaces` and `DecimalMultipleOf` (keeping the ordinary
+  pre-submit gating in `checks.limits.maxPlaces`: active only while the field is
+  edited and never on a prepared operation); the client runtime exports
+  `decimalPlaces(text)` reproducing Go's `decimal.Parse` / `Decimal.Scale`
+  grammar (shared with `outOfRange`); and `FieldChecks` sets `malformed: true`
+  always for non-empty malformed decimal text — including for an untouched field
+  and on a prepared operation, because Go's codec rejects it before preparation
+  runs — as an input-integrity state that blocks submit without ever reporting a
+  required error.
+
 ## v0.50.0 — 2026-11-22
 
 ### Forms take their fields from the generated SDK

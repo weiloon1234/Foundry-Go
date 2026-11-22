@@ -5,6 +5,68 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+<a id="required-wire-types-and-decimal-precision"></a>
+## Required wire types and decimal precision — manifest 12, v0.50.1
+
+Generated client form bindings now publish two facts that Go enforces at
+decoding and validation time ([form guide](guides/client-forms.md#recipe-field-facts)).
+**Manifest version 12** adds the optional boolean `non_empty` on string type
+entries (`contract.Type.NonEmpty`). Following the manifest compatibility policy,
+version 11 readers (v0.50.0) reject version 12 manifests and version 12 readers
+(v0.50.1) reject version 11 manifests; regenerate Go descriptors, manifest,
+OpenAPI and TypeScript together with the matching framework pin. No wire format,
+stored data or deployment protocol changes.
+
+What applications change:
+
+- More non-optional, non-nullable fields report `required: true` (and
+  `checks.required: true` on non-prepared operations): any field on a required
+  presence path whose Go contract declares `NonEmpty: true` (emitted as
+  `non_empty: true` in manifest version 12 and enforced by the framework itself
+  at JSON body, query, path, multipart text and request header decoding
+  boundaries before the type's own codec runs). The framework declares this on
+  every framework-owned scalar string codec exportable in generated client
+  contracts that rejects empty text: `model.ID`, `mfa.EnrollmentID`,
+  `decimal.Decimal`, `temporal.Date`, `temporal.Time`, `temporal.DateTime` /
+  `time.Time`, `temporal.LocalDateTime`, `temporal.Interval`,
+  `password.Plaintext` (a non-optional `password.Plaintext` field is now
+  required without any validation rule), `mfa.TOTPCode`, `mfa.RecoveryCode`,
+  `challenge.Token` / `passwordreset.Token` / `emailverification.Token`,
+  `email.Address`, `storage.ObjectKey`, `money.Currency`, `orm.Cursor` and the
+  auth refresh/MFA credential wrappers. Application custom codecs may opt in
+  through the same public `contract.Type{..., NonEmpty: true}` declaration
+  ([validation guide](guides/validation.md#non-empty-wire-codecs)), which also
+  enforces empty rejection at all framework decoding boundaries. Optional,
+  nullable, pointer and `omitzero` fields remain unrequired unless an
+  unconditional presence rule (`Required`, `Present`, `NotNull` or `NotNil`)
+  makes them required; `base64` (`[]byte`) and custom-codec fields without
+  `NonEmpty` are unchanged, and transformed rules still publish no bounds. Bound
+  selects and pickers over required reference IDs, dates and decimals now
+  display the required marker and refuse empty submits before sending.
+- On JSON request bodies, an empty string `""` for the formatless framework
+  types (`password.Plaintext`, `mfa.TOTPCode`, `mfa.RecoveryCode`,
+  `challenge.Token` / `passwordreset.Token` / `emailverification.Token`,
+  `email.Address`, `storage.ObjectKey`, `money.Currency`,
+  `authtransport.MFAChallengeCredential`, and `authtransport.RefreshCredential`)
+  still returns HTTP `400` with `error_code: "bad_request"` (no status or error
+  code changes) and now also carries a field-level issue with code `"value"` at
+  the field's path (for example `{"path": "/body/password", "code": "value"}`),
+  where `issues` was previously omitted. Formatted JSON framework types and all
+  URL/query/path/multipart types keep their exact previous status, error code,
+  and `value` issue.
+- Decimal fields publish `limits.maxPlaces` from `DecimalMaxPlaces` and
+  `DecimalMultipleOf` (enforced in `checks.limits.maxPlaces` only once the field
+  is edited and omitted on prepared operations), export `decimalPlaces(text)`
+  matching Go's `decimal.Parse` and `Decimal.Scale` grammar (aligned with
+  `outOfRange`), and set `checks.malformed: true` always for non-empty malformed
+  decimal text — including for an untouched field and on a prepared operation —
+  because Go's codec rejects it before preparation runs (it is an
+  input-integrity state, never a required error). Update bound decimal inputs to
+  check `checks.malformed` and `checks.limits.maxPlaces` without trimming
+  whitespace.
+- Reserved schema names do not change (`decimalPlaces` is lowercase; no new
+  capitalized module-scope declaration is added).
+
 <a id="form-bindings-replace-the-form-controller"></a>
 ## Form bindings replace the form controller — v0.50.0
 

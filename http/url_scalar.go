@@ -44,32 +44,44 @@ type describedURLCodec[V any] struct {
 	codec       PathCodec[V]
 	description contract.Scalar[V]
 	syntax      URLSyntax
+	nonEmpty    bool
 	err         error
 }
 
 func describeURL[V any](codec PathCodec[V], description contract.Scalar[V], syntax URLSyntax) PathCodec[V] {
-	err := description.Validate()
+	wire, err := description.Description()
 	if !validPathCodec(codec) {
 		err = safeerror.NewFault(fault.Invalid, "URL scalar requires a codec")
 	}
-	return describedURLCodec[V]{codec: codec, description: description, syntax: syntax, err: err}
+	return describedURLCodec[V]{codec: codec, description: description, syntax: syntax, nonEmpty: err == nil && wire.NonEmpty, err: err}
 }
 
-// Parse returns any retained descriptor error before parsing through the wrapped codec.
+// Parse returns any retained descriptor error and enforces a declared NonEmpty
+// contract before parsing through the wrapped codec.
 func (c describedURLCodec[V]) Parse(text string) (V, error) {
 	if c.err != nil {
 		return *new(V), c.err
+	}
+	if c.nonEmpty && text == "" {
+		return *new(V), safeerror.NewFault(fault.Invalid, "URL scalar value must not be empty")
 	}
 	return c.codec.Parse(text)
 }
 
 // Format returns any retained descriptor error before formatting through the wrapped
-// codec.
+// codec, and enforces a declared NonEmpty contract on the formatted text.
 func (c describedURLCodec[V]) Format(value V) (string, error) {
 	if c.err != nil {
 		return "", c.err
 	}
-	return c.codec.Format(value)
+	text, err := c.codec.Format(value)
+	if err != nil {
+		return "", err
+	}
+	if c.nonEmpty && text == "" {
+		return "", safeerror.NewFault(fault.Invalid, "URL scalar value must not be empty")
+	}
+	return text, nil
 }
 func (c describedURLCodec[V]) urlScalar() (URLScalarInfo, error) {
 	if c.err != nil {
@@ -142,8 +154,18 @@ func knownTextURLCodec[V any, P PathTextPointer[V]]() PathCodec[V] {
 	codec := textPathCodec[V, P]{}
 	typ := reflect.TypeFor[V]()
 	format := contract.Format(jsonshape.ScalarFormat(typ.PkgPath(), typ.Name()))
-	if format == "" {
-		return codec
+	if format != "" {
+		return nativeURLCodec[V](codec, contract.Type{Kind: contract.StringKind, Format: format, NonEmpty: true}, FormattedURLSyntax)
 	}
-	return nativeURLCodec[V](codec, contract.Type{Kind: contract.StringKind, Format: format}, FormattedURLSyntax)
+	var zero V
+	if provider, ok := any(zero).(interface{ JSONContract() contract.JSON[V] }); ok {
+		if description, err := provider.JSONContract().Description(); err == nil && len(description.Types) == 1 && description.Types[0].Kind == contract.StringKind && !description.Types[0].Nullable {
+			syntax := TextURLSyntax
+			if description.Types[0].Format != "" {
+				syntax = FormattedURLSyntax
+			}
+			return describeURL(codec, contract.DefineScalar[V](description.Types[0]), syntax)
+		}
+	}
+	return codec
 }

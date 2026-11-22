@@ -46,8 +46,8 @@ func TestRequestHeaderManifestNormalizationAndProjection(t *testing.T) {
 	source := headerManifest(t)
 	original, _ := source.JSON()
 	doc, _ := source.Snapshot()
-	if doc.Version != 11 || len(doc.HTTP[0].Query) != 0 || len(doc.HTTP[0].Headers) != 2 || doc.HTTP[1].Headers == nil {
-		t.Fatal("missing separate v11 header collection")
+	if doc.Version != manifest.Version || len(doc.HTTP[0].Query) != 0 || len(doc.HTTP[0].Headers) != 2 || doc.HTTP[1].Headers == nil {
+		t.Fatal("missing separate header collection")
 	}
 	parameters := doc.HTTP[0].Headers
 	if parameters[0].Name != "X-App-Version" || !parameters[0].Required || parameters[1].Name != "X-Sequence" || parameters[1].Required {
@@ -93,6 +93,7 @@ func TestRequestHeaderManifestRejectsInvalidDeclarations(t *testing.T) {
 	source := headerManifest(t)
 	for name, change := range map[string]func(*manifest.Document){
 		"v10":             func(d *manifest.Document) { d.Version = 10 },
+		"v11":             func(d *manifest.Document) { d.Version = 11 },
 		"reserved":        func(d *manifest.Document) { d.HTTP[0].Headers[0].Name = "aUtHoRiZaTiOn" },
 		"reserved prefix": func(d *manifest.Document) { d.HTTP[0].Headers[0].Name = "X-Forwarded-Custom" },
 		"idempotency":     func(d *manifest.Document) { d.HTTP[0].Headers[0].Name = "Idempotency-Key" },

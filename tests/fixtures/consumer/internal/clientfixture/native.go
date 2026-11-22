@@ -69,6 +69,19 @@ func (tools Toolchain) check(t testing.TB, source *manifest.Manifest, baseURL, f
 			t.Fatal(err)
 		}
 	}
+	goldens, err := filepath.Glob(filepath.Join(fixtures, "*.golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, golden := range goldens {
+		data, err := os.ReadFile(golden)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, filepath.Base(golden)), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"type":"module"}`), 0600); err != nil {
 		t.Fatal(err)
 	}

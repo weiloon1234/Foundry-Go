@@ -34,7 +34,7 @@ func expandJSONTypes(input []Type, shared bool) ([]Type, error) {
 			continue
 		}
 		// A provider placeholder has no independently authored shape.
-		if typ.Kind != "" || typ.Nullable || typ.Discriminator != "" || len(typ.Variants) != 0 || len(typ.Properties) != 0 || typ.Key != nil || typ.jsonKey != nil ||
+		if typ.Kind != "" || typ.Nullable || typ.NonEmpty || typ.Discriminator != "" || len(typ.Variants) != 0 || len(typ.Properties) != 0 || typ.Key != nil || typ.jsonKey != nil ||
 			typ.Element != "" || typ.Length.IsSet() || typ.Bits != 0 ||
 			typ.Signed || typ.Format != "" || typ.byteElement != "" || len(typ.Cases) != 0 ||
 			typ.enumCases != nil {

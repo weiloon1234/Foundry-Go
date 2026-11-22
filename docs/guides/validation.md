@@ -239,10 +239,13 @@ trimming the check performs, so a value padded with spaces near the limit is
 rejected. A sign-in request keeps its own composition without length bounds, so
 a client never limits what someone may type to sign in.
 
-A client marks a field required only when a rule rejects an empty value (see
-[field facts](client-forms.md#recipe-field-facts)). Where an empty value must be
-refused, declare it: a password that is verified rather than set takes no
-strength policy and must not be trimmed (a password may consist of spaces), so
+A client marks a field required when Go rejects an empty value on the required
+path — either because its framework wire codec rejects empty text (`model.ID`,
+`decimal.Decimal`, `temporal.*`) or because an enum, upload, or rule rejects
+empty (see [field facts](client-forms.md#recipe-field-facts)). Where an empty
+plain string or password must be refused, declare it: a password that is
+verified rather than set takes no strength policy and must not be trimmed (a
+password may consist of spaces), so
 `validation.PasswordValue[password.Plaintext](validation.PasswordOptions{MinLength: 1, MaxLength: password.MaxPasswordBytes})`
 refuses only an empty one.
 
@@ -429,6 +432,75 @@ Plain `omitempty` fields still cannot prove wire presence from their Go zero
 value. Use explicit wrappers; additional ordinary-field presence metadata remains
 milestone work.
 
+### Non-empty wire codecs
+
+String types whose Go wire contract declares `NonEmpty: true` on
+`contract.Type` (emitted as `"non_empty": true` in manifest version 12) are
+enforced by the framework itself at every decoding boundary:
+
+- **JSON body decoding** (`contract.JSON.Decode`), **query parameter decoding**
+  (`http.QueryParam` / `OptionalQueryParam` / `RepeatedQueryParam`), **path
+  parameter decoding** (`http.Param`), **multipart text parts** (`http.TextPart`),
+  and **request headers** (`http.HeaderParam`) reject the empty wire value `""`
+  themselves, with the framework's ordinary `value` decode issue (HTTP 400
+  `bad_request`) at the field's path, **before the type's own codec is called**.
+- Because the framework enforces `NonEmpty: true` before invoking the codec,
+  the published client fact and Go's runtime decoding cannot diverge — even if
+  an application's custom JSON or text codec would otherwise accept `""`.
+- Generated form bindings read `non_empty` directly from the manifest and
+  publish `required: true` whenever presence is required on every path to the
+  field, independently of validation rules (while keeping transformed-value
+  rules unpublished).
+
+The framework sets `NonEmpty: true` on every framework-owned scalar string
+codec exportable in generated client contracts that rejects empty text:
+
+- Formatted scalars (normalized automatically from `contract.Format`):
+  `model.ID[M]`, `auth/mfa.EnrollmentID[M]`, `decimal.Decimal`, `temporal.Date`,
+  `temporal.Time`, `temporal.DateTime`, `time.Time`, `temporal.LocalDateTime`,
+  `temporal.Interval` (`[]byte` / `base64` accepts `""` and remains `false`).
+- Non-formatted exportable framework string codecs: `auth/password.Plaintext`
+  (a non-optional `password.Plaintext` field is therefore required without
+  adding a separate validation rule), `auth/mfa.TOTPCode`,
+  `auth/mfa.RecoveryCode`, `auth/challenge.Token[M, P]` (including
+  `passwordreset.Token` and `emailverification.Token`), `email.Address`,
+  `storage.ObjectKey`, `decimal/money.Currency`, `database/orm.Cursor[M]`
+  (`pagination.CursorQuery`), and the auth refresh/MFA challenge credential
+  wrappers.
+
+Internal/non-transport framework text codecs (`database/migrate.Checksum`,
+`jobs/archive.Cursor`, `lease.Token[K]`, `tracing.TraceID`, `tracing.SpanID`)
+are intentionally excluded because they cannot be request fields of a generated
+client: they do not implement `JSONContract()` (rejected in `//foundry:dto`)
+and `http.TextQuery`/`http.TextPath` emits no automatic `URLScalarInfo` for
+them (rejected by `manifest.Build` unless explicitly wrapped in
+`http.DescribeURL`).
+
+An application type with its own string codec may declare `NonEmpty: true`
+through the public `contract.DefineJSONValue` or `contract.DefineScalar`
+boundary (and `http.TextPath` / `http.TextQuery` / `http.TextPart` propagate it
+automatically from `JSONContract()` when the type also implements
+`encoding.TextMarshaler` and `encoding.TextUnmarshaler`). Declaring
+`NonEmpty: true` means the framework will reject `""` on every JSON, query,
+path, multipart text and header boundary before calling the application's codec:
+
+```go
+func (AppSKU) JSONContract() contract.JSON[AppSKU] {
+	typ := reflect.TypeFor[AppSKU]()
+	id := contract.TypeID(typ.PkgPath() + "." + typ.Name())
+	return contract.DefineJSONValue[AppSKU](contract.Schema{
+		Root:  id,
+		Types: []contract.Type{{ID: id, Kind: contract.StringKind, NonEmpty: true}},
+	})
+}
+```
+
+Without `NonEmpty: true`, an application custom codec stays as before: it does
+not reject `""` at the framework boundary or mark a field required unless an
+unconditional validation rule does. Schema compilation rejects `NonEmpty: true`
+on non-string types, on `base64`, and on string enums that include `""` as a
+case.
+
 <a id="recipe-field-labels"></a>
 ## Field display names
 
@@ -477,8 +549,10 @@ func WholeUnits(amount decimal.Decimal) (int64, error) {
 `DecimalLessOrEqual` compare two decimal fields through `Compare`.
 `DecimalMaxPlaces(n)` limits significant fractional digits; decimals are
 canonical, so `1.50` has one place. `DecimalMultipleOf(step)` requires an exact
-integer quotient for a positive step such as `0.25`. None of these convert
-through floating point.
+integer quotient for a positive step such as `0.25`. Both publish the resulting
+maximum decimal places as `limits.maxPlaces` in generated client descriptors
+(keeping the stricter bound when both apply). None of these convert through
+floating point.
 
 When replacing a custom precision rule, retire its declaration and registration.
 The native rule ID is `foundry.decimal_places`, with plural message

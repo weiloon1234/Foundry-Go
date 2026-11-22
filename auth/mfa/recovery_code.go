@@ -70,7 +70,7 @@ func (c *RecoveryCode) UnmarshalJSON(data []byte) error {
 // redacted.
 func (RecoveryCode) JSONContract() contract.JSON[RecoveryCode] {
 	const id contract.TypeID = "github.com/weiloon1234/Foundry-Go/auth/mfa.RecoveryCode"
-	return contract.DefineJSONValue[RecoveryCode](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind}}})
+	return contract.DefineJSONValue[RecoveryCode](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind, NonEmpty: true}}})
 }
 
 // RecoveryHash is a redacted SHA-256 digest of a high-entropy RecoveryCode,

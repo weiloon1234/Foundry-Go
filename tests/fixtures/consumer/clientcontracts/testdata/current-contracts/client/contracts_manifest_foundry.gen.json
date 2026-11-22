@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "types": [
     {
       "id": "[]contract.Issue",
@@ -701,7 +701,8 @@
     {
       "id": "github.com/weiloon1234/Foundry-Go/database/orm.Cursor[foundry.test/consumer/mutatorqueries.Member]",
       "kind": "string",
-      "nullable": false
+      "nullable": false,
+      "non_empty": true
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/datatable.Direction",
@@ -816,6 +817,7 @@
       "id": "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "decimal"
     },
     {
@@ -1128,66 +1130,77 @@
       "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/genericdto.Project]",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "uuid"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/genericdto.User]",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "uuid"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "uuid"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "uuid"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/mutatorqueries.Member]",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "uuid"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "uuid"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/temporal.Date",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "date"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/temporal.DateTime",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "date_time"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/temporal.Interval",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "interval"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "local_date_time"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/temporal.Time",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "time"
     },
     {
@@ -1288,6 +1301,7 @@
           "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
           "kind": "string",
           "nullable": false,
+          "non_empty": true,
           "format": "uuid"
         },
         "syntax": "model_id",
@@ -6319,6 +6333,7 @@
               "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
               "kind": "string",
               "nullable": false,
+              "non_empty": true,
               "format": "uuid"
             },
             "quoted": false
@@ -6483,6 +6498,7 @@
               "id": "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
               "kind": "string",
               "nullable": false,
+              "non_empty": true,
               "format": "decimal"
             },
             "quoted": false
@@ -6497,6 +6513,7 @@
                 "id": "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
                 "kind": "string",
                 "nullable": false,
+                "non_empty": true,
                 "format": "decimal"
               },
               "syntax": "formatted"
@@ -6575,6 +6592,7 @@
               "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
               "kind": "string",
               "nullable": false,
+              "non_empty": true,
               "format": "uuid"
             },
             "quoted": false

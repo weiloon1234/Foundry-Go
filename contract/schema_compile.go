@@ -133,6 +133,9 @@ func compileSchemaGraph(input Schema, metadataOnly, shared bool) (*compiledSchem
 		if typ.Kind == IntegerKind && typ.Bits == 0 {
 			typ.Bits = uint8(strconv.IntSize)
 		}
+		if typ.Kind == StringKind && typ.Format != "" && !stringValid(typ.Format, "") {
+			typ.NonEmpty = true
+		}
 		properties := make(map[string]Property, len(typ.Properties))
 		for _, property := range typ.Properties {
 			if !account(string(property.Presentation.Kind)) || !account(string(property.Presentation.LabelKey)) || !account(string(property.Presentation.HelpKey)) || property.Presentation.Validate() != nil {
@@ -159,6 +162,11 @@ func compileSchemaGraph(input Schema, metadataOnly, shared bool) (*compiledSchem
 			node, err := jsonwire.Decode(literal, jsonwire.Limits{Bytes: jsonwire.MaxBytes, Depth: 0, Nodes: 1})
 			if err != nil || !scalarValid(typ, node) {
 				return nil, invalidSchema()
+			}
+			if typ.NonEmpty {
+				if text, ok := node.(string); ok && text == "" {
+					return nil, invalidSchema()
+				}
 			}
 			canonical, err := scalarCase(typ, node)
 			if err != nil {
@@ -316,7 +324,10 @@ func typeOptionsValid(typ Type, metadataOnly bool) bool {
 	if typ.Kind != IntegerKind && typ.Kind != NumberKind && typ.Bits != 0 {
 		return false
 	}
-	if typ.Kind != StringKind && typ.Format != "" {
+	if typ.Kind != StringKind && (typ.Format != "" || typ.NonEmpty) {
+		return false
+	}
+	if typ.Format == Base64Format && typ.NonEmpty {
 		return false
 	}
 	if typ.Kind != StringKind && typ.Kind != IntegerKind && len(typ.Cases) != 0 {

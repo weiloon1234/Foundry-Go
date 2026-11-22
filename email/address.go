@@ -116,7 +116,7 @@ func headerText(text string) bool {
 func (Address) JSONContract() contract.JSON[Address] {
 	typ := reflect.TypeFor[Address]()
 	id := contract.TypeID(typ.PkgPath() + "." + typ.Name())
-	return contract.DefineJSONValue[Address](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind}}})
+	return contract.DefineJSONValue[Address](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind, NonEmpty: true}}})
 }
 
 // Text configuration reuses the same mailbox parser as message construction.

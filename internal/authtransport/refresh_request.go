@@ -40,6 +40,6 @@ func (v *RefreshCredential) UnmarshalJSON(data []byte) error {
 func (RefreshCredential) JSONContract() contract.JSON[RefreshCredential] {
 	const name contract.TypeID = "github.com/weiloon1234/Foundry-Go/internal/authtransport.RefreshCredential"
 	return contract.DefineJSONValue[RefreshCredential](contract.Schema{
-		Root: name, Types: []contract.Type{{ID: name, Kind: contract.StringKind}},
+		Root: name, Types: []contract.Type{{ID: name, Kind: contract.StringKind, NonEmpty: true}},
 	})
 }

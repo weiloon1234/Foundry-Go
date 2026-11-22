@@ -84,7 +84,7 @@ func (integerPathCodec[V]) Format(value V) (string, error) {
 // ModelIDPath preserves model ownership when decoding and generating URLs. It
 // rejects the nil UUID. Parsing is not a database lookup or authorization check.
 func ModelIDPath[M any]() PathCodec[model.ID[M]] {
-	return nativeURLCodec[model.ID[M]](modelIDPathCodec[M]{}, contract.Type{Kind: contract.StringKind, Format: contract.UUIDFormat}, ModelIDURLSyntax)
+	return nativeURLCodec[model.ID[M]](modelIDPathCodec[M]{}, contract.Type{Kind: contract.StringKind, Format: contract.UUIDFormat, NonEmpty: true}, ModelIDURLSyntax)
 }
 
 type modelIDPathCodec[M any] struct{}

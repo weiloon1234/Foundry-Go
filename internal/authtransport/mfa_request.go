@@ -46,5 +46,5 @@ func (v *MFAChallengeCredential) UnmarshalJSON(data []byte) error {
 }
 func (MFAChallengeCredential) JSONContract() contract.JSON[MFAChallengeCredential] {
 	const id contract.TypeID = "github.com/weiloon1234/Foundry-Go/internal/authtransport.MFAChallengeCredential"
-	return contract.DefineJSONValue[MFAChallengeCredential](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind}}})
+	return contract.DefineJSONValue[MFAChallengeCredential](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind, NonEmpty: true}}})
 }

@@ -1,14 +1,25 @@
 package clientcontracts_test
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	stdhttp "net/http"
+	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"foundry.test/consumer/clientcontracts"
 	"foundry.test/consumer/internal/clientfixture"
+	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
+	"github.com/weiloon1234/Foundry-Go/decimal"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -73,7 +84,19 @@ func TestClientFieldLimitsAndBindings(t *testing.T) {
 		}},
 		contract.Type{ID: "client.Prefs", Kind: contract.ObjectKind, Nullable: true, Properties: []contract.Property{
 			{Name: "color", Type: "string", Required: true, Presentation: label("fields.color")},
+			{Name: "owner_id", Type: "client.OwnerID", Required: true, Presentation: label("fields.prefs_owner_id")},
 		}},
+		contract.Type{ID: "client.OwnerID", Kind: contract.StringKind, Format: contract.UUIDFormat},
+		contract.Type{ID: "client.OptionalOwnerID", Kind: contract.AliasKind, Element: "client.OwnerID"},
+		contract.Type{ID: "client.NullableOwnerID", Kind: contract.AliasKind, Element: "client.OwnerID", Nullable: true},
+		contract.Type{ID: "client.PointerOwnerID", Kind: contract.AliasKind, Element: "client.OwnerID", Nullable: true},
+		contract.Type{ID: "client.CalendarDate", Kind: contract.StringKind, Format: contract.DateFormat},
+		contract.Type{ID: "client.NullableDate", Kind: contract.AliasKind, Element: "client.CalendarDate", Nullable: true},
+		contract.Type{ID: "client.WallTime", Kind: contract.StringKind, Format: contract.TimeFormat},
+		contract.Type{ID: "client.LocalInstant", Kind: contract.StringKind, Format: contract.LocalDateTimeFormat},
+		contract.Type{ID: "client.Duration", Kind: contract.StringKind, Format: contract.IntervalFormat},
+		contract.Type{ID: "client.Payload", Kind: contract.StringKind, Format: contract.Base64Format},
+		contract.Type{ID: "client.NullableDecimal", Kind: contract.AliasKind, Element: "github.com/weiloon1234/Foundry-Go/decimal.Decimal", Nullable: true},
 		contract.Type{ID: "client.Slot", Kind: contract.ObjectKind, Properties: []contract.Property{
 			{Name: "opens", Type: "string", Required: true, Presentation: label("fields.opens")},
 		}},
@@ -132,6 +155,23 @@ func TestClientFieldLimitsAndBindings(t *testing.T) {
 			{Name: "share", Type: "client.Ratio", Required: true, Presentation: label("fields.share")},
 			{Name: "pin", Type: "string", Required: true, Presentation: label("fields.pin")},
 			{Name: "starts", Type: "client.Instant", Required: true, Presentation: label("fields.starts")},
+			{Name: "owner_id", Type: "client.OwnerID", Required: true, Presentation: label("fields.owner_id")},
+			{Name: "optional_owner_id", Type: "client.OptionalOwnerID", Presentation: label("fields.optional_owner_id")},
+			{Name: "nullable_owner_id", Type: "client.NullableOwnerID", Required: true, Presentation: label("fields.nullable_owner_id")},
+			{Name: "pointer_owner_id", Type: "client.PointerOwnerID", Presentation: label("fields.pointer_owner_id")},
+			{Name: "required_owner_id", Type: "client.OptionalOwnerID", Presentation: label("fields.required_owner_id")},
+			{Name: "birth_date", Type: "client.CalendarDate", Required: true, Presentation: label("fields.birth_date")},
+			{Name: "nullable_date", Type: "client.NullableDate", Required: true, Presentation: label("fields.nullable_date")},
+			{Name: "opens_at", Type: "client.WallTime", Required: true, Presentation: label("fields.opens_at")},
+			{Name: "local_at", Type: "client.LocalInstant", Required: true, Presentation: label("fields.local_at")},
+			{Name: "span", Type: "client.Duration", Required: true, Presentation: label("fields.span")},
+			{Name: "raw_bytes", Type: "client.Payload", Required: true, Presentation: label("fields.raw_bytes")},
+			{Name: "plain_decimal", Type: "github.com/weiloon1234/Foundry-Go/decimal.Decimal", Required: true, Presentation: label("fields.plain_decimal")},
+			{Name: "optional_price", Type: "github.com/weiloon1234/Foundry-Go/decimal.Decimal", Presentation: label("fields.optional_price")},
+			{Name: "nullable_price", Type: "client.NullableDecimal", Required: true, Presentation: label("fields.nullable_price")},
+			{Name: "step_price", Type: "github.com/weiloon1234/Foundry-Go/decimal.Decimal", Required: true, Presentation: label("fields.step_price")},
+			{Name: "tight_price", Type: "github.com/weiloon1234/Foundry-Go/decimal.Decimal", Required: true, Presentation: label("fields.tight_price")},
+			{Name: "whole_price", Type: "github.com/weiloon1234/Foundry-Go/decimal.Decimal", Required: true, Presentation: label("fields.whole_price")},
 		}},
 	)
 	doc.Roots = append(doc.Roots, "client.LimitsForm")
@@ -167,6 +207,12 @@ func TestClientFieldLimitsAndBindings(t *testing.T) {
 		limitField("maybe", wrap(validation.OptionalKind, accepted)),
 		limitField("share", limitLeaf("foundry.min", map[string]any{"min": 0}), limitLeaf("foundry.max", map[string]any{"max": 1})),
 		limitField("pin", limitLeaf("foundry.min_length", map[string]any{"min": 6}), limitLeaf("foundry.max_length", map[string]any{"max": 6})),
+		limitField("pointer_owner_id", wrap(validation.PointerKind, limitLeaf("foundry.non_empty", map[string]any{"empty_kind": "value"}))),
+		limitField("required_owner_id", limitLeaf("foundry.required", map[string]any{"empty_kind": "value"})),
+		limitField("optional_price", wrap(validation.OptionalKind, limitLeaf("foundry.decimal_places", map[string]any{"places": 3}))),
+		limitField("step_price", limitLeaf("foundry.multiple_of", map[string]any{"divisor": "0.25"})),
+		limitField("tight_price", limitLeaf("foundry.decimal_places", map[string]any{"places": 4}), limitLeaf("foundry.multiple_of", map[string]any{"divisor": "0.25"})),
+		limitField("whole_price", limitLeaf("foundry.decimal_places", map[string]any{"places": 0})),
 		limitField("rows", limitLeaf("foundry.max_items", map[string]any{"max": 3}), wrap(validation.EachKind, validation.Description{Kind: validation.AllKind, Children: []validation.Description{
 			limitField("name", limitLeaf("foundry.non_blank", nil), limitLeaf("foundry.max_length", map[string]any{"max": 6})),
 			limitField("slots", wrap(validation.EachKind, limitField("opens", limitLeaf("foundry.min_length", map[string]any{"min": 4})))),
@@ -230,4 +276,218 @@ func TestClientFieldLimitsAndBindings(t *testing.T) {
 		t.Fatal(err)
 	}
 	tools.Check(t, source, "", filepath.Join("testdata", "limits"))
+}
+
+type decimalCodecGoldenEntry struct {
+	Input  string `json:"input"`
+	Valid  bool   `json:"valid"`
+	Places *int   `json:"places,omitempty"`
+}
+
+// TestDecimalCodecGolden runs a table covering Go's decimal codec grammar
+// (signs, leading and trailing zeros, bare points, exponents, whitespace,
+// non-digits, and MaxDigits boundaries) through decimal.Parse and
+// Decimal.UnmarshalJSON, keeping the golden table checked by the TypeScript
+// fixture in lockstep with Go. Set FOUNDRY_UPDATE_DECIMAL_GOLDEN=1 to refresh.
+func TestDecimalCodecGolden(t *testing.T) {
+	inputs := []string{
+		"",
+		"+", "-", "++1", "+-1", "--1", "-+0", "1-2", "1+2",
+		".", ".0", ".5", "+.5", "-.5",
+		"0.", "1.", "+1.", "-1.", "1.2.3", "1..2", "..",
+		"0", "+0", "-0", "000", "+000", "-000",
+		"0.0", "+0.0", "-0.0", "000.000", "+000.000", "-000.000",
+		"01", "00042", "+00042", "-00042", "00042.1000", "-000.0010",
+		"1.0", "1.00", "1.50", "1.5000", "-12.3400", "0.0100", "0.001000",
+		"1", "42", "-42", "+42", "0.1", "0.01", "3.001", "-0.0001",
+		"123456789012345678901234567890.12345678901234567890",
+		"1e0", "1e3", "1E3", "1e+3", "1e-3", "1.5e2", "0e0", "-1.0E-1",
+		" ", "   ", " 1", "1 ", " 1 ", "\t1", "1\n", "1\r", "1 2", "1 .2", "1. 2", "\u00a01",
+		"abc", "1a", "a1", "1.2a",
+		"NaN", "nan", "Infinity", "-Infinity", "+Infinity", "inf",
+		"1_000", "1,000", "1,5", "$10", "10%", "１２", "1.２", "٠", "1\x00", "1.2\x00",
+		strings.Repeat("9", decimal.MaxDigits),
+		strings.Repeat("9", decimal.MaxDigits+1),
+		strings.Repeat("0", decimal.MaxDigits),
+		strings.Repeat("0", decimal.MaxDigits+1),
+		"+" + strings.Repeat("9", decimal.MaxDigits),
+		"-" + strings.Repeat("9", decimal.MaxDigits),
+		"+" + strings.Repeat("9", decimal.MaxDigits+1),
+		"0." + strings.Repeat("0", decimal.MaxDigits-1),
+		"0." + strings.Repeat("0", decimal.MaxDigits-2) + "1",
+		"+0." + strings.Repeat("0", decimal.MaxDigits-2) + "1",
+		"-0." + strings.Repeat("0", decimal.MaxDigits-2) + "1",
+		"0." + strings.Repeat("0", decimal.MaxDigits-1) + "1",
+		"+0." + strings.Repeat("0", decimal.MaxDigits-1) + "1",
+		"0000." + strings.Repeat("0", decimal.MaxDigits-4),
+		"0000." + strings.Repeat("0", decimal.MaxDigits-3),
+		"1." + strings.Repeat("0", decimal.MaxDigits-2) + "5",
+		"1." + strings.Repeat("0", decimal.MaxDigits-1) + "0",
+		"123." + strings.Repeat("4", decimal.MaxDigits-3),
+		"123." + strings.Repeat("4", decimal.MaxDigits-2),
+	}
+	entries := make([]decimalCodecGoldenEntry, 0, len(inputs))
+	for _, input := range inputs {
+		parsed, parseErr := decimal.Parse(input)
+		wire, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var unmarshaled decimal.Decimal
+		unmarshalErr := json.Unmarshal(wire, &unmarshaled)
+		if (parseErr == nil) != (unmarshalErr == nil) {
+			t.Fatalf("Parse vs UnmarshalJSON disagreed for %q: %v vs %v", input, parseErr, unmarshalErr)
+		}
+		entry := decimalCodecGoldenEntry{Input: input, Valid: parseErr == nil}
+		if parseErr == nil {
+			if parsed != unmarshaled {
+				t.Fatalf("Parse vs UnmarshalJSON value disagreed for %q: %v vs %v", input, parsed, unmarshaled)
+			}
+			scale := parsed.Scale()
+			entry.Places = &scale
+		}
+		entries = append(entries, entry)
+	}
+	got, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = append(got, '\n')
+	goldenPath := filepath.Join("testdata", "limits", "decimal_codec.golden.json")
+	if os.Getenv("FOUNDRY_UPDATE_DECIMAL_GOLDEN") == "1" {
+		if err := os.WriteFile(goldenPath, got, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("read golden %s: %v (run with FOUNDRY_UPDATE_DECIMAL_GOLDEN=1 to write)", goldenPath, err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("decimal codec golden %s drifted from Go codec; run with FOUNDRY_UPDATE_DECIMAL_GOLDEN=1 to refresh", goldenPath)
+	}
+}
+
+// TestClientNonEmptyContractEndToEnd exercises real generated DTOs, a real
+// generated query descriptor, a real HTTP router/server, manifest export,
+// TypeScript generation, strict tsc compilation, and Node runtime execution for
+// Go-declared NonEmpty codecs: omitzero ID, required TextQuery decimal sent
+// empty, list rows (non-nullable value.List vs nullable slice), PATCH fields
+// (including an Optional field with an unconditional Required rule),
+// password.Plaintext with no rule, all newly covered framework non-empty
+// codecs, and an application custom codec declaring NonEmpty vs an opaque one.
+func TestClientNonEmptyContractEndToEnd(t *testing.T) {
+	tools := clientfixture.Load(t)
+
+	createRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "codec.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/codec/create"))
+	createEndpoint := foundryhttp.DefineEndpoint(createRoute, foundryhttp.EmptyQuery(), clientcontracts.CodecFormCreateBody(), foundryhttp.EmptyResponse(204))
+
+	patchRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "codec.patch", Method: foundryhttp.PATCH, Access: foundryhttp.Public}, foundryhttp.StaticPath("/codec/patch"))
+	patchBase := foundryhttp.DefineEndpoint(patchRoute, foundryhttp.EmptyQuery(), clientcontracts.CodecFormPatchBody(), foundryhttp.EmptyResponse(204))
+	patchEndpoint := foundryhttp.ValidateBody(patchBase, validation.Rules(clientcontracts.CodecFormPatchValidationFields().ForcedOptionalID, validation.Required[model.ID[models.User]]()))
+
+	quoteRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "codec.quote", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/codec/quote"))
+	quoteEndpoint := foundryhttp.DefineEndpoint(quoteRoute, clientcontracts.DecimalAmountQueryDescriptor(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+
+	router, err := foundryhttp.NewRouter(
+		createEndpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, clientcontracts.CodecFormCreate]) (foundryhttp.NoContent, error) {
+			return foundryhttp.NoContent{}, nil
+		}),
+		patchEndpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, clientcontracts.CodecFormPatch]) (foundryhttp.NoContent, error) {
+			return foundryhttp.NoContent{}, nil
+		}),
+		quoteEndpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, clientcontracts.DecimalAmountQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
+			return foundryhttp.NoContent{}, nil
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(router)
+	t.Cleanup(server.Close)
+
+	// Confirm the real Go server enforces the exact wire contract:
+	// 1. Required TextQuery decimal sent as an empty query value (?amount=&sku=SKU-1) -> 400.
+	resp, err := server.Client().Get(server.URL + "/codec/quote?amount=&sku=SKU-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != stdhttp.StatusBadRequest {
+		t.Fatalf("empty required TextQuery decimal status = %d, want 400", resp.StatusCode)
+	}
+	// 2. Valid TextQuery decimal and AppSKU -> 204.
+	resp, err = server.Client().Get(server.URL + "/codec/quote?amount=12.50&sku=SKU-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != stdhttp.StatusNoContent {
+		t.Fatalf("valid TextQuery decimal status = %d, want 204", resp.StatusCode)
+	}
+	// 3. POST omitting omitzero_id succeeds (204); POST with empty password or empty sku rejects (400).
+	validCreate := `{
+		"owner_id":"0193fd8c-2075-7000-8000-000000000001",
+		"password":"correct horse battery staple",
+		"totp":"123456",
+		"recovery":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		"reset_token":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		"contact":"alice@example.com",
+		"asset_key":"uploads/report.pdf",
+		"currency":"USD",
+		"sku":"SKU-100",
+		"opaque_note":"",
+		"required_ids":["0193fd8c-2075-7000-8000-000000000002"],
+		"nullable_ids":null,
+		"lines":[{"item_id":"0193fd8c-2075-7000-8000-000000000003","amount":"9.95"}]
+	}`
+	resp, err = server.Client().Post(server.URL+"/codec/create", "application/json", strings.NewReader(validCreate))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != stdhttp.StatusNoContent {
+		t.Fatalf("valid create omitting omitzero_id status = %d, want 204", resp.StatusCode)
+	}
+	for name, badBody := range map[string]string{
+		"empty_password": strings.Replace(validCreate, `"correct horse battery staple"`, `""`, 1),
+		"empty_sku":      strings.Replace(validCreate, `"SKU-100"`, `""`, 1),
+		"empty_row_id":   strings.Replace(validCreate, `"0193fd8c-2075-7000-8000-000000000002"`, `""`, 1),
+	} {
+		resp, err = server.Client().Post(server.URL+"/codec/create", "application/json", strings.NewReader(badBody))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != stdhttp.StatusBadRequest {
+			t.Fatalf("%s status = %d, want 400", name, resp.StatusCode)
+		}
+	}
+	// 4. PATCH with empty owner_id rejects (400); PATCH omitting forced_optional_id rejects (422).
+	patchReq := func(payload string) int {
+		req, err := stdhttp.NewRequest(stdhttp.MethodPatch, server.URL+"/codec/patch", strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		r, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = r.Body.Close()
+		return r.StatusCode
+	}
+	if code := patchReq(`{"owner_id":"","pointer_owner_id":null,"forced_optional_id":"0193fd8c-2075-7000-8000-000000000001"}`); code != stdhttp.StatusBadRequest {
+		t.Fatalf("PATCH empty owner_id status = %d, want 400", code)
+	}
+	if code := patchReq(`{"owner_id":"0193fd8c-2075-7000-8000-000000000001","pointer_owner_id":null}`); code != stdhttp.StatusUnprocessableEntity {
+		t.Fatalf("PATCH missing forced_optional_id status = %d, want 422", code)
+	}
+
+	source, err := manifest.Build(t.Context(), manifest.Sources{HTTP: router})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools.Check(t, source, server.URL, filepath.Join("testdata", "codec-required"))
 }

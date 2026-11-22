@@ -130,7 +130,7 @@ interface UnionVariant { readonly tag: string; readonly type: string }
 interface WireType {
   readonly discriminator?: string; readonly variants?: readonly UnionVariant[];
   readonly id: string; readonly kind: string; readonly nullable: boolean; readonly properties?: readonly Property[];
-  readonly element?: string; readonly length?: number; readonly bits?: number; readonly signed?: boolean; readonly format?: string;
+  readonly element?: string; readonly length?: number; readonly bits?: number; readonly signed?: boolean; readonly format?: string; readonly non_empty?: boolean;
   readonly cases?: readonly unknown[]; readonly key?: { readonly value: WireType; readonly syntax: string; readonly server_only: boolean; readonly non_zero: boolean };
 }
 /** Custom URL syntax must be provided explicitly. Payload schema validation still runs. */
@@ -261,7 +261,7 @@ class WireCodec {
     let wire: unknown = value, result: unknown = value;
     switch (type.kind) {
       case "boolean": if (typeof value !== "boolean") reject(path, "type"); break;
-      case "string": if (typeof value !== "string" || !validUnicode(value) || !formatValid(type.format, value)) reject(path, "value"); break;
+      case "string": if (typeof value !== "string" || !validUnicode(value) || type.non_empty && value === "" || !formatValid(type.format, value)) reject(path, "value"); break;
       case "integer": {
         const wide = type.bits! > 32;
         if (encode) {

@@ -65,14 +65,19 @@ type Variant struct {
 
 // Type is one normalized wire shape. Only fields appropriate for Kind may be
 // set. Element describes array/map elements or an alias/quoted target. Integer
-// Integer Bits==0 is normalized to the Go target's native int width. Number
-// Bits==0 preserves json.Number lexemes; 32/64 describe concrete floating point.
+// Bits==0 is normalized to the Go target's native int width. Number Bits==0
+// preserves json.Number lexemes; 32/64 describe concrete floating point.
 // Length, when set, describes an exact array length, including an empty array.
 // Cases are exact JSON string/integer constants, never floating-point metadata.
+// NonEmpty marks a StringKind whose codec rejects the empty wire string "".
+// Built-in formats whose codec rejects "" normalize NonEmpty to true; custom
+// string codecs may declare it explicitly through DefineJSONValue or
+// DefineScalar.
 type Type struct {
 	ID            TypeID              `json:"id"`
 	Kind          Kind                `json:"kind"`
 	Nullable      bool                `json:"nullable"`
+	NonEmpty      bool                `json:"non_empty,omitempty"`
 	Discriminator string              `json:"discriminator,omitempty"`
 	Variants      []Variant           `json:"variants,omitempty"`
 	Properties    []Property          `json:"properties,omitempty"`

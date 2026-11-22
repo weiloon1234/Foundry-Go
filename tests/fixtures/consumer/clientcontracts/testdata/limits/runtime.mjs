@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import v8 from "node:v8";
 import vm from "node:vm";
@@ -18,7 +19,12 @@ assert.deepEqual(plain(field("transformed").limits), {});
 assert.deepEqual(plain(field("guarded").limits), {});
 assert.deepEqual(plain(field("count").limits), { min: 1, max: 10, step: 1 });
 assert.deepEqual(plain(field("ratio").limits), { min: "0.5", step: "any" }, "a fractional bound stays exact text");
-assert.deepEqual(plain(field("price").limits), { min: "0.01", step: "0.01" });
+assert.deepEqual(plain(field("price").limits), { min: "0.01", maxPlaces: 2, step: "0.01" });
+assert.deepEqual(plain(field("plain_decimal").limits), { step: "any" });
+assert.deepEqual(plain(field("optional_price").limits), { maxPlaces: 3, step: "0.001" });
+assert.deepEqual(plain(field("step_price").limits), { maxPlaces: 2, step: "0.01" }, "DecimalMultipleOf bounds canonical decimal places");
+assert.deepEqual(plain(field("tight_price").limits), { maxPlaces: 2, step: "0.01" }, "stricter place bound between DecimalMaxPlaces and DecimalMultipleOf wins");
+assert.deepEqual(plain(field("whole_price").limits), { maxPlaces: 0, step: 1 }, "zero decimal places publishes maxPlaces: 0 and step: 1");
 assert.deepEqual(plain(field("names").limits), {});
 assert.deepEqual(plain(field("names").at("en").limits), { nonEmpty: true, maxBytes: 12 });
 assert.equal(field("names").at("en").required, true);
@@ -35,7 +41,7 @@ assert.deepEqual(plain(field("share").limits), { min: 0, max: 1, step: "any" }, 
 assert.deepEqual(plain(field("pin").limits), { minLength: 6, maxLength: 6 }, "a fixed length is Go's, published for the code's cells");
 
 // The validator counts code points for lengths and UTF-8 bytes for byte limits.
-const body = { text: "abc", optional_text: "ab", nullable_text: null, transformed: "x", guarded: "x", count: 2, ratio: 1, price: "1.00", names: { en: "hello" }, codes: ["ab"], min_text: "ab", secret: "x", choice: "a", supplied: "s", unlabelled: "x", account: { username: "ann", email: null, internal: "x" }, rows: [{ name: "a", slots: [{ opens: "0900" }] }], states: { open: "yes" }, consent: true, agreed: true, refused: false, share: 0.5, pin: "123456", starts: "2026-01-01T00:00:00Z" };
+const body = { text: "abc", optional_text: "ab", nullable_text: null, transformed: "x", guarded: "x", count: 2, ratio: 1, price: "1.00", names: { en: "hello" }, codes: ["ab"], min_text: "ab", secret: "x", choice: "a", supplied: "s", unlabelled: "x", account: { username: "ann", email: null, internal: "x" }, rows: [{ name: "a", slots: [{ opens: "0900" }] }], states: { open: "yes" }, consent: true, agreed: true, refused: false, share: 0.5, pin: "123456", starts: "2026-01-01T00:00:00Z", owner_id: "0193fd8c-2075-7000-8000-000000000001", nullable_owner_id: null, required_owner_id: "0193fd8c-2075-7000-8000-000000000002", birth_date: "2026-01-01", nullable_date: null, opens_at: "09:00:00", local_at: "2026-01-01T09:00:00", span: "P1D", raw_bytes: "", plain_decimal: "0", nullable_price: null, step_price: "0.25", tight_price: "1.50", whole_price: "5" };
 const codes = (patch) => op.validate({ path: { key: "1" }, body: { ...body, ...patch } }).issues.map((issue) => `${issue.path} ${issue.code}`);
 assert.deepEqual(codes({ text: "€".repeat(10) }), [], "ten code points of 30 bytes fit both bounds");
 assert.deepEqual(codes({ text: "😀".repeat(10) }), ["/body/text foundry.max_bytes"], "ten emoji are ten code points (twenty UTF-16 units) but 40 bytes");
@@ -77,7 +83,7 @@ let values = { ...body, optional_text: "", supplied: "", optional_names: {} };
 const update = (updater) => { values = updater(values); };
 const { state, bind } = form();
 const f = bind(op, values, update, [], (bound) => { bound.names.at("ms"); bound.names.at("en"); bound.codes.at(0); });
-assert.deepEqual(Object.keys(f).sort(), ["account", "agreed", "choice", "codes", "consent", "count", "filter", "guarded", "links", "maybe", "min_text", "more_rows", "names", "nullable_text", "optional_names", "optional_text", "pin", "prefs", "price", "ratio", "refused", "rows", "secret", "share", "starts", "states", "supplied", "text", "transformed", "wallet"]);
+assert.deepEqual(Object.keys(f).sort(), ["account", "agreed", "birth_date", "choice", "codes", "consent", "count", "filter", "guarded", "links", "local_at", "maybe", "min_text", "more_rows", "names", "nullable_date", "nullable_owner_id", "nullable_price", "nullable_text", "opens_at", "optional_names", "optional_owner_id", "optional_price", "optional_text", "owner_id", "pin", "plain_decimal", "pointer_owner_id", "prefs", "price", "ratio", "raw_bytes", "refused", "required_owner_id", "rows", "secret", "share", "span", "starts", "states", "step_price", "supplied", "text", "tight_price", "transformed", "wallet", "whole_price"]);
 assert.equal(sdk.FieldBinding, undefined, "the binding class is a type only: an entry exports no value for it");
 assert.ok(Object.isFrozen(f.text));
 assert.equal(f.text.name, "text");
@@ -97,6 +103,30 @@ assert.equal(required(f.names.at("ms")), false);
 assert.equal(required(f.count), false, "a number has no empty text");
 assert.equal(required(f.transformed), false, "a transformed value publishes nothing");
 assert.equal(required(f.guarded), false, "a conditional rule publishes nothing");
+// Gap A: framework wire formats whose Go codec rejects empty text are
+// required when presence is required on every path, independently of rules;
+// optional, nullable, pointer and base64 forms are not.
+assert.equal(required(f.owner_id), true, "required model.ID (uuid)");
+assert.equal(required(f.price), true, "required decimal with rules");
+assert.equal(required(f.plain_decimal), true, "required decimal without rules");
+assert.equal(required(f.birth_date), true, "required temporal.Date");
+assert.equal(required(f.opens_at), true, "required temporal.Time");
+assert.equal(required(f.starts), true, "required temporal.DateTime / time.Time");
+assert.equal(required(f.local_at), true, "required temporal.LocalDateTime");
+assert.equal(required(f.span), true, "required temporal.Interval");
+assert.equal(required(f.required_owner_id), true, "Optional model.ID with Required rule");
+assert.equal(required(f.raw_bytes), false, "base64 codec accepts empty string");
+assert.equal(required(f.optional_owner_id), false, "Optional model.ID");
+assert.equal(required(f.nullable_owner_id), false, "Nullable model.ID");
+assert.equal(required(f.pointer_owner_id), false, "pointer *model.ID under Pointer rule");
+assert.equal(required(f.optional_price), false, "Optional decimal");
+assert.equal(required(f.nullable_price), false, "Nullable decimal");
+assert.equal(required(f.nullable_date), false, "Nullable date");
+assert.equal(required(f.prefs.owner_id), false, "model.ID inside optional nullable parent");
+assert.deepEqual(plain(f.owner_id.checks), { required: true, limits: {} });
+assert.deepEqual(plain(f.optional_owner_id.checks), { required: false, limits: {} });
+assert.deepEqual(plain(f.nullable_owner_id.checks), { required: false, limits: {} });
+assert.deepEqual(plain(f.pointer_owner_id.checks), { required: false, limits: {} });
 assert.equal(f.names.at("x.y").name, "names.x\\.y");
 // A boolean is required, meaning it must be checked, exactly when Go demands
 // true on the required path; no other rule requires it.
@@ -140,6 +170,73 @@ assert.equal(sdk.outOfRange({ max: "10" }, "10.000000000000000001"), "max");
 assert.equal(sdk.outOfRange(field("count").limits, 11), "max");
 assert.equal(sdk.outOfRange(field("price").limits, "1,5"), undefined);
 assert.equal(sdk.outOfRange(field("price").limits, "-"), undefined);
+assert.equal(sdk.outOfRange({ max: "10" }, "9".repeat(4097)), undefined, "outOfRange agrees with decimalPlaces on the MaxDigits bound");
+
+// Gap B: decimalPlaces matches Go's decimal.Parse / Decimal.UnmarshalJSON /
+// Decimal.Scale across the Go-generated golden table, and outOfRange agrees on
+// every entry about what is well formed.
+const decimalGolden = JSON.parse(fs.readFileSync(new URL("./decimal_codec.golden.json", import.meta.url), "utf8"));
+assert.ok(decimalGolden.length >= 60, `expected comprehensive golden table, got ${decimalGolden.length}`);
+for (const entry of decimalGolden) {
+  const got = sdk.decimalPlaces(entry.input);
+  if (entry.valid) {
+    assert.equal(got, entry.places, `decimalPlaces(${JSON.stringify(entry.input)})`);
+    const isZero = /^[+-]?0+(?:\.0+)?$/.test(entry.input);
+    const rangeCheck = isZero ? sdk.outOfRange({ min: "1" }, entry.input) : sdk.outOfRange({ min: "0", max: "0" }, entry.input);
+    assert.notEqual(rangeCheck, undefined, `outOfRange must accept valid decimal ${JSON.stringify(entry.input)}`);
+  } else {
+    assert.equal(got, undefined, `decimalPlaces(${JSON.stringify(entry.input)}) must be undefined`);
+    assert.equal(sdk.outOfRange({ min: "0", max: "0" }, entry.input), undefined, `outOfRange must reject malformed decimal ${JSON.stringify(entry.input)}`);
+  }
+}
+
+// Decimal checks: maxPlaces waits until edited (and is never checked on a
+// prepared operation); malformed decimal text is an input-integrity state on
+// checks.malformed (even untouched, optional or prepared), never on "".
+{
+  const dec = form();
+  let draft = { ...body, price: "3.001", optional_price: "", plain_decimal: "abc" };
+  const change = (next) => { draft = next(draft); };
+  const initial = dec.bind(op, draft, change, []);
+  assert.deepEqual(plain(initial.price.checks), { required: true, limits: {} }, "untouched stored 3.001 enforces no maxPlaces yet");
+  assert.deepEqual(plain(initial.optional_price.checks), { required: false, limits: {} }, "empty optional decimal is not malformed");
+  assert.deepEqual(plain(initial.plain_decimal.checks), { required: true, limits: {}, malformed: true }, "untouched malformed decimal flags malformed");
+  // Editing price to 3.002 activates maxPlaces: 2 (and min/step).
+  initial.price.onChange("3.002");
+  const edited = dec.bind(op, draft, change, []);
+  assert.deepEqual(plain(edited.price.checks), { required: true, limits: { min: "0.01", maxPlaces: 2, step: "0.01" } });
+  // Restoring price to its first-bound value clears checks.limits again.
+  edited.price.onChange("3.001");
+  assert.deepEqual(plain(dec.bind(op, draft, change, []).price.checks), { required: true, limits: {} });
+  // Clearing required decimal sets checks.required: true and omits malformed.
+  edited.price.onChange("");
+  assert.deepEqual(plain(dec.bind(op, draft, change, []).price.checks), { required: true, limits: { min: "0.01", maxPlaces: 2, step: "0.01" } }, "empty text belongs to required, never malformed");
+  // Malformed text on optional decimal flags malformed without setting required.
+  for (const bad of ["abc", "1.", ".5", "1e3", " 1", "   ", "9".repeat(4097)]) {
+    edited.optional_price.onChange(bad);
+    const boundBad = dec.bind(op, draft, change, []);
+    assert.deepEqual(plain(boundBad.optional_price.checks), { required: false, limits: { maxPlaces: 3, step: "0.001" }, malformed: true }, `malformed ${JSON.stringify(bad)}`);
+  }
+  // Valid text clears malformed and updates binding identity.
+  const beforeFix = dec.bind(op, draft, change, []).optional_price;
+  beforeFix.onChange("1.500");
+  const afterFix = dec.bind(op, draft, change, []).optional_price;
+  assert.notEqual(afterFix, beforeFix);
+  assert.deepEqual(plain(afterFix.checks), { required: false, limits: { maxPlaces: 3, step: "0.001" } });
+  // Prepared operation: enforces no required or maxPlaces, but still flags malformed decimal text.
+  const prepForm = form();
+  let prepDraft = { ...body, price: "1.00", owner_id: "" };
+  const prepChange = (next) => { prepDraft = next(prepDraft); };
+  const prepInit = prepForm.bind(sdk.operation("genericEcho"), prepDraft, prepChange, []);
+  assert.equal(prepInit.owner_id.required, true);
+  assert.deepEqual(plain(prepInit.owner_id.checks), { required: false, limits: {} }, "prepared op does not enforce required");
+  prepInit.price.onChange("3.001");
+  assert.deepEqual(plain(prepForm.bind(sdk.operation("genericEcho"), prepDraft, prepChange, []).price.checks), { required: false, limits: {} }, "prepared op does not enforce maxPlaces");
+  prepInit.price.onChange("abc");
+  assert.deepEqual(plain(prepForm.bind(sdk.operation("genericEcho"), prepDraft, prepChange, []).price.checks), { required: false, limits: {}, malformed: true }, "prepared op still flags malformed decimal");
+  prepInit.price.onChange("");
+  assert.deepEqual(plain(prepForm.bind(sdk.operation("genericEcho"), prepDraft, prepChange, []).price.checks), { required: false, limits: {} }, "empty on prepared op is not malformed");
+}
 
 // While a field holds the value the form first bound it with, a control
 // enforces only required; once it differs, every bound.

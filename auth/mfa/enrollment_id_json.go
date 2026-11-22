@@ -44,5 +44,5 @@ func (id *EnrollmentID[M]) UnmarshalJSON(data []byte) error {
 func (EnrollmentID[M]) JSONContract() contract.JSON[EnrollmentID[M]] {
 	typ := reflect.TypeFor[EnrollmentID[M]]()
 	id := contract.TypeID(typ.PkgPath() + "." + typ.Name())
-	return contract.DefineJSONValue[EnrollmentID[M]](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind, Format: contract.UUIDFormat}}})
+	return contract.DefineJSONValue[EnrollmentID[M]](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind, Format: contract.UUIDFormat, NonEmpty: true}}})
 }

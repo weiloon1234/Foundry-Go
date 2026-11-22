@@ -123,5 +123,5 @@ func IntegerJSONKey[K JSONKeyInteger]() JSONKey[K] {
 
 // ModelIDJSONKey retains model ownership and rejects the nil UUID.
 func ModelIDJSONKey[M any]() JSONKey[model.ID[M]] {
-	return defineJSONKey(scalarKeyType[model.ID[M]](Type{Kind: StringKind, Format: UUIDFormat}), ModelIDJSONKeySyntax, true)
+	return defineJSONKey(scalarKeyType[model.ID[M]](Type{Kind: StringKind, Format: UUIDFormat, NonEmpty: true}), ModelIDJSONKeySyntax, true)
 }

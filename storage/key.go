@@ -99,7 +99,7 @@ func (k *ObjectKey) UnmarshalJSON(data []byte) error {
 func (ObjectKey) JSONContract() contract.JSON[ObjectKey] {
 	t := reflect.TypeFor[ObjectKey]()
 	id := contract.TypeID(t.PkgPath() + "." + t.Name())
-	return contract.DefineJSONValue[ObjectKey](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind}}})
+	return contract.DefineJSONValue[ObjectKey](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind, NonEmpty: true}}})
 }
 
 // Prefix selects an exact lexical prefix, not a directory or a normalized path.

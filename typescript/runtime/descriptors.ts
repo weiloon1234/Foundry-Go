@@ -1,4 +1,4 @@
-import { JSONNumber, compareNumbers, createFieldBinding, defaultJSONLimits, immutable, object, pointer, reject, runtimePolicy, validUnicode, writeWire } from "./runtime.js";
+import { JSONNumber, compareNumbers, createFieldBinding, decimalPlaces, defaultJSONLimits, immutable, object, pointer, reject, runtimePolicy, validUnicode, writeWire } from "./runtime.js";
 import type { CallOptions, ClientOptions, FieldBinding, FieldChecks, FieldLimits, Identity, Issue, MultipartPart, Operation, Payload, Presentation, RuleDescription, RuntimeDocument, URLParameter, Upload, ValidationReport, WireType, localeKeyed } from "./runtime.js";
 /** Unsafe-size metadata numbers stay exact instead of being rounded or clamped. */
 export type ExactMetadataNumber = number | JSONNumber;
@@ -235,6 +235,7 @@ function fieldLimits(constraints: readonly Constraint[], type: WireType | undefi
     if (limits[key] === undefined || order !== undefined && (key === "min" ? order > 0 : order < 0)) limits[key] = next;
   };
   let places: number | undefined;
+  const placeBound = (next: number | undefined): void => { if (next !== undefined && (places === undefined || next < places)) places = next; };
   for (const rule of rules) {
     const id = rule.spec!.id, emptyKind = ruleParameter(rule, "empty_kind");
     const textOrCollection = emptyKind === "text" || emptyKind === "collection";
@@ -246,13 +247,21 @@ function fieldLimits(constraints: readonly Constraint[], type: WireType | undefi
       case "foundry.max_bytes": upper("maxBytes", ruleParameter(rule, "max")); break;
       case "foundry.min": case "foundry.decimal_min": bound("min", ruleParameter(rule, "min")); break;
       case "foundry.max": case "foundry.decimal_max": bound("max", ruleParameter(rule, "max")); break;
-      case "foundry.decimal_places": { const next = count(ruleParameter(rule, "places")); if (next !== undefined && (places === undefined || next < places)) places = next; break; }
+      case "foundry.decimal_places": placeBound(count(ruleParameter(rule, "places"))); break;
+      case "foundry.multiple_of": {
+        const divisor = ruleParameter(rule, "divisor");
+        if (typeof divisor === "string") placeBound(decimalPlaces(divisor));
+        break;
+      }
     }
   }
   // A number control's default step of 1 would reject a valid fraction.
   if (type?.kind === "integer") limits.step = 1;
   else if (type?.kind === "number") limits.step = "any";
-  else if (type?.kind === "string" && type.format === "decimal") limits.step = places === undefined ? "any" : places === 0 ? 1 : "0." + "0".repeat(places - 1) + "1";
+  else if (type?.kind === "string" && type.format === "decimal") {
+    if (places !== undefined) limits.maxPlaces = places;
+    limits.step = places === undefined ? "any" : places === 0 ? 1 : "0." + "0".repeat(places - 1) + "1";
+  }
   if (parameter && "max_bytes" in parameter) upper("maxBytes", parameter.max_bytes);
   const accept = uploadAccept(parameter);
   if (accept) limits.accept = accept;
@@ -315,10 +324,11 @@ function describeField(id: string | undefined, required: boolean, path: string, 
     // A boolean is never empty: a control requires it exactly when Go demands
     // true. A guarded Accepted runs on every present value (Required(Accepted())
     // guards it with Optional), so presence decides. For other values an enum
-    // type without an empty case rejects empty text when it decodes, and an
-    // empty file chooser is a missing upload.
+    // type without an empty case rejects empty text when it decodes, a string
+    // type whose Go contract declares non_empty rejects empty wire text in its
+    // codec, and an empty file chooser is a missing upload.
     const filled = present && (type?.kind === "boolean" ? rules.some(constraint => constraint.rule.spec!.id === "foundry.accepted")
-      : requiredText || file || choices.length > 0 && !choices.includes("") || rules.some(constraint => !constraint.guarded && rejectsEmpty(constraint.rule)));
+      : requiredText || file || !repeated && type?.non_empty === true || choices.length > 0 && !choices.includes("") || rules.some(constraint => !constraint.guarded && rejectsEmpty(constraint.rule)));
     reference = { ...reference, present, filled };
   }
   const descriptor = immutable({
@@ -748,18 +758,27 @@ function bindField(context: BinderContext, descriptor: BinderDescriptor, path: s
   if (labelKey === undefined) reject(descriptor.path, "form_field_label");
   const text = label(labelKey), hint = helpKey === undefined ? undefined : label(helpKey);
   const reference = descriptorReferences.get(descriptor), name = controlName(reference?.segments ?? []);
+  const schema = descriptor.schema;
+  const numeric = schema?.kind === "integer" ? "integer" : schema?.kind === "number" ? "float" : schema?.kind === "string" && schema.format === "decimal" ? "decimal" : undefined;
+  const format = schema?.kind === "string" ? schema.format : undefined;
+  const temporal = format === "date" || format === "time" || format === "date_time" || format === "local_date_time" ? format : undefined;
   // Edited means changed since the form first bound the field, however it
   // changed: by its control, another field's listener or the update function.
   // A value changed back is not edited, so its bounds wait again.
   const required = reference?.filled ?? false, edited = !Object.is(value, firstBound(render, data, path, value));
+  // Non-empty text that Go's decimal codec rejects is an input-integrity state,
+  // independent of whether the field was edited or the operation prepares input
+  // after decoding; empty text belongs to `required`, never `malformed`.
+  const malformed = numeric === "decimal" && typeof value === "string" && value !== "" && decimalPlaces(value) === undefined;
   // Go judges a prepared request only after application code has changed it,
-  // so its controls enforce nothing; others enforce bounds once edited.
-  const checks: FieldChecks = context.prepared ? noChecks : Object.freeze({ required, limits: edited ? descriptor.limits : noLimits });
+  // so its controls enforce no rules; others enforce bounds once edited.
+  const checks: FieldChecks = context.prepared ? (malformed ? malformedChecks : noChecks)
+    : Object.freeze(malformed ? { required, limits: edited ? descriptor.limits : noLimits, malformed: true } : { required, limits: edited ? descriptor.limits : noLimits });
   // An unchanged field keeps its binding, so memoised controls skip renders.
   const key = context.operation + "\u0000" + path;
   const previous = kept(render.bindings, data.bindings, data.after?.bindings, key);
   if (previous && previous.name === name && Object.is(previous.value, value) && previous.label === text && previous.hint === hint && sameIssues(previous.issues, shown)
-    && sameLimits(previous.limits, descriptor.limits) && previous.checks.required === checks.required && sameLimits(previous.checks.limits, checks.limits)) return previous;
+    && sameLimits(previous.limits, descriptor.limits) && previous.checks.required === checks.required && previous.checks.malformed === checks.malformed && sameLimits(previous.checks.limits, checks.limits)) return previous;
   const inner = descriptor.schema?.kind === "array" ? new Set(active).add(descriptor.schema.id) : active;
   const entries = list ? {
     at: (index: number): unknown => bindRow(latest(context), descriptor, path, value, write, index, inner),
@@ -773,10 +792,6 @@ function bindField(context: BinderContext, descriptor: BinderDescriptor, path: s
       return bindField(now, child, pointer(path, entry), current === undefined && child.schema?.kind === "string" ? "" : current, entryWrite, own, inner, false);
     },
   } : undefined;
-  const schema = descriptor.schema;
-  const numeric = schema?.kind === "integer" ? "integer" : schema?.kind === "number" ? "float" : schema?.kind === "string" && schema.format === "decimal" ? "decimal" : undefined;
-  const format = schema?.kind === "string" ? schema.format : undefined;
-  const temporal = format === "date" || format === "time" || format === "date_time" || format === "local_date_time" ? format : undefined;
   const binding = createFieldBinding<unknown>({
     name, label: text, hint, required, limits: descriptor.limits, checks, kind, numeric, temporal, row, value,
     onChange: next => write(() => next),
@@ -788,6 +803,7 @@ function bindField(context: BinderContext, descriptor: BinderDescriptor, path: s
 const noFields: Readonly<Record<string, unknown>> = /* @__PURE__ */ Object.freeze(Object.create(null) as Record<string, unknown>);
 const noLimits: FieldLimits = /* @__PURE__ */ Object.freeze({});
 const noChecks: FieldChecks = /* @__PURE__ */ Object.freeze({ required: false, limits: noLimits });
+const malformedChecks: FieldChecks = /* @__PURE__ */ Object.freeze({ required: false, limits: noLimits, malformed: true });
 /**
  * The field binder of a form. `label` translates a field's Go label and help
  * keys; an application passes its catalog-typed translator, so a Go key

@@ -223,7 +223,8 @@ copied into a second form schema.
 | `MinLength`, `MaxLength`, `Length`, `LengthBetween`, `Password` | Unicode code points | `minLength`, `maxLength` | a custom check counting code points; never `minlength` or `maxlength`, which count UTF-16 units and would reject text Go accepts |
 | `MaxBytes` | UTF-8 bytes | `maxBytes` | a custom check counting bytes |
 | `Min`, `Max`, `DecimalMin`, `DecimalMax` | the value; fractional and wide bounds stay exact text | `min`, `max` | an integer or float: number input `min`/`max` within the range a browser compares exactly; a decimal: an exact comparison (`outOfRange`), text it cannot read left to Go; a slider: its ends (see below) |
-| integer, number or decimal type, `DecimalMaxPlaces` | granularity | `step` (1 for an integer, `"any"` for a float, a decimal's places) | an integer or float number input `step`; a slider's step |
+| `DecimalMaxPlaces`, `DecimalMultipleOf` | canonical significant fractional digits (excluding trailing zeros) | `maxPlaces` | a decimal text input checks `decimalPlaces(value) > checks.limits.maxPlaces` once edited |
+| integer, number or decimal type, `DecimalMaxPlaces`, `DecimalMultipleOf` | granularity | `step` (1 for an integer, `"any"` for a float, a decimal's places) | an integer or float number input `step`; a slider's step |
 | multipart file part | bytes and types | `maxBytes`, `accept` | file input `accept` and a size check |
 | `NonBlank`, `NonEmpty` and `Required` of text or a collection | emptiness | `nonEmpty` | with presence, `required` |
 
@@ -250,29 +251,52 @@ when bounded, or a number input without a range).
 
 A binding is `required` exactly when Go rejects an empty value: the field must
 be present on every path to it (the wire requires the key and the value is not
-null, or a `Required`, `Present` or `NotNull` rule that always runs requires
-it), and a rule that always runs rejects empty: `NonBlank`, `NonEmpty` or
-`Required` of text or a collection, a positive minimum length or item count,
-the password rule, a membership rule without an empty case, an enum type, or a
-required upload. A rule under `Optional`, `Nullable` or a pointer runs only on
-a supplied value, so it never makes a field required. A boolean is never
-empty: for a checkbox or switch "required" means "must be checked", and it is
-required exactly when Go's `Accepted` rule demands true on the required path,
-including under `Required(Accepted())`; no other rule makes it required
-(`OneOf(false)` does not). A translated map
-publishes which locales its rule requires (the `locales` parameter of its
-`foundry.required` leaf, new manifest data), so `title.at("en")` is required
-exactly when Go requires the default locale.
+null, or a `Required`, `Present`, `NotNull` or `NotNil` rule that always runs
+requires it), and either the field's Go contract declares `NonEmpty` (emitted as
+`non_empty: true` in manifest version 12 and enforced by the framework at JSON,
+query, path, multipart text and header decoding boundaries — set on every
+framework scalar string codec exportable in generated client contracts that
+rejects empty text: `model.ID`, `mfa.EnrollmentID`, `decimal.Decimal`,
+`temporal.Date`, `temporal.Time`, `temporal.DateTime` / `time.Time`,
+`temporal.LocalDateTime`, `temporal.Interval`, `password.Plaintext`,
+`mfa.TOTPCode`, `mfa.RecoveryCode`, `challenge.Token` / `passwordreset.Token` /
+`emailverification.Token`, `email.Address`, `storage.ObjectKey`,
+`money.Currency`, `orm.Cursor`, the auth refresh/MFA credential wrappers, and
+any custom application codec that declares `NonEmpty: true` through
+`contract.DefineJSONValue` or `contract.DefineScalar`; not `base64` / `[]byte`
+or an application codec without `NonEmpty`), or a rule that always runs rejects
+empty: `NonBlank`, `NonEmpty` or `Required` of text or a collection, a positive
+minimum length or item count, the password rule, a membership rule without an
+empty case, an enum type, or a required upload. A rule under `Optional`,
+`Nullable` or a pointer runs only on a supplied value, and an optional,
+nullable, pointer or `omitzero` field is not on a required presence path unless
+an unconditional presence rule (`Required`, `Present`, `NotNull` or `NotNil`)
+makes it required, so without such a rule neither makes a field required. A
+boolean is never empty: for a checkbox or switch "required" means "must be
+checked", and it is required exactly when Go's `Accepted` rule demands true on
+the required path, including under `Required(Accepted())`; no other rule makes
+it required (`OneOf(false)` does not). A translated map publishes which locales
+its rule requires (the `locales` parameter of its `foundry.required` leaf, new
+manifest data), so `title.at("en")` is required exactly when Go requires the
+default locale.
 
 `checks` is what a control enforces before submit: `checks.required` blocks an
 empty value (an unchecked box for a boolean), and `checks.limits` holds the
-field's bounds once its value differs from the one the form first bound it
-with (empty while it holds that value), so a stored value that predates a rule
-never blocks saving other fields; the server judges what is sent. A request
-with a preparation step (`http.PrepareEndpoint`) runs application code
-(canonical slugs, trimming, sanitising) before Go validates it, so its
-controls enforce nothing: they still show the required marker with
-`aria-required`, the labels, hints, limits as facts and the issues Go reports.
+field's bounds (including a decimal's `maxPlaces`) once its value differs from
+the one the form first bound it with (empty while it holds that value), so a
+stored value that predates a rule never blocks saving other fields; the server
+judges what is sent. A request with a preparation step (`http.PrepareEndpoint`)
+runs application code (canonical slugs, trimming, sanitising) after decoding and
+before Go validates it, so its controls enforce no rules or required state
+(`checks.limits`, including `maxPlaces`, is empty on a prepared operation): they
+still show the required marker with `aria-required`, the labels, hints, limits
+as facts and the issues Go reports. For a decimal field, non-empty text that
+Go's decimal codec rejects (`decimalPlaces(value) === undefined`) sets
+`checks.malformed: true` always — including for an untouched field and on a
+prepared operation — because Go's decoder rejects malformed decimal text before
+preparation or validation runs; it is an input-integrity state that blocks
+submit with a format message, never a required error, and is never set for empty
+text (`""`).
 
 A control never enforces before submit anything stricter than Go and never
 changes a value the user did not change. The input type follows Go only where
@@ -377,9 +401,15 @@ Every generated client entry exports the form-binding values and types below:
   JSON Pointer.
 - `issueAt(descriptor, code, message)` — builds a frozen `Issue` addressed to
   `descriptor.path`.
+- `decimalPlaces(text)` — checks decimal text by the exact grammar of Go's
+  `decimal.Parse` (optional leading `+`/`-`, at least one ASCII digit on each
+  side of an optional `.`, no whitespace or exponent, at most `decimal.MaxDigits`
+  total digits before trimming zeros) and returns its canonical significant
+  fractional places (`Decimal.Scale`, excluding trailing zeros), or `undefined`
+  when malformed.
 - `outOfRange(limits, value)` — compares a number or exact decimal string
-  against `limits.min` and `limits.max` without rounding, returning `"min"`,
-  `"max"`, or `undefined`.
+  (matching `decimalPlaces`) against `limits.min` and `limits.max` without
+  rounding, returning `"min"`, `"max"`, or `undefined`.
 
 ### Types
 
@@ -387,9 +417,9 @@ Every generated client entry exports the form-binding values and types below:
   - `name: string` — location-relative dotted field path (`username`, `title.en`, `items.0.name`).
   - `label: string` — translated Go `client:"label=…"` text.
   - `hint: string | undefined` — translated Go `client:"help=…"` text, when declared.
-  - `required: boolean` — true when Go rejects an empty value on the required path (or demands `true` via `Accepted` for a boolean).
-  - `limits: FieldLimits` — Go's unconditional bounds (`nonEmpty`, `minLength`, `maxLength`, `maxBytes`, `min`, `max`, `step`, `accept`).
-  - `checks: FieldChecks` — `{ required, limits }` enforced before submit (`limits` active only while `value` differs from its first-bound value; both empty for a prepared operation).
+  - `required: boolean` — true when Go rejects an empty value on the required path (by a string type whose Go contract declares `NonEmpty`, an enum, an upload, a rule, or `Accepted` for a boolean).
+  - `limits: FieldLimits` — Go's unconditional bounds (`nonEmpty`, `minLength`, `maxLength`, `maxBytes`, `min`, `max`, `maxPlaces`, `step`, `accept`).
+  - `checks: FieldChecks` — `{ required, limits, malformed? }` enforced before submit (`limits`, including `maxPlaces`, active only while `value` differs from its first-bound value; `required` and `limits` empty for a prepared operation; `malformed: true` reported always — including for an untouched field and on a prepared operation — when a decimal field holds non-empty text Go's decimal codec rejects, never as a required error).
   - `kind: PresentationKind | undefined` — Go's presentation kind (`password`, `email`, `url`, `multiline`, etc.).
   - `numeric: "integer" | "float" | "decimal" | undefined` — how Go reads a numeric field.
   - `temporal: "date" | "time" | "date_time" | "local_date_time" | undefined` — which temporal format Go reads from text, so date/time pickers take their kind from Go.

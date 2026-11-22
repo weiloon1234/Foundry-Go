@@ -8,7 +8,10 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/decimal"
+	"github.com/weiloon1234/Foundry-Go/decimal/money"
+	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/enum"
+	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -44,28 +47,32 @@ func TestURLScalarMetadataMatchesNativeCodecs(t *testing.T) {
 		bits     uint8
 		signed   bool
 		format   contract.Format
+		nonEmpty bool
 	}{
-		{"named_string", func() URLScalarInfo { return codecMetadata(t, StringPath[scalarMetadataCode]()) }, contract.StringKind, TextURLSyntax, 0, false, ""},
-		{"native_int", func() URLScalarInfo { return codecMetadata(t, IntegerPath[int]()) }, contract.IntegerKind, IntegerURLSyntax, uint8(strconv.IntSize), true, ""},
-		{"named_uint16", func() URLScalarInfo { return codecMetadata(t, IntegerPath[scalarMetadataRank]()) }, contract.IntegerKind, IntegerURLSyntax, 16, false, ""},
-		{"int8", func() URLScalarInfo { return codecMetadata(t, IntegerPath[int8]()) }, contract.IntegerKind, IntegerURLSyntax, 8, true, ""},
-		{"float32", func() URLScalarInfo { return codecMetadata(t, FloatPath[float32]()) }, contract.NumberKind, FloatURLSyntax, 32, false, ""},
-		{"bool", func() URLScalarInfo { return codecMetadata(t, BoolPath[bool]()) }, contract.BooleanKind, BooleanURLSyntax, 0, false, ""},
-		{"model_id", func() URLScalarInfo { return codecMetadata(t, ModelIDPath[scalarMetadataMember]()) }, contract.StringKind, ModelIDURLSyntax, 0, false, contract.UUIDFormat},
-		{"decimal", func() URLScalarInfo { return codecMetadata(t, TextPath[decimal.Decimal, *decimal.Decimal]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.DecimalFormat},
-		{"date", func() URLScalarInfo { return codecMetadata(t, TextPath[temporal.Date, *temporal.Date]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.DateFormat},
-		{"time", func() URLScalarInfo { return codecMetadata(t, TextPath[temporal.Time, *temporal.Time]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.TimeFormat},
-		{"datetime", func() URLScalarInfo { return codecMetadata(t, TextPath[temporal.DateTime, *temporal.DateTime]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.DateTimeFormat},
+		{"named_string", func() URLScalarInfo { return codecMetadata(t, StringPath[scalarMetadataCode]()) }, contract.StringKind, TextURLSyntax, 0, false, "", false},
+		{"native_int", func() URLScalarInfo { return codecMetadata(t, IntegerPath[int]()) }, contract.IntegerKind, IntegerURLSyntax, uint8(strconv.IntSize), true, "", false},
+		{"named_uint16", func() URLScalarInfo { return codecMetadata(t, IntegerPath[scalarMetadataRank]()) }, contract.IntegerKind, IntegerURLSyntax, 16, false, "", false},
+		{"int8", func() URLScalarInfo { return codecMetadata(t, IntegerPath[int8]()) }, contract.IntegerKind, IntegerURLSyntax, 8, true, "", false},
+		{"float32", func() URLScalarInfo { return codecMetadata(t, FloatPath[float32]()) }, contract.NumberKind, FloatURLSyntax, 32, false, "", false},
+		{"bool", func() URLScalarInfo { return codecMetadata(t, BoolPath[bool]()) }, contract.BooleanKind, BooleanURLSyntax, 0, false, "", false},
+		{"model_id", func() URLScalarInfo { return codecMetadata(t, ModelIDPath[scalarMetadataMember]()) }, contract.StringKind, ModelIDURLSyntax, 0, false, contract.UUIDFormat, true},
+		{"decimal", func() URLScalarInfo { return codecMetadata(t, TextPath[decimal.Decimal, *decimal.Decimal]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.DecimalFormat, true},
+		{"date", func() URLScalarInfo { return codecMetadata(t, TextPath[temporal.Date, *temporal.Date]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.DateFormat, true},
+		{"time", func() URLScalarInfo { return codecMetadata(t, TextPath[temporal.Time, *temporal.Time]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.TimeFormat, true},
+		{"datetime", func() URLScalarInfo { return codecMetadata(t, TextPath[temporal.DateTime, *temporal.DateTime]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.DateTimeFormat, true},
 		{"local_datetime", func() URLScalarInfo {
 			return codecMetadata(t, TextPath[temporal.LocalDateTime, *temporal.LocalDateTime]())
-		}, contract.StringKind, FormattedURLSyntax, 0, false, contract.LocalDateTimeFormat},
-		{"interval", func() URLScalarInfo { return codecMetadata(t, TextPath[temporal.Interval, *temporal.Interval]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.IntervalFormat},
-		{"native_time", func() URLScalarInfo { return codecMetadata(t, TextPath[time.Time, *time.Time]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.DateTimeFormat},
+		}, contract.StringKind, FormattedURLSyntax, 0, false, contract.LocalDateTimeFormat, true},
+		{"interval", func() URLScalarInfo { return codecMetadata(t, TextPath[temporal.Interval, *temporal.Interval]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.IntervalFormat, true},
+		{"native_time", func() URLScalarInfo { return codecMetadata(t, TextPath[time.Time, *time.Time]()) }, contract.StringKind, FormattedURLSyntax, 0, false, contract.DateTimeFormat, true},
+		{"email_address", func() URLScalarInfo { return codecMetadata(t, TextPath[email.Address, *email.Address]()) }, contract.StringKind, TextURLSyntax, 0, false, "", true},
+		{"storage_object_key", func() URLScalarInfo { return codecMetadata(t, TextPath[storage.ObjectKey, *storage.ObjectKey]()) }, contract.StringKind, TextURLSyntax, 0, false, "", true},
+		{"money_currency", func() URLScalarInfo { return codecMetadata(t, TextPath[money.Currency, *money.Currency]()) }, contract.StringKind, TextURLSyntax, 0, false, "", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			info := tc.describe()
-			if info.Value.Kind != tc.kind || info.Syntax != tc.syntax || info.Value.Bits != tc.bits || info.Value.Signed != tc.signed || info.Value.Format != tc.format || info.Value.Nullable || info.Value.ID == "" {
+			if info.Value.Kind != tc.kind || info.Syntax != tc.syntax || info.Value.Bits != tc.bits || info.Value.Signed != tc.signed || info.Value.Format != tc.format || info.Value.NonEmpty != tc.nonEmpty || info.Value.Nullable || info.Value.ID == "" {
 				t.Fatalf("codec metadata: %+v", info)
 			}
 		})

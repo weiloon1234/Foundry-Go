@@ -2,7 +2,7 @@
 // Shared runtime of the generated client entries in this directory. Import an
 // entry module; this module's exports are not a stable API.
 
-export const manifestVersion = 11 as const;
+export const manifestVersion = 12 as const;
 const runtimePolicy: RuntimePolicy = { maxDepth: 64, decimalDigits: 4096, metadataBytes: 16777216, messageBytes: 65536, maxMessages: 10000, semanticBytes: 128, requestHeaderBytes: "\t !\"#$%\u0026'()*+,-./0123456789:;\u003c=\u003e?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~" };
 const semanticPattern = /* @__PURE__ */ new RegExp("^[a-z0-9][a-z0-9_.-]*$");
 const idempotencyKeyPattern = "^[A-Za-z0-9._:-]{16,256}$";
@@ -145,7 +145,7 @@ interface UnionVariant { readonly tag: string; readonly type: string }
 interface WireType {
   readonly discriminator?: string; readonly variants?: readonly UnionVariant[];
   readonly id: string; readonly kind: string; readonly nullable: boolean; readonly properties?: readonly Property[];
-  readonly element?: string; readonly length?: number; readonly bits?: number; readonly signed?: boolean; readonly format?: string;
+  readonly element?: string; readonly length?: number; readonly bits?: number; readonly signed?: boolean; readonly format?: string; readonly non_empty?: boolean;
   readonly cases?: readonly unknown[]; readonly key?: { readonly value: WireType; readonly syntax: string; readonly server_only: boolean; readonly non_zero: boolean };
 }
 /** Custom URL syntax must be provided explicitly. Payload schema validation still runs. */
@@ -276,7 +276,7 @@ class WireCodec {
     let wire: unknown = value, result: unknown = value;
     switch (type.kind) {
       case "boolean": if (typeof value !== "boolean") reject(path, "type"); break;
-      case "string": if (typeof value !== "string" || !validUnicode(value) || !formatValid(type.format, value)) reject(path, "value"); break;
+      case "string": if (typeof value !== "string" || !validUnicode(value) || type.non_empty && value === "" || !formatValid(type.format, value)) reject(path, "value"); break;
       case "integer": {
         const wide = type.bits! > 32;
         if (encode) {
@@ -333,9 +333,35 @@ function dateTimeValid(text: string): boolean {
   if (!match || !dateValid(match[1]!)) return false;
   const instant = Date.parse(text); return Number.isFinite(instant) && instant >= -62135596800000 && instant < 253402300800000;
 }
-function decimalValid(text: string): boolean {
-  return text.length <= runtimePolicy.decimalDigits + 2 && /^[+-]?[0-9]+(?:\.[0-9]+)?$/.test(text) && text.replace(/[^0-9]/g, "").length <= runtimePolicy.decimalDigits;
+/**
+ * Canonical significant fractional places of exact decimal text (matching Go's
+ * `decimal.Parse` and `Decimal.Scale`), or `undefined` when malformed: optional
+ * leading `+` or `-`, at least one ASCII digit on each side of an optional `.`,
+ * no whitespace or exponent, and at most `decimal.MaxDigits` total digits
+ * before trimming zeros. Trailing fractional zeros are excluded from the count.
+ */
+export function decimalPlaces(text: string): number | undefined {
+  if (typeof text !== "string" || text.length === 0 || text.length > runtimePolicy.decimalDigits + 2) return undefined;
+  let i = text.charCodeAt(0) === 43 || text.charCodeAt(0) === 45 ? 1 : 0;
+  const start = i;
+  while (i < text.length && text.charCodeAt(i) >= 48 && text.charCodeAt(i) <= 57) i++;
+  const whole = i - start;
+  if (whole === 0) return undefined;
+  if (i === text.length) return whole <= runtimePolicy.decimalDigits ? 0 : undefined;
+  if (text.charCodeAt(i) !== 46) return undefined;
+  const fracStart = ++i;
+  let lastNonZero = fracStart;
+  while (i < text.length) {
+    const c = text.charCodeAt(i);
+    if (c < 48 || c > 57) return undefined;
+    if (c !== 48) lastNonZero = i + 1;
+    i++;
+  }
+  const frac = i - fracStart;
+  if (frac === 0 || whole + frac > runtimePolicy.decimalDigits) return undefined;
+  return lastNonZero - fracStart;
 }
+function decimalValid(text: string): boolean { return decimalPlaces(text) !== undefined; }
 function base64Valid(text: string): boolean {
   if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(text)) return false;
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -598,7 +624,7 @@ export interface ValidationReport { readonly issues: readonly Issue[]; readonly 
 function numericText(value: unknown): string | undefined {
   if (value instanceof JSONNumber) return value.text;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  if (typeof value === "string" && /^[+-]?[0-9]+(?:\.[0-9]+)?$/.test(value)) return value;
+  if (typeof value === "string" && decimalPlaces(value) !== undefined) return value;
   return undefined;
 }
 // Compare decimal coefficient/exponent without expanding potentially huge exponents.
@@ -741,6 +767,8 @@ export interface FieldLimits {
   /** inclusive; a string keeps a decimal or wide bound exact. */
   readonly min?: number | string;
   readonly max?: number | string;
+  /** maximum significant fractional digits of a decimal (canonical, excluding trailing zeros). */
+  readonly maxPlaces?: number;
   /** a number control's granularity: 1 for integers, a decimal's places, else "any". */
   readonly step?: number | string;
   /** upload types as an accept attribute: media types, then extensions. */
@@ -757,6 +785,12 @@ export interface FieldChecks {
    * never blocks saving other fields.
    */
   readonly limits: FieldLimits;
+  /**
+   * true when a decimal field holds non-empty text that Go's decimal codec
+   * rejects: an input-integrity state that blocks submit with a format
+   * message and is never reported as a required error.
+   */
+  readonly malformed?: boolean;
 }
 interface FieldBindingInit<V> {
   readonly name: string;
@@ -792,17 +826,21 @@ class FieldBinding<V> {
   declare readonly hint: string | undefined;
   /**
    * Go rejects an empty value: it must be present on every path to this field
-   * and a rule that always runs on it, or its enum type, rejects empty. A
-   * boolean is never empty: it is required exactly when Go's `Accepted` rule
-   * demands true (a checkbox that must be checked). Shown as the required
-   * marker; whether the value blocks the submit is `checks.required`.
+   * and a rule that always runs on it, its enum type, or a string type whose
+   * Go contract declares `NonEmpty` (emitted as `non_empty` in the manifest)
+   * demands a non-empty value. A boolean is never empty: it is required
+   * exactly when Go's `Accepted` rule demands true (a checkbox that must be
+   * checked). Shown as the required marker; whether the value blocks the
+   * submit is `checks.required`.
    */
   declare readonly required: boolean;
   /** Go's bounds of a present value, as facts. */
   declare readonly limits: FieldLimits;
   /**
-   * What the control enforces before submit. Nothing for an operation whose
-   * application code prepares the request before Go validates it.
+   * What the control enforces before submit. An operation whose application
+   * code prepares the request before Go validates it enforces no rules or
+   * required state, while still flagging malformed decimal text that Go's
+   * decoder rejects before preparation.
    */
   declare readonly checks: FieldChecks;
   /** the Go presentation kind (such as "password", "email", "url", "multiline"), when declared. */

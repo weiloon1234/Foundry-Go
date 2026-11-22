@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "types": [
     {
       "id": "[]contract.Issue",
@@ -350,6 +350,7 @@
       "id": "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "decimal"
     },
     {
@@ -572,18 +573,21 @@
       "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "uuid"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "uuid"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/temporal.DateTime",
       "kind": "string",
       "nullable": false,
+      "non_empty": true,
       "format": "date_time"
     },
     {
@@ -1386,6 +1390,7 @@
               "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
               "kind": "string",
               "nullable": false,
+              "non_empty": true,
               "format": "uuid"
             },
             "quoted": false
@@ -1550,6 +1555,7 @@
               "id": "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
               "kind": "string",
               "nullable": false,
+              "non_empty": true,
               "format": "decimal"
             },
             "quoted": false
@@ -1564,6 +1570,7 @@
                 "id": "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
                 "kind": "string",
                 "nullable": false,
+                "non_empty": true,
                 "format": "decimal"
               },
               "syntax": "formatted"
@@ -1642,6 +1649,7 @@
               "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
               "kind": "string",
               "nullable": false,
+              "non_empty": true,
               "format": "uuid"
             },
             "quoted": false
@@ -1727,6 +1735,7 @@
               "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]",
               "kind": "string",
               "nullable": false,
+              "non_empty": true,
               "format": "uuid"
             },
             "quoted": false
@@ -1843,6 +1852,7 @@
               "id": "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
               "kind": "string",
               "nullable": false,
+              "non_empty": true,
               "format": "decimal"
             },
             "quoted": false
@@ -1857,6 +1867,7 @@
                 "id": "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
                 "kind": "string",
                 "nullable": false,
+                "non_empty": true,
                 "format": "decimal"
               },
               "syntax": "formatted"
@@ -1904,6 +1915,7 @@
               "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
               "kind": "string",
               "nullable": false,
+              "non_empty": true,
               "format": "uuid"
             },
             "quoted": false
@@ -1918,6 +1930,7 @@
                 "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
                 "kind": "string",
                 "nullable": false,
+                "non_empty": true,
                 "format": "uuid"
               },
               "syntax": "model_id"
@@ -1993,6 +2006,7 @@
               "id": "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
               "kind": "string",
               "nullable": true,
+              "non_empty": true,
               "format": "decimal"
             },
             "quoted": false
@@ -2007,6 +2021,7 @@
                 "id": "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
                 "kind": "string",
                 "nullable": false,
+                "non_empty": true,
                 "format": "decimal"
               },
               "syntax": "formatted"

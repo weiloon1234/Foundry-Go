@@ -56,7 +56,7 @@ func scalarValid(typ Type, node any) bool {
 		return ok
 	case StringKind:
 		text, ok := node.(string)
-		return ok && stringValid(typ.Format, text)
+		return ok && (!typ.NonEmpty || text != "") && stringValid(typ.Format, text)
 	case IntegerKind:
 		number, ok := node.(json.Number)
 		if !ok {

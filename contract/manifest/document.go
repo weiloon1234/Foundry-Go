@@ -19,9 +19,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
-// Version 11 adds typed request headers. Earlier
+// Version 12 adds optional non_empty on string types. Earlier
 // formats must be regenerated; older readers reject unsupported versions.
-const Version = 11
+const Version = 12
 const MaxBytes = 16 << 20
 const MaxOperations = 4096
 

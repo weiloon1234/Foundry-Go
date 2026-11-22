@@ -9,7 +9,7 @@ export interface ValidationReport { readonly issues: readonly Issue[]; readonly 
 function numericText(value: unknown): string | undefined {
   if (value instanceof JSONNumber) return value.text;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  if (typeof value === "string" && /^[+-]?[0-9]+(?:\.[0-9]+)?$/.test(value)) return value;
+  if (typeof value === "string" && decimalPlaces(value) !== undefined) return value;
   return undefined;
 }
 // Compare decimal coefficient/exponent without expanding potentially huge exponents.
@@ -152,6 +152,8 @@ export interface FieldLimits {
   /** inclusive; a string keeps a decimal or wide bound exact. */
   readonly min?: number | string;
   readonly max?: number | string;
+  /** maximum significant fractional digits of a decimal (canonical, excluding trailing zeros). */
+  readonly maxPlaces?: number;
   /** a number control's granularity: 1 for integers, a decimal's places, else "any". */
   readonly step?: number | string;
   /** upload types as an accept attribute: media types, then extensions. */
@@ -168,6 +170,12 @@ export interface FieldChecks {
    * never blocks saving other fields.
    */
   readonly limits: FieldLimits;
+  /**
+   * true when a decimal field holds non-empty text that Go's decimal codec
+   * rejects: an input-integrity state that blocks submit with a format
+   * message and is never reported as a required error.
+   */
+  readonly malformed?: boolean;
 }
 interface FieldBindingInit<V> {
   readonly name: string;
@@ -203,17 +211,21 @@ class FieldBinding<V> {
   declare readonly hint: string | undefined;
   /**
    * Go rejects an empty value: it must be present on every path to this field
-   * and a rule that always runs on it, or its enum type, rejects empty. A
-   * boolean is never empty: it is required exactly when Go's `Accepted` rule
-   * demands true (a checkbox that must be checked). Shown as the required
-   * marker; whether the value blocks the submit is `checks.required`.
+   * and a rule that always runs on it, its enum type, or a string type whose
+   * Go contract declares `NonEmpty` (emitted as `non_empty` in the manifest)
+   * demands a non-empty value. A boolean is never empty: it is required
+   * exactly when Go's `Accepted` rule demands true (a checkbox that must be
+   * checked). Shown as the required marker; whether the value blocks the
+   * submit is `checks.required`.
    */
   declare readonly required: boolean;
   /** Go's bounds of a present value, as facts. */
   declare readonly limits: FieldLimits;
   /**
-   * What the control enforces before submit. Nothing for an operation whose
-   * application code prepares the request before Go validates it.
+   * What the control enforces before submit. An operation whose application
+   * code prepares the request before Go validates it enforces no rules or
+   * required state, while still flagging malformed decimal text that Go's
+   * decoder rejects before preparation.
    */
   declare readonly checks: FieldChecks;
   /** the Go presentation kind (such as "password", "email", "url", "multiline"), when declared. */

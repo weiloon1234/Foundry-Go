@@ -98,6 +98,9 @@ func TestSchemaRejectsInvalidDeclarations(t *testing.T) {
 		"wrong_bits":                   {Root: "a", Types: []Type{{ID: "a", Kind: IntegerKind, Bits: 12}}},
 		"unknown_format":               {Root: "a", Types: []Type{{ID: "a", Kind: StringKind, Format: "guess"}}},
 		"misplaced_format":             {Root: "a", Types: []Type{{ID: "a", Kind: IntegerKind, Format: UUIDFormat}}},
+		"misplaced_non_empty":          {Root: "a", Types: []Type{{ID: "a", Kind: IntegerKind, NonEmpty: true}}},
+		"base64_non_empty":             {Root: "a", Types: []Type{{ID: "a", Kind: StringKind, Format: Base64Format, NonEmpty: true}}},
+		"empty_case_non_empty":         {Root: "a", Types: []Type{{ID: "a", Kind: StringKind, NonEmpty: true, Cases: []json.RawMessage{json.RawMessage(`""`), json.RawMessage(`"x"`)}}}},
 		"misplaced_property":           {Root: "a", Types: []Type{{ID: "a", Kind: StringKind, Properties: []Property{{Name: "x", Type: "a"}}}}},
 		"misplaced_length":             {Root: "a", Types: []Type{{ID: "a", Kind: StringKind, Length: value.Set(0)}}},
 		"negative_length":              {Root: "a", Types: []Type{{ID: "a", Kind: ArrayKind, Element: "a", Length: value.Set(-1)}}},
@@ -114,6 +117,31 @@ func TestSchemaRejectsInvalidDeclarations(t *testing.T) {
 				t.Fatalf("invalid declaration accepted: %v", err)
 			}
 		})
+	}
+}
+
+func TestSchemaNormalizesNonEmptyFormats(t *testing.T) {
+	compiled := compileForTest(t, Schema{Root: "doc", Types: []Type{
+		{ID: "doc", Kind: ObjectKind, Properties: []Property{
+			{Name: "id", Type: "id", Required: true},
+			{Name: "raw", Type: "raw", Required: true},
+			{Name: "custom", Type: "custom", Required: true},
+		}},
+		{ID: "id", Kind: StringKind, Format: UUIDFormat},
+		{ID: "raw", Kind: StringKind, Format: Base64Format},
+		{ID: "custom", Kind: StringKind, NonEmpty: true},
+	}})
+	byID := map[TypeID]Type{}
+	for _, typ := range compiled.snapshot().Types {
+		byID[typ.ID] = typ
+	}
+	if !byID["id"].NonEmpty || byID["raw"].NonEmpty || !byID["custom"].NonEmpty {
+		t.Fatalf("unexpected non_empty normalization: id=%v raw=%v custom=%v", byID["id"].NonEmpty, byID["raw"].NonEmpty, byID["custom"].NonEmpty)
+	}
+	issues, err := checkForTest(t, compiled, `{"id":"0193fd8c-2075-7000-8000-000000000001","raw":"","custom":""}`, shapeLimits{steps: 100, issues: 10})
+	want := []Issue{{Path: "/custom", Code: ValueIssue}}
+	if err != nil || !reflect.DeepEqual(issues, want) {
+		t.Fatalf("non_empty schema enforcement: got %v, %v; want %v", issues, err, want)
 	}
 }
 

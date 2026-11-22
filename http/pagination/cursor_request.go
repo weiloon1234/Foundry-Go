@@ -34,7 +34,7 @@ func (cursorCodec[M]) Format(cursor orm.Cursor[M]) (string, error) {
 func CursorQuery[M any]() foundryhttp.QueryCodec[orm.Cursor[M]] {
 	// This published wire identity is independent of the shared Go implementation owner.
 	id := contract.TypeID("github.com/weiloon1234/Foundry-Go/database/orm." + reflect.TypeFor[orm.Cursor[M]]().Name())
-	return foundryhttp.DescribeURL[orm.Cursor[M]](cursorCodec[M]{}, contract.DefineScalar[orm.Cursor[M]](contract.Type{ID: id, Kind: contract.StringKind}))
+	return foundryhttp.DescribeURL[orm.Cursor[M]](cursorCodec[M]{}, contract.DefineScalar[orm.Cursor[M]](contract.Type{ID: id, Kind: contract.StringKind, NonEmpty: true}))
 }
 
 func cursorParameters[F, M any](filters foundryhttp.Query[F], config CursorConfig) foundryhttp.Query[parameters[F, orm.CursorRequest[M]]] {

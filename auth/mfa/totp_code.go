@@ -70,5 +70,5 @@ func (c *TOTPCode) UnmarshalJSON(data []byte) error {
 // JSONContract describes TOTP input as a JSON string; ordinary output remains redacted.
 func (TOTPCode) JSONContract() contract.JSON[TOTPCode] {
 	const id contract.TypeID = "github.com/weiloon1234/Foundry-Go/auth/mfa.TOTPCode"
-	return contract.DefineJSONValue[TOTPCode](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind}}})
+	return contract.DefineJSONValue[TOTPCode](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind, NonEmpty: true}}})
 }

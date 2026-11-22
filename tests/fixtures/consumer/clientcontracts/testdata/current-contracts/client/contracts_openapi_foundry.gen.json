@@ -700,6 +700,7 @@
                   "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
                   "kind": "string",
                   "nullable": false,
+                  "non_empty": true,
                   "format": "uuid"
                 },
                 "syntax": "model_id",
@@ -18243,5 +18244,5 @@
       }
     }
   },
-  "x-foundry-manifest-version": 11
+  "x-foundry-manifest-version": 12
 }
