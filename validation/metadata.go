@@ -59,8 +59,12 @@ type Spec struct {
 // Description is an owned rule tree. Kind defines composition; Spec describes
 // a leaf. Field carries a declared wire name; Label is its optional static
 // display name. OtherField/OtherLabel describe a comparison target. ServerOnly
-// marks rules whose
-// behavior cannot be promised by a browser validator.
+// marks rules whose behavior cannot be promised by a browser validator.
+// Transformed marks a leaf or collection whose Go value differs from its wire
+// form (a named type with its own codec, json.Number, []byte): its bounds count
+// the decoded value, so a client must not apply them to the wire text. A
+// transformed rule is always ServerOnly; a ServerOnly rule need not be
+// transformed (its check is simply not implemented by the browser validator).
 type Description struct {
 	Kind          Kind            `json:"kind"`
 	Field         string          `json:"field,omitempty"`
@@ -71,6 +75,7 @@ type Description struct {
 	OtherLabelKey i18n.MessageKey `json:"other_label_key,omitempty"`
 	Spec          *Spec           `json:"spec,omitempty"`
 	ServerOnly    bool            `json:"server_only,omitempty"`
+	Transformed   bool            `json:"transformed,omitempty"`
 	Children      []Description   `json:"children,omitempty"`
 }
 

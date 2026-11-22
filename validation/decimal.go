@@ -40,7 +40,7 @@ func DecimalLessOrEqual() Rule[Pair[decimal.Decimal]] {
 }
 
 func decimalPair(id RuleID, accept func(int) bool) Rule[Pair[decimal.Decimal]] {
-	return valueRule(Spec{ID: id}, true, func(_ *execution, pair Pair[decimal.Decimal]) (bool, error) {
+	return wrappedRule[Pair[decimal.Decimal], decimal.Decimal](Spec{ID: id}, true, func(_ *execution, pair Pair[decimal.Decimal]) (bool, error) {
 		return accept(pair.Left.Cmp(pair.Right)), nil
 	})
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 	dbvalidation "github.com/weiloon1234/Foundry-Go/validation/database"
 
+	"strings"
 	"testing"
 )
 
@@ -113,7 +114,7 @@ func TestValidationDatabaseRulesAndDescriptions(t *testing.T) {
 		current := dbvalidation.Lookup(db, models.Users.Query(), models.Users.Email)
 		for _, rule := range []validation.Rule[string]{dbvalidation.Exists(db, models.Users.Query(), models.Users.Email), dbvalidation.Unique(db, models.Users.Query(), models.Users.Email)} {
 			before := g.statements
-			if !oracleEqual(t, "validation_database/value1", oracleSnapshot(must(validation.DescribeRule(rule)))) {
+			if !oracleEqual(t, "validation_database/value1", legacyRuleDescription(t, must(validation.DescribeRule(rule)))) {
 				t.Fatal("rule metadata changed")
 			}
 			if g.statements != before {
@@ -125,7 +126,7 @@ func TestValidationDatabaseRulesAndDescriptions(t *testing.T) {
 			}
 		}
 		for _, rule := range []validation.Rule[[]string]{validation.ExistsAll[[]string](current), validation.UniqueAll[[]string](current)} {
-			if !oracleEqual(t, "validation_database/value1_later", oracleSnapshot(must(validation.DescribeRule(rule)))) {
+			if !oracleEqual(t, "validation_database/value1_later", legacyRuleDescription(t, must(validation.DescribeRule(rule)))) {
 				t.Fatal("batch metadata changed")
 			}
 			checked := validation.Check(rule, t.Context(), []string{"secret", "secret"}, validation.DefaultLimits())
@@ -144,4 +145,16 @@ func validationIssues(err error) any {
 		return rejected.Issues()
 	}
 	return err.Error()
+}
+
+// legacyRuleDescription requires a database rule to describe an untransformed
+// value, then leaves that newer fact out for comparison with frozen records.
+func legacyRuleDescription(t *testing.T, description validation.Description) string {
+	t.Helper()
+	const untransformed = `,{"Key":"Transformed","Value":{"kind":"bool","value":false}}`
+	snapshot := oracleSnapshot(description)
+	if description.Transformed || strings.Count(snapshot, untransformed) != 1 {
+		t.Fatalf("database rule must describe one untransformed value: %s", snapshot)
+	}
+	return strings.Replace(snapshot, untransformed, "", 1)
 }

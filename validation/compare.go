@@ -10,14 +10,14 @@ type Scalar interface {
 
 // Same requires equal scalar values without coercion or normalization.
 func Same[V Scalar]() Rule[Pair[V]] {
-	return valueRule(Spec{ID: "foundry.same"}, scalarWireTransform[V](), func(s *execution, pair Pair[V]) (bool, error) {
+	return wrappedRule[Pair[V], V](Spec{ID: "foundry.same"}, scalarWireTransform[V](), func(s *execution, pair Pair[V]) (bool, error) {
 		return scalarValue(s, pair.Left) && scalarValue(s, pair.Right) && pair.Left == pair.Right, nil
 	})
 }
 
 // Different requires unequal scalar values without coercion or normalization.
 func Different[V Scalar]() Rule[Pair[V]] {
-	return valueRule(Spec{ID: "foundry.different"}, scalarWireTransform[V](), func(s *execution, pair Pair[V]) (bool, error) {
+	return wrappedRule[Pair[V], V](Spec{ID: "foundry.different"}, scalarWireTransform[V](), func(s *execution, pair Pair[V]) (bool, error) {
 		return scalarValue(s, pair.Left) && scalarValue(s, pair.Right) && pair.Left != pair.Right, nil
 	})
 }

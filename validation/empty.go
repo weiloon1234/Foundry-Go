@@ -30,18 +30,19 @@ func nativeEmptyCheck[T any]() emptyCheck[T] {
 		return emptyCheck[T]{err: invalid("empty-content rules require an unwrapped value; use the typed optional/nullable rule adapter")}
 	}
 	typ := reflect.TypeFor[T]()
-	check := emptyCheck[T]{serverOnly: jsonshape.HasEncoder(typ, true) || jsonshape.HasDecoder(typ, true)}
+	check := emptyCheck[T]{serverOnly: typeWireTransform(typ)}
 	switch typ.Kind() {
 	case reflect.String:
 		check.kind = emptyText
-		check.serverOnly = scalarWireTransform[T]()
 	case reflect.Array, reflect.Slice, reflect.Map:
 		check.kind = emptyCollection
-		check.serverOnly = collectionTypeWireTransform(typ)
 	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.Struct:
+		reflect.Float32, reflect.Float64:
 		check.kind = emptyValue
+	case reflect.Struct:
+		check.kind = emptyValue
+		check.serverOnly = jsonshape.HasEncoder(typ, true) || jsonshape.HasDecoder(typ, true)
 	default:
 		check.err = invalid("empty-content rules require a concrete text, collection, numeric, boolean or struct value; validate pointers with Pointer/NotNil")
 	}

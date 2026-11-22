@@ -1,5 +1,5 @@
-import { JSONNumber, defaultJSONLimits, immutable, object, pointer, reject, validUnicode, writeWire } from "./runtime.js";
-import type { CallOptions, ClientOptions, Identity, MultipartPart, Operation, Payload, Presentation, RuleDescription, RuntimeDocument, URLParameter, Upload, ValidationReport, WireType, localeKeyed } from "./runtime.js";
+import { JSONNumber, compareNumbers, createFieldBinding, defaultJSONLimits, immutable, object, pointer, reject, runtimePolicy, validUnicode, writeWire } from "./runtime.js";
+import type { CallOptions, ClientOptions, FieldBinding, FieldChecks, FieldLimits, Identity, Issue, MultipartPart, Operation, Payload, Presentation, RuleDescription, RuntimeDocument, URLParameter, Upload, ValidationReport, WireType, localeKeyed } from "./runtime.js";
 /** Unsafe-size metadata numbers stay exact instead of being rounded or clamped. */
 export type ExactMetadataNumber = number | JSONNumber;
 type ExactMetadata<T> = T extends number ? ExactMetadataNumber : T extends readonly (infer V)[] ? readonly ExactMetadata<V>[] : T extends object ? { readonly [K in keyof T]: ExactMetadata<T[K]> } : T;
@@ -23,6 +23,8 @@ type IsCollection<T> = NonNullable<T> extends readonly unknown[] ? true : string
 type CollectionKey<T> = NonNullable<T> extends readonly unknown[] ? number : IdentityKeyed<T> extends true ? MapKeys<T> : LocaleKeyed<T> extends true ? MapKeys<T> : string;
 type ElementValue<T> = NonNullable<T> extends readonly (infer V)[] ? V : Exclude<NonNullable<T>[MapKeys<T>], undefined>;
 declare const descriptorType: unique symbol;
+/** presentation hints whose label/help keys are this entry's declared field keys. */
+export type FieldPresentation = Omit<Presentation, "label_key" | "help_key"> & { readonly label_key?: FieldMessageKey; readonly help_key?: FieldMessageKey };
 /** Value/owner identity prevents fields of different operations or types being interchanged. */
 export interface FieldDescriptor<T, Owner = unknown> {
   readonly [descriptorType]: (value: T, owner: Owner) => readonly [T, Owner];
@@ -30,12 +32,11 @@ export interface FieldDescriptor<T, Owner = unknown> {
   readonly required: boolean;
   readonly nullable: boolean;
   readonly repeated: boolean;
-  readonly presentation: Readonly<Presentation>;
+  readonly presentation: Readonly<FieldPresentation>;
+  readonly limits: FieldLimits;
   readonly schema: SchemaMetadata | undefined;
   readonly parameter: ParameterMetadata | undefined;
   readonly choices: readonly NonNullable<T>[];
-  readonly accept?: string;
-  readonly maxBytes?: number;
   field<K extends ObjectFields<T>>(name: K): FieldDescriptor<NonNullable<T>[K], readonly [Owner, K]>;
   /** Select a declared union payload; the discriminator stays on the parent. */
   variant<D extends Discriminator<T>, V extends Extract<NonNullable<T>[D], string>>(discriminator: D, tag: V): FieldDescriptor<Omit<Extract<NonNullable<T>, Record<D, V>>, D>, readonly [Owner, D, V]>;
@@ -55,6 +56,51 @@ export interface OperationDescriptor<K extends keyof Operations> {
   body(this: K extends keyof OperationJSONBodies ? OperationDescriptor<K> : never): FieldDescriptor<OperationJSONBodies[K & keyof OperationJSONBodies], readonly [K, "body"]>;
   validate(input: Operations[K]["request"], options?: ClientOptions): ValidationReport;
   call(client: API, input: Operations[K]["request"], options?: CallOptions): Promise<Operations[K]["response"]>;
+}
+
+/** a map's text entry shows empty text while the map has no value for the key. */
+type EntryValue<V> = ElementValue<V> extends string ? ElementValue<V> : ElementValue<V> | undefined;
+/**
+ * A list's rows by position, at(i), when the form's values always hold the
+ * list (a draft that may leave it out has no rows to bind); a map's entries by
+ * key.
+ */
+type BoundEntries<T, V, Entry> = NonNullable<T> extends readonly (infer E)[]
+  ? undefined extends V ? {} : { at(index: number): BoundField<E, V extends readonly (infer R)[] ? R : never, Entry> }
+  : { at(key: MapKeys<T>): FieldBinding<EntryValue<V>> };
+/**
+ * A field binds as Go declares it (L, its node in OperationBodyLabels): a
+ * nested object as the bindings of the fields below it; a labelled list or map
+ * whole, and each entry with at(key), a list's row binding like a field of its
+ * own element type; a list without a label of its own by row only; any other
+ * value whole.
+ */
+export type BoundField<T, V, L> = L extends readonly [infer Entry] ? FieldBinding<V> & BoundEntries<T, V, Entry>
+  : L extends readonly (infer Entry)[] ? BoundEntries<T, V, Entry>
+  : L extends true ? FieldBinding<V> : BoundFields<NonNullable<T>, V, L>;
+/** One binding for every field that both the form's values and the request's label tree declare. */
+export type BoundFields<T, V, L> = { readonly [N in Extract<keyof V, keyof L>]: BoundField<T[N & keyof T], V[N], L[N]> };
+/** A form's value for one request field: its control value, a nested object's values (each field as the request declares it), a list's rows the same way. */
+type FormValue<T> = NonNullable<T> extends readonly (infer E)[] ? readonly FormValue<E>[] : [ObjectFields<T>] extends [never] ? NonNullable<T> : { readonly [K in keyof NonNullable<T> as K extends string ? K : never]: FormValue<NonNullable<T>[K]> };
+/** A form's values for an object's fields: each held as its control value; a form may leave a field out until it has one. */
+export type FormValues<T> = { readonly [K in ObjectFields<T>]?: FormValue<NonNullable<T>[K]> };
+type BinderBody<K> = K extends keyof Operations ? OperationInputs[K] extends { readonly body: infer Body } ? Body : never : never;
+type BinderLabels<K> = K extends keyof OperationBodyLabels ? OperationBodyLabels[K] : {};
+/** Values that fit the request body of every operation in K at once. */
+type BinderValues<K> = K extends readonly [infer First, ...infer Rest] ? FormValues<BinderBody<First>> & BinderValues<Rest> : unknown;
+/** receives a function from the current values to the next; a state setter that accepts one fits. */
+export type FormUpdate<V> = (updater: (values: V) => V) => void;
+/**
+ * binds a form's values to the fields of an operation's request body,
+ * nested objects and list rows included. A form that submits several
+ * operations passes them together, [create, update], and receives one set of
+ * bindings per operation, in that order, all on the form's one state. Within
+ * one form instance a binding keeps its identity while its field's value,
+ * label and issues are unchanged, whichever update function the call passes.
+ */
+export interface FieldBinder {
+  <K extends keyof Operations, V extends FormValues<BinderBody<K>>>(root: OperationDescriptor<K>, values: V, update: FormUpdate<V>, issues: readonly Issue[]): BoundFields<BinderBody<K>, V, BinderLabels<K>>;
+  <K extends readonly [keyof Operations, keyof Operations, ...(keyof Operations)[]], V extends BinderValues<K>>(roots: { readonly [I in keyof K]: OperationDescriptor<K[I]> }, values: V, update: FormUpdate<V>, issues: readonly Issue[]): { readonly [I in keyof K]: BoundFields<BinderBody<K[I]>, V, BinderLabels<K[I]>> };
 }
 
 let descriptorDocumentCache: RuntimeDocument | undefined;
@@ -97,9 +143,154 @@ function descriptorChoices(id: string, type: WireType): readonly unknown[] {
   return choices;
 }
 
+/** A rule leaf on a value; guarded when it runs only on a supplied, non-null value (under Optional, Nullable or a pointer). */
+interface Constraint { readonly rule: RuleDescription; readonly guarded: boolean }
+// The rule nodes that constrain the value at segments whenever it is present.
+// field nodes follow declared names; each/each_value follow any entry, so
+// their rules describe at(key) and element(). when/unless (conditional),
+// compare (cross-field) and each_key rules are not limits of the value.
+function constrainingRules(root: RuleDescription | undefined, segments: readonly (string | number | null)[]): readonly Constraint[] {
+  let current: readonly RuleDescription[] = root ? [root] : [];
+  const leaves = <T>(nodes: readonly RuleDescription[], step: (node: RuleDescription, guarded: boolean, found: T[]) => void): T[] => {
+    const found: T[] = [];
+    const visit = (node: RuleDescription, depth: number, guarded: boolean): void => {
+      if (depth > runtimePolicy.maxDepth) reject("", "limit");
+      // Go checks a transformed value after decoding; its wire text has no
+      // bound a client can apply.
+      if (node.transformed) return;
+      if (node.kind === "all" || node.kind === "bail") for (const child of node.children ?? []) visit(child, depth + 1, guarded);
+      else if (node.kind === "optional" || node.kind === "nullable" || node.kind === "pointer") for (const child of node.children ?? []) visit(child, depth + 1, true);
+      else step(node, guarded, found);
+    };
+    for (const node of nodes) visit(node, 0, false);
+    return found;
+  };
+  for (const segment of segments) {
+    current = leaves<RuleDescription>(current, (node, _guarded, found) => {
+      const entry = node.kind === "each_value" ? segment === null || typeof segment === "string" : node.kind === "each" && (segment === null || typeof segment === "number");
+      if (entry || node.kind === "field" && typeof segment === "string" && node.field === segment) found.push(...(node.children ?? []));
+    });
+  }
+  return leaves<Constraint>(current, (node, guarded, found) => { if (node.kind === "rule" && node.spec) found.push({ rule: node, guarded }); });
+}
+// derived, immutable data: each operation's rule tree and preparation flag, looked up once.
+const operationRules = /* @__PURE__ */ new Map<string, { readonly validation: RuleDescription | undefined; readonly prepared: boolean }>();
+function operationFacts(name: string): { readonly validation: RuleDescription | undefined; readonly prepared: boolean } {
+  let facts = operationRules.get(name);
+  if (!facts) {
+    const op = descriptorDocument().http.find(op => op.name === name);
+    operationRules.set(name, facts = { validation: op?.validation, prepared: op?.preparation === true });
+  }
+  return facts;
+}
+function ruleLeaves(reference: DescriptorReference | undefined, segments: readonly (string | number | null)[] | undefined): readonly Constraint[] {
+  if (!reference || !segments) return [];
+  return constrainingRules(operationFacts(reference.operation).validation, segments);
+}
+function ruleParameter(rule: RuleDescription, name: string): unknown {
+  return rule.spec?.parameters?.find(parameter => parameter.name === name)?.value;
+}
+// Go rejects an empty value when a rule that always runs on a present value
+// does: a non-empty rule, a positive minimum length or item count, the password
+// rule (its minimum is at least 1), or a membership rule without an empty
+// case. A rule under Optional, Nullable or a pointer runs only on a supplied
+// value, so it never makes the field required.
+function rejectsEmpty(rule: RuleDescription): boolean {
+  const emptyKind = ruleParameter(rule, "empty_kind");
+  switch (rule.spec!.id) {
+    case "foundry.non_blank": case "foundry.password": return true;
+    case "foundry.non_empty": return emptyKind === "text" || emptyKind === "collection";
+    case "foundry.required": return ruleParameter(rule, "locales") === undefined && (emptyKind === "text" || emptyKind === "collection");
+    case "foundry.min_length": case "foundry.min_items": return (compareNumbers(ruleParameter(rule, "min"), 0) ?? 0) > 0;
+    case "foundry.enum": case "foundry.one_of": { const values = ruleParameter(rule, "values"); return Array.isArray(values) && !values.includes(""); }
+    default: return false;
+  }
+}
+// A supplied value at this level: the wire requires its key, or a rule that
+// always runs requires it (Required, Present); not null: the type is not
+// nullable, or a rule that always runs rejects null (Required, NotNull). A
+// locale requirement of "default" or "all" rejects an absent or null map,
+// which holds no locale at all.
+function presentHere(constraints: readonly Constraint[], required: boolean, nullable: boolean): boolean {
+  const ids = new Set(constraints.filter(constraint => !constraint.guarded).map(({ rule }) => {
+    const locales = ruleParameter(rule, "locales");
+    return rule.spec!.id === "foundry.required" && locales !== undefined ? (locales === "none" ? "" : "foundry.required") : rule.spec!.id;
+  }));
+  return (required || ids.has("foundry.required") || ids.has("foundry.present")) && (!nullable || ids.has("foundry.required") || ids.has("foundry.not_null") || ids.has("foundry.not_nil"));
+}
+// only built-in rules whose unit is fixed by their ID give limits; two bounds
+// of one kind keep the stricter, and exact numbers stay exact strings. Only
+// rules that reject empty text or an empty collection make a value non-empty;
+// a length minimum alone does not (that is what makes a field required).
+function fieldLimits(constraints: readonly Constraint[], type: WireType | undefined, parameter: URLParameter | MultipartPart | undefined, nonEmpty: boolean): FieldLimits {
+  const rules = constraints.map(constraint => constraint.rule);
+  const limits: { -readonly [K in keyof FieldLimits]: FieldLimits[K] } = nonEmpty ? { nonEmpty } : {};
+  const count = (value: unknown): number | undefined => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  const lower = (key: "minLength", value: unknown): void => { const next = count(value); if (next !== undefined && (limits[key] === undefined || next > limits[key])) limits[key] = next; };
+  const upper = (key: "maxLength" | "maxBytes", value: unknown): void => { const next = count(value); if (next !== undefined && (limits[key] === undefined || next < limits[key])) limits[key] = next; };
+  const bound = (key: "min" | "max", value: unknown): void => {
+    const next = value instanceof JSONNumber ? value.text : typeof value === "number" || typeof value === "string" ? value : undefined;
+    if (next === undefined) return;
+    const order = limits[key] === undefined ? undefined : compareNumbers(next, limits[key]);
+    if (limits[key] === undefined || order !== undefined && (key === "min" ? order > 0 : order < 0)) limits[key] = next;
+  };
+  let places: number | undefined;
+  for (const rule of rules) {
+    const id = rule.spec!.id, emptyKind = ruleParameter(rule, "empty_kind");
+    const textOrCollection = emptyKind === "text" || emptyKind === "collection";
+    if (id === "foundry.non_blank" || (id === "foundry.non_empty" || id === "foundry.required" && ruleParameter(rule, "locales") === undefined) && textOrCollection) limits.nonEmpty = true;
+    switch (id) {
+      case "foundry.min_length": lower("minLength", ruleParameter(rule, "min")); break;
+      case "foundry.max_length": upper("maxLength", ruleParameter(rule, "max")); break;
+      case "foundry.password": lower("minLength", ruleParameter(rule, "min")); upper("maxLength", ruleParameter(rule, "max")); break;
+      case "foundry.max_bytes": upper("maxBytes", ruleParameter(rule, "max")); break;
+      case "foundry.min": case "foundry.decimal_min": bound("min", ruleParameter(rule, "min")); break;
+      case "foundry.max": case "foundry.decimal_max": bound("max", ruleParameter(rule, "max")); break;
+      case "foundry.decimal_places": { const next = count(ruleParameter(rule, "places")); if (next !== undefined && (places === undefined || next < places)) places = next; break; }
+    }
+  }
+  // A number control's default step of 1 would reject a valid fraction.
+  if (type?.kind === "integer") limits.step = 1;
+  else if (type?.kind === "number") limits.step = "any";
+  else if (type?.kind === "string" && type.format === "decimal") limits.step = places === undefined ? "any" : places === 0 ? 1 : "0." + "0".repeat(places - 1) + "1";
+  if (parameter && "max_bytes" in parameter) upper("maxBytes", parameter.max_bytes);
+  const accept = uploadAccept(parameter);
+  if (accept) limits.accept = accept;
+  return limits;
+}
+function uploadAccept(parameter: URLParameter | MultipartPart | undefined): string | undefined {
+  return parameter && "kind" in parameter && parameter.kind === "file" && (parameter.content_types?.length || parameter.extensions?.length) ? [...(parameter.content_types ?? []), ...(parameter.extensions ?? []).map(ext => ext.startsWith(".") ? ext : "." + ext)].join(", ") : undefined;
+}
+// the Go locale rule publishes which locales it requires ("default" or "all");
+// an entry of that map is required exactly when Go requires its locale.
+function localeRequired(constraints: readonly Constraint[], key: string): boolean {
+  const selected = constraints.map(constraint => constraint.rule).find(rule => rule.spec!.id === "foundry.required" && ruleParameter(rule, "locales") !== undefined);
+  const locales = selected && ruleParameter(selected, "locales");
+  return locales === "all" || locales === "default" && key === catalogLocales?.default;
+}
+
+/** The issues addressed to this field or below it, in order. Compare by descriptor, never by a hand-written path. */
+export function fieldIssues<T, Owner>(descriptor: FieldDescriptor<T, Owner>, issues: readonly Issue[]): readonly Issue[] {
+  const path = descriptor.path;
+  return issues.filter(issue => issue.path === path || issue.path.startsWith(path + "/"));
+}
+
+/**
+ * An issue the client itself addresses to a field, such as a failed
+ * precondition the server reports about one input: the address comes from the
+ * descriptor, never from a hand-written path.
+ */
+export function issueAt<T, Owner>(descriptor: FieldDescriptor<T, Owner>, code: string, message: string): Issue {
+  return Object.freeze({ path: descriptor.path, code, message });
+}
+
 interface DescriptorReference {
   readonly operation: string;
   readonly segments: readonly (string | number | null)[];
+  /** this value and every value above it must be present and not null. */
+  readonly present: boolean;
+  /** Go rejects an empty value here: present, and a rule or the type rejects empty. */
+  readonly filled?: boolean;
   readonly guards: readonly { readonly segments: readonly (string | number | null)[]; readonly discriminator: string; readonly tag: string }[];
   readonly id?: string;
 }
@@ -108,7 +299,7 @@ function childReference(reference: DescriptorReference | undefined, key: string 
   return reference && { ...reference, segments: [...reference.segments, key] };
 }
 
-function describeField(id: string | undefined, required: boolean, path: string, hint?: Presentation, parameter?: URLParameter | MultipartPart, repeated = false, reference?: DescriptorReference): unknown {
+function describeField(id: string | undefined, required: boolean, path: string, hint?: Presentation, parameter?: URLParameter | MultipartPart, repeated = false, reference?: DescriptorReference, requiredText = false): unknown {
   const resolved = id ? resolvedDescriptor(id) : undefined;
   const type = resolved?.type;
   const file = parameter && "kind" in parameter && parameter.kind === "file";
@@ -116,15 +307,29 @@ function describeField(id: string | undefined, required: boolean, path: string, 
   // Enum choices use the existing codec's exact client representation, including
   // wide integers as strings. No enum validator is recreated by the descriptor.
   const choices = !repeated && type ? descriptorChoices(id!, type) : [];
+  const rules = ruleLeaves(reference, reference?.segments);
+  const nullable = !repeated && (resolved?.nullable ?? false);
+  // Presence is a chain: an optional or nullable parent makes every value below it optional.
+  if (reference) {
+    const present = reference.present && presentHere(rules, required, nullable);
+    // A boolean is never empty: a control requires it exactly when Go demands
+    // true. A guarded Accepted runs on every present value (Required(Accepted())
+    // guards it with Optional), so presence decides. For other values an enum
+    // type without an empty case rejects empty text when it decodes, and an
+    // empty file chooser is a missing upload.
+    const filled = present && (type?.kind === "boolean" ? rules.some(constraint => constraint.rule.spec!.id === "foundry.accepted")
+      : requiredText || file || choices.length > 0 && !choices.includes("") || rules.some(constraint => !constraint.guarded && rejectsEmpty(constraint.rule)));
+    reference = { ...reference, present, filled };
+  }
   const descriptor = immutable({
-    path, required, nullable: !repeated && (resolved?.nullable ?? false), repeated,
+    path, required, nullable, repeated,
     presentation: hint ?? {}, schema: type, parameter, choices,
-    accept: parameter && "kind" in parameter && parameter.kind === "file" && (parameter.content_types?.length || parameter.extensions?.length) ? [...(parameter.content_types ?? []), ...(parameter.extensions ?? []).map(ext => ext.startsWith(".") ? ext : "." + ext)].join(", ") : undefined,
-    maxBytes: parameter && "max_bytes" in parameter ? parameter.max_bytes : undefined,
+    limits: fieldLimits(rules, type, parameter, requiredText),
     field(name: string): unknown {
       if (typeof name !== "string" || repeated) reject(path, "unknown_field");
       if (type?.kind === "map" && type.key?.value.cases?.some(value => String(value instanceof JSONNumber ? value.text : value) === name)) {
-        return describeField(type.element, false, pointer(path, name), undefined, undefined, false, childReference(reference, name));
+        const locale = localeRequired(rules, name);
+        return describeField(type.element, locale, pointer(path, name), hint, undefined, false, childReference(reference, name), locale);
       }
       if (type?.kind !== "object") reject(path, "unknown_field");
       const property = type.properties?.find(property => property.name === name);
@@ -147,13 +352,16 @@ function describeField(id: string | undefined, required: boolean, path: string, 
         // syntax and lowercase non-zero model IDs.
         if (type.key) contracts().mapKey(type.key, key, path);
       }
+      // An entry is labelled by its collection; a required locale of a
+      // translated map must be supplied with nonempty text.
+      const locale = !array && localeRequired(rules, String(key));
       return repeated ? describeField(id, true, pointer(path, String(key)), hint, parameter, false, childReference(reference, key))
-        : describeField(type!.element, array, pointer(path, String(key)), undefined, undefined, false, childReference(reference, key));
+        : describeField(type!.element, array || locale, pointer(path, String(key)), hint, undefined, false, childReference(reference, key), locale);
     },
     element(): unknown {
       if (repeated) return describeField(id, true, pointer(path, "*"), hint, parameter, false, childReference(reference, null));
       if (type?.kind !== "array" && type?.kind !== "map") reject(path, "not_collection");
-      return describeField(type.element, true, pointer(path, "*"), undefined, undefined, false, childReference(reference, null));
+      return describeField(type.element, true, pointer(path, "*"), hint, undefined, false, childReference(reference, null));
     },
   });
   if (reference) descriptorReferences.set(descriptor, { ...reference, ...(id ? { id } : {}) });
@@ -168,7 +376,7 @@ function describeOperation(name: string): unknown {
   // and field("body", name). Form and multipart bodies are named parameters.
   const bodyRoot = (): { field(name: string): unknown } => {
     if (!op.body?.type) reject("", "unknown_location");
-    return describeField(op.body.type, true, "/body", undefined, undefined, false, { operation: op.name, segments: ["body"], guards: [] }) as { field(name: string): unknown };
+    return describeField(op.body.type, true, "/body", undefined, undefined, false, { operation: op.name, segments: ["body"], guards: [], present: true }) as { field(name: string): unknown };
   };
   return Object.freeze({
     name, metadata: op, validation: op.validation, preparation: op.preparation === true,
@@ -187,7 +395,7 @@ function describeOperation(name: string): unknown {
       }
       const parameter = parameters?.find(field => field.name === name);
       if (!parameter) reject("", "unknown_field");
-      return describeField(parameter.type || undefined, parameter.required, pointer("/" + location, name), parameter.presentation, parameter, parameter.repeated, { operation: op.name, segments: [location, name], guards: [] });
+      return describeField(parameter.type || undefined, parameter.required, pointer("/" + location, name), parameter.presentation, parameter, parameter.repeated, { operation: op.name, segments: [location, name], guards: [], present: true });
     },
     validate(input: unknown, options: ClientOptions = {}): ValidationReport {
       return validateRequest(name as keyof Operations, input as Operations[keyof Operations]["request"], options);
@@ -198,6 +406,435 @@ function describeOperation(name: string): unknown {
       return (invoke as (input: unknown, options?: CallOptions) => unknown).call(client, input, options);
     },
   });
+}
+
+type BinderRoot = { readonly name: string; readonly metadata: Operation; field(location: string, name: string): unknown };
+type BinderDescriptor = { readonly path: string; readonly repeated: boolean; readonly limits: FieldLimits; readonly presentation: Readonly<FieldPresentation>; readonly schema: WireType | undefined; field(name: string): unknown; at(key: string | number): unknown };
+type BinderWrite = (transform: (current: unknown) => unknown) => void;
+/** A list bound without a label of its own: its rows by position. */
+interface BoundRows { at(index: number): unknown }
+// derived, immutable data: a declared field's descriptor cached per parent, so
+// binding a form on every render walks each rule tree once. Declared names
+// bound this; a row's or a map entry's descriptor is kept by its form instead.
+const binderNames = /* @__PURE__ */ new WeakMap<object, ReadonlySet<string>>();
+const binderFields = /* @__PURE__ */ new WeakMap<object, Map<string, BinderDescriptor>>();
+function binderField(parent: object, name: string, describe: () => unknown): BinderDescriptor {
+  let fields = binderFields.get(parent);
+  if (!fields) binderFields.set(parent, fields = new Map());
+  let child = fields.get(name);
+  if (!child) fields.set(name, child = describe() as BinderDescriptor);
+  return child;
+}
+// Whether a value binds, as the label tree the generator emits
+// (OperationBodyLabels) says: a value a control shows needs its Go label; a
+// nested object, or a list of them, binds without one when something below it
+// binds. A type already on the path binds nothing further.
+function binds(id: string | undefined, labelled: boolean, active: ReadonlySet<string>): boolean {
+  if (labelled) return true;
+  const type = id ? resolvedDescriptor(id).type : undefined;
+  if (!type || active.has(type.id)) return false;
+  const inner = new Set(active).add(type.id);
+  if (type.kind === "object") return (type.properties ?? []).some(property => binds(property.type, property.presentation?.label_key !== undefined, inner));
+  return type.kind === "array" && binds(type.element, false, inner);
+}
+// The fields a binder binds of a JSON object (a body, a nested object or a
+// multipart JSON part) or of a form or multipart body, matching the binder's
+// type, which leaves the others out. `active` holds the types on the path.
+function bindableNames(parent: BinderRoot | BinderDescriptor, active: ReadonlySet<string>): ReadonlySet<string> {
+  let names = binderNames.get(parent);
+  if (names) return names;
+  const properties = (type: WireType | undefined) => type?.kind === "object" ? type.properties ?? [] : [];
+  const body = "metadata" in parent ? parent.metadata.body : undefined;
+  const fields: readonly { readonly name: string; readonly type: string; readonly presentation?: Presentation }[] = !("metadata" in parent) ? properties(parent.schema)
+    : body?.type ? properties(resolvedDescriptor(body.type).type) : body?.parts ?? body?.fields ?? [];
+  names = new Set(fields.filter(field => binds(field.type || undefined, field.presentation?.label_key !== undefined, active)).map(field => field.name));
+  binderNames.set(parent, names);
+  return names;
+}
+// The control name: the path below the request location, dotted, with dots and
+// backslashes inside a key escaped; other locations keep their prefix.
+function controlName(segments: readonly (string | number | null)[]): string {
+  const keys = segments.map(segment => String(segment).replace(/[\\.]/g, character => "\\" + character));
+  return (segments[0] === "body" ? keys.slice(1) : keys).join(".");
+}
+function sameIssues(left: readonly Issue[], right: readonly Issue[]): boolean {
+  return left.length === right.length && left.every((issue, index) => issue === right[index]);
+}
+function sameLimits(left: FieldLimits, right: FieldLimits): boolean {
+  const keys = Object.keys(left) as (keyof FieldLimits)[];
+  return keys.length === Object.keys(right).length && keys.every(key => left[key] === right[key]);
+}
+
+declare const formFieldStateBrand: unique symbol;
+/**
+ * The binder state of one form instance: the bindings it handed out, so an
+ * unchanged field keeps its binding, the value each field held when the form
+ * first bound it (a field is edited while its value differs from that one),
+ * the length of each list and the issues with the lists they point into.
+ * Create one per form instance with formFieldState() and keep it while the
+ * form is mounted (in React, a hook that holds it in state).
+ *
+ * Binding a form computes; it changes nothing the form has committed. What a
+ * binder call learns (the update function its bindings call, the issues, list
+ * lengths, first-bound values) is published by commitFormFields(state) once the
+ * render that made the call is the one shown (in React, a layout effect). A
+ * call that is never committed changes nothing, and the next call replaces it.
+ */
+export interface FormFieldState { readonly [formFieldStateBrand]: true }
+/** The issues a form passes, each with the lists its path points into, their lengths when the issues arrived, and the lists whose length has differed since. */
+interface IssueSnapshot {
+  readonly issues: readonly Issue[];
+  readonly lists: readonly (readonly string[])[];
+  readonly reported: ReadonlyMap<string, number>;
+  readonly stale: ReadonlySet<string>;
+}
+interface RowsMemo { readonly list: unknown; readonly issues: readonly Issue[]; readonly label: (key: FieldMessageKey) => string; readonly entries: BoundRows }
+// Everything is kept by path, the request pointer the server reports issues
+// at, so a list's rows are addressed by position: row i of a list is whatever
+// the list holds at index i. Bindings, groups, rows and entry descriptors are
+// kept by operation and path.
+interface FormMemory {
+  readonly bindings: Map<string, FieldBinding<unknown>>;
+  readonly groups: Map<string, Readonly<Record<string, unknown>>>;
+  readonly rows: Map<string, RowsMemo>;
+  /** the descriptors of rows and map entries this form bound. */
+  readonly entries: Map<string, BinderDescriptor>;
+  /** by path, the value a field held when the form first bound it. */
+  readonly firsts: Map<string, unknown>;
+  /** the update function per operation, which the bindings call. */
+  readonly updates: Map<string, FormUpdate<Readonly<Record<string, unknown>>>>;
+  /** by path, the length of each bound list. */
+  readonly lengths: Map<string, number>;
+}
+/** What one binder call computed; commitFormFields publishes it. */
+interface FormRender extends FormMemory {
+  /** the lists whose length differs from the committed one. */
+  readonly changed: Set<string>;
+  readonly snapshot: IssueSnapshot;
+}
+/** What the form's shown render committed, the latest uncommitted call, and any post-commit entry bindings. */
+interface FormFieldData extends FormMemory {
+  snapshot: IssueSnapshot;
+  render: FormRender | undefined;
+  after: FormRender | undefined;
+}
+const formFieldData = /* @__PURE__ */ new WeakMap<object, FormFieldData>();
+const noIssues: IssueSnapshot = /* @__PURE__ */ Object.freeze({ issues: [], lists: [], reported: new Map<string, number>(), stale: new Set<string>() });
+function formMemory(): FormMemory {
+  return { bindings: new Map(), groups: new Map(), rows: new Map(), entries: new Map(), firsts: new Map(), updates: new Map(), lengths: new Map() };
+}
+/** A new, empty binder state for one form instance. */
+export function formFieldState(): FormFieldState {
+  const state = Object.freeze(Object.create(null) as object);
+  formFieldData.set(state, { ...formMemory(), snapshot: noIssues, render: undefined, after: undefined });
+  return state as FormFieldState;
+}
+/**
+ * Publishes what the latest binder call on this form computed (and any entry
+ * bindings created after the previous commit): from then on its bindings write
+ * through its update function, and its issues, list lengths and first-bound
+ * values are the form's. Call it once the render that bound the form is the
+ * one shown (in React, in a layout effect of the form component); nothing to
+ * publish is a no-op.
+ */
+export function commitFormFields(form: FormFieldState): void {
+  const data = formFieldData.get(form);
+  if (!data) reject("", "form_binding");
+  const after = data.after, render = data.render;
+  if (!after && !render) return;
+  data.after = undefined;
+  data.render = undefined;
+  const publish = <V>(from: ReadonlyMap<string, V>, to: Map<string, V>): void => { for (const [key, value] of from) to.set(key, value); };
+  const publishMemory = (from: FormMemory): void => {
+    publish(from.lengths, data.lengths);
+    publish(from.firsts, data.firsts);
+    publish(from.updates, data.updates);
+    publish(from.bindings, data.bindings);
+    publish(from.groups, data.groups);
+    publish(from.rows, data.rows);
+    publish(from.entries, data.entries);
+  };
+  if (after) publishMemory(after);
+  if (!render) return;
+  data.snapshot = render.snapshot;
+  // A list whose length changed may hold other rows at its positions: its
+  // rows' first-bound values are forgotten (each row is first bound again at
+  // its position, in this render), and what was kept past its end is dropped.
+  for (const list of render.changed) {
+    const length = render.lengths.get(list)!, below = list + "/";
+    const past = (at: string): boolean => at.startsWith(below) && Number(at.slice(below.length).split("/", 1)[0]) >= length;
+    for (const at of data.firsts.keys()) if (at.startsWith(below)) data.firsts.delete(at);
+    for (const at of data.lengths.keys()) if (past(at)) data.lengths.delete(at);
+    for (const kept of [data.bindings, data.groups, data.rows, data.entries]) for (const key of kept.keys()) if (past(key.slice(key.indexOf("\u0000") + 1))) kept.delete(key);
+  }
+  publishMemory(render);
+}
+/** A kept value: this call's, else the committed one (including post-commit bindings). */
+function kept<V>(pending: ReadonlyMap<string, V>, committed: ReadonlyMap<string, V>, after: ReadonlyMap<string, V> | undefined, key: string): V | undefined {
+  return pending.has(key) ? pending.get(key) : committed.has(key) ? committed.get(key) : after?.get(key);
+}
+// The value at a /body pointer in the form's values, undefined where the
+// values hold none.
+function valueAt(values: unknown, path: string): unknown {
+  if (path === "/body") return values;
+  if (!path.startsWith("/body/")) return undefined;
+  let value = values;
+  for (const key of path.slice(6).split("/")) {
+    if (Array.isArray(value)) value = /^(?:0|[1-9]\d*)$/.test(key) ? value[Number(key)] : undefined;
+    else {
+      const name = key.replace(/~1/g, "/").replace(/~0/g, "~");
+      value = value !== null && typeof value === "object" && Object.hasOwn(value, name) ? (value as Readonly<Record<string, unknown>>)[name] : undefined;
+    }
+  }
+  return value;
+}
+// The lists an issue's path points into (a list holding a row on the path),
+// recording each list's length now.
+function issueLists(values: unknown, path: string, lengths: Map<string, number>): readonly string[] {
+  const lists: string[] = [];
+  if (!path.startsWith("/body/")) return lists;
+  let at = "/body";
+  for (const key of path.slice(6).split("/")) {
+    const list = valueAt(values, at);
+    if (Array.isArray(list)) {
+      if (!/^(?:0|[1-9]\d*)$/.test(key)) break;
+      lists.push(at);
+      lengths.set(at, list.length);
+    }
+    at += "/" + key;
+  }
+  return lists;
+}
+// The issues as this call sees them. New issues (compared element by element)
+// record the length of every list they point into. A list whose length now
+// differs from that one is stale, with every list below its rows, until new
+// issues arrive: its positions may hold other rows, even once its length is
+// back.
+function issueSnapshot(previous: IssueSnapshot, values: unknown, issues: readonly Issue[]): IssueSnapshot {
+  let snapshot = previous;
+  if (!sameIssues(previous.issues, issues)) {
+    const reported = new Map<string, number>();
+    snapshot = { issues, lists: issues.map(issue => issueLists(values, issue.path, reported)), reported, stale: new Set() };
+  }
+  let stale: Set<string> | undefined;
+  for (const [list, length] of snapshot.reported) {
+    const current = valueAt(values, list);
+    if (!snapshot.stale.has(list) && !(Array.isArray(current) && current.length === length)) (stale ??= new Set(snapshot.stale)).add(list);
+  }
+  return stale ? { ...snapshot, stale } : snapshot;
+}
+// The issues at a path or below it, except on a row of a stale list (or below
+// one): its position may now hold another row. The list's own binding still
+// shows them, and the form's summary lists every issue.
+function issuesAt(render: FormRender, path: string): readonly Issue[] {
+  const { issues, lists, stale } = render.snapshot;
+  return issues.filter((issue, index) => (issue.path === path || issue.path.startsWith(path + "/"))
+    && !lists[index]!.some(list => stale.has(list) && path.startsWith(list + "/")));
+}
+// A list's length as this call binds it (a list the values do not hold has
+// none); a length that differs from the committed one marks the list changed.
+function observeLength(render: FormRender, data: FormFieldData, path: string, list: unknown): void {
+  if (!Array.isArray(list) || render.lengths.has(path)) return;
+  render.lengths.set(path, list.length);
+  const last = data.lengths.has(path) ? data.lengths.get(path) : data.after?.lengths.get(path);
+  if (last !== undefined && last !== list.length) render.changed.add(path);
+}
+// The value a field held when the form first bound it: committed (or learned
+// after commit), unless a list above it changed length in this call (its
+// position may hold another row now), else this call's value.
+function firstBound(render: FormRender, data: FormFieldData, path: string, value: unknown): unknown {
+  if (render.firsts.has(path)) return render.firsts.get(path);
+  const moved = [...render.changed].some(list => path.startsWith(list + "/"));
+  if (!moved) {
+    if (data.firsts.has(path)) return data.firsts.get(path);
+    if (data.after?.firsts.has(path)) return data.after.firsts.get(path);
+  }
+  render.firsts.set(path, value);
+  return value;
+}
+
+interface BinderContext {
+  readonly data: FormFieldData;
+  readonly render: FormRender;
+  readonly operation: string;
+  readonly prepared: boolean;
+  readonly label: (key: FieldMessageKey) => string;
+}
+function newRender(data: FormFieldData): FormRender {
+  return { ...formMemory(), changed: new Set(), snapshot: data.snapshot };
+}
+// A row or entry bound after its form's call (a child component's own
+// re-render or an event handler): it joins the form's latest uncommitted call,
+// or records into the post-commit buffer so what it learns is kept for the
+// next commit.
+function latest(context: BinderContext): BinderContext {
+  const { data } = context;
+  return { ...context, render: data.render ?? (data.after ??= newRender(data)) };
+}
+// The descriptor of a row or map entry, kept by the form that binds it, so
+// visiting many keys keeps nothing once the form is gone.
+function entryDescriptor(context: BinderContext, descriptor: BinderDescriptor, path: string, key: string | number): BinderDescriptor {
+  const id = context.operation + "\u0000" + pointer(path, String(key));
+  let child = kept(context.render.entries, context.data.entries, context.data.after?.entries, id);
+  if (!child) context.render.entries.set(id, child = descriptor.at(key) as BinderDescriptor);
+  return child;
+}
+// A nested object binds as its fields, stopping where its type is already on
+// the path (as the label tree does); a list without a label of its own binds
+// as its rows; any other value as a binding.
+function bindValue(context: BinderContext, descriptor: BinderDescriptor, path: string, value: unknown, write: BinderWrite, active: ReadonlySet<string>, row: boolean): unknown {
+  const type = descriptor.schema;
+  if (!descriptor.repeated && type?.kind === "object") return active.has(type.id) ? noFields : bindGroup(context, descriptor, path, value, write, name => descriptor.field(name), new Set(active).add(type.id));
+  if (descriptor.presentation.label_key === undefined && (descriptor.repeated || type?.kind === "array")) return bindRows(context, descriptor, path, value, write, active);
+  return bindField(context, descriptor, path, value, write, undefined, active, row);
+}
+// The bindings of an object's fields, each writing into the latest object (a
+// write that changes nothing keeps it); an unchanged group keeps its
+// identity, as its bindings do.
+function bindGroup(context: BinderContext, parent: BinderRoot | BinderDescriptor, path: string, value: unknown, write: BinderWrite, describe: (name: string) => unknown, active: ReadonlySet<string>): Readonly<Record<string, unknown>> {
+  const current = value !== null && typeof value === "object" ? value as Readonly<Record<string, unknown>> : {};
+  const bound: Record<string, unknown> = Object.create(null);
+  for (const name of bindableNames(parent, active)) {
+    const fieldWrite: BinderWrite = transform => write(old => {
+      const before = old !== null && typeof old === "object" ? (old as Readonly<Record<string, unknown>>)[name] : undefined, after = transform(before);
+      return Object.is(after, before) ? old : { ...(old as object | undefined), [name]: after };
+    });
+    bound[name] = bindValue(context, binderField(parent, name, () => describe(name)), pointer(path, name), Object.hasOwn(current, name) ? current[name] : undefined, fieldWrite, active, false);
+  }
+  const key = context.operation + "\u0000" + path, previous = kept(context.render.groups, context.data.groups, context.data.after?.groups, key), names = Object.keys(bound);
+  if (previous && names.length === Object.keys(previous).length && names.every(name => previous[name] === bound[name])) return previous;
+  const group = Object.freeze(bound);
+  context.render.groups.set(key, group);
+  return group;
+}
+// The rows of a list without a label of its own; they keep their identity
+// while the list, the issues below it and the label function do.
+function bindRows(context: BinderContext, descriptor: BinderDescriptor, path: string, value: unknown, write: BinderWrite, active: ReadonlySet<string>): BoundRows {
+  const { data, render } = context;
+  observeLength(render, data, path, value);
+  const key = context.operation + "\u0000" + path, issues = issuesAt(render, path), previous = kept(render.rows, data.rows, data.after?.rows, key);
+  if (previous && Object.is(previous.list, value) && previous.label === context.label && sameIssues(previous.issues, issues)) return previous.entries;
+  const inner = descriptor.schema?.kind === "array" ? new Set(active).add(descriptor.schema.id) : active;
+  const entries: BoundRows = Object.freeze({ at: (index: number): unknown => bindRow(latest(context), descriptor, path, value, write, index, inner) });
+  render.rows.set(key, { list: value, issues, label: context.label, entries });
+  return entries;
+}
+// Row `index` of a list. Its write goes into the latest list at that
+// position and is dropped when the list no longer reaches it; a list the
+// values do not hold reads as empty rows, and a write to its first row creates
+// it.
+function bindRow(context: BinderContext, descriptor: BinderDescriptor, path: string, value: unknown, write: BinderWrite, index: number, active: ReadonlySet<string>): unknown {
+  const list = Array.isArray(value) ? value : undefined;
+  if (!Number.isSafeInteger(index) || index < 0 || list && index >= list.length) reject(descriptor.path, "collection_key");
+  const child = entryDescriptor(context, descriptor, path, index);
+  const row: unknown = list?.[index];
+  const rowWrite: BinderWrite = transform => write(current => {
+    if (!Array.isArray(current)) return current === undefined && index === 0 ? [transform(undefined)] : current;
+    if (index >= current.length) return current;
+    const copy = [...current];
+    copy[index] = transform(current[index]);
+    return copy;
+  });
+  return bindValue(context, child, pointer(path, String(index)), row === undefined && child.schema?.kind === "string" ? "" : row, rowWrite, active, true);
+}
+function bindField(context: BinderContext, descriptor: BinderDescriptor, path: string, value: unknown, write: BinderWrite, collection: readonly Issue[] | undefined, active: ReadonlySet<string>, row: boolean): FieldBinding<unknown> {
+  const { data, render, label } = context;
+  const list = descriptor.repeated || descriptor.schema?.kind === "array";
+  if (list) observeLength(render, data, path, value);
+  // A map's entry without issues of its own shows its map's: one locale is
+  // shown at a time, so a problem in another stays visible.
+  const own = issuesAt(render, path), shown = own.length || !collection ? own : collection;
+  const { label_key: labelKey, help_key: helpKey, kind } = descriptor.presentation;
+  if (labelKey === undefined) reject(descriptor.path, "form_field_label");
+  const text = label(labelKey), hint = helpKey === undefined ? undefined : label(helpKey);
+  const reference = descriptorReferences.get(descriptor), name = controlName(reference?.segments ?? []);
+  // Edited means changed since the form first bound the field, however it
+  // changed: by its control, another field's listener or the update function.
+  // A value changed back is not edited, so its bounds wait again.
+  const required = reference?.filled ?? false, edited = !Object.is(value, firstBound(render, data, path, value));
+  // Go judges a prepared request only after application code has changed it,
+  // so its controls enforce nothing; others enforce bounds once edited.
+  const checks: FieldChecks = context.prepared ? noChecks : Object.freeze({ required, limits: edited ? descriptor.limits : noLimits });
+  // An unchanged field keeps its binding, so memoised controls skip renders.
+  const key = context.operation + "\u0000" + path;
+  const previous = kept(render.bindings, data.bindings, data.after?.bindings, key);
+  if (previous && previous.name === name && Object.is(previous.value, value) && previous.label === text && previous.hint === hint && sameIssues(previous.issues, shown)
+    && sameLimits(previous.limits, descriptor.limits) && previous.checks.required === checks.required && sameLimits(previous.checks.limits, checks.limits)) return previous;
+  const inner = descriptor.schema?.kind === "array" ? new Set(active).add(descriptor.schema.id) : active;
+  const entries = list ? {
+    at: (index: number): unknown => bindRow(latest(context), descriptor, path, value, write, index, inner),
+  } : descriptor.schema?.kind === "map" ? {
+    at(entry: string): FieldBinding<unknown> {
+      const now = latest(context);
+      const child = entryDescriptor(now, descriptor, path, entry);
+      const current = value !== null && typeof value === "object" && Object.hasOwn(value, entry) ? (value as Readonly<Record<string, unknown>>)[entry] : undefined;
+      // An entry is written into the latest map, never a stale copy.
+      const entryWrite: BinderWrite = transform => write(current => ({ ...(current as object | undefined), [entry]: transform(current !== null && typeof current === "object" ? (current as Readonly<Record<string, unknown>>)[entry] : undefined) }));
+      return bindField(now, child, pointer(path, entry), current === undefined && child.schema?.kind === "string" ? "" : current, entryWrite, own, inner, false);
+    },
+  } : undefined;
+  const schema = descriptor.schema;
+  const numeric = schema?.kind === "integer" ? "integer" : schema?.kind === "number" ? "float" : schema?.kind === "string" && schema.format === "decimal" ? "decimal" : undefined;
+  const format = schema?.kind === "string" ? schema.format : undefined;
+  const temporal = format === "date" || format === "time" || format === "date_time" || format === "local_date_time" ? format : undefined;
+  const binding = createFieldBinding<unknown>({
+    name, label: text, hint, required, limits: descriptor.limits, checks, kind, numeric, temporal, row, value,
+    onChange: next => write(() => next),
+    issues: shown,
+  }, entries);
+  render.bindings.set(key, binding);
+  return binding;
+}
+const noFields: Readonly<Record<string, unknown>> = /* @__PURE__ */ Object.freeze(Object.create(null) as Record<string, unknown>);
+const noLimits: FieldLimits = /* @__PURE__ */ Object.freeze({});
+const noChecks: FieldChecks = /* @__PURE__ */ Object.freeze({ required: false, limits: noLimits });
+/**
+ * The field binder of a form. `label` translates a field's Go label and help
+ * keys; an application passes its catalog-typed translator, so a Go key
+ * without catalog text fails to compile at that one call. `form` returns the
+ * binder state of the form instance being bound (see FormFieldState); the
+ * binder calls it once per call, so in React it may be a hook, which also
+ * commits the call (commitFormFields) in a layout effect.
+ */
+export function fieldBinder(label: (key: FieldMessageKey) => string, form: () => FormFieldState): FieldBinder {
+  if (typeof label !== "function" || typeof form !== "function") reject("", "form_binding");
+  const bindRoot = (data: FormFieldData, render: FormRender, root: unknown, values: Readonly<Record<string, unknown>>, update: FormUpdate<Readonly<Record<string, unknown>>>): unknown => {
+    if (root === null || typeof root !== "object" || !("metadata" in root)) reject("", "form_binding");
+    const op = root as BinderRoot;
+    render.updates.set(op.name, update);
+    const context: BinderContext = { data, render, operation: op.name, prepared: operationFacts(op.name).prepared, label };
+    const body = op.metadata.body?.type ? resolvedDescriptor(op.metadata.body.type).type : undefined;
+    // A binding writes through the committed update function of its
+    // operation, so a render that is never shown cannot redirect its writes;
+    // before the form's first commit, through the call that made it.
+    const updateOf = (): FormUpdate<Readonly<Record<string, unknown>>> => {
+      const committed = data.updates.get(op.name) ?? data.render?.updates.get(op.name);
+      if (!committed) reject("", "form_binding");
+      return committed;
+    };
+    // Every bindable field is bound: a form may leave a key out of its values
+    // until it has one (an upload before a file is chosen).
+    return bindGroup(context, op, "/body", values, transform => updateOf()(old => transform(old) as Readonly<Record<string, unknown>>), name => op.field("body", name), new Set(body ? [body.id] : []));
+  };
+  // form() runs once per call, whether the call binds one operation or
+  // several, so in React the whole form holds one state. The call computes
+  // into a render of its own, which commitFormFields publishes.
+  const bind = (root: unknown, values: unknown, update: FormUpdate<Readonly<Record<string, unknown>>>, issues: readonly Issue[]): unknown => {
+    const data = formFieldData.get(form());
+    if (!data || typeof update !== "function" || !Array.isArray(issues)) reject("", "form_binding");
+    const current = object(values);
+    const render: FormRender = { ...newRender(data), snapshot: issueSnapshot(data.snapshot, current, issues) };
+    let result: unknown;
+    if (!Array.isArray(root)) result = bindRoot(data, render, root, current, update);
+    else {
+      const names = root.map(each => each !== null && typeof each === "object" && "metadata" in each ? (each as BinderRoot).name : undefined);
+      if (names.length < 2 || names.includes(undefined) || new Set(names).size !== names.length) reject("", "form_binding");
+      result = Object.freeze(root.map(each => bindRoot(data, render, each, current, update)));
+    }
+    data.render = render;
+    return result;
+  };
+  return bind as FieldBinder;
 }
 
 export type TableColumnKind =

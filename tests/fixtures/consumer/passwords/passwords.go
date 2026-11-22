@@ -9,7 +9,7 @@ import (
 //foundry:dto http=body
 type LoginRequest struct {
 	Email    string             `json:"email"`
-	Password password.Plaintext `json:"password"`
+	Password password.Plaintext `json:"password" client:"kind=password"`
 }
 
 // HashForRegistration returns a hash, never a plaintext string. Persistence

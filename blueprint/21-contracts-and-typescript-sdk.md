@@ -160,8 +160,6 @@ document can reuse it later; this milestone does not emit one.
 - The runtime sources declare their module wiring as explicit import and export
   lines. `typescript.Render` drops those lines to keep returning one
   self-contained module from the same sources.
-- The React and Vue form adapters keep a type-only import of `FormStore` from
-  the full entry, which serves every entry of the directory.
 - Each entry embeds compact JSON. `manifestJSON` parses to the same document, but
   its text is no longer indented.
 

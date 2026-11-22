@@ -181,7 +181,6 @@ func TestSurfaceDeclarationsAreValidated(t *testing.T) {
 		want     error
 	}{
 		"artifact name":   {[]typescript.Surface{{Name: "manifest", Routes: []foundryhttp.RouteID{"admin"}}}, fault.Invalid},
-		"adapter name":    {[]typescript.Surface{{Name: "React", Routes: []foundryhttp.RouteID{"admin"}}}, fault.Invalid},
 		"runtime name":    {[]typescript.Surface{{Name: "runtime_admin", Routes: []foundryhttp.RouteID{"admin"}}}, fault.Invalid},
 		"pattern":         {[]typescript.Surface{{Name: "admin-portal", Routes: []foundryhttp.RouteID{"admin"}}}, fault.Invalid},
 		"case duplicate":  {[]typescript.Surface{{Name: "Admin", Routes: []foundryhttp.RouteID{"admin"}}, {Name: "admin", Routes: []foundryhttp.RouteID{"web"}}}, fault.Duplicate},
@@ -198,7 +197,7 @@ func TestSurfaceDeclarationsAreValidated(t *testing.T) {
 		}
 	}
 	sources := func(context.Context, foundation.Resolver) (manifest.Sources, error) { return manifest.Sources{}, nil }
-	if _, err := typescript.ExportCommand("contracts.export", openapi.Options{Title: "Portals", APIVersion: "1"}, sources, typescript.Surface{Name: "vue", Routes: []foundryhttp.RouteID{"admin"}}); !errors.Is(err, fault.Invalid) {
+	if _, err := typescript.ExportCommand("contracts.export", openapi.Options{Title: "Portals", APIVersion: "1"}, sources, typescript.Surface{Name: "OpenAPI", Routes: []foundryhttp.RouteID{"admin"}}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("export command accepted a reserved surface name", err)
 	}
 }

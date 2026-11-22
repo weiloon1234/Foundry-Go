@@ -26,6 +26,10 @@ func (d Description) Normalize() (Description, error) {
 		if info.Kind != CompareKind && (info.OtherField != "" || info.OtherLabel != "" || info.OtherLabelKey != "") {
 			return bad()
 		}
+		// A transformed value can never be checked against its wire text.
+		if info.Transformed && (!info.ServerOnly || info.Kind != LeafKind && info.Kind != EachKind) {
+			return bad()
+		}
 		if info.Kind == LeafKind {
 			if info.Spec == nil || len(info.Children) != 0 {
 				return bad()

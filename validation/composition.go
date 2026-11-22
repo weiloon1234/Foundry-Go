@@ -136,7 +136,8 @@ func NotNull[T any]() Rule[value.Nullable[T]] {
 // Empty slices have no elements; collection-size rules are separate.
 func Each[S ~[]T, T any](rules ...Rule[T]) Rule[S] {
 	child := All(rules...)
-	return lift(Description{Kind: EachKind, ServerOnly: collectionWireTransform[S, T]()}, child.ruleNode, func(s *execution, input S, depth int) {
+	transformed := collectionWireTransform[S, T]()
+	return lift(Description{Kind: EachKind, ServerOnly: transformed, Transformed: transformed}, child.ruleNode, func(s *execution, input S, depth int) {
 		for i, item := range input {
 			s.enterIndex(i)
 			run(child, s, item, depth+1)

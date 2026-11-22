@@ -302,5 +302,5 @@ function immutable<T>(value: T): T {
   }
   return value;
 }
-export { WireCodec, immutable, integerPattern, limitsValid, numberPattern, object, parseWire, pointer, reject, semanticID, textBytes, validUnicode, writeWire };
+export { WireCodec, immutable, integerPattern, object, parseWire, pointer, reject, semanticID, textBytes, validUnicode, writeWire };
 export type { WireType };

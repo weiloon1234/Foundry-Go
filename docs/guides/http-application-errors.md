@@ -205,8 +205,8 @@ export async function createMember(api: sdk.API, name: string) {
 ```
 
 The [compiled client example](../../tests/fixtures/consumer/clientcontracts/testdata/error-details.ts)
-imports `sdk` from the generated entry. Forms return the same narrowable error in
-failed submissions. Missing or malformed required details produce
+imports `sdk` from the generated entry. A form's submit action catches the same
+narrowable error. Missing or malformed required details produce
 `ResponseContractError`; tolerant enum decoding preserves newer server cases as
 `UnknownEnumValue`. The guard validates the current received envelope each time.
 Status alone cannot identify a business outcome; keep other failures explicit and never cast an

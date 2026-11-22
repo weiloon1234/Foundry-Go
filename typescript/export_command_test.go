@@ -69,15 +69,10 @@ func TestExportCommandPublishesFromApplicationSources(t *testing.T) {
 	if !strings.Contains(string(sdk), "   * Read notes *\\/ safely\n   * @deprecated\n") {
 		t.Fatal("operation documentation is missing or can close its comment")
 	}
-	if _, err := run("--dir", dir, "--react", "--vue"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := run("--dir", dir, "--react", "--vue", "--check"); err != nil {
-		t.Fatal(err)
-	}
-	for _, adapter := range []string{"react", "vue"} {
-		if _, err := os.Stat(filepath.Join(dir, "contracts_"+adapter+"_foundry.gen.ts")); err != nil {
-			t.Fatal(err)
+	// The form adapter flags were removed with the adapters.
+	for _, flag := range []string{"--react", "--vue"} {
+		if _, err := run("--dir", dir, flag); err == nil {
+			t.Fatalf("export accepted the removed %s flag", flag)
 		}
 	}
 }

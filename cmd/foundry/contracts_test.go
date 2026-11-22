@@ -62,19 +62,8 @@ func TestContractsCommandPublicationAndReadOnlyCheck(t *testing.T) {
 	if !reflect.DeepEqual(names(before), names(after)) {
 		t.Fatal("current check changed directory entries")
 	}
-	adapters := append(append([]string{}, args...), "--react", "--vue")
-	if err := run(t.Context(), adapters, &output, &output); err != nil {
-		t.Fatal(err)
-	}
-	if err := run(t.Context(), append(adapters, "--check"), &output, &output); err != nil {
-		t.Fatal(err)
-	}
-	for _, adapter := range []string{"react", "vue"} {
-		if _, err := os.Stat(filepath.Join(dir, "contracts_"+adapter+"_foundry.gen.ts")); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, args := range [][]string{{"contracts"}, {"contracts", "extra"}, {"contracts", "--manifest", input, "--dir", dir}, {"contracts", "--manifest", input, "--dir", dir, "--recover"}} {
+	// The form adapter flags were removed with the adapters.
+	for _, args := range [][]string{{"contracts"}, {"contracts", "extra"}, {"contracts", "--manifest", input, "--dir", dir}, {"contracts", "--manifest", input, "--dir", dir, "--recover"}, append(append([]string{}, args...), "--react"), append(append([]string{}, args...), "--vue")} {
 		if err := run(t.Context(), args, &output, &output); err == nil {
 			t.Fatalf("accepted invalid options: %v", args)
 		}

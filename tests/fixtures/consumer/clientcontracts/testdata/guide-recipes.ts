@@ -36,16 +36,20 @@ export async function portalLifecycle(transport: HTTPTransport, baseURL: string,
 // doc-example:end portal-lifecycle
 
 // doc-example:begin form-values
-export function formValues() {
-  const operation = sdk.operation("itemsEcho");
-  const form = sdk.createForm(operation, { body: {}, path: { key: "1" } });
-  const amount = form.field(operation.field("body", "amount"));
-  amount.set("123456789012345678901234567890.123");
-  amount.setText("999.99");
-  amount.parse();
-  const report = form.validate();
-  form.dispose();
-  return report;
+export function formValues(issues: readonly sdk.Issue[]) {
+  type Body = sdk.Operations["itemsEcho"]["request"]["body"];
+  let values: Required<Pick<sdk.FormValues<Body>, "amount">> = { amount: "999.99" };
+  // A React state setter fits `update`; it receives a function of the values.
+  const update: sdk.FormUpdate<typeof values> = (next) => { values = next(values); };
+  // One state per form instance, kept while it is mounted (in React, a hook).
+  const form = sdk.formFieldState();
+  const fields = sdk.fieldBinder((key) => key, () => form);
+  const amount = fields(sdk.operation("itemsEcho"), values, update, issues).amount;
+  // Binding computes; the form publishes the render it shows (in React, a
+  // layout effect), and its bindings then write through its update function.
+  sdk.commitFormFields(form);
+  amount.onChange("123456789012345678901234567890.123");
+  return { name: amount.name, label: amount.label, limits: amount.limits, checks: amount.checks, issues: amount.issues, values };
 }
 // doc-example:end form-values
 
@@ -135,41 +139,30 @@ export function localizedClient(transport: sdk.HTTPTransport, messages: sdk.Vali
 // doc-example:end localized-client
 
 // doc-example:begin form-presence
-export function formPresence(form: sdk.FormController<"itemsEcho">) {
-  const field = form.field(form.operation.field("body", "optional"));
-  field.unset();
-  const omitted = field.getSnapshot();
-  field.set(null);
-  const cleared = field.getSnapshot();
-  field.set("");
-  const empty = field.getSnapshot();
-  return { omitted, cleared, empty };
+export function formPresence(values: { readonly optional: string }, stored: string | null): Pick<sdk.Operations["itemsEcho"]["request"]["body"], "optional"> {
+  // The control edits text; the request decides presence: an empty value
+  // clears the field (null), an unchanged one is omitted from the body.
+  const next = values.optional.trim() ? values.optional : null;
+  return next === stored ? {} : { optional: next };
 }
 // doc-example:end form-presence
 
 // doc-example:begin form-outcomes
-export async function submitForm(form: sdk.FormController<"itemsEcho">, api: sdk.API) {
-  const result = await form.submit(api);
-  switch (result.status) {
-    case "succeeded":
-      return { result, issues: form.getSnapshot().issues };
-    case "invalid":
-      return { result, issues: result.report.issues };
-    case "failed":
-      if (result.error instanceof sdk.ResponseContractError) {
-        return { result, reconcile: true };
-      }
-      return {
-        result,
-        reconcile: result.outcome === "unknown",
-        issues: form.getSnapshot().issues,
-      };
-    case "canceled":
-      return { result, reconcile: result.outcome === "unknown" };
-    default: {
-      const exhaustive: never = result;
-      return exhaustive;
-    }
+type Submission =
+  | { readonly status: "saved"; readonly value: sdk.Operations["itemsEcho"]["response"] }
+  | { readonly status: "invalid"; readonly issues: readonly sdk.Issue[] }
+  | { readonly status: "rejected"; readonly error: sdk.APIError }
+  | { readonly status: "uncertain" };
+export async function submitForm(api: sdk.API, request: sdk.Operations["itemsEcho"]["request"]): Promise<Submission> {
+  try {
+    return { status: "saved", value: await api.itemsEcho(request) };
+  } catch (error) {
+    // The client's own contract check failed: nothing was sent.
+    if (error instanceof sdk.ContractError && !(error instanceof sdk.ResponseContractError)) return { status: "invalid", issues: error.issues };
+    // A declared 4xx answer is definite; anything else may have been processed,
+    // so reconcile before sending it again. No branch retries a mutation.
+    if (error instanceof sdk.APIError && error.status >= 400 && error.status < 500 && error.status !== 408) return { status: "rejected", error };
+    return { status: "uncertain" };
   }
 }
 // doc-example:end form-outcomes

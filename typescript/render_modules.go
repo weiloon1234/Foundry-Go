@@ -23,7 +23,7 @@ import (
 // entry's own operations and embedded manifest, so each entry inlines them.
 var (
 	coreSources  = []string{"wire", "formats", "validation_messages", "validation", "http", "fetch"}
-	entrySources = []string{"metadata", "descriptors", "forms"}
+	entrySources = []string{"metadata", "descriptors"}
 )
 
 const realtimeSource = "realtime"
@@ -100,6 +100,12 @@ var preambleNames = map[string]runtimeName{
 	"localeKeyed":       {},
 }
 
+// typeOnlyNames are core runtime classes that entries publish as types only.
+// The runtime declares each without export and wires it to the entry sources
+// as a type, so application code can name and receive one but has no class
+// value to construct, extend or take a prototype from.
+var typeOnlyNames = []string{"FieldBinding"}
+
 // runtimeNames indexes the core and realtime declarations. An ambient declare
 // const has no run-time binding, so it is imported only as a type.
 var runtimeNames = sync.OnceValues(func() (map[string]runtimeName, error) {
@@ -113,6 +119,13 @@ var runtimeNames = sync.OnceValues(func() (map[string]runtimeName, error) {
 			kind, ambient := string(match[3]), len(match[2]) != 0
 			result[string(match[4])] = runtimeName{realtime: name == realtimeSource, value: !ambient && kind != "interface" && kind != "type", public: len(match[1]) != 0 && !ambient}
 		}
+	}
+	for _, name := range typeOnlyNames {
+		info, declared := result[name]
+		if !declared || info.public || info.realtime {
+			return nil, safeerror.NewFault(fault.Internal, "runtime type-only name "+name+" must be a core declaration without export")
+		}
+		result[name] = runtimeName{public: true}
 	}
 	return result, nil
 })

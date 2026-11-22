@@ -143,7 +143,7 @@ func TestDatatableContractBytes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			source, selections := contractBaselineSource(t, name)
 			dir := t.TempDir()
-			options := typescript.Options{Dir: dir, Prefix: "contracts", OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"}, React: true, Vue: true, Surfaces: selections}
+			options := typescript.Options{Dir: dir, Prefix: "contracts", OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"}, Surfaces: selections}
 			if _, err := typescript.Generate(t.Context(), source, options); err != nil {
 				t.Fatal(err)
 			}

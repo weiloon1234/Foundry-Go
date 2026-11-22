@@ -210,8 +210,41 @@ behavior and definition identity.
 
 `Description()` returns owned metadata from the same rule tree used by `Check`.
 Endpoints include this tree in `EndpointInfo.Validation`. Custom rules and Go
-regular expressions are marked server-only. Future client generation must retain
-that distinction and preserve exact integer and decimal bound representations.
+regular expressions are marked server-only. A rule whose Go value differs from
+its wire form (a named type with its own codec, `json.Number`, `[]byte`) is also
+marked `Transformed`: its bounds count the decoded value, so clients do not apply
+them to the wire text. A rule on a carrier of that value (`Required`,
+`RequiredNullable`, `Prohibited`, `ProhibitedNullable`, a `Locales`
+requirement, a comparison of a `Pair`) is marked the same way, since it judges
+the carried value.
+
+<a id="publish-bounds"></a>
+## Publishing bounds to clients
+
+A custom rule publishes its bounds by composing built-in rules, which clients
+read as [field limits](client-forms.md#recipe-field-facts) and the server enforces, so
+a published bound is always applied:
+
+```go
+func Username() validation.Rule[string] {
+	format := validation.WithTranslation(validation.Custom(spec, check), UsernameArgsMessage(), args)
+	return validation.Bail(validation.NonBlank[string](), validation.LengthBetween[string](5, 24), format)
+}
+```
+
+`WithTranslation` wraps the custom leaf, not the composition. A bound failure
+then reports the built-in code and message (`foundry.min_length`), and the custom
+message remains for the format. A bound counts the submitted text, before any
+trimming the check performs, so a value padded with spaces near the limit is
+rejected. A sign-in request keeps its own composition without length bounds, so
+a client never limits what someone may type to sign in.
+
+A client marks a field required only when a rule rejects an empty value (see
+[field facts](client-forms.md#recipe-field-facts)). Where an empty value must be
+refused, declare it: a password that is verified rather than set takes no
+strength policy and must not be trimmed (a password may consist of spaces), so
+`validation.PasswordValue[password.Plaintext](validation.PasswordOptions{MinLength: 1, MaxLength: password.MaxPasswordBytes})`
+refuses only an empty one.
 
 ## Conditions, enums and collections
 

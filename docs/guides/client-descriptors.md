@@ -15,8 +15,10 @@
 
 The generated SDK exposes `operation(name)` and `schema(typeID)` alongside the
 existing typed client. They inspect the same normalized manifest; neither sends
-requests nor creates form state. React, Vue, Angular and plain JavaScript can
-consume them without runtime package dependencies.
+requests nor holds form values. React, Vue, Angular and plain JavaScript can
+consume them without runtime package dependencies. A form binds its fields
+through the [field binder](client-forms.md#recipe-form-values), which reads these
+descriptors.
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#field-descriptors -->
 ```typescript
@@ -69,9 +71,12 @@ presentation and validation rules come from the same manifest as the generated
 request's `headers` member. See [typed request headers](client-contracts.md#recipe-request-headers)
 for requiredness, framing and raw-header collision rules.
 
-Upload field descriptors (`part.kind === "file"`) expose `accept` (MIME media types
-and dot-prefixed extensions formatted for HTML file inputs) and `maxBytes` (maximum file byte size),
-composed from the endpoint's validation rules and multipart limits.
+Every field descriptor exposes `limits`, the bounds its operation's rules apply
+to a present value ([field facts](client-forms.md#recipe-field-facts)). Upload field
+descriptors (`part.kind === "file"`) carry `limits.accept` (MIME media types and
+dot-prefixed extensions formatted for HTML file inputs) and `limits.maxBytes`
+(maximum file byte size), composed from the endpoint's validation rules and
+multipart limits.
 Unsafe-size metadata numbers remain `import("./generated/contracts_foundry.gen.js").JSONNumber` values instead of being rounded
 or clamped. Enum `choices` use the existing codec's client values, including wide
 integers as strings; each type's choices are decoded once and shared. Metadata
@@ -183,10 +188,10 @@ fields by name; continue separate request/response DTOs and explicit response
 projections.
 OpenAPI publishes `x-foundry-presentation` and marks password fields `writeOnly`.
 
-File field descriptors compose `accept` from the declared MIME types and file
-extensions independently. An extension-only constraint such as `csv` produces
-`.csv` without requiring a MIME constraint. `maxBytes` carries the declared
-upload size limit.
+File field descriptors compose `limits.accept` from the declared MIME types and
+file extensions independently. An extension-only constraint such as `csv`
+produces `.csv` without requiring a MIME constraint. `limits.maxBytes` carries
+the declared upload size limit.
 
 ## Validation and compatibility
 
@@ -200,8 +205,10 @@ Presentation metadata was introduced in manifest **version 7**. The current vers
 is owned by [`contract/manifest/document.go`](../../contract/manifest/document.go). Regenerate saved manifests,
 OpenAPI and TypeScript together using the same framework/tool revision. Older
 formats are rejected explicitly. Existing direct client calls remain available.
-The [form controller continuation](client-forms.md) implements state and optional
-frontend adapters separately; consult the master for its acceptance status.
+[Form bindings](client-forms.md) read the same descriptors; the form keeps its
+values, and the binder state it creates (`formFieldState()`) belongs to that form
+instance: the descriptors of the rows and map entries it binds are kept there,
+so a closed form keeps none.
 
 ## Starter adoption
 

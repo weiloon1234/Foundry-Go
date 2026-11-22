@@ -37,8 +37,6 @@ func TestPublishClientContracts(t *testing.T) {
 			Dir:      cohortDir,
 			Prefix:   "contracts",
 			OpenAPI:  openapi.Options{Title: "Consumer", APIVersion: "1"},
-			React:    true,
-			Vue:      true,
 			Surfaces: selections,
 		}
 		if _, err := typescript.Generate(t.Context(), source, options); err != nil {

@@ -78,9 +78,9 @@ supported client validation rules, portal sessions, public configuration, and ty
 
 The core output has no runtime npm dependencies or React/Vue coupling. Frontend
 teams supply transport and can compile the TypeScript to ordinary JavaScript. The
-[form controller and optional adapters](docs/guides/client-forms.md) provide typed
-drafts, validation, submission and React/Vue subscriptions. They share the existing
-contract/validation owners; frontends supply rendering and components. Server-only
+[field binder](docs/guides/client-forms.md) binds a form's values to the generated
+request fields: name, label, limits, required state and issues come from the Go
+declaration; frontends keep the values, render the controls and submit. Server-only
 validation rules are reported as skipped by client validation; the backend remains
 authoritative.
 
@@ -107,8 +107,8 @@ The following are not implemented:
   Route documentation (summary, description, tags, deprecation) and typed
   request/response examples are exported.
 - Rich form-control hints such as widgets and display precision, and automatic
-  React/Vue form rendering. Typed descriptors, semantic hints, the shared controller
-  and optional subscription adapters are available; frontends supply visual controls.
+  React/Vue form rendering. Typed descriptors, semantic hints, field limits and the
+  field binder are available; frontends supply visual controls and form state.
 - Token-family impersonation, a cache failover store, direct local `sendfile`,
   and test/factory/mail/observer scaffolds. Session impersonation, lossless and
   lossy WebP, and the existing testing/factory APIs are available. See

@@ -59,8 +59,8 @@ const statusCases: readonly ("draft" | "ready")[] = sdk.Status.cases;
 const labeledStatus: string = sdk.enumLabel(sdk.Status.labels, "draft" as sdk.Status, (k: string) => k);
 // S5: Upload constraints
 const uploadDoc = sdk.operation("uploadsProfile").field("body", "document");
-const docAccept: string | undefined = uploadDoc.accept;
-const docMaxBytes: number | undefined = uploadDoc.maxBytes;
+const docAccept: string | undefined = uploadDoc.limits.accept;
+const docMaxBytes: number | undefined = uploadDoc.limits.maxBytes;
 // S7: Named schemas and newIdentity
 const schemaOwnerIndex: "foundry.test/consumer/clientcontracts.OwnerIndex" = sdk.schemas.OwnerIndex;
 const fromSchema = sdk.schema(sdk.schemas.OwnerIndex);

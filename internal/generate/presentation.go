@@ -51,7 +51,16 @@ func propertyPresentation(root types.Type, index []int) (contract.Presentation, 
 			if err != nil {
 				return contract.Presentation{}, err
 			}
-			return parsePresentation(tags["client"])
+			presentation, err := parsePresentation(tags["client"])
+			if err != nil {
+				return presentation, err
+			}
+			// A password input must never render as visible text, so its kind
+			// is declared, not defaulted.
+			if presentation.Kind != contract.PasswordPresentation && plaintextPassword(structure.Field(at).Type()) {
+				return presentation, fmt.Errorf("a password.Plaintext field requires client:\"kind=password\"")
+			}
+			return presentation, nil
 		}
 		root = structure.Field(at).Type()
 	}
@@ -134,4 +143,31 @@ func (e *emitter) presentationMethod(value contract.Presentation) string {
 		return ""
 	}
 	return ".WithPresentation(" + e.presentation(value) + ")"
+}
+
+// plaintextPassword reports whether a field holds password input: Foundry's
+// password.Plaintext, possibly behind a pointer or value.Optional/Nullable.
+func plaintextPassword(typ types.Type) bool {
+	for depth := 0; depth < 8; depth++ {
+		if pointer, ok := types.Unalias(typ).(*types.Pointer); ok {
+			typ = pointer.Elem()
+			continue
+		}
+		named, ok := types.Unalias(typ).(*types.Named)
+		if !ok || named.Obj().Pkg() == nil {
+			return false
+		}
+		switch named.Obj().Pkg().Path() + "." + named.Obj().Name() {
+		case "github.com/weiloon1234/Foundry-Go/auth/password.Plaintext":
+			return true
+		case "github.com/weiloon1234/Foundry-Go/value.Optional", "github.com/weiloon1234/Foundry-Go/value.Nullable":
+			if named.TypeArgs().Len() != 1 {
+				return false
+			}
+			typ = named.TypeArgs().At(0)
+		default:
+			return false
+		}
+	}
+	return false
 }

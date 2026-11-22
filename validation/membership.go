@@ -93,9 +93,10 @@ func Enum[E enum.Scalar](descriptor enum.Descriptor[E]) Rule[E] {
 	rule := membershipRule(Spec{ID: "foundry.enum", Parameters: []Parameter{
 		parameter("enum", definition.PackagePath+"."+definition.Name), parameter("values", wire),
 	}}, set, false)
-	// Enum membership uses the descriptor's validated actual wire cases.
+	// Enum membership uses the descriptor's validated actual wire cases, so it
+	// compares the wire form exactly even for a type with its own codec.
 	if rule.err == nil {
-		rule.info.ServerOnly = false
+		rule.info.ServerOnly, rule.info.Transformed = false, false
 	}
 	return rule
 }

@@ -1,14 +1,12 @@
 {
   "version": 2,
   "files": {
-    "contracts_exports_foundry.gen.ts": "d0ab1beef65e0ddbcefd520305c5ee058237a168f05859077d54eb8f80b2ede9",
-    "contracts_foundry.gen.ts": "404ac9d099ac9fa4785faf245dc2d7bd590929dcb4795952096935fba0b6b438",
+    "contracts_exports_foundry.gen.ts": "438e630d1b51ca0ded16bca029d97ec13a036bf7976b6904fa7ef39f6ac8400a",
+    "contracts_foundry.gen.ts": "f793c57a5465e119dd35fbd794a6bb3d2d6084cff9203be72ff55e3db236a12b",
     "contracts_manifest_foundry.gen.json": "b96e343d218fa47fd45453c61290b8098dcb74e0d5cad28b8dc7f9fc387dea69",
     "contracts_openapi_foundry.gen.json": "d14208d828b98b76b355b92ae87f0223191f4a61ecd2d1e4447af4a359b43eba",
-    "contracts_react_foundry.gen.ts": "5381e2b076a7f4fdd980708b2e512c3a55198a51bcac5db341667185811c6b23",
-    "contracts_reports_foundry.gen.ts": "00af3c98cae852890d44c276af826d2a11c1805ecd2aa12ea63b2ed0d588abcd",
-    "contracts_runtime_foundry.gen.ts": "8d6c10ecba0a3caaa4b089cd962d55c5aa10972d9b918b387d300514571dbb32",
-    "contracts_runtime_realtime_foundry.gen.ts": "9ae67cab99361d96ffbcd10a597406c1ecb98ae548a10477c2d38ed8b8a21834",
-    "contracts_vue_foundry.gen.ts": "90772adf054a6c6ebd6c8e681f5e07139ed457cbcf1b1dd62d918693f7adce40"
+    "contracts_reports_foundry.gen.ts": "ffdf88d3c1bf90aedfb0660c1271eac3ad32905727d0f9595742fe3881b1b63e",
+    "contracts_runtime_foundry.gen.ts": "00f28de563f115e839b6453dd6a9172add4f4d8fdc54f81e9860fd501940a029",
+    "contracts_runtime_realtime_foundry.gen.ts": "9ae67cab99361d96ffbcd10a597406c1ecb98ae548a10477c2d38ed8b8a21834"
   }
 }

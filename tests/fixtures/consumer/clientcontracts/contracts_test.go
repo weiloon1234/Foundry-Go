@@ -243,7 +243,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 			t.Fatalf("invalid TypeScript compiler input %q", name)
 		}
 	}
-	for _, name := range append(compilerInputs, "request-headers.mjs", "error-details.mjs", "runtime.mjs", "forms.mjs", "surfaces.mjs", "messages.mjs", "portal-session.mjs", "token-session.mjs", "browser-storage.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs", "fetch-transport.mjs") {
+	for _, name := range append(compilerInputs, "request-headers.mjs", "error-details.mjs", "runtime.mjs", "surfaces.mjs", "messages.mjs", "portal-session.mjs", "token-session.mjs", "browser-storage.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs", "fetch-transport.mjs") {
 		data, err := os.ReadFile(filepath.Join("testdata", name))
 		if err != nil {
 			t.Fatal(err)
@@ -355,9 +355,9 @@ func bundles(t *testing.T, node, compiler, dir string) {
 	apps := map[string]string{
 		"full_http":     `import { createClient } from "../contracts_foundry.gen.js"; console.log(createClient);`,
 		"members_http":  `import { createClient } from "../contracts_members_foundry.gen.js"; console.log(createClient);`,
-		"members_forms": `import { createClient, createForm, operation } from "../contracts_members_foundry.gen.js"; console.log(createClient, createForm, operation);`,
+		"members_forms": `import { createClient, fieldBinder, operation } from "../contracts_members_foundry.gen.js"; console.log(createClient, fieldBinder, operation);`,
 		"live_realtime": `import { createClient, createRealtime } from "../contracts_live_foundry.gen.js"; console.log(createClient, createRealtime);`,
-		"full_all":      `import { createClient, createForm, createRealtime, operation } from "../contracts_foundry.gen.js"; console.log(createClient, createForm, createRealtime, operation);`,
+		"full_all":      `import { createClient, createRealtime, fieldBinder, operation } from "../contracts_foundry.gen.js"; console.log(createClient, createRealtime, fieldBinder, operation);`,
 		"locales_only":  `import { catalogLocales } from "../contracts_members_foundry.gen.js"; console.log(catalogLocales);`,
 	}
 	if err := os.Mkdir(filepath.Join(dir, "apps"), 0700); err != nil {
@@ -391,7 +391,7 @@ func bundles(t *testing.T, node, compiler, dir string) {
 		t.Logf("bundle %s: %d bytes minified, %d bytes gzip", name, len(data), compressed.Len())
 	}
 	// String literals survive minification: each marks one runtime feature.
-	markers := map[string]string{"realtime": `"RealtimeError"`, "forms": `"submitting"`, "descriptors": `"unknown_operation"`}
+	markers := map[string]string{"realtime": `"RealtimeError"`, "forms": `"form_binding"`, "descriptors": `"unknown_operation"`}
 	for name, included := range map[string][]string{"members_http": nil, "members_forms": {"forms", "descriptors"}, "live_realtime": {"realtime"}, "full_all": {"realtime", "forms", "descriptors"}} {
 		for feature, marker := range markers {
 			if present, want := strings.Contains(contents[name], marker), slices.Contains(included, feature); present != want {

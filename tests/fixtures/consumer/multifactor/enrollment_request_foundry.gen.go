@@ -29,7 +29,7 @@ var foundryEnrollmentRequestJSON = sync.OnceValue(func() foundrycontract.JSON[En
 		{ID: "foundry.test/consumer/multifactor.PasswordCredentials", Kind: foundrycontract.Kind("object"), Nullable: false,
 			Properties: []foundrycontract.Property{
 				{Name: "email", Type: "string", Required: true},
-				{Name: "password", Type: "github.com/weiloon1234/Foundry-Go/auth/password.Plaintext", Required: true},
+				{Name: "password", Type: "github.com/weiloon1234/Foundry-Go/auth/password.Plaintext", Required: true, Presentation: foundrycontract.Presentation{Kind: "password", LabelKey: "", HelpKey: ""}},
 			},
 		},
 		foundrycontract.JSONType[password.Plaintext]("github.com/weiloon1234/Foundry-Go/auth/password.Plaintext", (*new(password.Plaintext)).JSONContract),

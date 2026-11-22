@@ -9,7 +9,7 @@ import (
 // It is never accepted as an authenticated model or reusable reauth ticket.
 type PasswordCredentials struct {
 	Email    string             `json:"email"`
-	Password password.Plaintext `json:"password"`
+	Password password.Plaintext `json:"password" client:"kind=password"`
 }
 
 //foundry:dto http=body

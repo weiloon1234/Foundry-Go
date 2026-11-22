@@ -230,56 +230,18 @@ export async function descriptorConsumer(): Promise<void> {
   void [decimal, empty, absent, text, mapText, absentElement, result, report, lossy, otherOwner, otherField, rootToken];
 }
 
-async function typedForms() {
-  // A form binds a JSON body root and a field below its union variant.
-  const methodOp = sdk.operation("unionsMethod");
-  const methodForm = sdk.createForm(methodOp, { body: { kind: "card", token: "t", sequence: "1" } });
-  methodForm.field(methodOp.body()).set({ kind: "bank_transfer", reference: "r" });
-  methodForm.field(methodOp.body().variant("kind", "card").field("token")).set("next");
-  methodForm.dispose();
+function typedFields() {
+  // The field binder binds a form's values to the labelled fields of a request.
   const op = sdk.operation("itemsEcho");
-  const form = sdk.createForm(op, { body: {}, path: { key: "1" } });
-  const amount = form.field(op.field("body", "amount"));
-  amount.set("123456789012345678901234567890.123");
-  amount.setText("999.99"); amount.parse();
-  const exact: string | undefined = amount.getSnapshot().value;
-  const report: sdk.ValidationReport = form.validate();
-  form.field(op.field("body", "tags").at(0)).set("text");
-  const unionOp = sdk.operation("unionsEcho"), unionForm = sdk.createForm(unionOp, { body: {} });
-  unionForm.field(unionOp.field("body", "method").variant("kind", "card").field("token")).set("card token");
-  const card = unionForm.field(unionOp.field("body", "method").variant("kind", "card"));
-  card.set({ token: "card token", sequence: "8", labels: [] });
-  // @ts-expect-error The discriminator belongs to the parent union, not its payload.
-  card.set({ kind: "card", token: "card token", sequence: "8", labels: [] });
-  // @ts-expect-error Nested fields retain their operation owner.
-  form.field(unionOp.field("body", "method").variant("kind", "card").field("token"));
-  const task = form.task(async (draft, signal) => { void signal; return [draft.body?.amount ?? ""]; });
-  const options: readonly string[] | undefined = task.getSnapshot().value;
-  // A scoped task lists fields of its own operation, whatever their value types.
-  const scoped = form.task(async draft => draft.body?.amount ?? "", { dependsOn: [op.field("body", "amount"), op.field("body", "tags").element(), op.field("path", "key")] });
-  // @ts-expect-error Dependencies are fields of this form's operation.
-  form.task(async () => null, { dependsOn: [unionOp.field("body", "method")] });
-  // @ts-expect-error DTO descriptors are not fields of an operation.
-  form.task(async () => null, { dependsOn: [sdk.schema("foundry.test/consumer/clientcontracts.Payload").field("amount")] });
-  // @ts-expect-error Task results are immutable snapshots.
-  task.getSnapshot().value?.push("mutation");
-  const result = await form.submit(api);
-  if (result.status === "succeeded") { const response: sdk.Operations["itemsEcho"]["response"] = result.value; void response; }
-  // @ts-expect-error DTO descriptors are not fields of an operation.
-  form.field(sdk.schema("foundry.test/consumer/clientcontracts.Payload").field("amount"));
-  // @ts-expect-error Another operation cannot mutate this form.
-  form.field(sdk.operation("formsSubmit").field("body", "name"));
-  // @ts-expect-error Exact decimal input cannot be a JS number.
-  amount.set(12.5);
-  // @ts-expect-error Explicit parsing preserves the field's value type.
-  amount.parse(() => 12.5);
-  // @ts-expect-error Array index is numeric.
-  op.field("body", "tags").at("0");
-  // @ts-expect-error Scalars cannot be indexed as collections.
-  op.field("body", "amount").at(0);
-  // @ts-expect-error Draft values are read-only and may be incomplete.
-  form.getSnapshot().values.body.amount = "1";
-  // @ts-expect-error Initial draft retains operation keys.
-  sdk.createForm(op, { wrongLocation: {} });
-  void [exact, report, options, scoped];
+  type Draft = Required<Pick<sdk.FormValues<sdk.Operations["itemsEcho"]["request"]["body"]>, "amount">>;
+  let draft: Draft = { amount: "1.00" };
+  const form = sdk.formFieldState();
+  const f = sdk.fieldBinder((key) => key, () => form)(op, draft, (update) => { draft = update(draft); }, []);
+  const amount: sdk.FieldBinding<string> = f.amount;
+  // @ts-expect-error A binding's value is the form's value type.
+  const wrong: sdk.FieldBinding<number> = f.amount;
+  // @ts-expect-error Only labelled fields the form's values hold are bound.
+  void f.tags;
+  void [amount, wrong];
 }
+void typedFields;

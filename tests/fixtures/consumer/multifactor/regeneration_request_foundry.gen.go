@@ -25,7 +25,7 @@ var foundryRegenerationRequestJSON = sync.OnceValue(func() foundrycontract.JSON[
 		{ID: "foundry.test/consumer/multifactor.PasswordCredentials", Kind: foundrycontract.Kind("object"), Nullable: false,
 			Properties: []foundrycontract.Property{
 				{Name: "email", Type: "string", Required: true},
-				{Name: "password", Type: "github.com/weiloon1234/Foundry-Go/auth/password.Plaintext", Required: true},
+				{Name: "password", Type: "github.com/weiloon1234/Foundry-Go/auth/password.Plaintext", Required: true, Presentation: foundrycontract.Presentation{Kind: "password", LabelKey: "", HelpKey: ""}},
 			},
 		},
 		{ID: "foundry.test/consumer/multifactor.RegenerationRequest", Kind: foundrycontract.Kind("object"), Nullable: false,

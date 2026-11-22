@@ -82,8 +82,9 @@ assert.equal(sdk.enumLabel(sdk.Status.labels, new sdk.UnknownEnumValue("foundry.
 assert.equal(sdk.enumLabel(undefined, "draft", k => `translated:${k}`), "draft");
 // S5: Upload constraints
 const uploadDoc = sdk.operation("uploadsProfile").field("body", "document");
-assert.equal(uploadDoc.accept, "image/png, text/plain, .png, .txt");
-assert.equal(uploadDoc.maxBytes, 1048576);
+assert.equal(uploadDoc.limits.accept, "image/png, text/plain, .png, .txt");
+assert.equal(uploadDoc.limits.maxBytes, 1048576);
+assert.equal(uploadDoc.accept, undefined, "upload limits live only under limits");
 // S7: Named schemas and newIdentity
 assert.equal(sdk.schemas.OwnerIndex, "foundry.test/consumer/clientcontracts.OwnerIndex");
 assert.equal(sdk.schema(sdk.schemas.OwnerIndex).field("pair").path, "/pair");

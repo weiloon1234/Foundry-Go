@@ -22,7 +22,7 @@ var foundryResetRequestJSON = sync.OnceValue(func() foundrycontract.JSON[ResetRe
 	return foundrycontract.DefineJSON[ResetRequest](foundrycontract.Schema{Root: "foundry.test/consumer/recovering.ResetRequest", Types: []foundrycontract.Type{
 		{ID: "foundry.test/consumer/recovering.ResetRequest", Kind: foundrycontract.Kind("object"), Nullable: false,
 			Properties: []foundrycontract.Property{
-				{Name: "password", Type: "github.com/weiloon1234/Foundry-Go/auth/password.Plaintext", Required: true},
+				{Name: "password", Type: "github.com/weiloon1234/Foundry-Go/auth/password.Plaintext", Required: true, Presentation: foundrycontract.Presentation{Kind: "password", LabelKey: "", HelpKey: ""}},
 				{Name: "token", Type: "github.com/weiloon1234/Foundry-Go/auth/challenge.Token[foundry.test/consumer/recovering.Member,github.com/weiloon1234/Foundry-Go/auth/challenge.PasswordReset]", Required: true},
 			},
 		},

@@ -5,6 +5,119 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+<a id="form-bindings-replace-the-form-controller"></a>
+## Form bindings replace the form controller — v0.50.0
+
+The generated SDK removes `createForm`, `FormController`, the form task API and
+the React and Vue `useForm` adapters, with the `React`/`Vue` generator options
+and the `--react`/`--vue` flags. Regenerating deletes the owned
+`contracts_react_foundry.gen.ts` and `contracts_vue_foundry.gen.ts` modules. Forms
+bind fields with `fieldBinder` ([form guide](guides/client-forms.md)). Upload
+descriptors move `accept` and `maxBytes` under `limits`. This is a frontend
+source change; wire formats, stored data and the deployment protocol do not
+change.
+
+What applications change:
+
+- Create one binder per client entry and bind each form once per render through
+  one binder state per mounted form: in React,
+  `useFields = fieldBinder((key: FieldMessageKey) => t(key), useFormFieldState)`
+  where `useFormFieldState` keeps `useState(formFieldState)[0]` and commits each
+  shown render with `useLayoutEffect(() => commitFormFields(state))`, then
+  `const f = useFields(operation("x"), draft, setDraft, feedback.issues)`, or
+  for a form that submits several operations
+  `const [created, updated] = useFields([create, update], draft, setDraft, feedback.issues)`,
+  each control bound through the operation the form submits.
+  A child component takes the bindings it shows as props. Shared controls take
+  `field={f.name}` and drop hand-written `name`, `label`, `required`, limits and
+  `error`; a control that edits no request field takes no `name` or `error`.
+  Client entries export `FieldBinding` as a type only: an object literal, a
+  spread or a copy of a binding and the class value (`new`, `.prototype`) no
+  longer compile as a binding; a value typed `any` still does.
+- Build each request body as a fresh literal typed as the request, or a PATCH
+  body assigned field by field; the request encoder rejects a key the request
+  does not declare, which a spread or a wider variable hides from the compiler.
+  The baseline's form convention test rejects both, at any depth and through
+  map entries, and a form that validates or submits an operation its binder
+  call does not bind.
+- Read issues by descriptor (`fieldIssues`, `issueAt`), not by a hand-written
+  pointer or field name; do not read submitted `FormData` by name.
+- Add `client:"label=…"` to every request field a control shows (a nested
+  object or a list of objects needs no label of its own), and
+  `client:"kind=password"` to every `password.Plaintext` field: generation now
+  fails without the kind.
+- A control's `required` now follows Go: a field Go accepts empty (a password
+  with no rule, an optional value) is no longer required, and one an enum or a
+  length minimum makes non-empty becomes required. Declare a rule where an
+  empty value must be refused; a password that is verified rather than set
+  needs a rule that does not trim (a password may be spaces), for example
+  `validation.PasswordValue` with a minimum of 1.
+- Bounds wait until a field's value differs from the one the form first bound,
+  lengths count code points (no native `maxlength`), decimals are text inputs
+  with an exact range check, and a request with a preparation step enforces
+  nothing in the browser. A control never enforces anything stricter than Go:
+  a bound input takes no `type` (email and URL kinds are text inputs with
+  keyboard and autofill hints; a password reveal passes `revealed`), a slider's
+  ends and step come from Go (a form may pass `min`/`max` to supply a missing
+  end or narrow the track inside Go's range, clamped to Go's range, and `step`
+  only to make it coarser), a PIN draws Go's length and keeps the text as
+  typed, a contact number's country is required only by its own rule, a select
+  or radio group keeps a held choice its options leave out, a bound picker
+  takes its kind from Go and no `isDateDisabled` or `minuteStep`, and a
+  checkbox or switch is required only when Go's `Accepted` demands true.
+  Browser tests that relied on a native `maxlength`, a native email check, a
+  number input for a decimal or an untouched value being range-checked change
+  with them.
+- Custom rules publish bounds by composing built-in rules
+  ([validation guide](guides/validation.md#publish-bounds)); a bound failure
+  then reports the built-in code and message instead of the custom one, and the
+  bound counts the text as sent, before the custom check trims it, so a padded
+  value at the limit is now rejected.
+- `MaxBytes` is checked by the generated validator; client validation now
+  reports `foundry.max_bytes` before sending.
+- The manifest's validation tree gains a `transformed` flag on rules whose value
+  has a wire transform (`Required`, `RequiredNullable`, `Prohibited`, a locale
+  requirement and a pair comparison take their value's) and a `locales`
+  parameter (`none`, `default` or `all`) on the required rule of a translated
+  map. Both are additive.
+- Generated names: entries export the types `FieldBinding`, `FieldBinder`,
+  `FieldChecks`, `FieldLimits`, `FieldPresentation`, `FieldMessageKey`,
+  `FormFieldState`, `FormValues`, `FormUpdate`, `BoundField`, `BoundFields` and
+  `OperationBodyLabels` (each operation's bound body fields as a tree:
+  `true`, an object of fields, `[entry]` for a labelled list or map, or
+  `(entry)[]` for a list bound by row only), and the values
+  `fieldBinder`, `formFieldState`, `commitFormFields`, `fieldIssues`,
+  `issueAt` and `outOfRange`; the form controller's names are gone.
+- Reserved schema names: a schema whose name is reserved is qualified by its
+  package (`Billing_Invoice`). The rule, kept with its list in
+  `typescript/standard_globals.go`: reserved are the names the generated module
+  declares at module scope (the renderer's and the runtime's), the global names
+  its code refers to, and a fixed list of standard global types that
+  application files commonly use beside imported generated types (fetch and
+  DOM: `Animation`, `Blob`, `Cache`, `Comment`, `Document`, `Element`,
+  `Event`, `File`, `FormData`, `Headers`, `History`, `Image`, `Location`,
+  `Node`, `Notification`, `Option`, `Range`, `Request`, `Response`, `Screen`,
+  `Selection`, `Storage`, `Text`, `Touch`, `URL`, `Worker`; TypeScript and
+  ECMAScript: `Array`, `Awaited`, `Boolean`, `Date`, `Error`, `Exclude`,
+  `Extract`, `Function`, `Iterator`, `Map`, `NonNullable`, `Number`,
+  `Object`, `Omit`, `Parameters`, `Partial`, `Pick`, `Promise`, `Readonly`,
+  `Record`, `Required`, `ReturnType`, `Set`, `String`, `Symbol`). Newly
+  reserved: the runtime's new form types above with their internal helpers
+  (`BinderBody`, `BinderContext`, `BinderDescriptor`, `BinderLabels`,
+  `BinderRoot`, `BinderValues`, `BinderWrite`, `BoundEntries`, `BoundRows`,
+  `Constraint`, `EntryValue`, `FieldBindingInit`, `FormFieldData`,
+  `FormMemory`, `FormRender`, `FormValue`, `IssueSnapshot`, `RowsMemo`),
+  `ReadonlyArray` and the standard global types not reserved
+  before. No longer reserved: words only comments, strings, property names or
+  type parameters spelled (such as `Name`, `Session`, `Value`, `Type`), the
+  removed form controller's names, and `EnumLabel`, `NewIdentity` and
+  `Schemas`, which the renderer no longer declares (a test now keeps the
+  renderer's list equal to what it declares). Measured against the four
+  applications' checked-in manifests, one type is renamed in each:
+  `Httpclient_Name` becomes `Name` (no application code names it);
+  `Datatable_Request` keeps its name, and no application type is named
+  `BoundEntries`, `BoundRows`, `EnumLabel`, `NewIdentity` or `Schemas`.
+
 ## Datatable columns and sources — v0.49.0
 
 This release makes a datatable its columns plus its base source. Each column
@@ -864,7 +977,8 @@ permissions, redaction and typed identifiers.
 
 ## Optional generated form adapters
 
-The [form controller](guides/client-forms.md) is additive to the existing SDK and
+Removed by [form bindings](#form-bindings-replace-the-form-controller); this
+record is history. The form controller was additive to the existing SDK and
 manifest v6. Regenerate with the matching tool/runtime and review type imports: new
 SDK declarations can qualify colliding DTO names. React/Vue output is opt-in and
 uses separate generated modules/subpath exports; the core stays dependency-free.

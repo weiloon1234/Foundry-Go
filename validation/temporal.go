@@ -62,7 +62,7 @@ func AfterOrEqualField[T any, V Temporal](field, other Field[T, V]) Rule[T] {
 }
 
 func temporalPair[T Temporal](id RuleID, direction int, equal bool) Rule[Pair[T]] {
-	return valueRule(Spec{ID: id, Parameters: []Parameter{parameter("type", temporalType[T]())}}, false, func(_ *execution, pair Pair[T]) (bool, error) {
+	return wrappedRule[Pair[T], T](Spec{ID: id, Parameters: []Parameter{parameter("type", temporalType[T]())}}, false, func(_ *execution, pair Pair[T]) (bool, error) {
 		left, leftValid := temporalInstant(pair.Left)
 		right, rightValid := temporalInstant(pair.Right)
 		return leftValid && rightValid && temporalOrder(left.Compare(right), direction, equal), nil

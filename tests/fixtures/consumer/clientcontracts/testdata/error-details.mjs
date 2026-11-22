@@ -34,16 +34,6 @@ for (const sdk of [full,members,older]) for (const strictResponses of sdk===olde
     assert.equal(error.code,sdk.ErrorCode.RegistrationClosed);
     return true;
   });
-  const form=sdk.createForm(sdk.operation("membersCreate"),{body:{name:"existing"}});
-  const result=await form.submit(api);
-  assert.equal(result.status,"failed"); assert.equal(result.outcome,"error_response");
-  assert(sdk.isOperationError("membersCreate",result.error));
-  assert.equal(result.error.response.details.existing_member_id,expectedID);
-  assert.equal(form.getSnapshot().error,result.error);
-  assert.equal(form.getSnapshot().issues[0].code,"member_exists");
-  form.field(sdk.operation("membersCreate").field("body","name")).set("healthy");
-  assert.equal((await form.submit(api)).status,"succeeded");
-  form.dispose();
 }
 const plainResponse=await fetch(baseURL+"/members",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:"closed"})});
 assert.equal(plainResponse.status,409);

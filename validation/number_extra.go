@@ -53,7 +53,7 @@ func LessOrEqual[N Number]() Rule[Pair[N]] {
 	return numericPair[N]("foundry.less_or_equal", func(a, b N) bool { return a <= b })
 }
 func numericPair[N Number](id RuleID, check func(N, N) bool) Rule[Pair[N]] {
-	return valueRule(Spec{ID: id}, true, func(_ *execution, input Pair[N]) (bool, error) {
+	return wrappedRule[Pair[N], N](Spec{ID: id}, true, func(_ *execution, input Pair[N]) (bool, error) {
 		return finite(input.Left) && finite(input.Right) && check(input.Left, input.Right), nil
 	})
 }

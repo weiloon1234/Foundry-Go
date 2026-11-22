@@ -332,6 +332,13 @@ func leaf[T any](spec Spec, server bool, check func(context.Context, T) (bool, e
 }
 
 func valueRule[T any](spec Spec, server bool, check func(*execution, T) (bool, error)) Rule[T] {
+	return wrappedRule[T, T](spec, server, check)
+}
+
+// wrappedRule builds a leaf on T whose check judges a V that T carries (an
+// Optional, Nullable or Pair of V): V, not its carrier, decides whether the
+// judged value differs from its wire form.
+func wrappedRule[T, V any](spec Spec, server bool, check func(*execution, T) (bool, error)) Rule[T] {
 	var prepared *i18n.PreparedMessage
 	if spec.Message == "" && strings.HasPrefix(string(spec.ID), "foundry.") && spec.Translation == nil {
 		message, err := builtinPrepared(spec)
@@ -357,7 +364,8 @@ func valueRule[T any](spec Spec, server bool, check func(*execution, T) (bool, e
 		}
 		prepared = &message
 	}
-	info := Description{Kind: LeafKind, Spec: &owned, ServerOnly: server || scalarWireTransform[T]()}
+	transformed := wireTransform[V]()
+	info := Description{Kind: LeafKind, Spec: &owned, ServerOnly: server || transformed, Transformed: transformed}
 	size := infoBytes(info)
 	if size > maxDescriptionBytes {
 		return failed[T](invalid("validation metadata exceeds its byte bound"))

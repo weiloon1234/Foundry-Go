@@ -119,6 +119,7 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 		r.out.Write(texts[name].inline)
 		r.out.WriteByte('\n')
 	}
+	fmt.Fprintf(&r.out, "export type { %s };\n", strings.Join(typeOnlyNames, ", "))
 	if err := r.body(source); err != nil {
 		return nil, err
 	}

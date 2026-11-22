@@ -10,12 +10,32 @@ import (
 // Native scalar operators cannot promise the same result on a custom wire
 // representation. JSON numbers also have a special string-backed Go value.
 func scalarWireTransform[T any]() bool {
-	typ := reflect.TypeFor[T]()
+	return scalarTypeWireTransform(reflect.TypeFor[T]())
+}
+
+func scalarTypeWireTransform(typ reflect.Type) bool {
 	switch typ.Kind() {
 	case reflect.Bool, reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64:
 		return typ == reflect.TypeFor[json.Number]() || jsonshape.HasEncoder(typ, true) || jsonshape.HasDecoder(typ, true)
 	default:
 		return false
+	}
+}
+
+// wireTransform reports whether a rule's Go value differs from its wire form:
+// a scalar with its own codec or json.Number, or a collection (fixed array,
+// slice or map) with its own codec or of bytes. Bounds and emptiness checks on
+// such a value are not published to clients.
+func wireTransform[T any]() bool {
+	return typeWireTransform(reflect.TypeFor[T]())
+}
+
+func typeWireTransform(typ reflect.Type) bool {
+	switch typ.Kind() {
+	case reflect.Array, reflect.Slice, reflect.Map:
+		return collectionTypeWireTransform(typ)
+	default:
+		return scalarTypeWireTransform(typ)
 	}
 }
 

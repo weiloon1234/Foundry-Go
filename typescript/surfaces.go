@@ -47,7 +47,7 @@ type SurfaceAuth struct {
 
 // reservedSurfaceNames are artifact names of the same prefix. Names beginning
 // with "runtime" are reserved for shared runtime modules.
-var reservedSurfaceNames = []string{"manifest", "openapi", "react", "vue"}
+var reservedSurfaceNames = []string{"manifest", "openapi"}
 
 // validateSurfaces checks names and returns owned copies. Names are compared
 // case-insensitively, since case-insensitive file systems would merge them.

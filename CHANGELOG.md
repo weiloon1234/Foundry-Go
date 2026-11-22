@@ -1,5 +1,129 @@
 # Changelog
 
+## v0.50.0 — 2026-11-22
+
+### Forms take their fields from the generated SDK
+
+A form used to repeat every request field by hand: its `name`, label key,
+`required` flag, length or byte limit and the path it read errors from. None of
+them failed to compile when Go changed. Now a form binds its values once and
+each control takes one generated field; the name, label, help text, required
+state, limits and issues come from the Go declaration. A renamed or removed Go
+field fails to compile at the form; a changed limit, label or required locale
+changes the control without an edit. This is a frontend source change; wire
+formats, stored data and the deployment protocol do not change.
+
+```tsx
+// before
+<Input label={t("admins.fields.username")} name="username" required
+  value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.currentTarget.value })}
+  error={feedback.paths["/body/username"] ?? feedback.fields.username} />
+
+// after
+const f = useFields(operation("adminAccountsCreate"), draft, setDraft, feedback.issues);
+<Input field={f.username} />
+```
+
+- `fieldBinder(label, form)` returns the binder; `form` returns the binder state
+  of the form instance (`formFieldState()`, kept while the form is mounted; in
+  React a hook, so a portal exports `useFields`). A form binds once, directly in
+  its component's body; a form that submits several operations passes them
+  together,
+  `const [created, updated] = useFields([create, update], draft, setDraft, issues)`,
+  and gets one set of bindings per operation on its one state. The state keeps
+  each binding's identity while its value, label and issues are unchanged,
+  whatever update function is passed, and remembers the value each field held
+  when the form first bound it: the field is edited while its value differs
+  from that one, however it changed.
+- Binding only computes. `commitFormFields(state)` publishes what the call
+  learned (its update function, issues, list lengths, first-bound values) once
+  its render is shown; a portal's hook calls it in a layout effect. A render
+  React discards changes nothing the form committed, and a shown binding writes
+  through the shown render's update function.
+- Bindings follow the request's structure. A nested object binds as its
+  fields (`f.account.bank_name`); a list binds whole and each row with
+  `.at(i)`, a row of plain values like a field of the element type and a row
+  of objects as its fields (`f.items.at(i).name`, lists inside rows too); a map
+  binds each entry with `.at(key)`, typed by its key; a repeated multipart part
+  binds each upload or value with `.at(i)`, and a JSON part binds its fields.
+  A field a control shows needs a Go label; a nested object or a list of
+  objects needs none of its own (a list without one binds by row only).
+  `.at(i)` exists only where the form's values type always holds the list.
+  The generated `OperationBodyLabels` describes each operation's bound fields
+  as a tree (`true`, an object of fields, `[entry]` for a labelled list or map,
+  `(entry)[]` for a list bound by row only).
+- Rows are addressed by position, as the server reports issues, so a form
+  adds, removes, moves and replaces rows through its own update with nothing
+  else to do. Once a list's length has differed from its length when the
+  issues arrived, the list (and every list below its rows) is stale until new
+  issues arrive, even when its length is back: no row of it shows them (the
+  list's binding and the form's summary still do), and its rows are bound anew.
+  A reorder, or a removal and an insertion between two renders, can show a
+  row's issue at the position the server reported until the next submit.
+- Client entries export `FieldBinding` as a type only, and its private member
+  makes it nominal: an object literal, a spread of a binding, a copy with one
+  member replaced and the class value do not compile as a binding (a value
+  typed `any` still does, as for every type). A binding's name is the dotted
+  path below its request location (`username`, `title.en`, `items.2.name`).
+  `temporal` tells which time Go reads from text, so a picker takes its kind
+  from Go; `row` marks a row of a list, which a control never clears (a
+  repeated upload's row is a `FieldBinding<Upload>`, a single upload a
+  `FieldBinding<Upload | undefined>`).
+- `FieldDescriptor.limits` publishes the bounds of built-in rules in Go's units
+  (code points, UTF-8 bytes, exact numbers, a number step: `"any"` for a
+  float). Rules on values with a wire transform (marked `transformed` in the
+  rule metadata, also under `Required`, `RequiredNullable`, `Prohibited`, a
+  locale requirement and a pair comparison, which take their value's
+  transformation), conditional rules and Go regular expressions publish
+  nothing.
+- A binding is `required` exactly when Go rejects an empty value: present on
+  every path, and a non-empty rule, a positive minimum length or item count,
+  the password rule, a membership rule or enum without an empty case, or a
+  required upload applies. Never under `Optional`, `Nullable` or a pointer. A
+  boolean is required (must be checked) exactly when Go's `Accepted` applies on
+  the required path, `Required(Accepted())` included; `OneOf(false)` does not
+  make it required.
+- `checks` is what a control enforces before submit: `required` always, and
+  the bounds of a field only while its value differs from the one first bound.
+  An operation with a preparation step enforces nothing in the browser; its
+  facts and issues still show. `numeric` tells an integer, a float and an
+  exact decimal apart; `outOfRange` compares a decimal's range exactly. A
+  control never enforces anything stricter than Go and never changes a value
+  the user did not change: integer and float fields are number inputs, the
+  password kind hides its text, and decimal, email and URL kinds stay text
+  inputs with keyboard and autofill hints.
+- A translated map's required rule publishes its locale requirement (`none`,
+  `default` or `all`). `FieldMessageKey` types the label and help keys that
+  request fields declare. `fieldIssues` and `issueAt` address issues by
+  descriptor. `MaxBytes` is checked by the generated validator.
+- `createForm`, `FormController`, form tasks, the React and Vue adapters, their
+  generator options and the `--react`/`--vue` flags are removed. Upload
+  descriptors move `accept` and `maxBytes` under `limits`.
+- A `password.Plaintext` field must declare `client:"kind=password"`; generation
+  fails without it.
+- Reserved TypeScript names follow one rule: the names the generated module
+  declares at module scope, the global names its code refers to, and a fixed
+  list of standard global types (fetch and DOM types such as `Request`,
+  `Response`, `Event`, `File`, `Node`; TypeScript and ECMAScript types such as
+  `Record`, `Partial`, `Promise`, `Date`, `Error`), which a generated type must
+  never shadow where it is imported. Words that only comments, strings,
+  property names or type parameters spell are no longer reserved, nor are
+  `EnumLabel`, `NewIdentity` and `Schemas`, which the renderer no longer
+  declares: `httpclient.Name` is now `Name` (was `Httpclient_Name`).
+  `datatable.Request` stays `Datatable_Request`.
+- A custom rule publishes bounds by composing built-in rules. A bound failure
+  then reports the built-in code and message instead of the custom one, and the
+  bound counts the text as sent, before the custom check trims it: a value
+  padded with spaces near the limit is now rejected, and a too-short value
+  reports the built-in minimum-length message.
+
+Measured on the Starter admin portal (all forms converted, production build): the
+bundle grows from 402,614 to 408,983 bytes gzip (+1.58%) and from 1,509,763 to
+1,535,277 bytes raw. Type instantiations grow from 99,857 to 139,292 and types
+from 42,614 to 45,662. The
+[compatibility notes](docs/compatibility.md#form-bindings-replace-the-form-controller)
+list what applications change.
+
 ## v0.49.0 — 2026-11-20
 
 ### A datatable is its columns and its source

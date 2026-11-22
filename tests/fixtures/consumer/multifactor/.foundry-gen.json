@@ -1,10 +1,10 @@
 {
   "version": 1,
   "files": {
-    "confirmation_request_foundry.gen.go": "8d385a1f79845b9e3251f467de43e8119187b987246b68fd2a487043c889d171",
-    "enrollment_request_foundry.gen.go": "653bda16616bda78cb608f89910ff35e85c758e269f0a50a6772cafe9b3f328f",
+    "confirmation_request_foundry.gen.go": "a176c9e93cb04986cf7a7f757cdb801a7054d169aeb8f812da93e07a766ba82b",
+    "enrollment_request_foundry.gen.go": "b683fbf922009c3bf2f07f4e322ee910d5185647e0185bdeff4ecb07d4c361a0",
     "recovery_request_foundry.gen.go": "404e4a5c08f3abe9fb28c70e469061d79ed09caeb132d2e853b22fb24c58fcd1",
-    "regeneration_request_foundry.gen.go": "dff1a892de09fe00152ca0ea3eed2806febf9746aa1a41e47a2a6cffbf0b62d1",
+    "regeneration_request_foundry.gen.go": "c136480a0caf67a81d85bad40c18a6c2ea40732c49584377dd907d63f106f096",
     "totp_request_foundry.gen.go": "c8980609c9d21638d99f4382ec9ca8bb792c1053b8162b2f5d04a1f23e613169"
   }
 }

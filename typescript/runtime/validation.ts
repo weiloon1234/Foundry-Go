@@ -1,7 +1,7 @@
 interface RuleDescription {
   readonly kind: string; readonly field?: string; readonly other_field?: string; readonly label?: string; readonly label_key?: string;
   readonly other_label?: string; readonly other_label_key?: string;
-  readonly server_only?: boolean; readonly children?: readonly RuleDescription[];
+  readonly server_only?: boolean; readonly transformed?: boolean; readonly children?: readonly RuleDescription[];
   readonly spec?: { readonly id: string; readonly message: string; readonly translation?: ValidationMessageRecipe; readonly parameters?: readonly { readonly name: string; readonly value: unknown }[] };
 }
 interface ValidationLimits { readonly Checks: number; readonly Depth: number; readonly Issues: number; readonly ValueBytes: number }
@@ -55,6 +55,7 @@ function validateRules(description: RuleDescription | undefined, input: unknown,
       case "foundry.empty": return empty();
       case "foundry.non_blank": return typeof value === "string" && trimGoSpace(value) !== "";
       case "foundry.min_length": case "foundry.min_items": return count >= 0 && compareNumbers(count, parameters.min)! >= 0;
+      case "foundry.max_bytes": return typeof value === "string" && compareNumbers(textBytes(value), parameters.max)! <= 0;
       case "foundry.max_length": case "foundry.max_items": return count >= 0 && compareNumbers(count, parameters.max)! <= 0;
       case "foundry.min": case "foundry.decimal_min": { const result = compareNumbers(value, parameters.min); return result !== undefined && result >= 0; }
       case "foundry.max": case "foundry.decimal_max": { const result = compareNumbers(value, parameters.max); return result !== undefined && result <= 0; }
@@ -134,4 +135,129 @@ function numericIdentity(text: string): string {
   while (digits.endsWith("0")) { digits = digits.slice(0, -1); power++; }
   return "number:" + match[1] + digits + "e" + power;
 }
-export type { RuleDescription };
+/**
+ * The bounds the operation's own rules always apply to a present value, read
+ * from the same rule tree request validation walks. A rule on a value whose Go
+ * form differs from its wire text publishes nothing. minLength/maxLength count
+ * code points, as the Go length rules do; maxBytes counts UTF-8 bytes of text
+ * or the size of an uploaded file. No pattern is given: a Go regular
+ * expression is checked by the server only.
+ */
+export interface FieldLimits {
+  /** a present value must be non-empty text or a non-empty collection. */
+  readonly nonEmpty?: boolean;
+  readonly minLength?: number;
+  readonly maxLength?: number;
+  readonly maxBytes?: number;
+  /** inclusive; a string keeps a decimal or wide bound exact. */
+  readonly min?: number | string;
+  readonly max?: number | string;
+  /** a number control's granularity: 1 for integers, a decimal's places, else "any". */
+  readonly step?: number | string;
+  /** upload types as an accept attribute: media types, then extensions. */
+  readonly accept?: string;
+}
+/** What a control enforces before its form is submitted. */
+export interface FieldChecks {
+  /** an empty value blocks the submit. */
+  readonly required: boolean;
+  /**
+   * the bounds checked before submit: the field's limits once its value
+   * differs from the one the form first bound it with (however it changed),
+   * none while it holds that value, so a stored value that predates a rule
+   * never blocks saving other fields.
+   */
+  readonly limits: FieldLimits;
+}
+interface FieldBindingInit<V> {
+  readonly name: string;
+  readonly label: string;
+  readonly hint: string | undefined;
+  readonly required: boolean;
+  readonly limits: FieldLimits;
+  readonly checks: FieldChecks;
+  readonly kind: PresentationKind | undefined;
+  readonly numeric: "integer" | "float" | "decimal" | undefined;
+  readonly temporal: "date" | "time" | "date_time" | "local_date_time" | undefined;
+  readonly row: boolean;
+  readonly value: V;
+  readonly onChange: (value: V) => void;
+  readonly issues: readonly Issue[];
+}
+/**
+ * One request field as a form control uses it: its name, label, hint, limits
+ * and issues from the generated declaration, and the form's value with its
+ * change callback. `V` is what the control shows and emits. Client entries
+ * export it as a type only, and its private member makes it nominal: an
+ * object literal, a spread of a binding, a copy with one member replaced and
+ * the class itself (to construct, extend or take a prototype from) do not
+ * compile as a binding outside the field binder.
+ */
+class FieldBinding<V> {
+  private declare readonly binder: true;
+  /** the location-relative dotted path, such as "username" or "title.en". */
+  declare readonly name: string;
+  /** the Go label, translated by the binder's label function. */
+  declare readonly label: string;
+  /** the Go help text, when declared. */
+  declare readonly hint: string | undefined;
+  /**
+   * Go rejects an empty value: it must be present on every path to this field
+   * and a rule that always runs on it, or its enum type, rejects empty. A
+   * boolean is never empty: it is required exactly when Go's `Accepted` rule
+   * demands true (a checkbox that must be checked). Shown as the required
+   * marker; whether the value blocks the submit is `checks.required`.
+   */
+  declare readonly required: boolean;
+  /** Go's bounds of a present value, as facts. */
+  declare readonly limits: FieldLimits;
+  /**
+   * What the control enforces before submit. Nothing for an operation whose
+   * application code prepares the request before Go validates it.
+   */
+  declare readonly checks: FieldChecks;
+  /** the Go presentation kind (such as "password", "email", "url", "multiline"), when declared. */
+  declare readonly kind: PresentationKind | undefined;
+  /**
+   * how Go reads a number: an integer, a binary float, or an exact decimal
+   * sent as text; undefined for any other value.
+   */
+  declare readonly numeric: "integer" | "float" | "decimal" | undefined;
+  /**
+   * which time Go reads from the text: a date, a time of day, an instant
+   * ("date_time", with an offset) or a wall clock ("local_date_time");
+   * undefined for any other value.
+   */
+  declare readonly temporal: "date" | "time" | "date_time" | "local_date_time" | undefined;
+  /**
+   * a row of a list, bound with at(i): the list holds a value at its
+   * position, so a control never clears it; the form removes the row instead.
+   */
+  declare readonly row: boolean;
+  /** the field's current form value. */
+  declare readonly value: V;
+  /** updates the field in the form's latest values through the committed update function. */
+  declare readonly onChange: (value: V) => void;
+  /** issues at this field or below it, else its collection's when it has none. */
+  declare readonly issues: readonly Issue[];
+  private constructor() {}
+}
+/**
+ * Which bound of `limits` a number breaks, compared exactly (a decimal's text
+ * is never rounded): "min", "max", or undefined when it is within its range or
+ * is not plain number text this comparison reads, which Go then judges.
+ */
+export function outOfRange(limits: FieldLimits, value: string | number): "min" | "max" | undefined {
+  const below = limits.min === undefined ? undefined : compareNumbers(value, limits.min);
+  if (below !== undefined && below < 0) return "min";
+  const above = limits.max === undefined ? undefined : compareNumbers(value, limits.max);
+  return above !== undefined && above > 0 ? "max" : undefined;
+}
+// The binder's only way to make a binding: the constructor is private.
+function createFieldBinding<V>(init: FieldBindingInit<V>, entries: object | undefined): FieldBinding<V> {
+  const binding: FieldBinding<V> = Object.assign(Object.create(FieldBinding.prototype), init, entries);
+  Object.freeze(binding);
+  return binding;
+}
+export { compareNumbers, createFieldBinding };
+export type { FieldBinding, RuleDescription };

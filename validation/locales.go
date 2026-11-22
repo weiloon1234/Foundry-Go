@@ -24,7 +24,7 @@ func Locales[M ~map[i18n.LocaleID]V, V ~string](catalog i18n.LocaleCatalog, requ
 		return failed[M](empty.err)
 	}
 	snapshot := NewSlot[i18n.LocaleSet]()
-	supported := reportRule(Spec{ID: "foundry.supported_locale"}, func(s *execution, input M, report *Report) error {
+	supported := reportRule[M, M](Spec{ID: "foundry.supported_locale"}, func(s *execution, input M, report *Report) error {
 		locales, err := snapshot.Value(s.ctx)
 		if err != nil {
 			return err
@@ -43,7 +43,20 @@ func Locales[M ~map[i18n.LocaleID]V, V ~string](catalog i18n.LocaleCatalog, requ
 		}
 		return nil
 	})
-	required := reportRule(requiredSpec(empty.parameters()), func(s *execution, input M, report *Report) error {
+	// The required locales are published by requirement, not by name: the
+	// catalog is runtime configuration, but which of its locales must be
+	// supplied is part of the declaration, so a client can mark those entries.
+	// The parameter also tells this map-level leaf apart from a value's own
+	// Required rule.
+	selected := "none"
+	switch require {
+	case i18n.DefaultLocale:
+		selected = "default"
+	case i18n.AllLocales:
+		selected = "all"
+	}
+	parameters := append(empty.parameters(), parameter("locales", selected))
+	required := reportRule[M, V](requiredSpec(parameters), func(s *execution, input M, report *Report) error {
 		locales, err := snapshot.Value(s.ctx)
 		if err != nil {
 			return err
@@ -66,12 +79,13 @@ func Locales[M ~map[i18n.LocaleID]V, V ~string](catalog i18n.LocaleCatalog, requ
 }
 
 // MaxBytes limits the UTF-8 encoded size of text, for storage bounds measured
-// in bytes. MaxLength counts characters instead. It is server-only metadata.
+// in bytes. MaxLength counts characters instead. Clients check it exactly: the
+// generated validator counts the same UTF-8 bytes.
 func MaxBytes[S ~string](maximum int) Rule[S] {
 	if maximum < 0 {
 		return failed[S](invalid("maximum text bytes must not be negative"))
 	}
-	return valueRule(Spec{ID: "foundry.max_bytes", Parameters: []Parameter{parameter("max", maximum)}}, true, func(s *execution, input S) (bool, error) {
+	return valueRule(Spec{ID: "foundry.max_bytes", Parameters: []Parameter{parameter("max", maximum)}}, false, func(s *execution, input S) (bool, error) {
 		text := string(input)
 		return textValue(s, text) && len(text) <= maximum, nil
 	})
@@ -79,9 +93,10 @@ func MaxBytes[S ~string](maximum int) Rule[S] {
 
 // reportRule is a built-in, server-only leaf that records its own issues at
 // paths below its input, sharing Hook's Report without an application
-// definition, so one built-in ID can appear in several rules of a tree.
-func reportRule[T any](spec Spec, check func(*execution, T, *Report) error) Rule[T] {
-	rule := valueRule(spec, true, func(*execution, T) (bool, error) { return true, nil })
+// definition, so one built-in ID can appear in several rules of a tree. V is
+// the value it judges (a locale requirement judges the map's text).
+func reportRule[T, V any](spec Spec, check func(*execution, T, *Report) error) Rule[T] {
+	rule := wrappedRule[T, V](spec, true, func(*execution, T) (bool, error) { return true, nil })
 	if rule.err != nil {
 		return rule
 	}

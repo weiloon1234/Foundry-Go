@@ -9,7 +9,7 @@ import (
 //foundry:dto http=body
 type ResetRequest struct {
 	Token    passwordreset.Token[Member] `json:"token"`
-	Password password.Plaintext          `json:"password"`
+	Password password.Plaintext          `json:"password" client:"kind=password"`
 }
 
 //foundry:dto http=body

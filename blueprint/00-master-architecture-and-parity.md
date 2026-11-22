@@ -706,13 +706,18 @@ its pin and switches its portal routes after publication.
 
 ## Form controller, optional adapters and startup diagnostics — 2026-09-30
 
+Superseded (unreleased, 2026-11-22): the controller, its React and Vue adapters
+and the starter handoff guide are removed; forms bind fields with the generated
+field binder ([form guide](../docs/guides/client-forms.md)). The record below
+is history.
+
 Status: **accepted** for the framework follow-up and starter migration candidate.
-The [form guide](../docs/guides/client-forms.md) records the shared controller,
+The form guide recorded the shared controller,
 explicit parsing, bounded async ownership and optional React/Vue subscriptions.
 Database startup diagnostics preserve existing retry/timeout behavior. Final
 `make verify`, real HTTP/TypeScript consumers, React/Vue rendering/cleanup/SSR,
 React hydration and relevant database races passed. The
-[starter handoff](../docs/guides/forms-starter-handoff-20260930.md) includes a patch
+starter handoff (removed) included a patch
 verified through the Go export command, installed SDK consumers and both real
 HTTPS profiles using a private overlay/local framework replacement. The
 [evidence](../docs/evidence/forms-startup-20260930.json) records final source hashes

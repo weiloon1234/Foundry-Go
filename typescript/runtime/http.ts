@@ -123,14 +123,6 @@ function responseFailure(status: unknown, error: unknown): unknown {
   const received = typeof status === "number" && Number.isInteger(status) ? status : 0;
   return error instanceof ContractError && !(error instanceof ResponseContractError) ? new ResponseContractError(received, error.issues) : error;
 }
-// Failures the invoker raised before calling its transport: only these prove a
-// request never left this client. The set is private, so an error thrown by
-// application code (a wrapped client or transport) can never claim it.
-const unsentFailures = /* @__PURE__ */ new WeakSet<object>();
-function beforeSending<T>(run: () => T): T {
-  try { return run(); }
-  catch (error) { if (error !== null && typeof error === "object") unsentFailures.add(error); throw error; }
-}
 function checkAbort(signal?: AbortSignal): void { if (signal?.aborted) throw signal.reason ?? new DOMException("Request aborted", "AbortError"); }
 function requestTimeout(value = 30_000): number {
   if (!Number.isSafeInteger(value) || value < 0 || value > 2_147_483_647)
@@ -407,11 +399,8 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
   return {
     validate(name: string, request: unknown): ValidationReport { return prepare(name, request, {}).validation; },
     async invoke(name: string, request: unknown, call: CallOptions = {}): Promise<unknown> {
-      const prepared = beforeSending(() => {
-        const next = prepare(name, request, call);
-        if (next.validation.issues.length) throw new ContractError(next.validation.issues);
-        return next;
-      }), { operation } = prepared;
+      const prepared = prepare(name, request, call), { operation } = prepared;
+      if (prepared.validation.issues.length) throw new ContractError(prepared.validation.issues);
       const response = await transport(prepared.request);
       let transferred = false, closed = false, failed = false;
       const close = async (): Promise<void> => { if (!closed) { closed = true; await response.close(); } };
@@ -497,5 +486,5 @@ function signedTarget(input: unknown, expected: string, policy: SignedURLPolicy,
   if (canonical(actual.searchParams) !== canonical(target.searchParams)) reject("", "signed_url");
   return relative && base ? base + input : input;
 }
-export { checkAbort, createHTTPInvoker, matchesOperationError, operationErrorResponse, ownInput, unsentFailures, urlValue };
+export { checkAbort, createHTTPInvoker, matchesOperationError, ownInput, urlValue };
 export type { MultipartPart, Operation, Payload, RealtimeChannel, RealtimeEvent, RuntimeDocument, URLParameter };

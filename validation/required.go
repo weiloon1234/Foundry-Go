@@ -11,7 +11,7 @@ func Required[T any](rules ...Rule[T]) Rule[value.Optional[T]] {
 	if check.err != nil {
 		return failed[value.Optional[T]](check.err)
 	}
-	base := valueRule(requiredSpec(check.parameters()), check.serverOnly, func(s *execution, input value.Optional[T]) (bool, error) {
+	base := wrappedRule[value.Optional[T], T](requiredSpec(check.parameters()), check.serverOnly, func(s *execution, input value.Optional[T]) (bool, error) {
 		selected, supplied := input.Get()
 		if !supplied {
 			return false, nil
@@ -33,7 +33,7 @@ func RequiredNullable[T any](rules ...Rule[T]) Rule[value.Optional[value.Nullabl
 	if check.err != nil {
 		return failed[value.Optional[value.Nullable[T]]](check.err)
 	}
-	base := valueRule(requiredSpec(check.parameters()), check.serverOnly, func(s *execution, input value.Optional[value.Nullable[T]]) (bool, error) {
+	base := wrappedRule[value.Optional[value.Nullable[T]], T](requiredSpec(check.parameters()), check.serverOnly, func(s *execution, input value.Optional[value.Nullable[T]]) (bool, error) {
 		nullable, supplied := input.Get()
 		if !supplied {
 			return false, nil
@@ -63,7 +63,7 @@ func Prohibited[T any]() Rule[value.Optional[T]] {
 	if check.err != nil {
 		return failed[value.Optional[T]](check.err)
 	}
-	return valueRule(prohibitedSpec(check.parameters()), check.serverOnly, func(s *execution, input value.Optional[T]) (bool, error) {
+	return wrappedRule[value.Optional[T], T](prohibitedSpec(check.parameters()), check.serverOnly, func(s *execution, input value.Optional[T]) (bool, error) {
 		selected, supplied := input.Get()
 		if !supplied {
 			return true, nil
@@ -80,7 +80,7 @@ func ProhibitedNullable[T any]() Rule[value.Optional[value.Nullable[T]]] {
 	if check.err != nil {
 		return failed[value.Optional[value.Nullable[T]]](check.err)
 	}
-	return valueRule(prohibitedSpec(check.parameters()), check.serverOnly, func(s *execution, input value.Optional[value.Nullable[T]]) (bool, error) {
+	return wrappedRule[value.Optional[value.Nullable[T]], T](prohibitedSpec(check.parameters()), check.serverOnly, func(s *execution, input value.Optional[value.Nullable[T]]) (bool, error) {
 		nullable, supplied := input.Get()
 		if !supplied {
 			return true, nil

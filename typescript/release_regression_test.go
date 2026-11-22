@@ -274,7 +274,7 @@ func TestExtensionOnlyUploadAcceptHint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runReleaseTypeScript(t, output, `assert.equal(sdk.operation("upload").field("body", "document").accept,".csv");`)
+	runReleaseTypeScript(t, output, `assert.equal(sdk.operation("upload").field("body", "document").limits.accept,".csv");`)
 }
 
 func runReleaseTypeScript(t *testing.T, source []byte, assertions string) {
