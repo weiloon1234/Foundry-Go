@@ -385,7 +385,6 @@
     "CSPSHA512",
     "CSPUnsafeEval",
     "CSPUnsafeHashes",
-    "CSPWasmUnsafeEval",
     "Events.WithConfig",
     "FloatCookie",
     "OriginPattern.Wildcard"

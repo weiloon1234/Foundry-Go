@@ -40,6 +40,41 @@ separately configured Reporting-Endpoints group; `ReportURI` declares legacy
 HTTP(S) destinations or absolute local paths. The framework does not register a
 report receiver automatically. Configure and protect that endpoint explicitly.
 
+## Allow WebAssembly compilation
+
+Add `http.CSPWasmUnsafeEval()` when a page compiles or instantiates WebAssembly:
+
+```go
+policy := foundryhttp.CSPPolicy{
+	DefaultSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+	ScriptSrc:  []foundryhttp.CSPSource{foundryhttp.CSPSelf(), foundryhttp.CSPWasmUnsafeEval()},
+	ConnectSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+}
+```
+
+The keyword permits WebAssembly compilation and instantiation. It does not enable
+JavaScript `eval`, `Function`, or string-based timers, and the framework offers no
+`'unsafe-eval'` constructor. The loader script and module download must still pass
+the applicable source restrictions. For a same-origin loader and a module loaded
+with `fetch`, the example allows the script through `ScriptSrc` and the fetch
+through `ConnectSrc`. A nonce-based script policy can combine the keyword with
+`CSPNonceSource()` and `CSPStrictDynamic()`; trusted loader tags still need their nonce.
+
+Only `ScriptSrc` and `DefaultSrc` accept this source. `DefaultSrc` applies to
+compilation only when `ScriptSrc` is absent. The
+[CSP WebAssembly compilation check](https://www.w3.org/TR/CSP3/#can-compile-wasm-bytes)
+consults those directives, not `ScriptSrcElem`, `ScriptSrcAttr`, `WorkerSrc`, or
+`ChildSrc`. Assembly rejects this constructor-produced source in every other
+source directive.
+Worker fetch permission does not grant compilation permission inside a worker;
+the worker's own effective CSP governs compilation there.
+
+According to [MDN's browser compatibility data](https://github.com/mdn/browser-compat-data/blob/main/http/headers/Content-Security-Policy.json),
+`'wasm-unsafe-eval'` support starts with Chrome 97, Firefox 102, and Safari 16.
+Older browsers that do not support the keyword ignore it and refuse WebAssembly
+compilation under these policies. Check compilation in the browsers your
+application supports. Never substitute `'unsafe-eval'` for compatibility.
+
 ## Configure an application allowlist
 
 `application.HTTPSettings.CSPAllowlist` contains an `http.CSPAllowlist`. The
@@ -121,7 +156,9 @@ hosts. With no additions, nil, empty, and `'none'` keep their original meaning.
 
 When script origins are added and both `WorkerSrc` and `ChildSrc` are nil, the
 helper pins `WorkerSrc` to a separate copy of the original `ScriptSrc`, including
-nonce sources. This preserves the effective worker policy instead of letting
+nonce sources but excluding `http.CSPWasmUnsafeEval()`, which has no worker-fetch
+meaning. If no sources remain, the pinned worker directive emits `'none'`.
+This preserves the effective worker policy instead of letting
 workers inherit the added script hosts. Explicit `WorkerSrc` or `ChildSrc`,
 including empty slices, remain unchanged. If `ChildSrc` is present and `WorkerSrc`
 is nil, `WorkerSrc` stays nil. CSP compilation accepts nonce sources in `WorkerSrc`

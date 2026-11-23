@@ -103,6 +103,7 @@ func (a CSPAllowlist) appendOrigins(p *CSPPolicy) error {
 // policy, are ignored.
 // When script additions apply and both WorkerSrc and ChildSrc are nil, WorkerSrc
 // is pinned to the original ScriptSrc so workers do not inherit added hosts.
+// The compilation-only CSPWasmUnsafeEval source is omitted from that worker list.
 // Explicit WorkerSrc/ChildSrc and other directives (including ScriptSrcElem)
 // are unchanged. All slices are copied.
 // Invalid input or a result exceeding CSP bounds returns a zero policy and error.
@@ -117,6 +118,9 @@ func ApplyCSPAllowlist(policy CSPPolicy, allowlist CSPAllowlist) (CSPPolicy, err
 	policy = cloneCSPPolicy(policy)
 	if len(addition.ScriptSrc) > 0 && policy.WorkerSrc == nil && policy.ChildSrc == nil {
 		policy.WorkerSrc = slices.Clone(policy.ScriptSrc)
+		policy.WorkerSrc = slices.DeleteFunc(policy.WorkerSrc, func(source CSPSource) bool {
+			return source == CSPWasmUnsafeEval()
+		})
 	}
 	for _, directive := range []struct {
 		name    string

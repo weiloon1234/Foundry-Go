@@ -40,6 +40,11 @@ func CSPUnsafeInline() CSPSource { return CSPSource{"'unsafe-inline'", cspKeywor
 // CSPStrictDynamic returns the 'strict-dynamic' source expression.
 func CSPStrictDynamic() CSPSource { return CSPSource{"'strict-dynamic'", cspKeyword} }
 
+// CSPWasmUnsafeEval permits WebAssembly compilation and instantiation, but not
+// JavaScript eval or Function compilation. It does not allow script or module
+// downloads by itself. Use it only in ScriptSrc or its DefaultSrc fallback.
+func CSPWasmUnsafeEval() CSPSource { return CSPSource{"'wasm-unsafe-eval'", cspKeyword} }
+
 // CSPHostSource accepts a CSP host pattern, for example
 // "https://*.example.test:443/assets/". It is not an arbitrary source-list string.
 // Use ASCII/punycode hosts. CSP host grammar does not permit IPv6 literals.
@@ -69,7 +74,7 @@ func (s CSPSource) Validate() error {
 	switch s.kind {
 	case cspKeyword:
 		switch s.text {
-		case "'none'", "'self'", "'unsafe-inline'", "'strict-dynamic'":
+		case "'none'", "'self'", "'unsafe-inline'", "'strict-dynamic'", "'wasm-unsafe-eval'":
 			valid = true
 		}
 	case cspNonce:

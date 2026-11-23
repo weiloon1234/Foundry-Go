@@ -5,6 +5,16 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+## WebAssembly CSP source
+
+`http.CSPWasmUnsafeEval()` is additive and opt-in. Existing policies are unchanged.
+This restores the constructor removed in v0.47.0, with directive validation at
+assembly. Its retirement-ledger entry is removed. The JavaScript eval constructor
+remains retired and unavailable.
+Only `ScriptSrc` and `DefaultSrc` accept it; it enables WebAssembly compilation
+without enabling JavaScript eval. No generated contract, wire schema, or stored
+format changes. See [WebAssembly CSP configuration](guides/http-content-security-policy.md#allow-webassembly-compilation).
+
 <a id="model-id-form-inputs"></a>
 ## Model ID form inputs — v0.50.3
 
@@ -270,7 +280,8 @@ See [custom handlers](guides/logging.md#custom-handlers) for the migration.
 No persisted format, queue layout, database schema, generated wire contract or
 deployment generation changes. Generate application declarations with the matching
 framework and run the application's route check after changing its pin. The
-retirement ledger rejects reintroducing removed public names.
+retirement ledger rejects reintroducing removed public names, except for the
+explicitly restored [WebAssembly CSP source](#webassembly-csp-source).
 
 ## Framework cleanup — v0.46.0
 

@@ -100,6 +100,9 @@ func compileCSPPolicy(p CSPPolicy, reportOnly bool) (compiledCSP, error) {
 			if source.text == "'none'" && len(directive.sources) != 1 {
 				return compiledCSP{}, safeerror.NewFault(fault.Invalid, "CSP none must be the only source")
 			}
+			if source == CSPWasmUnsafeEval() && directive.name != "script-src" && directive.name != "default-src" {
+				return compiledCSP{}, safeerror.NewFault(fault.Invalid, "CSP wasm-unsafe-eval requires script-src or default-src")
+			}
 			if directive.name == "frame-ancestors" && source.kind != cspHost && source.kind != cspScheme && source.text != "'self'" && source.text != "'none'" {
 				return compiledCSP{}, safeerror.NewFault(fault.Invalid, "frame ancestors require host, scheme, self or none sources")
 			}

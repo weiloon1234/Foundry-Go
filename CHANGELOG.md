@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.50.4 — 2026-11-23
+
+- Restore `http.CSPWasmUnsafeEval()` for WebAssembly compilation and instantiation in
+  `ScriptSrc` or its `DefaultSrc` fallback, without enabling JavaScript eval.
+  Other directives reject the keyword at assembly. CSP allowlist worker pinning
+  omits this compilation-only source while preserving worker fetch restrictions.
+
 ## v0.50.3 — 2026-11-23
 
 ### Bind a model ID that the user enters as text
