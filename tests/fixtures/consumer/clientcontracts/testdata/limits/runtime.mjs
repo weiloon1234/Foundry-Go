@@ -820,17 +820,41 @@ assert.deepEqual(gallery.photos, [replacement], "each write keeps the others");
 {
   v8.setFlagsFromString("--expose-gc");
   const collect = vm.runInNewContext("gc");
-  const settle = () => { for (let round = 0; round < 4; round++) collect(); return process.memoryUsage().heapUsed; };
   const visit = () => {
     const keys = form((key) => key);
+    const watched = [];
+    const watch = (name, value) => watched.push({ name, ref: new WeakRef(value) });
+    watch("form state", keys.state);
     let many = { ...body, names: {} };
-    const bound = keys.bind(op, many, (next) => { many = next(many); }, [], (each) => { for (let at = 0; at < 20000; at++) each.names.at(`key-${at}`); });
-    return bound.names.at("key-0").name;
+    const bound = keys.bind(op, many, (next) => { many = next(many); }, [], (each) => {
+      for (let at = 0; at < 20000; at++) {
+        const entry = each.names.at(`key-${at}`);
+        // A binding exposes its descriptor's own limits object. Watching it
+        // catches a retained descriptor even if the binding itself is freed.
+        watch(`map descriptor key-${at}`, entry.limits);
+      }
+      watch("list entry descriptor", each.codes.at(0).limits);
+      const row = each.rows.at(0);
+      watch("row binding", row);
+      watch("row field descriptor", row.name.limits);
+      watch("nested row field descriptor", row.slots.at(0).opens.limits);
+    });
+    watch("map entry binding", bound.names.at("key-0"));
+    assert.equal(bound.names.at("key-0").name, "names.key-0");
+    return watched;
   };
-  const baseline = settle();
-  assert.equal(visit(), "names.key-0");
-  const growth = settle() - baseline;
-  assert.ok(growth < 4 * 1024 * 1024, `a closed form keeps its entry descriptors: ${growth} bytes retained`);
+  // Only weak references leave the allocation callback; its frame is gone
+  // before collection. WeakRef creation and deref keep targets alive until
+  // the current job ends, so every collection needs a fresh event-loop turn.
+  const watched = await new Promise((resolve) => setImmediate(() => resolve(visit())));
+  let retained = [];
+  for (let round = 0; round < 10; round++) {
+    await new Promise((resolve) => setImmediate(resolve));
+    collect({ type: "major", execution: "sync" });
+    retained = watched.filter(({ ref }) => ref.deref() !== undefined).map(({ name }) => name);
+    if (retained.length === 0) break;
+  }
+  assert.equal(retained.length, 0, `a closed form retains: ${retained.slice(0, 5).join(", ")}`);
 }
 
 assert.throws(() => sdk.fieldBinder());
