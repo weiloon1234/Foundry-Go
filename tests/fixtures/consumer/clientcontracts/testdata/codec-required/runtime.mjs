@@ -118,3 +118,41 @@ assert.ok(baseURL, "live server URL must be set");
 const client = sdk.createClient(sdk.fetchTransport, { baseURL });
 await quoteOp.call(client, { query: { amount: "12.50", sku: "SKU-42" } });
 await patchOp.call(client, { body: { owner_id: validID, pointer_owner_id: null, forced_optional_id: validID } });
+
+// Model ID detection and fieldIdentity on real generated Go model.ID[T] DTOs,
+// including sending the parsed ID to the live Go server.
+for (const [label, binding] of [
+  ["create.owner_id", c.owner_id],
+  ["create.omitzero_id", c.omitzero_id],
+  ["create.required_ids.at(0)", c.required_ids.at(0)],
+  ["create.nullable_ids.at(0)", c.nullable_ids.at(0)],
+  ["create.lines.at(0).item_id", c.lines.at(0).item_id],
+  ["patch.owner_id", p.owner_id],
+  ["patch.optional_owner_id", p.optional_owner_id],
+  ["patch.nullable_owner_id", p.nullable_owner_id],
+  ["patch.pointer_owner_id", p.pointer_owner_id],
+  ["patch.forced_optional_id", p.forced_optional_id],
+]) {
+  assert.equal(binding.identity, true, `${label} must report identity: true`);
+}
+for (const [label, binding] of [
+  ["create.password", c.password],
+  ["create.totp", c.totp],
+  ["create.contact", c.contact],
+  ["create.sku", c.sku],
+  ["create.opaque_note", c.opaque_note],
+  ["create.required_ids", c.required_ids],
+  ["create.nullable_ids", c.nullable_ids],
+  ["create.lines.at(0).amount", c.lines.at(0).amount],
+]) {
+  assert.equal(binding.identity, false, `${label} must report identity: false`);
+  assert.equal(sdk.fieldIdentity(binding, validID), undefined, `non-ID ${label} must return undefined`);
+}
+const enteredOwner = sdk.fieldIdentity(p.owner_id, validID);
+const enteredRow = sdk.fieldIdentity(c.required_ids.at(0), "0193FD8C-2075-7000-8000-000000000002");
+assert.equal(enteredOwner, validID);
+assert.equal(enteredRow, "0193FD8C-2075-7000-8000-000000000002");
+assert.equal(sdk.fieldIdentity(p.owner_id, ""), undefined);
+assert.equal(sdk.fieldIdentity(p.owner_id, "not-a-uuid"), undefined);
+assert.equal(sdk.fieldIdentity(p.owner_id, "00000000-0000-0000-0000-000000000000"), undefined);
+await patchOp.call(client, { body: { owner_id: enteredOwner, pointer_owner_id: null, forced_optional_id: enteredRow } });

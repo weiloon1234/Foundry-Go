@@ -179,6 +179,82 @@ export function formUnsetNested(issues: readonly sdk.Issue[]) {
 }
 // doc-example:end form-unset-nested
 
+// Model ID entered as text: unset ID field, row of a list of IDs, repeated
+// multipart ID part, map entry of IDs, UUID-format enum, generic control,
+// narrowed vs unnarrowed request builder, draft typed only as undefined,
+// non-ID rejection, and cross-model rejection.
+type TargetID = sdk.Identity<"client.TargetID">;
+type IDEntryDraft = {
+  readonly owner_id?: sdk.Identity<"client.OwnerID"> | undefined;
+  readonly target_id?: TargetID | undefined;
+  readonly owner_ids: readonly sdk.Identity<"client.OwnerID">[];
+  readonly owner_map: Readonly<Partial<Record<string, sdk.Identity<"client.OwnerID">>>>;
+  readonly fixed_uuid: NonNullable<Body["fixed_uuid"]>;
+  readonly text: string;
+};
+declare const idEntryDraft: IDEntryDraft;
+const idBound = bind(op, idEntryDraft, () => {}, []);
+const unsetOwnerBinding: sdk.FieldBinding<sdk.Identity<"client.OwnerID"> | undefined> = idBound.owner_id;
+const ownerIsIdentity: boolean = unsetOwnerBinding.identity;
+const parsedOwner: sdk.Identity<"client.OwnerID"> | undefined = sdk.fieldIdentity(unsetOwnerBinding, "0193fd8c-2075-7000-8000-000000000001");
+unsetOwnerBinding.onChange(parsedOwner);
+function assignParsedOwner(text: string): Body["owner_id"] | undefined {
+  return sdk.fieldIdentity(unsetOwnerBinding, text);
+}
+function buildOwnerWithoutNarrowing(values: { readonly owner_id?: Body["owner_id"] | undefined }): { readonly owner_id: Body["owner_id"] } {
+  return {
+    // @ts-expect-error An unset ID in the draft must be narrowed before flowing into a required request field.
+    owner_id: values.owner_id,
+  };
+}
+const ownerRowBinding: sdk.FieldBinding<sdk.Identity<"client.OwnerID">> = idBound.owner_ids.at(0);
+const parsedRowOwner: sdk.Identity<"client.OwnerID"> | undefined = sdk.fieldIdentity(ownerRowBinding, "0193fd8c-2075-7000-8000-000000000002");
+if (parsedRowOwner !== undefined) {
+  ownerRowBinding.onChange(parsedRowOwner);
+  const rowElement: Body["owner_ids"][number] = parsedRowOwner;
+  void rowElement;
+}
+const repeatedIDRowBinding: sdk.FieldBinding<sdk.Identity<"client.OwnerID">> = up["reviewer_ids[]"].at(0);
+const parsedRepeatedIDRow: sdk.Identity<"client.OwnerID"> | undefined = sdk.fieldIdentity(repeatedIDRowBinding, "0193fd8c-2075-7000-8000-000000000004");
+if (parsedRepeatedIDRow !== undefined) repeatedIDRowBinding.onChange(parsedRepeatedIDRow);
+// @ts-expect-error A repeated multipart ID parameter itself is a list, not a single ID.
+up["reviewer_ids[]"].onChange(sdk.fieldIdentity(up["reviewer_ids[]"], "0193fd8c-2075-7000-8000-000000000004"));
+const ownerMapEntryBinding: sdk.FieldBinding<sdk.Identity<"client.OwnerID">> = idBound.owner_map.at("primary");
+const parsedMapOwner: sdk.Identity<"client.OwnerID"> | undefined = sdk.fieldIdentity(ownerMapEntryBinding, "0193fd8c-2075-7000-8000-000000000003");
+if (parsedMapOwner !== undefined) ownerMapEntryBinding.onChange(parsedMapOwner);
+// A UUID-format enum with declared cases is a literal union, not an Identity.
+const fixedUuidResult: undefined = sdk.fieldIdentity(idBound.fixed_uuid, "0193fd8c-2075-7000-8000-000000000009");
+// @ts-expect-error A UUID-format enum binding yields undefined, not the enum literal.
+idBound.fixed_uuid.onChange(fixedUuidResult);
+// A draft that types an ID field only as undefined yields static undefined.
+const onlyUndefinedOwner = bind(op, { owner_id: undefined }, () => {}, []).owner_id;
+const onlyUndefinedOwnerResult: undefined = sdk.fieldIdentity(onlyUndefinedOwner, "0193fd8c-2075-7000-8000-000000000001");
+function IdentityTextControl<T extends sdk.Identity<string>>(field: sdk.FieldBinding<T | undefined>, next: string): void {
+  if (field.identity) field.onChange(sdk.fieldIdentity(field, next));
+}
+IdentityTextControl(idBound.owner_id, "0193fd8c-2075-7000-8000-000000000001");
+IdentityTextControl(idBound.target_id, "0193fd8c-2075-7000-8000-000000000002");
+// Non-ID fields: fieldIdentity produces undefined, which cannot be assigned to
+// the field's value.
+const textIdentityResult = sdk.fieldIdentity(idBound.text, "0193fd8c-2075-7000-8000-000000000001");
+// @ts-expect-error A non-ID text binding yields undefined, not string.
+const badTextFromIdentity: string = textIdentityResult;
+// @ts-expect-error A non-ID binding's fieldIdentity result cannot be written to it.
+idBound.text.onChange(textIdentityResult);
+const listIdentityResult = sdk.fieldIdentity(idBound.owner_ids, "0193fd8c-2075-7000-8000-000000000001");
+// @ts-expect-error A list of IDs itself is not a single ID value.
+idBound.owner_ids.onChange(listIdentityResult);
+// Cross-model rejection: an OwnerID cannot be written into a TargetID field.
+// @ts-expect-error OwnerID | undefined cannot be written into a TargetID field.
+idBound.target_id.onChange(parsedOwner);
+if (parsedOwner !== undefined) {
+  // @ts-expect-error OwnerID is not assignable to TargetID.
+  const wrongModel: TargetID = parsedOwner;
+  void wrongModel;
+}
+// @ts-expect-error Only a real FieldBinding may be passed to fieldIdentity.
+sdk.fieldIdentity({ identity: true }, "0193fd8c-2075-7000-8000-000000000001");
+
 // Exact spelling on a real generated multipart DTO with a nested object
 // (httpuploads.ProfileInput -> Settings) and request-builder narrowing check.
 type UploadSettings = NonNullable<UploadBody["settings"]>;
@@ -393,4 +469,4 @@ bind(op, { codes: [undefined] }, () => {}, []);
 // @ts-expect-error An unlabelled nested leaf still has no binding even when unset.
 void bind(op, { account: { username: "ann", internal: undefined } }, () => {}, []).account.internal;
 
-void [text, count, entry, code, checks, consent, share, clearable, isRow, username, email, color, prefsBody, rowName, opens, rows, stateEntry, document, photo, tag, caption, uploadBody, addRow, removeRow, addSlot, row, moreName, address, role, filterName, forged, spread, copied, created, fromItems, fromGeneric, key, missing, issue, ownerId, pricePlaces, checkedPlaces, malformed, parsedPlaces, unsetCaption, strictUploadTag, widenedUploadTag, buildSettingsWithoutNarrowing, idiomOwner, idiomColor, idiomColorLoose, idiomOwnerStrict, idiomRowName, idiomSlotOpens, idiomRowNameStrict, idiomSlotOpensLoose, buildIdiomPrefs, buildIdiomRow, selectedOwnerName, strictNestedColor, widenedNestedColor, strictNestedOwner, buildPrefsFromDraft, strictRowName, widenedRowName, unsetSlotOpens, narrowedSlotOpens, unsetRowMetaNote, strictRowMetaNote, unsetRowName, narrowedRowName, strictSlotOpens, widenedSlotOpens, absentPrefsColor, absentPrefsOwner, strictAbsentColor, twoLevelLeaf, strictTwoLevelLeaf, absentParentMapEntry, inheritedKeyField, onlyUndefinedNamesWhole, optionalNamesEntry, multiAccountUsername, extraNestedColor, extraRowName];
+void [text, count, entry, code, checks, consent, share, clearable, isRow, username, email, color, prefsBody, rowName, opens, rows, stateEntry, document, photo, tag, caption, uploadBody, addRow, removeRow, addSlot, row, moreName, address, role, filterName, forged, spread, copied, created, fromItems, fromGeneric, key, missing, issue, ownerId, pricePlaces, checkedPlaces, malformed, parsedPlaces, ownerIsIdentity, assignParsedOwner, buildOwnerWithoutNarrowing, onlyUndefinedOwnerResult, badTextFromIdentity, unsetCaption, strictUploadTag, widenedUploadTag, buildSettingsWithoutNarrowing, idiomOwner, idiomColor, idiomColorLoose, idiomOwnerStrict, idiomRowName, idiomSlotOpens, idiomRowNameStrict, idiomSlotOpensLoose, buildIdiomPrefs, buildIdiomRow, selectedOwnerName, strictNestedColor, widenedNestedColor, strictNestedOwner, buildPrefsFromDraft, strictRowName, widenedRowName, unsetSlotOpens, narrowedSlotOpens, unsetRowMetaNote, strictRowMetaNote, unsetRowName, narrowedRowName, strictSlotOpens, widenedSlotOpens, absentPrefsColor, absentPrefsOwner, strictAbsentColor, twoLevelLeaf, strictTwoLevelLeaf, absentParentMapEntry, inheritedKeyField, onlyUndefinedNamesWhole, optionalNamesEntry, multiAccountUsername, extraNestedColor, extraRowName];

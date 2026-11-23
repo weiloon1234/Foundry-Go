@@ -41,7 +41,7 @@ assert.deepEqual(plain(field("share").limits), { min: 0, max: 1, step: "any" }, 
 assert.deepEqual(plain(field("pin").limits), { minLength: 6, maxLength: 6 }, "a fixed length is Go's, published for the code's cells");
 
 // The validator counts code points for lengths and UTF-8 bytes for byte limits.
-const body = { text: "abc", optional_text: "ab", nullable_text: null, transformed: "x", guarded: "x", count: 2, ratio: 1, price: "1.00", names: { en: "hello" }, codes: ["ab"], min_text: "ab", secret: "x", choice: "a", supplied: "s", unlabelled: "x", account: { username: "ann", email: null, internal: "x" }, rows: [{ name: "a", slots: [{ opens: "0900" }] }], states: { open: "yes" }, consent: true, agreed: true, refused: false, share: 0.5, pin: "123456", starts: "2026-01-01T00:00:00Z", owner_id: "0193fd8c-2075-7000-8000-000000000001", nullable_owner_id: null, required_owner_id: "0193fd8c-2075-7000-8000-000000000002", birth_date: "2026-01-01", nullable_date: null, opens_at: "09:00:00", local_at: "2026-01-01T09:00:00", span: "P1D", raw_bytes: "", plain_decimal: "0", nullable_price: null, step_price: "0.25", tight_price: "1.50", whole_price: "5" };
+const body = { text: "abc", optional_text: "ab", nullable_text: null, transformed: "x", guarded: "x", count: 2, ratio: 1, price: "1.00", names: { en: "hello" }, codes: ["ab"], min_text: "ab", secret: "x", choice: "a", supplied: "s", unlabelled: "x", account: { username: "ann", email: null, internal: "x" }, rows: [{ name: "a", slots: [{ opens: "0900" }] }], states: { open: "yes" }, consent: true, agreed: true, refused: false, share: 0.5, pin: "123456", starts: "2026-01-01T00:00:00Z", owner_id: "0193fd8c-2075-7000-8000-000000000001", owner_ids: ["0193fd8c-2075-7000-8000-000000000003"], owner_map: { primary: "0193fd8c-2075-7000-8000-000000000004" }, nullable_owner_id: null, required_owner_id: "0193fd8c-2075-7000-8000-000000000002", birth_date: "2026-01-01", nullable_date: null, opens_at: "09:00:00", local_at: "2026-01-01T09:00:00", span: "P1D", raw_bytes: "", plain_decimal: "0", nullable_price: null, step_price: "0.25", tight_price: "1.50", whole_price: "5" };
 const codes = (patch) => op.validate({ path: { key: "1" }, body: { ...body, ...patch } }).issues.map((issue) => `${issue.path} ${issue.code}`);
 assert.deepEqual(codes({ text: "€".repeat(10) }), [], "ten code points of 30 bytes fit both bounds");
 assert.deepEqual(codes({ text: "😀".repeat(10) }), ["/body/text foundry.max_bytes"], "ten emoji are ten code points (twenty UTF-16 units) but 40 bytes");
@@ -83,7 +83,7 @@ let values = { ...body, optional_text: "", supplied: "", optional_names: {} };
 const update = (updater) => { values = updater(values); };
 const { state, bind } = form();
 const f = bind(op, values, update, [], (bound) => { bound.names.at("ms"); bound.names.at("en"); bound.codes.at(0); });
-assert.deepEqual(Object.keys(f).sort(), ["account", "agreed", "birth_date", "choice", "codes", "consent", "count", "filter", "guarded", "links", "local_at", "maybe", "min_text", "more_rows", "names", "nullable_date", "nullable_owner_id", "nullable_price", "nullable_text", "opens_at", "optional_names", "optional_owner_id", "optional_price", "optional_text", "owner_id", "pin", "plain_decimal", "pointer_owner_id", "prefs", "price", "ratio", "raw_bytes", "refused", "required_owner_id", "rows", "secret", "share", "span", "starts", "states", "step_price", "supplied", "text", "tight_price", "transformed", "wallet", "whole_price"]);
+assert.deepEqual(Object.keys(f).sort(), ["account", "agreed", "birth_date", "choice", "codes", "consent", "count", "filter", "fixed_uuid", "guarded", "links", "local_at", "maybe", "min_text", "more_rows", "names", "nullable_date", "nullable_owner_id", "nullable_price", "nullable_text", "opens_at", "optional_names", "optional_owner_id", "optional_price", "optional_text", "owner_id", "owner_ids", "owner_map", "pin", "plain_decimal", "pointer_owner_id", "prefs", "price", "ratio", "raw_bytes", "refused", "required_owner_id", "rows", "secret", "share", "span", "starts", "states", "step_price", "supplied", "target_id", "text", "tight_price", "transformed", "wallet", "whole_price"]);
 assert.equal(sdk.FieldBinding, undefined, "the binding class is a type only: an entry exports no value for it");
 assert.ok(Object.isFrozen(f.text));
 assert.equal(f.text.name, "text");
@@ -583,7 +583,7 @@ uploads.bind(sdk.operation("uploadsProfile"), upload, (next) => { upload = next(
 assert.equal(upload.document, undefined);
 // Repeated parts bind a row per upload or text value; a JSON part binds its
 // labelled fields.
-let gallery = { title: "Profile", photos: [file], "tags[]": ["a"], settings: { caption: "" } };
+let gallery = { title: "Profile", photos: [file], "tags[]": ["a"], "reviewer_ids[]": ["0193fd8c-2075-7000-8000-000000000005"], settings: { caption: "" } };
 const g2 = form().bind(sdk.operation("uploadsProfile"), gallery, (next) => { gallery = next(gallery); }, []);
 assert.equal(g2.photos.at(0).value, file);
 assert.equal(g2.photos.at(0).name, "photos.0");
@@ -837,3 +837,135 @@ assert.throws(() => sdk.fieldBinder());
 assert.throws(() => sdk.fieldBinder((key) => key));
 assert.throws(() => sdk.fieldBinder((key) => key, () => ({}))(op, values, update, []), "a state not made by formFieldState");
 assert.throws(() => sdk.commitFormFields({}), "a state not made by formFieldState");
+
+// Model ID bindings report identity: true (including optional, nullable,
+// pointer, nested, list rows and map entries) and fieldIdentity parses text
+// through the same check as newIdentity without an owner string.
+{
+  const validLower = "0193fd8c-2075-7000-8000-000000000001";
+  const validUpper = "0193FD8C-2075-7000-8000-0000000000AB";
+  const nilID = "00000000-0000-0000-0000-000000000000";
+  const malformed = [
+    "",
+    " ",
+    "not-a-uuid",
+    ` ${validLower}`,
+    `${validLower} `,
+    "0193fd8c207570008000000000000001",
+    "0193fd8c-2075-7000-8000-00000000000g",
+    "0193fd8c-2075-7000-8000-0000000000012",
+    nilID,
+    null,
+    undefined,
+    123,
+  ];
+  // Top-level, wrapped, nested, row, repeated multipart part row and map-entry IDs all report identity: true.
+  for (const [label, binding] of [
+    ["owner_id", f.owner_id],
+    ["target_id", f.target_id],
+    ["optional_owner_id", f.optional_owner_id],
+    ["nullable_owner_id", f.nullable_owner_id],
+    ["pointer_owner_id", f.pointer_owner_id],
+    ["required_owner_id", f.required_owner_id],
+    ["prefs.owner_id", f.prefs.owner_id],
+    ["owner_ids.at(0)", f.owner_ids.at(0)],
+    ["reviewer_ids[].at(0)", g2["reviewer_ids[]"].at(0)],
+    ["owner_map.at(primary)", f.owner_map.at("primary")],
+    ["owner_map.at(absent)", f.owner_map.at("absent")],
+  ]) {
+    assert.equal(binding.identity, true, `${label} must report identity: true`);
+    assert.equal(sdk.fieldIdentity(binding, validLower), validLower, `${label} accepts lowercase UUID`);
+    assert.equal(sdk.fieldIdentity(binding, validUpper), validUpper, `${label} accepts uppercase UUID`);
+    for (const bad of malformed) {
+      assert.equal(sdk.fieldIdentity(binding, bad), undefined, `${label} rejects ${JSON.stringify(bad)}`);
+    }
+  }
+  // newIdentity and fieldIdentity both deliberately reject the nil UUID.
+  assert.throws(
+    () => sdk.newIdentity("client.OwnerID", nilID),
+    (err) => err instanceof sdk.ContractError && err.issues[0]?.code === "invalid_identity",
+  );
+  // Non-ID fields (including a list/repeated part/map of IDs itself, UUID-format
+  // enums with declared cases, uploads, text, numbers, temporals) report false.
+  for (const [label, binding] of [
+    ["text", f.text],
+    ["count", f.count],
+    ["price", f.price],
+    ["starts", f.starts],
+    ["birth_date", f.birth_date],
+    ["raw_bytes", f.raw_bytes],
+    ["consent", f.consent],
+    ["codes", f.codes],
+    ["codes.at(0)", f.codes.at(0)],
+    ["names", f.names],
+    ["names.at(en)", f.names.at("en")],
+    ["owner_ids", f.owner_ids],
+    ["reviewer_ids[]", g2["reviewer_ids[]"]],
+    ["owner_map", f.owner_map],
+    ["fixed_uuid", f.fixed_uuid],
+    ["upload document", u.document],
+    ["upload photo row", g2.photos.at(0)],
+  ]) {
+    assert.equal(binding.identity, false, `${label} must report identity: false`);
+    assert.equal(sdk.fieldIdentity(binding, validLower), undefined, `non-ID ${label} must return undefined even for valid UUID`);
+  }
+  // Execute the compiled guide recipe formIdentityText end-to-end: unset start,
+  // malformed and nil text flag invalid() and block submit, valid text writes
+  // the branded ID and builds the required request body, and clearing resets.
+  const { formIdentityText } = await import(new URL("./recipes.js", pathToFileURL(process.argv[2])));
+  const recipe = formIdentityText([]);
+  assert.equal(recipe.owner.identity, true);
+  assert.equal(recipe.getText(), "");
+  assert.equal(recipe.invalid(), false);
+  assert.equal(recipe.submit(), undefined);
+  recipe.onTextChange("not-a-uuid");
+  assert.equal(recipe.getText(), "not-a-uuid");
+  assert.equal(recipe.invalid(), true, "non-empty malformed text must flag an input error");
+  assert.equal(recipe.submit(), undefined, "malformed text must block submit");
+  recipe.onTextChange(nilID);
+  assert.equal(recipe.getText(), nilID);
+  assert.equal(recipe.invalid(), true, "nil UUID must flag an input error");
+  assert.equal(recipe.submit(), undefined, "nil UUID must block submit");
+  recipe.onTextChange(validLower);
+  assert.equal(recipe.getText(), validLower);
+  assert.equal(recipe.invalid(), false);
+  assert.deepEqual(recipe.submit(), { owner_id: validLower });
+  recipe.onTextChange("");
+  assert.equal(recipe.getText(), "");
+  assert.equal(recipe.invalid(), false);
+  assert.equal(recipe.submit(), undefined);
+  // Unset ID field round-trip: starts undefined, writes ID on valid text, clears on invalid/empty.
+  const idForm = form();
+  let idDraft = { owner_ids: [validLower], owner_map: {} };
+  const idChange = (next) => { idDraft = next(idDraft); };
+  const idBound = idForm.bind(op, idDraft, idChange, [], (each) => {
+    each.owner_ids.at(0);
+    each.owner_map.at("lead");
+  });
+  assert.equal(idBound.owner_id.value, undefined);
+  assert.equal(idBound.owner_id.identity, true);
+  idBound.owner_id.onChange(sdk.fieldIdentity(idBound.owner_id, "partial"));
+  assert.equal(idDraft.owner_id, undefined);
+  idBound.owner_id.onChange(sdk.fieldIdentity(idBound.owner_id, nilID));
+  assert.equal(idDraft.owner_id, undefined);
+  idBound.owner_id.onChange(sdk.fieldIdentity(idBound.owner_id, validLower));
+  assert.equal(idDraft.owner_id, validLower);
+  idBound.owner_id.onChange(sdk.fieldIdentity(idBound.owner_id, ""));
+  assert.equal(idDraft.owner_id, undefined);
+  // Row of list of IDs and map entry of IDs write valid IDs through onChange.
+  const nextRowID = sdk.fieldIdentity(idBound.owner_ids.at(0), validUpper);
+  assert.equal(nextRowID, validUpper);
+  idBound.owner_ids.at(0).onChange(nextRowID);
+  assert.deepEqual(idDraft.owner_ids, [validUpper]);
+  const nextMapID = sdk.fieldIdentity(idBound.owner_map.at("lead"), validLower);
+  assert.equal(nextMapID, validLower);
+  idBound.owner_map.at("lead").onChange(nextMapID);
+  assert.deepEqual(idDraft.owner_map, { lead: validLower });
+  // Forged objects not created by fieldBinder throw ContractError("form_binding").
+  for (const forgedBinding of [{ identity: true }, {}, null, undefined]) {
+    assert.throws(
+      () => sdk.fieldIdentity(forgedBinding, validLower),
+      (err) => err instanceof sdk.ContractError && err.issues[0]?.code === "form_binding",
+    );
+  }
+}

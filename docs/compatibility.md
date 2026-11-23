@@ -5,6 +5,28 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+<a id="model-id-form-inputs"></a>
+## Model ID form inputs — v0.50.3
+
+Generated client form bindings now identify `Identity<…>` fields and turn
+entered text into that field's branded `Identity<…>` without a cast or owner
+string ([form guide](guides/client-forms.md#recipe-form-identity-text)). This
+release is additive: `FieldBinding` gains the read-only `identity: boolean`
+member — true when the field's generated TypeScript value is an `Identity<…>`
+(a `model.ID[T]` or any other scalar Go declares with the UUID format that the
+generator brands the same way, such as `mfa.EnrollmentID[M]`, including a row
+of a list or a map entry; false for models keyed by an integer or plain string,
+for whole collections, and for UUID-format enums with declared cases) — and
+every client entry exports `fieldIdentity(binding, text)` returning
+`Extract<V, Identity<string>> | undefined` for text `newIdentity` accepts (a
+canonical hyphenated UUID in any letter case, never the nil ID, which the JSON
+wire contract accepts but `fieldIdentity` and the URL, form and multipart
+codecs deliberately reject). Existing forms compile unchanged. Manifest version
+12, wire formats, stored data and the deployment protocol do not change.
+Reserved schema names do not change (`fieldIdentity` is lowercase and no new
+capitalized module-scope declaration is added, so no application schema is
+renamed).
+
 <a id="unset-nested-form-fields"></a>
 ## Unset nested form fields — v0.50.2
 

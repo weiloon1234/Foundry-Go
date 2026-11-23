@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.50.3 — 2026-11-23
+
+### Bind a model ID that the user enters as text
+
+Previously, a form that let the user type or paste a `model.ID[T]` could not
+bind that field through `fieldBinder` without a cast or manually naming the
+schema handle (`contractValue(schemas.ReviewID, draft.review_id)` or
+`newIdentity(owner, text)`), because text inputs edit plain `string` while the
+request field expects a branded `Identity<…>`. Now `FieldBinding` exposes
+`identity: boolean` from the generated Go descriptor (true for any field whose
+generated TypeScript value is an `Identity<…>`: a `model.ID[T]` or any other
+UUID-format scalar branded the same way such as `mfa.EnrollmentID[M]`,
+including list rows and map entries, and false for non-UUID model keys, whole
+collections and UUID-format enums), and client entries export
+`fieldIdentity(binding, text)` returning
+`Extract<V, Identity<string>> | undefined` for text `newIdentity` accepts
+(canonical hyphenated UUID in any letter case, never the nil ID, which the JSON
+wire contract accepts but `fieldIdentity` and the URL, form and multipart
+codecs deliberately reject) — with no cast and no owner string. Additive
+change: manifest version 12, reserved schema names, wire formats, stored data
+and deployment do not change.
+
+```ts
+// before: unbound plain string draft + explicit schema handle on submit
+type TakedownDraft = Omit<TakedownCreateRequest, "review_id"> & { review_id: string };
+const body: TakedownCreateRequest = {
+  ...draft,
+  review_id: contractValue(schemas.ReviewID, draft.review_id),
+};
+
+// after: bound unset ID field; the control keeps raw text and writes the branded ID when valid
+type TakedownDraft = Required<Omit<FormValues<TakedownCreateRequest>, "review_id">> & {
+  readonly review_id?: TakedownCreateRequest["review_id"] | undefined;
+};
+const f = useFields(operation("adminReviewsTakedownCreate"), draft, setDraft, issues);
+// inside the text control:
+if (f.review_id.identity) f.review_id.onChange(fieldIdentity(f.review_id, nextText));
+```
+
 ## v0.50.2 — 2026-11-23
 
 ### Form values may leave nested and row leaves unset

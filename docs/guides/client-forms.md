@@ -5,6 +5,7 @@
 
 - Bind fields: [Form values](#recipe-form-values)
 - Limits, labels and required: [Field facts](#recipe-field-facts)
+- Enter a model ID as text: [An ID entered as text](#recipe-form-identity-text)
 - Preserve presence: [Omitted, null and empty](#recipe-form-presence)
 - Submit: [Outcomes and issues](#recipe-form-outcomes)
 - Public surface: [Reference](#recipe-form-reference)
@@ -182,10 +183,15 @@ query and header parameters are not bound: a list filter, search box or pager
 is an interface-only control with its own value.
 
 A `FieldBinding<V>` carries `name`, `label`, `hint`, `required`, `limits`,
-`checks`, `kind`, `numeric`, `temporal`, `row`, `value`, `onChange` and
-`issues`. `temporal` tells which time Go reads from text (`date`, `time`,
+`checks`, `kind`, `numeric`, `temporal`, `identity`, `row`, `value`, `onChange`
+and `issues`. `temporal` tells which time Go reads from text (`date`, `time`,
 `date_time` for an instant, `local_date_time` for a wall clock), so a picker
-takes its kind from Go; `row` is true for a row of a list. Client entries
+takes its kind from Go; `identity` is true when the field's generated
+TypeScript value is an `Identity<…>` — a `model.ID[T]` or any other scalar Go
+declares with the UUID format that the generator brands the same way (such as
+`mfa.EnrollmentID[M]`), including a row of a list or a map entry (models keyed
+by an integer or plain string are not one); `row` is true for a row of a list.
+Client entries
 export it as a type only, and it has a private member, which TypeScript
 compares nominally: an object literal, a spread of a binding, a copy with one
 member replaced and the class value (`new FieldBinding()`,
@@ -369,6 +375,54 @@ and keeps the text as typed. An upload's chooser, the file name shown and the
 bound value agree: the name is the bound upload's, and a cleared value clears
 the chooser.
 
+<a id="recipe-form-identity-text"></a>
+## An ID entered as text
+
+When a form lets the user type or paste an ID whose generated TypeScript value
+is an `Identity<…>` (a `model.ID[T]` or any other UUID-format scalar branded
+the same way, such as `mfa.EnrollmentID[M]`) instead of picking from loaded
+options, keep the field as `ID | undefined` in the form's values. The control
+reads `field.identity`, holds the raw text the user is typing in its own state,
+and writes `fieldIdentity(field, next)` — the field's branded ID when the text
+matches what `newIdentity` accepts (canonical hyphenated UUID in any letter
+case, never the nil ID `00000000-0000-0000-0000-000000000000`), or `undefined`
+otherwise — with no cast and no owner string. Non-empty text that is not a
+valid ID (`text !== "" && fieldIdentity(field, text) === undefined`) is an
+input error that the control displays and that blocks submit, so an optional or
+required form never silently omits or sends something the user did not see.
+Narrow `values.<field>` before placing it in a required request field; Go
+remains the judge of whether the ID exists or is authorized.
+
+[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/limits/recipes.ts).
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/limits/recipes.ts#form-identity-text -->
+```typescript
+export function formIdentityText(issues: readonly sdk.Issue[]) {
+  type FormBody = sdk.Operations["itemsEcho"]["request"]["body"];
+  type Draft = { readonly owner_id?: FormBody["owner_id"] | undefined };
+  let values: Draft = {};
+  const update: sdk.FormUpdate<Draft> = (next) => { values = next(values); };
+  const form = sdk.formFieldState();
+  const fields = sdk.fieldBinder((key) => key, () => form);
+  const owner = fields(sdk.operation("itemsEcho"), values, update, issues).owner_id;
+  sdk.commitFormFields(form);
+  // The control keeps the raw text the user is typing, writes the branded ID
+  // when valid (or undefined otherwise), and treats non-empty invalid text as
+  // an input error that blocks submit rather than silently omitting it.
+  let text = owner.value ?? "";
+  const invalid = (): boolean => owner.identity && text !== "" && sdk.fieldIdentity(owner, text) === undefined;
+  const onTextChange = (next: string) => {
+    text = next;
+    if (owner.identity) owner.onChange(sdk.fieldIdentity(owner, next));
+  };
+  const submit = (): { readonly owner_id: FormBody["owner_id"] } | undefined => {
+    if (invalid() || values.owner_id === undefined) return undefined;
+    return { owner_id: values.owner_id };
+  };
+  return { owner, getText: () => text, invalid, onTextChange, submit };
+}
+```
+
 <a id="recipe-form-presence"></a>
 ## Omitted, null and empty
 
@@ -458,6 +512,19 @@ Every generated client entry exports the form-binding values and types below:
 - `outOfRange(limits, value)` — compares a number or exact decimal string
   (matching `decimalPlaces`) against `limits.min` and `limits.max` without
   rounding, returning `"min"`, `"max"`, or `undefined`.
+- `fieldIdentity(binding, text)` — returns `text` typed as the ID member of
+  `binding`'s value (`Extract<V, Identity<string>> | undefined`) when
+  `binding.identity` is true and `text` is what `newIdentity` accepts (a
+  canonical hyphenated UUID in any letter case, never the nil ID
+  `00000000-0000-0000-0000-000000000000`), or `undefined` otherwise (including
+  for a real binding whose field is not an ID). The JSON wire contract also
+  accepts the nil ID, but `fieldIdentity` deliberately rejects it (a nil ID is
+  never a real row, and the URL, form and multipart codecs reject it too). If a
+  draft narrows an ID field so its TypeScript type cannot hold an `Identity`
+  (such as `undefined` alone), the static result is `undefined` while
+  `binding.identity` remains true and the run-time result still follows the
+  descriptor. Throws `ContractError` (`"form_binding"`) if `binding` was not
+  created by `fieldBinder`.
 
 ### Types
 
@@ -471,6 +538,7 @@ Every generated client entry exports the form-binding values and types below:
   - `kind: PresentationKind | undefined` — Go's presentation kind (`password`, `email`, `url`, `multiline`, etc.).
   - `numeric: "integer" | "float" | "decimal" | undefined` — how Go reads a numeric field.
   - `temporal: "date" | "time" | "date_time" | "local_date_time" | undefined` — which temporal format Go reads from text, so date/time pickers take their kind from Go.
+  - `identity: boolean` — true when the field's generated TypeScript value is an `Identity<…>` (a `model.ID[T]` or any other scalar Go declares with the UUID format branded the same way, such as `mfa.EnrollmentID[M]`, including a row of a list or a map entry; false for models keyed by an integer or plain string, whole collections, and UUID-format enums with declared cases).
   - `row: boolean` — true when the binding is a list row created with `.at(i)`, which a control never clears (the form removes the row instead).
   - `value: V` — the field's current form value.
   - `onChange: (value: V) => void` — updates the field through the form's committed update function.

@@ -138,8 +138,13 @@ func TestSurfacesPublishPortalEntriesBesideSharedRuntimeModules(t *testing.T) {
 	if !strings.Contains(runtimeModule, "export const fetchTransport: HTTPTransport") {
 		t.Fatal("runtime missing fetchTransport")
 	}
-	if !strings.Contains(runtimeModule, "export function newIdentity") || !strings.Contains(runtimeModule, "export function enumLabel") {
-		t.Fatal("runtime missing newIdentity or enumLabel")
+	if !strings.Contains(runtimeModule, "export function newIdentity") || !strings.Contains(runtimeModule, "export function enumLabel") || !strings.Contains(runtimeModule, "export function fieldIdentity") || !strings.Contains(runtimeModule, "declare readonly identity: boolean;") {
+		t.Fatal("runtime missing newIdentity, enumLabel, fieldIdentity or FieldBinding.identity")
+	}
+	for name, entry := range map[string]string{"full": full, "admin": admin, "web": web} {
+		if !strings.Contains(entry, "fieldIdentity") {
+			t.Fatal(name, "missing fieldIdentity re-export")
+		}
 	}
 	if !strings.Contains(admin, "export const catalogLocales: { readonly default: Locale; readonly supported: readonly Locale[] } | undefined = undefined;") {
 		t.Fatal("an entry without a catalog exports locales")

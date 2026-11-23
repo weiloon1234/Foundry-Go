@@ -82,10 +82,39 @@ function buildCreateLineNarrowed(row: UnsetLineCreateDraft["lines"][number]): Li
   return { item_id: row.item_id, amount: row.amount };
 }
 
+// Model ID entered as text on real generated Go DTOs (model.ID[models.User]
+// and model.ID[models.Order]): unset ID field, row of a list of IDs, non-ID
+// field, and cross-model rejection.
+type UnsetOwnerDraft = { readonly owner_id?: sdk.UserID | undefined };
+const unsetOwnerDraft: UnsetOwnerDraft = {};
+const unsetOwnerBound = bindCreate(createOp, unsetOwnerDraft, () => {}, []);
+const unsetOwnerField: sdk.FieldBinding<sdk.UserID | undefined> = unsetOwnerBound.owner_id;
+const parsedUserID: sdk.UserID | undefined = sdk.fieldIdentity(unsetOwnerField, "0193fd8c-2075-7000-8000-000000000001");
+unsetOwnerField.onChange(parsedUserID);
+const parsedRequiredRowUserID: sdk.UserID | undefined = sdk.fieldIdentity(c.required_ids.at(0), "0193fd8c-2075-7000-8000-000000000002");
+if (parsedRequiredRowUserID !== undefined) {
+  c.required_ids.at(0).onChange(parsedRequiredRowUserID);
+  const reqOwner: CreateBody["owner_id"] = parsedRequiredRowUserID;
+  void reqOwner;
+}
+const parsedOrderID: sdk.OrderID | undefined = sdk.fieldIdentity(unsetLines.lines.at(0).item_id, "0193fd8c-2075-7000-8000-000000000003");
+unsetLines.lines.at(0).item_id.onChange(parsedOrderID);
+// Non-ID fields return undefined from fieldIdentity, unassignable to their value.
+// @ts-expect-error A non-ID string field cannot accept fieldIdentity's result.
+c.contact.onChange(sdk.fieldIdentity(c.contact, "0193fd8c-2075-7000-8000-000000000001"));
+// @ts-expect-error A list of IDs itself is not a single ID binding.
+c.required_ids.onChange(sdk.fieldIdentity(c.required_ids, "0193fd8c-2075-7000-8000-000000000001"));
+// Cross-model rejection: UserID cannot be written to OrderID, nor OrderID to UserID.
+// @ts-expect-error UserID | undefined is not assignable to OrderID | undefined.
+unsetLines.lines.at(0).item_id.onChange(parsedUserID);
+// @ts-expect-error OrderID | undefined is not assignable to UserID | undefined.
+unsetOwnerField.onChange(parsedOrderID);
+
 void [
   owner, omitzeroID, password, totp, recovery, resetToken, contact, assetKey, currency,
   sku, optSku, opaqueNote, requiredRowID, nullableRowID, lineItemID, lineAmount, lineOptSku,
   patchOwner, patchOpt, patchNull, patchPtr, patchForced, patchSku,
   queryAmount, querySku, queryOptAmount,
   unsetLineItemID, strictLineItemID, strictLineAmount, widenedLineAmount, buildCreateLineUnnarrowed, buildCreateLineNarrowed,
+  unsetOwnerField, parsedUserID, parsedRequiredRowUserID, parsedOrderID,
 ];

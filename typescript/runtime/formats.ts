@@ -124,10 +124,13 @@ function intervalValid(input: string): boolean {
 }
 const goSpacePattern = /[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/;
 function trimGoSpace(text: string): string { return text.replace(/^[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g, ""); }
+function identityValid(value: unknown): value is string {
+  return typeof value === "string" && uuidPattern.test(value) && value !== "00000000-0000-0000-0000-000000000000";
+}
 /** Brand a string as a model Identity, or generate a fresh UUID v4 if omitted. */
 export function newIdentity<Owner extends string>(_owner: Owner, id?: string): Identity<Owner> {
   const value = id ?? (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "");
-  if (!value || !uuidPattern.test(value) || value === "00000000-0000-0000-0000-000000000000") reject("", "invalid_identity");
+  if (!identityValid(value)) reject("", "invalid_identity");
   return value as Identity<Owner>;
 }
 /** Check whether a string is a valid BCP 47 canonical locale identifier. */

@@ -773,6 +773,7 @@ function bindField(context: BinderContext, descriptor: BinderDescriptor, path: s
   const numeric = schema?.kind === "integer" ? "integer" : schema?.kind === "number" ? "float" : schema?.kind === "string" && schema.format === "decimal" ? "decimal" : undefined;
   const format = schema?.kind === "string" ? schema.format : undefined;
   const temporal = format === "date" || format === "time" || format === "date_time" || format === "local_date_time" ? format : undefined;
+  const isIdentity = !descriptor.repeated && format === "uuid" && !schema?.cases?.length;
   // Edited means changed since the form first bound the field, however it
   // changed: by its control, another field's listener or the update function.
   // A value changed back is not edited, so its bounds wait again.
@@ -808,7 +809,7 @@ function bindField(context: BinderContext, descriptor: BinderDescriptor, path: s
     },
   } : undefined;
   const binding = createFieldBinding<unknown>({
-    name, label: text, hint, required, limits: descriptor.limits, checks, kind, numeric, temporal, row, value,
+    name, label: text, hint, required, limits: descriptor.limits, checks, kind, numeric, temporal, identity: isIdentity, row, value,
     onChange: next => write(() => next),
     issues: shown,
   }, entries);

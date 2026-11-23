@@ -87,6 +87,10 @@ func TestClientFieldLimitsAndBindings(t *testing.T) {
 			{Name: "owner_id", Type: "client.OwnerID", Required: true, Presentation: label("fields.prefs_owner_id")},
 		}},
 		contract.Type{ID: "client.OwnerID", Kind: contract.StringKind, Format: contract.UUIDFormat},
+		contract.Type{ID: "client.TargetID", Kind: contract.StringKind, Format: contract.UUIDFormat},
+		contract.Type{ID: "client.OwnerIDs", Kind: contract.ArrayKind, Element: "client.OwnerID"},
+		contract.Type{ID: "client.OwnerMap", Kind: contract.MapKind, Element: "client.OwnerID", Nullable: true},
+		contract.Type{ID: "client.FixedUUID", Kind: contract.StringKind, Format: contract.UUIDFormat, Cases: []json.RawMessage{json.RawMessage(`"0193fd8c-2075-7000-8000-000000000009"`)}},
 		contract.Type{ID: "client.OptionalOwnerID", Kind: contract.AliasKind, Element: "client.OwnerID"},
 		contract.Type{ID: "client.NullableOwnerID", Kind: contract.AliasKind, Element: "client.OwnerID", Nullable: true},
 		contract.Type{ID: "client.PointerOwnerID", Kind: contract.AliasKind, Element: "client.OwnerID", Nullable: true},
@@ -166,6 +170,10 @@ func TestClientFieldLimitsAndBindings(t *testing.T) {
 			{Name: "pin", Type: "string", Required: true, Presentation: label("fields.pin")},
 			{Name: "starts", Type: "client.Instant", Required: true, Presentation: label("fields.starts")},
 			{Name: "owner_id", Type: "client.OwnerID", Required: true, Presentation: label("fields.owner_id")},
+			{Name: "target_id", Type: "client.TargetID", Presentation: label("fields.target_id")},
+			{Name: "owner_ids", Type: "client.OwnerIDs", Required: true, Presentation: label("fields.owner_ids")},
+			{Name: "owner_map", Type: "client.OwnerMap", Presentation: label("fields.owner_map")},
+			{Name: "fixed_uuid", Type: "client.FixedUUID", Presentation: label("fields.fixed_uuid")},
 			{Name: "optional_owner_id", Type: "client.OptionalOwnerID", Presentation: label("fields.optional_owner_id")},
 			{Name: "nullable_owner_id", Type: "client.NullableOwnerID", Required: true, Presentation: label("fields.nullable_owner_id")},
 			{Name: "pointer_owner_id", Type: "client.PointerOwnerID", Presentation: label("fields.pointer_owner_id")},
@@ -245,7 +253,7 @@ func TestClientFieldLimitsAndBindings(t *testing.T) {
 	}
 	for i := range doc.HTTP {
 		// An upload part a form binds before a file is chosen, repeated
-		// uploads, repeated text and a JSON part.
+		// uploads, repeated text, repeated model IDs and a JSON part.
 		if doc.HTTP[i].Name == "uploadsProfile" && doc.HTTP[i].Body != nil {
 			for j := range doc.HTTP[i].Body.Parts {
 				switch name := doc.HTTP[i].Body.Parts[j].Name; name {
@@ -257,6 +265,16 @@ func TestClientFieldLimitsAndBindings(t *testing.T) {
 					found++
 				}
 			}
+			doc.HTTP[i].Body.Parts = append(doc.HTTP[i].Body.Parts, manifest.Part{
+				Parameter: manifest.Parameter{
+					Name:         "reviewer_ids[]",
+					Type:         "client.OwnerID",
+					Syntax:       foundryhttp.ModelIDURLSyntax,
+					Repeated:     true,
+					Presentation: label("fields.reviewer_ids"),
+				},
+				Kind: foundryhttp.MultipartText,
+			})
 		}
 		// An update whose body has another shape than the create's: the
 		// create holds the account nested, the update sends it flat.

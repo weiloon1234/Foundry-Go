@@ -93,6 +93,7 @@ assert.match(genId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 const customId = sdk.newIdentity(sdk.schemas.Models_UserID, "11111111-1111-4111-8111-111111111111");
 assert.equal(customId, "11111111-1111-4111-8111-111111111111");
 assert.throws(() => sdk.newIdentity(sdk.schemas.Models_UserID, "not-a-uuid"), sdk.ContractError);
+assert.throws(() => sdk.newIdentity(sdk.schemas.Models_UserID, "00000000-0000-0000-0000-000000000000"), sdk.ContractError);
 // S8: ErrorCode
 assert.equal(sdk.ErrorCode.ValidationFailed, "validation_failed");
 assert.equal(sdk.ErrorCode.NotFound, "not_found");

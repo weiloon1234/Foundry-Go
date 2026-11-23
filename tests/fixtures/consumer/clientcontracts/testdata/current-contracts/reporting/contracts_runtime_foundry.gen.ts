@@ -446,10 +446,13 @@ function intervalValid(input: string): boolean {
 }
 const goSpacePattern = /[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/;
 function trimGoSpace(text: string): string { return text.replace(/^[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g, ""); }
+function identityValid(value: unknown): value is string {
+  return typeof value === "string" && uuidPattern.test(value) && value !== "00000000-0000-0000-0000-000000000000";
+}
 /** Brand a string as a model Identity, or generate a fresh UUID v4 if omitted. */
 export function newIdentity<Owner extends string>(_owner: Owner, id?: string): Identity<Owner> {
   const value = id ?? (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "");
-  if (!value || !uuidPattern.test(value) || value === "00000000-0000-0000-0000-000000000000") reject("", "invalid_identity");
+  if (!identityValid(value)) reject("", "invalid_identity");
   return value as Identity<Owner>;
 }
 /** Check whether a string is a valid BCP 47 canonical locale identifier. */
@@ -802,6 +805,7 @@ interface FieldBindingInit<V> {
   readonly kind: PresentationKind | undefined;
   readonly numeric: "integer" | "float" | "decimal" | undefined;
   readonly temporal: "date" | "time" | "date_time" | "local_date_time" | undefined;
+  readonly identity: boolean;
   readonly row: boolean;
   readonly value: V;
   readonly onChange: (value: V) => void;
@@ -857,6 +861,15 @@ class FieldBinding<V> {
    */
   declare readonly temporal: "date" | "time" | "date_time" | "local_date_time" | undefined;
   /**
+   * true when the field's generated TypeScript value is an `Identity<…>`: a
+   * `model.ID[T]` or any other scalar Go declares with the UUID format that
+   * the generator brands the same way (such as `mfa.EnrollmentID[M]`),
+   * including a row of a list or a map entry. False for models keyed by an
+   * integer or plain string, for whole collections, and for UUID-format enums
+   * with declared cases.
+   */
+  declare readonly identity: boolean;
+  /**
    * a row of a list, bound with at(i): the list holds a value at its
    * position, so a control never clears it; the form removes the row instead.
    */
@@ -868,6 +881,24 @@ class FieldBinding<V> {
   /** issues at this field or below it, else its collection's when it has none. */
   declare readonly issues: readonly Issue[];
   private constructor() {}
+}
+/**
+ * Turns entered text into the field's branded `Identity<…>` when
+ * `binding.identity` is true and `text` is what `newIdentity` accepts: a
+ * canonical hyphenated UUID in any letter case, and never the nil ID
+ * (`00000000-0000-0000-0000-000000000000`). The JSON wire contract also
+ * accepts the nil ID, but this function deliberately rejects it (a nil ID is
+ * never a real row, and the URL, form and multipart codecs reject it too).
+ * Returns `undefined` for non-ID bindings or invalid text; if a caller's
+ * values type narrows an ID field so it cannot hold an `Identity`, the static
+ * result is `undefined` while the run-time result still follows the descriptor.
+ * Throws `ContractError` (`"form_binding"`) when `binding` was not created by
+ * `fieldBinder`.
+ */
+export function fieldIdentity<V>(binding: FieldBinding<V>, text: string): Extract<V, Identity<string>> | undefined {
+  if (!(binding instanceof FieldBinding)) reject("", "form_binding");
+  if (!binding.identity || !identityValid(text)) return undefined;
+  return text as Extract<V, Identity<string>>;
 }
 /**
  * Which bound of `limits` a number breaks, compared exactly (a decimal's text
