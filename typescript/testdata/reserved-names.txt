@@ -44,6 +44,8 @@ DescriptorReference
 Discriminator
 Document
 DownloadTableId
+DraftFields
+DraftValue
 Element
 ElementValue
 EntryValue

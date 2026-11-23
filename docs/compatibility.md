@@ -5,6 +5,23 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+<a id="unset-nested-form-fields"></a>
+## Unset nested form fields — v0.50.2
+
+The generated `fieldBinder` now accepts form values that leave any leaf unset
+(`undefined` or omitted) at any depth — inside a nested object or a row object —
+as well as any absent or `undefined` nested object, binding leaves that may be
+unset as `FieldBinding<V | undefined>` while keeping `FieldBinding<V>` for
+leaves the form's values type always holds
+([form guide](guides/client-forms.md#recipe-form-values)). Types only widen:
+existing forms and `Required<FormValues<T>>` drafts compile unchanged, and
+request building still rejects an unset value flowing into a required request
+field. Manifest version 12, wire formats, stored data and the deployment
+protocol do not change. One generated name can change: the runtime's helper
+types `DraftFields` and `DraftValue` are added to the reserved schema name
+list, so an application schema named `DraftFields` or `DraftValue` is generated
+under its package-qualified name after regeneration.
+
 <a id="required-wire-types-and-decimal-precision"></a>
 ## Required wire types and decimal precision — manifest 12, v0.50.1
 

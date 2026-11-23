@@ -101,7 +101,7 @@ type EntryValue<V> = ElementValue<V> extends string ? ElementValue<V> : ElementV
  */
 type BoundEntries<T, V, Entry> = NonNullable<T> extends readonly (infer E)[]
   ? undefined extends V ? {} : { at(index: number): BoundField<E, V extends readonly (infer R)[] ? R : never, Entry> }
-  : { at(key: MapKeys<T>): FieldBinding<EntryValue<V>> };
+  : [NonNullable<V>] extends [never] ? {} : { at(key: MapKeys<T>): FieldBinding<EntryValue<V>> };
 /**
  * A field binds as Go declares it (L, its node in OperationBodyLabels): a
  * nested object as the bindings of the fields below it; a labelled list or map
@@ -112,16 +112,20 @@ type BoundEntries<T, V, Entry> = NonNullable<T> extends readonly (infer E)[]
 export type BoundField<T, V, L> = L extends readonly [infer Entry] ? FieldBinding<V> & BoundEntries<T, V, Entry>
   : L extends readonly (infer Entry)[] ? BoundEntries<T, V, Entry>
   : L extends true ? FieldBinding<V> : BoundFields<NonNullable<T>, V, L>;
-/** One binding for every field that both the form's values and the request's label tree declare. */
-export type BoundFields<T, V, L> = { readonly [N in Extract<keyof V, keyof L>]: BoundField<T[N & keyof T], V[N], L[N]> };
+/** One binding for every field that both the form's values and the request's label tree declare. When an object itself may be undefined in the values, each field below it may be undefined too. */
+export type BoundFields<T, V, L, U = undefined extends V ? undefined : never> = [NonNullable<V>] extends [never] ? {} : { readonly [N in Extract<keyof NonNullable<V>, keyof L>]: BoundField<T[N & keyof T], NonNullable<V>[N] | U, L[N]> };
 /** A form's value for one request field: its control value, a nested object's values (each field as the request declares it), a list's rows the same way. */
 type FormValue<T> = NonNullable<T> extends readonly (infer E)[] ? readonly FormValue<E>[] : [ObjectFields<T>] extends [never] ? NonNullable<T> : { readonly [K in keyof NonNullable<T> as K extends string ? K : never]: FormValue<NonNullable<T>[K]> };
 /** A form's values for an object's fields: each held as its control value; a form may leave a field out until it has one. */
 export type FormValues<T> = { readonly [K in ObjectFields<T>]?: FormValue<NonNullable<T>[K]> };
+/** A draft value for one request field accepted by fieldBinder: any nested or row object leaf may be omitted or undefined. */
+type DraftValue<T> = NonNullable<T> extends readonly (infer E)[] ? readonly DraftValue<E>[] : [ObjectFields<T>] extends [never] ? NonNullable<T> : DraftFields<T>;
+/** Draft values for an object's fields: any field may be omitted or undefined. */
+type DraftFields<T> = { readonly [K in ObjectFields<T>]?: DraftValue<NonNullable<T>[K]> | undefined };
 type BinderBody<K> = K extends keyof Operations ? OperationInputs[K] extends { readonly body: infer Body } ? Body : never : never;
 type BinderLabels<K> = K extends keyof OperationBodyLabels ? OperationBodyLabels[K] : {};
-/** Values that fit the request body of every operation in K at once. */
-type BinderValues<K> = K extends readonly [infer First, ...infer Rest] ? FormValues<BinderBody<First>> & BinderValues<Rest> : unknown;
+/** Values that fit the request body of every operation in K at once; any leaf or nested object may be left unset at any depth. */
+type BinderValues<K> = K extends readonly [infer First, ...infer Rest] ? DraftFields<BinderBody<First>> & BinderValues<Rest> : unknown;
 /** receives a function from the current values to the next; a state setter that accepts one fits. */
 export type FormUpdate<V> = (updater: (values: V) => V) => void;
 /**
@@ -133,7 +137,7 @@ export type FormUpdate<V> = (updater: (values: V) => V) => void;
  * label and issues are unchanged, whichever update function the call passes.
  */
 export interface FieldBinder {
-  <K extends keyof Operations, V extends FormValues<BinderBody<K>>>(root: OperationDescriptor<K>, values: V, update: FormUpdate<V>, issues: readonly Issue[]): BoundFields<BinderBody<K>, V, BinderLabels<K>>;
+  <K extends keyof Operations, V extends DraftFields<BinderBody<K>>>(root: OperationDescriptor<K>, values: V, update: FormUpdate<V>, issues: readonly Issue[]): BoundFields<BinderBody<K>, V, BinderLabels<K>>;
   <K extends readonly [keyof Operations, keyof Operations, ...(keyof Operations)[]], V extends BinderValues<K>>(roots: { readonly [I in keyof K]: OperationDescriptor<K[I]> }, values: V, update: FormUpdate<V>, issues: readonly Issue[]): { readonly [I in keyof K]: BoundFields<BinderBody<K[I]>, V, BinderLabels<K[I]>> };
 }
 
@@ -740,8 +744,9 @@ function bindGroup(context: BinderContext, parent: BinderRoot | BinderDescriptor
   const bound: Record<string, unknown> = Object.create(null);
   for (const name of bindableNames(parent, active)) {
     const fieldWrite: BinderWrite = transform => write(old => {
-      const before = old !== null && typeof old === "object" ? (old as Readonly<Record<string, unknown>>)[name] : undefined, after = transform(before);
-      return Object.is(after, before) ? old : { ...(old as object | undefined), [name]: after };
+      const record = old !== null && typeof old === "object" ? old as Readonly<Record<string, unknown>> : undefined;
+      const before = record && Object.hasOwn(record, name) ? record[name] : undefined, after = transform(before);
+      return Object.is(after, before) ? old : { ...record, [name]: after };
     });
     bound[name] = bindValue(context, binderField(parent, name, () => describe(name)), pointer(path, name), Object.hasOwn(current, name) ? current[name] : undefined, fieldWrite, active, false);
   }
@@ -773,10 +778,16 @@ function bindRow(context: BinderContext, descriptor: BinderDescriptor, path: str
   const child = entryDescriptor(context, descriptor, path, index);
   const row: unknown = list?.[index];
   const rowWrite: BinderWrite = transform => write(current => {
-    if (!Array.isArray(current)) return current === undefined && index === 0 ? [transform(undefined)] : current;
+    if (!Array.isArray(current)) {
+      if (current !== undefined || index !== 0) return current;
+      const after = transform(undefined);
+      return Object.is(after, undefined) ? current : [after];
+    }
     if (index >= current.length) return current;
+    const after = transform(current[index]);
+    if (Object.is(after, current[index])) return current;
     const copy = [...current];
-    copy[index] = transform(current[index]);
+    copy[index] = after;
     return copy;
   });
   return bindValue(context, child, pointer(path, String(index)), row === undefined && child.schema?.kind === "string" ? "" : row, rowWrite, active, true);
@@ -822,7 +833,11 @@ function bindField(context: BinderContext, descriptor: BinderDescriptor, path: s
       const child = entryDescriptor(now, descriptor, path, entry);
       const current = value !== null && typeof value === "object" && Object.hasOwn(value, entry) ? (value as Readonly<Record<string, unknown>>)[entry] : undefined;
       // An entry is written into the latest map, never a stale copy.
-      const entryWrite: BinderWrite = transform => write(current => ({ ...(current as object | undefined), [entry]: transform(current !== null && typeof current === "object" ? (current as Readonly<Record<string, unknown>>)[entry] : undefined) }));
+      const entryWrite: BinderWrite = transform => write(current => {
+        const record = current !== null && typeof current === "object" ? current as Readonly<Record<string, unknown>> : undefined;
+        const before = record && Object.hasOwn(record, entry) ? record[entry] : undefined, after = transform(before);
+        return Object.is(after, before) ? current : { ...record, [entry]: after };
+      });
       return bindField(now, child, pointer(path, entry), current === undefined && child.schema?.kind === "string" ? "" : current, entryWrite, own, inner, false);
     },
   } : undefined;

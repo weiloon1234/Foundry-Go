@@ -601,6 +601,220 @@ g2.settings.caption.onChange("Hello");
 assert.deepEqual(gallery.settings, { caption: "Hello" });
 assert.deepEqual(gallery.photos, [replacement], "each write keeps the others");
 
+// Unset nested leaves, unset row fields, and absent optional nested objects:
+// reading yields undefined, writes immutably create missing parent objects
+// while preserving siblings, no-op writes preserve object/array references,
+// and edited state, issues by position, stale lists and identity keep working.
+{
+  const ownerA = "0193fd8c-2075-7000-8000-000000000010";
+  const ownerB = "0193fd8c-2075-7000-8000-000000000011";
+  const nestedForm = form();
+  const initialDraft = {
+    text: "keep",
+    rows: [{ name: undefined, slots: [{}] }],
+  };
+  let draft = initialDraft;
+  const change = (next) => { draft = next(draft); };
+  const initialIssues = [
+    { path: "/body/prefs/owner_id", code: "required", message: "choose owner" },
+    { path: "/body/rows/0/name", code: "required", message: "enter name" },
+    { path: "/body/rows/0/slots/0/opens", code: "min", message: "too short" },
+  ];
+  const bound1 = nestedForm.bind(op, draft, change, initialIssues, (b) => {
+    b.rows.at(0).name;
+    b.rows.at(0).slots.at(0).opens;
+  });
+  // Absent optional nested object binds its leaves as undefined without throwing.
+  assert.equal(bound1.prefs.color.value, undefined);
+  assert.equal(bound1.prefs.owner_id.value, undefined);
+  assert.deepEqual(bound1.prefs.owner_id.issues.map(code), ["required"]);
+  assert.deepEqual(plain(bound1.prefs.color.checks.limits), {}, "absent nested leaf starts unedited");
+  // Unset row leaves read as undefined and receive positional issues.
+  assert.equal(bound1.rows.at(0).name.value, undefined);
+  assert.equal(bound1.rows.at(0).slots.at(0).opens.value, undefined);
+  assert.deepEqual(bound1.rows.at(0).name.issues.map(code), ["required"]);
+  assert.deepEqual(bound1.rows.at(0).slots.at(0).opens.issues.map(code), ["min"]);
+  assert.deepEqual(plain(bound1.rows.at(0).name.checks.limits), {}, "unset row leaf starts unedited");
+  assert.deepEqual(plain(bound1.rows.at(0).slots.at(0).opens.checks.limits), {}, "unset nested-row leaf starts unedited");
+  // Unchanged unset nested leaves keep binding and group identity across renders.
+  const boundSame = nestedForm.bind(op, draft, change, initialIssues, (b) => {
+    b.rows.at(0).name;
+    b.rows.at(0).slots.at(0).opens;
+  });
+  assert.equal(boundSame.prefs, bound1.prefs);
+  assert.equal(boundSame.prefs.owner_id, bound1.prefs.owner_id);
+  assert.equal(boundSame.rows.at(0).name, bound1.rows.at(0).name);
+  // No-op write of undefined onto an already-unset nested or row field keeps references unchanged.
+  bound1.prefs.owner_id.onChange(undefined);
+  assert.equal(draft, initialDraft);
+  bound1.rows.at(0).name.onChange(undefined);
+  assert.equal(draft, initialDraft);
+  // Writing through a leaf of an absent nested object creates the parent immutably
+  // and leaves top-level siblings untouched.
+  bound1.prefs.owner_id.onChange(ownerA);
+  assert.deepEqual(draft, { text: "keep", rows: [{ name: undefined, slots: [{}] }], prefs: { owner_id: ownerA } });
+  assert.equal("prefs" in initialDraft, false, "original draft was not mutated");
+  // Writing a sibling leaf keeps the first leaf untouched; editing activates limits,
+  // and clearing back to undefined restores unedited state.
+  const bound2 = nestedForm.bind(op, draft, change, initialIssues);
+  assert.equal(bound2.prefs.owner_id.value, ownerA);
+  bound2.prefs.color.onChange("green");
+  assert.deepEqual(draft.prefs, { owner_id: ownerA, color: "green" });
+  const bound3 = nestedForm.bind(op, draft, change, initialIssues);
+  assert.deepEqual(plain(bound3.prefs.color.checks.limits), { nonEmpty: true }, "edited leaf of previously absent object enforces limits");
+  bound3.prefs.color.onChange(undefined);
+  assert.deepEqual(draft.prefs, { owner_id: ownerA, color: undefined });
+  assert.deepEqual(plain(nestedForm.bind(op, draft, change, initialIssues).prefs.color.checks.limits), {}, "restoring undefined clears limits again");
+  bound3.prefs.owner_id.onChange(ownerB);
+  assert.equal(draft.prefs.owner_id, ownerB);
+  // Writing through unset row and nested-row leaves updates immutably and activates limits.
+  const prevRows = draft.rows;
+  const prevRow0 = draft.rows[0];
+  bound1.rows.at(0).name.onChange("alpha");
+  bound1.rows.at(0).slots.at(0).opens.onChange("09");
+  assert.equal(prevRows[0].name, undefined, "previous row array was not mutated");
+  assert.equal(prevRow0.slots[0].opens, undefined, "previous nested row was not mutated");
+  assert.deepEqual(draft.rows, [{ name: "alpha", slots: [{ opens: "09" }] }]);
+  const bound4 = nestedForm.bind(op, draft, change, initialIssues, (b) => {
+    b.rows.at(0).name;
+    b.rows.at(0).slots.at(0).opens;
+  });
+  assert.deepEqual(plain(bound4.rows.at(0).name.checks.limits), { nonEmpty: true, maxLength: 6 });
+  assert.deepEqual(plain(bound4.rows.at(0).slots.at(0).opens.checks.limits), { minLength: 4 });
+  // Stale list hides row and nested-row issues for unset fields too.
+  change((current) => ({ ...current, rows: [...current.rows, { name: undefined, slots: [] }] }));
+  const boundStale = nestedForm.bind(op, draft, change, initialIssues, (b) => {
+    b.rows.at(0).name;
+    b.rows.at(0).slots.at(0).opens;
+    b.rows.at(1).name;
+  });
+  assert.deepEqual(boundStale.rows.at(0).name.issues, []);
+  assert.deepEqual(boundStale.rows.at(0).slots.at(0).opens.issues, []);
+  assert.deepEqual(boundStale.rows.issues.map(code), ["required", "min"]);
+  assert.equal(boundStale.rows.at(1).name.value, undefined);
+  assert.deepEqual(plain(boundStale.rows.at(0).name.checks.limits), {}, "length change resets row first-bound values");
+}
+
+// Absent list row 0 no-op: writing undefined when nothing changes creates no
+// list and writes no [undefined] element; writing a real value creates it.
+{
+  const absentListForm = form();
+  const initial = { text: "keep" };
+  let draft = initial;
+  const change = (next) => { draft = next(draft); };
+  const bound = absentListForm.bind(op, draft, change, []);
+  bound.rows.at(0).name.onChange(undefined);
+  assert.equal(draft, initial, "no-op on row 0 of absent object list does not create rows");
+  assert.equal("rows" in draft, false);
+  bound.codes.at(0).onChange(undefined);
+  assert.equal(draft, initial, "no-op on row 0 of absent plain list does not create codes");
+  assert.equal("codes" in draft, false);
+  bound.rows.at(0).name.onChange("first");
+  assert.deepEqual(draft, { text: "keep", rows: [{ name: "first" }] });
+}
+
+// Runtime edge cases: null parent, absent nested object inside a row, two-level
+// unset nested object, map-entry writes into absent/null maps and under an
+// absent parent, and inherited Object.prototype keys ("toString", "constructor").
+{
+  const edgeForm = form();
+  const initial = {
+    text: "keep",
+    prefs: null,
+    optional_names: null,
+    links: [{ role: "owner" }],
+  };
+  let draft = initial;
+  const change = (next) => { draft = next(draft); };
+  const b = edgeForm.bind(op, draft, change, [], (each) => {
+    each.links.at(0).meta.note;
+    each.optional_names.at("en");
+    each.wallet.labels.at("en");
+    each.names.at("toString");
+    each.names.at("constructor");
+  });
+  // Null parent reads as undefined; no-op keeps reference; real write replaces null immutably.
+  assert.equal(b.prefs.color.value, undefined);
+  assert.equal(b.prefs.owner_id.value, undefined);
+  b.prefs.color.onChange(undefined);
+  assert.equal(draft, initial, "no-op write on null parent keeps draft unchanged");
+  b.prefs.color.onChange("teal");
+  assert.deepEqual(draft.prefs, { color: "teal" });
+  assert.equal(initial.prefs, null, "original null parent was not mutated");
+  assert.equal(draft.text, "keep");
+
+  // Absent nested object inside a row: reads undefined, no-op keeps reference, write creates meta immutably.
+  const beforeMeta = draft;
+  assert.equal(b.links.at(0).meta.note.value, undefined);
+  b.links.at(0).meta.note.onChange(undefined);
+  assert.equal(draft, beforeMeta, "no-op write on absent nested object inside row keeps draft unchanged");
+  const prevLinks = draft.links;
+  const prevLink0 = draft.links[0];
+  b.links.at(0).meta.note.onChange("row-note");
+  assert.deepEqual(draft.links, [{ role: "owner", meta: { note: "row-note" } }]);
+  assert.equal("meta" in prevLink0, false, "previous row object was not mutated");
+  assert.notEqual(draft.links, prevLinks);
+
+  // Two-level unset nested object (wallet -> detail -> leaf).
+  const beforeDeep = draft;
+  assert.equal(b.wallet.detail.leaf.value, undefined);
+  b.wallet.detail.leaf.onChange(undefined);
+  assert.equal(draft, beforeDeep, "no-op write on two-level absent nested object keeps draft unchanged");
+  b.wallet.detail.leaf.onChange("deep");
+  assert.deepEqual(draft.wallet, { detail: { leaf: "deep" } });
+  assert.equal("wallet" in beforeDeep, false);
+
+  // Map-entry write into a null map and into a map under an absent parent (and no-op writes).
+  assert.equal(b.optional_names.at("en").value, "");
+  b.optional_names.at("en").onChange("Hello");
+  assert.deepEqual(draft.optional_names, { en: "Hello" });
+  const afterMapWrite = draft;
+  b.optional_names.at("en").onChange("Hello");
+  assert.equal(draft, afterMapWrite, "no-op map-entry write keeps draft unchanged");
+
+  const mapParentForm = form();
+  const initialMapParent = { text: "keep" };
+  let mpDraft = initialMapParent;
+  const mpBind = mapParentForm.bind(op, mpDraft, (next) => { mpDraft = next(mpDraft); }, [], (each) => {
+    each.wallet.labels.at("en");
+  });
+  assert.equal(mpBind.wallet.labels.at("en").value, "");
+  mpBind.wallet.labels.at("en").onChange(undefined);
+  assert.equal(mpDraft, initialMapParent, "no-op map-entry write under absent parent creates nothing");
+  mpBind.wallet.labels.at("en").onChange("Tagged");
+  assert.deepEqual(mpDraft, { text: "keep", wallet: { labels: { en: "Tagged" } } });
+  assert.equal("wallet" in initialMapParent, false);
+
+  // Inherited Object.prototype keys ("toString" on nested object, "toString"/"constructor" on map).
+  const protoForm = form();
+  const initialProto = { wallet: { address: "0x1" }, names: {} };
+  let protoDraft = initialProto;
+  const pb = protoForm.bind(op, protoDraft, (next) => { protoDraft = next(protoDraft); }, [], (each) => {
+    each.names.at("toString");
+    each.names.at("constructor");
+  });
+  assert.equal(pb.wallet.toString.value, undefined, "inherited toString is not read as a field value");
+  pb.wallet.toString.onChange(undefined);
+  assert.equal(protoDraft, initialProto, "no-op write to absent toString field does not compare against Object.prototype.toString");
+  pb.wallet.toString.onChange("custom");
+  assert.equal(Object.hasOwn(protoDraft.wallet, "toString"), true);
+  assert.equal(protoDraft.wallet.toString, "custom");
+  assert.equal(protoDraft.wallet.address, "0x1");
+
+  assert.equal(pb.names.at("toString").value, "");
+  assert.equal(pb.names.at("constructor").value, "");
+  const beforeMapProto = protoDraft;
+  pb.names.at("toString").onChange(undefined);
+  pb.names.at("constructor").onChange(undefined);
+  assert.equal(protoDraft, beforeMapProto, "no-op map write on inherited key names keeps draft unchanged");
+  pb.names.at("toString").onChange("ts-val");
+  pb.names.at("constructor").onChange("ctor-val");
+  assert.equal(Object.hasOwn(protoDraft.names, "toString"), true);
+  assert.equal(Object.hasOwn(protoDraft.names, "constructor"), true);
+  assert.equal(protoDraft.names.toString, "ts-val");
+  assert.equal(protoDraft.names.constructor, "ctor-val");
+}
+
 // The descriptors of rows and map entries belong to the form that binds them:
 // a form that visits many keys keeps nothing once it is gone.
 {

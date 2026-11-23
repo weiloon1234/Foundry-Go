@@ -106,12 +106,22 @@ func TestClientFieldLimitsAndBindings(t *testing.T) {
 			{Name: "slots", Type: "client.Slots", Required: true, Presentation: label("fields.slots")},
 		}},
 		contract.Type{ID: "client.Rows", Kind: contract.ArrayKind, Element: "client.Row"},
+		contract.Type{ID: "client.WalletDetail", Kind: contract.ObjectKind, Properties: []contract.Property{
+			{Name: "leaf", Type: "string", Required: true, Presentation: label("fields.wallet_leaf")},
+		}},
 		contract.Type{ID: "client.Wallet", Kind: contract.ObjectKind, Properties: []contract.Property{
 			{Name: "address", Type: "string", Required: true, Presentation: label("fields.address")},
 			{Name: "note", Type: "string", Required: true},
+			{Name: "detail", Type: "client.WalletDetail"},
+			{Name: "labels", Type: "client.Names", Presentation: label("fields.wallet_labels")},
+			{Name: "toString", Type: "string", Presentation: label("fields.wallet_to_string")},
+		}},
+		contract.Type{ID: "client.RowMeta", Kind: contract.ObjectKind, Properties: []contract.Property{
+			{Name: "note", Type: "string", Required: true, Presentation: label("fields.row_meta_note")},
 		}},
 		contract.Type{ID: "client.Link", Kind: contract.ObjectKind, Properties: []contract.Property{
 			{Name: "role", Type: "string", Required: true, Presentation: label("fields.role")},
+			{Name: "meta", Type: "client.RowMeta"},
 		}},
 		contract.Type{ID: "client.Links", Kind: contract.ArrayKind, Element: "client.Link"},
 		// A self-reference through an alias, as value.Optional wraps one.

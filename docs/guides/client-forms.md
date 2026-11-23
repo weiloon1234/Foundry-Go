@@ -81,21 +81,68 @@ again for the same form. `update` receives a function
 from the current values to the next; a React state setter fits. Values are the
 control values: `FormValues<T>` holds each field as its non-null type (a nested
 object as its own values, a list as its rows), and the form decides what the
-request sends (see [presence](#recipe-form-presence)). A form may leave a key
-out of its values until it has one, such as an upload before a file is chosen:
-its binding's value is then `undefined`.
+request sends (see [presence](#recipe-form-presence)). A form's values may leave
+any leaf unset (`undefined` or omitted) at any depth — at the top level, in a
+nested object or in a row object — as well as any nested object itself, until it
+has a value (such as an upload before a file is chosen or a nested reference ID
+before a selection is made): a leaf the values type allows to be unset binds as
+`FieldBinding<V | undefined>`, while a leaf the values type always holds keeps
+`FieldBinding<V>`. To leave a specific nested or row leaf unset in a draft built
+from `FormValues<T>`, apply the same `Required<Omit<FormValues<...>, ...>> &
+Pick<FormValues<...>, ...>` pattern one level down on the nested object's or row
+element's generated type, omit the unset leaf in the initial values under
+`exactOptionalPropertyTypes` (a form that writes `undefined` into its own
+values declares that leaf `?: V | undefined` in its values type instead), and
+narrow it before building the request:
+
+[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/limits/types.ts).
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/limits/types.ts#form-unset-nested -->
+```typescript
+export function formUnsetNested(issues: readonly sdk.Issue[]) {
+  type FormBody = sdk.Operations["itemsEcho"]["request"]["body"];
+  type Prefs = NonNullable<FormBody["prefs"]>;
+  type Row = NonNullable<FormBody["rows"]>[number];
+  type UnsetDraft = Required<Omit<sdk.FormValues<FormBody>, "prefs" | "rows">> & {
+    readonly prefs: Required<Omit<sdk.FormValues<Prefs>, "owner_id">> & Pick<sdk.FormValues<Prefs>, "owner_id">;
+    readonly rows: readonly (Required<Omit<sdk.FormValues<Row>, "name">> & Pick<sdk.FormValues<Row>, "name">)[];
+  };
+  let values: Pick<UnsetDraft, "prefs" | "rows"> = {
+    prefs: { color: "blue" },
+    rows: [{ slots: [{ opens: "0900" }] }],
+  };
+  const update: sdk.FormUpdate<typeof values> = (next) => { values = next(values); };
+  const form = sdk.formFieldState();
+  const fields = sdk.fieldBinder((key) => key, () => form);
+  const bound = fields(sdk.operation("itemsEcho"), values, update, issues);
+  const owner: sdk.FieldBinding<sdk.Identity<"client.OwnerID"> | undefined> = bound.prefs.owner_id;
+  const strictColor: sdk.FieldBinding<string> = bound.prefs.color;
+  const rowTitle: sdk.FieldBinding<string | undefined> = bound.rows.at(0).name;
+  const slotOpens: sdk.FieldBinding<string> = bound.rows.at(0).slots.at(0).opens;
+  const toPrefs = (): Prefs | undefined => values.prefs.owner_id === undefined
+    ? undefined
+    : { color: values.prefs.color, owner_id: values.prefs.owner_id };
+  return { owner, strictColor, rowTitle, slotOpens, toPrefs };
+}
+```
 
 Bindings follow the request's structure as Go declares it:
 
 - A nested object binds as its fields: `f.account.bank_name`. Each field a
   control shows needs a Go label; the object needs none of its own. The object
-  itself is not a binding; its own issues stay in the form's summary. An
-  optional or nullable nested object is held in the values like any other and
-  the request builder sends, omits or nulls it. A nested field Go declares
+  itself is not a binding; its own issues stay in the form's summary. Any nested
+  object — whether required, optional or nullable in the request — may be held
+  in the values or left unset (`undefined` or omitted) until a leaf is written,
+  and the request builder sends, omits or nulls it: an unset nested object
+  whose fields the values type declares (an optional or `| undefined` property
+  of the object's type) still binds its leaves (each as
+  `FieldBinding<V | undefined>`, reading `undefined` until written; an entry of
+  a text map reads empty text), and writing through a leaf immutably creates
+  the missing parent objects while leaving siblings untouched. A nested field Go declares
   optional is optional in `FormValues`; declare it required in the form's own
   values type to bind it to a text control. A type that refers to itself binds
-  as far as its generated type goes: where the type repeats, an object binds
-  no fields.
+  as far as its generated type goes: where the type repeats, an object binds no
+  fields.
 - A list with a Go label binds whole (`f.permissions`, for a picker) and each
   row with `.at(i)`: a row of plain values binds like a field of the element
   type and shows the list's label (`f.tags.at(i)`), a row of objects as its
@@ -122,7 +169,8 @@ Bindings follow the request's structure as Go declares it:
 - A map with a Go label binds whole and each entry with `.at(key)`, typed by
   the map's key (a locale, an enum case, a model ID or any text); its entries
   show the map's label, so a map without one does not bind. An entry without
-  its own issues shows its map's.
+  its own issues shows its map's. A map whose values are objects keeps its
+  strict value type.
 - Multipart parts: a single upload or text part binds like a field (an upload
   as `FieldBinding<Upload | undefined>`, which the form may clear), a repeated
   part binds each upload or value with `.at(i)` as a list row (an upload as

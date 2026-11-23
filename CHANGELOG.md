@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.50.2 — 2026-11-23
+
+### Form values may leave nested and row leaves unset
+
+Previously, `fieldBinder` allowed unset (`undefined` or omitted) values only at
+the top level of a form's values: `FormValue<T>` required every field of a
+nested object and of a row object to be present and non-undefined, so a form
+could not hold an unselected nested reference ID (such as
+`provenance.evidence_attachment_id` or `rows[i].place_id`) without a cast or a
+placeholder value. Now `fieldBinder` accepts unset leaves at any depth and any
+absent or `undefined` nested object, binding any leaf whose value may be unset
+as `FieldBinding<V | undefined>` while keeping `FieldBinding<V>` for leaves the
+form's values type always holds; reading an unset leaf returns `undefined` and
+writing through a leaf of an absent nested object immutably creates the missing
+parent objects while leaving siblings untouched. Rows themselves keep their
+existing non-undefined element types, and request building still rejects an
+unset value flowing into a required request field. Types only widen; manifest
+version 12, wire formats, stored data and deployment do not change. One
+generated name can change: the runtime's helper types `DraftFields` and
+`DraftValue` are newly reserved, so an application schema with either name is
+generated under its package-qualified name.
+
+```ts
+type Body = Operations["agentCaptureFacts"]["request"]["body"];
+type Provenance = NonNullable<Body["provenance"]>;
+type Draft = Required<Omit<FormValues<Body>, "provenance">> & {
+  readonly provenance: Required<Omit<FormValues<Provenance>, "evidence_attachment_id">> & Pick<FormValues<Provenance>, "evidence_attachment_id">;
+};
+
+// before (TS2769: Draft's optional provenance.evidence_attachment_id was not assignable to FormValue<Provenance>)
+// after (compiles; f.provenance.evidence_attachment_id is FieldBinding<AttachmentID | undefined>,
+// while f.provenance.source stays FieldBinding<ProvenanceSource>)
+declare const draft: Draft;
+const f = useFields(operation("agentCaptureFacts"), draft, setDraft, issues);
+```
+
 ## v0.50.1 — 2026-11-23
 
 ### Form bindings publish codec-required wire types and decimal precision (manifest 12)

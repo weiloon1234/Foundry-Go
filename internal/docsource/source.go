@@ -34,7 +34,9 @@ func readSource(root, name string) (source, error) {
 	ext := path.Ext(name)
 	approved := (strings.HasPrefix(name, "tests/fixtures/consumer/") || strings.HasPrefix(name, "tests/fixtures/goway/")) && ext == ".go"
 	if ext == ".ts" {
-		approved = (path.Dir(name) == "tests/fixtures/consumer/clientcontracts/testdata" || path.Dir(name) == "tests/fixtures/consumer/clientcontracts/testdata/table-bindings") && !strings.HasSuffix(name, ".d.ts")
+		approved = (path.Dir(name) == "tests/fixtures/consumer/clientcontracts/testdata" ||
+			path.Dir(name) == "tests/fixtures/consumer/clientcontracts/testdata/table-bindings" ||
+			path.Dir(name) == "tests/fixtures/consumer/clientcontracts/testdata/limits") && !strings.HasSuffix(name, ".d.ts")
 	}
 	if !approved || strings.Contains(name, "_foundry.gen.") {
 		return source{}, safeerror.New(fmt.Sprintf("source %q is outside approved handwritten fixture inputs", name))
