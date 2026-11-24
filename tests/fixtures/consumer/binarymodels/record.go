@@ -12,12 +12,13 @@ import (
 type Payload []byte
 type Input []byte
 
+//foundry:model table=binary_records var=Records key=ID identity=false
 type Record struct {
 	ID      int
-	Body    Payload
+	Body    Payload `foundry:"input=Input"`
 	Raw     []byte
-	Note    value.Nullable[Payload]
-	Encoded string
+	Note    value.Nullable[Payload] `foundry:"input=Input"`
+	Encoded string                  `foundry:"input=Input"`
 }
 
 func (Record) MutateBody(v Input) (Payload, error)   { return Payload(slices.Clone(v)), nil }
@@ -31,7 +32,7 @@ type View struct {
 
 // Draft captures input buffers; assignments preserve omitted, NULL and empty values.
 func Draft(id int, input Input) []orm.Assignment[Record] {
-	return []orm.Assignment[Record]{orm.Set(Records.Key(), id), orm.Set(Records.Body, input), orm.Set(Records.RawBytes, []byte{}), orm.SetNull(Records.Note), orm.Set(Records.Encoded, input)}
+	return []orm.Assignment[Record]{orm.Set(Records.Key(), id), orm.Set(Records.Body, input), orm.Set(Records.Raw, []byte{}), orm.SetNull(Records.Note), orm.Set(Records.Encoded, input)}
 }
 
 func Matching(body Payload) orm.Predicate[Record] { return orm.Eq(Records.Body, body) }

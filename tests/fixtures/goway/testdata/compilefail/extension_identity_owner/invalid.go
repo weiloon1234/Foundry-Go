@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.IdentityOf(a.Authors, a.Articles.Key())
+var _ = orm.IdentityOf(a.Authors.Table, a.Articles.Key())

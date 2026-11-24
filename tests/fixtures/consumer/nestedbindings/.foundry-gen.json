@@ -1,6 +1,7 @@
 {
   "version": 1,
   "files": {
+    "models_foundry.gen.go": "47d8d560a122bdd45cb5a52df74a959d2f0530b3350b59342e1e6f325adeeef0",
     "path_foundry.gen.go": "ea1b071fe507668141079523ce454d3948cf62e4ddb801213cff3cc9d5ae54c4",
     "reply_foundry.gen.go": "3e2d98331743a946701740e2bbf3cad923a2e4ae220c308c083c994010faef23"
   }

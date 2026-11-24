@@ -9,5 +9,5 @@ import (
 
 func invalid(manager *translations.Manager) {
 	field := translations.Define(a.Owner, "title", translations.Options{})
-	_ = field.Set(context.Background(), manager, orm.IdentityOf(a.Authors, a.Authors.Key()).Reference(1), "en", "text")
+	_ = field.Set(context.Background(), manager, orm.IdentityOf(a.Authors.Table, a.Authors.Key()).Reference(1), "en", "text")
 }

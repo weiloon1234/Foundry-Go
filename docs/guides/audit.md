@@ -127,7 +127,7 @@ Convention matching cannot identify a secret with an unrelated name. Declare its
 
 Redacted fields keep assignment/change metadata and explicit redaction states. `FieldValue.Get` returns a `fault.Missing` error for redacted data. Partially redacted JSON is available as an audit snapshot, but cannot be decoded into a fabricated partial instance of its original Go type. Persisted redaction flags are checked against the representation on reload.
 
-`Changes().Entry().Payload()` and snapshot JSON are deliberate audit export boundaries. Routine formatting hides stored contents. They contain stored audit data, not automatically computed getter values. History readers use the handwritten column declaration; accessor evaluation remains an explicit DTO-mapping choice.
+`Changes().Entry().Payload()` and snapshot JSON are deliberate audit export boundaries. Routine formatting hides stored contents. They contain stored audit data, not automatically computed getter values. History readers use the generated column declaration; accessor evaluation remains an explicit DTO-mapping choice.
 
 ## Explicit domain events
 

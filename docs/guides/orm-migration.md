@@ -1,6 +1,6 @@
 # Migrate generated models to the ORM
 
-Replace generated query, draft and projection helpers with handwritten declarations in
+Replace retired query, draft and projection helpers with typed ORM APIs in
 `database/orm`, `database/orm/rows` and `database/orm/expr`. Keep your model structs,
 stored column names, key types, codecs, constraints and public response contracts.
 This guide describes APIs present in the Go-way branch, not every illustrative API
@@ -125,7 +125,7 @@ orm.MorphName | model.MorphName
 orm.Morphable | model.Morphable
 orm.Mutate | model Mutate<Field> method and typed orm.Input* declaration
 prune.Model | prune.ORMModel or prune.ORMSoftModel
-extensions.DefineOwner | extensions.DefineORMOwner with orm.IdentityOf and OwnerOptions
+extensions.DefineOwner | extensions.DefineORMOwner with the generated identity and OwnerOptions
 extensions.DefineOwnerWith | extensions.DefineORMOwner with explicit OwnerOptions
 extensions.Owner.QueryScope | extensions.ORMIdentity(owner).Scope(keys...)
 modelbinding.ByField | modelbinding.ByColumn
@@ -296,115 +296,30 @@ Run `go test ./migration` from `tests/fixtures/goway`.
 Historical snippets use `old`, `oldhooks`, `oldreads` and `oldmutators` for retired
 generated fixtures. Compiled examples use `models`, `hooks`, `reads`, `mutators` and
 shared `coremodels` input/storage types. `reports` contains native row declarations;
-`Users` without a package qualifier is the standalone declaration below. Copy the
+`Users` without a package qualifier belongs to the linked migration fixture. Copy the
 current imports and concrete model types from the linked source.
 
 ## Declare models and lifecycle roles
 
-Old declarations use `//foundry:model table=...` and generated `XFields()`/`XDraft`.
-Historical lifecycle declarations used `hooks=LocalHooks`. The ordinary struct and its domain methods survive migration.
-The old field namespace is obtained like this:
+For an existing handwritten table, follow the [conversion procedure](../compatibility.md#generated-model-declarations).
+It proves the generated declaration before replacing a package. New models use
+`//foundry:model table=users var=Users key=ID` on the struct and `foundry` field
+tags. Do not write a table type, binding or identity block yourself.
 
-<!-- orm-example: roles-before -->
-```go
-func legacyRoles() oldhooks.MemberFieldSet {
-	return oldhooks.MemberFields()
-}
-```
+The [complete plain model](model-declarations.md#recipe-declare-table) is rendered
+from the independent consumer fixture.
 
-Declare each persisted field once, using a pointer into the builder's model:
+See [model declarations](model-declarations.md) for nullable fields, enums,
+decimals, foreign keys, timestamps, mutator input types and slot ownership.
+Managed timestamps require `role=created-at` and `role=updated-at` together.
+A lone ordinary `CreatedAt` uses `role=time` with conventions enabled; keep any
+existing `timestamps=none` choice when converting an application-managed model.
+`role=time` cannot disable an active timestamp pair or soft-delete convention.
 
-<!-- orm-example: roles-after -->
-```go
-type EmailInput string
-type User struct {
-	ID        int64
-	Email     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt value.Nullable[time.Time]
-}
-
-func (User) MutateEmail(input EmailInput) (string, error) {
-	return strings.ToLower(strings.TrimSpace(string(input))), nil
-}
-
-type UserTable struct {
-	orm.Table[User, int64]
-	Primary   orm.Primary[User, int64]
-	Email     orm.InputText[User, EmailInput, string]
-	CreatedAt orm.CreatedAt[User, time.Time]
-	UpdatedAt orm.UpdatedAt[User, time.Time]
-	DeletedAt orm.SoftDelete[User, time.Time]
-	Soft      orm.SoftDeletable[User]
-}
-
-var Users = orm.Define("users", func(b orm.Builder[User], u *User) UserTable {
-	table := orm.TableOf(b, &u.ID)
-	deleted := orm.SoftDeleteOf(b, &u.DeletedAt)
-	return UserTable{table, orm.PrimaryOf(b, table.Key()),
-		orm.InputTextOf[User, EmailInput](b, &u.Email, nil),
-		orm.CreatedAtOf(b, &u.CreatedAt), orm.UpdatedAtOf(b, &u.UpdatedAt),
-		deleted, orm.SoftDeletes(deleted)}
-})
-```
-
-Choose carriers by their role as well as their stored value type:
-
-| Old declaration | Native declaration and consequence |
-| --- | --- |
-| `primary=ID` or the conventional ID | `TableOf(b, &m.ID)` declares the single primary key; `table.Key()` keeps its stored lookup type. |
-| Primary field selected by insert-from-query | Add `PrimaryOf(b, table.Key())` only if the application maps that key in insert-select. A lookup `Key` is not an insert mapping target. |
-| `MutateID(Input) (Key, error)` | `InputKeyOf` binds the input type to that same primary declaration. It is mutually exclusive with `PrimaryOf`; distinct input disables automatic UUID synthesis. |
-| Managed `CreatedAt`/`UpdatedAt` convention | Use `CreatedAtOf`/`UpdatedAtOf`. `TimeOf` on a managed field fails startup with the required carrier name. `NoTimestamps()` disables conventions; explicit managed roles conflict with that option. |
-| Nullable soft-delete timestamp | Bind `SoftDeleteOf` and expose `SoftDeletes(deleted)` as a `SoftDeletable[M]` table field such as `Users.Soft`. `NoSoftDeletes()` disables the convention. |
-| A field with any mutator, even identical input/storage types | Use the matching `Input*` or `NullableInput*` carrier. Ordinary columns with a mutator fail startup. The setter takes input; comparisons and ordering take stored values. |
-| Other persisted fields | Use `TextOf`, `NumberOf`, `IDOf`, `EnumOf`, `TimeOf`, `JSONOf`, `BytesOf`, password/encrypted constructors and nullable variants. Keep `foundry:"column=..."`, `default=database` and omission tags. |
-
-For a model with only `CreatedAt` (`created_at`) or only `UpdatedAt`
-(`updated_at`), keep the timestamp application-managed. The retired legacy generator's
-`discoverTimestamps` left timestamp roles unassigned when either field was absent;
-explicit `timestamps=true` instead rejected the missing pair. Declare `orm.NoTimestamps()`
-and an ordinary `orm.TimeOf` column, and retain each call site's explicit `Set`.
-Do not replace that column with `CreatedAtOf` or `UpdatedAtOf`, which require a pair.
-
-After, for a lone creation field (use the same pattern for a lone update field):
-
-<!-- orm-example: lone-timestamp-after -->
-```go
-type DeveloperEvent struct {
-	ID        int64
-	CreatedAt time.Time
-}
-
-type DeveloperEventTable struct {
-	orm.Table[DeveloperEvent, int64]
-	CreatedAt orm.Time[DeveloperEvent, time.Time]
-}
-
-var DeveloperEvents = orm.Define("developer_events", func(b orm.Builder[DeveloperEvent], e *DeveloperEvent) DeveloperEventTable {
-	return DeveloperEventTable{orm.TableOf(b, &e.ID), orm.TimeOf(b, &e.CreatedAt)}
-}, orm.NoTimestamps())
-
-func insertDeveloperEvent(ctx context.Context, tx *database.Tx, createdAt time.Time) error {
-	_, err := orm.Insert(ctx, tx, DeveloperEvents.Table, orm.Set(DeveloperEvents.CreatedAt, createdAt))
-	return err
-}
-```
-
-`NumberKey` and `TextKey` preserve key roles. They do not make a primary key an
-ordinary writable numeric/text field or grant numeric adjustment operations.
-`MapInsert` rejects input fields and managed UpdatedAt; CreatedAt is eligible.
-`MapUpdate` also rejects primary keys. Application wrappers cannot manufacture these
-roles by embedding or converting a column.
-
-Keep `Mutate<Field>` and `Access<Field>` methods as ordinary Go methods. Pass `nil`
-as the input constructor's transform to discover a named mutator at startup, as above.
-Use the constructor's typed transform for explicit bindings, including same-type
-transformations. Ordinary columns do not accept transforms; input constructors own
-the typed transform argument. Do not configure both
-an explicit and a discovered mutator. Startup rejects orphan or invalid Mutate/Access
-methods. Accessors are explicit calls, not automatic projection or JSON presentation.
+An exposed key uses `member=ID`; add `key-role=primary` only for insert-select.
+A mutated key uses `input=Type,member=ID,key-role=input`. Mutated fields and managed
+update timestamps cannot be SQL assignment targets. Primary keys never support
+source updates. These restrictions remain in the generated handle types.
 
 Distinct input and stored types retain their own contracts. The following fixtures
 use `EmailInput` for writes and `StoredEmail` for storage:
@@ -446,7 +361,7 @@ func inputKey(id model.ID[mutators.KeyRecord]) orm.Assignment[mutators.KeyRecord
 ```
 
 The [input-key declaration](../../tests/fixtures/goway/models/mutators/key.go) uses
-`InputKeyOf` over TableOf's single primary key. The stored ID still drives Find.
+`member=ID,key-role=input,input=FreshID` on its primary field. The stored ID still drives Find.
 An accessor call is unchanged:
 
 Before:
@@ -466,6 +381,7 @@ func accessor(member mutators.Member) (coremodels.EmailLink, error) {
 	return member.AccessEmail()
 }
 ```
+
 
 ## Replace read and write calls
 
@@ -622,8 +538,8 @@ soft deletion for a declared soft-delete model; Restore clears its timestamp.
 
 ## Declare and load relations
 
-Keep `relation.One`, `Many`, `relation.Through` and other slots on the model. Bind them inside
-Define with `OneOf`, `ManyOf` or the matching slot constructor. Declare relation
+Keep `relation.One`, `relation.Many`, `relation.Through` and other slots on the
+model. Regenerate their typed slot handles. Declare relation
 variables after both tables exist, replacing `defineXRelations` and generated
 relation sets:
 
@@ -699,7 +615,7 @@ func memberHooks() orm.Hooks[hooks.Member] {
 }
 ```
 
-Attach the per-write factory with `orm.WithHooks(memberHooks)` on Define. Keep all
+Attach the package-local per-write factory with `hooks=memberHooks` on the directive. Keep all
 old stages and their ordering: Saving precedes Creating/Updating; Created/Updated
 precedes Saved. Deleting/Deleted, Restoring/Restored, ForceDeleting/ForceDeleted and
 AfterCommit retain their operation-specific behavior. Local callbacks run before
@@ -804,7 +720,7 @@ func retrieval() orm.RetrievalHooks[reads.Member] {
 }
 ```
 
-Attach `orm.WithRetrievalHooks(retrieval)` and register retrieval observers with
+Name a package-local factory with `retrieval=memberRetrieval` and register retrieval observers with
 `NewRetrievalObserver`/`RegisterRetrievalObserver`. The local factory precedes observer
 factories for each nonempty complete batch. Each complete model receives Retrieved
 after decoding and row closure. Streaming uses closed batches when callbacks exist.
@@ -838,8 +754,8 @@ func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 }
 ```
 
-Attach a lazy immutable source with `orm.WithGlobalScopes(func(t TableType)
-[]orm.GlobalScope[Model] { ... })` on Define. The source receives the completed table;
+Attach a lazy immutable source with `scopes=scopeFactory` on the directive.
+Its package-local signature is `func(ModelTable) []orm.GlobalScope[Model]`. The source receives the completed table;
 avoid reading a partly initialized package variable. Scope callbacks return additive
 predicates and errors. Missing context and callback failures fail closed. Scope-source
 failure is sticky; later queries cannot silently run unscoped.
@@ -1101,7 +1017,7 @@ bind fields with rows constructors. `rows.Map` matches the exact projected type;
 [row declaration fixture](../../tests/fixtures/goway/reporting/members.go) shows the
 complete MemberRows schema used above. All fields must be mapped exactly once.
 
-A SQL row is not implicitly an API response. Replace `//foundry:projection dto=true`
+A SQL row is not implicitly an API response. Replace the retired projection directive with DTO output
 with a handwritten rows declaration plus retained `//foundry:dto` generation at the
 serial barrier. Preserve the DTO name, JSON tags, validation rules and descriptors;
 DTO/client generation still runs. Plain internal projections need no DTO annotation.
@@ -1430,38 +1346,9 @@ Makefile; do not edit it. The standalone example below builds its bindings with
 `validation.DefineBinding`. An application with a `role=row` DTO uses the generated
 `AdminRowColumns()` bindings instead.
 
-<!-- orm-example: pilot-declarations -->
-```go
-type Admin struct {
-	ID          int64
-	TenantID    int64
-	Username    string
-	Email       value.Nullable[string]
-	CountryCode countries.Code
-	DeletedAt   value.Nullable[time.Time]
-}
-type AdminTable struct {
-	orm.Table[Admin, int64]
-	TenantID    orm.Number[Admin, int64]
-	Username    orm.Text[Admin, string]
-	Email       orm.NullableText[Admin, string]
-	CountryCode orm.Column[Admin, countries.Code]
-	DeletedAt   orm.SoftDelete[Admin, time.Time]
-}
-
-var Admins = orm.Define("admins", func(b orm.Builder[Admin], a *Admin) AdminTable {
-	return AdminTable{orm.TableOf(b, &a.ID), orm.NumberOf(b, &a.TenantID),
-		orm.TextOf(b, &a.Username), orm.NullableTextOf(b, &a.Email),
-		orm.ColumnOf(b, &a.CountryCode), orm.SoftDeleteOf(b, &a.DeletedAt)}
-})
-
-// Keep this DTO's original package, name, field types and JSON tags.
-type AdminRow struct {
-	ID       int64                  `json:"id"`
-	Username string                 `json:"username"`
-	Email    value.Nullable[string] `json:"email"`
-}
-```
+Use the generated `AdminTable` and `Admins` from the model directive. The
+[declaration guide](model-declarations.md) owns the complete model recipe; keep
+`AdminRow` as a separate response DTO with its existing JSON contract.
 
 The column registrations now use selected expressions for sorts and row adapters
 for filters, and each column selects its own field. `Hidden` selects the key into
@@ -1832,18 +1719,13 @@ func legacyIdentity(user old.User) (model.Identity, error) { return user.Foundry
 
 After:
 
-<!-- orm-example: identity-after -->
-```go
-func identity(user models.User) (model.Identity, error) {
-	return orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user).Identity()
-}
-```
+Call the generated `user.FoundryIdentity()` or `user.FoundryReference()`;
+identity methods are enabled unless the directive specifies `identity=false`.
 
-If auth, notifications or another contract requires `model.Identifiable`, preserve a
-handwritten FoundryIdentity method delegating to the native identity declaration
-before removing generated methods. Passing an ORM reference alone does not satisfy
-that interface. Extension ownership also uses `orm.IdentityOf`; bind non-persisted
-extension slots with SlotOf and the owning extension package's policies.
+Authentication and other `model.Identifiable` consumers use the generated identity
+methods. Preserve custom identity semantics explicitly with `identity=false` when
+conversion requires them. Extension declarations reuse the generated identity
+variable in the same package; slot fields infer their bindings from their types.
 
 Seed definitions and caller-owned transactions stay unchanged:
 
@@ -1875,22 +1757,16 @@ func seeder() seed.Definition {
 relationship composition and after-create behavior. Seeders must call the ordinary
 write pipeline rather than reproducing conventions or lifecycle callbacks.
 
-## Use the current scaffolds
+## Start new models and keep schema migrations
 
-The command `foundry make model Widget --table widgets --dir ./models` now creates
-a handwritten Widget, WidgetTable, Widgets declaration and WidgetTables helper.
-The old result was an annotated model followed by generated query/draft helpers;
-the new result follows the compiled role declaration above. Add fields and roles in
-Go, then include the returned table list in application.WithTables. There is no
-package-wide table discovery and no model generation step for new declarations.
+Use the [directive recipe](model-scaffolding.md), then run `foundry generate`.
+Register the generated table with `application.WithTables`. Package-wide table
+discovery is not automatic. `foundry make model` writes the directive struct and
+prints the next generation command, just like the DTO scaffold.
 
-Keep `foundry generate` for DTO/enum/config declarations. Model-with-extension
-scaffolds still generate their metadata DTO codecs. `foundry make seeder --dir
-seeders --name SeedUsers --id app.users` still creates an ordinary seed.Definition;
-fill it with the compiled seeder body above. Migration scaffolds and schema SQL are
-unchanged. Scaffolds refuse existing files and preserve handwritten edits. Reuse
-[the scaffold compilation fixtures](../../internal/generate/scaffold_model_test.go)
-and [migration/seeder guide](migrations-and-seeding.md#development-scaffolding).
+DTO, enum and config generation continue independently. Migration scaffolds,
+schema SQL and seed definitions are unchanged. See
+[migrations and seeding](migrations-and-seeding.md#development-scaffolding).
 
 ## Move PostgreSQL type registration into connection setup
 
@@ -1938,22 +1814,10 @@ Locks are available only on `LockedQuery` inside an active transaction (`*databa
 
 ### Model reference and identity
 
-When defining handwritten models in place of generated ones, attach the `FoundryReference` and `FoundryIdentity` method pair using `orm.IdentityOf` and `ReferenceOf`:
-
-<!-- orm-example: pilot-recipe-model-identity -->
-```go
-var adminIdentity = orm.IdentityOf(Admins.Table, Admins.Key())
-
-func (a Admin) FoundryReference() model.Reference[Admin, int64] {
-	return adminIdentity.ReferenceOf(a)
-}
-
-func (a Admin) FoundryIdentity() (model.Identity, error) {
-	return a.FoundryReference().Identity()
-}
-```
-
-This declaration-level binding is required by `audit.RecordFor`, `audit.ModelHistory`, authentication providers (`auth.DefineProvider`), and authorization proofs.
+The model directive generates `FoundryReference` and `FoundryIdentity` by default.
+They preserve the concrete stored key and its identity codec. Do not duplicate
+these methods in application source. `identity=false` preserves an intentional
+custom contract during conversion. See [identity](model-declarations.md#recipe-register-tables).
 
 ### Datatable in isolated tests
 
@@ -2030,7 +1894,7 @@ The [breaking-change notes](../evidence/goway-breaking-changes.md) distinguish s
 syntax changes, startup validation and the remaining publication prerequisites.
 
 The before snippets above are historical, documentation-only examples. The after
-snippets remain compiled by the migration fixture after model generation retirement.
+snippets remain compiled by the migration fixture after retirement of generated query APIs.
 
 ## Pilot expressions and row declarations
 
@@ -2056,9 +1920,8 @@ func scopedUsername() {
 }
 ```
 
-`rows.BoolOf` and `orm.BoolOf` select Boolean codecs for built-in and named bools.
-They reuse ordinary field/column carriers; mutated model fields still need Input
-carriers. Framework enums already expose enum descriptors: use `rows.EnumOf` for
+`rows.BoolOf` selects a Boolean row codec. Model Boolean fields infer their
+codec; mutated fields declare `input=Type`. Framework enums already expose enum descriptors: use `rows.EnumOf` for
 `countries.Status`, preserving its validation and enum capability restrictions.
 
 <!-- orm-example: pilot2-boolean-enum -->
@@ -2098,20 +1961,14 @@ func validateJSONDeclarations() error {
 ## Preserve an attachment slot's stored name
 
 Replace a legacy slot tag such as `foundry:"name=public-media"` with the explicit
-collection-name argument to `attachments.ManyOf` or `attachments.OneOf`. Native
-slots have no persistence tags. `orm.SlotOf` binds the Go field; `extensions.BindSlot`
+collection-name argument to `attachments.ManyOf` or `attachments.OneOf`. Known slot types infer their generated bindings without tags. `extensions.BindSlot`
 retains owner/key/value typing. Keep the collection name, extension owner identity
 and `StorageModel` unchanged when renaming the Go field. The example binds Gallery
 to the existing public-media collection; no stored-data migration is needed.
 
-<!-- orm-example: pilot2-slot-name -->
-```go
-// The Go slot is Gallery; the persisted collection remains "public-media".
-// Bind the field with orm.SlotOf in the model declaration, without a foundry tag.
-var PublicMedia = attachments.ManyOf(ext.Owner, "public-media",
-	attachments.Policy{Disk: storage.DefineDisk("local"), Accepted: []storage.MediaType{"image/png"}},
-	extensions.BindSlot(ext.Articles.Key(), ext.Articles.Gallery))
-```
+Pass the existing `"public-media"` collection name to `attachments.ManyOf` with
+`extensions.BindSlot(ext.Articles.Key(), ext.Articles.Gallery)`. The directive
+generates `Gallery` from its attachment type; keep that stored name in the policy.
 
 See [extension slots](model-extension-slots.md), [JSON models](json-models.md) and
 [projection declarations](model-projections.md) for the owning contracts.

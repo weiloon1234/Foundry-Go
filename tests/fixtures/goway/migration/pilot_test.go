@@ -23,7 +23,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// migration:pilot-declarations
 type Admin struct {
 	ID          int64
 	TenantID    int64
@@ -53,8 +52,6 @@ type AdminRow struct {
 	Username string                 `json:"username"`
 	Email    value.Nullable[string] `json:"email"`
 }
-
-// migration:end
 
 // migration:pilot-columns
 func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
@@ -308,7 +305,6 @@ func requireAdminForUpdate(ctx context.Context, tx *database.Tx, id int64) (Admi
 
 // migration:end
 
-// migration:pilot-recipe-model-identity
 var adminIdentity = orm.IdentityOf(Admins.Table, Admins.Key())
 
 func (a Admin) FoundryReference() model.Reference[Admin, int64] {
@@ -318,8 +314,6 @@ func (a Admin) FoundryReference() model.Reference[Admin, int64] {
 func (a Admin) FoundryIdentity() (model.Identity, error) {
 	return a.FoundryReference().Identity()
 }
-
-// migration:end
 
 // migration:pilot-recipe-datatable-test
 func isolatedDatatableConfig(scope *postgres.Scope) datatable.Config {

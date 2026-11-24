@@ -152,9 +152,9 @@ explicit getters into a response struct that declares the fields to expose.
 
 A persistence model is a named type that appears as the model type argument of
 an `orm.Table`, `orm.Builder`, `orm.Define` or `orm.TableOf` instantiation. These
-are the declaration surface: `Define` is the only way to declare a table, and
-its callback receives the `Builder` that every column and relation constructor
-requires. Other `database/orm` generics, such as `Query` or `Predicate`, are not
+are the low-level declarations that generated model code calls: the generated
+binding calls `Define`, whose callback receives the `Builder` used by column
+and relation constructors. Application source declares the model directive. Other `database/orm` generics, such as `Query` or `Predicate`, are not
 treated as proof because raw fragments accept any type argument.
 
 Recognition runs once per generation run, after every package's generated

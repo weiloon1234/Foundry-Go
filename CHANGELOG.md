@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.51.0 — 2026-11-24
+
+- Declare each table-backed model once with `//foundry:model` and `foundry` tags.
+  `foundry generate` emits the table type, binding and identity into
+  `<file>_foundry.gen.go`, retaining typed query and write handles. For example,
+  handwritten `UserTable` + `Users` binding + identity methods → a `User` struct
+  headed by `//foundry:model table=users var=Users key=ID`. Managed timestamp
+  fields use `role=created-at` and `role=updated-at`; mutators declare `input=Type`.
+- Convert existing applications with `foundry models convert --dry-run ./...`,
+  then `foundry models convert ./...`. The tool proves equivalence before
+  publication and refuses unsupported packages without changing them. See the
+  [conversion steps and refusal remedies](docs/compatibility.md#generated-model-declarations).
+- Two stale-generation guards protect model declarations: structural field edits
+  fail compilation; changed `foundry` tags fail declaration validation with
+  `model changed since generation; run foundry generate`. Directive and field-comment
+  changes are checked by `foundry generate --check`.
+- Add `foundry models check` to the consumer gate. It forbids handwritten tables
+  for concrete constant-name models in non-test files outside the ORM tree.
+  Generic models and runtime-computed table names remain outside the directive.
+  Documentation checks reject handwritten application declaration examples while
+  preserving explicitly source-bound generated-code and test references.
+- Model checks follow table-name parameters through one helper call across loaded
+  packages, including generic receivers. Returned tables select the relevant name
+  parameter; unresolved returns retain conservative reporting. Declaration diagnostics reject missing plain-column codecs
+  early and distinguish misspelled directives from ordinary comments.
+- `foundry make model` now writes a directive struct instead of a handwritten
+  table binding. Like DTO scaffolds, it leaves generation as an explicit next step.
+- Model field documentation now appears on generated table members, with links
+  back to the handwritten fields. Conversion retains old member documentation
+  on those fields and reports appended comments.
+- The conversion command and its ORM snapshot bridge are migration-only and will
+  be removed in the release after consumers have converted. No runtime feature
+  may depend on them. Stored schema, external slot names and transport contracts
+  remain under their existing owners.
+
 ## v0.50.4 — 2026-11-23
 
 - Restore `http.CSPWasmUnsafeEval()` for WebAssembly compilation and instantiation in

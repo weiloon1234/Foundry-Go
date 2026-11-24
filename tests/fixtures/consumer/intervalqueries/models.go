@@ -9,8 +9,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin interval-queries
+//
+//foundry:model table=interval_samples var=Samples key=ID identity=false
 type Sample struct {
-	ID          int
+	ID          int `foundry:"member=ID,key-role=lookup"`
 	Period      temporal.Interval
 	MaybePeriod value.Nullable[temporal.Interval]
 	Start       time.Time
@@ -22,8 +25,11 @@ type Sample struct {
 	Date        temporal.Date
 }
 
+// doc-example:end interval-queries
+
+//foundry:model table=interval_plans var=Plans key=ID identity=false
 type Plan struct {
-	ID          int
+	ID          int `foundry:"member=ID,key-role=lookup"`
 	Period      temporal.Interval
 	Samples     relation.Many[Sample]
 	Labels      relation.Through[Label, Link]
@@ -31,13 +37,15 @@ type Plan struct {
 	TotalPeriod relation.Value[value.Nullable[temporal.Interval]]
 }
 
+//foundry:model table=interval_labels var=Labels key=ID identity=false
 type Label struct {
-	ID   temporal.Interval
+	ID   temporal.Interval `foundry:"codec=intervalCodec,member=ID"`
 	Name string
 }
 
+//foundry:model table=interval_links var=Links key=ID identity=false
 type Link struct {
-	ID         temporal.Interval
+	ID         temporal.Interval `foundry:"codec=intervalCodec,member=ID"`
 	PlanPeriod temporal.Interval
 	LabelID    temporal.Interval
 }

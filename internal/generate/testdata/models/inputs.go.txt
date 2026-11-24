@@ -1,0 +1,71 @@
+package sample
+
+import (
+	"database/sql/driver"
+	"errors"
+"github.com/weiloon1234/Foundry-Go/auth/password"
+	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/temporal"
+	"github.com/weiloon1234/Foundry-Go/value"
+	"time"
+)
+
+//foundry:enum
+type Direction string
+
+const Forward Direction = "forward"
+
+type Pair[A, B any] struct {
+	First  A
+	Second B
+}
+
+// found: model of an account
+//foundry:model table=input_families var=InputFamilies key=ID identity=false
+type InputFamily struct {
+ Hash password.Hash `foundry:"input=string,mutate=asHash,codec=hashCodec"`
+ MaybeHash value.Nullable[password.Hash] `foundry:"input=string,mutate=asHash,codec=hashCodec"`
+	ID             int64
+	Enabled        bool                                          `foundry:"input=string,mutate=asBool"`
+	MaybeEnabled   value.Nullable[bool]                          `foundry:"input=string,mutate=asBool"`
+	Label          string                                        `foundry:"input=string,mutate=asText" found:"exact" boundary:"unrelated" foundryui:"dropdown"`
+	MaybeLabel     value.Nullable[string]                        `foundry:"input=string,mutate=asText"`
+	Number         int                                           `foundry:"input=string,mutate=asNumber"`
+	MaybeNumber    value.Nullable[int]                           `foundry:"input=string,mutate=asNumber"`
+	At             time.Time                                     `foundry:"input=string,mutate=asTime"`
+	MaybeAt        value.Nullable[time.Time]                     `foundry:"input=string,mutate=asTime"`
+	Direction      Direction                                     `foundry:"input=string,mutate=asDirection"`
+	MaybeDirection value.Nullable[Direction]                     `foundry:"input=string,mutate=asDirection"`
+	Data           value.JSON[map[string]string]                 `foundry:"input=string,mutate=asJSON"`
+	MaybeData      value.Nullable[value.JSON[map[string]string]] `foundry:"input=string,mutate=asJSON"`
+	Interval       temporal.Interval                             `foundry:"input=string,mutate=asInterval"`
+	MaybeInterval  value.Nullable[temporal.Interval]             `foundry:"input=string,mutate=asInterval"`
+	Bytes          []byte                                        `foundry:"input=string,mutate=asBytes"`
+	MaybeBytes     value.Nullable[[]byte]                        `foundry:"input=string,mutate=asBytes"`
+	Generic        string                                        `foundry:"input=Pair[string,int],mutate=asPair"`
+	Custom         [2]byte                                       `foundry:"codec=customCodec"`
+}
+
+func asBool(string) (bool, error)           { return false, nil }
+func asText(s string) (string, error)       { return s, nil }
+func asNumber(string) (int, error)          { return 0, nil }
+func asTime(string) (time.Time, error)      { return time.Time{}, nil }
+func asDirection(string) (Direction, error) { return Forward, nil }
+func asJSON(string) (value.JSON[map[string]string], error) {
+	return value.JSON[map[string]string]{}, nil
+}
+func asInterval(string) (temporal.Interval, error) { return temporal.Interval{}, nil }
+func asBytes(s string) ([]byte, error)             { return []byte(s), nil }
+func asPair(p Pair[string, int]) (string, error)   { return p.First, nil }
+func customCodec() codec.Codec[[2]byte] {
+	return codec.New(func(v [2]byte) (driver.Value, error) { return v[:], nil }, func(raw any) ([2]byte, error) {
+		data, ok := raw.([]byte)
+		if !ok || len(data) != 2 {
+			return [2]byte{}, errors.New("expected two bytes")
+		}
+		return [2]byte(data), nil
+	})
+}
+
+func asHash(string)(password.Hash,error){return password.Hash{},nil}
+func hashCodec()codec.Codec[password.Hash]{return password.Codec()}

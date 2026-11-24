@@ -4,82 +4,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
-
-// CaptureTable binds the persisted Capture columns. ReceivedAt is the
-// kernel's event time, not a managed creation timestamp.
-type CaptureTable struct {
-	orm.Table[Capture, model.ID[Capture]]
-	ID         orm.Key[Capture, model.ID[Capture]]
-	ReceivedAt orm.Time[Capture, temporal.DateTime]
-	Method     orm.Text[Capture, string]
-	Path       orm.Text[Capture, string]
-	Route      orm.NullableText[Capture, string]
-	ClientIP   orm.NullableText[Capture, string]
-	Headers    orm.JSON[Capture, []httpcapture.Field]
-	// QueryFields binds Capture.Query; the name avoids Table.Query.
-	QueryFields         orm.JSON[Capture, []httpcapture.Field]
-	ContentType         orm.Text[Capture, string]
-	ContentEncoding     orm.Text[Capture, string]
-	DeclaredBytes       orm.NullableNumber[Capture, int64]
-	MeasuredBytes       orm.NullableNumber[Capture, int64]
-	ObservedBytes       orm.Number[Capture, int64]
-	BodyMode            orm.Text[Capture, string]
-	BodyState           orm.Text[Capture, string]
-	BodyOmission        orm.NullableText[Capture, string]
-	Body                orm.Column[Capture, []byte]
-	ResponseStatus      orm.NullableNumber[Capture, int32]
-	Outcome             orm.Text[Capture, observability.Outcome]
-	ResponseState       orm.Text[Capture, string]
-	ResponseContentType orm.Text[Capture, string]
-	ResponseEncoding    orm.Text[Capture, string]
-	ResponseBytes       orm.Number[Capture, int64]
-	ResponseHead        orm.Column[Capture, []byte]
-	ResponseHeaders     orm.JSON[Capture, []httpcapture.Field]
-	DurationMS          orm.Number[Capture, int64]
-	Omissions           orm.JSON[Capture, []string]
-	DroppedBefore       orm.Number[Capture, int64]
-}
-
-// Captures owns the immutable declaration. Example: orm.Find(ctx, tx, Captures.Table, id).
-var Captures = orm.Define("foundry_webhook_captures", func(b orm.Builder[Capture], m *Capture) CaptureTable {
-	t := orm.TableOf(b, &m.ID)
-	return CaptureTable{
-		Table: t, ID: t.Key(),
-		ReceivedAt:          orm.TimeOf(b, &m.ReceivedAt),
-		Method:              orm.TextOf(b, &m.Method),
-		Path:                orm.TextOf(b, &m.Path),
-		Route:               orm.NullableTextOf(b, &m.Route),
-		ClientIP:            orm.NullableTextOf(b, &m.ClientIP),
-		Headers:             orm.JSONOf(b, &m.Headers),
-		QueryFields:         orm.JSONOf(b, &m.Query),
-		ContentType:         orm.TextOf(b, &m.ContentType),
-		ContentEncoding:     orm.TextOf(b, &m.ContentEncoding),
-		DeclaredBytes:       orm.NullableNumberOf(b, &m.DeclaredBytes),
-		MeasuredBytes:       orm.NullableNumberOf(b, &m.MeasuredBytes),
-		ObservedBytes:       orm.NumberOf(b, &m.ObservedBytes),
-		BodyMode:            orm.TextOf(b, &m.BodyMode),
-		BodyState:           orm.TextOf(b, &m.BodyState),
-		BodyOmission:        orm.NullableTextOf(b, &m.BodyOmission),
-		Body:                orm.BytesOf(b, &m.Body),
-		ResponseStatus:      orm.NullableNumberOf(b, &m.ResponseStatus),
-		Outcome:             orm.TextOf(b, &m.Outcome),
-		ResponseState:       orm.TextOf(b, &m.ResponseState),
-		ResponseContentType: orm.TextOf(b, &m.ResponseContentType),
-		ResponseEncoding:    orm.TextOf(b, &m.ResponseEncoding),
-		ResponseBytes:       orm.NumberOf(b, &m.ResponseBytes),
-		ResponseHead:        orm.BytesOf(b, &m.ResponseHead),
-		ResponseHeaders:     orm.JSONOf(b, &m.ResponseHeaders),
-		DurationMS:          orm.NumberOf(b, &m.DurationMS),
-		Omissions:           orm.JSONOf(b, &m.Omissions),
-		DroppedBefore:       orm.NumberOf(b, &m.DroppedBefore),
-	}
-}, orm.NoTimestamps())
 
 type summaryFields struct {
 	rows.Row[Summary]

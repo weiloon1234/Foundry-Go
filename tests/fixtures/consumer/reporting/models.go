@@ -17,32 +17,35 @@ const (
 	Disabled State = "disabled"
 )
 
+//foundry:model table=report_operators var=OperatorModels key=ID identity=false
 type Operator struct {
 	ID        model.ID[Operator]
 	TenantID  int64
-	Active    bool
-	CanView   bool
-	CanExport bool
+	Active    bool `foundry:"role=column"`
+	CanView   bool `foundry:"role=column"`
+	CanExport bool `foundry:"role=column"`
 }
 
+//foundry:model table=report_members var=MemberModels key=ID identity=false
 type Member struct {
-	ID        model.ID[Member]
+	ID        model.ID[Member] `foundry:"member=ID,key-role=primary"`
 	TenantID  int64
 	Name      string
 	Nickname  value.Nullable[string]
 	State     State
-	Balance   decimal.Decimal
-	DeletedAt value.Nullable[temporal.DateTime]
+	Balance   decimal.Decimal                   `foundry:"role=number"`
+	DeletedAt value.Nullable[temporal.DateTime] `foundry:"role=soft-delete"`
 	Orders    relation.Many[Order]
 }
 
+//foundry:model table=report_orders var=OrderModels key=ID identity=false
 type Order struct {
-	ID        model.ID[Order]
+	ID        model.ID[Order] `foundry:"member=ID,key-role=primary"`
 	TenantID  int64
 	MemberID  model.ID[Member]
 	Label     string
-	Amount    decimal.Decimal
-	DeletedAt value.Nullable[temporal.DateTime]
+	Amount    decimal.Decimal                   `foundry:"role=number"`
+	DeletedAt value.Nullable[temporal.DateTime] `foundry:"role=soft-delete"`
 	Member    relation.One[Member]
 }
 

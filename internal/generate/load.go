@@ -14,8 +14,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 )
@@ -116,6 +114,7 @@ func (g *packageGraph) loadPackage(ctx context.Context, path string) (*packageIn
 	input.httpDependency = g.httpDependencies[path]
 	input.frameworkPackage = g.scope.path == framework
 	input.persistenceDependent = g.importsPersistence(input.files)
+	input.persistenceDependent = input.persistenceDependent || len(modelTypeSpecs(input.files)) != 0
 	if !declared {
 		// Without directives there is nothing to discover. The complete overlay
 		// check still validates the package and supplies it to dependents.
@@ -183,30 +182,16 @@ func (p *packageInput) check(outputs map[string][]byte, origins map[string]token
 	return nil
 }
 
-// mayDeclare is the byte-level prefilter for Foundry directives. It accepts
-// every line-comment form directive parsing accepts, including whitespace after
-// the slashes (`// foundry:dto`), so a file with a declaration is never
-// skipped. False positives, such as the text inside a string, only cost a parse.
+// mayDeclare accepts both directives and likely misspellings for discovery.
 func mayDeclare(data []byte) bool {
-	marker := []byte("foundry:")
-	for offset := 0; ; {
-		index := bytes.Index(data[offset:], marker)
-		if index < 0 {
-			return false
-		}
-		start := offset + index
-		for start > 0 {
-			r, size := utf8.DecodeLastRune(data[:start])
-			if r == '\n' || !unicode.IsSpace(r) {
-				break
+	for _, line := range bytes.Split(data, []byte("\n")) {
+		if i := bytes.Index(line, []byte("//")); i >= 0 {
+			if _, ok := directiveComment(string(line[i:])); ok {
+				return true
 			}
-			start -= size
 		}
-		if bytes.HasSuffix(data[:start], []byte("//")) {
-			return true
-		}
-		offset += index + len(marker)
 	}
+	return false
 }
 
 // hasDeclarationDirective reports whether a file attaches a Foundry directive to
@@ -230,7 +215,7 @@ func hasDeclarationDirective(name string, data []byte) (bool, error) {
 				continue
 			}
 			for _, comment := range comments.List {
-				if strings.HasPrefix(strings.TrimSpace(strings.TrimPrefix(comment.Text, "//")), "foundry:") {
+				if _, candidate := directiveComment(comment.Text); candidate {
 					return true, nil
 				}
 			}

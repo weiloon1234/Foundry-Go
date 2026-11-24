@@ -6,10 +6,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=profile_records var=Records key=ID identity=false
 type Record struct {
-	ID      model.ID[Record]
+	ID      model.ID[Record] `foundry:"member=ID"`
 	Name    string
-	Active  bool
+	Active  bool `foundry:"role=column"`
 	Score   int64
 	Payload []byte
 	Note    value.Nullable[string]

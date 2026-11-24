@@ -2,7 +2,11 @@ package generate
 
 import (
 	"go/ast"
+	"go/parser"
 	"go/token"
+	"strconv"
+
+	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 )
 
 // A declaration unit preserves a whole const group (and therefore iota), while
@@ -19,8 +23,13 @@ type declarationUnit struct {
 // needed to understand them. Everything else is checked in the complete overlay;
 // unrelated DTO aliases, functions and constants may reference generated types.
 func (p *packageInput) declarationFiles() ([]*ast.File, error) {
+	modelNames := make(map[string]bool)
+	for _, spec := range modelTypeSpecs(p.files) {
+		modelNames[spec.Name.Name] = true
+	}
 	var units []declarationUnit
 	var unionStubs []ast.Decl
+	var modelStubs []string
 	index := make(map[string]int)
 	enumNames := make(map[string]bool)
 	declarationMethods := make(map[string][]int)
@@ -47,7 +56,7 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 						copy.Body = nil
 					}
 					add(declarationUnit{file: fileIndex, decl: &copy, names: []string{decl.Name.Name}, refs: references(decl.Type)})
-				} else if declarationMethod(decl.Name.Name) && len(decl.Recv.List) == 1 {
+				} else if len(decl.Recv.List) == 1 && (declarationMethod(decl.Name.Name) || modelNames[receiverTypeName(decl.Recv.List[0].Type)] && modelmeta.FieldMethodPrefix(decl.Name.Name) != "") {
 					// Codec and contract discovery need signatures on a fresh
 					// checkout. Bodies may reference generated declarations.
 					owner := receiverTypeName(decl.Recv.List[0].Type)
@@ -84,6 +93,9 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 						}
 						kind, args, err := directive(comments)
 						if err != nil {
+							if isModelDirective(comments) {
+								return nil, modelError(p, spec.Pos(), spec.Name.Name, "", err.Error())
+							}
 							return nil, p.diagnostic(spec.Pos(), err.Error())
 						}
 						if kind == "union" {
@@ -102,6 +114,42 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 						typeCopy := *spec
 						copy.Specs = []ast.Spec{&typeCopy}
 						unit.refs = references(typeCopy.Type)
+						if kind == "model" {
+							tableType := spec.Name.Name + "Table"
+							if modelmeta.ModelIdentifier(tableType) {
+								modelStubs = append(modelStubs, tableType)
+							}
+							for _, name := range []string{args["hooks"], args["retrieval"], args["scopes"]} {
+								if name != "" {
+									unit.refs = append(unit.refs, name)
+								}
+							}
+							if st, ok := spec.Type.(*ast.StructType); ok {
+								for _, field := range st.Fields.List {
+									if field.Tag == nil {
+										continue
+									}
+									raw, err := strconv.Unquote(field.Tag.Value)
+									if err != nil {
+										continue
+									}
+									tag, err := modelmeta.ParseModelTag(raw)
+									if err != nil {
+										continue
+									}
+									for _, name := range []string{tag.Mutate, tag.Codec} {
+										if name != "" {
+											unit.refs = append(unit.refs, name)
+										}
+									}
+									if tag.Input != "" {
+										if expr, err := parser.ParseExpr(tag.Input); err == nil {
+											unit.refs = append(unit.refs, references(expr)...)
+										}
+									}
+								}
+							}
+						}
 						if spec.TypeParams != nil {
 							unit.refs = append(unit.refs, references(spec.TypeParams)...)
 						}
@@ -179,6 +227,11 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 	for i, unit := range units {
 		if selected[i] {
 			files[unit.file].Decls = append(files[unit.file].Decls, unit.decl)
+		}
+	}
+	for _, name := range modelStubs {
+		if _, exists := p.definedAt[name]; !exists {
+			unionStubs = append(unionStubs, &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(name), Type: &ast.StructType{Fields: &ast.FieldList{}}}}})
 		}
 	}
 	if len(unionStubs) != 0 {

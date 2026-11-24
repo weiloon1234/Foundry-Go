@@ -331,6 +331,11 @@ func (g *packageGraph) refineDiscoveryFailure(results []preparedPackage, index m
 		queue = append(queue, results[position].input.checked.Imports()...)
 	}
 	models, recognitionErr := g.persistenceModels(sources)
+	if recognitionErr == nil {
+		for _, spec := range modelTypeSpecs(p.files) {
+			models[persistenceModelKey{p.path, spec.Name.Name}] = true
+		}
+	}
 	if recognitionErr != nil || len(models) == 0 {
 		return failure.err
 	}

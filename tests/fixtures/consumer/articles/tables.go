@@ -10,57 +10,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/metadata"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/storage"
-	"github.com/weiloon1234/Foundry-Go/temporal"
+
 	"github.com/weiloon1234/Foundry-Go/translations"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
-
-// AuthorTable exposes stored author fields and the article slot. Example: Authors.Query().
-type AuthorTable struct {
-	// Table owns the concrete author key. Example: orm.Eq(Authors.Key(), id).
-	orm.Table[Author, model.ID[Author]]
-	// Name stores the author name. Example: orm.Set(Authors.Name, "Writer").
-	Name orm.Text[Author, string]
-	// Articles binds the eager collection. Example: AuthorArticles.Using(Articles.Query()).
-	Articles orm.Many[Author, Article]
-}
-
-// Authors publishes the author declaration. Example: orm.Insert(ctx, tx, Authors.Table,orm.Set(Authors.Name, "Writer")).
-var Authors = orm.Define("article_authors", func(b orm.Builder[Author], m *Author) AuthorTable {
-	return AuthorTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name), orm.ManyOf(b, &m.Articles)}
-})
-
-// ArticleTable exposes stored fields and external slots. Example: Articles.Query().
-type ArticleTable struct {
-	// Table owns the concrete article key. Example: orm.Eq(Articles.Key(), id).
-	orm.Table[Article, model.ID[Article]]
-	// Slug stores the public slug. Example: orm.Eq(Articles.Slug, "welcome").
-	Slug orm.Text[Article, string]
-	// AuthorID retains the author key type. Example: orm.Set(Articles.AuthorID, author.ID).
-	AuthorID orm.Column[Article, model.ID[Author]]
-	// DeletedAt stores soft deletion; Restore clears it. Example: Articles.DeletedAt.IsNull().
-	DeletedAt orm.SoftDelete[Article, temporal.DateTime]
-	// Soft authorizes physical deletion. Example: Articles.ForceDelete(ctx,tx,Articles.Soft,id).
-	Soft orm.SoftDeletable[Article]
-	// Title binds localized text. Example: ArticleSlots.Title.Relation(Articles.Title).
-	Title orm.Slot[Article, translations.Text]
-	// Summary binds localized summary text. Example: ArticleSlots.Summary.Relation(Articles.Summary).
-	Summary orm.Slot[Article, translations.Text]
-	// Logo binds a single file. Example: ArticleSlots.Logo.Relation(Articles.Logo).
-	Logo orm.Slot[Article, attachments.One[Article]]
-	// Galleries binds ordered files. Example: ArticleSlots.Galleries.Relation(Articles.Galleries).
-	Galleries orm.Slot[Article, attachments.Many[Article]]
-	// SEO binds the concrete metadata value. Example: ArticleSlots.SEO.Relation(Articles.SEO).
-	SEO orm.Slot[Article, metadata.Value[SEO]]
-	// Author binds the eager parent. Example: ArticleAuthor.Using(Authors.Query()).
-	Author orm.One[Article, Author]
-}
-
-// Articles publishes the article declaration without changing the generated API. Example: Articles.Query().With(ArticleAuthor).
-var Articles = orm.Define("articles", func(b orm.Builder[Article], m *Article) ArticleTable {
-	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
-	return ArticleTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Slug), orm.ColumnOf(b, &m.AuthorID), deleted, orm.SoftDeletes(deleted), orm.SlotOf(b, &m.Title), orm.SlotOf(b, &m.Summary), orm.SlotOf(b, &m.Logo), orm.SlotOf(b, &m.Galleries), orm.SlotOf(b, &m.SEO), orm.OneOf(b, &m.Author)}
-})
 
 // AuthorArticles loads the author's articles. Example: Authors.Query().With(AuthorArticles).
 var AuthorArticles = orm.HasManyOf(Authors.Articles, Authors.Key(), Articles.AuthorID)

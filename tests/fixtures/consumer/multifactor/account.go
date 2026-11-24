@@ -15,14 +15,22 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=mfa_accounts var=AccountRecords key=ID identity=false
 type Account struct {
-	ID    model.ID[Account]
+	// Table owns the concrete account key. Example: orm.Eq(AccountRecords.Key(), id).
+	ID model.ID[Account]
+	// Email binds the stored field. Example: orm.Set(AccountRecords.Email, "member@example.test").
 	Email string
 	// Sensitive stored password hash: typed persistence uses password.Codec; ordinary formatting and JSON are redacted. Automatic audit values are redacted and cursor/identity keys are rejected. Compare-and-swap with the stored Hash; verify plaintext with password.Hasher.Check rather than SQL equality.
-	Password   password.Hash
-	Enabled    bool
-	MFAEnabled bool
-	RequireMFA bool
+	//
+	// Password binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.Set(AccountRecords.Password, hash).
+	Password password.Hash
+	// Enabled binds the stored field. Example: orm.Set(AccountRecords.Enabled, true).
+	Enabled bool `foundry:"role=column"`
+	// MFAEnabled binds the stored field. Example: orm.Set(AccountRecords.MFAEnabled, true).
+	MFAEnabled bool `foundry:"role=column"`
+	// RequireMFA binds the stored field. Example: orm.Set(AccountRecords.RequireMFA, true).
+	RequireMFA bool `foundry:"role=column"`
 }
 
 type Provider = auth.Provider[Account, model.ID[Account]]

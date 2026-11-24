@@ -27,31 +27,34 @@ func TenantFrom(ctx context.Context) (TenantID, bool) {
 	return tenant, ok && tenant != ""
 }
 
+//foundry:model table=tenant_documents var=Documents key=ID scopes=documentScopes identity=false
 type Document struct {
 	ID        model.ID[Document]
 	TenantID  TenantID
 	Title     string
-	Published bool
+	Published bool `foundry:"role=column"`
 	Views     int64
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt value.Nullable[time.Time]
+	CreatedAt time.Time                 `foundry:"role=created-at"`
+	UpdatedAt time.Time                 `foundry:"role=updated-at"`
+	DeletedAt value.Nullable[time.Time] `foundry:"role=soft-delete"`
 	Tags      relation.Through[Tag, DocumentTag]
 }
 
 type TagCode string
 
+//foundry:model table=tenant_tags var=Tags key=Code identity=false
 type Tag struct {
 	Code      TagCode
 	Name      string
 	Documents relation.Through[Document, DocumentTag]
 }
 
+//foundry:model table=tenant_document_tags var=DocumentTags key=ID identity=false
 type DocumentTag struct {
 	ID         model.ID[DocumentTag]
-	DocumentID model.ID[Document]
+	DocumentID model.ID[Document] `foundry:"role=column"`
 	TagCode    TagCode
 	Weight     int64
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	CreatedAt  time.Time `foundry:"role=created-at"`
+	UpdatedAt  time.Time `foundry:"role=updated-at"`
 }

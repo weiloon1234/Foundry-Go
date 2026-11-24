@@ -15,18 +15,19 @@ type Preferences struct {
 	APIToken string `json:"apiToken"`
 }
 
+//foundry:model table=audited_accounts var=Accounts key=ID identity=false hooks=ormAccountHooks
 type Account struct {
 	ID model.ID[Account]
 	// Email stores the normalized address used by audit snapshots.
 	// MutateEmail normalizes input; AccessEmail returns display text without changing storage.
-	Email        string
+	Email        string `foundry:"input=string"`
 	PasswordHash string
 	Note         value.Nullable[string]
-	Balance      decimal.Decimal
+	Balance      decimal.Decimal `foundry:"role=number"`
 	Preferences  value.JSON[Preferences]
-	CreatedAt    temporal.DateTime
-	UpdatedAt    temporal.DateTime
-	DeletedAt    value.Nullable[temporal.DateTime]
+	CreatedAt    temporal.DateTime                 `foundry:"role=created-at"`
+	UpdatedAt    temporal.DateTime                 `foundry:"role=updated-at"`
+	DeletedAt    value.Nullable[temporal.DateTime] `foundry:"role=soft-delete"`
 }
 
 func (Account) MutateEmail(input string) (string, error) {
@@ -39,6 +40,7 @@ func (Account) MarshalJSON() ([]byte, error) { panic("model presentation must no
 
 type LabelCode string
 
+//foundry:model table=audited_labels var=Labels key=Code identity=false
 type Label struct {
 	Code LabelCode
 	Name string

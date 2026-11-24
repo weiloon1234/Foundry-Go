@@ -119,7 +119,7 @@ func TestDeclarationErrors(t *testing.T) {
 	}
 	bad := Define("bad", func(b Builder[badTag], s *badTag) Table[badTag, int] { TextOf(b, &s.Name); return TableOf(b, &s.ID) })
 	err := Check(bad)
-	for _, want := range []string{"column tag", "default=database", "typo"} {
+	for _, want := range []string{"column requires a SQL identifier", "default requires database", "unknown foundry option typo"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("missing %s: %v", want, err)
 		}

@@ -11,44 +11,23 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// Member declares lifecycle parity independently of generated model adapters.
+// Member declares lifecycle parity with operation-local hook state.
+//
+//foundry:model table=hook_members var=Members key=ID hooks=LocalHooks identity=false
 type Member struct {
-	ID        int64
-	Name      string `foundry:"default=database"`
-	Note      value.Nullable[coremodels.StoredLabel]
+	ID        int64                                  `foundry:"member=ID,key-role=primary"`
+	Name      string                                 `foundry:"default=database,input=string"`
+	Note      value.Nullable[coremodels.StoredLabel] `foundry:"input=coremodels.LabelInput"`
 	Body      []byte
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt value.Nullable[time.Time]
-	Scratch   string `foundry:"-"`
+	CreatedAt time.Time                 `foundry:"role=created-at"`
+	UpdatedAt time.Time                 `foundry:"role=updated-at"`
+	DeletedAt value.Nullable[time.Time] `foundry:"role=soft-delete"`
+	Scratch   string                    `foundry:"-"`
 }
 
 func (Member) MutateName(v string) (string, error) { return coremodels.NormalizeName(v) }
 func (Member) MutateNote(v coremodels.LabelInput) (coremodels.StoredLabel, error) {
 	return coremodels.NormalizeLabel(v)
-}
-
-type MemberTable struct {
-	orm.Table[Member, int64]
-	ID        orm.Primary[Member, int64]
-	Soft      orm.SoftDeletable[Member]
-	Name      orm.InputText[Member, string, string]
-	Note      orm.NullableInputText[Member, coremodels.LabelInput, coremodels.StoredLabel]
-	Body      orm.Column[Member, []byte]
-	CreatedAt orm.CreatedAt[Member, time.Time]
-	UpdatedAt orm.UpdatedAt[Member, time.Time]
-	DeletedAt orm.SoftDelete[Member, time.Time]
-}
-
-var Members = Declare(LocalHooks)
-
-// Declare accepts an immutable per-write factory; runtime state belongs to its caller.
-func Declare(factory func() orm.Hooks[Member]) MemberTable {
-	return orm.Define("hook_members", func(b orm.Builder[Member], m *Member) MemberTable {
-		table := orm.TableOf(b, &m.ID)
-		deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
-		return MemberTable{table, orm.PrimaryOf(b, table.Key()), orm.SoftDeletes(deleted), orm.InputTextOf[Member, string](b, &m.Name, nil), orm.NullableInputTextOf[Member, coremodels.LabelInput](b, &m.Note, nil), orm.BytesOf(b, &m.Body), orm.CreatedAtOf(b, &m.CreatedAt), orm.UpdatedAtOf(b, &m.UpdatedAt), deleted}
-	}, orm.WithHooks(factory))
 }
 
 // LocalHooks declares every old write stage; callbacks use the operation's trace only.

@@ -21,8 +21,9 @@ are acceptance examples, not starter applications.
 - Put reusable infrastructure in the framework; applications supply domain models,
   concrete DTOs, business handlers and explicit declarations. Improve a missing
   framework capability instead of making every consumer rebuild it.
-- Handwrite persistence models, `database/orm` table declarations and `orm/rows`
-  projections. Follow the typed-role rules in [database/AGENTS.md](database/AGENTS.md)
+- Declare each table-backed model once as a struct with `//foundry:model` and
+  `foundry` tags. Run `foundry generate` for its table and identity; keep `orm/rows`
+  projections handwritten. Do not handwrite application table bindings or identity blocks. Follow the typed-role rules in [database/AGENTS.md](database/AGENTS.md)
   and the [migration guide](docs/guides/orm-migration.md).
 - Prefer configured `application.New` for ordinary assembly. Keep direct foundation
   providers as the advanced composition path. Use constructors and small interfaces;

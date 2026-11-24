@@ -14,7 +14,7 @@ import (
 // Keep the historical concrete model identity while using only handwritten ORM.
 type cursorUser = oldmodels.User
 
-func readUserTable() oldmodels.UserTable { return oldmodels.Users }
+func readUserTable() cursorUserTable { return cursorUsers }
 
 var readUserColumns = []string{"id", "email_address", "age", "nickname", "status", "level", "birthday", "introducer_id"}
 

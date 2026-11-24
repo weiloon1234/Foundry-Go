@@ -2,13 +2,13 @@
 
 Aggregate descriptors from `database/orm/expr` work both in rows projections and
 in per-parent relation slots. Related models need not be hydrated to compute a
-summary. [Handwritten declarations](../../tests/fixtures/consumer/models/orm_relations.go)
+summary. [Relation declarations](../../tests/fixtures/consumer/models/orm_relations.go)
 own bindings, while ordinary model fields retain explicit loaded state.
 
 ## Declaring computed fields
 
-Declare `relation.Value[V]` fields in the model and bind them with `orm.ValueOf` in
-`orm.Define`. These slots are not persisted columns or write assignments. Supply
+Declare `relation.Value[V]` fields in the annotated model and regenerate their
+typed slot handles. These slots are not persisted columns or write assignments. Supply
 an exact-result aggregate with `slot.Using(expr.Related(relation, aggregate))`.
 `expr.Related` validates the actual source and target owners as well as the Go
 result type. A missing computation remains invalid when selected.

@@ -5,17 +5,26 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=idem_workspaces var=Workspaces key=ID identity=false
 type Workspace struct {
-	ID      int64
-	Tenant  string
-	Enabled bool
+	// Table owns the primary key. Example: orm.Eq(Workspaces.Key(), id).
+	ID int64
+	// Tenant binds the Tenant field. Example: orm.Set(Workspaces.Tenant, "tenant").
+	Tenant string
+	// Enabled binds the Enabled field. Example: orm.Set(Workspaces.Enabled, true).
+	Enabled bool `foundry:"role=column"`
 }
 
+//foundry:model table=idem_orders var=Orders key=ID identity=false
 type Order struct {
-	ID          model.ID[Order]
+	// Table owns the primary key. Example: orm.Eq(Orders.Key(), id).
+	ID model.ID[Order]
+	// WorkspaceID binds the WorkspaceID field. Example: orm.Set(Orders.WorkspaceID, 1).
 	WorkspaceID int64
-	Caller      int64
-	Name        string
+	// Caller binds the Caller field. Example: orm.Set(Orders.Caller, 1).
+	Caller int64
+	// Name binds the Name field. Example: orm.Set(Orders.Name, "order").
+	Name string
 }
 
 //foundry:path pattern=/workspaces/{workspace}/orders

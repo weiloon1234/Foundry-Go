@@ -1,4 +1,8 @@
 {
   "version": 1,
-  "files": {}
+  "files": {
+    "metadata_foundry.gen.go": "e9f8395e125269c4e416347a6a7499a3294cdd910a75f49af90078855d8d0f6d",
+    "setting_foundry.gen.go": "478cd0b0af3c04a94d9bbfd5aab608d4ab4a7f1e84c308fef409ed5f185cec8d",
+    "translation_foundry.gen.go": "4f252a7d562a3f083d971505733f5694713d97862603c066e9e826f3bd6b6672"
+  }
 }

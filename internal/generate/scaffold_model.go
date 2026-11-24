@@ -2,11 +2,14 @@ package generate
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+
+	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 )
 
 // scaffoldModelSlots reuses the extension kind and naming rules without depending
-// on generated model declarations. Metadata contracts alone still need generation.
+// on generated model declarations.
 func scaffoldModelSlots(o ScaffoldOptions) []extensionSlot {
 	var result []extensionSlot
 	for _, group := range []struct {
@@ -51,23 +54,15 @@ func renderORMModel(pkg string, o ScaffoldOptions) (string, error) {
 			return "metadata.Value[" + names.metadata[slot.name] + "]"
 		}
 	}
-	fmt.Fprintf(&s, "// %s is a persisted model. Add fields and their typed handles below.\n// Example: %s{}.\ntype %s struct {\n// ID is the concrete owner key. Example: record.ID.\nID %s `foundry:\"column=id\"`\n", name, name, name, key)
+	fmt.Fprintf(&s, "// %s is a persisted model. Add domain fields, then run foundry generate.\n// Example: %s{}.\n//foundry:model table=%s key=ID var=%s\ntype %s struct {\n// ID is the concrete owner key. Example: record.ID.\nID %s\n", name, name, o.Table, table, name, key)
 	for _, slot := range slots {
-		fmt.Fprintf(&s, "// %s holds %s. Example: record.%s.IsLoaded().\n%s %s\n", slot.name, extensionSlotDescription(slot), slot.name, slot.name, valueType(slot))
+		tag := ""
+		if modelTableMember(slot.name) {
+			tag = fmt.Sprintf(" `foundry:%q`", "member="+scaffoldSlotMember(slot, slots))
+		}
+		fmt.Fprintf(&s, "// %s holds %s. Example: record.%s.IsLoaded().\n%s %s%s\n", slot.name, extensionSlotDescription(slot), slot.name, slot.name, valueType(slot), tag)
 	}
 	s.WriteString("}\n\n")
-	fmt.Fprintf(&s, "// %s holds the model's typed fields. Example: %s.Query().\ntype %s struct {\n// Table owns the primary key and operations. Example: orm.Eq(%s.Key(), id).\norm.Table[%s,%s]\n", names.tableType, table, names.tableType, table, name, key)
-	// Slot handles use a suffix so every previously accepted model field name
-	// (including Table, Key and Query) remains usable beside embedded operations.
-	for _, slot := range slots {
-		fmt.Fprintf(&s, "// %sSlot binds the external value. Example: extensions.BindSlot(%s.Key(),%s.%sSlot).\n%sSlot orm.Slot[%s,%s]\n", slot.name, table, table, slot.name, slot.name, name, valueType(slot))
-	}
-	s.WriteString("}\n\n")
-	fmt.Fprintf(&s, "// %s declares the persisted table. Example: orm.Find(ctx, db, %s.Table, id).\nvar %s = orm.Define(%q,func(b orm.Builder[%s],m *%s)%s {\nreturn %s{Table:orm.TableOf(b,&m.ID),\n", table, table, table, o.Table, name, name, names.tableType, names.tableType)
-	for _, slot := range slots {
-		fmt.Fprintf(&s, "%sSlot:orm.SlotOf(b,&m.%s),\n", slot.name, slot.name)
-	}
-	s.WriteString("}\n})\n\n")
 	fmt.Fprintf(&s, "// %s supplies this declaration to the package's Tables helper.\n// Example: orm.Check(%s()...).\nfunc %s() []orm.CheckedTable { return []orm.CheckedTable{%s} }\n", names.tables, names.tables, names.tables, table)
 	s.WriteString("\n// Declare relations after the tables they reference to avoid initialization cycles.\n")
 	for _, slot := range slots {
@@ -81,7 +76,7 @@ func renderORMModel(pkg string, o ScaffoldOptions) (string, error) {
 	if o.Disk != "" {
 		fmt.Fprintf(&s, "\n// %s names the attachment disk; configure it in storage settings.\n// Example: %s.ID().\nvar %s=storage.DefineDisk(%q)\n", names.disk, names.disk, names.disk, o.Disk)
 	}
-	fmt.Fprintf(&s, "\n// %s pins the persisted owner identity. Keep it stable when renaming tables.\n// Example: %s.Reference(id).\nvar %s=extensions.DefineORMOwner(%q,orm.IdentityOf(%s.Table,%s.Key()),extensions.OwnerOptions{StorageModel:%q})\n", names.owner, names.owner, names.owner, o.Table, table, table, o.Table)
+	fmt.Fprintf(&s, "\n// %s pins the persisted owner identity. Keep it stable when renaming tables.\n// Example: %s.Reference(id).\nvar %s=extensions.DefineORMOwner(%q,%s,extensions.OwnerOptions{StorageModel:%q})\n", names.owner, names.owner, names.owner, o.Table, modelmeta.IdentityVariable(table), o.Table)
 	fmt.Fprintf(&s, "\n// %s groups typed external-store handles. Example: %s.From(runtime).\ntype %s struct {\n", names.extensionType, names.extensions, names.extensionType)
 	for _, slot := range slots {
 		typ := "translations.TextHandle[" + name + "," + key + "]"
@@ -96,7 +91,7 @@ func renderORMModel(pkg string, o ScaffoldOptions) (string, error) {
 	s.WriteString("}\n\n")
 	fmt.Fprintf(&s, "// %s declares policies independently of table initialization.\n// Example: %s.From(runtime).\nvar %s=%s{\n", names.extensions, names.extensions, names.extensions, names.extensionType)
 	for _, slot := range slots {
-		binding := fmt.Sprintf("extensions.BindSlot(%s.Key(),%s.%sSlot)", table, table, slot.name)
+		binding := fmt.Sprintf("extensions.BindSlot(%s.Key(),%s.%s)", table, table, scaffoldSlotMember(slot, slots))
 		switch slot.kind {
 		case textSlot:
 			fmt.Fprintf(&s, "%s:translations.TextOf(%s,%q,translations.Options{},%s),\n", slot.name, names.owner, slot.stored, binding)
@@ -123,7 +118,7 @@ func renderORMModel(pkg string, o ScaffoldOptions) (string, error) {
 	s.WriteString("return d\n}\n\n")
 	fmt.Fprintf(&s, "// All returns typed eager loaders. Example: %s.Query().With(bound.All()...).\nfunc (d %s) All() []orm.Relation[%s] {return []orm.Relation[%s]{\n", table, names.extensionType, name, name)
 	for _, slot := range slots {
-		fmt.Fprintf(&s, "d.%s.Relation(%s.%sSlot),\n", slot.name, table, slot.name)
+		fmt.Fprintf(&s, "d.%s.Relation(%s.%s),\n", slot.name, table, scaffoldSlotMember(slot, slots))
 	}
 	s.WriteString("}}\n\n")
 	fmt.Fprintf(&s, "// %s includes ordinary deletion cleanup.\n// Example: builder.Models(%s()).\nfunc %s() slots.Declaration {return slots.DeclareORM(%s,slots.Parts{\n", names.declaration, names.declaration, names.declaration, names.owner)
@@ -149,4 +144,24 @@ func renderORMModel(pkg string, o ScaffoldOptions) (string, error) {
 	}
 	s.WriteString("},\n})}\n")
 	return s.String(), nil
+}
+
+func scaffoldSlotMember(slot extensionSlot, slots []extensionSlot) string {
+	if !modelTableMember(slot.name) {
+		return slot.name
+	}
+	used := make(map[string]bool, len(slots))
+	for _, s := range slots {
+		used[s.name] = true
+	}
+	base := slot.name + "Slot"
+	for i := 0; ; i++ {
+		name := base
+		if i > 0 {
+			name += strconv.Itoa(i)
+		}
+		if !used[name] && !modelTableMember(name) {
+			return name
+		}
+	}
 }

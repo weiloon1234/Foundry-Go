@@ -33,18 +33,20 @@ type PolicyKey struct {
 	Region  string `json:"region"`
 }
 
+//foundry:model table=json_documents var=Documents key=ID identity=false
 type Document struct {
 	ID       int
 	Settings value.JSON[Preferences]
 	Backup   value.Nullable[value.JSON[Preferences]]
 	Tags     value.JSON[[]string]
 	State    value.JSON[value.Nullable[string]]
-	PolicyID value.JSON[PolicyKey]
+	PolicyID value.JSON[PolicyKey] `foundry:"codec=policyKeyCodec"`
 	Policy   relation.One[Policy]
 }
 
+//foundry:model table=json_policies var=Policies key=ID identity=false
 type Policy struct {
-	ID   value.JSON[PolicyKey]
+	ID   value.JSON[PolicyKey] `foundry:"codec=policyKeyCodec"`
 	Name string
 }
 

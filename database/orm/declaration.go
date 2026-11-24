@@ -21,7 +21,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
 // Builder binds fields during Define. Example: TextOf(b, &o.Email).
@@ -40,6 +39,10 @@ type declaration struct {
 }
 
 type tableCore struct {
+	// BEGIN foundry models convert
+	conversionTableMetadata
+	// END foundry models convert
+
 	typ           reflect.Type
 	slots         map[int]*slotCore
 	model         querycore.ModelDefinition
@@ -58,6 +61,10 @@ type tableCore struct {
 }
 
 type columnCore struct {
+	// BEGIN foundry models convert
+	conversionColumnMetadata
+	// END foundry models convert
+
 	owner              *tableCore
 	field              reflect.StructField
 	metadata           querycore.Column
@@ -89,7 +96,12 @@ type columnCore struct {
 
 // Option configures a declaration. Example: Define("logs", declare, NoTimestamps()).
 type Option struct {
+	// BEGIN foundry models convert
+	conversionOptionMetadata
+	// END foundry models convert
+
 	noTimestamps, noSoftDeletes bool
+	fingerprint                 string
 	hooks                       func() hookSet
 	hookModel                   reflect.Type
 	retrieval                   func() retrievalSet
@@ -112,6 +124,22 @@ func Define[M any, T CheckedTable](name string, declare func(Builder[M], *M) T, 
 	d.core.readObserved = lifecycle.HasRetrievalObservers[M]
 	var scopeSource func(any, *tableCore) []querycore.ScopeDefinition
 	for _, opt := range opts {
+		if opt.fingerprint != "" {
+			fields := []modelmeta.FieldTag{}
+			if d.typ.Kind() == reflect.Struct {
+				for i := 0; i < d.typ.NumField(); i++ {
+					f := d.typ.Field(i)
+					fields = append(fields, modelmeta.FieldTag{Name: f.Name, Tag: string(f.Tag)})
+				}
+			}
+			if modelmeta.Fingerprint(fields) != opt.fingerprint {
+				d.fail("model", "model changed since generation; run foundry generate")
+			}
+		}
+		// BEGIN foundry models convert
+		recordConversionOption(d.core, opt)
+		// END foundry models convert
+
 		if opt.retrievalModel != nil {
 			if opt.retrievalModel != d.typ || opt.retrieval == nil || d.core.retrieval != nil {
 				d.fail("retrieval", "declare one retrieval factory for this model")
@@ -141,6 +169,9 @@ func Define[M any, T CheckedTable](name string, declare func(Builder[M], *M) T, 
 		}
 
 	}
+	// BEGIN foundry models convert
+	recordConversionSettings(d)
+	// END foundry models convert
 	if d.typ.Kind() != reflect.Struct {
 		d.errors = append(d.errors, safeerror.New(fmt.Sprintf("orm %s: model must be a struct", name)))
 	}
@@ -213,51 +244,24 @@ func bindField(d *declaration, ptr unsafe.Pointer, typ reflect.Type, nullable bo
 	return c
 }
 
+// ModelFingerprint binds generated declarations to the model's ordered fields and tags.
+// Example: ModelFingerprint("<generated SHA-256>").
+func ModelFingerprint(fingerprint string) Option { return Option{fingerprint: fingerprint} }
+
 func parseTag(d *declaration, c *columnCore) {
-	tags, err := modelmeta.ParseTags(string(c.field.Tag))
+	tag, err := modelmeta.ParseModelTag(string(c.field.Tag))
 	if err != nil {
 		d.fail(c.field.Name, err.Error())
 		return
 	}
-	tag, present := tags["foundry"]
-	if present && tag == "" {
-		d.fail(c.field.Name, "foundry tag cannot be empty; remove the tag or specify an option")
-		return
-	}
-	if tag == "-" {
+	if tag.Ignore {
 		d.fail(c.field.Name, "transient field cannot be declared as a column")
 		return
 	}
-	seen := map[string]bool{}
-	for _, part := range strings.Split(tag, ",") {
-		if part == "" {
-			if tag != "" {
-				d.fail(c.field.Name, "empty foundry tag option")
-			}
-			continue
-		}
-		key, v, ok := strings.Cut(part, "=")
-		if !ok || seen[key] {
-			d.fail(c.field.Name, "invalid or repeated foundry tag option: "+key)
-			continue
-		}
-		seen[key] = true
-		switch key {
-		case "column":
-			if !sqlname.Valid(v) {
-				d.fail(c.field.Name, "column tag requires a valid SQL identifier")
-			}
-			c.metadata.Name = v
-		case "default":
-			if v != "database" {
-				d.fail(c.field.Name, "use default=database")
-			} else {
-				c.metadata.DatabaseDefault = true
-			}
-		default:
-			d.fail(c.field.Name, "unsupported foundry tag option: "+key)
-		}
+	if tag.Column != "" {
+		c.metadata.Name = tag.Column
 	}
+	c.metadata.DatabaseDefault = tag.DatabaseDefault
 }
 
 func seal(d *declaration) {
@@ -265,6 +269,9 @@ func seal(d *declaration) {
 	if d.typ.Kind() == reflect.Struct {
 		for i := 0; i < d.typ.NumField(); i++ {
 			f := d.typ.Field(i)
+			if _, err := modelmeta.ParseModelTag(string(f.Tag)); err != nil {
+				d.fail(f.Name, err.Error())
+			}
 			if d.core.slots[i] != nil {
 				if _, persisted := d.fields[i]; persisted {
 					d.fail(f.Name, "a field cannot be both a persisted column and an extension slot")
@@ -272,12 +279,12 @@ func seal(d *declaration) {
 				continue
 			}
 			if _, ok := d.fields[i]; !ok {
-				tags, err := modelmeta.ParseTags(string(f.Tag))
+				tags, err := modelmeta.ParseModelTag(string(f.Tag))
 				if err != nil {
 					d.fail(f.Name, err.Error())
 					continue
 				}
-				if tags["foundry"] == "-" {
+				if tags.Ignore {
 					continue
 				}
 				if !f.IsExported() || f.Anonymous {
@@ -285,7 +292,7 @@ func seal(d *declaration) {
 					continue
 				}
 				if f.Type.PkgPath() == "github.com/weiloon1234/Foundry-Go/database/relation" {
-					if _, present := tags["foundry"]; present {
+					if tags.StorageTag() != "" {
 						d.fail(f.Name, "relation slots cannot have persistence tags")
 					}
 					continue

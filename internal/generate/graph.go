@@ -309,6 +309,9 @@ func (g *packageGraph) goList(ctx context.Context, arguments []string, receive f
 // that contain no Foundry declarations. Declarations in either place fail with
 // their source path, because generated output must build on every platform.
 func (g *packageGraph) selectPackage(pkg listedPackage) (bool, error) {
+	if err := rejectTestModels(pkg.Dir, g.scope.display(pkg.Dir), g.snapshot[pkg.Dir]); err != nil {
+		return false, err
+	}
 	var constrained []string
 	for _, name := range pkg.IgnoredGoFiles {
 		if strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {

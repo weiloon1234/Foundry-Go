@@ -27,11 +27,16 @@ const (
 
 type CountryCode string
 
+//foundry:model table=users var=Users key=ID
 type User struct {
-	ID                 model.ID[User]
-	Email              string `foundry:"column=email_address"`
-	Age                int
-	Nickname           value.Nullable[string]
+	// ID selects the stored user key. Example: orm.Eq(Users.ID, id).
+	ID model.ID[User] `foundry:"member=ID,key-role=primary"`
+	// Email selects the stored address. Example: orm.Eq(Users.Email, email).
+	Email string `foundry:"column=email_address"`
+	Age   int
+	// Nickname selects non-null nicknames. Example: orm.Eq(Users.Nickname, "member").
+	Nickname value.Nullable[string]
+	// Status selects the stored enum. Example: orm.Eq(Users.Status, models.StatusActive).
 	Status             Status
 	Level              Level
 	Birthday           value.Nullable[temporal.Date]
@@ -60,15 +65,19 @@ type User struct {
 	Scratch            []string `foundry:"-"`
 }
 
+//foundry:model table=orders var=Orders key=ID identity=false
 type Order struct {
-	ID         model.ID[Order]
+	ID         model.ID[Order] `foundry:"member=ID,key-role=primary"`
 	BuyerID    model.ID[User]
 	TotalCents int64
 	Buyer      relation.One[User]
 }
 
+//foundry:model table=countries var=Countries key=Code identity=false
 type Country struct {
-	Code      CountryCode
+	// Code selects the stored natural key. Example: orm.Eq(Countries.Code, models.CountryCode("MY")).
+	Code CountryCode `foundry:"member=Code,key-role=primary"`
+	// Name selects a stored name. Example: orm.Eq(Countries.Name, "Malaysia").
 	Name      string
 	Locations relation.Many[Location]
 }

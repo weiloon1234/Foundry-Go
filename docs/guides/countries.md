@@ -4,7 +4,7 @@ Milestone 18 passed native verification and consumer review. The
 [master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-18-verification-and-consumer-review)
 records the checks and operational limits.
 
-`countries.Country` is an handwritten ORM model with the typed
+`countries.Country` is a directive-declared ORM model with the typed
 natural primary key `countries.Code`. Reference data is installed only through an
 explicit seeder invocation.
 

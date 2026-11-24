@@ -1,8 +1,7 @@
 # E01 — Slot declarations and generation
 
-The filename retains the original milestone identity. Model-slot generation was
-retired in Stage 8; native declarations now own the same storage and loading
-contracts. The [master](../00-master-architecture-and-parity.md#model-extension-slot-delivery)
+The filename retains the original milestone identity. The current model directive generates slot bindings; handwritten
+policies retain the same storage and loading contracts. The [master](../00-master-architecture-and-parity.md#model-extension-slot-delivery)
 records historical acceptance; the [current guide](../../docs/guides/model-extensions.md)
 and [articles consumer](../../tests/fixtures/consumer/articles/tables.go) define the
 supported API.
@@ -16,7 +15,7 @@ supported API.
 | `attachments.Many[M]` | `attachments.ManyOf` | ordered ready files |
 | `metadata.Value[V]` | `metadata.ValueOf` | optional typed value |
 
-Bind each field with `orm.SlotOf` in `orm.Define`. `extensions.BindSlot` connects
+Generate each slot binding from its field type on the annotated model. `extensions.BindSlot` connects
 its validated offset and primary key to the policy handle. Stored names are explicit
 handle arguments, not generator defaults. Preserve them across Go field renames.
 Slots are not SQL columns or assignment targets and refuse implicit response
@@ -32,7 +31,7 @@ manager configuration. Existing manager limits own per-owner/key/collection boun
 
 ## Owner identity and assembly
 
-`extensions.DefineORMOwner` takes a validated `orm.IdentityOf`, an explicit owner
+`extensions.DefineORMOwner` takes the generated model identity, an explicit owner
 name and `OwnerOptions`. Pin `StorageModel` before renaming a table. Owner name and
 storage model form persisted scope; changing them can hide stored data without
 deleting it. `PreviousModels` and explicit rescope commands remain recovery tools.
@@ -50,8 +49,8 @@ loading reuse the [shared relation boundary](02-slot-loading-and-reads.md).
 
 ## Retained generation and acceptance
 
-DTO, enum, validation, config and transport generation remain. Persistence models
-and slot policies are handwritten; they cannot silently become transport DTOs.
+Model table, DTO, enum, validation, config and transport generation share the
+publisher. Model structs and slot policies are handwritten; they cannot silently become transport DTOs.
 The Makefile remains the only generation entry point. Native compiler negatives,
 startup validation, PostgreSQL owner/cleanup tests, bounds, snapshots and editor
 completion replace the retired model-generation cases. Frozen observations retain

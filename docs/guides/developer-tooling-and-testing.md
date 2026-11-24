@@ -82,8 +82,16 @@ requires a directive until the next heading of the same or higher level. The
 previously complete guides also retain their whole-guide source-binding rule.
 The coverage list lives in `internal/docsource`, replacing both old fixture
 substring checkers. The former `go-source` and `compiled-examples` markers are
-rejected. Those query guides still require a link to `orm-migration.md` and reject
-generated model/query teaching through `checkdocs` and the retirement owner.
+rejected. Current guides and instructions teach `//foundry:model`; `checkdocs`
+rejects Go examples that handwrite model tables, bindings or identity blocks.
+The projection directive and former query/draft APIs remain retired.
+
+A low-level generated-code or test reference can label one example with
+`<!-- model-declaration-reference -->`, immediately before its `compiled-source`
+marker and Go fence. Its source must be generated output, a `_test.go` file or
+within the ORM owner tree. This allowance covers that block only; it does not
+exempt a guide or change the application `models check` rule. API-name tables
+and operational identity adapters do not declare models and need no marker.
 Shell and JSON examples do not claim compiler proof.
 
 Run `make generate` to render after declaration generation. For a guide-only edit,
@@ -409,7 +417,7 @@ package, first add a `doc.go` containing its package declaration, as shown in
 Then create individual declarations:
 
 ```sh
-GOWORK=off go tool foundry make model Widget --table widgets --dir ./models
+# Add a model struct with the directive from the model-declaration guide.
 GOWORK=off go tool foundry make dto SaveWidgetRequest --http body --dir ./transport
 GOWORK=off go tool foundry make dto WidgetResource --role response --http response --dir ./transport
 GOWORK=off go tool foundry make job DeliverWidget --id widget.deliver --queue deliveries --dir ./jobs
@@ -431,20 +439,18 @@ The other kinds follow the same pattern:
 | `make rule Slug --id notes.slug` | A `validation.Custom` string rule. |
 | `make notification NoteShared --id notes.shared` | A `NoteSharedPayload` DTO, its codec and the `notifications.Definition`. |
 | `make migration CreateNotes --id ... --origin app --version v1.0.0 --create notes` | A migration starting from a reviewed `CREATE TABLE` with a UUID key and timestamps. |
-| `make model Article --table articles --translated Title,Summary --attachment Logo --attachments Galleries --metadata SEO --disk public` | A model with [extension slot](model-extension-slots.md) fields: `translations.Text`, `attachments.One`/`Many` and `metadata.Value` of a new empty `ArticleSEO` DTO. Attachment slots add an `ArticleDisk` declaration of the named storage disk and handwritten `ArticleExtensions` handles whose policies accept nothing until you list their media types, so assembly refuses them until then. `--disk` is required exactly when attachment slots are requested. |
+| `make model Article --table articles --translated Title,Summary --attachment Logo --attachments Galleries --metadata SEO --disk public` | A model struct with the [model directive](model-scaffolding.md); run `foundry generate` after scaffolding. It includes a model with [extension slot](model-extension-slots.md) fields: `translations.Text`, `attachments.One`/`Many` and `metadata.Value` of a new empty `ArticleSEO` DTO. Attachment slots add an `ArticleDisk` declaration of the named storage disk and handwritten `ArticleExtensions` handles whose policies accept nothing until you list their media types, so assembly refuses them until then. `--disk` is required exactly when attachment slots are requested. |
 
 Endpoint and notification scaffolds check every target first, then create each
 DTO, run generation for the package and create the component file; each step
 publishes through the same guarded path, so a later failure leaves earlier,
 valid files in place. Test files and factories remain handwritten: they are not
-package declarations the scaffold type checker can verify. A model scaffold writes an [ORM declaration](model-scaffolding.md),
-including typed slot handles and a per-model table registration helper. Models
-with metadata slots are checked with their generated DTO codecs, then generation
-publishes those codecs. A later generation failure leaves the handwritten file;
-`foundry generate` completes its contracts. No model/query output is generated
-for the scaffolded model. Endpoint, notification and model-with-slots scaffolds
-pass the tool's framework build to generation. ORM field comments are handwritten.
-Other scaffolds run no generation.
+package declarations the scaffold type checker can verify. Model scaffolds write
+one directive struct, extension policies and a per-model registration helper.
+Like DTO scaffolds, they print the next generation command. Preflight checks the
+proposed source together with its generated table, identity and metadata codecs
+in memory. Endpoint and notification scaffolds run generation using the tool's
+framework build; other scaffolds leave generation to the caller.
 
 The generic DTO scaffold accepts `--http body`, `--http response` or `--http both`.
 Omit it to retain the plain `//foundry:dto` output. `--role response` independently
@@ -460,10 +466,10 @@ are checked in memory; run generation after adding the DTO fields to publish the
 
 These commands create one consumer-owned artifact, never an application project.
 Existing migration/seeder scaffolds use the same path checks and publisher.
-Keep model and handle documentation in the handwritten declaration.
+Keep model field documentation in the handwritten struct; generate its handles.
 Models require an explicit table. DTO identity comes from its Go type. Jobs and
 commands require semantic IDs. Add fields/behavior to the handwritten artifact,
-then run generation for DTO codecs when needed. ORM fields and relations need no generation. Job and command placeholders
+then run generation for model tables and DTO codecs. Model field or tag edits require regeneration. Job and command placeholders
 return an explicit error until implemented and registered. Scaffolds never
 silently overwrite existing files; recovery preserves create-only authority.
 

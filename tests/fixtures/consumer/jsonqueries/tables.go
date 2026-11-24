@@ -9,33 +9,7 @@ import (
 )
 
 // DocumentTable and PolicyTable retain the existing model and JSON key identities.
-type DocumentTable struct {
-	orm.Table[Document, int]
-	Settings orm.JSON[Document, Preferences]
-	Backup   orm.NullableJSON[Document, Preferences]
-	Tags     orm.JSON[Document, []string]
-	State    orm.JSON[Document, value.Nullable[string]]
-	PolicyID orm.Column[Document, value.JSON[PolicyKey]]
-	Policy   orm.One[Document, Policy]
-}
 
-type PolicyTable struct {
-	orm.Table[Policy, value.JSON[PolicyKey]]
-	Name orm.Text[Policy, string]
-}
-
-var Documents = orm.Define("json_documents", func(b orm.Builder[Document], d *Document) DocumentTable {
-	return DocumentTable{
-		Table:    orm.TableOf(b, &d.ID),
-		Settings: orm.JSONOf(b, &d.Settings), Backup: orm.NullableJSONOf(b, &d.Backup),
-		Tags: orm.JSONOf(b, &d.Tags), State: orm.JSONOf(b, &d.State),
-		PolicyID: orm.ColumnOf(b, &d.PolicyID, orm.Codec(codec.JSON[PolicyKey]())),
-		Policy:   orm.OneOf(b, &d.Policy),
-	}
-})
-var Policies = orm.Define("json_policies", func(b orm.Builder[Policy], p *Policy) PolicyTable {
-	return PolicyTable{orm.TableOf(b, &p.ID, orm.Codec(codec.JSON[PolicyKey]())), orm.TextOf(b, &p.Name)}
-})
 var DocumentLinks = struct {
 	Policy orm.BelongsTo[Document, Policy]
 }{
@@ -68,3 +42,5 @@ var NextField = expr.JSONFieldOf(func(p *Profile) **Profile { return &p.Next })
 var QuotedField = expr.JSONFieldOf(func(p *Profile) *string { return &p.Quoted })
 
 var OddField = expr.JSONFieldOf(func(p *Profile) *string { return &p.Odd })
+
+func policyKeyCodec() codec.Codec[value.JSON[PolicyKey]] { return codec.JSON[PolicyKey]() }

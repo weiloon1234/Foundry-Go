@@ -1,0 +1,98 @@
+package sample
+
+import (
+	"github.com/weiloon1234/Foundry-Go/auth/password"
+	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/encrypted"
+	"github.com/weiloon1234/Foundry-Go/model"
+ "github.com/weiloon1234/Foundry-Go/jobs"
+ "github.com/weiloon1234/Foundry-Go/decimal"
+ "time"
+	"github.com/weiloon1234/Foundry-Go/temporal"
+	"github.com/weiloon1234/Foundry-Go/value"
+)
+
+//foundry:enum
+type State string
+
+const Enabled State = "enabled"
+
+//foundry:model table=constructors var=Constructors key=ID
+type Constructor struct {
+	ID                    model.ID[Constructor]
+	Bool                  bool
+	MaybeBool             value.Nullable[bool]
+	Number                int
+	MaybeNumber           value.Nullable[int]
+	Text                  string
+	MaybeText             value.Nullable[string]
+	PlainText             string `foundry:"role=column"`
+	Bytes                 []byte
+	MaybeBytes            value.Nullable[[]byte]
+	Hash                  password.Hash
+	MaybeHash             value.Nullable[password.Hash]
+	Secret                encrypted.Text
+	MaybeSecret           value.Nullable[encrypted.JSON[string]]
+	State                 State
+	MaybeState            value.Nullable[State]
+	At                    temporal.DateTime
+	MaybeAt               value.Nullable[temporal.DateTime]
+	Duration              temporal.Interval
+	MaybeDuration         value.Nullable[temporal.Interval]
+	PlainDuration         temporal.Interval                 `foundry:"role=column"`
+	PlainMaybeDuration    value.Nullable[temporal.Interval] `foundry:"role=column"`
+	JSON                  value.JSON[string]
+	MaybeJSON             value.Nullable[value.JSON[string]]
+	ForeignID             model.ID[Other]
+	MaybeForeignID        value.Nullable[model.ID[Other]]
+	CustomBytes           []byte                          `foundry:"codec=bytesCodec"`
+	CustomMaybeBytes      value.Nullable[[]byte]          `foundry:"codec=bytesCodec"`
+	CustomInputBytes      []byte                          `foundry:"input=string,mutate=asBytes,codec=bytesCodec"`
+	CustomMaybeInputBytes value.Nullable[[]byte]          `foundry:"input=string,mutate=asBytes,codec=bytesCodec"`
+	CustomID              model.ID[Other]                 `foundry:"codec=idCodec"`
+	CustomMaybeID         value.Nullable[model.ID[Other]] `foundry:"codec=idCodec"`
+	CustomJSON            value.JSON[string]              `foundry:"codec=jsonCodec"`
+	CustomHash            password.Hash                   `foundry:"codec=hashCodec"`
+}
+type Other struct{}
+
+func bytesCodec() codec.Codec[[]byte]            { return codec.Bytes[[]byte]() }
+func idCodec() codec.Codec[model.ID[Other]]      { return codec.ID[Other]() }
+func jsonCodec() codec.Codec[value.JSON[string]] { return codec.JSON[string]() }
+func hashCodec() codec.Codec[password.Hash]      { return password.Codec() }
+func asBytes(v string) ([]byte, error)           { return []byte(v), nil }
+
+//foundry:model table=plain_times var=PlainTimes key=ID
+type PlainTimesRecord struct {
+	ID        int
+	CreatedAt temporal.DateTime                 `foundry:"role=column"`
+	UpdatedAt temporal.DateTime                 `foundry:"role=column"`
+	DeletedAt value.Nullable[temporal.DateTime] `foundry:"role=column"`
+}
+
+//foundry:model table=plain_families var=PlainFamilies key=ID
+type PlainFamily struct {
+ ID int
+ Single bool `foundry:"role=column"`
+ WriterID model.ID[Other] `foundry:"role=column"`
+ IsPublic bool `foundry:"role=column"`
+ PresentationDeclared bool `foundry:"role=column"`
+ Execution jobs.ExecutionID `foundry:"role=column"`
+ Bytes []byte `foundry:"codec=bytesCodec"`
+ Hash password.Hash `foundry:"codec=hashCodec"`
+ Number int `foundry:"role=column"`
+ Amount decimal.Decimal `foundry:"role=column"`
+ State State `foundry:"role=column"`
+ Instant time.Time `foundry:"role=column"`
+ DateTime temporal.DateTime `foundry:"role=column"`
+ Date temporal.Date `foundry:"role=column"`
+ Time temporal.Time `foundry:"role=column"`
+ Local temporal.LocalDateTime `foundry:"role=column"`
+ Duration temporal.Interval `foundry:"role=column"`
+ Document value.JSON[string] `foundry:"codec=jsonCodec"`
+}
+//foundry:model table=entries var=Entries key=ID identity=false
+type Entry struct {
+ ID int
+ CreatedAt temporal.DateTime `foundry:"role=time,default=database"`
+}

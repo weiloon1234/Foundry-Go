@@ -10,9 +10,9 @@
 
 Further reading: [Bulk writes](#set-based-and-conflict-writes).
 
-A mutation input column separates the value accepted by writes from the value stored in the model. An input assignment retains input until persistence; reads and predicates use the stored type. Declare the appropriate `Input*` carrier even when input and stored types are identical.
+A mutation input column separates the value accepted by writes from the value stored in the model. An input assignment retains input until persistence; reads and predicates use the stored type. Declare `input=Type` even when input and stored types are identical.
 
-The [complete declaration](model-declarations.md) uses `InputText[User, EmailInput, string]` with a named `MutateEmail` method. This fixture uses distinct input and stored types:
+The [complete declaration](model-declarations.md) uses a distinct `SlugInput` with a value-receiver `MutateSlug` method. This fixture uses distinct input and stored types:
 
 <!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#inputs-after -->
 ```go
@@ -21,13 +21,13 @@ func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
 }
 ```
 
-The [mutator declaration](../../tests/fixtures/goway/models/mutators/models.go) binds input, codec and accessor types. A nil transform argument to `Input*Of` selects the matching `Mutate<Field>` method. Supply a typed `func(Input) (Stored, error)` instead when the transform is explicit. Do not also declare a named mutator. Ordinary columns do not accept transforms; use the input constructor's transform argument.
+The [mutator declaration](../../tests/fixtures/goway/models/mutators/models.go) binds input, codec and accessor types. With `input=Type`, the generator selects the matching value-receiver `Mutate<Field>` method. To use an explicit transform, add `mutate=name` for a package-local `func(Input) (Stored, error)`. Do not declare both.
 
 ## Declaration validation
 
 `Mutate<Field>` names a persisted Go field, independently of its SQL column tag. It requires a value receiver, one concrete non-null input, the field's exact scalar stored result, and `error`. A nullable stored field still uses a scalar input/result transform. Unknown fields, pointer receivers, variadic methods, interface inputs and invalid results fail startup validation.
 
-The receiver is a zero-valued type marker. Transform the argument rather than reading receiver fields. Keep mutators pure and free of I/O; cross-field and transactional work belongs in [hooks](model-hooks.md). Ordinary columns with named mutators also fail startup, naming the field and required `Input*Of` carrier. `application.WithTables` checks these contracts before acquiring resources.
+The receiver is a zero-valued type marker. Transform the argument rather than reading receiver fields. Keep mutators pure and free of I/O; cross-field and transactional work belongs in [hooks](model-hooks.md). A field with a conventional mutator and no input tag fails generation with `Mutate<Field> requires input`. `application.WithTables` checks these contracts before acquiring resources.
 
 ## Different input and stored types
 
@@ -35,7 +35,31 @@ Omitted fields skip the transform, including database defaults and untouched upd
 
 Before-write hooks read `value.Optional[Input]` through `WriteGet` and `value.Optional[value.Nullable[Input]]` through `WriteNullableGet`. `WriteSet` replaces inputs; `WriteUnset` restores omission. After-write changes contain stored types, never fresh inputs.
 
-An input primary key is declared with `InputKeyOf` over the single table key. Stored-key lookup types remain unchanged. A distinct input disables automatic UUID synthesis: supply input explicitly or use a database-owned default. `PrimaryOf` cannot be combined with `InputKeyOf`.
+An input primary key uses `member=ID,key-role=input,input=Type` on the key field. Stored-key lookup types remain unchanged. A distinct input disables automatic UUID synthesis: supply input explicitly or use a database-owned default. An input key cannot also declare a primary insert-select role.
+
+This is the complete input-key declaration; its conventional mutator returns the
+exact stored key type. The converter recognizes the earlier
+`InputKeyOf(b, table.Key(), nil)` binding and preserves this capability.
+
+<!-- compiled-source: tests/fixtures/goway/models/mutators/key.go -->
+```go
+package mutators
+
+import (
+	"github.com/weiloon1234/Foundry-Go/model"
+)
+
+// KeyRecord exercises a distinct primary-key input.
+//
+//foundry:model table=input_key_records var=KeyRecords key=ID identity=false
+type KeyRecord struct {
+	ID    model.ID[KeyRecord] `foundry:"input=FreshID,member=ID,key-role=input"`
+	Label string              `foundry:"default=database"`
+}
+type FreshID struct{ Value model.ID[KeyRecord] }
+
+func (KeyRecord) MutateID(input FreshID) (model.ID[KeyRecord], error) { return input.Value, nil }
+```
 
 ## Execution and safe failures
 

@@ -10,5 +10,5 @@ import (
 
 func invalid(manager *metadata.Manager) {
 	key := metadata.Define(a.Owner, "seo", 1, contract.StringJSON[string]())
-	_, _ = key.Get(context.Background(), manager, orm.IdentityOf(a.Authors, a.Authors.Key()).Reference(1))
+	_, _ = key.Get(context.Background(), manager, orm.IdentityOf(a.Authors.Table, a.Authors.Key()).Reference(1))
 }

@@ -5,6 +5,7 @@
     "catalogue_filters_foundry.gen.go": "4562d4069e29467321c061986e6b9df8d434e2e6441c5d9f6e718f6f7b548ab9",
     "catalogue_item_foundry.gen.go": "bca2b8f8e93f92cc7c9d64924bf732bfd966c0b94a0f524aebbdd046f1c73f40",
     "form_input_foundry.gen.go": "1ed3b2b15079aa264a7ef2c75038739394f895345e2e13d27538e3bf1fb592fc",
+    "models_foundry.gen.go": "963043e47ec26ec34ae9d2639af43513a7e615ead8740afba4d981d060d6d989",
     "multipart_input_foundry.gen.go": "cdb8f134b2879c2bd557943108a3c58618416ca4c18cff58d902193af4c92e95",
     "patch_foundry.gen.go": "7953a9c179517459b932b9bff36c6efa7802eb97e3f648f02f48423338761f07",
     "project_path_foundry.gen.go": "0e3066cb8a856b10603c044db4439476005d28e3c21357f7ba3108b95578062f",

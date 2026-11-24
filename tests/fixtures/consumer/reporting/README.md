@@ -25,7 +25,7 @@ existing package paths and wire fields. Reporting queries, exports and authority
 reloads use ORM declarations. Schema setup and deliberately corrupt driver inputs
 remain explicit SQL in integration fixtures.
 
-Models and relation declarations are handwritten. Each table declares its row
+Model structs and relation declarations are handwritten; model directives generate the typed tables. Each table declares its row
 selections through its columns and returns only its base source. The source goldens
 compile each table's real Query statements with `datatable.Compile`
 (`source_golden_test.go`), and the operator identity golden keeps legacy calls as

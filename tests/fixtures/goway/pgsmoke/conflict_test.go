@@ -19,7 +19,7 @@ func TestConflictPersistsDefaultsAndRollsBackAtomicFailures(t *testing.T) {
 	_, err := db.Exec(ctx, `CREATE TABLE hook_members(id bigint PRIMARY KEY,name text NOT NULL DEFAULT 'database',note text,body bytea NOT NULL,created_at timestamptz NOT NULL,updated_at timestamptz NOT NULL,deleted_at timestamptz)`)
 	must(t, err)
 	calls := 0
-	table := h.Declare(func() orm.Hooks[h.Member] { calls++; return orm.Hooks[h.Member]{} })
+	table := declareHookMembers(func() orm.Hooks[h.Member] { calls++; return orm.Hooks[h.Member]{} })
 	incoming := orm.OnConflict(orm.ConflictKey(table.Key())).DoUpdate(orm.ConflictIncoming(table.Name), orm.ConflictIncoming(table.Note))
 	got, err := orm.Upsert(ctx, db, table.Query(), incoming, orm.Set(table.Key(), 1), orm.Set(table.Name, " original "), orm.Set(table.Body, []byte{1}))
 	must(t, err)

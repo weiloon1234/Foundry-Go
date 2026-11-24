@@ -63,6 +63,14 @@ func TestScaffoldBehavior(t *testing.T){
  if err:=invocation.Run(t.Context(),nil,cli.Streams{In:strings.NewReader(""),Out:io.Discard,Err:io.Discard});!errors.Is(err,fault.Invalid){t.Fatal("unfinished command succeeded",err)}
 }
 `)
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+		t.Fatal(err)
+	}
+	build := exec.CommandContext(t.Context(), "go", "build", "./...")
+	build.Dir = dir
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build: %v %s", err, output)
+	}
 	command := exec.CommandContext(t.Context(), "go", "test", "-mod=readonly", "./...")
 	command.Dir = dir
 	if output, err := command.CombinedOutput(); err != nil {
@@ -70,7 +78,7 @@ func TestScaffoldBehavior(t *testing.T){
 	}
 }
 
-// A model scaffold uses ORM declarations and generates metadata codecs only. Its
+// A model scaffold declares a struct and leaves generation to the caller. Its
 // attachment policies accept nothing until the application lists media types.
 func TestModelScaffoldDeclaresExtensionSlots(t *testing.T) {
 	dir := fixture(t, "package sample\n")
@@ -93,6 +101,9 @@ func TestModelScaffoldDeclaresExtensionSlots(t *testing.T) {
 			t.Fatalf("ORM scaffold generated legacy model output %s: %v", file, err)
 		}
 	}
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal("scaffold left generation stale", err)
 	}
@@ -104,6 +115,9 @@ func TestModelScaffoldDeclaresExtensionSlots(t *testing.T) {
 		other.Dir = dir
 		if _, err := scaffoldFixture(t.Context(), other); err != nil {
 			t.Fatal(other.Name, err)
+		}
+		if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
+			t.Fatal(err)
 		}
 	}
 	// In a subpackage the new file is checked with its generated output too: a
@@ -127,7 +141,10 @@ func TestModelScaffoldDeclaresExtensionSlots(t *testing.T) {
 	if _, err := scaffoldFixture(t.Context(), collision); err != nil {
 		t.Fatal("subpackage scaffold", err)
 	}
-	// Ordinary generation must leave the handwritten ORM model unchanged.
+	if _, err := generateFixture(t.Context(), Options{Dir: models}); err != nil {
+		t.Fatal(err)
+	}
+	// Generation must leave the model declaration unchanged.
 	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
@@ -149,6 +166,14 @@ func TestScaffoldedSlots(t *testing.T){
  if _,err:=orm.Compile(Specials.Query().Where(orm.Eq(Specials.Key(),Special{}.ID)));err!=nil{t.Fatal(err)}
 }
 `)
+	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+		t.Fatal(err)
+	}
+	build := exec.CommandContext(t.Context(), "go", "build", "./...")
+	build.Dir = dir
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build: %v %s", err, output)
+	}
 	command := exec.CommandContext(t.Context(), "go", "test", "-mod=readonly", "./...")
 	command.Dir = dir
 	if output, err := command.CombinedOutput(); err != nil {
@@ -212,8 +237,11 @@ func TestModelScaffoldDocumentsSlots(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(path)
-	if err != nil || !strings.Contains(string(data), "translated text stored in foundry_model_translations") || strings.Contains(string(data), "//foundry:model") {
+	if err != nil || !strings.Contains(string(data), "translated text stored in foundry_model_translations") || !strings.Contains(string(data), "//foundry:model") {
 		t.Fatal("the scaffolded model lacks handwritten slot documentation", err)
+	}
+	if _, err := generateFixture(t.Context(), Options{Dir: dir}); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := generateFixture(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal("generation is stale after the scaffold", err)

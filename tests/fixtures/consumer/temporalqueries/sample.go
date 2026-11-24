@@ -8,8 +8,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=temporal_samples var=Samples key=ID identity=false
 type Sample struct {
-	ID         int
+	ID         int `foundry:"member=ID,key-role=primary-number"`
 	Millis     int64
 	At         time.Time
 	Instant    temporal.DateTime

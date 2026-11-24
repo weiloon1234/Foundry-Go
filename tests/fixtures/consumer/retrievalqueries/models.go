@@ -9,11 +9,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=retrieval_members var=Members key=ID identity=false retrieval=memberRetrievalHooks
 type Member struct {
 	ID       model.ID[Member]
-	Name     string
+	Name     string `foundry:"input=string"`
 	Nickname value.Nullable[string]
-	ParentID value.Nullable[model.ID[Member]]
+	ParentID value.Nullable[model.ID[Member]] `foundry:"role=column"`
 	Parent   relation.One[Member]
 	Children relation.Many[Member]
 	Groups   relation.Through[Group, Membership]
@@ -27,14 +28,16 @@ func (member Member) AccessName() (string, error) { return strings.ToUpper(membe
 
 type GroupCode string
 
+//foundry:model table=retrieval_groups var=Groups key=Code identity=false
 type Group struct {
 	Code GroupCode
 	Name string
 }
 
+//foundry:model table=retrieval_memberships var=Memberships key=ID identity=false
 type Membership struct {
 	ID        model.ID[Membership]
-	MemberID  model.ID[Member]
+	MemberID  model.ID[Member] `foundry:"role=column"`
 	GroupCode value.Nullable[GroupCode]
 }
 

@@ -1,7 +1,13 @@
 {
   "version": 1,
   "files": {
+    "ledger_foundry.gen.go": "93134907fc8ff5ec099e5d2de04f96c598999ac0367c9d87fa9aeec2be043218",
     "level_foundry.gen.go": "437ebeec5d9955447b0a186a7e27c9b6d7a76f7acd04aa775fc3cd402835ac35",
-    "status_foundry.gen.go": "f352a84d15f7c8695576a877387a22d438a527fcf3644afe259a6c6a915beeed"
+    "location_foundry.gen.go": "b772f51c41be45f98a1f2d6fd52aaffe8afa65958e0dd17fc6abcc664592e3a4",
+    "measurement_foundry.gen.go": "8d3986339a2e26fbdee04ae36087f4a4e89018e44b8afce3cac5650ad471a928",
+    "membership_foundry.gen.go": "5a96da5553709299b8be55e0adaca770da44a16db70f182c2b18c90fba1e9e1e",
+    "models_foundry.gen.go": "c52200f67e84146689ec72ccb0254f6f02980dfd656148af85d16dc5aa34c426",
+    "status_foundry.gen.go": "f352a84d15f7c8695576a877387a22d438a527fcf3644afe259a6c6a915beeed",
+    "write_record_foundry.gen.go": "b1647d0baf850569f94dc4a7478ca9a9d0138d02cf014b87ee7361a42ed3a41c"
   }
 }

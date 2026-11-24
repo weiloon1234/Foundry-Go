@@ -19,9 +19,10 @@ The [model extension slot continuation](model-extension-slots/README.md) lets
 models declare translated text, attachments and typed schemaless values as typed
 fields over the delivered extension stores. Its status is also owned by the master.
 
-The [Go-way data-layer program](goway-data-layer/README.md) delivers handwritten
-model declarations and native queries. Stage 8 retires model generation and the
-former query runtime; DTO and transport generation remain.
+The [Go-way data-layer program](goway-data-layer/README.md) delivers native typed
+queries. Its Stage 8 retirement records describe the former query/draft generator.
+Current [model directives](../docs/guides/model-declarations.md) generate typed ORM
+tables and identities; projections, queries and business behavior stay handwritten.
 Its blueprint includes the compiler-case mapping, emitter audit and measurement harness.
 
 ## How to implement a milestone

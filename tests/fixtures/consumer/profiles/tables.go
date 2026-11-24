@@ -2,27 +2,7 @@ package profiles
 
 import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/model"
-	"github.com/weiloon1234/Foundry-Go/temporal"
 )
-
-// ProfileTable binds the stored profile fields. Example: Profiles.Query().
-type ProfileTable struct {
-	// Table owns the concrete UUID key. Example: orm.Eq(Profiles.Key(), id).
-	orm.Table[Profile, model.ID[Profile]]
-	// Name is the stored display name. Example: orm.Set(Profiles.Name, "Consumer").
-	Name orm.Text[Profile, string]
-	// DeletedAt stores soft deletion; Restore clears it. Example: Profiles.DeletedAt.IsNull().
-	DeletedAt orm.SoftDelete[Profile, temporal.DateTime]
-	// Soft authorizes physical deletion. Example: Profiles.ForceDelete(ctx,tx,Profiles.Soft,id).
-	Soft orm.SoftDeletable[Profile]
-}
-
-// Profiles is the handwritten profile declaration. Example: orm.Insert(ctx, tx, Profiles.Table,orm.Set(Profiles.Name, "Consumer")).
-var Profiles = orm.Define("profiles", func(b orm.Builder[Profile], m *Profile) ProfileTable {
-	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
-	return ProfileTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name), deleted, orm.SoftDeletes(deleted)}
-})
 
 // ProfileIdentity preserves the existing persisted identity. Example: ProfileIdentity.ReferenceOf(profile).
 // doc-example:begin model-extensions-profile-identity

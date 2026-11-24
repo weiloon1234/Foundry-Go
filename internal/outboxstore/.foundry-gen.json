@@ -1,4 +1,6 @@
 {
   "version": 1,
-  "files": {}
+  "files": {
+    "message_foundry.gen.go": "132bf6e9b3fc6f351df256ccdd33a9882cd6b9bb66147842336884d141a53318"
+  }
 }

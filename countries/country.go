@@ -5,7 +5,6 @@ package countries
 import (
 	"strings"
 
-	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
@@ -55,155 +54,96 @@ type Currency struct {
 // Country uses an explicit ORM declaration with its natural primary key.
 // Status, ConversionRate and IsDefault belong to the application; reference
 // seeding never overwrites those fields on existing rows.
+//
+//foundry:model table=foundry_countries var=Countries key=ISO2 identity=false
 type Country struct {
-	ISO2                Code                   `foundry:"column=iso2"`
-	ISO3                string                 `foundry:"column=iso3"`
-	ISONumeric          value.Nullable[string] `foundry:"column=iso_numeric"`
-	Name                string
-	OfficialName        value.Nullable[string]
-	Capital             value.Nullable[string]
-	Region              value.Nullable[string]
-	Subregion           value.Nullable[string]
-	Currencies          value.JSON[[]Currency]
-	PrimaryCurrencyCode value.Nullable[string]
-	CallingCode         value.Nullable[string]
-	CallingRoot         value.Nullable[string]
-	CallingSuffixes     value.JSON[[]string]
-	TLDs                value.JSON[[]string] `foundry:"column=tlds"`
-	Timezones           value.JSON[[]string]
-	Latitude            value.Nullable[float64]
-	Longitude           value.Nullable[float64]
-	Independent         value.Nullable[bool]
-	UNMember            value.Nullable[bool] `foundry:"column=un_member"`
-	FlagEmoji           value.Nullable[string]
-	Status              Status
-	ConversionRate      value.Nullable[decimal.Decimal]
-	IsDefault           bool
-	ReferenceVersion    string
-	// CreatedAt preserves an explicit creation time; omitted inserts use the application clock.
-	// Updates do not automatically change it. Example: Country{CreatedAt: createdAt}.
-	CreatedAt temporal.DateTime
-	// UpdatedAt is replaced by the application clock on writes, after before hooks and before field mutators.
-	// Explicit assignments do not override this management. Example: orm.Desc(Countries.UpdatedAt).
-	UpdatedAt temporal.DateTime
-}
-
-func invalid() error { return safeerror.NewFault(fault.Invalid, "invalid country reference data") }
-
-// CountryTable binds the persisted Country columns. Example: Countries.Query().Limit(10).
-type CountryTable struct {
 	// Table provides Country queries and writes. Example: Countries.Query().Limit(10).
-	orm.Table[Country, Code]
+	//
 	// ISO2 binds the persisted Country.ISO2 column.
 	// Example: orm.Eq(Countries.ISO2, iSO2).
-	ISO2 orm.Key[Country, Code]
+	ISO2 Code `foundry:"member=ISO2,key-role=lookup"`
 	// ISO3 binds the persisted Country.ISO3 column.
 	// Example: orm.Set(Countries.ISO3, iSO3).
-	ISO3 orm.Text[Country, string]
+	ISO3 string
 	// ISONumeric binds the persisted Country.ISONumeric column.
 	// Example: orm.SetNull(Countries.ISONumeric).
-	ISONumeric orm.NullableText[Country, string]
+	ISONumeric value.Nullable[string]
 	// Name binds the persisted Country.Name column.
 	// Example: orm.Set(Countries.Name, name).
-	Name orm.Text[Country, string]
+	Name string
 	// OfficialName binds the persisted Country.OfficialName column.
 	// Example: orm.SetNull(Countries.OfficialName).
-	OfficialName orm.NullableText[Country, string]
+	OfficialName value.Nullable[string]
 	// Capital binds the persisted Country.Capital column.
 	// Example: orm.SetNull(Countries.Capital).
-	Capital orm.NullableText[Country, string]
+	Capital value.Nullable[string]
 	// Region binds the persisted Country.Region column.
 	// Example: orm.SetNull(Countries.Region).
-	Region orm.NullableText[Country, string]
+	Region value.Nullable[string]
 	// Subregion binds the persisted Country.Subregion column.
 	// Example: orm.SetNull(Countries.Subregion).
-	Subregion orm.NullableText[Country, string]
+	Subregion value.Nullable[string]
 	// Currencies binds the persisted Country.Currencies column.
 	// Example: encoded, err := value.NewJSON(currencies); if err == nil { _ = orm.Set(Countries.Currencies, encoded) }.
-	Currencies orm.JSON[Country, []Currency]
+	Currencies value.JSON[[]Currency]
 	// PrimaryCurrencyCode binds the persisted Country.PrimaryCurrencyCode column.
 	// Example: orm.SetNull(Countries.PrimaryCurrencyCode).
-	PrimaryCurrencyCode orm.NullableText[Country, string]
+	PrimaryCurrencyCode value.Nullable[string]
 	// CallingCode binds the persisted Country.CallingCode column.
 	// Example: orm.SetNull(Countries.CallingCode).
-	CallingCode orm.NullableText[Country, string]
+	CallingCode value.Nullable[string]
 	// CallingRoot binds the persisted Country.CallingRoot column.
 	// Example: orm.SetNull(Countries.CallingRoot).
-	CallingRoot orm.NullableText[Country, string]
+	CallingRoot value.Nullable[string]
 	// CallingSuffixes binds the persisted Country.CallingSuffixes column.
 	// Example: encoded, err := value.NewJSON(callingSuffixes); if err == nil { _ = orm.Set(Countries.CallingSuffixes, encoded) }.
-	CallingSuffixes orm.JSON[Country, []string]
+	CallingSuffixes value.JSON[[]string]
 	// TLDs binds the persisted Country.TLDs column.
 	// Example: encoded, err := value.NewJSON([]string{".my"}); if err == nil { _ = orm.Set(Countries.TLDs, encoded) }.
-	TLDs orm.JSON[Country, []string]
+	TLDs value.JSON[[]string] `foundry:"column=tlds"`
 	// Timezones binds the persisted Country.Timezones column.
 	// Example: encoded, err := value.NewJSON(timezones); if err == nil { _ = orm.Set(Countries.Timezones, encoded) }.
-	Timezones orm.JSON[Country, []string]
+	Timezones value.JSON[[]string]
 	// Latitude binds the persisted Country.Latitude column.
 	// Example: orm.SetNull(Countries.Latitude).
-	Latitude orm.NullableNumber[Country, float64]
+	Latitude value.Nullable[float64]
 	// Longitude binds the persisted Country.Longitude column.
 	// Example: orm.SetNull(Countries.Longitude).
-	Longitude orm.NullableNumber[Country, float64]
+	Longitude value.Nullable[float64]
 	// Independent binds the persisted Country.Independent column.
 	// Example: orm.SetNull(Countries.Independent).
-	Independent orm.NullableColumn[Country, bool]
+	Independent value.Nullable[bool]
 	// UNMember binds the persisted Country.UNMember column.
 	// Example: orm.SetNull(Countries.UNMember).
-	UNMember orm.NullableColumn[Country, bool]
+	UNMember value.Nullable[bool]
 	// FlagEmoji binds the persisted Country.FlagEmoji column.
 	// Example: orm.SetNull(Countries.FlagEmoji).
-	FlagEmoji orm.NullableText[Country, string]
+	FlagEmoji value.Nullable[string]
 	// Status binds the persisted Country.Status column.
 	// Example: orm.Set(Countries.Status, status).
-	Status orm.Enum[Country, Status]
+	Status Status
 	// ConversionRate binds the persisted Country.ConversionRate column.
 	// Example: orm.SetNull(Countries.ConversionRate).
-	ConversionRate orm.NullableColumn[Country, decimal.Decimal]
+	ConversionRate value.Nullable[decimal.Decimal] `foundry:"role=column"`
 	// IsDefault binds the persisted Country.IsDefault column.
 	// Example: orm.Set(Countries.IsDefault, isDefault).
-	IsDefault orm.Column[Country, bool]
+	IsDefault bool `foundry:"role=column"`
 	// ReferenceVersion binds the persisted Country.ReferenceVersion column.
 	// Example: orm.Set(Countries.ReferenceVersion, referenceVersion).
-	ReferenceVersion orm.Text[Country, string]
+	ReferenceVersion string
+	// CreatedAt preserves an explicit creation time; omitted inserts use the application clock.
+	// Updates do not automatically change it. Example: Country{CreatedAt: createdAt}.
+	//
 	// CreatedAt preserves an explicitly assigned creation time; when omitted on insert, the ORM uses the application clock.
 	// The insert default is applied after before hooks and before field mutators; updates do not automatically change it.
 	// Example: orm.Set(Countries.CreatedAt, createdAt).
-	CreatedAt orm.CreatedAt[Country, temporal.DateTime]
+	CreatedAt temporal.DateTime `foundry:"role=created-at"`
+	// UpdatedAt is replaced by the application clock on writes, after before hooks and before field mutators.
+	// Explicit assignments do not override this management. Example: orm.Desc(Countries.UpdatedAt).
+	//
 	// UpdatedAt is managed: writes replace assigned or omitted values with the application clock after before hooks and before field mutators.
 	// Example: orm.Desc(Countries.UpdatedAt).
-	UpdatedAt orm.UpdatedAt[Country, temporal.DateTime]
+	UpdatedAt temporal.DateTime `foundry:"role=updated-at"`
 }
 
-// Countries owns the immutable Country declaration. Example: orm.First(ctx, tx, Countries.Query()).
-var Countries = orm.Define("foundry_countries", func(b orm.Builder[Country], m *Country) CountryTable {
-	table := orm.TableOf(b, &m.ISO2)
-	return CountryTable{Table: table,
-		ISO2:                table.Key(),
-		ISO3:                orm.TextOf(b, &m.ISO3),
-		ISONumeric:          orm.NullableTextOf(b, &m.ISONumeric),
-		Name:                orm.TextOf(b, &m.Name),
-		OfficialName:        orm.NullableTextOf(b, &m.OfficialName),
-		Capital:             orm.NullableTextOf(b, &m.Capital),
-		Region:              orm.NullableTextOf(b, &m.Region),
-		Subregion:           orm.NullableTextOf(b, &m.Subregion),
-		Currencies:          orm.JSONOf(b, &m.Currencies),
-		PrimaryCurrencyCode: orm.NullableTextOf(b, &m.PrimaryCurrencyCode),
-		CallingCode:         orm.NullableTextOf(b, &m.CallingCode),
-		CallingRoot:         orm.NullableTextOf(b, &m.CallingRoot),
-		CallingSuffixes:     orm.JSONOf(b, &m.CallingSuffixes),
-		TLDs:                orm.JSONOf(b, &m.TLDs),
-		Timezones:           orm.JSONOf(b, &m.Timezones),
-		Latitude:            orm.NullableNumberOf(b, &m.Latitude),
-		Longitude:           orm.NullableNumberOf(b, &m.Longitude),
-		Independent:         orm.NullableColumnOf(b, &m.Independent),
-		UNMember:            orm.NullableColumnOf(b, &m.UNMember),
-		FlagEmoji:           orm.NullableTextOf(b, &m.FlagEmoji),
-		Status:              orm.EnumOf(b, &m.Status),
-		ConversionRate:      orm.NullableColumnOf(b, &m.ConversionRate),
-		IsDefault:           orm.ColumnOf(b, &m.IsDefault),
-		ReferenceVersion:    orm.TextOf(b, &m.ReferenceVersion),
-		CreatedAt:           orm.CreatedAtOf(b, &m.CreatedAt),
-		UpdatedAt:           orm.UpdatedAtOf(b, &m.UpdatedAt),
-	}
-})
+func invalid() error { return safeerror.NewFault(fault.Invalid, "invalid country reference data") }

@@ -1,4 +1,6 @@
 {
   "version": 1,
-  "files": {}
+  "files": {
+    "models_foundry.gen.go": "f97de4869d4ac02a018df1a494ea67a66ae42efc74ea45c74cbbd729f9b88c8a"
+  }
 }

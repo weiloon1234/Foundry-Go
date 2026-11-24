@@ -47,6 +47,9 @@ func checkDocument(name string, data []byte, strict bool) error {
 		return err
 	}
 	patterns := []*regexp.Regexp{regexp.MustCompile(`database/query\b`), regexp.MustCompile(`\bquery\.[A-Z]\w*`)}
+	for _, directive := range rules.RetiredDirectives {
+		patterns = append(patterns, regexp.MustCompile(`foundry:`+regexp.QuoteMeta(directive)+`\b`))
+	}
 	if strict {
 		patterns = append(patterns, regexp.MustCompile(`\bLegacy[A-Z]\w*`))
 	}

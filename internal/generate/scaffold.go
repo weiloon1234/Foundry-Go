@@ -118,15 +118,7 @@ func Scaffold(ctx context.Context, options ScaffoldOptions) (string, error) {
 	if options.Kind == EndpointScaffold || options.Kind == NotificationScaffold {
 		return scaffoldWithContracts(ctx, options)
 	}
-	path, err := scaffoldFile(ctx, options, imports)
-	if err != nil || !options.hasSlots() {
-		return path, err
-	}
-	// Generate any metadata DTO codecs; ORM declarations themselves remain handwritten.
-	if _, err := Generate(ctx, options.generation()); err != nil {
-		return path, fmt.Errorf("model %s was created; run foundry generate to create its metadata codecs: %w", path, err)
-	}
-	return path, nil
+	return scaffoldFile(ctx, options, imports)
 }
 
 // scaffoldFile creates the single declaration file of options.
@@ -172,10 +164,9 @@ func scaffoldFile(ctx context.Context, options ScaffoldOptions, imports []string
 		overlay[name] = data
 	}
 	overlay[name] = data
-	if options.hasSlots() || (options.Kind == DTOScaffold && options.HTTP != "") {
+	if options.Kind == ModelScaffold || (options.Kind == DTOScaffold && options.HTTP != "") {
 		// HTTP helpers must pass the ordinary generator collision check before publication.
-		// Metadata slots can refer to a DTO codec generated from the same file.
-		// Check that codec and the handwritten ORM declarations together.
+		// Model tables, identities and metadata codecs are checked together.
 		if err := checkWithGeneration(ctx, graph, name, data); err != nil {
 			return "", err
 		}

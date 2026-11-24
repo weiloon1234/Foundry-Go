@@ -15,11 +15,12 @@ import (
 )
 
 type documentRules struct {
-	Owners         []string          `json:"owners"`
-	Constructors   map[string]string `json:"constructors"`
-	RetainedOwners []string          `json:"retainedOwners"`
-	CallArguments  map[string]int    `json:"callArguments"`
-	Chains         []struct {
+	RetiredDirectives []string          `json:"retiredDirectives"`
+	Owners            []string          `json:"owners"`
+	Constructors      map[string]string `json:"constructors"`
+	RetainedOwners    []string          `json:"retainedOwners"`
+	CallArguments     map[string]int    `json:"callArguments"`
+	Chains            []struct {
 		Owner       string   `json:"owner"`
 		Methods     []string `json:"methods"`
 		Replacement string   `json:"replacement"`

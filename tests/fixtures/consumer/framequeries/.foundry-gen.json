@@ -1,4 +1,6 @@
 {
   "version": 1,
-  "files": {}
+  "files": {
+    "sample_foundry.gen.go": "2ef0bc5c5799ab6b0614b95566c7132d71e3ac2152c43b2a6d0bfc9dcf25b879"
+  }
 }

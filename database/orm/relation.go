@@ -67,11 +67,11 @@ func bindSlot(d *declaration, ptr unsafe.Pointer, typ, target reflect.Type) *slo
 	if d.core.slots[index] != nil {
 		d.fail(f.Name, "relation slot is already declared")
 	}
-	tags, err := modelmeta.ParseTags(string(f.Tag))
+	tags, err := modelmeta.ParseModelTag(string(f.Tag))
 	if err != nil {
 		d.fail(f.Name, err.Error())
 	}
-	if _, ok := tags["foundry"]; ok {
+	if tags.StorageTag() != "" {
 		d.fail(f.Name, "relation slots cannot have persistence tags")
 	}
 	d.core.slots[index] = s

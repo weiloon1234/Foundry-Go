@@ -124,6 +124,8 @@ inside `value.Nullable`) is stored as an envelope and used as plaintext:
 
 <!-- compiled-source: tests/fixtures/consumer/vault/entry.go#encryption-entry -->
 ```go
+//
+//foundry:model table=vault_entries var=Entries key=ID identity=false
 type Entry struct {
 	ID       model.ID[Entry]
 	Label    string
@@ -132,8 +134,8 @@ type Entry struct {
 }
 ```
 
-The [handwritten table](../../tests/fixtures/consumer/vault/orm.go) uses
-`orm.EncryptedTextOf` and `orm.NullableEncryptedJSONOf`. Write through
+The [model directive](../../tests/fixtures/consumer/vault/entry.go) generates
+the required encrypted text and nullable encrypted JSON bindings. Write through
 `orm.Insert` with `orm.Set(vault.Entries.Token, encrypted.NewText(apiToken))`
 and `orm.SetNull(vault.Entries.Settings)`. The returned model
 exposes plaintext through `Token.Reveal()`; the column holds an envelope.

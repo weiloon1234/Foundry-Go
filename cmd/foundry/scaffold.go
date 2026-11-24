@@ -111,7 +111,7 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	message := "Implement its domain work, then register its definition explicitly."
 	switch options.Kind {
 	case generate.ModelScaffold:
-		message = "Add domain fields and typed ORM handles. Include the model's table helper in your package Tables registration. Model changes need no generation."
+		message = "Add domain fields, then run foundry generate for this package. Include the model's table helper in your package Tables registration."
 		if len(options.Attachment)+len(options.Attachments) != 0 {
 			message += " List accepted media types, configure the disk, and register the model's ExtensionDeclaration with application.Builder.Models."
 		} else if len(options.Translated)+len(options.Metadata) != 0 {

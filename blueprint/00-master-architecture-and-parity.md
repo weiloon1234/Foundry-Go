@@ -8,6 +8,17 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Current model declaration contract
+
+A concrete model with a constant table name is declared once with `//foundry:model`
+and `foundry` tags. Generation emits its typed ORM table, binding and identity.
+Queries, projections, business methods and extension policies remain ordinary Go.
+See [model declarations](../docs/guides/model-declarations.md) and
+[conversion compatibility](../docs/compatibility.md#generated-model-declarations).
+Dated generator-retirement entries below describe the former query/draft system;
+they do not prescribe handwritten application table bindings. This contract note
+records no new milestone acceptance.
+
 ## Retirement cleanup and documentation — v0.24.0, 2026-11-12
 
 Status: **build, changed-package vet, targeted root/consumer/Go-way tests,

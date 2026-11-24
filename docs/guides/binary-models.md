@@ -6,7 +6,9 @@ generator and editor acceptance. See [production acceptance](../production-accep
 Persisted `[]byte`, named byte-slice types such as `type Payload []byte`, aliases
 of those types, and `value.Nullable` wrappers use PostgreSQL `bytea`. A slice
 whose element is a distinct named octet type is not `~[]byte` and cannot use
-`codec.Bytes` or `orm.BytesOf`. Binary fields cannot be primary or relation keys
+`codec.Bytes` or the inferred binary constructor. Use an explicit codec for such
+a custom stored type. For `~[]byte` fields, model generation selects the binary
+column constructor. Binary fields cannot be primary or relation keys
 because Go requires those key values to be comparable.
 
 `codec.Bytes[T]()` preserves the exact slice type. A non-nil empty slice is a

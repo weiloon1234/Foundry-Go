@@ -1,7 +1,7 @@
 # Typed JSON models and queries
 
-Store an ordinary payload as `value.JSON[Payload]`, with `orm.JSONOf` or
-`orm.NullableJSONOf` in the table declaration. A handwritten `expr.JSONFieldOf`
+Store an ordinary payload as `value.JSON[Payload]` on the annotated model.
+Generation infers JSON and nullable JSON handles from the field type. A handwritten `expr.JSONFieldOf`
 binds a payload field pointer to its JSON tag; paths need no generated accessors.
 
 ## Model and value declarations

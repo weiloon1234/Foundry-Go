@@ -1,6 +1,7 @@
 {
   "version": 1,
   "files": {
-    "preferences_foundry.gen.go": "47cea5fe9fb523094b6367f787d9e0d3aa454e2ae83c713571c27a243a12a38c"
+    "preferences_foundry.gen.go": "47cea5fe9fb523094b6367f787d9e0d3aa454e2ae83c713571c27a243a12a38c",
+    "profile_foundry.gen.go": "42fffd55f100bfd564cf451ed71e371093b6e1a047d427296bdc66789a9a956b"
   }
 }

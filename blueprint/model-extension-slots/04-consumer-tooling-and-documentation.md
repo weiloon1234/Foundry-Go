@@ -22,7 +22,7 @@ delete over real HTTP, PostgreSQL and a local disk:
 
 The existing [profiles consumer](../../tests/fixtures/consumer/profiles/profile.go)
 uses the same native declaration owners. The guide preserves owner/storage
-identity when migrating existing data to handwritten tables and handles.
+identity when converting model declarations and retaining extension handles.
 
 ## Tooling
 
@@ -35,11 +35,10 @@ identity when migrating existing data to handwritten tables and handles.
   key and collection names that no current slot declares, for example after a Go
   field rename that accidentally changes an explicit stored name. It prints opaque keys and names only
   and has no delete flag, like the orphan commands.
-- **Scaffolds.** `foundry make model` writes handwritten ORM declarations and
-  explicit native handles for `--translated`, `--attachment`, `--attachments` and
-  `--metadata`. Attachment flags require `--disk` and policies accept no media
-  until configured. Check-first publication and retained DTO generation stay in
-  their existing owners; model policies are not generated.
+- New models follow the [directive recipe](../../docs/guides/model-scaffolding.md).
+  The current scaffold still emits handwritten bindings and requires conversion.
+  Attachment policies require a configured disk and accepted media. Model policies
+  remain handwritten; generation owns typed field bindings and metadata DTO codecs.
 
 ## Documentation
 
@@ -50,8 +49,8 @@ identity when migrating existing data to handwritten tables and handles.
   [attachments](../../docs/guides/attachments.md),
   [relations](../../docs/guides/model-relations.md) and
   [localization](../../docs/guides/localization.md) guides.
-- [Model declarations](../../docs/guides/model-generation.md) explain handwritten
-  fields and the retained DTO/transport generation boundary.
+- [Model declarations](../../docs/guides/model-declarations.md) explain directives,
+  field tags and the independent DTO/transport generation boundary.
 - The [agent language tooling](../../docs/guides/agent-language-tooling.md)
   scenarios gain slot completion and hover probes.
 - The changelog records delivered behavior. The compatibility policy records the

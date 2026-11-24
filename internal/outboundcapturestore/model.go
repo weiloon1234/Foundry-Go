@@ -21,24 +21,27 @@ type Operation struct{}
 // Result, BodyMode, the body state and omission columns and the Omissions
 // elements hold the closed httpclient/capture enum values the migration's
 // CHECKs enforce.
+//
+//foundry:model table=foundry_outbound_captures var=Captures key=ID timestamps=none identity=false
 type Capture struct {
-	ID                    model.ID[Capture]
-	OperationID           model.ID[Operation]
-	Attempt               int16
-	Retried               bool
-	Client                string
-	StartedAt             temporal.DateTime
-	HeadersMS             value.Nullable[int64]
-	DurationMS            int64
-	Result                string
-	RequestID             value.Nullable[string]
-	TraceID               value.Nullable[string]
-	Route                 value.Nullable[string]
-	Method                string
-	Scheme                string
-	Host                  string
-	Path                  string
-	Query                 value.JSON[[]httpcapture.Field]
+	ID          model.ID[Capture] `foundry:"member=ID"`
+	OperationID model.ID[Operation]
+	Attempt     int16
+	Retried     bool
+	Client      string
+	StartedAt   temporal.DateTime
+	HeadersMS   value.Nullable[int64]
+	DurationMS  int64
+	Result      string
+	RequestID   value.Nullable[string]
+	TraceID     value.Nullable[string]
+	Route       value.Nullable[string]
+	Method      string
+	Scheme      string
+	Host        string
+	Path        string
+	// QueryFields binds Capture.Query; the name avoids Table.Query.
+	Query                 value.JSON[[]httpcapture.Field] `foundry:"member=QueryFields"`
 	RequestHeaders        value.JSON[[]httpcapture.Field]
 	BodyMode              string
 	RequestBodyState      string

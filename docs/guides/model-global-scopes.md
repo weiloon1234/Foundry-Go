@@ -14,16 +14,11 @@ func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 }
 ```
 
-In this [compiled example](../../tests/fixtures/goway/migration/examples_test.go), `tenantID` reads typed context metadata and returns an error when it is missing. It never substitutes a permissive tenant. Attach the source through the options passed to `orm.Define`:
+In this [compiled example](../../tests/fixtures/goway/migration/examples_test.go), `tenantID` reads typed context metadata and returns an error when it is missing. It never substitutes a permissive tenant. Name the source in the model directive:
 
-<!-- orm-example: scope-options -->
-```go
-func scopeOptions() []orm.Option {
-	return []orm.Option{orm.WithGlobalScopes(func(t reads.MemberTable) []orm.GlobalScope[reads.Member] {
-		return []orm.GlobalScope[reads.Member]{scope(t)}
-	})}
-}
-```
+Add `scopes=memberScopes` to the directive. Define a package-local
+`func memberScopes(t MemberTable) []orm.GlobalScope[Member]` returning the scopes
+for that model. See the [complete scoped model](../../tests/fixtures/goway/models/reads/models.go).
 
 The lazy source receives the completed table declaration. It runs once when compilation first needs scopes; it may refer to initialized relations. It must build declarations without compiling or executing queries. Names must be valid identifiers and unique within the model. Declarations are immutable snapshots, not a mutable registry.
 

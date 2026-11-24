@@ -103,8 +103,8 @@ func TestRealGoplsConsumer(t *testing.T) {
 					}
 				}
 			case "definition":
-				if !strings.Contains(string(result.Payload), "/models/orm.go") {
-					t.Fatalf("definition did not resolve the installed consumer's handwritten declaration: %s", result.Payload)
+				if !strings.Contains(string(result.Payload), "/models/models_foundry.gen.go") {
+					t.Fatalf("definition did not resolve the installed consumer's generated table member: %s", result.Payload)
 				}
 			}
 			current, err := os.ReadFile(path)
@@ -333,7 +333,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"idempotency-configured-store", "idempotenthttp/application.go", "services.", "Idempotency", []string{"Idempotency", "Database", "Events"}, []string{"Store", "error"}, "/application/idempotency.go"},
 		{"scoped-pool-settings", "isolatedhttp/isolation_test.go", "environment.", "Settings", []string{"Settings", "Start", "Migrate"}, []string{"DatabaseSettings"}, "/testkit/postgres/application/environment.go"},
 		{"scoped-named-connection", "isolatedhttp/isolation_test.go", "pgapp.", "On", []string{"On", "Bind"}, []string{"ConnectionName", "Selection"}, "/testkit/postgres/application/environment.go"},
-		{"scoped-orm-fields", "isolatedhttp/application.go", "RecordRows.", "Name", []string{"Name", "Text", "Key", "Query"}, []string{"string", "Record"}, "/isolatedhttp/tables.go"},
+		{"scoped-orm-fields", "isolatedhttp/application.go", "RecordRows.", "Name", []string{"Name", "Text", "Key", "Query"}, []string{"string", "Record"}, "/isolatedhttp/models_foundry.gen.go"},
 		{"nested-project-field", "nestedbindings/bindings.go", "input.Model.Parent.Child.", "Slug", []string{"ID", "TeamID", "Slug", "Team", "Tasks"}, []string{"Slug"}, "/nestedbindings/models.go"},
 		{"nested-task-field", "nestedbindings/bindings.go", "input.Model.Child.", "Slug", []string{"ID", "ProjectID", "Slug"}, []string{"Slug"}, "/nestedbindings/models.go"},
 		{"nested-alternate-key", "nestedbindings/bindings.go", "modelbinding.", "ByColumn", []string{"ByColumn", "ThroughRelation", "ThroughSelectedRelation", "Then"}, []string{"ColumnHandle", "Resolver", "Executor"}, "/http/modelbinding/orm.go"},
@@ -383,7 +383,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"datatable-report-compile", "reporting/editor_examples_test.go", "datatable.", "Compile", []string{"Compile", "Define", "New"}, []string{"Table[", "Config", "Request", "Statements", "error"}, "/datatable/compile.go"},
 		{"orm-report-join", "reporting/orders.go", "rows.", "InnerJoin", []string{"InnerJoin", "LeftJoin", "On", "Scope"}, []string{"JoinOn[", "Source[", "InnerJoined["}, "/database/orm/rows/join.go"},
 		{"orm-report-nullable-text", "reporting/members.go", "datatable.", "NullableText", []string{"NullableText", "Text", "Number", "Enum"}, []string{"ColumnHandle[", "Nullable[", "ColumnRegistration["}, "/datatable/bound_columns.go"},
-		{"orm-report-primary-role", "reporting/orm.go", "orm.", "PrimaryOf", []string{"PrimaryOf", "TableOf", "SoftDeleteOf"}, []string{"Builder[", "Key[", "Primary["}, "/database/orm/column_role.go"},
+		{"orm-report-primary-role", "reporting/models_foundry.gen.go", "orm.", "PrimaryOf", []string{"PrimaryOf", "TableOf", "SoftDeleteOf"}, []string{"Builder[", "Key[", "Primary["}, "/database/orm/column_role.go"},
 		{"orm-report-grouping", "reporting/orders.go", "rows.", "GroupSource", []string{"GroupSource", "WhereSource", "From"}, []string{"SelectionSource[", "GroupKey[", "Input["}, "/database/orm/rows/plan.go"},
 
 		{"attachment-typed-replace", "profiles/profile.go", "Avatar.", "Replace", []string{"Replace", "Add", "Find", "Load"}, []string{"Reference", "Upload", "Result", "error"}, "/attachments/write.go"},
@@ -641,13 +641,13 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"relationship-existence-predicate", "relationshipfilters/filters_postgres_test.go", "orm.", "Has", []string{"Has", "Not"}, []string{"ExistenceRelation[", "Predicate[", "User"}, "/database/orm/relation_predicate.go"},
 		{"relationship-filter-model-slice", "relationshipfilters/filters_postgres_test.go", "orm.", "All", []string{"All", "First", "Require"}, []string{"Query[", "[]", "error"}, "/database/orm/query.go"},
 		{"typed-cte-materialization", "ctes/ctes_postgres_test.go", "rowset.CTE(\"eligible_users\", rowset.ModelRecord(models.Users.Query().Where(orm.Gte(u.Age, 21)))).", "Materialized", []string{"Materialized", "NotMaterialized"}, []string{"CommonTable[", "User", "Materialized"}, "/database/orm/rows/cte.go"},
-		{"typed-cte-fields", "ctes/ctes_postgres_test.go", "expr.At(df, models.Users.", "Status", []string{"ID", "Email", "Status", "Nickname"}, []string{"Enum[", "User", "Status"}, "/models/orm.go"},
+		{"typed-cte-fields", "ctes/ctes_postgres_test.go", "expr.At(df, models.Users.", "Status", []string{"ID", "Email", "Status", "Nickname"}, []string{"Enum[", "User", "Status"}, "/models/models_foundry.gen.go"},
 		{"typed-model-union", "setqueries/sets_postgres_test.go", ".Materialized()\n\tcombined := rowset.", "Union", []string{"Union", "UnionAll", "Intersect", "Except"}, []string{"RecordSource[", "SetQuery["}, "/database/orm/rows/set_operations.go"},
 		{"combined-record-fields", "setqueries/editor_examples_test.go", "reports.BuyerTotalRows.", "Total", []string{"BuyerID", "Total", "Orders", "Average"}, []string{"Field[", "BuyerTotals", "Nullable[", "Decimal"}, "/reports/rows.go"},
 		{"combined-value-expression", "setqueries/sets_postgres_test.go", "combined.", "Value", []string{"Value", "Limit", "Where", "OrderBy"}, []string{"RowExpression[", "Set[", "int"}, "/database/orm/rows/value_set.go"},
 		{"joined-complete-model-slice", "recordqueries/records_postgres_test.go", "rowset.ReadRecord(builder).", "All", []string{"All", "First", "RequireFirst", "Count"}, []string{"All", "[]", "User", "error"}, "/database/orm/rows/result_read.go"},
 		{"recursive-cte-construction", "recursivequeries/recursive_postgres_test.go", "rowset.", "RecursiveCTE", []string{"RecursiveCTE", "RecursiveAllCTE", "SelectRecord"}, []string{"RecursiveSelf[", "RecordSource[", "CommonTable["}, "/database/orm/rows/recursive_cte.go"},
-		{"recursive-working-fields", "recursivequeries/recursive_postgres_test.go", "expr.At(p, models.Users.", "ID", []string{"ID", "Email", "IntroducerID"}, []string{"Primary[", "ID[", "User"}, "/models/orm.go"},
+		{"recursive-working-fields", "recursivequeries/recursive_postgres_test.go", "expr.At(p, models.Users.", "ID", []string{"ID", "Email", "IntroducerID"}, []string{"Primary[", "ID[", "User"}, "/models/models_foundry.gen.go"},
 		{"distinct-model-selection", "distinctqueries/distinct_postgres_test.go", "rows.", "DistinctOn", []string{"Distinct", "DistinctOn", "DistinctRecord"}, []string{"GroupKey[", "Query[", "User"}, "/database/orm/rows/clauses.go"},
 		{"window-scope-builder", "windowqueries/windows_postgres_test.go", "expr.WindowFor(rows.ModelScope(base)).", "PartitionBy", []string{"PartitionBy", "OrderBy", "RowsBetween", "GroupsBetween", "RangeBetween"}, []string{"GroupKey[", "Window["}, "/database/orm/expr/window.go"},
 		{"typed-window-rank", "windowqueries/windows_postgres_test.go", "expr.", "RowNumber", []string{"RowNumber", "Rank", "DenseRank", "Lag", "Lead"}, []string{"Window[", "Selected[", "int64"}, "/database/orm/expr/window_function.go"},

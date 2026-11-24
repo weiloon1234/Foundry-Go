@@ -44,6 +44,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		{"lint", "Check project raw SQL policy", runLint},
 		{"doctor", "Inspect local framework/tool prerequisites without starting services", runDoctor},
 		{"routes", "Check staged route declarations and generated DTO helpers", runRoutes},
+		{"models", "Convert or check model table declarations", runModels},
 		{"docs", "Check documentation references and API teaching against the pinned framework", runDocs},
 		{"deploy", "Run the deploy tool from the application's pinned framework", runDeploy},
 	} {

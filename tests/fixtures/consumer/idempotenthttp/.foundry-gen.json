@@ -1,6 +1,7 @@
 {
   "version": 1,
   "files": {
+    "models_foundry.gen.go": "57298aba7b45289ae485800a805391d4a91a7a22ae570c589545db2ccc489c03",
     "order_exists_details_foundry.gen.go": "03fa4a83cdc45211821847ffe00a335dc9b0b047cc63378a5192a9eee2fd627a",
     "path_foundry.gen.go": "b3950c92e9936347e020020ca69068c96e37e6a344b7227ce845072aa7465e74",
     "receipt_foundry.gen.go": "fbb79d63995345598b8a89f65acbf487159c6d1bfe8c140290eae7f2e0d6efdf",

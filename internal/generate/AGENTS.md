@@ -6,13 +6,14 @@ Read the closest discovery/emitter/tests and the corresponding runtime descripto
 
 ## Source and output ownership
 
-- Do not generate persistence models, SQL query families or projections. Retired
-  `model`/`projection` directives must fail with migration diagnostics before
-  publication. Keep ORM scaffolds editable; see the [migration guide](../../docs/guides/orm-migration.md).
+- Generate tables and identity blocks from handwritten `//foundry:model` structs
+  and `foundry` tags. Emit one `<file>_foundry.gen.go` per source file through the
+  existing publisher. Do not generate SQL query families, drafts or projections.
+  The `projection` directive remains retired. See the [declaration guide](../../docs/guides/model-declarations.md).
 - Retain DTO, enum, config, message, multipart, union, path and HTTP query/form
   generation, contract export and TypeScript generation. HTTP `query` directives
   are not SQL queries. Keep shared codecs, JSON-path contract rules and source help
-  reachable from retained declarations, without a hidden model generator.
+  reachable from model and transport declarations.
 - Use parsed/type-checked Go declarations and existing metadata owners. Reuse the
   shared runtime JSON/config/type rules instead of approximating them with a second
   reflection or string-parsing implementation.
@@ -33,7 +34,17 @@ Read the closest discovery/emitter/tests and the corresponding runtime descripto
 - Generation leaves handwritten model comments unchanged. Reject unsupported
   journals without changing their staging. Follow the
   [fixture evidence rules](../../tests/fixtures/AGENTS.md) for frozen legacy outputs.
-  Persistence uses handwritten ORM declarations; transport generation remains independent.
+  Transport generation remains independent of model table generation.
+- Reuse `internal/modelmeta` for tags and fingerprints. Keep the compile-time
+  structural assertion and declaration-time ordered field/tag fingerprint.
+  Directive and field-documentation comment changes require `generate --check`. Mirror static ORM rules
+  and retain executable tests of advertised timestamp corrections.
+- Preserve constructor coverage in the model generator tests. Low-level functions
+  are generated-code implementation APIs and test tools; direct use outside the
+  ORM tree is limited to tests, generic models and runtime-computed table names.
+- Keep `internal/modelconvert` and its ORM snapshot bridge isolated. They exist
+  only for `foundry models convert` and are removed in the release after consumers
+  convert; no runtime feature may depend on them.
 
 ## Cross-layer acceptance
 
@@ -46,10 +57,10 @@ and consumer typing agree. Select the evidence appropriate to the changed shape:
   files whose ownership the existing publisher can establish.
 - DTO/config changes reach their runtime codecs and manifest/client adapters;
   generic, nullable, union and map cases retain the same meaning.
-- Model-generator retirement must leave retained manifest/OpenAPI/TypeScript and
-  transport bytes identical. Ownership manifests may change through publication.
-  Retire model-only tests only after their native replacement assertions exist;
-  keep mixed contract, filesystem and recovery coverage.
+- Model declaration changes must preserve unrelated manifest/OpenAPI/TypeScript
+  and transport bytes. Keep mixed contract, filesystem and recovery coverage.
+  Retired query/draft APIs remain retired; model directives generate typed ORM
+  declarations, not those former APIs.
 - Public signature or documentation changes have real gopls completion/hover/definition
   coverage through the [existing agent tests](../agent), using unsaved overlays.
 - Publication/recovery changes retain real filesystem/crash/failure evidence.

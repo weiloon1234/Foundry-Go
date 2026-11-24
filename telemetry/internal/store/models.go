@@ -35,6 +35,8 @@ type Histogram struct {
 }
 
 // Control is the typed row for foundry_telemetry_controls.
+//
+//foundry:model table=foundry_telemetry_controls var=Controls key=Key timestamps=none identity=false
 type Control struct {
 	Key string
 }

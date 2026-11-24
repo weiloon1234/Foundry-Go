@@ -31,6 +31,7 @@ func LoadAnalysis(ctx context.Context, dir string, patterns []string) (result []
 			result = nil
 			resultErr = ctx.Err()
 		}
+		resultErr = ownSourceDiagnostic(resultErr)
 	}()
 	if ctx.Err() != nil {
 		return nil, ctx.Err()

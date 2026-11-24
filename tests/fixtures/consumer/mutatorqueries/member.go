@@ -14,6 +14,7 @@ type State string
 
 const Active State = "active"
 
+//foundry:model table=mutator_members var=Members key=ID identity=false hooks=memberHooks
 type Member struct {
 	// ID is the database identity. Stored reads keep the key; call AccessID explicitly for presentation.
 	// Custom getter [Member.AccessID] is explicit; persistence uses the stored identity.
@@ -24,19 +25,23 @@ type Member struct {
 	// Custom getter [Member.AccessEmail] is explicit when mapping a DTO.
 	// Custom setter [Member.MutateEmail] transforms supplied values during persistence.
 	// Direct field assignment and input construction do not invoke it.
-	Email string `foundry:"column=email_address"`
+	//
+	// Email is the delivery address. ChangeOf compares stored values after MutateEmail.
+	// Custom getter AccessEmail is explicit; predicates compare stored values.
+	// Custom setter MutateEmail runs on write, not during assignment construction.
+	Email string `foundry:"column=email_address,input=string"`
 	// Nickname retains the stored nullable value. Custom getter [Member.AccessNickname]
 	// is explicit when mapping a DTO. Custom setter [Member.MutateNickname] runs during
 	// persistence, skipping omitted values and SQL NULL; a supplied scalar zero invokes it.
-	Nickname value.Nullable[string]
+	Nickname value.Nullable[string] `foundry:"input=string"`
 	// Attempts stores the persisted count. MutateAttempts runs during persistence through orm.Set(Members.Attempts, value).
 	// Direct assignment does not run the mutator.
 	// Attempts retains the stored count. Custom setter [Member.MutateAttempts] runs
 	// during persistence. Direct field assignment and input construction do not invoke it.
-	Attempts int `foundry:"default=database"`
+	Attempts int `foundry:"default=database,input=int"`
 	// State retains the stored enum. Custom setter [Member.MutateState] runs during
 	// persistence. Direct field assignment and input construction do not invoke it.
-	State State `foundry:"default=database"`
+	State State `foundry:"default=database,input=State"`
 }
 
 var RejectedEmail = errors.New("email is rejected")

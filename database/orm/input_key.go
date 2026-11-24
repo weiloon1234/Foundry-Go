@@ -34,6 +34,9 @@ func InputKeyOf[M, I any, K comparable](b Builder[M], key Key[M, K], transform f
 		if !ok {
 			return invalid("primary mutator signature does not match its declared input and stored key")
 		}
+		// BEGIN foundry models convert
+		recordConversionMutator(core, reflect.ValueOf(typed))
+		// END foundry models convert
 		core.mutator = querycore.NewCapturedFieldMutator(core.metadata.Name, key.stored.assign, typed)
 		return nil
 	}

@@ -19,13 +19,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// guide:write-options
-// doc-example:begin write-options
 func writeOptions() []orm.Option {
 	return []orm.Option{orm.WithHooks(memberHooks)}
-} // doc-example:end write-options
-
-// guide:end
+}
 
 // guide:register-observer
 func registerMemberObserver(r *foundation.Registrar, pool foundation.Key[*database.DB]) error {
@@ -37,7 +33,6 @@ func registerMemberObserver(r *foundation.Registrar, pool foundation.Key[*databa
 
 // guide:end
 
-// guide:read-options
 func readOptions() []orm.Option {
 	return []orm.Option{orm.WithRetrievalHooks(retrieval)}
 }
@@ -49,16 +44,11 @@ func registerReadObserver(r *foundation.Registrar, pool foundation.Key[*database
 		})
 }
 
-// guide:end
-
-// guide:scope-options
 func scopeOptions() []orm.Option {
 	return []orm.Option{orm.WithGlobalScopes(func(t reads.MemberTable) []orm.GlobalScope[reads.Member] {
 		return []orm.GlobalScope[reads.Member]{scope(t)}
 	})}
 }
-
-// guide:end
 
 // guide:stored-comparison
 func compareStored(before, after hooks.Member) (orm.Changes[hooks.Member], error) {
@@ -125,7 +115,6 @@ func updateOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, erro
 
 // guide:end
 
-// guide:source-insert
 type ArchivedMember struct {
 	ID                   int64
 	Name                 string
@@ -161,8 +150,6 @@ func copyMembers(ctx context.Context, tx *database.Tx) (int64, error) {
 		rows.MapInsert(destination.CreatedAt, expr.Value(source.CreatedAt))).
 		Values(orm.Set(destination.Name, "copy")).Exec(ctx, tx)
 }
-
-// guide:end
 
 // guide:source-update
 func updateMemberBodies(ctx context.Context, tx *database.Tx) (int64, error) {

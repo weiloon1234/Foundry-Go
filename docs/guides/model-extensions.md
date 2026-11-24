@@ -11,25 +11,42 @@ attachments and metadata as typed fields on the model itself.
 
 ## Shared owners
 
-Declare an identity from the ORM table and its primary handle once. The compiled [profiles example](../../tests/fixtures/consumer/profiles/profile.go) binds that identity with `extensions.DefineORMOwner` and pins `StorageModel`.
+The model directive generates its identity once. Reuse that identity for extension ownership. The example below binds that identity with `extensions.DefineORMOwner` and pins `StorageModel`.
 
-<!-- compiled-source: tests/fixtures/consumer/profiles/tables.go#model-extensions-profile-identity -->
+Use the generated `articlesIdentity` inside the model package. Pass it to
+`extensions.DefineORMOwner` together with the explicit owner name and
+`extensions.OwnerOptions{StorageModel: "guide_articles"}`.
+
+<!-- compiled-source: tests/fixtures/goway/modelguide/owners.go -->
 ```go
-var ProfileIdentity = orm.IdentityOf(Profiles.Table, Profiles.Key())
+package modelguide
+
+import (
+	"github.com/weiloon1234/Foundry-Go/attachments"
+	"github.com/weiloon1234/Foundry-Go/extensions"
+	"github.com/weiloon1234/Foundry-Go/storage"
+	"github.com/weiloon1234/Foundry-Go/translations"
+)
+
+var ArticleOwner = extensions.DefineORMOwner("guide-articles", articlesIdentity, extensions.OwnerOptions{StorageModel: "guide_articles"})
+var ArticleTitle = translations.TextOf(ArticleOwner, "title", translations.Options{}, extensions.BindSlot(Articles.Key(), Articles.Title))
+var ArticleCover = attachments.OneOf(ArticleOwner, "cover", attachments.Policy{
+	Disk: storage.DefineDisk("public"), Accepted: []storage.MediaType{"image/png"},
+}, extensions.BindSlot(Articles.Key(), Articles.Cover))
+
 ```
 
-<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go#model-extensions-owners -->
-```go
-var Owners = extensions.DefineORMOwner("profiles", ProfileIdentity, extensions.OwnerOptions{StorageModel: "profiles"})
-```
+The [compiled profiles fixture](../../tests/fixtures/consumer/profiles/profile.go)
+keeps its existing explicit owner contract during conversion. New declarations
+reuse the generated identity as described above.
 
-`orm.IdentityOf` requires the table declaration and its actual primary handle.
+The generated identity binds the table declaration to its actual primary handle.
 Different model/key types fail at compilation; a handle from another declaration
 and sensitive keys fail validation. It retains the primary codec, including
 natural keys, and the declared soft-delete policy. It selects stored
 keys directly, without model presentation getters or retrieval observers.
 
-Register each owner with `extensions.NewRegistry(Owners.Registration(), ...)`,
+Register each owner with `extensions.NewRegistry(ArticleOwner.Registration(), ...)`,
 then construct `extensions.New(database, registry, config)`. Reuse that exact
 owner declaration for all extension descriptors. Duplicate names and duplicate
 model namespaces are rejected. The store borrows the database and has no
@@ -129,7 +146,7 @@ framework contracts. `contract.DynamicJSON()` is the explicit unrestricted JSON
 facility; it still enforces syntax and resource bounds.
 
 Apply `metadata.Migrations()` with the ordinary migration runner in the shared
-store schema. Metadata uses handwritten ORM declarations internally.
+store schema. Metadata uses generated ORM declarations internally.
 Public operations never ask applications to reproduce table or codec schemas.
 
 `Get` returns an omitted optional for a missing key and `database.NotFound` for

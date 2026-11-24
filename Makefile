@@ -7,7 +7,7 @@ RACE_EXEMPT_PACKAGES := ./internal/retirement ./internal/noraw ./cmd/foundry
 RACE_EXEMPT_IMPORTS = $(addprefix $(shell awk '$$1 == "module" { print $$2 }' go.mod)/,$(patsubst ./%,%,$(RACE_EXEMPT_PACKAGES)))
 # Heaviest first; PostgreSQL shards deal these import paths before ordinary packages.
 RACE_HEAVY_PACKAGES := github.com/weiloon1234/Foundry-Go/internal/generate github.com/weiloon1234/Foundry-Go/internal/agent foundry.test/consumer github.com/weiloon1234/Foundry-Go/database/orm github.com/weiloon1234/Foundry-Go/attachments foundry.test/goway
-GENERATION_DIRS := logging cloud/credentials infrastructure imaging application internal/auditstore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/webhookstore webhook/capture httpclient/capture countries datatable database/orm/internal/enuminit telemetry tests/fixtures/consumer tests/fixtures/goway
+GENERATION_DIRS := logging cloud/credentials infrastructure imaging application internal/auditstore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/webhookstore webhook/capture httpclient/capture countries datatable database/orm/internal/enuminit telemetry tests/fixtures/consumer tests/fixtures/goway internal/challengestore internal/extensiontest internal/idempotencystore internal/jobarchive internal/mfastore internal/outboundcapturestore internal/outboxstore internal/sessionstore internal/tokenstore internal/webhookcapturestore tests/fixtures/deploy-acceptance
 FIXTURE_DIRS := tests/fixtures/plugin_base tests/fixtures/plugin_dep tests/fixtures/consumer tests/fixtures/goway
 export GOWORK := off
 # Nested modules do not inherit the root module's preferred toolchain.
@@ -52,7 +52,7 @@ for task_generate_dir in $(GENERATION_DIRS); do \
 done
 endef
 
-.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-tools-check typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check routes-check release-tools-check deploy-tools-check security-check security-tools-check verify publish-client-contracts
+.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-tools-check typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check routes-check models-check release-tools-check deploy-tools-check security-check security-tools-check verify publish-client-contracts
 
 toolchain-check:
 	$(GO) version
@@ -114,6 +114,12 @@ routes-check:
 	done
 	$(GO) run ./cmd/foundry routes check ./datatable ./webhook/capture ./httpclient/capture
 
+models-check:
+	$(GO) run ./cmd/foundry models check ./...
+	@set -eu; for task_fixture_dir in $(FIXTURE_DIRS) tests/fixtures/deploy-acceptance; do \
+		$(GO) run ./cmd/foundry models check --dir "$$task_fixture_dir"; \
+	done
+
 docs-check:
 	$(GO) run ./internal/cmd/checkdocs
 
@@ -157,7 +163,7 @@ benchmark-typescript:
 	$(GO) test -timeout=$(TEST_TIMEOUT) -run '^TestRenderPerformanceFixtures$$' -bench '^(BenchmarkRender|BenchmarkRenderModules|BenchmarkReceivedNaming|BenchmarkGenerateCheck)$$' -benchmem -benchtime=$(TYPESCRIPT_BENCH_TIME) -count=$(TYPESCRIPT_BENCH_COUNT) ./typescript
 
 verify: export FOUNDRY_TEST_TYPESCRIPT_REQUIRED := 1
-verify: toolchain-check typescript-tools-check fmt-check vet test fixture-check generate-check routes-check docs-check release-tools-check deploy-tools-check
+verify: toolchain-check typescript-tools-check fmt-check vet test fixture-check generate-check routes-check models-check docs-check release-tools-check deploy-tools-check
 
 # Scans reuse installed tools and warm caches; no cold package measurement.
 SECURITY_OUTPUT ?= .cache/security-check

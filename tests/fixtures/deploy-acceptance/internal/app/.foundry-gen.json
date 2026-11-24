@@ -4,6 +4,7 @@
     "health_live_foundry.gen.go": "89208b5fbbfc07044b03f9831c46cebc97615baf264b1f2b9f707ab15735073e",
     "health_ready_foundry.gen.go": "50b20a1d7f98e24f052ae964dad48bc4aead9e05595013fac061c46f82644584",
     "upload_receipt_foundry.gen.go": "af064390e2a83c840605e83befb50abad1333d940d8104bcdc2ac52b6dee7e6c",
-    "upload_usage_foundry.gen.go": "ee5a5b92b74bf81f12d9e99e1fb080a0cca5b1f48e406decc04f010d2fe88d80"
+    "upload_usage_foundry.gen.go": "ee5a5b92b74bf81f12d9e99e1fb080a0cca5b1f48e406decc04f010d2fe88d80",
+    "uploads_foundry.gen.go": "49be17a4bf9ba7e1a102f2ec7fe0b8f61aaf65d32403cdf5ff461e43ca40860f"
   }
 }

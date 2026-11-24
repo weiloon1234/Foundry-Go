@@ -150,9 +150,9 @@ func TestStage5bAttachEndpointHookRollbackPostgres(t *testing.T) {
 	for _, endpoint := range []string{"source", "target"} {
 		t.Run(endpoint, func(t *testing.T) {
 			called, committed := false, false
-			p := orm.Define("joined_pivots", func(b orm.Builder[j.Pivot], m *j.Pivot) j.PivotFields {
+			p := orm.Define("joined_pivots", func(b orm.Builder[j.Pivot], m *j.Pivot) j.PivotTable {
 				table := orm.TableOf(b, &m.ID)
-				return j.PivotFields{Table: table, ID: table.Key(), ParentID: orm.NullableNumberOf(b, &m.ParentID), TargetID: orm.NullableNumberOf(b, &m.TargetID), Kind: orm.ColumnOf(b, &m.Kind, orm.Codec(codec.String[model.MorphName]())), Role: orm.TextOf(b, &m.Role), DeletedAt: orm.SoftDeleteOf(b, &m.DeletedAt), Parent: orm.OneOf(b, &m.Parent), Target: orm.OneOf(b, &m.Target), MorphParent: orm.OneOf(b, &m.MorphParent), MorphTarget: orm.OneOf(b, &m.MorphTarget)}
+				return j.PivotTable{Table: table, ID: table.Key(), ParentID: orm.NullableNumberOf(b, &m.ParentID), TargetID: orm.NullableNumberOf(b, &m.TargetID), Kind: orm.ColumnOf(b, &m.Kind, orm.Codec(codec.String[model.MorphName]())), Role: orm.TextOf(b, &m.Role), DeletedAt: orm.SoftDeleteOf(b, &m.DeletedAt), Parent: orm.OneOf(b, &m.Parent), Target: orm.OneOf(b, &m.Target), MorphParent: orm.OneOf(b, &m.MorphParent), MorphTarget: orm.OneOf(b, &m.MorphTarget)}
 			}, orm.WithHooks(func() orm.Hooks[j.Pivot] {
 				return orm.Hooks[j.Pivot]{
 					Created: func(ctx context.Context, tx *database.Tx, _ orm.Changes[j.Pivot]) error {

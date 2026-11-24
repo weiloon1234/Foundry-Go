@@ -23,6 +23,8 @@ type Preferences struct {
 	Quota   value.Optional[decimal.Decimal]   `json:"quota,omitzero"`
 	Profile value.Optional[Profile]           `json:"profile,omitzero"`
 }
+
+//foundry:model table=json_documents var=Documents key=ID identity=false
 type Document struct {
 	ID       int64
 	Settings value.JSON[Preferences]
@@ -30,22 +32,6 @@ type Document struct {
 	Tags     value.JSON[[]string]
 	Fixed    value.JSON[[3]int64]
 	State    value.JSON[value.Nullable[string]]
-}
-type Table struct {
-	orm.Table[Document, int64]
-	Settings orm.JSON[Document, Preferences]
-	Backup   orm.NullableJSON[Document, Preferences]
-	Tags     orm.JSON[Document, []string]
-	Fixed    orm.JSON[Document, [3]int64]
-	State    orm.JSON[Document, value.Nullable[string]]
-}
-
-var Documents = Declare()
-
-func Declare() Table {
-	return orm.Define("json_documents", func(b orm.Builder[Document], d *Document) Table {
-		return Table{orm.TableOf(b, &d.ID), orm.JSONOf(b, &d.Settings), orm.NullableJSONOf(b, &d.Backup), orm.JSONOf(b, &d.Tags), orm.JSONOf(b, &d.Fixed), orm.JSONOf(b, &d.State)}
-	})
 }
 
 // Handwritten declarations are resolved once and validated during application startup.

@@ -13,9 +13,18 @@ See the [consumer guide](consumer/README.md) for existing scenario families.
 - Share fixture setup/definitions at their existing owner; keep each scenario's
   business behavior clear. Base/dependent plugins and consumers must use matching
   framework/Go requirements. Use [the root Makefile](../../Makefile) for module order.
-- For retained DTO/contract generation, change handwritten declarations and regenerate
+- For model and DTO/contract generation, change handwritten declarations and regenerate
   owned output/manifests together. ORM declarations follow [database rules](../../database/AGENTS.md).
   Public documentation examples should agree with these executable consumers.
+- Declare each concrete constant-table model in a non-test Go file with
+  `//foundry:model`; regenerate tables and identity blocks rather than writing
+  them. A fixture needing another table shape declares its own model.
+  Low-level declarations remain allowed in `_test.go`, the ORM owner tree, generic
+  model builders and runtime-table-name builders. Test-only declarations must not
+  become application teaching. The generator refuses test-file directives.
+- Keep guide regions current in fixture source. Regenerate compiled fences with
+  `go run ./internal/cmd/renderdocs` from the repository root. Never hand-edit a
+  fence to disagree with its source. `foundry models check` has no exemptions.
 
 ## Prove the advertised behavior
 

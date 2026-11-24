@@ -11,11 +11,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/translations"
 )
 
-// Article is a persisted model. Add fields and their typed handles below.
+// Article is a persisted model. Add domain fields, then run foundry generate.
 // Example: Article{}.
+//
+//foundry:model table=articles key=ID var=Articles
 type Article struct {
 	// ID is the concrete owner key. Example: record.ID.
-	ID model.ID[Article] `foundry:"column=id"`
+	ID model.ID[Article]
 	// Title holds translated text stored in foundry_model_translations as field "title", one row per locale. Example: record.Title.IsLoaded().
 	Title translations.Text
 	// Logo holds the single file of attachment collection "logo", recorded in foundry_attachments with its bytes on the policy's disk. Example: record.Logo.IsLoaded().
@@ -25,30 +27,6 @@ type Article struct {
 	// SEO holds the typed metadata value "seo" stored in foundry_model_metadata, with no model column. Example: record.SEO.IsLoaded().
 	SEO metadata.Value[ArticleSEO]
 }
-
-// ArticleTable holds the model's typed fields. Example: Articles.Query().
-type ArticleTable struct {
-	// Table owns the primary key and operations. Example: orm.Eq(Articles.Key(), id).
-	orm.Table[Article, model.ID[Article]]
-	// TitleSlot binds the external value. Example: extensions.BindSlot(Articles.Key(),Articles.TitleSlot).
-	TitleSlot orm.Slot[Article, translations.Text]
-	// LogoSlot binds the external value. Example: extensions.BindSlot(Articles.Key(),Articles.LogoSlot).
-	LogoSlot orm.Slot[Article, attachments.One[Article]]
-	// GallerySlot binds the external value. Example: extensions.BindSlot(Articles.Key(),Articles.GallerySlot).
-	GallerySlot orm.Slot[Article, attachments.Many[Article]]
-	// SEOSlot binds the external value. Example: extensions.BindSlot(Articles.Key(),Articles.SEOSlot).
-	SEOSlot orm.Slot[Article, metadata.Value[ArticleSEO]]
-}
-
-// Articles declares the persisted table. Example: orm.Find(ctx, db, Articles.Table, id).
-var Articles = orm.Define("articles", func(b orm.Builder[Article], m *Article) ArticleTable {
-	return ArticleTable{Table: orm.TableOf(b, &m.ID),
-		TitleSlot:   orm.SlotOf(b, &m.Title),
-		LogoSlot:    orm.SlotOf(b, &m.Logo),
-		GallerySlot: orm.SlotOf(b, &m.Gallery),
-		SEOSlot:     orm.SlotOf(b, &m.SEO),
-	}
-})
 
 // ArticleTables supplies this declaration to the package's Tables helper.
 // Example: orm.Check(ArticleTables()...).
@@ -68,7 +46,7 @@ var ArticleDisk = storage.DefineDisk("public")
 
 // ArticleExtensionOwner pins the persisted owner identity. Keep it stable when renaming tables.
 // Example: ArticleExtensionOwner.Reference(id).
-var ArticleExtensionOwner = extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table, Articles.Key()), extensions.OwnerOptions{StorageModel: "articles"})
+var ArticleExtensionOwner = extensions.DefineORMOwner("articles", articlesIdentity, extensions.OwnerOptions{StorageModel: "articles"})
 
 // ArticleExtensionSlots groups typed external-store handles. Example: ArticleExtensions.From(runtime).
 type ArticleExtensionSlots struct {
@@ -85,12 +63,12 @@ type ArticleExtensionSlots struct {
 // ArticleExtensions declares policies independently of table initialization.
 // Example: ArticleExtensions.From(runtime).
 var ArticleExtensions = ArticleExtensionSlots{
-	Title: translations.TextOf(ArticleExtensionOwner, "title", translations.Options{}, extensions.BindSlot(Articles.Key(), Articles.TitleSlot)),
+	Title: translations.TextOf(ArticleExtensionOwner, "title", translations.Options{}, extensions.BindSlot(Articles.Key(), Articles.Title)),
 	// List accepted media types (or an Image plan); assembly rejects an empty policy.
-	Logo: attachments.OneOf(ArticleExtensionOwner, "logo", attachments.Policy{Disk: ArticleDisk, Accepted: []storage.MediaType{}}, extensions.BindSlot(Articles.Key(), Articles.LogoSlot)),
+	Logo: attachments.OneOf(ArticleExtensionOwner, "logo", attachments.Policy{Disk: ArticleDisk, Accepted: []storage.MediaType{}}, extensions.BindSlot(Articles.Key(), Articles.Logo)),
 	// List accepted media types (or an Image plan); assembly rejects an empty policy.
-	Gallery: attachments.ManyOf(ArticleExtensionOwner, "gallery", attachments.Policy{Disk: ArticleDisk, Accepted: []storage.MediaType{}}, extensions.BindSlot(Articles.Key(), Articles.GallerySlot)),
-	SEO:     metadata.ValueOf(ArticleExtensionOwner, "seo", metadata.Spec[ArticleSEO]{}, ArticleSEOJSON(), extensions.BindSlot(Articles.Key(), Articles.SEOSlot)),
+	Gallery: attachments.ManyOf(ArticleExtensionOwner, "gallery", attachments.Policy{Disk: ArticleDisk, Accepted: []storage.MediaType{}}, extensions.BindSlot(Articles.Key(), Articles.Gallery)),
+	SEO:     metadata.ValueOf(ArticleExtensionOwner, "seo", metadata.Spec[ArticleSEO]{}, ArticleSEOJSON(), extensions.BindSlot(Articles.Key(), Articles.SEO)),
 }
 
 // From borrows runtime managers once. Example: ArticleExtensions.From(runtime).
@@ -105,10 +83,10 @@ func (d ArticleExtensionSlots) From(runtime slots.Runtime) ArticleExtensionSlots
 // All returns typed eager loaders. Example: Articles.Query().With(bound.All()...).
 func (d ArticleExtensionSlots) All() []orm.Relation[Article] {
 	return []orm.Relation[Article]{
-		d.Title.Relation(Articles.TitleSlot),
-		d.Logo.Relation(Articles.LogoSlot),
-		d.Gallery.Relation(Articles.GallerySlot),
-		d.SEO.Relation(Articles.SEOSlot),
+		d.Title.Relation(Articles.Title),
+		d.Logo.Relation(Articles.Logo),
+		d.Gallery.Relation(Articles.Gallery),
+		d.SEO.Relation(Articles.SEO),
 	}
 }
 

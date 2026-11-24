@@ -1,0 +1,88 @@
+package sample
+
+import (
+	"github.com/weiloon1234/Foundry-Go/attachments"
+	"github.com/weiloon1234/Foundry-Go/auth/challenge"
+	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/encrypted"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/relation"
+	"github.com/weiloon1234/Foundry-Go/decimal"
+	"github.com/weiloon1234/Foundry-Go/metadata"
+	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/temporal"
+	"github.com/weiloon1234/Foundry-Go/translations"
+	"github.com/weiloon1234/Foundry-Go/value"
+)
+
+type Destination struct{ Name string }
+
+//foundry:model table=withdrawals var=Withdrawals key=ID
+type Withdrawal struct {
+	ID             model.ID[Withdrawal]
+	AmountUSD      decimal.Decimal `foundry:"role=column"`
+	PayoutAmount   decimal.Decimal `foundry:"role=number"`
+	BankSnapshot   encrypted.JSON[Destination]
+	OptionalSecret value.Nullable[encrypted.Text]
+	PaidAt         value.Nullable[temporal.DateTime]
+}
+
+//foundry:model table=entity_lifecycle_events var=EntityLifecycleEvents key=ID hooks=eventHooks retrieval=eventRetrieval scopes=eventScopes softdeletes=none
+type EntityLifecycleEvent struct {
+	ID         model.ID[EntityLifecycleEvent]
+	ReopensOn  value.Nullable[temporal.Date]
+	OccurredAt temporal.DateTime
+	LocalAt    temporal.LocalDateTime
+	Time       temporal.Time
+	Interval   temporal.Interval
+}
+
+func eventHooks() orm.Hooks[EntityLifecycleEvent] { return orm.Hooks[EntityLifecycleEvent]{} }
+func eventRetrieval() orm.RetrievalHooks[EntityLifecycleEvent] {
+	return orm.RetrievalHooks[EntityLifecycleEvent]{}
+}
+func eventScopes(t EntityLifecycleEventTable) []orm.GlobalScope[EntityLifecycleEvent] { return nil }
+
+//foundry:model table=experiment_units var=ExperimentUnits key=ID identity=false timestamps=none
+type ExperimentUnit struct {
+	ID        model.ID[ExperimentUnit]
+	CreatedAt temporal.DateTime
+}
+
+//foundry:model table=entities var=Entities key=ID
+type Entity struct {
+	ID          model.ID[Entity]
+	RegistryID  string `foundry:"input=string"`
+	PublicMedia attachments.Many[Entity]
+	DeletedAt   value.Nullable[temporal.DateTime] `foundry:"role=soft-delete"`
+}
+
+func (Entity) MutateRegistryID(v string) (string, error) { return v, nil }
+
+//foundry:model table=projects var=Projects key=ID
+type Project struct {
+	ID         model.ID[Project]
+	Summary    translations.Text
+	Settings   metadata.Value[Destination]
+	Files      attachments.One[Project]
+	Opaque     Destination `foundry:"slot"`
+	OriginalID attachments.ID[Entity]
+	PublicID   value.Nullable[attachments.ID[Entity]]
+	Revision   challenge.Revision[Project]
+	Parent     relation.One[Project]
+	Children   relation.Many[Project]
+	Through    relation.Through[Project, Entity]
+	Count      relation.Value[int64]
+}
+
+type Email string
+
+func emailCodec() codec.Codec[Email]    { return codec.String[Email]() }
+func normalize(v string) (Email, error) { return Email(v), nil }
+
+//foundry:model table=names var=Names key=Code identity=false
+type Name struct {
+	Code   string `foundry:"key-role=primary-text,member=Code"`
+	Email  Email  `foundry:"input=string,mutate=normalize,codec=emailCodec"`
+	Hidden bool   `foundry:"member=none"`
+}

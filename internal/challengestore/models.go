@@ -5,29 +5,52 @@ package challengestore
 import (
 	"fmt"
 
-	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=foundry_challenge_subjects var=Subjects key=Key identity=false
 type Subject struct {
-	Key      string
-	Scope    string
+	// Table provides Subject queries and writes. Example: Subjects.Query().Limit(10).
+	Key string
+	// Scope binds the persisted Subject.Scope column.
+	// Example: orm.Set(Subjects.Scope, scope).
+	Scope string
+	// Identity binds the persisted Subject.Identity column.
+	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.Set(Subjects.Identity, encoded) }.
 	Identity value.JSON[model.Identity]
 }
 
 // Entry has one current credential per stable subject/purpose. Reissuance creates
 // a new ID so a stale pruning candidate cannot delete the replacement.
+//
+//foundry:model table=foundry_challenges var=Entries key=ID identity=false
 type Entry struct {
-	ID          model.ID[Entry]
-	Scope       string
-	SubjectKey  string
-	SecretHash  string
+	// Table provides Entry queries and writes. Example: Entries.Query().Limit(10).
+	//
+	// ID binds the persisted Entry.ID column.
+	// Example: orm.Eq(Entries.ID, id).
+	ID model.ID[Entry] `foundry:"member=ID"`
+	// Scope binds the persisted Entry.Scope column.
+	// Example: orm.Set(Entries.Scope, scope).
+	Scope string
+	// SubjectKey binds the persisted Entry.SubjectKey column.
+	// Example: orm.Set(Entries.SubjectKey, subjectKey).
+	SubjectKey string
+	// SecretHash binds the persisted Entry.SecretHash column.
+	// Example: orm.Set(Entries.SecretHash, secretHash).
+	SecretHash string
+	// BindingHash binds the persisted Entry.BindingHash column.
+	// Example: orm.Set(Entries.BindingHash, bindingHash).
 	BindingHash string
-	CreatedAt   temporal.DateTime
-	ExpiresAt   temporal.DateTime
+	// CreatedAt binds the caller-supplied creation time; the ORM does not automatically populate or refresh it.
+	// Example: orm.Set(Entries.CreatedAt, createdAt).
+	CreatedAt temporal.DateTime `foundry:"role=time"`
+	// ExpiresAt binds the persisted Entry.ExpiresAt column.
+	// Example: orm.Set(Entries.ExpiresAt, expiresAt).
+	ExpiresAt temporal.DateTime
 }
 
 type PruneCandidate struct {
@@ -37,68 +60,6 @@ type PruneCandidate struct {
 
 func (Subject) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("challenge subject")) }
 func (Entry) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("stored challenge")) }
-
-// SubjectTable binds the persisted Subject columns. Example: Subjects.Query().Limit(10).
-type SubjectTable struct {
-	// Table provides Subject queries and writes. Example: Subjects.Query().Limit(10).
-	orm.Table[Subject, string]
-	// Scope binds the persisted Subject.Scope column.
-	// Example: orm.Set(Subjects.Scope, scope).
-	Scope orm.Text[Subject, string]
-	// Identity binds the persisted Subject.Identity column.
-	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.Set(Subjects.Identity, encoded) }.
-	Identity orm.JSON[Subject, model.Identity]
-}
-
-// Subjects owns the immutable Subject declaration. Example: orm.First(ctx, tx, Subjects.Query()).
-var Subjects = orm.Define("foundry_challenge_subjects", func(b orm.Builder[Subject], m *Subject) SubjectTable {
-	table := orm.TableOf(b, &m.Key)
-	return SubjectTable{Table: table,
-		Scope:    orm.TextOf(b, &m.Scope),
-		Identity: orm.JSONOf(b, &m.Identity),
-	}
-})
-
-// EntryTable binds the persisted Entry columns. Example: Entries.Query().Limit(10).
-type EntryTable struct {
-	// Table provides Entry queries and writes. Example: Entries.Query().Limit(10).
-	orm.Table[Entry, model.ID[Entry]]
-	// ID binds the persisted Entry.ID column.
-	// Example: orm.Eq(Entries.ID, id).
-	ID orm.Key[Entry, model.ID[Entry]]
-	// Scope binds the persisted Entry.Scope column.
-	// Example: orm.Set(Entries.Scope, scope).
-	Scope orm.Text[Entry, string]
-	// SubjectKey binds the persisted Entry.SubjectKey column.
-	// Example: orm.Set(Entries.SubjectKey, subjectKey).
-	SubjectKey orm.Text[Entry, string]
-	// SecretHash binds the persisted Entry.SecretHash column.
-	// Example: orm.Set(Entries.SecretHash, secretHash).
-	SecretHash orm.Text[Entry, string]
-	// BindingHash binds the persisted Entry.BindingHash column.
-	// Example: orm.Set(Entries.BindingHash, bindingHash).
-	BindingHash orm.Text[Entry, string]
-	// CreatedAt binds the caller-supplied creation time; the ORM does not automatically populate or refresh it.
-	// Example: orm.Set(Entries.CreatedAt, createdAt).
-	CreatedAt orm.Time[Entry, temporal.DateTime]
-	// ExpiresAt binds the persisted Entry.ExpiresAt column.
-	// Example: orm.Set(Entries.ExpiresAt, expiresAt).
-	ExpiresAt orm.Time[Entry, temporal.DateTime]
-}
-
-// Entries owns the immutable Entry declaration. Example: orm.First(ctx, tx, Entries.Query()).
-var Entries = orm.Define("foundry_challenges", func(b orm.Builder[Entry], m *Entry) EntryTable {
-	table := orm.TableOf(b, &m.ID)
-	return EntryTable{Table: table,
-		ID:          table.Key(),
-		Scope:       orm.TextOf(b, &m.Scope),
-		SubjectKey:  orm.TextOf(b, &m.SubjectKey),
-		SecretHash:  orm.TextOf(b, &m.SecretHash),
-		BindingHash: orm.TextOf(b, &m.BindingHash),
-		CreatedAt:   orm.TimeOf(b, &m.CreatedAt),
-		ExpiresAt:   orm.TimeOf(b, &m.ExpiresAt),
-	}
-})
 
 // PruneCandidateRows declares the narrow pruning result. Example: rows.Select(source, PruneCandidateRows, mappings...).
 var PruneCandidateRows = rows.Define(func(b rows.Builder[PruneCandidate], r *PruneCandidate) struct {

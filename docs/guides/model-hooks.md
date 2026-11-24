@@ -10,7 +10,7 @@
 
 Further reading: [Callback contracts](#callback-contracts).
 
-Declare a per-write factory returning `orm.Hooks[M]` and attach it with `orm.WithHooks` in the options passed to `orm.Define`.
+Declare a per-write factory returning `orm.Hooks[M]` and name it with `hooks=memberHooks` on the model directive.
 
 <!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#hooks-after -->
 ```go
@@ -27,12 +27,8 @@ func memberHooks() orm.Hooks[hooks.Member] {
 }
 ```
 
-<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#write-options -->
-```go
-func writeOptions() []orm.Option {
-	return []orm.Option{orm.WithHooks(memberHooks)}
-}
-```
+Add `hooks=memberHooks` to the model directive. The factory must be a
+package-local `func() orm.Hooks[Member]`. Keep its body handwritten.
 
 The [member declaration](../../tests/fixtures/goway/models/hooks/models.go) shows the complete attachment. The factory runs once per ordinary write inside the transaction, after an existing model has been locked and read. Closures can hold operation-local state. Query construction, metadata inspection and ordinary reads do not instantiate write factories.
 
@@ -105,3 +101,10 @@ No callback is automatically retried. Unknown commit outcomes require reconcilia
 ## Set and per-model behavior
 
 Set updates/deletes skip per-model factories and require the applicable `WithoutModelHooks` acknowledgement. Insert batches, upserts and source writes explicitly skip these callbacks without a separate acknowledgement. Normal writes never silently switch to set behavior. [Per-model batches](model-batch-writes.md) preserve callbacks for every model inside one bounded atomic operation. Retrieval uses a separate factory and observer family described in [retrieval events](model-retrieval.md).
+
+A test that supplies different hook factories per call may use a low-level builder
+in a `_test.go` file. When several test packages need that builder, keep identical
+copies in those test packages; each copy states that they are identical. The
+application's package-level table still uses the directive and one named factory.
+See the [goway test builder](../../tests/fixtures/goway/hook_declaration_test.go)
+and [pgsmoke copy](../../tests/fixtures/goway/pgsmoke/hook_declaration_test.go).

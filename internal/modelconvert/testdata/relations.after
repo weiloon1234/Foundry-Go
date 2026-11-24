@@ -1,0 +1,21 @@
+package models
+
+import (
+ "github.com/weiloon1234/Foundry-Go/database/relation"
+)
+
+type Child struct{ID int64}
+type Pivot struct{ID int64}
+
+// Parent retains all four relation families.
+//
+//foundry:model table=parents var=Parents key=ID identity=false
+type Parent struct{
+ ID int64
+ Child relation.One[Child]
+ Children relation.Many[Child]
+ Linked relation.Through[Child,Pivot]
+ Count relation.Value[int64]
+}
+
+func (p Parent) Label()string{return "parent"}

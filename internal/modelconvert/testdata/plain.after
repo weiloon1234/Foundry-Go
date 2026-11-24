@@ -1,0 +1,18 @@
+package models
+
+import (
+	"github.com/weiloon1234/Foundry-Go/model"
+)
+
+// User is retained.
+//
+//foundry:model table=users var=Users key=ID
+type User struct {
+	ID   model.ID[User]
+	Name string `json:"name"`
+}
+
+// Keep this business declaration.
+const Greeting = "hello"
+
+func (u User) Greeting() string { return Greeting + u.Name }

@@ -80,7 +80,7 @@ this new-project example:
 mkdir -p models transport
 printf '%s\n' '// Package models owns persisted domain declarations.' 'package models' > models/doc.go
 printf '%s\n' '// Package transport owns public request and response contracts.' 'package transport' > transport/doc.go
-go tool foundry make model Widget --table widgets --dir ./models
+# Add the model struct and //foundry:model directive as shown in the declaration guide.
 go tool foundry make dto WidgetResponse --dir ./transport
 # Add domain fields and handler behavior to the handwritten files.
 go tool foundry generate --recursive --dir .
@@ -88,11 +88,11 @@ go mod tidy
 go test ./...
 ```
 
-The model scaffold creates a handwritten ORM declaration and a `WidgetTables()`
-helper. Compose it into the application's `models.Tables()` list; model field and
-relation edits need no generation. See [model scaffolding](model-scaffolding.md)
-for typed timestamp, soft-delete, mutator and extension bindings. DTO and other
-contract declarations in this workflow still use generation.
+Declare the model with the [model directive](model-declarations.md), generate its
+table, and include that table in the application's `models.Tables()` list. Run
+generation after field, tag or directive changes. The generator does not create
+that registry. See [starting a model](model-scaffolding.md) for lifecycle roles
+and slots. DTO and other contract declarations use the same generation command.
 
 ORM declarations and generated contract codecs do not create database tables.
 Declare reviewed forward migrations for your models and include the enabled

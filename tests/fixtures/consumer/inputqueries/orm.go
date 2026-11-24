@@ -5,28 +5,15 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/model"
+
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// MemberTable separates fresh inputs from stored values. Example: orm.Set(Members.Email, EmailInput{Address:"Ada@example.test"}).
-type MemberTable struct {
-	orm.Table[Member, model.ID[Member]]
-	Email orm.InputText[Member, EmailInput, StoredEmail]
-	Note  orm.NullableInputText[Member, LabelInput, StoredLabel]
-}
+var memberFields MemberTable
 
-// Members preserves omitted/null/value inputs and explicit AccessEmail presentation.
-// Example: Members.Query().Where(orm.Eq(Members.Email, StoredEmail("ada@example.test"))).
-var Members = declareMembers()
+func init() { memberFields = Members }
 
-func declareMembers() MemberTable {
-	var fields MemberTable
-	fields = orm.Define("input_members", func(b orm.Builder[Member], m *Member) MemberTable {
-		return MemberTable{orm.TableOf(b, &m.ID), orm.InputTextOf[Member, EmailInput](b, &m.Email, nil), orm.NullableInputTextOf[Member, LabelInput](b, &m.Note, nil)}
-	}, orm.WithHooks(func() orm.Hooks[Member] { return ormMemberHooks(fields) }))
-	return fields
-}
+func memberHooks() orm.Hooks[Member] { return ormMemberHooks(memberFields) }
 
 func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 	after := func(ctx context.Context, _ *database.Tx, changes orm.Changes[Member]) error {

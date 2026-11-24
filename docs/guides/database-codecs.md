@@ -48,7 +48,7 @@ Integers accept driver `int64` or decimal integer text/bytes. Floats accept driv
 
 `Add`, `Sub` and `Mul` return exact values or a bound error without modifying operands. `Cmp` compares numerically and `Scale` reports canonical fractional digits. There is no implicit rounding: `Div` and `Round` require an explicit scale and `decimal.RoundingMode` (see [supporting APIs](supporting-apis.md#exact-decimals-and-money)). Scale used for display is not retained: `1.00` and `1` are the same value. JSON uses strings to preserve exact digits for JavaScript and other consumers; numeric JSON input is rejected.
 
-`codec.Decimal()` binds canonical text and accepts exact text/integer driver values. Floating-point sources fail. Table declarations use `orm.NumberOf` and `orm.NullableNumberOf` with `decimal.Decimal`, exposing ordered predicates and assignments. The [ledger declaration](../../tests/fixtures/consumer/models/ledger.go) demonstrates this shape; a float cannot be passed to its amount assignment.
+`codec.Decimal()` binds canonical text and accepts exact text/integer driver values. Floating-point sources fail. Model decimal fields use `role=number` for ordered predicates and assignments, including nullable decimals. The [ledger declaration](../../tests/fixtures/consumer/models/ledger.go) demonstrates this shape; a float cannot be passed to its amount assignment.
 
 The codec cannot override a database column's declared scale. PostgreSQL rounds inputs to a constrained numeric scale; use a matching schema and validate an application's precision/scale rule before writing when rounding is unacceptable. [PostgreSQL numeric types](https://www.postgresql.org/docs/18/datatype-numeric.html)
 

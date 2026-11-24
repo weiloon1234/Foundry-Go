@@ -17,12 +17,13 @@ type StoredLabel string
 
 var Veto = errors.New("input fixture veto")
 
+//foundry:model table=input_members var=Members key=ID identity=false hooks=memberHooks
 type Member struct {
 	ID model.ID[Member]
 	// Email stores the normalized address in contact_email.
 	// Custom setter: MutateEmail accepts EmailInput; Custom getter: AccessEmail returns EmailLink.
-	Email StoredEmail `foundry:"column=contact_email"`
-	Note  value.Nullable[StoredLabel]
+	Email StoredEmail                 `foundry:"column=contact_email,input=EmailInput"`
+	Note  value.Nullable[StoredLabel] `foundry:"input=LabelInput"`
 }
 
 func (Member) MutateEmail(input EmailInput) (StoredEmail, error) {

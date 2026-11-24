@@ -39,9 +39,9 @@ Use a context file inside the consumer workspace, including when symlinks are re
 ## Keep editor and agent answers current
 
 Use the consumer's selected framework version and generated output together.
-Regenerate DTO, configuration, enum and transport contracts with that version's
-CLI after changing them, then use `generate --check`. Model tables, field handles,
-relations and their comments are handwritten and need no model generation.
+Regenerate model, DTO, configuration, enum and transport declarations with that
+version's CLI after changing them, then use `generate --check`. Model structs and
+business methods stay handwritten; table types and field handles are generated.
 
 Document stored fields and their handles, including getter, mutator, timestamp
 and slot behavior. Completion, hover and definition read these handwritten

@@ -5,23 +5,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-// Widget is a persisted model. Add fields and their typed handles below.
+// Widget is a persisted model. Add domain fields, then run foundry generate.
 // Example: Widget{}.
+//
+//foundry:model table=widgets key=ID var=Widgets
 type Widget struct {
 	// ID is the concrete owner key. Example: record.ID.
-	ID model.ID[Widget] `foundry:"column=id"`
+	ID model.ID[Widget]
 }
-
-// WidgetTable holds the model's typed fields. Example: Widgets.Query().
-type WidgetTable struct {
-	// Table owns the primary key and operations. Example: orm.Eq(Widgets.Key(), id).
-	orm.Table[Widget, model.ID[Widget]]
-}
-
-// Widgets declares the persisted table. Example: orm.Find(ctx, db, Widgets.Table, id).
-var Widgets = orm.Define("widgets", func(b orm.Builder[Widget], m *Widget) WidgetTable {
-	return WidgetTable{Table: orm.TableOf(b, &m.ID)}
-})
 
 // WidgetTables supplies this declaration to the package's Tables helper.
 // Example: orm.Check(WidgetTables()...).

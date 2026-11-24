@@ -12,15 +12,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=hook_members var=Members key=ID identity=false hooks=memberHooks
 type Member struct {
 	ID           model.ID[Member]
-	Email        string
-	Nickname     value.Nullable[string]
-	IntroducerID value.Nullable[model.ID[Member]]
-	IsIntroducer bool `foundry:"default=database"`
-	Rank         int  `foundry:"default=database"`
+	Email        string                           `foundry:"input=string"`
+	Nickname     value.Nullable[string]           `foundry:"input=string"`
+	IntroducerID value.Nullable[model.ID[Member]] `foundry:"role=column"`
+	IsIntroducer bool                             `foundry:"default=database,role=column"`
+	Rank         int                              `foundry:"default=database"`
 }
 
+//foundry:model table=hook_logs var=Logs key=ID identity=false
 type Log struct {
 	ID    model.ID[Log]
 	Label string

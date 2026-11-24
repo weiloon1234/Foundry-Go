@@ -1,8 +1,14 @@
 # Go-way data layer
 
-The Go-way data layer uses handwritten, typed declarations backed by the shared
-SQL core. Stage 8 removes model generation and the former query runtime. DTO and
-transport generation remain. Application migration and final performance gates
+Current model declarations use `//foundry:model` and field tags to generate the
+native ORM table and identity. See [the declaration guide](../../docs/guides/model-declarations.md).
+The Stage 8 retirement and measurement entries below record the former generated
+query/draft implementation; they do not prescribe handwritten application tables.
+
+
+The Go-way data layer uses typed declarations backed by the shared SQL core.
+Model directives generate table bindings; projections stay handwritten. Stage 8
+removed the former generated query/draft system. DTO and transport generation remain. Application migration and final performance gates
 retain their separate status below.
 
 The [master status](../00-master-architecture-and-parity.md#go-way-data-layer)
@@ -345,7 +351,7 @@ They use retained `postgres.Isolate` schemas. PostgreSQL execution is lead-owned
 | Decision | Adopted direction |
 | --- | --- |
 | D1 | `database/orm`, `orm/expr` and `orm/rows` are the only supported data-layer surface. |
-| D2 | A typed table struct returned by `orm.Define`, with a separate relation namespace to avoid initialization cycles. Measure the cost of the entire table declaration. |
+| D2 | A generated typed table struct from the model directive, with separate relation declarations to avoid initialization cycles. Measure the cost of the entire table declaration. |
 | D3 | Explicit capability constructors: number, text, enum, generic column, nullable and temporal families. Custom representations require an explicit codec. |
 | D4 | Validate field offsets at declaration/startup; use those offsets on the hot path. |
 | D5 | Assignment lists (`column.Set(value)`) preserve omitted/null/value distinctions. |
@@ -385,7 +391,7 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | JSON documents and intervals | Generated JSON/interval fields | `JSONOf`/`NullableJSONOf`: equality, membership, containment, assignment, `Asc`/`Desc` and `IsJSONNull`; no range comparisons/text patterns. `IntervalOf`/`NullableIntervalOf`: ordered comparisons, sorting and assignment. Interval functions delivered in 6d2; JSON Kind/Length and typed paths delivered in 6d3 |
 | Password and encrypted fields | Typed values and lifecycle codecs | Stage 3.1b: password scalar capabilities; encrypted typed assignments/null predicates, shared sealing/opening, transaction-keyring enforcement |
 | Column/default tags | Generator reads tags | Startup metadata reads the same tags, Stage 3 |
-| Table name/options | Model annotation | `orm.Define` and typed options, Stage 3 |
+| Table name/options | Model annotation | Model directive and tags; generated code calls the Stage 3 ORM constructors |
 | Accessors | Handwritten `Access<Field>` methods | B5a: exact startup signature and persisted-field validation; explicit calls remain ordinary Go methods and never replace stored hydration |
 | Mutators, including distinct input/stored types | `Mutate<Field>` plus generated input fields | B5a: typed named methods bound once at declaration or explicit `orm.Mutate`; required/nullable input-column kinds, once-only transactional transforms and redacted errors preserving cause identity |
 | Lifecycle and per-write factory state | Generated hooks and drafts | B5b delivered: `WithHooks(func() Hooks[M])`, typed Write input getters, all 13 stages, local-before-observer order per stage, locked originals and closed RETURNING rows |

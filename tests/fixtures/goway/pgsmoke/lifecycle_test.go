@@ -25,7 +25,7 @@ func TestLifecyclePersistedChangesRollbackAndCommit(t *testing.T) {
 	commits := 0
 	var captured orm.Changes[h.Member]
 	var q h.MemberTable
-	q = h.Declare(func() orm.Hooks[h.Member] {
+	q = declareHookMembers(func() orm.Hooks[h.Member] {
 		return orm.Hooks[h.Member]{
 			Creating: func(ctx context.Context, tx *database.Tx, w *orm.Write[h.Member]) error {
 				if !orm.WriteIsSet(w, func() func(arg0 string) orm.Assignment[h.Member] {

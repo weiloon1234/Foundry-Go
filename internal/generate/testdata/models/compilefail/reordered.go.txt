@@ -1,0 +1,3 @@
+package sample
+
+type Account struct { Name string; ID int64 }

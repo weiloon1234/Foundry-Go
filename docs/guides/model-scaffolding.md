@@ -1,164 +1,86 @@
-# Scaffold an ORM model
+# Start a model declaration
 
 <a id="agent-entry"></a>
 ## Agent entry
 
-- [Scaffold a model](#recipe-scaffold-model)
+- [Declare a model](#recipe-scaffold-model)
 - [Register tables](model-declarations.md#recipe-register-tables)
 - [Add fields](#recipe-add-fields)
 - [Add relations](#recipe-add-relations)
-- [Scaffold extension slots](#recipe-scaffold-slots)
+- [Add extension slots](#recipe-scaffold-slots)
 
 <a id="recipe-scaffold-model"></a>
-## Scaffold a model
+## Declare a model
 
-Create an existing Go package, then scaffold its first model:
+Run the scaffold in an existing model package. It writes a struct with
+`//foundry:model` and a per-model registration helper. Like the DTO scaffold, it
+prints the next generation command; it does not publish generated output.
 
 ```sh
 GOWORK=off go tool foundry make model Widget --table widgets --dir ./models
+GOWORK=off go tool foundry generate --dir ./models
+GOWORK=off go tool foundry generate --check --dir ./models
+GOWORK=off go tool foundry models check --dir ./models
 ```
 
-The command creates `widget_model.go` with a `Widget` struct, a `WidgetTable`
-namespace, the `Widgets` declaration and `WidgetTables()`. The primary key remains
-`model.ID[Widget]`, with an explicit `foundry:"column=id"` tag. Add fields and bind
-them inside `orm.Define`; model edits need no generation. The command preserves
-existing files and rejects declaration collisions before publication.
+Generation writes the table type, variable, field bindings and identity block to
+`<file>_foundry.gen.go`. Include the generated table in the application's explicit
+registry. It does not create SQL tables or a package-wide `Tables()` helper.
 
-The flags are unchanged. There are no timestamp, soft-delete, mutator or ordinary
-relation flags: add those declarations by hand. Only metadata DTOs and other
-contract declarations still need `foundry generate`.
+The scaffolded source is compiled with its generated table:
 
-Scaffold names are allocated together, including metadata codec and validation
-helpers. Collisions receive deterministic numeric suffixes; ordinary names stay
-unchanged. For example, `--table widget_table` uses `WidgetTable1` for the table
-variable and preserves the `WidgetTable` type. `--metadata Table` uses
-`ArticleTable1` for an Article model's metadata DTO. Persisted table and slot names
-do not change. If a valid SQL name yields an empty or digit-leading namespace,
-the scaffold prefixes `Query`: `_` becomes `Query`, and `_9` becomes `Query9`.
-The same rule applies to schema-qualified tables. SQL-name validation remains
-unchanged; bare digit-leading and non-ASCII SQL identifiers are rejected.
+<!-- compiled-source: tests/fixtures/goway/modelguide/widget_model.go -->
+```go
+package modelguide
 
-See [registering and checking tables](model-declarations.md#recipe-register-tables).
+import (
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/model"
+)
+
+// Widget is a persisted model. Add domain fields, then run foundry generate.
+// Example: Widget{}.
+//
+//foundry:model table=widgets key=ID var=Widgets
+type Widget struct {
+	// ID is the concrete owner key. Example: record.ID.
+	ID model.ID[Widget]
+}
+
+// WidgetTables supplies this declaration to the package's Tables helper.
+// Example: orm.Check(WidgetTables()...).
+func WidgetTables() []orm.CheckedTable { return []orm.CheckedTable{Widgets} }
+
+// Declare relations after the tables they reference to avoid initialization cycles.
+```
 
 <a id="recipe-add-fields"></a>
 ## Add fields with lifecycle roles
 
-The scaffold has no timestamp, soft-delete, mutator or ordinary relation flags.
-The following compiled example extends its initial struct and table declaration:
-
-<!-- compiled-source: tests/fixtures/goway/guideadapters/scaffold_test.go#model-scaffolding-name-input -->
-```go
-type NameInput struct{ Text string }
-
-type Widget struct {
-	ID   model.ID[Widget] `foundry:"column=id"`
-	Name string
-	// CreatedAt preserves supplied input; omission uses the owning clock.
-	CreatedAt temporal.DateTime
-	// UpdatedAt is managed by the write pipeline.
-	UpdatedAt temporal.DateTime
-	DeletedAt value.Nullable[temporal.DateTime]
-	Children  relation.Many[Child]
-}
-
-type WidgetTable struct {
-	orm.Table[Widget, model.ID[Widget]]
-	Name      orm.InputText[Widget, NameInput, string]
-	CreatedAt orm.CreatedAt[Widget, temporal.DateTime]
-	UpdatedAt orm.UpdatedAt[Widget, temporal.DateTime]
-	DeletedAt orm.SoftDelete[Widget, temporal.DateTime]
-	Soft      orm.SoftDeletable[Widget]
-	Children  orm.Many[Widget, Child]
-}
-
-var Widgets = orm.Define("widgets", func(b orm.Builder[Widget], m *Widget) WidgetTable {
-	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
-	return WidgetTable{
-		Table: orm.TableOf(b, &m.ID),
-		Name: orm.InputTextOf(b, &m.Name, func(input NameInput) (string, error) {
-			return strings.TrimSpace(input.Text), nil
-		}),
-		CreatedAt: orm.CreatedAtOf(b, &m.CreatedAt),
-		UpdatedAt: orm.UpdatedAtOf(b, &m.UpdatedAt),
-		DeletedAt: deleted,
-		Soft:      orm.SoftDeletes(deleted),
-		Children:  orm.ManyOf(b, &m.Children),
-	}
-})
-```
-
-Creation time preserves supplied input and uses the owning clock when omitted.
-Update time is managed by the write pipeline. Document both on fields and handles.
-`SoftDeletes` derives the capability needed for physical deletion. `InputTextOf`
-keeps the stored string separate from `NameInput`; predicates accept the stored
-string, while `orm.Set` accepts the input type. A nil transform selects a named model
-mutator. Other `Input*` families preserve their corresponding storage types.
+Add the stored field to the struct and regenerate. Types infer ordinary handles.
+Use `input=NameInput` with a value-receiver `MutateName` method or a named
+`mutate` function. Use `role=created-at` and `role=updated-at` for a managed pair,
+and `role=soft-delete` for a nullable deletion instant. The latter generates
+`Widgets.Soft`. See [roles and diagnostics](model-declarations.md#fields-and-roles).
 
 <a id="recipe-add-relations"></a>
-## Add relations after table declarations
+## Add relations after generation
 
-Bind relation slots inside each `orm.Define`, then declare computations after both
-tables. This avoids initialization cycles:
-
-<!-- compiled-source: tests/fixtures/goway/guideadapters/scaffold_test.go#model-scaffolding-child -->
-```go
-type Child struct {
-	ID       model.ID[Child]
-	WidgetID model.ID[Widget]
-}
-
-type ChildTable struct {
-	orm.Table[Child, model.ID[Child]]
-	WidgetID orm.Column[Child, model.ID[Widget]]
-}
-
-var Children = orm.Define("children", func(b orm.Builder[Child], m *Child) ChildTable {
-	return ChildTable{orm.TableOf(b, &m.ID), orm.ColumnOf(b, &m.WidgetID)}
-})
-var WidgetChildren = orm.HasManyOf(Widgets.Children, Widgets.Key(), Children.WidgetID)
-
-func WidgetTables() []orm.CheckedTable { return []orm.CheckedTable{Widgets} }
-func ChildTables() []orm.CheckedTable  { return []orm.CheckedTable{Children} }
-
-func Tables() []orm.CheckedTable {
-	return append(WidgetTables(), ChildTables()...)
-}
-```
-
-Load with `Widgets.Query().With(WidgetChildren)`. See the
-[ORM API guide](../../database/orm/README.md) for other relation kinds.
+Add `relation.One[Child]` or `relation.Many[Child]` fields to the model and
+regenerate their typed slots. Declare the relationship computations after both
+tables, using the generated key and foreign-key handles. Keep table initialization
+separate from relation setup to avoid cycles. See [relations](model-relations.md).
 
 <a id="recipe-scaffold-slots"></a>
 ## Add extension slots
 
-```sh
-GOWORK=off go tool foundry make model Article --table articles --translated Title \
-  --attachment Logo --attachments Gallery --metadata SEO --disk public --dir ./models
-```
+Add `translations.Text`, `attachments.One[Model]`, `attachments.Many[Model]` or
+`metadata.Value[T]` fields and regenerate. Their types identify slots; no `slot`
+tag is needed. Keep stored names, policies and owner identities in handwritten
+extension declarations. Reuse the generated identity variable in the model's
+package and the generated slot handles in `extensions.BindSlot`.
 
-The same handwritten file contains the slot fields, `orm.Slot` bindings (for example,
-`Articles.TitleSlot`),
-`ArticleExtensionOwner`, the typed `ArticleExtensions` handles, their `From` and
-`All` methods, and `ArticleExtensionDeclaration()`. The owner and stored slot
-names remain explicit. The `Slot` suffix keeps fields such as `Key`, `Table` and
-`Query` from hiding table operations. Bind managers once with `ArticleExtensions.From(runtime)`;
-load its relations with `Articles.Query().With(bound.All()...)`.
-
-Register `ArticleExtensionDeclaration()` through `application.Builder.Models`.
-List accepted attachment media types, or an image plan, and configure the disk
-before assembly. An empty attachment policy still fails validation. Keep the
-owner identity and stored slot names stable when renaming Go fields or tables.
-
-`ArticleSEO` remains a generated-codec DTO. The scaffold generates its codec
-before returning; run `foundry generate` after changing its JSON fields.
-ORM field comments are ordinary handwritten documentation. Plain model scaffolds
-run no generation.
-
-The [scaffold tests](../../internal/generate/scaffold_model_test.go) compile the
-output and exercise `orm.Check`, typed roles and relation declarations. The
-[plain model](../../internal/generate/testdata/scaffold/model.golden) and
-[extension model](../../internal/generate/testdata/scaffold/extensions.golden)
-goldens show complete initial files.
-
-
-The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.
+Register extension declarations through `application.Builder.Models`, configure
+their disks and specify attachment media policies. Metadata DTOs still need their
+own generated codec. See the [complete slot fixture](../../tests/fixtures/consumer/articles/article.go)
+and [extension slot guide](model-extension-slots.md).

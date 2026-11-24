@@ -8,14 +8,15 @@ import (
 
 type Label string
 
+//foundry:model table=calculation_samples var=Samples key=ID identity=false
 type Sample struct {
-	ID       int
+	ID       int `foundry:"member=ID,key-role=primary-number"`
 	Quantity int16
-	Amount   decimal.Decimal
+	Amount   decimal.Decimal `foundry:"role=number"`
 	Score    float32
 	Name     Label
 	Note     value.Nullable[Label]
-	Tax      value.Nullable[decimal.Decimal]
+	Tax      value.Nullable[decimal.Decimal] `foundry:"role=number"`
 }
 
 type Calculation struct {

@@ -7,11 +7,22 @@ current database target. Consult the relevant query/model guide for the operatio
 
 ## Typed persistence
 
-- Preserve [typed declaration roles](../docs/guides/model-declarations.md):
-  `CreatedAtOf`/`UpdatedAtOf` for managed timestamps, `Input*` for every mutated
-  field, and primary roles through `NumberKey`/`TextKey`. `PrimaryOf` is needed only for
-  primary insert-select targets. Require the exact declaration's `SoftDeletable`
+- Declare concrete, constant-table models with `//foundry:model table=... var=... key=...`.
+  Generate the table, binding and identity beside the struct; never duplicate them.
+  Preserve [typed declaration roles](../docs/guides/model-declarations.md):
+  `role=created-at`/`role=updated-at` for managed timestamps, `input=Type` for every
+  mutated field, and an exposed primary key role (`primary`, `primary-number` or `primary-text`)
+  for insert-select targets. Require the exact declaration's `SoftDeletable`
   token for force-delete paths; it never grants visibility or authorization.
+- Low-level table constructors are what generated code calls. Direct use remains
+  allowed in `_test.go`, the `database/orm` tree, generic model builders and
+  declarations with runtime-computed table names. `foundry models check` enforces
+  concrete, constant-name declarations elsewhere, with no exemption mechanism.
+  The generator refuses directives in test files and on generic models.
+- Run `foundry generate --check --recursive` and `foundry models check` in the
+  consumer gate. Register all tables with `application.WithTables` or `orm.Check`
+  to detect stale field tags before resources start. Directive comments are checked
+  by generation only; structural field changes also fail compilation.
 - Extend the existing AST, declaration metadata, PostgreSQL compiler and executor.
   Do not add a parallel SQL builder or interpolation path. Bind user values.
 - Preserve model/key/field/projection/source ownership and codec value types through

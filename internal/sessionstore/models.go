@@ -5,7 +5,6 @@ package sessionstore
 import (
 	"fmt"
 
-	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -13,144 +12,88 @@ import (
 
 // Subject is the stable per-scope identity row used to serialize issue/revoke.
 // It is not a user model and stores no roles, permissions or credentials.
+//
+//foundry:model table=foundry_session_subjects var=Subjects key=Key identity=false
 type Subject struct {
-	Key      string
-	Scope    string
+	// Table provides Subject queries and writes. Example: Subjects.Query().Limit(10).
+	Key string
+	// Scope binds the persisted Subject.Scope column.
+	// Example: orm.Set(Subjects.Scope, scope).
+	Scope string
+	// Identity binds the persisted Subject.Identity column.
+	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.Set(Subjects.Identity, encoded) }.
 	Identity value.JSON[model.Identity]
 }
 
 // Entry contains only a hash of the random session secret. Rotation changes the
 // hash while retaining the public session identifier and absolute deadline.
+//
+//foundry:model table=foundry_sessions var=Entries key=ID identity=false
 type Entry struct {
-	ID            model.ID[Entry]
-	Scope         string
-	SubjectKey    string
-	SecretHash    string
-	Assurance     uint8
-	Remember      bool
-	Sliding       bool
-	IdleNanos     int64
-	CreatedAt     temporal.DateTime
-	LastSeenAt    temporal.DateTime
+	// Table provides Entry queries and writes. Example: Entries.Query().Limit(10).
+	//
+	// ID binds the persisted Entry.ID column.
+	// Example: orm.Eq(Entries.ID, id).
+	ID model.ID[Entry] `foundry:"member=ID"`
+	// Scope binds the persisted Entry.Scope column.
+	// Example: orm.Set(Entries.Scope, scope).
+	Scope string
+	// SubjectKey binds the persisted Entry.SubjectKey column.
+	// Example: orm.Set(Entries.SubjectKey, subjectKey).
+	SubjectKey string
+	// SecretHash binds the persisted Entry.SecretHash column.
+	// Example: orm.Set(Entries.SecretHash, secretHash).
+	SecretHash string
+	// Assurance binds the persisted Entry.Assurance column.
+	// Example: orm.Set(Entries.Assurance, assurance).
+	Assurance uint8
+	// Remember binds the persisted Entry.Remember column.
+	// Example: orm.Set(Entries.Remember, remember).
+	Remember bool `foundry:"role=column"`
+	// Sliding binds the persisted Entry.Sliding column.
+	// Example: orm.Set(Entries.Sliding, sliding).
+	Sliding bool `foundry:"role=column"`
+	// IdleNanos binds the persisted Entry.IdleNanos column.
+	// Example: orm.Set(Entries.IdleNanos, idleNanos).
+	IdleNanos int64
+	// CreatedAt binds the caller-supplied creation time; the ORM does not automatically populate or refresh it.
+	// Example: orm.Set(Entries.CreatedAt, createdAt).
+	CreatedAt temporal.DateTime `foundry:"role=time"`
+	// LastSeenAt binds the persisted Entry.LastSeenAt column.
+	// Example: orm.Set(Entries.LastSeenAt, lastSeenAt).
+	LastSeenAt temporal.DateTime
+	// IdleExpiresAt binds the persisted Entry.IdleExpiresAt column.
+	// Example: orm.Set(Entries.IdleExpiresAt, idleExpiresAt).
 	IdleExpiresAt temporal.DateTime
-	ExpiresAt     temporal.DateTime
+	// ExpiresAt binds the persisted Entry.ExpiresAt column.
+	// Example: orm.Set(Entries.ExpiresAt, expiresAt).
+	ExpiresAt temporal.DateTime
 	// ClientIP and UserAgent are display-only device metadata from issuance.
-	ClientIP  value.Nullable[string]
+	//
+	// ClientIP binds the persisted Entry.ClientIP column.
+	// Example: orm.SetNull(Entries.ClientIP).
+	ClientIP value.Nullable[string]
+	// UserAgent binds the persisted Entry.UserAgent column.
+	// Example: orm.SetNull(Entries.UserAgent).
 	UserAgent value.Nullable[string]
 	// ConfirmedAt is the last password confirmation within this session.
+	//
+	// ConfirmedAt binds the persisted Entry.ConfirmedAt column.
+	// Example: orm.SetNull(Entries.ConfirmedAt).
 	ConfirmedAt value.Nullable[temporal.DateTime]
 	// ImpersonatorIdentity (identity JSON), ImpersonatorGuard and
 	// ImpersonatorSession mark an impersonation session with its original actor.
+	//
+	// ImpersonatorIdentity binds the persisted Entry.ImpersonatorIdentity column.
+	// Example: orm.SetNull(Entries.ImpersonatorIdentity).
 	ImpersonatorIdentity value.Nullable[string]
-	ImpersonatorGuard    value.Nullable[string]
-	ImpersonatorSession  value.Nullable[model.ID[Entry]]
+	// ImpersonatorGuard binds the persisted Entry.ImpersonatorGuard column.
+	// Example: orm.SetNull(Entries.ImpersonatorGuard).
+	ImpersonatorGuard value.Nullable[string]
+	// ImpersonatorSession binds the persisted Entry.ImpersonatorSession column.
+	// Example: orm.SetNull(Entries.ImpersonatorSession).
+	ImpersonatorSession value.Nullable[model.ID[Entry]] `foundry:"role=column"`
 }
 
 func (Subject) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("session subject")) }
 func (Entry) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("stored session")) }
-
-// SubjectTable binds the persisted Subject columns. Example: Subjects.Query().Limit(10).
-type SubjectTable struct {
-	// Table provides Subject queries and writes. Example: Subjects.Query().Limit(10).
-	orm.Table[Subject, string]
-	// Scope binds the persisted Subject.Scope column.
-	// Example: orm.Set(Subjects.Scope, scope).
-	Scope orm.Text[Subject, string]
-	// Identity binds the persisted Subject.Identity column.
-	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.Set(Subjects.Identity, encoded) }.
-	Identity orm.JSON[Subject, model.Identity]
-}
-
-// Subjects owns the immutable Subject declaration. Example: orm.First(ctx, tx, Subjects.Query()).
-var Subjects = orm.Define("foundry_session_subjects", func(b orm.Builder[Subject], m *Subject) SubjectTable {
-	table := orm.TableOf(b, &m.Key)
-	return SubjectTable{Table: table,
-		Scope:    orm.TextOf(b, &m.Scope),
-		Identity: orm.JSONOf(b, &m.Identity),
-	}
-})
-
-// EntryTable binds the persisted Entry columns. Example: Entries.Query().Limit(10).
-type EntryTable struct {
-	// Table provides Entry queries and writes. Example: Entries.Query().Limit(10).
-	orm.Table[Entry, model.ID[Entry]]
-	// ID binds the persisted Entry.ID column.
-	// Example: orm.Eq(Entries.ID, id).
-	ID orm.Key[Entry, model.ID[Entry]]
-	// Scope binds the persisted Entry.Scope column.
-	// Example: orm.Set(Entries.Scope, scope).
-	Scope orm.Text[Entry, string]
-	// SubjectKey binds the persisted Entry.SubjectKey column.
-	// Example: orm.Set(Entries.SubjectKey, subjectKey).
-	SubjectKey orm.Text[Entry, string]
-	// SecretHash binds the persisted Entry.SecretHash column.
-	// Example: orm.Set(Entries.SecretHash, secretHash).
-	SecretHash orm.Text[Entry, string]
-	// Assurance binds the persisted Entry.Assurance column.
-	// Example: orm.Set(Entries.Assurance, assurance).
-	Assurance orm.Number[Entry, uint8]
-	// Remember binds the persisted Entry.Remember column.
-	// Example: orm.Set(Entries.Remember, remember).
-	Remember orm.Column[Entry, bool]
-	// Sliding binds the persisted Entry.Sliding column.
-	// Example: orm.Set(Entries.Sliding, sliding).
-	Sliding orm.Column[Entry, bool]
-	// IdleNanos binds the persisted Entry.IdleNanos column.
-	// Example: orm.Set(Entries.IdleNanos, idleNanos).
-	IdleNanos orm.Number[Entry, int64]
-	// CreatedAt binds the caller-supplied creation time; the ORM does not automatically populate or refresh it.
-	// Example: orm.Set(Entries.CreatedAt, createdAt).
-	CreatedAt orm.Time[Entry, temporal.DateTime]
-	// LastSeenAt binds the persisted Entry.LastSeenAt column.
-	// Example: orm.Set(Entries.LastSeenAt, lastSeenAt).
-	LastSeenAt orm.Time[Entry, temporal.DateTime]
-	// IdleExpiresAt binds the persisted Entry.IdleExpiresAt column.
-	// Example: orm.Set(Entries.IdleExpiresAt, idleExpiresAt).
-	IdleExpiresAt orm.Time[Entry, temporal.DateTime]
-	// ExpiresAt binds the persisted Entry.ExpiresAt column.
-	// Example: orm.Set(Entries.ExpiresAt, expiresAt).
-	ExpiresAt orm.Time[Entry, temporal.DateTime]
-	// ClientIP binds the persisted Entry.ClientIP column.
-	// Example: orm.SetNull(Entries.ClientIP).
-	ClientIP orm.NullableText[Entry, string]
-	// UserAgent binds the persisted Entry.UserAgent column.
-	// Example: orm.SetNull(Entries.UserAgent).
-	UserAgent orm.NullableText[Entry, string]
-	// ConfirmedAt binds the persisted Entry.ConfirmedAt column.
-	// Example: orm.SetNull(Entries.ConfirmedAt).
-	ConfirmedAt orm.NullableTime[Entry, temporal.DateTime]
-	// ImpersonatorIdentity binds the persisted Entry.ImpersonatorIdentity column.
-	// Example: orm.SetNull(Entries.ImpersonatorIdentity).
-	ImpersonatorIdentity orm.NullableText[Entry, string]
-	// ImpersonatorGuard binds the persisted Entry.ImpersonatorGuard column.
-	// Example: orm.SetNull(Entries.ImpersonatorGuard).
-	ImpersonatorGuard orm.NullableText[Entry, string]
-	// ImpersonatorSession binds the persisted Entry.ImpersonatorSession column.
-	// Example: orm.SetNull(Entries.ImpersonatorSession).
-	ImpersonatorSession orm.NullableColumn[Entry, model.ID[Entry]]
-}
-
-// Entries owns the immutable Entry declaration. Example: orm.First(ctx, tx, Entries.Query()).
-var Entries = orm.Define("foundry_sessions", func(b orm.Builder[Entry], m *Entry) EntryTable {
-	table := orm.TableOf(b, &m.ID)
-	return EntryTable{Table: table,
-		ID:                   table.Key(),
-		Scope:                orm.TextOf(b, &m.Scope),
-		SubjectKey:           orm.TextOf(b, &m.SubjectKey),
-		SecretHash:           orm.TextOf(b, &m.SecretHash),
-		Assurance:            orm.NumberOf(b, &m.Assurance),
-		Remember:             orm.ColumnOf(b, &m.Remember),
-		Sliding:              orm.ColumnOf(b, &m.Sliding),
-		IdleNanos:            orm.NumberOf(b, &m.IdleNanos),
-		CreatedAt:            orm.TimeOf(b, &m.CreatedAt),
-		LastSeenAt:           orm.TimeOf(b, &m.LastSeenAt),
-		IdleExpiresAt:        orm.TimeOf(b, &m.IdleExpiresAt),
-		ExpiresAt:            orm.TimeOf(b, &m.ExpiresAt),
-		ClientIP:             orm.NullableTextOf(b, &m.ClientIP),
-		UserAgent:            orm.NullableTextOf(b, &m.UserAgent),
-		ConfirmedAt:          orm.NullableTimeOf(b, &m.ConfirmedAt),
-		ImpersonatorIdentity: orm.NullableTextOf(b, &m.ImpersonatorIdentity),
-		ImpersonatorGuard:    orm.NullableTextOf(b, &m.ImpersonatorGuard),
-		ImpersonatorSession:  orm.NullableColumnOf(b, &m.ImpersonatorSession),
-	}
-})

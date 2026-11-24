@@ -24,11 +24,18 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=profiles var=Profiles key=ID identity=false
 type Profile struct {
-	ID   model.ID[Profile]
+	// Table owns the concrete UUID key. Example: orm.Eq(Profiles.Key(), id).
+	ID model.ID[Profile]
+	// Name is the stored display name. Example: orm.Set(Profiles.Name, "Consumer").
 	Name string
 	// Managed soft-delete timestamp: Delete sets this stored field and Restore clears it. Ordinary queries exclude deleted models; WithTrashed and OnlyTrashed select visibility explicitly. Assigning this field directly through typed assignments uses ordinary create/update hooks rather than deletion/restoration events.
-	DeletedAt value.Nullable[temporal.DateTime]
+	//
+	// DeletedAt stores soft deletion; Restore clears it. Example: Profiles.DeletedAt.IsNull().
+	//
+	// Soft authorizes physical deletion. Example: Profiles.ForceDelete(ctx,tx,Profiles.Soft,id).
+	DeletedAt value.Nullable[temporal.DateTime] `foundry:"role=soft-delete"`
 }
 
 //foundry:dto

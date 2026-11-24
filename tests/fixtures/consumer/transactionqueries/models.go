@@ -11,8 +11,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=records var=Records key=ID identity=false
 type Record struct {
-	ID   int64
+	ID   int64 `foundry:"member=ID,key-role=lookup"`
 	Name string
 }
 

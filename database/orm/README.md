@@ -1,33 +1,24 @@
 # Declare and query a table
 
-Handwritten declarations bind concrete models and keys to the shared SQL runtime.
+Model directives bind concrete models and keys to the shared SQL runtime.
 Use this package for model reads, writes, lifecycle callbacks and relations;
 `orm/expr` and `orm/rows` provide expressions, joins and typed result selections.
 
-Keep the model and its table declaration together. The table's second type
-parameter is the primary key type, including named natural keys.
+Declare the model once, then run `foundry generate`:
 
 ```go
+package models
+
+//foundry:model table=products var=Products key=Code
 type Product struct {
-	Code  string
+	Code  string `foundry:"member=Code,key-role=primary-text"`
 	Price int64
 }
-
-type ProductTable struct {
-	orm.Table[Product, string]
-	Code  orm.TextPrimary[Product, string]
-	Price orm.Number[Product, int64]
-}
-
-var Products = orm.Define("products", func(b orm.Builder[Product], p *Product) ProductTable {
-	table := orm.TableOf(b, &p.Code)
-	return ProductTable{
-		Table: table,
-		Code:  orm.TextKey(orm.PrimaryOf(b, table.Key())),
-		Price: orm.NumberOf(b, &p.Price),
-	}
-})
 ```
+
+Generation emits `ProductTable`, `Products` and the identity block beside this
+source. See [complete fixture-backed declarations](../../docs/guides/model-declarations.md)
+for imports, nullable values, lifecycle roles and staleness checks.
 
 Call `orm.Check(Products)` during startup to report declaration errors together.
 Each query or write also rejects an invalid table.
@@ -48,17 +39,14 @@ page, err := orm.Paginate(ctx, db, Products.Query(), orm.Page(2, 20))
 ```
 
 Omit an assignment to leave the field unwritten. `orm.Set(column, 0)` writes zero.
-Nullable families provide explicit NULL operations, such as `orm.SetNull(column)`. Use `NullableTextOf`,
-`NullableNumberOf`, `NullableTimeOf`, `NullableIDOf`, or `NullableColumnOf` for
-`value.Nullable` fields.
+Nullable fields provide explicit NULL operations, such as `orm.SetNull(column)`.
+Declare `value.Nullable[T]` and let generation choose the handle.
 
-Declare every persisted field. Tag transient fields with `foundry:"-"`.
-Relation fields are slots and do not become columns in this prototype.
-`foundry:"column=email_address"` overrides the SQL name, and
-`foundry:"default=database"` permits omission on insert.
-
-Use `EnumOf` for a generated enum descriptor and `BytesOf` for owned byte
-buffers. Use `ColumnOf(b, &p.Field, orm.Codec(custom))` for a custom codec.
+Tag transient fields with `foundry:"-"`. Relation fields infer slots and do not
+become columns. `foundry:"column=email_address"` overrides the SQL name;
+`foundry:"default=database"` permits omission on insert. Enums, bytes and password
+hashes infer their codecs. A custom codec uses `codec=factory`, naming a
+package-local function returning the exact stored codec type.
 
 Built-in codecs carry a private framework capability and avoid per-value callback
 isolation. Custom codecs, validators, scanners and JSON methods remain contained:
@@ -67,11 +55,11 @@ the result stream after the callback exits. Applications cannot grant that
 capability with `WithParameterType` or by embedding a framework scanner. A failed
 collection returns no partial model slice; successful rows retain independent values.
 
-A persisted `CreatedAt` and `UpdatedAt` pair uses the existing timestamp
-convention. Both fields must be `time.Time` or `temporal.DateTime`.
-`orm.NoTimestamps()` disables that convention. A nullable instant named
-`DeletedAt` enables soft deletion. Explicit timestamp constructors support
-other field names.
+A managed `CreatedAt` and `UpdatedAt` pair declares `role=created-at` and
+`role=updated-at`. Both fields must be nonnullable, non-key `time.Time` or
+`temporal.DateTime`. Use `timestamps=none` and remove timestamp role tags for
+application-managed fields. A nullable deletion instant uses `role=soft-delete`.
+See [timestamp conventions](../../docs/guides/model-declarations.md#timestamp-choices).
 
 Use `orm.AllLocked(ctx, tx, orm.Lock(q))` or
 `orm.AllLocked(ctx, tx, orm.ForShare(q))` for row locks.
@@ -80,14 +68,14 @@ The locked terminal functions require `*database.Tx`. Ordinary reads accept
 transaction behavior. A `*orm.WriteError[M]` preserves a hydrated candidate when
 transaction confirmation is uncertain. The candidate does not prove persistence.
 
-Declare lifecycle hooks with `orm.WithHooks` and field mutators on the model.
-Direct relations, joins and projections are described below.
+Declare lifecycle hooks with `hooks=factory` on the model directive and
+`input=Type` on mutated fields. Direct relations, joins and projections follow below.
 
-The key field is bound only by `TableOf`. Derive ordered numeric capabilities
-with `orm.NumberKey(table.Key())` or text capabilities with
-`orm.TextKey(table.Key())`; a second field binding is an error. Primary keys are
-comparable, cannot use sensitive codecs, and a `model.ID[M]` key must belong to
-its model. `Text` and `NullableText` retain named string types.
+The generated table binds the key once. Use `Table.Key()` for stored-key lookup.
+Expose a key with `member=Code`; numeric and text keys infer ordered lookup
+capabilities. A primary insertion capability needs the matching `key-role` tag.
+Primary keys are comparable, cannot use sensitive codecs, and a `model.ID[M]`
+key must belong to its model. Text handles retain named string types.
 
 Numeric adjustments require a strictly positive, finite amount:
 
@@ -114,11 +102,11 @@ float64 overflow returns a database out-of-range error rather than silently
 passing the guard.
 
 `orm.InsertMany(ctx, tx, table, [][]orm.Assignment[M]{...})` inserts an atomic bounded batch.
-`NoSoftDeletes()` disables the deletion convention and conflicts with explicit
-`SoftDeleteOf`. `orm.ForceDelete(ctx, db, table.Query(), soft, table.Key(), key)` physically deletes active records by
+`softdeletes=none` disables the deletion convention and conflicts with
+`role=soft-delete`. `orm.ForceDelete(ctx, db, table.Query(), soft, table.Key(), key)` physically deletes active records by
 default; use package `ForceDelete` with a `WithTrashed` or `OnlyTrashed` query for
 deleted records. `orm.ForceDeleteAll` respects query visibility. Explicit timestamp roles
-win over names; explicit timestamp constructors conflict with `NoTimestamps()`.
+win over names; explicit timestamp roles conflict with `timestamps=none`.
 `CreatedAt`, `UpdatedAt`, and `SoftDelete` retain the instant type as their second
 type parameter. Upserts use `orm.OnConflict` with typed targets and assignments.
 
@@ -131,7 +119,7 @@ yields one model at a time. Callback errors and cancellation stop traversal.
 
 ## Relations and projected rows (Stage 1b)
 
-Bind slots during `Define`, then declare relationships after both tables exist:
+Generate slots from the annotated model, then declare relationships after both tables exist:
 
 ```go
 var OrderRelations = struct { Buyer orm.BelongsTo[Order, User] }{
@@ -141,7 +129,7 @@ orders, err := orm.All(ctx, db, Orders.Query().With(OrderRelations.Buyer))
 loaded, err := orm.LoadFrom(ctx, db, Orders.Query().With(OrderRelations.Buyer), orders)
 ```
 
-`OneOf` and `ManyOf` bind `relation.One` and `relation.Many` fields. Nullable
+The generator binds `relation.One` and `relation.Many` fields to typed slots. Nullable
 foreign IDs retain their non-null key type. The loader uses the shared engine's
 500-key batches and 10,000-row fetched/attachment budgets. `orm.LoadFrom` returns copies;
 errors publish no partial result. Target soft deletes and context scopes remain
@@ -187,20 +175,20 @@ retained query/table method sets. Fixture budgets cover individual kinds and
 model-count growth. There are no compatibility methods or promoted `.Column`
 fields, per-kind operator names or column adapters.
 
-Stage 3.1a adds `JSONOf`/`NullableJSONOf` for `value.JSON[T]` and
-`IntervalOf`/`NullableIntervalOf` for `temporal.Interval`. JSON handles keep the
+Generation infers JSON handles for `value.JSON[T]` and interval handles for
+`temporal.Interval`, including their nullable forms. JSON handles keep the
 payload type through equality, membership, containment and assignment. They support
 `orm.Asc`/`orm.Desc` and `orm.IsJSONNull`, but no range comparisons or text patterns. `expr.JSONType` and
 `expr.JSONLength` inspect JSON expressions. Interval handles add ordered comparisons
 and sorting, without numeric adjustments or text patterns. Nullable handles distinguish SQL NULL from
 values; JSON null is represented by `value.JSON[value.Nullable[T]]`.
 
-Use `TableOf(b, &m.Period, orm.Codec(codec.Interval()))` for an interval natural
-key. PostgreSQL compares intervals using 30-day months and 24-hour days: an
+For an interval natural key, use `key=Period` on the directive and
+`codec=intervalCodec` on the field, with a factory returning `codec.Interval()`. PostgreSQL compares intervals using 30-day months and 24-hour days: an
 `orm.Eq(Users.Period, temporal.Months(1))` predicate also matches stored `30 days`. Interval natural
 keys therefore collide for `1 mon` and `30 days`; hydration preserves their distinct
 calendar and elapsed components. Use `expr.SumInterval` and `expr.AvgInterval` for interval aggregates.
-`BytesOf`/`NullableBytesOf` retain buffer ownership and distinguish empty bytes
+Generated binary bindings retain buffer ownership and distinguish empty bytes
 from NULL. `orm.IContains` and `orm.IContains` treat `%`, `_` and `\`
 as literal substring characters and match case-insensitively. For example,
 `orm.IContains(Users.Email, "@EXAMPLE.com")` binds a value; it never interpolates SQL.
@@ -219,9 +207,8 @@ renames require re-encryption; see [encryption](../../docs/guides/encryption.md)
 Unknown or committed callback failures retain reconciliation candidates through
 `WriteError`; a candidate never proves successful commit.
 
-Encrypted Go values (including `value.Nullable` wrappers) must use the
-`EncryptedTextOf`/`EncryptedJSONOf` constructors or their nullable forms.
-`ColumnOf` with an explicit encrypted codec is rejected at startup. Row
+Encrypted Go values, including nullable wrappers, infer their required envelope
+bindings. They reject the `codec` tag; a plain column cannot open an envelope. Row
 projections reject encrypted values because they cannot open them yet.
 
 Hydration publishes only complete, successfully opened models. Buffered reads,
@@ -386,32 +373,18 @@ pivot lifecycle callbacks retain the declared model ownership.
 `orm.Check` reports invalid declarations before application resources start.
 `Mutate<Field>(Input) (Stored, error)` and `Access<Field>() (Result, error)` use
 value receivers and exact concrete types. Their suffix must name a persisted Go
-field, including after a rename. Binding happens once during `Define`; writes
+field, including after a rename. Binding happens once during generated table initialization; writes
 invoke typed functions without reflective dispatch. Mutators use a zero receiver,
 so use the input argument rather than receiver state. Accessors are ordinary
 explicit calls and never replace stored hydration or DTO mappings.
 
-For a same-type transformation, use an input column with a typed transform:
-
-```go
-Email: orm.InputTextOf(b, &m.Email, normalizeEmail),
-```
-
-Use the same input-column family for distinct input and storage types:
-
-```go
-Email: orm.InputTextOf(b, &m.Email, normalizeEmailInput),
-Note:  orm.NullableInputTextOf[Member, LabelInput](b, &m.Note, nil),
-```
-
-A nil constructor transform selects the matching `Mutate<Field>` method. An
-explicit transform and a named mutator for the same field are a declaration
-error. `InputColumn`, `InputText`, `InputNumber`, `InputTime`, `InputEnum`,
-`InputJSON` and `InputInterval` retain their stored comparison, ordering and
-expression capabilities. Each also has a nullable form. `InputBytesOf` uses an
-owned binary codec with the `InputColumn` kind. `Set` takes only the concrete
-input type; predicates take only the stored type. Nullable `SetNull` keeps SQL
-NULL distinct from an omitted assignment or an assigned zero value.
+For a same-type transformation, add `input=string` to the stored string field.
+For distinct input and storage types, add `input=EmailInput`. The generator binds
+the value-receiver `MutateEmail` method, or the package-local function named by
+`mutate=normalizeEmail`. Do not supply both. Input handles retain their stored
+comparison, ordering and expression capabilities. `orm.Set` takes the concrete
+input type; predicates take the stored type. Nullable `SetNull` keeps SQL NULL
+distinct from omission and a supplied zero.
 
 Mutators run in declaration order inside the write transaction, after automatic
 timestamps and before encryption and binding. They run once per assigned value,
@@ -427,18 +400,11 @@ The independent [mutator consumer](../../tests/fixtures/goway/models/mutators/mo
 and its [PostgreSQL source](../../tests/fixtures/goway/pgsmoke/mutators_test.go)
 exercise distinct inputs, explicit getters, omission, NULL and rollback.
 
-Primary keys with distinct mutation inputs reuse the one primary declaration:
-
-```go
-table := orm.TableOf(b, &user.ID)
-id := orm.InputKeyOf[User, FreshID](b, table.Key(), nil)
-```
-
-`orm.Set(id, FreshID{Value: storedID})` takes fresh input.
-`orm.Eq(id, storedID)` and `orm.Find(ctx, db, table, storedID)` retain the stored key type. Declare this input key
-inside `Define`. Its nil transform selects the matching named method. A distinct
-input disables automatic UUID creation, so an omitted required key fails before
-SQL. Ordinary same-type UUID key mutators retain automatic UUID preparation.
+Primary keys with distinct mutation inputs use
+`foundry:"member=ID,key-role=input,input=FreshID"`. The generated handle accepts
+`FreshID`; lookups retain the stored key type. A distinct input disables automatic
+UUID creation, so an omitted required key fails before SQL. Ordinary same-type
+UUID key mutators retain automatic UUID preparation.
 
 Mutator callback errors expose only a fixed field diagnostic through ordinary
 formatting. Their original cause remains available through `errors.Is` and
@@ -447,8 +413,8 @@ encrypted fields continue to reject them.
 
 ### Write lifecycle
 
-Declare a per-write factory with `WithHooks(func() Hooks[Order] { ... })` as a
-`Define` option. The factory runs inside the owning transaction, after a locked
+Declare a package-local `func() orm.Hooks[Order]` factory and name it with
+`hooks=orderHooks` on the model directive. The factory runs inside the owning transaction, after a locked
 original has been hydrated and its rows closed. It runs once per normal write.
 `Saving` precedes `Creating` or `Updating`. Mutators and conventions follow these
 callbacks. The effective draft is validated before mutators and encryption;
@@ -524,9 +490,8 @@ rows use `ForceDelete(ctx, db, Orders.Query().WithTrashed(), Orders.Soft, Orders
 
 ## Typed relation aggregate slots
 
-Declare a non-persisted `relation.Value[V]` field on the model and an
-`orm.Value[Model,V]` handle on its table. Bind the handle inside `Define` with
-`orm.ValueOf(b, &model.Count)`. Like relation slots, aggregate slots cannot carry
+Declare a non-persisted `relation.Value[V]` field on the annotated model.
+Generation emits its `orm.Value[Model,V]` handle. Like relation slots, aggregate slots cannot carry
 persistence tags and do not enter write drafts or ordinary row hydration.
 
 Bind computations after tables and relations have initialized:
@@ -599,8 +564,8 @@ transaction isolation when separate slots require one consistent snapshot.
 
 ## Complete-model retrieval and global scopes
 
-`WithRetrievalHooks(func() RetrievalHooks[Order] { ... })` declares a separate
-read factory. `Retrieved(ctx, executor, order)` runs after complete stored
+`retrieval=orderRetrieval` on the directive names a package-local factory
+returning `orm.RetrievalHooks[Order]`. `Retrieved(ctx, executor, order)` runs after complete stored
 hydration and successful row closure. Each nonempty fetch/batch constructs the
 local factory first, then retrieval observer factories in registration order;
 each model invokes local callbacks before observers. Register instance-owned
@@ -618,22 +583,10 @@ skip retrieval, even when their source has read callbacks. `orm.Raw` dispatches
 retrieval for its complete models while bypassing all scopes and read routing.
 A callback failure does not roll back SQL supplied to Raw.
 
-Attach tenant defaults through a lazy source receiving the completed typed
-declaration. This avoids Go initialization cycles and snapshots declaration
-handles before consumers can replace their public fields:
-
-```go
-var Orders = orm.Define("orders", declareOrders,
-    orm.WithGlobalScopes(func(t OrderTable) []orm.GlobalScope[Order] {
-        return []orm.GlobalScope[Order]{
-            orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[Order], error) {
-                id, err := tenantID(ctx)
-                return orm.Eq(t.TenantID, id), err
-            }),
-        }
-    }),
-)
-```
+Attach tenant defaults with `scopes=orderScopes` on the model directive.
+Define the package-local factory as `func(OrderTable) []orm.GlobalScope[Order]`.
+It receives the completed typed table, avoiding a partly initialized package
+variable. See the [scope guide](../../docs/guides/model-global-scopes.md).
 
 The source runs once when first needed. It may construct relation predicates but
 must not compile or execute queries. Each scope returns an additive predicate
@@ -958,41 +911,19 @@ per-model behavior.
 
 ## Declaration roles
 
-Declare managed timestamp pairs with `orm.CreatedAt`/`orm.CreatedAtOf` and
-`orm.UpdatedAt`/`orm.UpdatedAtOf`. These columns retain ordinary time predicates,
-ordering, projections and aggregates. A managed field declared through `TimeOf`
-fails startup validation with the field name and the required constructor. A lone,
-unmanaged creation timestamp keeps `TimeOf` and its existing database-default
-behavior; `NoTimestamps` continues to disable conventional timestamp management.
+Declare managed timestamp pairs with `role=created-at` and `role=updated-at`.
+A lone ordinary creation timestamp uses `role=time` while conventions are enabled;
+`timestamps=none` disables name conventions. Managed roles cannot use input
+mutators or database defaults. See [model declarations](../../docs/guides/model-declarations.md).
 
-Mutated fields use `Input*` declarations even when input and stored types match:
-`orm.InputTextOf[User, string](b, &m.Name, nil)` discovers `MutateName`; passing a
-transform function declares it explicitly. Ordinary columns with mutators fail
-startup. Each Input capability family has a distinct private layout: converting a
-column or enum into an ordered input field is rejected by the compiler.
+Every mutated field requires `input=Type`, even when input and stored types match.
+Each generated input capability family retains its private layout; a cast cannot
+grant an enum numeric operations. Expose a primary insert-select key with
+`member=ID,key-role=primary`. It cannot also be an input key. Primary keys never
+support source updates.
 
-`Table.Key()` is for lookup and ordinary key assignments. `NumberKey` and `TextKey`
-preserve that role. Applications need `PrimaryOf` only when mapping a primary key
-in insert-select: declare `ID orm.Primary[User, int64]` and bind it with
-`orm.PrimaryOf(b, table.Key())`. `orm.NumberKey` and `orm.TextKey` retain the key's role.
-`PrimaryOf` cannot coexist with `InputKeyOf`; neither lookup keys nor mutated input
-keys can be used as insert-select targets. All primary roles are excluded from
-source-update targets.
-
-Expose soft-delete authority as an ordinary declaration field:
-
-```go
-type UserFields struct {
-    orm.Table[User, int64]
-    DeletedAt orm.SoftDelete[User, time.Time]
-    Soft orm.SoftDeletable[User]
-}
-// Inside Define:
-deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
-fields := UserFields{table, deleted, orm.SoftDeletes(deleted)}
-// After declaration:
-_, err := orm.ForceDelete(ctx, db, Users.Query().WithTrashed(), Users.Soft, Users.Key(), id)
-```
+`role=soft-delete` generates `Users.Soft`. Pass that exact capability to force-delete
+operations. It does not grant visibility or authorization.
 
 Every force-delete entry point requires this token, including `ForceDeleteAll`,
 `rows.ForceDeleteUsing` and pivot `ForceDetach`. Tokens are bound to the exact
@@ -1008,8 +939,8 @@ eligibility. Runtime declaration, ownership and SQL-mapping checks remain active
 ### Framework adapters
 
 Extension fields remain ordinary `translations.Text`, `attachments.One[M]`,
-`attachments.Many[M]` and `metadata.Value[V]` values on the model. Bind each with
-`orm.SlotOf(b, &m.Title)` inside `Define`; it adds no persisted column. Declare
+`attachments.Many[M]` and `metadata.Value[V]` values on the model. The directive
+generates their slot bindings; they add no persisted columns. Declare
 policies separately with `translations.TextOf`, `attachments.OneOf` /
 `ManyOf` and `metadata.ValueOf`, passing
 `extensions.BindSlot(Articles.Key(), Articles.Title)`. The owner comes from
@@ -1186,3 +1117,31 @@ values count toward `MaxParameters`; they are not interpolated into SQL.
 
 Plan-decoder budgets and lifecycle callback recursion guards remain internal
 implementation bounds.
+
+
+## Generated declaration functions
+
+Application declarations use `//foundry:model`. This section describes functions
+that generated code calls and that low-level ORM tests exercise. Direct use is
+allowed in `_test.go`, this ORM package tree, generic-model builders and builders
+with runtime-computed table names. Other non-test concrete constant-table models
+must pass `foundry models check` using the directive.
+
+| Generated call | Purpose |
+| --- | --- |
+| `orm.Define`, `orm.TableOf` | Construct one checked table and bind its primary field once. |
+| `orm.ColumnOf`, `TextOf`, `NumberOf`, `TimeOf`, `IntervalOf`, `IDOf`, `EnumOf`, `JSONOf`, `BytesOf`, `BoolOf` and nullable variants | Bind the stored family and its codec. |
+| `orm.PasswordOf`, `NullablePasswordOf`, encrypted constructors | Retain sensitive/envelope semantics. |
+| `orm.InputColumnOf`, `InputTextOf` and other input/nullable input constructors | Bind a concrete mutation input to its stored type. |
+| `orm.CreatedAtOf`, `UpdatedAtOf`, `SoftDeleteOf`, `SoftDeletes` | Bind lifecycle roles and the exact declaration's deletion capability. |
+| `orm.PrimaryOf`, `InputKeyOf`, `NumberKey`, `TextKey` | Derive permitted capabilities from the one primary key. |
+| `orm.OneOf`, `ManyOf`, `ThroughOf`, `ValueOf`, `SlotOf` | Bind relation and external-store slots, without duplicating stored columns. |
+| `orm.WithHooks`, `WithRetrievalHooks`, `WithGlobalScopes` | Attach the directive's typed factories. |
+| `orm.NoTimestamps`, `NoSoftDeletes` | Apply explicit convention opt-outs. |
+| `orm.IdentityOf` | Construct the identity reused by generated methods and extension adapters. |
+| `orm.ModelFingerprint` | Check ordered field names and exact Foundry tags at declaration time. |
+
+Row constructors under `orm/rows` remain handwritten projection APIs. Relationship
+computations and external-store policies also remain handwritten. The migration
+snapshot bridge exists only for `foundry models convert`; do not build runtime
+features on it.

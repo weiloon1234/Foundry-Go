@@ -11,16 +11,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=soft_members var=Members key=ID hooks=ormMemberHooks identity=false
 type Member struct {
 	ID        model.ID[Member]
-	Name      string
-	ParentID  value.Nullable[model.ID[Member]]
-	CreatedAt time.Time
-	UpdatedAt temporal.DateTime
+	Name      string                           `foundry:"input=string"`
+	ParentID  value.Nullable[model.ID[Member]] `foundry:"role=column"`
+	CreatedAt time.Time                        `foundry:"role=created-at"`
+	UpdatedAt temporal.DateTime                `foundry:"role=updated-at"`
 	// DeletedAt stores the row visibility timestamp in removed_on.
 	// Managed soft-delete timestamp: Delete sets it and Restore clears it.
 	// Custom getter: AccessDeletedAt reports whether the stored timestamp is present.
-	DeletedAt  value.Nullable[time.Time] `foundry:"column=removed_on"`
+	DeletedAt  value.Nullable[time.Time] `foundry:"column=removed_on,role=soft-delete"`
 	Parent     relation.One[Member]
 	Children   relation.Many[Member]
 	Groups     relation.Through[Group, Membership]
@@ -35,17 +36,22 @@ func (m Member) AccessDeletedAt() (bool, error) { return !m.DeletedAt.IsNull(), 
 
 type GroupCode string
 
+//foundry:model table=soft_groups var=Groups key=Code identity=false
 type Group struct {
-	Code      GroupCode
-	Name      string
-	DeletedAt value.Nullable[temporal.DateTime]
+	Code GroupCode
+	// Name selects the stored group name. Example: orm.Eq(Groups.Name, "reserved").
+	Name string
+	// DeletedAt controls soft-delete visibility. Delete sets it and Restore clears it.
+	// Example: Groups.Query().WithTrashed().
+	DeletedAt value.Nullable[temporal.DateTime] `foundry:"role=soft-delete"`
 }
 
+//foundry:model table=soft_memberships var=Memberships key=ID identity=false
 type Membership struct {
 	ID        model.ID[Membership]
-	MemberID  model.ID[Member]
+	MemberID  model.ID[Member] `foundry:"role=column"`
 	GroupCode GroupCode
-	DeletedAt value.Nullable[time.Time]
+	DeletedAt value.Nullable[time.Time] `foundry:"role=soft-delete"`
 }
 
 type MemberLabel struct {

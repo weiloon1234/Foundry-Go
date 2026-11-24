@@ -25,7 +25,7 @@ func TestBinaryDraftAndSnapshotsOwnBuffers(t *testing.T) {
 				return func(arg0 Input) orm.Assignment[Record] { return orm.Set(receiver, arg0) }
 			}()).Get()
 			storedRaw, _ := orm.WriteGet(draft, func() func(arg0 []byte) orm.Assignment[Record] {
-				receiver := table.RawBytes
+				receiver := table.Raw
 				return func(arg0 []byte) orm.Assignment[Record] { return orm.Set(receiver, arg0) }
 			}()).Get()
 			note, _ := orm.WriteNullableGet(draft, func() func(arg0 Input) orm.Assignment[Record] {
@@ -42,7 +42,7 @@ func TestBinaryDraftAndSnapshotsOwnBuffers(t *testing.T) {
 				return func(arg0 Input) orm.Assignment[Record] { return orm.Set(receiver, arg0) }
 			}()).Get()
 			storedRaw, _ = orm.WriteGet(draft, func() func(arg0 []byte) orm.Assignment[Record] {
-				receiver := table.RawBytes
+				receiver := table.Raw
 				return func(arg0 []byte) orm.Assignment[Record] { return orm.Set(receiver, arg0) }
 			}()).Get()
 			note, _ = orm.WriteNullableGet(draft, func() func(arg0 Input) orm.Assignment[Record] {
@@ -56,7 +56,7 @@ func TestBinaryDraftAndSnapshotsOwnBuffers(t *testing.T) {
 			return stop
 		}}
 	}))
-	draft := []orm.Assignment[Record]{orm.Set(table.Key(), 1), orm.Set(table.Body, input), orm.Set(table.RawBytes, raw), orm.Set(table.Note, input), orm.Set(table.Encoded, input)}
+	draft := []orm.Assignment[Record]{orm.Set(table.Key(), 1), orm.Set(table.Body, input), orm.Set(table.Raw, raw), orm.Set(table.Note, input), orm.Set(table.Encoded, input)}
 	input[0], raw[0] = 9, 9
 	if _, err := orm.Insert(t.Context(), draftPool(t), table.Table, draft...); !errors.Is(err, stop) || !called {
 		t.Fatal("draft inspection did not run", err)

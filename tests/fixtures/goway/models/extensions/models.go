@@ -1,4 +1,4 @@
-// Package extensions exercises declaration-owned extension slots without model generation.
+// Package extensions exercises declaration-owned extension slots with generated model tables.
 package extensions
 
 import (
@@ -14,38 +14,25 @@ import (
 
 // Article is a methodless extension owner. Example: Article{ID:1}.
 // doc-example:begin model-extension-slots-article
+//
+//foundry:model table=extension_articles var=Articles key=ID identity=false
 type Article struct {
-	ID      int64
-	Title   translations.Text
-	Cover   attachments.One[Article]
+	// Table owns the primary key. Example: orm.Eq(Articles.Key(), 1).
+	ID int64
+	// Title binds translated text. Example: extensions.BindSlot(Articles.Key(),Articles.Title).
+	Title translations.Text
+	// Cover binds one attachment. Example: extensions.BindSlot(Articles.Key(),Articles.Cover).
+	Cover attachments.One[Article]
+	// Gallery binds multiple attachments. Example: extensions.BindSlot(Articles.Key(),Articles.Gallery).
 	Gallery attachments.Many[Article]
-	SEO     metadata.Value[string]
+	// SEO binds a concrete metadata value. Example: extensions.BindSlot(Articles.Key(),Articles.SEO).
+	SEO metadata.Value[string]
 } // doc-example:end model-extension-slots-article
 
 // Author supplies an unrelated owner for compiler fixtures. Example: Author{ID:1}.
+//
+//foundry:model table=extension_authors var=Authors key=ID identity=false
 type Author struct{ ID int64 }
-
-// ArticleTable binds persisted and extension fields. Example: Articles.Query().
-type ArticleTable struct {
-	// Table owns the primary key. Example: orm.Eq(Articles.Key(), 1).
-	orm.Table[Article, int64]
-	// Title binds translated text. Example: extensions.BindSlot(Articles.Key(),Articles.Title).
-	Title orm.Slot[Article, translations.Text]
-	// Cover binds one attachment. Example: extensions.BindSlot(Articles.Key(),Articles.Cover).
-	Cover orm.Slot[Article, attachments.One[Article]]
-	// Gallery binds multiple attachments. Example: extensions.BindSlot(Articles.Key(),Articles.Gallery).
-	Gallery orm.Slot[Article, attachments.Many[Article]]
-	// SEO binds a concrete metadata value. Example: extensions.BindSlot(Articles.Key(),Articles.SEO).
-	SEO orm.Slot[Article, metadata.Value[string]]
-}
-
-// Articles declares the persisted owner. Example: orm.Find(ctx, db, Articles.Table, 1).
-var Articles = orm.Define("extension_articles", func(b orm.Builder[Article], m *Article) ArticleTable {
-	return ArticleTable{orm.TableOf(b, &m.ID), orm.SlotOf(b, &m.Title), orm.SlotOf(b, &m.Cover), orm.SlotOf(b, &m.Gallery), orm.SlotOf(b, &m.SEO)}
-})
-
-// Authors is the unrelated declaration. Example: orm.Find(ctx, db, Authors.Table, 1).
-var Authors = orm.Define("extension_authors", func(b orm.Builder[Author], m *Author) orm.Table[Author, int64] { return orm.TableOf(b, &m.ID) })
 
 // Owner pins storage identity independently of future table renames. Example: extensions.ORMIdentity(Owner).Reference(1).
 // doc-example:begin model-extension-slots-owner

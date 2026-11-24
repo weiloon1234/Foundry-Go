@@ -1,122 +1,290 @@
-# Typed model declarations and write roles
+# Declare a model once
 
 <a id="agent-entry"></a>
 ## Agent entry
 
-- Declare: [Table and write roles](#recipe-declare-table)
+- Declare: [Model and generated table](#recipe-declare-table)
+- Choose: [Fields and roles](#recipe-field-roles)
 - Delete: [Soft-delete capability](#recipe-soft-delete)
 - Register: [Tables and identity](#recipe-register-tables)
-- When transforming fields: [Input assignments](model-mutators.md#recipe-mutate-field)
-- When adding lifecycle rules: [Hooks](model-hooks.md#recipe-write-hooks)
-- Audit: [Typed policy](audit.md#recipe-register-audit)
-- Map responses: [Explicit accessors](model-accessors.md#recipe-access-field)
+- Regenerate: [Stale declarations](#recipe-stale-declarations)
+- Transform: [Mutators](model-mutators.md#recipe-mutate-field)
+- Observe: [Hooks](model-hooks.md#recipe-write-hooks)
 
 <a id="recipe-declare-table"></a>
-## Declare a typed table
+## Declare a model and generate its table
 
-Further reading: [Scaffolding](model-scaffolding.md), [Typed values](typed-values.md).
+Write a defined, nongeneric struct in a non-test Go file. Attach
+`//foundry:model table=users var=Users key=ID` to its type documentation. The three
+required options name the SQL table, generated table variable and persisted key
+field. Directive options are separated by spaces; `foundry` tag options use commas.
 
-Models are ordinary Go structs. An `orm.Define` declaration binds their persisted fields, typed primary key and optional lifecycle configuration. Register tables with `application.WithTables` so declaration validation happens before resources start. `orm.Check` validates declarations directly; query execution also rejects invalid declarations.
+This complete fixture file declares two plain models:
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#roles-after -->
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/models.go -->
 ```go
-type EmailInput string
-type User struct {
-	ID        int64
-	Email     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt value.Nullable[time.Time]
+package bootstrap
+
+import "github.com/weiloon1234/Foundry-Go/model"
+
+//foundry:model table=bootstrap_members var=Members key=ID identity=false
+type Member struct {
+	ID   model.ID[Member] `foundry:"member=ID"`
+	Name string
 }
 
-func (User) MutateEmail(input EmailInput) (string, error) {
-	return strings.ToLower(strings.TrimSpace(string(input))), nil
+//foundry:model table=bootstrap_operators var=Operators key=ID identity=false
+type Operator struct {
+	ID         model.ID[Operator] `foundry:"member=ID"`
+	Department string
 }
-
-type UserTable struct {
-	orm.Table[User, int64]
-	Primary   orm.Primary[User, int64]
-	Email     orm.InputText[User, EmailInput, string]
-	CreatedAt orm.CreatedAt[User, time.Time]
-	UpdatedAt orm.UpdatedAt[User, time.Time]
-	DeletedAt orm.SoftDelete[User, time.Time]
-	Soft      orm.SoftDeletable[User]
-}
-
-var Users = orm.Define("users", func(b orm.Builder[User], u *User) UserTable {
-	table := orm.TableOf(b, &u.ID)
-	deleted := orm.SoftDeleteOf(b, &u.DeletedAt)
-	return UserTable{table, orm.PrimaryOf(b, table.Key()),
-		orm.InputTextOf[User, EmailInput](b, &u.Email, nil),
-		orm.CreatedAtOf(b, &u.CreatedAt), orm.UpdatedAtOf(b, &u.UpdatedAt),
-		deleted, orm.SoftDeletes(deleted)}
-})
 ```
 
-The example and its imports are in the [compiled migration package](../../tests/fixtures/goway/migration/examples_test.go). Struct tags still declare column names, database-default omission and ignored fields. Migrations own persisted schema. This declaration creates no SQL tables and adds no response DTO or wire fields.
+Run the module-pinned tool from the application root:
 
-## Select the field's role
+```sh
+GOWORK=off go tool foundry generate --recursive
+GOWORK=off go tool foundry generate --check --recursive
+GOWORK=off go tool foundry models check ./...
+```
 
-| Field | Declaration | Write contract |
-| --- | --- | --- |
-| Ordinary stored value | `ColumnOf`, `TextOf`, `NumberOf`, `TimeOf` or the matching family | `Set` accepts the stored type. |
-| Go-mutated value | `Input*Of[M, Input](b, pointer, transform)` | `Set` accepts the input type; predicates use the stored type. |
-| Managed creation time | `CreatedAtOf` and `CreatedAt[M, V]` | Preserves a supplied creation time; eligible for insert-select mapping. |
-| Managed update time | `UpdatedAtOf` and `UpdatedAt[M, V]` | Write conventions supply it; SQL source mapping is unavailable. |
-| Managed deletion time | `SoftDeleteOf` and `SoftDelete[M, V]` | Retains nullable stored-time reads and deletion conventions. |
-| Primary lookup key | `TableOf(b, &model.ID).Key()` | Concrete stored key for lookup and predicates. |
-| Primary insert-select target | `PrimaryOf(b, table.Key())` | Explicitly enables SQL insertion into an unmutated primary key. |
-| Mutated primary input | `InputKeyOf` | Accepts typed key input; stored-key lookup remains unchanged. |
+For `user.go`, generation writes `user_foundry.gen.go` beside it and records
+ownership in `.foundry-gen.json`. It emits `UserTable`, `Users`, the typed field
+bindings and, by default, `usersIdentity`, `User.FoundryReference` and
+`User.FoundryIdentity`. The fixture above opts out of identity with `identity=false`.
+Keep generated output and its manifest with the source. Never edit either by hand.
 
-`PrimaryOf` is needed only when an application maps a primary key in insert-select. Ordinary models need only `TableOf` and its key. `PrimaryOf` and `InputKeyOf` are mutually exclusive. `NumberKey` and `TextKey` preserve the key's role; they cannot turn a key into an ordinary update target.
+Table members follow struct order. The embedded `Table` is first; a soft-delete
+capability named `Soft` is last. Keys are available through `Users.Key()` unless
+explicitly exposed as members. Identity names lowercase the first word of the
+table variable: `Users` becomes `usersIdentity`; `APIKeys` becomes `apiKeysIdentity`.
+Handwritten extension declarations in the same package can reuse that variable.
 
-Managed time carriers support ordinary time predicates, ordering and expressions. Declaring a managed pair through `TimeOf` fails startup with the field name and required carrier. `NoTimestamps()` opts out when both fields use ordinary declarations; it conflicts with explicit managed roles. `NoSoftDeletes()` similarly conflicts with `SoftDeleteOf`.
+Generation creates no SQL tables, migrations, query wrappers, drafts or response
+DTOs. Keep schema changes in migrations, queries in ordinary typed ORM calls and
+public responses in separate DTOs. Row projections remain handwritten.
 
-Every Go-mutated field requires an `Input*` carrier, including same-type transformations. Its family preserves stored capabilities: an input enum cannot become an ordered numeric column through conversion. Startup rejects orphan/invalid `Mutate<Field>` and `Access<Field>` methods, missing transformations and conflicting explicit/discovered transformations. See [mutators](model-mutators.md).
+<a id="recipe-field-roles"></a>
+## Fields and roles
+
+Fields infer their normal typed handles. Add a tag only to choose different
+behavior; redundant options fail generation.
+
+| Struct field or option | Generated behavior |
+| --- | --- |
+| String, integer or float | Text or number handle, retaining named types. |
+| Boolean, bytes or `model.ID[Other]` | Boolean, bytes or ID codec with a column handle. A foreign ID does not create a foreign-key constraint. |
+| Generated enum | Enum handle and its descriptor's codec. Do not add `role=enum`. |
+| `value.Nullable[T]` | Nullable handle for the stored family. NULL remains distinct from a supplied zero. |
+| `decimal.Decimal` | Choose `role=number` for numeric operations or `role=column` for a plain column. |
+| `time.Time`, `temporal.DateTime`, `Date`, `Time`, `LocalDateTime`, `Interval` | Ordinary time or interval handle unless a managed role is explicit. See conventional-name rules below. |
+| `password.Hash`, encrypted text or JSON | The required sensitive codec or encrypted envelope constructor. |
+| `value.JSON[T]` | JSON handle using the payload contract. |
+| `column=email_address` | Overrides the inferred snake-case column name. A redundant override is rejected. |
+| `default=database` | Omitted insert values use the database default; the migration must define it. |
+| `input=EmailInput` | Write assignments accept `EmailInput`; reads and predicates retain the stored type. |
+| `mutate=normalizeEmail` | Names a package-local `func(EmailInput) (Stored, error)` instead of the conventional `MutateEmail` method. Requires `input`. |
+| `codec=emailCodec` | Calls a package-local `func() codec.Codec[Stored]` and selects a plain column. Do not combine it with a role. |
+| `role=column` | Selects a plain column when that differs from the inferred constructor. |
+| `foundry:"-"` | Excludes a transient field from persistence; it still participates in the structural guard. |
+
+`value.Optional` is a write or transport state, not a persisted column. Embedded
+fields, including ignored embedded fields, are unsupported. Persisted fields must
+be exported. Custom stored types require a codec factory. Encrypted fields cannot
+use custom column codecs, database defaults or input mutators, and require an
+application-assigned primary key. Password input requires an explicit password
+codec and an input type.
+
+The following complete file shows nullable decimals, their explicit role and a
+model-owned key:
+
+<!-- compiled-source: tests/fixtures/consumer/models/ledger.go -->
+```go
+package models
+
+import (
+	"github.com/weiloon1234/Foundry-Go/decimal"
+	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/value"
+)
+
+//foundry:model table=ledger_entries var=LedgerEntries key=ID identity=false
+type LedgerEntry struct {
+	ID model.ID[LedgerEntry] `foundry:"member=ID,key-role=primary"`
+	// Amount selects exact stored decimals. Example: orm.Eq(LedgerEntries.Amount, amount).
+	Amount  decimal.Decimal                 `foundry:"role=number"`
+	Balance value.Nullable[decimal.Decimal] `foundry:"role=number"`
+}
+```
+
+This complete declaration combines a nullable decimal, an enum, a foreign ID and
+a managed timestamp pair. The foreign ID retains its model owner; migrations
+still define its constraint.
+
+<!-- compiled-source: tests/fixtures/goway/modelguide/product.go -->
+```go
+// Package modelguide supplies complete generated declarations for the guides.
+package modelguide
+
+import (
+	"time"
+
+	"foundry.test/goway/models"
+	"github.com/weiloon1234/Foundry-Go/decimal"
+	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/value"
+)
+
+//foundry:model table=guide_products var=Products key=ID
+type Product struct {
+	ID        model.ID[Product]
+	OwnerID   model.ID[models.User]
+	Status    models.Status
+	Price     decimal.Decimal                 `foundry:"role=number"`
+	Discount  value.Nullable[decimal.Decimal] `foundry:"role=number"`
+	CreatedAt time.Time                       `foundry:"role=created-at"`
+	UpdatedAt time.Time                       `foundry:"role=updated-at"`
+}
+```
+
+### Timestamp choices
+
+Use `role=created-at` and `role=updated-at` together, once each, on non-key,
+nonnullable `time.Time` or `temporal.DateTime` fields. Use `role=soft-delete` on a
+non-key nullable instant. Managed timestamps cannot use database defaults or input
+mutators. Explicit managed roles can use field names other than the conventional names.
+
+A lone ordinary time-family field named `CreatedAt` or `UpdatedAt` needs
+`role=time` while conventions are enabled. A string or interval with such a lone
+name keeps its inferred role. An active `CreatedAt`/`UpdatedAt` pair instead needs both managed roles,
+or `timestamps=none` on the directive with timestamp role tags removed. An eligible active
+`DeletedAt` needs `role=soft-delete`, or `softdeletes=none` with its role tag removed.
+If the type, input or database-default setting makes a managed role invalid, the
+generator offers only the model-level opt-out.
+`role=time` does not disable conventions. It is redundant on unrelated names or
+when that convention is disabled. Explicit managed roles take precedence over
+conventional names; ignored fields and slots do not participate. A custom codec or
+explicit plain-column role on a conventional field retains the ORM's existing
+convention opt-out. Choose those only when a plain column is the intended API.
+
+### Key capabilities and member names
+
+The key must be persisted, exported, nonnullable and comparable. A `model.ID[M]`
+primary key must belong to `M`. Integer and string keys, including named types and
+enums, have default codecs. Other supported comparable keys need `codec=name`.
+
+`member=ID` exposes a key named `ID`. Exposed numeric and string keys infer lookup
+capabilities; an ordinary key remains available through `Table.Key()`.
+`key-role=primary`, `primary-number` or `primary-text` enables insert-select mapping.
+`key-role=input` requires an exposed member and `input=Type`, and cannot also grant
+primary insert-select mapping. `lookup`, `number` and `text` select nondefault key
+capabilities when applicable; redundant choices are rejected. Input keys with a
+distinct input type do not synthesize a UUID automatically.
+
+For non-key fields, `member=none` keeps persistence but hides the handle. Rename
+an exposed member with `member=Name` only when its field name collides with a
+promoted table method, such as `Key` or `Query`, or the generated embedded field
+`Table`. There is no general rename,
+table-type-name or member-order option.
+
+### Hooks, mutators and slots
+
+A directive can name package-local, nongeneric factories:
+
+| Option | Required signature |
+| --- | --- |
+| `hooks=memberHooks` | `func() orm.Hooks[Member]` |
+| `retrieval=memberRetrieval` | `func() orm.RetrievalHooks[Member]` |
+| `scopes=memberScopes` | `func(MemberTable) []orm.GlobalScope[Member]` |
+
+This complete declaration combines soft deletion, a hook, a distinct mutation
+input, translation and attachment slots. The [owner and policies](model-extensions.md#shared-owners)
+use its generated identity and retain explicit stored slot names.
+
+<!-- compiled-source: tests/fixtures/goway/modelguide/article.go -->
+```go
+package modelguide
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/weiloon1234/Foundry-Go/attachments"
+	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/translations"
+	"github.com/weiloon1234/Foundry-Go/value"
+)
+
+type SlugInput struct{ Text string }
+
+//foundry:model table=guide_articles var=Articles key=ID hooks=articleHooks
+type Article struct {
+	ID        model.ID[Article]
+	Slug      string `foundry:"input=SlugInput"`
+	Revision  int
+	DeletedAt value.Nullable[time.Time] `foundry:"role=soft-delete"`
+	Title     translations.Text
+	Cover     attachments.One[Article]
+}
+
+func (Article) MutateSlug(input SlugInput) (string, error) {
+	return strings.ToLower(strings.TrimSpace(input.Text)), nil
+}
+
+func articleHooks() orm.Hooks[Article] {
+	return orm.Hooks[Article]{Deleting: func(_ context.Context, _ *database.Tx, article Article) error {
+		if article.Slug == "protected" {
+			return fault.Conflict
+		}
+		return nil
+	}}
+}
+```
+
+`input=Type` is required even for a same-type mutator. A value-receiver
+`Mutate<Field>(Input) (Stored, error)` supplies the conventional transform; otherwise
+name a function with `mutate=name`. Do not declare both. Accessors remain explicit
+business methods; they do not change persistence or identity.
+
+`relation.One`, `relation.Many`, `relation.Through` and `relation.Value` fields infer relation slots.
+`attachments.One/Many[Model]`, `translations.Text` and `metadata.Value[T]` infer
+external-store slots. Attachment owners must match the declaring model. Use bare
+`slot` only for an external-store type that is not recognized. A slot takes no
+column, default, role, input or codec option. Persisted slot names and policies
+stay in handwritten extension declarations, never in the tag. See the complete
+[Article with soft deletion and slots](../../tests/fixtures/consumer/articles/article.go)
+and [extension setup](model-extension-slots.md).
 
 <a id="recipe-soft-delete"></a>
-## Soft-delete capability
+## Use the soft-delete capability
 
-Expose `orm.SoftDeletes(deletedColumn)` as an ordinary table field such as `Users.Soft`. Force deletion and bounded restoration require that exact declaration's token. Missing or wrong-model tokens fail compilation; zero or foreign-declaration tokens fail validation before SQL. The token does not change query visibility or authorize tenant access.
+`role=soft-delete` generates `Users.Soft`. Force deletion and bounded restoration
+require that exact declaration's token. Wrong-model or missing tokens fail
+compilation; zero or foreign-declaration tokens fail validation before SQL. The
+token grants neither visibility nor authorization. Use `WithTrashed` or
+`OnlyTrashed` explicitly when selecting deleted rows.
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#force-after -->
-```go
-func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
-	_, err := orm.ForceDelete(ctx, tx, Users.Query().WithTrashed(), Users.Soft, Users.Key(), id)
-	return err
-}
-```
+See [model writes](model-writes.md) for operations and [soft-delete fixture](../../tests/fixtures/consumer/softqueries/models.go)
+for a complete declaration with timestamps, a hook and a mutator.
 
 ## SQL assignment constraints
 
-`rows.MapInsert` requires an `orm.InsertableRole` column handle. `rows.MapUpdate` requires an `orm.UpdatableRole` column handle. Input columns and managed update timestamps carry roles (`orm.InputRole`, `orm.InputKeyRole`, `orm.UpdatedRole`) that satisfy neither constraint. Primary columns satisfy insertion only when declared through `PrimaryOf` (`orm.PrimaryRole`); they never satisfy update. A lookup-only key (`orm.LookupKeyRole`) cannot erase those restrictions. Separate source-match, insert-mapping and update-mapping types retain their phase and nullability.
-
-Ordinary source reads, joins, projections and aggregates retain the stored field capabilities. These roles restrict assignment paths without changing the database schema or serialized contracts.
-
-
-`orm.BoolOf(b, &m.Enabled)` declares a Boolean column without a new carrier family;
-named Boolean types retain their exact type. Optional codec settings follow
-`ColumnOf`. Mutated fields still require Input carriers. See the compiled
-[Boolean row and expression examples](orm-migration.md#pilot-expressions-and-row-declarations).
+`rows.MapInsert` requires `orm.InsertableRole`; `rows.MapUpdate` requires
+`orm.UpdatableRole`. Input fields and managed update timestamps satisfy neither.
+Primary insertion requires an exposed key with a primary key role; a lookup key
+cannot acquire that permission by conversion. Primary keys never satisfy update.
+Managed creation time remains eligible for insert-select. These roles do not
+change the stored schema or response contracts.
 
 <a id="recipe-register-tables"></a>
-## Register tables and identity
+## Register tables and use identity
 
-Register the complete table list before resources start. The registry validates supplied declarations; it cannot discover an omitted model.
-
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#application-after -->
-```go
-func configuredApplication(settings application.Settings, pool foundation.Key[*database.DB]) *application.Builder {
-	observers := foundation.Module{Name: "member.observers", OnRegister: func(r *foundation.Registrar) error {
-		return orm.RegisterObserver(r, pool, orm.NewObserver[hooks.Member]("members"),
-			func(foundation.Resolver) (func() orm.Hooks[hooks.Member], error) { return memberHooks, nil })
-	}}
-	return application.New(settings, application.WithTables(Users.Table, hooks.Members.Table)).Register(observers)
-}
-```
-
-Compose per-model table lists in the application's complete `Tables()` registry.
-For an explicit declaration check before assembly, use the same list:
+Pass the complete table list to `application.WithTables` before resources start.
+For a direct declaration check, use the same list with `orm.Check`:
 
 <!-- compiled-source: tests/fixtures/consumer/productionprofile/queries.go#check-table-registry -->
 ```go
@@ -125,14 +293,101 @@ if err := orm.Check(Tables()...); err != nil {
 }
 ```
 
-`application.WithTables` checks its supplied declarations during construction.
-Neither path discovers omitted model packages.
+Neither check discovers an omitted model. Query execution also rejects invalid
+declarations. The generator does not emit a package-wide `Tables()` registry.
 
-Keep references backed by the same stored key.
+Use `user.FoundryReference()` for a typed reference and `user.FoundryIdentity()`
+for its serialized identity. The generated methods read the stored key through
+its codec, without an accessor or database read. `identity=false` omits the
+identity variable and both methods; use it only when those methods are not needed
+or an existing custom identity contract must remain. `identity=true` is redundant.
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#identity-after -->
-```go
-func identity(user models.User) (model.Identity, error) {
-	return orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user).Identity()
-}
-```
+<a id="recipe-stale-declarations"></a>
+## Stale declarations
+
+| Source change without regeneration | Detection |
+| --- | --- |
+| Add, remove, rename, reorder or retype a field, including an ignored field | Compilation fails at the generated shape conversion, beside `Struct changed: run foundry generate.` |
+| Change, add or remove a `foundry` tag | The declaration fingerprint fails `orm.Check`, application table validation or query validation with `model changed since generation; run foundry generate`. |
+| Change the directive comment, such as `table`, `key` or `hooks` | `foundry generate --check` detects stale output. Comments are invisible to the runtime fingerprint. |
+| Change another tag namespace | It is outside the model fingerprint. Its owning generator or runtime validates that contract. |
+
+The fingerprint covers ordered field names and exact `foundry` tag presence and
+values, including ignored fields. The ORM recomputes it once at declaration time;
+there is no query-path hashing. `generate --check` covers generated output and
+ownership in addition to these two guards. Run it in the gate alongside
+`foundry models check`; the latter checks declaration spelling, not freshness.
+
+## Diagnose a wrong declaration
+
+Field errors identify `file:line:column: model Struct.Field`; table-level errors
+name the struct without a field. These are actual messages;
+angle-bracket names stand for the offending field, type or option.
+
+| Mistake | Diagnostic and correction |
+| --- | --- |
+| Handwrite a table in a checked non-test package | `declare the table with the //foundry:model directive on the struct, then run foundry generate` |
+| Misspell or space the directive prefix | `invalid Foundry directive spelling; use //foundry:model` |
+| Misspell the tag namespace | `unknown struct tag foudry; use foundry` |
+| Use a generic model directive | `generic models are outside the directive; build the table in a generic function using the low-level ORM functions` |
+| Omit the table or key | `table requires an explicit SQL identifier`; `key requires a struct field name` |
+| Guess a directive option | `unknown directive option <name>`; `type`, `table-type`, `identity-var`, `members` and `soft` are not options. |
+| Guess a tag option | `unknown foundry option <name>` |
+| Repeat an inferred role | `role=enum is inferred from the field type; remove it` |
+| Omit a decimal role | `decimal field requires role=column or role=number` |
+| Omit managed roles on an eligible conventional pair | `declare role=created-at on CreatedAt and role=updated-at on UpdatedAt, or use timestamps=none on the model and remove timestamp role tags` |
+| Omit an eligible conventional deletion role | `declare role=soft-delete on DeletedAt, or use softdeletes=none on the model and remove its role tag` |
+| Omit input metadata or its transform | `Mutate<Field> requires input`; `input requires Mutate<Field> or mutate` |
+| Use a pointer receiver for field behavior | `model field method <Name> requires a value receiver` |
+| Guess an external stored-name tag | `slot is a bare flag, not slot=<name>` |
+| Add `slot` to a known slot family | `slot is inferred from the field type; remove it` |
+| Embed a struct | `embedded fields are not supported; declare each model field directly` |
+| Use a transport presence wrapper | `Optional is a write/transport state, not a persisted column` |
+| Shadow a table method | `field collides with a promoted Table method; declare member=<Name> using a non-colliding name` |
+| Put the directive in a test file | `model declarations in _test.go files are not supported; move the model into a non-test Go file` |
+
+An ineligible conventional timestamp offers only the model-level opt-out; it does
+not suggest an impossible managed role. See [timestamp rules](model-timestamps.md).
+
+## Low-level declaration boundary
+
+The tag parser rejects names one edit or one adjacent transposition from `foundry`.
+Namespaces beginning `foundry_`, `foundry-` or `foundry.` with a nonempty suffix are
+reserved. Unrelated tags such as `found` and `boundary` remain valid.
+Without whitespace after `//`, a near-miss namespace or separator followed by a
+known directive kind is rejected regardless of the remaining text. With whitespace
+after `//`, it is rejected only when the kind has no following text or only
+`key=value` options; ordinary prose is left alone. The correction names the exact
+directive, without echoing the typo or its options. Exact `//foundry:` prefixes
+retain the unknown-kind and malformed-option errors.
+
+Write field documentation on the model struct. Generation copies leading and
+trailing field comments onto the generated table member, including the handles
+used in queries, `orm.Set` and `orm.ChangeOf`. Each member links back to
+`Model.Field`. Go-to-definition on a table handle lands on that generated member;
+follow its model-field link to edit the handwritten declaration. Direct model-field
+access resolves to the handwritten field itself. Use `foundry generate --check` to
+detect stale directive comments and field documentation. The compile-time guard and
+runtime fingerprint do not inspect comments.
+
+During migration, `models convert` moves a table member's documentation onto its
+model field. Existing field documentation stays first; different member text is
+appended below it and listed in the conversion report. Identical text is retained
+once. The model field remains the documentation owner after conversion.
+
+Application models use the directive. `foundry models check` reports handwritten
+table construction for concrete models with constant table names in non-test files
+outside `database/orm`. Folded constant names are included. The check follows one
+helper level across all packages selected by the run (`./...` from the module root
+selects the whole module): when a function or method passes its own parameter directly to
+`orm.Define` as the table name, the corresponding call argument decides whether
+the name is constant. Direct returns and uniquely assigned returned locals identify
+the relevant table when a helper declares several tables. If the returned table
+cannot be resolved, any constant candidate name still causes a report. Other
+string arguments do not affect that decision. Helpers outside the loaded packages,
+including third-party modules, are not analysed; neither are deeper helper chains
+or table-name expressions inside helpers. There is no exemption flag, comment or
+list. Generic models and runtime-computed table names remain
+outside the directive. Tests and the ORM tree can use the functions that generated
+code calls to exercise shapes the generator cannot emit. See the
+[generated-code reference](../../database/orm/README.md#generated-declaration-functions).

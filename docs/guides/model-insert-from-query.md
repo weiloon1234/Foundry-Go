@@ -2,36 +2,39 @@
 
 `rows.InsertFrom(source, destination, mappings...)` builds one set-based insertion. Each `rows.MapInsert` retains source scope, destination model, exact stored type and nullability. Fixed inputs use ordinary typed assignments.
 
-<!-- orm-example: source-insert -->
+Declare the destination with an exposed primary insertion handle. Map stored
+columns from the source; supply the mutated name through a typed input.
+
+<!-- compiled-source: tests/fixtures/goway/modelguide/archive.go -->
 ```go
+package modelguide
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"foundry.test/goway/models/hooks"
+	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+)
+
+//foundry:model table=guide_member_archives var=Archives key=ID
 type ArchivedMember struct {
-	ID                   int64
-	Name                 string
-	Body                 []byte
-	CreatedAt, UpdatedAt time.Time
+	ID        int64  `foundry:"member=ID,key-role=primary"`
+	Name      string `foundry:"input=string"`
+	Body      []byte
+	CreatedAt time.Time `foundry:"role=created-at"`
+	UpdatedAt time.Time `foundry:"role=updated-at"`
 }
 
 func (ArchivedMember) MutateName(name string) (string, error) {
 	return strings.TrimSpace(name), nil
 }
 
-type ArchiveTable struct {
-	orm.Table[ArchivedMember, int64]
-	ID        orm.Primary[ArchivedMember, int64]
-	Name      orm.InputText[ArchivedMember, string, string]
-	Body      orm.Column[ArchivedMember, []byte]
-	CreatedAt orm.CreatedAt[ArchivedMember, time.Time]
-	UpdatedAt orm.UpdatedAt[ArchivedMember, time.Time]
-}
-
-var Archives = orm.Define("member_archives", func(b orm.Builder[ArchivedMember], m *ArchivedMember) ArchiveTable {
-	table := orm.TableOf(b, &m.ID)
-	return ArchiveTable{table, orm.PrimaryOf(b, table.Key()),
-		orm.InputTextOf[ArchivedMember, string](b, &m.Name, nil), orm.BytesOf(b, &m.Body),
-		orm.CreatedAtOf(b, &m.CreatedAt), orm.UpdatedAtOf(b, &m.UpdatedAt)}
-})
-
-func copyMembers(ctx context.Context, tx *database.Tx) (int64, error) {
+func CopyMembers(ctx context.Context, tx *database.Tx) (int64, error) {
 	source, destination := hooks.Members, Archives
 	return rows.InsertFrom(rows.From(source.Query()), destination.Query(),
 		rows.MapInsert(destination.ID, expr.Value(source.Key())),
@@ -47,7 +50,7 @@ The destination is a separate archive table; its key retains the source identity
 
 SQL mappings append. `Values(assignments...)` replaces the fixed inputs for every selected row. Repeated mappings or a column present in both mappings and fixed values fail validation. Nullable expressions cannot populate required destinations; explicit nullable widening is available through the expression API.
 
-`MapInsert` accepts only `orm.InsertableRole` column handles. Go-mutated fields require fixed `Values` inputs and cannot accept SQL mappings. Managed update time is also excluded. Mapping an unmutated primary requires `PrimaryOf`; a lookup key alone does not grant this permission. Complete [typed roles](model-declarations.md) enforce these restrictions directly on `orm.ColumnHandle`.
+`MapInsert` accepts only `orm.InsertableRole` column handles. Go-mutated fields require fixed `Values` inputs and cannot accept SQL mappings. Managed update time is also excluded. Mapping an unmutated primary requires an exposed key with `key-role=primary`; a lookup key alone does not grant this permission. Complete [typed roles](model-declarations.md) enforce these restrictions directly on `orm.ColumnHandle`.
 
 SQL mappings do not call Go accessors or mutators. Fixed inputs transform once per attempt inside the transaction. Omitted input remains omitted, NULL skips scalar mutators, and supplied zero remains a value. Use bounded `CreateEach` when every source row needs Go transformations or lifecycle callbacks.
 

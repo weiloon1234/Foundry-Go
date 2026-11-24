@@ -20,28 +20,30 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=extension_members var=memberFields key=ID identity=false retrieval=memberRetrieval
 type Member struct {
 	ID        int64
-	DeletedAt value.Nullable[temporal.DateTime]
+	DeletedAt value.Nullable[temporal.DateTime] `foundry:"role=soft-delete"`
 }
+
+//foundry:model table=extension_others var=otherFields key=ID identity=false retrieval=otherRetrieval
 type Other struct {
 	ID        int64
-	DeletedAt value.Nullable[temporal.DateTime]
+	DeletedAt value.Nullable[temporal.DateTime] `foundry:"role=soft-delete"`
 }
+
+//foundry:model table=extension_products var=products key=SKU identity=false retrieval=productRetrieval
 type Product struct{ SKU string }
 
 // Identity reads must never hydrate presentation models or invoke retrieval hooks.
-func noPresentation[M any]() orm.Option {
-	return orm.WithRetrievalHooks(func() orm.RetrievalHooks[M] {
-		panic("extension ownership must not hydrate model presentation")
-	})
+func noPresentationHooks[M any]() orm.RetrievalHooks[M] {
+	panic("extension ownership must not hydrate model presentation")
 }
 
-var products = orm.Define("extension_products", func(b orm.Builder[Product], m *Product) orm.Table[Product, string] {
-	return orm.TableOf(b, &m.SKU)
-}, noPresentation[Product]())
+func productRetrieval() orm.RetrievalHooks[Product] { return noPresentationHooks[Product]() }
+func otherRetrieval() orm.RetrievalHooks[Other]     { return noPresentationHooks[Other]() }
 
-var Products = extensions.DefineORMOwner("products", orm.IdentityOf(products, products.Key()), extensions.OwnerOptions{})
+var Products = extensions.DefineORMOwner("products", orm.IdentityOf(products.Table, products.Key()), extensions.OwnerOptions{})
 
 type memberTable struct {
 	orm.Table[Member, int64]
@@ -51,10 +53,10 @@ type memberTable struct {
 func memberSource(table string) memberTable {
 	return orm.Define(table, func(b orm.Builder[Member], m *Member) memberTable {
 		return memberTable{orm.TableOf(b, &m.ID), orm.SoftDeleteOf(b, &m.DeletedAt)}
-	}, noPresentation[Member]())
+	}, orm.WithRetrievalHooks(memberRetrieval))
 }
 
-var memberFields = memberSource("extension_members")
+func memberRetrieval() orm.RetrievalHooks[Member] { return noPresentationHooks[Member]() }
 
 func MemberQuery() orm.Query[Member]        { return memberFields.Query() }
 func MemberIDField() orm.Key[Member, int64] { return memberFields.Key() }
@@ -68,14 +70,6 @@ func MemberIdentity(table string) orm.ModelIdentity[Member, int64] {
 	return orm.IdentityOf(fields.Table, fields.Key())
 }
 
-type otherTable struct {
-	orm.Table[Other, int64]
-	DeletedAt orm.SoftDelete[Other, temporal.DateTime]
-}
-
-var otherFields = orm.Define("extension_others", func(b orm.Builder[Other], m *Other) otherTable {
-	return otherTable{orm.TableOf(b, &m.ID), orm.SoftDeleteOf(b, &m.DeletedAt)}
-}, noPresentation[Other]())
 var Others = extensions.DefineORMOwner("others", orm.IdentityOf(otherFields.Table, otherFields.Key()), extensions.OwnerOptions{})
 
 type Fixture struct {

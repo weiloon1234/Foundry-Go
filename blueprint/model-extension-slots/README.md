@@ -1,7 +1,7 @@
 # Model extension slots
 
 Native model slots are ordinary Go fields whose policies live in explicit typed
-handles. Stage 8 retires the former generated binding layer. The storage owners
+handles. Model directives generate their typed field bindings. The storage owners
 remain [translations](../../docs/guides/model-extensions.md#translated-model-fields),
 [attachments](../../docs/guides/attachments.md) and
 [metadata](../../docs/guides/model-extensions.md#typed-metadata).
@@ -13,9 +13,9 @@ history; use the [current guide](../../docs/guides/model-extensions.md) and
 
 ## Current consumer shape
 
-`orm.Define` declares stored columns and `orm.SlotOf` declares external slots.
+The model directive generates stored columns and external slot handles.
 `extensions.DefineORMOwner` retains explicit owner/storage names and a validated
-`orm.IdentityOf`. `extensions.BindSlot` connects the typed key and slot;
+generated model identity. `extensions.BindSlot` connects the typed key and slot;
 `translations.TextOf`, `attachments.OneOf`/`ManyOf` and `metadata.ValueOf` declare
 policy-bearing handles. Bind managers once with `.From(manager)`; pass
 `.Relation(slot)` to `Query.With` or to the query used by `LoadFrom`/`LoadMissingFrom`.

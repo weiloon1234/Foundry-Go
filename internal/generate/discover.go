@@ -28,7 +28,8 @@ type enumValue struct {
 	position      token.Position
 }
 type metadata struct {
-	enums []enum
+	models []modelDeclaration
+	enums  []enum
 
 	paths     []pathDeclaration
 	multipart []multipartDeclaration
@@ -41,6 +42,12 @@ type metadata struct {
 func discover(p *packageInput) (metadata, error) {
 	defer func() { p.documentation = nil }()
 	var result metadata
+	type pendingModel struct {
+		spec  *ast.TypeSpec
+		named *types.Named
+		args  map[string]string
+	}
+	var models []pendingModel
 	for _, file := range p.files {
 		for _, decl := range file.syntax.Decls {
 			gen, ok := decl.(*ast.GenDecl)
@@ -55,6 +62,9 @@ func discover(p *packageInput) (metadata, error) {
 				}
 				kind, args, err := directive(comments)
 				if err != nil {
+					if isModelDirective(comments) {
+						return result, modelError(p, typeSpec.Pos(), typeSpec.Name.Name, "", err.Error())
+					}
 					return result, p.diagnostic(typeSpec.Pos(), err.Error())
 				}
 				if kind == "" {
@@ -64,14 +74,22 @@ func discover(p *packageInput) (metadata, error) {
 					return result, p.diagnostic(gen.Pos(), "Foundry directives on grouped declarations must attach to one type")
 				}
 				object, ok := p.types.Scope().Lookup(typeSpec.Name.Name).(*types.TypeName)
-				if !ok || object.IsAlias() || !object.Exported() {
+				if !ok || object.IsAlias() || (!object.Exported() && kind != "model") {
+					if kind == "model" {
+						return result, modelError(p, typeSpec.Pos(), typeSpec.Name.Name, "", "requires a defined struct type")
+					}
 					return result, p.diagnostic(typeSpec.Pos(), "Foundry declarations require an exported defined type")
 				}
 				named, ok := object.Type().(*types.Named)
 				if !ok || (named.TypeParams().Len() != 0 && kind != "dto") {
+					if kind == "model" {
+						return result, modelError(p, typeSpec.Pos(), typeSpec.Name.Name, "", "generic models are outside the directive; build the table in a generic function using the low-level ORM functions")
+					}
 					return result, p.diagnostic(typeSpec.Pos(), "generic Foundry declarations are not supported")
 				}
 				switch kind {
+				case "model":
+					models = append(models, pendingModel{typeSpec, named, args})
 				case "union":
 					declaration, err := discoverUnion(p, typeSpec, named, args)
 					if err != nil {
@@ -130,6 +148,13 @@ func discover(p *packageInput) (metadata, error) {
 		enums[e.typ] = true
 	}
 	p.enumTypes = enums
+	for _, pending := range models {
+		declaration, err := discoverModel(p, pending.spec, pending.named, pending.args)
+		if err != nil {
+			return result, err
+		}
+		result.models = append(result.models, declaration)
+	}
 	// Transport hints are checked once enum declarations are known.
 	for _, declaration := range result.paths {
 		for _, field := range declaration.fields {
@@ -296,9 +321,13 @@ func directive(group *ast.CommentGroup) (string, map[string]string, error) {
 		return kind, args, nil
 	}
 	for _, comment := range group.List {
-		text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
-		if !strings.HasPrefix(text, "foundry:") {
+		text, candidate := directiveComment(comment.Text)
+		if !candidate {
 			continue
+		}
+		if strings.TrimRight(comment.Text, " \t\r") != "//"+text {
+			correctedKind := strings.TrimPrefix(strings.Fields(text)[0], "foundry:")
+			return "", nil, fmt.Errorf("invalid Foundry directive spelling; use //foundry:%s", correctedKind)
 		}
 		if kind != "" {
 			return "", nil, fmt.Errorf("duplicate Foundry declaration directive")
@@ -308,10 +337,10 @@ func directive(group *ast.CommentGroup) (string, map[string]string, error) {
 			return "", nil, fmt.Errorf("missing Foundry directive kind")
 		}
 		kind = words[0]
-		if kind == "model" || kind == "projection" {
-			return "", nil, fmt.Errorf("foundry:%s generation is retired; use handwritten orm.Define or rows.Define declarations", kind)
+		if kind == "projection" {
+			return "", nil, fmt.Errorf("foundry:%s generation is retired; use handwritten rows.Define declarations", kind)
 		}
-		if kind != "enum" && kind != "path" && kind != "dto" && kind != "query" && kind != "form" && kind != "multipart" && kind != "message" && kind != "config" && kind != "union" {
+		if !knownDirective(kind) {
 			return "", nil, fmt.Errorf("unsupported Foundry declaration directive")
 		}
 		for _, word := range words[1:] {
@@ -356,3 +385,45 @@ func exportedName(name string) string {
 // checkEncryptedFields keeps encrypted values bound to a key known before the
 // insert, and leaves their plaintext untransformed: a mutator would run on an
 // envelope boundary the framework owns.
+
+// directiveComment is shared by the discovery prefilter and the parser.
+func directiveComment(comment string) (string, bool) {
+	if !strings.HasPrefix(comment, "//") {
+		return "", false
+	}
+	body := strings.TrimPrefix(comment, "//")
+	text := strings.TrimSpace(body)
+	// Exact directives retain the parser's unknown-kind and malformed-option errors.
+	if strings.HasPrefix(comment, "//foundry:") {
+		return text, true
+	}
+	split := strings.IndexFunc(text, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsSpace(r) })
+	if split < 0 {
+		return "", false
+	}
+	prefix := strings.TrimSpace(text[:split])
+	if !modelmeta.NearFoundry(prefix) {
+		return "", false
+	}
+	suffix := strings.TrimSpace(text[split+1:])
+	words := strings.Fields(suffix)
+	if len(words) == 0 || (!knownDirective(words[0]) && words[0] != "projection") {
+		return "", false
+	}
+	if strings.TrimLeftFunc(body, unicode.IsSpace) != body {
+		for _, word := range words[1:] {
+			key, value, ok := strings.Cut(word, "=")
+			if !ok || key == "" || value == "" {
+				return "", false
+			}
+		}
+	}
+	return "foundry:" + suffix, true
+}
+func knownDirective(kind string) bool {
+	switch kind {
+	case "model", "enum", "path", "dto", "query", "form", "multipart", "message", "config", "union":
+		return true
+	}
+	return false
+}

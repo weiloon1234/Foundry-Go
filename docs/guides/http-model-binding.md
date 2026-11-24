@@ -18,7 +18,7 @@ handler runs. The original endpoint still owns parsing, validation, middleware,
 errors, URL generation and the explicit response DTO.
 
 The [independent consumer](../../tests/fixtures/consumer/httpmodels/bindings.go)
-uses a handwritten model declaration with generated path and response contracts:
+uses a model directive with generated path and response contracts:
 
 <!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go#http-model-binding-show-request -->
 ```go

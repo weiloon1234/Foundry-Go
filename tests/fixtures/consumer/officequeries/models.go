@@ -11,8 +11,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=office_regions var=Regions key=ID identity=false
 type Region struct {
-	ID model.ID[Region]
+	ID model.ID[Region] `foundry:"member=ID"`
 	// Code is the key shared by every polymorphic target type.
 	Code       string
 	Name       string
@@ -21,12 +22,13 @@ type Region struct {
 	LatestHire relation.One[Employee]
 }
 
+//foundry:model table=office_offices var=Offices key=ID identity=false
 type Office struct {
-	ID         model.ID[Office]
+	ID         model.ID[Office] `foundry:"member=ID"`
 	Code       string
 	RegionID   model.ID[Region]
 	Name       string
-	DeletedAt  value.Nullable[time.Time]
+	DeletedAt  value.Nullable[time.Time] `foundry:"role=soft-delete"`
 	Newest     relation.One[Employee]
 	Earliest   relation.One[Employee]
 	TopEarner  relation.One[Employee]
@@ -38,8 +40,9 @@ type Office struct {
 	Desks      relation.Many[Desk]
 }
 
+//foundry:model table=office_employees var=Employees key=ID identity=false
 type Employee struct {
-	ID       model.ID[Employee]
+	ID       model.ID[Employee] `foundry:"member=ID"`
 	OfficeID model.ID[Office]
 	Name     string
 	Salary   int64
@@ -54,32 +57,38 @@ func (Region) MorphName() model.MorphName { return "region" }
 func (Office) MorphName() model.MorphName { return "office" }
 
 // Note belongs to either a region or an office.
+//
+//foundry:model table=office_notes var=Notes key=ID identity=false
 type Note struct {
-	ID          model.ID[Note]
-	SubjectType model.MorphName
+	ID          model.ID[Note]  `foundry:"member=ID"`
+	SubjectType model.MorphName `foundry:"role=column"`
 	SubjectID   string
 	Body        string
 	Region      relation.One[Region]
 	Office      relation.One[Office]
 }
 
+//foundry:model table=office_labels var=Labels key=ID identity=false
 type Label struct {
-	ID      model.ID[Label]
+	ID      model.ID[Label] `foundry:"member=ID"`
 	Name    string
 	Offices relation.Through[Office, Labeling]
 }
 
+//foundry:model table=office_labelings var=Labelings key=ID identity=false
 type Labeling struct {
-	ID            model.ID[Labeling]
+	ID            model.ID[Labeling] `foundry:"member=ID"`
 	LabelID       model.ID[Label]
-	LabelableType model.MorphName
+	LabelableType model.MorphName `foundry:"role=column"`
 	LabelableID   string
 }
 
 // Desk is visible only while its office is: its global scope is a relation
 // existence predicate over the model's own relation.
+//
+//foundry:model table=office_desks var=Desks key=ID scopes=foundryDeskScopes identity=false
 type Desk struct {
-	ID       model.ID[Desk]
+	ID       model.ID[Desk] `foundry:"member=ID"`
 	OfficeID model.ID[Office]
 	Label    string
 	Office   relation.One[Office]

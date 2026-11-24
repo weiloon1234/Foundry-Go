@@ -22,7 +22,7 @@ attachments and typed metadata as model extension slots, registers them with
 `Builder.Models` and exercises ORM deletion cleanup against PostgreSQL;
 see the [slot guide](../../../docs/guides/model-extension-slots.md).
 
-The Stage 9 foundations publish handwritten declarations: [profiles](profiles/tables.go), [articles](articles/tables.go),
+The Stage 9 foundations use model directives for their typed tables and retain explicit identity and extension declarations: [profiles](profiles/tables.go), [articles](articles/tables.go),
 [passwords](passwords/tables.go) and [multifactor](multifactor/tables.go).
 Each package exposes `Tables()` for startup checking and an ORM identity that
 preserves existing stored references. Profiles' service cleanup uses ORM hooks;
@@ -33,9 +33,12 @@ batch-load and storage assertions use the typed package functions `FieldOf`,
 `KeyOf`, `OneCollection` and `ManyCollection`. These packages register only their
 ORM observer families.
 
+The current `//foundry:model` directive owns typed model tables; row projections remain handwritten.
+The trigram tables compute schema-qualified names at runtime, so their
+[Declare(schema) builder](trigramqueries/tables.go) retains low-level declarations.
 DTO, enum, configuration, localization and client generation remain supported.
 The generic DTO, union, localization, upload and request-flow contracts are
-retained unchanged. The completed cleanup barrier removed model/projection directives and
+retained unchanged. The earlier cleanup barrier removed the legacy model/projection directives and
 obsolete generated output from each migrated owner through `make generate`.
 
 The [portal consumer](spaportals/portals.go) declares browser portals with
@@ -125,11 +128,11 @@ This independent module imports the public Foundry-Go root package through a loc
 The [lifecycle test](lifecycle_test.go) loads typed configuration, resolves concrete services, boots two fake providers, runs a cancellable kernel with an injected clock, and verifies reverse-order cleanup. The [value test](values_test.go) exercises model-owned IDs and typed nullable patches. The [compiler tests](types_test.go) invoke the selected Go compiler against intentionally invalid packages under `testdata/compilefail`; those failures are required assertions, not broken framework packages.
 
 The [handwritten models](models/models.go) own stored fields, tags and enum constants;
-[ORM declarations](models/orm.go) bind their typed fields. The [declaration and
+Their `//foundry:model` directives generate the typed tables beside those structs. The [declaration and
 contract tests](generated_test.go) verify queries, assignment presence, self-owned
-IDs, natural keys and retained generated enums. The [catalog declaration](catalog/orm.go),
+IDs, natural keys and retained generated enums. The [catalog model directive](catalog/product.go),
 its [separate enum package](catalog/status/status.go), and the [package graph test](package_graph_test.go)
-exercise handwritten declarations across package boundaries. Generated DTO/config/enum
+exercise typed declarations across package boundaries. Generated model/DTO/config/enum
 outputs and `.foundry-gen.json` manifests remain generator-owned. The lead runs the
 Makefile generation barrier after consumer migration.
 
@@ -155,7 +158,7 @@ The [chunk acceptance](chunkqueries/chunks_postgres_test.go) checks bounded offs
 
 The [upsert acceptance](upsertqueries/upserts_postgres_test.go) covers generated single/batch upserts, composite and named conflict targets, defaults, typed values/NULLs, skipped rows, retained UUIDs, concurrent writers, reserved target names, duplicate-target rollback and failed batch hydration. [Conflict calculations](upsertqueries/calculations_postgres_test.go) add generated stored/proposed field scopes, exact decimals, nullable values, trigger/default behavior, scalar and correlated assignments, CTE dependencies and rollback after scalar cardinality errors. [Index targets](upsertqueries/index_targets_postgres_test.go) exercise typed expressions and partial predicates under generic prepared plans, static quoted constants, conditional updates and unmatched index errors. Negative compiler cases preserve destination, scope, value, nullability and row/selected-phase rules. Gopls inspects generated methods, conflict scopes, typed assignment construction and index declarations.
 
-The [relation declarations](models/orm_relations.go) use handwritten ORM handles to connect typed keys. [PostgreSQL relation acceptance](model_relations_postgres_test.go) verifies batched/nested self-relations, nullable inverse keys, loaded states, scopes, cardinality, natural keys and query/resource bounds. The catalog model also targets a concrete model in another package. Compiler failures cover wrong relation keys, owners, targets and scoped predicates.
+The [relation declarations](models/orm_relations.go) use generated ORM handles to connect typed keys. [PostgreSQL relation acceptance](model_relations_postgres_test.go) verifies batched/nested self-relations, nullable inverse keys, loaded states, scopes, cardinality, natural keys and query/resource bounds. The catalog model also targets a concrete model in another package. Compiler failures cover wrong relation keys, owners, targets and scoped predicates.
 
 The [many-to-many acceptance](model_through_postgres_test.go) loads concrete [membership pivots](models/membership.go) beside each group and self-referencing friendship targets. It verifies combined target/pivot ordering, distinct duplicate edges, nullable keys, separate scopes, nested target/pivot relations, query counts, loaded states, ambiguous joins and failed pivot hydration. Compiler assertions reject incompatible pivot keys, owners, scopes, ordering and payloads.
 
@@ -339,13 +342,13 @@ have been removed. The `testdata/legacy-model.json` snapshots preserve the legac
 SQL, reference and extension expectations captured before removal; see the
 [freeze evidence](../../../docs/evidence/goway-stage9-d-barrier-freeze.json).
 
-## Stage 9 handwritten declarations
+## Typed model declarations
 
 The root model read, write, pagination, codec, changes and observer examples now
-use `models.Users`, `models.WriteRecords` and the other handwritten declarations.
+use `models.Users`, `models.WriteRecords` and the other generated model tables.
 The package graph checks typed fields and assignments imported from `catalog`;
 `TestModulePinnedFoundryTool` still exercises retained config generation through
-the module-selected CLI. The editor gate resolves the handwritten declarations,
+the module-selected CLI. The editor gate resolves the typed declarations,
 while DTO, enum and config probes still resolve their generated contracts.
 
 `nestedbindings.Tables()` registers `Teams`, `ProjectRecords` and `Tasks`.

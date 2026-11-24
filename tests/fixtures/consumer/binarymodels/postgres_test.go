@@ -37,7 +37,7 @@ func TestPostgresBinaryModelsAndProjections(t *testing.T) {
 		if !bytes.Equal(created.Body, []byte{0, 255, 1}) || created.Raw == nil || len(created.Raw) != 0 || !created.Note.IsNull() || created.Encoded != "00ff01" {
 			return errors.New("binary persistence lost bytes, empty, NULL or custom input")
 		}
-		if _, err := orm.Insert(t.Context(), tx, binarymodels.Records.Table, orm.Set(fields.Key(), 2), orm.Set(fields.Body, binarymodels.Input{}), orm.Set(fields.RawBytes, []byte{}), orm.Set(fields.Note, binarymodels.Input{}), orm.Set(fields.Encoded, binarymodels.Input{})); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, binarymodels.Records.Table, orm.Set(fields.Key(), 2), orm.Set(fields.Body, binarymodels.Input{}), orm.Set(fields.Raw, []byte{}), orm.Set(fields.Note, binarymodels.Input{}), orm.Set(fields.Encoded, binarymodels.Input{})); err != nil {
 			return err
 		}
 		needle := binarymodels.Payload{0, 255, 1}
@@ -73,7 +73,7 @@ func TestPostgresBinaryModelsAndProjections(t *testing.T) {
 		if !present || !bytes.Equal(item.Body, []byte{4, 5}) || !item.Note.IsNull() {
 			return errors.New("binary conflict lost owned custom input")
 		}
-		if _, err := orm.Insert(t.Context(), tx, binarymodels.Records.Table, orm.Set(fields.Key(), 3), orm.Set(fields.Body, binarymodels.Input{}), orm.Set(fields.RawBytes, nil), orm.SetNull(fields.Note), orm.Set(fields.Encoded, binarymodels.Input{})); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.Insert(t.Context(), tx, binarymodels.Records.Table, orm.Set(fields.Key(), 3), orm.Set(fields.Body, binarymodels.Input{}), orm.Set(fields.Raw, nil), orm.SetNull(fields.Note), orm.Set(fields.Encoded, binarymodels.Input{})); !errors.Is(err, fault.Invalid) {
 			return errors.New("nil binary model value was accepted")
 		}
 		return nil

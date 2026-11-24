@@ -234,7 +234,7 @@ func decodeJournal(data []byte) (journal, error) {
 	if err := decodePublicationJSON(data, &log); err != nil {
 		return log, fmt.Errorf("invalid generation journal: %w", err)
 	}
-	if (log.Version != 2 && log.Version != 5 && log.Version != 6 && log.Version != 7) || len(log.Files) == 0 {
+	if (log.Version != 2 && log.Version != 5 && log.Version != 6 && log.Version != 7 && log.Version != 8) || len(log.Files) == 0 {
 		return log, fmt.Errorf("unsupported generation journal")
 	}
 	if (log.Version == 6) != (log.Distribution != nil) || (log.Version != 6 && len(log.NewDirs) != 0) {
@@ -281,6 +281,9 @@ func decodeJournal(data []byte) (journal, error) {
 		if log.Version == 6 {
 			validTarget = name == manifestName || DistributionPath(name)
 		}
+		if log.Version == 8 {
+			validTarget = len(log.Guards) == 1 && log.Guards[0] == "." && name == base && (validTarget || conversionSource(base) && entry.Before.Exists && entry.After.Exists)
+		}
 		if log.Version == 7 {
 			validTarget = len(log.Files) == 1 && len(log.Guards) == 1 && log.Guards[0] == "." && name == base && scaffoldName.MatchString(base) && !entry.Before.Exists && entry.After.Exists
 		}
@@ -308,6 +311,9 @@ func prepareStaging(dir string, plan writePlan) error {
 		return err
 	}
 	log := journal{Version: 2, Guards: plan.guards, Files: make(map[string]journalEntry)}
+	if plan.conversion {
+		log.Version = 8
+	}
 	if plan.scaffold {
 		log.Version = 7
 	}

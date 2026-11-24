@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "files": {
+    "account_foundry.gen.go": "08a0f706a9e780f63367213b1f2f34b5bcee779cb6d7e46c3bfcc8644d0bd2a2",
+    "archive_foundry.gen.go": "a9af3be57952f850e742850f793a8bc54af9115d49ae7ddbb4be4db9f30799b9",
+    "article_foundry.gen.go": "f85d9204cdf7d63596dd35c3c3e08b3a8d47679f20fb0842bf54fbec67ed2652",
+    "event_foundry.gen.go": "95c06a400992bc949d1aa2cf879bb1e06f5f865ae7fce29b6e14c0019384e39a",
+    "product_foundry.gen.go": "61add360ffcbd39a68e132a43b841211bca52062a0ac9df124d85f27e7131231",
+    "widget_model_foundry.gen.go": "a5d4d707032df0436db8b0c90a731e20010e1a5d51fd9c3e9b6eaa11e9f45a6a"
+  }
+}

@@ -90,6 +90,9 @@ func bindNamedMutator[M, I, V any](core *columnCore) {
 		if !ok {
 			return invalid("mutator signature does not match the column's declared input and stored types")
 		}
+		// BEGIN foundry models convert
+		recordConversionNamedMutator(core, reflect.ValueOf(method))
+		// END foundry models convert
 		return core.bindMutator(func(input I) (V, error) { var receiver M; return method(receiver, input) })
 	}
 }

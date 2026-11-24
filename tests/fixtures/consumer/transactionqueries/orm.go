@@ -1,22 +1,10 @@
 package transactionqueries
 
 import (
-	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
-
-type RecordColumns struct {
-	orm.Table[Record, int64]
-	ID   orm.Key[Record, int64]
-	Name orm.Text[Record, string]
-}
-
-var Records = orm.Define("records", func(b orm.Builder[Record], r *Record) RecordColumns {
-	table := orm.TableOf(b, &r.ID)
-	return RecordColumns{table, table.Key(), orm.TextOf(b, &r.Name)}
-})
 
 type SummaryColumns struct {
 	rows.Row[Summary]

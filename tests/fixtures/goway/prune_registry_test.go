@@ -24,7 +24,7 @@ func (e *prunePrivateError) Error() string {
 
 func TestORMPruneRegistryPreservesHookFailureIdentityAndRedaction(t *testing.T) {
 	cause := &prunePrivateError{}
-	f := n.Declare(func() orm.Hooks[n.Member] {
+	f := declareHookMembers(func() orm.Hooks[n.Member] {
 		return orm.Hooks[n.Member]{Deleting: func(context.Context, *database.Tx, n.Member) error { return cause }}
 	})
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)

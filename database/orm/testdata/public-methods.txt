@@ -132,6 +132,17 @@ orm.CursorRequest
   Validate func() error
 *orm.CursorRequest
   Validate func() error
+orm.DeclarationOwner
+  field Model string
+  field Name string
+  field StorageModel string
+*orm.DeclarationOwner
+orm.DeclarationSlot
+  field Field string
+  field Kind string
+  field Name string
+  field Storage string
+*orm.DeclarationSlot
 orm.DeleteSource
   Exec func(ctx context.Context, writer github.com/weiloon1234/Foundry-Go/database.Transactor) (int64, error)
   Format func(s fmt.State, _ rune)
@@ -760,6 +771,7 @@ orm.WriteError
   Error func() string
   GoString func() string
   Unwrap func() error
+orm.ModelFingerprint func(fingerprint string) github.com/weiloon1234/Foundry-Go/database/orm.Option
 orm.BoolOf func[M any, V ~bool](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], ptr *V, opts ...github.com/weiloon1234/Foundry-Go/database/orm.ColumnOption[V]) github.com/weiloon1234/Foundry-Go/database/orm.Column[M, V]
 orm.FoundryModel func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.MetadataSeal) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Source, func(github.com/weiloon1234/Foundry-Go/database.Row) (M, error))
 orm.FoundryOrderBy func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], o github.com/weiloon1234/Foundry-Go/internal/ormcore.Order, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.QuerySeal) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]

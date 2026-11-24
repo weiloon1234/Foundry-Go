@@ -114,6 +114,7 @@ func checkRepository(root string) error {
 				references = append(references, parsed...)
 				failures = append(failures, err)
 				if active {
+					failures = append(failures, checkModelGuide(relative, data))
 					if err := retirement.CheckDocument(relative, data); err != nil {
 						failures = append(failures, err)
 					}
@@ -187,9 +188,6 @@ func checkDocument(root, path string, current bool, completed map[string]bool, a
 	}
 	definitions := linkDefinitions(data)
 	var failures []error
-	if current {
-		failures = append(failures, checkModelGuide(path, data))
-	}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
 	fence := ""

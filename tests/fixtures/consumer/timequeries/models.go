@@ -10,15 +10,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+//foundry:model table=time_members var=Members key=ID identity=false hooks=memberHooks
 type Member struct {
 	ID        model.ID[Member]
-	Name      string
-	CreatedAt time.Time `foundry:"column=created_on"`
+	Name      string    `foundry:"input=string"`
+	CreatedAt time.Time `foundry:"column=created_on,role=created-at"`
 	// UpdatedAt records the last managed model write.
 	// Managed update timestamp: ORM writes supply the configured database clock value.
-	UpdatedAt temporal.DateTime `foundry:"column=changed_on"`
+	UpdatedAt temporal.DateTime `foundry:"column=changed_on,role=updated-at"`
 }
 
+//foundry:model table=time_manual var=Manuals key=ID identity=false timestamps=none
 type Manual struct {
 	ID        model.ID[Manual]
 	CreatedAt time.Time

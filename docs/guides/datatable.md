@@ -244,8 +244,8 @@ table metadata or route changes; see [export ownership](client-contracts.md#reci
 Keep the DTO type, package and JSON descriptor; mark the DTO `role=row` and use
 its generated `…Columns()` bindings. Each column declares the expression it
 selects, so there is no `rows.Define` schema or `rows.Select` mapping list. The
-[report declarations](../../tests/fixtures/consumer/reporting/orm.go)
-use `orm.PrimaryOf` and `orm.SoftDeleteOf` to retain declaration roles; the
+[model directives](../../tests/fixtures/consumer/reporting/models.go)
+use primary key roles and `role=soft-delete` to retain declaration roles; the
 [row DTOs](../../tests/fixtures/consumer/reporting/models.go) retain exact field
 types. Generated DTO output owns wire metadata and column bindings.
 
@@ -617,8 +617,9 @@ in the database". Direct managers should call `manager.CheckCollation(ctx)` befo
 serving requests. An empty setting performs no check; dynamic per-expression
 `expr.Collate` names remain unchecked until execution.
 
-For native PostgreSQL enums, declare the column with
-`orm.TextOf(b, &m.Status, orm.Codec(codec.String[Status]().WithoutCollation()))`.
+For a native PostgreSQL enum stored through a custom codec, use `codec=statusCodec`
+on the model field. Its package-local factory returns the exact stored codec,
+marked with `WithoutCollation()`. This selects a plain column; do not add a text role.
 
 The Go declaration cannot see the SQL type created by a migration. Mark native
 enums and other non-collatable text-kind columns with `WithoutCollation()`;
@@ -991,7 +992,7 @@ The gate never updates those artifacts automatically; use `make publish-client-c
 after reviewing an intentional contract change.
 
 `make typescript-check` also runs reporting codec, type and anonymous HTTP checks.
-`make agent-smoke` covers handwritten ORM declarations and row mappings through
+`make agent-smoke` covers generated ORM declarations and row mappings through
 real completion, hover and definition requests. Select the existing native tools
 as described in the [tooling guide](developer-tooling-and-testing.md).
 

@@ -1,6 +1,6 @@
 # Typed field computations
 
-Declare columns once with `orm.Define` and the appropriate typed constructors.
+Declare stored fields once on a `//foundry:model` struct; generation chooses their typed handles.
 Use package functions from `database/orm/expr` to construct optional computations;
 columns do not need a separate summary-method family for each owner/value pair.
 

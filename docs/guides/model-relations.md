@@ -9,11 +9,11 @@
 
 Further reading: [Relation declarations](#declaring-keys-in-go).
 
-Relations retain source model, target model and key types. The [handwritten model fields](../../tests/fixtures/consumer/models/models.go) declare `relation.One[User]`, `relation.Many[Order]` or `relation.Through[Group, Membership]`. These fields are relation state, not persisted columns: bind them with typed slot declarations rather than persisted columns. [Model extension slots](model-extension-slots.md) for translated text, attachments and metadata load through the same `With` and `LoadFrom` paths.
+Relations retain source model, target model and key types. The [handwritten model fields](../../tests/fixtures/consumer/models/models.go) declare `relation.One[User]`, `relation.Many[Order]` or `relation.Through[Group, Membership]`. These fields are relation state, not persisted columns: the model directive generates typed slot bindings for them. [Model extension slots](model-extension-slots.md) for translated text, attachments and metadata load through the same `With` and `LoadFrom` paths.
 
 ## Declaring keys in Go
 
-Bind model slots and keys in handwritten `orm.Define` declarations, then compose
+Generate model slots and keys from the directive, then compose
 owner-typed relationships at package scope. The [consumer declarations](../../tests/fixtures/consumer/models/orm_relations.go) demonstrate this pattern:
 
 ```go

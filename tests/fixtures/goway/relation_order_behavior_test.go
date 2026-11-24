@@ -46,9 +46,9 @@ func TestComputedRelationOrdersFailClosed(t *testing.T) {
 	if _, err := orm.Compile(j.Parents.Query().With(j.Peers.OrderByPivot(pivot))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("zero pivot seal accepted", err)
 	}
-	foreign := orm.Define("joined_targets", func(b orm.Builder[j.Target], m *j.Target) j.TargetFields {
+	foreign := orm.Define("joined_targets", func(b orm.Builder[j.Target], m *j.Target) j.TargetTable {
 		t := orm.TableOf(b, &m.ID)
-		return j.TargetFields{Table: t, ID: t.Key(), ParentID: orm.NumberOf(b, &m.ParentID), Name: orm.TextOf(b, &m.Name), Rank: orm.NumberOf(b, &m.Rank), DeletedAt: orm.SoftDeleteOf(b, &m.DeletedAt), Parent: orm.OneOf(b, &m.Parent), Inverse: orm.ThroughOf(b, &m.Inverse)}
+		return j.TargetTable{Table: t, ID: t.Key(), ParentID: orm.NumberOf(b, &m.ParentID), Name: orm.TextOf(b, &m.Name), Rank: orm.NumberOf(b, &m.Rank), DeletedAt: orm.SoftDeleteOf(b, &m.DeletedAt), Parent: orm.OneOf(b, &m.Parent), Inverse: orm.ThroughOf(b, &m.Inverse)}
 	})
 	if err := orm.Check(foreign); err != nil {
 		t.Fatal(err)
@@ -63,10 +63,10 @@ func TestComputedRelationOrdersFailClosed(t *testing.T) {
 			t.Fatal("invalid relation order accepted", err)
 		}
 	}
-	foreignPivot := orm.Define("joined_pivots", func(b orm.Builder[j.Pivot], m *j.Pivot) j.PivotFields {
+	foreignPivot := orm.Define("joined_pivots", func(b orm.Builder[j.Pivot], m *j.Pivot) j.PivotTable {
 		deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
 		t := orm.TableOf(b, &m.ID)
-		return j.PivotFields{Table: t, ID: t.Key(), ParentID: orm.NullableNumberOf(b, &m.ParentID), TargetID: orm.NullableNumberOf(b, &m.TargetID), Kind: orm.ColumnOf(b, &m.Kind, orm.Codec(codec.String[model.MorphName]())), Role: orm.TextOf(b, &m.Role), DeletedAt: deleted, Soft: orm.SoftDeletes(deleted), Parent: orm.OneOf(b, &m.Parent), Target: orm.OneOf(b, &m.Target), MorphParent: orm.OneOf(b, &m.MorphParent), MorphTarget: orm.OneOf(b, &m.MorphTarget)}
+		return j.PivotTable{Table: t, ID: t.Key(), ParentID: orm.NullableNumberOf(b, &m.ParentID), TargetID: orm.NullableNumberOf(b, &m.TargetID), Kind: orm.ColumnOf(b, &m.Kind, orm.Codec(codec.String[model.MorphName]())), Role: orm.TextOf(b, &m.Role), DeletedAt: deleted, Soft: orm.SoftDeletes(deleted), Parent: orm.OneOf(b, &m.Parent), Target: orm.OneOf(b, &m.Target), MorphParent: orm.OneOf(b, &m.MorphParent), MorphTarget: orm.OneOf(b, &m.MorphTarget)}
 	})
 	if err := orm.Check(foreignPivot); err != nil {
 		t.Fatal(err)

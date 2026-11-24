@@ -11,9 +11,9 @@ Rust references: `foundry-macros`, `foundry-build`, `src/app_enum`, `src/contrac
 `cmd/foundry` hosts `generate`, `generate --check`, and `agent` commands. A private generator pipeline owns parsing, type checking, normalized metadata, diagnostics, and writing. DTO, enum, validation, and contract emitters share that pipeline; they must not build separate schema parsers.
 
 - Model structs remain handwritten, normally grouped in a consumer's domain model package. Go structs are not regenerated from a parallel schema DSL.
-- Persistence uses handwritten `orm.Define` tables and `rows.Define` projections. Retired `model` and `projection` directives fail with migration diagnostics. Retained DTO, enum, config, message, multipart, union, path and HTTP query/form declarations drive generation.
+- Persistence models use `//foundry:model` and `foundry` field tags. The generator emits their typed table, binding and identity block; `rows.Define` projections stay handwritten. The projection directive remains retired. DTO, enum, config, message, multipart, union, path and HTTP query/form declarations retain their own generation.
 - Preserve named Go field types, nullability, and type parameters through the metadata representation. Do not erase a named enum or model ID to its underlying scalar type.
-- Emit `<declaration>_foundry.gen.go` beside its owning transport declaration in the same package. Handwritten persistence, business methods and lifecycle implementations remain ordinary Go code.
+- Emit `<declaration>_foundry.gen.go` beside its owning source declaration in the same package. Handwritten persistence, business methods and lifecycle implementations remain ordinary Go code.
 - Hook and relation references are Go symbols/type-checked descriptors, not dynamically resolved string function names.
 - Generated files include a standard generated-code header, source locations, and Go documentation. Stable ordering and formatting must not depend on timestamps, absolute paths, or map iteration.
 - Model field documentation is handwritten. Retained generation derives help from source comments for generated DTO and transport symbols without editing handwritten files. See [field documentation](07-model-lifecycle-events-and-audit.md#automatic-field-documentation-for-getters-and-setters).
@@ -36,7 +36,10 @@ projection declarations follow the [native declaration guide](../docs/guides/mod
 Independent compiler fixtures reject wrong model owners, field values and model
 IDs through native ORM declarations. DTO and transport fixtures separately cover
 retained generated contracts. Editor probes exercise their concrete signatures.
-The original generated-model prototype is historical evidence in the master.
+The former generated query/draft prototype is historical evidence in the master.
+The current model generator emits ORM declarations and two stale guards: a
+structural conversion checked by Go and an ordered field/tag fingerprint checked
+at declaration time. Directive comments require `generate --check`.
 
 Use current Go features only after confirming compiler and gopls support. Concrete generic methods are available in Go 1.27; generic interface methods are not. Do not design an interface that depends on unsupported language syntax. [Go generic methods](https://go.dev/blog/generic-methods)
 

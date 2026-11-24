@@ -15,7 +15,7 @@ import (
 )
 
 // The guide includes exact regions of the compiled after examples. Every Go block
-// needs a region ID; missing, duplicate and stale snippets fail this test.
+// names compiled source or a region ID; missing, duplicate and stale snippets fail this test.
 func TestGuideSnippets(t *testing.T) {
 	root, regions := compiledRegions(t, "migration")
 	used := checkGuideSnippets(t, filepath.Join(root, "docs/guides/orm-migration.md"), regions)
@@ -107,7 +107,7 @@ func checkGuideSnippets(t *testing.T, path string, regions map[string]string) ma
 	doc := string(data)
 	// Source-bound fences are checked by internal/docsource at the root gate.
 	// Retain their legacy region names for the historical coverage census.
-	compiled := regexp.MustCompile("(?s)<!-- compiled-source: [^#]+#([a-z0-9-]+) -->\\n`{3,}[^\\n]*\\n.*?\\n`{3,}\\n?")
+	compiled := regexp.MustCompile("(?s)<!-- compiled-source: [^# \n]+(?:#([a-z0-9-]+))? -->\\n`{3,}[^\\n]*\\n.*?\\n`{3,}\\n?")
 	converted := compiled.FindAllStringSubmatch(doc, -1)
 	doc = compiled.ReplaceAllString(doc, "")
 	blocks := regexp.MustCompile("(?s)<!-- orm-example: ([a-z0-9-]+) -->\\n```go\\n(.*?)\\n```").FindAllStringSubmatch(doc, -1)
@@ -116,7 +116,9 @@ func checkGuideSnippets(t *testing.T, path string, regions map[string]string) ma
 	}
 	used := map[string]bool{}
 	for _, block := range converted {
-		used[block[1]] = true
+		if block[1] != "" {
+			used[block[1]] = true
+		}
 	}
 	for _, block := range blocks {
 		name := block[1]

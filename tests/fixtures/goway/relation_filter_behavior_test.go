@@ -11,9 +11,9 @@ import (
 )
 
 func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
-	foreign := orm.Define("joined_targets", func(b orm.Builder[j.Target], m *j.Target) j.TargetFields {
+	foreign := orm.Define("joined_targets", func(b orm.Builder[j.Target], m *j.Target) j.TargetTable {
 		table := orm.TableOf(b, &m.ID)
-		return j.TargetFields{Table: table, ID: table.Key(), ParentID: orm.NumberOf(b, &m.ParentID), Name: orm.TextOf(b, &m.Name), Rank: orm.NumberOf(b, &m.Rank), DeletedAt: orm.SoftDeleteOf(b, &m.DeletedAt), Parent: orm.OneOf(b, &m.Parent), Inverse: orm.ThroughOf(b, &m.Inverse)}
+		return j.TargetTable{Table: table, ID: table.Key(), ParentID: orm.NumberOf(b, &m.ParentID), Name: orm.TextOf(b, &m.Name), Rank: orm.NumberOf(b, &m.Rank), DeletedAt: orm.SoftDeleteOf(b, &m.DeletedAt), Parent: orm.OneOf(b, &m.Parent), Inverse: orm.ThroughOf(b, &m.Inverse)}
 	})
 	for name, p := range map[string]expr.Predicate[j.Target]{
 		"foreign":       expr.TextContains(expr.TextRow(foreign.Name), "a"),

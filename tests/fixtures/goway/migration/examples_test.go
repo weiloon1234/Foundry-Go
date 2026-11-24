@@ -24,8 +24,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// migration:roles-after
-// doc-example:begin roles-after
 type EmailInput string
 type User struct {
 	ID        int64
@@ -56,9 +54,7 @@ var Users = orm.Define("users", func(b orm.Builder[User], u *User) UserTable {
 		orm.InputTextOf[User, EmailInput](b, &u.Email, nil),
 		orm.CreatedAtOf(b, &u.CreatedAt), orm.UpdatedAtOf(b, &u.UpdatedAt),
 		deleted, orm.SoftDeletes(deleted)}
-}) // doc-example:end roles-after
-
-// migration:end
+})
 
 // migration:reads-after
 // doc-example:begin reads-after
@@ -260,13 +256,9 @@ func seeder() seed.Definition {
 
 // migration:end
 
-// migration:identity-after
-// doc-example:begin identity-after
 func identity(user models.User) (model.Identity, error) {
 	return orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user).Identity()
-} // doc-example:end identity-after
-
-// migration:end
+}
 
 // migration:scalar-after
 func scalar(ctx context.Context, db database.Executor) error {

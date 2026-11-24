@@ -9,5 +9,5 @@ import (
 
 func invalid(manager *attachments.Manager) {
 	collection := attachments.Define(a.Owner, "files", attachments.Policy{})
-	_, _ = collection.Replace(context.Background(), manager, orm.IdentityOf(a.Authors, a.Authors.Key()).Reference(1), attachments.Upload{})
+	_, _ = collection.Replace(context.Background(), manager, orm.IdentityOf(a.Authors.Table, a.Authors.Key()).Reference(1), attachments.Upload{})
 }

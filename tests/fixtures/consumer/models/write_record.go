@@ -7,10 +7,11 @@ import (
 
 type RecordKey int64
 
+//foundry:model table=write_records var=WriteRecords key=Code identity=false
 type WriteRecord struct {
-	Code    RecordKey `foundry:"default=database"`
+	Code    RecordKey `foundry:"default=database,member=Code,key-role=primary"`
 	Name    string
-	Enabled bool `foundry:"default=database"`
+	Enabled bool `foundry:"default=database,role=column"`
 	Note    value.Nullable[string]
-	Amount  decimal.Decimal `foundry:"default=database"`
+	Amount  decimal.Decimal `foundry:"default=database,role=number"`
 }

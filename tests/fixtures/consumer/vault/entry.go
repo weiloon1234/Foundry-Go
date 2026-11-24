@@ -11,6 +11,8 @@ import (
 
 // Entry keeps an API token and optional connection settings encrypted at rest.
 // doc-example:begin encryption-entry
+//
+//foundry:model table=vault_entries var=Entries key=ID identity=false
 type Entry struct {
 	ID       model.ID[Entry]
 	Label    string

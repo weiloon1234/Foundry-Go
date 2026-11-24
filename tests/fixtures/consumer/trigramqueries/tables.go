@@ -33,7 +33,7 @@ type EntityTable struct {
 	orm.Table[Entity, int64]
 	Country orm.Text[Entity, string]
 }
-type NameTable struct {
+type EntityNameTable struct {
 	orm.Table[EntityName, int64]
 	EntityID   orm.Number[EntityName, int64]
 	Normalized orm.Text[EntityName, Normalized]
@@ -51,7 +51,7 @@ type ReviewTable struct {
 }
 type Tables struct {
 	Entities  EntityTable
-	Names     NameTable
+	Names     EntityNameTable
 	Addresses AddressTable
 	Reviews   ReviewTable
 }
@@ -61,8 +61,8 @@ func Declare(schema string) Tables {
 		Entities: orm.Define(schema+".entities", func(b orm.Builder[Entity], m *Entity) EntityTable {
 			return EntityTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Country)}
 		}),
-		Names: orm.Define(schema+".entity_names", func(b orm.Builder[EntityName], m *EntityName) NameTable {
-			return NameTable{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.EntityID), orm.TextOf(b, &m.Normalized)}
+		Names: orm.Define(schema+".entity_names", func(b orm.Builder[EntityName], m *EntityName) EntityNameTable {
+			return EntityNameTable{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.EntityID), orm.TextOf(b, &m.Normalized)}
 		}),
 		Addresses: orm.Define(schema+".addresses", func(b orm.Builder[Address], m *Address) AddressTable {
 			return AddressTable{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.EntityID), orm.NumberOf(b, &m.Latitude), orm.NumberOf(b, &m.Longitude)}

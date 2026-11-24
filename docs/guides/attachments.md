@@ -22,7 +22,7 @@ A model can also declare collections as `attachments.One`/`Many` fields; see
 publication workflow.
 
 Attachments share the registered [model extension owner](model-extensions.md#shared-owners),
-handwritten ORM infrastructure declarations, and explicit versioned migrations.
+generated ORM infrastructure declarations, and explicit versioned migrations.
 Apply `attachments.Migrations()` through the normal migration runner. The
 constructor performs no migration, storage write, seeding or worker startup.
 

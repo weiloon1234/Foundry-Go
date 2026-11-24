@@ -6,6 +6,7 @@
     "member_name_row_foundry.gen.go": "7b3a0cc7843e7d4fb382cc735ef6e797b3782f8d774347108dd2855a4983ecc9",
     "member_row_foundry.gen.go": "18cda911145b78e0948668e83fcfd4ad981c3953075e3373b4b894b2535961cf",
     "member_total_foundry.gen.go": "06070fc48cb8077134846b620feb5f53966be69d2d0c02a654ef140515a97867",
+    "models_foundry.gen.go": "c78410a224ddf9f10268bcd0a54dfc7fbf9ee829683776886b442f83ad582cb4",
     "numeric_level_row_foundry.gen.go": "1f08e51c672ddf74e1860380826212547652aaff05fe98ccaddf9c7c195ad421",
     "order_line_row_foundry.gen.go": "ed2566648e73b9865645191dfb965de2f5155d5c51380a11223a9c65dc7d1b92",
     "order_row_foundry.gen.go": "50c419d7931c68bcae49c3e594343aa6a45d8201f34845aae1bf55942cbf23d8",

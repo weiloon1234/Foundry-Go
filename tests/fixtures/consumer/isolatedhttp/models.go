@@ -3,9 +3,13 @@ package isolatedhttp
 
 import "github.com/weiloon1234/Foundry-Go/model"
 
+//foundry:model table=scope_records var=RecordRows key=ID identity=false
 type Record struct {
-	ID   model.ID[Record]
+	// Table owns the primary key. Example: orm.Eq(RecordRows.Key(), id).
+	ID model.ID[Record]
+	// Name binds the Name field. Example: orm.Set(RecordRows.Name, "fixture").
 	Name string
+	// Text binds the Text field. Example: orm.Set(RecordRows.Text, "text").
 	Text string
 }
 

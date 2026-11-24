@@ -1,6 +1,7 @@
 {
   "version": 1,
   "files": {
+    "article_foundry.gen.go": "676d261695032de55aebbd670382ff0db4cfd09fcddf398af117264fd047b192",
     "article_input_foundry.gen.go": "c93d72472c6707b7a1841bdf5e2e1395f6cbc6b1aff4e0bb0bd307cef644c4e6",
     "article_list_foundry.gen.go": "a48570852fbb86a9763290bc8dd79e57a00c92ee9a48be2b4618eea74f68e35d",
     "article_media_foundry.gen.go": "50fbcfddd6728d4dbd8bd6964a0e83965e5422f6cfc2c1f0c332120e90437586",

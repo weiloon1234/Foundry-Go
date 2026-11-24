@@ -1,6 +1,6 @@
 # Managed model timestamps
 
-Declare creation and update fields with `orm.CreatedAtOf` and `orm.UpdatedAtOf`. Their carriers retain ordinary stored-time predicates, ordering and expression support. Both fields must be non-null, non-primary `time.Time` or `temporal.DateTime` values. The [typed declaration example](model-declarations.md) shows the complete table.
+Tag creation and update fields with `foundry:"role=created-at"` and `foundry:"role=updated-at"`. Their carriers retain ordinary stored-time predicates, ordering and expression support. Both fields must be non-null, non-primary `time.Time` or `temporal.DateTime` values. The [typed declaration example](model-declarations.md) shows the complete table.
 
 <!-- orm-example: writes-after -->
 ```go
@@ -12,9 +12,25 @@ func write(ctx context.Context, tx *database.Tx, id int64) error {
 
 The [member table](../../tests/fixtures/goway/models/hooks/models.go) used here has both roles. Insert supplies creation time when omitted and always supplies update time. Update always assigns update time; it preserves creation time unless explicitly assigned. An otherwise empty update can therefore become a timestamp-only write. Caller assignments remain unchanged.
 
-Both roles must form a valid pair. A conventional lone field remains ordinary unless an explicit role requires the pair. Binding a managed field through `TimeOf` fails declaration validation with the required carrier. For application-managed fields, use ordinary declarations and `orm.NoTimestamps()`. The opt-out conflicts with explicit managed roles. Role constructors do not accept a Go mutator; put business transformations in hooks or ordinary input fields.
+Both roles must form a valid pair. An active conventional pair requires both managed roles, or `timestamps=none` on the directive with timestamp role tags removed. The opt-out conflicts with explicit managed roles. Managed fields reject mutators and database defaults; put business transformations in hooks or ordinary input fields.
 
-For a lone `CreatedAt` or `UpdatedAt`, use `orm.NoTimestamps()`, `orm.TimeOf` and explicit `Set` calls.
+For a lone ordinary `CreatedAt` or `UpdatedAt`, use `role=time` and explicit `Set` calls. If `timestamps=none` is already declared, omit the redundant role tag. `role=time` cannot opt an active conventional pair out of timestamp management. See [declaration diagnostics](model-declarations.md#diagnose-a-wrong-declaration).
+
+The lone ordinary timestamp below can use a database default. It has no managed
+update partner and does not disable timestamp conventions for other models.
+
+<!-- compiled-source: tests/fixtures/goway/modelguide/event.go -->
+```go
+package modelguide
+
+import "time"
+
+//foundry:model table=guide_events var=Events key=ID
+type Event struct {
+	ID        int64
+	CreatedAt time.Time `foundry:"role=time,default=database"`
+}
+```
 
 ## Clock and precision
 

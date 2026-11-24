@@ -4,20 +4,39 @@
 
 ## Models and values
 
-Declare an ordinary Go field such as `Period temporal.Interval`, or `MaybePeriod value.Nullable[temporal.Interval]`. Use `orm.IntervalOf` / `orm.NullableIntervalOf`, backed by `codec.Interval()`, as in the [declarations](../../tests/fixtures/consumer/intervalqueries/orm.go). A supplied zero interval differs from an omitted assignment and SQL NULL.
+Declare an ordinary Go field such as `Period temporal.Interval`, or `MaybePeriod value.Nullable[temporal.Interval]`. The model directive infers interval handles backed by `codec.Interval()`; no role tag is needed. A supplied zero interval differs from an omitted assignment and SQL NULL.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/intervalqueries/orm.go):
+This complete scalar fixture includes ordinary and nullable intervals:
 
-<!-- compiled-source: tests/fixtures/consumer/intervalqueries/orm.go#interval-queries -->
+<!-- compiled-source: tests/fixtures/goway/models/scalars/scalars.go -->
 ```go
-var Samples = orm.Define("interval_samples", func(b orm.Builder[Sample], s *Sample) SampleColumns {
-	table := orm.TableOf(b, &s.ID)
-	return SampleColumns{
-		Table: table, ID: table.Key(), Period: orm.IntervalOf(b, &s.Period), MaybePeriod: orm.NullableIntervalOf(b, &s.MaybePeriod),
-		Start: orm.TimeOf(b, &s.Start), End: orm.TimeOf(b, &s.End), LocalStart: orm.TimeOf(b, &s.LocalStart), LocalEnd: orm.TimeOf(b, &s.LocalEnd),
-		ClockStart: orm.TimeOf(b, &s.ClockStart), ClockEnd: orm.TimeOf(b, &s.ClockEnd), Date: orm.TimeOf(b, &s.Date),
-	}
-})
+package scalars
+
+import (
+	"github.com/weiloon1234/Foundry-Go/temporal"
+	"github.com/weiloon1234/Foundry-Go/value"
+)
+
+//foundry:model table=scalar_records var=Records key=ID identity=false
+type Record struct {
+	ID            int64
+	Name          string
+	MaybeName     value.Nullable[string]
+	Date          temporal.Date
+	MaybeDate     value.Nullable[temporal.Date]
+	Local         temporal.LocalDateTime
+	MaybeLocal    value.Nullable[temporal.LocalDateTime]
+	Instant       temporal.DateTime
+	MaybeInstant  value.Nullable[temporal.DateTime]
+	Clock         temporal.Time
+	MaybeClock    value.Nullable[temporal.Time]
+	Period        temporal.Interval
+	MaybePeriod   value.Nullable[temporal.Interval]
+	Millis        int64
+	MaybeMillis   value.Nullable[int64]
+	Latitude      float64
+	MaybeLatitude value.Nullable[float64]
+}
 ```
 
 The example binds persisted fields to their typed columns. Returned models and results remain Go structs and slices.

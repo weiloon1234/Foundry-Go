@@ -3,23 +3,14 @@ package hooks
 import (
 	"time"
 
-	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // KeyedMember retains model-owned keys on restore and force deletion.
+//
+//foundry:model table=hook_keyed_members var=KeyedMembers key=ID identity=false
 type KeyedMember struct {
 	ID        model.ID[KeyedMember]
-	DeletedAt value.Nullable[time.Time]
+	DeletedAt value.Nullable[time.Time] `foundry:"role=soft-delete"`
 }
-type KeyedMemberTable struct {
-	orm.Table[KeyedMember, model.ID[KeyedMember]]
-	DeletedAt orm.SoftDelete[KeyedMember, time.Time]
-	Soft      orm.SoftDeletable[KeyedMember]
-}
-
-var KeyedMembers = orm.Define("hook_keyed_members", func(b orm.Builder[KeyedMember], m *KeyedMember) KeyedMemberTable {
-	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
-	return KeyedMemberTable{orm.TableOf(b, &m.ID), deleted, orm.SoftDeletes(deleted)}
-})

@@ -12,25 +12,28 @@ import (
 
 type Slug string
 
+//foundry:model table=teams var=TeamRecords key=ID identity=false
 type Team struct {
 	ID       model.ID[Team]
 	Name     string
 	Projects relation.Many[Project]
 }
 
+//foundry:model table=projects var=ProjectRecords key=ID identity=false retrieval=projectRetrievalHooks
 type Project struct {
 	ID        model.ID[Project]
-	TeamID    model.ID[Team]
+	TeamID    model.ID[Team] `foundry:"role=column"`
 	Slug      Slug
-	Enabled   bool
-	DeletedAt value.Nullable[time.Time]
+	Enabled   bool                      `foundry:"role=column"`
+	DeletedAt value.Nullable[time.Time] `foundry:"role=soft-delete"`
 	Team      relation.One[Team]
 	Tasks     relation.Many[Task]
 }
 
+//foundry:model table=tasks var=TaskRecords key=ID identity=false
 type Task struct {
 	ID        model.ID[Task]
-	ProjectID model.ID[Project]
+	ProjectID model.ID[Project] `foundry:"role=column"`
 	Slug      Slug
 }
 

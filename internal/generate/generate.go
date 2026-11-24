@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Options targets an existing consumer Go package or a recursive package tree. Check validates output
@@ -56,7 +57,12 @@ const maxReportedStale = 50
 
 // Generate analyzes declarations, renders deterministic output and type-checks
 // the complete package overlay before publishing any generated source.
-func Generate(ctx context.Context, options Options) (Report, error) {
+func Generate(ctx context.Context, options Options) (result Report, resultErr error) {
+	// Diagnostics here are produced by our source parser, compiler and publisher;
+	// no application callbacks execute during generation.
+	defer func() {
+		resultErr = ownSourceDiagnostic(resultErr)
+	}()
 	var report Report
 	if err := ctx.Err(); err != nil {
 		return report, err
@@ -262,4 +268,13 @@ func prepareRecovery(ctx context.Context, options Options) (*generationTree, err
 		return walkGenerationTree(ctx, dir, options.Recursive)
 	}
 	return tree, nil
+}
+
+// ownSourceDiagnostic marks parser, compiler and publication errors at their
+// source-tooling boundary. These operations do not invoke application callbacks.
+func ownSourceDiagnostic(err error) error {
+	if err == nil {
+		return nil
+	}
+	return safeerror.Owned(err.Error(), err)
 }

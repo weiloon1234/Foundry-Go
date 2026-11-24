@@ -37,13 +37,13 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		documentation                          []string
 	}
 	probes := []fieldDocProbe{
-		{"sensitive-password-field", "passwords/account_postgres_test.go", "return account.", "Digest", "/passwords/account.go", []string{"Sensitive stored password hash", "password.Codec", "redacted", "Compare-and-swap"}},
+		{"sensitive-password-field", "passwords/account_postgres_test.go", "return account.", "Digest", "/passwords/tables.go", []string{"Sensitive stored password hash", "password.Codec", "redacted", "Compare-and-swap"}},
 		{"raw-field-both", "mutatorqueries/accessors_test.go", "storedEmail := member.", "Email", "/mutatorqueries/member.go", []string{"Email is the delivery address stored in email_address", "Call AccessEmail explicitly", "MutateEmail runs during persistence through orm.Set(Members.Email", "assigning this field does not invoke it"}},
 		{"raw-field-getter", "mutatorqueries/accessors_test.go", "if member.", "ID", "/mutatorqueries/member.go", []string{"ID is the database identity", "Stored reads keep the key", "call AccessID explicitly for presentation"}},
 		{"raw-field-setter", "mutatorqueries/accessors_test.go", "|| member.", "Attempts", "/mutatorqueries/member.go", []string{"Attempts stores the persisted count", "MutateAttempts runs during persistence through orm.Set(Members.Attempts", "Direct assignment"}},
-		{"query-field", "mutatorqueries/mutators_postgres_test.go", "q.Query().Where(orm.Eq(f.", "Email", "/mutatorqueries/orm.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail", "delivery address."}},
+		{"query-field", "mutatorqueries/mutators_postgres_test.go", "q.Query().Where(orm.Eq(f.", "Email", "/mutatorqueries/member_foundry.gen.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail", "delivery address.", "Member.Email"}},
 		{"extension-slot-field", "articles/cleanup_postgres_test.go", "if article.", "Title", "/articles/article.go", []string{"Extension slot, not a column", "foundry_model_translations", "ArticleSlots.Title", "From(runtime)", "localized article heading shown to readers"}},
-		{"draft-setter", "mutatorqueries/mutators_postgres_test.go", "mutatorqueries.Members.", "Email", "/mutatorqueries/orm.go", []string{"MutateEmail", "not during assignment construction", "delivery address."}},
+		{"draft-setter", "mutatorqueries/mutators_postgres_test.go", "mutatorqueries.Members.", "Email", "/mutatorqueries/member_foundry.gen.go", []string{"MutateEmail", "not during assignment construction", "delivery address.", "Member.Email"}},
 		{"config-group", "startupconfig/settings_test.go", "Overrides: []config.Override[startupconfig.Settings]{keys.", "HTTP", "/startupconfig/settings_foundry.gen.go", []string{"public listener", "request timeout"}},
 		{"config-trailing-field", "startupconfig/settings_test.go", "keys.HTTP.", "Port", "/startupconfig/settings_foundry.gen.go", []string{"public listener port", "http.port", "Port"}},
 		{"imported-config-field", "bootstrap/bootstrap_test.go", "keys.App.Features.Outbox.", "Events", "/bootstrap/settings_foundry.gen.go", []string{"EventOutbox", "durable job connections", "Empty connection selects the default", "jobs.DefaultPolicy"}},
@@ -51,7 +51,7 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		{"projection-selection", "projectionqueries/projections_postgres_test.go", "rows.Map(reports.UserSummaries.", "Email", "/reports/rows.go", []string{"buyer contact address selected for this report"}},
 		{"orm-row-selection", "reporting/members.go", "datatable.Column(wire.", "Name", "/reporting/member_row_foundry.gen.go", []string{"Display name selected for the member report"}},
 		{"extension-descriptor", "articles/loading_postgres_test.go", "s.x.", "Title", "/articles/tables.go", []string{"localized article heading shown to readers", "keeps its locale input and owner", "ArticleSlots.Title.Rule"}},
-		{"changes-field", "mutatorqueries/changes_postgres_test.go", "orm.ChangeOf(changes, q.", "Email", "/mutatorqueries/orm.go", []string{"delivery address.", "stored values", "MutateEmail"}},
+		{"changes-field", "mutatorqueries/changes_postgres_test.go", "orm.ChangeOf(changes, q.", "Email", "/mutatorqueries/member_foundry.gen.go", []string{"delivery address.", "stored values", "MutateEmail", "Member.Email"}},
 		{"json-property", "jsonqueries/path_postgres_test.go", "expr.JSONProperty(prefs, jsonqueries.", "Theme", "/jsonqueries/tables.go", []string{"reader appearance", "omitted uses the application default"}},
 	}
 

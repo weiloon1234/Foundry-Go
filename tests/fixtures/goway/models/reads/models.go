@@ -10,62 +10,30 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+//foundry:model table=read_members var=Members key=ID retrieval=LocalReads scopes=memberScopes identity=false
 type Member struct {
-	ID        int64
+	ID        int64 `foundry:"member=ID,key-role=lookup"`
 	TenantID  int64
 	Name      string
 	ManagerID value.Nullable[int64]
 	Manager   relation.One[Member]
 	Groups    relation.Through[Group, Membership]
 }
+
+//foundry:model table=read_groups var=Groups key=ID scopes=groupScopes identity=false
 type Group struct {
-	ID       int64
+	ID       int64 `foundry:"member=ID,key-role=lookup"`
 	TenantID int64
 	Name     string
 }
+
+//foundry:model table=read_memberships var=Memberships key=ID scopes=membershipScopes identity=false
 type Membership struct {
-	ID       int64
+	ID       int64 `foundry:"member=ID,key-role=lookup"`
 	TenantID int64
 	MemberID int64
 	GroupID  int64
 }
-type MemberTable struct {
-	orm.Table[Member, int64]
-	ID        orm.Key[Member, int64]
-	TenantID  orm.Number[Member, int64]
-	Name      orm.Text[Member, string]
-	ManagerID orm.NullableNumber[Member, int64]
-	Manager   orm.One[Member, Member]
-	Groups    orm.Through[Member, Group, Membership]
-}
-type GroupTable struct {
-	orm.Table[Group, int64]
-	ID       orm.Key[Group, int64]
-	TenantID orm.Number[Group, int64]
-	Name     orm.Text[Group, string]
-}
-type MembershipTable struct {
-	orm.Table[Membership, int64]
-	ID       orm.Key[Membership, int64]
-	TenantID orm.Number[Membership, int64]
-	MemberID orm.Number[Membership, int64]
-	GroupID  orm.Number[Membership, int64]
-}
-
-var Members = orm.Define("read_members", func(b orm.Builder[Member], m *Member) MemberTable {
-	table := orm.TableOf(b, &m.ID)
-	return MemberTable{table, table.Key(), orm.NumberOf(b, &m.TenantID), orm.TextOf(b, &m.Name), orm.NullableNumberOf(b, &m.ManagerID), orm.OneOf(b, &m.Manager), orm.ThroughOf(b, &m.Groups)}
-}, orm.WithRetrievalHooks(LocalReads), orm.WithGlobalScopes(func(t MemberTable) []orm.GlobalScope[Member] { return []orm.GlobalScope[Member]{MemberTenant(t)} }))
-var Groups = orm.Define("read_groups", func(b orm.Builder[Group], m *Group) GroupTable {
-	table := orm.TableOf(b, &m.ID)
-	return GroupTable{table, table.Key(), orm.NumberOf(b, &m.TenantID), orm.TextOf(b, &m.Name)}
-}, orm.WithGlobalScopes(func(t GroupTable) []orm.GlobalScope[Group] { return []orm.GlobalScope[Group]{GroupTenant(t)} }))
-var Memberships = orm.Define("read_memberships", func(b orm.Builder[Membership], m *Membership) MembershipTable {
-	table := orm.TableOf(b, &m.ID)
-	return MembershipTable{table, table.Key(), orm.NumberOf(b, &m.TenantID), orm.NumberOf(b, &m.MemberID), orm.NumberOf(b, &m.GroupID)}
-}, orm.WithGlobalScopes(func(t MembershipTable) []orm.GlobalScope[Membership] {
-	return []orm.GlobalScope[Membership]{MembershipTenant(t)}
-}))
 
 func MemberTenant(t MemberTable) orm.GlobalScope[Member] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[Member], error) {
@@ -95,3 +63,15 @@ func ReadHooks(label string) orm.RetrievalHooks[Member] {
 
 var Manager = orm.BelongsToOf(Members.Manager, Members.ManagerID, Members.ID)
 var MemberGroups = orm.ManyToManyOf(Members.Groups, orm.JoinKeys(Members.ID, Memberships.MemberID), orm.JoinKeys(Memberships.GroupID, Groups.ID))
+
+func membershipScopes(t MembershipTable) []orm.GlobalScope[Membership] {
+	return []orm.GlobalScope[Membership]{MembershipTenant(t)}
+}
+
+func memberScopes(t MemberTable) []orm.GlobalScope[Member] {
+	return []orm.GlobalScope[Member]{MemberTenant(t)}
+}
+
+func groupScopes(t GroupTable) []orm.GlobalScope[Group] {
+	return []orm.GlobalScope[Group]{GroupTenant(t)}
+}

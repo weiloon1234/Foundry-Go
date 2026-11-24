@@ -7,48 +7,15 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/model"
+
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// RecordTable declares the mutating field and per-write local hooks. Example: orm.Set(Records.Name, "new").
-type RecordTable struct {
-	orm.Table[Record, model.ID[Record]]
-	Name orm.InputText[Record, string, string]
-}
+var recordFields RecordTable
 
-// Records dispatches local hooks before registered ORM observers. Example: orm.Insert(ctx, db, Records.Table,orm.Set(Records.Name, "new")).
-var Records = declareRecords()
+func init() { recordFields = Records }
 
-func declareRecords() RecordTable {
-	var fields RecordTable
-	fields = orm.Define("observed_records", func(b orm.Builder[Record], m *Record) RecordTable {
-		return RecordTable{orm.TableOf(b, &m.ID), orm.InputTextOf[Record, string](b, &m.Name, nil)}
-	}, orm.WithHooks(func() orm.Hooks[Record] { return observerHooksFor("local", fields) }))
-	return fields
-}
-
-// PlainTable has no local hook factory. Example: orm.Eq(Plains.Name, "stored").
-type PlainTable struct {
-	orm.Table[Plain, model.ID[Plain]]
-	Name orm.Text[Plain, string]
-}
-
-// Plains still dispatches application-owned observers. Example: orm.Insert(ctx, db, Plains.Table).
-var Plains = orm.Define("observed_plain", func(b orm.Builder[Plain], m *Plain) PlainTable {
-	return PlainTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)}
-})
-
-// EffectTable declares transactional observer side effects. Example: orm.Set(Effects.Label, "saved").
-type EffectTable struct {
-	orm.Table[Effect, model.ID[Effect]]
-	Label orm.Text[Effect, string]
-}
-
-// Effects uses the caller's transaction. Example: orm.Insert(ctx, tx, Effects.Table,orm.Set(Effects.Label, "saved")).
-var Effects = orm.Define("observed_effects", func(b orm.Builder[Effect], m *Effect) EffectTable {
-	return EffectTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Label)}
-})
+func recordHooks() orm.Hooks[Record] { return observerHooksFor("local", recordFields) }
 
 // ORMObserverHooks preserves operation-local draft and change capture.
 // Register only this adapter family when using Records; example: orm.NewObserver[Record]("first").Declare(func() orm.Hooks[Record] { return ORMObserverHooks("first") }).

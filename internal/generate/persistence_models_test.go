@@ -222,7 +222,7 @@ func Register[M any]() { var _ store.Table[M, int] }
 }
 
 func TestRetiredPersistenceDirectivesAreActionable(t *testing.T) {
-	for _, kind := range []string{"model", "projection"} {
+	for _, kind := range []string{"projection"} {
 		t.Run(kind, func(t *testing.T) {
 			dir := fixture(t, "package sample\n//foundry:"+kind+"\ntype Item struct {ID int}\n")
 			_, err := generateFixture(t.Context(), Options{Dir: dir})

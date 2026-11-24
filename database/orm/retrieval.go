@@ -22,7 +22,12 @@ type RetrievalHooks[M any] struct {
 // WithRetrievalHooks installs a factory run once per nonempty complete batch.
 // Example: WithRetrievalHooks(func() RetrievalHooks[Order] { return orderReadHooks() }).
 func WithRetrievalHooks[M any](factory func() RetrievalHooks[M]) Option {
-	opt := Option{retrievalModel: reflect.TypeFor[M]()}
+	opt := Option{
+		// BEGIN foundry models convert
+		conversionOptionMetadata: conversionOptionMetadata{snapshotRetrieval: snapshotFunction(reflect.ValueOf(factory))},
+		// END foundry models convert
+		retrievalModel: reflect.TypeFor[M](),
+	}
 	if factory != nil {
 		opt.retrieval = func() retrievalSet { return eraseRetrieval(factory()) }
 	}

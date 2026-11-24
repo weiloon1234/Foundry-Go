@@ -4,28 +4,32 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/password"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// AccountTable publishes typed stored fields for the handwritten declaration.
-// Example: AccountRecords.Query().
 // doc-example:begin password-hashing-account-table
-type AccountTable struct {
+// Account is a model fixture, not a starter application. Digest deliberately
+// avoids a conventional sensitive field name to verify type-owned redaction.
+//
+//foundry:model table=password_accounts var=AccountRecords key=ID identity=false
+type Account struct {
 	// Table owns the concrete account key. Example: orm.Eq(AccountRecords.Key(), id).
-	orm.Table[Account, model.ID[Account]]
+	ID model.ID[Account]
 	// Email binds the stored field. Example: orm.Set(AccountRecords.Email, "member@example.test").
-	Email orm.Text[Account, string]
+	Email string
+	// Sensitive stored password hash: typed persistence uses password.Codec; ordinary formatting and JSON are redacted. Automatic audit values are redacted and cursor/identity keys are rejected. Compare-and-swap with the stored Hash; verify plaintext with password.Hasher.Check rather than SQL equality.
+	//
 	// Digest binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.Set(AccountRecords.Digest, hash).
-	Digest orm.Column[Account, password.Hash]
+	Digest password.Hash
+	// Sensitive stored password hash: typed persistence uses password.Codec; ordinary formatting and JSON are redacted. Automatic audit values are redacted and cursor/identity keys are rejected. Compare-and-swap with the stored Hash; verify plaintext with password.Hasher.Check rather than SQL equality.
+	//
 	// Backup binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.Set(AccountRecords.Backup, hash).
-	Backup orm.NullableColumn[Account, password.Hash]
+	Backup value.Nullable[password.Hash]
 	// Enabled binds the stored field. Example: orm.Set(AccountRecords.Enabled, true).
-	Enabled orm.Column[Account, bool]
+	Enabled bool `foundry:"role=column"`
 }
 
-// AccountRecords preserves the persisted account schema. Example: AccountRecords.Query().
-var AccountRecords = orm.Define("password_accounts", func(b orm.Builder[Account], m *Account) AccountTable {
-	return AccountTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Email), orm.PasswordOf(b, &m.Digest), orm.NullablePasswordOf(b, &m.Backup), orm.ColumnOf(b, &m.Enabled)}
-}) // doc-example:end password-hashing-account-table
+// doc-example:end password-hashing-account-table
 
 // AccountIdentity preserves reference wire identity and key ownership. Example: AccountIdentity.ReferenceOf(account).
 var AccountIdentity = orm.IdentityOf(AccountRecords.Table, AccountRecords.Key())

@@ -11,8 +11,8 @@ Rust references: `src/database/model.rs`, `query.rs`, `src/events/mod.rs`, `src/
 ## Typed public contracts
 
 Native writes use typed `orm.Assignment[M]` values and `orm.Write[M]` drafts.
-Attach a factory returning `orm.Hooks[M]` with `orm.WithHooks` on the handwritten
-table declaration. Hooks receive the concrete draft or stored model and the
+Attach a package-local factory returning `orm.Hooks[M]` with `hooks=name` on the
+model directive. Hooks receive the concrete draft or stored model and the
 transaction; post-write hooks receive `orm.Changes[M]`. Provider observers use
 `orm.NewObserver` and `orm.RegisterObserver` for the same typed database pool.
 

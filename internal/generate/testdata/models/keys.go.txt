@@ -1,0 +1,49 @@
+package sample
+
+import "github.com/weiloon1234/Foundry-Go/database/codec"
+
+//foundry:model table=lookup var=Lookup key=ID identity=false
+type LookupRecord struct {
+	ID int64 `foundry:"member=ID,key-role=lookup,codec=idCodec"`
+}
+
+func idCodec() codec.Codec[int64] { return codec.Signed[int64]() }
+
+//foundry:model table=primary_records var=PrimaryRecords key=ID identity=false
+type PrimaryRecord struct {
+	ID int64 `foundry:"member=ID,key-role=primary"`
+}
+
+//foundry:model table=number_records var=NumberRecords key=ID identity=false
+type NumberRecord struct {
+	ID int64 `foundry:"member=ID"`
+}
+
+//foundry:model table=text_records var=TextRecords key=ID identity=false
+type TextRecord struct {
+	ID string `foundry:"member=ID"`
+}
+
+//foundry:model table=number_primary var=NumberPrimary key=ID identity=false
+type NumberPrimaryRecord struct {
+	ID int64 `foundry:"member=ID,key-role=primary-number"`
+}
+
+//foundry:model table=text_primary var=TextPrimary key=ID identity=false
+type TextPrimaryRecord struct {
+	ID string `foundry:"member=ID,key-role=primary-text"`
+}
+
+//foundry:model table=input_records var=InputRecords key=ID identity=false
+type InputRecord struct {
+	ID int64 `foundry:"member=ID,key-role=input,input=int"`
+}
+
+func (InputRecord) MutateID(v int) (int64, error) { return int64(v), nil }
+
+//foundry:model table=api_keys var=APIKeys key=ID
+type APIKey struct {
+ ID int64
+ Key string `foundry:"member=KeyName"`
+ Query string `foundry:"member=QueryValue"`
+}

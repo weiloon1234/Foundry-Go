@@ -1,4 +1,4 @@
-// Package integrations exercises framework adapters with handwritten ORM models.
+// Package integrations exercises framework adapters with generated ORM model tables.
 package integrations
 
 import (

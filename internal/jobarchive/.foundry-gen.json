@@ -1,4 +1,6 @@
 {
   "version": 1,
-  "files": {}
+  "files": {
+    "failure_foundry.gen.go": "276b9ed4b78ace63d28aaa6fc82c3b24a1ae19dd26fad5a6fa40c862761e38ff"
+  }
 }

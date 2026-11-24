@@ -2,20 +2,26 @@
 
 The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) records completed runtime, PostgreSQL, compiler-rejection, real-gopls and full-repository acceptance.
 
-Declare an identity from the handwritten table and its own primary-key handle:
+The model directive generates identity methods from the table and its primary key:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#model-references-user-identity -->
+Use `user.FoundryReference()` and `user.FoundryIdentity()`. In the model package,
+reuse the generated `usersIdentity` for `Reference` and `Parse` operations. See
+[generated names and identity](model-declarations.md#recipe-register-tables).
+
+<!-- compiled-source: tests/fixtures/goway/modelguide/references.go -->
 ```go
-var UserIdentity = orm.IdentityOf(models.Users.Table, models.Users.Key())
+package modelguide
 
-func restoreUser(user models.User) (model.Reference[models.User, model.ID[models.User]], error) {
-	reference := UserIdentity.ReferenceOf(user)
-	identity, err := reference.Identity()
+import "github.com/weiloon1234/Foundry-Go/model"
+
+func RestoreArticle(article Article) (model.Reference[Article, model.ID[Article]], error) {
+	identity, err := article.FoundryIdentity()
 	if err != nil {
-		return model.Reference[models.User, model.ID[models.User]]{}, err
+		return model.Reference[Article, model.ID[Article]]{}, err
 	}
-	return UserIdentity.Parse(identity)
+	return articlesIdentity.Parse(identity)
 }
+
 ```
 
 For a model-owned UUID, `reference.Key()` retains `model.ID[models.User]`. For a natural key it

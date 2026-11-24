@@ -9,21 +9,11 @@ func retrieval() orm.RetrievalHooks[reads.Member] {
 }
 ```
 
-Attach `orm.WithRetrievalHooks` through `orm.Define` options. Register provider observers for the same typed pool key:
+Attach the package-local retrieval factory through the model directive:
 
-<!-- orm-example: read-options -->
-```go
-func readOptions() []orm.Option {
-	return []orm.Option{orm.WithRetrievalHooks(retrieval)}
-}
-
-func registerReadObserver(r *foundation.Registrar, pool foundation.Key[*database.DB]) error {
-	return orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[reads.Member]("members.read"),
-		func(foundation.Resolver) (func() orm.RetrievalHooks[reads.Member], error) {
-			return retrieval, nil
-		})
-}
-```
+Add `retrieval=memberRetrieval` to the model directive and define that
+package-local function as `func() orm.RetrievalHooks[Member]`. Register provider
+observers with `orm.RegisterRetrievalObserver` for the same typed pool key.
 
 The [read fixture](../../tests/fixtures/goway/models/reads/models.go) contains the complete declaration. Provider constructors resolve services once during application construction. Each nonempty complete fetch or closed batch constructs local factories first, then observer factories in registration order. Empty results and hydration/closure failures construct none. Dispatch follows row order, with local callbacks before observers.
 

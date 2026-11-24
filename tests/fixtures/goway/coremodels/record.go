@@ -5,7 +5,7 @@ import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/auth/challenge"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/orm"
+
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/outbox"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -19,8 +19,9 @@ type Preferences struct {
 }
 type Payload []byte
 
+//foundry:model table=core_records var=Records key=Code identity=false
 type Record struct {
-	Code          Code
+	Code          Code `foundry:"codec=codeCodec,member=Code,key-role=lookup"`
 	Settings      value.JSON[Preferences]
 	MaybeSettings value.Nullable[value.JSON[Preferences]]
 	Period        temporal.Interval
@@ -33,37 +34,11 @@ type Record struct {
 	Status        models.Status
 }
 
-type Fields struct {
-	orm.Table[Record, Code]
-	Code          orm.Key[Record, Code]
-	Settings      orm.JSON[Record, Preferences]
-	MaybeSettings orm.NullableJSON[Record, Preferences]
-	Period        orm.Interval[Record]
-	MaybePeriod   orm.NullableInterval[Record]
-	Body          orm.Column[Record, Payload]
-	MaybeBody     orm.NullableColumn[Record, Payload]
-	ForeignID     orm.Column[Record, model.ID[models.User]]
-	Revision      orm.Column[Record, challenge.Revision[Record]]
-	MessageID     orm.Column[Record, outbox.ID[Event]]
-	Status        orm.Enum[Record, models.Status]
-}
-
-var Records = orm.Define("core_records", func(b orm.Builder[Record], m *Record) Fields {
-	table := orm.TableOf(b, &m.Code, orm.Codec(codec.String[Code]()))
-	return Fields{Table: table, Code: table.Key(), Settings: orm.JSONOf(b, &m.Settings), MaybeSettings: orm.NullableJSONOf(b, &m.MaybeSettings), Period: orm.IntervalOf(b, &m.Period), MaybePeriod: orm.NullableIntervalOf(b, &m.MaybePeriod), Body: orm.BytesOf(b, &m.Body), MaybeBody: orm.NullableBytesOf(b, &m.MaybeBody), ForeignID: orm.IDOf(b, &m.ForeignID), Revision: orm.IDOf(b, &m.Revision), MessageID: orm.IDOf(b, &m.MessageID), Status: orm.EnumOf(b, &m.Status)}
-})
-
+//foundry:model table=core_durations var=Durations key=Period identity=false
 type Duration struct {
-	Period temporal.Interval
+	Period temporal.Interval `foundry:"codec=intervalCodec,member=Period"`
 	Label  string
 }
-type DurationFields struct {
-	orm.Table[Duration, temporal.Interval]
-	Period orm.Key[Duration, temporal.Interval]
-	Label  orm.Text[Duration, string]
-}
 
-var Durations = orm.Define("core_durations", func(b orm.Builder[Duration], m *Duration) DurationFields {
-	table := orm.TableOf(b, &m.Period, orm.Codec(codec.Interval()))
-	return DurationFields{table, table.Key(), orm.TextOf(b, &m.Label)}
-})
+func codeCodec() codec.Codec[Code]                  { return codec.String[Code]() }
+func intervalCodec() codec.Codec[temporal.Interval] { return codec.Interval() }

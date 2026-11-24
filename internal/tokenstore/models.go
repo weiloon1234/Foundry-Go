@@ -6,36 +6,78 @@ import (
 	"fmt"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
-	"github.com/weiloon1234/Foundry-Go/database/orm"
+
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // Subject is a stable lock identity for create/revoke/refresh serialization.
+//
+//foundry:model table=foundry_token_subjects var=Subjects key=Key identity=false
 type Subject struct {
-	Key      string
-	Scope    string
+	// Table provides Subject queries and writes. Example: Subjects.Query().Limit(10).
+	Key string
+	// Scope binds the persisted Subject.Scope column.
+	// Example: orm.Set(Subjects.Scope, scope).
+	Scope string
+	// Identity binds the persisted Subject.Identity column.
+	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.Set(Subjects.Identity, encoded) }.
 	Identity value.JSON[model.Identity]
 }
 
 // Family owns identity, grant, immutable expiry policy and the current generation.
+//
+//foundry:model table=foundry_token_families var=Families key=ID identity=false
 type Family struct {
-	ID               model.ID[Family]
-	Scope            string
-	SubjectKey       string
-	Name             string
-	Scopes           value.JSON[[]auth.AccessScopeName]
-	Mode             uint8
-	Assurance        uint8
-	AccessNanos      int64
+	// Table provides Family queries and writes. Example: Families.Query().Limit(10).
+	//
+	// ID binds the persisted Family.ID column.
+	// Example: orm.Eq(Families.ID, id).
+	ID model.ID[Family] `foundry:"member=ID"`
+	// Scope binds the persisted Family.Scope column.
+	// Example: orm.Set(Families.Scope, scope).
+	Scope string
+	// SubjectKey binds the persisted Family.SubjectKey column.
+	// Example: orm.Set(Families.SubjectKey, subjectKey).
+	SubjectKey string
+	// Name binds the persisted Family.Name column.
+	// Example: orm.Set(Families.Name, name).
+	Name string
+	// Scopes binds the persisted Family.Scopes column.
+	// Example: encoded, err := value.NewJSON(scopes); if err == nil { _ = orm.Set(Families.Scopes, encoded) }.
+	Scopes value.JSON[[]auth.AccessScopeName]
+	// Mode binds the persisted Family.Mode column.
+	// Example: orm.Set(Families.Mode, mode).
+	Mode uint8
+	// Assurance binds the persisted Family.Assurance column.
+	// Example: orm.Set(Families.Assurance, assurance).
+	Assurance uint8
+	// AccessNanos binds the persisted Family.AccessNanos column.
+	// Example: orm.Set(Families.AccessNanos, accessNanos).
+	AccessNanos int64
+	// RefreshIdleNanos binds the persisted Family.RefreshIdleNanos column.
+	// Example: orm.Set(Families.RefreshIdleNanos, refreshIdleNanos).
 	RefreshIdleNanos int64
-	RotationLimit    uint32
-	Generation       uint32
-	CreatedAt        temporal.DateTime
-	ExpiresAt        temporal.DateTime
+	// RotationLimit binds the persisted Family.RotationLimit column.
+	// Example: orm.Set(Families.RotationLimit, rotationLimit).
+	RotationLimit uint32
+	// Generation binds the persisted Family.Generation column.
+	// Example: orm.Set(Families.Generation, generation).
+	Generation uint32
+	// CreatedAt binds the caller-supplied creation time; the ORM does not automatically populate or refresh it.
+	// Example: orm.Set(Families.CreatedAt, createdAt).
+	CreatedAt temporal.DateTime `foundry:"role=time"`
+	// ExpiresAt binds the persisted Family.ExpiresAt column.
+	// Example: orm.Set(Families.ExpiresAt, expiresAt).
+	ExpiresAt temporal.DateTime
 	// ClientIP and UserAgent are display-only device metadata from issuance.
-	ClientIP  value.Nullable[string]
+	//
+	// ClientIP binds the persisted Family.ClientIP column.
+	// Example: orm.SetNull(Families.ClientIP).
+	ClientIP value.Nullable[string]
+	// UserAgent binds the persisted Family.UserAgent column.
+	// Example: orm.SetNull(Families.UserAgent).
 	UserAgent value.Nullable[string]
 }
 
@@ -43,166 +85,43 @@ type Family struct {
 // access hash authenticates only within the configured refresh grace; its
 // refresh hash, like every older one kept in foundry_token_consumed_refreshes,
 // identifies reuse and revokes the family.
+//
+//foundry:model table=foundry_token_generations var=Entries key=ID identity=false
 type Entry struct {
-	ID               model.ID[Entry]
-	Scope            string
-	FamilyID         model.ID[Family]
-	Generation       uint32
-	AccessHash       string
-	RefreshHash      value.Nullable[string]
-	IssuedAt         temporal.DateTime
-	LastSeenAt       temporal.DateTime
-	AccessExpiresAt  temporal.DateTime
+	// Table provides Entry queries and writes. Example: Entries.Query().Limit(10).
+	//
+	// ID binds the persisted Entry.ID column.
+	// Example: orm.Eq(Entries.ID, id).
+	ID model.ID[Entry] `foundry:"member=ID"`
+	// Scope binds the persisted Entry.Scope column.
+	// Example: orm.Set(Entries.Scope, scope).
+	Scope string
+	// FamilyID binds the persisted Entry.FamilyID column.
+	// Example: orm.Set(Entries.FamilyID, familyID).
+	FamilyID model.ID[Family] `foundry:"role=column"`
+	// Generation binds the persisted Entry.Generation column.
+	// Example: orm.Set(Entries.Generation, generation).
+	Generation uint32
+	// AccessHash binds the persisted Entry.AccessHash column.
+	// Example: orm.Set(Entries.AccessHash, accessHash).
+	AccessHash string
+	// RefreshHash binds the persisted Entry.RefreshHash column.
+	// Example: orm.SetNull(Entries.RefreshHash).
+	RefreshHash value.Nullable[string]
+	// IssuedAt binds the persisted Entry.IssuedAt column.
+	// Example: orm.Set(Entries.IssuedAt, issuedAt).
+	IssuedAt temporal.DateTime
+	// LastSeenAt binds the persisted Entry.LastSeenAt column.
+	// Example: orm.Set(Entries.LastSeenAt, lastSeenAt).
+	LastSeenAt temporal.DateTime
+	// AccessExpiresAt binds the persisted Entry.AccessExpiresAt column.
+	// Example: orm.Set(Entries.AccessExpiresAt, accessExpiresAt).
+	AccessExpiresAt temporal.DateTime
+	// RefreshExpiresAt binds the persisted Entry.RefreshExpiresAt column.
+	// Example: orm.SetNull(Entries.RefreshExpiresAt).
 	RefreshExpiresAt value.Nullable[temporal.DateTime]
 }
 
 func (Subject) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("token subject")) }
 func (Family) Format(s fmt.State, _ rune)  { _, _ = s.Write([]byte("stored token family")) }
 func (Entry) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("stored token generation")) }
-
-// SubjectTable binds the persisted Subject columns. Example: Subjects.Query().Limit(10).
-type SubjectTable struct {
-	// Table provides Subject queries and writes. Example: Subjects.Query().Limit(10).
-	orm.Table[Subject, string]
-	// Scope binds the persisted Subject.Scope column.
-	// Example: orm.Set(Subjects.Scope, scope).
-	Scope orm.Text[Subject, string]
-	// Identity binds the persisted Subject.Identity column.
-	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.Set(Subjects.Identity, encoded) }.
-	Identity orm.JSON[Subject, model.Identity]
-}
-
-// Subjects owns the immutable Subject declaration. Example: orm.First(ctx, tx, Subjects.Query()).
-var Subjects = orm.Define("foundry_token_subjects", func(b orm.Builder[Subject], m *Subject) SubjectTable {
-	table := orm.TableOf(b, &m.Key)
-	return SubjectTable{Table: table,
-		Scope:    orm.TextOf(b, &m.Scope),
-		Identity: orm.JSONOf(b, &m.Identity),
-	}
-})
-
-// FamilyTable binds the persisted Family columns. Example: Families.Query().Limit(10).
-type FamilyTable struct {
-	// Table provides Family queries and writes. Example: Families.Query().Limit(10).
-	orm.Table[Family, model.ID[Family]]
-	// ID binds the persisted Family.ID column.
-	// Example: orm.Eq(Families.ID, id).
-	ID orm.Key[Family, model.ID[Family]]
-	// Scope binds the persisted Family.Scope column.
-	// Example: orm.Set(Families.Scope, scope).
-	Scope orm.Text[Family, string]
-	// SubjectKey binds the persisted Family.SubjectKey column.
-	// Example: orm.Set(Families.SubjectKey, subjectKey).
-	SubjectKey orm.Text[Family, string]
-	// Name binds the persisted Family.Name column.
-	// Example: orm.Set(Families.Name, name).
-	Name orm.Text[Family, string]
-	// Scopes binds the persisted Family.Scopes column.
-	// Example: encoded, err := value.NewJSON(scopes); if err == nil { _ = orm.Set(Families.Scopes, encoded) }.
-	Scopes orm.JSON[Family, []auth.AccessScopeName]
-	// Mode binds the persisted Family.Mode column.
-	// Example: orm.Set(Families.Mode, mode).
-	Mode orm.Number[Family, uint8]
-	// Assurance binds the persisted Family.Assurance column.
-	// Example: orm.Set(Families.Assurance, assurance).
-	Assurance orm.Number[Family, uint8]
-	// AccessNanos binds the persisted Family.AccessNanos column.
-	// Example: orm.Set(Families.AccessNanos, accessNanos).
-	AccessNanos orm.Number[Family, int64]
-	// RefreshIdleNanos binds the persisted Family.RefreshIdleNanos column.
-	// Example: orm.Set(Families.RefreshIdleNanos, refreshIdleNanos).
-	RefreshIdleNanos orm.Number[Family, int64]
-	// RotationLimit binds the persisted Family.RotationLimit column.
-	// Example: orm.Set(Families.RotationLimit, rotationLimit).
-	RotationLimit orm.Number[Family, uint32]
-	// Generation binds the persisted Family.Generation column.
-	// Example: orm.Set(Families.Generation, generation).
-	Generation orm.Number[Family, uint32]
-	// CreatedAt binds the caller-supplied creation time; the ORM does not automatically populate or refresh it.
-	// Example: orm.Set(Families.CreatedAt, createdAt).
-	CreatedAt orm.Time[Family, temporal.DateTime]
-	// ExpiresAt binds the persisted Family.ExpiresAt column.
-	// Example: orm.Set(Families.ExpiresAt, expiresAt).
-	ExpiresAt orm.Time[Family, temporal.DateTime]
-	// ClientIP binds the persisted Family.ClientIP column.
-	// Example: orm.SetNull(Families.ClientIP).
-	ClientIP orm.NullableText[Family, string]
-	// UserAgent binds the persisted Family.UserAgent column.
-	// Example: orm.SetNull(Families.UserAgent).
-	UserAgent orm.NullableText[Family, string]
-}
-
-// Families owns the immutable Family declaration. Example: orm.First(ctx, tx, Families.Query()).
-var Families = orm.Define("foundry_token_families", func(b orm.Builder[Family], m *Family) FamilyTable {
-	table := orm.TableOf(b, &m.ID)
-	return FamilyTable{Table: table,
-		ID:               table.Key(),
-		Scope:            orm.TextOf(b, &m.Scope),
-		SubjectKey:       orm.TextOf(b, &m.SubjectKey),
-		Name:             orm.TextOf(b, &m.Name),
-		Scopes:           orm.JSONOf(b, &m.Scopes),
-		Mode:             orm.NumberOf(b, &m.Mode),
-		Assurance:        orm.NumberOf(b, &m.Assurance),
-		AccessNanos:      orm.NumberOf(b, &m.AccessNanos),
-		RefreshIdleNanos: orm.NumberOf(b, &m.RefreshIdleNanos),
-		RotationLimit:    orm.NumberOf(b, &m.RotationLimit),
-		Generation:       orm.NumberOf(b, &m.Generation),
-		CreatedAt:        orm.TimeOf(b, &m.CreatedAt),
-		ExpiresAt:        orm.TimeOf(b, &m.ExpiresAt),
-		ClientIP:         orm.NullableTextOf(b, &m.ClientIP),
-		UserAgent:        orm.NullableTextOf(b, &m.UserAgent),
-	}
-})
-
-// EntryTable binds the persisted Entry columns. Example: Entries.Query().Limit(10).
-type EntryTable struct {
-	// Table provides Entry queries and writes. Example: Entries.Query().Limit(10).
-	orm.Table[Entry, model.ID[Entry]]
-	// ID binds the persisted Entry.ID column.
-	// Example: orm.Eq(Entries.ID, id).
-	ID orm.Key[Entry, model.ID[Entry]]
-	// Scope binds the persisted Entry.Scope column.
-	// Example: orm.Set(Entries.Scope, scope).
-	Scope orm.Text[Entry, string]
-	// FamilyID binds the persisted Entry.FamilyID column.
-	// Example: orm.Set(Entries.FamilyID, familyID).
-	FamilyID orm.Column[Entry, model.ID[Family]]
-	// Generation binds the persisted Entry.Generation column.
-	// Example: orm.Set(Entries.Generation, generation).
-	Generation orm.Number[Entry, uint32]
-	// AccessHash binds the persisted Entry.AccessHash column.
-	// Example: orm.Set(Entries.AccessHash, accessHash).
-	AccessHash orm.Text[Entry, string]
-	// RefreshHash binds the persisted Entry.RefreshHash column.
-	// Example: orm.SetNull(Entries.RefreshHash).
-	RefreshHash orm.NullableText[Entry, string]
-	// IssuedAt binds the persisted Entry.IssuedAt column.
-	// Example: orm.Set(Entries.IssuedAt, issuedAt).
-	IssuedAt orm.Time[Entry, temporal.DateTime]
-	// LastSeenAt binds the persisted Entry.LastSeenAt column.
-	// Example: orm.Set(Entries.LastSeenAt, lastSeenAt).
-	LastSeenAt orm.Time[Entry, temporal.DateTime]
-	// AccessExpiresAt binds the persisted Entry.AccessExpiresAt column.
-	// Example: orm.Set(Entries.AccessExpiresAt, accessExpiresAt).
-	AccessExpiresAt orm.Time[Entry, temporal.DateTime]
-	// RefreshExpiresAt binds the persisted Entry.RefreshExpiresAt column.
-	// Example: orm.SetNull(Entries.RefreshExpiresAt).
-	RefreshExpiresAt orm.NullableTime[Entry, temporal.DateTime]
-}
-
-// Entries owns the immutable Entry declaration. Example: orm.First(ctx, tx, Entries.Query()).
-var Entries = orm.Define("foundry_token_generations", func(b orm.Builder[Entry], m *Entry) EntryTable {
-	table := orm.TableOf(b, &m.ID)
-	return EntryTable{Table: table,
-		ID:               table.Key(),
-		Scope:            orm.TextOf(b, &m.Scope),
-		FamilyID:         orm.ColumnOf(b, &m.FamilyID),
-		Generation:       orm.NumberOf(b, &m.Generation),
-		AccessHash:       orm.TextOf(b, &m.AccessHash),
-		RefreshHash:      orm.NullableTextOf(b, &m.RefreshHash),
-		IssuedAt:         orm.TimeOf(b, &m.IssuedAt),
-		LastSeenAt:       orm.TimeOf(b, &m.LastSeenAt),
-		AccessExpiresAt:  orm.TimeOf(b, &m.AccessExpiresAt),
-		RefreshExpiresAt: orm.NullableTimeOf(b, &m.RefreshExpiresAt),
-	}
-})

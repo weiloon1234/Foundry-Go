@@ -15,9 +15,9 @@
 
 Further reading: [Transaction composition](transaction-query-composition.md).
 
-Declare a model's table and columns once with `orm.Define`; `Table.Query()` returns
+Declare a model once with `//foundry:model` and generate its table; `Table.Query()` returns
 an immutable `orm.Query[M]`. Models and returned collections remain ordinary Go
-structs and slices. The [handwritten declarations](../../tests/fixtures/consumer/models/orm.go)
+structs and slices. The [model declarations](../../tests/fixtures/consumer/models/models.go)
 and [migration examples](../../tests/fixtures/goway/migration/examples_test.go)
 show reads using public APIs.
 
@@ -153,4 +153,4 @@ Declaration metadata is checked once and reused; no per-model generated query
 engine is required. See the [diagnostic contract](../../database/orm/README.md#diagnostic-redaction)
 and [ORM performance](orm-performance.md). [Writes](model-writes.md),
 [relations](model-relations.md) and [pagination](model-pagination.md) share these
-handwritten declarations.
+generated table declarations.

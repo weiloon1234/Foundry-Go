@@ -17,16 +17,19 @@ import (
 // and retention deletes it; nothing updates a row. Text columns BodyMode,
 // BodyState, BodyOmission, ResponseState and the Omissions elements hold the
 // closed webhook/capture enum values that the migration's CHECKs enforce.
+//
+//foundry:model table=foundry_webhook_captures var=Captures key=ID timestamps=none identity=false
 type Capture struct {
 	// ID is the kernel's UUIDv7 request ID for the captured request.
-	ID                  model.ID[Capture]
-	ReceivedAt          temporal.DateTime
-	Method              string
-	Path                string
-	Route               value.Nullable[string]
-	ClientIP            value.Nullable[string]
-	Headers             value.JSON[[]httpcapture.Field]
-	Query               value.JSON[[]httpcapture.Field]
+	ID         model.ID[Capture] `foundry:"member=ID"`
+	ReceivedAt temporal.DateTime
+	Method     string
+	Path       string
+	Route      value.Nullable[string]
+	ClientIP   value.Nullable[string]
+	Headers    value.JSON[[]httpcapture.Field]
+	// QueryFields binds Capture.Query; the name avoids Table.Query.
+	Query               value.JSON[[]httpcapture.Field] `foundry:"member=QueryFields"`
 	ContentType         string
 	ContentEncoding     string
 	DeclaredBytes       value.Nullable[int64]

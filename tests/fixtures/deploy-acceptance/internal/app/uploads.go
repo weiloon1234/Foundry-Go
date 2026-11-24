@@ -24,14 +24,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/storage/local"
 )
 
+//foundry:model table=acceptance_fixture var=uploadOwners key=Name identity=false
 type uploadOwner struct {
 	Name string
 }
 
-var uploadOwners = orm.Define("acceptance_fixture", func(b orm.Builder[uploadOwner], m *uploadOwner) orm.Table[uploadOwner, string] {
-	return orm.TableOf(b, &m.Name)
-})
-var uploadIdentity = extensions.DefineORMOwner("acceptance-uploads", orm.IdentityOf(uploadOwners, uploadOwners.Key()), extensions.OwnerOptions{})
+var uploadIdentity = extensions.DefineORMOwner("acceptance-uploads", orm.IdentityOf(uploadOwners.Table, uploadOwners.Key()), extensions.OwnerOptions{})
 var uploadDisk = storage.DefineDisk("acceptance-uploads")
 var largeUploadPolicy = attachments.Policy{Disk: uploadDisk, Cardinality: attachments.Single, AnyMedia: true, MaxBytes: 512 << 20, MaxStoredBytes: 512 << 20}
 var largeFiles = attachments.Define(uploadIdentity, "large", largeUploadPolicy)

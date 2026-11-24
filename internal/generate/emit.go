@@ -115,6 +115,21 @@ func emit(p *packageInput, metadata metadata) (map[string][]byte, map[string]tok
 		origins[file] = position
 		return nil
 	}
+	groups := make(map[string][]modelDeclaration)
+	for _, declaration := range metadata.models {
+		groups[declaration.position.Filename] = append(groups[declaration.position.Filename], declaration)
+	}
+	for _, source := range sortedNames(groups) {
+		declarations := groups[source]
+		position = declarations[0].position
+		data, err := emitModels(p, declarations)
+		if err != nil {
+			return nil, nil, err
+		}
+		file := strings.TrimSuffix(filepath.Base(source), ".go") + "_foundry.gen.go"
+		outputs[file] = data
+		origins[file] = position
+	}
 	for _, declaration := range metadata.unions {
 		position = declaration.position
 		data, err := emitUnion(p, declaration)

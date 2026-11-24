@@ -34,7 +34,7 @@ func TestAuditRowsShareRollbackAndRestoreTypedHistory(t *testing.T) {
 	veto := errors.New("rollback after audit")
 	var table h.MemberTable
 	var captured record.Model[h.Member, int64]
-	table = h.Declare(func() orm.Hooks[h.Member] {
+	table = declareHookMembers(func() orm.Hooks[h.Member] {
 		write := func(ctx context.Context, tx *database.Tx, c orm.Changes[h.Member]) error {
 			history, err := orm.Audit(table.Table, c, orm.AuditPolicy[h.Member]{})
 			if err != nil {

@@ -1,4 +1,6 @@
 {
   "version": 1,
-  "files": {}
+  "files": {
+    "record_foundry.gen.go": "d2086451037d8135c725790e2229c6856dcac4f5b7976c6e095baf7a265fd752"
+  }
 }

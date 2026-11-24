@@ -55,14 +55,11 @@ func validateJSONDeclarations() error {
 
 // migration:end
 
-// migration:pilot2-slot-name
 // The Go slot is Gallery; the persisted collection remains "public-media".
 // Bind the field with orm.SlotOf in the model declaration, without a foundry tag.
 var PublicMedia = attachments.ManyOf(ext.Owner, "public-media",
 	attachments.Policy{Disk: storage.DefineDisk("local"), Accepted: []storage.MediaType{"image/png"}},
 	extensions.BindSlot(ext.Articles.Key(), ext.Articles.Gallery))
-
-// migration:end
 
 func TestPilot2Declarations(t *testing.T) {
 	if err := orm.Check(Admins.Table); err != nil {

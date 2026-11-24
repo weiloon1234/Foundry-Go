@@ -5,7 +5,7 @@ Prerequisites: E01. Status belongs to the
 
 ## Native slot loading
 
-Declare model slots with `orm.SlotOf`, bind the table key and slot through
+Generate model slots from their declared types, bind the table key and slot through
 `extensions.BindSlot`, and declare a native translation, attachment or metadata
 handle. `handle.From(manager).Relation(slot)` supplies a typed eager relation to
 `Query.With`. The ORM imports no extension package; its shared loader owns relation

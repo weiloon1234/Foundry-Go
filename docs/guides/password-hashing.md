@@ -108,23 +108,26 @@ Go's process memory. Rate limiting and model login policy remain separate contro
 
 <!-- compiled-source: tests/fixtures/consumer/passwords/tables.go#password-hashing-account-table -->
 ```go
-type AccountTable struct {
+// Account is a model fixture, not a starter application. Digest deliberately
+// avoids a conventional sensitive field name to verify type-owned redaction.
+//
+//foundry:model table=password_accounts var=AccountRecords key=ID identity=false
+type Account struct {
 	// Table owns the concrete account key. Example: orm.Eq(AccountRecords.Key(), id).
-	orm.Table[Account, model.ID[Account]]
+	ID model.ID[Account]
 	// Email binds the stored field. Example: orm.Set(AccountRecords.Email, "member@example.test").
-	Email orm.Text[Account, string]
+	Email string
+	// Sensitive stored password hash: typed persistence uses password.Codec; ordinary formatting and JSON are redacted. Automatic audit values are redacted and cursor/identity keys are rejected. Compare-and-swap with the stored Hash; verify plaintext with password.Hasher.Check rather than SQL equality.
+	//
 	// Digest binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.Set(AccountRecords.Digest, hash).
-	Digest orm.Column[Account, password.Hash]
+	Digest password.Hash
+	// Sensitive stored password hash: typed persistence uses password.Codec; ordinary formatting and JSON are redacted. Automatic audit values are redacted and cursor/identity keys are rejected. Compare-and-swap with the stored Hash; verify plaintext with password.Hasher.Check rather than SQL equality.
+	//
 	// Backup binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.Set(AccountRecords.Backup, hash).
-	Backup orm.NullableColumn[Account, password.Hash]
+	Backup value.Nullable[password.Hash]
 	// Enabled binds the stored field. Example: orm.Set(AccountRecords.Enabled, true).
-	Enabled orm.Column[Account, bool]
+	Enabled bool `foundry:"role=column"`
 }
-
-// AccountRecords preserves the persisted account schema. Example: AccountRecords.Query().
-var AccountRecords = orm.Define("password_accounts", func(b orm.Builder[Account], m *Account) AccountTable {
-	return AccountTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Email), orm.PasswordOf(b, &m.Digest), orm.NullablePasswordOf(b, &m.Backup), orm.ColumnOf(b, &m.Enabled)}
-})
 ```
 
 The declaration supplies `orm.Set(AccountRecords.Digest, hash)`, typed hash predicates,
@@ -143,7 +146,7 @@ intentional persistence boundaries that reveal stored bytes to the database.
 Document the sensitive stored hash on the handwritten model field and handle,
 including the distinction between conditional stored-hash replacement and plaintext
 verification. Completion, hover and definition expose those comments directly.
-The `PasswordOf` and `NullablePasswordOf` declarations select the sensitive codec. The [model consumer](../../tests/fixtures/consumer/passwords/account.go)
+Generation selects the sensitive codec from required or nullable `password.Hash` fields. The [model consumer](../../tests/fixtures/consumer/passwords/account.go)
 and [integration test source](../../tests/fixtures/consumer/passwords/account_postgres_test.go)
 exercise typed CRUD, projections, conditional updates and audit/cursor protection.
 

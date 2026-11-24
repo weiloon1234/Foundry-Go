@@ -13,16 +13,19 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+//foundry:model table=observed_records var=Records key=ID identity=false hooks=recordHooks
 type Record struct {
 	ID   model.ID[Record]
-	Name string
+	Name string `foundry:"input=string"`
 }
 
+//foundry:model table=observed_plain var=Plains key=ID identity=false
 type Plain struct {
 	ID   model.ID[Plain]
 	Name string
 }
 
+//foundry:model table=observed_effects var=Effects key=ID identity=false
 type Effect struct {
 	ID    model.ID[Effect]
 	Label string

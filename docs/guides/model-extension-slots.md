@@ -15,8 +15,8 @@
 
 ## Overview
 
-Declare translations, attachments and metadata as ordinary model fields, bind their
-offsets with `orm.SlotOf`, and declare their policies outside `orm.Define`. Slots
+Declare translations, attachments and metadata as ordinary model fields. Generate
+their bindings with the model directive and declare their policies separately. Slots
 store data in shared framework tables, not columns in the model's own table.
 The [articles consumer](../../tests/fixtures/consumer/articles/tables.go) contains
 the full declaration and HTTP workflow.
@@ -29,17 +29,24 @@ uses an integer key and four slot kinds:
 
 <!-- compiled-source: tests/fixtures/goway/models/extensions/models.go#model-extension-slots-article -->
 ```go
+//
+//foundry:model table=extension_articles var=Articles key=ID identity=false
 type Article struct {
-	ID      int64
-	Title   translations.Text
-	Cover   attachments.One[Article]
+	// Table owns the primary key. Example: orm.Eq(Articles.Key(), 1).
+	ID int64
+	// Title binds translated text. Example: extensions.BindSlot(Articles.Key(),Articles.Title).
+	Title translations.Text
+	// Cover binds one attachment. Example: extensions.BindSlot(Articles.Key(),Articles.Cover).
+	Cover attachments.One[Article]
+	// Gallery binds multiple attachments. Example: extensions.BindSlot(Articles.Key(),Articles.Gallery).
 	Gallery attachments.Many[Article]
-	SEO     metadata.Value[string]
+	// SEO binds a concrete metadata value. Example: extensions.BindSlot(Articles.Key(),Articles.SEO).
+	SEO metadata.Value[string]
 }
 ```
 
 Its table namespace exposes `orm.Slot[Article, V]` handles; `V` is the exact
-slot field type. Bind each with `orm.SlotOf(b, &m.Field)` inside `orm.Define`.
+slot field type. The model directive generates each typed slot binding.
 The owner derives from the table and its primary key:
 
 <!-- compiled-source: tests/fixtures/goway/models/extensions/models.go#model-extension-slots-owner -->
@@ -443,7 +450,7 @@ descriptors. Ordinary slot reads and writes continue to use the handle directly.
 
 An old attachment slot's `foundry:"name=public-media"` tag becomes the explicit
 `"public-media"` argument to `attachments.ManyOf` or `attachments.OneOf`. Remove
-the tag: native `orm.SlotOf` binds a Go field, not a persisted column. Keep the
+the tag: the generator recognizes the slot type, which is not a persisted column. Keep the
 owner identity and `StorageModel` unchanged as well as the collection name. A
 Go-field rename changes its binding, not that stored identity. See the compiled
 [migration example](orm-migration.md#preserve-an-attachment-slots-stored-name).

@@ -9,7 +9,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-// migration:lone-timestamp-after
 type DeveloperEvent struct {
 	ID        int64
 	CreatedAt time.Time
@@ -28,8 +27,6 @@ func insertDeveloperEvent(ctx context.Context, tx *database.Tx, createdAt time.T
 	_, err := orm.Insert(ctx, tx, DeveloperEvents.Table, orm.Set(DeveloperEvents.CreatedAt, createdAt))
 	return err
 }
-
-// migration:end
 
 func TestLoneTimestampDeclaration(t *testing.T) {
 	if err := orm.Check(DeveloperEvents.Table); err != nil {

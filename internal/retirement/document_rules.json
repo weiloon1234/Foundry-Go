@@ -1,4 +1,5 @@
 {
+  "retiredDirectives": ["projection"],
   "owners": [
     "http.Endpoint",
     "http.AuthenticatedEndpoint",

@@ -2,7 +2,7 @@
 
 `Records`, `Plains` and `Effects` publish ORM declarations. `Records` attaches the
 local per-write factory. `Plains` deliberately has no local factory, exercising
-registered observers on an otherwise unannotated model. `Effects` writes through
+registered observers on a model without local hooks. `Effects` writes through
 the current transaction.
 
 For an ORM application, register `orm.NewObserver[Record]` with a factory returning
@@ -15,5 +15,5 @@ foreign hook family without constructing either factory.
 concurrent-operation and row-lifetime assertions now exercise ORM operations.
 `lifecycle.CountObservers[Record](rows.Observers())` checks registration counts after
 row closure without accessing private adapters or constructing factories.
-Legacy hook state and model-generation directives are removed; event integration
+Model directives generate the typed tables; event integration
 uses the same ORM observer family.

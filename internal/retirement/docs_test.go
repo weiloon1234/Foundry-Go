@@ -274,3 +274,14 @@ func TestRetiredDocumentationUnqualifiedCode(t *testing.T) {
 		t.Fatal("accepted before marker outside migration guide")
 	}
 }
+
+func TestRestoredModelDirectiveAndRetiredProjection(t *testing.T) {
+	for _, name := range []string{"docs/guides/model-declarations.md", "database/AGENTS.md", "database/orm/README.md"} {
+		if err := CheckDocument(name, []byte("//foundry:model table=users var=Users key=ID")); err != nil {
+			t.Fatal(err)
+		}
+		if err := CheckDocument(name, []byte("//foundry:projection")); err == nil {
+			t.Fatalf("%s accepted retired projection directive", name)
+		}
+	}
+}

@@ -83,7 +83,7 @@ func TestForcePruneVisibilityAndOuterRollback(t *testing.T) {
 	ctx := t.Context()
 	_, err := db.Exec(ctx, `CREATE TABLE hook_members(id bigint PRIMARY KEY,name text NOT NULL DEFAULT 'database',note text,body bytea NOT NULL,created_at timestamptz NOT NULL,updated_at timestamptz NOT NULL,deleted_at timestamptz)`)
 	must(t, err)
-	f := h.Declare(func() orm.Hooks[h.Member] { return orm.Hooks[h.Member]{} })
+	f := declareHookMembers(func() orm.Hooks[h.Member] { return orm.Hooks[h.Member]{} })
 	_, err = orm.CreateEach(ctx, db, f.Query(), [][]orm.Assignment[h.Member]{{orm.Set(f.Key(), 1), orm.Set(f.Body, []byte{1})}, {orm.Set(f.Key(), 2), orm.Set(f.Body, []byte{2})}})
 	must(t, err)
 	_, err = orm.Delete(ctx, db, f.Table.Query(), f.Table.Key(), 1)

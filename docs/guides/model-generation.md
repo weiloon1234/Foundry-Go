@@ -1,11 +1,11 @@
-# Enum and transport generation
+# Model, enum and transport generation
 
-Persistence models, table declarations and row projections are handwritten Go.
-Use [model scaffolding](model-scaffolding.md), [typed reads](model-queries.md),
-[writes](model-writes.md), [relations](model-relations.md) and
-[projections](model-projections.md). Generation owns separate enum and transport
-contracts; it does not emit tables, query namespaces, drafts or model accessors.
-The [migration guide](orm-migration.md) retains historical before examples.
+Declare a persistence model once with `//foundry:model` and `foundry` tags.
+Generation emits its typed table, binding and identity block. See
+[model declarations](model-declarations.md) for complete source-backed examples,
+roles and stale-generation diagnostics. Row projections, queries and business
+methods remain handwritten. Enum and transport generation are independent; a
+persistence model is never implicitly a response DTO.
 
 ## Commands and ownership
 
@@ -30,11 +30,11 @@ Diagnostics name module-relative source paths such as `models/user.go:12:6`. A f
 
 Packages are processed in dependency order; independent packages are analyzed concurrently with a bounded worker count, and errors are reported in the same dependency order as a sequential run. Only dependencies outside the selection are compiled for export data; selected packages are type-checked from source once for declarations and once as the complete overlay, and packages without Foundry directives skip the declaration pass. Generated dependencies are shared as checked Go packages in memory, so a fresh checkout can contain handwritten methods that return generated types from other selected packages. Every selected package is validated before any output is published. Import paths beginning with `-` fail at their source location before dependency compilation, including when tolerant Go package metadata omits them; package operands are separated from Go command options. Import cycles, invalid dependents, stale files, and concurrent package/module-file changes fail generation. Dependencies outside the selected tree must already compile; select the appropriate consumer module root when those dependencies also need generation.
 
-Generation discovers enum, DTO, validation, configuration, message, multipart,
+Generation discovers model, enum, DTO, validation, configuration, message, multipart,
 union and HTTP path/query declarations, then checks the complete package with its
 generated overlay before publication. Generic DTOs retain their concrete type
-parameters. Persistence declarations are handwritten; checked `orm.Define`
-instantiations identify model types after overlay checking. Those models cannot
+parameters. Model directives and checked generated table bindings identify
+persistence types after overlay checking. Those models cannot
 become transport fields, embeddings or map keys. Use a separate DTO.
 
 Generated-symbol collisions with handwritten declarations or other generated
@@ -58,7 +58,7 @@ The advisory-lock adapter covers Linux, macOS, FreeBSD, NetBSD, OpenBSD and Drag
 
 ## Enums and language tooling
 
-Attach `//foundry:enum` to an exported string/integer type with typed constants. Its cases are the exported constants of that type declared as values. Aliases whose value is another case (`const DefaultStatus = StatusActive`, or `Status(StatusActive)`) and constants marked `//foundry:ignore` (on the constant, as its line comment, or on a const group's documentation) keep their Go meaning without becoming wire values. An unexported constant with its own value, such as a `statusCount` sentinel, fails generation with its position: export it to keep it as a case, or mark it `//foundry:ignore`. Directives may be written `//foundry:enum` or `// foundry:enum`. Two cases with the same serialized value fail with both names. The generator emits a source-ordered values list, parsing, membership validation, and text/JSON marshaling. Values slices are independent copies. Invalid casts remain possible in Go, so decoding, serialization, and explicit `Validate` enforce membership at runtime. Integer parsing checks its underlying width. Null input is rejected and failed decoding leaves the receiver unchanged. Enum strings must be valid UTF-8; pointer-sized `uintptr` is unsupported.
+Attach `//foundry:enum` to an exported string/integer type with typed constants. Its cases are the exported constants of that type declared as values. Aliases whose value is another case (`const DefaultStatus = StatusActive`, or `Status(StatusActive)`) and constants marked `//foundry:ignore` (on the constant, as its line comment, or on a const group's documentation) keep their Go meaning without becoming wire values. An unexported constant with its own value, such as a `statusCount` sentinel, fails generation with its position: export it to keep it as a case, or mark it `//foundry:ignore`. Use the exact directive spelling `//foundry:enum`; whitespace in the prefix is rejected. Two cases with the same serialized value fail with both names. The generator emits a source-ordered values list, parsing, membership validation, and text/JSON marshaling. Values slices are independent copies. Invalid casts remain possible in Go, so decoding, serialization, and explicit `Validate` enforce membership at runtime. Integer parsing checks its underlying width. Null input is rejected and failed decoding leaves the receiver unchanged. Enum strings must be valid UTF-8; pointer-sized `uintptr` is unsupported.
 
 Generated enums expose a `StatusCodec()`-style typed codec and implement `database/sql/driver.Valuer` and `database/sql.Scanner` by delegating to it. The shared codec calls the generated `Validate` rule at both boundaries. String enums bind as strings; integer enums bind as signed `int64`, rejecting unsigned values outside the SQL integer range. Scanning accepts text/bytes and, for integer enums, `int64`; invalid values, overflow, floats, booleans and SQL null are rejected without modifying the receiver. `codec.Nullable(models.StatusCodec())` handles explicit null. Real PostgreSQL consumer tests verify valid and malformed stored enums through both direct codecs and native ORM model hydration.
 
@@ -143,6 +143,6 @@ generated property-path contracts without generating persistence columns.
 
 ## Persisted binary fields
 
-Handwritten binary columns use the shared codec and typed declaration roles.
+Binary model fields infer the shared codec and typed declaration roles.
 See [binary model values](binary-models.md) for empty/NULL semantics, operations
 and identity-key restrictions.

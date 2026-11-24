@@ -8,16 +8,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
-// ControlTable binds Control columns without managed timestamps.
-type ControlTable struct {
-	orm.Table[Control, string]
-}
-
-// Controls owns the foundry_telemetry_controls declaration.
-var Controls = orm.Define("foundry_telemetry_controls", func(b orm.Builder[Control], m *Control) ControlTable {
-	return ControlTable{Table: orm.TableOf(b, &m.Key)}
-}, orm.NoTimestamps())
-
 // RunTable binds Run columns without managed timestamps.
 type RunTable[R any, I, L ~string] struct {
 	orm.Table[Run[R, I, L], model.ID[Run[R, I, L]]]

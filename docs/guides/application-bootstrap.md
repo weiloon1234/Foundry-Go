@@ -42,7 +42,7 @@ portal's client-route fallback to that router; see
 
 ## ORM table validation
 
-Register handwritten ORM declarations explicitly at application construction:
+Register generated ORM declarations explicitly at application construction:
 
 ```go
 app, err := application.New(settings, application.WithTables(models.Tables()...)).Build(ctx)
@@ -54,7 +54,7 @@ validation local to the application; no process-wide table registry is created.
 Convert the thin `.Table` handles to `orm.CheckedTable` inside the model declaration
 package and return a fresh slice from `models.Tables()`. This keeps concrete table
 namespaces out of bootstrap; see the [declaration helper](../../tests/fixtures/goway/models/tables.go).
-Table declarations are immutable after `orm.Define`. `orm.Check` contains failures
+Generated table declarations are immutable after initialization. `orm.Check` contains failures
 for each declaration and deferred column check, preserving the remaining diagnostics in declaration order. Custom
 enum marshaler errors use safe messages while retaining their causes for
 `errors.Is`/`errors.As`. Tests can call `orm.Check` directly. `Builder.Models`

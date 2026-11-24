@@ -1,8 +1,8 @@
 # Soft deletion and restoration
 
-Declare `value.Nullable[time.Time]` or `value.Nullable[temporal.DateTime]` through `orm.SoftDeleteOf`. Store the resulting `SoftDelete[M, V]` column and `orm.SoftDeletes(column)` token in the table declaration. The [typed roles guide](model-declarations.md) shows `Users.DeletedAt` and `Users.Soft`.
+Declare `value.Nullable[time.Time]` or `value.Nullable[temporal.DateTime]` with `foundry:"role=soft-delete"`. Generation emits the deletion handle and the `Soft` capability. The [typed roles guide](model-declarations.md) shows `Articles.DeletedAt` and `Articles.Soft`.
 
-The column must be non-primary. Migrations own its nullable SQL column. `NoSoftDeletes()` leaves an ordinary deletion field under application control and conflicts with an explicit `SoftDeleteOf` role. A nullable timestamp declaration alone does not supply the force-delete capability.
+The column must be non-primary. Migrations own its nullable SQL column. `softdeletes=none` on the directive leaves an ordinary deletion field under application control and conflicts with `role=soft-delete`. A nullable timestamp declaration alone does not supply the force-delete capability.
 
 ## Typed writes and visibility
 

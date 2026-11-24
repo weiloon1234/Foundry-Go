@@ -4,6 +4,7 @@ package generate
 
 import (
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -15,7 +16,7 @@ const automaticRecovery = true
 // process lock a different inode and publish concurrently. The OS releases this
 // advisory lock when the owning process exits, including forced termination.
 func acquireGuard(dir string) (func(), error) {
-	file, err := os.OpenFile(filepath.Join(dir, ".foundry-generate.guard"), os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
+	file, err := os.OpenFile(filepath.Join(dir, frameworkinfo.GenerationGuard), os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
 	if err != nil {
 		return nil, err
 	}

@@ -4,101 +4,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
-
-// CaptureTable binds the persisted Capture columns. StartedAt is the
-// attempt's start, not a managed creation timestamp.
-type CaptureTable struct {
-	orm.Table[Capture, model.ID[Capture]]
-	ID          orm.Key[Capture, model.ID[Capture]]
-	OperationID orm.Column[Capture, model.ID[Operation]]
-	Attempt     orm.Number[Capture, int16]
-	Retried     orm.Column[Capture, bool]
-	Client      orm.Text[Capture, string]
-	StartedAt   orm.Time[Capture, temporal.DateTime]
-	HeadersMS   orm.NullableNumber[Capture, int64]
-	DurationMS  orm.Number[Capture, int64]
-	Result      orm.Text[Capture, string]
-	RequestID   orm.NullableText[Capture, string]
-	TraceID     orm.NullableText[Capture, string]
-	Route       orm.NullableText[Capture, string]
-	Method      orm.Text[Capture, string]
-	Scheme      orm.Text[Capture, string]
-	Host        orm.Text[Capture, string]
-	Path        orm.Text[Capture, string]
-	// QueryFields binds Capture.Query; the name avoids Table.Query.
-	QueryFields           orm.JSON[Capture, []httpcapture.Field]
-	RequestHeaders        orm.JSON[Capture, []httpcapture.Field]
-	BodyMode              orm.Text[Capture, string]
-	RequestBodyState      orm.Text[Capture, string]
-	RequestBodyOmission   orm.NullableText[Capture, string]
-	RequestBody           orm.Column[Capture, []byte]
-	RequestDeclaredBytes  orm.NullableNumber[Capture, int64]
-	RequestSentBytes      orm.Number[Capture, int64]
-	RequestBodyComplete   orm.Column[Capture, bool]
-	Status                orm.NullableNumber[Capture, int16]
-	Protocol              orm.NullableText[Capture, string]
-	RemoteIP              orm.NullableText[Capture, string]
-	ConnectionReused      orm.NullableColumn[Capture, bool]
-	ResponseHeaders       orm.JSON[Capture, []httpcapture.Field]
-	ResponseBodyState     orm.Text[Capture, string]
-	ResponseBodyOmission  orm.NullableText[Capture, string]
-	ResponseBody          orm.Column[Capture, []byte]
-	ResponseDeclaredBytes orm.NullableNumber[Capture, int64]
-	ResponseReadBytes     orm.Number[Capture, int64]
-	ResponseBodyComplete  orm.Column[Capture, bool]
-	Omissions             orm.JSON[Capture, []string]
-	DroppedBefore         orm.Number[Capture, int64]
-}
-
-// Captures owns the immutable declaration. Example: orm.Find(ctx, tx, Captures.Table, id).
-var Captures = orm.Define("foundry_outbound_captures", func(b orm.Builder[Capture], m *Capture) CaptureTable {
-	t := orm.TableOf(b, &m.ID)
-	return CaptureTable{
-		Table: t, ID: t.Key(),
-		OperationID:           orm.IDOf(b, &m.OperationID),
-		Attempt:               orm.NumberOf(b, &m.Attempt),
-		Retried:               orm.BoolOf(b, &m.Retried),
-		Client:                orm.TextOf(b, &m.Client),
-		StartedAt:             orm.TimeOf(b, &m.StartedAt),
-		HeadersMS:             orm.NullableNumberOf(b, &m.HeadersMS),
-		DurationMS:            orm.NumberOf(b, &m.DurationMS),
-		Result:                orm.TextOf(b, &m.Result),
-		RequestID:             orm.NullableTextOf(b, &m.RequestID),
-		TraceID:               orm.NullableTextOf(b, &m.TraceID),
-		Route:                 orm.NullableTextOf(b, &m.Route),
-		Method:                orm.TextOf(b, &m.Method),
-		Scheme:                orm.TextOf(b, &m.Scheme),
-		Host:                  orm.TextOf(b, &m.Host),
-		Path:                  orm.TextOf(b, &m.Path),
-		QueryFields:           orm.JSONOf(b, &m.Query),
-		RequestHeaders:        orm.JSONOf(b, &m.RequestHeaders),
-		BodyMode:              orm.TextOf(b, &m.BodyMode),
-		RequestBodyState:      orm.TextOf(b, &m.RequestBodyState),
-		RequestBodyOmission:   orm.NullableTextOf(b, &m.RequestBodyOmission),
-		RequestBody:           orm.BytesOf(b, &m.RequestBody),
-		RequestDeclaredBytes:  orm.NullableNumberOf(b, &m.RequestDeclaredBytes),
-		RequestSentBytes:      orm.NumberOf(b, &m.RequestSentBytes),
-		RequestBodyComplete:   orm.BoolOf(b, &m.RequestBodyComplete),
-		Status:                orm.NullableNumberOf(b, &m.Status),
-		Protocol:              orm.NullableTextOf(b, &m.Protocol),
-		RemoteIP:              orm.NullableTextOf(b, &m.RemoteIP),
-		ConnectionReused:      orm.NullableColumnOf(b, &m.ConnectionReused),
-		ResponseHeaders:       orm.JSONOf(b, &m.ResponseHeaders),
-		ResponseBodyState:     orm.TextOf(b, &m.ResponseBodyState),
-		ResponseBodyOmission:  orm.NullableTextOf(b, &m.ResponseBodyOmission),
-		ResponseBody:          orm.BytesOf(b, &m.ResponseBody),
-		ResponseDeclaredBytes: orm.NullableNumberOf(b, &m.ResponseDeclaredBytes),
-		ResponseReadBytes:     orm.NumberOf(b, &m.ResponseReadBytes),
-		ResponseBodyComplete:  orm.BoolOf(b, &m.ResponseBodyComplete),
-		Omissions:             orm.JSONOf(b, &m.Omissions),
-		DroppedBefore:         orm.NumberOf(b, &m.DroppedBefore),
-	}
-}, orm.NoTimestamps())
 
 type summaryFields struct {
 	rows.Row[Summary]

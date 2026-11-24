@@ -23,39 +23,34 @@ Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/
 <a id="recipe-declare-provider"></a>
 ## One provider, multiple guards
 
-Declare the table once, then implement `FoundryIdentity` for the model-first
-authentication boundary. The provider reuses the stored key codec:
+Declare the account with the model directive. Its generated `FoundryIdentity`
+method satisfies the subject identity contract; the provider reuses the stored
+key codec.
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#authentication-account -->
+<!-- compiled-source: tests/fixtures/goway/modelguide/account.go -->
 ```go
+package modelguide
+
+import (
+	"context"
+
+	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/value"
+)
+
+//foundry:model table=guide_accounts var=Accounts key=ID
 type Account struct {
 	ID      int64
 	Enabled bool
 }
 
-type AccountTable struct {
-	orm.Table[Account, int64]
-	Enabled orm.Column[Account, bool]
-}
-
-var Accounts = orm.Define("guide_accounts", func(b orm.Builder[Account], m *Account) AccountTable {
-	return AccountTable{orm.TableOf(b, &m.ID), orm.ColumnOf(b, &m.Enabled)}
-})
-var AccountIdentity = orm.IdentityOf(Accounts.Table, Accounts.Key())
-
-func (a Account) FoundryIdentity() (model.Identity, error) {
-	return AccountIdentity.ReferenceOf(a).Identity()
-}
-
-func accountProvider(db database.Executor) auth.Provider[Account, int64] {
-	return auth.DefineProvider("accounts", AccountIdentity.Reference(0),
+func AccountProvider(db database.Executor) auth.Provider[Account, int64] {
+	return auth.DefineProvider("accounts", accountsIdentity.Reference(0),
 		func(ctx context.Context, id int64) (value.Optional[Account], error) {
 			return orm.Find(ctx, db, Accounts.Table, id)
-		},
-		func(_ context.Context, account Account) (bool, error) {
-			return account.Enabled, nil
-		},
-	)
+		}, func(_ context.Context, account Account) (bool, error) { return account.Enabled, nil })
 }
 ```
 
