@@ -6,11 +6,13 @@ stored column names, key types, codecs, constraints and public response contract
 This guide describes APIs present in the Go-way branch, not every illustrative API
 in the original plan.
 
-Migrate a shared model package before its callers. Register its tables, port its
-queries and tests, then remove the old model directive and generated helpers at a
-coordinated generation barrier. Keep DTO, enum, configuration and client generation.
-Do not edit generated files or ownership manifests by hand. Model and projection
-generation and the former query runtime are retired.
+Migrate a shared model package before its callers. Declare its tables with the
+`//foundry:model` directive ([model declarations](model-declarations.md)), port its
+queries and tests, then remove the old generated query, draft and projection helpers
+at a coordinated generation barrier. Keep DTO, enum, configuration and client
+generation. Do not edit generated files or ownership manifests by hand. Projection
+generation and the former query runtime are retired; a model's table type, binding
+and identity are generated from its struct.
 
 ## Unified ORM column handles and operators
 
