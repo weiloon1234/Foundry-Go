@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.51.1 — 2026-11-24
+
+- The ORM migration guide no longer says model generation is retired: its
+  introduction now points at the `//foundry:model` directive, as the rest of the
+  guide and the model declarations guide already did. Documentation only.
+
 ## v0.51.0 — 2026-11-24
 
 - Declare each table-backed model once with `//foundry:model` and `foundry` tags.
