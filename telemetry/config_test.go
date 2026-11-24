@@ -106,6 +106,9 @@ func TestConfigRetentionReadAndTimingBounds(t *testing.T) {
 		{"issues high", func(c *Config) { c.Retention.MaxIssueRows = 10001 }},
 		{"events low", func(c *Config) { c.Retention.MaxEventRows = 99 }},
 		{"events high", func(c *Config) { c.Retention.MaxEventRows = 100001 }},
+		{"quiet negative", func(c *Config) { c.Retention.EmptyRunQuietPeriod = -time.Hour }},
+		{"quiet low", func(c *Config) { c.Retention.EmptyRunQuietPeriod = time.Hour - time.Nanosecond }},
+		{"quiet high", func(c *Config) { c.Retention.EmptyRunQuietPeriod = maxRetention + time.Nanosecond }},
 		{"prune interval", func(c *Config) { c.Retention.PruneInterval = 0 }},
 		{"read concurrency", func(c *Config) { c.Reads.MaxConcurrent = 0 }},
 		{"read runs", func(c *Config) { c.Reads.MaxOverviewRuns = 0 }},
@@ -225,5 +228,18 @@ func TestIdentityParsingAndFingerprintGrouping(t *testing.T) {
 	b.Release = "next"
 	if fingerprint(a) == fingerprint(b) {
 		t.Fatal("release omitted from grouping")
+	}
+}
+
+func TestEmptyRunQuietPeriodDefaultsAndBounds(t *testing.T) {
+	for _, duration := range []time.Duration{0, time.Hour, maxRetention} {
+		p := engineConfig().Retention
+		p.EmptyRunQuietPeriod = duration
+		if err := p.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		if p.emptyRunQuietPeriod() != max(duration, time.Hour) {
+			t.Fatal("wrong effective quiet period")
+		}
 	}
 }

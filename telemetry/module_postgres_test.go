@@ -80,7 +80,12 @@ func TestPostgresTelemetryModuleRetainsDependenciesPastShutdownDeadline(t *testi
 			return closeErr
 		})
 	}}
-	module := KernelModule("fixture.telemetry-owner", engineKey, nil, []foundation.ProviderID{owner.Name}, func(r foundation.Resolver) (*Engine, error) {
+	kernel := foundation.Module{Name: "fixture.kernel", OnRegister: func(r *foundation.Registrar) error {
+		return r.Kernel(foundation.CLI, func(*foundation.Runtime) (foundation.Kernel, error) {
+			return foundation.KernelFunc(func(context.Context) error { return nil }), nil
+		})
+	}}
+	module := KernelModule("fixture.telemetry-owner", engineKey, []foundation.KernelKind{foundation.CLI}, []foundation.ProviderID{owner.Name}, func(r foundation.Resolver) (*Engine, error) {
 		ownedDB, err := foundation.Resolve(r, databaseKey)
 		if err != nil {
 			return nil, err
@@ -88,7 +93,7 @@ func TestPostgresTelemetryModuleRetainsDependenciesPastShutdownDeadline(t *testi
 		engine, err = New(collector, Dependencies{DB: ownedDB, Schema: scope.Schema(), Recorder: recorder, Clock: source, Logger: logger}, engineConfig())
 		return engine, err
 	})
-	app, err := foundation.NewBuilder(foundation.WithClock(source), foundation.WithLogger(logger), foundation.WithObservability(recorder), foundation.WithShutdownTimeout(20*time.Millisecond)).Register(owner, module).Build(t.Context())
+	app, err := foundation.NewBuilder(foundation.WithClock(source), foundation.WithLogger(logger), foundation.WithObservability(recorder), foundation.WithShutdownTimeout(20*time.Millisecond)).Register(owner, module, kernel).Build(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,17 +104,10 @@ func TestPostgresTelemetryModuleRetainsDependenciesPastShutdownDeadline(t *testi
 		defer cancel()
 		_ = app.Shutdown(ctx)
 	})
-	// Start without a selected kernel owns cleanup but starts no periodic loop.
-	// The blocked collector below therefore belongs to the final capture.
-	if err := app.Start(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	// The selected console exits before its first tick. Its final capture must
+	// still retain borrowed dependencies through an uncooperative callback.
 	shutdown := make(chan error, 1)
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		defer cancel()
-		shutdown <- app.Shutdown(ctx)
-	}()
+	go func() { shutdown <- app.Run(t.Context(), foundation.CLI) }()
 	waitModuleSignal(t, metricEntered, "final capture did not reach the metric callback")
 	select {
 	case err := <-shutdown:

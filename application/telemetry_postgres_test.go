@@ -20,9 +20,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/telemetry"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
+	telemetrytest "github.com/weiloon1234/Foundry-Go/testkit/telemetry"
 )
 
 func telemetryPostgresSettings(t *testing.T) Settings {
+	t.Helper()
+	s, _ := telemetryPostgresFixture(t)
+	return s
+}
+
+func telemetryPostgresFixture(t *testing.T) (Settings, *database.DB) {
 	t.Helper()
 	scope := pgtest.Isolate(t)
 	db := scope.Open(t)
@@ -43,13 +50,27 @@ func telemetryPostgresSettings(t *testing.T) Settings {
 	connection := infrastructure.DefaultConnectionSettings()
 	connection.Primary = infrastructure.PostgreSQLSettingsFromConfig(scope.Config())
 	s.Services.Database.Connections = infrastructure.DatabaseConnections{"default": connection}
-	return s
+	return s, db
 }
 
 func TestPostgresTelemetryDefaultKernelSelection(t *testing.T) {
-	for _, kind := range []foundation.KernelKind{foundation.HTTP, foundation.Worker, foundation.Scheduler, foundation.CLI} {
-		t.Run(string(kind), func(t *testing.T) {
-			s := telemetryPostgresSettings(t)
+	for _, test := range []struct {
+		name     string
+		kind     foundation.KernelKind
+		selected bool
+		kernels  []foundation.KernelKind
+	}{
+		{"http", foundation.HTTP, true, nil},
+		{"worker", foundation.Worker, true, nil},
+		{"scheduler", foundation.Scheduler, true, nil},
+		{"console", foundation.CLI, false, nil},
+		{"selected-console", foundation.CLI, true, []foundation.KernelKind{foundation.CLI}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			kind := test.kind
+			s, assertions := telemetryPostgresFixture(t)
+			s.Features.Telemetry.Kernels = test.kernels
+			s.Features.Telemetry.Config.FlushInterval = time.Minute
 			seen := make(chan bool, 1)
 			var app *App
 			module := foundation.Module{Name: "fixture.telemetry-kernel", OnRegister: func(r *foundation.Registrar) error {
@@ -77,7 +98,7 @@ func TestPostgresTelemetryDefaultKernelSelection(t *testing.T) {
 			if err := app.Run(t.Context(), kind); err != nil {
 				t.Fatal(err)
 			}
-			if got := <-seen; got != (kind != foundation.CLI) {
+			if got := <-seen; got != test.selected {
 				t.Fatal("telemetry selected the wrong process kernel", got)
 			}
 			engine, err := app.Resources().Telemetry()
@@ -89,6 +110,19 @@ func TestPostgresTelemetryDefaultKernelSelection(t *testing.T) {
 			default:
 				t.Fatal("kernel exit left telemetry ownership alive")
 			}
+			var count int64
+			schema := s.Services.Database.Connections["default"].Primary.Schema
+			if err := database.ScanOne(t.Context(), assertions.Primary(), `SELECT count(*) FROM "`+schema+`".foundry_telemetry_runs`, nil, &count); err != nil {
+				t.Fatal(err)
+			}
+			want := int64(0)
+			if test.selected {
+				want = 1
+			}
+			if count != want {
+				t.Fatalf("fast kernel exit stored %d runs, want %d", count, want)
+			}
+
 		})
 	}
 }
@@ -265,6 +299,7 @@ func TestPostgresConfiguredTelemetryAdmitsBrowserReports(t *testing.T) {
 		t.Fatal(err)
 	}
 	report.Frames[0].File = "mutated-after-admission"
+	telemetrytest.Flush(t, engine)
 	if err := engine.Close(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -314,4 +349,30 @@ func TestPostgresConfiguredTelemetryAdmitsBrowserReports(t *testing.T) {
 		t.Fatalf("configured browser admission after Close: %v", err)
 	}
 	assertStored()
+}
+
+func TestPostgresTelemetryProviderOnlyShutdownWritesNothing(t *testing.T) {
+	s, assertions := telemetryPostgresFixture(t)
+	app, err := New(s, telemetryQuiet()).Build(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeTelemetryApp(t, app) })
+	if err := app.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	_ = observability.Observe(observability.WithContext(t.Context(), app.Observability()), observability.Operation{Kind: observability.Job, Name: "fixture.console-failure"}, func(context.Context) error { return fault.Internal })
+	if err := app.Shutdown(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	schema := s.Services.Database.Connections["default"].Primary.Schema
+	for _, table := range []string{"runs", "flushes", "metric_buckets", "issues", "events", "alerts"} {
+		var count int64
+		if err := database.ScanOne(t.Context(), assertions.Primary(), `SELECT count(*) FROM "`+schema+`".foundry_telemetry_`+table, nil, &count); err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("provider-only shutdown wrote %d %s", count, table)
+		}
+	}
 }

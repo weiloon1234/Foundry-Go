@@ -65,6 +65,8 @@ type RetentionPolicy struct {
 	Minute, Hour, Issue, Security                                      time.Duration
 	MaxRuns, MaxReceiptRows, MaxMetricRows, MaxIssueRows, MaxEventRows int
 	PruneInterval                                                      time.Duration
+	// EmptyRunQuietPeriod defaults to one hour; explicit values are one hour to thirty days.
+	EmptyRunQuietPeriod time.Duration
 }
 
 // ReadLimits contains explicit positive admission, result, page and timeout
@@ -175,10 +177,17 @@ func (p AlertPolicy) Validate() error {
 
 // Validate checks retention durations, row capacities and prune timing.
 func (p RetentionPolicy) Validate() error {
-	if p.Minute < time.Hour || p.Minute > maxMinuteRetention || p.Hour < p.Minute || p.Hour > maxRetention || p.Issue < time.Hour || p.Issue > maxRetention || p.Security < time.Hour || p.Security > maxMinuteRetention || p.MaxRuns < minStorageRows || p.MaxRuns > maxRuns || p.MaxReceiptRows < 1 || p.MaxMetricRows < minStorageRows || p.MaxMetricRows > maxMetricRows || p.MaxIssueRows < minStorageRows || p.MaxIssueRows > maxIssueRows || p.MaxEventRows < minStorageRows || p.MaxEventRows > maxEventRows || p.PruneInterval <= 0 {
+	if p.Minute < time.Hour || p.Minute > maxMinuteRetention || p.Hour < p.Minute || p.Hour > maxRetention || p.Issue < time.Hour || p.Issue > maxRetention || p.Security < time.Hour || p.Security > maxMinuteRetention || p.MaxRuns < minStorageRows || p.MaxRuns > maxRuns || p.MaxReceiptRows < 1 || p.MaxMetricRows < minStorageRows || p.MaxMetricRows > maxMetricRows || p.MaxIssueRows < minStorageRows || p.MaxIssueRows > maxIssueRows || p.MaxEventRows < minStorageRows || p.MaxEventRows > maxEventRows || p.PruneInterval <= 0 || p.emptyRunQuietPeriod() < time.Hour || p.emptyRunQuietPeriod() > maxRetention {
 		return invalid("invalid telemetry retention or storage bounds")
 	}
 	return nil
+}
+
+func (p RetentionPolicy) emptyRunQuietPeriod() time.Duration {
+	if p.EmptyRunQuietPeriod == 0 {
+		return time.Hour
+	}
+	return p.EmptyRunQuietPeriod
 }
 
 // Validate requires positive read bounds and a representable page offset.

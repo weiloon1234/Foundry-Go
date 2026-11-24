@@ -5,6 +5,38 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+## Telemetry run admission — v0.52.0
+
+Ordinary console commands and provider-only application boots now leave no
+telemetry run on shutdown. HTTP, worker and scheduler kernels continue recording,
+including fast exits. Explicitly selecting `foundation.CLI` retains console
+telemetry. Direct engine assembly and the explicit test flush retain their
+capture contracts.
+
+A full run table now reclaims only enough old empty stopping runs to admit a new
+writer, within existing transaction/cascade bounds. If a lowered cap requires
+more than 50 deletions, each attempt commits up to 50 eligible deletions while
+still refusing the run, so later attempts converge. A cleanup commit never counts
+as batch persistence; an unknown commit is not confirmed progress. For deficits
+within 50, reclamation and admission remain one atomic transaction.
+The stored version 1 snapshot
+and heartbeat determine eligibility; no schema migration or new finalization
+marker is required. `Retention.EmptyRunQuietPeriod` is additive: zero selects one
+hour, and explicit values must be one hour–30 days. Existing configurations need
+no changes. A host already full of eligible empty ended runs recovers on its next
+admission attempt after upgrading, without separate cleanup or raising the cap.
+
+A run is reclaimable only when its stored snapshot is stopping, it has been
+silent for the quiet period, and it has no metric bucket, no alert and no
+unexpired receipt. Issues and events are not attached to a run and are never
+touched by run reclamation; a same-release issue or an orphan event does not
+prevent it. Their rows, counts, detail and independent retention remain intact.
+A table containing only protected runs still refuses new runs. See the
+[precise reclamation and retry rules](guides/persisted-telemetry.md#retention-and-reads).
+Missing writers pass admission again with stable process/receipt identities.
+Refused units recover without a restart when space appears; warnings now occur
+once and then hourly, with one notice after confirmed recovery.
+
 ## Model conversion tool removal — v0.52.0
 
 The migration-only `foundry models convert` command and its ORM snapshot bridge

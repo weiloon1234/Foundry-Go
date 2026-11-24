@@ -174,6 +174,7 @@ func serverTime(ctx context.Context, tx *database.Tx) (temporal.DateTime, error)
 
 func (s *storage) persist(ctx context.Context, b batch, staged receiptState) (persistResult, error) {
 	result := persistResult{}
+	capacityRefused := false
 	if err := staged.validate(); err != nil {
 		return result, err
 	}
@@ -210,15 +211,20 @@ func (s *storage) persist(ctx context.Context, b batch, staged receiptState) (pe
 		if err != nil {
 			return err
 		}
+		admitted, err := s.writeRun(ctx, tx, b, now)
+		if err != nil {
+			return err
+		}
+		if !admitted {
+			capacityRefused = true
+			return nil // Commit bounded cleanup without accepting this batch.
+		}
 		count, err := orm.Count(ctx, tx, flushes.Query())
 		if err != nil {
 			return err
 		}
 		if count >= int64(s.config.Retention.MaxReceiptRows) {
 			return safeerror.NewFault(fault.Overloaded, "telemetry receipt capacity reached")
-		}
-		if err = s.writeRun(ctx, tx, b, now); err != nil {
-			return err
 		}
 		if s.config.Alerts.Enabled {
 			staged.Rules, err = s.writeIncidents(ctx, tx, b)
@@ -255,8 +261,14 @@ func (s *storage) persist(ctx context.Context, b batch, staged receiptState) (pe
 		result.state = staged.clone()
 		return nil
 	})
-	if !result.expired && tx != nil && tx.State() == database.TxCommitted {
-		result.committed = true
+	if tx != nil && tx.State() == database.TxCommitted {
+		if capacityRefused {
+			// A committed cleanup is not a committed batch: retain its identity
+			// and report refusal only after the transaction outcome is known.
+			err = safeerror.Join("telemetry run admission", errRunCapacity, err)
+		} else if !result.expired {
+			result.committed = true
+		}
 	}
 	result.uncertain = !result.committed && !result.expired && tx != nil && tx.State() == database.TxUnknown
 	if err == nil && !result.committed && !result.expired {
@@ -265,35 +277,52 @@ func (s *storage) persist(ctx context.Context, b batch, staged receiptState) (pe
 	return result, err
 }
 
-func (s *storage) writeRun(ctx context.Context, tx *database.Tx, b batch, now temporal.DateTime) error {
+func (s *storage) writeRun(ctx context.Context, tx *database.Tx, b batch, now temporal.DateTime) (admitted bool, err error) {
 	exists, err := orm.Exists(ctx, tx, runs.Query().Where(orm.Eq(runs.Key(), s.runKey())))
 	if err != nil {
-		return err
+		return false, err
 	}
+	// A missing row, including a reclaimed row from this writer, must pass
+	// admission again. The stable process and pending receipt IDs are retained.
 	if !exists {
 		count, err := orm.Count(ctx, tx, runs.Query())
 		if err != nil {
-			return err
+			return false, err
 		}
 		if count >= int64(s.config.Retention.MaxRuns) {
-			return safeerror.NewFault(fault.Overloaded, "telemetry run capacity reached")
+			needed := count - int64(s.config.Retention.MaxRuns) + 1
+			reclaimed, err := s.reclaimEmptyRuns(ctx, tx, now, needed)
+			if err != nil {
+				return false, err
+			}
+			if needed > maxPruneRuns {
+				return false, nil
+			}
+			if count-reclaimed >= int64(s.config.Retention.MaxRuns) {
+				return false, errRunCapacity
+			}
 		}
 	}
 	payload, err := encodePayload(b.runtimeSnapshot(), maxRuntimePayloadBytes)
 	if err != nil {
-		return err
+		return false, err
 	}
 	until, err := now.Add(s.config.Retention.Hour)
 	if err != nil {
-		return err
+		return false, err
+	}
+	draft := []orm.Assignment[runRow]{orm.Set(runs.Key(), s.runKey()), orm.Set(runs.Instance, s.collector.config.Instance), orm.Set(runs.Release, s.collector.config.Release), orm.Set(runs.StartedAt, s.collector.started), orm.Set(runs.HeartbeatAt, b.at), orm.Set(runs.RetainUntil, until), orm.Set(runs.Runtime, payload)}
+	if !exists {
+		_, err = orm.Insert(ctx, tx, runs.Table, draft...)
+		return err == nil, err
 	}
 	q := runs.Query()
 	cr := rows.ConflictRowsOf(q)
 	stored := expr.At(cr.Stored(), runs.RetainUntil)
 	proposed := expr.At(cr.Proposed(), runs.RetainUntil)
 	conflict := orm.OnConflict(orm.ConflictKey(runs.Key())).DoUpdate(orm.ConflictIncoming(runs.HeartbeatAt), orm.ConflictIncoming(runs.Runtime), rows.SetConflictValue(runs.RetainUntil, expr.When(expr.Greater(proposed, stored), proposed).Else(stored)))
-	_, err = orm.Upsert(ctx, tx, q, conflict, orm.Set(runs.Key(), s.runKey()), orm.Set(runs.Instance, s.collector.config.Instance), orm.Set(runs.Release, s.collector.config.Release), orm.Set(runs.StartedAt, s.collector.started), orm.Set(runs.HeartbeatAt, b.at), orm.Set(runs.RetainUntil, until), orm.Set(runs.Runtime, payload))
-	return err
+	_, err = orm.Upsert(ctx, tx, q, conflict, draft...)
+	return err == nil, err
 }
 
 // Row identities are decoded at this boundary so every ORM primary key belongs

@@ -2,6 +2,19 @@
 
 ## v0.52.0 — 2026-11-25
 
+- Telemetry kernel selection now controls shutdown persistence: ordinary console
+  commands and provider-only boots leave no run; selected kernels still drain on
+  fast exit, and explicitly selected console kernels still record.
+- At the run cap, telemetry admission atomically reclaims only the needed oldest
+  stopping runs silent for the quiet period (one hour by default), with no metric
+  bucket, no alert and no unexpired receipt. Issues and events are not attached
+  to a run and are never touched by this reclamation. Existing full hosts with
+  eligible rows recover without a migration or configuration change. Missing
+  writers re-enter admission. Tables far above a lowered cap make committed
+  cleanup progress of at most 50 eligible runs per refused attempt, then admit
+  once the remaining deficit fits. Refused engines retry with hourly warnings
+  and one recovery notice only after confirmed batch persistence.
+
 - Remove the migration-only `foundry models convert` command, its equivalence
   proof and ORM snapshot bridge, and source-replacement publication support.
 - Consumers already using `//foundry:model` declarations need no changes. Model

@@ -1394,6 +1394,11 @@ type SettingsAppFeaturesTelemetryConfigRetentionConfigKeySet struct {
 	MaxEventRows config.Key[Settings, int]
 	// PruneInterval selects app.features.telemetry.config.retention.prune_interval. Set accepts time.Duration.
 	PruneInterval config.Key[Settings, time.Duration]
+	// EmptyRunQuietPeriod selects app.features.telemetry.config.retention.empty_run_quiet_period. Set accepts time.Duration.
+	//
+	// EmptyRunQuietPeriod defaults to one hour; explicit values are one hour to thirty days.
+	//
+	EmptyRunQuietPeriod config.Key[Settings, time.Duration]
 }
 
 // SettingsAppFeaturesTelemetryConfigAlertsConfigKeySet exposes compiler-checked configuration overrides.
@@ -2691,6 +2696,9 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 							PruneInterval: config.Duration[Settings]("app.features.telemetry.config.retention.prune_interval", func(settings *Settings) *time.Duration {
 								return &settings.App.Features.Telemetry.Config.Retention.PruneInterval
 							}),
+							EmptyRunQuietPeriod: config.Duration[Settings]("app.features.telemetry.config.retention.empty_run_quiet_period", func(settings *Settings) *time.Duration {
+								return &settings.App.Features.Telemetry.Config.Retention.EmptyRunQuietPeriod
+							}),
 						},
 						Alerts: SettingsAppFeaturesTelemetryConfigAlertsConfigKeySet{
 							Enabled: config.Scalar[Settings, bool]("app.features.telemetry.config.alerts.enabled", func(settings *Settings) *bool { return &settings.App.Features.Telemetry.Config.Alerts.Enabled }),
@@ -3283,6 +3291,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.Features.Telemetry.Config.Retention.MaxIssueRows,
 		keys.App.Features.Telemetry.Config.Retention.MaxEventRows,
 		keys.App.Features.Telemetry.Config.Retention.PruneInterval,
+		keys.App.Features.Telemetry.Config.Retention.EmptyRunQuietPeriod,
 		keys.App.Features.Telemetry.Config.Alerts.Enabled,
 		keys.App.Features.Telemetry.Config.Alerts.Rules,
 		keys.App.Features.Telemetry.Config.Alerts.Thresholds.Latency,

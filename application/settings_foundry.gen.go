@@ -1383,6 +1383,11 @@ type SettingsFeaturesTelemetryConfigRetentionConfigKeySet struct {
 	MaxEventRows config.Key[Settings, int]
 	// PruneInterval selects features.telemetry.config.retention.prune_interval. Set accepts time.Duration.
 	PruneInterval config.Key[Settings, time.Duration]
+	// EmptyRunQuietPeriod selects features.telemetry.config.retention.empty_run_quiet_period. Set accepts time.Duration.
+	//
+	// EmptyRunQuietPeriod defaults to one hour; explicit values are one hour to thirty days.
+	//
+	EmptyRunQuietPeriod config.Key[Settings, time.Duration]
 }
 
 // SettingsFeaturesTelemetryConfigAlertsConfigKeySet exposes compiler-checked configuration overrides.
@@ -2589,6 +2594,9 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 						PruneInterval: config.Duration[Settings]("features.telemetry.config.retention.prune_interval", func(settings *Settings) *time.Duration {
 							return &settings.Features.Telemetry.Config.Retention.PruneInterval
 						}),
+						EmptyRunQuietPeriod: config.Duration[Settings]("features.telemetry.config.retention.empty_run_quiet_period", func(settings *Settings) *time.Duration {
+							return &settings.Features.Telemetry.Config.Retention.EmptyRunQuietPeriod
+						}),
 					},
 					Alerts: SettingsFeaturesTelemetryConfigAlertsConfigKeySet{
 						Enabled: config.Scalar[Settings, bool]("features.telemetry.config.alerts.enabled", func(settings *Settings) *bool { return &settings.Features.Telemetry.Config.Alerts.Enabled }),
@@ -3142,6 +3150,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Features.Telemetry.Config.Retention.MaxIssueRows,
 		keys.Features.Telemetry.Config.Retention.MaxEventRows,
 		keys.Features.Telemetry.Config.Retention.PruneInterval,
+		keys.Features.Telemetry.Config.Retention.EmptyRunQuietPeriod,
 		keys.Features.Telemetry.Config.Alerts.Enabled,
 		keys.Features.Telemetry.Config.Alerts.Rules,
 		keys.Features.Telemetry.Config.Alerts.Thresholds.Latency,

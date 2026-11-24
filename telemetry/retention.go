@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -108,6 +109,15 @@ func pruneSelected[M any, K comparable](ctx context.Context, tx *database.Tx, ta
 func (s *storage) pruneRuns(ctx context.Context, tx *database.Tx, now temporal.DateTime, result *PruneResult) error {
 	query := runs.Query().Where(orm.Lte(runs.RetainUntil, now)).
 		OrderBy(orm.Asc(runs.RetainUntil), orm.Asc(runs.Key())).Limit(maxPruneRuns)
+	query = withoutLiveRunReceipts(query, now)
+	keys, err := rows.Read(rows.SelectValue(query, runs.Key())).All(ctx, tx)
+	if err != nil || len(keys) == 0 {
+		return err
+	}
+	return s.deleteRunKeys(ctx, tx, keys, result)
+}
+
+func withoutLiveRunReceipts(query orm.Query[runRow], now temporal.DateTime) orm.Query[runRow] {
 	outer := rows.From(query)
 	inner := rows.From(flushes.Query().Where(orm.Gt(flushes.RetainUntil, now)))
 	live := rows.Correlate(outer, inner)
@@ -115,11 +125,11 @@ func (s *storage) pruneRuns(ctx context.Context, tx *database.Tx, now temporal.D
 		expr.At(rows.InnerScope(live, rows.ModelScope(flushes.Query())), flushes.RunID),
 		expr.At(rows.OuterScope(live, rows.ModelScope(query)), runs.Key()),
 	))
-	query = expr.Where(query, expr.Not(live.Exists()))
-	keys, err := rows.Read(rows.SelectValue(query, runs.Key())).All(ctx, tx)
-	if err != nil || len(keys) == 0 {
-		return err
-	}
+	return expr.Where(query, expr.Not(live.Exists()))
+}
+
+// Both expired pruning and empty-run admission share the cascade budgets.
+func (s *storage) deleteRunKeys(ctx context.Context, tx *database.Tx, keys []model.ID[runRow], result *PruneResult) error {
 	metricCount, err := orm.Count(ctx, tx, metrics.Query().Where(orm.In(metrics.RunID, keys...)))
 	if err != nil {
 		return err

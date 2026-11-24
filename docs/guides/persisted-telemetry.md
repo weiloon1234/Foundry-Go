@@ -80,6 +80,24 @@ builder cannot add its reporter to that recorder.
 orders telemetry after its actual provider. Without that declaration, captured
 readiness is unavailable, not healthy. Telemetry does not construct diagnostics.
 
+## Which processes record a run
+
+Kernel selection is the persistence intent. By default HTTP, worker and scheduler
+kernels capture periodically and drain on shutdown, including an exit before the
+first tick. Ordinary console commands and provider-only `Start`/`Shutdown` boots
+write no telemetry run, metrics, issues, events or alerts. They still expose the
+reader and explicit maintenance APIs; closing them seals intake, waits for
+admitted work and counts discarded observations as loss in memory. An unselected
+console command persists nothing, including errors it encountered and its loss
+counters. Its errors remain in its logs and exit status, not persisted telemetry.
+
+`TelemetrySettings.Kernels` can explicitly select the console (`foundation.CLI`)
+or WebSocket kernel. Those selected kernels persist normally, even on a fast
+exit. `testkit/telemetry.Flush` remains an explicit test-only capture/write without
+a loop. An engine assembled directly with `telemetry.New` keeps capture and
+persistence on `Close`, including short-lived commands. Only `KernelModule`
+applies the kernel selection rule before scheduling its loop or cleanup.
+
 ## Migrations and adoption
 
 `telemetry.Migrations()` returns immutable definitions under origin
@@ -88,6 +106,10 @@ readiness is unavailable, not healthy. Telemetry does not construct diagnostics.
 `foundry_telemetry_metric_buckets`, `foundry_telemetry_issues`,
 `foundry_telemetry_events`, and `foundry_telemetry_alerts` in the selected schema.
 Histogram, runtime, detail, and receipt payloads use the store's version 1 format.
+
+Telemetry tables are per PostgreSQL schema, and each telemetry schema belongs to
+one application. That application's units share its table capacities and run
+history. Distinct applications sharing a database must use separate schemas.
 
 Enabled configured applications include these definitions in `App.Migrations()`.
 `Build`, `Start`, and engine construction never apply migrations. Apply them
@@ -113,7 +135,8 @@ migration definitions remain intact; rollback does not require dropping tables.
 ## Configuration bounds
 
 Collector and engine policy are explicit. Zero values do not supply memory,
-retention, read, or alert defaults. The validation contracts are in
+retention, read, or alert defaults, except `Retention.EmptyRunQuietPeriod`: zero
+uses one hour for compatibility with existing configurations. The validation contracts are in
 [`telemetry/config.go`](../../telemetry/config.go).
 
 | Policy | Accepted bounds |
@@ -123,6 +146,7 @@ retention, read, or alert defaults. The validation contracts are in
 | `FlushInterval` | 1 second–1 minute |
 | `FlushTimeout`, `DrainTimeout`, `PruneInterval`, read `Timeout` | Positive durations |
 | `Retention.Minute`, `Retention.Security` | 1 hour–7 days |
+| `Retention.EmptyRunQuietPeriod` | Zero uses 1 hour; explicit values are 1 hour–30 days |
 | `Retention.Hour`, `Retention.Issue` | At most 30 days; `Hour` covers `Minute`; `Issue` is at least 1 hour |
 | `MaxRuns`, `MaxMetricRows` | 100–10,000 runs; 100–1,000,000 metric rows |
 | `MaxIssueRows`, `MaxEventRows` | 100–10,000 issues; 100–100,000 events |
@@ -201,6 +225,47 @@ bounds on cascaded children. Runs with live receipts remain protected. A delayed
 pruner can need several passes to catch up. `Engine.Prune(ctx)` is also available
 for an application-owned maintenance task; telemetry adds no separate schedule.
 It never removes application acknowledgements, audit records, or log operations.
+
+`Retention.MaxRuns` caps the shared run table (100–10,000; configured explicitly).
+Existing runs may still write at the cap. Before refusing a new run, admission
+uses the same controls-row transaction to reclaim only the oldest eligible empty
+runs, ordered by heartbeat and then ID. Eligibility requires a version 1 stored
+snapshot whose `Health.State` is `stopping`, a heartbeat strictly older than
+`EmptyRunQuietPeriod` by PostgreSQL time, no metric bucket, no alert and no
+unexpired flush receipt. Missing or malformed stopping state is kept.
+
+Issues and events are not attached to a run and are never touched by run
+reclamation. They neither prevent reclamation nor lose rows, counts or detail
+when a run is removed, including issues of the same release and orphan events.
+Ordinary retention pruning of issues and events continues independently under
+their own policies.
+
+When admission needs at most 50 rows reclaimed, it deletes only the exact number
+needed, within the existing cascade budgets. If too few eligible rows exist or
+those budgets are exceeded, it deletes nothing and refuses the run. Reclamation,
+the new run, its data and its receipt commit or roll back together.
+
+If the table is farther above its cap and admission needs more than 50 rows,
+the attempt instead reclaims up to 50 eligible rows in oldest-first order under
+the same lock and cascade budgets. It commits that bounded cleanup, then returns
+the capacity error without admitting the run or consuming its pending batch.
+Each later flush rechecks the table, so eligible rows can bring a lowered cap
+within reach across successive attempts. An attempt with no reclaimable rows
+changes nothing. There is no unbounded cleanup loop in one attempt. An unknown
+cleanup commit remains an unknown outcome; it does not report confirmed progress
+or recovery. Only confirmed batch persistence announces recovery.
+
+Existing stored rows use the same rule: a full host with eligible empty ended
+runs recovers through admission attempts after upgrading, without a migration,
+configuration change or separate cleanup.
+
+A writer returning after its row was reclaimed must pass admission again under
+the same lock. It retains its process and pending receipt identities; missing
+rows do not bypass the cap. Refused engines retry each flush and recover in the
+same process when space appears. A refusal logs the existing safe warning once,
+then at most hourly while it persists, and a confirmed write/reconciliation logs
+one recovery notice with the refusal count. Unknown commits never announce
+recovery. Pending bounds and best-effort loss still apply during an outage.
 
 `Engine.Reader()` returns owned snapshots through these methods:
 

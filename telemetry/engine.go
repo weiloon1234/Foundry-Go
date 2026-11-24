@@ -36,21 +36,26 @@ type Dependencies struct {
 // Call Close after producers stop, and retain dependencies until Done closes.
 // Do not copy an Engine.
 type Engine struct {
-	collector        *Collector
-	deps             Dependencies
-	config           Config
-	storage          *storage
-	reader           *Reader
-	operations       operationOwner
-	mu               sync.Mutex
-	started, closing bool
-	cancel           context.CancelFunc
-	runDone, done    chan struct{}
-	closeErr         error
+	collector         *Collector
+	deps              Dependencies
+	config            Config
+	storage           *storage
+	reader            *Reader
+	operations        operationOwner
+	mu                sync.Mutex
+	started, closing  bool
+	persistOnClose    bool
+	capacityRefusals  uint64
+	capacityWarningAt time.Time
+	cancel            context.CancelFunc
+	runDone, done     chan struct{}
+	closeErr          error
 }
 
 // New validates and snapshots policy before claiming the collector. It performs
-// no database I/O and starts no work. A collector has exactly one Engine/storage
+// no database I/O and starts no work. Direct assembly selects final persistence;
+// KernelModule replaces that intent with its selected-kernel policy before boot.
+// A collector has exactly one Engine/storage
 // owner, including when that owner is closed. Apply Migrations separately.
 func New(c *Collector, deps Dependencies, config Config) (*Engine, error) {
 	if c == nil || deps.DB == nil || deps.Recorder == nil || credential.IsNil(deps.Clock) {
@@ -60,7 +65,7 @@ func New(c *Collector, deps Dependencies, config Config) (*Engine, error) {
 		return nil, err
 	}
 	config.Alerts.Rules = slices.Clone(config.Alerts.Rules)
-	e := &Engine{collector: c, deps: deps, config: config, runDone: make(chan struct{}), done: make(chan struct{})}
+	e := &Engine{collector: c, deps: deps, config: config, persistOnClose: true, runDone: make(chan struct{}), done: make(chan struct{})}
 	reader, err := newReader(deps, config, c.config.Routes, &e.operations)
 	if err != nil {
 		return nil, err
@@ -88,6 +93,7 @@ func (e *Engine) run(ctx context.Context, ticks <-chan time.Time) error {
 		return safeerror.NewFault(fault.Conflict, "telemetry run is single-use and cannot start after close")
 	}
 	e.started = true
+	e.persistOnClose = true
 	lifetime, cancel := context.WithCancel(ctx)
 	e.cancel = cancel
 	e.mu.Unlock()
@@ -129,7 +135,8 @@ func (e *Engine) loop(ctx context.Context, ticks <-chan time.Time) error {
 
 // Close seals intake and API admission once, cancels Run, and starts finalization.
 // Its context bounds only this caller's wait. Finalization waits for actual work
-// exit, performs a final capture and a DrainTimeout-limited FIFO drain, and counts
+// exit, and when persistence is selected performs a final capture and a
+// DrainTimeout-limited FIFO drain. It counts
 // remaining batches as best-effort shutdown loss. Late reports also count loss.
 // Repeated Close calls return the same completed result; Done is the ownership barrier.
 func (e *Engine) Close(ctx context.Context) error {
@@ -147,7 +154,7 @@ func (e *Engine) Close(ctx context.Context) error {
 			e.cancel()
 		}
 		started := e.started
-		go e.finalize(started, operations)
+		go e.finalize(started, e.persistOnClose, operations)
 	}
 	e.mu.Unlock()
 	select {
@@ -163,21 +170,24 @@ func (e *Engine) Close(ctx context.Context) error {
 	}
 }
 
-func (e *Engine) finalize(started bool, operations <-chan struct{}) {
+func (e *Engine) finalize(started, persist bool, operations <-chan struct{}) {
 	if started {
 		<-e.runDone
 	}
 	<-operations
-	ctx, cancel := context.WithTimeout(context.Background(), e.config.DrainTimeout)
-	err := e.capture(ctx)
-	if err != nil {
-		e.captureFailure(err)
+	var err, drainErr error
+	if persist {
+		ctx, cancel := context.WithTimeout(context.Background(), e.config.DrainTimeout)
+		err = e.capture(ctx)
+		if err != nil {
+			e.captureFailure(err)
+		}
+		drainErr = e.drain(ctx)
+		if drainErr != nil {
+			e.logFailure(drainErr)
+		}
+		cancel()
 	}
-	drainErr := e.drain(ctx)
-	if drainErr != nil {
-		e.logFailure(drainErr)
-	}
-	cancel()
 	c := e.collector
 	c.mu.Lock()
 	for _, pending := range c.pending {
@@ -258,7 +268,17 @@ func (e *Engine) drain(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := e.storage.flush(ctx, nil); err != nil {
+		e.collector.mu.Lock()
+		before := e.storage.applied
+		e.collector.mu.Unlock()
+		err := e.storage.flush(ctx, nil)
+		e.collector.mu.Lock()
+		committed := e.storage.applied != before
+		e.collector.mu.Unlock()
+		if committed {
+			e.logCapacityRecovery()
+		}
+		if err != nil {
 			return err
 		}
 	}
@@ -273,6 +293,9 @@ func (e *Engine) captureFailure(err error) {
 
 func (e *Engine) logFailure(err error) {
 	if e.deps.Logger == nil {
+		return
+	}
+	if e.suppressCapacityWarning(err) {
 		return
 	}
 	_ = callback.Isolated("telemetry logger", func() error {
