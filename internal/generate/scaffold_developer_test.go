@@ -211,7 +211,7 @@ func TestDeveloperScaffoldOptionsAndRecoveryAuthority(t *testing.T) {
 	for _, kind := range []ScaffoldKind{ModelScaffold, DTOScaffold, JobScaffold, CommandScaffold} {
 		name := "record_" + string(kind) + ".go"
 		entry := journalEntry{After: state(oldFile{true, []byte("package sample\n"), 0644})}
-		for _, version := range []int{1, 3, 7} {
+		for _, version := range []int{1, 3, 7, 8} {
 			log := journal{Version: version, Guards: []string{"."}, Files: map[string]journalEntry{name: entry}}
 			data, _ := json.Marshal(log)
 			_, err := decodeJournal(data)

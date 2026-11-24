@@ -132,17 +132,6 @@ orm.CursorRequest
   Validate func() error
 *orm.CursorRequest
   Validate func() error
-orm.DeclarationOwner
-  field Model string
-  field Name string
-  field StorageModel string
-*orm.DeclarationOwner
-orm.DeclarationSlot
-  field Field string
-  field Kind string
-  field Name string
-  field Storage string
-*orm.DeclarationSlot
 orm.DeleteSource
   Exec func(ctx context.Context, writer github.com/weiloon1234/Foundry-Go/database.Transactor) (int64, error)
   Format func(s fmt.State, _ rune)

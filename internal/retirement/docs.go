@@ -46,6 +46,14 @@ func checkDocument(name string, data []byte, strict bool) error {
 	if err != nil {
 		return err
 	}
+	commands := make(map[*regexp.Regexp]string)
+	for command, replacement := range rules.RetiredCommands {
+		words := strings.Fields(strings.TrimPrefix(command, "foundry "))
+		for i, word := range words {
+			words[i] = regexp.QuoteMeta(word)
+		}
+		commands[regexp.MustCompile(`\b`+strings.Join(words, `[ \t]+`)+`\b`)] = replacement
+	}
 	patterns := []*regexp.Regexp{regexp.MustCompile(`database/query\b`), regexp.MustCompile(`\bquery\.[A-Z]\w*`)}
 	for _, directive := range rules.RetiredDirectives {
 		patterns = append(patterns, regexp.MustCompile(`foundry:`+regexp.QuoteMeta(directive)+`\b`))
@@ -131,6 +139,11 @@ func checkDocument(name string, data []byte, strict bool) error {
 		pending = false
 		if fence == "" && textBefore {
 			continue
+		}
+		for pattern, replacement := range commands {
+			if pattern.MatchString(line) {
+				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: retired command; %s", name, i+1, replacement)))
+			}
 		}
 		bad := false
 		if fence != "" {

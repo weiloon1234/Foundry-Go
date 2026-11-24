@@ -1,4 +1,7 @@
 {
+  "retiredCommands": {
+    "foundry models convert": "declare models with //foundry:model and run foundry generate; consumers on versions before v0.51.0 must first use v0.51.1, then upgrade"
+  },
   "retiredDirectives": ["projection"],
   "owners": [
     "http.Endpoint",

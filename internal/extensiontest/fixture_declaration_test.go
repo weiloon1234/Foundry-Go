@@ -1,24 +1,27 @@
 package extensiontest
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
 func TestMemberDefaultAndComputedDeclarations(t *testing.T) {
-	before, err := orm.DeclarationSnapshot(memberSource("extension_members"), "members", nil, nil)
+	if err := orm.Check(memberFields, memberSource("extension_members")); err != nil {
+		t.Fatal(err)
+	}
+	generated := orm.IdentityOf(memberFields.Table, memberFields.Key())
+	computed := MemberIdentity("extension_members")
+	generatedKey, err := generated.KeyToken(42)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Compare the pre-existing handles; generation also exposes the Soft token.
-	after, err := orm.DeclarationSnapshot(memberTable{memberFields.Table, memberFields.DeletedAt}, "members", nil, nil)
+	computedKey, err := computed.KeyToken(42)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(before, after) {
-		t.Fatal("default declaration changed")
+	if generated.ModelName() != computed.ModelName() || generatedKey != computedKey {
+		t.Fatal("default and computed identities differ")
 	}
 	identity := MemberIdentity("renamed_members")
 	renamed := identity.ModelName()

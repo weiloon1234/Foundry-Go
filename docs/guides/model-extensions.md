@@ -37,8 +37,8 @@ var ArticleCover = attachments.OneOf(ArticleOwner, "cover", attachments.Policy{
 ```
 
 The [compiled profiles fixture](../../tests/fixtures/consumer/profiles/profile.go)
-keeps its existing explicit owner contract during conversion. New declarations
-reuse the generated identity as described above.
+uses an explicit owner contract with `identity=false`. New declarations reuse
+the generated identity as described above.
 
 The generated identity binds the table declaration to its actual primary handle.
 Different model/key types fail at compilation; a handle from another declaration

@@ -1142,6 +1142,4 @@ must pass `foundry models check` using the directive.
 | `orm.ModelFingerprint` | Check ordered field names and exact Foundry tags at declaration time. |
 
 Row constructors under `orm/rows` remain handwritten projection APIs. Relationship
-computations and external-store policies also remain handwritten. The migration
-snapshot bridge exists only for `foundry models convert`; do not build runtime
-features on it.
+computations and external-store policies also remain handwritten.

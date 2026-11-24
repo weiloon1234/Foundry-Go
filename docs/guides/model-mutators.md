@@ -38,8 +38,7 @@ Before-write hooks read `value.Optional[Input]` through `WriteGet` and `value.Op
 An input primary key uses `member=ID,key-role=input,input=Type` on the key field. Stored-key lookup types remain unchanged. A distinct input disables automatic UUID synthesis: supply input explicitly or use a database-owned default. An input key cannot also declare a primary insert-select role.
 
 This is the complete input-key declaration; its conventional mutator returns the
-exact stored key type. The converter recognizes the earlier
-`InputKeyOf(b, table.Key(), nil)` binding and preserves this capability.
+exact stored key type.
 
 <!-- compiled-source: tests/fixtures/goway/models/mutators/key.go -->
 ```go

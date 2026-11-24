@@ -51,7 +51,7 @@ func TestColorAdjustmentsMatchPerPixelFormula(t *testing.T) {
 			}
 		}
 	}
-	// Other decoded color models convert once, with the same result for opaque pixels.
+	// Other decoded color models are converted once, with the same result for opaque pixels.
 	gray := image.NewGray(image.Rect(0, 0, 9, 9))
 	for i := range gray.Pix {
 		gray.Pix[i] = uint8(i * 3)

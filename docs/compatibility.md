@@ -5,97 +5,34 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+## Model conversion tool removal — v0.52.0
+
+The migration-only `foundry models convert` command and its ORM snapshot bridge
+are removed. Consumers already using directive models need no source changes.
+The generator, `orm.ModelFingerprint`, both stale-generation guards,
+`foundry models check` and model scaffolding retain their behavior.
+
+For a consumer still on a version before v0.51.0, convert on v0.51.1 first
+(the last release with the tool), then upgrade to v0.52.0.
+Complete any pending source publication recovery with the v0.51.1 tool before
+upgrading. Version 8 journals are no longer supported; their staging is retained.
+Ordinary generation continues to use version 2 journals.
+
 <a id="generated-model-declarations"></a>
 ## Generated model declarations — v0.51.0
 
 Concrete table-backed models with constant table names now use one declaration:
 `//foundry:model table=users var=Users key=ID` on the struct, with `foundry` field
 tags. Generation emits the table type, binding and identity block. Applications,
-shipped stores and non-test consumer fixtures must convert handwritten table
-bindings. The field/query/write APIs remain typed ORM APIs; this does not restore
-the retired generated query or draft APIs. Row projections remain handwritten.
+shipped stores and non-test consumer fixtures use these generated declarations.
+The field/query/write APIs remain typed ORM APIs; this does not restore the
+retired generated query or draft APIs. Row projections remain handwritten.
 
 This is a source and gate compatibility change. `foundry models check` rejects
 handwritten constant-table declarations for concrete models outside the ORM tree
 and test files. Generic model builders and runtime-computed names remain outside
 the directive. There is no exemption flag or comment. Consumers that already use
 DTO or enum generation must also generate their model declarations.
-
-### Convert an application
-
-1. Pin the framework dependency and its `cmd/foundry` tool to the same chosen
-   release using the [module-pinned tool setup](guides/team-adoption.md).
-   Use a release containing `models convert`; do not use a globally installed
-   tool from a different release. Keep the application source reviewable before
-   conversion, including local edits. Set `FOUNDRY_VERSION` to the reviewed release
-   that contains this change, then pin the module tool:
-
-   ```sh
-   GOWORK=off go get -tool "github.com/weiloon1234/Foundry-Go/cmd/foundry@${FOUNDRY_VERSION:?select a release containing models convert}"
-   GOWORK=off go tool foundry doctor --dir .
-   ```
-
-2. From the application module root, prove the conversion without publication:
-
-   ```sh
-   GOWORK=off go tool foundry models convert --dry-run --timeout 15m ./...
-   ```
-
-3. Resolve every refusal, repeat the dry run, then publish proven packages:
-
-   ```sh
-   GOWORK=off go tool foundry models convert --timeout 15m ./...
-   ```
-
-4. Inspect the source, generated files and `.foundry-gen.json` changes. Check
-   current output and declaration spelling, then build:
-
-   ```sh
-   GOWORK=off go tool foundry generate --check --recursive
-   GOWORK=off go tool foundry models check ./...
-   GOWORK=off go build -p 4 ./...
-   ```
-
-5. Keep the generated output and ownership manifest with the source. Retain the
-   complete application table registry and its startup validation. Add both checks
-   above to the application's gate. Repeat the process for independent modules.
-
-`models convert [--dir DIR] [--dry-run] [--timeout 5m] [./...]` proves whole
-packages before publication. Dry-run runs the proof but leaves original files
-unchanged. Any refused model prevents publication of its package; other packages
-can still convert, and any refusal makes the command fail. A second successful
-run is a no-op. A timeout bounds the CLI wait and exits with status 124.
-
-The proof compares original and generated declaration metadata, typed members and
-key capabilities, identity storage names, relation/slot metadata and retained
-behavior source. Inline hook, retrieval and scope factories move into named
-functions without changing their bodies. The proof does not establish database
-schema/data equivalence or arbitrary initializer and callback semantics. No SQL
-migration runs. Preserve SQL names, key codecs and external slot names.
-
-### Resolve conversion refusals
-
-| Refused shape | Required action before retrying |
-| --- | --- |
-| A table type with a name other than `<Model>Table` | Rename the type and its references to the conventional name. The converter names the declaration. |
-| Arbitrarily renamed table members | Align callers with field names. Only collisions with promoted table methods permit `member=Name`. Member order is not a compatibility requirement. |
-| A nonconventional identity variable referenced elsewhere | Rename those references to the reported conventional name, such as `usersIdentity` or `apiKeysIdentity`. An unreferenced name can disappear. |
-| A bare `orm.Table` value | Prepare a named `<Model>Table` and its affected callers for conversion; the tool refuses to hide that variable-type change. |
-| A function-local table, indirect initializer or model owned by another package | Move an application declaration beside its owning model and make it convertible, or write the directive there and update callers explicitly. Test-only builders can move into test files. |
-| A partial identity block | Choose the full generated identity, or `identity=false` with the required custom methods retained. Do not leave duplicate generated and handwritten methods. |
-| Dynamic declarations or resource-dependent initializers | Refactor only when their semantics permit a constant directive. Generic models and runtime-computed table names remain outside the directive. |
-| Metadata mismatch or unsupported declaration | Use the source position, property and before/after values in the refusal to resolve the difference. Do not bypass proof or change stored names to force conversion. |
-| Unknown, edited or unsafe generated output | Restore the matching source/output ownership state. Do not delete manifests or overwrite user-owned files. |
-
-A proof failure reports `<package>: conversion refused: models <names>: <stage>: <cause>`.
-The cause retains compiler, source, metadata or publication diagnostics. A metadata
-difference identifies the model, property and original/generated values.
-
-The converter reports `models convert: <n> refusal(s); refused packages were not
-changed`. For interrupted publication, use the matching tool's
-`foundry generate --recover --dir PACKAGE`. Keep recovery staging and backups
-until recovery succeeds. Conversion uses the shared guarded publisher, including
-source replacements; ordinary generation does not rewrite model source.
 
 ### Keep declarations current
 
@@ -105,11 +42,6 @@ A `foundry` tag edit fails declaration validation with
 ordered field names and exact `foundry` tags, including ignored fields, once at
 declaration time. Directive comments require `foundry generate --check` because
 reflection cannot see comments. See [staleness](guides/model-declarations.md#stale-declarations).
-
-`models convert`, its public ORM snapshot bridge and snapshot-only runtime support
-are migration-only. They are scheduled for removal in the release after consumers
-have converted. Application runtime code must not depend on them. The generator,
-its stale-declaration guards and `models check` remain.
 
 ## WebAssembly CSP source
 

@@ -285,3 +285,26 @@ func TestRestoredModelDirectiveAndRetiredProjection(t *testing.T) {
 		}
 	}
 }
+
+func TestDocumentationRetiredCommands(t *testing.T) {
+	denied, err := declarations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules, err := loadDocumentRules(denied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for command, replacement := range rules.RetiredCommands {
+		for _, spelling := range []string{command, strings.TrimPrefix(command, "foundry "), strings.ReplaceAll(command, " ", "\t")} {
+			for _, text := range []string{"Run `" + spelling + " ./...`.", "```sh\n" + spelling + " ./...\n```", "Run " + spelling + "."} {
+				for _, check := range []func(string, []byte) error{CheckDocument, CheckApplicationDocument} {
+					err := check("AGENTS.md", []byte(text))
+					if err == nil || !strings.Contains(err.Error(), replacement) {
+						t.Fatalf("missing retired command remedy: %v", err)
+					}
+				}
+			}
+		}
+	}
+}

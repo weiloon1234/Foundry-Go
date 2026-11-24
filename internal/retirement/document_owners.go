@@ -15,6 +15,7 @@ import (
 )
 
 type documentRules struct {
+	RetiredCommands   map[string]string `json:"retiredCommands"`
 	RetiredDirectives []string          `json:"retiredDirectives"`
 	Owners            []string          `json:"owners"`
 	Constructors      map[string]string `json:"constructors"`

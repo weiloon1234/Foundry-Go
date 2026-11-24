@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.52.0 — 2026-11-25
+
+- Remove the migration-only `foundry models convert` command, its equivalence
+  proof and ORM snapshot bridge, and source-replacement publication support.
+- Consumers already using `//foundry:model` declarations need no changes. Model
+  generation, stale-generation guards, `foundry models check` and scaffolding
+  retain their behavior.
+- If you still use handwritten models, convert on v0.51.1 first, the last release
+  with the tool, then upgrade to v0.52.0. See [compatibility](docs/compatibility.md).
+
 ## v0.51.1 — 2026-11-24
 
 - The ORM migration guide no longer says model generation is retired: its

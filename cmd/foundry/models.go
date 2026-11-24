@@ -14,10 +14,7 @@ import (
 )
 
 func runModels(ctx context.Context, args []string, stdout, stderr io.Writer) (resultErr error) {
-	if len(args) > 0 && args[0] == "convert" {
-		return runModelsConvert(ctx, args[1:], stdout, stderr)
-	}
-	const usage = "usage: foundry models check | convert [--dir .] [--timeout 5m] [./...]\nCheck that table-backed models are declared only through the generator. No files are changed.\n--timeout bounds how long the CLI waits, including parsing and type checking; expiry exits with status 124."
+	const usage = "usage: foundry models check [--dir .] [--timeout 5m] [./...]\nCheck that table-backed models are declared only through the generator. No files are changed.\n--timeout bounds how long the CLI waits, including parsing and type checking; expiry exits with status 124."
 	if handled, err := subcommandHelp(args, stdout, usage); handled {
 		return err
 	}

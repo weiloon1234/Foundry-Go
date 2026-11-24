@@ -150,9 +150,6 @@ func WithHooks[M any](factory func() Hooks[M]) Option {
 		stored = func() hookSet { return eraseHooks(factory()) }
 	}
 	return Option{
-		// BEGIN foundry models convert
-		conversionOptionMetadata: conversionOptionMetadata{snapshotHooks: snapshotFunction(reflect.ValueOf(factory))},
-		// END foundry models convert
 		hooks: stored, hookModel: reflect.TypeFor[M](),
 	}
 }

@@ -43,9 +43,6 @@ func Scope[M any, K comparable](table Table[M, K], name string, resolve func(con
 // execute or compile queries. Example: WithGlobalScopes(func(t OrderTable) []GlobalScope[Order] { return []GlobalScope[Order]{Scope(t.Table, "tenant", tenantPredicate(t))} }).
 func WithGlobalScopes[M any, T CheckedTable](source func(T) []GlobalScope[M]) Option {
 	opt := Option{
-		// BEGIN foundry models convert
-		conversionOptionMetadata: conversionOptionMetadata{snapshotScopes: snapshotFunction(reflect.ValueOf(source))},
-		// END foundry models convert
 		scopeModel: reflect.TypeFor[M](), scopeTable: reflect.TypeFor[T](),
 	}
 	if source != nil {

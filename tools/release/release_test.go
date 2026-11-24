@@ -532,12 +532,12 @@ func TestRetiredFixtureEvidencePolicy(t *testing.T) {
 
 func TestSourcePolicyModelDeclarationFixtures(t *testing.T) {
 	_, policy := sourceFixture(t)
-	for _, name := range []string{"internal/generate/testdata/models/basic.go.txt", "internal/generate/testdata/models/constructors.golden", "internal/generate/testdata/models/compilefail/added.go.txt", "internal/modelconvert/testdata/plain.before", "internal/modelconvert/testdata/plain.after", "internal/modelconvert/testdata/plain.generated"} {
+	for _, name := range []string{"internal/generate/testdata/models/basic.go.txt", "internal/generate/testdata/models/constructors.golden", "internal/generate/testdata/models/compilefail/added.go.txt"} {
 		if !policy.sourceName(filepath.FromSlash(name)) {
 			t.Fatal("reviewed model fixture excluded", name)
 		}
 	}
-	for _, name := range []string{"internal/generate/testdata/models/private.go.txt", "internal/modelconvert/testdata/private.before", "other/testdata/plain.generated"} {
+	for _, name := range []string{"internal/generate/testdata/models/private.go.txt"} {
 		if policy.sourceName(filepath.FromSlash(name)) {
 			t.Fatal("unreviewed model fixture included", name)
 		}

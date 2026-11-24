@@ -14,7 +14,7 @@ A concrete model with a constant table name is declared once with `//foundry:mod
 and `foundry` tags. Generation emits its typed ORM table, binding and identity.
 Queries, projections, business methods and extension policies remain ordinary Go.
 See [model declarations](../docs/guides/model-declarations.md) and
-[conversion compatibility](../docs/compatibility.md#generated-model-declarations).
+[model declaration compatibility](../docs/compatibility.md#generated-model-declarations).
 Dated generator-retirement entries below describe the former query/draft system;
 they do not prescribe handwritten application table bindings. This contract note
 records no new milestone acceptance.

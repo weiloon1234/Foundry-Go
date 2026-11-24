@@ -370,11 +370,6 @@ access resolves to the handwritten field itself. Use `foundry generate --check` 
 detect stale directive comments and field documentation. The compile-time guard and
 runtime fingerprint do not inspect comments.
 
-During migration, `models convert` moves a table member's documentation onto its
-model field. Existing field documentation stays first; different member text is
-appended below it and listed in the conversion report. Identical text is retained
-once. The model field remains the documentation owner after conversion.
-
 Application models use the directive. `foundry models check` reports handwritten
 table construction for concrete models with constant table names in non-test files
 outside `database/orm`. Folded constant names are included. The check follows one

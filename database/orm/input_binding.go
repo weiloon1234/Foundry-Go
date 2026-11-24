@@ -19,9 +19,6 @@ func bindInput[I, V any](d *declaration, ptr *V, c codec.Codec[V], transform fun
 		if !ok {
 			return invalid("mutator signature does not match declared input and stored types")
 		}
-		// BEGIN foundry models convert
-		recordConversionMutator(core, reflect.ValueOf(typed))
-		// END foundry models convert
 		core.mutator = querycore.NewFieldMutator(core.metadata.Name, c, typed)
 		return nil
 	}
@@ -42,9 +39,6 @@ func bindNullableInput[I, V any](d *declaration, ptr *value.Nullable[V], c codec
 		if !ok {
 			return invalid("mutator signature does not match declared nullable input and stored types")
 		}
-		// BEGIN foundry models convert
-		recordConversionMutator(core, reflect.ValueOf(typed))
-		// END foundry models convert
 		core.mutator = querycore.NewNullableFieldMutator(core.metadata.Name, c, typed)
 		return nil
 	}

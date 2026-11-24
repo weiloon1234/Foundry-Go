@@ -18,6 +18,11 @@
     "OneSlot.PublicURL"
   ],
   "database/orm": [
+    "DeclarationSnapshot",
+    "DeclarationSlot",
+    "DeclarationOwner",
+    "FoundryCompareDeclarationSnapshots",
+    "FoundryExplainDeclarationSnapshots",
     "Extension",
     "LegacyIdentityScope",
     "Predicate.Not",

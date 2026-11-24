@@ -42,9 +42,6 @@ Read the closest discovery/emitter/tests and the corresponding runtime descripto
 - Preserve constructor coverage in the model generator tests. Low-level functions
   are generated-code implementation APIs and test tools; direct use outside the
   ORM tree is limited to tests, generic models and runtime-computed table names.
-- Keep `internal/modelconvert` and its ORM snapshot bridge isolated. They exist
-  only for `foundry models convert` and are removed in the release after consumers
-  convert; no runtime feature may depend on them.
 
 ## Cross-layer acceptance
 

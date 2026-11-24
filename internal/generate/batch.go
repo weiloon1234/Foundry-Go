@@ -44,20 +44,6 @@ func combineWrites(root string, writes []packageWrite) (writePlan, error) {
 			}
 			plan.artifacts = true
 		}
-		if write.plan.conversion {
-			if len(writes) != 1 || write.input.dir != root || write.plan.scaffold || write.plan.artifacts || write.plan.distribution != nil {
-				return plan, fmt.Errorf("conversion requires one isolated package")
-			}
-			for name, data := range write.plan.changes {
-				if name == manifestName || outputName.MatchString(name) {
-					continue
-				}
-				if !conversionSource(name) || !write.plan.before[name].exists || data == nil {
-					return plan, fmt.Errorf("invalid conversion source target")
-				}
-			}
-			plan.conversion = true
-		}
 		if write.plan.scaffold {
 			if len(writes) != 1 || len(write.plan.changes) != 1 || write.input.dir != root {
 				return plan, fmt.Errorf("scaffolding must create exactly one file in one package")

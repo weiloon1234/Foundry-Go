@@ -39,10 +39,6 @@ type declaration struct {
 }
 
 type tableCore struct {
-	// BEGIN foundry models convert
-	conversionTableMetadata
-	// END foundry models convert
-
 	typ           reflect.Type
 	slots         map[int]*slotCore
 	model         querycore.ModelDefinition
@@ -61,10 +57,6 @@ type tableCore struct {
 }
 
 type columnCore struct {
-	// BEGIN foundry models convert
-	conversionColumnMetadata
-	// END foundry models convert
-
 	owner              *tableCore
 	field              reflect.StructField
 	metadata           querycore.Column
@@ -96,10 +88,6 @@ type columnCore struct {
 
 // Option configures a declaration. Example: Define("logs", declare, NoTimestamps()).
 type Option struct {
-	// BEGIN foundry models convert
-	conversionOptionMetadata
-	// END foundry models convert
-
 	noTimestamps, noSoftDeletes bool
 	fingerprint                 string
 	hooks                       func() hookSet
@@ -136,9 +124,6 @@ func Define[M any, T CheckedTable](name string, declare func(Builder[M], *M) T, 
 				d.fail("model", "model changed since generation; run foundry generate")
 			}
 		}
-		// BEGIN foundry models convert
-		recordConversionOption(d.core, opt)
-		// END foundry models convert
 
 		if opt.retrievalModel != nil {
 			if opt.retrievalModel != d.typ || opt.retrieval == nil || d.core.retrieval != nil {
@@ -169,9 +154,6 @@ func Define[M any, T CheckedTable](name string, declare func(Builder[M], *M) T, 
 		}
 
 	}
-	// BEGIN foundry models convert
-	recordConversionSettings(d)
-	// END foundry models convert
 	if d.typ.Kind() != reflect.Struct {
 		d.errors = append(d.errors, safeerror.New(fmt.Sprintf("orm %s: model must be a struct", name)))
 	}

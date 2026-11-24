@@ -271,9 +271,13 @@ func TestRecoveryPreservesUnsupportedJournals(t *testing.T) {
 	}
 	for _, data := range []string{
 		`{"version":1,"guards":["."],"files":{"models.go":{}}}`,
+		`{"version":8,"guards":["."],"files":{"models_foundry.gen.go":{}}}`,
 		`{"version":999,"guards":["."],"files":{"models.go":{}}}`,
 		`{"version":2,"guards":["."],"files":{"models.go":{}},"unknown":true}`,
 	} {
+		if _, err := decodeJournal([]byte(data)); err == nil {
+			t.Fatal("unsupported journal decoded")
+		}
 		dir := fixture(t, "package sample\ntype User struct{ Email string }\n")
 		before := snapshotFile(t, dir, "models.go")
 		staging := filepath.Join(dir, lockName)

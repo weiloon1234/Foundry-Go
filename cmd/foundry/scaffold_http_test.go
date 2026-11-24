@@ -37,7 +37,7 @@ func TestDTOScaffoldTransportFlags(t *testing.T) {
 func TestModelScaffoldDeclarationWorkflow(t *testing.T) {
 	for _, slots := range []bool{false, true} {
 		t.Run(fmt.Sprint(slots), func(t *testing.T) {
-			dir := conversionFixture(t)
+			dir := scaffoldModuleFixture(t)
 			if err := os.WriteFile(filepath.Join(dir, "models.go"), []byte("package sample\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -72,4 +72,26 @@ func TestModelScaffoldDeclarationWorkflow(t *testing.T) {
 			}
 		})
 	}
+}
+
+func scaffoldModuleFixture(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	for _, name := range []string{"go.mod", "go.sum"} {
+		data, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if name == "go.mod" {
+			data = []byte(strings.Replace(string(data), "module "+frameworkinfo.ModulePath, "module foundry.test/scaffold", 1) + "\nrequire " + frameworkinfo.ModulePath + " v0.0.0\nreplace " + frameworkinfo.ModulePath + " => " + root + "\n")
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
 }

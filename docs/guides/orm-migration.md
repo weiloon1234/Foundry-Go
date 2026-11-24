@@ -303,8 +303,7 @@ current imports and concrete model types from the linked source.
 
 ## Declare models and lifecycle roles
 
-For an existing handwritten table, follow the [conversion procedure](../compatibility.md#generated-model-declarations).
-It proves the generated declaration before replacing a package. New models use
+Models use
 `//foundry:model table=users var=Users key=ID` on the struct and `foundry` field
 tags. Do not write a table type, binding or identity block yourself.
 
@@ -315,7 +314,7 @@ See [model declarations](model-declarations.md) for nullable fields, enums,
 decimals, foreign keys, timestamps, mutator input types and slot ownership.
 Managed timestamps require `role=created-at` and `role=updated-at` together.
 A lone ordinary `CreatedAt` uses `role=time` with conventions enabled; keep any
-existing `timestamps=none` choice when converting an application-managed model.
+existing `timestamps=none` choice for an application-managed model.
 `role=time` cannot disable an active timestamp pair or soft-delete convention.
 
 An exposed key uses `member=ID`; add `key-role=primary` only for insert-select.
@@ -1725,8 +1724,8 @@ Call the generated `user.FoundryIdentity()` or `user.FoundryReference()`;
 identity methods are enabled unless the directive specifies `identity=false`.
 
 Authentication and other `model.Identifiable` consumers use the generated identity
-methods. Preserve custom identity semantics explicitly with `identity=false` when
-conversion requires them. Extension declarations reuse the generated identity
+methods. Preserve custom identity semantics explicitly with `identity=false`.
+Extension declarations reuse the generated identity
 variable in the same package; slot fields infer their bindings from their types.
 
 Seed definitions and caller-owned transactions stay unchanged:
@@ -1819,7 +1818,7 @@ Locks are available only on `LockedQuery` inside an active transaction (`*databa
 The model directive generates `FoundryReference` and `FoundryIdentity` by default.
 They preserve the concrete stored key and its identity codec. Do not duplicate
 these methods in application source. `identity=false` preserves an intentional
-custom contract during conversion. See [identity](model-declarations.md#recipe-register-tables).
+custom identity contract. See [identity](model-declarations.md#recipe-register-tables).
 
 ### Datatable in isolated tests
 

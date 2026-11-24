@@ -38,7 +38,6 @@ type writePlan struct {
 	before       map[string]oldFile
 	guards       []string
 	scaffold     bool
-	conversion   bool
 	artifacts    bool
 	distribution *pluginmanifest.Distribution
 	newDirs      []string
