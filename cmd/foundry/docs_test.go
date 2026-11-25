@@ -75,6 +75,7 @@ func documentationFixture(t *testing.T, mode string) (app, framework, goBinary s
 test "$GOWORK" = off && test "$GOPROXY" = off && test "$GOSUMDB" = off &&
 test "$GOTOOLCHAIN" = local && test "$GOFLAGS" = -mod=readonly &&
 test "$GOENV" = off && test "$GOVCS" = '*:off' || exit 91
+if test "$1 $2" = 'list -find'; then cat "$FOUNDRY_TEST_GO_LIST" || exit 93; exit 0; fi
 test "$1 $2 $3 $4" = 'list -m -json github.com/weiloon1234/Foundry-Go' || exit 92
 printf '%s\n' ` + "'" + strings.ReplaceAll(string(data), "'", "'\"'\"'") + "'\n"
 	goBinary = filepath.Join(t.TempDir(), "go")
@@ -233,13 +234,17 @@ func TestDocsSymlinkedApplicationRoot(t *testing.T) {
 func TestDocsPaginationRetirement(t *testing.T) {
 	for _, owner := range []string{"AuthenticatedNumberedEndpoint[P,F,A,T]", "AuthenticatedSimpleEndpoint[P,F,A,T]", "AuthenticatedCursorEndpoint[P,F,M,A,T]"} {
 		app, _, goBinary, build := documentationFixture(t, "match")
-		text := "```go\npackage example\nimport p \"github.com/weiloon1234/Foundry-Go/http/pagination\"\nfunc use(e p." + owner + ") { e.WithScopes(scopes) }\n```\n"
-		putDocumentation(t, app, ".claude/skills/endpoint/SKILL.md", text)
-		want := ".claude/skills/endpoint/SKILL.md:4: [retired-api] pagination." + strings.SplitN(owner, "[", 2)[0] + ".WithScopes is retired; use pagination.Authenticated(endpoint, binding, http.AllOf(http.Scopes(scopes)))."
+		source := "package example\nimport p \"github.com/weiloon1234/Foundry-Go/http/pagination\"\nfunc use(e p." + owner + ") { e.WithScopes(scopes) }\n"
+		putDocumentation(t, app, "internal/pages/use.go", source)
+		listGoFiles(t, app, "internal/pages/use.go")
+		putDocumentation(t, app, ".claude/skills/endpoint/SKILL.md", "<!-- compiled-source: internal/pages/use.go -->\n```go\n"+source+"```\n")
+		want := ".claude/skills/endpoint/SKILL.md:5: [retired-api] pagination." + strings.SplitN(owner, "[", 2)[0] + ".WithScopes is retired; use pagination.Authenticated(endpoint, binding, http.AllOf(http.Scopes(scopes)))."
 		if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatal(err)
 		}
-		putDocumentation(t, app, ".claude/skills/endpoint/SKILL.md", "```go\npagination.Authenticated(page, binding, http.AllOf(http.Scopes(scopes)))\n```\n")
+		source = "package example\nvar _ = pagination.Authenticated(page, binding, http.AllOf(http.Scopes(scopes)))\n"
+		putDocumentation(t, app, "internal/pages/use.go", source)
+		putDocumentation(t, app, ".claude/skills/endpoint/SKILL.md", "<!-- compiled-source: internal/pages/use.go -->\n```go\n"+source+"```\n")
 		if err := checkDocs(t.Context(), app, goBinary, build); err != nil {
 			t.Fatal(err)
 		}
@@ -249,7 +254,9 @@ func TestDocsPaginationRetirement(t *testing.T) {
 func TestDocsApplicationNames(t *testing.T) {
 	app, _, goBinary, build := documentationFixture(t, "match")
 	putDocumentation(t, app, ".claude/skills/datatables/SKILL.md", "Codecs: `Text`, `DateTime`, `Decimal`, `Count`.\n")
-	putDocumentation(t, app, "web/shared/AGENTS.md", "Components: `Button`, `Input`, `Select`, `<Select>`, `<Select prop>`, `</Select>`.\n```tsx\nrows.Count(items)\nendpoint.WithScopes(scopes)\n```\n")
+	const rows = "rows.Count(items)\nendpoint.WithScopes(scopes)\n"
+	putDocumentation(t, app, "web/shared/rows.tsx", rows)
+	putDocumentation(t, app, "web/shared/AGENTS.md", "Components: `Button`, `Input`, `Select`, `<Select>`, `<Select prop>`, `</Select>`.\n<!-- compiled-source: web/shared/rows.tsx -->\n```tsx\n"+rows+"```\n")
 	if err := checkDocs(t.Context(), app, goBinary, build); err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@ import (
 func TestAgentNavigationLines(t *testing.T) {
 	for _, heading := range []string{"## Agent entry", "<a id=\"agent-entry\"></a>\n## Tasks"} {
 		text := heading + "\n\n- Read: [Read](#recipe-read)\n\n## Background\n\n[Other](#other)\n"
-		document, err := parseDocument(nil, "guide.md", []byte(text), nil)
+		document, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(text), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -27,12 +27,12 @@ func TestAgentNavigationLines(t *testing.T) {
 
 func TestRecipeAnchorRequiresHeading(t *testing.T) {
 	for _, tail := range []string{"<!-- explanation -->\n## Read", "Some prose\n## Read", "<a id=\"recipe-other\"></a>\n## Read", "<a id=\"other\"></a>\n## Read", "Read\n----", ""} {
-		_, err := parseDocument(nil, "guide.md", []byte("<a id=\"recipe-read\"></a>\n"+tail), nil)
+		_, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte("<a id=\"recipe-read\"></a>\n"+tail), nil)
 		if err == nil || !strings.Contains(err.Error(), "must be followed by a # heading") {
 			t.Fatalf("displaced anchor %q: %v", tail, err)
 		}
 	}
-	if _, err := parseDocument(nil, "guide.md", []byte("<a id=\"recipe-read\"></a>\n\n## Read\n"), nil); err != nil {
+	if _, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte("<a id=\"recipe-read\"></a>\n\n## Read\n"), nil); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -140,10 +140,10 @@ func TestWholeFileRetainsBoundaryBlankLines(t *testing.T) {
 
 func TestObsoleteSnippetConventionsRejected(t *testing.T) {
 	for _, marker := range []string{"<!-- go-source: example.go -->", "<!-- compiled-examples -->", "<!-- orm-example: example -->", "<!-- orm-example: example-before -->"} {
-		if _, err := parseDocument(nil, "guide.md", []byte(marker+"\n"), nil); err == nil || !strings.Contains(err.Error(), "obsolete guide snippet marker") {
+		if _, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(marker+"\n"), nil); err == nil || !strings.Contains(err.Error(), "obsolete guide snippet marker") {
 			t.Fatalf("accepted obsolete marker %q: %v", marker, err)
 		}
-		if _, err := parseDocument(nil, "guide.md", []byte("```markdown\n"+marker+"\n```\n"), nil); err != nil {
+		if _, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte("```markdown\n"+marker+"\n```\n"), nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -156,7 +156,7 @@ func TestRenderPreservesProseAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	read := func(string) (source, error) { return src, nil }
-	first, err := parseDocument(nil, "guide.md", []byte(original), read)
+	first, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(original), read)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestRenderPreservesProseAndIsIdempotent(t *testing.T) {
 	if err := Check([]Document{first}); err == nil {
 		t.Fatal("edited fence passed equality")
 	}
-	second, err := parseDocument(nil, "guide.md", first.Rendered, read)
+	second, err := parseDocument(FrameworkPolicy(), nil, "guide.md", first.Rendered, read)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestRenderPreservesProseAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	src.regions["example"] = excerpt{text: "changed\n"}
-	changed, err := parseDocument(nil, "guide.md", first.Rendered, read)
+	changed, err := parseDocument(FrameworkPolicy(), nil, "guide.md", first.Rendered, read)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +210,7 @@ func TestDocumentBoundaries(t *testing.T) {
 		{"syntax in fence", "```markdown\n<!-- compiled-source: absent.go -->\n<a id=\"recipe-read\"></a>\n```\n", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			doc, err := parseDocument(nil, "guide.md", []byte(test.text), read)
+			doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(test.text), read)
 			if err == nil {
 				err = CheckBindings([]Document{doc})
 			}
@@ -258,11 +258,11 @@ func TestSourcePaths(t *testing.T) {
 	root := t.TempDir()
 	good := "tests/fixtures/consumer/recipe/example.go"
 	writeInput(t, root, good, "package recipe\n")
-	if _, err := readSource(root, good); err != nil {
+	if _, err := readSource(FrameworkPolicy(), root, "docs/guides/x.md", good); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"/tmp/example.go", "../example.go", "tests/fixtures/consumer/../example.go", "internal/example.go", "tests/fixtures/consumer/recipe/example.txt", "tests/fixtures/consumer/clientcontracts/testdata/frozen/example.ts", "tests/fixtures/consumer/recipe/example_foundry.gen.go", `tests\fixtures\consumer\example.go`} {
-		if _, err := readSource(root, name); err == nil {
+		if _, err := readSource(FrameworkPolicy(), root, "docs/guides/x.md", name); err == nil {
 			t.Fatalf("accepted %s", name)
 		}
 	}
@@ -270,7 +270,7 @@ func TestSourcePaths(t *testing.T) {
 	if err := os.Symlink(filepath.Join(root, good), filepath.Join(root, alias)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readSource(root, alias); err == nil {
+	if _, err := readSource(FrameworkPolicy(), root, "docs/guides/x.md", alias); err == nil {
 		t.Fatal("accepted source alias")
 	}
 }
@@ -329,7 +329,7 @@ func TestHiddenExecutableFences(t *testing.T) {
 		"> ```typescript\n> const value = 1;\n> ```", "- ````go\n  var value = 1\n  ````",
 		"```ts\nconst value = 1;\n```", "```tsx\nconst value = <Input />;\n```",
 	} {
-		doc, err := parseDocument(nil, "guide.md", []byte(text), nil)
+		doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(text), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -370,7 +370,7 @@ func TestDiagnosticShape(t *testing.T) {
 
 func TestShellGoCommandsAreNotGoStatements(t *testing.T) {
 	text := "```sh\ngo list -m -f '{{.Dir}}' example.test/framework\ngo get -tool \"example.test/framework@${VERSION:?select a version}\"\n```"
-	doc, err := parseDocument(nil, "guide.md", []byte(text), nil)
+	doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(text), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

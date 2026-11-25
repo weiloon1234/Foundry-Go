@@ -2,6 +2,7 @@ package docsource
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -16,9 +17,32 @@ import (
 )
 
 var directive = regexp.MustCompile(`^<!-- compiled-source: ([^\s#]+)(?:#([a-z0-9]+(?:-[a-z0-9]+)*))? -->$`)
+
+// A worked-example region is delimited the way an application's baseline
+// delimits any app-owned region: the two marker lines stand alone.
+var appRegionMarker = regexp.MustCompile(`^<!-- app-owned:(begin|end) ([a-z0-9-]+) -->$`)
+
+const workedExample = "worked-example"
+
+// The explicit statement that an application has no code for a task: exactly
+// this sentence and one Foundry guides line naming one recipe anchor.
+const noWorkedExample = "This application has no worked example for this task yet."
+
+var noWorkedExampleGuide = regexp.MustCompile("^Foundry guides: `[a-z0-9]+(?:-[a-z0-9]+)*#recipe-[a-z0-9]+(?:-[a-z0-9]+)*`$")
+
 var sectionAnchor = regexp.MustCompile(`^<a id="(agent-entry|recipe-[a-z0-9-]+)"></a>$`)
 
 var taskLink = regexp.MustCompile(`^(?:- )?(?:[^\[\]<>\x60.!?]+: )?\[[^\]]+\]\([^\s)]+\)(?:, \[[^\]]+\]\([^\s)]+\))*$`)
+
+// finding starts a finding of rule at a document line; an application's findings
+// teach the rule's application reference.
+func finding(policy Policy, rule diagnostic.Rule, path string, line int) diagnostic.Diagnostic {
+	found := rule.At(path, line, 0)
+	if policy.words().application {
+		found = found.InApplication()
+	}
+	return found
+}
 
 // Inclusion locates a source excerpt and its rendered document block.
 type Inclusion struct {
@@ -39,24 +63,40 @@ type Document struct {
 	// AgentLines identifies navigation lines using the same section boundaries
 	// as recipe coverage. Link targets are checked by checkdocs through docrefs.
 	AgentLines []int
+	policy     Policy
 }
 
-// Load reads all guide directives. It validates ownership and section coverage,
-// but leaves rendering comparison and publication to the caller.
+// Load reads all guide directives of the framework repository. It validates
+// ownership and section coverage, but leaves rendering comparison and
+// publication to the caller.
 func Load(root string, cache *markdown.Cache) ([]Document, error) {
 	paths, err := documentPaths(root)
 	if err != nil {
 		return nil, err
 	}
-	var documents []Document
-	var failures []error
-	sources := make(map[string]source)
-	total := 0
-	for _, filename := range paths {
+	names := make([]string, len(paths))
+	for i, filename := range paths {
 		relative, err := filepath.Rel(root, filename)
 		if err != nil {
 			return nil, err
 		}
+		names[i] = filepath.ToSlash(relative)
+	}
+	return LoadDocuments(FrameworkPolicy(), root, names, cache)
+}
+
+// LoadDocuments reads the named documents (slash-separated, relative to root)
+// and binds their code blocks to sources the policy approves. The caller owns
+// document discovery.
+func LoadDocuments(policy Policy, root string, names []string, cache *markdown.Cache) ([]Document, error) {
+	if len(names) > markdown.MaxDocuments {
+		return nil, diagnostic.DocLimit.At("documentation", 0, 0).Say("run", fmt.Sprintf("more than %d documents", markdown.MaxDocuments)).To("split the documentation run").Err()
+	}
+	var documents []Document
+	var failures []error
+	sources := make(map[string]source)
+	total := 0
+	for _, relative := range names {
 		data, err := markdown.ReadFile(root, relative, markdown.DocumentLimit(relative))
 		if err != nil {
 			return nil, err
@@ -65,11 +105,20 @@ func Load(root string, cache *markdown.Cache) ([]Document, error) {
 		if total > markdown.MaxRunBytes {
 			return nil, diagnostic.DocLimit.At("documentation", 0, 0).Say("inputs", fmt.Sprintf("over %d bytes per run", markdown.MaxRunBytes)).To("split the teaching corpus").Err()
 		}
-		document, err := parseDocument(cache, filepath.ToSlash(relative), data, func(name string) (source, error) {
+		document, err := parseDocument(policy, cache, relative, data, func(name string) (source, error) {
+			// Approval depends on the document, so it is never cached.
+			language, err := policy.approve(root, relative, name)
+			if err != nil {
+				return source{}, err
+			}
 			if cached, ok := sources[name]; ok {
 				return cached, nil
 			}
-			value, err := readSource(root, name)
+			value, err := loadSource(policy, root, name, language)
+			if _, statErr := os.Lstat(filepath.Join(root, filepath.FromSlash(name))); errors.Is(statErr, fs.ErrNotExist) && policy.words().rebind != "" {
+				// A source the application removed or renamed: say how to re-point the binding.
+				return source{}, safeerror.New("compiled source cannot be read; restore the source file" + policy.words().rebind)
+			}
 			if err == nil {
 				total += value.bytes
 				if total > markdown.MaxRunBytes {
@@ -101,10 +150,63 @@ func Check(documents []Document) error {
 			if len(doc.StaleLines) > 0 {
 				line = doc.StaleLines[0]
 			}
-			failures = append(failures, diagnostic.DocRendered.At(doc.Path, line, 0).Text("", "compiled source differs from the displayed block; run go run ./internal/cmd/renderdocs").Err())
+			failures = append(failures, finding(doc.policyOrFramework(), diagnostic.DocRendered, doc.Path, line).Text("", "compiled source differs from the displayed block; "+doc.policyOrFramework().words().renderFix).Err())
 		}
 	}
 	return safeerror.Join("documentation check failed", failures...)
+}
+
+// Render rewrites each document whose bound blocks differ from their sources,
+// byte for byte outside the replaced block bodies, and writes nothing else. It
+// opens every target for writing before it writes any, so a target that cannot be
+// written leaves every document unchanged. A failure while writing names the
+// documents already written and the one that failed.
+func Render(root string, documents []Document) error {
+	type target struct {
+		path string
+		data []byte
+		file *os.File
+	}
+	var targets []target
+	defer func() {
+		for _, t := range targets {
+			if t.file != nil {
+				t.file.Close()
+			}
+		}
+	}()
+	for _, document := range documents {
+		if bytes.Equal(document.Original, document.Rendered) {
+			continue
+		}
+		file, err := markdown.OpenRegular(root, document.Path, os.O_WRONLY)
+		if err != nil {
+			return err
+		}
+		targets = append(targets, target{document.Path, document.Rendered, file})
+	}
+	var written []string
+	for i := range targets {
+		t := &targets[i]
+		err := t.file.Truncate(0)
+		if err == nil {
+			_, err = t.file.Write(t.data)
+		}
+		closeErr := t.file.Close()
+		t.file = nil
+		if err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			already := "no other document was written"
+			if len(written) > 0 {
+				already = "already written: " + strings.Join(written, ", ")
+			}
+			return diagnostic.DocFile.At(t.path, 0, 0).Say("document", "could not be written").To("make it writable and run render again; " + already).Caused(err)
+		}
+		written = append(written, t.path)
+	}
+	return nil
 }
 
 // CheckBindings reports every executable block without a compiled owner.
@@ -129,7 +231,7 @@ func documentPaths(root string) ([]string, error) {
 		relative = filepath.ToSlash(relative)
 		owned := teachingPath(relative)
 		// An owned tree has no name-based exclusions. Never open secret inputs.
-		if strings.HasPrefix(entry.Name(), ".env") {
+		if strings.HasPrefix(strings.ToLower(entry.Name()), ".env") {
 			if owned {
 				return diagnostic.DocFile.At(relative, 0, 0).Say("secret input", "found inside a teaching directory").To("move it outside the teaching tree").Err()
 			}
@@ -196,8 +298,16 @@ type section struct {
 	agent bool
 }
 
-func parseDocument(cache *markdown.Cache, name string, data []byte, read func(string) (source, error)) (Document, error) {
-	result := Document{Path: name, Original: data}
+func (d Document) policyOrFramework() Policy {
+	if d.policy == nil {
+		return FrameworkPolicy()
+	}
+	return d.policy
+}
+
+func parseDocument(policy Policy, cache *markdown.Cache, name string, data []byte, read func(string) (source, error)) (Document, error) {
+	result := Document{Path: name, Original: data, policy: policy}
+	words := policy.words()
 	parsed, err := cache.Read(name, data)
 	if err != nil {
 		return Document{}, err
@@ -218,21 +328,25 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 	}
 	var out bytes.Buffer
 	cursor := 0
+	example := exampleRegion{}
 	var sections []section
 	pendingAnchor := ""
 	anchorLine := 0
 	for _, block := range parsed.Blocks {
 		trimmed := strings.TrimSpace(block.Text)
 		fail := func(rule diagnostic.Rule, message string) (Document, error) {
-			return Document{}, rule.At(name, block.First, 0).Text("", message).Err()
+			return Document{}, finding(policy, rule, name, block.First).Text("", message).Err()
 		}
 		binding := func(message string) {
-			result.BindingErrors = append(result.BindingErrors, diagnostic.DocBinding.At(name, block.First, 0).Text("", message).Err())
+			result.BindingErrors = append(result.BindingErrors, finding(policy, diagnostic.DocBinding, name, block.First).Text("", message).Err())
 		}
 		if block.Kind == markdown.Comment {
 			if strings.HasPrefix(trimmed, "<!-- go-source:") || trimmed == "<!-- compiled-examples -->" || strings.HasPrefix(trimmed, "<!-- orm-example:") {
 				return fail(diagnostic.DocMarker, "obsolete guide snippet marker; use <!-- compiled-source: path#region -->.")
 			}
+		}
+		if policy.requiresWorkedExample() && example.observe(&result, name, block) {
+			continue
 		}
 		anchor := ""
 		for line := block.First; line <= block.Last; line++ {
@@ -333,14 +447,18 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 				if block.Info == "typescript" || block.Info == "tsx" {
 					label = "TypeScript"
 				}
-				binding(label + " block has no compiled source; move the code into a fixture file and bind it with <!-- compiled-source: path#region -->.")
+				message := label + " block has no compiled source; " + words.bindHint
+				if !executable(block.Info) {
+					message += " If it is not code, retag it sh or json, or write it as prose."
+				}
+				binding(message)
 			}
 			continue
 		}
 		if !block.Closed {
 			return fail(diagnostic.DocMarker, "unclosed compiled-source fence; add a matching closing delimiter.")
 		}
-		if block.Info == "tsx" {
+		if block.Info == "tsx" && !policy.hostsTSX() {
 			binding("TSX block has no compiled source host in the framework; use a compiled plain-TypeScript recipe or move UI teaching to its application.")
 		}
 		if read == nil {
@@ -353,19 +471,20 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 			} else if owned {
 				return fail(diagnostic.DocMarker, message)
 			}
-			return fail(diagnostic.DocMarker, "compiled source cannot be read; restore the source file")
+			return fail(diagnostic.DocMarker, "compiled source cannot be read; restore the source file"+words.rebind)
 		}
 		selected := source.whole
 		if match[2] != "" {
 			var found bool
 			selected, found = source.regions[match[2]]
 			if !found {
-				return fail(diagnostic.DocRegion, "missing source region "+match[2]+"; bind an existing region or add matching begin and end markers to the source.")
+				return fail(diagnostic.DocRegion, "missing source region "+match[2]+"; bind an existing region or add matching begin and end markers to the source"+words.sentenceEnd())
 			}
 		}
 		if source.language != block.Info {
 			return fail(diagnostic.DocMarker, "compiled source language differs from the fence tag; use the source language tag.")
 		}
+		example.bound(selected.text)
 		result.Inclusions = append(result.Inclusions, Inclusion{Document: name, Line: previous.First, Source: match[1], Region: match[2], First: selected.first, Last: selected.last})
 		// Body lines keep the document's own line ending and the opener's
 		// container prefix; an empty line carries no trailing whitespace.
@@ -425,9 +544,10 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 	for _, inline := range parsed.Inlines {
 		if inline.Kind == markdown.HTML && markdown.HasCodeElement(inline.Text) && !reported[inline.First] {
 			reported[inline.First] = true
-			result.BindingErrors = append(result.BindingErrors, diagnostic.DocBinding.At(name, inline.First, 0).Text("", "inline <pre> or <code> HTML in prose is unsupported; use backticks for a code span or a fenced block with a language tag").Err())
+			result.BindingErrors = append(result.BindingErrors, finding(policy, diagnostic.DocBinding, name, inline.First).Text("", "inline <pre> or <code> HTML in prose is unsupported; use backticks for a code span or a fenced block with a language tag").Err())
 		}
 	}
+	example.finish(&result, name)
 	if pendingAnchor != "" {
 		return Document{}, diagnostic.DocSectionAnchor.At(name, anchorLine, 0).Text("", fmt.Sprintf("anchor %s must be followed by a # heading before the document ends; add the heading or remove the anchor", pendingAnchor)).Err()
 	}
@@ -459,4 +579,121 @@ func executableTeaching(name, code string) bool {
 		}
 	}
 	return false
+}
+
+// exampleRegion follows the worked-example region of one document. A region
+// holds a bound block, or exactly the statement that the application has no
+// worked example yet together with a Foundry guides line naming a recipe anchor.
+type exampleRegion struct {
+	open, seen bool
+	begin      int
+	// fences counts every fence of the region, blocks those that are bound, and
+	// code the bound blocks that hold a line of code.
+	fences, blocks, code int
+	lines                []string
+}
+
+// bound records a bound block; text is the source region it displays.
+func (r *exampleRegion) bound(text string) {
+	if r.open {
+		r.blocks++
+		if hasCode(text) {
+			r.code++
+		}
+	}
+}
+
+// hasCode reports whether text has a line that is neither blank nor only a comment
+// (Go, TypeScript and TSX share // and /* */ comments).
+func hasCode(text string) bool {
+	inBlock := false
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		for line != "" {
+			if inBlock {
+				end := strings.Index(line, "*/")
+				if end < 0 {
+					line = ""
+					break
+				}
+				inBlock = false
+				line = strings.TrimSpace(line[end+2:])
+				continue
+			}
+			if strings.HasPrefix(line, "//") {
+				line = ""
+			} else if strings.HasPrefix(line, "/*") {
+				inBlock = true
+				line = line[2:]
+			} else {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (r *exampleRegion) fail(result *Document, name string, line int, message string) {
+	result.BindingErrors = append(result.BindingErrors, diagnostic.DocWorkedExample.At(name, line, 0).Text("", message).Err())
+}
+
+// observe consumes the region markers and collects what lies between them;
+// it reports true for a block that is a worked-example marker.
+func (r *exampleRegion) observe(result *Document, name string, block markdown.Node) bool {
+	trimmed := strings.TrimSpace(block.Text)
+	if block.Kind == markdown.Comment {
+		if match := appRegionMarker.FindStringSubmatch(trimmed); match != nil && match[2] == workedExample {
+			switch {
+			case match[1] == "begin" && (r.open || r.seen):
+				r.fail(result, name, block.First, "duplicate "+workedExample+" region; keep one region per skill.")
+			case match[1] == "begin":
+				*r = exampleRegion{open: true, seen: true, begin: block.First}
+			case !r.open:
+				r.fail(result, name, block.First, workedExample+" region ends without a matching begin marker; add the begin marker above the region.")
+			default:
+				r.check(result, name, block.First)
+				r.open = false
+			}
+			return true
+		}
+	}
+	if r.open && block.Kind == markdown.Fence {
+		r.fences++
+	}
+	if !r.open || block.Kind == markdown.Fence || block.Kind == markdown.Comment && strings.HasPrefix(trimmed, "<!-- compiled-source") {
+		return false
+	}
+	for _, line := range strings.Split(block.Text, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			r.lines = append(r.lines, line)
+		}
+	}
+	return false
+}
+
+func (r *exampleRegion) check(result *Document, name string, end int) {
+	statement := false
+	for _, line := range r.lines {
+		statement = statement || line == noWorkedExample
+	}
+	switch {
+	case r.blocks > 0 && statement:
+		r.fail(result, name, r.begin, workedExample+" region holds a bound block and also says there is no worked example; remove the statement.")
+	case r.code > 0:
+	case r.blocks > 0:
+		r.fail(result, name, r.begin, workedExample+" region binds a block that holds no code, only blank lines or comments; bind a region with a declaration or statement from the application's own code.")
+	case r.fences > 0:
+		r.fail(result, name, r.begin, workedExample+" region holds a fence that is not bound; bind it with <!-- compiled-source: path#region -->, or remove it so the region holds exactly the statement \""+noWorkedExample+"\" and one Foundry guides line.")
+	case len(r.lines) == 0:
+		r.fail(result, name, r.begin, workedExample+" region is empty; bind a block from the application's own code with <!-- compiled-source: path#region -->, or write \""+noWorkedExample+"\" followed by a Foundry guides line naming one recipe anchor.")
+	case len(r.lines) == 2 && r.lines[0] == noWorkedExample && noWorkedExampleGuide.MatchString(r.lines[1]):
+	default:
+		r.fail(result, name, r.begin, workedExample+" region neither binds a block nor makes the explicit statement; hold a bound block, or exactly the sentence \""+noWorkedExample+"\" and one line of the form Foundry guides: `guide#recipe-anchor`, nothing else.")
+	}
+}
+
+func (r *exampleRegion) finish(result *Document, name string) {
+	if r.open {
+		r.fail(result, name, r.begin, workedExample+" region is never closed; add the end marker after the region.")
+	}
 }

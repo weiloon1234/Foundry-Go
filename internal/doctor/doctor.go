@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
@@ -85,6 +86,51 @@ func selectedFramework(ctx context.Context, options Options, execute probe) (Fra
 		return Framework{}, safeerror.New("The selected Foundry-Go module could not be read. Check --dir, run `go mod download " + frameworkinfo.ModulePath + "` in the application module, and see `go tool foundry doctor` if it still fails")
 	}
 	return Framework{Dir: module.Dir, Selection: module.selection()}, nil
+}
+
+// maxPackageListBytes bounds the package list of an application module.
+const maxPackageListBytes = 16 << 20
+
+const maxListDiagnosticBytes = 200
+
+// ModulePackages lists the packages of the module at options.Dir without
+// resolving dependencies, as concatenated JSON objects holding each package's
+// directory, its Go, cgo and test files, and whether it is complete. It uses
+// the same offline environment as the other probes. When the listing fails it also
+// returns the first line of the tool's own message, bounded and free of control
+// characters (empty when the tool printed nothing), so the caller can word the
+// failure for its own command.
+func ModulePackages(ctx context.Context, options Options) (listing []byte, toolMessage string, err error) {
+	if options.Go == "" {
+		options.Go = "go"
+	}
+	stderr := &headWriter{limit: 4 * maxListDiagnosticBytes}
+	data, err := runBounded(ctx, options, maxPackageListBytes, stderr, options.Go, "list", "-find", "-json=Dir,GoFiles,CgoFiles,TestGoFiles,XTestGoFiles,Incomplete,Error", "./...")
+	if err != nil {
+		return nil, firstLine(stderr.data), safeerror.New("the packages of the module could not be listed")
+	}
+	return data, "", nil
+}
+
+// firstLine is the first non-blank line of a tool's message, printable characters
+// only and cut to a bounded length.
+func firstLine(message []byte) string {
+	for _, line := range strings.Split(string(message), "\n") {
+		line = strings.Map(func(r rune) rune {
+			if unicode.IsPrint(r) {
+				return r
+			}
+			return -1
+		}, strings.TrimSpace(line))
+		if line == "" {
+			continue
+		}
+		if len(line) > maxListDiagnosticBytes {
+			line = strings.ToValidUTF8(line[:maxListDiagnosticBytes], "") + "..."
+		}
+		return line
+	}
+	return ""
 }
 
 func Inspect(ctx context.Context, options Options) (Report, error) { return inspect(ctx, options, run) }

@@ -25,11 +25,28 @@ type Diagnostic struct {
 	Problem string
 	Fix     string
 	Skills  []string
+	// application selects the rule's application teaching reference.
+	application bool
 }
 
 // At starts a finding of rule at path. Line and column are one-based; zero omits them.
 func (r Rule) At(path string, line, column int) Diagnostic {
 	return Diagnostic{Rule: r, Path: path, Line: line, Column: column}
+}
+
+// InApplication marks the finding as raised for an application's own files, so it
+// teaches the rule's application reference.
+func (d Diagnostic) InApplication() Diagnostic {
+	d.application = true
+	return d
+}
+
+// Reference is the `guide#anchor` token this finding prints.
+func (d Diagnostic) Reference() string {
+	if d.application {
+		return d.Rule.ApplicationReference()
+	}
+	return d.Rule.Reference()
 }
 
 // Say sets the subject and the problem. The problem is lowercase text without a final period.
@@ -81,7 +98,7 @@ func (d Diagnostic) String() string {
 		text.WriteString(strings.TrimSuffix(d.Fix, "."))
 	}
 	text.WriteString(". Foundry guide: ")
-	text.WriteString(d.Rule.Reference())
+	text.WriteString(d.Reference())
 	if len(d.Skills) > 0 {
 		text.WriteString(" (skill: ")
 		text.WriteString(strings.Join(d.Skills, ", "))
@@ -158,7 +175,7 @@ func Annotate(err error, skills func() Skills) error {
 
 // WithSkills names the skills that declare the rule's guide anchor.
 func (d Diagnostic) WithSkills(skills Skills) Diagnostic {
-	d.Skills = skills.Names(d.Rule)
+	d.Skills = skills[d.Reference()]
 	return d
 }
 

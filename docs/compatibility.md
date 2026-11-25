@@ -823,11 +823,12 @@ The framework's own guides, `AGENTS.md` files and skills additionally require
 compiled-source bindings, supported fence tags and fenced code instead of indented
 blocks or HTML `pre`/`code` elements, and reject a bare retired name in a
 code span when no current top-level export of any importable package has that name
-(the message names the retired members it matches and asks for the qualified name). An application's `foundry docs check` does **not** enforce these
-binding, tag, block or bare-name rules in this release. Application checks continue
-to validate references and retired API teaching without requiring framework fixture
-sources. Framework documents are limited to 512 KiB each, except the dated records
+(the message names the retired members it matches and asks for the qualified name).
+Framework documents are limited to 512 KiB each, except the dated records
 `docs/evidence/` and `CHANGELOG.md` at 1.5 MiB.
+
+An application's documents satisfy the binding, tag and block rules against the
+application's own code; see [Application documents](#application-documents).
 
 Review reference diagnostics alongside runtime and generator changes during an
 upgrade. A rollback must restore compatible application references and workflow
@@ -836,6 +837,43 @@ skill version or copied framework teaching is installed. These checks change no
 runtime, wire, persisted-data, or generated-client format. The
 [developer-tooling guide](guides/developer-tooling-and-testing.md#pinned-documentation-checks)
 owns the grammar, offline lookup, scan scope, and command instructions.
+
+<a id="application-documents"></a>
+
+## Application documents bind to the application's own code — unreleased
+
+At the first pin that carries this change, `go tool foundry docs check` refuses an
+application's `AGENTS.md` or `.claude/skills` Markdown that does not meet the binding
+rules. Before upgrading, an application's documents must satisfy:
+
+- every `go`, `typescript` and `tsx` fence is preceded by a
+  `<!-- compiled-source: path#region -->` directive and equals that region of a
+  handwritten file under `internal/`, `cmd/` or `examples/` (Go) or `web/` or
+  `client/tests/` (TypeScript and TSX); generated files, `*.d.ts`, `testdata`,
+  `deploy`, `config`, nested modules, paths through a symlink and TypeScript files
+  with `@ts-nocheck` are refused (directory and `.env` names compare without regard to
+  case), and a test file (`_test.go`, `*.test.ts(x)`, `*.spec.ts(x)`, any TypeScript
+  file below a `tests` directory) is bindable only from the `testing` skill;
+- a Go source is a file of a package of the module that the default build compiles;
+- every fence carries a tag of the closed list (`go`, `typescript`, `tsx`, `sh`, `toml`,
+  `json`, `sql`, `text`, `ini`, `markdown`, `yaml`, `makefile`), and a `text` or
+  `markdown` fence holds no code that looks executable;
+- the documents contain no indented code block and no HTML `pre` or `code` element;
+- the size and shape limits above hold;
+- a skill with a `worked-example` app-owned region holds a bound block with a line of
+  code there, or exactly the explicit statement and a `Foundry guides:` line of the
+  guide's rule, never an empty, comment-only or vague region.
+
+Quoted code that is not a binding (a route sketch, a directory tree whose text looks
+like a call) becomes prose, an `sh` or `json` fence, or a bound region. `go tool foundry
+docs render --dir .` writes bound blocks from their sources (all or nothing: it
+writes nothing while any document has another binding finding), `docs render --check`
+compares, and `docs bindings --language typescript --dir .` lists the TypeScript files
+an application's own convention test asserts are type-checked. The checks change no
+runtime, wire, persisted-data or generated-client format. Rolling back to an earlier pin
+removes the checks; the markers and directives stay as harmless comments. The
+[developer-tooling guide](guides/developer-tooling-and-testing.md#recipe-application-documents)
+owns the grammar.
 
 <a id="webhook-capture"></a>
 

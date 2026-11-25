@@ -62,7 +62,7 @@ func OpenRegular(root, name string, flag int) (*os.File, error) {
 	current := ""
 	parts := strings.Split(filepath.Clean(name), string(filepath.Separator))
 	for i, part := range parts {
-		if strings.HasPrefix(part, ".env") {
+		if strings.HasPrefix(strings.ToLower(part), ".env") {
 			return nil, diagnostic.DocFile.At(name, 0, 0).Say("path", "names a secret input").To("keep secrets out of documentation inputs").Err()
 		}
 		current = filepath.Join(current, part)
@@ -79,6 +79,9 @@ func OpenRegular(root, name string, flag int) (*os.File, error) {
 	}
 	f, err := r.OpenFile(name, flag|syscall.O_NONBLOCK, 0)
 	if err != nil {
+		if flag&(os.O_WRONLY|os.O_RDWR) != 0 {
+			return nil, diagnostic.DocFile.At(name, 0, 0).Say("document", "cannot be opened for writing").To("make it writable").Caused(err)
+		}
 		return nil, diagnostic.DocFile.At(name, 0, 0).Say("input", "cannot be opened").To("restore read access").Caused(err)
 	}
 	opened, err := f.Stat()

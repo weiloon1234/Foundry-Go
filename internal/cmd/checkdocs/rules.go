@@ -15,13 +15,18 @@ import (
 
 const rulesSource = "internal/diagnostic/rule.go"
 
-// tableRow is one `| `rule` | check | `guide#anchor` |` row of the tooling guide's rule table.
-var tableRow = regexp.MustCompile("^\\| `([a-z0-9-]+)` \\| [^|]+ \\| `([a-z0-9-]+#[a-z0-9-]+)` \\|$")
+// tableRow is one `| `rule` | check | `guide#anchor` | `guide#anchor` or empty |` row of
+// the tooling guide's rule table: the teaching token, then the token an application
+// finding teaches when it differs.
+var tableRow = regexp.MustCompile("^\\| `([a-z0-9-]+)` \\| [^|]+ \\| `([a-z0-9-]+#[a-z0-9-]+)` \\| (?:`([a-z0-9-]+#[a-z0-9-]+)`)? \\|$")
+
+// teaching is what one table row says a rule teaches.
+type teaching struct{ framework, application string }
 
 // listedRules reads the rule table of the tooling guide: rule ID to its teaching
-// token, in the order written, and the IDs listed more than once.
-func listedRules(guide string) (rows map[string]string, repeated []string) {
-	rows = map[string]string{}
+// tokens, in the order written, and the IDs listed more than once.
+func listedRules(guide string) (rows map[string]teaching, repeated []string) {
+	rows = map[string]teaching{}
 	inRules := false
 	for _, line := range strings.Split(guide, "\n") {
 		switch {
@@ -32,7 +37,7 @@ func listedRules(guide string) (rows map[string]string, repeated []string) {
 				if _, seen := rows[match[1]]; seen {
 					repeated = append(repeated, match[1])
 				}
-				rows[match[1]] = match[2]
+				rows[match[1]] = teaching{match[2], match[3]}
 			}
 		}
 	}
@@ -41,7 +46,7 @@ func listedRules(guide string) (rows map[string]string, repeated []string) {
 
 // checkRules requires every diagnostic rule to name an existing guide and explicit
 // anchor, and the tooling guide's rule table to list exactly the rules, each with
-// its own teaching token: a finding must always point at a page that teaches its fix.
+// its own teaching tokens: a finding must always point at a page that teaches its fix.
 func checkRules(root string) error {
 	pages := docrefs.NewPages(root, nil)
 	listing, err := markdown.ReadFile(root, "docs/guides/"+diagnostic.RuleCatalogue.Guide+".md", markdown.MaxDocumentBytes)
@@ -62,11 +67,20 @@ func checkRules(root string) error {
 		case anchors.CheckFragment(rulesSource, 0, "guide "+rule.Guide, rule.Anchor) != nil:
 			failures = append(failures, finding.Say(subject, fmt.Sprintf("names anchor %s, which guide %s does not declare", rule.Anchor, rule.Guide)).To("add the explicit anchor to the guide or correct the rule").Err())
 		}
-		switch teaching, listed := rows[rule.ID]; {
+		if rule.Application != "" && err == nil && anchors.CheckFragment(rulesSource, 0, "guide "+rule.Guide, rule.Application) != nil {
+			failures = append(failures, finding.Say(subject, fmt.Sprintf("names application anchor %s, which guide %s does not declare", rule.Application, rule.Guide)).To("add the explicit anchor to the guide or correct the rule").Err())
+		}
+		wantApplication := ""
+		if rule.Application != "" {
+			wantApplication = rule.ApplicationReference()
+		}
+		switch row, listed := rows[rule.ID]; {
 		case !listed:
 			failures = append(failures, finding.Say(subject, "not listed in the tooling guide").To("add the rule to the diagnostic rules table").Err())
-		case teaching != rule.Reference():
-			failures = append(failures, finding.Say(subject, fmt.Sprintf("table teaches %s, rule teaches %s", teaching, rule.Reference())).To("make the table row name the rule's guide anchor").Err())
+		case row.framework != rule.Reference():
+			failures = append(failures, finding.Say(subject, fmt.Sprintf("table teaches %s, rule teaches %s", row.framework, rule.Reference())).To("make the table row name the rule's guide anchor").Err())
+		case row.application != wantApplication:
+			failures = append(failures, finding.Say(subject, fmt.Sprintf("table teaches %q in an application, rule teaches %q", row.application, wantApplication)).To("make the table's last column name the rule's application anchor, or leave it empty").Err())
 		}
 	}
 	for _, id := range sortedKeys(rows) {
@@ -80,7 +94,7 @@ func checkRules(root string) error {
 	return errors.Join(failures...)
 }
 
-func sortedKeys(m map[string]string) []string {
+func sortedKeys(m map[string]teaching) []string {
 	keys := make([]string, 0, len(m))
 	for key := range m {
 		keys = append(keys, key)

@@ -2,8 +2,8 @@
 package docsource
 
 import (
+	"bytes"
 	"fmt"
-	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -29,27 +29,22 @@ type source struct {
 	regions  map[string]excerpt
 }
 
-func readSource(root, name string) (source, error) {
-	if name == "" || path.Clean(name) != name || strings.ContainsAny(name, `\:#`) || strings.HasPrefix(name, "/") {
-		return source{}, safeerror.New(fmt.Sprintf("invalid repository-relative source path %q; use a clean path below tests/fixtures", name))
+func readSource(policy Policy, root, document, name string) (source, error) {
+	language, err := policy.approve(root, document, name)
+	if err != nil {
+		return source{}, err
 	}
-	ext := path.Ext(name)
-	approved := (strings.HasPrefix(name, "tests/fixtures/consumer/") || strings.HasPrefix(name, "tests/fixtures/goway/")) && ext == ".go"
-	if ext == ".ts" {
-		approved = (path.Dir(name) == "tests/fixtures/consumer/clientcontracts/testdata" ||
-			path.Dir(name) == "tests/fixtures/consumer/clientcontracts/testdata/table-bindings" ||
-			path.Dir(name) == "tests/fixtures/consumer/clientcontracts/testdata/limits") && !strings.HasSuffix(name, ".d.ts")
-	}
-	if !approved || strings.Contains(name, "_foundry.gen.") {
-		return source{}, safeerror.New(fmt.Sprintf("source %q is outside approved handwritten fixture inputs; bind a handwritten file of an independent fixture", name))
-	}
+	return loadSource(policy, root, name, language)
+}
+
+// loadSource reads an approved file and parses its regions.
+func loadSource(policy Policy, root, name, language string) (source, error) {
 	data, err := markdown.ReadFile(root, name, markdown.MaxSourceBytes)
 	if err != nil {
 		return source{}, err
 	}
-	language := "typescript"
-	if ext == ".go" {
-		language = "go"
+	if policy.words().application && (language == "typescript" || language == "tsx") && bytes.Contains(data, []byte("@ts-nocheck")) {
+		return source{}, safeerror.New(fmt.Sprintf("source %q is not bindable: it contains @ts-nocheck, which would hide the file from the application's type-check; remove it or bind another file", name))
 	}
 	parsed, err := parseSource(string(data), language)
 	if err != nil {
@@ -58,7 +53,7 @@ func readSource(root, name string) (source, error) {
 			line, _ = strconv.Atoi(match[1])
 			message = match[2]
 		}
-		return source{}, diagnostic.DocRegion.At(name, line, 0).Text("", message).Err()
+		return source{}, finding(policy, diagnostic.DocRegion, name, line).Text("", message).Err()
 	}
 	parsed.bytes = len(data)
 	return parsed, nil
@@ -66,13 +61,18 @@ func readSource(root, name string) (source, error) {
 
 func parseSource(data, language string) (source, error) {
 	locations := markdown.NewLines([]byte(data))
-	comments := lineComments(data, language)
+	comments, elements := lineComments(data, language)
 	for offset := 0; offset < len(data); {
 		n := strings.Index(data[offset:], "// doc-example:")
 		if n < 0 {
 			break
 		}
 		offset += n
+		for _, element := range elements {
+			if offset >= element.start && offset < element.end {
+				return source{}, safeerror.New(fmt.Sprintf("line %d: region marker sits inside JSX, where a line comment cannot start a region; wrap whole declarations with the markers (a component or hook function, or statements before its return).", locations.Number(offset)))
+			}
+		}
 		if !comments[offset] {
 			return source{}, safeerror.New(fmt.Sprintf("line %d: region marker must be an actual line comment, outside literals and block comments; move the marker outside the literal or block comment.", locations.Number(offset)))
 		}
