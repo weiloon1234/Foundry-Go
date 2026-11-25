@@ -20,6 +20,19 @@ demonstrates declarations, injected domain services and kernel assembly.
 <a id="recipe-declare-schedule"></a>
 ## Declare timing once
 
+`Reports` is the application service that builds the report, and `DailyReport` is the schedule's ID. Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `jobs`, `model`, `schedule`, `temporal`.
+
+<!-- compiled-source: tests/fixtures/consumer/scheduling/reports.go#report-types -->
+```go
+const DailyReport schedule.ID = "reports.daily"
+
+type Reports interface {
+	BuildDaily(context.Context, time.Time) error
+}
+```
+
+Declare the schedule from the service:
+
 <!-- compiled-source: tests/fixtures/consumer/scheduling/reports.go#daily-schedule -->
 ```go
 func ReportSchedule(reports Reports) (schedule.Declaration, error) {
@@ -179,6 +192,8 @@ bound. Authorize operational endpoints exposing attribution/occurrence IDs.
 
 <a id="recipe-schedule-job"></a>
 ## Typed job targets
+
+`models.User` is your application model; `Welcome` and `WelcomeJob` are the payload and definition of the [job guide](jobs.md#recipe-declare-job). `services` is the `application.Services` handed to application assembly.
 
 <!-- compiled-source: tests/fixtures/consumer/background/guide.go#calendar-job -->
 ```go

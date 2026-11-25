@@ -30,6 +30,7 @@ var AuthorIdentity = orm.IdentityOf(Authors.Table, Authors.Key())
 // ArticleOwner pins the historical extension owner scope. Example: extensions.ORMIdentity(ArticleOwner).Reference(id).
 var ArticleOwner = extensions.DefineORMOwner("articles", ArticleIdentity, extensions.OwnerOptions{StorageModel: "articles"})
 
+// doc-example:begin article-slot-handles
 // ArticleSlotHandles groups the thin external-store handles. Example: ArticleSlots.From(runtime).
 type ArticleSlotHandles struct {
 	// Title is the localized article heading shown to readers; it keeps its locale input and owner. Example: ArticleSlots.Title.Rule().
@@ -43,6 +44,8 @@ type ArticleSlotHandles struct {
 	// SEO keeps its concrete value type. Example: ArticleSlots.SEO.Save(ctx,article,SEO{}).
 	SEO metadata.ValueHandle[Article, model.ID[Article], SEO]
 }
+
+// doc-example:end article-slot-handles
 
 // ArticleSlots reuses the existing policies and stored names. Example: ArticleSlots.From(runtime).
 var ArticleSlots = func() ArticleSlotHandles {

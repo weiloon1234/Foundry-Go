@@ -29,6 +29,10 @@ still AVIF and explicit animation plans without an OS codec installation.
 <a id="recipe-declare-collection"></a>
 ## Declare collection policy once
 
+`Profile` and `Article` are the application's own models, with their generated `ProfileIdentity`, `ArticleIdentity` and `Articles` table. `Owners` is the profile model's `extensions.Owner` and `Files` an application `storage.Disk`. `Services` is the application's struct whose `Attachments` field is the `*attachments.Manager`. The article `Service` has an extension `store` (`*extensions.Store`) and `handles`, its bound `ArticleSlotHandles` from [model extension slots](model-extension-slots.md#recipe-slot-policies).
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `attachments`, `database`, `database/orm`, `imaging`, `jobs`, `model`, `storage`, `value`; the framework's `http` package is imported as `foundryhttp` and `storage/http` as `storagehttp`.
+
 <!-- compiled-source: tests/fixtures/consumer/profiles/profile.go#attachments-avatar -->
 ```go
 var Avatar = attachments.Define(Owners, "avatar", attachments.Policy{Disk: Files, Cardinality: attachments.Single, Accepted: []storage.MediaType{"image/png", "image/jpeg"}, Image: value.Set(imaging.NewPlan().Fill(32, 32, false).Format(imaging.PNG))})
@@ -53,7 +57,7 @@ Redeclaring a matching name cannot replace a registered policy. Collection calls
 retain the owner's model and primary key type; file IDs also retain the model.
 See the [independent consumer](../../tests/fixtures/consumer/profiles/profile.go).
 
-Bound slots accept request-owned uploads. Return the typed publication report
+Bound slots accept request-owned uploads. `ArticleMedia` is the multipart request body: `Logo` is a `value.Optional[foundryhttp.UploadedFile]` and `Galleries` a slice of `foundryhttp.UploadedFile`. Return the typed publication report
 together with any error to the application decision boundary:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#publish-file-sources -->
@@ -66,13 +70,13 @@ type MediaPublication struct {
 func (s *Service) PublishMedia(ctx context.Context, article Article, input ArticleMedia) (MediaPublication, error) {
 	var publication MediaPublication
 	if logo, supplied := input.Logo.Get(); supplied {
-		result, err := s.x.Logo.ReplaceFile(ctx, article, logo)
+		result, err := s.handles.Logo.ReplaceFile(ctx, article, logo)
 		publication.Logo = value.Set(result)
 		if err != nil {
 			return publication, err
 		}
 	}
-	results, err := attachments.AddFilesTo(ctx, s.x.Galleries, article, input.Galleries)
+	results, err := attachments.AddFilesTo(ctx, s.handles.Galleries, article, input.Galleries)
 	publication.Gallery = results
 	return publication, err
 }
@@ -81,8 +85,8 @@ func (s *Service) PublishMedia(ctx context.Context, article Article, input Artic
 The optional logo result distinguishes an unattempted logo from a failed attempt.
 Every returned result retains `Operation`, `Publication`, `PendingCleanup` and
 `PendingVariants`. On a batch error, inspect successful earlier entries and the
-failed entry; do not replay the whole batch. The HTTP consumer preserves this
-report in `MediaPublicationError` for application error handling. Disclosure,
+failed entry; do not replay the whole batch. Keep this
+report in an application error type for the error boundary. Disclosure,
 reconciliation and retry decisions remain application-owned.
 
 `attachments.AddFilesTo` validates the bound handle and batch limit before opening
@@ -95,11 +99,11 @@ files must come from that same handle before the transaction begins:
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#append-slot-file -->
 ```go
 func (s *Service) AddGalleryFile(ctx context.Context, article Article, file attachments.FileSource) (attachments.Result[Article, model.ID[Article]], error) {
-	return s.x.Galleries.AddFile(ctx, article, file)
+	return s.handles.Galleries.AddFile(ctx, article, file)
 }
 
 func (s *Service) AddPreparedGallery(ctx context.Context, tx *database.Tx, article Article, prepared attachments.Prepared[Article, model.ID[Article]]) (attachments.Result[Article, model.ID[Article]], error) {
-	return s.x.Galleries.AddIn(ctx, tx, article, prepared)
+	return s.handles.Galleries.AddIn(ctx, tx, article, prepared)
 }
 ```
 
@@ -258,7 +262,7 @@ keeps the caller's visibility query for the locked owner read and model write:
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#publish-slot-file -->
 ```go
 func (s *Service) ReplaceLogo(ctx context.Context, visible orm.Query[Article], article Article, file attachments.FileSource, slug string) (attachments.Result[Article, model.ID[Article]], error) {
-	prepared, err := s.x.Logo.PrepareFile(ctx, article, file)
+	prepared, err := s.handles.Logo.PrepareFile(ctx, article, file)
 	result := attachments.Result[Article, model.ID[Article]]{Operation: prepared.Operation()}
 	if err != nil {
 		return result, err
@@ -271,7 +275,7 @@ func (s *Service) ReplaceLogo(ctx context.Context, visible orm.Query[Article], a
 		if _, err := orm.Update(ctx, tx, visible, Articles.Key(), locked.ID, orm.Set(Articles.Slug, slug)); err != nil {
 			return err
 		}
-		result, err = s.x.Logo.ReplaceIn(ctx, tx, locked, prepared)
+		result, err = s.handles.Logo.ReplaceIn(ctx, tx, locked, prepared)
 		return err
 	})
 	// Publication inside the callback remains subject to the outer commit.
@@ -456,11 +460,13 @@ Locally active writers are excluded.
 
 ## Image variants
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#attachments-thumbnail -->
+The next two blocks use the `Article` model and `Owner` of [model extension slots](model-extension-slots.md#recipe-declare-slots), whose key is an `int64`.
+
+<!-- compiled-source: tests/fixtures/goway/models/extensions/slot_recipes.go#attachments-thumbnail -->
 ```go
 var Thumbnail = attachments.DefineVariant("thumbnail",
 	imaging.NewPlan().Fit(320, 320, false).Format(imaging.WebP))
-var Photos = attachments.Define(ext.Owner, "photos", attachments.Policy{
+var Photos = attachments.Define(Owner, "photos", attachments.Policy{
 	Disk: storage.DefineDisk("photos"), Cardinality: attachments.Multiple,
 	Accepted: []storage.MediaType{"image/jpeg", "image/png"},
 	Variants: []attachments.Variant{Thumbnail},
@@ -517,13 +523,13 @@ IDs only, and exits with an error when any attachment failed.
 
 ## Ordinary jobs and outbox
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#attachments-queued-photos -->
+<!-- compiled-source: tests/fixtures/goway/models/extensions/slot_recipes.go#attachments-queued-photos -->
 ```go
-func queuedPhotos(producer *jobs.Outbox) (attachments.Collection[ext.Article, int64], error) {
+func QueuedPhotos(producer *jobs.Outbox) (attachments.Collection[Article, int64], error) {
 	job := attachments.DefineReconcileJob("attachments.reconcile", jobs.DefaultPolicy("maintenance"))
 	queue, err := job.ToOutbox(producer)
 	if err != nil {
-		return attachments.Collection[ext.Article, int64]{}, err
+		return attachments.Collection[Article, int64]{}, err
 	}
 	return Photos.WithReconciliation(queue), nil
 }
@@ -618,8 +624,7 @@ func VideoDownload(videos attachments.Collection[Article, model.ID[Article]], ma
 }
 ```
 
-Here `foundryhttp` is the framework HTTP package and `storagehttp` is
-`github.com/weiloon1234/Foundry-Go/storage/http`. The attachment ID is a strong
+The attachment ID is a strong
 HTTP validator because each upload has immutable bytes and a new ID. Storage
 reads still use the private persisted ETag/version. The HTTP owner handles HEAD,
 206/416, suffix/open-ended ranges, If-Range, validators, and closure after success,
@@ -681,10 +686,10 @@ func (s *Service) ClearFiles(ctx context.Context, tx *database.Tx, visible orm.Q
 	if err != nil {
 		return err
 	}
-	if _, err := s.x.Logo.ClearIn(ctx, tx, article); err != nil {
+	if _, err := s.handles.Logo.ClearIn(ctx, tx, article); err != nil {
 		return err
 	}
-	_, err = s.x.Galleries.ClearIn(ctx, tx, article)
+	_, err = s.handles.Galleries.ClearIn(ctx, tx, article)
 	return err
 }
 ```

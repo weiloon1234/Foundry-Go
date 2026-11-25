@@ -31,6 +31,8 @@ selected message fallback.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `decimal`, `i18n`, `i18n/message`, `validation`.
 
+`localization` is the application's own package that declares the message argument structs and their generated `…Message()` constructors.
+
 The Go argument struct is the source of truth for parameter names and types:
 
 <!-- compiled-source: tests/fixtures/consumer/localization/messages.go#typed-plural-message -->
@@ -163,7 +165,7 @@ See [generated browser message formatting](client-contracts.md#recipe-browser-me
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
-The application's `localization` package also declares the welcome message:
+The same package also declares the welcome message:
 
 <!-- compiled-source: tests/fixtures/consumer/localization/messages.go#welcome-message-input -->
 ```go

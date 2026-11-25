@@ -99,19 +99,15 @@ enabled = true
 				return nil
 			}, nil
 		}),
-		// doc-example:begin queued-listener
-		application.ListenQueued(handled, "queued", func(application.Services) (events.Handler[eventqueries.RecordCreated], error) {
-			return func(_ context.Context, p eventqueries.RecordCreated) error {
-				mu.Lock()
-				defer mu.Unlock()
-				if p.ID != handledID {
-					return errors.New("queued listener lost typed payload")
-				}
-				queued++
-				return nil
-			}, nil
+		eventqueries.QueueListener(handled, "queued", func(_ context.Context, p eventqueries.RecordCreated) error {
+			mu.Lock()
+			defer mu.Unlock()
+			if p.ID != handledID {
+				return errors.New("queued listener lost typed payload")
+			}
+			queued++
+			return nil
 		}),
-		// doc-example:end queued-listener
 		application.Listen(retried, "retry", func(application.Services) (events.Handler[eventqueries.RecordCreated], error) {
 			return func(ctx context.Context, _ eventqueries.RecordCreated) error {
 				mu.Lock()

@@ -22,14 +22,16 @@ Milestone 12 adds the [shared publisher and typed job/event delivery](jobs.md#tr
 <a id="recipe-enqueue-event"></a>
 ## Register once, publish a concrete DTO
 
+`models.Plain` is your application model with a typed `ID`; `RecordCreated` and `PublicationService` are the payload DTO and service declared in [typed events](events.md#recipe-declare-event) and [durable event assembly](events.md#recipe-durable-events); `Durable` is the producer's typed `foundation.Key` and `Bus` the key of the `events.Bus`. Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `database`, `events`, `foundation`, `model`, `outbox`, `value`.
+
 Configured applications declare the destination in
 [durable event assembly](events.md#recipe-durable-events). Advanced foundation
 providers register the same typed producer through `events.RegisterOutbox`:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/durable.go#register-event-outbox -->
 ```go
-if err := events.RegisterOutbox(r, Durable, Bus, "consumer.domain"); err != nil {
-	return err
+func RegisterEventOutbox(r *foundation.Registrar) error {
+	return events.RegisterOutbox(r, Durable, Bus, "consumer.domain")
 }
 ```
 
@@ -43,11 +45,11 @@ their own destination configuration.
 
 The service constructed in [durable event assembly](events.md#recipe-durable-events)
 enqueues using the business transaction. A model observer can use the same call
-with its `orm.Changes[observerqueries.Plain]` stored snapshot:
+with its `orm.Changes[models.Plain]` stored snapshot:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#enqueue-event -->
 ```go
-func (s *PublicationService) Enqueue(ctx context.Context, tx *database.Tx, id model.ID[observerqueries.Plain]) (outbox.ID[RecordCreated], error) {
+func (s *PublicationService) Enqueue(ctx context.Context, tx *database.Tx, id model.ID[models.Plain]) (outbox.ID[RecordCreated], error) {
 	return Created.Enqueue(ctx, tx, s.producer, RecordCreated{ID: id})
 }
 ```

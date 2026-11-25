@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	"foundry.test/consumer/mutatorqueries"
+	models "foundry.test/consumer/mutatorqueries"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -14,13 +14,13 @@ import (
 // doc-example:begin typed-cache
 // Profile is an internal cache snapshot, not an automatically exported HTTP DTO.
 type Profile struct {
-	Email  mutatorqueries.DisplayEmail
+	Email  models.DisplayEmail
 	Labels []string
 }
-type Profiles = cache.Cache[model.ID[mutatorqueries.Member], Profile]
+type Profiles = cache.Cache[model.ID[models.Member], Profile]
 
 // ProfileEntries is declared once; repeated bindings reuse its identity.
-var ProfileEntries = cache.Define("member-profiles-v1", keyspace.TextKeys[model.ID[mutatorqueries.Member]](), cache.JSON[Profile]())
+var ProfileEntries = cache.Define("member-profiles-v1", keyspace.TextKeys[model.ID[models.Member]](), cache.JSON[Profile]())
 
 func Bind(store *cache.Store) (Profiles, error) { return ProfileEntries.Bind(store) }
 
@@ -29,14 +29,14 @@ func Bind(store *cache.Store) (Profiles, error) { return ProfileEntries.Bind(sto
 // doc-example:begin cache-snapshot
 // SaveProfile explicitly selects the model's read accessor. The stored model and
 // its ID remain untouched; consumers choose the representation to cache.
-func SaveProfile(ctx context.Context, profiles Profiles, member mutatorqueries.Member) error {
+func SaveProfile(ctx context.Context, profiles Profiles, member models.Member) error {
 	value, err := profileSnapshot(member)
 	if err != nil {
 		return err
 	}
 	return profiles.Put(ctx, member.ID, value, cache.For(5*time.Minute))
 }
-func profileSnapshot(member mutatorqueries.Member) (Profile, error) {
+func profileSnapshot(member models.Member) (Profile, error) {
 	email, err := member.AccessEmail()
 	if err != nil {
 		return Profile{}, err
@@ -48,7 +48,7 @@ func profileSnapshot(member mutatorqueries.Member) (Profile, error) {
 
 // RememberProfile keeps application code focused on loading a concrete model and
 // selecting its presentation fields. Foundry owns caching and local coalescing.
-func RememberProfile(ctx context.Context, profiles Profiles, id model.ID[mutatorqueries.Member], load func(context.Context, model.ID[mutatorqueries.Member]) (mutatorqueries.Member, error)) (Profile, error) {
+func RememberProfile(ctx context.Context, profiles Profiles, id model.ID[models.Member], load func(context.Context, model.ID[models.Member]) (models.Member, error)) (Profile, error) {
 	return profiles.Remember(ctx, id, cache.For(5*time.Minute), func(ctx context.Context) (Profile, error) {
 		member, err := load(ctx, id)
 		if err != nil {
@@ -61,7 +61,7 @@ func RememberProfile(ctx context.Context, profiles Profiles, id model.ID[mutator
 // FlexibleProfile serves a snapshot younger than a minute directly and an older
 // one (up to ten more minutes) immediately while Foundry refreshes it in the
 // background. The application only chooses its freshness policy and loader.
-func FlexibleProfile(ctx context.Context, profiles Profiles, id model.ID[mutatorqueries.Member], load func(context.Context, model.ID[mutatorqueries.Member]) (mutatorqueries.Member, error)) (Profile, error) {
+func FlexibleProfile(ctx context.Context, profiles Profiles, id model.ID[models.Member], load func(context.Context, model.ID[models.Member]) (models.Member, error)) (Profile, error) {
 	return profiles.Flexible(ctx, id, time.Minute, 10*time.Minute, func(ctx context.Context) (Profile, error) {
 		member, err := load(ctx, id)
 		if err != nil {
@@ -72,7 +72,7 @@ func FlexibleProfile(ctx context.Context, profiles Profiles, id model.ID[mutator
 }
 
 // doc-example:begin read-cache
-func ReadProfile(ctx context.Context, profiles Profiles, id model.ID[mutatorqueries.Member]) (Profile, bool, error) {
+func ReadProfile(ctx context.Context, profiles Profiles, id model.ID[models.Member]) (Profile, bool, error) {
 	return profiles.Get(ctx, id)
 }
 

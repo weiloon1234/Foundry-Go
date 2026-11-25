@@ -17,12 +17,14 @@ full repository checks have passed.
 <a id="recipe-declare-event"></a>
 ## Declare and dispatch an event
 
+`models.Plain` is your application model with a typed `ID`. Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `database`, `database/orm`, `events`, `foundation`, `model`.
+
 Define a concrete payload DTO and one reusable descriptor:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/events.go#event-payload -->
 ```go
 type RecordCreated struct {
-	ID model.ID[observerqueries.Plain] `json:"id"`
+	ID model.ID[models.Plain] `json:"id"`
 }
 
 var Created = events.Define[RecordCreated]("records.created", 1)
@@ -35,7 +37,7 @@ payload contract changes; a version is not a retry counter.
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#dispatch-event -->
 ```go
-func DispatchCreated(ctx context.Context, bus *events.Bus, id model.ID[observerqueries.Plain]) error {
+func DispatchCreated(ctx context.Context, bus *events.Bus, id model.ID[models.Plain]) error {
 	return Created.Dispatch(ctx, bus, RecordCreated{ID: id})
 }
 ```
@@ -68,19 +70,15 @@ schema, so it does not require another registration. Undeclared topics fail.
 <a id="recipe-queued-listener"></a>
 ## Queued listeners, subscribers and test fakes
 
-<!-- compiled-source: tests/fixtures/consumer/eventqueries/configured_outbox_postgres_test.go#queued-listener -->
+Declare a queued listener with its topic, a listener name and a handler:
+
+<!-- compiled-source: tests/fixtures/consumer/eventqueries/configured_outbox.go#queued-listener -->
 ```go
-application.ListenQueued(handled, "queued", func(application.Services) (events.Handler[eventqueries.RecordCreated], error) {
-	return func(_ context.Context, p eventqueries.RecordCreated) error {
-		mu.Lock()
-		defer mu.Unlock()
-		if p.ID != handledID {
-			return errors.New("queued listener lost typed payload")
-		}
-		queued++
-		return nil
-	}, nil
-}),
+func QueueListener(topic events.Topic[RecordCreated], name events.ListenerID, handle events.Handler[RecordCreated]) application.EventDeclaration {
+	return application.ListenQueued(topic, name, func(application.Services) (events.Handler[RecordCreated], error) {
+		return handle, nil
+	})
+}
 ```
 
 `events.Listen(name, handler).Queued()` (or `events.RegisterQueuedListener`,
@@ -151,18 +149,20 @@ shutdown; Foundry must keep its dependencies alive until that code exits.
 <a id="recipe-after-commit-event"></a>
 ## Dispatching from a model lifecycle
 
-The consumer registers an `orm.NewObserver[observerqueries.Plain]` whose `Created` callback reads
-the typed stored model from `orm.Changes[observerqueries.Plain]`, then schedules its event:
+Register an `orm.NewObserver[models.Plain]` whose `Created` callback reads
+the typed stored model from `orm.Changes[models.Plain]`, then schedules its event. `bus` is the `*events.Bus` resolved when the observer is registered:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/events.go#observer-after-commit -->
 ```go
-return orm.Hooks[observerqueries.Plain]{Created: func(ctx context.Context, tx *database.Tx, changes orm.Changes[observerqueries.Plain]) error {
-	after, present := changes.After().Get()
-	if !present {
-		return errors.New("created observer has no stored snapshot")
-	}
-	return Created.AfterCommit(ctx, tx, bus, RecordCreated{ID: after.ID})
-}}
+func CreatedHooks(bus *events.Bus) orm.Hooks[models.Plain] {
+	return orm.Hooks[models.Plain]{Created: func(ctx context.Context, tx *database.Tx, changes orm.Changes[models.Plain]) error {
+		after, present := changes.After().Get()
+		if !present {
+			return errors.New("created observer has no stored snapshot")
+		}
+		return Created.AfterCommit(ctx, tx, bus, RecordCreated{ID: after.ID})
+	}}
+}
 ```
 
 `AfterCommit` requires a concrete `*database.Tx`, not a pool. It snapshots the
@@ -191,6 +191,10 @@ Declare a producer key and its destination alongside the typed topic:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/configured_outbox.go#event-outbox -->
 ```go
+var Publications = foundation.NewKey[*events.Outbox]("consumer.publications")
+
+// ConfigurePublications declares the producer; TOML maps its destination to a
+// durable job connection.
 func ConfigurePublications(builder *application.Builder) *application.Builder {
 	return builder.Events(application.Topic(Created), application.EventOutbox(Publications, "consumer.publications"))
 }

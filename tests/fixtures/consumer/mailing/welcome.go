@@ -12,20 +12,23 @@ import (
 	"github.com/weiloon1234/Foundry-Go/outbox"
 )
 
+// doc-example:begin mail-types
 type Welcome struct {
 	Recipient email.Address      `json:"recipient"`
 	Name      string             `json:"name"`
 	Documents []email.Attachment `json:"documents,omitempty"`
 }
 
-var WelcomeEmail = jobs.Define[Welcome]("mail.welcome", 1, jobs.DefaultPolicy("communications"))
-var MailerKey = foundation.NewKey[*email.Mailer]("application.mailer")
-
 type Sender struct {
 	mailer   *email.Mailer
 	from     email.Address
 	template email.Template[Welcome]
 }
+
+// doc-example:end mail-types
+
+var WelcomeEmail = jobs.Define[Welcome]("mail.welcome", 1, jobs.DefaultPolicy("communications"))
+var MailerKey = foundation.NewKey[*email.Mailer]("application.mailer")
 
 // doc-example:begin mail-template
 func NewSender(mailer *email.Mailer, from email.Address) (*Sender, error) {

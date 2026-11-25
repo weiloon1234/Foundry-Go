@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"foundry.test/goway/models"
+	ext "foundry.test/goway/models/extensions"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
@@ -14,7 +15,7 @@ func TestGuideDeclarations(t *testing.T) {
 	if err := orm.Check(append(Tables(), Accounts, models.Users)...); err != nil {
 		t.Fatal(err)
 	}
-	if err := articleDeclaration().Validate(); err != nil {
+	if err := ext.ArticleDeclaration().Validate(); err != nil {
 		t.Fatal(err)
 	}
 	id, err := model.NewIDAt[models.User](time.Now())

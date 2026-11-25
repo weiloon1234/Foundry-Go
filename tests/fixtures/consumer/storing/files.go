@@ -13,9 +13,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/storage/s3"
 )
 
+// doc-example:begin disk-keys
 var Files = storage.DefineDisk("documents")
 var FileDisk = foundation.NewKey[*storage.Disk]("domain.documents")
 var localBackend = foundation.NewKey[*local.Backend]("infrastructure.local-files")
+
+// doc-example:end disk-keys
+
 var cloudBackend = foundation.NewKey[*s3.Backend]("infrastructure.cloud-files")
 
 // doc-example:begin local-disk

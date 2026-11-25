@@ -3,7 +3,7 @@ package eventqueries
 import (
 	"context"
 
-	"foundry.test/consumer/observerqueries"
+	models "foundry.test/consumer/observerqueries"
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/events"
@@ -13,7 +13,7 @@ import (
 )
 
 // doc-example:begin dispatch-event
-func DispatchCreated(ctx context.Context, bus *events.Bus, id model.ID[observerqueries.Plain]) error {
+func DispatchCreated(ctx context.Context, bus *events.Bus, id model.ID[models.Plain]) error {
 	return Created.Dispatch(ctx, bus, RecordCreated{ID: id})
 }
 
@@ -33,7 +33,7 @@ func NewPublicationService(services application.Services) (*PublicationService, 
 // doc-example:end configured-event-producer
 
 // doc-example:begin enqueue-event
-func (s *PublicationService) Enqueue(ctx context.Context, tx *database.Tx, id model.ID[observerqueries.Plain]) (outbox.ID[RecordCreated], error) {
+func (s *PublicationService) Enqueue(ctx context.Context, tx *database.Tx, id model.ID[models.Plain]) (outbox.ID[RecordCreated], error) {
 	return Created.Enqueue(ctx, tx, s.producer, RecordCreated{ID: id})
 }
 

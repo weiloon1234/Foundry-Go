@@ -18,6 +18,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
+// doc-example:begin notification-declarations
+
 //foundry:dto
 type OrderPlaced struct {
 	OrderID model.ID[models.Order] `json:"order_id"`
@@ -37,6 +39,12 @@ type PrivateNotifications = notifications.Realtime[UserNotifications, models.Use
 var Placed = notifications.Define("order.placed", 1, OrderPlacedJSON())
 var Delivery = notifications.DefineDeliveryJob("notifications.deliver", jobs.DefaultPolicy("communications"))
 var Database = notifications.Database("inbox", OrderCardJSON(), card)
+
+func card(_ context.Context, _ models.User, _ notifications.DeliveryContext, input OrderPlaced) (OrderCard, error) {
+	return OrderCard{input.OrderID, input.Summary}, nil
+}
+
+// doc-example:end notification-declarations
 
 // doc-example:begin notification-recipient
 func Users(provider auth.Provider[models.User, model.ID[models.User]], guard auth.Guard[models.User]) UserRecipient {
@@ -61,9 +69,6 @@ func NewOrders(recipient UserRecipient, mailer *email.Mailer, from email.Address
 }
 
 // doc-example:end notification-channels
-func card(_ context.Context, _ models.User, _ notifications.DeliveryContext, input OrderPlaced) (OrderCard, error) {
-	return OrderCard{input.OrderID, input.Summary}, nil
-}
 
 // doc-example:begin notifications-capture
 func Capture(ctx context.Context, binding OrdersBinding, user models.User, input OrderPlaced) (notifications.PendingNotification[models.User, OrderPlaced], error) {

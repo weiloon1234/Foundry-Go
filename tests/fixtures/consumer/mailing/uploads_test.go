@@ -10,30 +10,16 @@ import (
 	"testing"
 
 	"foundry.test/consumer/httpuploads"
+	"foundry.test/consumer/mailing"
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/email/memory"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-// doc-example:begin attach-request-upload
-type uploadMailService struct {
-	base email.Message
-}
-
-func (s *uploadMailService) Build(ctx context.Context, input httpuploads.ProfileInput) (email.Message, error) {
-	message, err := s.base.AttachUpload(ctx, input.Attachment)
-	if err != nil {
-		return email.Message{}, err
-	}
-	return message, nil
-}
-
-// doc-example:end attach-request-upload
-
 // uploadMailRecorder captures one request for the sequential tests below.
 // It is test bookkeeping, not part of the reusable mail service.
 type uploadMailRecorder struct {
-	service *uploadMailService
+	service *mailing.UploadMailService
 	message email.Message
 	file    foundryhttp.UploadedFile
 }
@@ -41,7 +27,7 @@ type uploadMailRecorder struct {
 func (r *uploadMailRecorder) Save(ctx context.Context, input httpuploads.ProfileInput) (httpuploads.UploadReply, error) {
 	r.file = input.Attachment
 	var err error
-	r.message, err = r.service.Build(ctx, input)
+	r.message, err = r.service.Build(ctx, input.Attachment)
 	return httpuploads.UploadReply{Name: input.Attachment.Name(), Bytes: input.Attachment.Size(), DetectedType: input.Attachment.ContentType()}, err
 }
 
@@ -63,7 +49,7 @@ func checkBrowserUploadMail(t *testing.T, contents ...string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := &uploadMailRecorder{service: &uploadMailService{base: email.NewMessage(from, "Your upload", to).Text("Attached")}}
+	svc := &uploadMailRecorder{service: mailing.NewUploadMailService(email.NewMessage(from, "Your upload", to).Text("Attached"))}
 	directory := t.TempDir()
 	router, err := httpuploads.Router(directory, svc)
 	if err != nil {

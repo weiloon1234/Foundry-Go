@@ -24,9 +24,12 @@ var WelcomeJob = jobs.Define[Welcome]("members.welcome", 1, jobs.DefaultPolicy("
 
 // doc-example:end job-definition
 
+// doc-example:begin welcome-sender
 type WelcomeSender interface {
 	SendWelcome(context.Context, model.ID[models.User]) error
 }
+
+// doc-example:end welcome-sender
 
 func WelcomeDeclaration(sender WelcomeSender) (jobs.Declaration, error) {
 	return WelcomeJob.Declare(func(ctx context.Context, payload Welcome) error { return sender.SendWelcome(ctx, payload.UserID) })

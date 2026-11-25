@@ -6,6 +6,23 @@ import (
 	"github.com/weiloon1234/Foundry-Go/email"
 )
 
+// doc-example:begin attach-stored-files
+func ArticleImagesMessage(from, to email.Address, article Article) (email.Message, error) {
+	message, err := email.NewMessage(from, "Article images", to).Text("Attached").AttachStored(article.Logo)
+	if err != nil {
+		return email.Message{}, err
+	}
+	for _, file := range article.Galleries.All() {
+		message, err = message.AttachStored(file)
+		if err != nil {
+			return email.Message{}, err
+		}
+	}
+	return message, nil
+}
+
+// doc-example:end attach-stored-files
+
 // doc-example:begin durable-email-references
 func EmailReferences(article Article) ([]email.Attachment, error) {
 	logo, err := article.Logo.EmailAttachment()

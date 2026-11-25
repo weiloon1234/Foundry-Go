@@ -7,7 +7,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
 	"io"
 	stdhttp "net/http"
 	"net/http/httptest"
@@ -20,8 +19,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/foundation"
-	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
-	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"github.com/weiloon1234/Foundry-Go/webhook"
@@ -72,36 +69,20 @@ func TestVerifiedWebhookReauthenticatesEveryReplay(t *testing.T) {
 	app := startApp(t, pgtest.Isolate(t), Hooks{}, nil)
 	store, _ := app.app.Resources().Idempotency()
 	db, _ := app.app.Resources().Database()
-	type providerAccount int64
 	now := time.Now().UTC().Truncate(time.Second)
-	verifier, err := webhook.New(webhook.DefaultConfig("provider", webhook.Standard), providerAccount(99), []secret.String{secret.New("whsec_" + base64.StdEncoding.EncodeToString([]byte("fixed-loopback-provider-test-key-32-bytes")))}, providerClock{now})
+	verifier, err := webhook.New(webhook.DefaultConfig("provider", webhook.Standard), ProviderAccount(99), []secret.String{secret.New("whsec_" + base64.StdEncoding.EncodeToString([]byte("fixed-loopback-provider-test-key-32-bytes")))}, providerClock{now})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var calls atomic.Int32
-	// doc-example:begin verified-webhook-route
-	providerWebhookRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "provider.webhook", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/webhook"))
-	providerWebhookEndpoint := foundryhttp.DefineEndpoint(providerWebhookRoute, foundryhttp.EmptyQuery(), SubmissionBody(), foundryhttp.EmptyResponse(204))
-	providerWebhookEndpoint = foundryhttp.ConfigureEndpoint(providerWebhookEndpoint, foundryhttp.Use(foundryhttp.VerifyWebhook(verifier)))
-	endpoint := foundryhttp.Idempotent(providerWebhookEndpoint, store, idempotency.Definition{ID: "provider.delivery", Version: 1})
-
-	type input = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, Submission]
-	router, err := foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, _ input) (idempotency.Scope, error) {
-		delivery, ok := verifier.FromContext(ctx)
-		if !ok {
-			return idempotency.Scope{}, fmt.Errorf("verified delivery missing")
-		}
-		var account providerAccount = delivery.Account()
-		return idempotency.NewScope(string(delivery.Provider()), strconv.FormatInt(int64(account), 10))
-	}, func(ctx context.Context, tx *database.Tx, in input) (foundryhttp.NoContent, error) {
+	router, err := WebhookRouter(verifier, store, func(ctx context.Context, tx *database.Tx, submission Submission) error {
 		calls.Add(1)
-		_, err := orm.Insert(ctx, tx, Orders.Table, orm.Set(Orders.WorkspaceID, 1), orm.Set(Orders.Caller, 99), orm.Set(Orders.Name, in.Body.Name))
-		return foundryhttp.NoContent{}, err
-	}))
+		_, err := orm.Insert(ctx, tx, Orders.Table, orm.Set(Orders.WorkspaceID, 1), orm.Set(Orders.Caller, 99), orm.Set(Orders.Name, submission.Name))
+		return err
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// doc-example:end verified-webhook-route
 	id, body := "provider-delivery-001", `{"name":"webhook"}`
 	stamp := strconv.FormatInt(now.Unix(), 10)
 	send := func(signature, stamp, untrustedKey string) int {
