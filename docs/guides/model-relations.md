@@ -16,9 +16,16 @@ Relations retain source model, target model and key types. The [handwritten mode
 Generate model slots and keys from the directive, then compose
 owner-typed relationships at package scope. The [consumer declarations](../../tests/fixtures/consumer/models/orm_relations.go) demonstrate this pattern:
 
+The `models` namespace below is the application model package. The office examples
+use the application's `Office`, `Employee` and `Region` models and their generated
+`Offices`, `Employees` and `Regions` table values. The generated
+tables and [relationship declarations](../../tests/fixtures/consumer/models/orm_relations.go)
+retain the concrete owners used by these functions.
+
+<!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relations.go#model-relations-1 -->
 ```go
-introducer := orm.BelongsToOf(models.Users.Introducer, models.Users.IntroducerID, models.Users.ID)
-orders := orm.HasManyOf(models.Users.Orders, models.Users.ID, models.Orders.BuyerID)
+var introducer = orm.BelongsToOf(models.Users.Introducer, models.Users.IntroducerID, models.Users.ID)
+var orders = orm.HasManyOf(models.Users.Orders, models.Users.ID, models.Orders.BuyerID)
 ```
 
 Use the bound slot and column handles; no SQL names or codecs are repeated. Key
@@ -32,9 +39,13 @@ ordinary Go import-cycle rules still apply.
 
 ## Loading and reading values
 
+<!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relations.go#model-relations-2 -->
 ```go
-users, err := orm.All(ctx, db, models.Users.Query().With(models.UserLinks.Introducer,
-    models.UserLinks.Orders.OrderBy(orm.Desc(models.Orders.TotalCents))))
+func eagerUsers(ctx context.Context, db database.Executor) ([]models.User, error) {
+	users, err := orm.All(ctx, db, models.Users.Query().With(models.UserLinks.Introducer,
+		models.UserLinks.Orders.OrderBy(orm.Desc(models.Orders.TotalCents))))
+	return users, err
+}
 ```
 
 `With` preserves the model query and its filters, ordering and terminals. Relations load after parent rows are closed, allowing the same executor to be a single-connection transaction. Count/Exists do not execute eager loads. Model writes reject eager-loading clauses.
@@ -49,9 +60,10 @@ Eager loading copies the caller's parent slice once per load, attaches each rela
 
 When a parent has many targets but a slot needs one of them, declare the choice explicitly, like Laravel's `latestOfMany`/`ofMany`:
 
+<!-- compiled-source: tests/fixtures/consumer/officequeries/guide_relations.go#model-relations-3 -->
 ```go
-newest := orm.HasOneOf(Offices.Newest, Offices.ID, Employees.OfficeID).LatestOfMany()
-earliest := orm.HasOneOf(Offices.Earliest, Offices.ID, Employees.OfficeID).OfMany(orm.Asc(Employees.HiredAt))
+var newest = orm.HasOneOf(Offices.Newest, Offices.ID, Employees.OfficeID).LatestOfMany()
+var earliest = orm.HasOneOf(Offices.Earliest, Offices.ID, Employees.OfficeID).OfMany(orm.Asc(Employees.HiredAt))
 ```
 
 Each parent loads the first target in that order (the target primary key breaks ties; `OldestOfMany` uses the lowest key), in one `DISTINCT ON` query per key batch. The relationship's filters and scopes take part in the choice: `TopEarner.Where(orm.Lt(e.Salary, 25))` loads the best-paid employee under 25. `orm.Has` therefore matches when any filtered target exists. Relation aggregates over a one-of-many relationship are rejected; aggregate its `HasMany` form. The [office consumer](../../tests/fixtures/consumer/officequeries/office_postgres_test.go) exercises these relationships.
@@ -60,9 +72,10 @@ Each parent loads the first target in that order (the target primary key breaks 
 
 `orm.HasManyThroughOf` and `orm.HasOneThroughOf` reach targets through an intermediate model, like Laravel's `hasManyThrough`/`hasOneThrough`:
 
+<!-- compiled-source: tests/fixtures/consumer/officequeries/guide_relations.go#model-relations-4 -->
 ```go
-employees := orm.HasManyThroughOf(Regions.Employees, orm.JoinKeys(Regions.ID, Offices.RegionID), orm.JoinKeys(Offices.ID, Employees.OfficeID))
-region := orm.HasOneThroughOf(Employees.Region, orm.JoinKeys(Employees.OfficeID, Offices.ID), orm.JoinKeys(Offices.RegionID, Regions.ID))
+var employees = orm.HasManyThroughOf(Regions.Employees, orm.JoinKeys(Regions.ID, Offices.RegionID), orm.JoinKeys(Offices.ID, Employees.OfficeID))
+var region = orm.HasOneThroughOf(Employees.Region, orm.JoinKeys(Employees.OfficeID, Offices.ID), orm.JoinKeys(Offices.RegionID, Regions.ID))
 ```
 
 The arguments pair the source key with the intermediate's first key, then the intermediate's second key with the target key; the compiler checks both key types and all three models. The slots are ordinary `relation.Many`/`relation.One` fields. Targets load in one joined query per key batch, the intermediate's soft deletion and [global scopes](model-global-scopes.md) apply, and a target reachable through several intermediate rows appears once per path. `orm.Has`, relation aggregates and `expr.RelatedValue` use the same join. The intermediate is any declared model; it needs no relation slot of its own. A one-of-many choice over `HasOneThroughOf` is made per parent across all its intermediate rows: `orm.HasOneThroughOf(r.LatestHire, orm.JoinKeys(r.ID, o.RegionID), orm.JoinKeys(o.ID, e.OfficeID)).OfMany(orm.Desc(e.HiredAt))` loads each region's latest hire from any of its offices.
@@ -71,17 +84,24 @@ The arguments pair the source key with the intermediate's first key, then the in
 
 A model that takes part in polymorphic relationships declares its stored discriminator once; this method is the typed morph map, so call sites never pass type strings:
 
+<!-- compiled-source: tests/fixtures/consumer/officequeries/models.go#model-relations-5 -->
 ```go
-func (Office) MorphName() model.MorphName { return "office" }
+// MorphName declares the stored discriminator of regions in polymorphic relationships.
 func (Region) MorphName() model.MorphName { return "region" }
 
+// MorphName declares the stored discriminator of offices in polymorphic relationships.
+func (Office) MorphName() model.MorphName { return "office" }
+
+// Note belongs to either a region or an office.
+//
+//foundry:model table=office_notes var=Notes key=ID identity=false
 type Note struct {
-    ID          model.ID[Note]
-    SubjectType model.MorphName
-    SubjectID   string
-    Body        string
-    Region      relation.One[Region]
-    Office      relation.One[Office]
+	ID          model.ID[Note]  `foundry:"member=ID"`
+	SubjectType model.MorphName `foundry:"role=column"`
+	SubjectID   string
+	Body        string
+	Region      relation.One[Region]
+	Office      relation.One[Office]
 }
 ```
 
@@ -98,10 +118,14 @@ Every morph target shares one key type (here a unique `Code`), because one store
 
 Apply related predicates explicitly with `Where`, and nested descriptors with `With`:
 
+<!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relations.go#model-relations-6 -->
 ```go
-introducer := models.UserLinks.Introducer.
-    Where(orm.Eq(models.Users.Status, models.StatusActive)).With(models.UserLinks.Introducer)
-users, err := orm.All(ctx, db, models.Users.Query().With(introducer))
+func activeIntroducers(ctx context.Context, db database.Executor) ([]models.User, error) {
+	introducer := models.UserLinks.Introducer.
+		Where(orm.Eq(models.Users.Status, models.StatusActive)).With(models.UserLinks.Introducer)
+	users, err := orm.All(ctx, db, models.Users.Query().With(introducer))
+	return users, err
+}
 ```
 
 Predicates and nested descriptors must belong to the target model. A filtered-out target becomes loaded empty; it does not remove its parent. Parent scopes and related scopes are separate declarations. Automatic [soft-delete visibility](model-soft-deletes.md) applies independently to targets and pivots. Authentication remains a separate authorization concern.
@@ -114,14 +138,18 @@ No relation-global limit or offset is accepted because it would truncate a batch
 
 Declare a `relation.Through[Target, Pivot]` field. Both types are ordinary declared models; the [membership fixture](../../tests/fixtures/consumer/models/membership.go) uses a natural primary key for its pivot and a nullable named natural target key. `orm.ManyToManyOf(slot, orm.JoinKeys(sourceKey, pivotSourceKey), orm.JoinKeys(pivotTargetKey, targetKey))` checks both key pairs and the pivot owner at compilation. The same model can be the source and target.
 
+<!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relations.go#model-relations-7 -->
 ```go
-groups := models.UserLinks.Groups.
-    Where(orm.Eq(models.Groups.Name, "same")).
-    WherePivot(orm.Gt(models.Memberships.Priority, 0)).
-    OrderByPivot(orm.Asc(models.Memberships.Priority)).
-    OrderBy(orm.Desc(models.Groups.Code)).
-    With(models.GroupLinks.Owner).WithPivot(models.MembershipLinks.Inviter)
-users, err := orm.All(ctx, db, models.Users.Query().With(groups))
+func orderedMemberships(ctx context.Context, db database.Executor) ([]models.User, error) {
+	groups := models.UserLinks.Groups.
+		Where(orm.Eq(models.Groups.Name, "same")).
+		WherePivot(orm.Gt(models.Memberships.Priority, 0)).
+		OrderByPivot(orm.Asc(models.Memberships.Priority)).
+		OrderBy(orm.Desc(models.Groups.Code)).
+		With(models.GroupLinks.Owner).WithPivot(models.MembershipLinks.Inviter)
+	users, err := orm.All(ctx, db, models.Users.Query().With(groups))
+	return users, err
+}
 ```
 
 `user.Groups.Get()` returns `([]relation.Link[Group, Membership], bool)`. Each link exposes a concrete `relation.Link.Model` and `Pivot`. The loaded flag distinguishes not loaded from loaded empty; retrieving the collection copies its slice. Target models shared by different parents never carry another parent's pivot data. Distinct pivot rows for the same target remain distinct links. If one pivot row matches several target rows, loading fails with `database.TooManyRows`; enforce target-key uniqueness in the database when required.

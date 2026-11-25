@@ -97,12 +97,21 @@ version is deleted by `Version` alone, which removes exactly that version withou
 a delete marker. `Capabilities.ValidatePut`, `ValidateRead`, `ValidateDelete` and
 `ValidateList` are the shared checks used by `Disk` and the adapters.
 
+<!-- compiled-source: tests/fixtures/consumer/storing/guide_listing.go#storage-1 -->
 ```go
-prefix, err := storage.ParsePrefix("reports/")
-if err != nil { return err }
-page, err := disk.List(ctx, storage.ListOptions{Prefix: prefix, Limit: 100})
-if err != nil { return err }
-// Use page.Next unchanged with the same disk and prefix for the next page.
+func listReports(ctx context.Context, disk *storage.Disk) error {
+	prefix, err := storage.ParsePrefix("reports/")
+	if err != nil {
+		return err
+	}
+	page, err := disk.List(ctx, storage.ListOptions{Prefix: prefix, Limit: 100})
+	if err != nil {
+		return err
+	}
+	// Use page.Next unchanged with the same disk and prefix for the next page.
+	_ = page
+	return nil
+}
 ```
 
 Listings are bounded pages, not transactionally consistent snapshots. A cursor
@@ -134,6 +143,7 @@ the prefix is empty. Accumulate skipped counts across pages and inspect errors
 and per-key failures. Listing and deletion are not a snapshot, so concurrently
 written objects can also remain.
 
+<!-- compiled-source: tests/fixtures/consumer/storing/guide_listing.go#delete-prefix-page -->
 ```go
 type prefixPageResult struct {
 	storage.DeleteManyResult

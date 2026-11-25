@@ -7,12 +7,16 @@ import (
 
 // RequestParameters keeps URL inputs and application headers in one typed input.
 //
+// doc-example:begin model-generation-1
+//
 //foundry:query
 type RequestParameters struct {
 	Search     value.Optional[string] `query:"q"`
 	AppVersion string                 `header:"X-App-Version"`
 	DeviceID   value.Optional[string] `header:"X-Device-ID"`
 }
+
+// doc-example:end model-generation-1
 
 //foundry:dto http=response
 type RequestHeadersResponse struct {

@@ -10,23 +10,24 @@ import (
 	"github.com/weiloon1234/Foundry-Go/redis/data"
 )
 
-type ActivityKind string
-
-const PageViews ActivityKind = "page-views"
-
-// Activity is a consumer-owned DTO stored in a bounded recent-activity list.
-type Activity struct {
-	Member model.ID[mutatorqueries.Member]
-	Kind   ActivityKind
-}
 type GroupRanking = data.SortedSet[model.ID[models.Group], model.ID[mutatorqueries.Member]]
 type RecentActivity = data.List[model.ID[models.Group], Activity]
-type ActivityCounts = data.Hash[model.ID[mutatorqueries.Member], ActivityKind, int64]
 
-var Rankings = data.DefineSortedSet[model.ID[models.Group], model.ID[mutatorqueries.Member]]("group-rankings", 1, keyspace.TextKeys[model.ID[models.Group]]())
+// doc-example:begin redis-data-6
+var Rankings = data.DefineSortedSet[model.ID[models.Group], model.ID[Member]]("group-rankings", 1, keyspace.TextKeys[model.ID[models.Group]]())
+
+// doc-example:end redis-data-6
+
+// doc-example:begin redis-data-7
 var Recent = data.DefineList[model.ID[models.Group], Activity]("group-activity", 1, keyspace.TextKeys[model.ID[models.Group]]())
-var Counts = data.DefineHash[model.ID[mutatorqueries.Member], ActivityKind, int64]("member-activity", 1, keyspace.TextKeys[model.ID[mutatorqueries.Member]](), keyspace.StringKeys[ActivityKind]()).
+
+// doc-example:end redis-data-7
+
+// doc-example:begin redis-data-5
+var Counts = data.DefineHash[model.ID[Member], ActivityKind, int64]("member-activity", 1, keyspace.TextKeys[model.ID[Member]](), keyspace.StringKeys[ActivityKind]()).
 	WithFieldDecoder(func(text string) (ActivityKind, error) { return ActivityKind(text), nil })
+
+// doc-example:end redis-data-5
 
 // RecordView updates the three structures for one page view.
 func RecordView(ctx context.Context, rankings GroupRanking, recent RecentActivity, counts ActivityCounts, group model.ID[models.Group], member model.ID[mutatorqueries.Member]) error {
@@ -53,3 +54,17 @@ func TopMembers(ctx context.Context, rankings GroupRanking, group model.ID[model
 func MemberActivity(ctx context.Context, counts ActivityCounts, member model.ID[mutatorqueries.Member]) ([]data.HashEntry[ActivityKind, int64], error) {
 	return counts.GetAll(ctx, member)
 }
+
+// doc-example:begin redis-activity-types
+type ActivityKind string
+
+const PageViews ActivityKind = "page-views"
+
+// Activity is a consumer-owned DTO stored in a bounded recent-activity list.
+type Activity struct {
+	Member model.ID[Member]
+	Kind   ActivityKind
+}
+type ActivityCounts = data.Hash[model.ID[Member], ActivityKind, int64]
+
+// doc-example:end redis-activity-types

@@ -136,14 +136,34 @@ COMMIT and ROLLBACK use driver methods and emit no statement events. Application
 SQL is counted even when its text names transaction control. Counts include failed statements that reached execution.
 Nested scopes of the same detector replace their parent's counters.
 
-For tests or direct database assembly:
+To assert statement shapes in a test, pass connection settings and an operation
+with the signature `func(context.Context, *database.DB) error`. This helper registers
+the detector on the pool it opens. The operation must close its rows before returning:
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_statement_shapes_test.go#database-runtime-1 -->
 ```go
-detector, err := database.NewStatementDetector(database.DefaultStatementDetectorConfig())
-// Handle err, then include database.WithStatementDetector(detector) when opening pools.
-ctx, scope := detector.Begin(t.Context())
-// Execute the operation using ctx, and close all rows.
-dbassert.AssertStatementShapes(t, scope)
+func assertOperationShapes(t *testing.T, config postgres.Config, run func(context.Context, *database.DB) error) {
+	t.Helper()
+	detector, err := database.NewStatementDetector(database.DefaultStatementDetectorConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := postgres.Open(t.Context(), config, database.WithStatementDetector(detector))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(context.Background()); err != nil {
+			t.Error(err)
+		}
+	})
+	ctx, scope := detector.Begin(t.Context())
+	// The operation closes its rows before returning so the scope is complete.
+	if err := run(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	dbassert.AssertStatementShapes(t, scope)
+}
 ```
 
 Import `testkit/dbassert` for the assertion. Only framework-compiled shapes are

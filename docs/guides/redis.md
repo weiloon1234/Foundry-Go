@@ -34,6 +34,10 @@ Explicit namespace overrides retain their configured application and environment
 Declare application rate-limit and credential-protection stores alongside the
 application settings so construction and inspection use the same declarations:
 
+In these recipes, `Member` is the application model with its typed `ID` and
+`AccessEmail` accessor. `DisplayEmail` is the accessor's application-owned result type.
+`Profile` is the application's cache snapshot DTO.
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#credential-stores -->
 ```go
 var CredentialLimitsKey = foundation.NewKey[*ratelimit.Store]("credentials.limits")
@@ -95,36 +99,44 @@ their separately declared deployment policy. No existing key format changes.
 
 ## Application ownership
 
+<!-- compiled-source: tests/fixtures/consumer/caching/guide_redis.go#redis-1 -->
 ```go
-var RedisConnection = foundation.NewKey[*redis.Client]("app.redis")
+func redisProfiles(ctx context.Context, password string, ProfileEntries cache.Declaration[model.ID[Member], Profile]) error {
+	var RedisConnection = foundation.NewKey[*redis.Client]("app.redis")
+	config := redis.DefaultConfig()
+	config.Host = "redis.example.test"
+	config.User = "application"
+	config.Password = secret.New(password)
 
-config := redis.DefaultConfig()
-config.Host = "redis.example.test"
-config.User = "application"
-config.Password = secret.New(password)
-
-app, err := foundry.New().Register(
-    redis.Module("app.redis", RedisConnection, config),
-).Build(ctx)
-if err != nil {
-    return err
+	app, err := foundry.New().Register(
+		redis.Module("app.redis", RedisConnection, config),
+	).Build(ctx)
+	if err != nil {
+		return err
+	}
+	defer app.Shutdown(context.Background())
+	// Start when the assembled application is ready; normal kernel execution shares
+	// the application's lifecycle. Module installs cleanup before its health probe.
+	if err := app.Start(ctx); err != nil {
+		return err
+	}
+	client, err := foundation.Resolve(app.Services(), RedisConnection)
+	if err != nil {
+		return err
+	}
+	store, err := cache.NewStore(client, cache.DefaultConfig(keyspace.Namespace{
+		Application: "example", Environment: "production",
+	}))
+	if err != nil {
+		return err
+	}
+	profiles, err := ProfileEntries.Bind(store)
+	if err != nil {
+		return err
+	}
+	_ = profiles
+	return err
 }
-// Start when the assembled application is ready; normal kernel execution shares
-// the application's lifecycle. Module installs cleanup before its health probe.
-if err := app.Start(ctx); err != nil {
-    return err
-}
-client, err := foundation.Resolve(app.Services(), RedisConnection)
-if err != nil {
-    return err
-}
-store, err := cache.NewStore(client, cache.DefaultConfig(keyspace.Namespace{
-    Application: "example", Environment: "production",
-}))
-if err != nil {
-    return err
-}
-profiles, err := ProfileEntries.Bind(store)
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/caching/redis.go) uses the
@@ -238,18 +250,34 @@ hide an applied rotation; the command is never retried automatically.
 
 Bind the same tag declarations used with memory to the Redis-backed Store:
 
+`Profiles` is the application's alias for
+`cache.Cache[model.ID[Member], Profile]`, as declared by its
+[cache owner](../../tests/fixtures/consumer/caching/profiles.go). It retains a
+concrete model key and snapshot type; the `profiles` parameter is that bound cache.
+
+<!-- compiled-source: tests/fixtures/consumer/caching/guide_redis.go#redis-2 -->
 ```go
-tags, err := MemberChanges.Bind(store)
-if err != nil {
-    return err
+func taggedProfile(ctx context.Context, store *cache.Store, profiles Profiles, member Member, loadProfile func(context.Context) (Profile, error), MemberChanges cache.TagDeclaration[model.ID[Member]]) error {
+	tags, err := MemberChanges.Bind(store)
+	if err != nil {
+		return err
+	}
+	view, err := profiles.WithTags(tags.For(member.ID))
+	if err != nil {
+		return err
+	}
+	profile, err := view.Remember(ctx, member.ID, cache.For(5*time.Minute), loadProfile)
+	if err != nil {
+		return err
+	}
+	// After the corresponding domain change has committed:
+	err = tags.Invalidate(ctx, member.ID)
+	if err != nil {
+		return err
+	}
+	_ = profile
+	return err
 }
-view, err := profiles.WithTags(tags.For(member.ID))
-if err != nil {
-    return err
-}
-profile, err := view.Remember(ctx, member.ID, cache.For(5*time.Minute), loadProfile)
-// After the corresponding domain change has committed:
-err = tags.Invalidate(ctx, member.ID)
 ```
 
 Use [the existing typed tag consumer](../../tests/fixtures/consumer/caching/tags.go)

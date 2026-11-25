@@ -10,12 +10,15 @@ import (
 	"github.com/weiloon1234/Foundry-Go/pubsub"
 )
 
+// doc-example:begin pubsub-1
 // MemberChange is a declared transport snapshot. It does not serialize the model.
-type MemberChange struct{ Email mutatorqueries.DisplayEmail }
+type MemberChange struct{ Email DisplayEmail }
 
-var MemberChanged = pubsub.Define[model.ID[mutatorqueries.Member], MemberChange]("member-changed", 1, keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
+var MemberChanged = pubsub.Define[model.ID[Member], MemberChange]("member-changed", 1, keyspace.TextKeys[model.ID[Member]]())
 
-type MemberChanges = pubsub.Topic[model.ID[mutatorqueries.Member], MemberChange]
+// doc-example:end pubsub-1
+
+type MemberChanges = pubsub.Topic[model.ID[Member], MemberChange]
 
 func Bind(broker *pubsub.Broker) (MemberChanges, error) { return MemberChanged.Bind(broker) }
 

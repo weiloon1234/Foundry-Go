@@ -130,13 +130,25 @@ negative scale, a scale above `MaxDigits` and results beyond `MaxDigits` fail.
 `Fixed(scale)` presents exactly `scale` fractional digits (`"2.50"`) and fails
 instead of rounding when the value has more digits.
 
+<!-- compiled-source: tests/fixtures/consumer/codecs/guide_decimal.go#supporting-apis-1 -->
 ```go
-rate, _ := decimal.Parse("0.0825")
-tax, err := subtotal.Mul(rate)
-if err == nil {
-	tax, err = tax.Round(2, decimal.HalfEven)
+func taxAndShare(subtotal, total decimal.Decimal) error {
+	rate, _ := decimal.Parse("0.0825")
+	tax, err := subtotal.Mul(rate)
+	if err != nil {
+		return err
+	}
+	if err == nil {
+		tax, err = tax.Round(2, decimal.HalfEven)
+	}
+	share, err := total.Div(decimal.FromInt64(3), 2, decimal.HalfUp)
+	if err != nil {
+		return err
+	}
+	_ = tax
+	_ = share
+	return err
 }
-share, err := total.Div(decimal.FromInt64(3), 2, decimal.HalfUp)
 ```
 
 `decimal/money` pairs an amount with a `money.Currency` ISO 4217 code.

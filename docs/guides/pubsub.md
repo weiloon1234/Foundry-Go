@@ -10,26 +10,46 @@ remain separate delivery mechanisms.
 The [consumer example](../../tests/fixtures/consumer/messaging/members.go) compiles
 from an independent module and deliberately selects the model getter:
 
+In these recipes, `Member` is the application model with its typed `ID` and
+`AccessEmail` accessor. `DisplayEmail` is the accessor's application-owned result type.
+
+<!-- compiled-source: tests/fixtures/consumer/messaging/members.go#pubsub-1 -->
 ```go
-type MemberChange struct {
-    Email DisplayEmail
+// MemberChange is a declared transport snapshot. It does not serialize the model.
+type MemberChange struct{ Email DisplayEmail }
+
+var MemberChanged = pubsub.Define[model.ID[Member], MemberChange]("member-changed", 1, keyspace.TextKeys[model.ID[Member]]())
+```
+
+<!-- compiled-source: tests/fixtures/consumer/messaging/guide_pubsub.go#pubsub-1 -->
+```go
+func publishAndReceive(ctx context.Context, broker *pubsub.Broker, member Member) error {
+	topic, err := MemberChanged.Bind(broker)
+	if err != nil {
+		return err
+	}
+	subscription, err := topic.Subscribe(ctx, member.ID)
+	if err != nil {
+		return err
+	}
+	defer subscription.Close(context.Background())
+
+	email, err := member.AccessEmail()
+	if err != nil {
+		return err
+	}
+	subscribers, err := topic.Publish(ctx, member.ID, MemberChange{Email: email})
+	if err != nil {
+		return err
+	}
+	change, err := subscription.Receive(ctx)
+	if err != nil {
+		return err
+	}
+	_ = subscribers
+	_ = change
+	return err
 }
-
-var MemberChanged = pubsub.Define[model.ID[Member], MemberChange](
-    "member-changed", 1, keyspace.TextKeys[model.ID[Member]](),
-)
-
-topic, err := MemberChanged.Bind(broker)
-if err != nil { return err }
-subscription, err := topic.Subscribe(ctx, member.ID)
-if err != nil { return err }
-defer subscription.Close(context.Background())
-
-email, err := member.AccessEmail()
-if err != nil { return err }
-subscribers, err := topic.Publish(ctx, member.ID, MemberChange{Email: email})
-if err != nil { return err }
-change, err := subscription.Receive(ctx)
 ```
 
 `Member`, `DisplayEmail`, and the domain work belong to the application. In the
@@ -47,8 +67,12 @@ incompatible payload contract on a different physical channel.
 
 ## Broker construction and application ownership
 
+<!-- compiled-source: tests/fixtures/consumer/messaging/guide_pubsub.go#pubsub-2 -->
 ```go
-broker, err := pubsub.NewBroker(client, pubsub.DefaultConfig(namespace))
+func redisBroker(client *redis.Client, namespace keyspace.Namespace) (*pubsub.Broker, error) {
+	broker, err := pubsub.NewBroker(client, pubsub.DefaultConfig(namespace))
+	return broker, err
+}
 ```
 
 Here `client` is an existing `*redis.Client` and `namespace` is a shared
@@ -90,11 +114,18 @@ readiness. A failed initial attempt is reported the same way. Payloads published
 while `gap` runs are queued within the buffer limits and delivered afterwards, so
 `receive` must tolerate a change that the reconciliation already reflected.
 
+<!-- compiled-source: tests/fixtures/consumer/messaging/guide_pubsub.go#pubsub-3 -->
 ```go
-err := MemberChanged.Supervise(ctx, member.ID, pubsub.DefaultSupervisePolicy(),
-    func(ctx context.Context, change MemberChange) error { return apply(ctx, change) },
-    func(ctx context.Context, gap pubsub.Gap) error { return reloadMember(ctx, member.ID) },
-)
+func superviseMember(ctx context.Context, topic pubsub.Topic[model.ID[Member], MemberChange], member Member, apply func(context.Context, MemberChange) error, reloadMember func(context.Context, model.ID[Member]) error) error {
+	err := topic.Supervise(ctx, member.ID, pubsub.DefaultSupervisePolicy(),
+		func(ctx context.Context, change MemberChange) error { return apply(ctx, change) },
+		func(ctx context.Context, gap pubsub.Gap) error { return reloadMember(ctx, member.ID) },
+	)
+	if err != nil {
+		return err
+	}
+	return err
+}
 ```
 
 Invalid keys, cycles and contained callback panics end supervision instead of
