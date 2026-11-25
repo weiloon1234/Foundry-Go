@@ -43,11 +43,9 @@ func (r *EnqueueTrace) Reject(err error) { r.mu.Lock(); defer r.mu.Unlock(); r.f
 // error directly without keeping the resulting message ID in memory.
 func DurableDomain() foundation.Module {
 	return foundation.Module{Name: "domain.durable", Requires: []foundation.ProviderID{"database", "events"}, OnRegister: func(r *foundation.Registrar) error {
-		// doc-example:begin register-event-outbox
-		if err := events.RegisterOutbox(r, Durable, Bus, "consumer.domain"); err != nil {
+		if err := RegisterEventOutbox(r); err != nil {
 			return err
 		}
-		// doc-example:end register-event-outbox
 		if err := events.RegisterTopic(r, Bus, Created); err != nil {
 			return err
 		}
@@ -79,3 +77,10 @@ func DurableDomain() foundation.Module {
 		})
 	}}
 }
+
+// doc-example:begin register-event-outbox
+func RegisterEventOutbox(r *foundation.Registrar) error {
+	return events.RegisterOutbox(r, Durable, Bus, "consumer.domain")
+}
+
+// doc-example:end register-event-outbox

@@ -8,6 +8,8 @@
 <a id="recipe-lease-work"></a>
 ## Run work under a typed lease
 
+`models.Member` is your application model with a typed `ID`. Framework imports from `github.com/weiloon1234/Foundry-Go`: `keyspace`, `lease`, `model`.
+
 Declare a resource family once, then bind it to the application's lease manager.
 The [independent consumer](../../tests/fixtures/consumer/coordination/members.go)
 uses model-owned IDs and supplies only domain work:
@@ -15,14 +17,14 @@ uses model-owned IDs and supplies only domain work:
 <!-- compiled-source: tests/fixtures/consumer/coordination/members.go#lease-work -->
 ```go
 // MemberRefresh is one reusable declaration; distinct model IDs cannot be mixed.
-var MemberRefresh = lease.Define("member-refresh", keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
+var MemberRefresh = lease.Define("member-refresh", keyspace.TextKeys[model.ID[models.Member]]())
 
-type MemberLeases = lease.Leases[model.ID[mutatorqueries.Member]]
+type MemberLeases = lease.Leases[model.ID[models.Member]]
 
 func Bind(manager *lease.Manager) (MemberLeases, error) { return MemberRefresh.Bind(manager) }
 
 // RefreshMember supplies domain work. Foundry owns waiting, heartbeat and cleanup.
-func RefreshMember(ctx context.Context, locks MemberLeases, id model.ID[mutatorqueries.Member], refresh func(context.Context, model.ID[mutatorqueries.Member]) error) (bool, error) {
+func RefreshMember(ctx context.Context, locks MemberLeases, id model.ID[models.Member], refresh func(context.Context, model.ID[models.Member]) error) (bool, error) {
 	return locks.With(ctx, id, 30*time.Second, 2*time.Second, func(ctx context.Context) error { return refresh(ctx, id) })
 }
 ```

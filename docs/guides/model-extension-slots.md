@@ -21,11 +21,12 @@ store data in shared framework tables, not columns in the model's own table.
 The [articles consumer](../../tests/fixtures/consumer/articles/tables.go) contains
 the full declaration and HTTP workflow.
 
+`Article` and its generated `Articles` table are the application's own model. Two articles appear below: a minimal one with an `int64` key for the declaration, and the application's `Article` with a `model.ID[Article]` key for assembly, reads and writes. Framework imports from `github.com/weiloon1234/Foundry-Go`: `attachments`, `contract`, `database`, `database/orm`, `extensions`, `extensions/slots`, `i18n`, `metadata`, `storage`, `translations`, `validation`, `value`; the framework's `http` package is imported as `foundryhttp`.
+
 <a id="recipe-declare-slots"></a>
 ## Declare slots on the model
 
-The [compiled extension example](../../tests/fixtures/goway/models/extensions/models.go)
-uses an integer key and four slot kinds:
+The minimal `Article` uses an integer key and four slot kinds:
 
 <!-- compiled-source: tests/fixtures/goway/models/extensions/models.go#model-extension-slots-article -->
 ```go
@@ -63,29 +64,46 @@ Slots are excluded from parent SQL, assignments and automatic column audit.
 <a id="recipe-slot-policies"></a>
 ## Declare policies outside the table
 
-The guide binds policies once below. Here, `ext` is the compiled extension model
-package linked above:
+Bind each slot's policy once, in an application-owned namespace. `Descriptors` is that
+namespace's struct type, with one handle field per slot, and `Owner` is the owner declared above:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extension-slots-article-extensions -->
+<!-- compiled-source: tests/fixtures/goway/models/extensions/slot_recipes.go#model-extension-slots-article-extensions -->
 ```go
-// ArticleExtensions binds policies to the exact stored slot types.
-// Example: ArticleExtensions.From(runtime).
-var ArticleExtensions = ext.Descriptors{
-	Title:   translations.TextOf(ext.Owner, "title", translations.Options{}, extensions.BindSlot(ext.Articles.Key(), ext.Articles.Title)),
-	Cover:   attachments.OneOf(ext.Owner, "cover", attachments.Policy{Disk: storage.DefineDisk("local"), Accepted: []storage.MediaType{"image/png"}}, extensions.BindSlot(ext.Articles.Key(), ext.Articles.Cover)),
-	Gallery: attachments.ManyOf(ext.Owner, "gallery", attachments.Policy{Disk: storage.DefineDisk("local"), Accepted: []storage.MediaType{"image/png"}}, extensions.BindSlot(ext.Articles.Key(), ext.Articles.Gallery)),
-	SEO:     metadata.ValueOf(ext.Owner, "seo", metadata.Spec[string]{}, contract.StringJSON[string](), extensions.BindSlot(ext.Articles.Key(), ext.Articles.SEO)),
+// ArticleSlots binds policies to the exact stored slot types.
+var ArticleSlots = Descriptors{
+	Title:   translations.TextOf(Owner, "title", translations.Options{}, extensions.BindSlot(Articles.Key(), Articles.Title)),
+	Cover:   attachments.OneOf(Owner, "cover", attachments.Policy{Disk: storage.DefineDisk("local"), Accepted: []storage.MediaType{"image/png"}}, extensions.BindSlot(Articles.Key(), Articles.Cover)),
+	Gallery: attachments.ManyOf(Owner, "gallery", attachments.Policy{Disk: storage.DefineDisk("local"), Accepted: []storage.MediaType{"image/png"}}, extensions.BindSlot(Articles.Key(), Articles.Gallery)),
+	SEO:     metadata.ValueOf(Owner, "seo", metadata.Spec[string]{}, contract.StringJSON[string](), extensions.BindSlot(Articles.Key(), Articles.SEO)),
 }
 ```
 
 `TextOf`, `OneOf`, `ManyOf` and `ValueOf` produce thin typed handles backed by
 shared state. Their `From` methods borrow the existing translation, attachment
 and metadata managers. Group them in an application-owned namespace whose `From`
-and `All` methods compose those handles. The [compiled declaration](../../tests/fixtures/goway/models/extensions/models.go)
-shows both methods; `All` returns `[]orm.Relation[Article]`, built with each
-handle's `Relation(tableSlot)`.
+and `All` methods compose those handles; `All` returns `[]orm.Relation[Article]`,
+built with each handle's `Relation(tableSlot)`.
 
-The articles consumer groups its concrete handles in `ArticleSlotHandles`:
+The articles consumer groups its concrete handles in `ArticleSlotHandles`, one field per slot of its `Article`:
+
+<!-- compiled-source: tests/fixtures/consumer/articles/tables.go#article-slot-handles -->
+```go
+// ArticleSlotHandles groups the thin external-store handles. Example: ArticleSlots.From(runtime).
+type ArticleSlotHandles struct {
+	// Title is the localized article heading shown to readers; it keeps its locale input and owner. Example: ArticleSlots.Title.Rule().
+	Title translations.TextHandle[Article, model.ID[Article]]
+	// Summary keeps its optional locale input. Example: ArticleSlots.Summary.MergeRule().
+	Summary translations.TextHandle[Article, model.ID[Article]]
+	// Logo keeps single-file capability. Example: ArticleSlots.Logo.Accepts(ctx,file).
+	Logo attachments.OneHandle[Article, model.ID[Article]]
+	// Galleries keeps multi-file capability. Example: ArticleSlots.Galleries.Accepts(ctx,file).
+	Galleries attachments.ManyHandle[Article, model.ID[Article]]
+	// SEO keeps its concrete value type. Example: ArticleSlots.SEO.Save(ctx,article,SEO{}).
+	SEO metadata.ValueHandle[Article, model.ID[Article], SEO]
+}
+```
+
+Its `From` binds each handle to its manager, and `All` lists the loaders:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/tables.go#bind-slot-managers -->
 ```go
@@ -142,14 +160,14 @@ paths embed the scope, so declare the stable storage model before renaming a tab
 Return `slots.DeclareORM(owner, parts)` from an application-owned declaration
 function. `parts` lists the handles' `Registration()` and `Describe()` values:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extension-slots-article-declaration -->
+<!-- compiled-source: tests/fixtures/goway/models/extensions/slot_recipes.go#model-extension-slots-article-declaration -->
 ```go
-func articleDeclaration() slots.Declaration {
-	return slots.DeclareORM(ext.Owner, slots.Parts{
-		Translations: []translations.Registration{ArticleExtensions.Title.Registration()},
-		Attachments:  []attachments.Registration{ArticleExtensions.Cover.Registration(), ArticleExtensions.Gallery.Registration()},
-		Metadata:     []metadata.Registration{ArticleExtensions.SEO.Registration()},
-		Slots:        []extensions.SlotDescription{ArticleExtensions.Title.Describe(), ArticleExtensions.Cover.Describe(), ArticleExtensions.Gallery.Describe(), ArticleExtensions.SEO.Describe()},
+func ArticleDeclaration() slots.Declaration {
+	return slots.DeclareORM(Owner, slots.Parts{
+		Translations: []translations.Registration{ArticleSlots.Title.Registration()},
+		Attachments:  []attachments.Registration{ArticleSlots.Cover.Registration(), ArticleSlots.Gallery.Registration()},
+		Metadata:     []metadata.Registration{ArticleSlots.SEO.Registration()},
+		Slots:        []extensions.SlotDescription{ArticleSlots.Title.Describe(), ArticleSlots.Cover.Describe(), ArticleSlots.Gallery.Describe(), ArticleSlots.SEO.Describe()},
 	})
 }
 ```
@@ -159,6 +177,25 @@ tables separately through `application.WithTables`. Assembly rejects duplicate
 registrations and missing feature dependencies before acquiring resources. Every
 slot needs extensions; translated slots need locales, and attachments need storage
 and attachments enabled.
+
+The articles consumer's service keeps its extension store and the bound handles:
+
+<!-- compiled-source: tests/fixtures/consumer/articles/http.go#article-service -->
+```go
+// Service maps typed requests to slot writes and loads. Its store supplies the
+// transactions; an application with ordinary tables uses its database handle.
+type Service struct {
+	store   *extensions.Store
+	handles ArticleSlotHandles
+}
+
+// NewService binds the extension runtime once.
+func NewService(store *extensions.Store, runtime slots.Runtime) *Service {
+	return &Service{store: store, handles: ArticleSlots.From(runtime)}
+}
+```
+
+In the next block, `Tables()` returns the application's checked tables (`[]orm.CheckedTable`) and `ORMExtensionDeclaration()` is its declaration function, written as above for the `Article` of this consumer:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/slot_recipes.go#configure-slots -->
 ```go
@@ -183,11 +220,11 @@ that can delete its owner and supplies `slots.Runtime.Store` for cross-pool clea
 <a id="recipe-load-slots"></a>
 ## Loading slots
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extension-slots-articles -->
+<!-- compiled-source: tests/fixtures/goway/models/extensions/slot_recipes.go#model-extension-slots-articles -->
 ```go
-func articles(ctx context.Context, db database.Executor, runtime slots.Runtime) ([]ext.Article, error) {
-	bound := ArticleExtensions.From(runtime)
-	return orm.All(ctx, db, ext.Articles.Query().With(bound.All()...))
+func LoadArticles(ctx context.Context, db database.Executor, runtime slots.Runtime) ([]Article, error) {
+	bound := ArticleSlots.From(runtime)
+	return orm.All(ctx, db, Articles.Query().With(bound.All()...))
 }
 ```
 
@@ -210,6 +247,8 @@ including soft-deleted models read with `WithTrashed`, keep unloaded slots.
 
 <a id="recipe-read-slots"></a>
 ## Reading loaded slots
+
+`SEO` is the metadata DTO of the articles consumer's `Article`, with optional `Keywords` and `Canonical` fields.
 
 <!-- compiled-source: tests/fixtures/consumer/articles/slot_recipes.go#loaded-slot-values -->
 ```go
@@ -256,9 +295,9 @@ Slots refuse implicit JSON serialization. Map loaded values into explicit DTOs.
 <a id="recipe-write-slots"></a>
 ## Writing slots
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extension-slots-save-article -->
+<!-- compiled-source: tests/fixtures/goway/models/extensions/slot_recipes.go#model-extension-slots-save-article -->
 ```go
-func saveArticle(ctx context.Context, tx *database.Tx, bound ext.Descriptors, article ext.Article, title map[i18n.LocaleID]string, seo string) error {
+func SaveArticle(ctx context.Context, tx *database.Tx, bound Descriptors, article Article, title map[i18n.LocaleID]string, seo string) error {
 	if err := bound.Title.SyncIn(ctx, tx, article, title); err != nil {
 		return err
 	}
@@ -266,21 +305,21 @@ func saveArticle(ctx context.Context, tx *database.Tx, bound ext.Descriptors, ar
 }
 ```
 
-For concrete metadata, including removal, the articles service uses:
+For concrete metadata, including removal, the articles service uses its `handles` field. `ArticleInput` is its request body DTO: `Title` and `Summary` are `map[i18n.LocaleID]string` and `SEO` is a `value.Optional[SEO]`:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/http.go#write-slot-values -->
 ```go
 func (s *Service) writeText(ctx context.Context, tx *database.Tx, article Article, in ArticleInput) error {
-	if err := s.x.Title.SyncIn(ctx, tx, article, in.Title); err != nil {
+	if err := s.handles.Title.SyncIn(ctx, tx, article, in.Title); err != nil {
 		return err
 	}
-	if err := s.x.Summary.SyncIn(ctx, tx, article, in.Summary); err != nil {
+	if err := s.handles.Summary.SyncIn(ctx, tx, article, in.Summary); err != nil {
 		return err
 	}
 	if seo, ok := in.SEO.Get(); ok {
-		return s.x.SEO.SaveIn(ctx, tx, article, seo)
+		return s.handles.SEO.SaveIn(ctx, tx, article, seo)
 	}
-	_, err := s.x.SEO.ForgetIn(ctx, tx, article)
+	_, err := s.handles.SEO.ForgetIn(ctx, tx, article)
 	return err
 }
 ```
@@ -303,8 +342,11 @@ shows publication from request-owned uploads.
 ## Request input and validation
 
 A `map[i18n.LocaleID]string` retains locale-keyed JSON and TypeScript contracts.
-Use `value.Optional` for PATCH omission or a JSON multipart part. The articles
-consumer binds its complete input to the handle's rule:
+Use `value.Optional` for PATCH omission or a JSON multipart part. `ArticleInputValidationFields()` is generated from `ArticleInput`.
+
+Inputs: `s *Service`.
+
+The articles consumer binds its complete input to the handle's rule:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/http.go#article-input-rules -->
 ```go
@@ -312,8 +354,8 @@ input := ArticleInputValidationFields()
 textRules := validation.All(
 	validation.Rules(input.Slug, validation.NonBlank[string]()),
 	validation.Rules(input.Author, validation.NonBlank[string]()),
-	validation.Rules(input.Title, s.x.Title.Rule()),
-	validation.Rules(input.Summary, s.x.Summary.Rule()),
+	validation.Rules(input.Title, s.handles.Title.Rule()),
+	validation.Rules(input.Summary, s.handles.Summary.Rule()),
 )
 ```
 
@@ -325,22 +367,25 @@ NUL text reports `foundry.not_matches`. Unbound rules fail registration.
 
 `Accepts(ctx, file)` applies the write policy's name, size, detected media and
 image checks without database or storage work. It buffers under manager admission.
-Wrap it in a typed `validation.Custom` rule as the [HTTP example](../../tests/fixtures/consumer/articles/http.go)
-does. The eventual write remains authoritative.
+The eventual write remains authoritative. `ArticleMediaValidationFields()` is generated from the multipart body `ArticleMedia`, whose `Galleries` field has the type `Gallery`, a slice of `foundryhttp.UploadedFile`.
+
+Inputs: `s *Service`.
+
+Wrap `Accepts` in a typed `validation.Custom` rule and bind the media rules:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/http.go#slot-upload-rules -->
 ```go
 media := ArticleMediaValidationFields()
 logo := validation.Custom(validation.Spec{ID: "articles.logo", Message: "The logo is not an accepted image."}, func(ctx context.Context, file foundryhttp.UploadedFile) (bool, error) {
-	return s.x.Logo.Accepts(ctx, file)
+	return s.handles.Logo.Accepts(ctx, file)
 })
 gallery := validation.Custom(validation.Spec{ID: "articles.gallery", Message: "The gallery image is not accepted."}, func(ctx context.Context, file foundryhttp.UploadedFile) (bool, error) {
-	return s.x.Galleries.Accepts(ctx, file)
+	return s.handles.Galleries.Accepts(ctx, file)
 })
 mediaRules := validation.All(
-	validation.Rules(media.Title, validation.Optional(s.x.Title.MergeRule())),
+	validation.Rules(media.Title, validation.Optional(s.handles.Title.MergeRule())),
 	validation.Rules(media.Logo, validation.Optional(logo)),
-	validation.Rules(media.Galleries, validation.MaxItems[Gallery](s.x.Galleries.Describe().MaxFiles), validation.Each[Gallery](gallery)),
+	validation.Rules(media.Galleries, validation.MaxItems[Gallery](s.handles.Galleries.Describe().MaxFiles), validation.Each[Gallery](gallery)),
 )
 ```
 

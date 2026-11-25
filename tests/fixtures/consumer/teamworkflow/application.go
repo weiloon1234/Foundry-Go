@@ -61,7 +61,11 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 		if err != nil {
 			return nil, err
 		}
-		viewer, err := CaptureRoutes(captures)
+		binding, err := captureGuard()
+		if err != nil {
+			return nil, err
+		}
+		viewer, err := CaptureRoutes(captures, binding)
 		if err != nil {
 			return nil, err
 		}

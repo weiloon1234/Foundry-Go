@@ -24,6 +24,8 @@ collects the integration steps for a separate application repository.
 <a id="recipe-declare-job"></a>
 ## Concrete payloads and stable dispatch
 
+`models.User` is your application model with a typed `ID`. Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `database`, `jobs`, `model`, `outbox`.
+
 Declare one named DTO and reuse its definition for registration and dispatch:
 
 <!-- compiled-source: tests/fixtures/consumer/background/welcome.go#job-payload -->
@@ -37,6 +39,17 @@ type Welcome struct {
 ```go
 var WelcomeJob = jobs.Define[Welcome]("members.welcome", 1, jobs.DefaultPolicy("communications"))
 ```
+
+The handler calls an application service, here `WelcomeSender`:
+
+<!-- compiled-source: tests/fixtures/consumer/background/welcome.go#welcome-sender -->
+```go
+type WelcomeSender interface {
+	SendWelcome(context.Context, model.ID[models.User]) error
+}
+```
+
+Register the definition with its handler on a job connection:
 
 <!-- compiled-source: tests/fixtures/consumer/background/guide.go#configured-job -->
 ```go

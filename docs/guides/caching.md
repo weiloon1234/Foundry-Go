@@ -19,7 +19,7 @@ Redis also implements typed tags and [leases](leases.md) with full native accept
 <a id="recipe-typed-cache"></a>
 ## Declare once, bind once
 
-In these recipes, `mutatorqueries.Member` is your application model with a typed `ID` and an `AccessEmail() (mutatorqueries.DisplayEmail, error)` accessor; `mutatorqueries.DisplayEmail` is its string-backed presentation value.
+In these recipes, `models.Member` is your application model with a typed `ID` and an `AccessEmail() (models.DisplayEmail, error)` accessor; `models.DisplayEmail` is its string-backed presentation value.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `cache`, `clock`, `keyspace`, `cache/memory`, `model`.
 
@@ -31,13 +31,13 @@ uses a model-owned ID and explicitly selects a getter when creating a cache snap
 ```go
 // Profile is an internal cache snapshot, not an automatically exported HTTP DTO.
 type Profile struct {
-	Email  mutatorqueries.DisplayEmail
+	Email  models.DisplayEmail
 	Labels []string
 }
-type Profiles = cache.Cache[model.ID[mutatorqueries.Member], Profile]
+type Profiles = cache.Cache[model.ID[models.Member], Profile]
 
 // ProfileEntries is declared once; repeated bindings reuse its identity.
-var ProfileEntries = cache.Define("member-profiles-v1", keyspace.TextKeys[model.ID[mutatorqueries.Member]](), cache.JSON[Profile]())
+var ProfileEntries = cache.Define("member-profiles-v1", keyspace.TextKeys[model.ID[models.Member]](), cache.JSON[Profile]())
 
 func Bind(store *cache.Store) (Profiles, error) { return ProfileEntries.Bind(store) }
 ```
@@ -46,14 +46,14 @@ func Bind(store *cache.Store) (Profiles, error) { return ProfileEntries.Bind(sto
 ```go
 // SaveProfile explicitly selects the model's read accessor. The stored model and
 // its ID remain untouched; consumers choose the representation to cache.
-func SaveProfile(ctx context.Context, profiles Profiles, member mutatorqueries.Member) error {
+func SaveProfile(ctx context.Context, profiles Profiles, member models.Member) error {
 	value, err := profileSnapshot(member)
 	if err != nil {
 		return err
 	}
 	return profiles.Put(ctx, member.ID, value, cache.For(5*time.Minute))
 }
-func profileSnapshot(member mutatorqueries.Member) (Profile, error) {
+func profileSnapshot(member models.Member) (Profile, error) {
 	email, err := member.AccessEmail()
 	if err != nil {
 		return Profile{}, err
@@ -64,7 +64,7 @@ func profileSnapshot(member mutatorqueries.Member) (Profile, error) {
 
 <!-- compiled-source: tests/fixtures/consumer/caching/profiles.go#read-cache -->
 ```go
-func ReadProfile(ctx context.Context, profiles Profiles, id model.ID[mutatorqueries.Member]) (Profile, bool, error) {
+func ReadProfile(ctx context.Context, profiles Profiles, id model.ID[models.Member]) (Profile, bool, error) {
 	return profiles.Get(ctx, id)
 }
 ```
@@ -84,6 +84,8 @@ Copies of one declaration can bind repeatedly. A separately created declaration
 with the same name fails with `fault.Duplicate`, even when its Go types match.
 Use a versioned family name when an incompatible cache representation changes.
 Binding validates declarations without invoking codecs or performing I/O.
+
+`caching` is the application package that declares the cache above.
 
 Use a configured named store when selecting a separate cache authority. Resolve
 it once during service construction and retain the typed view for requests:
@@ -112,15 +114,15 @@ A tag family has its own typed key. Bind it to the same store as the cache view:
 <!-- compiled-source: tests/fixtures/consumer/caching/tags.go#invalidate-tag -->
 ```go
 // MemberChanges links member-derived cache snapshots to a typed invalidation key.
-var MemberChanges = cache.DefineTag("member-changes-v1", keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
+var MemberChanges = cache.DefineTag("member-changes-v1", keyspace.TextKeys[model.ID[models.Member]]())
 
-type MemberTags = cache.Tags[model.ID[mutatorqueries.Member]]
+type MemberTags = cache.Tags[model.ID[models.Member]]
 
 func BindMemberTags(store *cache.Store) (MemberTags, error) { return MemberChanges.Bind(store) }
-func ForMember(profiles Profiles, tags MemberTags, id model.ID[mutatorqueries.Member]) (Profiles, error) {
+func ForMember(profiles Profiles, tags MemberTags, id model.ID[models.Member]) (Profiles, error) {
 	return profiles.WithTags(tags.For(id))
 }
-func InvalidateMember(ctx context.Context, tags MemberTags, id model.ID[mutatorqueries.Member]) error {
+func InvalidateMember(ctx context.Context, tags MemberTags, id model.ID[models.Member]) error {
 	return tags.Invalidate(ctx, id)
 }
 ```
@@ -250,10 +252,10 @@ model-owned member IDs:
 
 <!-- compiled-source: tests/fixtures/consumer/caching/counters.go#caching-1 -->
 ```go
-var ProfileViews = cache.DefineCounter("profile-views-v1", keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
+var ProfileViews = cache.DefineCounter("profile-views-v1", keyspace.TextKeys[model.ID[models.Member]]())
 ```
 
-Inputs: `ctx context.Context`, `store *cache.Store`, `memberID model.ID[mutatorqueries.Member]`.
+Inputs: `ctx context.Context`, `store *cache.Store`, `memberID model.ID[models.Member]`.
 
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_operations.go#caching-1 -->
 ```go
@@ -296,7 +298,7 @@ capability and passed real-service and full native acceptance.
 
 ## Existence, expiry and batch removal
 
-Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[mutatorqueries.Member]`, `memberA model.ID[mutatorqueries.Member]`, `memberB model.ID[mutatorqueries.Member]`.
+Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[models.Member]`, `memberA model.ID[models.Member]`, `memberB model.ID[models.Member]`.
 
 The [compiling consumer](../../tests/fixtures/consumer/caching/entries.go) keeps its
 model-owned keys through these operations:
@@ -393,7 +395,7 @@ wins the store's fill registration supplies the loader, context and TTL. Concurr
 followers for that key wait for the same serialized result; each caller decodes
 its own snapshot, including the owner. A loader returning zero or nil is cacheable.
 
-Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[mutatorqueries.Member]`, `loadMember func(context.Context, model.ID[mutatorqueries.Member]) (mutatorqueries.Member, error)`.
+Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[models.Member]`, `loadMember func(context.Context, model.ID[models.Member]) (models.Member, error)`.
 
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_operations.go#caching-3 -->
 ```go
@@ -464,7 +466,7 @@ and atomic conditional publication.
 
 ### Stale-while-revalidate with Flexible
 
-Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[mutatorqueries.Member]`, `loadProfile func(context.Context) (Profile, error)`.
+Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[models.Member]`, `loadProfile func(context.Context) (Profile, error)`.
 
 `Flexible(ctx, key, fresh, stale, loader, options...)` is `Remember` that keeps
 serving an aging value while it is refreshed:

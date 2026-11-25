@@ -11,13 +11,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+// doc-example:begin report-types
 const DailyReport schedule.ID = "reports.daily"
-
-var SchedulerKey = foundation.NewKey[*schedule.Scheduler]("reports.scheduler")
 
 type Reports interface {
 	BuildDaily(context.Context, time.Time) error
 }
+
+// doc-example:end report-types
+
+var SchedulerKey = foundation.NewKey[*schedule.Scheduler]("reports.scheduler")
 
 // doc-example:begin daily-schedule
 func ReportSchedule(reports Reports) (schedule.Declaration, error) {

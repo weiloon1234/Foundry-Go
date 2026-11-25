@@ -88,18 +88,20 @@ type ArticleList struct {
 	Items []ArticleView `json:"items"`
 }
 
-// Service maps typed requests to slot writes and loads. The fixture keeps its
-// tables in the extension store's isolated schema, so the store supplies the
+// doc-example:begin article-service
+// Service maps typed requests to slot writes and loads. Its store supplies the
 // transactions; an application with ordinary tables uses its database handle.
 type Service struct {
-	store *extensions.Store
-	x     ArticleSlotHandles
+	store   *extensions.Store
+	handles ArticleSlotHandles
 }
 
 // NewService binds the extension runtime once.
 func NewService(store *extensions.Store, runtime slots.Runtime) *Service {
-	return &Service{store: store, x: ArticleSlots.From(runtime)}
+	return &Service{store: store, handles: ArticleSlots.From(runtime)}
 }
+
+// doc-example:end article-service
 
 // Routes declares the article endpoints. Translated and file rules come from
 // the model's slot policy, so validation and writes share one source.
@@ -109,22 +111,22 @@ func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
 	textRules := validation.All(
 		validation.Rules(input.Slug, validation.NonBlank[string]()),
 		validation.Rules(input.Author, validation.NonBlank[string]()),
-		validation.Rules(input.Title, s.x.Title.Rule()),
-		validation.Rules(input.Summary, s.x.Summary.Rule()),
+		validation.Rules(input.Title, s.handles.Title.Rule()),
+		validation.Rules(input.Summary, s.handles.Summary.Rule()),
 	)
 	// doc-example:end article-input-rules
 	// doc-example:begin slot-upload-rules
 	media := ArticleMediaValidationFields()
 	logo := validation.Custom(validation.Spec{ID: "articles.logo", Message: "The logo is not an accepted image."}, func(ctx context.Context, file foundryhttp.UploadedFile) (bool, error) {
-		return s.x.Logo.Accepts(ctx, file)
+		return s.handles.Logo.Accepts(ctx, file)
 	})
 	gallery := validation.Custom(validation.Spec{ID: "articles.gallery", Message: "The gallery image is not accepted."}, func(ctx context.Context, file foundryhttp.UploadedFile) (bool, error) {
-		return s.x.Galleries.Accepts(ctx, file)
+		return s.handles.Galleries.Accepts(ctx, file)
 	})
 	mediaRules := validation.All(
-		validation.Rules(media.Title, validation.Optional(s.x.Title.MergeRule())),
+		validation.Rules(media.Title, validation.Optional(s.handles.Title.MergeRule())),
 		validation.Rules(media.Logo, validation.Optional(logo)),
-		validation.Rules(media.Galleries, validation.MaxItems[Gallery](s.x.Galleries.Describe().MaxFiles), validation.Each[Gallery](gallery)),
+		validation.Rules(media.Galleries, validation.MaxItems[Gallery](s.handles.Galleries.Describe().MaxFiles), validation.Each[Gallery](gallery)),
 	)
 	// doc-example:end slot-upload-rules
 	articlesCreateRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/articles"))
@@ -174,7 +176,7 @@ func (s *Service) Create(ctx context.Context, in foundryhttp.Input[foundryhttp.N
 		if err := s.writeText(ctx, tx, created, in.Body); err != nil {
 			return err
 		}
-		article, err = orm.Require(ctx, tx, Articles.Query().With(s.x.All()...).Where(orm.Eq(Articles.Key(), created.ID)))
+		article, err = orm.Require(ctx, tx, Articles.Query().With(s.handles.All()...).Where(orm.Eq(Articles.Key(), created.ID)))
 		return err
 	})
 	if err != nil {
@@ -199,7 +201,7 @@ func (s *Service) Update(ctx context.Context, in foundryhttp.Input[ArticlePath, 
 		if err := s.writeText(ctx, tx, updated, in.Body); err != nil {
 			return err
 		}
-		article, err = orm.Require(ctx, tx, Articles.Query().With(s.x.All()...).Where(orm.Eq(Articles.Key(), updated.ID)))
+		article, err = orm.Require(ctx, tx, Articles.Query().With(s.handles.All()...).Where(orm.Eq(Articles.Key(), updated.ID)))
 		return err
 	})
 	if err != nil {
@@ -210,16 +212,16 @@ func (s *Service) Update(ctx context.Context, in foundryhttp.Input[ArticlePath, 
 
 // doc-example:begin write-slot-values
 func (s *Service) writeText(ctx context.Context, tx *database.Tx, article Article, in ArticleInput) error {
-	if err := s.x.Title.SyncIn(ctx, tx, article, in.Title); err != nil {
+	if err := s.handles.Title.SyncIn(ctx, tx, article, in.Title); err != nil {
 		return err
 	}
-	if err := s.x.Summary.SyncIn(ctx, tx, article, in.Summary); err != nil {
+	if err := s.handles.Summary.SyncIn(ctx, tx, article, in.Summary); err != nil {
 		return err
 	}
 	if seo, ok := in.SEO.Get(); ok {
-		return s.x.SEO.SaveIn(ctx, tx, article, seo)
+		return s.handles.SEO.SaveIn(ctx, tx, article, seo)
 	}
-	_, err := s.x.SEO.ForgetIn(ctx, tx, article)
+	_, err := s.handles.SEO.ForgetIn(ctx, tx, article)
 	return err
 }
 
@@ -233,7 +235,7 @@ func (s *Service) Upload(ctx context.Context, in foundryhttp.Input[ArticleMediaP
 		return ArticleView{}, err
 	}
 	if title, ok := in.Body.Title.Get(); ok {
-		if err := s.x.Title.Save(ctx, article, title); err != nil {
+		if err := s.handles.Title.Save(ctx, article, title); err != nil {
 			return ArticleView{}, err
 		}
 	}
@@ -250,7 +252,7 @@ func (s *Service) Upload(ctx context.Context, in foundryhttp.Input[ArticleMediaP
 
 // Show loads every slot with the article.
 func (s *Service) Show(ctx context.Context, in foundryhttp.Input[ArticlePath, foundryhttp.NoQuery, foundryhttp.NoBody]) (ArticleView, error) {
-	article, err := s.find(ctx, in.Path.Article, s.x.All()...)
+	article, err := s.find(ctx, in.Path.Article, s.handles.All()...)
 	if err != nil {
 		return ArticleView{}, err
 	}
@@ -262,7 +264,7 @@ func (s *Service) List(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPa
 	var list []Article
 	if err := s.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		list, err = orm.All(ctx, tx, Articles.Query().With(s.x.Title.Relation(Articles.Title), s.x.Summary.Relation(Articles.Summary), s.x.Logo.Relation(Articles.Logo), s.x.Galleries.Relation(Articles.Galleries), s.x.SEO.Relation(Articles.SEO)).OrderBy(orm.Asc(Articles.Slug)))
+		list, err = orm.All(ctx, tx, Articles.Query().With(s.handles.Title.Relation(Articles.Title), s.handles.Summary.Relation(Articles.Summary), s.handles.Logo.Relation(Articles.Logo), s.handles.Galleries.Relation(Articles.Galleries), s.handles.SEO.Relation(Articles.SEO)).OrderBy(orm.Asc(Articles.Slug)))
 		return err
 	}); err != nil {
 		return ArticleList{}, err

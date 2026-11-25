@@ -75,12 +75,12 @@ Every stored metadata row, translation, attachment and registration key belongs
 to the owner's scope, an opaque digest of the owner name and its *storage model*.
 The storage model defaults to the declared table name, so renaming an owner
 table silently moves the owner to a new, empty scope unless its persisted
-identity is declared. For example, a renamed account table can keep its original storage model:
+identity is declared. `Article` is the application's own model with the `Articles` table of its generated declaration, and `extensions`, `orm` and `i18n` are the framework packages `github.com/weiloon1234/Foundry-Go/extensions`, `.../database/orm` and `.../i18n`. For example, a renamed article table can keep its original storage model:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extensions-account-owner -->
+<!-- compiled-source: tests/fixtures/goway/models/extensions/slot_recipes.go#model-extensions-renamed-owner -->
 ```go
-var AccountOwner = extensions.DefineORMOwner("accounts", AccountIdentity,
-	extensions.OwnerOptions{StorageModel: "original_accounts"})
+var RenamedOwner = extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table, Articles.Key()),
+	extensions.OwnerOptions{StorageModel: "original_articles"})
 ```
 
 The scope, row keys and attachment object paths are then unchanged, and stored
@@ -92,10 +92,10 @@ for the lifetime of the stored data.
 If a table was already renamed without a declaration, rows written under the old
 scope are hidden but intact. Declare the old table name as a previous model:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extensions-recover-account-owner -->
+<!-- compiled-source: tests/fixtures/goway/models/extensions/slot_recipes.go#model-extensions-recovered-owner -->
 ```go
-var RecoverAccountOwner = extensions.DefineORMOwner("accounts", AccountIdentity,
-	extensions.OwnerOptions{PreviousModels: []string{"original_accounts"}})
+var RecoveredOwner = extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table, Articles.Key()),
+	extensions.OwnerOptions{PreviousModels: []string{"original_articles"}})
 ```
 
 `metadata rescope --owner users` and `translations rescope --owner users` (or
@@ -125,6 +125,8 @@ inside the same transaction, or run orphan inspection and `PruneOrphans` before
 the keys are reused. Soft deletion deliberately retains data for restoration.
 
 ## Typed metadata
+
+`Profile` is the application's own model, `ProfileIdentity` its generated identity and `Owners` its registered `extensions.Owner`. `Services` is the application's struct holding the `*metadata.Manager` as `Metadata` and the `*translations.Manager` as `Translations`; `Preferences` is a `//foundry:dto` struct with `Dark bool` and `Tags []string`. The blocks below use the framework packages `metadata`, `translations` and `i18n` from `github.com/weiloon1234/Foundry-Go`.
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/profile.go#model-extensions-example-5 -->
 ```go

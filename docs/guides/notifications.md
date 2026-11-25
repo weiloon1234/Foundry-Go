@@ -38,6 +38,37 @@ in `Config.Schema`. Keep notifications and the jobs outbox in the same schema.
 The tables contain private payloads, email routes and rendered content; access to
 the database requires the same protection as application messages.
 
+`models.User` and `models.Order` are your application models with typed IDs. Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `database`, `database/orm`, `email`, `jobs`, `model`, `notifications`, `outbox`, `websocket`; the framework's `http` package is imported as `foundryhttp`. The declarations below are the application's own and the later blocks use them:
+
+<!-- compiled-source: tests/fixtures/consumer/notifying/orders.go#notification-declarations -->
+```go
+//foundry:dto
+type OrderPlaced struct {
+	OrderID model.ID[models.Order] `json:"order_id"`
+	Summary string                 `json:"summary"`
+}
+
+//foundry:dto
+type OrderCard struct {
+	OrderID model.ID[models.Order] `json:"order_id"`
+	Summary string                 `json:"summary"`
+}
+type UserRecipient = notifications.Recipient[models.User, model.ID[models.User]]
+type OrdersBinding = notifications.Binding[models.User, model.ID[models.User], OrderPlaced]
+type UserNotifications struct{}
+type PrivateNotifications = notifications.Realtime[UserNotifications, models.User, model.ID[models.User], OrderCard]
+
+var Placed = notifications.Define("order.placed", 1, OrderPlacedJSON())
+var Delivery = notifications.DefineDeliveryJob("notifications.deliver", jobs.DefaultPolicy("communications"))
+var Database = notifications.Database("inbox", OrderCardJSON(), card)
+
+func card(_ context.Context, _ models.User, _ notifications.DeliveryContext, input OrderPlaced) (OrderCard, error) {
+	return OrderCard{input.OrderID, input.Summary}, nil
+}
+```
+
+Declare the recipient from the application's authentication provider and guard:
+
 <!-- compiled-source: tests/fixtures/consumer/notifying/orders.go#notification-recipient -->
 ```go
 func Users(provider auth.Provider[models.User, model.ID[models.User]], guard auth.Guard[models.User]) UserRecipient {

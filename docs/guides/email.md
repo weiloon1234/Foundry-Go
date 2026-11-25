@@ -58,12 +58,12 @@ For typed Go configuration use `infrastructure.Mailers` keyed by
 including `API.AccountID` and `API.Token`. Driver-specific settings affect
 transport only; messages, templates and attachment APIs stay the same.
 
-<!-- compiled-source: tests/fixtures/consumer/mailing/configured_test.go#configured-mailer -->
+Resolve a named mailer from the started application's resources:
+
+<!-- compiled-source: tests/fixtures/consumer/mailing/mailers.go#configured-mailer -->
 ```go
-services := app.Resources()
-mailer, err := services.Mailers.Mailer(transactional)
-if err != nil {
-	t.Fatal(err)
+func ResolveMailer(app *application.App, name email.MailerName) (*email.Mailer, error) {
+	return app.Resources().Mailers.Mailer(name)
 }
 ```
 
@@ -74,7 +74,24 @@ under a distinct `infrastructure.MailDriver`; built-in names cannot be overridde
 <a id="recipe-mail-template"></a>
 ## Typed messages and templates
 
-See the [consumer mailing package](../../tests/fixtures/consumer/mailing/welcome.go) for the complete pattern:
+`Welcome` and `Article` are the application's own types. `Welcome` is the job payload and `Sender` the service that renders it; `email.Template[Welcome]` renders the typed template. Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `database`, `email`, `i18n`, `jobs`; the framework's `http` package is imported as `foundryhttp`.
+
+<!-- compiled-source: tests/fixtures/consumer/mailing/welcome.go#mail-types -->
+```go
+type Welcome struct {
+	Recipient email.Address      `json:"recipient"`
+	Name      string             `json:"name"`
+	Documents []email.Attachment `json:"documents,omitempty"`
+}
+
+type Sender struct {
+	mailer   *email.Mailer
+	from     email.Address
+	template email.Template[Welcome]
+}
+```
+
+Construct the sender once with its mailer and a validated sender address:
 
 <!-- compiled-source: tests/fixtures/consumer/mailing/welcome.go#mail-template -->
 ```go
@@ -128,22 +145,22 @@ as shown by the consumer `RecipientRequest`; runtime parsing stays in email.
 ## Storage attachments and limits
 
 Consumers do not convert uploads or model attachments into provider-specific
-blobs. These helpers feed the same attachment preparation used by every adapter:
+blobs. These helpers feed the same attachment preparation used by every adapter.
 
 Keep the base message immutable on a reused service. Each invocation returns a
 request-local message containing that invocation's upload; send that returned
 message without assigning it back to the service. Do not retain request upload
-handles on the service. The consumer test captures handles separately to check
-request cleanup.
+handles on the service. `base` is the application's immutable base message and
+`foundryhttp.UploadedFile` is the framework's request upload:
 
-<!-- compiled-source: tests/fixtures/consumer/mailing/uploads_test.go#attach-request-upload -->
+<!-- compiled-source: tests/fixtures/consumer/mailing/upload_mail.go#attach-request-upload -->
 ```go
-type uploadMailService struct {
+type UploadMailService struct {
 	base email.Message
 }
 
-func (s *uploadMailService) Build(ctx context.Context, input httpuploads.ProfileInput) (email.Message, error) {
-	message, err := s.base.AttachUpload(ctx, input.Attachment)
+func (s *UploadMailService) Build(ctx context.Context, upload foundryhttp.UploadedFile) (email.Message, error) {
+	message, err := s.base.AttachUpload(ctx, upload)
 	if err != nil {
 		return email.Message{}, err
 	}
@@ -151,19 +168,26 @@ func (s *uploadMailService) Build(ctx context.Context, input httpuploads.Profile
 }
 ```
 
-<!-- compiled-source: tests/fixtures/consumer/articles/email_postgres_test.go#attach-stored-files -->
+Attach loaded model slots with `AttachStored`. `Article` is the application's model with its `Logo` and `Galleries` slots loaded:
+
+<!-- compiled-source: tests/fixtures/consumer/articles/email_references.go#attach-stored-files -->
 ```go
-message, err := email.NewMessage(from, "Article images", to).Text("Attached").AttachStored(row.Logo)
-if err != nil {
-	t.Fatal(err)
-}
-for _, file := range row.Galleries.All() {
-	message, err = message.AttachStored(file)
+func ArticleImagesMessage(from, to email.Address, article Article) (email.Message, error) {
+	message, err := email.NewMessage(from, "Article images", to).Text("Attached").AttachStored(article.Logo)
 	if err != nil {
-		t.Fatal(err)
+		return email.Message{}, err
 	}
+	for _, file := range article.Galleries.All() {
+		message, err = message.AttachStored(file)
+		if err != nil {
+			return email.Message{}, err
+		}
+	}
+	return message, nil
 }
 ```
+
+A queued payload carries pinned references instead of attachments:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/email_references.go#durable-email-references -->
 ```go
@@ -202,9 +226,9 @@ loaded `attachments.One[M]`. It captures metadata and an immutable version (or
 conditional ETag), without reading bytes. An empty/unloaded slot fails instead
 of silently omitting the file. The mailer needs the same storage disk registered;
 configured application mailers receive it automatically. Authorize the record
-before attaching it. See the real [browser upload](../../tests/fixtures/consumer/mailing/uploads_test.go)
-and [stored model](../../tests/fixtures/consumer/articles/email_postgres_test.go)
-consumer examples.
+before attaching it. See the [browser upload](../../tests/fixtures/consumer/mailing/upload_mail.go)
+and [stored model](../../tests/fixtures/consumer/articles/email_references.go)
+consumer sources.
 
 For queued DTOs, `file.EmailAttachment()` (also available on a single-file slot)
 returns a pinned `email.Attachment` to put in a concrete payload. Runtime upload
@@ -275,6 +299,8 @@ Worker/process loss after acceptance but before recording success can still rede
 
 <a id="recipe-localized-mail-job"></a>
 ## Jobs and transactional enqueue
+
+`WelcomeArgs` is the application's `//foundry:dto` message-arguments struct with a `Name` field, `WelcomeArgsMessage()` its generated message definition, and `localization` the application's package that declares them (see [localization](localization.md)).
 
 Capture the supported recipient locale in the concrete job payload. Resolve the
 configured mailer and catalog during handler construction. Apply that locale to

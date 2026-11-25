@@ -10,18 +10,24 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/events"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/outbox/publisher"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-var Created = events.Define[Receipt]("idempotent.order", 1)
-var Rejected = http.DefineError("order_rejected", 422, "The order was rejected.")
+var Rejected = foundryhttp.DefineError("order_rejected", 422, "The order was rejected.")
 
-type Request = http.Input[Path, http.NoQuery, Submission]
-type BoundRequest = modelbinding.Input[Path, http.NoQuery, Submission, Workspace]
+type Request = foundryhttp.Input[Path, foundryhttp.NoQuery, Submission]
+
+// doc-example:begin order-route-types
+var Created = events.Define[Receipt]("idempotent.order", 1)
+
+type BoundRequest = modelbinding.Input[Path, foundryhttp.NoQuery, Submission, Workspace]
+
+// doc-example:end order-route-types
+
 type Hooks struct {
 	Deny          *atomic.Bool
 	Calls         *atomic.Int32
@@ -46,16 +52,16 @@ func Migrations() []migrate.Definition {
 		`INSERT INTO idem_workspaces(id,tenant,enabled) VALUES(1,'tenant-a',true),(2,'tenant-b',true)`,
 	}}}
 }
-func Endpoint() http.Endpoint[Path, http.NoQuery, Submission, Receipt] {
-	ordersCreateRoute := http.DefineRoute(http.RouteSpec{ID: "orders.create", Method: http.POST, Access: http.Guarded}, PathDescriptor())
-	ordersCreateEndpoint := http.DefineEndpoint(ordersCreateRoute, http.EmptyQuery(), SubmissionBody(), ReceiptResponse(201))
-	ordersCreateEndpoint = http.ConfigureEndpoint(ordersCreateEndpoint, http.Errors(Rejected, OrderExists))
-	ordersCreateEndpoint = http.PrepareEndpoint(ordersCreateEndpoint, func(_ context.Context, in Request) (http.NoQuery, Submission, error) {
+func Endpoint() foundryhttp.Endpoint[Path, foundryhttp.NoQuery, Submission, Receipt] {
+	ordersCreateRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "orders.create", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, PathDescriptor())
+	ordersCreateEndpoint := foundryhttp.DefineEndpoint(ordersCreateRoute, foundryhttp.EmptyQuery(), SubmissionBody(), ReceiptResponse(201))
+	ordersCreateEndpoint = foundryhttp.ConfigureEndpoint(ordersCreateEndpoint, foundryhttp.Errors(Rejected, OrderExists))
+	ordersCreateEndpoint = foundryhttp.PrepareEndpoint(ordersCreateEndpoint, func(_ context.Context, in Request) (foundryhttp.NoQuery, Submission, error) {
 		in.Body.Name = strings.TrimSpace(in.Body.Name)
 		return in.Query, in.Body, nil
 	})
 
-	return http.ValidateBody(ordersCreateEndpoint, validation.Rules(validation.DefineField("name", func(in Submission) string { return in.Name }), validation.NonBlank[string]()))
+	return foundryhttp.ValidateBody(ordersCreateEndpoint, validation.Rules(validation.DefineField("name", func(in Submission) string { return in.Name }), validation.NonBlank[string]()))
 }
 
 // Build uses ordinary configured infrastructure. Only the idempotent callback's
@@ -74,7 +80,7 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 			_, err = db.Exec(ctx, `INSERT INTO idem_deliveries(id,payload) VALUES($1,$2::jsonb) ON CONFLICT(id) DO NOTHING`, message.ID(), payload)
 			return err
 		}}}}, nil
-	}).HTTP(func(services application.Services) ([]http.RouteRegistration, error) {
+	}).HTTP(func(services application.Services) ([]foundryhttp.RouteRegistration, error) {
 		db, err := services.Database()
 		if err != nil {
 			return nil, err
@@ -97,16 +103,16 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 		}
 
 		ordersCreateEndpoint := Endpoint()
-		required := http.RequireAuthentication(ordersCreateEndpoint, transport, guard)
+		required := foundryhttp.RequireAuthentication(ordersCreateEndpoint, transport, guard)
 
-		required = http.AuthorizeActor(required, func(_ context.Context, _ Actor, in Request) error {
+		required = foundryhttp.AuthorizeActor(required, func(_ context.Context, _ Actor, in Request) error {
 			if in.Body.Name == "request-denied" || hooks.Deny != nil && hooks.Deny.Load() {
-				return http.Forbidden
+				return foundryhttp.Forbidden
 			}
 			return nil
 		})
 
-		return []http.RouteRegistration{OrderRoute(db, required, guard, store, func(ctx context.Context, tx *database.Tx, actor Actor, in BoundRequest) (Receipt, error) {
+		return []foundryhttp.RouteRegistration{OrderRoute(db, required, guard, store, func(ctx context.Context, tx *database.Tx, actor Actor, in BoundRequest) (Receipt, error) {
 			if hooks.Calls != nil {
 				hooks.Calls.Add(1)
 			}

@@ -19,7 +19,9 @@ and Ed25519 public verification keys (`whpk_`). `webhook.Stripe` supports Stripe
 The same `whsec_` prefix has different key semantics in these protocols; select
 the provider's actual protocol rather than guessing from its key prefix.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `webhook/capture`, `clock`, `database`, `database/orm`, `encryption`, `http` as `foundryhttp`, `httpclient`, `idempotency`, `jobs`, `webhook/outbound`, `secret`, `webhook`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `auth`, `webhook/capture`, `clock`, `database`, `database/orm`, `encryption`, `httpclient`, `idempotency`, `jobs`, `webhook/outbound`, `secret`, `webhook`; the framework's `http` package is imported as `foundryhttp`.
+
+`BillingAccountID` is the application's typed account ID, declared as `type BillingAccountID int64`.
 
 <!-- compiled-source: tests/fixtures/consumer/security/contracts.go#webhook-verifier -->
 ```go
@@ -112,35 +114,33 @@ is not current resource authorization; apply ordinary account/resource policy.
 <a id="recipe-webhook-deduplication"></a>
 ## Durable duplicate handling
 
-Inputs: `t *testing.T`.
+`Submission` is the application's request DTO, here with a `Name` field, and `SubmissionBody()` its generated body binding. `ProviderAccount` is the typed account ID of the verifier below. The route needs the typed verifier, the configured idempotency store and a callback that owns the database effect:
 
-<!-- compiled-source: tests/fixtures/consumer/idempotenthttp/publication_test.go#verified-webhook-route -->
+<!-- compiled-source: tests/fixtures/consumer/idempotenthttp/webhook_route.go#verified-webhook-route -->
 ```go
-providerWebhookRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "provider.webhook", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/webhook"))
-providerWebhookEndpoint := foundryhttp.DefineEndpoint(providerWebhookRoute, foundryhttp.EmptyQuery(), SubmissionBody(), foundryhttp.EmptyResponse(204))
-providerWebhookEndpoint = foundryhttp.ConfigureEndpoint(providerWebhookEndpoint, foundryhttp.Use(foundryhttp.VerifyWebhook(verifier)))
-endpoint := foundryhttp.Idempotent(providerWebhookEndpoint, store, idempotency.Definition{ID: "provider.delivery", Version: 1})
+type ProviderAccount int64
 
-type input = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, Submission]
-router, err := foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, _ input) (idempotency.Scope, error) {
-	delivery, ok := verifier.FromContext(ctx)
-	if !ok {
-		return idempotency.Scope{}, fmt.Errorf("verified delivery missing")
-	}
-	var account providerAccount = delivery.Account()
-	return idempotency.NewScope(string(delivery.Provider()), strconv.FormatInt(int64(account), 10))
-}, func(ctx context.Context, tx *database.Tx, in input) (foundryhttp.NoContent, error) {
-	calls.Add(1)
-	_, err := orm.Insert(ctx, tx, Orders.Table, orm.Set(Orders.WorkspaceID, 1), orm.Set(Orders.Caller, 99), orm.Set(Orders.Name, in.Body.Name))
-	return foundryhttp.NoContent{}, err
-}))
-if err != nil {
-	t.Fatal(err)
+func WebhookRouter(verifier *webhook.Verifier[ProviderAccount], store *idempotency.Store, record func(context.Context, *database.Tx, Submission) error) (*foundryhttp.Router, error) {
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "provider.webhook", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/webhook"))
+	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), SubmissionBody(), foundryhttp.EmptyResponse(204))
+	endpoint = foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Use(foundryhttp.VerifyWebhook(verifier)))
+	idempotent := foundryhttp.Idempotent(endpoint, store, idempotency.Definition{ID: "provider.delivery", Version: 1})
+
+	type input = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, Submission]
+	registration := idempotent.Handle(func(ctx context.Context, _ input) (idempotency.Scope, error) {
+		delivery, ok := verifier.FromContext(ctx)
+		if !ok {
+			return idempotency.Scope{}, fmt.Errorf("verified delivery missing")
+		}
+		return idempotency.NewScope(string(delivery.Provider()), strconv.FormatInt(int64(delivery.Account()), 10))
+	}, func(ctx context.Context, tx *database.Tx, in input) (foundryhttp.NoContent, error) {
+		return foundryhttp.NoContent{}, record(ctx, tx, in.Body)
+	})
+	return foundryhttp.NewRouter(registration)
 }
 ```
 
-The region uses the enclosing test's typed verifier and configured idempotency
-store. `http.VerifyWebhook` verifies the original body before JSON decoding or
+`http.VerifyWebhook` verifies the original body before JSON decoding or
 any replay. The transaction callback is the sole owner of the database effect.
 
 The HTTP adapter replaces untrusted `Idempotency-Key` with a stable digest of the
@@ -208,17 +208,22 @@ admin portal use the developer read scope and the developer type permission so
 a wildcard grant cannot read captured payloads. The routes send
 `Cache-Control: no-store`.
 
+`Actor` is the application's authenticated actor type with an integer `ID`. The viewer needs a developer permission and the application's guard binding (`foundryhttp.BindGuard`):
+
+<!-- compiled-source: tests/fixtures/consumer/teamworkflow/capture.go#webhook-capture-permission -->
+```go
+// ReadCaptures is the application's developer gate: only the developer actor may
+// read captured webhook payloads.
+var ReadCaptures = auth.DefinePermission("workflow.captures.read", func(_ context.Context, actor Actor) (bool, error) {
+	return actor.ID == 1, nil
+})
+```
+
+Mount the viewer routes behind that permission:
+
 <!-- compiled-source: tests/fixtures/consumer/teamworkflow/capture.go#webhook-capture-routes -->
 ```go
-func CaptureRoutes(captures *capture.Store) ([]foundryhttp.RouteRegistration, error) {
-	transport, guard, err := authfixture.Authentication(ReadCaptures.Registration())
-	if err != nil {
-		return nil, err
-	}
-	binding, err := foundryhttp.BindGuard(transport, guard)
-	if err != nil {
-		return nil, err
-	}
+func CaptureRoutes(captures *capture.Store, binding foundryhttp.GuardBinding[Actor]) ([]foundryhttp.RouteRegistration, error) {
 	return capture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.Permissions(ReadCaptures))
 }
 ```

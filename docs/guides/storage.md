@@ -22,10 +22,7 @@ multipart cleanup or HTTP file transport.
 <a id="recipe-store-files"></a>
 ## Ordinary application operations
 
-The [independent consumer](../../tests/fixtures/consumer/storing/files.go) supplies
-complete imports and application assembly.
-
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `foundation`, `http` as `foundryhttp`, `storage/local`, `storage/s3`, `storage`, `storage/http` as `storagehttp`, `value`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `foundation`, `storage/local`, `storage/s3`, `storage`, `value`; the framework's `http` package is imported as `foundryhttp` and `storage/http` as `storagehttp`.
 
 <!-- compiled-source: tests/fixtures/consumer/storing/guide.go#store-and-open -->
 ```go
@@ -280,6 +277,17 @@ record/filesystem overhead and persistent object capacity beyond payload
 reservations. To survive a completely full large volume, small publications need
 a separate managed disk on independently reserved storage.
 
+The application declares its disk and the typed service keys once:
+
+<!-- compiled-source: tests/fixtures/consumer/storing/files.go#disk-keys -->
+```go
+var Files = storage.DefineDisk("documents")
+var FileDisk = foundation.NewKey[*storage.Disk]("domain.documents")
+var localBackend = foundation.NewKey[*local.Backend]("infrastructure.local-files")
+```
+
+Then it provides the adapter and the disk:
+
 <!-- compiled-source: tests/fixtures/consumer/storing/files.go#local-disk -->
 ```go
 func LocalProviders(root string) []foundation.Provider {
@@ -483,7 +491,6 @@ func AuthorizedStream(disk *storage.Disk, key storage.ObjectKey, authorize func(
 }
 ```
 
-Here `storagehttp` imports `github.com/weiloon1234/Foundry-Go/storage/http`.
 For a missing attachment object's test setup, see
 [testing missing backing objects](attachments.md#test-missing-backing-objects).
 

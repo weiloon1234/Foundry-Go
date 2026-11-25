@@ -6,7 +6,7 @@ import (
 	"errors"
 	"sync"
 
-	"foundry.test/consumer/observerqueries"
+	models "foundry.test/consumer/observerqueries"
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
@@ -18,7 +18,7 @@ import (
 // RecordCreated is a declared domain DTO, independent of the persisted model.
 // doc-example:begin event-payload
 type RecordCreated struct {
-	ID model.ID[observerqueries.Plain] `json:"id"`
+	ID model.ID[models.Plain] `json:"id"`
 }
 
 var Created = events.Define[RecordCreated]("records.created", 1)
@@ -67,22 +67,25 @@ func Domain() foundation.Module {
 		}); err != nil {
 			return err
 		}
-		return orm.RegisterObserver(r, Pool, orm.NewObserver[observerqueries.Plain]("record.events"), func(s foundation.Resolver) (func() orm.Hooks[observerqueries.Plain], error) {
+		return orm.RegisterObserver(r, Pool, orm.NewObserver[models.Plain]("record.events"), func(s foundation.Resolver) (func() orm.Hooks[models.Plain], error) {
 			bus, err := foundation.Resolve(s, Bus)
 			if err != nil {
 				return nil, err
 			}
-			return func() orm.Hooks[observerqueries.Plain] {
-				// doc-example:begin observer-after-commit
-				return orm.Hooks[observerqueries.Plain]{Created: func(ctx context.Context, tx *database.Tx, changes orm.Changes[observerqueries.Plain]) error {
-					after, present := changes.After().Get()
-					if !present {
-						return errors.New("created observer has no stored snapshot")
-					}
-					return Created.AfterCommit(ctx, tx, bus, RecordCreated{ID: after.ID})
-				}}
-				// doc-example:end observer-after-commit
-			}, nil
+			return func() orm.Hooks[models.Plain] { return CreatedHooks(bus) }, nil
 		})
 	}}
 }
+
+// doc-example:begin observer-after-commit
+func CreatedHooks(bus *events.Bus) orm.Hooks[models.Plain] {
+	return orm.Hooks[models.Plain]{Created: func(ctx context.Context, tx *database.Tx, changes orm.Changes[models.Plain]) error {
+		after, present := changes.After().Get()
+		if !present {
+			return errors.New("created observer has no stored snapshot")
+		}
+		return Created.AfterCommit(ctx, tx, bus, RecordCreated{ID: after.ID})
+	}}
+}
+
+// doc-example:end observer-after-commit

@@ -32,7 +32,18 @@ A store never migrates automatically. The application module starts its expiry
 pruner (see [Atomicity and bounds](#atomicity-and-bounds)); a standalone
 `idempotency.New` store prunes only after an explicit `Start`.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `database`, `database/orm`, `events`, `http` as `foundryhttp`, `idempotency`, `http/modelbinding`, `value`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `database`, `database/orm`, `events`, `idempotency`, `http/modelbinding`, `value`; the framework's `http` package is imported as `foundryhttp`.
+
+These are the application's own declarations: `Workspace` (model with `ID int64`, `Tenant string` and `Enabled bool`) and `Order`, with their generated tables `Workspaces` and `Orders`; `Path` (the generated path `/workspaces/{workspace}/orders`, with `Workspace int64`); `Submission` (request DTO with `Name` and an optional `Memo`); `Receipt` (response DTO); and `Actor` (the authenticated actor, with `ID int64` and `Tenant string`). `BoundRequest` and the `Created` topic are:
+
+<!-- compiled-source: tests/fixtures/consumer/idempotenthttp/application.go#order-route-types -->
+```go
+var Created = events.Define[Receipt]("idempotent.order", 1)
+
+type BoundRequest = modelbinding.Input[Path, foundryhttp.NoQuery, Submission, Workspace]
+```
+
+`BoundRequest` carries the typed request as `in.Request` and the resolved workspace as `in.Model`.
 
 Adapt an existing typed endpoint after declaring its decoding, normalization,
 validation and authorization:

@@ -11,13 +11,12 @@
 ## Configure shared fill ownership
 
 Configure coordination in application assembly; domain code keeps its typed
-`Remember` call. The [independent consumer](../../tests/fixtures/consumer/caching/distributed.go)
-borrows the application's lease manager:
+`Remember` call. `lease` and `cache` are the framework packages `github.com/weiloon1234/Foundry-Go/lease` and `.../cache`; the application's lease manager is borrowed:
 
 <!-- compiled-source: tests/fixtures/consumer/caching/distributed.go#coordinated-cache -->
 ```go
 // DistributedStore borrows the application's lease manager and its Redis authority.
-// RememberProfile, model IDs, getter selection and tag declarations stay unchanged.
+// Cache declarations, model IDs, getter selection and tag declarations stay unchanged.
 func DistributedStore(manager *lease.Manager) (*cache.Store, error) {
 	return cache.NewCoordinatedStore(manager, cache.DefaultConfig(manager.Namespace()), cache.DefaultCoordinationConfig())
 }
@@ -30,8 +29,8 @@ unsupported adapters, invalid configuration and closed managers fail explicitly.
 A tagged store additionally requires `CoordinatedTaggedBackend`.
 
 Bind the same cache declarations to this store. Model-owned key types, concrete
-payloads, getters, TTLs and tag views stay unchanged. The consumer's existing
-`RememberProfile` continues to load a concrete Member and choose its email getter.
+payloads, getters, TTLs and tag views stay unchanged. Domain code that calls
+`Remember` keeps loading a concrete model and choosing its getter.
 Ordinary `cache.NewStore` retains local coalescing. There is no fallback from
 failed distributed coordination to an uncoordinated loader or memory adapter.
 

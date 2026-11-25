@@ -22,13 +22,13 @@ type MediaPublication struct {
 func (s *Service) PublishMedia(ctx context.Context, article Article, input ArticleMedia) (MediaPublication, error) {
 	var publication MediaPublication
 	if logo, supplied := input.Logo.Get(); supplied {
-		result, err := s.x.Logo.ReplaceFile(ctx, article, logo)
+		result, err := s.handles.Logo.ReplaceFile(ctx, article, logo)
 		publication.Logo = value.Set(result)
 		if err != nil {
 			return publication, err
 		}
 	}
-	results, err := attachments.AddFilesTo(ctx, s.x.Galleries, article, input.Galleries)
+	results, err := attachments.AddFilesTo(ctx, s.handles.Galleries, article, input.Galleries)
 	publication.Gallery = results
 	return publication, err
 }
@@ -47,7 +47,7 @@ func (e *MediaPublicationError) Unwrap() error { return e.cause }
 
 // doc-example:begin publish-slot-file
 func (s *Service) ReplaceLogo(ctx context.Context, visible orm.Query[Article], article Article, file attachments.FileSource, slug string) (attachments.Result[Article, model.ID[Article]], error) {
-	prepared, err := s.x.Logo.PrepareFile(ctx, article, file)
+	prepared, err := s.handles.Logo.PrepareFile(ctx, article, file)
 	result := attachments.Result[Article, model.ID[Article]]{Operation: prepared.Operation()}
 	if err != nil {
 		return result, err
@@ -60,7 +60,7 @@ func (s *Service) ReplaceLogo(ctx context.Context, visible orm.Query[Article], a
 		if _, err := orm.Update(ctx, tx, visible, Articles.Key(), locked.ID, orm.Set(Articles.Slug, slug)); err != nil {
 			return err
 		}
-		result, err = s.x.Logo.ReplaceIn(ctx, tx, locked, prepared)
+		result, err = s.handles.Logo.ReplaceIn(ctx, tx, locked, prepared)
 		return err
 	})
 	// Publication inside the callback remains subject to the outer commit.
@@ -72,11 +72,11 @@ func (s *Service) ReplaceLogo(ctx context.Context, visible orm.Query[Article], a
 
 // doc-example:begin append-slot-file
 func (s *Service) AddGalleryFile(ctx context.Context, article Article, file attachments.FileSource) (attachments.Result[Article, model.ID[Article]], error) {
-	return s.x.Galleries.AddFile(ctx, article, file)
+	return s.handles.Galleries.AddFile(ctx, article, file)
 }
 
 func (s *Service) AddPreparedGallery(ctx context.Context, tx *database.Tx, article Article, prepared attachments.Prepared[Article, model.ID[Article]]) (attachments.Result[Article, model.ID[Article]], error) {
-	return s.x.Galleries.AddIn(ctx, tx, article, prepared)
+	return s.handles.Galleries.AddIn(ctx, tx, article, prepared)
 }
 
 // doc-example:end append-slot-file
@@ -100,10 +100,10 @@ func (s *Service) ClearFiles(ctx context.Context, tx *database.Tx, visible orm.Q
 	if err != nil {
 		return err
 	}
-	if _, err := s.x.Logo.ClearIn(ctx, tx, article); err != nil {
+	if _, err := s.handles.Logo.ClearIn(ctx, tx, article); err != nil {
 		return err
 	}
-	_, err = s.x.Galleries.ClearIn(ctx, tx, article)
+	_, err = s.handles.Galleries.ClearIn(ctx, tx, article)
 	return err
 }
 

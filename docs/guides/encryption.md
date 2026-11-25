@@ -11,6 +11,8 @@ The `encryption` package is the shared authenticated-encryption boundary for Fou
 <a id="recipe-encrypt-record"></a>
 ## Keys and record ownership
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `database/encrypted`, `encryption`, `model`, `secret`, `value`.
+
 Load an explicitly configured key using `encryption.ParseKey(id, secretValue)`,
 then construct an immutable `encryption.NewKeyring(activeID, keys...)`. A key is
 32 random bytes encoded as canonical unpadded base64url. `GenerateKey` supports
@@ -118,7 +120,7 @@ provide stream encryption or global concurrency admission.
 
 Like Laravel's `encrypted` and `encrypted:array/json` casts, a model field of type
 `encrypted.Text` or `encrypted.JSON[T]` (package `database/encrypted`, optionally
-inside `value.Nullable`) is stored as an envelope and used as plaintext:
+inside `value.Nullable`) is stored as an envelope and used as plaintext. `Settings` is your own JSON struct, here with `Region string` and `Limits []int`:
 
 <!-- compiled-source: tests/fixtures/consumer/vault/entry.go#encryption-entry -->
 ```go
