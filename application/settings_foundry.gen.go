@@ -1438,7 +1438,8 @@ type SettingsFeaturesTelemetryCollectorConfigKeySet struct {
 	//
 	// MaxEvents bounds the issue observations held before the next capture; observations over the bound
 	// are counted as dropped. Browser issues may use at most MaxEvents/4 of it and security issues MaxEvents/2
-	// (rounded down), which also caps the security issues one capture holds. It must be 1..4096.
+	// (rounded down), which also caps the security issues one capture holds; Alerts.Thresholds.AuthFailures may
+	// not exceed that cap. It must be 1..4096.
 	//
 	MaxEvents config.Key[Settings, int]
 	// MaxPendingBatches selects features.telemetry.collector.max_pending_batches. Set accepts int.
@@ -1669,8 +1670,9 @@ type SettingsFeaturesTelemetryConfigAlertsThresholdsConfigKeySet struct {
 	// AuthFailures selects features.telemetry.config.alerts.thresholds.auth_failures. Set accepts int.
 	//
 	// AuthFailures is the number of authentication_failed and rate_limited security issues in one
-	// capture at or over which the authentication burst rule is bad. It must be 1..4096, but a capture holds at most
-	// CollectorConfig.MaxEvents/2 security issues, so a larger value never fires.
+	// capture at or over which the authentication burst rule is bad. It must be 1..4096 and at most
+	// CollectorConfig.MaxEvents/2, the security issues a capture holds; ValidateWith and telemetry.New
+	// refuse a larger value, which could never fire.
 	//
 	AuthFailures config.Key[Settings, int]
 }

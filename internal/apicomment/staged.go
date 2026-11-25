@@ -224,7 +224,8 @@ func Release(root, tag string) error {
 	return os.WriteFile(path, RecordedCopy(data, tag), 0o644)
 }
 
-// CountText is the one-line report of the staging file's size.
+// CountText is the one-line report of the staging file's size. It is a status line,
+// not a finding, so it carries no rule tag, location or guide reference.
 func CountText(count int) string {
-	return "api-comment: " + strconv.Itoa(count) + " declarations are staged without a comment (target 0)"
+	return strconv.Itoa(count) + " declarations are staged without a comment (target 0)"
 }

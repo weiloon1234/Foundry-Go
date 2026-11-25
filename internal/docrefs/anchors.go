@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
@@ -14,17 +15,33 @@ import (
 var anchorLine = regexp.MustCompile(`^<a id="([^"]*)"></a>$`)
 var anchorStart = regexp.MustCompile(`^<a\s+[^>]*\bid\b`)
 
-// Anchors indexes only literal explicit IDs, never generated heading slugs.
-type Anchors struct{ lines map[string]int }
+// Anchors indexes literal explicit IDs for reference checks, never generated heading
+// slugs. It also records the slugs of the document's headings, which only CheckLink
+// accepts, because a Markdown viewer resolves them.
+type Anchors struct {
+	lines map[string]int
+	slugs map[string]bool
+}
 
 // IndexAnchors rejects malformed and duplicate explicit anchors outside fences.
 // Callers must handle its error before using the index for fragment validation.
 func IndexAnchors(cache *markdown.Cache, name string, data []byte) (Anchors, error) {
-	index := Anchors{lines: make(map[string]int)}
+	index := Anchors{lines: make(map[string]int), slugs: make(map[string]bool)}
 	var failures []error
 	parsed, err := cache.Read(name, data)
 	if err != nil {
 		return Anchors{}, err
+	}
+	repeats := make(map[string]int)
+	for _, block := range parsed.Blocks {
+		if block.Kind != markdown.Heading {
+			continue
+		}
+		slug := headingSlug(block.Text)
+		index.slugs[slug] = true
+		if repeats[slug]++; repeats[slug] > 1 {
+			index.slugs[fmt.Sprintf("%s-%d", slug, repeats[slug]-1)] = true
+		}
 	}
 	parsed.AnchorLines(func(line int, text string) {
 		text = strings.TrimSpace(text)
@@ -65,6 +82,33 @@ func (a Anchors) CheckFragment(file string, line int, page, fragment string) err
 			To("link to an existing explicit anchor or add it there").Err()
 	}
 	return nil
+}
+
+// CheckLink validates the fragment of a link between documents: an explicit anchor,
+// or the slug a Markdown viewer gives a heading. A fragment that names neither is a
+// dead link.
+func (a Anchors) CheckLink(file string, line int, page, fragment string) error {
+	if _, exists := a.lines[fragment]; exists || a.slugs[fragment] {
+		return nil
+	}
+	return diagnostic.AnchorMissing.At(file, line, 0).
+		Say(fmt.Sprintf("anchor %q of %s", clip(fragment), page), "not declared").
+		To("link to an existing explicit anchor or heading, or add the anchor there").Err()
+}
+
+// headingSlug is the fragment a Markdown viewer gives a heading: lowercase, spaces
+// as hyphens, and only letters, digits, hyphens and underscores kept.
+func headingSlug(title string) string {
+	var slug strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(title)) {
+		switch {
+		case r == ' ':
+			slug.WriteByte('-')
+		case r == '-' || r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r):
+			slug.WriteRune(r)
+		}
+	}
+	return slug.String()
 }
 
 // clip bounds quoted source text in a message.

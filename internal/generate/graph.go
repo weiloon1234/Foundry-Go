@@ -286,7 +286,10 @@ func (g *packageGraph) goList(ctx context.Context, arguments []string, receive f
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return fmt.Errorf("load consumer Go packages: %w: %s", err, strings.TrimSpace(stderr.String()))
+		if text := strings.TrimSpace(stderr.String()); text != "" {
+			return fmt.Errorf("load consumer Go packages: %w: %s", err, text)
+		}
+		return fmt.Errorf("load consumer Go packages: %w", err)
 	}
 	decoder := json.NewDecoder(&stdout)
 	for {

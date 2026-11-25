@@ -243,3 +243,47 @@ func TestEmptyRunQuietPeriodDefaultsAndBounds(t *testing.T) {
 		}
 	}
 }
+
+// A capture holds at most half of MaxEvents security issues, so a larger
+// AuthFailures could never fire: ValidateWith refuses it at the boundary.
+func TestAuthFailuresThresholdFitsTheSecurityIssueLimit(t *testing.T) {
+	for _, test := range []struct {
+		name                  string
+		maxEvents, authFailed int
+		valid                 bool
+	}{
+		{"at the limit", 20, 10, true},
+		{"over the limit", 20, 11, false},
+		{"odd events round down", 21, 10, true},
+		{"odd events over", 21, 11, false},
+		{"one event holds no security issue", 1, 1, false},
+		{"largest collector", 4096, 2048, true},
+		{"largest collector over", 4096, 2049, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			collector := collectorConfig()
+			collector.MaxEvents = test.maxEvents
+			config := engineConfig()
+			config.Alerts = alertPolicy()
+			config.Alerts.Thresholds.AuthFailures = test.authFailed
+			err := config.ValidateWith(collector)
+			if test.valid {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if err == nil || !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "AuthFailures") || !strings.Contains(err.Error(), "MaxEvents") {
+				t.Fatalf("a threshold the collector cannot reach was accepted or its message names neither setting: %v", err)
+			}
+		})
+	}
+	collector := collectorConfig()
+	if err := engineConfig().ValidateWith(collector); err != nil {
+		t.Fatalf("a disabled policy with no thresholds is valid: %v", err)
+	}
+	collector.MaxEvents = 0
+	if err := engineConfig().ValidateWith(collector); err == nil {
+		t.Fatal("an invalid collector passed ValidateWith")
+	}
+}

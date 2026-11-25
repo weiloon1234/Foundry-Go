@@ -61,7 +61,7 @@ func New(c *Collector, deps Dependencies, config Config) (*Engine, error) {
 	if c == nil || deps.DB == nil || deps.Recorder == nil || credential.IsNil(deps.Clock) {
 		return nil, invalid("telemetry requires a collector, database, recorder and clock")
 	}
-	if err := c.config.Validate(); err != nil {
+	if err := config.ValidateWith(c.config); err != nil {
 		return nil, err
 	}
 	config.Alerts.Rules = slices.Clone(config.Alerts.Rules)

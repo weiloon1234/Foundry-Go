@@ -128,6 +128,18 @@ func TestModelTestFileRefusal(t *testing.T) {
 	}
 }
 
+// declarationFinding is the shape the guide promises for a model-declaration error:
+// a position, the generate-declaration rule, a model subject, a problem, a correction
+// after a semicolon and the guide reference, on one line.
+var declarationFinding = regexp.MustCompile(`^[^\n]+:\d+:\d+: \[generate-declaration\] model [A-Za-z0-9_]+(\.[A-Za-z0-9_]+)?: [^\n]+; [^\n]+\. Foundry guide: model-declarations#diagnose-declarations$`)
+
+func requireDeclarationFinding(t *testing.T, err error) {
+	t.Helper()
+	if !declarationFinding.MatchString(err.Error()) {
+		t.Fatalf("not a complete declaration finding (position, rule, model subject, correction, guide): %q", err.Error())
+	}
+}
+
 func TestModelRejectsInvalidDeclarations(t *testing.T) {
 	fixtures := newRejectionFixtures(t)
 	for _, tc := range []struct{ name, source, want string }{
@@ -172,6 +184,7 @@ func TestModelRejectsInvalidDeclarations(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "models.go:") {
 				t.Fatalf("got %v; want source location and %s", err, tc.want)
 			}
+			requireDeclarationFinding(t, err)
 			if len(generatedSnapshot(t, dir)) != 0 {
 				t.Fatal("invalid model published output")
 			}

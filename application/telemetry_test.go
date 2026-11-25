@@ -117,6 +117,10 @@ func TestTelemetryBuildValidationAndMigrationDefaults(t *testing.T) {
 		{"unknown kernel", func(s *Settings) { s.Features.Telemetry.Kernels = []foundation.KernelKind{"unknown"} }, fault.Invalid},
 		{"collector bounds", func(s *Settings) { s.Features.Telemetry.Collector.MaxSeries = 0 }, fault.Invalid},
 		{"engine bounds", func(s *Settings) { s.Features.Telemetry.Config.Reads.MaxConcurrent = 0 }, fault.Invalid},
+		{"auth failures above half of max events", func(s *Settings) {
+			s.Features.Telemetry.Config.Alerts = telemetry.AlertPolicy{Enabled: true, Rules: []telemetry.Rule{telemetry.RuleAuthenticationBurst}, SustainCaptures: 1, RecoverCaptures: 1,
+				Thresholds: telemetry.Thresholds{Latency: time.Second, ErrorRatio: .5, PoolUsageRatio: .5, MinimumRequests: 1, AuthFailures: s.Features.Telemetry.Collector.MaxEvents/2 + 1}}
+		}, fault.Invalid},
 		{"receipt horizon", func(s *Settings) {
 			s.Features.Telemetry.Collector.PendingRetention = time.Hour
 			s.Features.Telemetry.Config.Retention.Hour = time.Hour
@@ -130,6 +134,16 @@ func TestTelemetryBuildValidationAndMigrationDefaults(t *testing.T) {
 			}
 		})
 	}
+	t.Run("auth failures at half of max events", func(t *testing.T) {
+		s := telemetryFixtureSettings()
+		s.Features.Telemetry.Config.Alerts = telemetry.AlertPolicy{Enabled: true, Rules: []telemetry.Rule{telemetry.RuleAuthenticationBurst}, SustainCaptures: 1, RecoverCaptures: 1,
+			Thresholds: telemetry.Thresholds{Latency: time.Second, ErrorRatio: .5, PoolUsageRatio: .5, MinimumRequests: 1, AuthFailures: s.Features.Telemetry.Collector.MaxEvents / 2}}
+		app, err := New(s, telemetryQuiet()).Build(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		closeTelemetryApp(t, app)
+	})
 	for _, schema := range []string{"", "scoped_fixture"} {
 		t.Run("schema_"+schema, func(t *testing.T) {
 			s := telemetryFixtureSettings()

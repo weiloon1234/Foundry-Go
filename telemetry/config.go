@@ -53,7 +53,8 @@ type CollectorConfig struct {
 	MaxSeries int
 	// MaxEvents bounds the issue observations held before the next capture; observations over the bound
 	// are counted as dropped. Browser issues may use at most MaxEvents/4 of it and security issues MaxEvents/2
-	// (rounded down), which also caps the security issues one capture holds. It must be 1..4096.
+	// (rounded down), which also caps the security issues one capture holds; Alerts.Thresholds.AuthFailures may
+	// not exceed that cap. It must be 1..4096.
 	MaxEvents int
 	// MaxPendingBatches bounds the captured batches waiting to be stored; when that many are pending a
 	// new capture is dropped and counted. It must be 1..60.
@@ -85,8 +86,9 @@ type Thresholds struct {
 	// judged; below it those rules neither worsen nor recover. It must be 1..1,000,000.
 	MinimumRequests int
 	// AuthFailures is the number of authentication_failed and rate_limited security issues in one
-	// capture at or over which the authentication burst rule is bad. It must be 1..4096, but a capture holds at most
-	// CollectorConfig.MaxEvents/2 security issues, so a larger value never fires.
+	// capture at or over which the authentication burst rule is bad. It must be 1..4096 and at most
+	// CollectorConfig.MaxEvents/2, the security issues a capture holds; ValidateWith and telemetry.New
+	// refuse a larger value, which could never fire.
 	AuthFailures int
 }
 
@@ -241,6 +243,18 @@ func (c CollectorConfig) Validate() error {
 	return c.Browser.Validate()
 }
 
+// issueLimit is the most issues of source one capture holds: a quarter of MaxEvents
+// for browser issues, half for security issues and all of it for the rest.
+func (c CollectorConfig) issueLimit(source Source) int {
+	switch source {
+	case SourceBrowser:
+		return c.MaxEvents / 4
+	case SourceSecurity:
+		return c.MaxEvents / 2
+	}
+	return c.MaxEvents
+}
+
 // Validate checks every threshold without choosing application defaults.
 func (t Thresholds) Validate() error {
 	if t.Latency <= 0 || t.Latency > time.Minute || !validRatio(t.ErrorRatio) || !validRatio(t.PoolUsageRatio) || t.MinimumRequests < 1 || t.MinimumRequests > maxMinimumRequests || t.AuthFailures < 1 || t.AuthFailures > maxEvents {
@@ -302,6 +316,22 @@ func (l ReadLimits) Validate() error {
 	}
 	if l.MaxPage > int(^uint(0)>>1)/l.MaxPageSize {
 		return invalid("telemetry page bounds overflow")
+	}
+	return nil
+}
+
+// ValidateWith checks the collector and the configuration, and that the collector holds
+// enough security issues in one capture for Alerts.Thresholds.AuthFailures to be reached:
+// the threshold may be at most half of the collector's MaxEvents.
+func (c Config) ValidateWith(collector CollectorConfig) error {
+	if err := collector.Validate(); err != nil {
+		return err
+	}
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	if c.Alerts.Thresholds.AuthFailures > collector.issueLimit(SourceSecurity) {
+		return invalid("telemetry alert threshold AuthFailures exceeds the security issues a capture holds, half of collector MaxEvents; lower AuthFailures or raise MaxEvents")
 	}
 	return nil
 }

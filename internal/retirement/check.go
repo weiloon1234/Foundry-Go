@@ -53,14 +53,23 @@ func parseLedger(data []byte, source string) (map[string][]retiredDeclaration, e
 		return nil, diagnostic.LedgerShape.At(source, 0, 0).Say("", err.Error()).To("make the ledger a JSON object of package paths to arrays of {name, replacement | noReplacement} entries").Err()
 	}
 	var failures []error
-	for owner, members := range result {
-		for _, member := range members {
+	for _, owner := range sortedOwners(result) {
+		for _, member := range result[owner] {
 			if (member.Replacement == "") == !member.NoReplacement {
 				failures = append(failures, diagnostic.LedgerShape.At(source, 0, 0).Text("", fmt.Sprintf("%s.%s must have exactly one of replacement and noReplacement: true; name its replacement, or set noReplacement when nothing replaces it", owner, member.Name)).Err())
 			}
 		}
 	}
 	return result, safeerror.Join("operation failed", failures...)
+}
+
+func sortedOwners(entries map[string][]retiredDeclaration) []string {
+	owners := make([]string, 0, len(entries))
+	for owner := range entries {
+		owners = append(owners, owner)
+	}
+	sort.Strings(owners)
+	return owners
 }
 
 // LedgerNames is the embedded ledger as the release file records its names.
@@ -87,15 +96,29 @@ func RetiredNames(entries map[string][]retiredDeclaration) []byte {
 }
 
 // LostEntries names each name of the previous release's ledger that the
-// current ledger no longer holds: a retired name stays retired.
+// current ledger no longer holds: a retired name stays retired. A recorded file
+// with no bytes, or with a line that is not "package<TAB>name", is a ledger-shape
+// finding, so a damaged record cannot make every entry look kept.
 func LostEntries(previous []byte, current map[string][]retiredDeclaration) []diagnostic.Diagnostic {
 	have := ledgerNames(current)
 	var lost []diagnostic.Diagnostic
-	for _, line := range strings.Split(string(previous), "\n") {
+	for number, line := range strings.Split(string(previous), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
 		owner, name, ok := strings.Cut(line, "\t")
-		if ok && !have[owner][name] {
+		if !ok || owner == "" || name == "" || strings.Contains(name, "\t") {
+			lost = append(lost, diagnostic.LedgerShape.At(ReleaseLedgerFile, number+1, 0).Text("", "line is not package<TAB>name; regenerate the record with go run ./internal/cmd/exportsurface --release <tag>"))
+			continue
+		}
+		if !have[owner][name] {
 			lost = append(lost, diagnostic.LedgerEntryLost.At(LedgerFile, 0, 0).Text("", fmt.Sprintf("%s.%s was retired in the previous release and is missing from the ledger; restore the entry", owner, name)))
 		}
+	}
+	// A ledger that retired nothing records one blank line (RetiredNames); a file of no
+	// bytes is damage, not an empty ledger.
+	if len(previous) == 0 {
+		lost = append(lost, diagnostic.LedgerShape.At(ReleaseLedgerFile, 0, 0).Text("", "recorded retired names file is empty; restore it from the previous release"))
 	}
 	sortFindings(lost)
 	return lost

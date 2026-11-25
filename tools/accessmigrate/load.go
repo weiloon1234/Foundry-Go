@@ -18,7 +18,11 @@ import (
 	"time"
 )
 
-const maxMetadataBytes = 64 << 20
+// maxMetadataBytes bounds the package metadata of one run; a test lowers it.
+var maxMetadataBytes = 64 << 20
+
+// errMetadataLimit is the one message for metadata over the limit.
+var errMetadataLimit = errors.New("package metadata exceeds its limit")
 
 type listedPackage struct {
 	Dir, ImportPath, Name, Export, ForTest string
@@ -35,17 +39,21 @@ type sourcePackage struct {
 	info  *types.Info
 }
 
+// limitedBuffer keeps its buffer unexported: embedding bytes.Buffer would promote
+// ReadFrom, which io.Copy prefers over Write and so bypasses the limit.
 type limitedBuffer struct {
-	bytes.Buffer
+	data      bytes.Buffer
 	remaining int
+	exceeded  bool
 }
 
 func (b *limitedBuffer) Write(p []byte) (int, error) {
 	if len(p) > b.remaining {
-		return 0, errors.New("package metadata exceeds its limit")
+		b.exceeded = true
+		return 0, errMetadataLimit
 	}
 	b.remaining -= len(p)
-	return b.Buffer.Write(p)
+	return b.data.Write(p)
 }
 
 type mappedImporter struct {
@@ -80,15 +88,19 @@ func load(ctx context.Context, dir string, patterns, tags []string, fset *token.
 	cmd.Dir = dir
 	cmd.WaitDelay = 5 * time.Second
 	out := &limitedBuffer{remaining: maxMetadataBytes}
-	var stderr bytes.Buffer
 	cmd.Stdout = out
-	cmd.Stderr = &stderr
+	// Compiler and go list text can quote application source, so it is neither kept
+	// nor printed; go build shows the same errors to the developer.
+	cmd.Stderr = io.Discard
 	if err := cmd.Run(); err != nil {
-		return nil, errors.New("go list failed; the module must build against its current dependency before migrating:\n" + strings.TrimSpace(stderr.String()))
+		if out.exceeded {
+			return nil, errMetadataLimit
+		}
+		return nil, errors.New("go list failed; the module must build against its current dependency before migrating (run go build ./... to see the errors)")
 	}
 	var selected []listedPackage
 	exports := map[string]string{}
-	decoder := json.NewDecoder(&out.Buffer)
+	decoder := json.NewDecoder(&out.data)
 	for {
 		var p listedPackage
 		err := decoder.Decode(&p)
@@ -130,7 +142,7 @@ func load(ctx context.Context, dir string, patterns, tags []string, fset *token.
 			}
 			file, err := parser.ParseFile(fset, name, nil, parser.ParseComments|parser.SkipObjectResolution)
 			if err != nil {
-				return nil, err
+				return nil, errors.New("cannot parse " + name + " (run go build ./... to see the error)")
 			}
 			files = append(files, file)
 		}
@@ -144,7 +156,7 @@ func load(ctx context.Context, dir string, patterns, tags []string, fset *token.
 		path, _, _ := strings.Cut(p.ImportPath, " [")
 		config := types.Config{Importer: mappedImporter{imp, p.ImportMap}}
 		if _, err := config.Check(path, fset, files, info); err != nil {
-			return nil, errors.New("cannot type-check " + p.ImportPath + " against its current dependency: " + err.Error())
+			return nil, errors.New("cannot type-check " + p.ImportPath + " against its current dependency (run go build ./... to see the error)")
 		}
 		result = append(result, sourcePackage{path: path, files: files, info: info})
 	}

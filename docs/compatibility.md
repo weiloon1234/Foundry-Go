@@ -24,16 +24,15 @@ before and after.
 | `http.RequireRouteAuthentication(r, a, g, ...)` | `b, err := http.BindGuard(a, g)` once, then `http.RouteAuthenticated(r, b, rule)` |
 | `http.OptionalAuthentication(e, a, g, ...)` | `http.OptionallyAuthenticated(e, b, ...)` with `b` from `http.BindGuard(a, g)` |
 | `http.OptionalRouteAuthentication(r, a, g, ...)` | `http.RouteOptionallyAuthenticated(r, b, ...)` with `b` from `http.BindGuard(a, g)` |
-| `http.AnyActorOf(g)` (never released; used between the two steps of this change) | `b.AnyActor()` |
-| `http.TicketAuthenticated(e, b, r, ...)`, `pagination.Authenticated(p, b, ...)` | the rule follows the binding or redeemer |
+| `http.TicketAuthenticated(e, b, redeemer, options...)` | `http.TicketAuthenticated(e, b, redeemer, rule, options...)` |
+| `pagination.Authenticated(p, b, options...)` | `pagination.Authenticated(p, b, rule, options...)` |
 | `http.ConfigureAuthenticated(v, ...)`, `ConfigureAuthenticatedRoute`, `pagination.ConfigureAuthenticated` | accept `http.ActorMiddleware` only |
 | `datatable.ReadAccess(opts...)`, `ExportAccess(opts...)`, `datatable.Routes(g, t, c, options...)` | `datatable.Routes(g, t, c, datatable.ReadAccess(rule), datatable.ExportAccess(rule))`; `ReadAccess` is required, an exportable table also requires `ExportAccess`; `RouteOption` is replaced by `ReadOption` and `ExportOption` |
 | webhook and outbound capture `Routes(group, store, guard, opts...)` | `Routes(group, store, guard, rule)` |
 
 `http.GuardOption`, `datatable.RouteOption`, `http.RequireAuthentication`,
 `http.RequireRouteAuthentication`, `http.OptionalAuthentication`,
-`http.OptionalRouteAuthentication` and `http.AnyActorOf` are removed and in the
-retired-names ledger. A guarded declaration always starts from a `GuardBinding`, so there
+`http.OptionalRouteAuthentication` are removed and in the retired-names ledger. A guarded declaration always starts from a `GuardBinding`, so there
 is one constructor per kind: `Authenticated` (endpoint), `RouteAuthenticated` (raw route),
 `TicketAuthenticated`, `OptionallyAuthenticated` and `RouteOptionallyAuthenticated`.
 `GuardBinding.AnyActor` is the only spelling of an open route; the manifest shows such a
@@ -116,6 +115,20 @@ http.Scopes(...) does not match inferred type AccessRule[User]`; the
 [authentication guide](guides/authentication.md#recipe-access-rule) shows both messages
 in full.
 
+<a id="telemetry-auth-failures-threshold"></a>
+## Telemetry authentication threshold — unreleased
+
+A telemetry configuration whose `Alerts.Thresholds.AuthFailures` is larger than half of
+the collector's `MaxEvents` is now refused: at application startup, and by
+`telemetry.New` for a direct construction (both call `telemetry.Config.ValidateWith`).
+A capture holds at most `MaxEvents/2` security issues, so a larger threshold could never
+be reached and the authentication burst rule silently never fired. `MaxEvents` 1 holds no
+security issue, so an enabled alert policy (which requires `AuthFailures` of at least 1)
+needs `MaxEvents` of at least 2. This is a source and startup compatibility change; no
+runtime behaviour, persisted data or wire format changes. Fix: lower
+`features.telemetry.config.alerts.thresholds.auth_failures` or raise
+`features.telemetry.collector.max_events`; the error names `AuthFailures` and `MaxEvents`.
+
 ## Enum lists and registered migrations in `models check` — unreleased
 
 `foundry models check` (and so each application's quick gate and the framework's
@@ -173,7 +186,8 @@ package (a bare word cannot be attributed to a package), decided from the
 recorded inventory; the same rule applies to every entry, and a method or field of
 that name does not count as a live namesake. The qualified spelling of an entry is
 always refused. The ledger gains 354 names that earlier releases removed and left
-unrecorded and now holds 752: 295 `database/orm` names (262 functions and 33 types
+unrecorded; with the 398 names of v0.52.0 and the 6 of the access-rule change the ledger
+now holds 758: 295 `database/orm` names (262 functions and 33 types
 by the v0.47.0 inventory; the v0.48.0 note below counts 262 and 36), `database/query`
 and its public names, `attachments.MaxUploadBytes`, `datatable.DefineColumn` and the
 TypeScript `Options.React` and `Options.Vue` fields, each with its replacement. Source
@@ -751,6 +765,7 @@ No database, stored token, session, ticket, DTO or public error-code migration i
 required. Resource and tenant policies still run after admission. Application
 owners retain control of which read and export alternatives to declare.
 
+<a id="diagnostic-output-shape"></a>
 ## Diagnostic output shape — unreleased
 
 Consumers that read the output of `foundry routes check`, `models check`,
@@ -804,8 +819,10 @@ recorded. Replacement metadata adds no retirement-name, arity or chain rule.
 `go tool foundry docs check` reads each active document (`AGENTS.md` files and
 `.claude/skills` Markdown) with the shared Goldmark v1.8.7 CommonMark reader (MIT
 licence; [dependency review](dependency-review.md) records its role). Compared with
-v0.52.0, at the next pin an application sees these changes (the list was not
-checked line by line for completeness):
+v0.52.0, at the next pin an application sees these changes. Its `go.mod` gains
+`github.com/yuin/goldmark v1.8.7` as an indirect requirement through the `foundry` tool;
+run `go mod tidy` after repinning, then `go tool foundry docs check`, which prints every
+refusal with its line:
 
 - A document is refused, with its line number, when it is over 512 KiB, has a line
   over 16 KiB, has a line opening with more than 16 quote or list markers, or uses
@@ -851,7 +868,9 @@ owns the grammar, offline lookup, scan scope, and command instructions.
 
 At the first pin that carries this change, `go tool foundry docs check` refuses an
 application's `AGENTS.md` or `.claude/skills` Markdown that does not meet the binding
-rules. Before upgrading, an application's documents must satisfy:
+rules. After repinning, run `go tool foundry docs render --check --dir .` and fix what it
+lists (`docs check` refuses the documents until they satisfy these rules; no earlier
+release has the check). The documents must satisfy:
 
 - every `go`, `typescript` and `tsx` fence is preceded by a
   `<!-- compiled-source: path#region -->` directive and equals that region of a

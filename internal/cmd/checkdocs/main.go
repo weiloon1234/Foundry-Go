@@ -256,7 +256,7 @@ func checkDocument(cache *markdown.Cache, root, path string, data []byte, curren
 			failures = append(failures, diagnostic.DocLink.At(path, lineNumber, 0).Say(fmt.Sprintf("Agent entry link %q", target), "must target a local guide's explicit agent-entry or recipe-* anchor").To("select an existing task anchor").Err())
 			continue
 		}
-		if link.IsAbs() || link.Host != "" || link.Path == "" && !explicit {
+		if link.IsAbs() || link.Host != "" || link.Path == "" && link.Fragment == "" {
 			continue
 		}
 		local := filepath.Join(filepath.Dir(path), filepath.FromSlash(link.Path))
@@ -293,6 +293,10 @@ func checkDocument(cache *markdown.Cache, root, path string, data []byte, curren
 		}
 		if explicit {
 			if err := checkExplicitFragment(targets, path, lineNumber, local, filepath.ToSlash(relative), link.Fragment); err != nil {
+				failures = append(failures, err)
+			}
+		} else if link.Fragment != "" && filepath.Ext(local) == ".md" {
+			if err := checkLinkFragment(targets, path, lineNumber, local, filepath.ToSlash(relative), link.Fragment); err != nil {
 				failures = append(failures, err)
 			}
 		}

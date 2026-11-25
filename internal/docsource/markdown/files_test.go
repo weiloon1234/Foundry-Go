@@ -37,3 +37,30 @@ func TestOpenRegularForWritingSaysItCannotWrite(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// A file replaced between inspection and open is a different file than the one
+// that was inspected: the open is refused instead of reading the replacement.
+func TestOpenRegularRefusesAFileReplacedAfterInspection(t *testing.T) {
+	root := t.TempDir()
+	filename := filepath.Join(root, "AGENTS.md")
+	if err := os.WriteFile(filename, []byte("inspected\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(root, "other.md")
+	if err := os.WriteFile(other, []byte("replacement\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	afterInspection = func() {
+		if err := os.Rename(other, filename); err != nil {
+			t.Error(err)
+		}
+	}
+	defer func() { afterInspection = nil }()
+	f, err := OpenRegular(root, "AGENTS.md", os.O_RDONLY)
+	if err == nil || !strings.Contains(err.Error(), "changed while it was opened") {
+		if f != nil {
+			f.Close()
+		}
+		t.Fatalf("a replaced file was opened: %v", err)
+	}
+}

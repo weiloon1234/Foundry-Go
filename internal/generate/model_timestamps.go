@@ -29,7 +29,7 @@ func validateModelTimestamps(p *packageInput, d *modelDeclaration, fields, roles
 		if partner, exists := ordinary[missing]; !exists || modelManagedInstant(partner, false) {
 			message = "declare both role=created-at and role=updated-at, or " + message
 		}
-		return fail(f, message)
+		return fail(f, "only one of the managed timestamp roles is declared; "+message)
 	}
 	// Preserve the existing explicit plain-column convention opt-out.
 	if !hasCreated {
@@ -52,7 +52,7 @@ func validateModelTimestamps(p *packageInput, d *modelDeclaration, fields, roles
 			if modelManagedInstant(c, false) && modelManagedInstant(u, false) {
 				message = "declare role=created-at on CreatedAt and role=updated-at on UpdatedAt, or " + message
 			}
-			return fail(c, message)
+			return fail(c, "CreatedAt and UpdatedAt are conventional timestamp names; "+message)
 		}
 	}
 	if !d.noSoftDeletes && !d.hasSoft {
@@ -61,7 +61,7 @@ func validateModelTimestamps(p *packageInput, d *modelDeclaration, fields, roles
 			if modelManagedInstant(f, true) {
 				message = "declare role=soft-delete on DeletedAt, or " + message
 			}
-			return fail(f, message)
+			return fail(f, "DeletedAt is a conventional deletion name; "+message)
 		}
 	}
 	// Only after resolving all roles and names can an ordinary time spelling be
@@ -87,7 +87,7 @@ func validateModelTimestamps(p *packageInput, d *modelDeclaration, fields, roles
 		default:
 			continue
 		}
-		return fail(f, "declare role=time for an ordinary time column")
+		return fail(f, "a conventional timestamp name on an ordinary time column; declare role=time for an ordinary time column")
 	}
 	return nil
 }

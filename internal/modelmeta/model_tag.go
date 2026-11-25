@@ -61,7 +61,7 @@ func ParseModelTag(raw string) (ModelTag, error) {
 		return result, nil
 	}
 	if text == "" {
-		return result, safeerror.New("foundry tag cannot be empty")
+		return result, safeerror.New("foundry tag cannot be empty; list its options or remove the tag")
 	}
 	if text == "-" {
 		result.Ignore = true
@@ -78,26 +78,26 @@ func ParseModelTag(raw string) (ModelTag, error) {
 	}
 
 	if result.Mutate != "" && result.Input == "" {
-		failures = append(failures, safeerror.New("mutate requires input"))
+		failures = append(failures, safeerror.New("mutate requires input; declare input=<type> or remove mutate"))
 	}
 	return result, safeerror.Join("invalid foundry option", failures...)
 }
 
 func parseModelOption(result *ModelTag, part string, seen map[string]bool) error {
 	if part == "" {
-		return safeerror.New("empty foundry option")
+		return safeerror.New("empty foundry option; remove the stray comma")
 	}
 	if part == "-" {
-		return safeerror.New("- must be the only foundry option")
+		return safeerror.New("- must be the only foundry option; write foundry:\"-\" alone or remove the dash")
 	}
 	key, value, assigned := strings.Cut(part, "=")
 	if seen[key] {
-		return safeerror.New(fmt.Sprintf("duplicate foundry option %s", key))
+		return safeerror.New(fmt.Sprintf("duplicate foundry option %s; declare it once", key))
 	}
 	seen[key] = true
 	if key == "slot" {
 		if assigned {
-			return safeerror.New("slot is a bare flag, not slot=<name>")
+			return safeerror.New("slot is a bare flag, not slot=<name>; write slot")
 		}
 		result.Slot = true
 		return nil
@@ -105,20 +105,20 @@ func parseModelOption(result *ModelTag, part string, seen map[string]bool) error
 	switch key {
 	case "column", "default", "role", "input", "mutate", "codec", "member", "key-role", "values":
 	default:
-		return safeerror.New(fmt.Sprintf("unknown foundry option %s", key))
+		return safeerror.New(fmt.Sprintf("unknown foundry option %s; the options are column, default, role, input, mutate, codec, member, key-role, values and slot", key))
 	}
 	if !assigned || value == "" {
-		return safeerror.New(fmt.Sprintf("foundry option requires key=value: %s", key))
+		return safeerror.New(fmt.Sprintf("foundry option requires key=value: %s; write %s=<value>", key, key))
 	}
 	switch key {
 	case "column":
 		if !sqlname.Valid(value) {
-			return safeerror.New("column requires a SQL identifier")
+			return safeerror.New("column requires a SQL identifier; write column=<name>")
 		}
 		result.Column = value
 	case "default":
 		if value != "database" {
-			return safeerror.New("default requires database")
+			return safeerror.New("default requires database; write default=database")
 		}
 		result.DatabaseDefault = true
 	case "role":
@@ -126,13 +126,13 @@ func parseModelOption(result *ModelTag, part string, seen map[string]bool) error
 		case "column", "text", "number", "enum", "json", "time", "interval", "created-at", "updated-at", "soft-delete":
 			result.Role = value
 		default:
-			return safeerror.New(fmt.Sprintf("unknown role %s", value))
+			return safeerror.New(fmt.Sprintf("unknown role %s; the roles are column, text, number, enum, json, time, interval, created-at, updated-at and soft-delete", value))
 		}
 	case "input":
 		result.Input = value
 	case "mutate", "codec":
 		if !ModelIdentifier(value) {
-			return safeerror.New(fmt.Sprintf("%s requires a named function", key))
+			return safeerror.New(fmt.Sprintf("%s requires a named function; write %s=<functionName>", key, key))
 		}
 		if key == "mutate" {
 			result.Mutate = value
@@ -141,17 +141,17 @@ func parseModelOption(result *ModelTag, part string, seen map[string]bool) error
 		}
 	case "member":
 		if value != "none" && !ModelIdentifier(value) {
-			return safeerror.New("member requires a Go identifier or none")
+			return safeerror.New("member requires a Go identifier or none; write member=<Name> or member=none")
 		}
 		result.Member = value
 	case "values":
 		names := strings.Split(value, "|")
 		for i, name := range names {
 			if !ModelIdentifier(name) {
-				return safeerror.New("values requires enum case names separated by |")
+				return safeerror.New("values requires enum case names separated by |; write values=<CaseA>|<CaseB>")
 			}
 			if slices.Contains(names[:i], name) {
-				return safeerror.New(fmt.Sprintf("values names %s twice", name))
+				return safeerror.New(fmt.Sprintf("values names %s twice; list each case once", name))
 			}
 		}
 		result.Values = names
@@ -160,7 +160,7 @@ func parseModelOption(result *ModelTag, part string, seen map[string]bool) error
 		case "lookup", "primary", "input", "number", "text", "primary-number", "primary-text":
 			result.KeyRole = value
 		default:
-			return safeerror.New(fmt.Sprintf("unknown key-role %s", value))
+			return safeerror.New(fmt.Sprintf("unknown key-role %s; the key roles are lookup, primary, input, number, text, primary-number and primary-text", value))
 		}
 	}
 	return nil
@@ -214,19 +214,19 @@ func modelTagParts(text string) ([]string, error) {
 		case '\'', '"', '`':
 			quoted, err := strconv.QuotedPrefix(text[i:])
 			if err != nil {
-				return nil, safeerror.New("malformed foundry option: invalid quoted value")
+				return nil, safeerror.New("malformed foundry option: invalid quoted value; quote the tag value")
 			}
 			i += len(quoted) - 1
 		case '[', '(', '{':
 			stack = append(stack, text[i])
 		case ']', ')', '}':
 			if len(stack) == 0 {
-				return nil, safeerror.New("malformed foundry option: unmatched delimiters")
+				return nil, safeerror.New("malformed foundry option: unmatched delimiters; balance the brackets and quotes in the option")
 			}
 			open := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
 			if open == '[' && text[i] != ']' || open == '(' && text[i] != ')' || open == '{' && text[i] != '}' {
-				return nil, safeerror.New("malformed foundry option: unmatched delimiters")
+				return nil, safeerror.New("malformed foundry option: unmatched delimiters; balance the brackets and quotes in the option")
 			}
 		case ',':
 			if len(stack) == 0 {
@@ -236,7 +236,7 @@ func modelTagParts(text string) ([]string, error) {
 		}
 	}
 	if len(stack) != 0 {
-		return nil, safeerror.New("malformed foundry option: unmatched delimiters")
+		return nil, safeerror.New("malformed foundry option: unmatched delimiters; balance the brackets and quotes in the option")
 	}
 	return append(result, text[start:]), nil
 }

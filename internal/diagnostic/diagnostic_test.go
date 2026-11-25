@@ -143,3 +143,28 @@ func TestRuleCatalogueIsComplete(t *testing.T) {
 		t.Fatalf("rule.go declares %d rules, Rules() lists %d", declared, len(Rules()))
 	}
 }
+
+// Nesting beyond the traversal bound is reported as a line, not followed: findings
+// at the bound are listed, those past it are not, and nothing recurses without end.
+func TestFindingsStopAtTheNestingBound(t *testing.T) {
+	nested := func(depth int) error {
+		err := rule.At("leaf.md", 1, 0).Say("x", "bad").To("fix").Err()
+		for i := 0; i < depth; i++ {
+			err = safeerror.Join("failed", err, rule.At("side.md", 1, 0).Say("y", "bad").To("fix").Err())
+		}
+		return err
+	}
+	found, other := Findings(nested(maxDepth / 2))
+	if len(other) != 0 || len(found) != maxDepth/2+1 {
+		t.Fatalf("a shallow nesting was cut: %d findings, %v", len(found), other)
+	}
+	found, other = Findings(nested(maxDepth * 2))
+	for _, line := range other {
+		if line != "diagnostic nesting is too deep to list" {
+			t.Fatalf("unexpected line %q", line)
+		}
+	}
+	if len(other) == 0 || len(found) > maxDepth+1 {
+		t.Fatalf("a deep nesting was followed: %d findings, %v", len(found), other)
+	}
+}

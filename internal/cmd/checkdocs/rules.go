@@ -15,10 +15,10 @@ import (
 
 const rulesSource = "internal/diagnostic/rule.go"
 
-// tableRow is one `| `rule` | check | `guide#anchor` | `guide#anchor` or empty |` row of
+// tableRow is one `| `rule` | `guide#anchor` | `guide#anchor` or empty |` row of
 // the tooling guide's rule table: the teaching token, then the token an application
 // finding teaches when it differs.
-var tableRow = regexp.MustCompile("^\\| `([a-z0-9-]+)` \\| [^|]+ \\| `([a-z0-9-]+#[a-z0-9-]+)` \\| (?:`([a-z0-9-]+#[a-z0-9-]+)`)? \\|$")
+var tableRow = regexp.MustCompile("^\\| `([a-z0-9-]+)` \\| `([a-z0-9-]+#[a-z0-9-]+)` \\| (?:`([a-z0-9-]+#[a-z0-9-]+)`)? \\|$")
 
 // teaching is what one table row says a rule teaches.
 type teaching struct{ framework, application string }

@@ -150,3 +150,38 @@ func TestRefusesAFlagAsPackagePattern(t *testing.T) {
 		t.Fatal("accepted a flag as a package pattern")
 	}
 }
+
+func TestMetadataOverTheLimitIsRefused(t *testing.T) {
+	buffer := &limitedBuffer{remaining: 4}
+	if _, err := buffer.Write([]byte("abcd")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := buffer.Write([]byte("e")); err == nil || !buffer.exceeded || buffer.data.Len() != 4 {
+		t.Fatalf("a write past the limit was kept or accepted: %v", err)
+	}
+	dir := module(t, "stubold")
+	previous := maxMetadataBytes
+	maxMetadataBytes = 16
+	defer func() { maxMetadataBytes = previous }()
+	var out, errs bytes.Buffer
+	if err := run(context.Background(), []string{"--dir", dir}, &out, &errs); err == nil || !strings.Contains(err.Error(), "package metadata exceeds its limit") {
+		t.Fatalf("metadata over the limit was not refused: %v", err)
+	}
+}
+
+// Compiler text can quote application source, so a build failure prints none of it.
+func TestLoadFailureDoesNotEchoCompilerText(t *testing.T) {
+	dir := module(t, "stubold")
+	source := "package migrated\n\nvar leaked int = \"APPLICATION-SECRET-LITERAL\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "migrated", "broken.go"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, errs bytes.Buffer
+	err := run(context.Background(), []string{"--dir", dir}, &out, &errs)
+	if err == nil || !strings.Contains(err.Error(), "go build") {
+		t.Fatalf("a module that does not build was not refused with the next step: %v", err)
+	}
+	if strings.Contains(err.Error()+out.String()+errs.String(), "APPLICATION-SECRET-LITERAL") {
+		t.Fatal("compiler text reached the output")
+	}
+}

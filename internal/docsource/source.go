@@ -29,14 +29,6 @@ type source struct {
 	regions  map[string]excerpt
 }
 
-func readSource(policy Policy, root, document, name string) (source, error) {
-	language, err := policy.approve(root, document, name)
-	if err != nil {
-		return source{}, err
-	}
-	return loadSource(policy, root, name, language)
-}
-
 // loadSource reads an approved file and parses its regions.
 func loadSource(policy Policy, root, name, language string) (source, error) {
 	data, err := markdown.ReadFile(root, name, markdown.MaxSourceBytes)
@@ -87,7 +79,7 @@ func parseSource(data, language string) (source, error) {
 		trimmed := strings.TrimSpace(line)
 		marker := regionMarker.FindStringSubmatch(trimmed)
 		if marker == nil {
-			if strings.Contains(trimmed, "// doc-example:") || strings.HasPrefix(trimmed, "// migration:") || strings.HasPrefix(trimmed, "// guide:") {
+			if strings.Contains(trimmed, "// doc-example:") {
 				return source{}, safeerror.New(fmt.Sprintf("line %d: region marker must use a standalone // doc-example:begin or // doc-example:end comment; put each marker alone on a line.", i+1))
 			}
 			whole.WriteString(line)

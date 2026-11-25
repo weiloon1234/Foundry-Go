@@ -353,3 +353,17 @@ func TestCheckEndToEnd(t *testing.T) {
 		t.Fatalf("a commented field whose line remains fails: %v %v", findings, err)
 	}
 }
+
+// A release tag is validated before anything is read or written.
+func TestReleaseRefusesAMalformedTagWithoutWriting(t *testing.T) {
+	root := t.TempDir()
+	for _, tag := range []string{"", "0.53.0", "v1.2", "v01.2.3", "v1.2.3-rc1", "v1.2.3\n"} {
+		err := Release(root, tag)
+		if err == nil || !strings.Contains(err.Error(), "want a tag of the form vMAJOR.MINOR.PATCH") {
+			t.Errorf("tag %q: %v", tag, err)
+		}
+	}
+	if entries, err := os.ReadDir(root); err != nil || len(entries) != 0 {
+		t.Fatalf("a refused tag wrote files: %v %v", entries, err)
+	}
+}

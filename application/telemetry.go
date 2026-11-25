@@ -42,10 +42,7 @@ func validateTelemetrySettings(s TelemetrySettings, observation ObservabilitySet
 	if !observation.Enabled {
 		return safeerror.NewFault(fault.Invalid, "telemetry requires configured observability")
 	}
-	if err := s.Collector.Validate(); err != nil {
-		return err
-	}
-	if err := s.Config.Validate(); err != nil {
+	if err := s.Config.ValidateWith(s.Collector); err != nil {
 		return err
 	}
 	for i, kernel := range s.Kernels {

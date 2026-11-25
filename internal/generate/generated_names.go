@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 )
 
 // checkGeneratedNames reports a generated package-level symbol or method that
@@ -18,7 +20,7 @@ func (p *packageInput) checkGeneratedNames(outputs map[string]*ast.File, origins
 	for _, name := range sortedNames(outputs) {
 		origin := origins[name]
 		collision := func(symbol string, handwritten token.Pos) error {
-			return fmt.Errorf("%s: %s is declared by handwritten code, but the Foundry declaration at %s generates it in %s; rename the handwritten declaration or the Foundry declaration", p.fset.Position(handwritten), symbol, origin, p.displayName(name))
+			return p.diagnostic(handwritten, fmt.Sprintf("%s is declared by handwritten code, but the Foundry declaration at %s generates it in %s; rename the handwritten declaration or the Foundry declaration", symbol, origin, p.displayName(name)))
 		}
 		// Two declarations can derive the same helper name, for example a path
 		// and an enum whose names differ only by a generated suffix.
@@ -28,7 +30,7 @@ func (p *packageInput) checkGeneratedNames(outputs map[string]*ast.File, origins
 				generated[symbol] = name
 				return nil
 			}
-			return fmt.Errorf("%s: generated symbol %s in %s is also generated in %s by the declaration at %s; rename one declaration", origin, symbol, p.displayName(name), p.displayName(previous), origins[previous])
+			return diagnostic.GenerateDecl.At(origin.Filename, origin.Line, origin.Column).Text("", fmt.Sprintf("generated symbol %s in %s is also generated in %s by the declaration at %s; rename one declaration", symbol, p.displayName(name), p.displayName(previous), origins[previous])).Err()
 		}
 		for _, decl := range outputs[name].Decls {
 			switch decl := decl.(type) {

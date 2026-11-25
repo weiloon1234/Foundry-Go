@@ -15,8 +15,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 )
 
-// maxMigrationDefinitions bounds the history one check replays.
-const maxMigrationDefinitions = 10000
+// maxMigrationDefinitions bounds the history one check replays. A test lowers it.
+var maxMigrationDefinitions = 10000
 
 type migrationKey struct{ origin, id string }
 

@@ -462,3 +462,11 @@ func pass[M any](table orm.Table[M,int64]) orm.Table[M,int64] { return table }
 		})
 	}
 }
+
+// A directory go cannot enter is reported without a dangling separator.
+func TestCheckOfAMissingDirectoryEndsWithItsCause(t *testing.T) {
+	_, err := Check(t.Context(), filepath.Join(t.TempDir(), "absent"), []string{"./..."})
+	if err == nil || !strings.Contains(err.Error(), "load consumer Go packages") || strings.HasSuffix(strings.TrimSpace(err.Error()), ":") {
+		t.Fatalf("error = %v", err)
+	}
+}

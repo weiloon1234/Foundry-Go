@@ -899,48 +899,48 @@ anchor that a finding raised for an application's own documents teaches when it 
 from the framework's; the table must state it exactly and `make docs-check` refuses a
 mismatch:
 
-| Rule | Check | Teaching | In an application |
-| --- | --- | --- | --- |
-| `route-nesting` | `routes check` | `flat-routes#staged-routes` |  |
-| `route-helper` | `routes check` | `flat-routes#generated-helpers` |  |
-| `route-helper-missing` | `routes check` | `flat-routes#generated-helpers` |  |
-| `model-table` | `models check` | `model-declarations#recipe-declare-table` |  |
-| `enum-list` | `models check` | `migrations-and-seeding#recipe-enum-lists` |  |
-| `migration-unregistered` | `models check` | `migrations-and-seeding#recipe-register-migration` |  |
-| `raw-sql` | `lint --no-raw` | `database-runtime#no-raw-policy` |  |
-| `generated-stale` | `generate --check` | `model-declarations#recipe-stale-declarations` |  |
-| `generate-declaration` | `generate` | `model-declarations#diagnose-declarations` |  |
-| `guides-declaration` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |  |
-| `anchor-invalid` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-reference-guides` |
-| `anchor-duplicate` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |  |
-| `anchor-missing` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |  |
-| `guide-name` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |  |
-| `guide-missing` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |  |
-| `retired-command` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
-| `retired-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
-| `ambiguous-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
-| `ledger-shape` | `exportsurface` | `developer-tooling-and-testing#retired-names` |  |
-| `removal-unledgered` | `exportsurface` | `developer-tooling-and-testing#retired-names` |  |
-| `ledger-entry-lost` | `exportsurface` | `developer-tooling-and-testing#retired-names` |  |
-| `surface-stale` | `exportsurface` | `developer-tooling-and-testing#retired-names` |  |
-| `doc-limit` | `docs check` | `developer-tooling-and-testing#document-limits` |  |
-| `doc-file` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
-| `doc-comment` | `docs check` | `developer-tooling-and-testing#document-limits` |  |
-| `api-comment` | `apicomments` | `developer-tooling-and-testing#api-comments` |  |
-| `doc-rendered` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
-| `doc-marker` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
-| `doc-region` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
-| `doc-binding` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
-| `doc-section-anchor` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
-| `doc-agent-entry` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
-| `doc-inputs` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
-| `doc-worked-example` | `docs check` | `developer-tooling-and-testing#recipe-application-documents` |  |
-| `doc-link` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |  |
-| `doc-milestone` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |  |
-| `doc-model-example` | `checkdocs` | `model-declarations#recipe-declare-table` |  |
-| `fixture-go-version` | `checkdocs` | `developer-tooling-and-testing#documentation-gate` |  |
-| `blueprint-numbered` | `checkdocs` | `developer-tooling-and-testing#documentation-gate` |  |
-| `rule-catalogue` | `checkdocs` | `developer-tooling-and-testing#diagnostic-rules` |  |
+| Rule | Teaching | In an application |
+| --- | --- | --- |
+| `route-nesting` | `flat-routes#staged-routes` |  |
+| `route-helper` | `flat-routes#generated-helpers` |  |
+| `route-helper-missing` | `flat-routes#generated-helpers` |  |
+| `model-table` | `model-declarations#recipe-declare-table` |  |
+| `enum-list` | `migrations-and-seeding#recipe-enum-lists` |  |
+| `migration-unregistered` | `migrations-and-seeding#recipe-register-migration` |  |
+| `raw-sql` | `database-runtime#no-raw-policy` |  |
+| `generated-stale` | `model-declarations#recipe-stale-declarations` |  |
+| `generate-declaration` | `model-declarations#diagnose-declarations` |  |
+| `guides-declaration` | `developer-tooling-and-testing#recipe-reference-guides` |  |
+| `anchor-invalid` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-reference-guides` |
+| `anchor-duplicate` | `developer-tooling-and-testing#recipe-author-examples` |  |
+| `anchor-missing` | `developer-tooling-and-testing#recipe-reference-guides` |  |
+| `guide-name` | `developer-tooling-and-testing#recipe-reference-guides` |  |
+| `guide-missing` | `developer-tooling-and-testing#recipe-reference-guides` |  |
+| `retired-command` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
+| `retired-api` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
+| `ambiguous-api` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
+| `ledger-shape` | `developer-tooling-and-testing#retired-names` |  |
+| `removal-unledgered` | `developer-tooling-and-testing#retired-names` |  |
+| `ledger-entry-lost` | `developer-tooling-and-testing#retired-names` |  |
+| `surface-stale` | `developer-tooling-and-testing#retired-names` |  |
+| `doc-limit` | `developer-tooling-and-testing#document-limits` |  |
+| `doc-file` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
+| `doc-comment` | `developer-tooling-and-testing#document-limits` |  |
+| `api-comment` | `developer-tooling-and-testing#api-comments` |  |
+| `doc-rendered` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-marker` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-region` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-binding` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-section-anchor` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-agent-entry` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-inputs` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-worked-example` | `developer-tooling-and-testing#recipe-application-documents` |  |
+| `doc-link` | `developer-tooling-and-testing#recipe-author-examples` |  |
+| `doc-milestone` | `developer-tooling-and-testing#recipe-author-examples` |  |
+| `doc-model-example` | `model-declarations#recipe-declare-table` |  |
+| `fixture-go-version` | `developer-tooling-and-testing#documentation-gate` |  |
+| `blueprint-numbered` | `developer-tooling-and-testing#documentation-gate` |  |
+| `rule-catalogue` | `developer-tooling-and-testing#diagnostic-rules` |  |
 
 <a id="documentation-gate"></a>
 ### Framework-only documentation rules

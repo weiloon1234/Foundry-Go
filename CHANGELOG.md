@@ -20,14 +20,105 @@
   `datatable.ReadAccess` and `ExportAccess` take the same rule, `datatable.Routes` requires
   `ReadAccess` (and `ExportAccess` for an exportable table, a refusal that names the table),
   and the webhook and outbound capture `Routes` take one rule. `http.GuardOption`,
-  `datatable.RouteOption`, the four constructors above and `http.AnyActorOf` are retired
+  `datatable.RouteOption` and the four constructors above are retired
   (`datatable.ReadOption` and `ExportOption` replace the second). A nil or zero rule is
   refused when the route registers, naming the route's method, pattern and ID. Manifests,
   wire formats and stored data are unchanged.
-  Migrate with `go run github.com/weiloon1234/Foundry-Go/tools/accessmigrate@<release> --dir . ./...`
-  before repinning; it also converts a variable or helper holding `[]http.GuardOption[M]`,
+  `http.TicketAuthenticated(e, b, redeemer, rule, options...)` and
+  `pagination.Authenticated(p, b, rule, options...)` gain the rule argument after the
+  binding and redeemer.
+  Fix: run `go run github.com/weiloon1234/Foundry-Go/tools/accessmigrate@<release> --dir . ./...`
+  while the application is still on the previous release, then repin; it also converts a variable or helper holding `[]http.GuardOption[M]`,
   and the [compatibility policy](docs/compatibility.md#access-rule) lists what it
   rewrites and, for each shape it leaves for a decision, the recipe.
+- Breaking (startup): a telemetry configuration whose `Alerts.Thresholds.AuthFailures` is
+  above half of the collector's `MaxEvents` is refused at startup (and by `telemetry.New`)
+  instead of building an authentication burst rule that can never fire: a capture holds at
+  most `MaxEvents/2` security issues. `MaxEvents` 1 holds none, so an enabled alert policy
+  needs `MaxEvents` of at least 2. `telemetry.Config.ValidateWith(collector)` is the one
+  check. Fix: lower `features.telemetry.config.alerts.thresholds.auth_failures` or raise
+  `features.telemetry.collector.max_events` (the error names `AuthFailures` and `MaxEvents`).
+- Breaking (gate): an application whose constraint rejects a case of its enum fails
+  `foundry models check` at the next pin. Fix: declare `values=` on the field and run
+  `foundry generate` (no database change), or add a new migration that writes the
+  constraint again. A migration function that no list
+  registers is a `[migration-unregistered]` finding at the same pin; add it to the list. A constraint
+  written in a form the rule does not read is a finding until a new migration writes it
+  with tests that compare the column with literals. Nothing changes for constraints that
+  reject no case.
+- Breaking (gate): `foundry docs check` binds an application's own documents to the application's own
+  code. In `AGENTS.md` and `.claude/skills` Markdown every `go`, `typescript` and `tsx`
+  fence must carry a `<!-- compiled-source: path#region -->` directive and equal that
+  region; the closed fence-tag list, the no-indented-code rule and the shape limits
+  apply. Go sources are bindable under `internal/`, `cmd/` and `examples/`, TypeScript
+  and TSX under `web/` and `client/tests/`; generated files, `*.d.ts`, `node_modules`,
+  `dist`, `testdata`, `deploy`, `config`, nested modules, symlinks, `.env*` and
+  TypeScript files with `@ts-nocheck` are refused (names compare without regard to case),
+  and a test file (`_test.go`, `*.test.ts(x)`, `*.spec.ts(x)`, TypeScript below a `tests`
+  directory) only from the `testing` skill. A Go source must belong to a
+  package of the module (one offline `go list -find` per run, only when a document binds
+  Go). A skill's app-owned `worked-example` region holds a bound block with a line of code,
+  or exactly the explicit statement that the application has no such code with a `Foundry guides:` recipe
+  reference; an empty or vague region is a `doc-worked-example` finding. TSX regions
+  wrap whole declarations; a marker inside JSX is refused. New commands:
+  `foundry docs render [--check] [--dir .]` writes the bound blocks and nothing else
+  (all or nothing: any other binding finding, or a target that cannot be written, stops
+  it before a file changes), and `foundry docs bindings --language go|typescript` lists
+  the bound sources, one module-relative path per line, for the application's TypeScript
+  convention test, and exits non-zero with the findings when a document has one. A finding
+  raised for an application points at the application recipe of the tooling guide, and a
+  failed `go list` prints the first line of its message.
+  Fix: after repinning, run `go tool foundry docs render --check --dir .`, bind or retag
+  each block it lists, then `go tool foundry docs render --dir .`; see
+  [the compatibility policy](docs/compatibility.md#application-documents).
+- Breaking (gate): `go tool foundry docs check` refuses the qualified spelling of
+  every ledger name in an application's `AGENTS.md` and `.claude/skills` Markdown, so
+  a document that still writes `orm.TextEq` or `datatable.DefineColumn` fails at the
+  next pin. Fix: write the replacement the diagnostic prints (`orm.TextEq is retired; use
+  orm.Eq.`). Application code that compiled is unaffected. In the framework's own
+  strict documents a bare retired name is refused only when no current top-level
+  export of any importable package has that name, even an unrelated package: a bare
+  word cannot be attributed to a package (decided from the recorded inventory, one rule
+  for every entry; a method or field of that name does not count).
+- Breaking (gate): `go tool foundry docs check` refuses a `Foundry guides:` declaration
+  that names `orm-migration`, because the migration page is removed. Fix: after
+  repinning, retarget the declaration (in `foundry-model` and `foundry-upgrade` skills
+  and any other) to a current task guide such as `model-declarations`.
+- Breaking (gate): `go tool foundry docs check` now reads each active document (`AGENTS.md` files
+  and `.claude/skills` Markdown) with the shared Goldmark v1.8.7 CommonMark reader
+  (MIT licence). An application's `go.mod` gains `github.com/yuin/goldmark v1.8.7` as an
+  indirect requirement through the `foundry` tool; run `go mod tidy` after repinning.
+  Compared with v0.52.0 an application sees these changes; after repinning, run
+  `go tool foundry docs check`, which prints every refusal with its line:
+  - A document is refused, with its line number, when it is over 512 KiB, has a
+    line over 16 KiB, has a line opening with more than 16 quote or list markers, or
+    uses CR-only line endings. A path component starting with `.env` or a symlink is
+    refused unread, and reads are confined to the application directory and to
+    regular files.
+  - An HTML comment with no closing `-->` is refused, with the line it opens on,
+    instead of hiding the rest of the document.
+  - Retired names inside HTML comments are no longer reported; text after a comment
+    on the same line is still checked.
+  - Fences inside quotes and list items are real fences, so a TypeScript or
+    JavaScript fence there is skipped like a top-level one; indented blocks are
+    checked as code, not prose; inline code spans pair as CommonMark pairs them.
+  - `Foundry guides:` declarations are read from paragraph text, including list
+    items and quotes, and no longer from indented or raw HTML blocks.
+  - Diagnostics have new wording (`name is retired; use replacement.`) and report
+    recorded replacements; replacement metadata adds no retirement-name, arity or
+    chain rule. The retirement diagnostic's heading is now
+    `documentation retirement check failed` (it was `operation failed`).
+- Breaking (output): every finding of a compiler-independent check prints one finding shape,
+  `path:line:col: [rule] subject: problem; fix. Foundry guide: <guide>#<anchor>`,
+  and in an application also `(skill: name)` for each skill that declares that
+  token in a `Foundry guides:` line. It covers `foundry routes check`,
+  `models check`, `lint --no-raw` (which now names the symbol and column),
+  `generate --check` (one line per stale file, then one `scope:` line) and `generate` declaration errors,
+  `docs check` and the framework's `make docs-check`. `:0` is never printed. Rule IDs
+  are stable and listed in the developer tooling guide; the framework's docs check
+  fails when a rule names a missing guide anchor. Fix: update any parser of the old
+  per-check output (the exit codes are unchanged); see
+  [the compatibility policy](docs/compatibility.md#diagnostic-output-shape).
 - `foundry models check` evaluates each enum column's live `CHECK` constraints against
   its enum, without a database: for every case of the `//foundry:enum` behind a model
   field (or `value.Nullable`, `value.JSON`, slice or array of one) it evaluates each
@@ -61,57 +152,20 @@
   its definition in a local and returns it counts as a migration, and a reference to a
   migration function as a value counts as registering it. The migrations guide teaches
   both; the consumer fixture's `enumlists` package is the positive case.
-- Application effect of the enum rule: an application whose constraint rejects a case of
-  its enum fails `models check` at the next pin until the field declares `values=` and
-  `foundry generate` is run, or a new migration writes the constraint again. A constraint
-  written in a form the rule does not read is a finding until a new migration writes it
-  with tests that compare the column with literals. Nothing changes for constraints that
-  reject no case.
-- `foundry docs check` binds an application's own documents to the application's own
-  code. In `AGENTS.md` and `.claude/skills` Markdown every `go`, `typescript` and `tsx`
-  fence must carry a `<!-- compiled-source: path#region -->` directive and equal that
-  region; the closed fence-tag list, the no-indented-code rule and the shape limits
-  apply. Go sources are bindable under `internal/`, `cmd/` and `examples/`, TypeScript
-  and TSX under `web/` and `client/tests/`; generated files, `*.d.ts`, `node_modules`,
-  `dist`, `testdata`, `deploy`, `config`, nested modules, symlinks, `.env*` and
-  TypeScript files with `@ts-nocheck` are refused (names compare without regard to case),
-  and a test file (`_test.go`, `*.test.ts(x)`, `*.spec.ts(x)`, TypeScript below a `tests`
-  directory) only from the `testing` skill. A Go source must belong to a
-  package of the module (one offline `go list -find` per run, only when a document binds
-  Go). A skill's app-owned `worked-example` region holds a bound block with a line of code,
-  or exactly the explicit statement that the application has no such code with a `Foundry guides:` recipe
-  reference; an empty or vague region is a `doc-worked-example` finding. TSX regions
-  wrap whole declarations; a marker inside JSX is refused. New commands:
-  `foundry docs render [--check] [--dir .]` writes the bound blocks and nothing else
-  (all or nothing: any other binding finding, or a target that cannot be written, stops
-  it before a file changes), and `foundry docs bindings --language go|typescript` lists
-  the bound sources, one module-relative path per line, for the application's TypeScript
-  convention test, and exits non-zero with the findings when a document has one. A finding
-  raised for an application points at the application recipe of the tooling guide, and a
-  failed `go list` prints the first line of its message.
-  Application effect at the next pin: see the compatibility policy.
 - Retired-names ledger completeness: `make generate` records the exported API of
   the importable packages (`internal/retirement/exported-surface.txt`; an alias lists
   the members of its target), and `make generate-check` refuses any identifier removed
   or changed in kind since the previous release (`internal/retirement/release/`) that
   has no ledger entry; ledger entries cannot disappear. Every entry states
   `replacement` or `noReplacement: true`. The ledger gains 354 removed names that
-  earlier releases left unrecorded and now holds 752: 295 `database/orm` names (the
+  earlier releases left unrecorded (it holds 758 with the 398 of v0.52.0 and the 6 of the
+  access-rule change): 295 `database/orm` names (the
   per-kind operators, assignments, adapters and audit functions of v0.48.0: 262
   functions and 33 types by the v0.47.0 inventory, where the v0.48.0 note counted
   36 types), `database/query` and its public names, `datatable.DefineColumn`,
   `attachments.MaxUploadBytes` and the TypeScript `Options.React`/`Options.Vue`.
   A retired package import is refused from the ledger, and a compile-fail case that
   names a retired name is not a use of it.
-- Application effect: `go tool foundry docs check` refuses the qualified spelling of
-  every ledger name in an application's `AGENTS.md` and `.claude/skills` Markdown, so
-  a document that still writes `orm.TextEq` or `datatable.DefineColumn` fails at the
-  next pin. The diagnostic prints the replacement (`orm.TextEq is retired; use
-  orm.Eq.`). Application code that compiled is unaffected. In the framework's own
-  strict documents a bare retired name is refused only when no current top-level
-  export of any importable package has that name, even an unrelated package: a bare
-  word cannot be attributed to a package (decided from the recorded inventory, one rule
-  for every entry; a method or field of that name does not count).
 - `go run ./internal/cmd/exportsurface --release vX.Y.Z` now validates the tag, runs
   the removal check against the existing baseline before replacing it, and its flags
   `--check`, `--out` and `--release` are mutually exclusive; `--root` reads that
@@ -124,40 +178,6 @@
   are plain text. The retired-names ledger checks are findings: `ledger-shape`,
   `removal-unledgered`, `ledger-entry-lost` and `surface-stale` (teaching reference
   `developer-tooling-and-testing#retired-names`), and print no `:0`.
-- Every finding of a compiler-independent check prints one finding shape,
-  `path:line:col: [rule] subject: problem; fix. Foundry guide: <guide>#<anchor>`,
-  and in an application also `(skill: name)` for each skill that declares that
-  token in a `Foundry guides:` line. It covers `foundry routes check`,
-  `models check`, `lint --no-raw` (which now names the symbol and column),
-  `generate --check` (one line per stale file, then one `scope:` line) and `generate` declaration errors,
-  `docs check` and the framework's `make docs-check`. `:0` is never printed. Rule IDs
-  are stable and listed in the developer tooling guide; the framework's docs check
-  fails when a rule names a missing guide anchor. Machine readers of the old
-  per-check output must be updated; see the compatibility policy.
-- Before upgrading the application pin, retarget any `Foundry guides:` declaration
-  naming `orm-migration` to a current task guide. The migration page is removed.
-- `go tool foundry docs check` now reads each active document (`AGENTS.md` files
-  and `.claude/skills` Markdown) with the shared Goldmark v1.8.7 CommonMark reader
-  (MIT licence). Compared with v0.52.0 an application sees these changes (the list was not
-  checked line by line for completeness):
-  - A document is refused, with its line number, when it is over 512 KiB, has a
-    line over 16 KiB, has a line opening with more than 16 quote or list markers, or
-    uses CR-only line endings. A path component starting with `.env` or a symlink is
-    refused unread, and reads are confined to the application directory and to
-    regular files.
-  - An HTML comment with no closing `-->` is refused, with the line it opens on,
-    instead of hiding the rest of the document.
-  - Retired names inside HTML comments are no longer reported; text after a comment
-    on the same line is still checked.
-  - Fences inside quotes and list items are real fences, so a TypeScript or
-    JavaScript fence there is skipped like a top-level one; indented blocks are
-    checked as code, not prose; inline code spans pair as CommonMark pairs them.
-  - `Foundry guides:` declarations are read from paragraph text, including list
-    items and quotes, and no longer from indented or raw HTML blocks.
-  - Diagnostics have new wording (`name is retired; use replacement.`) and report
-    recorded replacements; replacement metadata adds no retirement-name, arity or
-    chain rule. The retirement diagnostic's heading is now
-    `documentation retirement check failed` (it was `operation failed`).
 - Compiled-source bindings, the closed fence-tag list, the restrictions on indented
   code and HTML `pre`/`code` elements, and the bare-name rule for code spans apply
   to the framework's own guides, instructions and skills. An application's
@@ -168,6 +188,14 @@
   limited to 512 KiB.
 - Client guides use compiled, framework-neutral TypeScript examples. UI hooks
   remain application-owned, and the framework adds no React or TSX dependency.
+- Framework checks: `make docs-check` refuses a link whose fragment names neither an
+  explicit anchor nor a heading of its Markdown target, and prints one finding once even
+  when several stages read the same bad document; the rule table in the tooling guide
+  lists each rule's teaching reference only (the `Check` column is removed); the
+  retired-names check reports an empty or malformed recorded release file as a
+  `ledger-shape` finding; `apicomments` prints its success count without a rule tag.
+  `foundry generate` prints every model-declaration error, including a name that
+  collides with handwritten code, in the finding shape with a correction.
 
 ## v0.52.0 — 2026-11-25
 
@@ -2373,7 +2401,7 @@ upgrade hosts through `tools-plan`/`tools-apply` before using them.
   migration. The actions `redis-restore-plan`, `redis-restore-apply`, and
   `redis-restore-resume` support reviewed exact-key recovery with a fresh safety
   snapshot and retained startup protection. Apply and resume require confirmation. See the
-  [restore procedure](docs/guides/deployment.md#restore-a-redis-snapshot).
+  [restore procedure](docs/guides/deployment.md).
 - Added: the schema-1 `deploy:jobs-inspect --format json` command reports configured
   Redis job connections, queues, layout states, eligibility, and safe blockers from
   the release. Queued listeners resolve their connection and queue exactly as the
@@ -2386,7 +2414,7 @@ upgrade hosts through `tools-plan`/`tools-apply` before using them.
   remains available. Migration uncertainty prevents automatic old-release recovery.
   Cutover requires generation-5 host tools, and hosts with persisted queue gates
   require generation-5 mutation clients. See the
-  [deployment guide](docs/guides/deployment.md#coordinated-redis-queue-cutover).
+  [deployment guide](docs/guides/deployment.md).
 
 ## v0.14.0 — 2026-11-09
 
@@ -2419,7 +2447,7 @@ only v0.14.0 clients. There is no old/new client overlap. See the jobs operation
 - Changed: Redis queues use layout 3 behind an explicit coordinated cutover with
   no old/new client overlap. Layout-2 migration changes only the metadata marker;
   layout 1 must first migrate through v0.13.0. Existing membership needs no backfill.
-  See [queue operations](docs/guides/jobs-operations.md#redis-queue-layout-upgrade).
+  See [queue operations](docs/guides/jobs-operations.md#redis-queue-storage-layout).
 - Fixed: shared Redis record loading validates history entries and envelope
   presence before direct mutations. Workflow members retire only with their
   owning group; missing or corrupt members preserve that owner and fail closed.
@@ -3623,7 +3651,7 @@ Measured on the consumer fixture: a package reading `Order.TotalCents` 70.9 MB �
 4.7 MB (compile 850 → 113 MB RSS), one typed query 76.4 → 20.8 MB, a model
 without relations 12.2 → 0.62 MB, a plain endpoint 16.4 → 4.9 MB. Typed
 contracts and runtime behavior are unchanged. See the
-[build resources guide](docs/guides/query-build-resources.md#model-and-endpoint-edges).
+[build resources guide](docs/guides/query-build-resources.md).
 
 - Generated models replace `FoundryQuery()` with the methodless witness
   `FoundryModel() query.ModelRef[M]`; add `query.NewModelRef` and
@@ -3703,7 +3731,7 @@ contracts and runtime behavior are unchanged. See the
   calls and generated output remain unchanged; no deprecated APIs are added.
   Matched Boss Club builds retain 0.69% less combined build/vet/race cache and
   improve cold-build median by 1.19%; unchanged-build timing ranges overlap.
-  See [runtime build resources](docs/guides/query-build-resources.md#shared-runtime-metadata).
+  See [runtime build resources](docs/guides/query-build-resources.md).
 
 ### Query compilation footprint
 
@@ -3713,7 +3741,7 @@ contracts and runtime behavior are unchanged. See the
   transaction/lifecycle behavior unchanged; no consumer source migration or
   deprecated compatibility methods are introduced. Matched ordinary builds use
   13.2% less cache and a 30.6% smaller consumer archive; see the
-  [continuation measurements](docs/guides/query-build-resources.md#further-shared-write-planning).
+  [continuation measurements](docs/guides/query-build-resources.md).
 
 - Preserve the typed query API while isolating the non-generic SQL/planning
   engine in `internal/querycore`, sharing model-independent builder state,

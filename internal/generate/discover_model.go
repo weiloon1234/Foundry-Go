@@ -1,11 +1,11 @@
 package generate
 
 import (
-	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
@@ -36,7 +36,8 @@ func modelError(p *packageInput, pos token.Pos, model, field, message string) er
 	if field != "" {
 		model += "." + field
 	}
-	return safeerror.New(fmt.Sprintf("%s: model %s: %s", p.fset.Position(pos), model, message))
+	position := p.fset.Position(pos)
+	return diagnostic.GenerateDecl.At(position.Filename, position.Line, position.Column).Text("model "+model, message).Err()
 }
 func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args map[string]string) (modelDeclaration, error) {
 	d := modelDeclaration{name: spec.Name.Name, table: args["table"], variable: args["var"], tableType: spec.Name.Name + "Table", key: args["key"], identity: args["identity"] != "false", noTimestamps: args["timestamps"] == "none", noSoftDeletes: args["softdeletes"] == "none", hooks: args["hooks"], retrieval: args["retrieval"], scopes: args["scopes"], typ: named, position: p.fset.Position(spec.Pos())}
@@ -47,35 +48,35 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 		switch key {
 		case "table", "var", "key", "identity", "timestamps", "softdeletes", "hooks", "retrieval", "scopes":
 		default:
-			return fail("unknown directive option " + key)
+			return fail("unknown directive option " + key + "; the options are table, var, key, identity, timestamps, softdeletes, hooks, retrieval and scopes")
 		}
 	}
 	if !sqlname.Table(d.table) {
-		return fail("table requires an explicit SQL identifier")
+		return fail("table requires an explicit SQL identifier; write table=<name> or table=<schema>.<name>")
 	}
 	if !modelmeta.ModelIdentifier(d.variable) {
-		return fail("var requires a Go identifier")
+		return fail("var requires a Go identifier; write var=<Name>")
 	}
 	if !modelmeta.ModelIdentifier(d.key) {
-		return fail("key requires a struct field name")
+		return fail("key requires a struct field name; write key=<Field> naming the primary-key field")
 	}
 	if args["identity"] == "true" {
 		return fail("identity=true is redundant; remove it")
 	}
 	if args["identity"] != "" && args["identity"] != "false" {
-		return fail("identity requires false to opt out")
+		return fail("identity requires false to opt out; write identity=false or remove the option")
 	}
 	d.identityVar = modelmeta.IdentityVariable(d.variable)
 	if args["timestamps"] != "" && !d.noTimestamps {
-		return fail("timestamps requires none")
+		return fail("timestamps requires none; write timestamps=none or remove the option")
 	}
 	if args["softdeletes"] != "" && !d.noSoftDeletes {
-		return fail("softdeletes requires none")
+		return fail("softdeletes requires none; write softdeletes=none or remove the option")
 	}
 	var ok bool
 	d.shape, ok = named.Underlying().(*types.Struct)
 	if !ok {
-		return fail("requires a struct")
+		return fail("requires a struct; declare the model as a struct type")
 	}
 	reader := p.sourceDocumentation()
 	source, err := reader.structure(named)
@@ -110,31 +111,31 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 		}
 		if f.carrier == "SoftDelete" {
 			if d.hasSoft {
-				return fail("declare only one soft-delete field")
+				return fail("declare only one soft-delete field; remove the others")
 			}
 			if d.noSoftDeletes {
-				return fail("softdeletes=none conflicts with soft-delete")
+				return fail("softdeletes=none conflicts with soft-delete; remove softdeletes=none or the soft-delete field")
 			}
 			d.hasSoft = true
 		}
 		if d.noTimestamps && (f.carrier == "CreatedAt" || f.carrier == "UpdatedAt") {
-			return fail("timestamps=none conflicts with managed timestamps")
+			return fail("timestamps=none conflicts with managed timestamps; remove timestamps=none or the managed timestamp fields")
 		}
 		d.fields = append(d.fields, f)
 		if f.member != "" {
 			if members[f.member] {
-				return fail("duplicate table member " + f.member)
+				return fail("duplicate table member " + f.member + "; give one field member=<Name> with a distinct name")
 			}
 			members[f.member] = true
 			d.members = append(d.members, f.member)
 		}
 	}
 	if !keyFound {
-		return fail("key field " + d.key + " does not exist or is ignored")
+		return fail("key field " + d.key + " does not exist or is ignored; name an exported persisted field in key=")
 	}
 	if d.hasSoft {
 		if members["Soft"] {
-			return fail("duplicate table member Soft")
+			return fail("duplicate table member Soft; give the field named Soft member=<Name> with a distinct name")
 		}
 		d.members = append(d.members, "Soft")
 	}
@@ -173,7 +174,11 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 			valid = valid && n != nil && isNamed(n, framework+"/database/orm", option.result) && n.TypeArgs().Len() == 1 && types.Identical(n.TypeArgs().At(0), named)
 		}
 		if !valid {
-			return fail(option.name + " has an incompatible signature")
+			shape := "func() orm." + option.result + "[" + d.name + "]"
+			if option.name == "scopes" {
+				shape = "func(" + d.tableType + ") []orm." + option.result + "[" + d.name + "]"
+			}
+			return fail(option.name + " has an incompatible signature; declare " + shape)
 		}
 	}
 	return d, nil
@@ -189,5 +194,5 @@ func modelFunction(p *packageInput, name, option string) (*types.Func, error) {
 			}
 		}
 	}
-	return nil, safeerror.New(option + " requires a named function")
+	return nil, safeerror.New(option + " requires a named function; name a package-level function that is not generic or variadic")
 }

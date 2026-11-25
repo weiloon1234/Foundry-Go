@@ -15,7 +15,7 @@ func ruleRow(rule diagnostic.Rule) string {
 	if rule.Application != "" {
 		application = "`" + rule.ApplicationReference() + "`"
 	}
-	return "| `" + rule.ID + "` | check | `" + rule.Reference() + "` | " + application + " |"
+	return "| `" + rule.ID + "` | `" + rule.Reference() + "` | " + application + " |"
 }
 
 // ruleRepository writes one guide per rule guide, declaring every anchor its rules
@@ -28,7 +28,7 @@ func ruleRepository(t *testing.T, row func(diagnostic.Rule) string) string {
 		t.Fatal(err)
 	}
 	anchors := map[string]map[string]bool{}
-	listing := "<a id=\"diagnostic-rules\"></a>\n## Rules\n\n| Rule | Check | Teaching | In an application |\n| --- | --- | --- | --- |\n"
+	listing := "<a id=\"diagnostic-rules\"></a>\n## Rules\n\n| Rule | Teaching | In an application |\n| --- | --- | --- |\n"
 	for _, rule := range diagnostic.Rules() {
 		if anchors[rule.Guide] == nil {
 			anchors[rule.Guide] = map[string]bool{}
@@ -105,7 +105,7 @@ func TestRuleTableMustMatchTheRulesBothWays(t *testing.T) {
 
 	root := ruleRepository(t, func(rule diagnostic.Rule) string {
 		if rule.ID == "model-table" {
-			return "| `model-table` | models check | `flat-routes#staged-routes` |  |"
+			return "| `model-table` | `flat-routes#staged-routes` |  |"
 		}
 		return correct(rule)
 	})
@@ -116,7 +116,7 @@ func TestRuleTableMustMatchTheRulesBothWays(t *testing.T) {
 
 	root = ruleRepository(t, func(rule diagnostic.Rule) string {
 		if rule.ID == "rule-catalogue" {
-			return correct(rule) + "\n| `deleted-rule` | check | `flat-routes#staged-routes` |  |"
+			return correct(rule) + "\n| `deleted-rule` | `flat-routes#staged-routes` |  |"
 		}
 		return correct(rule)
 	})
@@ -149,7 +149,7 @@ func TestRuleTableMustStateTheApplicationTeaching(t *testing.T) {
 	// doc-binding teaches a different recipe in an application.
 	root := ruleRepository(t, func(rule diagnostic.Rule) string {
 		if rule.ID == "doc-binding" {
-			return "| `doc-binding` | check | `" + rule.Reference() + "` |  |"
+			return "| `doc-binding` | `" + rule.Reference() + "` |  |"
 		}
 		return ruleRow(rule)
 	})
@@ -161,7 +161,7 @@ func TestRuleTableMustStateTheApplicationTeaching(t *testing.T) {
 	// A rule without an application anchor must leave the column empty.
 	root = ruleRepository(t, func(rule diagnostic.Rule) string {
 		if rule.ID == "raw-sql" {
-			return "| `raw-sql` | check | `" + rule.Reference() + "` | `flat-routes#staged-routes` |"
+			return "| `raw-sql` | `" + rule.Reference() + "` | `flat-routes#staged-routes` |"
 		}
 		return ruleRow(rule)
 	})

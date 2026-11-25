@@ -55,9 +55,6 @@ func (t truth) isFalse() bool { return !t.passAny() }
 // every row, and nothing in it is unknown.
 func (t truth) alwaysPasses() bool { return !t.fAny }
 
-// isNull reports that the expression is NULL for every row.
-func (t truth) isNull() bool { return t.nAny && !t.tAny && !t.fAny }
-
 // unreadable reports that whether a row can satisfy the expression depends on a
 // test the rule cannot read.
 func (t truth) unreadable() bool { return t.passAny() && !t.aTN && t.why != "" }

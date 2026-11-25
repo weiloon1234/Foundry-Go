@@ -420,3 +420,40 @@ func TestLedgerFindingsUseTheSharedShape(t *testing.T) {
 		}
 	}
 }
+
+// A damaged recorded file must not make every entry look kept.
+func TestLostEntriesRefuseADamagedRecord(t *testing.T) {
+	kept := map[string][]retiredDeclaration{"pkg": {{Name: "A", NoReplacement: true}}}
+	for name, test := range map[string]struct {
+		record string
+		line   int
+	}{
+		"empty":           {"", 0},
+		"no tab":          {"pkg\tA\npkg A\n", 2},
+		"empty name":      {"pkg\t\n", 1},
+		"empty package":   {"\tA\n", 1},
+		"extra tab field": {"pkg\tA\textra\n", 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			found := LostEntries([]byte(test.record), kept)
+			if len(found) != 1 || found[0].Rule != diagnostic.LedgerShape || found[0].Path != ReleaseLedgerFile || found[0].Line != test.line {
+				t.Fatalf("findings = %v", findingLines(found))
+			}
+		})
+	}
+	if found := LostEntries([]byte("pkg\tA\n\n"), kept); len(found) != 0 {
+		t.Fatalf("a trailing blank line is not damage: %v", findingLines(found))
+	}
+	// A ledger that retired nothing is recorded as one blank line and is not damage.
+	if found := LostEntries([]byte("\n"), nil); len(found) != 0 {
+		t.Fatalf("an empty ledger's record is not damage: %v", findingLines(found))
+	}
+}
+
+func TestLedgerShapeFailuresAreInOwnerOrder(t *testing.T) {
+	_, err := parseLedger([]byte(`{"zz":[{"name":"A"}],"aa":[{"name":"B"}],"mm":[{"name":"C"}]}`), LedgerFile)
+	found, _ := diagnostic.Findings(err)
+	if len(found) != 3 || !strings.Contains(found[0].String(), "aa.B") || !strings.Contains(found[1].String(), "mm.C") || !strings.Contains(found[2].String(), "zz.A") {
+		t.Fatalf("failures are not in owner order: %v", findingLines(found))
+	}
+}

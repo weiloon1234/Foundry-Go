@@ -77,7 +77,7 @@ func discover(p *packageInput) (metadata, error) {
 				object, ok := p.types.Scope().Lookup(typeSpec.Name.Name).(*types.TypeName)
 				if !ok || object.IsAlias() || (!object.Exported() && kind != "model") {
 					if kind == "model" {
-						return result, modelError(p, typeSpec.Pos(), typeSpec.Name.Name, "", "requires a defined struct type")
+						return result, modelError(p, typeSpec.Pos(), typeSpec.Name.Name, "", "requires a defined struct type; declare it as a defined struct type, not an alias")
 					}
 					return result, p.diagnostic(typeSpec.Pos(), "Foundry declarations require an exported defined type")
 				}

@@ -65,13 +65,13 @@ func validateModel(p *packageInput, d *modelDeclaration) error {
 		switch f.carrier {
 		case "CreatedAt", "UpdatedAt", "SoftDelete":
 			if previous, exists := roles[f.carrier]; exists {
-				return fail(f, "timestamp role is already declared by "+previous.field.Name())
+				return fail(f, "timestamp role is already declared by "+previous.field.Name()+"; keep one field for the role")
 			}
 			roles[f.carrier] = f
 		}
 	}
 	if len(columns) > querycore.MaxExpressionNodes {
-		return modelError(p, d.typ.Obj().Pos(), d.name, "", "persisted column count exceeds ORM declaration limit")
+		return modelError(p, d.typ.Obj().Pos(), d.name, "", "persisted column count exceeds ORM declaration limit; split the model or remove persisted fields")
 	}
 	if err := validateModelTimestamps(p, d, fields, roles); err != nil {
 		return err
@@ -79,10 +79,10 @@ func validateModel(p *packageInput, d *modelDeclaration) error {
 	for _, f := range d.fields {
 		if f.carrier == "Encrypted" || f.carrier == "NullableEncrypted" {
 			if f.tag.DatabaseDefault {
-				return fail(f, "encrypted fields cannot have database defaults")
+				return fail(f, "encrypted fields cannot have database defaults; remove default=database")
 			}
 			if key.tag.DatabaseDefault {
-				return fail(f, "encrypted fields require an application-assigned primary key")
+				return fail(f, "encrypted fields require an application-assigned primary key; remove default=database from the key")
 			}
 		}
 	}
@@ -94,16 +94,16 @@ func validateModel(p *packageInput, d *modelDeclaration) error {
 		field := strings.TrimPrefix(name, prefix)
 		f, exists := fields[field]
 		if !exists {
-			return modelError(p, p.methods[d.name][name], d.name, field, "model field method "+name+" targets no persisted field")
+			return modelError(p, p.methods[d.name][name], d.name, field, "model field method "+name+" targets no persisted field; rename it after a persisted field or remove it")
 		}
 		obj, _, _ := types.LookupFieldOrMethod(types.NewPointer(d.typ), true, p.types, name)
 		fn, ok := obj.(*types.Func)
 		if !ok {
-			return fail(f, "model field method "+name+" is unavailable")
+			return fail(f, "model field method "+name+" is unavailable; declare it on the model type")
 		}
 		sig := fn.Type().(*types.Signature)
 		if _, pointer := sig.Recv().Type().(*types.Pointer); pointer {
-			return fail(f, "model field method "+name+" requires a value receiver")
+			return fail(f, "model field method "+name+" requires a value receiver; declare it on the value type")
 		}
 		if prefix == "Access" {
 			valid := !sig.Variadic() && sig.Params().Len() == 0 && sig.Results().Len() == 2
@@ -112,7 +112,7 @@ func validateModel(p *packageInput, d *modelDeclaration) error {
 				valid = !iface && types.Identical(sig.Results().At(1).Type(), types.Universe.Lookup("error").Type())
 			}
 			if !valid {
-				return fail(f, "model accessor "+name+" requires signature () (Result, error) with a concrete result")
+				return fail(f, "model accessor "+name+" requires signature () (Result, error) with a concrete result; change the method to that signature")
 			}
 		}
 	}

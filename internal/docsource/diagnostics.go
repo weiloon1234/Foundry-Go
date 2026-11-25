@@ -14,14 +14,21 @@ var filesystemFailure = regexp.MustCompile(`^(?:open|read|stat|lstat|mkdir|write
 
 // Diagnostics prints one failure per line. Findings already carry their location,
 // rule and teaching reference; a bare filesystem failure becomes a doc-file finding.
+// Stages that read the same document report its refusal each time, so an identical
+// line is printed once.
 func Diagnostics(err error) string {
 	if err == nil {
 		return ""
 	}
-	lines := strings.Split(err.Error(), "\n")
-	for i, line := range lines {
+	var lines []string
+	seen := make(map[string]bool)
+	for _, line := range strings.Split(err.Error(), "\n") {
 		if match := filesystemFailure.FindStringSubmatch(line); match != nil {
-			lines[i] = diagnostic.DocFile.At(match[1], 0, 0).Say("input", match[2]).To("restore the file and its required access permissions").String()
+			line = diagnostic.DocFile.At(match[1], 0, 0).Say("input", match[2]).To("restore the file and its required access permissions").String()
+		}
+		if !seen[line] {
+			seen[line] = true
+			lines = append(lines, line)
 		}
 	}
 	return strings.Join(lines, "\n")

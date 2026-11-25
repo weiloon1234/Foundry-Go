@@ -343,9 +343,10 @@ and `--recursive` that the check used. Run it in the gate alongside
 ## Diagnose a wrong declaration
 
 `foundry generate` prints each declaration error as
-`file:line:column: [generate-declaration] model Struct.Field: message`; table-level
-errors name the struct without a field. The messages below are the actual message text;
-angle-bracket names stand for the offending field, type or option.
+`file:line:column: [generate-declaration] model Struct.Field: problem; correction. Foundry guide: model-declarations#diagnose-declarations`;
+table-level errors name the struct without a field. The messages below are the actual
+problem and correction text; angle-bracket names stand for the offending field, type or
+option. A message not listed has the same shape: what is wrong, then what to change.
 `foundry models check` prints a handwritten table as
 `file:line:column: [model-table] model Struct: table is declared by hand; put the //foundry:model directive on the struct, run foundry generate, and delete the handwritten table`.
 
@@ -355,23 +356,24 @@ angle-bracket names stand for the offending field, type or option.
 | Misspell or space the directive prefix | `invalid Foundry directive spelling; use //foundry:model` |
 | Misspell the tag namespace | `unknown struct tag foudry; use foundry` |
 | Use a generic model directive | `generic models are outside the directive; build the table in a generic function using the low-level ORM functions` |
-| Omit the table or key | `table requires an explicit SQL identifier`; `key requires a struct field name` |
-| Guess a directive option | `unknown directive option <name>`; `type`, `table-type`, `identity-var`, `members` and `soft` are not options. |
-| Guess a tag option | `unknown foundry option <name>` |
+| Omit the table or key | `table requires an explicit SQL identifier; write table=<name> or table=<schema>.<name>`; `key requires a struct field name; write key=<Field> naming the primary-key field` |
+| Guess a directive option | `unknown directive option <name>; the options are table, var, key, identity, timestamps, softdeletes, hooks, retrieval and scopes`; `type`, `table-type`, `identity-var`, `members` and `soft` are not options. |
+| Guess a tag option | `unknown foundry option <name>; the options are column, default, role, input, mutate, codec, member, key-role, values and slot` |
 | Repeat an inferred role | `role=enum is inferred from the field type; remove it` |
 | Name a case that does not exist in `values` | `[enum-list]` from `foundry models check`: `values names Missing, which is not a case of enum Phase` |
 | Name every case in `values` | `[enum-list]` from `foundry models check`: `values names every case of enum Phase; remove the values option` |
-| Put `values` on a field that holds no enum | `values applies only to an enum field or a collection of enums` |
-| Omit a decimal role | `decimal field requires role=column or role=number` |
-| Omit managed roles on an eligible conventional pair | `declare role=created-at on CreatedAt and role=updated-at on UpdatedAt, or use timestamps=none on the model and remove timestamp role tags` |
-| Omit an eligible conventional deletion role | `declare role=soft-delete on DeletedAt, or use softdeletes=none on the model and remove its role tag` |
-| Omit input metadata or its transform | `Mutate<Field> requires input`; `input requires Mutate<Field> or mutate` |
-| Use a pointer receiver for field behavior | `model field method <Name> requires a value receiver` |
-| Guess an external stored-name tag | `slot is a bare flag, not slot=<name>` |
+| Put `values` on a field that holds no enum | `values applies only to an enum field or a collection of enums; remove the values option` |
+| Omit a decimal role | `decimal field requires role=column or role=number; declare one of them` |
+| Omit managed roles on an eligible conventional pair | `CreatedAt and UpdatedAt are conventional timestamp names; declare role=created-at on CreatedAt and role=updated-at on UpdatedAt, or use timestamps=none on the model and remove timestamp role tags` |
+| Omit an eligible conventional deletion role | `DeletedAt is a conventional deletion name; declare role=soft-delete on DeletedAt, or use softdeletes=none on the model and remove its role tag` |
+| Omit input metadata or its transform | `Mutate<Field> requires input; declare input=<type> on the field or remove the method`; `input requires Mutate<Field> or mutate; declare the method or mutate=<function>` |
+| Use a pointer receiver for field behavior | `model field method <Name> requires a value receiver; declare it on the value type` |
+| Guess an external stored-name tag | `slot is a bare flag, not slot=<name>; write slot` |
 | Add `slot` to a known slot family | `slot is inferred from the field type; remove it` |
 | Embed a struct | `embedded fields are not supported; declare each model field directly` |
-| Use a transport presence wrapper | `Optional is a write/transport state, not a persisted column` |
+| Use a transport presence wrapper | `Optional is a write/transport state, not a persisted column; declare the plain type, or value.Nullable[T] for a nullable column` |
 | Shadow a table method | `field collides with a promoted Table method; declare member=<Name> using a non-colliding name` |
+| Handwrite a name the generator also emits | `<Name> is declared by handwritten code, but the Foundry declaration at <file:line:column> generates it in <file>; rename the handwritten declaration or the Foundry declaration`, at the handwritten declaration |
 | Put the directive in a test file | `model declarations in _test.go files are not supported; move the model into a non-test Go file` |
 
 An ineligible conventional timestamp offers only the model-level opt-out; it does

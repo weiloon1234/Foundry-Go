@@ -288,3 +288,17 @@ func TestEnumListCases(t *testing.T) {
 		t.Fatalf("findings\n got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(wants, "\n"))
 	}
 }
+
+func TestEnumListRefusesMoreMigrationsThanTheBound(t *testing.T) {
+	dir := enumModule(t, source(wrongGuessModule))
+	previous := maxMigrationDefinitions
+	maxMigrationDefinitions = 0
+	defer func() { maxMigrationDefinitions = previous }()
+	report, err := Check(t.Context(), dir, []string{"./..."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Findings) != 1 || !strings.Contains(report.Findings[0].String(), "the module declares more than the supported number of migrations to check") {
+		t.Fatalf("findings = %v", report.Findings)
+	}
+}

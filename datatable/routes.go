@@ -86,7 +86,9 @@ func ReadAccess[M any](rule foundryhttp.AccessRule[M]) ReadOption[M] { return Re
 
 // ExportAccess is the access rule applied before ticket request decoding. Routes
 // requires it for an exportable table and refuses it twice. The rule also applies
-// to ticket-authenticated downloads before table authorization.
+// to ticket-authenticated downloads before table authorization. A table declared
+// without exports registers no export route, so a rule given to it is accepted and
+// has no effect.
 //
 // Example: datatable.ExportAccess(http.AllOf(http.Scopes(exportScopes), http.Permissions(exportPermission)))
 func ExportAccess[M any](rule foundryhttp.AccessRule[M]) ExportOption[M] {
@@ -104,9 +106,9 @@ func ExportAccess[M any](rule foundryhttp.AccessRule[M]) ExportOption[M] {
 // callback isolation and request lifetime; Manager owns deferred export work.
 //
 // ExportAccess is a trailing option, not a required argument, only because
-// exportability is a property of the table, which the compiler cannot see: a table
-// declared without exports takes no export rule, and an exportable table refuses to
-// register without exactly one.
+// exportability is a property of the table, which the compiler cannot see: an
+// exportable table refuses to register without exactly one, and a table declared
+// without exports accepts a rule and ignores it, because it registers no export route.
 //
 // Example: datatable.Routes(group, table, config, datatable.ReadAccess(read), datatable.ExportAccess(export))
 func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], config RoutesConfig[M, A], read ReadOption[M], export ...ExportOption[M]) ([]foundryhttp.RouteRegistration, error) {

@@ -2,7 +2,9 @@ GO ?= go
 TEST_PACKAGE_BATCH_SIZE ?= 6
 TEST_TIMEOUT ?= 20m
 TEST_POSTGRES_SHARD ?= 1/1
-# Keep these three tool packages on one line; testpostgres guards all non-test source for concurrency.
+# Keep these four tool packages on one line; testpostgres guards all non-test source for concurrency.
+# The Markdown reader is exempt because it is single-threaded, so the race detector has nothing
+# to find, and its worst-case parse tests (inputs at the size limit) run several times slower under it.
 RACE_EXEMPT_PACKAGES := ./internal/retirement ./internal/noraw ./cmd/foundry ./internal/docsource/markdown
 RACE_EXEMPT_IMPORTS = $(addprefix $(shell awk '$$1 == "module" { print $$2 }' go.mod)/,$(patsubst ./%,%,$(RACE_EXEMPT_PACKAGES)))
 # Heaviest first; PostgreSQL shards deal these import paths before ordinary packages.

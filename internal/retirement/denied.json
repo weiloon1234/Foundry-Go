@@ -2515,10 +2515,6 @@
       "replacement": "http.BindGuard once, then http.RouteOptionallyAuthenticated(route, binding)"
     },
     {
-      "name": "AnyActorOf",
-      "replacement": "the guard binding's AnyActor method"
-    },
-    {
       "name": "GuardOption",
       "replacement": "http.AccessRule for the access rule of http.Authenticated (http.AllOf, http.AnyOf or the guard binding's AnyActor method); http.ActorOption for http.ConfigureAuthenticated"
     },

@@ -232,14 +232,7 @@ func (c *Collector) add(issue observedIssue) {
 		c.dropLocked(1)
 		return
 	}
-	limit := c.config.MaxEvents
-	switch issue.Source {
-	case SourceBrowser:
-		limit /= 4
-	case SourceSecurity:
-		limit /= 2
-	}
-	if c.issueCounts[issue.Source] >= limit || len(c.issues) >= c.config.MaxEvents {
+	if c.issueCounts[issue.Source] >= c.config.issueLimit(issue.Source) || len(c.issues) >= c.config.MaxEvents {
 		c.dropLocked(1)
 		return
 	}

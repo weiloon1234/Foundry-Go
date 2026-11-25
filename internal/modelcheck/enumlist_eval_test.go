@@ -15,7 +15,7 @@ func outcome(t truth) string {
 		return "false"
 	case t.unreadable():
 		return "unreadable"
-	case t.isNull():
+	case t.nAny && !t.tAny && !t.fAny: // NULL for every row
 		return "null"
 	case t.alwaysPasses():
 		return "true"

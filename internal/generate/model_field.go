@@ -50,10 +50,10 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 	n, _ := types.Unalias(f.stored).(*types.Named)
 	named := func(path, name string) bool { return n != nil && isNamed(n, path, name) }
 	if named(framework+"/value", "Optional") {
-		return fail("Optional is a write/transport state, not a persisted column")
+		return fail("Optional is a write/transport state, not a persisted column; declare the plain type, or value.Nullable[T] for a nullable column")
 	}
 	if named(framework+"/value", "Nullable") {
-		return fail("nested Nullable is not a persisted column")
+		return fail("nested Nullable is not a persisted column; use a single value.Nullable[T]")
 	}
 	f.args = []types.Type{f.stored}
 	base := ""
@@ -74,14 +74,14 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 				f.args = append(f.args, n.TypeArgs().At(i))
 			}
 		default:
-			return fail("unsupported relation slot type " + field.Type().String())
+			return fail("unsupported relation slot type " + field.Type().String() + "; use relation.One, Many, Through or Value")
 		}
 	case tag.Slot || named(framework+"/translations", "Text") || named(framework+"/metadata", "Value") || named(framework+"/attachments", "One") || named(framework+"/attachments", "Many"):
 		f.slot = true
 		f.carrier = "Slot"
 		f.constructor = "SlotOf"
 		if (named(framework+"/attachments", "One") || named(framework+"/attachments", "Many")) && !types.Identical(n.TypeArgs().At(0), d.typ) {
-			return fail("attachment slot belongs to a different model")
+			return fail("attachment slot belongs to a different model; use the attachment type of this model")
 		}
 	case named(framework+"/value", "JSON"):
 		base = "json"
@@ -126,28 +126,28 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 		}
 	}
 	if len(tag.Values) != 0 && modelmeta.FieldEnum(f.stored, func(named *types.Named) bool { return p.enumTypes[named] || hasEnumDescriptor(named) }) == nil {
-		return fail("values applies only to an enum field or a collection of enums")
+		return fail("values applies only to an enum field or a collection of enums; remove the values option")
 	}
 	if f.slot {
 		if f.nullable {
-			return fail("Nullable does not apply to a slot")
+			return fail("Nullable does not apply to a slot; remove value.Nullable")
 		}
 		if relation && tag.Slot {
-			return fail("slot conflicts with relation type")
+			return fail("slot conflicts with relation type; remove the slot option")
 		}
 		if tag.Slot && n != nil && (named(framework+"/translations", "Text") || named(framework+"/metadata", "Value") || named(framework+"/attachments", "One") || named(framework+"/attachments", "Many")) {
 			return fail("slot is inferred from the field type; remove it")
 		}
 		for _, opt := range []struct{ name, value string }{{"column", tag.Column}, {"role", tag.Role}, {"input", tag.Input}, {"codec", tag.Codec}, {"key-role", tag.KeyRole}} {
 			if opt.value != "" {
-				return fail(opt.name + " does not apply to a slot")
+				return fail(opt.name + " does not apply to a slot; remove the " + opt.name + " option")
 			}
 		}
 		if tag.DatabaseDefault {
-			return fail("default does not apply to a slot")
+			return fail("default does not apply to a slot; remove the default option")
 		}
 		if f.key {
-			return fail("unsupported primary key type " + field.Type().String())
+			return fail("unsupported primary key type " + field.Type().String() + "; a slot cannot be the primary key, so choose a persisted column")
 		}
 		return f, nil
 	}
@@ -157,16 +157,16 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 	if f.key {
 		f.args = []types.Type{f.stored}
 		if f.nullable || encrypted || password && tag.Codec == "" || !types.Comparable(field.Type()) || !modelKeyType(f.stored, tag.Codec != "") {
-			return fail("unsupported primary key type " + field.Type().String())
+			return fail("unsupported primary key type " + field.Type().String() + "; use a string or integer type, model.ID of this model, or declare codec=<name>")
 		}
 		if named(framework+"/model", "ID") && !types.Identical(n.TypeArgs().At(0), d.typ) {
-			return fail("primary model.ID must belong to this model")
+			return fail("primary model.ID must belong to this model; use model.ID of this model")
 		}
 		if tag.Role != "" {
 			return fail("role applies only to non-key fields; remove it")
 		}
 		if tag.KeyRole != "" && f.member == "" {
-			return fail("key-role requires member")
+			return fail("key-role requires member; declare member=<Name> or remove key-role")
 		}
 		inferred := "lookup"
 		if isString {
@@ -190,11 +190,11 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 		case "input":
 			f.carrier = "InputKey"
 			if tag.Input == "" {
-				return fail("key-role=input requires input")
+				return fail("key-role=input requires input; declare input=<type> or choose another key-role")
 			}
 		case "number", "primary-number":
 			if !isNumber {
-				return fail("key-role=" + role + " does not apply to " + field.Type().String())
+				return fail("key-role=" + role + " does not apply to " + field.Type().String() + "; choose a key-role that fits the key type or remove it")
 			}
 			f.carrier = "NumberLookupKey"
 			if role == "primary-number" {
@@ -202,7 +202,7 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 			}
 		case "text", "primary-text":
 			if !isString {
-				return fail("key-role=" + role + " does not apply to " + field.Type().String())
+				return fail("key-role=" + role + " does not apply to " + field.Type().String() + "; choose a key-role that fits the key type or remove it")
 			}
 			f.carrier = "TextLookupKey"
 			if role == "primary-text" {
@@ -210,11 +210,11 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 			}
 		}
 		if tag.Input != "" && role != "input" {
-			return fail("input on a primary key requires key-role=input and an exposed key member")
+			return fail("input on a primary key requires key-role=input and an exposed key member; declare key-role=input and member=<Name>, or remove input")
 		}
 	} else {
 		if tag.KeyRole != "" {
-			return fail("key-role applies only to the primary key")
+			return fail("key-role applies only to the primary key; remove it")
 		}
 		if tag.Codec != "" && tag.Role != "" {
 			if tag.Role == "column" {
@@ -223,7 +223,7 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 			return fail("codec selects a plain column; remove role=" + tag.Role)
 		}
 		if decimalType && tag.Codec == "" && tag.Role != "column" && tag.Role != "number" {
-			return fail("decimal field requires role=column or role=number")
+			return fail("decimal field requires role=column or role=number; declare one of them")
 		}
 		role := tag.Role
 		timeDecision := base == "time" && ((field.Name() == "CreatedAt" || field.Name() == "UpdatedAt") && !d.noTimestamps || field.Name() == "DeletedAt" && !d.noSoftDeletes)
@@ -248,10 +248,10 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 			allowed = instant && f.nullable
 		}
 		if encrypted && tag.Codec != "" {
-			return fail("encrypted fields require their envelope constructor; codec is not supported")
+			return fail("encrypted fields require their envelope constructor; remove codec")
 		}
 		if !allowed {
-			return fail("role=" + role + " does not apply to " + field.Type().String())
+			return fail("role=" + role + " does not apply to " + field.Type().String() + "; remove the role option or use a field type the role accepts")
 		}
 		if base == "" && tag.Codec == "" {
 			return fail("unsupported stored type " + field.Type().String() + "; declare codec")
@@ -259,7 +259,7 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 
 		if tag.Codec == "" && role == "column" {
 			if password && tag.Input != "" {
-				return fail("password input requires codec")
+				return fail("password input requires codec; declare codec=<name> or remove input")
 			}
 			family := ""
 			switch {
@@ -277,7 +277,7 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 
 		if role == "created-at" || role == "updated-at" || role == "soft-delete" {
 			if tag.DatabaseDefault {
-				return fail("managed timestamp roles cannot use default=database")
+				return fail("managed timestamp roles cannot use default=database; remove default=database")
 			}
 		}
 		carriers := map[string]string{"column": "Column", "text": "Text", "number": "Number", "enum": "Enum", "json": "JSON", "time": "Time", "interval": "Interval", "created-at": "CreatedAt", "updated-at": "UpdatedAt", "soft-delete": "SoftDelete", "encrypted": "Encrypted"}
@@ -301,15 +301,15 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 	}
 	if tag.Input != "" {
 		if encrypted || strings.Contains(f.carrier, "CreatedAt") || strings.Contains(f.carrier, "UpdatedAt") || f.carrier == "SoftDelete" {
-			return fail("input does not apply to " + f.carrier)
+			return fail("input does not apply to " + f.carrier + "; remove the input option")
 		}
 		evaluated, err := types.Eval(p.fset, p.types, field.Pos(), tag.Input)
 		if err != nil || !evaluated.IsType() {
-			return fail("input requires a Go type")
+			return fail("input requires a Go type; write input=<type> naming a type visible in this package")
 		}
 		f.input = evaluated.Type
 		if !modelMutatorInput(f.input) {
-			return fail("mutator input must be concrete and non-null")
+			return fail("mutator input must be concrete and non-null; use a concrete, non-interface, non-Nullable type")
 		}
 		if !f.key {
 			prefix := ""
@@ -330,34 +330,34 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 		}
 		if tag.Mutate != "" {
 			if method != nil {
-				return fail("mutate conflicts with Mutate" + field.Name())
+				return fail("mutate conflicts with Mutate" + field.Name() + "; remove the mutate option or the method")
 			}
 			fn, err := modelFunction(p, tag.Mutate, "mutate")
 			if err != nil {
 				return f, err
 			}
 			if !modelTransform(fn, f.input, f.stored) {
-				return fail("mutate has an incompatible signature")
+				return fail("mutate has an incompatible signature; declare func(<input>) (<stored>, error)")
 			}
 		} else {
 			fn, ok := method.(*types.Func)
 			if !ok {
-				return fail("input requires Mutate" + field.Name() + " or mutate")
+				return fail("input requires Mutate" + field.Name() + " or mutate; declare the method or mutate=<function>")
 			}
 			if !modelTransform(fn, f.input, f.stored) {
-				return fail("Mutate" + field.Name() + " has an incompatible signature")
+				return fail("Mutate" + field.Name() + " has an incompatible signature; declare func(<input>) (<stored>, error)")
 			}
 			if _, pointer := fn.Type().(*types.Signature).Recv().Type().(*types.Pointer); pointer {
-				return fail("model field method " + fn.Name() + " requires a value receiver")
+				return fail("model field method " + fn.Name() + " requires a value receiver; declare it on the value type")
 			}
 			f.method = fn
 		}
 	} else if _, exists := p.methods[d.name]["Mutate"+field.Name()]; exists {
-		return fail("Mutate" + field.Name() + " requires input")
+		return fail("Mutate" + field.Name() + " requires input; declare input=<type> on the field or remove the method")
 	}
 	if tag.Codec != "" {
 		if encrypted {
-			return fail("codec does not apply to " + f.carrier)
+			return fail("codec does not apply to " + f.carrier + "; remove the codec option")
 		}
 		fn, err := modelFunction(p, tag.Codec, "codec")
 		if err != nil {
@@ -365,11 +365,11 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 		}
 		sig := fn.Type().(*types.Signature)
 		if sig.Params().Len() != 0 || sig.Results().Len() != 1 {
-			return fail("codec has an incompatible signature")
+			return fail("codec has an incompatible signature; declare func() codec.Codec[<stored type>]")
 		}
 		codecType, _ := types.Unalias(sig.Results().At(0).Type()).(*types.Named)
 		if codecType == nil || !isNamed(codecType, framework+"/database/codec", "Codec") || codecType.TypeArgs().Len() != 1 || !types.Identical(codecType.TypeArgs().At(0), f.stored) {
-			return fail("codec has an incompatible signature")
+			return fail("codec has an incompatible signature; declare func() codec.Codec[<stored type>]")
 		}
 	}
 	return f, nil

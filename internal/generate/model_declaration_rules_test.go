@@ -85,7 +85,7 @@ const Enabled State="enabled"
 		{"codec capability role", "ID int; Name string `foundry:\"role=text,codec=stringCodec\"`", "", "func stringCodec()codec.Codec[string]{return codec.String[string]()}", "codec selects a plain column; remove role=text"},
 	}
 	fixtures := newRejectionFixtures(t)
-	location := regexp.MustCompile(`models.go:\d+:\d+: model Account`)
+	location := regexp.MustCompile(`models.go:\d+:\d+: \[generate-declaration\] model Account`)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			source := prefix + "\n//foundry:model table=accounts var=Accounts key=ID " + tc.options + "\ntype Account struct{" + tc.fields + "}\n" + tc.extra
@@ -94,6 +94,7 @@ const Enabled State="enabled"
 			if err == nil || !strings.Contains(err.Error(), tc.want) || !location.MatchString(err.Error()) {
 				t.Fatalf("got %v; want source/model location and %s", err, tc.want)
 			}
+			requireDeclarationFinding(t, err)
 			if len(generatedSnapshot(t, dir)) != 0 {
 				t.Fatal("invalid model published output")
 			}

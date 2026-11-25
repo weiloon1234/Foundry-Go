@@ -117,8 +117,21 @@ func TestRepositoryChecks(t *testing.T) {
 		{
 			name: "remote links fragments and fenced examples",
 			change: func(t *testing.T, root string) {
-				writeTestFile(t, root, "README.md", "[Go](https://go.dev/)\n[Section](#section)\n```markdown\n[Example](not-created.md)\n```\n~~~markdown\n[Example](also-not-created.md)\n~~~\n")
+				writeTestFile(t, root, "README.md", "# Section\n\n[Go](https://go.dev/)\n[Section](#section)\n```markdown\n[Example](not-created.md)\n```\n~~~markdown\n[Example](also-not-created.md)\n~~~\n")
 			},
+		},
+		{
+			name:      "a dead fragment of the same document",
+			change:    func(t *testing.T, root string) { writeTestFile(t, root, "README.md", "# Section\n\n[Gone](#nope)\n") },
+			wantError: `README.md:3: [anchor-missing] anchor "nope" of README.md`,
+		},
+		{
+			name: "a dead fragment of another document",
+			change: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/usage.md", "# Usage\n")
+				writeTestFile(t, root, "README.md", "[Gone](docs/usage.md#nothere)\n")
+			},
+			wantError: `README.md:1: [anchor-missing] anchor "nothere" of docs/usage.md`,
 		},
 		{
 			name: "inline generics are code rather than links",

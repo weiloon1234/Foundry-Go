@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/internal/docrefs"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func TestIndentationColumnsAndHTMLOpenings(t *testing.T) {
@@ -100,5 +101,15 @@ func TestRegionCommentBoundaries(t *testing.T) {
 	_, err := Load(root, nil)
 	if err == nil || !strings.HasPrefix(err.Error(), sourcePath+":5:") {
 		t.Fatalf("boundary lost source location: %v", err)
+	}
+}
+
+func TestDiagnosticsPrintsAnIdenticalLineOnce(t *testing.T) {
+	finding := "a.md:3: [doc-limit] line: over 16384 bytes; break the line. Foundry guide: developer-tooling-and-testing#document-limits"
+	other := "b.md:1: [doc-limit] document: over 1 bytes; split the document. Foundry guide: developer-tooling-and-testing#document-limits"
+	err := safeerror.New(finding + "\n" + other + "\n" + finding + "\nopen c.md: permission denied\nopen c.md: permission denied")
+	lines := strings.Split(Diagnostics(err), "\n")
+	if len(lines) != 3 || lines[0] != finding || lines[1] != other || !strings.HasPrefix(lines[2], "c.md: [doc-file]") {
+		t.Fatalf("lines = %q", lines)
 	}
 }

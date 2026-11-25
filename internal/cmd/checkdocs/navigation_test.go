@@ -21,7 +21,12 @@ func TestExplicitGuideFragments(t *testing.T) {
 		{"fenced anchor", "[Read](other.md#recipe-read)\n", "````markdown\n```\n<a id=\"recipe-read\"></a>\n````\n", `[anchor-missing] anchor "recipe-read"`},
 		{"duplicate anchor", "", "<a id=\"recipe-read\"></a>\n## Read\n<a id=\"recipe-read\"></a>\n## Read again\n", "[anchor-duplicate]"},
 		{"malformed anchor", "", "<a id='recipe-read'></a>\n## Read\n", "[anchor-invalid] explicit anchor \"<a id='recipe-read'></a>\": malformed"},
-		{"other fragments unchanged", "[Any](other.md#arbitrary-slug)\n[Local](#other)\n", "# Other\n", ""},
+		{"heading slug", "[Any](other.md#other)\n# Local\n[Local](#local)\n", "# Other\n", ""},
+		{"repeated heading slug", "[Any](other.md#other-1)\n", "# Other\n# Other\n", ""},
+		{"slug drops punctuation", "[Any](other.md#read-it-now)\n", "# Read it, now!\n", ""},
+		{"dead slug", "[Any](other.md#arbitrary-slug)\n", "# Other\n", `[anchor-missing] anchor "arbitrary-slug"`},
+		{"dead same page slug", "[Local](#nope)\n", "", `[anchor-missing] anchor "nope"`},
+		{"unrepeated heading has no suffix", "[Any](other.md#other-1)\n", "# Other\n", `[anchor-missing] anchor "other-1"`},
 		{"external fragments unchanged", "[Remote](https://example.test/guide#recipe-read)\n", "", ""},
 		{"code is not a link", "`[Read](#recipe-missing)`\n~~~markdown\n[Read](#recipe-missing)\n~~~\n", "", ""},
 	} {
@@ -58,7 +63,7 @@ func TestAgentEntryLinkTargets(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := testRepository(t)
-			writeTestFile(t, root, "docs/guides/example.md", "<a id=\"agent-entry\"></a>\n## Agent entry\n\n- Read: [Read]("+test.link+")\n\n<a id=\"recipe-read\"></a>\n## Read\n\n[Background](other.md#arbitrary-slug)\n")
+			writeTestFile(t, root, "docs/guides/example.md", "<a id=\"agent-entry\"></a>\n## Agent entry\n\n- Read: [Read]("+test.link+")\n\n<a id=\"recipe-read\"></a>\n## Read\n\n[Background](other.md#background)\n")
 			writeTestFile(t, root, "docs/guides/other.md", "<a id=\"agent-entry\"></a>\n## Agent entry\n\n<a id=\"recipe-read\"></a>\n## Read\n\n<a id=\"background\"></a>\n## Background\n")
 			writeTestFile(t, root, "README.md", "<a id=\"recipe-read\"></a>\n# Read\n")
 			err := checkRepository(root)

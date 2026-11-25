@@ -14559,6 +14559,7 @@ telemetry	method	BrowserCode.Value
 telemetry	method	BrowserPolicy.Validate
 telemetry	method	CollectorConfig.Validate
 telemetry	method	Config.Validate
+telemetry	method	Config.ValidateWith
 telemetry	method	ReadLimits.Validate
 telemetry	method	RetentionPolicy.Validate
 telemetry	method	RoutePolicy.Validate

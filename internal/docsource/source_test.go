@@ -343,13 +343,27 @@ func TestOnlyStandaloneRegionMarkers(t *testing.T) {
 	for _, text := range []string{
 		"// doc-example:begin value\nvar Value = 1 // doc-example:end value\n",
 		"type Settings struct { // doc-example:begin settings\n Name string\n} // doc-example:end settings\n",
-		"// migration:value\nvar Value = 1\n// migration:end\n",
-		"// guide:value\nvar Value = 1\n// guide:end\n",
 	} {
 		if _, err := parseSource(text, "go"); err == nil {
 			t.Fatalf("accepted %q", text)
 		}
 	}
+	// Only the doc-example markers are regions: other comment prefixes are ordinary comments.
+	for _, text := range []string{"// migration:value\nvar Value = 1\n// migration:end\n", "// guide:value\nvar Value = 1\n// guide:end\n"} {
+		parsed, err := parseSource(text, "go")
+		if err != nil || len(parsed.regions) != 0 {
+			t.Fatalf("an ordinary comment was read as a region marker: %v %v", parsed.regions, err)
+		}
+	}
+}
+
+// readSource approves and loads a bound source the way a document directive does.
+func readSource(policy Policy, root, document, name string) (source, error) {
+	language, err := policy.approve(root, document, name)
+	if err != nil {
+		return source{}, err
+	}
+	return loadSource(policy, root, name, language)
 }
 
 func TestDiagnosticShape(t *testing.T) {

@@ -41,6 +41,10 @@ func ReadAll(name string, reader io.Reader, limit int64) ([]byte, error) {
 	return data, nil
 }
 
+// afterInspection runs between the inspection of a file and its open. Only a test
+// sets it, to replace the file at that moment.
+var afterInspection func()
+
 // OpenRegular refuses aliases and special files before opening. os.Root also
 // confines resolution if an ancestor changes between inspection and open.
 func OpenRegular(root, name string, flag int) (*os.File, error) {
@@ -76,6 +80,9 @@ func OpenRegular(root, name string, flag int) (*os.File, error) {
 		if i == len(parts)-1 && !info.Mode().IsRegular() {
 			return nil, diagnostic.DocFile.At(name, 0, 0).Say("input", "not a regular file").To("use a regular file").Err()
 		}
+	}
+	if afterInspection != nil {
+		afterInspection()
 	}
 	f, err := r.OpenFile(name, flag|syscall.O_NONBLOCK, 0)
 	if err != nil {
