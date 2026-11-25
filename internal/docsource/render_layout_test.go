@@ -144,7 +144,7 @@ func TestInlineHTMLCodeInProseIsOneDiagnosticAboutBackticks(t *testing.T) {
 
 func TestLoneCarriageReturnDocumentIsRefused(t *testing.T) {
 	_, err := parseDocument(nil, "guide.md", []byte("# T\r\r```go\rx := 1\r```\r"), nil)
-	if err == nil || !strings.Contains(err.Error(), "guide.md:1: document uses CR-only line endings") {
+	if err == nil || !strings.Contains(err.Error(), "guide.md:1: [doc-limit] line ending: a lone CR") {
 		t.Fatalf("CR-only document accepted: %v", err)
 	}
 }

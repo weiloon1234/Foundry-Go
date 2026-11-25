@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
@@ -32,12 +33,16 @@ func IndexAnchors(cache *markdown.Cache, name string, data []byte) (Anchors, err
 		}
 		match := anchorLine.FindStringSubmatch(text)
 		if match == nil || !identifier.MatchString(match[1]) {
-			failures = append(failures, problem(name, line, `invalid explicit anchor; use <a id="lowercase-id"></a> alone on a line`))
+			failures = append(failures, diagnostic.AnchorInvalid.At(name, line, 0).
+				Say("explicit anchor", "malformed").
+				To(`write <a id="lowercase-id"></a> alone on a line`).Err())
 			return
 		}
 		id := match[1]
 		if previous, exists := index.lines[id]; exists {
-			failures = append(failures, problem(name, line, fmt.Sprintf("duplicate explicit anchor %q (first declared on line %d); rename or remove the second anchor.", id, previous)))
+			failures = append(failures, diagnostic.AnchorDuplicate.At(name, line, 0).
+				Say(fmt.Sprintf("anchor %q", id), fmt.Sprintf("declared twice (first on line %d)", previous)).
+				To("rename or remove the second anchor").Err())
 			return
 		}
 		index.lines[id] = line
@@ -49,10 +54,14 @@ func IndexAnchors(cache *markdown.Cache, name string, data []byte) (Anchors, err
 // checkdocs can use this for guide navigation links as well as app references.
 func (a Anchors) CheckFragment(file string, line int, fragment string) error {
 	if !identifier.MatchString(fragment) {
-		return problem(file, line, "invalid explicit anchor fragment "+fmt.Sprintf("%q; use lowercase letters, digits and internal hyphens.", fragment))
+		return diagnostic.AnchorInvalid.At(file, line, 0).
+			Say(fmt.Sprintf("fragment %q", fragment), "not an anchor id").
+			To("use lowercase letters, digits and internal hyphens").Err()
 	}
 	if _, exists := a.lines[fragment]; !exists {
-		return problem(file, line, fmt.Sprintf("explicit anchor %q is absent; link to an existing explicit anchor or add it to the target guide.", fragment))
+		return diagnostic.AnchorMissing.At(file, line, 0).
+			Say(fmt.Sprintf("anchor %q", fragment), "not declared in the target guide").
+			To("link to an existing explicit anchor or add it to the guide").Err()
 	}
 	return nil
 }
@@ -93,7 +102,9 @@ func (p *Pages) Index(name string, data []byte) (Anchors, error) {
 	var result page
 	p.bytes += len(data)
 	if len(p.pages) >= markdown.MaxDocuments || p.bytes > markdown.MaxRunBytes {
-		result.err = safeerror.New(fmt.Sprintf("documentation:0: anchor index exceeds maximum %d targets or %d bytes; split the documentation run.", markdown.MaxDocuments, markdown.MaxRunBytes))
+		result.err = diagnostic.DocLimit.At("documentation", 0, 0).
+			Say("anchor index", fmt.Sprintf("over %d targets or %d bytes", markdown.MaxDocuments, markdown.MaxRunBytes)).
+			To("split the documentation run").Err()
 	} else {
 		result.anchors, result.err = IndexAnchors(p.cache, p.documentName(name), data)
 	}
@@ -110,7 +121,9 @@ func (p *Pages) Load(name string) (Anchors, error) {
 		return cached.anchors, cached.err
 	}
 	if len(p.pages) >= markdown.MaxDocuments {
-		return Anchors{}, safeerror.New(fmt.Sprintf("documentation:0: anchor index exceeds maximum %d targets.", markdown.MaxDocuments))
+		return Anchors{}, diagnostic.DocLimit.At("documentation", 0, 0).
+			Say("anchor index", fmt.Sprintf("over %d targets", markdown.MaxDocuments)).
+			To("split the documentation run").Err()
 	}
 	relative, err := filepath.Rel(p.root, name)
 	if err == nil {
@@ -139,12 +152,16 @@ func (p *Pages) CheckReferences(guidesDir string, refs []Reference) error {
 	var failures []error
 	for _, ref := range refs {
 		if !identifier.MatchString(ref.Guide) {
-			failures = append(failures, problem(ref.File, ref.Line, "invalid guide name; use a guide basename with lowercase letters, digits and internal hyphens."))
+			failures = append(failures, diagnostic.GuideName.At(ref.File, ref.Line, 0).
+				Say(fmt.Sprintf("guide %q", ref.Guide), "not a guide name").
+				To("use a guide basename of lowercase letters, digits and internal hyphens").Err())
 			continue
 		}
 		anchors, err := p.Load(filepath.Join(guidesDir, ref.Guide+".md"))
 		if err != nil {
-			failures = append(failures, safeerror.Prefix(fmt.Sprintf("%s:%d: selected framework guide %s is missing or is not a regular file; link to a regular guide file in the selected framework version", ref.File, ref.Line, ref.Guide), err))
+			failures = append(failures, diagnostic.GuideMissing.At(ref.File, ref.Line, 0).
+				Say("guide "+ref.Guide, "missing or not a regular file in the selected framework").
+				To("reference a guide file that exists in the pinned framework version").Err())
 		} else if ref.Anchor != "" {
 			failures = append(failures, anchors.CheckFragment(ref.File, ref.Line, ref.Anchor))
 		}

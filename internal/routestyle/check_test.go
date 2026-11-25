@@ -111,7 +111,7 @@ func TestNestedDeclarationsAndAllowedTerminals(t *testing.T) {
 				t.Fatalf("findings=%v, want %d", got, test.count)
 			}
 			for _, d := range got {
-				if d.Position.Line < 1 || !strings.Contains(d.Message, "named local") {
+				if d.Line < 1 || d.Column < 1 || !strings.Contains(d.String(), "named local") || !strings.Contains(d.String(), "[route-nesting] ") || !strings.HasSuffix(d.String(), ". Read docs/guides/flat-routes.md#staged-routes") {
 					t.Fatal(d)
 				}
 			}
@@ -126,7 +126,7 @@ func TestGeneratedHelpersUseTypedOwner(t *testing.T) {
  `
 	a, f := testAnalysis(t, source)
 	d := a.CheckFile(f)
-	if len(d) != 2 || d[0].Code != "route-helper" || !strings.Contains(d[0].Message, "SaveBody") || !strings.Contains(d[1].Message, "SaveResponse") {
+	if len(d) != 2 || d[0].Rule.ID != "route-helper" || !strings.Contains(d[0].String(), "SaveBody") || !strings.Contains(d[1].String(), "SaveResponse") {
 		t.Fatal(d)
 	}
 }
@@ -146,7 +146,7 @@ func TestMultipartHelpers(t *testing.T) {
  _=h.MultipartBody(h.MultipartDirectory(request.UploadRequestDescriptor(),"uploads"))
  _=request.UploadBody("uploads")
  }`)
-	if d := a.CheckFile(f); len(d) != 2 || !strings.Contains(d[0].Message, "UploadBody") || !strings.Contains(d[1].Message, "UploadBody") {
+	if d := a.CheckFile(f); len(d) != 2 || !strings.Contains(d[0].String(), "UploadBody") || !strings.Contains(d[1].String(), "UploadBody") {
 		t.Fatal(d)
 	}
 }
@@ -157,14 +157,14 @@ package routes
 import h "`+frameworkinfo.ModulePath+`/http"
 import request "example/requests"
 func use(){_=h.DefineEndpoint(h.DefineRoute());_=h.JSONBody(request.SaveRequestJSON())}`)
-	if d := a.CheckFile(f); len(d) != 1 || d[0].Code != "route-nesting" {
+	if d := a.CheckFile(f); len(d) != 1 || d[0].Rule.ID != "route-nesting" {
 		t.Fatal(d)
 	}
 }
 
 func TestParenthesizedHelperCall(t *testing.T) {
 	a, f := testAnalysis(t, `package routes; import h "`+frameworkinfo.ModulePath+`/http"; import request "example/requests"; func use(){ _=h.JSONBody(((request.SaveRequestJSON)())) }`)
-	if d := a.CheckFile(f); len(d) != 1 || d[0].Code != "route-helper" {
+	if d := a.CheckFile(f); len(d) != 1 || d[0].Rule.ID != "route-helper" {
 		t.Fatal(d)
 	}
 }
@@ -173,7 +173,7 @@ func TestMissingHelperAndStructuralExclusion(t *testing.T) {
 	a, f := testAnalysis(t, `package routes;import h "`+frameworkinfo.ModulePath+`/http";import r "example/requests";func use(){_=h.JSONBody(r.MissingRequestJSON())}`)
 	a.Declarations["example/requests.MissingRequest"] = generate.TransportDeclaration{Kind: "dto"}
 	got := a.CheckFile(f)
-	if len(got) != 1 || got[0].Code != "route-helper-missing" || !strings.Contains(got[0].Message, "http=body") || !strings.Contains(got[0].Message, "MissingBody") {
+	if len(got) != 1 || got[0].Rule.ID != "route-helper-missing" || !strings.Contains(got[0].String(), "http=body") || !strings.Contains(got[0].String(), "MissingBody") {
 		t.Fatal(got)
 	}
 	a.HTTPDependencies = map[string]bool{"example/requests": true}
@@ -237,7 +237,7 @@ func use(){`
 				t.Fatalf("findings=%v, want %d", got, test.count)
 			}
 			for _, d := range got {
-				if d.Code != "route-nesting" || !strings.Contains(d.Message, test.call+"(...)") || !strings.Contains(d.Message, "assign ") {
+				if d.Rule.ID != "route-nesting" || !strings.Contains(d.String(), test.call+"(...)") || !strings.Contains(d.String(), "assign it to a named local") {
 					t.Fatal(d)
 				}
 			}

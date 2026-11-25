@@ -318,15 +318,19 @@ there is no query-path hashing. `generate --check` covers generated output and
 ownership in addition to these two guards. Run it in the gate alongside
 `foundry models check`; the latter checks declaration spelling, not freshness.
 
+<a id="diagnose-declarations"></a>
 ## Diagnose a wrong declaration
 
-Field errors identify `file:line:column: model Struct.Field`; table-level errors
-name the struct without a field. These are actual messages;
+`foundry generate` prints each declaration error as
+`file:line:column: [generate-declaration] model Struct.Field: message`; table-level
+errors name the struct without a field. The messages below are the actual message text;
 angle-bracket names stand for the offending field, type or option.
+`foundry models check` prints a handwritten table as
+`file:line:column: [model-table] model Struct: table is declared by hand; put the //foundry:model directive on the struct, run foundry generate, and delete the handwritten table`.
 
 | Mistake | Diagnostic and correction |
 | --- | --- |
-| Handwrite a table in a checked non-test package | `declare the table with the //foundry:model directive on the struct, then run foundry generate` |
+| Handwrite a table in a checked non-test package | `[model-table]` from `foundry models check`: put the `//foundry:model` directive on the struct, run `foundry generate`, and delete the handwritten table |
 | Misspell or space the directive prefix | `invalid Foundry directive spelling; use //foundry:model` |
 | Misspell the tag namespace | `unknown struct tag foudry; use foundry` |
 | Use a generic model directive | `generic models are outside the directive; build the table in a generic function using the low-level ORM functions` |

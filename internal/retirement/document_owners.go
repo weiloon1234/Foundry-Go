@@ -2,7 +2,6 @@ package retirement
 
 import (
 	"encoding/json"
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -11,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 )
 
 type documentRules struct {
@@ -135,15 +134,15 @@ func (r documentRules) checkCode(name, code string, line int, application bool) 
 		}
 	}
 	var failures []error
-	report := func(pos token.Pos, message string) {
+	report := func(pos token.Pos, rule diagnostic.Rule, sentence string) {
 		n := line + fset.Position(pos).Line - strings.Count(prefix, "\n") - 1
-		failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, n, message)))
+		failures = append(failures, rule.At(name, n, 0).Text("", strings.TrimSuffix(sentence, ".")).Err())
 	}
 	// The parser's unresolved uses exclude local bindings, declarations,
 	// selector names and composite literal field names.
 	for _, id := range file.Unresolved {
 		if spelling := dotRetirements[id.Name]; spelling != "" {
-			report(id.Pos(), r.retirementMessage(spelling))
+			report(id.Pos(), diagnostic.RetiredAPI, r.retirementMessage(spelling))
 		}
 	}
 	ast.Inspect(file, func(node ast.Node) bool {
@@ -154,7 +153,7 @@ func (r documentRules) checkCode(name, code string, line int, application bool) 
 		if len(importedRetirements) != 0 {
 			bindings := r.bindingsAt(file, selected.Pos(), aliases)
 			if spelling := qualifiedName(selected, bindings, aliases); importedRetirements[spelling] {
-				report(selected.Sel.Pos(), r.retirementMessage(spelling))
+				report(selected.Sel.Pos(), diagnostic.RetiredAPI, r.retirementMessage(spelling))
 			}
 		}
 		denied := r.denied[selected.Sel.Name]
@@ -191,9 +190,9 @@ func (r documentRules) checkCode(name, code string, line int, application bool) 
 			if replacement != "" {
 				message = owner + "." + selected.Sel.Name + " is retired; " + replacement
 			}
-			report(selected.Sel.Pos(), message)
+			report(selected.Sel.Pos(), diagnostic.RetiredAPI, message)
 		} else if owner == "" && r.matchesCallArguments(selected.Sel.Name, calls[selected]) {
-			report(selected.Sel.Pos(), "ambiguous API teaching for ."+selected.Sel.Name+"; qualify the receiver's owner or replace the example with a Foundry guides: reference")
+			report(selected.Sel.Pos(), diagnostic.AmbiguousAPI, "ambiguous API teaching for ."+selected.Sel.Name+"; qualify the receiver's owner or replace the example with a Foundry guides: reference")
 		}
 		return true
 	})

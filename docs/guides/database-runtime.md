@@ -53,6 +53,21 @@ Closing rows may drain remaining results through the driver. For immediate serve
 
 These SQL strings, arguments, and scan destinations are explicit runtime boundaries. Use placeholders for values. Scan destinations can be partially populated on error and must then be discarded. [Model reads](model-queries.md) and [declared projections](model-projections.md) construct fresh typed records and publish only successfully hydrated values. Do not issue raw transaction-control statements such as `BEGIN`, `COMMIT`, `ROLLBACK`, or custom savepoints through these methods; use the framework's scope helpers.
 
+<a id="no-raw-policy"></a>
+### Find raw SQL calls
+
+From the application module, `go tool foundry lint --no-raw ./...` reports every
+call, tests included, to an explicit raw SQL API: `database.ScanOne`,
+`database.ReadQuery`, `database.ForEach`, `database.Exec`, `database.Query`,
+`database.QueryRead`, `orm.Raw`, `orm.WhereRaw`, `rows.Raw` and `expr.Raw`
+or `expr.RawWithCodec`, including the same methods called through an interface
+and function values with a matching signature. A finding is
+`file:line:column: [raw-sql] symbol: raw SQL call; use a typed model or projection
+query`; it never prints SQL text or arguments, and one finding is kept per line.
+Replace the call with a [model read](model-queries.md) or a
+[declared projection](model-projections.md). The check is a best-effort source
+policy, not a proof that no raw SQL runs.
+
 ## Transaction scopes
 
 The [independent consumer example](../../tests/fixtures/consumer/database_example_test.go) compiles a parameterized query and transaction using only public Foundry contracts. It requires a connected database to execute; it is currently a compilation example, not PostgreSQL acceptance evidence.

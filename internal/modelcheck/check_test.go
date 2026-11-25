@@ -10,6 +10,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -94,14 +95,17 @@ var Users = orm.Define("users", func(b orm.Builder[User], u *User) UserTable { r
 		t.Fatalf("expected 1 finding, got %d: %v", len(diagnostics), diagnostics)
 	}
 	d := diagnostics[0]
-	if d.Target != "model User" {
-		t.Errorf("expected target 'model User', got %q", d.Target)
+	if d.Subject != "model User" {
+		t.Errorf("expected target 'model User', got %q", d.Subject)
 	}
-	if d.Message != directiveReplacement {
-		t.Errorf("expected message %q, got %q", directiveReplacement, d.Message)
+	if d.Fix != directiveReplacement {
+		t.Errorf("expected message %q, got %q", directiveReplacement, d.Fix)
 	}
-	if d.Position.Line != 5 {
-		t.Errorf("expected position line 5, got %d", d.Position.Line)
+	if d.Line != 5 {
+		t.Errorf("expected position line 5, got %d", d.Line)
+	}
+	if text := d.String(); d.Column < 1 || !strings.Contains(text, "[model-table] model User: table is declared by hand; put the //foundry:model directive") || !strings.HasSuffix(text, ". Read docs/guides/model-declarations.md#recipe-declare-table") {
+		t.Errorf("finding lost its rule, fix or teaching: %q", text)
 	}
 }
 
@@ -117,8 +121,8 @@ var Users = o.Define("users", func(b o.Builder[User], u *User) UserTable { retur
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 finding, got %d: %v", len(diagnostics), diagnostics)
 	}
-	if diagnostics[0].Target != "model User" {
-		t.Errorf("expected target 'model User', got %q", diagnostics[0].Target)
+	if diagnostics[0].Subject != "model User" {
+		t.Errorf("expected target 'model User', got %q", diagnostics[0].Subject)
 	}
 }
 
@@ -134,8 +138,8 @@ var Users = Define("users", func(b Builder[User], u *User) UserTable { return Us
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 finding, got %d: %v", len(diagnostics), diagnostics)
 	}
-	if diagnostics[0].Target != "model User" {
-		t.Errorf("expected target 'model User', got %q", diagnostics[0].Target)
+	if diagnostics[0].Subject != "model User" {
+		t.Errorf("expected target 'model User', got %q", diagnostics[0].Subject)
 	}
 }
 
@@ -152,8 +156,8 @@ var Users = def("users", func(b orm.Builder[User], u *User) UserTable { return U
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 finding, got %d: %v", len(diagnostics), diagnostics)
 	}
-	if diagnostics[0].Target != "model User" {
-		t.Errorf("expected target 'model User', got %q", diagnostics[0].Target)
+	if diagnostics[0].Subject != "model User" {
+		t.Errorf("expected target 'model User', got %q", diagnostics[0].Subject)
 	}
 }
 
@@ -169,11 +173,11 @@ type UserTable struct{ MyBase }
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 finding, got %d: %v", len(diagnostics), diagnostics)
 	}
-	if diagnostics[0].Target != "model User" {
-		t.Errorf("expected target 'model User', got %q", diagnostics[0].Target)
+	if diagnostics[0].Subject != "model User" {
+		t.Errorf("expected target 'model User', got %q", diagnostics[0].Subject)
 	}
-	if diagnostics[0].Position.Line != 5 {
-		t.Errorf("expected line 5, got %d", diagnostics[0].Position.Line)
+	if diagnostics[0].Line != 5 {
+		t.Errorf("expected line 5, got %d", diagnostics[0].Line)
 	}
 }
 
@@ -188,8 +192,8 @@ type UserTable struct{ orm.Table[User, int64] }
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 finding, got %d: %v", len(diagnostics), diagnostics)
 	}
-	if diagnostics[0].Target != "model User" {
-		t.Errorf("expected target 'model User', got %q", diagnostics[0].Target)
+	if diagnostics[0].Subject != "model User" {
+		t.Errorf("expected target 'model User', got %q", diagnostics[0].Subject)
 	}
 }
 
@@ -274,8 +278,8 @@ var Items = orm.Define("items", func(b orm.Builder[Item], m *Item) ItemTable {
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 finding for concrete model outside ORM tree, got %d: %v", len(diagnostics), diagnostics)
 	}
-	if diagnostics[0].Target != "model Item" {
-		t.Errorf("expected target 'model Item', got %q", diagnostics[0].Target)
+	if diagnostics[0].Subject != "model Item" {
+		t.Errorf("expected target 'model Item', got %q", diagnostics[0].Subject)
 	}
 }
 
@@ -313,8 +317,8 @@ var Users = orm.Define("users", func(b orm.Builder[User], u *User) UserTable { r
 	if len(nonTestDiagnostics) != 1 {
 		t.Fatalf("expected 1 finding in non-test file, got %d: %v", len(nonTestDiagnostics), nonTestDiagnostics)
 	}
-	if nonTestDiagnostics[0].Target != "model User" {
-		t.Errorf("expected target 'model User', got %q", nonTestDiagnostics[0].Target)
+	if nonTestDiagnostics[0].Subject != "model User" {
+		t.Errorf("expected target 'model User', got %q", nonTestDiagnostics[0].Subject)
 	}
 }
 

@@ -138,7 +138,7 @@ func TestApplicationDocumentationDotImportReferences(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			code := "package example\nimport . \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\n" + tc.code
 			err := CheckApplicationDocument("AGENTS.md", []byte("```go\n"+code+"\n```"))
-			if err == nil || !strings.Contains(err.Error(), "AGENTS.md:4: rows.Count is retired; use rows.Read(query).Count(ctx, executor).") {
+			if err == nil || !strings.Contains(err.Error(), "AGENTS.md:4: [retired-api] rows.Count is retired; use rows.Read(query).Count(ctx, executor).") {
 				t.Fatalf("accepted imported retirement or missing location: %v", err)
 			}
 			if strings.Count(err.Error(), "rows.Count is retired; use rows.Read(query).Count(ctx, executor).") != 1 {

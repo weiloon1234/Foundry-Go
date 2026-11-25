@@ -171,8 +171,8 @@ func TestDocsActiveModuleInstructions(t *testing.T) {
 		t.Fatal("accepted app-owned stale teaching")
 	}
 	for _, want := range []string{
-		".claude/skills/workflow/references/recipe.md:2: selected framework guide missing is missing or is not a regular file; link to a regular guide file in the selected framework version",
-		".claude/skills/workflow/references/recipe.md:3: http.Endpoint.WithScopes is retired; use http.Authenticated(endpoint, binding, http.Scopes(scopes)).",
+		".claude/skills/workflow/references/recipe.md:2: [guide-missing] guide missing: missing or not a regular file in the selected framework",
+		".claude/skills/workflow/references/recipe.md:3: [retired-api] http.Endpoint.WithScopes is retired; use http.Authenticated(endpoint, binding, http.Scopes(scopes)).",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("missing %s: %v", want, err)
@@ -187,16 +187,16 @@ func TestDocsRejectsWrongSelectedGuideAndToolBeforeScanning(t *testing.T) {
 	app, framework, goBinary, build := documentationFixture(t, "match")
 	putDocumentation(t, app, "docs/guides/orm.md", "<a id=\"only-in-app\"></a>\n")
 	putDocumentation(t, app, "AGENTS.md", "Foundry guides: `orm#only-in-app`\n")
-	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "absent") {
+	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "not declared in the target guide") {
 		t.Fatal(err)
 	}
 	putDocumentation(t, framework, "docs/guides/orm.md", "# Old pin without anchors\n")
 	putDocumentation(t, app, "AGENTS.md", "Foundry guides: `orm#agent-entry`\n")
-	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "absent") {
+	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "not declared in the target guide") {
 		t.Fatal(err)
 	}
 	build.Version = "v0.12.0"
-	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "v0.12.0") || strings.Contains(err.Error(), "absent") {
+	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "v0.12.0") || strings.Contains(err.Error(), "not declared in the target guide") {
 		t.Fatal(err)
 	}
 }
@@ -235,7 +235,7 @@ func TestDocsPaginationRetirement(t *testing.T) {
 		app, _, goBinary, build := documentationFixture(t, "match")
 		text := "```go\npackage example\nimport p \"github.com/weiloon1234/Foundry-Go/http/pagination\"\nfunc use(e p." + owner + ") { e.WithScopes(scopes) }\n```\n"
 		putDocumentation(t, app, ".claude/skills/endpoint/SKILL.md", text)
-		want := ".claude/skills/endpoint/SKILL.md:4: pagination." + strings.SplitN(owner, "[", 2)[0] + ".WithScopes is retired; use pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))."
+		want := ".claude/skills/endpoint/SKILL.md:4: [retired-api] pagination." + strings.SplitN(owner, "[", 2)[0] + ".WithScopes is retired; use pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))."
 		if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatal(err)
 		}
@@ -273,7 +273,7 @@ func TestDocsRejectsActiveDirectorySymlinks(t *testing.T) {
 			if err := os.Symlink(target, link); err != nil {
 				t.Fatal(err)
 			}
-			if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "must not be symlinks") {
+			if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "active documentation: a symlink") {
 				t.Fatalf("active symlink bypassed instructions: %v", err)
 			}
 		})

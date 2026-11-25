@@ -3,7 +3,6 @@ package markdown
 
 import (
 	"bytes"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -15,7 +14,7 @@ import (
 	"github.com/yuin/goldmark/util"
 	"golang.org/x/net/html"
 
-	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 )
 
 // Lines indexes newline offsets once, including the final unterminated line.
@@ -123,7 +122,7 @@ func Read(name string, data []byte) (Document, error) {
 	}
 	document, unclosed := parse(data)
 	if unclosed > 0 {
-		return Document{}, safeerror.New(fmt.Sprintf("%s:%d: HTML comment is not closed; add \"-->\".", name, unclosed))
+		return Document{}, diagnostic.DocComment.At(name, unclosed, 0).Say("HTML comment", "not closed").To("add \"-->\"").Err()
 	}
 	return document, nil
 }

@@ -1,7 +1,7 @@
 package retirement
 
 import (
-	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/scanner"
@@ -115,23 +115,29 @@ func (c *DocumentChecker) Check(name string, data []byte) error {
 		return err
 	}
 	var failures []error
-	report := func(line int, message string) {
-		failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, line, message)))
+	report := func(finding diagnostic.Diagnostic) {
+		failures = append(failures, finding.Err())
+	}
+	retired := func(line int, spelling string) {
+		failures = append(failures, diagnostic.RetiredAPI.At(name, line, 0).Text("", strings.TrimSuffix(c.rules.retirementMessage(spelling), ".")).Err())
 	}
 	checkText := func(text string, line int) {
 		for i, value := range strings.Split(text, "\n") {
 			for pattern, replacement := range c.commands {
-				if pattern.MatchString(value) {
-					report(line+i, "retired command; "+replacement)
+				if match := pattern.FindString(value); match != "" {
+					report(diagnostic.RetiredCommand.At(name, line+i, 0).
+						Say(strings.Join(strings.Fields(match), " "), "retired command").To(replacement))
 				}
 			}
 			for _, pattern := range c.patterns {
 				if spelling := pattern.find(value); spelling != "" {
-					message := "retired API in teaching; no replacement is recorded for this spelling; remove it and consult the current task guide."
 					if _, exists := c.rules.replacements[retirementName(spelling)]; exists {
-						message = c.rules.retirementMessage(spelling)
+						retired(line+i, spelling)
+					} else {
+						report(diagnostic.RetiredAPI.At(name, line+i, 0).
+							Say(spelling, "retired API in teaching with no replacement recorded").
+							To("remove it and consult the current task guide"))
 					}
-					report(line+i, message)
 					break
 				}
 			}
@@ -162,7 +168,7 @@ func (c *DocumentChecker) Check(name string, data []byte) error {
 		code := withoutJSXElements(block.Text)
 		failures = append(failures, c.rules.checkCode(name, code, line, !c.strict)...)
 		if spelling, relative := retiredCodeName(code, c.unqualified); (block.Info == "" || block.Info == "go" || block.Info == "golang") && spelling != "" {
-			report(line+relative-1, c.rules.retirementMessage(spelling))
+			retired(line+relative-1, spelling)
 		}
 		checkText(code, line)
 	}
@@ -172,7 +178,7 @@ func (c *DocumentChecker) Check(name string, data []byte) error {
 			node.Text = withoutJSXElements(node.Text)
 			failures = append(failures, c.rules.checkCode(name, node.Text, node.First, !c.strict)...)
 			if spelling, _ := retiredCodeName(node.Text, c.unqualified); spelling != "" {
-				report(node.First, c.rules.retirementMessage(spelling))
+				retired(node.First, spelling)
 			}
 			checkText(node.Text, node.First)
 		case markdown.Text:

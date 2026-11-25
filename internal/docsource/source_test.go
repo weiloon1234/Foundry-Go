@@ -2,11 +2,13 @@ package docsource
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 )
 
 func TestAgentNavigationLines(t *testing.T) {
@@ -314,7 +316,7 @@ func TestEveryTeachingDocumentRequiresBindings(t *testing.T) {
 				t.Fatalf("loaded %d documents", len(docs))
 			}
 			err = CheckBindings(docs)
-			if err == nil || !strings.Contains(err.Error(), name+":2: Go block has no compiled source;") || !strings.Contains(err.Error(), name+":6: TypeScript block has no compiled source;") {
+			if err == nil || !strings.Contains(err.Error(), name+":2: [doc-binding] Go block has no compiled source;") || !strings.Contains(err.Error(), name+":6: [doc-binding] TypeScript block has no compiled source;") {
 				t.Fatalf("missing diagnostics: %v", err)
 			}
 		})
@@ -352,12 +354,17 @@ func TestOnlyStandaloneRegionMarkers(t *testing.T) {
 
 func TestDiagnosticShape(t *testing.T) {
 	err := CheckBindings([]Document{{BindingErrors: []error{
-		fmt.Errorf("guide.md:7: Go block has no compiled source; bind it"),
-		fmt.Errorf("AGENTS.md:9: source is missing; restore the referenced file"),
+		diagnostic.DocBinding.At("guide.md", 7, 0).Text("", "Go block has no compiled source; bind it").Err(),
+		diagnostic.DocFile.At("AGENTS.md", 0, 0).Say("input", "cannot be read").To("restore read access").Err(),
 	}}})
-	want := "guide.md:7: Go block has no compiled source; bind it.\nAGENTS.md:9: source is missing; restore the referenced file."
+	want := "guide.md:7: [doc-binding] Go block has no compiled source; bind it. Read docs/guides/developer-tooling-and-testing.md#recipe-author-examples\n" +
+		"AGENTS.md: [doc-file] input: cannot be read; restore read access. Read docs/guides/developer-tooling-and-testing.md#pinned-documentation-checks"
 	if got := Diagnostics(err); got != want {
 		t.Fatalf("got %q", got)
+	}
+	got := Diagnostics(errors.New("open guide.md: permission denied"))
+	if want := "guide.md: [doc-file] input: permission denied; restore the file and its required access permissions. Read docs/guides/developer-tooling-and-testing.md#pinned-documentation-checks"; got != want {
+		t.Fatalf("bare filesystem failure = %q", got)
 	}
 }
 

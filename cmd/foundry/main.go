@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/agent"
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
 )
@@ -107,7 +108,7 @@ func runGenerate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	}
 	report, err := generate.Generate(ctx, generate.Options{Dir: *dir, Check: *check, Recursive: *recursive, Framework: frameworkinfo.CurrentBuild()})
 	if err != nil {
-		return err
+		return diagnostic.Annotate(err, func() diagnostic.Skills { return applicationSkills(*dir) })
 	}
 	if *check {
 		_, err := fmt.Fprintln(stdout, "Generated output is current.")

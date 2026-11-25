@@ -7,7 +7,7 @@ import (
 
 func TestBareNameReportDoesNotNameAnOwnerTheDocumentNeverWrote(t *testing.T) {
 	err := CheckDocument("guide.md", []byte("# Guide\n\nThe `Compile` span stands alone.\n"))
-	want := "guide.md:3: `Compile` matches the retired `rows.Compile`; write the qualified name you mean (for example `pkg.Compile`), or use `rows.CompileRead`."
+	want := "guide.md:3: [retired-api] `Compile` matches the retired `rows.Compile`; write the qualified name you mean (for example `pkg.Compile`), or use `rows.CompileRead`."
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("want %q, got %v", want, err)
 	}
@@ -84,7 +84,7 @@ func TestDocumentShapeRefusalsReachBothCheckers(t *testing.T) {
 
 func TestUnclosedCommentIsRefusedNotSkipped(t *testing.T) {
 	err := CheckDocument("guide.md", []byte("# T\n\n<!-- abc\nrows.Count(q)\n"))
-	if err == nil || !strings.Contains(err.Error(), `guide.md:3: HTML comment is not closed; add "-->"`) {
+	if err == nil || !strings.Contains(err.Error(), `guide.md:3: [doc-comment] HTML comment: not closed; add "-->"`) {
 		t.Fatalf("unclosed comment hid the rest of the document: %v", err)
 	}
 }

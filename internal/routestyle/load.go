@@ -3,12 +3,12 @@ package routestyle
 
 import (
 	"context"
-	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
 	"sort"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
 )
 
@@ -18,16 +18,7 @@ func Load(ctx context.Context, dir string, patterns []string) ([]*generate.Analy
 	return generate.LoadAnalysis(ctx, dir, patterns)
 }
 
-// Diagnostic names the source location and the concrete edit the author must make.
-type Diagnostic struct {
-	Position token.Position `json:"position"`
-	Code     string         `json:"code"`
-	Message  string         `json:"message"`
-}
-
-func (d Diagnostic) String() string { return fmt.Sprintf("%s: %s: %s", d.Position, d.Code, d.Message) }
-
-func check(ctx context.Context, dir string, patterns []string) (result []Diagnostic, resultErr error) {
+func check(ctx context.Context, dir string, patterns []string) (result []diagnostic.Diagnostic, resultErr error) {
 	defer func() {
 		if ctx.Err() != nil {
 			result = nil
@@ -65,13 +56,16 @@ func check(ctx context.Context, dir string, patterns []string) (result []Diagnos
 	}
 	sort.Slice(result, func(i, j int) bool {
 		a, b := result[i], result[j]
-		if a.Position.Filename != b.Position.Filename {
-			return a.Position.Filename < b.Position.Filename
+		if a.Path != b.Path {
+			return a.Path < b.Path
 		}
-		if a.Position.Offset != b.Position.Offset {
-			return a.Position.Offset < b.Position.Offset
+		if a.Line != b.Line {
+			return a.Line < b.Line
 		}
-		return a.Code < b.Code
+		if a.Column != b.Column {
+			return a.Column < b.Column
+		}
+		return a.Rule.ID < b.Rule.ID
 	})
 	return result, nil
 }

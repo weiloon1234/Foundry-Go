@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 )
 
 // Limits apply before parsing and to streams as well as filesystem inputs.
@@ -33,10 +33,10 @@ const (
 func ReadAll(name string, reader io.Reader, limit int64) ([]byte, error) {
 	data, err := io.ReadAll(io.LimitReader(reader, limit+1))
 	if err != nil {
-		return nil, safeerror.Owned(name+":0: cannot read input; restore read access.", err)
+		return nil, diagnostic.DocFile.At(name, 0, 0).Say("input", "cannot be read").To("restore read access").Caused(err)
 	}
 	if int64(len(data)) > limit {
-		return nil, safeerror.New(fmt.Sprintf("%s:0: input exceeds maximum %d bytes; split or reduce the input.", name, limit))
+		return nil, diagnostic.DocLimit.At(name, 0, 0).Say("input", fmt.Sprintf("over %d bytes", limit)).To("split or reduce the input").Err()
 	}
 	return data, nil
 }
@@ -45,46 +45,46 @@ func ReadAll(name string, reader io.Reader, limit int64) ([]byte, error) {
 // confines resolution if an ancestor changes between inspection and open.
 func OpenRegular(root, name string, flag int) (*os.File, error) {
 	if !filepath.IsLocal(name) {
-		return nil, safeerror.New(name + ":0: path is outside repository root; use a repository-relative file.")
+		return nil, diagnostic.DocFile.At(name, 0, 0).Say("path", "outside the repository root").To("use a repository-relative file").Err()
 	}
 	info, err := os.Lstat(root)
 	if err != nil {
-		return nil, safeerror.Owned(name+":0: cannot inspect repository root.", err)
+		return nil, diagnostic.DocFile.At(name, 0, 0).Say("repository root", "cannot be inspected").To("restore access to the root directory").Caused(err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		return nil, safeerror.New(name + ":0: repository root is a symlink; use its real directory.")
+		return nil, diagnostic.DocFile.At(name, 0, 0).Say("repository root", "a symlink").To("use its real directory").Err()
 	}
 	r, err := os.OpenRoot(root)
 	if err != nil {
-		return nil, safeerror.Owned(name+":0: cannot open repository root.", err)
+		return nil, diagnostic.DocFile.At(name, 0, 0).Say("repository root", "cannot be opened").To("restore access to the root directory").Caused(err)
 	}
 	defer r.Close()
 	current := ""
 	parts := strings.Split(filepath.Clean(name), string(filepath.Separator))
 	for i, part := range parts {
 		if strings.HasPrefix(part, ".env") {
-			return nil, safeerror.New(name + ":0: secret inputs cannot be read as documentation.")
+			return nil, diagnostic.DocFile.At(name, 0, 0).Say("path", "names a secret input").To("keep secrets out of documentation inputs").Err()
 		}
 		current = filepath.Join(current, part)
 		info, err = r.Lstat(current)
 		if err != nil {
-			return nil, safeerror.Owned(name+":0: cannot inspect input; restore the file and its required access permissions.", err)
+			return nil, diagnostic.DocFile.At(name, 0, 0).Say("input", "cannot be inspected").To("restore the file and its access permissions").Caused(err)
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return nil, safeerror.New(name + ":0: input contains a symlink; replace it with an owned file or directory.")
+			return nil, diagnostic.DocFile.At(name, 0, 0).Say("input", "contains a symlink").To("replace it with an owned file or directory").Err()
 		}
 		if i == len(parts)-1 && !info.Mode().IsRegular() {
-			return nil, safeerror.New(name + ":0: input must be a regular file.")
+			return nil, diagnostic.DocFile.At(name, 0, 0).Say("input", "not a regular file").To("use a regular file").Err()
 		}
 	}
 	f, err := r.OpenFile(name, flag|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		return nil, safeerror.Owned(name+":0: cannot open input; restore read access.", err)
+		return nil, diagnostic.DocFile.At(name, 0, 0).Say("input", "cannot be opened").To("restore read access").Caused(err)
 	}
 	opened, err := f.Stat()
 	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
 		f.Close()
-		return nil, safeerror.New(name + ":0: input changed or is not a regular file; retry with an owned regular file.")
+		return nil, diagnostic.DocFile.At(name, 0, 0).Say("input", "changed while it was opened").To("retry with an owned regular file").Err()
 	}
 	return f, nil
 }

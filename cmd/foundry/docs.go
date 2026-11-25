@@ -15,6 +15,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/docrefs"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/doctor"
@@ -85,7 +86,7 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 		}
 		rel = filepath.ToSlash(rel)
 		if entry.Type()&os.ModeSymlink != 0 && (rel == ".claude" || rel == ".claude/skills" || strings.HasPrefix(rel, ".claude/skills/")) {
-			return safeerror.New(fmt.Sprintf("%s: active documentation directories and files must not be symlinks", rel))
+			return diagnostic.DocFile.At(rel, 0, 0).Say("active documentation", "a symlink").To("replace it with a real directory or file").Err()
 		}
 		if entry.IsDir() {
 			if rel != "." {
@@ -105,7 +106,7 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 			return nil
 		}
 		if !entry.Type().IsRegular() {
-			return safeerror.New(fmt.Sprintf("%s: active documentation must be a regular file", rel))
+			return diagnostic.DocFile.At(rel, 0, 0).Say("active documentation", "not a regular file").To("use a regular file").Err()
 		}
 		data, err := markdown.ReadFile(root, rel, markdown.DocumentLimit(rel))
 		if err != nil {
@@ -120,7 +121,7 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 		return nil
 	})
 	failures = append(failures, err, docrefs.CheckReferences(filepath.Join(selected.Dir, "docs", "guides"), refs))
-	return safeerror.Join("documentation check failed", failures...)
+	return diagnostic.Annotate(safeerror.Join("documentation check failed", failures...), func() diagnostic.Skills { return docrefs.SkillIndex(refs) })
 }
 
 // Match dated records, not ordinary skill names containing a milestone number.

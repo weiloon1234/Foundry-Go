@@ -105,7 +105,7 @@ func TestGeneratedHeaderOmitsLineAndDiagnosticsUseModulePaths(t *testing.T) {
 
 func TestCheckListsStaleFilesAndReasons(t *testing.T) {
 	dir := fixture(t, sampleSource)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "user_foundry.gen.go: missing") || !strings.Contains(err.Error(), manifestName+": ownership manifest differs") {
+	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "user_foundry.gen.go: [generated-stale] generated output is stale (missing); run foundry generate") || !strings.Contains(err.Error(), manifestName+": [generated-stale] generated output is stale (ownership manifest differs)") {
 		t.Fatalf("fresh check lacked missing files: %v", err)
 	}
 	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
@@ -113,14 +113,14 @@ func TestCheckListsStaleFilesAndReasons(t *testing.T) {
 	}
 	write(t, dir, "models.go", strings.Replace(sampleSource, "Name string;", "Name string; Age int;", 1))
 	report, err := Generate(t.Context(), Options{Dir: dir, Check: true})
-	if err == nil || !strings.Contains(err.Error(), "user_foundry.gen.go: content differs") {
+	if err == nil || !strings.Contains(err.Error(), "user_foundry.gen.go: [generated-stale] generated output is stale (content differs)") {
 		t.Fatalf("content change was not explained: %v", err)
 	}
 	if len(report.Stale) == 0 || report.Stale[len(report.Stale)-1].Path != "user_foundry.gen.go" {
 		t.Fatalf("stale report = %+v", report.Stale)
 	}
 	write(t, dir, "models.go", strings.Replace(sampleSource, "//foundry:enum\n", "", 1))
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "status_foundry.gen.go: obsolete") {
+	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "status_foundry.gen.go: [generated-stale] generated output is stale (obsolete)") {
 		t.Fatalf("obsolete output was not explained: %v", err)
 	}
 	source := []byte("package sample\n\n// A.\nfunc A() {}\n")

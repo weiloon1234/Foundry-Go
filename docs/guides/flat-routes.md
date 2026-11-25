@@ -84,6 +84,7 @@ return admin.Handle(createPage)
 The existing typed functions and handler contracts remain the API. The request
 runtime is unchanged.
 
+<a id="staged-routes"></a>
 ## The rule
 
 A call whose static result type is a route stage value must not be an argument
@@ -137,6 +138,7 @@ Use named stages before free-function terminals such as `pagination.Handle`.
 Keep registrations in their original order. Stage package-level declarations
 inside a typed initializer function when several statements are necessary.
 
+<a id="generated-helpers"></a>
 ## Generated HTTP pieces
 
 Inputs: `create foundryhttp.Route[foundryhttp.NoPath]`.
@@ -219,14 +221,18 @@ imports, explicit generic arguments and dynamically selected function values do
 not change the rule. A same-named function returning a non-stage value is allowed.
 Callback bodies are checked in their own execution context.
 
-Findings name the file, line and edit to make. The command exits non-zero on
-findings or package-loading errors. Generated route declarations are checked;
+A finding prints as `file:line:column: [rule] subject: problem; fix. Read
+docs/guides/flat-routes.md#anchor`, where the guide and anchor teach the fix. In an
+application, `(skill: name)` follows when a skill declares that anchor in a
+`Foundry guides:` line. The rules are `route-nesting` (the staged-route rule above)
+and `route-helper` or `route-helper-missing` (the generated helper rule below). The
+command exits non-zero on findings or package-loading errors. Generated route declarations are checked;
 fix their generator rather than editing generated output. Handwritten
 `JSONBody`, `JSONResponse` and multipart wrappers around generated descriptors
 are findings only for concrete `foundry:dto` or `foundry:multipart` declarations
 in the application module being checked, even when the key is absent. Checking
 only a routes package still resolves metadata from its DTO dependencies. Message
 declarations, declarations owned by another module and framework packages are
-exempt. The diagnostic names the helper and says to add `http=body`, `http=response`, or `http=both`, regenerate,
-and use it. Framework packages retain their direct adapters. Streams, raw
+exempt. The finding names the wrapped declaration and says to add `http=body`, `http=response`, or `http=both`, run `foundry generate`,
+and call the helper. Framework packages retain their direct adapters. Streams, raw
 bodies, token/cookie responses and composed pagination/datatable adapters are not generated DTO declarations and are exempt.

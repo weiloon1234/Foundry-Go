@@ -563,6 +563,69 @@ or `all`) and compact JSON or readable indented text. The development binary
 cannot import an arbitrary application's bootstrap: register this command in the
 application that owns those declarations.
 
+<a id="diagnostic-rules"></a>
+## Read a check finding
+
+Every compiler-independent check prints each finding as one line of one shape:
+
+```text
+path:line:col: [rule] subject: problem; fix. Read docs/guides/<guide>.md#<anchor> (skill: name)
+```
+
+`:col` is omitted when a check has no column, and `:line` when it has no line; a
+zero is never printed. `subject:` is omitted when the problem sentence begins with
+the public name. `Read` names the guide page and explicit anchor that teach the fix,
+as a path inside the pinned framework (see [Read pinned guides offline](#recipe-read-pinned-guides)).
+`(skill: name)` is added by the commands that run in an application when
+`.claude/skills/*/SKILL.md` declares that `guide#anchor` in a `Foundry guides:`
+line; it names every such skill, in name order. A rule no skill declares prints the
+guide only. The command reads the skills once per run, and only when it has a finding.
+
+The rule IDs are stable output. `foundry routes check`, `foundry models check`,
+`foundry lint --no-raw`, `foundry generate --check`, `foundry generate`,
+`foundry docs check` and the framework's `make docs-check` print these rules, and a
+rule's guide and anchor are validated by `make docs-check`:
+
+| Rule | Check | Teaching |
+| --- | --- | --- |
+| `route-nesting` | `routes check` | `flat-routes#staged-routes` |
+| `route-helper` | `routes check` | `flat-routes#generated-helpers` |
+| `route-helper-missing` | `routes check` | `flat-routes#generated-helpers` |
+| `model-table` | `models check` | `model-declarations#recipe-declare-table` |
+| `raw-sql` | `lint --no-raw` | `database-runtime#no-raw-policy` |
+| `generated-stale` | `generate --check` | `model-declarations#recipe-stale-declarations` |
+| `generate-declaration` | `generate` | `model-declarations#diagnose-declarations` |
+| `guides-declaration` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
+| `anchor-invalid` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
+| `anchor-duplicate` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
+| `anchor-missing` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
+| `guide-name` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
+| `guide-missing` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
+| `retired-command` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
+| `retired-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
+| `ambiguous-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
+| `doc-limit` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
+| `doc-file` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
+| `doc-comment` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-rendered` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-marker` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-region` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-binding` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-section-anchor` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-agent-entry` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-inputs` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-link` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-milestone` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-model-example` | `checkdocs` | `model-declarations#recipe-declare-table` |
+| `fixture-go-version` | `checkdocs` | `developer-tooling-and-testing#documentation-gate` |
+| `blueprint-numbered` | `checkdocs` | `developer-tooling-and-testing#documentation-gate` |
+| `rule-catalogue` | `checkdocs` | `developer-tooling-and-testing#diagnostic-rules` |
+
+<a id="documentation-gate"></a>
+The `fixture-go-version` and `blueprint-numbered` rules belong to the framework's own
+`make docs-check`: a fixture module's `go` directive must equal the root `go.mod`, and
+`blueprint/` files are numbered `NN-name.md` without gaps or repeats.
+
 <a id="recipe-test-transports"></a>
 ## Test-owned application and transports
 

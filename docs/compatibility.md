@@ -567,6 +567,21 @@ No database, stored token, session, ticket, DTO or public error-code migration i
 required. Resource and tenant policies still run after admission. Application
 owners retain control of which read and export alternatives to declare.
 
+## Diagnostic output shape — unreleased
+
+Consumers that read the output of `foundry routes check`, `models check`,
+`lint --no-raw`, `generate --check`, `generate` or `docs check` see one finding
+shape: `path:line:col: [rule] subject: problem; fix. Read docs/guides/<guide>.md#<anchor>`,
+with `(skill: name)` appended in an application whose skill declares that anchor.
+Each finding is its own line. `:col` (and `:line`) are omitted rather than printed
+as zero, so parsers must not expect `:0`; `docs check` no longer prints `file:0:`
+locations. Previously `routes check` printed `position: code: message`, `models check`
+`position: target: message`, `lint --no-raw` only `file:line`, and `generate --check`
+one heading line followed by indented `file: reason` lines. The exit codes, the
+closing error line and the checks' findings are unchanged; the message wording
+changed to state the public name and the fix. Rule IDs are stable and listed in
+[Read a check finding](guides/developer-tooling-and-testing.md#diagnostic-rules).
+
 ## Pinned documentation
 
 Use `go tool foundry docs check` from the application's matching framework pin

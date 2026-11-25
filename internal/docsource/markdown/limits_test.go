@@ -17,16 +17,16 @@ func TestShapeRefusalsAreLocatedAndPrecedeParsing(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"quote markers", "# T\n\n" + nested("> ", MaxContainerMarkers+1), "guide.md:3: line opens with more than 16 quote or list markers"},
-		{"packed quote markers", "a\n" + nested(">", MaxContainerMarkers+1), "guide.md:2: line opens with more than 16 quote or list markers"},
-		{"bullets", nested("- ", MaxContainerMarkers+1), "guide.md:1: line opens with more than 16"},
-		{"ordered items", nested("1. ", MaxContainerMarkers+1), "guide.md:1: line opens with more than 16"},
-		{"mixed", strings.Repeat("> - ", 9) + "x\n", "guide.md:1: line opens with more than 16"},
-		{"long line", "ok\n" + strings.Repeat("a", MaxLineBytes+1) + "\n", "guide.md:2: line exceeds maximum 16384 bytes"},
-		{"CR-only endings", "# T\r\r```go\rx := 1\r```\r", "guide.md:1: document uses CR-only line endings"},
-		{"lone CR mid-line", "a\nb\rc\n", "guide.md:2: document uses CR-only line endings"},
-		{"trailing lone CR", "a\r", "guide.md:1: document uses CR-only line endings"},
-		{"oversize", strings.Repeat("a\n", MaxDocumentBytes/2+1), "guide.md:0: document exceeds maximum 524288 bytes"},
+		{"quote markers", "# T\n\n" + nested("> ", MaxContainerMarkers+1), "guide.md:3: [doc-limit] line: opens with more than 16 quote or list markers"},
+		{"packed quote markers", "a\n" + nested(">", MaxContainerMarkers+1), "guide.md:2: [doc-limit] line: opens with more than 16 quote or list markers"},
+		{"bullets", nested("- ", MaxContainerMarkers+1), "guide.md:1: [doc-limit] line: opens with more than 16"},
+		{"ordered items", nested("1. ", MaxContainerMarkers+1), "guide.md:1: [doc-limit] line: opens with more than 16"},
+		{"mixed", strings.Repeat("> - ", 9) + "x\n", "guide.md:1: [doc-limit] line: opens with more than 16"},
+		{"long line", "ok\n" + strings.Repeat("a", MaxLineBytes+1) + "\n", "guide.md:2: [doc-limit] line: over 16384 bytes"},
+		{"CR-only endings", "# T\r\r```go\rx := 1\r```\r", "guide.md:1: [doc-limit] line ending: a lone CR"},
+		{"lone CR mid-line", "a\nb\rc\n", "guide.md:2: [doc-limit] line ending: a lone CR"},
+		{"trailing lone CR", "a\r", "guide.md:1: [doc-limit] line ending: a lone CR"},
+		{"oversize", strings.Repeat("a\n", MaxDocumentBytes/2+1), "guide.md: [doc-limit] document: over 524288 bytes"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -74,7 +74,7 @@ func TestDocumentLimitIsOneRulePerPath(t *testing.T) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if _, err := Read("CHANGELOG.md", []byte(strings.Repeat("a\n", MaxRecordBytes/2+10))); err == nil || !strings.Contains(err.Error(), "exceeds maximum 1572864 bytes") {
+	if _, err := Read("CHANGELOG.md", []byte(strings.Repeat("a\n", MaxRecordBytes/2+10))); err == nil || !strings.Contains(err.Error(), "document: over 1572864 bytes") {
 		t.Fatalf("record limit not enforced: %v", err)
 	}
 }
@@ -238,14 +238,14 @@ func TestBudgetBoundsDocumentsAndBytes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := documents.Take("last.md", 1); err == nil || !strings.Contains(err.Error(), "last.md:0: too many documents; maximum is 4096.") {
+	if err := documents.Take("last.md", 1); err == nil || !strings.Contains(err.Error(), "last.md: [doc-limit] run: more than 4096 documents") {
 		t.Fatalf("document count: %v", err)
 	}
 	var bytes Budget
 	if err := bytes.Take("a.md", MaxRunBytes); err != nil {
 		t.Fatal(err)
 	}
-	if err := bytes.Take("b.md", 1); err == nil || !strings.Contains(err.Error(), "b.md:0: documents exceed maximum") {
+	if err := bytes.Take("b.md", 1); err == nil || !strings.Contains(err.Error(), "b.md: [doc-limit] run: reads more than") {
 		t.Fatalf("byte total: %v", err)
 	}
 }
@@ -284,7 +284,7 @@ func TestSiblingIndexesResolveWithinOneContainer(t *testing.T) {
 }
 
 func TestUnclosedCommentIsRefusedOnItsLine(t *testing.T) {
-	want := `guide.md:3: HTML comment is not closed; add "-->"`
+	want := `guide.md:3: [doc-comment] HTML comment: not closed; add "-->"`
 	for name, input := range map[string]string{
 		"before an unbound Go fence": "# T\n\n<!-- abc\n\n```go\nx := 1\n```\n",
 		"before a pre element":       "# T\n\n<!-- abc\n\n<pre>x</pre>\n",

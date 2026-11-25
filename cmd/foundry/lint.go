@@ -26,10 +26,8 @@ func runLint(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	if err != nil {
 		return err
 	}
-	for _, d := range diagnostics {
-		if _, err := fmt.Fprintln(stdout, d.String()); err != nil {
-			return err
-		}
+	if err := printFindings(stdout, ".", diagnostics); err != nil {
+		return err
 	}
 	if len(diagnostics) > 0 {
 		return safeerror.New(fmt.Sprintf("no-raw: %d raw SQL call site(s)", len(diagnostics)))

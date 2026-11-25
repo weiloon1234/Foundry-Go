@@ -2,30 +2,15 @@
 package docrefs
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 var identifier = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
-
-// Problem locates invalid documentation without requiring a source checkout.
-type Problem struct {
-	File    string
-	Line    int
-	Message string
-}
-
-func (p Problem) Error() string { return fmt.Sprintf("%s:%d: %s", p.File, p.Line, p.Message) }
-
-// problem captures the concrete location diagnostic before exposing its value.
-func problem(file string, line int, message string) error {
-	p := Problem{File: file, Line: line, Message: message}
-	return safeerror.Owned(p.Error(), p)
-}
 
 // Reference names a page and, optionally, an explicit anchor in that page.
 type Reference struct {
@@ -66,7 +51,9 @@ func Parse(cache *markdown.Cache, name string, data []byte) ([]Reference, error)
 			parsed = append(parsed, Reference{File: name, Line: line, Guide: guide, Anchor: anchor})
 		}
 		if !valid {
-			failures = append(failures, problem(name, line, "invalid Foundry guides: declaration; use comma-separated `guide` or `guide#anchor` tokens with lowercase letters, digits and internal hyphens"))
+			failures = append(failures, diagnostic.GuidesDeclaration.At(name, line, 0).
+				Say("Foundry guides line", "malformed declaration").
+				To("write comma-separated `guide` or `guide#anchor` tokens of lowercase letters, digits and internal hyphens").Err())
 			return
 		}
 		refs = append(refs, parsed...)
