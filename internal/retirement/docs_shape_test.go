@@ -81,3 +81,10 @@ func TestDocumentShapeRefusalsReachBothCheckers(t *testing.T) {
 		}
 	}
 }
+
+func TestUnclosedCommentIsRefusedNotSkipped(t *testing.T) {
+	err := CheckDocument("guide.md", []byte("# T\n\n<!-- abc\nrows.Count(q)\n"))
+	if err == nil || !strings.Contains(err.Error(), `guide.md:3: HTML comment is not closed; add "-->"`) {
+		t.Fatalf("unclosed comment hid the rest of the document: %v", err)
+	}
+}

@@ -301,6 +301,9 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 		if block.Kind == markdown.HTML && markdown.HasCodeElement(block.Text) {
 			binding("HTML pre/code elements are unsupported; use a fenced block with a language tag.")
 		}
+		if block.Kind == markdown.HTML && strings.HasPrefix(trimmed, "<!-- compiled-source") {
+			return fail("compiled-source marker must stand alone on its line; remove the text after \"-->\".")
+		}
 		if block.Kind == markdown.Comment && strings.HasPrefix(trimmed, "<!-- compiled-source") {
 			if directive.FindStringSubmatch(trimmed) == nil {
 				return fail("malformed compiled-source directive; use <!-- compiled-source: path#region -->.")

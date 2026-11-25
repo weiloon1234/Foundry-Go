@@ -3,6 +3,7 @@ package markdown
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -13,6 +14,8 @@ import (
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 	"golang.org/x/net/html"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Lines indexes newline offsets once, including the final unterminated line.
@@ -118,7 +121,11 @@ func Read(name string, data []byte) (Document, error) {
 	if err := checkShape(name, data); err != nil {
 		return Document{}, err
 	}
-	return parse(data), nil
+	document, unclosed := parse(data)
+	if unclosed > 0 {
+		return Document{}, safeerror.New(fmt.Sprintf("%s:%d: HTML comment is not closed; add \"-->\".", name, unclosed))
+	}
+	return document, nil
 }
 
 // fencePriority is goldmark's registration priority for its fenced-code block
@@ -126,7 +133,9 @@ func Read(name string, data []byte) (Document, error) {
 // this priority, because the wrapper below would then silently not be installed.
 const fencePriority = 700
 
-func parse(data []byte) Document {
+// parse also returns the line of the first comment with no closing "-->", or 0.
+func parse(data []byte) (Document, int) {
+	unclosed := 0
 	result := Document{Source: data, Lines: NewLines(data)}
 	fences := &fenceParser{BlockParser: parser.NewFencedCodeBlockParser(), nodes: make(map[ast.Node]*Node), lines: result.Lines, source: data}
 	blocks := parser.DefaultBlockParsers()
@@ -189,6 +198,11 @@ func parse(data []byte) Document {
 			// made of comments alone is a Comment.
 			if v.HTMLBlockType == ast.HTMLBlockType2 && onlyComments(item.Text) {
 				item.Kind = Comment
+			}
+			if unclosed == 0 && v.HTMLBlockType == ast.HTMLBlockType2 {
+				if offset := unclosedCommentOffset(item.Text); offset >= 0 {
+					unclosed = result.Lines.Number(max(0, n.Lines().At(0).Start)) + strings.Count(item.Text[:offset], "\n")
+				}
 			}
 		case *extast.TableRow, *extast.TableHeader:
 			item.Kind = TableRow
@@ -279,7 +293,25 @@ func parse(data []byte) Document {
 			result.Blocks[i].Previous = previous
 		}
 	}
-	return result
+	return result, unclosed
+}
+
+// unclosedCommentOffset returns the offset of a comment in raw that has no
+// closing "-->" (the tokenizer runs it to the end of the input), or -1.
+func unclosedCommentOffset(raw string) int {
+	z := html.NewTokenizer(strings.NewReader(raw))
+	offset := 0
+	for {
+		kind := z.Next()
+		if kind == html.ErrorToken {
+			return -1
+		}
+		token := z.Raw()
+		if kind == html.CommentToken && !bytes.HasSuffix(token, []byte("-->")) {
+			return offset
+		}
+		offset += len(token)
+	}
 }
 
 func inlineEnd(n ast.Node) int {

@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -212,6 +213,24 @@ func TestCacheRetentionIsBounded(t *testing.T) {
 	}
 }
 
+func TestCacheRetentionIsBoundedByBytes(t *testing.T) {
+	cache := NewCache()
+	// Blank lines parse in no time; each document sits exactly at the size limit.
+	data := []byte(strings.Repeat("\n", MaxDocumentBytes))
+	fits := MaxRunBytes / MaxDocumentBytes
+	for i := 0; i < fits+20; i++ {
+		if _, err := cache.Read(fmt.Sprintf("d%d.md", i), data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if cache.bytes > MaxRunBytes || len(cache.entries) != fits {
+		t.Fatalf("cache retained %d documents and %d bytes, want %d documents within %d bytes", len(cache.entries), cache.bytes, fits, MaxRunBytes)
+	}
+	if _, kept := cache.entries[fmt.Sprintf("d%d.md", fits)]; kept {
+		t.Fatal("a document past the byte bound was retained")
+	}
+}
+
 func TestBudgetBoundsDocumentsAndBytes(t *testing.T) {
 	var documents Budget
 	for i := 0; i < MaxDocuments; i++ {
@@ -233,13 +252,12 @@ func TestBudgetBoundsDocumentsAndBytes(t *testing.T) {
 
 func TestMixedCommentBlockKeepsItsTail(t *testing.T) {
 	for input, kind := range map[string]Kind{
-		"<!-- c -->\n":                  Comment,
-		"<!-- a\nb -->\n":               Comment,
-		"<!-- a --> <!-- b -->\n":       Comment,
-		"<!-- c --><pre>x</pre>\n":      HTML,
-		"<!-- c --> tail text\n":        HTML,
-		"<!-- a\nb --><pre>x</pre>\n":   HTML,
-		"<!-- unterminated\nstill in\n": Comment,
+		"<!-- c -->\n":                Comment,
+		"<!-- a\nb -->\n":             Comment,
+		"<!-- a --> <!-- b -->\n":     Comment,
+		"<!-- c --><pre>x</pre>\n":    HTML,
+		"<!-- c --> tail text\n":      HTML,
+		"<!-- a\nb --><pre>x</pre>\n": HTML,
 	} {
 		document, err := Read("guide.md", []byte(input))
 		if err != nil || len(document.Blocks) != 1 || document.Blocks[0].Kind != kind {
@@ -261,6 +279,58 @@ func TestSiblingIndexesResolveWithinOneContainer(t *testing.T) {
 		document, err := Read("guide.md", []byte(input))
 		if err != nil || document.Blocks[0].Kind != Comment || document.Blocks[0].Next != -1 {
 			t.Errorf("%s: marker sibling = %d (%v)", name, document.Blocks[0].Next, err)
+		}
+	}
+}
+
+func TestUnclosedCommentIsRefusedOnItsLine(t *testing.T) {
+	want := `guide.md:3: HTML comment is not closed; add "-->"`
+	for name, input := range map[string]string{
+		"before an unbound Go fence": "# T\n\n<!-- abc\n\n```go\nx := 1\n```\n",
+		"before a pre element":       "# T\n\n<!-- abc\n\n<pre>x</pre>\n",
+		"before a retired name":      "# T\n\n<!-- abc\n\nrows.Count(q)\n",
+		"second comment on a line":   "# T\n\n<!-- a --> <!-- b\nmore\n",
+		"in a quote":                 "# T\n\n> <!-- abc\n> more\n",
+	} {
+		_, err := Read("guide.md", []byte(input))
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: want %q, got %v", name, want, err)
+		}
+	}
+	_, err := Read("guide.md", []byte("# T\n\ntext\n\n<!-- a\nlate\n"))
+	if err == nil || !strings.Contains(err.Error(), "guide.md:5:") {
+		t.Errorf("multi-line comment line: %v", err)
+	}
+	for name, input := range map[string]string{
+		"closed multi-line": "# T\n\n<!-- abc\n\n```go\nx := 1\n```\n\n-->\n\ntail\n",
+		"in a fence":        "# T\n\n```html\n<!-- abc\n```\n",
+		"in a code span":    "# T\n\nUse `<!--` to open.\n",
+		"short comment":     "<!-->\n\ntext\n",
+	} {
+		if _, err := Read("guide.md", []byte(input)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestThematicBreakIsNotNesting(t *testing.T) {
+	for name, input := range map[string]string{
+		"hyphens":         "# T\n\n" + strings.Repeat("- ", 20) + "\n",
+		"asterisks":       "# T\n\n" + strings.Repeat("* ", 20) + "\n",
+		"quoted hyphens":  "> " + strings.Repeat("- ", 20) + "\n",
+		"tabbed asterisk": strings.Repeat("*\t", 20) + "\n",
+	} {
+		if _, err := Read("guide.md", []byte(input)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	for name, input := range map[string]string{
+		"list opener": strings.Repeat("- ", MaxContainerMarkers+1) + "x\n",
+		"star opener": strings.Repeat("* ", MaxContainerMarkers+1) + "x\n",
+		"quote":       strings.Repeat("> ", MaxContainerMarkers+1) + "x\n",
+	} {
+		if _, err := Read("guide.md", []byte(input)); err == nil || !strings.Contains(err.Error(), "flatten the nesting") {
+			t.Errorf("%s: %v", name, err)
 		}
 	}
 }

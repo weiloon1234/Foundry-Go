@@ -156,3 +156,10 @@ func TestLiteralHTMLNamesAreNotBlocks(t *testing.T) {
 		t.Fatalf("inline literal hid real HTML: %v", err)
 	}
 }
+
+func TestMarkerFollowedByTextMustStandAlone(t *testing.T) {
+	doc, err := parseDocument(nil, "guide.md", []byte("# T\n\n<!-- compiled-source: a.go#r --> text\n```go\nx := 1\n```\n"), nil)
+	if err == nil || !strings.Contains(err.Error(), "guide.md:3: compiled-source marker must stand alone on its line") || strings.Contains(err.Error(), "no compiled source") {
+		t.Fatalf("want the stand-alone message, got %v (%v)", err, doc)
+	}
+}
