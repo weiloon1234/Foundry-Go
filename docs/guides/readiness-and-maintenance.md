@@ -12,6 +12,8 @@ Readiness checks and maintenance admission share the application lifecycle.
 <a id="recipe-declare-readiness"></a>
 ## Declare dependency readiness
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`.
+
 Use the feature callback to return concrete dependency probes. Resolve dependencies
 at construction and retain them in the probes. Configured health must be enabled
 for these probes to run. Public probes expose status only; dependency identities
@@ -74,11 +76,13 @@ response; a dependency outage alone must not trigger a process restart loop.
 <a id="recipe-maintenance-admission"></a>
 ## Control maintenance admission
 
+Inputs: `app *application.App`, `paused bool`.
+
+Pause or resume new work:
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/readiness.go#pause-admission -->
 ```go
-func Pause(app *application.App, paused bool) {
-	app.Maintenance().Set(paused)
-}
+app.Maintenance().Set(paused)
 ```
 
 `maintenance.Gate` controls new work admission. Its zero value serves normally.

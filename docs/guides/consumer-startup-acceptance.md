@@ -29,6 +29,13 @@ selects an optional TOML deployment file. `PROFILE__HTTP__SERVER__ADDRESS` can
 select a fixed listener. These are framework acceptance examples, not a starter
 application product or a production authentication template.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `foundation`.
+`configuredprofile` is the example module's own package: `configuredprofile.Load`
+reads its settings from the optional TOML file and `configuredprofile.Build` returns
+the application.
+
+Inputs: `ctx context.Context`, `path *string`, `serve *bool`.
+
 The entry point is ordinary Go:
 
 <!-- compiled-source: tests/fixtures/consumer/configuredprofile/cmd/profile/main.go#run-configured-http -->

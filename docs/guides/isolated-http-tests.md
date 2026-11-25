@@ -16,8 +16,12 @@ PostgreSQL transaction per write. Handlers contain no test schema argument.
 <a id="recipe-isolate-application"></a>
 ## Isolate an application
 
-The low-level alias `pgtest` imports `testkit/postgres`; `pgapp` imports
-`testkit/postgres/application` for application settings/migrations.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `attachments`, `foundation`, `infrastructure`, `testkit/application` as `appstest`, `testkit/attachments` as `attachmentstest`, `testkit/http` as `httptest`, `testkit/postgres` as `pgtest`, `testkit/postgres/application` as `pgapp`, `testkit/redis` as `redistest`.
+In the examples, `models` is the application's model package, and `isolatedhttp` and
+`configuredprofile` stand for the application's own packages: each has `Defaults()`
+returning its settings, `Build` assembling the application, and (for `isolatedhttp`)
+`Migrations()` and the `Receipt` type that its publisher callback receives. The
+example passes a callback that does nothing.
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_recipes_test.go#isolated-application -->
 ```go
@@ -98,14 +102,15 @@ func TestConfiguredHTTPKernel(t *testing.T) {
 }
 ```
 
+Inputs: `t testing.TB`, `app *application.App`.
+
+Run a worker kernel the same way:
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_recipes_test.go#run-worker-test -->
 ```go
-func runWorker(t testing.TB, app *application.App) {
-	t.Helper()
-	stop := appstest.RunKernel(t, app, foundation.Worker)
-	// Exercise this application's registered jobs before stopping it.
-	stop()
-}
+stop := appstest.RunKernel(t, app, foundation.Worker)
+// Exercise this application's registered jobs before stopping it.
+stop()
 ```
 
 For the production HTTP kernel, run `app.Run(ctx, foundation.HTTP)`, obtain its
@@ -213,6 +218,8 @@ func redisSettings(t testing.TB) infrastructure.RedisSettings {
 }
 ```
 
+Inputs: `t testing.TB`, `builder *application.Builder`.
+
 Register key cleanup from the configured builder before `Build` or client startup,
 so application shutdown runs first. Every connection in this inventory must use
 `Config(t)`'s test endpoint. Inventory cleanup includes derived job, lease and
@@ -220,14 +227,11 @@ cache-generation namespaces and ignores pub/sub channels.
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_recipes_test.go#redis-test-cleanup -->
 ```go
-func prepareRedisCleanup(t testing.TB, builder *application.Builder) {
-	t.Helper()
-	inventory, err := builder.RedisKeys()
-	if err != nil {
-		t.Fatal(err)
-	}
-	redistest.Cleanup(t, inventory)
+inventory, err := builder.RedisKeys()
+if err != nil {
+	t.Fatal(err)
 }
+redistest.Cleanup(t, inventory)
 ```
 
 Passing tests remove only their registered exact key prefixes. Failure, panic or
@@ -245,16 +249,15 @@ after each exact feature/application/environment prefix; it never flushes a stor
 <a id="recipe-missing-attachment"></a>
 ## Simulate a missing attachment object
 
+Inputs: `t testing.TB`, `manager *attachments.Manager`, `file attachments.File[models.User]`.
+
 Pass the selected file from a collection result or a loaded model slot. The helper
 removes that original object and retains its metadata and other files. Use only
 test-owned storage. See [attachments](attachments.md) for creating and loading files.
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_recipes_test.go#missing-attachment-object -->
 ```go
-func removeOriginal(t testing.TB, manager *attachments.Manager, file attachments.File[models.User]) {
-	t.Helper()
-	attachmentstest.RemoveBackingObject(t, manager, file)
-}
+attachmentstest.RemoveBackingObject(t, manager, file)
 ```
 
 ## Acceptance evidence

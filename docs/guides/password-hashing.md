@@ -126,8 +126,8 @@ Go's process memory. Rate limiting and model login policy remain separate contro
 
 <!-- compiled-source: tests/fixtures/consumer/passwords/tables.go#password-hashing-account-table -->
 ```go
-// Account is a model fixture, not a starter application. Digest deliberately
-// avoids a conventional sensitive field name to verify type-owned redaction.
+// Digest deliberately avoids a conventional sensitive field name: the
+// password.Hash type, not the name, owns redaction.
 //
 //foundry:model table=password_accounts var=AccountRecords key=ID identity=false
 type Account struct {

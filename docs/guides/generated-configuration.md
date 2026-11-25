@@ -32,6 +32,12 @@ and enabled reports validate configuration before acquiring runtime resources.
 The [datatable sorting guide](datatable.md) describes explicit column overrides
 and unchanged stable orders.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `config`, `config/toml`, `fault`, `infrastructure`, `secret`.
+`Port` is the application's `uint16` type and `Environment` its string-backed
+`//foundry:enum` with the member `Development`.
+
+Declare the groups and the settings struct:
+
 <!-- compiled-source: tests/fixtures/consumer/startupconfig/settings.go#deployment-settings -->
 ```go
 type HTTPSettings struct {
@@ -215,8 +221,7 @@ TOML loading, this API does not promise cancellation of arbitrary filesystem I/O
 
 When adopting this option, delete application dotenv parsers, the merged lookup
 closure and the provenance rewrite. Keep application defaults, declarations and
-validation. Existing loaders can pass their selected process lookup unchanged:
-
+validation. Existing loaders can pass their selected process lookup unchanged.
 Pass those inputs through the same loader and inspect `report.Entries()` only
 after a successful load. Entries contain provenance, not loaded values.
 
@@ -226,7 +231,9 @@ after a successful load. Entries contain provenance, not loaded values.
 Mark browser-visible scalar or declared enum fields with `config:"name,public"`
 and a `client:"env=..."` tag containing the complete frontend environment key.
 The [compiled configuration declaration](../../tests/fixtures/consumer/configured/settings.go)
-uses the same settings type for server configuration and public metadata:
+uses the same settings type for server configuration and public metadata.
+`Services` nests the framework's `infrastructure.Settings`; see
+[named services](named-services.md#recipe-named-tables):
 
 <!-- compiled-source: tests/fixtures/consumer/configured/settings.go#generated-configuration-settings -->
 ```go

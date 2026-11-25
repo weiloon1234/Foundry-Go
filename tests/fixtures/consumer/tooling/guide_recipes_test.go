@@ -36,15 +36,14 @@ func TestConfiguredHTTPKernel(t *testing.T) {
 
 // doc-example:end run-http-test
 
-// doc-example:begin run-worker-test
 func runWorker(t testing.TB, app *application.App) {
 	t.Helper()
+	// doc-example:begin run-worker-test
 	stop := appstest.RunKernel(t, app, foundation.Worker)
 	// Exercise this application's registered jobs before stopping it.
 	stop()
+	// doc-example:end run-worker-test
 }
-
-// doc-example:end run-worker-test
 
 // doc-example:begin isolated-application
 func isolatedApplication(t testing.TB) *application.App {
@@ -89,22 +88,20 @@ func redisSettings(t testing.TB) infrastructure.RedisSettings {
 
 // doc-example:end redis-test-settings
 
-// doc-example:begin redis-test-cleanup
 func prepareRedisCleanup(t testing.TB, builder *application.Builder) {
 	t.Helper()
+	// doc-example:begin redis-test-cleanup
 	inventory, err := builder.RedisKeys()
 	if err != nil {
 		t.Fatal(err)
 	}
 	redistest.Cleanup(t, inventory)
+	// doc-example:end redis-test-cleanup
 }
 
-// doc-example:end redis-test-cleanup
-
-// doc-example:begin missing-attachment-object
 func removeOriginal(t testing.TB, manager *attachments.Manager, file attachments.File[models.User]) {
 	t.Helper()
+	// doc-example:begin missing-attachment-object
 	attachmentstest.RemoveBackingObject(t, manager, file)
+	// doc-example:end missing-attachment-object
 }
-
-// doc-example:end missing-attachment-object

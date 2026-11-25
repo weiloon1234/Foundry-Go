@@ -9,12 +9,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// doc-example:begin scoped-model-binding-path
+
 //foundry:path pattern=/teams/{team}/projects/{project}/tasks/{task}
 type Path struct {
 	Team    model.ID[Team]
 	Project Slug
 	Task    Slug
 }
+
+// doc-example:end scoped-model-binding-path
 
 //foundry:dto http=response
 type Reply struct {
@@ -23,8 +27,11 @@ type Reply struct {
 	Task    Slug   `json:"task"`
 }
 
+// doc-example:begin scoped-model-binding-types
 type TeamProject = modelbinding.Models[Team, Project]
 type Resources = modelbinding.Models[TeamProject, Task]
+
+// doc-example:end scoped-model-binding-types
 type Request = modelbinding.Input[Path, foundryhttp.NoQuery, foundryhttp.NoBody, Resources]
 type TransportRequest = foundryhttp.Input[Path, foundryhttp.NoQuery, foundryhttp.NoBody]
 

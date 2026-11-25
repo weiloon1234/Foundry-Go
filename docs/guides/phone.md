@@ -10,6 +10,8 @@
 <a id="recipe-normalize-phone"></a>
 ## Normalize accepted input
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `countries`, `i18n`, `phone`, `validation`, `validation/phone` as `phonevalidation`.
+
 Use `phone.Parse` with the selected `countries.Code` before storing a contact number:
 
 <!-- compiled-source: tests/fixtures/consumer/codecs/phone.go#normalize-phone -->
@@ -23,8 +25,7 @@ func NormalizePhone(country countries.Code, input string, options phone.Options)
 }
 ```
 
-Import `github.com/weiloon1234/Foundry-Go/phone` and
-`github.com/weiloon1234/Foundry-Go/countries`. Store the selected country separately
+Store the selected country separately
 from the canonical string. The returned `phone.E164` has private storage;
 its zero value is absent. Use `String()` at a persistence or transport boundary.
 
@@ -45,7 +46,6 @@ Only `phone` and its importers compile this dependency's metadata.
 <a id="recipe-validate-phone"></a>
 ## Declare validation rules
 
-Import `github.com/weiloon1234/Foundry-Go/validation/phone` as `phonevalidation`.
 For a fixed country, bind `phonevalidation.Number[string](country, options)`
 to an ordinary typed validation field. Named string types are also supported.
 
