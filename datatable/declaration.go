@@ -114,8 +114,8 @@ type Description struct {
 }
 
 // Define snapshots a typed table specification and retains declaration errors instead
-// of returning them; the call itself never fails. Table.Validate, Description and
-// Compile return the retained error, and NewRegistry (and so datatable.New) refuses
+// of returning them; the call itself never fails. Table.Validate and Table.Description,
+// and datatable.Compile, return the retained error, and NewRegistry (and so datatable.New) refuses
 // the table's Registration with it.
 //
 // Example: datatable.Define(spec)

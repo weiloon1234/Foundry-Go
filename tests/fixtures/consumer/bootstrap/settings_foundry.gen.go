@@ -1140,7 +1140,7 @@ type SettingsAppFeaturesOutboxConfigKeySet struct {
 	//
 	// Events maps each declared EventOutbox destination (the key) to the durable job
 	// connection (the value) that delivers it; the reverse direction of Jobs. Empty connection selects the
-	// default job connection, which must be a Redis connection. Each destination needs an
+	// default job connection. Every connection used here, explicit or default, must be a Redis job connection. Each destination needs an
 	// EventOutbox declaration and each declaration needs an entry here; at most 128 entries.
 	// Each connection uses its default queue and jobs.DefaultPolicy for the framework event delivery job.
 	//

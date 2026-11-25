@@ -3,7 +3,7 @@
   "files": {
     "models_foundry.gen.go": "c1048c9bc7566132834363e7d17352e5202ed2c27d4416a88778f73cf0917acb",
     "profile_foundry.gen.go": "ec883ecd6a9e2c30ee2f5f6542701d8a29c883be78673940d0c6718397d3d5be",
-    "settings_foundry.gen.go": "655662e2ac24d78cd3b6bf78121ad388256422e36aea3030e788bcd3a3d30758",
+    "settings_foundry.gen.go": "8df2126f544efb6966c288b0181c0f8291cd319249dc310d913f1f288ed45328",
     "upload_input_foundry.gen.go": "e01bde54ca0def93944824c6624c26259df497ad1fa5ed01214016b840e7d5e6",
     "upload_result_foundry.gen.go": "c32fd4776bace6e2ac95a67caf4a9581eaa1491ff1ecffa0bd50944baef01faa"
   }
