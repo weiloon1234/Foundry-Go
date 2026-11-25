@@ -61,7 +61,7 @@ func Analyze(root string) ([]Declaration, error) {
 	found := make(map[string]Declaration)
 	for _, config := range configs {
 		for _, d := range analyzeConfig(fset, root, config) {
-			if prior, ok := found[d.Key()]; !ok || d.File+":"+lineText(d.Line) < prior.File+":"+lineText(prior.Line) {
+			if prior, ok := found[d.Key()]; !ok || worse(d, prior) {
 				found[d.Key()] = d
 			}
 		}
@@ -72,6 +72,16 @@ func Analyze(root string) ([]Declaration, error) {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Key() < result[j].Key() })
 	return result, nil
+}
+
+// worse reports whether copy a of a declaration is the one to keep over copy b
+// when platform files declare it more than once: a copy without an acceptable
+// comment beats a commented one; otherwise the earlier position wins.
+func worse(a, b Declaration) bool {
+	if a.Commented() != b.Commented() {
+		return !a.Commented()
+	}
+	return a.File+":"+lineText(a.Line) < b.File+":"+lineText(b.Line)
 }
 
 func lineText(line int) string { return fmt.Sprintf("%08d", line) }
@@ -88,37 +98,21 @@ type analysis struct {
 	root  string
 	dirs  map[string]string // import path to root-relative directory
 	sites map[token.Pos]site
-	seen  map[string]bool
-	found map[string]Declaration
+	seen  map[walkKey]bool
+	// reached holds the exported function types and interfaces some root reached.
+	reached map[string]bool
+	found   map[string]Declaration
 }
 
 func analyzeConfig(fset *token.FileSet, root string, config retirement.SurfaceConfig) []Declaration {
-	a := &analysis{fset: fset, root: root, dirs: map[string]string{}, sites: map[token.Pos]site{}, seen: map[string]bool{}, found: map[string]Declaration{}}
+	a := &analysis{fset: fset, root: root, dirs: map[string]string{}, sites: map[token.Pos]site{}, seen: map[walkKey]bool{}, reached: map[string]bool{}, found: map[string]Declaration{}}
 	for path, pkg := range config.All {
 		a.dirs[path] = pkg.Dir
 		for _, file := range pkg.Files {
 			a.index(file)
 		}
 	}
-	for _, pkg := range config.Importable {
-		scope := pkg.Types.Scope()
-		for _, name := range scope.Names() {
-			obj := scope.Lookup(name)
-			if !obj.Exported() {
-				continue
-			}
-			switch obj := obj.(type) {
-			case *types.Const:
-				a.require(pkg.Dir, KindConst, name, obj.Pos(), name)
-			case *types.Var:
-				a.require(pkg.Dir, KindVar, name, obj.Pos(), name)
-			case *types.Func:
-				a.params(obj.Type().(*types.Signature), name)
-			case *types.TypeName:
-				a.exposed(obj)
-			}
-		}
-	}
+	a.walkRoots(config.Importable)
 	result := make([]Declaration, 0, len(a.found))
 	for _, d := range a.found {
 		result = append(result, d)
@@ -184,7 +178,7 @@ func embeddedIdent(expr ast.Expr) *ast.Ident {
 }
 
 // require records one declaration that needs a comment and judges its comment.
-func (a *analysis) require(dir, kind, name string, pos token.Pos, declared string) {
+func (a *analysis) require(dir, kind, name string, pos token.Pos, declared string, typ types.Type) {
 	position := a.fset.Position(pos)
 	file := position.Filename
 	if relative, err := filepath.Rel(a.root, file); err == nil {
@@ -192,7 +186,7 @@ func (a *analysis) require(dir, kind, name string, pos token.Pos, declared strin
 	}
 	d := Declaration{Package: dir, Kind: kind, Name: name, File: file, Line: position.Line}
 	if s, ok := a.sites[pos]; ok {
-		d.Problem = judge(s, declared)
+		d.Problem = judge(s, declared, typ)
 	} else {
 		d.Problem = problemMissing
 	}
@@ -201,139 +195,4 @@ func (a *analysis) require(dir, kind, name string, pos token.Pos, declared strin
 
 func (a *analysis) isFramework(pkg *types.Package) bool {
 	return pkg != nil && (pkg.Path() == frameworkPath || strings.HasPrefix(pkg.Path(), frameworkPath+"/"))
-}
-
-// exposed starts the traversal from an exported type of an importable
-// package: the parameters of its methods (promoted ones included), and the
-// parameters of any function-typed field.
-func (a *analysis) exposed(obj *types.TypeName) {
-	named, ok := types.Unalias(obj.Type()).(*types.Named)
-	if !ok {
-		return
-	}
-	if !a.isFramework(named.Obj().Pkg()) {
-		return
-	}
-	switch under := named.Underlying().(type) {
-	case *types.Signature:
-		a.params(under, obj.Name())
-		return
-	case *types.Interface:
-		for i := 0; i < under.NumMethods(); i++ {
-			if m := under.Method(i); m.Exported() {
-				a.params(m.Type().(*types.Signature), obj.Name()+"."+m.Name())
-			}
-		}
-		return
-	case *types.Struct:
-		for i := 0; i < under.NumFields(); i++ {
-			if f := under.Field(i); f.Exported() {
-				a.callbackParams(f.Type(), obj.Name()+"."+f.Name())
-			}
-		}
-	}
-	set := types.NewMethodSet(types.NewPointer(named))
-	for i := 0; i < set.Len(); i++ {
-		if m, ok := set.At(i).Obj().(*types.Func); ok && m.Exported() {
-			a.params(m.Type().(*types.Signature), obj.Name()+"."+m.Name())
-		}
-	}
-}
-
-// callbackParams visits the parameters of every function type that a field
-// type holds directly or through pointers, slices, arrays, maps and channels.
-func (a *analysis) callbackParams(t types.Type, prefix string) {
-	switch t := types.Unalias(t).(type) {
-	case *types.Signature:
-		a.params(t, prefix)
-	case *types.Named:
-		if sig, ok := t.Underlying().(*types.Signature); ok {
-			a.params(sig, prefix)
-		}
-	case *types.Pointer:
-		a.callbackParams(t.Elem(), prefix)
-	case *types.Slice:
-		a.callbackParams(t.Elem(), prefix)
-	case *types.Array:
-		a.callbackParams(t.Elem(), prefix)
-	case *types.Chan:
-		a.callbackParams(t.Elem(), prefix)
-	case *types.Map:
-		a.callbackParams(t.Key(), prefix)
-		a.callbackParams(t.Elem(), prefix)
-	}
-}
-
-// params visits what a caller passes to a function: its parameter types.
-func (a *analysis) params(sig *types.Signature, prefix string) {
-	for i := 0; i < sig.Params().Len(); i++ {
-		p := sig.Params().At(i)
-		a.visit(p.Type(), prefix+"."+p.Name())
-	}
-}
-
-// visit follows a caller-input type to the struct types it reaches.
-func (a *analysis) visit(t types.Type, prefix string) {
-	switch t := t.(type) {
-	case *types.Alias:
-		a.visit(types.Unalias(t), prefix)
-	case *types.Named:
-		key := types.TypeString(t, nil)
-		if a.seen[key] {
-			return
-		}
-		a.seen[key] = true
-		for i := 0; i < t.TypeArgs().Len(); i++ {
-			a.visit(t.TypeArgs().At(i), prefix)
-		}
-		if !a.isFramework(t.Obj().Pkg()) {
-			return
-		}
-		name := t.Origin().Obj().Name()
-		if st, ok := t.Underlying().(*types.Struct); ok {
-			a.structure(st, name)
-			return
-		}
-		a.visit(t.Underlying(), name)
-	case *types.Struct:
-		a.structure(t, prefix)
-	case *types.Pointer:
-		a.visit(t.Elem(), prefix)
-	case *types.Slice:
-		a.visit(t.Elem(), prefix)
-	case *types.Array:
-		a.visit(t.Elem(), prefix)
-	case *types.Chan:
-		a.visit(t.Elem(), prefix)
-	case *types.Map:
-		a.visit(t.Key(), prefix)
-		a.visit(t.Elem(), prefix)
-	case *types.Signature:
-		a.params(t, prefix)
-		for i := 0; i < t.Results().Len(); i++ {
-			a.visit(t.Results().At(i).Type(), prefix+"."+t.Results().At(i).Name())
-		}
-	case *types.Interface:
-		for i := 0; i < t.NumMethods(); i++ {
-			m := t.Method(i)
-			a.visit(m.Type(), prefix+"."+m.Name())
-		}
-	}
-}
-
-// structure requires a comment on every exported field of a caller-input
-// struct and follows every field a caller can set or embed.
-func (a *analysis) structure(st *types.Struct, owner string) {
-	for i := 0; i < st.NumFields(); i++ {
-		f := st.Field(i)
-		origin := f.Origin()
-		if f.Exported() {
-			if dir, ok := a.dirs[origin.Pkg().Path()]; ok {
-				a.require(dir, KindField, owner+"."+f.Name(), origin.Pos(), f.Name())
-			}
-		}
-		if f.Exported() || f.Embedded() {
-			a.visit(f.Type(), owner+"."+f.Name())
-		}
-	}
 }

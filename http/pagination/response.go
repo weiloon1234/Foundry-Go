@@ -5,10 +5,14 @@ import "github.com/weiloon1234/Foundry-Go/value"
 // NumberedMeta preserves the ORM's exact numbered-page metadata, including zero
 // last_page for an empty count. Separate count/read operations are not a snapshot.
 type NumberedMeta struct {
-	Number int   `json:"current_page"`
-	Size   int   `json:"per_page"`
-	Total  int64 `json:"total"`
-	Pages  int64 `json:"last_page"`
+	// Number is the requested page number, counted from 1.
+	Number int `json:"current_page"`
+	// Size is the requested page size.
+	Size int `json:"per_page"`
+	// Total is the count of all rows matching the query, not only this page.
+	Total int64 `json:"total"`
+	// Pages is Total divided by Size, rounded up; it is 0 when Total is 0.
+	Pages int64 `json:"last_page"`
 }
 
 // SimpleMeta retains navigation information without claiming a total count.

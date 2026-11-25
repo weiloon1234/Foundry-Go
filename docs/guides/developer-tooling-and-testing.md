@@ -204,31 +204,62 @@ name-and-kind inventory does not hold.
 Editors and coding agents learn the framework from hover text, so a constant, variable
 or field an application sets or names without a comment is a guess. A framework author
 comments every exported constant and variable of an importable package and every exported
-field of a **caller-input** struct. A struct is a caller input when its type, followed
-through pointers, slices, arrays, maps, channels, function types, interface methods,
-generic type arguments and aliases, is a parameter of an exported function, method,
-interface method or function-typed field, or the type of an exported or embedded field of
-another caller input. A struct that appears only in results is not required yet. Types
-declared in `internal` count when an importable package exposes them. Generated
-declarations are checked as well: the fix belongs in the generator or its metadata.
+field of a **caller-input** struct, and one rule decides which structs those are: it
+follows **who supplies the value**, not the route by which a type is reached.
 
-A comment is the declaration's own doc comment or trailing line comment, and its first
-sentence starts with the declared name (the bare name, also for a constant or a field) and
-says more than the name: once the name, its words, articles and linking words (`is`,
-`of`, `to`, and the like) are removed, a word must remain, so `Timeout is the timeout.`
-fails. Each member of a grouped `const (` or `var (` block needs its own comment; the
-block's heading does not count. Names declared together (`A, B int`) cannot share one:
-split them.
+- The parameters of every exported function and of every method of an exported type are
+  supplied by the application; their results are supplied by the framework. The type of
+  every exported variable is supplied by the application.
+- A pointer, slice, array, map (key and element), channel, alias, generic type argument,
+  struct field (exported or embedded) and named type keeps the direction.
+- A function type flips its parameters and keeps its results. A callback the application
+  writes (a function-typed parameter, field or variable it supplies) receives
+  framework-supplied parameters and returns application-supplied results; a function the
+  framework hands back and the application calls takes application-supplied parameters and
+  returns framework-supplied results. An interface does the same for each method: one the
+  application implements has framework-supplied parameters and application-supplied
+  results; one the framework hands out is the reverse.
+- A type the framework returns (exported or not) has its exported methods' parameters
+  supplied by the application. An exported function type or interface that nothing
+  reaches is walked as application-supplied, since an application writes the handlers and
+  implementations of the public callback and interface types.
+- A struct's exported fields are required when the struct is supplied by the application
+  at least once. A struct that only the framework supplies is a result type and is not
+  required yet. The fields of an unexported struct are required only when an application
+  can set them, as promoted fields of an embedded struct of a reachable struct; a
+  parameter of an unexported struct type requires nothing.
+
+Types declared in `internal` count when an importable package exposes them. Generated
+declarations are checked as well: the fix belongs in the generator or its metadata. A
+declaration that platform files declare more than once is judged by its worst copy.
+
+A comment is the declaration's own doc comment or trailing line comment. It starts with
+the declared name (the bare name, also for a constant or a field), and the whole comment
+says more than the name: once the name's words, the words of the declaration's type,
+articles and linking words (`a`, `an`, `the`, `is`, `are`, `of`, `for`, `to`, `this`,
+`that`, `its`, `it`, `and`, `or`, `in`, `on`) and the filler words `value`, `setting`,
+`field`, `option`, `parameter`, `flag` and `TODO` are removed, a word must remain. So
+`Timeout is the timeout.`, `Name is a string.` and `Name is the name value.` fail, and
+`Timeout is the timeout. Zero means no limit.` passes. This test is a floor that catches
+empty comments, not a judgement of truth: whether a comment is right is reviewed by
+reading the code. Each member of a grouped `const (` or `var (` block needs its own
+comment; the block's heading does not count. Names declared together (`A, B int`) cannot
+share one: split them.
 
 `go run ./internal/cmd/apicomments`, part of `make docs-check`, prints a finding with rule
 `api-comment` for every required declaration without such a comment, at its location. The
 declarations that lack one today are listed in
 [`internal/apicomment/uncommented.txt`](../../internal/apicomment/uncommented.txt), one
-`package`, kind and name per line. The file only shrinks: a missing comment that is not
-listed fails (new API is commented), and a listed declaration that now has a comment, or
-that no longer exists or is no longer required, fails until its line is removed. Write the
-comment, then run `go run ./internal/cmd/apicomments --shrink`, which removes such lines
-and never adds one. The release target is an empty file.
+`package`, kind and name per line, sorted. The file only shrinks: a missing comment that is
+not listed fails (new API is commented), a listed declaration that now has a comment, or
+that no longer exists or is no longer required, fails until its line is removed, and so does
+a line that is not in the copy of the file recorded at the last release
+([`internal/apicomment/release/uncommented.txt`](../../internal/apicomment/release/uncommented.txt)),
+so a line added by hand is refused. Write the comment, then run
+`go run ./internal/cmd/apicomments --shrink`, which removes such lines, sorts the file and
+never adds one. The release commit records the copy with
+`go run ./internal/cmd/apicomments --release vX.Y.Z`
+([release checklist](../release-checklist.md)). The release target is an empty file.
 
 <a id="recipe-reference-guides"></a>
 ## Reference pinned guides

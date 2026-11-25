@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
+	"github.com/weiloon1234/Foundry-Go/internal/retirement"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // StagedFile lists, relative to the framework root, the declarations that need
@@ -19,11 +21,19 @@ import (
 // list that no generator may grow.
 const StagedFile = "internal/apicomment/uncommented.txt"
 
+// RecordedFile is the copy of StagedFile as of the last release. The staging
+// file may hold only lines of this copy, so a line added by hand fails: new API
+// is commented, never staged. `apicomments --release vX.Y.Z` rewrites it from
+// the staging file in the release commit (docs/release-checklist.md).
+const RecordedFile = "internal/apicomment/release/uncommented.txt"
+
 // StagedHeader starts the file; every other line is "package\tkind\tname".
 const StagedHeader = `# Declarations that need a doc comment and still lack one, one per line:
 # package, kind (const, var or field) and name, separated by tabs, sorted.
 # Checked by internal/cmd/apicomments (make docs-check). The file only shrinks:
 # write the comment, then run go run ./internal/cmd/apicomments --shrink.
+# The file may hold only lines of the copy recorded at the last release
+# (internal/apicomment/release/uncommented.txt); a line added by hand fails.
 # The release target is an empty file; the line count is reported at each release.
 `
 
@@ -48,6 +58,10 @@ func ParseStaged(data []byte) Staged {
 		at := func(problem, fix string) diagnostic.Diagnostic {
 			return diagnostic.APIComment.At(StagedFile, i+1, 0).Say("", problem).To(fix)
 		}
+		if strings.HasSuffix(line, "\r") {
+			staged.Findings = append(staged.Findings, at("line ends with a carriage return", "save the file with Unix line endings (go run ./internal/cmd/apicomments --shrink rewrites it)"))
+			continue
+		}
 		fields := strings.Split(line, "\t")
 		if len(fields) != 3 || (fields[1] != KindConst && fields[1] != KindVar && fields[1] != KindField) || fields[0] == "" || fields[2] == "" {
 			staged.Findings = append(staged.Findings, at("line is not \"package\", kind and name separated by tabs", "remove the line"))
@@ -67,10 +81,32 @@ func ParseStaged(data []byte) Staged {
 	return staged
 }
 
-// Compare judges the analysed declarations against the staging file. Every
-// finding is something to fix by editing a source file or by removing a line
-// of the staging file; none asks for a line to be added.
-func Compare(declarations []Declaration, staged Staged) []diagnostic.Diagnostic {
+// Recorded is the staging file as recorded at the last release.
+type Recorded struct {
+	// Version is the release tag from the first line, empty when it has none.
+	Version string
+	// Lines holds the recorded keys.
+	Lines map[string]int
+}
+
+// ParseRecorded reads the recorded copy's bytes. Its own faults are not
+// reported: a line that is not valid can never match a staging line.
+func ParseRecorded(data []byte) Recorded {
+	version, _ := retirement.ReleaseVersion(data)
+	return Recorded{Version: version, Lines: ParseStaged(data).Lines}
+}
+
+// RecordedCopy is the bytes `--release` writes: the release line, then the
+// staging file as it stands.
+func RecordedCopy(staged []byte, tag string) []byte {
+	return append([]byte("# Recorded at release "+tag+".\n"), staged...)
+}
+
+// Compare judges the analysed declarations against the staging file and the
+// copy recorded at the last release. Every finding is something to fix by
+// editing a source file or by removing a line of the staging file; none asks
+// for a line to be added.
+func Compare(declarations []Declaration, staged Staged, recorded Recorded) []diagnostic.Diagnostic {
 	findings := append([]diagnostic.Diagnostic(nil), staged.Findings...)
 	required := make(map[string]Declaration, len(declarations))
 	for _, d := range declarations {
@@ -87,6 +123,9 @@ func Compare(declarations []Declaration, staged Staged) []diagnostic.Diagnostic 
 		line := staged.Lines[key]
 		d, ok := required[key]
 		name := strings.ReplaceAll(key, "\t", " ")
+		if _, kept := recorded.Lines[key]; !kept {
+			findings = append(findings, diagnostic.APIComment.At(StagedFile, line, 0).Say(name, "is not in the copy recorded at release "+recorded.Version+" ("+RecordedFile+"), so it was added after that release; a declaration added after a release must have its comment, because the staging file can only shrink").To("remove the line and comment the declaration"))
+		}
 		switch {
 		case !ok:
 			findings = append(findings, diagnostic.APIComment.At(StagedFile, line, 0).Say(name, "is listed but is not a declaration that needs a comment (it is gone or no longer a caller input)").To(removeLine))
@@ -115,8 +154,8 @@ func fixFor(d Declaration) string {
 }
 
 // Shrink returns the staging file with every line that Compare would call
-// stale removed. It never adds a line: the result's lines are a subset of the
-// input's, in the input's order.
+// stale removed, sorted and without duplicates. It never adds a line: the
+// result's lines are a subset of the input's.
 func Shrink(declarations []Declaration, data []byte) []byte {
 	required := make(map[string]Declaration, len(declarations))
 	for _, d := range declarations {
@@ -125,17 +164,22 @@ func Shrink(declarations []Declaration, data []byte) []byte {
 	var out strings.Builder
 	out.WriteString(StagedHeader)
 	seen := make(map[string]bool)
+	var kept []string
 	for _, key := range ParseStaged(data).Order {
 		if d, ok := required[key]; ok && !d.Commented() && !seen[key] {
 			seen[key] = true
-			out.WriteString(key + "\n")
+			kept = append(kept, key)
 		}
+	}
+	sort.Strings(kept)
+	for _, key := range kept {
+		out.WriteString(key + "\n")
 	}
 	return []byte(out.String())
 }
 
-// Check analyses root and judges it against its staging file. The count is the
-// number of listed declarations.
+// Check analyses root and judges it against its staging file and the recorded
+// copy. The count is the number of listed declarations.
 func Check(root string) (findings []diagnostic.Diagnostic, count int, err error) {
 	declarations, err := Analyze(root)
 	if err != nil {
@@ -146,7 +190,36 @@ func Check(root string) (findings []diagnostic.Diagnostic, count int, err error)
 		return nil, 0, err
 	}
 	staged := ParseStaged(data)
-	return Compare(declarations, staged), len(staged.Order), nil
+	recorded, err := os.ReadFile(filepath.Join(root, RecordedFile))
+	if err != nil {
+		return nil, 0, err
+	}
+	return Compare(declarations, staged, ParseRecorded(recorded)), len(staged.Order), nil
+}
+
+// Release writes the recorded copy for tag from the staging file, once the
+// check passes: the copy is the starting point the next release's staging file
+// may only shrink from.
+func Release(root, tag string) error {
+	if !retirement.ValidReleaseTag(tag) {
+		return safeerror.New("--release " + tag + ": want a tag of the form vMAJOR.MINOR.PATCH, for example v0.53.0")
+	}
+	findings, _, err := Check(root)
+	if err != nil {
+		return err
+	}
+	if len(findings) != 0 {
+		return diagnostic.Join(findings)
+	}
+	data, err := os.ReadFile(filepath.Join(root, StagedFile))
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(root, RecordedFile)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, RecordedCopy(data, tag), 0o644)
 }
 
 // CountText is the one-line report of the staging file's size.

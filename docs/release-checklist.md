@@ -60,7 +60,19 @@ working tree.
 
 Report the line count of `internal/apicomment/uncommented.txt` (the first line of
 `go run ./internal/cmd/apicomments` output says it) in the release notes. The file only
-shrinks and the target is an empty file.
+shrinks and the target is an empty file. It may hold only lines of the copy recorded at the
+last release, so the release commit records the new copy: in the same commit that renames
+the `CHANGELOG.md` heading `Unreleased` to `vX.Y.Z`, and before tagging, run:
+
+```sh
+go run ./internal/cmd/apicomments --release vX.Y.Z
+```
+
+The command refuses a malformed tag and any staging file the check refuses, then rewrites
+`internal/apicomment/release/uncommented.txt` from the staging file. Review the diff (it can
+only have lost lines), then commit it with the heading change. A test compares the copy's
+version with the newest released heading of `CHANGELOG.md`, as it does for the retired-names
+baseline. Do not run it for any other purpose.
 
 ## Private packaged consumer gate
 

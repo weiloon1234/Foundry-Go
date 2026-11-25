@@ -107,8 +107,14 @@ type SettingsAppServicesConfigKeySet struct {
 // SettingsAppServicesNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppServicesNamespaceConfigKeySet struct {
 	// Application selects app.services.namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[Settings, string]
 	// Environment selects app.services.namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[Settings, string]
 }
 
@@ -221,8 +227,14 @@ type SettingsAppServicesCoordinationConfigConfigKeySet struct {
 // SettingsAppServicesCoordinationConfigNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppServicesCoordinationConfigNamespaceConfigKeySet struct {
 	// Application selects app.services.coordination.config.namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[Settings, string]
 	// Environment selects app.services.coordination.config.namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[Settings, string]
 }
 
@@ -478,8 +490,14 @@ type SettingsAppWorkerConfigConfigKeySet struct {
 // SettingsAppWorkerConfigNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppWorkerConfigNamespaceConfigKeySet struct {
 	// Application selects app.worker.config.namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[Settings, string]
 	// Environment selects app.worker.config.namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[Settings, string]
 }
 
@@ -615,22 +633,43 @@ type SettingsAppRealtimeConfigConfigKeySet struct {
 // SettingsAppRealtimeConfigMessageRateConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppRealtimeConfigMessageRateConfigKeySet struct {
 	// Requests selects app.realtime.config.message_rate.requests. Set accepts uint32.
+	//
+	// Requests is the number of units admitted per Window; it must be positive.
+	//
 	Requests config.Key[Settings, uint32]
 	// Window selects app.realtime.config.message_rate.window. Set accepts time.Duration.
+	//
+	// Window is the length of the fixed window; it must be a whole number of milliseconds from one millisecond through MaxWindow.
+	//
 	Window config.Key[Settings, time.Duration]
 }
 
 // SettingsAppRealtimeConfigPayloadConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppRealtimeConfigPayloadConfigKeySet struct {
 	// Bytes selects app.realtime.config.payload.bytes. Set accepts int.
+	//
+	// Bytes is the largest document size in bytes; it must be positive.
+	//
 	Bytes config.Key[Settings, int]
 	// Depth selects app.realtime.config.payload.depth. Set accepts int.
+	//
+	// Depth is the deepest child nesting allowed, with the root at zero; it must be from 0 to MaxJSONDepth.
+	//
 	Depth config.Key[Settings, int]
 	// Nodes selects app.realtime.config.payload.nodes. Set accepts int.
+	//
+	// Nodes is the most wire tree nodes allowed, object names included; it must be positive.
+	//
 	Nodes config.Key[Settings, int]
 	// Steps selects app.realtime.config.payload.steps. Set accepts int.
+	//
+	// Steps is the most schema graph visits allowed, aliases and missing fields included; it must be positive.
+	//
 	Steps config.Key[Settings, int]
 	// Issues selects app.realtime.config.payload.issues. Set accepts int.
+	//
+	// Issues is the most field diagnostics returned; it must be positive.
+	//
 	Issues config.Key[Settings, int]
 }
 
@@ -845,8 +884,14 @@ type SettingsAppFeaturesAuthSessionsConfigConfigKeySet struct {
 // SettingsAppFeaturesAuthSessionsConfigNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesAuthSessionsConfigNamespaceConfigKeySet struct {
 	// Application selects app.features.auth.sessions.config.namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[Settings, string]
 	// Environment selects app.features.auth.sessions.config.namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[Settings, string]
 }
 
@@ -922,38 +967,71 @@ type SettingsAppFeaturesAuthTokensConfigConfigKeySet struct {
 // SettingsAppFeaturesAuthTokensConfigNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesAuthTokensConfigNamespaceConfigKeySet struct {
 	// Application selects app.features.auth.tokens.config.namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[Settings, string]
 	// Environment selects app.features.auth.tokens.config.namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[Settings, string]
 }
 
 // SettingsAppFeaturesAuthTokensConfigPersonalConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesAuthTokensConfigPersonalConfigKeySet struct {
 	// Access selects app.features.auth.tokens.config.personal.access. Set accepts time.Duration.
+	//
+	// Access is how long an access token stays valid. It must not exceed Absolute.
+	//
 	Access config.Key[Settings, time.Duration]
 	// RefreshIdle selects app.features.auth.tokens.config.personal.refresh_idle. Set accepts time.Duration.
+	//
+	// RefreshIdle is how long a refresh token stays valid without a successful refresh. It is required for Renewable and must be zero otherwise; it must lie between Access and Absolute.
+	//
 	RefreshIdle config.Key[Settings, time.Duration]
 	// Absolute selects app.features.auth.tokens.config.personal.absolute. Set accepts time.Duration.
+	//
+	// Absolute is the family's total lifetime from issuance, which refreshes never extend. It is at most MaxLifetime; Personal and Challenge require it to equal Access.
+	//
 	Absolute config.Key[Settings, time.Duration]
 }
 
 // SettingsAppFeaturesAuthTokensConfigRenewableConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesAuthTokensConfigRenewableConfigKeySet struct {
 	// Access selects app.features.auth.tokens.config.renewable.access. Set accepts time.Duration.
+	//
+	// Access is how long an access token stays valid. It must not exceed Absolute.
+	//
 	Access config.Key[Settings, time.Duration]
 	// RefreshIdle selects app.features.auth.tokens.config.renewable.refresh_idle. Set accepts time.Duration.
+	//
+	// RefreshIdle is how long a refresh token stays valid without a successful refresh. It is required for Renewable and must be zero otherwise; it must lie between Access and Absolute.
+	//
 	RefreshIdle config.Key[Settings, time.Duration]
 	// Absolute selects app.features.auth.tokens.config.renewable.absolute. Set accepts time.Duration.
+	//
+	// Absolute is the family's total lifetime from issuance, which refreshes never extend. It is at most MaxLifetime; Personal and Challenge require it to equal Access.
+	//
 	Absolute config.Key[Settings, time.Duration]
 }
 
 // SettingsAppFeaturesAuthTokensConfigChallengeConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesAuthTokensConfigChallengeConfigKeySet struct {
 	// Access selects app.features.auth.tokens.config.challenge.access. Set accepts time.Duration.
+	//
+	// Access is how long an access token stays valid. It must not exceed Absolute.
+	//
 	Access config.Key[Settings, time.Duration]
 	// RefreshIdle selects app.features.auth.tokens.config.challenge.refresh_idle. Set accepts time.Duration.
+	//
+	// RefreshIdle is how long a refresh token stays valid without a successful refresh. It is required for Renewable and must be zero otherwise; it must lie between Access and Absolute.
+	//
 	RefreshIdle config.Key[Settings, time.Duration]
 	// Absolute selects app.features.auth.tokens.config.challenge.absolute. Set accepts time.Duration.
+	//
+	// Absolute is the family's total lifetime from issuance, which refreshes never extend. It is at most MaxLifetime; Personal and Challenge require it to equal Access.
+	//
 	Absolute config.Key[Settings, time.Duration]
 }
 
@@ -988,8 +1066,14 @@ type SettingsAppFeaturesAuthMFAConfigConfigKeySet struct {
 // SettingsAppFeaturesAuthMFAConfigNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesAuthMFAConfigNamespaceConfigKeySet struct {
 	// Application selects app.features.auth.mfa.config.namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[Settings, string]
 	// Environment selects app.features.auth.mfa.config.namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[Settings, string]
 }
 
@@ -1310,89 +1394,220 @@ type SettingsAppFeaturesObservabilityErrorLogConfigKeySet struct {
 // SettingsAppFeaturesTelemetryConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesTelemetryConfigKeySet struct {
 	// Enabled selects app.features.telemetry.enabled. Set accepts bool.
+	//
+	// Enabled turns on persisted telemetry. It requires observability to be enabled.
+	//
 	Enabled config.Key[Settings, bool]
 	// Database selects app.features.telemetry.database. Set accepts database.ConnectionName.
+	//
+	// Database names the database connection that stores telemetry. Empty selects the default connection.
+	//
 	Database config.Key[Settings, database.ConnectionName]
 	// Schema selects app.features.telemetry.schema. Set accepts string.
+	//
+	// Schema is the schema that holds the telemetry tables. Empty selects the connection's primary schema,
+	// or public when that has none.
+	//
 	Schema config.Key[Settings, string]
 	// Kernels selects app.features.telemetry.kernels. Set accepts []foundation.KernelKind.
-	Kernels   config.Key[Settings, []foundation.KernelKind]
+	//
+	// Kernels lists the kernels whose processes run the telemetry engine; empty selects HTTP, worker and
+	// scheduler. Each must be a known kernel kind, listed once.
+	//
+	Kernels config.Key[Settings, []foundation.KernelKind]
+	//
+	// Collector configures the in-memory collector; it is validated at assembly.
+	//
 	Collector SettingsAppFeaturesTelemetryCollectorConfigKeySet
-	Config    SettingsAppFeaturesTelemetryConfigConfigKeySet
+	//
+	// Config configures the engine's timing, retention, alerts and read limits; it is validated at
+	// assembly.
+	//
+	Config SettingsAppFeaturesTelemetryConfigConfigKeySet
 }
 
 // SettingsAppFeaturesTelemetryCollectorConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesTelemetryCollectorConfigKeySet struct {
 	// Instance selects app.features.telemetry.collector.instance. Set accepts telemetry.Instance.
+	//
+	// Instance names this process instance and is stored on its run. It must be 1 to 128 bytes of letters, digits
+	// and . _ - characters, starting with a letter or digit and without "..".
+	//
 	Instance config.Key[Settings, telemetry.Instance]
 	// Release selects app.features.telemetry.collector.release. Set accepts telemetry.Release.
+	//
+	// Release names the deployed build. It is stored on the run and on every collected issue, and a
+	// browser report whose release differs is refused. It follows the same identity rules as Instance.
+	//
 	Release config.Key[Settings, telemetry.Release]
 	// MaxSeries selects app.features.telemetry.collector.max_series. Set accepts int.
+	//
+	// MaxSeries bounds the in-memory request-metric series. It must be 1..4096.
+	//
 	MaxSeries config.Key[Settings, int]
 	// MaxEvents selects app.features.telemetry.collector.max_events. Set accepts int.
+	//
+	// MaxEvents bounds the issue observations held before the next capture; observations over the bound
+	// are counted as dropped. Browser issues may use at most MaxEvents/4 of it and security issues MaxEvents/2
+	// (rounded down), which also caps the security issues one capture holds. It must be 1..4096.
+	//
 	MaxEvents config.Key[Settings, int]
 	// MaxPendingBatches selects app.features.telemetry.collector.max_pending_batches. Set accepts int.
+	//
+	// MaxPendingBatches bounds the captured batches waiting to be stored; when that many are pending a
+	// new capture is dropped and counted. It must be 1..60.
+	//
 	MaxPendingBatches config.Key[Settings, int]
 	// PendingRetention selects app.features.telemetry.collector.pending_retention. Set accepts time.Duration.
+	//
+	// PendingRetention is how long a captured batch may wait to be stored before it is discarded as
+	// expired. It must be one minute to one hour.
+	//
 	PendingRetention config.Key[Settings, time.Duration]
-	Routes           SettingsAppFeaturesTelemetryCollectorRoutesConfigKeySet
-	Browser          SettingsAppFeaturesTelemetryCollectorBrowserConfigKeySet
+	//
+	// Routes excludes routes and operations from backend issue collection, and excluded routes from
+	// alert evaluation and from traffic reads unless a read includes them.
+	//
+	Routes SettingsAppFeaturesTelemetryCollectorRoutesConfigKeySet
+	//
+	// Browser configures anonymous browser error intake.
+	//
+	Browser SettingsAppFeaturesTelemetryCollectorBrowserConfigKeySet
 }
 
 // SettingsAppFeaturesTelemetryCollectorRoutesConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesTelemetryCollectorRoutesConfigKeySet struct {
 	// ExcludedRoutes selects app.features.telemetry.collector.routes.excluded_routes. Set accepts []http.RouteID.
+	//
+	// ExcludedRoutes lists route identities whose requests are excluded. Each entry must be a distinct
+	// semantic identity.
+	//
 	ExcludedRoutes config.Key[Settings, []http.RouteID]
 	// ExcludedPrefixes selects app.features.telemetry.collector.routes.excluded_prefixes. Set accepts []string.
+	//
+	// ExcludedPrefixes excludes every route whose identity starts with one of these strings. Each entry must be a distinct
+	// semantic identity (lowercase letters, digits, . _ -, starting with a letter or digit).
+	//
 	ExcludedPrefixes config.Key[Settings, []string]
 	// ExcludedOperations selects app.features.telemetry.collector.routes.excluded_operations. Set accepts []observability.Name.
+	//
+	// ExcludedOperations lists operation names whose backend issues are not collected. Each entry must be a distinct
+	// semantic identity. An operation named telemetry or starting with telemetry. is always excluded.
+	//
 	ExcludedOperations config.Key[Settings, []observability.Name]
 	// ExcludedOperationPrefixes selects app.features.telemetry.collector.routes.excluded_operation_prefixes. Set accepts []string.
+	//
+	// ExcludedOperationPrefixes excludes every operation whose name starts with one of these strings. Each entry must be a
+	// distinct semantic identity.
+	//
 	ExcludedOperationPrefixes config.Key[Settings, []string]
 }
 
 // SettingsAppFeaturesTelemetryCollectorBrowserConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesTelemetryCollectorBrowserConfigKeySet struct {
 	// Enabled selects app.features.telemetry.collector.browser.enabled. Set accepts bool.
+	//
+	// Enabled turns on browser error intake. While false, RecordBrowser refuses every report.
+	//
 	Enabled config.Key[Settings, bool]
 	// Portals selects app.features.telemetry.collector.browser.portals. Set accepts []telemetry.Portal.
+	//
+	// Portals is the allowlist of portals that may report. It must be non-empty when Enabled is true, and
+	// each entry must be a distinct bounded identity.
+	//
 	Portals config.Key[Settings, []telemetry.Portal]
 }
 
 // SettingsAppFeaturesTelemetryConfigConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesTelemetryConfigConfigKeySet struct {
 	// FlushInterval selects app.features.telemetry.config.flush_interval. Set accepts time.Duration.
+	//
+	// FlushInterval is how often the engine captures and stores a batch. It must be one second to one
+	// minute.
+	//
 	FlushInterval config.Key[Settings, time.Duration]
 	// FlushTimeout selects app.features.telemetry.config.flush_timeout. Set accepts time.Duration.
+	//
+	// FlushTimeout bounds one storage or pruning attempt. It must be positive.
+	//
 	FlushTimeout config.Key[Settings, time.Duration]
 	// DrainTimeout selects app.features.telemetry.config.drain_timeout. Set accepts time.Duration.
+	//
+	// DrainTimeout bounds the final drain of pending batches at shutdown. It must be positive.
+	//
 	DrainTimeout config.Key[Settings, time.Duration]
-	Retention    SettingsAppFeaturesTelemetryConfigRetentionConfigKeySet
-	Alerts       SettingsAppFeaturesTelemetryConfigAlertsConfigKeySet
-	Reads        SettingsAppFeaturesTelemetryConfigReadsConfigKeySet
+	//
+	// Retention bounds how long and how much telemetry is stored.
+	//
+	Retention SettingsAppFeaturesTelemetryConfigRetentionConfigKeySet
+	//
+	// Alerts configures the built-in incident rules, their thresholds and the capture counts that open and recover incidents. Evaluation runs only when Alerts.Enabled is true.
+	//
+	Alerts SettingsAppFeaturesTelemetryConfigAlertsConfigKeySet
+	//
+	// Reads bounds concurrent reads, result sizes, page sizes and the read timeout; its result and page sizes must not exceed the matching storage capacities in Retention.
+	//
+	Reads SettingsAppFeaturesTelemetryConfigReadsConfigKeySet
 }
 
 // SettingsAppFeaturesTelemetryConfigRetentionConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesTelemetryConfigRetentionConfigKeySet struct {
 	// Minute selects app.features.telemetry.config.retention.minute. Set accepts time.Duration.
+	//
+	// Minute is how long minute-resolution metric buckets are kept. It must be one hour to seven days.
+	//
 	Minute config.Key[Settings, time.Duration]
 	// Hour selects app.features.telemetry.config.retention.hour. Set accepts time.Duration.
+	//
+	// Hour is how long hour-resolution metric buckets and run records are kept. It must be at least
+	// Minute and at most thirty days, and must exceed the receipt retry horizon.
+	//
 	Hour config.Key[Settings, time.Duration]
 	// Issue selects app.features.telemetry.config.retention.issue. Set accepts time.Duration.
+	//
+	// Issue is how long backend and browser issues and their events are kept. It must be one hour to
+	// thirty days.
+	//
 	Issue config.Key[Settings, time.Duration]
 	// Security selects app.features.telemetry.config.retention.security. Set accepts time.Duration.
+	//
+	// Security is how long security issues and their events are kept. It must be one hour to seven days.
+	//
 	Security config.Key[Settings, time.Duration]
 	// MaxRuns selects app.features.telemetry.config.retention.max_runs. Set accepts int.
+	//
+	// MaxRuns bounds the stored process runs. At the bound, a new run is stored only if enough empty runs (quiet for
+	// EmptyRunQuietPeriod) can be reclaimed; otherwise its batch is refused as overloaded. It must be 100..10,000.
+	//
 	MaxRuns config.Key[Settings, int]
 	// MaxReceiptRows selects app.features.telemetry.config.retention.max_receipt_rows. Set accepts int.
+	//
+	// MaxReceiptRows bounds the stored flush receipts; at the bound a flush fails as overloaded. It must
+	// be positive.
+	//
 	MaxReceiptRows config.Key[Settings, int]
 	// MaxMetricRows selects app.features.telemetry.config.retention.max_metric_rows. Set accepts int.
+	//
+	// MaxMetricRows bounds the stored metric buckets; buckets over the bound are dropped and counted. It
+	// must be 100..1,000,000.
+	//
 	MaxMetricRows config.Key[Settings, int]
 	// MaxIssueRows selects app.features.telemetry.config.retention.max_issue_rows. Set accepts int.
+	//
+	// MaxIssueRows bounds the stored issue groups; groups over the bound are dropped and counted. It
+	// must be 100..10,000.
+	//
 	MaxIssueRows config.Key[Settings, int]
 	// MaxEventRows selects app.features.telemetry.config.retention.max_event_rows. Set accepts int.
+	//
+	// MaxEventRows bounds the stored issue events; events over the bound are dropped and counted. It
+	// must be 100..100,000.
+	//
 	MaxEventRows config.Key[Settings, int]
 	// PruneInterval selects app.features.telemetry.config.retention.prune_interval. Set accepts time.Duration.
+	//
+	// PruneInterval is the minimum time between pruning passes in the engine's loop. It must be positive.
+	//
 	PruneInterval config.Key[Settings, time.Duration]
 	// EmptyRunQuietPeriod selects app.features.telemetry.config.retention.empty_run_quiet_period. Set accepts time.Duration.
 	//
@@ -1404,47 +1619,119 @@ type SettingsAppFeaturesTelemetryConfigRetentionConfigKeySet struct {
 // SettingsAppFeaturesTelemetryConfigAlertsConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesTelemetryConfigAlertsConfigKeySet struct {
 	// Enabled selects app.features.telemetry.config.alerts.enabled. Set accepts bool.
+	//
+	// Enabled turns on incident evaluation as batches are stored. An enabled policy needs rules,
+	// thresholds and both capture counts.
+	//
 	Enabled config.Key[Settings, bool]
 	// Rules selects app.features.telemetry.config.alerts.rules. Set accepts []telemetry.Rule.
-	Rules      config.Key[Settings, []telemetry.Rule]
+	//
+	// Rules lists the built-in rules to evaluate. Each must be a known rule, listed once.
+	//
+	Rules config.Key[Settings, []telemetry.Rule]
+	//
+	// Thresholds supplies the limits the rules compare against. They are validated when Enabled is true
+	// or any value is set.
+	//
 	Thresholds SettingsAppFeaturesTelemetryConfigAlertsThresholdsConfigKeySet
 	// SustainCaptures selects app.features.telemetry.config.alerts.sustain_captures. Set accepts int.
+	//
+	// SustainCaptures is how many consecutive bad captures open an incident for a rule, or reopen a recovered one as
+	// a new episode. A capture below Thresholds.MinimumRequests restarts the count for the latency and HTTP errors
+	// rules. It must be 1..60 when the policy is enabled or a count is set.
+	//
 	SustainCaptures config.Key[Settings, int]
 	// RecoverCaptures selects app.features.telemetry.config.alerts.recover_captures. Set accepts int.
+	//
+	// RecoverCaptures is how many consecutive healthy captures recover an open or acknowledged incident for a rule.
+	// A capture below Thresholds.MinimumRequests restarts the count for the latency and HTTP errors rules. It must be
+	// 1..60 when the policy is enabled or a count is set.
+	//
 	RecoverCaptures config.Key[Settings, int]
 }
 
 // SettingsAppFeaturesTelemetryConfigAlertsThresholdsConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesTelemetryConfigAlertsThresholdsConfigKeySet struct {
 	// Latency selects app.features.telemetry.config.alerts.thresholds.latency. Set accepts time.Duration.
+	//
+	// Latency is the 95th-percentile request latency at or above which the latency rule is bad. It must
+	// be above zero and at most one minute.
+	//
 	Latency config.Key[Settings, time.Duration]
 	// ErrorRatio selects app.features.telemetry.config.alerts.thresholds.error_ratio. Set accepts float64.
+	//
+	// ErrorRatio is the share of requests answered with status 500 or above at or over which the HTTP
+	// errors rule is bad. It must be finite and in (0,1].
+	//
 	ErrorRatio config.Key[Settings, float64]
 	// PoolUsageRatio selects app.features.telemetry.config.alerts.thresholds.pool_usage_ratio. Set accepts float64.
+	//
+	// PoolUsageRatio is the database connection pool usage (open connections in use over the pool's
+	// maximum, the higher of the primary and read pools) at or over which the pool pressure rule is bad.
+	// It must be finite and in (0,1].
+	//
 	PoolUsageRatio config.Key[Settings, float64]
 	// MinimumRequests selects app.features.telemetry.config.alerts.thresholds.minimum_requests. Set accepts int.
+	//
+	// MinimumRequests is the request count a capture needs before the latency and HTTP errors rules are
+	// judged; below it those rules neither worsen nor recover. It must be 1..1,000,000.
+	//
 	MinimumRequests config.Key[Settings, int]
 	// AuthFailures selects app.features.telemetry.config.alerts.thresholds.auth_failures. Set accepts int.
+	//
+	// AuthFailures is the number of authentication_failed and rate_limited security issues in one
+	// capture at or over which the authentication burst rule is bad. It must be 1..4096, but a capture holds at most
+	// CollectorConfig.MaxEvents/2 security issues, so a larger value never fires.
+	//
 	AuthFailures config.Key[Settings, int]
 }
 
 // SettingsAppFeaturesTelemetryConfigReadsConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesTelemetryConfigReadsConfigKeySet struct {
 	// MaxConcurrent selects app.features.telemetry.config.reads.max_concurrent. Set accepts int.
+	//
+	// MaxConcurrent bounds the reads in flight; another read fails as overloaded. It must be positive.
+	//
 	MaxConcurrent config.Key[Settings, int]
 	// MaxOverviewRuns selects app.features.telemetry.config.reads.max_overview_runs. Set accepts int.
+	//
+	// MaxOverviewRuns bounds the runs an overview returns; more are truncated. It must be positive and
+	// at most Retention.MaxRuns.
+	//
 	MaxOverviewRuns config.Key[Settings, int]
 	// MaxOverviewAlerts selects app.features.telemetry.config.reads.max_overview_alerts. Set accepts int.
+	//
+	// MaxOverviewAlerts bounds the incidents an overview returns; more are truncated. It must be
+	// positive and at most Retention.MaxRuns times the number of built-in rules.
+	//
 	MaxOverviewAlerts config.Key[Settings, int]
 	// MaxTrafficRows selects app.features.telemetry.config.reads.max_traffic_rows. Set accepts int.
+	//
+	// MaxTrafficRows bounds the metric rows a traffic read scans; more are truncated. It must be
+	// positive and at most Retention.MaxMetricRows.
+	//
 	MaxTrafficRows config.Key[Settings, int]
 	// MaxTrafficGroups selects app.features.telemetry.config.reads.max_traffic_groups. Set accepts int.
+	//
+	// MaxTrafficGroups bounds the distinct traffic groups a traffic read returns; more are truncated. It
+	// must be positive and at most MaxTrafficRows.
+	//
 	MaxTrafficGroups config.Key[Settings, int]
 	// MaxPage selects app.features.telemetry.config.reads.max_page. Set accepts int.
+	//
+	// MaxPage is the highest page number a paged read accepts. It must be positive.
+	//
 	MaxPage config.Key[Settings, int]
 	// MaxPageSize selects app.features.telemetry.config.reads.max_page_size. Set accepts int.
+	//
+	// MaxPageSize is the largest page size a paged read accepts. It must be positive and at most
+	// Retention.MaxIssueRows and Retention.MaxEventRows.
+	//
 	MaxPageSize config.Key[Settings, int]
 	// Timeout selects app.features.telemetry.config.reads.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds one read; a read whose context ends before it completes fails with a timeout fault. It must be positive.
+	//
 	Timeout config.Key[Settings, time.Duration]
 }
 

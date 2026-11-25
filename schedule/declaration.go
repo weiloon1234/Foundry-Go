@@ -22,8 +22,14 @@ type Handler func(context.Context, Invocation) error
 // ticks. Zero skips missed occurrences. At most Max occurrences from Window are
 // considered per schedule per tick; excess backlog is skipped, never accumulated.
 type CatchUp struct {
+	// Window is how far back from now missed occurrences are replayed. It must be
+	// greater than 0 and at most 7 days; Validate refuses any other value unless
+	// Max is also 0, which disables catch-up.
 	Window time.Duration
-	Max    int
+	// Max is the most recent occurrences replayed per schedule per tick; older
+	// ones in the window are skipped as a backlog. It must be from 1 to 1000;
+	// Validate refuses any other value unless Window is also 0.
+	Max int
 }
 
 // Validate checks catch-up window and count bounds. The zero policy disables catch-up.

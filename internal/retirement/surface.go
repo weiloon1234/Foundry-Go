@@ -623,9 +623,17 @@ func CheckRemovalsOf(root string, current []byte) error {
 // CheckBaselineVersion refuses a release baseline whose version is not the newest
 // released heading of the changelog. The release commit changes both together.
 func CheckBaselineVersion(baseline, changelog []byte) error {
+	return CheckRecordedVersion(ReleaseSurfaceFile, "go run ./internal/cmd/exportsurface --release", baseline, changelog)
+}
+
+// CheckRecordedVersion refuses a file recorded at a release (its first line is
+// "# Recorded at release vX.Y.Z.") whose version is not the newest released
+// heading of the changelog. command is the release step that rewrites the file;
+// the message appends the newest version to it.
+func CheckRecordedVersion(file, command string, baseline, changelog []byte) error {
 	recorded, ok := ReleaseVersion(baseline)
 	if !ok {
-		return safeerror.New(ReleaseSurfaceFile + " must start with the line \"# Recorded at release vX.Y.Z.\"")
+		return safeerror.New(file + " must start with the line \"# Recorded at release vX.Y.Z.\"")
 	}
 	var newest string
 	for _, line := range strings.Split(string(changelog), "\n") {
@@ -638,7 +646,7 @@ func CheckBaselineVersion(baseline, changelog []byte) error {
 		return safeerror.New("CHANGELOG.md has no released version heading")
 	}
 	if recorded != newest {
-		return safeerror.New(fmt.Sprintf("%s records %s but CHANGELOG.md's newest released version is %s; run go run ./internal/cmd/exportsurface --release %s in the release commit, with the heading (docs/release-checklist.md)", ReleaseSurfaceFile, recorded, newest, newest))
+		return safeerror.New(fmt.Sprintf("%s records %s but CHANGELOG.md's newest released version is %s; run %s %s in the release commit, with the heading (docs/release-checklist.md)", file, recorded, newest, command, newest))
 	}
 	return nil
 }
