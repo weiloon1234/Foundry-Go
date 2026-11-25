@@ -3,13 +3,11 @@
 Inspection results include JSON `timing.initialize_ns` and `timing.request_ns`.
 Startup/initialization and request/response time are separate; request
 time includes gopls package loading caused by that request. Overall wall time also
-includes source preparation and server shutdown. These timing additions passed
-[milestone 24 acceptance](../production-acceptance.md); see
-[native measurements](developer-resource-measurements.md).
+includes source preparation and server shutdown.
 
 Foundry's agent command speaks the Language Server Protocol (LSP) to an existing `gopls` executable. LSP is the editor protocol; gopls supplies Go completion, hover documentation, and definition locations. The command opens the actual consumer workspace, so its Go module graph and selected Foundry dependency determine the answers.
 
-The client passes protocol fixture tests and real-gopls completion, hover, and definition acceptance against the independent consumer. The approved tool's version is pinned in [tools/gopls.version](../../tools/gopls.version), separately from framework runtime dependencies. Nothing installs gopls automatically.
+The approved tool's version is pinned in [tools/gopls.version](../../tools/gopls.version), separately from framework runtime dependencies. Nothing installs gopls automatically.
 
 Run `make gopls-install` with the native Go toolchain to install the pinned development tool into ignored `bin/`. The real acceptance gate is `FOUNDRY_TEST_GOPLS="$PWD/bin/gopls" make agent-smoke`. It checks completion, typed hover information, definition lookup, original field help and getter/mutator notices in the independent consumer. Stored-field probes also reject removed computation methods while keeping ordinary comparisons and mutation methods visible. It also checks that source is unchanged. Ordinary tests skip that gate when no executable is selected; the smoke target fails if the selection is missing. A skipped test does not satisfy the real-language-server requirement.
 
@@ -56,8 +54,7 @@ For example, stored fields feed `expr.Value(field)` and aggregate descriptors in
 `database/orm/expr`. The
 [typed field migration table](typed-field-computations.md) records the exact
 changes. Private query-engine helpers and dated blueprint examples are not
-consumer APIs. Current guides describe supported behavior; dated acceptance
-records prove only their recorded source revision.
+consumer APIs. Current guides describe supported behavior.
 
 Use `make fmt` and `make fmt-check` in this checkout for the selected Go SDK's
 `gofmt`. Formatting does not regenerate declarations, migrate API calls, or add and
@@ -79,7 +76,7 @@ The client has protocol tests for framing limits, Unicode positions, unsaved buf
 
 ## Verification batches and cache freshness
 
-Milestone 23 adds batching to the acceptance harness. Each consumer editor
+The acceptance harness batches editor scenarios. Each consumer editor
 scenario starts one fresh gopls process and performs completion, hover and
 lookup with separate owned overlays. Initialization and each operation have
 independent deadlines. No server or unsaved state crosses scenarios. Every
@@ -108,10 +105,4 @@ When directly running an external-child gate outside make, use `go test -count=1
 the wrapper cannot fingerprint inputs for an arbitrary manual command. Existing
 `agent-smoke` and `typescript-check` targets already do this. Finish a milestone's
 source before the verification batch, then fix collected failures together.
-Milestone 23's final native gate passed in 430.4s. The complete editor package
-passed in 215.733s with 365 scenarios, compared with milestone 22's 582.512s
-for 357 scenarios. The 915-case consumer compiler package passed in 9.366s,
-compared with 130.414s for 903 cases. All actual assertions remain required.
-These are observed acceptance timings under the default native compiler settings;
-controlled resource measurements belong to milestone 24. Cache invalidation and
-unchanged-input reuse were exercised with actual Go child processes.
+All actual assertions remain required.

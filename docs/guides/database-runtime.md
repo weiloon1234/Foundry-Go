@@ -1,6 +1,6 @@
 # Database runtime
 
-The `database` package provides connector-based pooling, application lifecycle integration, parameterized SQL execution, streaming rows, callback-scoped transactions and sessions, explicit savepoints, and after-commit callbacks. [Migrations and seeders](migrations-and-seeding.md) build on these contracts. The [PostgreSQL adapter](postgresql.md) supplies the concrete driver. Protocol fixtures and real PostgreSQL acceptance verify their behavior.
+The `database` package provides connector-based pooling, application lifecycle integration, parameterized SQL execution, streaming rows, callback-scoped transactions and sessions, explicit savepoints, and after-commit callbacks. [Migrations and seeders](migrations-and-seeding.md) build on these contracts. The [PostgreSQL adapter](postgresql.md) supplies the concrete driver.
 
 ## Pool ownership
 
@@ -70,7 +70,7 @@ policy, not a proof that no raw SQL runs.
 
 ## Transaction scopes
 
-The [independent consumer example](../../tests/fixtures/consumer/database_example_test.go) compiles a parameterized query and transaction using only public Foundry contracts. It requires a connected database to execute; it is currently a compilation example, not PostgreSQL acceptance evidence.
+The [independent consumer example](../../tests/fixtures/consumer/database_example_test.go) compiles a parameterized query and transaction using only public Foundry contracts. It requires a connected database to execute; it is a compilation example, not PostgreSQL acceptance evidence.
 
 `db.Transaction(ctx, callback)` runs one callback exactly once. An optional `database.TxOptions` selects default/read-committed/repeatable-read/serializable isolation and read-only mode. No transaction callback is automatically retried. Callbacks run in owned goroutines so panics and `runtime.Goexit` become safe failures followed by cleanup; the caller waits for actual callback exit.
 
@@ -124,7 +124,7 @@ Standard-library driver protocol fixtures cover ownership, exhaustion, cancellat
 
 [Typed plans](query-plans.md) add separate `Explain` and `ExplainAnalyze`
 operations to compiled SELECT queries. Locked/transaction sources retain their
-`*database.Tx` requirement. These operations passed milestone 23 native PostgreSQL verification.
+`*database.Tx` requirement.
 
 ## Optional read endpoint
 

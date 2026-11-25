@@ -1,7 +1,5 @@
 # Native custom JSON value contracts
 
-**Status: focused runtime, generation, consumer, compiler and editor acceptance passed.**
-
 Declare a value method named `JSONContract` alongside a custom value's native
 Go serialization methods. It returns `contract.JSON[ThatSameValue]`. Generated
 DTOs discover the method automatically, retain the concrete field type and

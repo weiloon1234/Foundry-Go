@@ -6,9 +6,11 @@ The column must be non-primary. Migrations own its nullable SQL column. `softdel
 
 ## Typed writes and visibility
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`.
+
 `orm.Delete` soft-delete configured models, returning the stored post-write model. `orm.Restore` clears the deletion time on one deleted key. `orm.RestoreEach` restores a bounded set and requires the soft token. Ordinary models retain physical deletion.
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#force-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#force-delete -->
 ```go
 func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
 	_, err := orm.ForceDelete(ctx, tx, Users.Query().WithTrashed(), Users.Soft, Users.Key(), id)

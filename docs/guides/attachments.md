@@ -236,9 +236,8 @@ separate cleanup owners; retain and inspect adapter cleanup references when abor
 fails or an upload ID is lost. The transactional outbox remains the durable owner
 of required queued cleanup/variant work; after-commit callbacks only prompt it.
 
-Large SDK wire coverage and env-gated PostgreSQL regression sources exercise this
-path. R2 conditional create and replace support multipart objects up to
-`MaxObjectBytes` after live certification on 2026-11-15. Checksum-fallback reconciliation and explicit settlement stream the
+R2 conditional create and replace support multipart objects up to
+`MaxObjectBytes`. Checksum-fallback reconciliation and explicit settlement stream the
 pinned object through the shared fixed-buffer count/hash sink, using its persisted
 size even after the upload policy is lowered. Explicit settlement reads to EOF
 regardless of checksum metadata; automatic settlement retains the metadata
@@ -248,8 +247,8 @@ The existing writer exclusion, settlement delay, and cleanup grace still apply.
 
 Configure the manager `Timeout` to cover one maximum-sized verification plus its
 database work. Verification uses that operation budget; `CleanupTimeout` remains
-the shorter detached cleanup budget. Ingress/deployment and live-provider
-acceptance remain required before production rollout.
+the shorter detached cleanup budget. Ingress/deployment limits and a live-provider
+check remain the application's responsibility before production rollout.
 
 Before hooks run in declaration order with detected metadata and the typed
 owner. AfterStored hooks run after storage acknowledgement inside the ownership
@@ -799,7 +798,7 @@ For application reads inside deferred HTTP sources, use the
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.
 
-## Large-attachment acceptance
+## Large attachments
 
 For a 512 MiB opaque collection, set both policy ceilings, provision the private
 spool volume, and keep Prepare outside the caller transaction. Use AddIn or
@@ -815,6 +814,4 @@ and explicit settlement stream the original; cancellation or incomplete evidence
 must leave the intent unresolved.
 
 R2 supports conditional multipart create and replace up to `MaxObjectBytes`.
-Attachment upload policies and disk object-size limits still apply. Live
-certification also passed ranged reads of a 96 MiB object through the attachment
-seek reader.
+Attachment upload policies and disk object-size limits still apply.

@@ -15,6 +15,7 @@ func Operators(lookup func(context.Context, model.ID[Operator]) (value.Optional[
 	return auth.DefineProvider("report.operators", OperatorIdentity.Reference(model.ID[Operator]{}), lookup, func(_ context.Context, operator Operator) (bool, error) { return operator.Active, nil })
 }
 
+// doc-example:begin table-authority
 // Access is registered with the same auth registry as the interactive guard.
 // Queued execution reloads the actor and reuses this domain decision below.
 var Access = auth.DefinePolicy("reports.access", canReport)
@@ -30,13 +31,6 @@ type Authority struct {
 	actor    Operator
 	resolved bool
 }
-
-// doc-example:begin current-table-authority
-func FromGuard(guard auth.Guard[Operator]) Authority {
-	return Authority{guard: value.Set(guard)}
-}
-
-// doc-example:end current-table-authority
 
 func (a Authority) subject(ctx context.Context) (Operator, error) {
 	if guard, present := a.guard.Get(); present {
@@ -65,3 +59,12 @@ func authorize(ctx context.Context, authority Authority, action datatable.Action
 	}
 	return nil
 }
+
+// doc-example:end table-authority
+
+// doc-example:begin current-table-authority
+func FromGuard(guard auth.Guard[Operator]) Authority {
+	return Authority{guard: value.Set(guard)}
+}
+
+// doc-example:end current-table-authority

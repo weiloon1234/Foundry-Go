@@ -2,9 +2,6 @@
 
 The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
 
-T01 passed native verification, consumer/client/compiler/editor acceptance and
-cost measurements.
-
 `UserDTO` denotes your concrete response struct, and `userJSON` is its `contract.JSON[UserDTO]` descriptor returned by the generated `UserDTOJSON()` helper.
 
 The application owns `User` and any generated tables or identities used below.
@@ -91,8 +88,8 @@ own agreement with native Go serialization; these helpers do not infer an arbitr
 schema from sample data.
 
 The independent fixture covers typed HTTP, nested schemas, compiler rejection,
-strict TypeScript with real HTTP, and actual gopls completion. Generation remains
-deterministic and the full native `make verify` gate passed.
+strict TypeScript with real HTTP, and actual gopls completion. Generation is
+deterministic.
 
 Five native samples measured a median 12.7 µs for generic descriptor construction
 versus 5.7 µs for the concrete envelope; construct and retain descriptors at
@@ -108,5 +105,4 @@ for generic and 4.06/0.48/0.50 s for concrete; builds took 4.05/0.24/0.49 s and
 4.29/0.25/0.48 s. These are single sequential local-checkout samples with isolated
 Go build caches and an existing module cache, not release or statistical claims.
 The linked evidence retains commands, samples, source hashes and measurement
-harnesses. The complete T-series integration and final audit subsequently passed;
-see the [integrated workflow and acceptance](typed-api-workflow.md).
+harnesses.

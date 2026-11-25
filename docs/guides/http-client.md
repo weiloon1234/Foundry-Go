@@ -9,7 +9,7 @@
 
 ## Overview
 
-Milestone 24 delivered shared logical-operation observations and explicit
+The client emits shared logical-operation observations and has an explicit
 `Config.PropagateTrace`. Trace headers are off by default and remain subject to
 the named client's header budget. See [observability](observability.md).
 

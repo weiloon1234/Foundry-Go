@@ -7,7 +7,7 @@ focused packages and ordinary Go values.
 
 Use the existing [encryption package](encryption.md) for versioned authenticated
 encryption and retained-key rotation, `auth/password` for password hashing and
-the HTTP URL-signing API for purpose-bound signatures. Milestone 20 reuses those
+the HTTP URL-signing API for purpose-bound signatures. These supporting APIs reuse those
 implementations and their compatibility tests.
 
 `randomtoken.Bytes(size)` obtains cryptographic entropy. `Hex(size)` and

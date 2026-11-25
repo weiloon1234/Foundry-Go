@@ -1,8 +1,6 @@
 # Developer tooling and testing
 
-Milestone 23 passed native verification, independent consumer review, relevant
-races and bounded fuzzing. This guide explains the public APIs and their
-executable consumer recipes.
+This guide explains the public APIs and their executable consumer recipes.
 
 <a id="agent-entry"></a>
 ## Agent entry
@@ -988,6 +986,143 @@ credentials, which the framework rejects as ambiguous. Build `proof` with `auth.
 for the actor and assurance under test. Every request still verifies the
 credential, provider eligibility, scopes, policies and, for cookies, the
 application's origin/CSRF policy; the helpers grant nothing themselves.
+
+<a id="recipe-test-guarded-endpoint"></a>
+### Test a guarded endpoint without a database
+
+A guarded endpoint test acts as a token holder, calls the route with the generated
+request descriptor and asserts the typed statuses. It needs no database when the
+token store is in memory. Framework imports from `github.com/weiloon1234/Foundry-Go`:
+`auth`, `auth/token`, `database/orm`, `http` as `foundryhttp`, `httpclient`,
+`keyspace`, `model`, `testkit/http` as `httptest`, `validation`, `value`; the
+application's own packages are `models` (its declared models, here `models.User`
+with its generated `Users` table and a `Status` enum) and `outgoing` (its request and
+response DTOs: `CreateAccount` with a `Name`, and `AccountReceipt`).
+
+A test token backend keeps issued tokens in memory; the token service verifies each
+request against it, so scope, provider eligibility and verification behave as in
+production. The backend implements only the methods this test uses (`Create` and
+`Lookup`), so a test that refreshes or revokes a token must implement those methods too:
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/guarded_endpoint_test.go#guarded-test-backend -->
+```go
+// memoryTokens is a token.Backend that keeps issued tokens in memory so a test
+// needs no database. Embedding the interface leaves the unused methods unset.
+type memoryTokens struct {
+	token.Backend
+	records []token.Record
+}
+
+func (m *memoryTokens) Create(_ context.Context, address token.Address, creation token.Creation) (token.Record, error) {
+	record, err := creation.At(address, time.Now())
+	if err != nil {
+		return token.Record{}, err
+	}
+	m.records = append(m.records, record)
+	return record, nil
+}
+
+func (m *memoryTokens) Lookup(_ context.Context, _ token.Address, digest token.Digest, _ bool) (value.Optional[token.Record], error) {
+	for _, record := range m.records {
+		if record.AccessHash.Equal(digest) {
+			return value.Set(record), nil
+		}
+	}
+	return value.Optional[token.Record]{}, nil
+}
+```
+
+The route is declared as in [staged routes](flat-routes.md). The test binds the
+token guard, requires the `accounts.create` scope and validates the body, then
+serves it on a test client and returns the token service for the test to issue
+credentials from:
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/guarded_endpoint_test.go#guarded-test-handler -->
+```go
+var publishScope = auth.DefineAccessScope[models.User]("accounts.create")
+
+// guardedAccounts serves POST /accounts for a user holding the accounts.create scope.
+func guardedAccounts(t *testing.T) (*httptest.Client, *token.Tokens[models.User, model.ID[models.User]]) {
+	t.Helper()
+	provider := auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(models.User{}), func(_ context.Context, id model.ID[models.User]) (value.Optional[models.User], error) {
+		return value.Set(models.User{ID: id, Status: models.StatusActive}), nil
+	}, func(_ context.Context, user models.User) (bool, error) {
+		return user.Status == models.StatusActive, nil
+	})
+	store, err := token.NewStore(&memoryTokens{}, token.DefaultConfig(keyspace.Namespace{Application: "tooling", Environment: "test"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scopes, err := auth.NewAccessScopes(publishScope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := token.New(store, "users.api", provider, "users.bearer", scopes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	guard := tokens.Guard()
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration())
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport, err := foundryhttp.NewAuthentication(registry, foundryhttp.BearerCredential(guard.Source()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, err := foundryhttp.BindGuard(transport, guard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "accounts.create", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/accounts"))
+	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), outgoing.CreateAccountBody(), outgoing.AccountReceiptResponse(201))
+	endpoint = foundryhttp.ValidateBody(endpoint, validation.Rules(outgoing.CreateAccountValidationFields().Name, validation.NonBlank[string]()))
+	guarded := foundryhttp.Authenticated(endpoint, binding, foundryhttp.AllOf(foundryhttp.Scopes(scopes)))
+	router, err := foundryhttp.NewRouter(guarded.Handle(func(_ context.Context, user models.User, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, outgoing.CreateAccount]) (outgoing.AccountReceipt, error) {
+		return outgoing.AccountReceipt{ID: 7, Name: input.Body.Name}, nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return httptest.New(t, router), tokens
+}
+```
+
+`CreateAccountBody()` and `AccountReceiptResponse(201)` are the generated endpoint
+descriptors, `CreateAccountJSON()` and `AccountReceiptJSON()` the generated client
+descriptors that `httptest.JSON` and `httptest.DecodeJSON` take. Inputs: `t *testing.T`,
+`client *httptest.Client` and `tokens *token.Tokens[models.User, model.ID[models.User]]` from `guardedAccounts(t)`,
+`proof` from `auth.NewProof` for the user, and `scopes` holding `accounts.create`.
+A call without a token returns 401, a valid call 201 with the receipt, an invalid body
+422, and a token that lacks the required scope 403:
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/guarded_endpoint_test.go#guarded-test-calls -->
+```go
+post := func(client *httptest.Client, name string) httpclient.Response {
+	request, err := httptest.JSON(t.Context(), client.Post("/accounts"), outgoing.CreateAccountJSON(), outgoing.CreateAccount{Name: name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.Do(t.Context(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return response
+}
+httptest.AssertStatus(t, post(client, "Ada"), 401)
+
+scoped := httptest.ActingAsToken(t, client, tokens, proof, token.IssueOptions[models.User]{Name: "test", Scopes: scopes})
+created := post(scoped, "Ada")
+httptest.AssertStatus(t, created, 201)
+receipt, err := httptest.DecodeJSON(t.Context(), created, outgoing.AccountReceiptJSON())
+if err != nil || receipt.ID != 7 || receipt.Name != "Ada" {
+	t.Fatal("unexpected receipt", receipt, err)
+}
+httptest.AssertStatus(t, post(scoped, " "), 422)
+
+unscoped := httptest.ActingAsToken(t, client, tokens, proof, token.IssueOptions[models.User]{Name: "no scope"})
+httptest.AssertStatus(t, post(unscoped, "Ada"), 403)
+```
 
 `testkit/websocket.Connect` owns a real connection and handshake. Send protocol
 requests, receive bounded frames, assert their type and decode event payloads

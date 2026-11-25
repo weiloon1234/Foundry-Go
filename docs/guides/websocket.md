@@ -412,7 +412,7 @@ is an I/O-free readiness check: it fails while stopping, after a terminal fault 
 while a distributed hub's fan-out stream is not subscribed. Protect any
 operational endpoint exposing channel/member inspection. `Registry.Channels()`
 returns owned, deterministic metadata from the runtime's exact descriptors for
-the shared client-contract exporter in milestone 21.
+the shared client-contract exporter.
 
 The [protocol test client](../../testkit/websocket/client.go) performs bounded real
 HTTP/WebSocket I/O for independent fixtures. Verification covers typing, room

@@ -13,14 +13,14 @@
 
 ## Overview
 
-Foundry provides immutable migration definitions, history inspection, an explicit PostgreSQL runner, transactional seeders, consumer command adapters, and development scaffolding. Verification combines driver protocol fixtures, independent consumer modules, and real PostgreSQL acceptance through the [PostgreSQL adapter](postgresql.md).
+Foundry provides immutable migration definitions, history inspection, an explicit PostgreSQL runner, transactional seeders, consumer command adapters, and development scaffolding. Real PostgreSQL behavior is exercised through the [PostgreSQL adapter](postgresql.md).
 
 <a id="recipe-declare-migration"></a>
 ## Historical definitions
 
 Handwritten Go models describe current application types. A `migrate.Definition` records a historical schema change: a typed origin and ID, the release that introduced it, ordered SQL statements, and typed prerequisites. The [consumer migration package](../../tests/fixtures/consumer/migrations/migrations.go) and its [test](../../tests/fixtures/consumer/migrations_test.go) demonstrate public usage.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `database`, `database/command` as `dbcommand`, `infrastructure`, `database/migrate`, `model`, `database/orm`, `database/seed`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `database`, `database/command` as `dbcommand`, `infrastructure`, `database/migrate`, `model`, `database/orm`, `database/seed`, `value`.
 
 The application declares its origin, migration IDs and introducing version once as typed constants:
 

@@ -21,13 +21,66 @@ Declare a paginated endpoint with the generated domain filters and an explicit
 response DTO. Foundry parses page inputs, applies defaults and bounds, and builds
 response metadata and navigation links. The service uses the normal ORM API.
 
-The application owns `Member` (its model, with its generated table), `MemberFilters` (a `//foundry:query` struct with an optional `Email`), `MemberResponse` (a `//foundry:dto http=response` struct), their generated descriptors `MemberFiltersDescriptor` and `MemberResponseJSON`, `memberQuery(filters MemberFilters) orm.Query[Member]` (applies the filters) and `PresentMember(Member) (MemberResponse, error)` (maps a model).
+The application owns `Member`, its model with its generated table `Members`; `mutatorqueries` below is the application's own package that declares `Member` and the read types `DisplayEmail` and `DisplayNickname` (see [model mutators](model-mutators.md#recipe-mutate-field)); `MemberFilters` and `MemberResponse` are declared next, and their generated descriptors are `MemberFiltersDescriptor` and `MemberResponseJSON`.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`, `http` as `foundryhttp`, `http/pagination`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `database`, `database/orm`, `http` as `foundryhttp`, `http/pagination`, `model`, `value`.
+
+Declare the filter struct and the response DTO. `//foundry:query` generates the query descriptor from the `query:"email"` tag, and an `Optional` field keeps an omitted filter distinct from an empty one:
+
+<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#pagination-filters-and-response -->
+```go
+// MemberFilters are the optional filters of the member list.
+//
+//foundry:query
+type MemberFilters struct {
+	Email value.Optional[string] `query:"email"`
+}
+
+// MemberResponse is one member in the list.
+//
+//foundry:dto http=response
+type MemberResponse struct {
+	ID       model.ID[mutatorqueries.Member]                `json:"id"`
+	Email    mutatorqueries.DisplayEmail                    `json:"email"`
+	Nickname value.Nullable[mutatorqueries.DisplayNickname] `json:"nickname"`
+}
+```
+
+The query function applies the filters to the model's table query:
+
+<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#member-query -->
+```go
+func memberQuery(filters MemberFilters) orm.Query[mutatorqueries.Member] {
+	builder := mutatorqueries.Members.Query()
+	if email, set := filters.Email.Get(); set {
+		builder = builder.Where(orm.Eq(mutatorqueries.Members.Email, email))
+	}
+	return builder
+}
+```
+
+The presenter maps one model to the response DTO, choosing the read accessors explicitly:
+
+<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#member-presenter -->
+```go
+// PresentMember explicitly chooses read accessors. Persisted identity stays
+// model-owned and untouched; a getter failure aborts the complete response.
+func PresentMember(member mutatorqueries.Member) (MemberResponse, error) {
+	email, err := member.AccessEmail()
+	if err != nil {
+		return MemberResponse{}, err
+	}
+	nickname, err := member.AccessNickname()
+	if err != nil {
+		return MemberResponse{}, err
+	}
+	return MemberResponse{ID: member.ID, Email: email, Nickname: nickname}, nil
+}
+```
 
 Declare the endpoint and its request type:
 
-<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#http-pagination-list-request -->
+<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#paginated-list-endpoint -->
 ```go
 type ListRequest = pagination.Request[foundryhttp.NoPath, MemberFilters]
 
@@ -42,7 +95,7 @@ var List = func() pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters,
 
 A service reads the page with the ORM and maps it:
 
-<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#http-pagination-example-2 -->
+<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#paginated-list-service -->
 ```go
 // DatabaseService reads pages with the handwritten ORM declarations and the framework's
 // parsed page request. The endpoint owns page metadata, JSON contracts and links.
@@ -64,18 +117,13 @@ errors, panic, Goexit and cancellation return no partial page. Mapping does not
 modify stored fields or invoke write mutators. Ordinary Go ownership applies to
 any pointers/maps a DTO deliberately retains from its source.
 
-## v0.3 migration
+## Operations are package functions
 
 Pagination operations are documented package functions. Pass the endpoint first;
-handler, actor, request and response types remain connected. The former methods
-are removed.
-
-| Before | After |
-| --- | --- |
-| `endpoint.Handle(handler)` | `pagination.Handle(endpoint, handler)` |
-| `endpoint.URL(ctx, path, filters, page)` | `pagination.URL(endpoint, ctx, path, filters, page)` |
-| `secured.Handle(handler)` | `pagination.HandleAuthenticated(secured, handler)` |
-| `secured.URL(ctx, path, filters, page)` | `pagination.AuthenticatedURL(secured, ctx, path, filters, page)` |
+handler, actor, request and response types remain connected:
+`pagination.Handle(endpoint, handler)`, `pagination.URL(endpoint, ctx, path, filters, page)`,
+`pagination.HandleAuthenticated(secured, handler)` and
+`pagination.AuthenticatedURL(secured, ctx, path, filters, page)`.
 
 <a id="recipe-authenticated-pages"></a>
 ## Authenticated page reads

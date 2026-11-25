@@ -1,11 +1,6 @@
 # Typed query parameters
 
-**Status: typed query binding and generation are available.** Focused runtime,
-generator and independent consumer checks passed, including six additional
-compiler-rejection cases. Canonical generation, all freshness targets, consumer
-checks and actual gopls completion/hover/definition probes also passed. Full
-repository regression verification also passed, including real PostgreSQL, actual
-gopls and generated-output freshness. [Typed endpoints](http-endpoints.md) use
+[Typed endpoints](http-endpoints.md) use
 these descriptors for their concrete query input.
 
 Declare query fields in an ordinary Go struct and run the shared Foundry

@@ -1,8 +1,8 @@
 # HTTP contract and lifecycle changes
 
 These instructions add to the [repository rules](../AGENTS.md). Start from the
-closest public endpoint/middleware consumer. The [typed API workflow](../docs/guides/typed-api-workflow.md)
-shows composition; [request contracts](../docs/guides/http-requests.md) own decoding
+closest public endpoint/middleware consumer. The [endpoint recipe](../docs/guides/http-endpoints.md#recipe-compose-endpoint)
+and [staged routes](../docs/guides/flat-routes.md) show composition; [request contracts](../docs/guides/http-requests.md) own decoding
 and request lifecycle details.
 
 ## One handler contract

@@ -110,7 +110,7 @@ var RegistrationClosed = foundryhttp.DefineError(
 )
 ```
 
-Run the normal [generator](typed-api-workflow.md) to produce the descriptor.
+Run the normal [generator](flat-routes.md#generated-helpers) to produce the descriptor.
 `CreateMember` is the application's request body (`//foundry:dto http=body` with a `Name string`), `MemberCreated` its response (`//foundry:dto http=response` with an `ID model.ID[models.User]`), and `CreateMemberBody` and `MemberCreatedResponse` their generated descriptors. The exact error declarations belong to the endpoint's error contract:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/member_create.go#declare-error-endpoint -->

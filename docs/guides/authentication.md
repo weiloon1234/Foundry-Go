@@ -704,7 +704,7 @@ The Foundry HTTP server establishes request ID/IP/user-agent metadata before the
 router; a standalone Router's host owns that outer request boundary. Regardless
 of inherited identity metadata, an absent optional guard clears model/system/guard
 attribution and preserves only request metadata. This never turns metadata into
-authentication. The composition examples and tests passed milestone 10 acceptance.
+authentication.
 
 ## Middleware after authentication
 

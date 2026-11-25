@@ -2,9 +2,11 @@
 
 Tag creation and update fields with `foundry:"role=created-at"` and `foundry:"role=updated-at"`. Their carriers retain ordinary stored-time predicates, ordering and expression support. Both fields must be non-null, non-primary `time.Time` or `temporal.DateTime` values. The [typed declaration example](model-declarations.md) shows the complete table.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`.
+
 `hooks.Member` is the application's model in its `hooks` package, and `hooks.Members` its generated table. `updateMember` updates one member:
 
-<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#writes-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#update-member-write -->
 ```go
 func updateMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
 	return orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))

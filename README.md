@@ -28,7 +28,8 @@ go tool foundry doctor --dir .
 Follow [team adoption](docs/guides/team-adoption.md) for package scaffolding,
 generation, migrations, private-module access and application CI. Start with
 [application bootstrap](docs/guides/application-bootstrap.md), then build a real
-endpoint using the [typed API workflow](docs/guides/typed-api-workflow.md).
+endpoint with [staged route declarations](docs/guides/flat-routes.md) and the
+[endpoint recipe](docs/guides/http-endpoints.md#recipe-compose-endpoint).
 The [configured consumer](tests/fixtures/consumer/configuredprofile/cmd/profile/main.go)
 is an executable assembly example.
 

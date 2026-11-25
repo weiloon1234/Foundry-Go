@@ -1,7 +1,5 @@
 # Typed path and query contracts
 
-**Status: focused runtime, generation, consumer, compiler and editor acceptance passed.**
-
 Path and query descriptions now include the scalar codec that actually performs
 parsing and formatting. Inspect a path with `PathParameters(path)`, a query with
 `QueryParameters(query)`, or the complete endpoint with `InspectEndpoint(endpoint)`.

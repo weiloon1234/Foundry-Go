@@ -10,6 +10,8 @@
 <a id="recipe-coordinate-cache"></a>
 ## Configure shared fill ownership
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `cache`, `lease`.
+
 Configure coordination in application assembly; domain code keeps its typed
 `Remember` call. `lease` and `cache` are the framework packages `github.com/weiloon1234/Foundry-Go/lease` and `.../cache`; the application's lease manager is borrowed:
 
@@ -116,10 +118,6 @@ implement combined distributed publication.
 Native two-client tests cover coalescing, post-election reads, stale publication,
 tag invalidation during loading, timeout without fallback, callback failures,
 shutdown, recursive contexts, proof binding and uncertain acknowledgements.
-Consumer races, three new compiler-rejection cases and an actual gopls constructor
-probe pass.
-
-Full native verification passed in 414.1s with 1960 matching source inputs, required local PostgreSQL and Redis, all 665 compiler cases, 243 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Fresh focused lease/cache/Redis races, two-client failure tests, consumer races, three new compiler rejections and one actual gopls constructor probe also passed. No dependency was added.
 
 ## Namespace rotation
 

@@ -16,7 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// doc-example:begin reads-after
+// doc-example:begin query-and-find
 func largeOrders(ctx context.Context, db database.Executor) ([]models.Order, error) {
 	return orm.All(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))
 }
@@ -29,7 +29,7 @@ func requireOrder(ctx context.Context, db database.Executor, id model.ID[models.
 	return orm.Require(ctx, db, models.Orders.Query().Where(orm.Eq(models.Orders.ID, id)))
 }
 
-// doc-example:end reads-after
+// doc-example:end query-and-find
 
 // doc-example:begin unique-column-lock
 func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
@@ -45,12 +45,12 @@ func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
 
 // doc-example:end unique-column-lock
 
-// doc-example:begin writes-after
+// doc-example:begin update-member-write
 func updateMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
 	return orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))
 }
 
-// doc-example:end writes-after
+// doc-example:end update-member-write
 
 // doc-example:begin insert-member
 func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
@@ -60,7 +60,7 @@ func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member,
 
 // doc-example:end insert-member
 
-// doc-example:begin relations-after
+// doc-example:begin belongs-to-eager-load
 var OrderBuyer = orm.BelongsToOf(models.Orders.Buyer, models.Orders.BuyerID, models.Users.ID)
 
 func ordersWithBuyers(ctx context.Context, db database.Executor) ([]models.Order, error) {
@@ -71,9 +71,9 @@ func loadBuyers(ctx context.Context, db database.Executor, existing []models.Ord
 	return orm.LoadFrom(ctx, db, models.Orders.Query().With(OrderBuyer), existing)
 }
 
-// doc-example:end relations-after
+// doc-example:end belongs-to-eager-load
 
-// doc-example:begin hooks-after
+// doc-example:begin creating-hook-default
 func memberHooks() orm.Hooks[hooks.Member] {
 	return orm.Hooks[hooks.Member]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[hooks.Member]) error {
 		setName := func(name string) orm.Assignment[hooks.Member] { return orm.Set(hooks.Members.Name, name) }
@@ -84,7 +84,7 @@ func memberHooks() orm.Hooks[hooks.Member] {
 	}}
 }
 
-// doc-example:end hooks-after
+// doc-example:end creating-hook-default
 
 // doc-example:begin audit-registration
 func registerAudit(r *foundation.Registrar, pool foundation.Key[*database.DB], history foundation.Key[*audit.Recorder]) error {

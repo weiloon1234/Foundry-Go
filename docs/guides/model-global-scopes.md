@@ -4,9 +4,11 @@ Global scopes attach typed, additive predicates to a model declaration. A scope 
 
 ## Declare and attach scopes
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`.
+
 `scope` declares a global scope named `tenant` for the member table:
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#scopes-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#tenant-global-scope -->
 ```go
 func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[reads.Member], error) {
@@ -38,7 +40,7 @@ Raw SQL bypasses automatic scopes, including complete-model `orm.Raw`. Retrieval
 
 `bypass` removes the tenant scope for one query:
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#bypass-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#bypass-global-scope -->
 ```go
 func bypass() orm.Query[reads.Member] {
 	return orm.WithoutGlobalScope(reads.Members.Query(), reads.MemberTenant(reads.Members))

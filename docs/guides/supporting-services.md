@@ -1,8 +1,5 @@
 # Configured supporting services
 
-C04 passed its native acceptance gate.
-The examples below describe the implemented API; [C05 final acceptance](consumer-startup-acceptance.md) also passed.
-
 Use `application.Settings` for deployment values and Go declarations for domain
 behavior. `application.New(settings).HTTP(routes).Jobs(jobs...).Events(listeners...)
 .Schedules(schedules).Realtime(channels).Features(features).Build(ctx)` constructs

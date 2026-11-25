@@ -29,7 +29,7 @@ func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member,
 
 `updateMember` renames a member by key and writes SQL NULL to its note:
 
-<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#writes-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#update-member-write -->
 ```go
 func updateMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
 	return orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))

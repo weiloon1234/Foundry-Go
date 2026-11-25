@@ -1,8 +1,6 @@
 # Generated JSON DTO contracts
 
-**Status: DTO declaration and decoding APIs are available.** Full repository acceptance and focused runtime, generator and independent consumer
-checks passed, including canonical generation and actual-workspace completion,
-hover and definition. [Typed endpoints](http-endpoints.md) use these contracts
+[Typed endpoints](http-endpoints.md) use these contracts
 for request decoding, validation and response preparation.
 
 Declare a public transport struct and run the existing Foundry generator. Its
@@ -158,7 +156,7 @@ before export; floating-point values retain their concrete 32/64-bit bounds.
 [typed map keys](http-json-map-keys.md) preserve supported string, integer, enum,
 model-ID and custom key contracts. Storage-oriented `value.JSON` fields and unannotated generic types are not inferred as public DTOs. Declare [generic DTO contracts](generic-dtos.md) explicitly and register concrete instantiations.
 [Root slice/nullable descriptors and response encoding](http-responses.md) share
-this schema and passed focused and full repository acceptance.
+this schema.
 
 ## Explicit response fields
 

@@ -14,7 +14,7 @@ Framework imports from `github.com/weiloon1234/Foundry-Go`: none; the block uses
 
 `Member` is the application's model with a stored email and an `AccessEmail` method; `coremodels.EmailLink` is the application's presentation type. `emailLink` maps one member:
 
-<!-- compiled-source: tests/fixtures/goway/models/mutators/guide_examples.go#accessors-after -->
+<!-- compiled-source: tests/fixtures/goway/models/mutators/guide_examples.go#read-accessor -->
 ```go
 func emailLink(member Member) (coremodels.EmailLink, error) {
 	return member.AccessEmail()

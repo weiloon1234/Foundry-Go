@@ -4,6 +4,8 @@
 
 ## Find first or create
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`. `models` is the application's own package of declared models.
+
 `firstOrCreateUser` returns the first matching user or creates one:
 
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#first-or-create-user -->

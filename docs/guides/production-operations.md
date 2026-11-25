@@ -1,6 +1,5 @@
 # Production operations
 
-Production behavior passed the [recorded acceptance and audit](../production-acceptance.md).
 Configure one application lifecycle owner, explicit providers and typed
 registries. Bind operational routes through the same HTTP server, authentication
 and permission system as ordinary application routes.

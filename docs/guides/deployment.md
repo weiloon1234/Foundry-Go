@@ -1822,7 +1822,7 @@ behavior. Trickle acceptance measures the application's upload slot returning to
 its baseline within the route deadline window, with a 408 or connection close.
 Client completion time includes nginx draining and is recorded separately.
 
-Milestone 5 acceptance must exercise the rendered proxy, including a successful
+Acceptance of this upload profile must exercise the rendered proxy, including a successful
 publication silent for more than 120 seconds, progressing, stalled, and trickling
 clients, fixed-length and chunked bodies, disconnects, and direct application
 requests. Independently saturate every pool and fill each test-owned volume.
@@ -1838,5 +1838,4 @@ the tools upgrade.
 
 Do not interpret generated paths or a
 passing nginx render test as certification of small-request isolation under full
-downstream quotas. R2 conditional multipart create and replace passed live
-certification on 2026-11-15 and now support objects up to `MaxObjectBytes`.
+downstream quotas. R2 conditional multipart create and replace support objects up to `MaxObjectBytes`.

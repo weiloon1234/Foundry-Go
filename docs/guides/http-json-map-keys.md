@@ -1,7 +1,5 @@
 # Typed JSON object keys
 
-**Status: focused runtime, generation, consumer, compiler and editor acceptance passed.**
-
 Generated DTO contracts preserve the actual Go map key. Ordinary string and
 integer keys, Foundry enums, model IDs and supported formatted values are
 discovered from the field declaration. Declare the application text key and its JSON key contract before the response that uses it.
@@ -93,5 +91,3 @@ are the explicit boundary for generation and custom native codec authors; they
 do not inspect arbitrary Go business methods. Handwritten metadata must agree
 with the native type's representation. Schema metadata alone cannot recreate
 the private native key checker.
-
-Combined transport full regression passed.

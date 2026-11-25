@@ -4,6 +4,8 @@
 
 ## Select conflict behavior
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`, `database/orm/expr`, `database/orm/rows`, `value`. `models` is the application's own package of declared models.
+
 `upsertUser` inserts a user, or on an email conflict takes the incoming age:
 
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#upsert-user -->
@@ -29,7 +31,7 @@ Active destination scopes join conflict update conditions. An unconditional upda
 
 `excluded` builds a conflict update that adds the proposed age to the stored age:
 
-<!-- compiled-source: tests/fixtures/goway/migration/sql_test.go#excluded-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/sql_test.go#conflict-stored-plus-proposed -->
 ```go
 func excluded() orm.Conflict[models.User] {
 	r := rows.ConflictRowsOf(models.Users.Query())

@@ -1,8 +1,10 @@
 # Typed model field changes
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`, `value`.
+
 `orm.Changes[M]` contains persisted snapshots and assignment metadata. Hooks receive it automatically after complete `RETURNING` hydration. `orm.ChangeOf` and `orm.NullableChangeOf` return `lifecycle.FieldChange[V]` and `lifecycle.FieldChange[value.Nullable[V]]` respectively.
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#changes-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#read-field-change -->
 ```go
 func changes(changes orm.Changes[hooks.Member]) (bool, error) {
 	field, err := orm.ChangeOf(changes, hooks.Members.Name)

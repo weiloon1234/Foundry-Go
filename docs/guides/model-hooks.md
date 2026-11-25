@@ -14,7 +14,7 @@ Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `databas
 
 Declare a per-write factory returning `orm.Hooks[M]` and name it with `hooks=memberHooks` on the model directive. `hooks.Member` is the application's model in its `hooks` package and `hooks.Members` its generated table. This factory gives a new member the name `guest` when the write supplies none:
 
-<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#hooks-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#creating-hook-default -->
 ```go
 func memberHooks() orm.Hooks[hooks.Member] {
 	return orm.Hooks[hooks.Member]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[hooks.Member]) error {
@@ -68,7 +68,7 @@ Create runs `Saving`, `Creating`, conventions, mutators/encryption, SQL, `Create
 
 `orm.WriteGet(write, setter)` reads an optional typed input. The setter is a typed callback, such as `func(v string) orm.Assignment[hooks.Member] { return orm.Set(hooks.Members.Name, v) }`. `WriteNullableGet` preserves omitted, NULL and value separately. `WriteIsSet` tests assignment presence. `WriteSet` replaces pending assignments and `WriteUnset` restores omission:
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#unset-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#unset-assignment -->
 ```go
 func unset(draft *orm.Write[hooks.Member]) error {
 	return orm.WriteUnset(draft, func() func(arg0 coremodels.LabelInput) orm.Assignment[hooks.Member] {

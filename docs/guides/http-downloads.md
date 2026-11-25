@@ -119,11 +119,9 @@ implicit JSON serialization. [OpenAPI and client generation](client-contracts.md
 
 ## Scope
 
-Runtime, independent consumer, compiler, editor, generation and documentation
-checks passed before publication. Canonical acceptance and the complete combined
-regression with unseekable streams also passed. [Storage-backed downloads](storage.md) use explicitly selected disks; [static/SPA integration](http-assets.md) is delivered. Typed
+[Storage-backed downloads](storage.md) use explicitly selected disks; [static/SPA integration](http-assets.md) has its own guide. Typed
 unseekable streams are documented in [stream responses](http-streams.md). The documented example is compiled from the independent
-consumer module as part of acceptance.
+consumer module.
 
 <a id="recipe-ticket-download"></a>
 ## Single-use ticket downloads

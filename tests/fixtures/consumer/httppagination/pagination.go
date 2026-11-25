@@ -13,11 +13,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin pagination-filters-and-response
+
+// MemberFilters are the optional filters of the member list.
+//
 //foundry:query
 type MemberFilters struct {
 	Email value.Optional[string] `query:"email"`
 }
 
+// MemberResponse is one member in the list.
+//
 //foundry:dto http=response
 type MemberResponse struct {
 	ID       model.ID[mutatorqueries.Member]                `json:"id"`
@@ -25,10 +31,12 @@ type MemberResponse struct {
 	Nickname value.Nullable[mutatorqueries.DisplayNickname] `json:"nickname"`
 }
 
+// doc-example:end pagination-filters-and-response
+
 // Member is the application's model; Query is its generated table.
 type Member = mutatorqueries.Member
 
-// doc-example:begin http-pagination-list-request
+// doc-example:begin paginated-list-endpoint
 type ListRequest = pagination.Request[foundryhttp.NoPath, MemberFilters]
 
 var List = func() pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse] {
@@ -39,7 +47,7 @@ var List = func() pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters,
 	)
 }()
 
-// doc-example:end http-pagination-list-request
+// doc-example:end paginated-list-endpoint
 
 type Service interface {
 	List(context.Context, ListRequest) (orm.PageResult[MemberResponse], error)
@@ -49,7 +57,7 @@ func Router(service Service) (*foundryhttp.Router, error) {
 	return foundryhttp.NewRouter(pagination.Handle(List, service.List))
 }
 
-// doc-example:begin http-pagination-example-2
+// doc-example:begin paginated-list-service
 // DatabaseService reads pages with the handwritten ORM declarations and the framework's
 // parsed page request. The endpoint owns page metadata, JSON contracts and links.
 type DatabaseService struct{ DB database.Executor }
@@ -63,8 +71,9 @@ func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResu
 	return pagination.MapPage(ctx, page, PresentMember)
 }
 
-// doc-example:end http-pagination-example-2
+// doc-example:end paginated-list-service
 
+// doc-example:begin member-presenter
 // PresentMember explicitly chooses read accessors. Persisted identity stays
 // model-owned and untouched; a getter failure aborts the complete response.
 func PresentMember(member mutatorqueries.Member) (MemberResponse, error) {
@@ -79,6 +88,9 @@ func PresentMember(member mutatorqueries.Member) (MemberResponse, error) {
 	return MemberResponse{ID: member.ID, Email: email, Nickname: nickname}, nil
 }
 
+// doc-example:end member-presenter
+
+// doc-example:begin member-query
 func memberQuery(filters MemberFilters) orm.Query[mutatorqueries.Member] {
 	builder := mutatorqueries.Members.Query()
 	if email, set := filters.Email.Get(); set {
@@ -86,3 +98,5 @@ func memberQuery(filters MemberFilters) orm.Query[mutatorqueries.Member] {
 	}
 	return builder
 }
+
+// doc-example:end member-query

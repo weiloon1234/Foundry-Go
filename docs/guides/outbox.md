@@ -10,14 +10,10 @@
 
 ## Overview
 
-Runtime and consumer PostgreSQL races, vet, current generation, and clean-copy
-generation/compilation have passed. Seven compiler-rejection cases and four
-real-gopls probes also passed, followed by full repository acceptance.
-
 An outbox stores a message in the same transaction as its business write. A
 successful enqueue returns a typed message ID; the outer transaction still owns
 commit or rollback. Enqueue does not invoke listeners or establish delivery.
-Milestone 12 adds the [shared publisher and typed job/event delivery](jobs.md#transactional-publication); its acceptance status is recorded in the roadmap.
+The [shared publisher and typed job/event delivery](jobs.md#transactional-publication) relay committed rows to the durable queue.
 
 <a id="recipe-enqueue-event"></a>
 ## Register once, publish a concrete DTO
@@ -217,8 +213,6 @@ The generic clock and temporal values still retain nanoseconds. Explicit caller
 values still pass through strict SQL codecs, which reject sub-microsecond data.
 No application clock workaround, configuration change or schema migration is
 required for this publisher correction.
-The [B06 handoff and verification status](outbox-timestamp-b06.md) separates the
-framework regression evidence from the remaining starter macOS/Linux acceptance.
 
 The publisher treats a wrapped `fault.Invalid` error as a permanent failure.
 `fault.Missing` (for example a job or event name/version not yet registered in

@@ -137,9 +137,9 @@ changes. [Recovery model hooks](account-recovery.md#transaction-and-concurrency-
 now maintain a typed persisted email revision: restoring an old address cannot
 revive a link from its previous revision. This changes only the locked model row;
 it does not acquire challenge locks in the reverse order. Recovery JSON/HTTP and
-public request orchestration are written too. These extensions passed the complete milestone gate and auth parity review.
+public request orchestration are written too.
 
 The new `Provider.RecheckPassword` shares the issuance validator and returns the
 current locked model to factor management. It retains model/key types and the
 original provider declaration; it does not convert a pending password result
-into full authentication. See [MFA prerequisites](mfa.md). Tests passed the milestone gate.
+into full authentication. See [MFA prerequisites](mfa.md).

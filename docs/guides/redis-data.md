@@ -524,5 +524,3 @@ server runtime error, or a transaction with PostgreSQL. Each operation uses one
 mutation command after its validation reads. Advanced operations use the explicit [scoped command boundary](redis-commands.md),
 with `AdapterKey` reusing the typed declaration’s actual key resolution.
 
-Focused native behavior, races, ten compiler rejection cases and five real-gopls
-scenarios passed. Full native verification passed in 444.1 seconds.

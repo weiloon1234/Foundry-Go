@@ -164,8 +164,7 @@ payload decoding, source cleanup, HEAD, identity byte ranges, conditional files,
 shared missing-resource errors and both Accept/Accept-Encoding variation.
 The fixtures also cover automatic validators for actual encoded bytes,
 cross-encoding preconditions, source failure retention, unsupported native controls
-and a real full-duplex exchange through both wrappers. These checks passed under
-race detection using the approved Brotli dependency.
+and a real full-duplex exchange through both wrappers.
 
 Transfer failure diagnostics use safe framework messages and never format custom
 reader/writer errors. The original cause remains available to the handler through

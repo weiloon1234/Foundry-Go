@@ -1,6 +1,5 @@
 # Application bootstrap
 
-C03 and C04 passed their native acceptance gates, and [C05 final acceptance](consumer-startup-acceptance.md) also passed.
 A [compact runnable example](consumer-startup-acceptance.md) needs no external service.
 `application.New(settings)` assembles the configured providers, router and selected
 HTTP kernel. The existing `foundry.New().Register(...).Build(...)` remains the
@@ -24,7 +23,7 @@ with its table declarations and options, registers its HTTP routes, and returns
 
 The application owns `Member`, `models.User`, `models.Order`, and `models.WriteRecord` and any generated tables or identities used below.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `auth`, `foundation`, `http` as `foundryhttp`, `validation`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `auth`, `database/orm`, `foundation`, `http` as `foundryhttp`, `validation`.
 
 Inputs: `ctx context.Context`, `configPath string`.
 
@@ -254,7 +253,7 @@ and realtime declarations with neither a hub nor a publisher enabled.
 `HTTP.Server.AccessLog` defaults to true in application settings. `Log.Default`
 selects one of `Log.Channels`; leaf settings select `logging.Stderr`,
 `logging.Stdout` or `logging.File`, level and source annotation. Named stacks and
-supporting services are described in [the C04 guide](supporting-services.md).
+supporting services are described in [the supporting services guide](supporting-services.md).
 File paths are absolute; the parent must already exist. Startup opens an append
 file with private permissions for a new file. Build never touches it; application
 shutdown closes it after borrowers. File sinks provide [automatic rotation and
@@ -282,22 +281,13 @@ exercises two actor models over native HTTP, explicit PostgreSQL tables, default
 cache, multipart upload, an image plan and the configured storage disk. These are
 framework acceptance fixtures, not a generated starter application.
 
-## Measured build cost
+## Build cost
 
-The native C03 measurement compared
-independent copies with empty build caches, existing dependencies and downloads
-disabled. One cold build measured 3.31s for the accepted smaller query consumer
-and 9.97s for the configured executable. Unchanged builds measured 0.24s for both;
-a small main-package edit measured 0.24s and 1.41s respectively. Imported package
-counts were 159 and 502; linked binary sizes were about 5.1MB and 35.3MB.
-
-These are different capability profiles, not a framework-overhead isolation
-benchmark. Configured assembly imports its supported database, cloud, image and
+Configured assembly imports its supported database, cloud, image and
 HTTP implementations even when deployment settings disable them. Runtime-disabled
 features acquire no resources, but still contribute to Go compilation. Keep using
 narrow feature imports and the advanced builder when that build-size tradeoff
-matters. These samples do not establish an SLA; power/background load was not
-controlled. [C05 packaged-consumer and runtime results](developer-resource-measurements.md#consumer-startup-c05-native-results) now provide the final evidence.
+matters.
 
 ### Observing framework database statements
 

@@ -1,9 +1,8 @@
 # Application foundation
 
-Milestone 24 delivered [shared observations](observability.md) through
+[Shared observations](observability.md) are available through
 `WithObservability`, `App.Observability`, `Runtime.Observability` and the synchronized
-`Runtime.State` view. The application owns exporter startup and final draining;
-the complete milestone verification batch passed. See [production acceptance](../production-acceptance.md).
+`Runtime.State` view. The application owns exporter startup and final draining.
 
 Foundry assembles providers, constructs dependencies, owns application lifetime, and cleans up resources. The [independent consumer test](../../tests/fixtures/consumer/lifecycle_test.go) is the executable reference: it uses two fake providers and a cancellable kernel without a database or network server.
 

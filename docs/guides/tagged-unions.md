@@ -1,8 +1,5 @@
 # Tagged payload unions
 
-T02 passed the native gate, typed consumer/client/compiler/editor checks, fuzzing
-and cost measurements.
-
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
 Declare ordinary payload DTOs and list their Go types once:
@@ -98,10 +95,6 @@ operation. Older generated clients reject unknown tags rather than dropping data
 or interpreting an arbitrary shape. The acceptance harness generates a prior
 contract without one variant to exercise that rejection explicitly.
 
-Native Go/TypeScript HTTP round trips, compiler failures, real gopls, deterministic
-generation, schema ownership, runtime bounds and fuzzing passed. The complete
-`make verify` gate passed after the batched fixes and cache cleanup.
-
 | Native fixture operation | Median µs | Bytes/op | Allocations/op |
 | --- | ---: | ---: | ---: |
 | Construct owned card variant | 9.33 | 6,054 | 134 |
@@ -130,5 +123,3 @@ local-checkout samples with isolated compiler caches and existing module downloa
 they do not establish application-wide throughput or packaged-release performance.
 The evidence retains raw samples, editor timings, commands, source hashes and the
 measurement harness. Temporary compiler caches were cleaned after measurement.
-The remaining T-series milestones and final integrated audit subsequently passed;
-see the [integrated workflow and acceptance](typed-api-workflow.md).

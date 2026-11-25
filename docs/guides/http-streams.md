@@ -205,9 +205,3 @@ logged with a redacted diagnostic. The TypeScript client returns an
 `EventStreamResult<T>`: iterate it once with `for await`, receiving frozen
 `{ id?, name, data, retry? }` events whose data is decoded tolerantly, or call
 `close()`; pass `Last-Event-ID` in the call headers to resume.
-
-Focused canonical acceptance passed: HTTP and consumer races, compiler rejection
-cases, actual gopls, fuzzing, bounded-copy benchmarks, vet and documentation checks.
-Combined full regression including all three generation-freshness targets also
-passed. [Static/SPA integration](http-assets.md) and [automatic ETags](http-etags.md)
-also passed full regression.

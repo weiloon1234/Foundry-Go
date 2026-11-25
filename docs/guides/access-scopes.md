@@ -140,8 +140,7 @@ The trusted password/MFA login flow will issue its own verified session proof.
 ## Delivery boundary
 
 The [token runtime and PostgreSQL adapter](tokens.md) retain refresh digests
-to detect reuse and commit family revocation. Typed storage, HTTP delivery and
-account-security flows passed milestone 10 acceptance. Current policies cannot
+to detect reuse and commit family revocation. Current policies cannot
 expand a credential's immutable scope ceiling.
 
 A token binding applies its current declared ceiling to stored grants with

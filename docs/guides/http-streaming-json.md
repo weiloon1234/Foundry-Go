@@ -1,7 +1,5 @@
 # Native streaming JSON value contracts
 
-**Status: focused runtime, generation, consumer, compiler and editor acceptance passed.**
-
 Custom values can implement Go's `MarshalJSONTo` and `UnmarshalJSONFrom`
 protocols and expose a typed `JSONContract` value method. Generated DTOs discover
 that method automatically. Legacy JSON/text methods remain supported.
@@ -66,5 +64,3 @@ concurrency-safe and must not retain borrowed decoders, encoders or input.
 These are JSON VALUE methods. JSON object keys retain their separate native
 rules and [typed key contracts](http-json-map-keys.md); streaming value methods
 do not become map-key codecs.
-
-Combined transport full regression passed.

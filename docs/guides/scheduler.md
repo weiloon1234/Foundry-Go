@@ -228,10 +228,9 @@ system attribution into captured job envelopes.
 
 ## Verification contract
 
-The gate covers parsing/DST, missed ticks/catch-up, concurrency/history bounds,
-hooks/shutdown, local and real-Redis leadership/failover/overlap, job identity,
-independent consumer/compiler/editor checks, races, generation and full `make verify`.
-Executed evidence is recorded in the roadmap. Redis fixtures use isolated keys and
+Tests cover parsing/DST, missed ticks/catch-up, concurrency/history bounds,
+hooks/shutdown, local and real-Redis leadership/failover/overlap and job identity.
+Redis fixtures use isolated keys and
 existing services; no database reset or additional server is required.
 
 Lease coordination errors use bounded inspection too. Failed overlap cleanup is classified inside owned isolation, records a terminal coordination failure and releases scheduler capacity. A reached ownership-loss marker retains its existing meaning; leadership error searches cannot loop over an adapter error cycle.

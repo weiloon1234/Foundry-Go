@@ -1,8 +1,10 @@
 # Typed model retrieval events
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`.
+
 `orm.RetrievalHooks[M]` dispatches `Retrieved` after complete-model hydration and row closure. It is separate from write hooks and explicit accessors. It does not replace stored fields with presentation values.
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#retrieved-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#retrieved-hook -->
 ```go
 func retrieval() orm.RetrievalHooks[reads.Member] {
 	return orm.RetrievalHooks[reads.Member]{Retrieved: func(context.Context, database.Executor, reads.Member) error { return nil }}
