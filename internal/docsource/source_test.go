@@ -148,7 +148,7 @@ func TestObsoleteSnippetConventionsRejected(t *testing.T) {
 }
 
 func TestRenderPreservesProseAndIsIdempotent(t *testing.T) {
-	original := "# Guide\r\n\r\nAuthored prose.\r\n<!-- compiled-source: example.ts#example -->\r\n\r\n~~~go\nstale\n~~~\n\nAfter.\n"
+	original := "# Guide\r\n\r\nAuthored prose.\r\n<!-- compiled-source: example.ts#example -->\r\n\r\n~~~typescript\nstale\n~~~\n\nAfter.\n"
 	src, err := parseSource("const before = 0;\n// doc-example:begin example\n  const fence = \" ``` \";\n  const value = 1;\n// doc-example:end example\n", "typescript")
 	if err != nil {
 		t.Fatal(err)
@@ -158,7 +158,7 @@ func TestRenderPreservesProseAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := strings.Replace(original, "~~~go\nstale\n~~~", "````typescript\nconst fence = \" ``` \";\nconst value = 1;\n````", 1)
+	want := strings.Replace(original, "stale", "const fence = \" ``` \";\nconst value = 1;", 1)
 	if string(first.Rendered) != want {
 		t.Fatalf("got %q, want %q", first.Rendered, want)
 	}

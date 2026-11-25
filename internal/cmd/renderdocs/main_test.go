@@ -97,3 +97,24 @@ func TestRegionBoundaryPaddingUsesSameRenderAndCheck(t *testing.T) {
 		t.Fatal("render did not preserve the interior blank line", err)
 	}
 }
+
+func TestRendererRefusesExternalInstructions(t *testing.T) {
+	root := t.TempDir()
+	external := filepath.Join(t.TempDir(), "AGENTS.md")
+	original := "<!-- compiled-source: tests/fixtures/consumer/example/example.go -->\n```go\nstale\n```\n"
+	if err := os.WriteFile(external, []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(external, filepath.Join(root, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	for _, check := range []bool{true, false} {
+		if err := run(root, check); err == nil || !strings.Contains(err.Error(), "symlink") {
+			t.Fatalf("external target accepted: %v", err)
+		}
+	}
+	data, err := os.ReadFile(external)
+	if err != nil || string(data) != original {
+		t.Fatalf("external target changed: %q, %v", data, err)
+	}
+}

@@ -101,7 +101,7 @@ func TestRepositoryChecksModelDeclarationTeaching(t *testing.T) {
 
 func TestHistoricalLabelCannotExemptGeneratedExamples(t *testing.T) {
 	doc := "<!-- orm-example: inputs-before -->\n```go\nreturn oldmutators.MemberDraft{}.SetEmail(input)\n```\n"
-	if err := checkModelGuide("docs/guides/model-declarations.md", []byte(doc)); err == nil {
+	if err := checkModelGuide("docs/guides/orm-migration.md", []byte(doc)); err == nil {
 		t.Fatal("historical label exempted generated examples")
 	}
 }

@@ -145,3 +145,66 @@ func TestSelectedGuideResolution(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestParserContainersAndComments(t *testing.T) {
+	input := "> ```text\n> Foundry guides: bad\n\nFoundry guides: `orm`\n\n<!--\nFoundry guides: bad\n<a id=\"hidden\"></a>\n-->\n\n> <a id=\"visible\"></a>\n"
+	refs, err := Parse("AGENTS.md", []byte(input))
+	if err != nil || len(refs) != 1 || refs[0].Line != 4 {
+		t.Fatalf("references: %+v %v", refs, err)
+	}
+	anchors, err := IndexAnchors("AGENTS.md", []byte(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := anchors.CheckFragment("AGENTS.md", 12, "visible"); err != nil {
+		t.Fatal(err)
+	}
+	if err := anchors.CheckFragment("AGENTS.md", 12, "hidden"); err == nil {
+		t.Fatal("comment became anchor")
+	}
+}
+
+func TestAnchorTargetIsIndexedOncePerRun(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "guide.md")
+	if err := os.WriteFile(target, []byte("<a id=\"recipe-first\"></a>\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	pages := NewPages(root)
+	first, err := pages.Load(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("<a id=\"recipe-second\"></a>\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	again, err := pages.Load(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := again.CheckFragment("source.md", 1, "recipe-first"); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.CheckFragment("source.md", 1, "recipe-second"); err == nil {
+		t.Fatal("cached target reread")
+	}
+	fresh, err := NewPages(root).Load(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fresh.CheckFragment("source.md", 1, "recipe-second"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestInlineCommentCannotHideMalformedDeclaration(t *testing.T) {
+	for _, input := range []string{"Foundry guides: bad <!-- comment -->\n", "Foundry guides: bad <!-- multiline\ncomment -->\n"} {
+		if _, err := Parse("AGENTS.md", []byte(input)); err == nil {
+			t.Fatalf("comment hid declaration: %q", input)
+		}
+	}
+	refs, err := Parse("AGENTS.md", []byte("# Foundry guides: bad\n"))
+	if err != nil || len(refs) != 0 {
+		t.Fatalf("heading became declaration: %v %v", refs, err)
+	}
+}

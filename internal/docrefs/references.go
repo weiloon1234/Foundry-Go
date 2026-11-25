@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
@@ -39,7 +40,7 @@ type Reference struct {
 func Parse(name string, data []byte) ([]Reference, error) {
 	var refs []Reference
 	var failures []error
-	outsideFences(data, func(line int, text string) {
+	markdown.Read(data).ProseLines(func(line int, text string) {
 		const prefix = "Foundry guides:"
 		text = strings.TrimSpace(text)
 		if !strings.HasPrefix(text, prefix) {
@@ -67,31 +68,4 @@ func Parse(name string, data []byte) ([]Reference, error) {
 		refs = append(refs, parsed...)
 	})
 	return refs, safeerror.Join("documentation references failed", failures...)
-}
-
-// outsideFences handles both Markdown fence characters, including longer outer
-// fences containing shorter examples. A closing fence cannot have trailing text.
-func outsideFences(data []byte, visit func(int, string)) {
-	var fence byte
-	width := 0
-	for i, line := range strings.Split(string(data), "\n") {
-		trimmed := strings.TrimSpace(line)
-		n := 0
-		if len(trimmed) > 0 && (trimmed[0] == '`' || trimmed[0] == '~') {
-			for n < len(trimmed) && trimmed[n] == trimmed[0] {
-				n++
-			}
-		}
-		if width > 0 {
-			if n >= width && trimmed[0] == fence && strings.TrimSpace(trimmed[n:]) == "" {
-				width = 0
-			}
-			continue
-		}
-		if n >= 3 && (trimmed[0] != '`' || !strings.Contains(trimmed[n:], "`")) {
-			fence, width = trimmed[0], n
-			continue
-		}
-		visit(i+1, line)
-	}
 }

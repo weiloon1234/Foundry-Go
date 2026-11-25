@@ -131,3 +131,29 @@ func TestFrameworkGuideDeclarations(t *testing.T) {
 		}
 	}
 }
+
+func TestRepositorySkillsReceiveRetirementCheck(t *testing.T) {
+	root := testRepository(t)
+	writeTestFile(t, root, ".claude/skills/example/SKILL.md", "Use orm.DoesntHave.\n")
+	err := checkRepository(root)
+	if err == nil || !strings.Contains(err.Error(), ".claude/skills/example/SKILL.md:1:") || !strings.Contains(err.Error(), "retired") {
+		t.Fatalf("skill bypassed retirement: %v", err)
+	}
+}
+
+func TestQuotedFenceDoesNotHideFollowingLinks(t *testing.T) {
+	root := testRepository(t)
+	writeTestFile(t, root, "README.md", "> ```text\n> [Hidden](hidden.md)\n\n[Missing](missing.md)\n")
+	err := checkRepository(root)
+	if err == nil || !strings.Contains(err.Error(), `local link "missing.md"`) || strings.Contains(err.Error(), `local link "hidden.md"`) {
+		t.Fatalf("wrong container: %v", err)
+	}
+}
+
+func TestRepositoryCommentsAreNotTeaching(t *testing.T) {
+	root := testRepository(t)
+	writeTestFile(t, root, "docs/guides/example.md", "<!--\n<pre>\n```go\nvar example = models.UserDraft{}\nrows.Count(query)\n```\n[Missing](missing.md)\n</pre>\n-->\n")
+	if err := checkRepository(root); err != nil {
+		t.Fatal(err)
+	}
+}

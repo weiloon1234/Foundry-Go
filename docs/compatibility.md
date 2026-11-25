@@ -589,22 +589,23 @@ and remain readable without fixture sources or TypeScript tools.
 The pinned tool must match both the effective module path and version, including
 versioned replacements; an equal version on a different module is not a match.
 
-Guides, `AGENTS.md` files and skills bind Go and TypeScript examples with
-`<!-- compiled-source: path[#region] -->` and standalone
-`// doc-example:begin|end name` boundaries. Region names are unique per source
-file; multiple documents may include the same region. No document has a binding
-or retirement exemption. All fences require a supported language tag; indented
-and HTML code blocks are refused. The tag is the contract; executable-code
-detection in `text` fences is best effort. Framework TSX examples are unsupported; application
-source binding is a separate application tooling change.
-
-The ORM migration guide is removed. Use [model declarations](guides/model-declarations.md),
+At the next application pin, retarget any `Foundry guides:` declaration naming
+`orm-migration` to a current task guide. The ORM migration page is removed.
+Use [model declarations](guides/model-declarations.md),
 [conditional expressions](guides/conditional-expressions.md),
-[projection declarations](guides/model-projections.md), and
-[JSON models](guides/json-models.md) for current recipes. The
-[retired-names ledger](../internal/retirement/denied.json) gives the replacement
-when one was documented. Entries without one omit that field, and diagnostics
-say that no replacement is recorded.
+[projection declarations](guides/model-projections.md), or
+[JSON models](guides/json-models.md) for the relevant task.
+Diagnostics have new wording and include replacements recorded in the
+[retired-names ledger](../internal/retirement/denied.json), or state that none is
+recorded. Replacement metadata adds no retirement-name, arity or chain rule.
+
+The framework's own guides, `AGENTS.md` files and skills require compiled-source
+bindings, supported fence tags and fenced code instead of indented blocks or
+HTML `pre`/`code` elements. An application's `foundry docs check` does **not**
+enforce these binding, tag or block rules in this release. Application checks
+continue to validate references and retired API teaching without requiring
+framework fixture sources. The shared Markdown reader uses Goldmark v1.8.7
+under the MIT licence; [dependency review](dependency-review.md) records its role.
 
 Review reference diagnostics alongside runtime and generator changes during an
 upgrade. A rollback must restore compatible application references and workflow

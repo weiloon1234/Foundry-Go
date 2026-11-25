@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"github.com/weiloon1234/Foundry-Go/internal/docrefs"
+	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/doctor"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 	"github.com/weiloon1234/Foundry-Go/internal/retirement"
@@ -63,6 +64,10 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 	if !verified {
 		return safeerror.New(fmt.Sprintf("docs check requires a verified tool/framework version match; development builds and local replacements are unverifiable; run the module-pinned `go tool foundry docs check --dir .` with a released framework"))
 	}
+	checker, err := retirement.NewDocumentChecker(false)
+	if err != nil {
+		return err
+	}
 	var refs []docrefs.Reference
 	var failures []error
 	err = filepath.WalkDir(root, func(name string, entry fs.DirEntry, walkErr error) error {
@@ -100,13 +105,13 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 		if !entry.Type().IsRegular() {
 			return safeerror.New(fmt.Sprintf("%s: active documentation must be a regular file", rel))
 		}
-		data, err := os.ReadFile(name)
+		data, err := markdown.ReadFile(root, rel, markdown.MaxDocumentBytes)
 		if err != nil {
 			return err
 		}
 		parsed, err := docrefs.Parse(rel, data)
 		refs = append(refs, parsed...)
-		failures = append(failures, err, retirement.CheckApplicationDocument(rel, data))
+		failures = append(failures, err, checker.Check(rel, data))
 		return nil
 	})
 	failures = append(failures, err, docrefs.CheckReferences(filepath.Join(selected.Dir, "docs", "guides"), refs))

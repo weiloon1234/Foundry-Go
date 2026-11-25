@@ -2,9 +2,11 @@ package retirement
 
 import (
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/scanner"
 	"go/token"
+	"golang.org/x/net/html"
 	"path"
 	"regexp"
 	"strings"
@@ -12,29 +14,45 @@ import (
 	"unicode/utf8"
 )
 
-var codeSpan = regexp.MustCompile("`+([^`]+)`+")
 var proseSelector = regexp.MustCompile(`[A-Za-z_][A-Za-z_0-9]*(\(\))?(\.[A-Za-z_][A-Za-z_0-9]*(\(\))?)+`)
-var jsxElement = regexp.MustCompile(`</?[A-Za-z_$][A-Za-z_0-9$]*(\.[A-Za-z_$][A-Za-z_0-9$]*)*([ \t\r\n]+([A-Za-z_{]([^<>"']|"[^"]*"|'[^']*')*)?)?/?>`)
 
 // CheckDocument rejects retired spellings in active documentation without historical exemptions.
 func CheckDocument(name string, data []byte) error {
-	return checkDocument(name, data, true)
+	checker, err := NewDocumentChecker(true)
+	if err != nil {
+		return err
+	}
+	return checker.Check(name, data)
 }
 
 // CheckApplicationDocument checks framework teaching in application instructions.
 // Bare names alone do not establish framework ownership.
 func CheckApplicationDocument(name string, data []byte) error {
-	return checkDocument(name, data, false)
-}
-
-func checkDocument(name string, data []byte, strict bool) error {
-	denied, err := declarations()
+	checker, err := NewDocumentChecker(false)
 	if err != nil {
 		return err
 	}
+	return checker.Check(name, data)
+}
+
+// DocumentChecker compiles immutable retirement rules once for a document run.
+type DocumentChecker struct {
+	rules       documentRules
+	commands    map[*regexp.Regexp]string
+	patterns    []*regexp.Regexp
+	unqualified map[string]bool
+	strict      bool
+}
+
+// NewDocumentChecker snapshots the ledger and compiles rules for framework or application teaching.
+func NewDocumentChecker(strict bool) (*DocumentChecker, error) {
+	denied, err := declarations()
+	if err != nil {
+		return nil, err
+	}
 	rules, err := loadDocumentRules(denied)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	commands := make(map[*regexp.Regexp]string)
 	for command, replacement := range rules.RetiredCommands {
@@ -65,83 +83,84 @@ func checkDocument(name string, data []byte, strict bool) error {
 			patterns = append(patterns, regexp.MustCompile(`\b`+regexp.QuoteMeta(path.Base(owner)+"."+name)+`\b`))
 		}
 	}
+	return &DocumentChecker{rules: rules, commands: commands, patterns: patterns, unqualified: unqualified, strict: strict}, nil
+}
+
+// Check retains import ownership across each complete code block.
+func (c *DocumentChecker) Check(name string, data []byte) error {
+	if len(data) > markdown.MaxDocumentBytes {
+		return safeerror.New(fmt.Sprintf("%s:0: document exceeds maximum %d bytes.", name, markdown.MaxDocumentBytes))
+	}
+	parsed := markdown.Read(data)
 	var failures []error
-	fence, language := "", ""
-	var code []string
-	codeLine := 0
-	checkCode := func() {
-		if !javascriptFence(language) {
-			text := withoutJSXElements(strings.Join(code, "\n"))
-			failures = append(failures, rules.checkCode(name, text, codeLine, !strict)...)
-			if spelling, relativeLine := retiredCodeName(text, unqualified); (language == "" || language == "go" || language == "golang") && spelling != "" {
-				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, codeLine+relativeLine-1, rules.retirementMessage(spelling))))
+	report := func(line int, message string) {
+		failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, line, message)))
+	}
+	checkText := func(text string, line int) {
+		for i, value := range strings.Split(text, "\n") {
+			for pattern, replacement := range c.commands {
+				if pattern.MatchString(value) {
+					report(line+i, "retired command; "+replacement)
+				}
+			}
+			for _, pattern := range c.patterns {
+				if spelling := pattern.FindString(value); spelling != "" {
+					message := "retired API in teaching; no replacement is recorded for this spelling; remove it and consult the current task guide."
+					if _, exists := c.rules.replacements[retirementName(spelling)]; exists {
+						message = c.rules.retirementMessage(spelling)
+					}
+					report(line+i, message)
+					break
+				}
 			}
 		}
 	}
-	for i, line := range strings.Split(string(data), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-			n := 0
-			for n < len(trimmed) && trimmed[n] == trimmed[0] {
-				n++
-			}
-			marker := trimmed[:n]
-			if fence == "" && (marker[0] != '`' || !strings.Contains(trimmed[n:], "`")) {
-				fence = marker
-				code = nil
-				codeLine = i + 2
-				language = strings.TrimSpace(strings.TrimLeft(trimmed, string(marker[0])))
-				continue
-			} else if fence != "" && fence[0] == marker[0] && len(marker) >= len(fence) && strings.TrimSpace(trimmed[n:]) == "" {
-				checkCode()
-				fence = ""
-				continue
-			}
+	for _, block := range parsed.Blocks {
+		if block.Kind == markdown.HTML {
+			markdown.HTMLTokens(block, func(kind html.TokenType, raw string, line int) {
+				if kind != html.TextToken {
+					return
+				}
+				checkText(raw, line)
+				for _, selector := range proseSelector.FindAllString(raw, -1) {
+					failures = append(failures, c.rules.checkCode(name, selector, line, !c.strict)...)
+				}
+			})
 		}
-		if fence != "" && javascriptFence(language) {
+		if block.Kind != markdown.Fence && block.Kind != markdown.Indented {
 			continue
 		}
-		for pattern, replacement := range commands {
-			if pattern.MatchString(line) {
-				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: retired command; %s", name, i+1, replacement)))
-			}
-		}
-		bad := ""
-		if fence != "" {
-			code = append(code, line)
-		}
-		line = withoutJSXElements(line)
-		if fence == "" {
-			for _, span := range codeSpan.FindAllStringSubmatch(line, -1) {
-				if bad == "" {
-					bad, _ = retiredCodeName(span[1], unqualified)
-				}
-				failures = append(failures, rules.checkCode(name, span[1], i+1, !strict)...)
-			}
-			prose := codeSpan.ReplaceAllString(line, "")
-			for _, selector := range proseSelector.FindAllString(prose, -1) {
-				failures = append(failures, rules.checkCode(name, selector, i+1, !strict)...)
-			}
-		}
-		if bad != "" {
-			failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, i+1, rules.retirementMessage(bad))))
+		if javascriptFence(block.Info) {
 			continue
 		}
-		for _, pattern := range patterns {
-			if spelling := pattern.FindString(line); spelling != "" {
-				message := "retired API in teaching; no replacement is recorded for this spelling; remove it and consult the current task guide."
-				if _, exists := rules.replacements[retirementName(spelling)]; exists {
-					message = rules.retirementMessage(spelling)
-				}
-				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, i+1, message)))
-				break
+		line := block.First
+		if block.Kind == markdown.Fence {
+			line++
+		}
+		code := withoutJSXElements(block.Text)
+		failures = append(failures, c.rules.checkCode(name, code, line, !c.strict)...)
+		if spelling, relative := retiredCodeName(code, c.unqualified); (block.Info == "" || block.Info == "go" || block.Info == "golang") && spelling != "" {
+			report(line+relative-1, c.rules.retirementMessage(spelling))
+		}
+		checkText(code, line)
+	}
+	for _, node := range parsed.Inlines {
+		switch node.Kind {
+		case markdown.CodeSpan:
+			node.Text = withoutJSXElements(node.Text)
+			failures = append(failures, c.rules.checkCode(name, node.Text, node.First, !c.strict)...)
+			if spelling, _ := retiredCodeName(node.Text, c.unqualified); spelling != "" {
+				report(node.First, c.rules.retirementMessage(spelling))
 			}
+			checkText(node.Text, node.First)
+		case markdown.Text:
+			for _, selector := range proseSelector.FindAllString(node.Text, -1) {
+				failures = append(failures, c.rules.checkCode(name, selector, node.First, !c.strict)...)
+			}
+			checkText(node.Text, node.First)
 		}
 	}
-	if fence != "" {
-		checkCode()
-	}
-	return safeerror.Join("operation failed", failures...)
+	return safeerror.Join("documentation retirement check failed", failures...)
 }
 
 func javascriptFence(language string) bool {
@@ -158,23 +177,39 @@ func javascriptFence(language string) bool {
 
 func withoutJSXElements(text string) string {
 	var masked []byte
-	for _, match := range jsxElement.FindAllStringIndex(text, -1) {
-		if match[0] > 0 {
-			previous, _ := utf8.DecodeLastRuneInString(text[:match[0]])
-			// Name<Placeholder> is documentation notation, not a JSX tag.
+	offset := 0
+	markdown.HTMLTokens(markdown.Node{Text: text, First: 1}, func(kind html.TokenType, raw string, _ int) {
+		start := offset
+		offset += len(raw)
+		if kind != html.StartTagToken && kind != html.EndTagToken && kind != html.SelfClosingTagToken {
+			return
+		}
+		// HTML tokenization is intentionally permissive. JSX requires an attribute
+		// name, so a Go comparison such as <count && rows.Count(items) > is not JSX.
+		tokenizer := html.NewTokenizer(strings.NewReader(raw))
+		tokenizer.Next()
+		element := tokenizer.Token()
+		if len(element.Attr) > 0 {
+			first, _ := utf8.DecodeRuneInString(element.Attr[0].Key)
+			if first != '_' && first != '{' && !unicode.IsLetter(first) {
+				return
+			}
+		}
+		if start > 0 {
+			previous, _ := utf8.DecodeLastRuneInString(text[:start])
 			if previous == '_' || previous == '$' || unicode.IsLetter(previous) || unicode.IsDigit(previous) {
-				continue
+				return
 			}
 		}
 		if masked == nil {
 			masked = []byte(text)
 		}
-		for i := match[0]; i < match[1]; i++ {
+		for i := start; i < offset; i++ {
 			if masked[i] != '\n' {
 				masked[i] = ' '
 			}
 		}
-	}
+	})
 	if masked == nil {
 		return text
 	}

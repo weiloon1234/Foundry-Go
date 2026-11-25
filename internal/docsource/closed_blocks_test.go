@@ -36,7 +36,7 @@ func TestClosedBlockSyntax(t *testing.T) {
 			}
 		})
 	}
-	for tag := range fenceLanguages {
+	for _, tag := range []string{"sh", "toml", "json", "sql", "text", "ini", "markdown", "yaml", "makefile"} {
 		if executable(tag) {
 			continue
 		}
@@ -88,8 +88,8 @@ func TestContainerRendering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, prefix := range []string{"> ", "- ", "> - ", "1. "} {
-		continuation := continuationPrefix(prefix)
+	for _, container := range []struct{ prefix, continuation string }{{"> ", "> "}, {"- ", "  "}, {"> - ", ">   "}, {"1. ", "   "}} {
+		prefix, continuation := container.prefix, container.continuation
 		input := prefix + "<!-- compiled-source: example.ts#value -->\n" + continuation + "```typescript\n" + continuation + "const value = 1;\n" + continuation + "```\n"
 		doc, err := parseDocument("guide.md", []byte(input), func(string) (source, error) { return src, nil })
 		if err != nil {

@@ -3,6 +3,7 @@ package docsource
 import (
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"io"
 	"regexp"
 	"strings"
@@ -41,10 +42,10 @@ func ParseFlags(flags *flag.FlagSet, args []string) error {
 	if err := flags.Parse(args); err != nil {
 		var names []string
 		flags.VisitAll(func(f *flag.Flag) { names = append(names, "--"+f.Name) })
-		return fmt.Errorf("%s:0: %v; use the supported flags: %s.", flags.Name(), err, strings.Join(names, ", "))
+		return safeerror.Owned(fmt.Sprintf("%s:0: invalid flags; use the supported flags: %s.", flags.Name(), strings.Join(names, ", ")), err)
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf("%s:0: unexpected positional argument %q; pass options as named flags.", flags.Name(), flags.Arg(0))
+		return safeerror.New(fmt.Sprintf("%s:0: unexpected positional argument %q; pass options as named flags.", flags.Name(), flags.Arg(0)))
 	}
 	return nil
 }
