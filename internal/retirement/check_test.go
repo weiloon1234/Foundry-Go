@@ -98,12 +98,16 @@ func TestRetirementDenialLedger(t *testing.T) {
 				root := t.TempDir()
 				writeSource(t, root, "go.mod", "module "+strings.TrimSuffix(framework, "/")+"\n")
 				source := "package sample; "
-				if receiver, method, ok := strings.Cut(name, "."); ok {
+				if name == PackageEntry {
+					writeSource(t, root, "sample/a.go", `package sample; import _ "`+framework+owner+`"`)
+				} else if receiver, method, ok := strings.Cut(name, "."); ok {
 					source += "type " + receiver + " struct{}; func (" + receiver + ") " + method + "(){}"
 				} else {
 					source += "type " + name + " int"
 				}
-				writeSource(t, root, owner+"/neutral.go", source)
+				if name != PackageEntry {
+					writeSource(t, root, owner+"/neutral.go", source)
+				}
 				if err := Check(root); err == nil {
 					t.Fatal("denial ledger entry not enforced")
 				}
@@ -371,4 +375,42 @@ var Second Node
 			t.Fatalf("unexpected error on clean cycle: %v", err)
 		}
 	})
+}
+
+// A compile-fail case is a wrong guess that must keep failing to compile, so
+// naming a retired name there is allowed; the same text anywhere else is a use.
+func TestRetiredNameInCompileFailCaseIsNotAUse(t *testing.T) {
+	const use = `package invalid
+
+import "` + framework + `database/orm"
+
+var _ = orm.TextEq
+`
+	for path, rejected := range map[string]bool{
+		"testdata/compilefail/case/invalid.go":                  false,
+		"tests/fixtures/x/testdata/compilefail/case/invalid.go": false,
+		"sample/a.go":                      true,
+		"sample/testdata/other/invalid.go": true,
+	} {
+		root := t.TempDir()
+		writeSource(t, root, "go.mod", "module "+strings.TrimSuffix(framework, "/")+"\n")
+		writeSource(t, root, "database/orm/orm.go", "package orm\n\nfunc Other() {}\n")
+		writeSource(t, root, path, use)
+		err := Check(root)
+		if rejected && (err == nil || !strings.Contains(err.Error(), "reference to retired orm.TextEq")) {
+			t.Errorf("%s: use of a retired name accepted: %v", path, err)
+		}
+		if !rejected && err != nil {
+			t.Errorf("%s: compile-fail case refused: %v", path, err)
+		}
+	}
+}
+
+func TestRetiredPackageImportComesFromTheLedger(t *testing.T) {
+	denied := map[string][]string{"gone/pkg": {"Old", PackageEntry}, "kept": {"Old"}}
+	for imported, want := range map[string]bool{"gone/pkg": true, "gone/pkg/sub": true, "gone/pkgx": false, "kept": false, "kept/sub": false} {
+		if _, got := retiredPackage(denied, imported); got != want {
+			t.Errorf("import %s: retired = %v, want %v", imported, got, want)
+		}
+	}
 }

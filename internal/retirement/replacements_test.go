@@ -84,7 +84,7 @@ func TestRetirementReplacementDiagnostics(t *testing.T) {
 	for _, test := range []struct{ code, want string }{
 		{"orm.DoesntHave", "orm.DoesntHave is retired; use orm.Not(orm.Has(relation, predicates...))."},
 		{"attachments.AddFiles", "attachments.AddFiles is retired; use attachments.AddFilesTo."},
-		{"orm.DeclarationSnapshot", "orm.DeclarationSnapshot is retired; no replacement is recorded; remove this use and consult the current task guide."},
+		{"orm.DeclarationSnapshot", "orm.DeclarationSnapshot is retired; it has no replacement; remove this use and consult the current task guide."},
 		{"orm.Predicate.Not", "orm.Predicate.Not is retired; use orm.Not(predicate)."},
 	} {
 		err := CheckDocument("guide.md", []byte("# Guide\n\nUse `"+test.code+"`.\n"))
@@ -504,9 +504,8 @@ validation.Rule.Check`)
 			actual[owner+"."+member] = true
 		}
 	}
-	if len(actual) != len(expected) {
-		t.Fatalf("denied names = %d, baseline = %d", len(actual), len(expected))
-	}
+	// Names may be added when API is removed; the release baseline test owns
+	// "no entry disappears" from each later tag on.
 	for _, name := range expected {
 		if !actual[name] {
 			t.Errorf("lost denial %s", name)

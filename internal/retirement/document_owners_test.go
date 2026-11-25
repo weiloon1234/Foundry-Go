@@ -97,7 +97,7 @@ func TestApplicationDocumentationFrameworkImports(t *testing.T) {
 	}{
 		{"package example\nimport result \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\nfunc example() { result.Count(items) }", false},
 		{"package example\nimport expression \"github.com/weiloon1234/Foundry-Go/database/orm/expr\"\nfunc example() { expression.Select(mapping) }", false},
-		{"package example\nimport . \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\nfunc example() { Count(items) }", true},
+		{"package example\nimport . \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\nfunc example() { Preflight(items) }", true},
 	} {
 		text := []byte("```go\n" + tc.code + "\n```")
 		if err := CheckApplicationDocument("AGENTS.md", text); err == nil || !strings.Contains(err.Error(), " is retired;") {

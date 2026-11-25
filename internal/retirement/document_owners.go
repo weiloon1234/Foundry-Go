@@ -27,8 +27,10 @@ type documentRules struct {
 		Replacement string   `json:"replacement"`
 	} `json:"chains"`
 	replacements map[string]string
-	denied       map[string]map[string]bool
-	declarations map[string][]string
+	// noReplacement holds the retired spellings the ledger says nothing replaces.
+	noReplacement map[string]bool
+	denied        map[string]map[string]bool
+	declarations  map[string][]string
 }
 
 func loadDocumentRules(declarations map[string][]string) (documentRules, error) {
@@ -45,9 +47,11 @@ func loadDocumentRules(declarations map[string][]string) (documentRules, error) 
 		return rules, err
 	}
 	rules.replacements = make(map[string]string)
+	rules.noReplacement = make(map[string]bool)
 	for owner, members := range entries {
 		for _, member := range members {
 			rules.replacements[retirementName(owner+"."+member.Name)] = member.Replacement
+			rules.noReplacement[retirementName(owner+"."+member.Name)] = member.NoReplacement
 		}
 	}
 	rules.declarations = declarations
@@ -384,6 +388,9 @@ func (r documentRules) retirementMessage(name string) string {
 	}
 	if replacement := r.replacements[name]; replacement != "" {
 		return name + " is retired; use " + replacement + "."
+	}
+	if r.noReplacement[name] {
+		return name + " is retired; it has no replacement; remove this use and consult the current task guide."
 	}
 	return name + " is retired; no replacement is recorded; remove this use and consult the current task guide."
 }

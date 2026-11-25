@@ -63,23 +63,32 @@
     {
       "name": "OneSlot.PublicURL",
       "replacement": "attachments.OneHandle.PublicURL"
+    },
+    {
+      "name": "MaxUploadBytes",
+      "replacement": "attachments.MaxBufferedBytes"
     }
   ],
   "database/orm": [
     {
-      "name": "DeclarationSnapshot"
+      "name": "DeclarationSnapshot",
+      "noReplacement": true
     },
     {
-      "name": "DeclarationSlot"
+      "name": "DeclarationSlot",
+      "noReplacement": true
     },
     {
-      "name": "DeclarationOwner"
+      "name": "DeclarationOwner",
+      "noReplacement": true
     },
     {
-      "name": "FoundryCompareDeclarationSnapshots"
+      "name": "FoundryCompareDeclarationSnapshots",
+      "noReplacement": true
     },
     {
-      "name": "FoundryExplainDeclarationSnapshots"
+      "name": "FoundryExplainDeclarationSnapshots",
+      "noReplacement": true
     },
     {
       "name": "Extension",
@@ -118,7 +127,8 @@
       "replacement": "orm.Not(orm.Has(relation, predicates...))"
     },
     {
-      "name": "Query.ForUpdate"
+      "name": "Query.ForUpdate",
+      "noReplacement": true
     },
     {
       "name": "EnumDesc",
@@ -827,6 +837,1186 @@
     {
       "name": "TimeNotIn",
       "replacement": "orm.NotIn"
+    },
+    {
+      "name": "AuditEncryptedField",
+      "replacement": "orm.AuditField"
+    },
+    {
+      "name": "AuditNullableEncryptedField",
+      "replacement": "orm.AuditField"
+    },
+    {
+      "name": "AuditReadEncrypted",
+      "replacement": "orm.AuditRead"
+    },
+    {
+      "name": "AuditReadNullableEncrypted",
+      "replacement": "orm.AuditReadNullable"
+    },
+    {
+      "name": "ColumnAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "ColumnAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "ColumnDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "ColumnEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "ColumnExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "ColumnIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "ColumnNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "ColumnNotIn",
+      "replacement": "orm.NotIn"
+    },
+    {
+      "name": "ColumnSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "EncryptedAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "EncryptedChangeOf",
+      "replacement": "orm.ChangeOf"
+    },
+    {
+      "name": "EncryptedExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "EncryptedSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "EnumAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "EnumAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "EnumEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "EnumExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "EnumIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "EnumNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "EnumNotIn",
+      "replacement": "orm.NotIn"
+    },
+    {
+      "name": "EnumSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "ExpressionColumn",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "InputColumnAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "InputColumnAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "InputColumnEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "InputColumnExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "InputColumnIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "InputColumnNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "InputColumnSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "InputEnumAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "InputEnumEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "InputEnumExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "InputEnumSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "InputIntervalAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "InputIntervalExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "InputIntervalSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "InputJSONAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "InputJSONContainedBy",
+      "replacement": "orm.ContainedByDocument"
+    },
+    {
+      "name": "InputJSONContains",
+      "replacement": "orm.ContainsDocument"
+    },
+    {
+      "name": "InputJSONExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "InputJSONIsJSONNull",
+      "replacement": "orm.IsJSONNull"
+    },
+    {
+      "name": "InputJSONSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "InputKeyAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "InputKeyEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "InputKeyExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "InputKeySet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "InputNumberAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "InputNumberAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "InputNumberEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "InputNumberExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "InputNumberGte",
+      "replacement": "orm.Gte"
+    },
+    {
+      "name": "InputNumberSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "InputTextAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "InputTextAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "InputTextContains",
+      "replacement": "orm.Contains"
+    },
+    {
+      "name": "InputTextEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "InputTextExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "InputTextLike",
+      "replacement": "orm.Like"
+    },
+    {
+      "name": "InputTextNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "InputTextSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "InputTimeAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "InputTimeExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "InputTimeSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "InsertTarget",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "IntervalAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "IntervalAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "IntervalBetween",
+      "replacement": "orm.Between"
+    },
+    {
+      "name": "IntervalDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "IntervalEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "IntervalExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "IntervalGt",
+      "replacement": "orm.Gt"
+    },
+    {
+      "name": "IntervalGte",
+      "replacement": "orm.Gte"
+    },
+    {
+      "name": "IntervalIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "IntervalLt",
+      "replacement": "orm.Lt"
+    },
+    {
+      "name": "IntervalLte",
+      "replacement": "orm.Lte"
+    },
+    {
+      "name": "IntervalNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "IntervalNotIn",
+      "replacement": "orm.NotIn"
+    },
+    {
+      "name": "IntervalSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "JSONAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "JSONAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "JSONContainedBy",
+      "replacement": "orm.ContainedByDocument"
+    },
+    {
+      "name": "JSONContains",
+      "replacement": "orm.ContainsDocument"
+    },
+    {
+      "name": "JSONDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "JSONEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "JSONExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "JSONIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "JSONIsJSONNull",
+      "replacement": "orm.IsJSONNull"
+    },
+    {
+      "name": "JSONNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "JSONNotIn",
+      "replacement": "orm.NotIn"
+    },
+    {
+      "name": "JSONSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "KeyAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "KeyColumn",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "KeyColumnNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "KeyDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "KeyEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "KeyExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "KeyIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "KeyNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "KeyNotIn",
+      "replacement": "orm.NotIn"
+    },
+    {
+      "name": "KeySet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableColumnAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableColumnAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "NullableColumnDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "NullableColumnEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "NullableColumnExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableColumnIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "NullableColumnIsNotNull",
+      "replacement": "orm.IsNotNull"
+    },
+    {
+      "name": "NullableColumnIsNull",
+      "replacement": "orm.IsNull"
+    },
+    {
+      "name": "NullableColumnNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "NullableColumnNotIn",
+      "replacement": "orm.NotIn"
+    },
+    {
+      "name": "NullableColumnSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableColumnSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableEncryptedAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableEncryptedChangeOf",
+      "replacement": "orm.NullableChangeOf"
+    },
+    {
+      "name": "NullableEncryptedExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableEncryptedIsNotNull",
+      "replacement": "orm.IsNotNull"
+    },
+    {
+      "name": "NullableEncryptedIsNull",
+      "replacement": "orm.IsNull"
+    },
+    {
+      "name": "NullableEncryptedSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableEncryptedSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableEnumAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableEnumEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "NullableEnumExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableEnumIsNotNull",
+      "replacement": "orm.IsNotNull"
+    },
+    {
+      "name": "NullableEnumIsNull",
+      "replacement": "orm.IsNull"
+    },
+    {
+      "name": "NullableEnumNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "NullableEnumSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableEnumSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableInputColumnAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableInputColumnExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableInputColumnIsNull",
+      "replacement": "orm.IsNull"
+    },
+    {
+      "name": "NullableInputColumnSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableInputColumnSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableInputEnumAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableInputEnumExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableInputEnumSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableInputEnumSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableInputIntervalAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableInputIntervalExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableInputIntervalSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableInputIntervalSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableInputJSONAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableInputJSONContainedBy",
+      "replacement": "orm.ContainedByDocument"
+    },
+    {
+      "name": "NullableInputJSONContains",
+      "replacement": "orm.ContainsDocument"
+    },
+    {
+      "name": "NullableInputJSONExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableInputJSONIsJSONNull",
+      "replacement": "orm.IsJSONNull"
+    },
+    {
+      "name": "NullableInputJSONSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableInputJSONSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableInputNumberAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableInputNumberExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableInputNumberSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableInputNumberSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableInputTextAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableInputTextContains",
+      "replacement": "orm.Contains"
+    },
+    {
+      "name": "NullableInputTextExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableInputTextSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableInputTextSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableInputTimeAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableInputTimeExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableInputTimeSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableInputTimeSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableIntervalAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableIntervalAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "NullableIntervalBetween",
+      "replacement": "orm.Between"
+    },
+    {
+      "name": "NullableIntervalDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "NullableIntervalEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "NullableIntervalExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableIntervalGt",
+      "replacement": "orm.Gt"
+    },
+    {
+      "name": "NullableIntervalGte",
+      "replacement": "orm.Gte"
+    },
+    {
+      "name": "NullableIntervalIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "NullableIntervalIsNotNull",
+      "replacement": "orm.IsNotNull"
+    },
+    {
+      "name": "NullableIntervalIsNull",
+      "replacement": "orm.IsNull"
+    },
+    {
+      "name": "NullableIntervalLt",
+      "replacement": "orm.Lt"
+    },
+    {
+      "name": "NullableIntervalLte",
+      "replacement": "orm.Lte"
+    },
+    {
+      "name": "NullableIntervalNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "NullableIntervalNotIn",
+      "replacement": "orm.NotIn"
+    },
+    {
+      "name": "NullableIntervalSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableIntervalSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableJSONAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableJSONAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "NullableJSONContainedBy",
+      "replacement": "orm.ContainedByDocument"
+    },
+    {
+      "name": "NullableJSONContains",
+      "replacement": "orm.ContainsDocument"
+    },
+    {
+      "name": "NullableJSONDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "NullableJSONEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "NullableJSONExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableJSONIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "NullableJSONIsJSONNull",
+      "replacement": "orm.IsJSONNull"
+    },
+    {
+      "name": "NullableJSONIsNotNull",
+      "replacement": "orm.IsNotNull"
+    },
+    {
+      "name": "NullableJSONIsNull",
+      "replacement": "orm.IsNull"
+    },
+    {
+      "name": "NullableJSONNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "NullableJSONNotIn",
+      "replacement": "orm.NotIn"
+    },
+    {
+      "name": "NullableJSONSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableJSONSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableNumberAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableNumberAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "NullableNumberDecrement",
+      "replacement": "orm.Decrement"
+    },
+    {
+      "name": "NullableNumberDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "NullableNumberEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "NullableNumberExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableNumberGt",
+      "replacement": "orm.Gt"
+    },
+    {
+      "name": "NullableNumberGte",
+      "replacement": "orm.Gte"
+    },
+    {
+      "name": "NullableNumberIncrement",
+      "replacement": "orm.Increment"
+    },
+    {
+      "name": "NullableNumberIsNotNull",
+      "replacement": "orm.IsNotNull"
+    },
+    {
+      "name": "NullableNumberIsNull",
+      "replacement": "orm.IsNull"
+    },
+    {
+      "name": "NullableNumberSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableNumberSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableTextAdapter",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "NullableTextAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "NullableTextContains",
+      "replacement": "orm.Contains"
+    },
+    {
+      "name": "NullableTextDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "NullableTextEndsWith",
+      "replacement": "orm.EndsWith"
+    },
+    {
+      "name": "NullableTextEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "NullableTextExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableTextIContains",
+      "replacement": "orm.IContains"
+    },
+    {
+      "name": "NullableTextIEndsWith",
+      "replacement": "orm.IEndsWith"
+    },
+    {
+      "name": "NullableTextILike",
+      "replacement": "orm.ILike"
+    },
+    {
+      "name": "NullableTextIStartsWith",
+      "replacement": "orm.IStartsWith"
+    },
+    {
+      "name": "NullableTextIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "NullableTextIsNotNull",
+      "replacement": "orm.IsNotNull"
+    },
+    {
+      "name": "NullableTextIsNull",
+      "replacement": "orm.IsNull"
+    },
+    {
+      "name": "NullableTextLike",
+      "replacement": "orm.Like"
+    },
+    {
+      "name": "NullableTextNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "NullableTextSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableTextSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NullableTextStartsWith",
+      "replacement": "orm.StartsWith"
+    },
+    {
+      "name": "NullableTimeAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "NullableTimeDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "NullableTimeExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NullableTimeGt",
+      "replacement": "orm.Gt"
+    },
+    {
+      "name": "NullableTimeGte",
+      "replacement": "orm.Gte"
+    },
+    {
+      "name": "NullableTimeIsNotNull",
+      "replacement": "orm.IsNotNull"
+    },
+    {
+      "name": "NullableTimeIsNull",
+      "replacement": "orm.IsNull"
+    },
+    {
+      "name": "NullableTimeLt",
+      "replacement": "orm.Lt"
+    },
+    {
+      "name": "NullableTimeLte",
+      "replacement": "orm.Lte"
+    },
+    {
+      "name": "NullableTimeSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NullableTimeSetNull",
+      "replacement": "orm.SetNull"
+    },
+    {
+      "name": "NumberAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "NumberBetween",
+      "replacement": "orm.Between"
+    },
+    {
+      "name": "NumberDecrement",
+      "replacement": "orm.Decrement"
+    },
+    {
+      "name": "NumberDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "NumberEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "NumberExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NumberGt",
+      "replacement": "orm.Gt"
+    },
+    {
+      "name": "NumberGte",
+      "replacement": "orm.Gte"
+    },
+    {
+      "name": "NumberIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "NumberIncrement",
+      "replacement": "orm.Increment"
+    },
+    {
+      "name": "NumberKeyAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "NumberKeyBetween",
+      "replacement": "orm.Between"
+    },
+    {
+      "name": "NumberKeyEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "NumberKeyExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "NumberKeyGt",
+      "replacement": "orm.Gt"
+    },
+    {
+      "name": "NumberKeyGte",
+      "replacement": "orm.Gte"
+    },
+    {
+      "name": "NumberKeyLt",
+      "replacement": "orm.Lt"
+    },
+    {
+      "name": "NumberKeyLte",
+      "replacement": "orm.Lte"
+    },
+    {
+      "name": "NumberKeySet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "NumberLt",
+      "replacement": "orm.Lt"
+    },
+    {
+      "name": "NumberLte",
+      "replacement": "orm.Lte"
+    },
+    {
+      "name": "NumberNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "NumberNotIn",
+      "replacement": "orm.NotIn"
+    },
+    {
+      "name": "NumberSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "OrderedExpressionColumn",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "TextAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "TextContains",
+      "replacement": "orm.Contains"
+    },
+    {
+      "name": "TextDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "TextEndsWith",
+      "replacement": "orm.EndsWith"
+    },
+    {
+      "name": "TextEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "TextExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "TextExpressionColumn",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "TextGt",
+      "replacement": "orm.Gt"
+    },
+    {
+      "name": "TextIContains",
+      "replacement": "orm.IContains"
+    },
+    {
+      "name": "TextIEndsWith",
+      "replacement": "orm.IEndsWith"
+    },
+    {
+      "name": "TextILike",
+      "replacement": "orm.ILike"
+    },
+    {
+      "name": "TextIStartsWith",
+      "replacement": "orm.IStartsWith"
+    },
+    {
+      "name": "TextIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "TextLike",
+      "replacement": "orm.Like"
+    },
+    {
+      "name": "TextNe",
+      "replacement": "orm.Ne"
+    },
+    {
+      "name": "TextNotIn",
+      "replacement": "orm.NotIn"
+    },
+    {
+      "name": "TextSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "TextStartsWith",
+      "replacement": "orm.StartsWith"
+    },
+    {
+      "name": "TimeAsc",
+      "replacement": "orm.Asc"
+    },
+    {
+      "name": "TimeBetween",
+      "replacement": "orm.Between"
+    },
+    {
+      "name": "TimeDesc",
+      "replacement": "orm.Desc"
+    },
+    {
+      "name": "TimeEq",
+      "replacement": "orm.Eq"
+    },
+    {
+      "name": "TimeExpr",
+      "replacement": "pass the column directly; there is no wrapper"
+    },
+    {
+      "name": "TimeGt",
+      "replacement": "orm.Gt"
+    },
+    {
+      "name": "TimeGte",
+      "replacement": "orm.Gte"
+    },
+    {
+      "name": "TimeIn",
+      "replacement": "orm.In"
+    },
+    {
+      "name": "TimeLt",
+      "replacement": "orm.Lt"
+    },
+    {
+      "name": "TimeLte",
+      "replacement": "orm.Lte"
+    },
+    {
+      "name": "TimeSet",
+      "replacement": "orm.Set or orm.SetIfPresent"
+    },
+    {
+      "name": "UpdateTarget",
+      "replacement": "pass the column directly; there is no adapter"
+    },
+    {
+      "name": "FoundryColumn",
+      "noReplacement": true
     }
   ],
   "database/prune": [
@@ -879,64 +2069,84 @@
       "replacement": "modelbinding.ThroughSelectedRelation"
     },
     {
-      "name": "Endpoint.WithBodyValidation"
+      "name": "Endpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
-      "name": "Endpoint.WithScopes"
+      "name": "Endpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "Endpoint.WithPermissions"
+      "name": "Endpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "Endpoint.WithAuthorization"
+      "name": "Endpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "Endpoint.WithMiddleware"
+      "name": "Endpoint.WithMiddleware",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedEndpoint.WithBodyValidation"
+      "name": "AuthenticatedEndpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedEndpoint.WithScopes"
+      "name": "AuthenticatedEndpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedEndpoint.WithPermissions"
+      "name": "AuthenticatedEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedEndpoint.WithAuthorization"
+      "name": "AuthenticatedEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedEndpoint.WithMiddleware"
+      "name": "AuthenticatedEndpoint.WithMiddleware",
+      "noReplacement": true
     },
     {
-      "name": "IdempotentEndpoint.WithBodyValidation"
+      "name": "IdempotentEndpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
-      "name": "IdempotentEndpoint.WithScopes"
+      "name": "IdempotentEndpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "IdempotentEndpoint.WithPermissions"
+      "name": "IdempotentEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "IdempotentEndpoint.WithAuthorization"
+      "name": "IdempotentEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "IdempotentEndpoint.WithMiddleware"
+      "name": "IdempotentEndpoint.WithMiddleware",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedIdempotentEndpoint.WithBodyValidation"
+      "name": "AuthenticatedIdempotentEndpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedIdempotentEndpoint.WithScopes"
+      "name": "AuthenticatedIdempotentEndpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedIdempotentEndpoint.WithPermissions"
+      "name": "AuthenticatedIdempotentEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedIdempotentEndpoint.WithAuthorization"
+      "name": "AuthenticatedIdempotentEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedIdempotentEndpoint.WithMiddleware"
+      "name": "AuthenticatedIdempotentEndpoint.WithMiddleware",
+      "noReplacement": true
     }
   ],
   "metadata": [
@@ -1255,7 +2465,12 @@
       "replacement": "datatable.Manager.DownloadTimeout (including a nil manager)"
     },
     {
-      "name": "Cell.FormatWith"
+      "name": "Cell.FormatWith",
+      "noReplacement": true
+    },
+    {
+      "name": "DefineColumn",
+      "replacement": "datatable.Column; use datatable.Text, datatable.Number or another typed constructor for a direct model column"
     }
   ],
   "model": [
@@ -1270,171 +2485,224 @@
       "replacement": "jobs.CurrentEnvelopeVersion; format 3 only (convert retained formats 1/2 before activation)"
     },
     {
-      "name": "DefaultOverlapOptions"
+      "name": "DefaultOverlapOptions",
+      "noReplacement": true
     }
   ],
   "http": [
     {
-      "name": "Endpoint.WithBodyValidation"
+      "name": "Endpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
       "name": "Endpoint.WithScopes",
       "replacement": "http.Authenticated(endpoint, binding, http.Scopes(scopes))"
     },
     {
-      "name": "Endpoint.WithPermissions"
+      "name": "Endpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "Endpoint.WithAuthorization"
+      "name": "Endpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "Endpoint.WithMiddleware"
+      "name": "Endpoint.WithMiddleware",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedEndpoint.WithBodyValidation"
+      "name": "AuthenticatedEndpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedEndpoint.WithScopes"
+      "name": "AuthenticatedEndpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedEndpoint.WithPermissions"
+      "name": "AuthenticatedEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedEndpoint.WithAuthorization"
+      "name": "AuthenticatedEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedEndpoint.WithMiddleware"
+      "name": "AuthenticatedEndpoint.WithMiddleware",
+      "noReplacement": true
     },
     {
-      "name": "OptionalAuthenticationEndpoint.WithBodyValidation"
+      "name": "OptionalAuthenticationEndpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
-      "name": "OptionalAuthenticationEndpoint.WithScopes"
+      "name": "OptionalAuthenticationEndpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "OptionalAuthenticationEndpoint.WithPermissions"
+      "name": "OptionalAuthenticationEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "OptionalAuthenticationEndpoint.WithAuthorization"
+      "name": "OptionalAuthenticationEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "OptionalAuthenticationEndpoint.WithMiddleware"
+      "name": "OptionalAuthenticationEndpoint.WithMiddleware",
+      "noReplacement": true
     },
     {
-      "name": "SignedEndpoint.WithBodyValidation"
+      "name": "SignedEndpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
-      "name": "SignedEndpoint.WithScopes"
+      "name": "SignedEndpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "SignedEndpoint.WithPermissions"
+      "name": "SignedEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "SignedEndpoint.WithAuthorization"
+      "name": "SignedEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "SignedEndpoint.WithMiddleware"
+      "name": "SignedEndpoint.WithMiddleware",
+      "noReplacement": true
     },
     {
-      "name": "SignedAuthenticatedEndpoint.WithBodyValidation"
+      "name": "SignedAuthenticatedEndpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
-      "name": "SignedAuthenticatedEndpoint.WithScopes"
+      "name": "SignedAuthenticatedEndpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "SignedAuthenticatedEndpoint.WithPermissions"
+      "name": "SignedAuthenticatedEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "SignedAuthenticatedEndpoint.WithAuthorization"
+      "name": "SignedAuthenticatedEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "SignedAuthenticatedEndpoint.WithMiddleware"
+      "name": "SignedAuthenticatedEndpoint.WithMiddleware",
+      "noReplacement": true
     },
     {
-      "name": "TicketEndpoint.WithBodyValidation"
+      "name": "TicketEndpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
-      "name": "TicketEndpoint.WithScopes"
+      "name": "TicketEndpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "TicketEndpoint.WithPermissions"
+      "name": "TicketEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "TicketEndpoint.WithAuthorization"
+      "name": "TicketEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "TicketEndpoint.WithMiddleware"
+      "name": "TicketEndpoint.WithMiddleware",
+      "noReplacement": true
     },
     {
-      "name": "IdempotentEndpoint.WithBodyValidation"
+      "name": "IdempotentEndpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
-      "name": "IdempotentEndpoint.WithScopes"
+      "name": "IdempotentEndpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "IdempotentEndpoint.WithPermissions"
+      "name": "IdempotentEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "IdempotentEndpoint.WithAuthorization"
+      "name": "IdempotentEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "IdempotentEndpoint.WithMiddleware"
+      "name": "IdempotentEndpoint.WithMiddleware",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedIdempotentEndpoint.WithBodyValidation"
+      "name": "AuthenticatedIdempotentEndpoint.WithBodyValidation",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedIdempotentEndpoint.WithScopes"
+      "name": "AuthenticatedIdempotentEndpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedIdempotentEndpoint.WithPermissions"
+      "name": "AuthenticatedIdempotentEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedIdempotentEndpoint.WithAuthorization"
+      "name": "AuthenticatedIdempotentEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedIdempotentEndpoint.WithMiddleware"
+      "name": "AuthenticatedIdempotentEndpoint.WithMiddleware",
+      "noReplacement": true
     },
     {
-      "name": "CSPReportSample"
+      "name": "CSPReportSample",
+      "noReplacement": true
     },
     {
-      "name": "CSPSHA384"
+      "name": "CSPSHA384",
+      "noReplacement": true
     },
     {
-      "name": "CSPSHA512"
+      "name": "CSPSHA512",
+      "noReplacement": true
     },
     {
-      "name": "CSPUnsafeEval"
+      "name": "CSPUnsafeEval",
+      "noReplacement": true
     },
     {
-      "name": "CSPUnsafeHashes"
+      "name": "CSPUnsafeHashes",
+      "noReplacement": true
     },
     {
-      "name": "Events.WithConfig"
+      "name": "Events.WithConfig",
+      "noReplacement": true
     },
     {
-      "name": "FloatCookie"
+      "name": "FloatCookie",
+      "noReplacement": true
     },
     {
-      "name": "OriginPattern.Wildcard"
+      "name": "OriginPattern.Wildcard",
+      "noReplacement": true
     }
   ],
   "validation": [
     {
-      "name": "Field.Rules"
+      "name": "Field.Rules",
+      "noReplacement": true
     },
     {
-      "name": "Rule.Check"
+      "name": "Rule.Check",
+      "noReplacement": true
     },
     {
-      "name": "AfterField"
+      "name": "AfterField",
+      "noReplacement": true
     },
     {
-      "name": "AfterOrEqualNow"
+      "name": "AfterOrEqualNow",
+      "noReplacement": true
     },
     {
-      "name": "BeforeOrEqualField"
+      "name": "BeforeOrEqualField",
+      "noReplacement": true
     }
   ],
   "http/pagination": [
@@ -1443,99 +2711,354 @@
       "replacement": "pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))"
     },
     {
-      "name": "AuthenticatedNumberedEndpoint.WithPermissions"
+      "name": "AuthenticatedNumberedEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedNumberedEndpoint.WithAuthorization"
+      "name": "AuthenticatedNumberedEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
       "name": "AuthenticatedSimpleEndpoint.WithScopes",
       "replacement": "pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))"
     },
     {
-      "name": "AuthenticatedSimpleEndpoint.WithPermissions"
+      "name": "AuthenticatedSimpleEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedSimpleEndpoint.WithAuthorization"
+      "name": "AuthenticatedSimpleEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
       "name": "AuthenticatedCursorEndpoint.WithScopes",
       "replacement": "pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))"
     },
     {
-      "name": "AuthenticatedCursorEndpoint.WithPermissions"
+      "name": "AuthenticatedCursorEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "AuthenticatedCursorEndpoint.WithAuthorization"
+      "name": "AuthenticatedCursorEndpoint.WithAuthorization",
+      "noReplacement": true
     },
     {
-      "name": "authenticatedPageEndpoint.WithScopes"
+      "name": "authenticatedPageEndpoint.WithScopes",
+      "noReplacement": true
     },
     {
-      "name": "authenticatedPageEndpoint.WithPermissions"
+      "name": "authenticatedPageEndpoint.WithPermissions",
+      "noReplacement": true
     },
     {
-      "name": "authenticatedPageEndpoint.WithAuthorization"
+      "name": "authenticatedPageEndpoint.WithAuthorization",
+      "noReplacement": true
     }
   ],
   "application": [
     {
-      "name": "WithErrorReporter"
+      "name": "WithErrorReporter",
+      "noReplacement": true
     },
     {
-      "name": "WithLogHandler"
+      "name": "WithLogHandler",
+      "noReplacement": true
     },
     {
-      "name": "WithTraceBatchExporter"
+      "name": "WithTraceBatchExporter",
+      "noReplacement": true
     },
     {
-      "name": "WithTraceExporter"
+      "name": "WithTraceExporter",
+      "noReplacement": true
     }
   ],
   "audit": [
     {
-      "name": "ParseModelID"
+      "name": "ParseModelID",
+      "noReplacement": true
     }
   ],
   "deployment": [
     {
-      "name": "Bindings.DeploymentSHA256"
+      "name": "Bindings.DeploymentSHA256",
+      "noReplacement": true
     }
   ],
   "imaging": [
     {
-      "name": "Format.CanDecode"
+      "name": "Format.CanDecode",
+      "noReplacement": true
     }
   ],
   "redis": [
     {
-      "name": "JobKeys"
+      "name": "JobKeys",
+      "noReplacement": true
     }
   ],
   "redis/data": [
     {
-      "name": "AllScores"
+      "name": "AllScores",
+      "noReplacement": true
     }
   ],
   "redis/raw": [
     {
-      "name": "DecodeBytes"
+      "name": "DecodeBytes",
+      "noReplacement": true
     }
   ],
   "schedule": [
     {
-      "name": "Weekends"
+      "name": "Weekends",
+      "noReplacement": true
     }
   ],
   "storage": [
     {
-      "name": "DeletePrefixOptions"
+      "name": "DeletePrefixOptions",
+      "noReplacement": true
     },
     {
-      "name": "DeletePrefixResult"
+      "name": "DeletePrefixResult",
+      "noReplacement": true
     },
     {
-      "name": "Disk.DeletePrefix"
+      "name": "Disk.DeletePrefix",
+      "noReplacement": true
+    }
+  ],
+  "typescript": [
+    {
+      "name": "Options.React",
+      "noReplacement": true
+    },
+    {
+      "name": "Options.Vue",
+      "noReplacement": true
+    }
+  ],
+  "database/query": [
+    {
+      "name": "package",
+      "replacement": "database/orm declarations and reads; orm/expr expressions; orm/rows projections, sets and CTEs"
+    },
+    {
+      "name": "PageRequest",
+      "replacement": "orm.PageRequest"
+    },
+    {
+      "name": "Page",
+      "replacement": "orm.PageResult"
+    },
+    {
+      "name": "SimplePage",
+      "replacement": "orm.SimplePage"
+    },
+    {
+      "name": "CursorRequest",
+      "replacement": "orm.CursorRequest"
+    },
+    {
+      "name": "CursorPage",
+      "replacement": "orm.CursorPage"
+    },
+    {
+      "name": "Cursor",
+      "replacement": "orm.Cursor"
+    },
+    {
+      "name": "ParseCursor",
+      "replacement": "orm.ParseCursor"
+    },
+    {
+      "name": "CursorInputError",
+      "replacement": "orm.CursorInputError"
+    },
+    {
+      "name": "Plan",
+      "replacement": "orm.Plan"
+    },
+    {
+      "name": "PlanNode",
+      "replacement": "orm.PlanNode"
+    },
+    {
+      "name": "Statement",
+      "replacement": "orm.Statement"
+    },
+    {
+      "name": "WriteError",
+      "replacement": "orm.WriteError"
+    },
+    {
+      "name": "RelationLimits",
+      "replacement": "orm.RelationLimits"
+    },
+    {
+      "name": "DefaultRelationLimits",
+      "replacement": "orm.DefaultRelationLimits"
+    },
+    {
+      "name": "MaxExpressionDepth",
+      "replacement": "orm.MaxExpressionDepth"
+    },
+    {
+      "name": "MaxExpressionNodes",
+      "replacement": "orm.MaxExpressionNodes"
+    },
+    {
+      "name": "MaxParameters",
+      "replacement": "orm.MaxParameters"
+    },
+    {
+      "name": "MaxMembershipValues",
+      "replacement": "orm.MaxMembershipValues"
+    },
+    {
+      "name": "MaxScalarSQLBytes",
+      "replacement": "orm.MaxScalarSQLBytes"
+    },
+    {
+      "name": "MaxPageSize",
+      "replacement": "orm.MaxPageSize"
+    },
+    {
+      "name": "MaxCursorBytes",
+      "replacement": "orm.MaxCursorBytes"
+    },
+    {
+      "name": "MaxCursorFields",
+      "replacement": "orm.MaxCursorFields"
+    },
+    {
+      "name": "MaxInsertRows",
+      "replacement": "orm.MaxInsertRows"
+    },
+    {
+      "name": "MaxPerModelWriteRows",
+      "replacement": "orm.MaxPerModelWriteRows"
+    },
+    {
+      "name": "MaxRelationWriteRows",
+      "replacement": "orm.MaxRelationWriteRows"
+    },
+    {
+      "name": "MaxIdentityBatch",
+      "replacement": "orm.MaxIdentityBatch"
+    },
+    {
+      "name": "MaxChunkSize",
+      "replacement": "orm.MaxChunkSize"
+    },
+    {
+      "name": "DefaultChunkSize",
+      "replacement": "orm.DefaultChunkSize"
+    },
+    {
+      "name": "JSONKind",
+      "replacement": "database.JSONKind"
+    },
+    {
+      "name": "JSONNull",
+      "replacement": "database.JSONNull"
+    },
+    {
+      "name": "JSONBoolean",
+      "replacement": "database.JSONBoolean"
+    },
+    {
+      "name": "JSONNumber",
+      "replacement": "database.JSONNumber"
+    },
+    {
+      "name": "JSONString",
+      "replacement": "database.JSONString"
+    },
+    {
+      "name": "JSONArray",
+      "replacement": "database.JSONArray"
+    },
+    {
+      "name": "JSONObject",
+      "replacement": "database.JSONObject"
+    },
+    {
+      "name": "MorphName",
+      "replacement": "model.MorphName"
+    },
+    {
+      "name": "Morphable",
+      "replacement": "model.Morphable"
+    },
+    {
+      "name": "DateUnit",
+      "replacement": "expr.DateUnit"
+    },
+    {
+      "name": "TimestampUnit",
+      "replacement": "expr.TimestampUnit"
+    },
+    {
+      "name": "TimeZone",
+      "replacement": "expr.TimeZone"
+    },
+    {
+      "name": "LocalResolution",
+      "replacement": "expr.LocalResolution"
+    },
+    {
+      "name": "GeographicPoint",
+      "replacement": "expr.GeographicPoint"
+    },
+    {
+      "name": "MaxPlanBytes",
+      "noReplacement": true
+    },
+    {
+      "name": "MaxPlanNodes",
+      "noReplacement": true
+    },
+    {
+      "name": "MaxPlanDepth",
+      "noReplacement": true
+    },
+    {
+      "name": "MaxLifecycleDepth",
+      "noReplacement": true
+    },
+    {
+      "name": "ModelField",
+      "replacement": "rows.Field and typed projection columns"
+    },
+    {
+      "name": "RecordField",
+      "replacement": "rows.Field and typed projection columns"
+    },
+    {
+      "name": "ConflictValueField",
+      "replacement": "orm conflict expressions and typed assignments"
+    },
+    {
+      "name": "ModelValueField",
+      "replacement": "orm conflict expressions and typed assignments"
+    },
+    {
+      "name": "ModelScope",
+      "replacement": "rows.As or rows.Scope"
+    },
+    {
+      "name": "RecordScope",
+      "replacement": "rows.As or rows.Scope"
+    },
+    {
+      "name": "NullableModelScope",
+      "replacement": "outer-join nullable row scopes"
+    },
+    {
+      "name": "NullableRecordScope",
+      "replacement": "outer-join nullable row scopes"
     }
   ]
 }

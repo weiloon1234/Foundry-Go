@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Retired-names ledger completeness: `make generate` records the exported API of
+  the importable packages (`internal/retirement/exported-surface.txt`; an alias lists
+  the members of its target), and `make generate-check` refuses any identifier removed
+  or changed in kind since the previous release (`internal/retirement/release/`) that
+  has no ledger entry; ledger entries cannot disappear. Every entry states
+  `replacement` or `noReplacement: true`. The ledger gains 354 removed names that
+  earlier releases left unrecorded and now holds 752: 295 `database/orm` names (the
+  per-kind operators, assignments, adapters and audit functions of v0.48.0: 262
+  functions and 33 types by the v0.47.0 inventory, where the v0.48.0 note counted
+  36 types), `database/query` and its public names, `datatable.DefineColumn`,
+  `attachments.MaxUploadBytes` and the TypeScript `Options.React`/`Options.Vue`.
+  A retired package import is refused from the ledger, and a compile-fail case that
+  names a retired name is not a use of it.
+- Application effect: `go tool foundry docs check` refuses the qualified spelling of
+  every ledger name in an application's `AGENTS.md` and `.claude/skills` Markdown, so
+  a document that still writes `orm.TextEq` or `datatable.DefineColumn` fails at the
+  next pin. The diagnostic prints the replacement (`orm.TextEq is retired; use
+  orm.Eq.`). Application code that compiled is unaffected. In the framework's own
+  strict documents a bare retired name is refused only when no current top-level
+  export of any importable package has that name (decided from the recorded
+  inventory, one rule for every entry; a method or field of that name does not count).
+- `go run ./internal/cmd/exportsurface --release vX.Y.Z` now validates the tag, runs
+  the removal check against the existing baseline before replacing it, and its flags
+  `--check`, `--out` and `--release` are mutually exclusive; `--root` reads that
+  root's ledger. A test ties the baseline's version to the newest released heading of
+  this file, so a release cut without replacing the baseline fails the next change.
 - Before upgrading the application pin, retarget any `Foundry guides:` declaration
   naming `orm-migration` to a current task guide. The migration page is removed.
 - `go tool foundry docs check` now reads each active document (`AGENTS.md` files

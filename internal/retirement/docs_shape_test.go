@@ -6,17 +6,17 @@ import (
 )
 
 func TestBareNameReportDoesNotNameAnOwnerTheDocumentNeverWrote(t *testing.T) {
-	err := CheckDocument("guide.md", []byte("# Guide\n\nThe `Compile` span stands alone.\n"))
-	want := "guide.md:3: `Compile` matches the retired `rows.Compile`; write the qualified name you mean (for example `pkg.Compile`), or use `rows.CompileRead`."
+	err := CheckDocument("guide.md", []byte("# Guide\n\nThe `Preflight` span stands alone.\n"))
+	want := "guide.md:3: `Preflight` matches the retired `rows.Preflight`; write the qualified name you mean (for example `pkg.Preflight`), or use `rows.PreflightRead`."
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("want %q, got %v", want, err)
 	}
-	if strings.Contains(err.Error(), "rows.Compile is retired") {
+	if strings.Contains(err.Error(), "rows.Preflight is retired") {
 		t.Fatalf("bare name attributed to a package the document did not write: %v", err)
 	}
 	// A qualified spelling is the document's own claim and keeps the direct wording.
-	err = CheckDocument("guide.md", []byte("Use `rows.Compile` here.\n"))
-	if err == nil || !strings.Contains(err.Error(), "rows.Compile is retired; use rows.CompileRead.") {
+	err = CheckDocument("guide.md", []byte("Use `rows.Preflight` here.\n"))
+	if err == nil || !strings.Contains(err.Error(), "rows.Preflight is retired; use rows.PreflightRead.") {
 		t.Fatalf("qualified spelling: %v", err)
 	}
 }

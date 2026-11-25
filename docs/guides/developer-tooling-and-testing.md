@@ -165,11 +165,34 @@ cache. Reading a released recipe needs no compiler or renderer.
 
 Guides teach only the current API. The retired-name ledger in
 [`internal/retirement/denied.json`](../../internal/retirement/denied.json) records
-retired names and optional replacement text in the same entries. The retired-names
-ledger gives the replacement when one was documented; diagnostics print that text
-or say that no replacement is recorded. Its replacement package names are checked
-against current declarations. Historical labels
+retired names, each with either `replacement` text or `noReplacement: true`.
+Diagnostics print the replacement or say that none exists. An entry marked
+the qualified spelling of an entry (package name, dot, retired name) is always refused, in framework
+and application documents. A bare retired name is refused only in the framework's own
+documents, and only when no current top-level export (function, type, alias, constant
+or variable) of any importable package has that name, read from the recorded
+inventory; a method or field with that name does not count as a live namesake. One
+rule decides every entry; an entry carries no flag. Its replacement package
+names are checked against current declarations. Historical labels
 do not exempt a fence, table or paragraph from retirement checks.
+
+Removing an exported identifier of the framework requires its ledger entry in the
+same change. `make generate` records the exported API of the importable packages in
+`internal/retirement/exported-surface.txt`; `make generate-check` refuses a stale
+record and any identifier present in the previous release's record
+(`internal/retirement/release/`) that is gone, or changed kind (function to constant),
+and not in the ledger, and the ledger test refuses a lost entry. An alias records the
+members of its target, so turning a type into an alias drops nothing. The inventory
+covers the importable packages: it skips the root `tests`, `tools` and `cmd`
+directories, every `testdata`, `internal` and nested-module directory; a public
+package such as `a/tools` is recorded. A package that does not type-check, or a cgo
+file with exported declarations, fails the generator with its location instead of
+producing a partial record. The message names the identifier and the file to add it to.
+`go run ./internal/cmd/exportsurface --release vX.Y.Z` replaces the baseline only
+when the removal check passes; a test ties the baseline's version to the newest
+released heading of `CHANGELOG.md`. `database/orm/testdata/public-methods.txt` stays
+a separate record: it pins method and field signatures and promoted members, which the
+name-and-kind inventory does not hold.
 
 <a id="recipe-reference-guides"></a>
 ## Reference pinned guides
@@ -659,7 +682,7 @@ Composition stays typed:
 
 `factory.NewFaker(seed)` is a small deterministic generator of fictional values
 (`Name`, `Email` at the reserved `example.test` domain and unique per faker,
-`Word`, `Words`, `Sentence`, `IntBetween`, `Float`, `Bool`, `TimeBetween`, and
+`Word`, `Words`, `Sentence`, `IntBetween`, `Float`, `Bool`, `Faker.TimeBetween`, and
 `factory.Pick`). The same seed reproduces a failing test's values; it uses only
 the standard library.
 

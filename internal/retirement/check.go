@@ -2,6 +2,7 @@
 package retirement
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -14,20 +15,25 @@ import (
 	"os"
 	pathpkg "path"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 )
 
-//go:embed denied.json document_rules.json
+//go:embed denied.json document_rules.json exported-surface.txt
 var ledger embed.FS
 
 const framework = "github.com/weiloon1234/Foundry-Go/"
 const retiredPath = "database/" + "query"
 
+// A retired name records either the API that replaces it or, explicitly, that
+// nothing does; an entry with neither is a ledger error.
 type retiredDeclaration struct {
-	Name        string `json:"name"`
-	Replacement string `json:"replacement,omitempty"`
+	Name          string `json:"name"`
+	Replacement   string `json:"replacement,omitempty"`
+	NoReplacement bool   `json:"noReplacement,omitempty"`
 }
 
 var retiredDeclarations = sync.OnceValues(func() (map[string][]retiredDeclaration, error) {
@@ -35,10 +41,64 @@ var retiredDeclarations = sync.OnceValues(func() (map[string][]retiredDeclaratio
 	if err != nil {
 		return nil, err
 	}
-	var result map[string][]retiredDeclaration
-	err = json.Unmarshal(data, &result)
-	return result, err
+	return parseLedger(data, LedgerFile)
 })
+
+func parseLedger(data []byte, source string) (map[string][]retiredDeclaration, error) {
+	var result map[string][]retiredDeclaration
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&result); err != nil {
+		return nil, safeerror.New(fmt.Sprintf("%s:0: %s; the ledger is a JSON object of package paths to arrays of {name, replacement | noReplacement} entries", source, err))
+	}
+	var failures []error
+	for owner, members := range result {
+		for _, member := range members {
+			if (member.Replacement == "") == !member.NoReplacement {
+				failures = append(failures, safeerror.New(fmt.Sprintf("%s:0: %s.%s must have exactly one of replacement and noReplacement: true; name its replacement, or set noReplacement when nothing replaces it", source, owner, member.Name)))
+			}
+		}
+	}
+	return result, safeerror.Join("operation failed", failures...)
+}
+
+// LedgerNames is the embedded ledger as the release file records its names.
+func LedgerNames() ([]byte, error) {
+	entries, err := retiredDeclarations()
+	if err != nil {
+		return nil, err
+	}
+	return RetiredNames(entries), nil
+}
+
+// RetiredNames is the ledger's names as the release file records them: one
+// "package<TAB>name" line each, sorted, so the file does not depend on the
+// entry schema of its time.
+func RetiredNames(entries map[string][]retiredDeclaration) []byte {
+	var lines []string
+	for owner, members := range entries {
+		for _, member := range members {
+			lines = append(lines, owner+"\t"+member.Name)
+		}
+	}
+	sort.Strings(lines)
+	return []byte(strings.Join(lines, "\n") + "\n")
+}
+
+// LostEntries names each name of the previous release's ledger that the
+// current ledger no longer holds: a retired name stays retired.
+func LostEntries(previous []byte, current map[string][]retiredDeclaration) []string {
+	have := ledgerNames(current)
+	var lost []string
+	for _, line := range strings.Split(string(previous), "\n") {
+		owner, name, ok := strings.Cut(line, "\t")
+		if ok && !have[owner][name] {
+			lost = append(lost, fmt.Sprintf("%s:0: %s.%s was retired in the previous release and is missing from the ledger; restore the entry", LedgerFile, owner, name))
+		}
+	}
+	sort.Strings(lost)
+	return lost
+}
 
 func declarations() (map[string][]string, error) {
 	entries, err := retiredDeclarations()
@@ -121,12 +181,16 @@ func Check(root string) error {
 			if alias == "." {
 				dotOwners = append(dotOwners, imports[alias])
 			}
-			if imported == framework+retiredPath || strings.HasPrefix(imported, framework+retiredPath+"/") {
-				failures = append(failures, safeerror.New(fmt.Sprintf("%s: retired import", relative)))
+			if owner, retired := retiredPackage(denied, strings.TrimPrefix(imported, framework)); retired {
+				failures = append(failures, safeerror.New(fmt.Sprintf("%s: retired import of %s", relative, owner)))
 			}
 		}
+		// A compile-fail case is a wrong guess that must keep failing to compile;
+		// its runner asserts the compiler's diagnostic, so naming a retired name
+		// there is not a use of it. Imports and declarations stay checked.
+		compileFail := strings.Contains("/"+relative, "/testdata/compilefail/")
 		ast.Inspect(file, func(n ast.Node) bool {
-			if id, ok := n.(*ast.Ident); ok {
+			if id, ok := n.(*ast.Ident); ok && !compileFail {
 				for _, owner := range dotOwners {
 					for _, name := range denied[owner] {
 						if name == id.Name {
@@ -135,7 +199,7 @@ func Check(root string) error {
 					}
 				}
 			}
-			if selected, ok := n.(*ast.SelectorExpr); ok {
+			if selected, ok := n.(*ast.SelectorExpr); ok && !compileFail {
 				if qualifier, ok := selected.X.(*ast.Ident); ok {
 					for _, name := range denied[imports[qualifier.Name]] {
 						if selected.Sel.Name == name {
@@ -176,6 +240,17 @@ func Check(root string) error {
 		}
 	}
 	return safeerror.Join("operation failed", failures...)
+}
+
+// retiredPackage reports whether imported, a framework-relative path, is a
+// package the ledger retires or lies below one.
+func retiredPackage(denied map[string][]string, imported string) (string, bool) {
+	for owner, names := range denied {
+		if (imported == owner || strings.HasPrefix(imported, owner+"/")) && slices.Contains(names, PackageEntry) {
+			return owner, true
+		}
+	}
+	return "", false
 }
 
 type sourceLocation struct {

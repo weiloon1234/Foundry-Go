@@ -19,10 +19,12 @@ func TestApplicationDocumentationNames(t *testing.T) {
 			t.Errorf("application names rejected in %q: %v", text, err)
 		}
 	}
+	// Names a current package exports (Count, Select, Load) are accepted bare;
+	// retired names nothing exports are not.
 	for _, text := range []string{
-		"Codecs: `Text`, `DateTime`, `Decimal`, `Count`.",
-		"Components: `Button`, `Input`, `Select`, `Dialog`, `Table`.",
-		"```go\nCount(items)\nSelect(options)\n```",
+		"Helpers: `Preflight`, `ScalarQuery`, `LoadMissing`.",
+		"Helpers: `DoesntHave`, `Preflight`.",
+		"```go\nLoadMissing(items)\nDoesntHave(options)\n```",
 	} {
 		if err := CheckDocument("docs/guides/example.md", []byte(text)); err == nil {
 			t.Errorf("framework accepted bare retired names in %q", text)
@@ -195,25 +197,25 @@ func TestRetiredDocumentationBoundaries(t *testing.T) {
 
 func TestRetiredDocumentationUnqualifiedCode(t *testing.T) {
 	for _, text := range []string{
-		"Use `Load` and `LoadMissing`.",
+		"Use `LoadMissing` and `Preflight`.",
 		"Use `Query[S, R].OrderBy`.",
 		"Use `Query[S, R].All`.",
 		"Use `rows.Query[S, R].All`.",
 		"```go\nvar saved = Query[S, R].OrderBy\n```",
 		"```go\nvar saved = Query[S, R].All\n```",
-		"```\nLoad(ctx, db, parents)\n```",
+		"```\nLoadMissing(ctx, db, parents)\n```",
 		"```\nQuery[S, R].OrderBy\n```",
 		"~~~\nQuery[S, R].All\n~~~",
 		"Use `Query[S, map[K]R].All`.",
-		"Use ``Compile(q)``.",
+		"Use ``Preflight(q)``.",
 		"Use `Preflight(ctx, q)`.",
-		"Use `Each(ctx, db, q, yield)`.",
-		"```go\nitems, err := Load(ctx, db, parents)\n```",
+		"Use `ScalarQuery(ctx, db, q, yield)`.",
+		"```go\nitems, err := LoadMissing(ctx, db, parents)\n```",
 		"~~~go\nvar saved = LoadMissing\n~~~",
-		"```go\nreturn Load\n```",
-		"```go\nconsume(Load)\n```",
-		"```go\nvar callback func() = Each\n```",
-		"```go\nfunc build() { _ = New(build) }\n```",
+		"```go\nreturn LoadMissing\n```",
+		"```go\nconsume(LoadMissing)\n```",
+		"```go\nvar callback func() = ScalarQuery\n```",
+		"```go\nfunc build() { _ = DoesntHave(build) }\n```",
 	} {
 		if err := CheckDocument("README.md", []byte(text)); err == nil {
 			t.Errorf("accepted %s", text)
@@ -230,15 +232,15 @@ func TestRetiredDocumentationUnqualifiedCode(t *testing.T) {
 		"Use `orm.Compile(q)`, `rows.Read(q).Paginate(ctx, db, request)` and `orm.Query.OrderBy`.",
 		"```go\nfmt.Println(\"Load Each Compile\") // Load resources\nrows.EachRead(ctx, db, rows.Read(q), yield)\n```",
 		// Declaring a function or method that shares a retired name is not a use of it.
-		"```go\nfunc New(dependencies datatable.Dependencies) (*datatable.Manager, error) {\n\treturn datatable.New(dependencies, config)\n}\n```",
-		"```go\nfunc (r Reports) Load(ctx context.Context) error { return nil }\n```",
-		"```go\nfunc (r *Reports[T]) Each(yield func(T) bool) {}\n```",
+		"```go\nfunc Preflight(dependencies datatable.Dependencies) (*datatable.Manager, error) {\n\treturn datatable.New(dependencies, config)\n}\n```",
+		"```go\nfunc (r Reports) LoadMissing(ctx context.Context) error { return nil }\n```",
+		"```go\nfunc (r *Reports[T]) ScalarQuery(yield func(T) bool) {}\n```",
 	} {
 		if err := CheckDocument("README.md", []byte(text)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	before := "<!-- orm-example: query-before -->\n```go\nLoad(ctx, db, parents)\n```"
+	before := "<!-- orm-example: query-before -->\n```go\nLoadMissing(ctx, db, parents)\n```"
 	if err := CheckDocument("docs/guides/orm-migration.md", []byte(before)); err == nil {
 		t.Fatal("historical label exempted retired teaching")
 	}
@@ -277,6 +279,59 @@ func TestDocumentationRetiredCommands(t *testing.T) {
 					}
 				}
 			}
+		}
+	}
+}
+
+// One rule for every entry, decided from the recorded inventory: a bare retired
+// name is refused in a framework document only when no current top-level export
+// of any importable package has that name; a qualified retired name always is.
+func TestBareRetiredNameFollowsTheInventory(t *testing.T) {
+	refused := func(text string) error {
+		return CheckDocument("guide.md", []byte("# Guide\n\n"+text+"\n"))
+	}
+	// Live namesakes: database.JSONContains, database.JSONNull, orm.Load, orm.Count.
+	for _, live := range []string{"JSONContains", "JSONNull", "Load", "Count", "Paginate"} {
+		if err := refused("The `" + live + "` helper takes a document."); err != nil {
+			t.Errorf("bare %s has a current top-level export and was refused: %v", live, err)
+		}
+		if err := refused("```go\nvar current = " + live + "\n```"); err != nil {
+			t.Errorf("bare %s in a code block has a current top-level export and was refused: %v", live, err)
+		}
+	}
+	// No live namesake: refused, and the message lists the retired members it matches.
+	err := refused("The `KeyColumnNe` filter.")
+	if err == nil || !strings.Contains(err.Error(), "`KeyColumnNe` matches the retired `orm.KeyColumnNe`") {
+		t.Fatalf("a bare retired name nothing exports must be refused with the honest message: %v", err)
+	}
+	// A method or field elsewhere with the same name is not a live namesake.
+	if err := refused("The `TimeBetween` filter."); err == nil {
+		t.Fatal("TimeBetween is only a method elsewhere; the bare name must stay refused")
+	}
+	// The qualified spelling of a retired entry is always refused, live namesake or not.
+	for qualified, use := range map[string]string{"orm.JSONContains": "orm.ContainsDocument", "orm.Load": ""} {
+		err := refused("```go\nvar old = " + qualified + "\n```")
+		if err == nil || !strings.Contains(err.Error(), qualified+" is retired") || use != "" && !strings.Contains(err.Error(), "use "+use) {
+			t.Errorf("the retired %s must be refused: %v", qualified, err)
+		}
+	}
+}
+
+// The rule reads the inventory, so a name that left the live surface is refused
+// bare as soon as the inventory is regenerated; no entry carries a flag.
+func TestLiveNamesComeFromTopLevelExportsOnly(t *testing.T) {
+	live, err := liveTopLevelNames()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"JSONNull", "JSONContains", "Load"} {
+		if !live[name] {
+			t.Errorf("%s should be a current top-level export", name)
+		}
+	}
+	for _, name := range []string{"KeyColumnNe", "TimeBetween", "Foundry.Anything"} {
+		if live[name] {
+			t.Errorf("%s must not be a live top-level name", name)
 		}
 	}
 }
