@@ -28,6 +28,16 @@
   `--check`, `--out` and `--release` are mutually exclusive; `--root` reads that
   root's ledger. A test ties the baseline's version to the newest released heading of
   this file, so a release cut without replacing the baseline fails the next change.
+- Every compiler-independent check prints one finding shape,
+  `path:line:col: [rule] subject: problem; fix. Foundry guide: <guide>#<anchor>`,
+  and in an application also `(skill: name)` for each skill that declares that
+  token in a `Foundry guides:` line. It covers `foundry routes check`,
+  `models check`, `lint --no-raw` (which now names the symbol and column),
+  `generate --check` (one line per stale file, then one `scope:` line) and `generate` declaration errors,
+  `docs check` and the framework's `make docs-check`. `:0` is never printed. Rule IDs
+  are stable and listed in the developer tooling guide; the framework's docs check
+  fails when a rule names a missing guide anchor. Machine readers of the old
+  per-check output must be updated; see the compatibility policy.
 - Before upgrading the application pin, retarget any `Foundry guides:` declaration
   naming `orm-migration` to a current task guide. The migration page is removed.
 - `go tool foundry docs check` now reads each active document (`AGENTS.md` files

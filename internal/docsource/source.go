@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
+
+var sourceLine = regexp.MustCompile(`^line (\d+): (.*)$`)
 
 var regionMarker = regexp.MustCompile(`^// doc-example:(begin|end) ([a-z0-9]+(?:-[a-z0-9]+)*)$`)
 
@@ -27,7 +31,7 @@ type source struct {
 
 func readSource(root, name string) (source, error) {
 	if name == "" || path.Clean(name) != name || strings.ContainsAny(name, `\:#`) || strings.HasPrefix(name, "/") {
-		return source{}, safeerror.New(fmt.Sprintf("invalid repository-relative source path %q", name))
+		return source{}, safeerror.New(fmt.Sprintf("invalid repository-relative source path %q; use a clean path below tests/fixtures", name))
 	}
 	ext := path.Ext(name)
 	approved := (strings.HasPrefix(name, "tests/fixtures/consumer/") || strings.HasPrefix(name, "tests/fixtures/goway/")) && ext == ".go"
@@ -37,7 +41,7 @@ func readSource(root, name string) (source, error) {
 			path.Dir(name) == "tests/fixtures/consumer/clientcontracts/testdata/limits") && !strings.HasSuffix(name, ".d.ts")
 	}
 	if !approved || strings.Contains(name, "_foundry.gen.") {
-		return source{}, safeerror.New(fmt.Sprintf("source %q is outside approved handwritten fixture inputs", name))
+		return source{}, safeerror.New(fmt.Sprintf("source %q is outside approved handwritten fixture inputs; bind a handwritten file of an independent fixture", name))
 	}
 	data, err := markdown.ReadFile(root, name, markdown.MaxSourceBytes)
 	if err != nil {
@@ -49,7 +53,12 @@ func readSource(root, name string) (source, error) {
 	}
 	parsed, err := parseSource(string(data), language)
 	if err != nil {
-		return source{}, safeerror.New(fmt.Sprintf("%s:%s", name, strings.TrimPrefix(err.Error(), "line ")))
+		line, message := 0, err.Error()
+		if match := sourceLine.FindStringSubmatch(message); match != nil {
+			line, _ = strconv.Atoi(match[1])
+			message = match[2]
+		}
+		return source{}, diagnostic.DocRegion.At(name, line, 0).Text("", message).Err()
 	}
 	parsed.bytes = len(data)
 	return parsed, nil

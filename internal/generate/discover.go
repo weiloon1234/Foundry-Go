@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 )
 
@@ -361,7 +362,8 @@ func isNamed(named *types.Named, path, name string) bool {
 	return named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == path && named.Obj().Name() == name
 }
 func (p *packageInput) diagnostic(pos token.Pos, message string) error {
-	return fmt.Errorf("%s: %s", p.fset.Position(pos), message)
+	position := p.fset.Position(pos)
+	return diagnostic.GenerateDecl.At(position.Filename, position.Line, position.Column).Text("", message).Err()
 }
 
 // Reject malformed/duplicate tags instead of letting reflect.StructTag.Lookup

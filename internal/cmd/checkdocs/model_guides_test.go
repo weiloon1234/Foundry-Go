@@ -93,7 +93,7 @@ func TestRepositoryChecksModelDeclarationTeaching(t *testing.T) {
 	for _, name := range []string{"docs/guides/declarations.md", "database/orm/README.md", "database/AGENTS.md"} {
 		root := testRepository(t)
 		writeTestFile(t, root, name, "```go\nvar Users = orm.Define(\"users\", bindUser)\n```\n")
-		if err := checkRepository(root); err == nil || !strings.Contains(err.Error(), "handwritten model declaration teaching") {
+		if err := checkRepository(root); err == nil || !strings.Contains(err.Error(), "teaches a handwritten model declaration") {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}
@@ -108,7 +108,7 @@ func TestHistoricalLabelCannotExemptGeneratedExamples(t *testing.T) {
 
 func TestRetiredGeneratedModelDiagnosticKeepsLine(t *testing.T) {
 	err := checkModelGuide(nil, "guide.md", []byte("# Guide\n\nText.\n\nUse models.UserFields().\n"))
-	if err == nil || !strings.Contains(err.Error(), "guide.md:5: guide teaches a retired generated model/query API; declare models with //foundry:model") {
+	if err == nil || !strings.Contains(err.Error(), "guide.md:5: [doc-model-example] guide: teaches a retired generated model/query API; declare models with //foundry:model") {
 		t.Fatalf("lost located repair: %v", err)
 	}
 }

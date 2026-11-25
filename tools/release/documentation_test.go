@@ -51,7 +51,7 @@ func TestDocumentationPackagedOfflineConsumer(t *testing.T) {
 	required := map[string]bool{
 		guide: false, "internal/docrefs/references.go": false, "internal/docrefs/anchors.go": false,
 		"internal/retirement/denied.json": false, "internal/retirement/document_rules.json": false,
-		"internal/retirement/document_owners.go": false, "cmd/foundry/docs.go": false,
+		"internal/retirement/document_owners.go": false, "cmd/foundry/docs.go": false, "internal/diagnostic/rule.go": false,
 	}
 	var guideBytes []byte
 	for _, file := range archive.File {
@@ -150,7 +150,7 @@ func TestDocumentationPackagedOfflineConsumer(t *testing.T) {
 	put(t, app, "AGENTS.md", "Foundry guides: `developer-tooling-and-testing#"+anchor+"`\nUse `http.Endpoint.WithBodyValidation`.\n")
 	beforeApp = documentationTree(t, app)
 	output, err = documentationResult(t, app, offline, goBinary, "tool", "foundry", "docs", "check", "--dir", ".")
-	if err == nil || !strings.Contains(output, "AGENTS.md:2: http.Endpoint.WithBodyValidation is retired;") {
+	if err == nil || !strings.Contains(output, "AGENTS.md:2: [retired-api] http.Endpoint.WithBodyValidation is retired;") {
 		t.Fatalf("packaged checker did not apply its embedded retirement rules: %v\n%s", err, output)
 	}
 	if !reflect.DeepEqual(beforeApp, documentationTree(t, app)) || !reflect.DeepEqual(beforeCache, documentationTree(t, cache)) {

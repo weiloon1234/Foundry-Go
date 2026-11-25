@@ -1,12 +1,12 @@
 package docrefs
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
@@ -17,11 +17,11 @@ func TestReferenceDiagnosticsRetainTypedLocations(t *testing.T) {
 	if !owned || !strings.Contains(message, "AGENTS.md:1:") || !strings.Contains(message, "AGENTS.md:2:") {
 		t.Fatalf("lost captured diagnostics: %q", message)
 	}
-	var location Problem
-	if !errors.As(err, &location) || location.File != "AGENTS.md" || location.Line != 1 {
-		t.Fatalf("lost typed location: %+v, %v", location, err)
+	found, other := diagnostic.Findings(err)
+	if len(found) != 2 || len(other) != 0 || found[0].Path != "AGENTS.md" || found[0].Line != 1 || found[0].Rule != diagnostic.GuidesDeclaration {
+		t.Fatalf("lost typed location: %+v, %v", found, err)
 	}
-	one := problem("AGENTS.md", 3, "invalid reference")
+	one := diagnostic.GuidesDeclaration.At("AGENTS.md", 3, 0).Say("Foundry guides:", "declaration is malformed").Err()
 	if safeerror.Join("documentation failed", nil, one) != one {
 		t.Fatal("singleton diagnostic identity lost")
 	}
@@ -81,12 +81,12 @@ func TestExplicitAnchorIndexAndNavigation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, fragment := range []string{"agent-entry", "recipe-2"} {
-		if err := index.CheckFragment("orm.md", 10, fragment); err != nil {
+		if err := index.CheckFragment("orm.md", 10, "page", fragment); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, fragment := range []string{"a-heading-is-not-an-id", "missing", "#agent-entry", "Agent-Entry", "%61gent-entry", ""} {
-		if err := index.CheckFragment("orm.md", 10, fragment); err == nil || !strings.Contains(err.Error(), "orm.md:10:") {
+		if err := index.CheckFragment("orm.md", 10, "page", fragment); err == nil || !strings.Contains(err.Error(), "orm.md:10:") {
 			t.Fatalf("fragment %q: %v", fragment, err)
 		}
 	}
@@ -113,7 +113,7 @@ func TestSelectedGuideResolution(t *testing.T) {
 	put("duplicate.md", "<a id=\"entry\"></a>\n<a id=\"entry\"></a>\n")
 	for _, tc := range []struct{ guide, anchor, want string }{
 		{"orm", "", ""}, {"orm", "entry", ""}, {"missing", "", "missing"},
-		{"orm", "heading", "absent"}, {"duplicate", "", "duplicate explicit anchor"}, {"../orm", "", "invalid guide"},
+		{"orm", "heading", "[anchor-missing] anchor \"heading\" of guide orm: not declared"}, {"duplicate", "", "[guide-missing] guide duplicate"}, {"../orm", "", "[guide-name]"},
 	} {
 		err := CheckReferences(dir, []Reference{{"AGENTS.md", 7, tc.guide, tc.anchor}})
 		if tc.want == "" {
@@ -157,10 +157,10 @@ func TestParserContainersAndComments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := anchors.CheckFragment("AGENTS.md", 12, "visible"); err != nil {
+	if err := anchors.CheckFragment("AGENTS.md", 12, "page", "visible"); err != nil {
 		t.Fatal(err)
 	}
-	if err := anchors.CheckFragment("AGENTS.md", 12, "hidden"); err == nil {
+	if err := anchors.CheckFragment("AGENTS.md", 12, "page", "hidden"); err == nil {
 		t.Fatal("comment became anchor")
 	}
 }
@@ -183,17 +183,17 @@ func TestAnchorTargetIsIndexedOncePerRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := again.CheckFragment("source.md", 1, "recipe-first"); err != nil {
+	if err := again.CheckFragment("source.md", 1, "page", "recipe-first"); err != nil {
 		t.Fatal(err)
 	}
-	if err := first.CheckFragment("source.md", 1, "recipe-second"); err == nil {
+	if err := first.CheckFragment("source.md", 1, "page", "recipe-second"); err == nil {
 		t.Fatal("cached target reread")
 	}
 	fresh, err := NewPages(root, nil).Load(target)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := fresh.CheckFragment("source.md", 1, "recipe-second"); err != nil {
+	if err := fresh.CheckFragment("source.md", 1, "page", "recipe-second"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -245,7 +245,7 @@ func TestPagesIndexUsesRepositoryRelativeNamesForTheSharedCache(t *testing.T) {
 	pages := NewPages(root, markdown.NewCache())
 	data := []byte("<a id=\"entry\"></a>\n# T\n<a id=\"entry\"></a>\n")
 	_, err := pages.Index(name, data)
-	if err == nil || !strings.Contains(err.Error(), "docs/guides/a.md:3: duplicate explicit anchor") || strings.Contains(err.Error(), root) {
+	if err == nil || !strings.Contains(err.Error(), "docs/guides/a.md:3: [anchor-duplicate] anchor \"entry\": declared twice") || strings.Contains(err.Error(), root) {
 		t.Fatalf("diagnostic should name the repository-relative path: %v", err)
 	}
 	if _, again := pages.Index(name, data); again == nil || again.Error() != err.Error() {

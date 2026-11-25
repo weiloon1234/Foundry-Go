@@ -602,6 +602,24 @@ No database, stored token, session, ticket, DTO or public error-code migration i
 required. Resource and tenant policies still run after admission. Application
 owners retain control of which read and export alternatives to declare.
 
+## Diagnostic output shape — unreleased
+
+Consumers that read the output of `foundry routes check`, `models check`,
+`lint --no-raw`, `generate --check`, `generate` or `docs check` see one finding
+shape: `path:line:col: [rule] subject: problem; fix. Foundry guide: <guide>#<anchor>`,
+where `<guide>#<anchor>` is the token a `Foundry guides:` line declares, with
+`(skill: name)` appended in an application whose skill declares that token.
+Each finding is its own line. `:col` (and `:line`) are omitted rather than printed
+as zero, so parsers must not expect `:0`; `docs check` no longer prints `file:0:`
+locations. Previously `routes check` printed `position: code: message`, `models check`
+`position: target: message`, `lint --no-raw` only `file:line`, and `generate --check`
+one heading line followed by indented `file: reason` lines. The exit codes, the
+closing error line and the checks' findings are unchanged; the message wording
+changed to state the public name and the fix. `generate --check` prints the package scope once, as a closing `scope:` line, not on
+each finding. `foundry contracts` and `foundry deploy` still print their own shapes and
+are outside this change. Rule IDs are stable and listed in
+[Read a check finding](guides/developer-tooling-and-testing.md#diagnostic-rules).
+
 ## Pinned documentation
 
 Use `go tool foundry docs check` from the application's matching framework pin
@@ -661,9 +679,9 @@ checked line by line for completeness):
 
 The framework's own guides, `AGENTS.md` files and skills additionally require
 compiled-source bindings, supported fence tags and fenced code instead of indented
-blocks or HTML `pre`/`code` elements, and reject a bare retired member name in a
-code span (the message names the retired members it matches and asks for the
-qualified name). An application's `foundry docs check` does **not** enforce these
+blocks or HTML `pre`/`code` elements, and reject a bare retired name in a
+code span when no current top-level export of any importable package has that name
+(the message names the retired members it matches and asks for the qualified name). An application's `foundry docs check` does **not** enforce these
 binding, tag, block or bare-name rules in this release. Application checks continue
 to validate references and retired API teaching without requiring framework fixture
 sources. Framework documents are limited to 512 KiB each, except the dated records

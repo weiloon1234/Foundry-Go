@@ -37,28 +37,28 @@ func TestRepositoryChecks(t *testing.T) {
 			change: func(t *testing.T, root string) {
 				writeTestFile(t, root, "docs/guides/lifecycle.md", "Events, outbox and audit remain milestone 01 work.\n")
 			},
-			wantError: "future-work claim names completed milestone 01",
+			wantError: "future-work claim: names completed milestone 01",
 		},
 		{
 			name: "wrapped planned milestone link",
 			change: func(t *testing.T, root string) {
 				writeTestFile(t, root, "docs/guides/pagination.md", "Automatic HTTP parsing is planned in\n[milestone 01](../../blueprint/01-next.md).\n")
 			},
-			wantError: "future-work claim names completed milestone 01",
+			wantError: "future-work claim: names completed milestone 01",
 		},
 		{
 			name: "completed milestone remains open",
 			change: func(t *testing.T, root string) {
 				writeTestFile(t, root, "README.md", "Milestone 01 remains open for additional source-parity work.\n")
 			},
-			wantError: "future-work claim names completed milestone 01",
+			wantError: "future-work claim: names completed milestone 01",
 		},
 		{
 			name: "missing authoritative status table",
 			change: func(t *testing.T, root string) {
 				writeTestFile(t, root, "blueprint/00-master-architecture-and-parity.md", "# Master\n")
 			},
-			wantError: "missing completed milestone status rows",
+			wantError: "master status table: no completed milestone rows",
 		},
 		{
 			name: "history deferred work and code keep their meaning",
@@ -82,7 +82,7 @@ func TestRepositoryChecks(t *testing.T) {
 				writeTestFile(t, filepath.Dir(root), "outside.md", "# Outside\n")
 				writeTestFile(t, root, "README.md", "[Inside](blueprint/01-next.md)\n[Outside](../outside.md)\n")
 			},
-			wantError: `local link "../outside.md": target is outside repository root`,
+			wantError: `local link "../outside.md": targets a file outside the repository root`,
 		},
 		{
 			name: "gap in blueprint sequence",
@@ -91,7 +91,7 @@ func TestRepositoryChecks(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
-			wantError: "expected milestone 01",
+			wantError: "blueprint number: should be 01",
 		},
 		{
 			name: "duplicate milestone",
@@ -105,14 +105,14 @@ func TestRepositoryChecks(t *testing.T) {
 			change: func(t *testing.T, root string) {
 				writeTestFile(t, root, "tests/fixtures/consumer/go.mod", "module example.test/consumer\n\ngo 1.19.0\n")
 			},
-			wantError: "differs from root",
+			wantError: "[fixture-go-version] go directive: 1.19.0 where the root go.mod requires",
 		},
 		{
 			name: "missing fixture Go requirement",
 			change: func(t *testing.T, root string) {
 				writeTestFile(t, root, "tests/fixtures/consumer/go.mod", "module example.test/consumer\n")
 			},
-			wantError: "missing Go requirement",
+			wantError: "go.mod: no go directive",
 		},
 		{
 			name: "remote links fragments and fenced examples",
@@ -220,7 +220,7 @@ func TestGoInputsAlsoChecksBindings(t *testing.T) {
 	if err := os.WriteFile(inputs, nil, 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := run(root, inputs); err == nil || !strings.Contains(err.Error(), "example.md:3: Go block has no compiled source;") {
+	if err := run(root, inputs); err == nil || !strings.Contains(err.Error(), "example.md:3: [doc-binding] Go block has no compiled source;") {
 		t.Fatalf("input mode escaped binding checks: %v", err)
 	}
 }

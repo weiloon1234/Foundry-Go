@@ -17,8 +17,9 @@ var typedDiagnosticOwners = map[string]int{
 	// their typed causes keep Accepts from normalizing I/O failure as rejection.
 	"attachments/upload.go#prepareInput#ReadError":       1,
 	"attachments/upload.go#prepareCaptured#CleanupError": 1,
-	// Documentation location diagnostics are captured before their typed cause escapes.
-	"internal/docrefs/references.go#problem#Problem": 1,
+	// Check findings are captured by Err and Caused before their typed value escapes.
+	"internal/diagnostic/diagnostic.go#At#Diagnostic": 1,
+	"internal/diagnostic/diagnostic.go#Caused#caused": 1,
 	// Native lifecycle owner captures fixed text before retaining application causes.
 	"internal/lifecore/failure.go#Failure#failure": 1,
 	// Concrete diagnostic captured by Owned/Retain at this owner.

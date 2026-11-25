@@ -63,7 +63,7 @@ var RuntimeUsers = dbutil.DefineTable[User](runtimeName())
 			if len(got) != tc.want {
 				t.Fatalf("findings: %v; want %d", got, tc.want)
 			}
-			if len(got) != 0 && (got[0].Target != "model User" || got[0].Message != directiveReplacement || got[0].Position.Line != 4 || filepath.Base(got[0].Position.Filename) != "users.go") {
+			if len(got) != 0 && (got[0].Subject != "model User" || got[0].Fix != directiveReplacement || got[0].Line != 4 || filepath.Base(got[0].Path) != "users.go") {
 				t.Fatalf("wrong call site: %v", got)
 			}
 		})

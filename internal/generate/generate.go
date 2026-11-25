@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
@@ -145,16 +146,17 @@ func (g *packageGraph) checkFramework(build frameworkinfo.Build) error {
 }
 
 func staleError(root string, stale []StaleFile) error {
-	var message strings.Builder
-	fmt.Fprintf(&message, "generated output is stale in %s; run foundry generate with the same package scope:", root)
+	const fix = "run foundry generate"
+	failures := make([]error, 0, min(len(stale), maxReportedStale+1)+1)
 	for i, file := range stale {
 		if i == maxReportedStale {
-			fmt.Fprintf(&message, "\n  ... and %d more", len(stale)-i)
+			failures = append(failures, diagnostic.GeneratedStale.At(root, 0, 0).Say("", fmt.Sprintf("%d more generated files are stale", len(stale)-i)).To(fix).Err())
 			break
 		}
-		fmt.Fprintf(&message, "\n  %s: %s", file.Path, file.Reason)
+		failures = append(failures, diagnostic.GeneratedStale.At(file.Path, 0, 0).Say("", fmt.Sprintf("generated output is stale (%s)", file.Reason)).To(fix).Err())
 	}
-	return errors.New(message.String())
+	failures = append(failures, safeerror.New("scope: "+root+"; run foundry generate with the same --dir and --recursive as this check"))
+	return safeerror.Join("check failed", failures...)
 }
 
 func staleReason(name string, plan writePlan) StaleReason {

@@ -7,10 +7,12 @@ import (
 	"go/types"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 )
 
-const directiveReplacement = "declare the table with the //foundry:model directive on the struct, then run foundry generate"
+const tableProblem = "table is declared by hand"
+const directiveReplacement = "put the //foundry:model directive on the struct, run foundry generate, and delete the handwritten table"
 
 type defineCall struct {
 	call  *ast.CallExpr
@@ -336,8 +338,8 @@ func (a *Analysis) filePackage(file *ast.File) *types.Package {
 }
 
 // CheckPackage checks all syntax files of one package for low-level table declarations.
-func (a *Analysis) CheckPackage(syntax []*ast.File) []Diagnostic {
-	var result []Diagnostic
+func (a *Analysis) CheckPackage(syntax []*ast.File) []diagnostic.Diagnostic {
+	var result []diagnostic.Diagnostic
 	var defineCalls []defineCall
 	nameParameters := a.nameParameters
 	if nameParameters == nil {
@@ -501,22 +503,14 @@ func (a *Analysis) CheckPackage(syntax []*ast.File) []Diagnostic {
 				target = "type " + named.Obj().Name()
 			}
 		}
-		result = append(result, Diagnostic{
-			Position: pos,
-			Target:   target,
-			Message:  directiveReplacement,
-		})
+		result = append(result, diagnostic.ModelTable.At(pos.Filename, pos.Line, pos.Column).Say(target, tableProblem).To(directiveReplacement))
 	}
 
 	// Emit findings for standalone table structs
 	for _, sf := range structFindings {
 		pos := a.Files.Position(sf.pos)
 		target := targetString(sf.model, sf.name)
-		result = append(result, Diagnostic{
-			Position: pos,
-			Target:   target,
-			Message:  directiveReplacement,
-		})
+		result = append(result, diagnostic.ModelTable.At(pos.Filename, pos.Line, pos.Column).Say(target, tableProblem).To(directiveReplacement))
 	}
 
 	return result

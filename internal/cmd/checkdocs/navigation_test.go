@@ -15,12 +15,12 @@ func TestExplicitGuideFragments(t *testing.T) {
 		{"other guide", "[Read](other.md#recipe-read)\n", "<a id=\"recipe-read\"></a>\n## Read\n", ""},
 		{"encoded fragment", "[Read](other.md#recipe%2Dread)\n", "<a id=\"recipe-read\"></a>\n## Read\n", ""},
 		{"entry", "[Tasks](other.md#agent-entry)\n", "<a id=\"agent-entry\"></a>\n## Agent entry\n", ""},
-		{"missing same page", "[Read](#recipe-read)\n", "", `explicit anchor "recipe-read" is absent`},
-		{"missing other page", "[Read](other.md#recipe-missing)\n", "<a id=\"recipe-read\"></a>\n## Read\n", `explicit anchor "recipe-missing" is absent`},
-		{"heading is not an anchor", "[Tasks](other.md#agent-entry)\n", "## Agent entry\n", `explicit anchor "agent-entry" is absent`},
-		{"fenced anchor", "[Read](other.md#recipe-read)\n", "````markdown\n```\n<a id=\"recipe-read\"></a>\n````\n", `explicit anchor "recipe-read" is absent`},
-		{"duplicate anchor", "", "<a id=\"recipe-read\"></a>\n## Read\n<a id=\"recipe-read\"></a>\n## Read again\n", "duplicate explicit anchor"},
-		{"malformed anchor", "", "<a id='recipe-read'></a>\n## Read\n", "invalid explicit anchor"},
+		{"missing same page", "[Read](#recipe-read)\n", "", `[anchor-missing] anchor "recipe-read"`},
+		{"missing other page", "[Read](other.md#recipe-missing)\n", "<a id=\"recipe-read\"></a>\n## Read\n", `[anchor-missing] anchor "recipe-missing"`},
+		{"heading is not an anchor", "[Tasks](other.md#agent-entry)\n", "## Agent entry\n", `[anchor-missing] anchor "agent-entry"`},
+		{"fenced anchor", "[Read](other.md#recipe-read)\n", "````markdown\n```\n<a id=\"recipe-read\"></a>\n````\n", `[anchor-missing] anchor "recipe-read"`},
+		{"duplicate anchor", "", "<a id=\"recipe-read\"></a>\n## Read\n<a id=\"recipe-read\"></a>\n## Read again\n", "[anchor-duplicate]"},
+		{"malformed anchor", "", "<a id='recipe-read'></a>\n## Read\n", "[anchor-invalid] explicit anchor \"<a id='recipe-read'></a>\": malformed"},
 		{"other fragments unchanged", "[Any](other.md#arbitrary-slug)\n[Local](#other)\n", "# Other\n", ""},
 		{"external fragments unchanged", "[Remote](https://example.test/guide#recipe-read)\n", "", ""},
 		{"code is not a link", "`[Read](#recipe-missing)`\n~~~markdown\n[Read](#recipe-missing)\n~~~\n", "", ""},
@@ -48,7 +48,7 @@ func TestAgentEntryLinkTargets(t *testing.T) {
 		{"same page recipe", "#recipe-read", ""},
 		{"other guide recipe", "other.md#recipe-read", ""},
 		{"other guide entry", "other.md#agent-entry", ""},
-		{"missing anchor", "other.md#recipe-missing", `explicit anchor "recipe-missing" is absent`},
+		{"missing anchor", "other.md#recipe-missing", `[anchor-missing] anchor "recipe-missing"`},
 		{"bare guide", "other.md", "must target a local guide's explicit"},
 		{"implicit heading", "other.md#read", "must target a local guide's explicit"},
 		{"other explicit ID", "other.md#background", "must target a local guide's explicit"},
@@ -73,7 +73,7 @@ func TestRecipeFragmentFromOutsideGuides(t *testing.T) {
 	root := testRepository(t)
 	writeTestFile(t, root, "README.md", "[Read](docs/guides/example.md#recipe-read)\n")
 	writeTestFile(t, root, "docs/guides/example.md", "## Read\n")
-	if err := checkRepository(root); err == nil || !strings.Contains(err.Error(), `explicit anchor "recipe-read" is absent`) {
+	if err := checkRepository(root); err == nil || !strings.Contains(err.Error(), `[anchor-missing] anchor "recipe-read"`) {
 		t.Fatalf("missing guide anchor was not checked: %v", err)
 	}
 }
@@ -89,7 +89,7 @@ func TestDisplacedRecipeAnchor(t *testing.T) {
 func TestReferenceStyleNavigation(t *testing.T) {
 	for _, test := range []struct{ name, text, want string }{
 		{"missing target", "[Read][recipe]\n\n[recipe]: missing.md#recipe-read\n", "local link"},
-		{"missing anchor", "[Read][recipe]\n\n[recipe]: other.md#recipe-missing\n", `explicit anchor "recipe-missing" is absent`},
+		{"missing anchor", "[Read][recipe]\n\n[recipe]: other.md#recipe-missing\n", `[anchor-missing] anchor "recipe-missing"`},
 		{"full", "[Read][RECIPE]\n\n[recipe]: other.md#recipe-read\n", ""},
 		{"collapsed", "[Read][]\n\n[read]: other.md#recipe-read\n", ""},
 		{"shortcut", "[Read]\n\n[read]: <other.md#recipe-read>\n", ""},
@@ -113,9 +113,9 @@ func TestReferenceStyleNavigation(t *testing.T) {
 func TestFrameworkGuideDeclarations(t *testing.T) {
 	for _, name := range []string{"AGENTS.md", "docs/guides/example.md", ".claude/skills/workflow/references/api.md"} {
 		for _, test := range []struct{ text, want string }{
-			{"Foundry guides: `missing#anchor`\n", "selected framework guide missing"},
-			{"Foundry guides: `other#missing`\n", `explicit anchor "missing" is absent`},
-			{"Foundry guides: `other` trailing\n", "invalid Foundry guides:"},
+			{"Foundry guides: `missing#anchor`\n", "[guide-missing] guide missing: missing or not a regular file in the selected framework; check the name against the guides of the pinned framework, or remove the reference"},
+			{"Foundry guides: `other#missing`\n", `[anchor-missing] anchor "missing" of guide other: not declared`},
+			{"Foundry guides: `other` trailing\n", "[guides-declaration] Foundry guides token `other` trailing: malformed"},
 			{"Foundry guides: `other#recipe-read`\n", ""},
 			{"```markdown\nFoundry guides: `missing` trailing\n```\n", ""},
 		} {

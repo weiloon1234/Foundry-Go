@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/docrefs"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
@@ -40,7 +41,7 @@ func main() {
 
 func run(root, inputs string) error {
 	if inputs == "" {
-		return checkRepository(root)
+		return errors.Join(checkRepository(root), checkRules(root))
 	}
 	documents, err := docsource.Load(root, nil)
 	if err != nil {
@@ -147,7 +148,7 @@ func checkRepository(root string) error {
 			if err != nil {
 				failures = append(failures, err)
 			} else if fixtureVersion != version {
-				failures = append(failures, fmt.Errorf("%s:%d: Go requirement %s differs from root %s; align the fixture go directive with the root go.mod.", path, goRequirementLine(path), fixtureVersion, version))
+				failures = append(failures, diagnostic.FixtureGoVersion.At(path, goRequirementLine(path), 0).Say("go directive", fmt.Sprintf("%s where the root go.mod requires %s", fixtureVersion, version)).To("align the fixture go directive with the root go.mod").Err())
 			}
 		}
 		return nil
@@ -171,16 +172,16 @@ func checkBlueprints(root string) error {
 		}
 		match := blueprintName.FindStringSubmatch(entry.Name())
 		if match == nil {
-			return fmt.Errorf("blueprint/%s:0: invalid blueprint filename; rename it to NN-descriptive-name.md", entry.Name())
+			return diagnostic.BlueprintNumbered.At("blueprint/"+entry.Name(), 0, 0).Say("blueprint filename", "not NN-descriptive-name.md").To("rename it to NN-descriptive-name.md").Err()
 		}
 		number, _ := strconv.Atoi(match[1])
 		if number != next {
-			return fmt.Errorf("blueprint/%s:0: expected milestone %02d (missing or duplicate number); restore sequential blueprint numbering.", entry.Name(), next)
+			return diagnostic.BlueprintNumbered.At("blueprint/"+entry.Name(), 0, 0).Say("blueprint number", fmt.Sprintf("should be %02d (missing or duplicate number)", next)).To("restore sequential blueprint numbering").Err()
 		}
 		next++
 	}
 	if next == 0 {
-		return errors.New("blueprint:0: no numbered blueprints found; restore the numbered blueprint files.")
+		return diagnostic.BlueprintNumbered.At("blueprint", 0, 0).Say("blueprint directory", "no numbered blueprints").To("restore the numbered blueprint files").Err()
 	}
 	return nil
 }
@@ -196,7 +197,7 @@ func goRequirement(path string) (string, error) {
 			return fields[1], nil
 		}
 	}
-	return "", fmt.Errorf("%s:0: missing Go requirement; add the go directive matching the root go.mod.", path)
+	return "", diagnostic.FixtureGoVersion.At(path, 0, 0).Say("go.mod", "no go directive").To("add the go directive matching the root go.mod").Err()
 }
 
 func checkDocument(cache *markdown.Cache, root, path string, data []byte, current bool, completed map[string]bool, agentLines map[int]bool, targets *docrefs.Pages) error {
@@ -233,7 +234,7 @@ func checkDocument(cache *markdown.Cache, root, path string, data []byte, curren
 					number = "0" + number
 				}
 				if completed[number] {
-					failures = append(failures, fmt.Errorf("%s:%d: future-work claim names completed milestone %s; describe its current API or move dated evidence to a dated record", path, block.First, number))
+					failures = append(failures, diagnostic.DocMilestone.At(path, block.First, 0).Say("future-work claim", fmt.Sprintf("names completed milestone %s", number)).To("describe its current API or move dated evidence to a dated record").Err())
 				}
 			}
 		}
@@ -247,12 +248,12 @@ func checkDocument(cache *markdown.Cache, root, path string, data []byte, curren
 		target := strings.Trim(strings.TrimSpace(destination), "<>")
 		link, err := url.Parse(target)
 		if err != nil {
-			failures = append(failures, fmt.Errorf("%s:%d: invalid link %q: %v; use a valid local path or URL.", path, lineNumber, target, err))
+			failures = append(failures, diagnostic.DocLink.At(path, lineNumber, 0).Say(fmt.Sprintf("link %q", target), "not a valid URL").To("use a valid local path or URL").Caused(err))
 			continue
 		}
 		explicit := link.Fragment == "agent-entry" || strings.HasPrefix(link.Fragment, "recipe-")
 		if agentLines[lineNumber] && (!explicit || link.IsAbs() || link.Host != "") {
-			failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide's explicit agent-entry or recipe-* anchor; select an existing task anchor.", path, lineNumber, target))
+			failures = append(failures, diagnostic.DocLink.At(path, lineNumber, 0).Say(fmt.Sprintf("Agent entry link %q", target), "must target a local guide's explicit agent-entry or recipe-* anchor").To("select an existing task anchor").Err())
 			continue
 		}
 		if link.IsAbs() || link.Host != "" || link.Path == "" && !explicit {
@@ -264,34 +265,34 @@ func checkDocument(cache *markdown.Cache, root, path string, data []byte, curren
 		}
 		relative, err := filepath.Rel(root, local)
 		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root; link to a file inside the repository.", path, lineNumber, target))
+			failures = append(failures, diagnostic.DocLink.At(path, lineNumber, 0).Say(fmt.Sprintf("local link %q", target), "targets a file outside the repository root").To("link to a file inside the repository").Err())
 			continue
 		}
 		if historicalTeachingTarget(root, path, relative) {
-			failures = append(failures, fmt.Errorf("%s:%d: teaching link %q targets historical material; link to the current task guide or retain an unlinked historical citation.", path, lineNumber, target))
+			failures = append(failures, diagnostic.DocLink.At(path, lineNumber, 0).Say(fmt.Sprintf("teaching link %q", target), "targets historical material").To("link to the current task guide or keep an unlinked historical citation").Err())
 			continue
 		}
 		if _, err := os.Stat(local); err != nil {
-			failures = append(failures, fmt.Errorf("%s:%d: local link %q: %v; correct the link target or restore the missing file.", path, lineNumber, target, err))
+			failures = append(failures, diagnostic.DocLink.At(path, lineNumber, 0).Say(fmt.Sprintf("local link %q", target), "cannot be read").To("correct the link target or restore the missing file").Caused(err))
 			continue
 		}
 		resolvedRoot, rootErr := filepath.EvalSymlinks(root)
 		resolvedLocal, localErr := filepath.EvalSymlinks(local)
 		if rootErr != nil || localErr != nil {
-			failures = append(failures, fmt.Errorf("%s:%d: local link %q: %v; correct the link target or restore the missing file.", path, lineNumber, target, errors.Join(rootErr, localErr)))
+			failures = append(failures, diagnostic.DocLink.At(path, lineNumber, 0).Say(fmt.Sprintf("local link %q", target), "cannot be resolved").To("correct the link target or restore the missing file").Caused(errors.Join(rootErr, localErr)))
 			continue
 		}
 		relative, err = filepath.Rel(resolvedRoot, resolvedLocal)
 		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root; link to a file inside the repository.", path, lineNumber, target))
+			failures = append(failures, diagnostic.DocLink.At(path, lineNumber, 0).Say(fmt.Sprintf("local link %q", target), "targets a file outside the repository root").To("link to a file inside the repository").Err())
 			continue
 		}
 		if agentLines[lineNumber] && (filepath.Dir(local) != filepath.Join(root, "docs", "guides") || filepath.Ext(local) != ".md") {
-			failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide; link to an existing task in docs/guides.", path, lineNumber, target))
+			failures = append(failures, diagnostic.DocLink.At(path, lineNumber, 0).Say(fmt.Sprintf("Agent entry link %q", target), "must target a local guide").To("link to an existing task in docs/guides").Err())
 			continue
 		}
 		if explicit {
-			if err := checkExplicitFragment(targets, path, lineNumber, local, link.Fragment); err != nil {
+			if err := checkExplicitFragment(targets, path, lineNumber, local, filepath.ToSlash(relative), link.Fragment); err != nil {
 				failures = append(failures, err)
 			}
 		}

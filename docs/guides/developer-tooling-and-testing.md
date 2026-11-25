@@ -100,21 +100,6 @@ One Goldmark AST reader supplies block, container, link, anchor and inline synta
 to all documentation checks. A binding comment must be the immediately preceding
 node in the same container. Comments containing apparent code remain comments, but
 text or an element after a comment on the same line is checked like any other.
-Every documentation command applies one size rule to every Markdown document it
-reads: at most 512 KiB, except the dated historical records (`docs/evidence/` and
-`CHANGELOG.md`, which the repository check reads for links), which may reach 1.5 MiB.
-Before parsing, a document is refused with its line number when a line is longer than
-16 KiB, opens with more than 16 quote or list markers, or ends with a lone carriage
-return (CR-only line endings). Each source file is limited to 8 MiB and each
-compiler-input manifest or stream to 16 MiB. Teaching-source loading (including rendered
-bytes) and the anchor cache each allow at most 128 MiB per run, and a run reads at most
-4096 documents or targets. Oversized inputs fail with the limit in the diagnostic.
-Each document is parsed once per run and that parse serves its binding, retirement,
-reference and link checks; retirement rules compile once, and each link target's
-anchors are indexed once. In framework documents a code span holding only a bare name
-that matches a retired member is reported as a match, not as that package's name; write
-the qualified name you mean.
-
 These binding, tag and block restrictions apply to the framework's documents.
 An application's `foundry docs check` does not enforce them in this release.
 
@@ -232,6 +217,28 @@ when the reference includes a fragment. Read prerequisites when the task needs
 them. For GitHub, append `<guide-name>.md#<anchor-id>` to the application's pinned
 `tree/<version>/docs/guides` base, using its commit for a pseudo-version. Do not
 store module-cache paths in instructions or use sibling checkouts as authority.
+
+<a id="document-limits"></a>
+## Document limits and comments
+
+Every documentation command applies one size rule to every Markdown document it
+reads: at most 512 KiB, except the dated historical records (`docs/evidence/` and
+`CHANGELOG.md`, which the repository check reads for links), which may reach 1.5 MiB.
+Before parsing, a document is refused with its line number when a line is longer than
+16 KiB, opens with more than 16 quote or list markers, or ends with a lone carriage
+return (CR-only line endings). Each source file is limited to 8 MiB and each
+compiler-input manifest or stream to 16 MiB. Teaching-source loading (including rendered
+bytes) and the anchor cache each allow at most 128 MiB per run, and a run reads at most
+4096 documents or targets. Oversized inputs fail with the limit in the diagnostic.
+Each document is parsed once per run and that parse serves its binding, retirement,
+reference and link checks; retirement rules compile once, and each link target's
+anchors are indexed once. In framework documents a code span holding only a bare name
+that matches a retired member is reported as a match, not as that package's name; write
+the qualified name you mean.
+
+An HTML comment must be closed with `-->`. An unclosed `<!--` would turn the rest of
+the document into one comment that no check reads, so the reader refuses the document
+with the line of the opener.
 
 <a id="pinned-documentation-checks"></a>
 ## Check documentation against the framework pin
@@ -585,6 +592,73 @@ metadata inspection independent of service startup. Select a typed section
 or `all`) and compact JSON or readable indented text. The development binary
 cannot import an arbitrary application's bootstrap: register this command in the
 application that owns those declarations.
+
+<a id="diagnostic-rules"></a>
+## Read a check finding
+
+Every compiler-independent check prints each finding as one line of one shape:
+
+```text
+path:line:col: [rule] subject: problem; fix. Foundry guide: <guide>#<anchor> (skill: name)
+```
+
+`:col` is omitted when a check has no column, and `:line` when it has no line; a
+zero is never printed. `subject:` is omitted when the problem sentence begins with
+the public name. `Foundry guide:` is the `guide#anchor` token that names the guide
+page and explicit anchor that teach the fix, the same token a `Foundry guides:` line
+declares; it resolves inside the pinned framework (see
+[Read pinned guides offline](#recipe-read-pinned-guides)).
+`(skill: name)` is added by the commands that run in an application when
+`.claude/skills/*/SKILL.md` declares that `guide#anchor` in a `Foundry guides:`
+line; it names every such skill, in name order. A rule no skill declares prints the
+guide only. The command reads the skills once per run, and only when it has a finding.
+
+The rule IDs are stable output. `foundry routes check`, `foundry models check`,
+`foundry lint --no-raw`, `foundry generate --check`, `foundry generate`,
+`foundry docs check` and the framework's `make docs-check` print these rules, and a
+rule's guide and anchor are validated by `make docs-check`:
+
+| Rule | Check | Teaching |
+| --- | --- | --- |
+| `route-nesting` | `routes check` | `flat-routes#staged-routes` |
+| `route-helper` | `routes check` | `flat-routes#generated-helpers` |
+| `route-helper-missing` | `routes check` | `flat-routes#generated-helpers` |
+| `model-table` | `models check` | `model-declarations#recipe-declare-table` |
+| `raw-sql` | `lint --no-raw` | `database-runtime#no-raw-policy` |
+| `generated-stale` | `generate --check` | `model-declarations#recipe-stale-declarations` |
+| `generate-declaration` | `generate` | `model-declarations#diagnose-declarations` |
+| `guides-declaration` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
+| `anchor-invalid` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
+| `anchor-duplicate` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
+| `anchor-missing` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
+| `guide-name` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
+| `guide-missing` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
+| `retired-command` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
+| `retired-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
+| `ambiguous-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
+| `doc-limit` | `docs check` | `developer-tooling-and-testing#document-limits` |
+| `doc-file` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
+| `doc-comment` | `docs check` | `developer-tooling-and-testing#document-limits` |
+| `doc-rendered` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-marker` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-region` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-binding` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-section-anchor` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-agent-entry` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-inputs` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-link` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-milestone` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-model-example` | `checkdocs` | `model-declarations#recipe-declare-table` |
+| `fixture-go-version` | `checkdocs` | `developer-tooling-and-testing#documentation-gate` |
+| `blueprint-numbered` | `checkdocs` | `developer-tooling-and-testing#documentation-gate` |
+| `rule-catalogue` | `checkdocs` | `developer-tooling-and-testing#diagnostic-rules` |
+
+<a id="documentation-gate"></a>
+### Framework-only documentation rules
+
+The `fixture-go-version` and `blueprint-numbered` rules belong to the framework's own
+`make docs-check`: a fixture module's `go` directive must equal the root `go.mod`, and
+`blueprint/` files are numbered `NN-name.md` without gaps or repeats.
 
 <a id="recipe-test-transports"></a>
 ## Test-owned application and transports

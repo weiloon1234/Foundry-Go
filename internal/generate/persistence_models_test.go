@@ -482,10 +482,10 @@ var _ = ResponseJSON()
 type Response struct { `+shape.field+` }
 `)
 			_, err := generateFixture(t.Context(), Options{Dir: dir})
-			if err == nil || !strings.Contains(err.Error(), "models.go:7:6: "+shape.diagnostic) {
+			if err == nil || !strings.Contains(err.Error(), "models.go:7:6: [generate-declaration] "+shape.diagnostic) {
 				t.Fatalf("model diagnostic did not take precedence: %v", err)
 			}
-			if !strings.Contains(err.Error(), "(discovery also failed: models.go:7:6: "+shape.original) {
+			if !strings.Contains(err.Error(), "(discovery also failed: models.go:7:6: [generate-declaration] "+shape.original) {
 				t.Fatalf("refined diagnostic dropped the discovery failure: %v", err)
 			}
 			if len(generatedSnapshot(t, dir)) != 0 {

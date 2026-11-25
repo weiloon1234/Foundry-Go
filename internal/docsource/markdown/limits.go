@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 )
 
 // Parser cost is not linear in document size for pathological input, so every
@@ -38,7 +38,7 @@ func DocumentLimit(name string) int64 {
 // checkShape refuses a document before parsing, naming the first offending line.
 func checkShape(name string, data []byte) error {
 	if limit := DocumentLimit(name); int64(len(data)) > limit {
-		return safeerror.New(fmt.Sprintf("%s:0: document exceeds maximum %d bytes; split the document.", name, limit))
+		return diagnostic.DocLimit.At(name, 0, 0).Say("document", fmt.Sprintf("over %d bytes", limit)).To("split the document").Err()
 	}
 	for number, line := 1, 0; line <= len(data); number++ {
 		end := bytes.IndexByte(data[line:], '\n')
@@ -51,13 +51,13 @@ func checkShape(name string, data []byte) error {
 			text = bytes.TrimSuffix(data[line:end], []byte{'\r'})
 		}
 		if at := bytes.IndexByte(text, '\r'); at >= 0 {
-			return safeerror.New(fmt.Sprintf("%s:%d: document uses CR-only line endings; convert them to LF or CRLF.", name, number))
+			return diagnostic.DocLimit.At(name, number, 0).Say("line ending", "a lone CR").To("convert line endings to LF or CRLF").Err()
 		}
 		if len(text) > MaxLineBytes {
-			return safeerror.New(fmt.Sprintf("%s:%d: line exceeds maximum %d bytes; break the line.", name, number, MaxLineBytes))
+			return diagnostic.DocLimit.At(name, number, 0).Say("line", fmt.Sprintf("over %d bytes", MaxLineBytes)).To("break the line").Err()
 		}
 		if leadingMarkers(text) > MaxContainerMarkers {
-			return safeerror.New(fmt.Sprintf("%s:%d: line opens with more than %d quote or list markers; flatten the nesting.", name, number, MaxContainerMarkers))
+			return diagnostic.DocLimit.At(name, number, 0).Say("line", fmt.Sprintf("opens with more than %d quote or list markers", MaxContainerMarkers)).To("flatten the nesting").Err()
 		}
 		line = next
 	}
@@ -162,10 +162,10 @@ func (b *Budget) Take(name string, size int) error {
 	b.documents++
 	b.bytes += int64(size)
 	if b.documents > MaxDocuments {
-		return safeerror.New(fmt.Sprintf("%s:0: too many documents; maximum is %d.", name, MaxDocuments))
+		return diagnostic.DocLimit.At(name, 0, 0).Say("run", fmt.Sprintf("more than %d documents", MaxDocuments)).To("split the documentation run").Err()
 	}
 	if b.bytes > MaxRunBytes {
-		return safeerror.New(fmt.Sprintf("%s:0: documents exceed maximum %d bytes per run; split the documentation run.", name, MaxRunBytes))
+		return diagnostic.DocLimit.At(name, 0, 0).Say("run", fmt.Sprintf("reads more than %d bytes", MaxRunBytes)).To("split the documentation run").Err()
 	}
 	return nil
 }

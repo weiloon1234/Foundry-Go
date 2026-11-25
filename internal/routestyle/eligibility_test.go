@@ -77,7 +77,7 @@ func TestEligibilityUsesDeclarationModuleAndDirective(t *testing.T) {
 		if err != nil {
 			t.Fatal(pattern, err)
 		}
-		if len(got) != 1 || got[0].Code != "route-helper-missing" || !strings.Contains(got[0].Message, "SaveBody") {
+		if len(got) != 1 || got[0].Rule.ID != "route-helper-missing" || !strings.Contains(got[0].String(), "SaveBody") {
 			t.Fatalf("%s: %v", pattern, got)
 		}
 	}

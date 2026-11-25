@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -10,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 )
 
@@ -34,7 +34,7 @@ func checkModelGuide(cache *markdown.Cache, name string, data []byte) error {
 			if node.Kind == markdown.Fence {
 				line++
 			}
-			return fmt.Errorf("%s:%d: guide teaches a retired generated model/query API; declare models with //foundry:model and foundry tags, then use their generated tables.", name, line)
+			return diagnostic.DocModelExample.At(name, line, 0).Say("guide", "teaches a retired generated model/query API").To("declare models with //foundry:model and foundry tags, then use their generated tables").Err()
 		}
 	}
 	reference := false
@@ -48,26 +48,26 @@ func checkModelGuide(cache *markdown.Cache, name string, data []byte) error {
 		}
 		if reference && !sourceMarker {
 			if block.Kind != markdown.Comment || !strings.HasPrefix(trimmed, "<!-- compiled-source: ") {
-				return fmt.Errorf("%s:%d: model-declaration-reference must immediately precede one compiled-source Go fence; move the marker directly before its compiled-source marker.", name, block.First)
+				return diagnostic.DocModelExample.At(name, block.First, 0).Say("model-declaration-reference", "must immediately precede one compiled-source Go fence").To("move the marker directly before its compiled-source marker").Err()
 			}
 			source := strings.TrimSuffix(strings.TrimPrefix(trimmed, "<!-- compiled-source: "), " -->")
 			source, _, _ = strings.Cut(source, "#")
 			if !strings.HasSuffix(source, "_test.go") && !strings.HasSuffix(source, "_foundry.gen.go") && !strings.HasPrefix(source, "database/orm/") {
-				return fmt.Errorf("%s:%d: model-declaration-reference requires generated code, a test file or the ORM owner source; bind an eligible source file.", name, block.First)
+				return diagnostic.DocModelExample.At(name, block.First, 0).Say("model-declaration-reference", "requires generated code, a test file or the ORM owner source").To("bind an eligible source file").Err()
 			}
 			sourceMarker = true
 			continue
 		}
 		if reference && (block.Kind != markdown.Fence || block.Info != "go") {
-			return fmt.Errorf("%s:%d: model-declaration-reference requires a compiled-source Go fence; add a Go fence directly after the compiled-source marker.", name, block.First)
+			return diagnostic.DocModelExample.At(name, block.First, 0).Say("model-declaration-reference", "requires a compiled-source Go fence").To("add a Go fence directly after the compiled-source marker").Err()
 		}
 		if block.Kind == markdown.Fence && block.Info == "go" && !reference && handwrittenModelDeclaration(block.Text) {
-			return fmt.Errorf("%s:%d: handwritten model declaration teaching; declare the model with //foundry:model and foundry tags, then run foundry generate", name, block.First+1)
+			return diagnostic.DocModelExample.At(name, block.First+1, 0).Say("Go block", "teaches a handwritten model declaration").To("declare the model with //foundry:model and foundry tags, then run foundry generate").Err()
 		}
 		reference = false
 	}
 	if reference {
-		return fmt.Errorf("%s:0: model-declaration-reference must immediately precede one compiled-source Go fence", name)
+		return diagnostic.DocModelExample.At(name, 0, 0).Say("model-declaration-reference", "must immediately precede one compiled-source Go fence").To("add the fence after the marker or remove the marker").Err()
 	}
 
 	return nil

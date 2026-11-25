@@ -45,13 +45,13 @@ func TestResolvedRawSymbols(t *testing.T) {
 		t.Fatalf("got %d, want %d: %v", len(diagnostics), len(expected), diagnostics)
 	}
 	for _, d := range diagnostics {
-		key := fmt.Sprintf("%s:%d", d.Position.Filename, d.Position.Line)
+		key := fmt.Sprintf("%s:%d", d.Path, d.Line)
 		want := expected[key]
-		if want == "" || !strings.HasPrefix(d.Symbol, want) {
+		if want == "" || !strings.HasPrefix(d.Subject, want) {
 			t.Fatal(d)
 		}
-		if d.String() != key {
-			t.Fatalf("diagnostic must contain only file:line: %q", d.String())
+		if !strings.HasPrefix(d.String(), fmt.Sprintf("%s:%d:%d: [raw-sql] %s: raw SQL call; ", d.Path, d.Line, d.Column, d.Subject)) || !strings.HasSuffix(d.String(), "Foundry guide: database-runtime#no-raw-policy") || d.Column < 1 {
+			t.Fatalf("diagnostic must name its location, rule, symbol and teaching only: %q", d.String())
 		}
 		if strings.Contains(d.String(), "private_") {
 			t.Fatal("diagnostic disclosed SQL or arguments")

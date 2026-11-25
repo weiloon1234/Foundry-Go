@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"path/filepath"
 	"regexp"
@@ -38,7 +38,7 @@ func completedMilestones(root string, cache *markdown.Cache) (map[string]bool, e
 		}
 	}
 	if len(completed) == 0 {
-		return nil, fmt.Errorf("%s:0: missing completed milestone status rows; restore the master status table with its current completion states.", filepath.Join(root, name))
+		return nil, diagnostic.DocMilestone.At(filepath.Join(root, name), 0, 0).Say("master status table", "no completed milestone rows").To("restore the table with its current completion states").Err()
 	}
 	return completed, nil
 }

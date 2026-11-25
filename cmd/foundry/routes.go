@@ -48,10 +48,8 @@ func runRoutes(ctx context.Context, args []string, stdout, stderr io.Writer) (re
 	if err != nil {
 		return err
 	}
-	for _, d := range diagnostics {
-		if _, err := fmt.Fprintln(stdout, d.String()); err != nil {
-			return err
-		}
+	if err := printFindings(stdout, *dir, diagnostics); err != nil {
+		return err
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()

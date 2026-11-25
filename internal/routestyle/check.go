@@ -9,12 +9,13 @@ import (
 	"go/types"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 	"github.com/weiloon1234/Foundry-Go/internal/routecontract"
 )
 
-func (a *Analysis) CheckFile(file *ast.File) []Diagnostic {
-	var result []Diagnostic
+func (a *Analysis) CheckFile(file *ast.File) []diagnostic.Diagnostic {
+	var result []diagnostic.Diagnostic
 	generated := ast.IsGenerated(file)
 	ast.Inspect(file, func(n ast.Node) bool {
 		if a.Context.Err() != nil {
@@ -26,12 +27,14 @@ func (a *Analysis) CheckFile(file *ast.File) []Diagnostic {
 		}
 		if !generated {
 			if use, ok := a.Use(call); ok && !a.HTTPDependencies[use.Owner.Obj().Pkg().Path()] {
-				code := "route-helper-missing"
+				rule := diagnostic.RouteHelperMissing
 				if _, exists := a.Helper(call); exists {
-					code = "route-helper"
+					rule = diagnostic.RouteHelper
 				}
-				message := fmt.Sprintf("declare http=%s (or http=both) on %s, regenerate, and use %s.%s instead of wrapping the generated declaration", use.Mode(), use.Owner.Obj().Name(), use.Owner.Obj().Pkg().Name(), use.Name)
-				result = append(result, Diagnostic{a.Files.Position(call.Pos()), code, message})
+				position := a.Files.Position(call.Pos())
+				result = append(result, rule.At(position.Filename, position.Line, position.Column).
+					Say(a.expression(call.Fun), "wraps the generated declaration of "+use.Owner.Obj().Name()).
+					To(fmt.Sprintf("declare http=%s (or http=both) on %s, run foundry generate, then call %s", use.Mode(), use.Owner.Obj().Name(), use.Owner.Obj().Pkg().Name()+"."+use.Name)))
 			}
 		}
 		for _, arg := range call.Args {
@@ -44,9 +47,10 @@ func (a *Analysis) CheckFile(file *ast.File) []Diagnostic {
 				}
 				if inner, ok := n.(*ast.CallExpr); ok {
 					if !a.Info.Types[inner.Fun].IsType() && a.IsStage(a.Info.TypeOf(inner)) {
-						var name bytes.Buffer
-						printer.Fprint(&name, a.Files, inner.Fun)
-						result = append(result, Diagnostic{a.Files.Position(inner.Pos()), "route-nesting", fmt.Sprintf("assign %s(...) to a named local first; pass that value as the route stage", name.String())})
+						position := a.Files.Position(inner.Pos())
+						result = append(result, diagnostic.RouteNesting.At(position.Filename, position.Line, position.Column).
+							Say(a.expression(inner.Fun)+"(...)", "route stage inside another call").
+							To("assign it to a local, then pass the local"))
 					}
 					// Each call's arguments are checked by the outer walk. Its receiver
 					// is not an argument: stage.Handle(...) and stage.URL(...) stay inline.
@@ -58,6 +62,13 @@ func (a *Analysis) CheckFile(file *ast.File) []Diagnostic {
 		return true
 	})
 	return result
+}
+
+// expression prints an expression as written, for a diagnostic subject.
+func (a *Analysis) expression(expr ast.Expr) string {
+	var text bytes.Buffer
+	printer.Fprint(&text, a.Files, expr)
+	return text.String()
 }
 
 // Helper describes a replacement using the descriptor's existing package qualifier.

@@ -6,28 +6,19 @@ import (
 	"fmt"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/ast"
-	"go/token"
 	"go/types"
 	"sort"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 )
 
 const databasePath = frameworkinfo.ModulePath + "/database"
 
-type Diagnostic struct {
-	Position token.Position
-	Symbol   string
-}
-
-func (d Diagnostic) String() string {
-	return fmt.Sprintf("%s:%d", d.Position.Filename, d.Position.Line)
-}
-
 // Check diagnoses calls in consumer packages, including tests. Loading failures
 // are errors even when the selected packages belong to the framework itself.
-func Check(ctx context.Context, dir string, patterns []string) ([]Diagnostic, error) {
+func Check(ctx context.Context, dir string, patterns []string) ([]diagnostic.Diagnostic, error) {
 	graph, err := load(ctx, dir, patterns)
 	if err != nil {
 		return nil, err
@@ -44,7 +35,7 @@ func Check(ctx context.Context, dir string, patterns []string) ([]Diagnostic, er
 	if err != nil {
 		return nil, err
 	}
-	var diagnostics []Diagnostic
+	var diagnostics []diagnostic.Diagnostic
 	seen := map[string]bool{}
 	for _, pkg := range graph.selected {
 		if err := ctx.Err(); err != nil {
@@ -70,8 +61,10 @@ func Check(ctx context.Context, dir string, patterns []string) ([]Diagnostic, er
 					return true
 				}
 				pos := graph.fset.PositionFor(call.Pos(), false)
-				d := Diagnostic{pos, symbol}
-				if key := d.String(); !seen[key] {
+				d := diagnostic.RawSQL.At(pos.Filename, pos.Line, pos.Column).
+					Say(symbol, "raw SQL call").
+					To("use a typed model or projection query")
+				if key := fmt.Sprintf("%s:%d", d.Path, d.Line); !seen[key] {
 					seen[key] = true
 					diagnostics = append(diagnostics, d)
 				}
@@ -80,11 +73,14 @@ func Check(ctx context.Context, dir string, patterns []string) ([]Diagnostic, er
 		}
 	}
 	sort.Slice(diagnostics, func(i, j int) bool {
-		a, b := diagnostics[i].Position, diagnostics[j].Position
-		if a.Filename != b.Filename {
-			return a.Filename < b.Filename
+		a, b := diagnostics[i], diagnostics[j]
+		if a.Path != b.Path {
+			return a.Path < b.Path
 		}
-		return a.Offset < b.Offset
+		if a.Line != b.Line {
+			return a.Line < b.Line
+		}
+		return a.Column < b.Column
 	})
 	return diagnostics, nil
 }

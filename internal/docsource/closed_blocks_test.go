@@ -110,7 +110,7 @@ func TestSourceDiagnosticKeepsUnclosedRegionLine(t *testing.T) {
 	writeInput(t, root, name, "package example\n\n// doc-example:begin value\nvar Value = 1\n")
 	writeInput(t, root, "docs/guides/example.md", "<!-- compiled-source: "+name+"#value -->\n```go\n```\n")
 	_, err := Load(root, nil)
-	if err == nil || !strings.Contains(Diagnostics(err), name+":3: unclosed region value; add its matching end marker.") {
+	if err == nil || !strings.Contains(Diagnostics(err), name+":3: [doc-region] unclosed region value; add its matching end marker.") {
 		t.Fatalf("lost source location: %v", err)
 	}
 }
@@ -121,7 +121,7 @@ func TestArgumentDiagnostics(t *testing.T) {
 			flags := flag.NewFlagSet(command, flag.ContinueOnError)
 			flags.String("root", ".", "root")
 			err := ParseFlags(flags, args)
-			if err == nil || !strings.HasPrefix(Diagnostics(err), command+":0:") || !strings.Contains(Diagnostics(err), "; ") {
+			if err == nil || !strings.HasPrefix(Diagnostics(err), command+": ") || !strings.Contains(Diagnostics(err), "; ") {
 				t.Fatalf("argument diagnostic: %v", err)
 			}
 		}
@@ -133,7 +133,7 @@ func TestManifestDiagnosticsKeepLines(t *testing.T) {
 	writeInput(t, root, TypeScriptInputs, "[\n  \"example.ts\",\n  \"example.ts\"\n]\n")
 	docs := []Document{{Inclusions: []Inclusion{{Source: "tests/fixtures/consumer/clientcontracts/testdata/example.ts"}}}}
 	err := CheckTypeScriptInputs(root, docs)
-	if err == nil || !strings.Contains(err.Error(), TypeScriptInputs+":3: repeated compiler input") || !strings.Contains(err.Error(), "remove the duplicate") {
+	if err == nil || !strings.Contains(err.Error(), TypeScriptInputs+`:3: [doc-inputs] compiler input "example.ts": listed twice`) || !strings.Contains(err.Error(), "remove the duplicate") {
 		t.Fatalf("lost manifest location: %v", err)
 	}
 }
@@ -159,7 +159,7 @@ func TestLiteralHTMLNamesAreNotBlocks(t *testing.T) {
 
 func TestMarkerFollowedByTextMustStandAlone(t *testing.T) {
 	doc, err := parseDocument(nil, "guide.md", []byte("# T\n\n<!-- compiled-source: a.go#r --> text\n```go\nx := 1\n```\n"), nil)
-	if err == nil || !strings.Contains(err.Error(), "guide.md:3: compiled-source marker must stand alone on its line") || strings.Contains(err.Error(), "no compiled source") {
+	if err == nil || !strings.Contains(err.Error(), "guide.md:3: [doc-marker] compiled-source marker must stand alone on its line") || strings.Contains(err.Error(), "no compiled source") {
 		t.Fatalf("want the stand-alone message, got %v (%v)", err, doc)
 	}
 }

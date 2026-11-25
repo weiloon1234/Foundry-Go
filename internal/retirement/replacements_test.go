@@ -88,7 +88,7 @@ func TestRetirementReplacementDiagnostics(t *testing.T) {
 		{"orm.Predicate.Not", "orm.Predicate.Not is retired; use orm.Not(predicate)."},
 	} {
 		err := CheckDocument("guide.md", []byte("# Guide\n\nUse `"+test.code+"`.\n"))
-		if err == nil || !strings.Contains(err.Error(), "guide.md:3: "+test.want) {
+		if err == nil || !strings.Contains(err.Error(), "guide.md:3: [retired-api] "+test.want) {
 			t.Fatalf("%s: %v", test.code, err)
 		}
 	}
@@ -515,7 +515,7 @@ validation.Rule.Check`)
 
 func TestUnqualifiedRetirementKeepsCodeLine(t *testing.T) {
 	err := CheckDocument("guide.md", []byte("# Guide\n\n```go\nvar current = 1\n\nDoesntHave(relation)\n```\n"))
-	if err == nil || !strings.Contains(err.Error(), "guide.md:6: `DoesntHave` matches the retired `orm.DoesntHave`; write the qualified name you mean") {
+	if err == nil || !strings.Contains(err.Error(), "guide.md:6: [retired-api] `DoesntHave` matches the retired `orm.DoesntHave`; write the qualified name you mean") {
 		t.Fatalf("retirement lost its source line: %v", err)
 	}
 }
@@ -550,7 +550,7 @@ func TestNestedPackageReplacementAliases(t *testing.T) {
 			}
 			code := "```go\npackage p\nimport " + alias + " \"" + framework + test.owner + "\"\nvar use = " + expression + "\n```\n"
 			err := CheckApplicationDocument("AGENTS.md", []byte(code))
-			if err == nil || !strings.Contains(err.Error(), "AGENTS.md:4: "+path.Base(test.owner)+"."+test.member+" is retired; use "+test.replacement+".") || strings.Contains(err.Error(), "no replacement") {
+			if err == nil || !strings.Contains(err.Error(), "AGENTS.md:4: [retired-api] "+path.Base(test.owner)+"."+test.member+" is retired; use "+test.replacement+".") || strings.Contains(err.Error(), "no replacement") {
 				t.Fatalf("lost replacement through %s: %v", alias, err)
 			}
 		}

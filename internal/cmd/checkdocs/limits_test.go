@@ -17,12 +17,12 @@ func TestRepositoryAppliesOneSizeRulePerPath(t *testing.T) {
 	}{
 		{"evidence above the guide limit is a record", "docs/evidence/big.md", filler(markdown.MaxDocumentBytes + 100<<10), ""},
 		{"changelog above the guide limit is a record", "CHANGELOG.md", filler(markdown.MaxDocumentBytes + 100<<10), ""},
-		{"evidence above the record limit", "docs/evidence/huge.md", filler(markdown.MaxRecordBytes + 1<<10), "docs/evidence/huge.md:0: input exceeds maximum 1572864 bytes"},
-		{"guide above the guide limit", "docs/guides/big.md", filler(markdown.MaxDocumentBytes + 1<<10), "docs/guides/big.md:0: input exceeds maximum 524288 bytes"},
-		{"skill above the guide limit", ".claude/skills/x/SKILL.md", filler(markdown.MaxDocumentBytes + 1<<10), ".claude/skills/x/SKILL.md:0: input exceeds maximum 524288 bytes"},
-		{"blueprint above the guide limit", "blueprint/02-big.md", filler(markdown.MaxDocumentBytes + 1<<10), "blueprint/02-big.md:0: input exceeds maximum 524288 bytes"},
-		{"deep nesting in a record", "docs/evidence/deep.md", strings.Repeat("> ", 17) + "x\n", "docs/evidence/deep.md:1: line opens with more than 16 quote or list markers"},
-		{"CR-only endings", "docs/guides/cr.md", "# T\r\rText\r", "docs/guides/cr.md:1: document uses CR-only line endings"},
+		{"evidence above the record limit", "docs/evidence/huge.md", filler(markdown.MaxRecordBytes + 1<<10), "docs/evidence/huge.md: [doc-limit] input: over 1572864 bytes"},
+		{"guide above the guide limit", "docs/guides/big.md", filler(markdown.MaxDocumentBytes + 1<<10), "docs/guides/big.md: [doc-limit] input: over 524288 bytes"},
+		{"skill above the guide limit", ".claude/skills/x/SKILL.md", filler(markdown.MaxDocumentBytes + 1<<10), ".claude/skills/x/SKILL.md: [doc-limit] input: over 524288 bytes"},
+		{"blueprint above the guide limit", "blueprint/02-big.md", filler(markdown.MaxDocumentBytes + 1<<10), "blueprint/02-big.md: [doc-limit] input: over 524288 bytes"},
+		{"deep nesting in a record", "docs/evidence/deep.md", strings.Repeat("> ", 17) + "x\n", "docs/evidence/deep.md:1: [doc-limit] line: opens with more than 16 quote or list markers"},
+		{"CR-only endings", "docs/guides/cr.md", "# T\r\rText\r", "docs/guides/cr.md:1: [doc-limit] line ending: a lone CR"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

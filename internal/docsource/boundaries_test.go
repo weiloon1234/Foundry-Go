@@ -62,7 +62,7 @@ func TestReferencedAnchorDiagnosticLeadsWithSource(t *testing.T) {
 	root := t.TempDir()
 	writeInput(t, root, "orm.md", "# ORM\n")
 	err := docrefs.CheckReferences(root, []docrefs.Reference{{File: "AGENTS.md", Line: 7, Guide: "orm", Anchor: "recipe-missing"}})
-	if err == nil || !strings.HasPrefix(Diagnostics(err), "AGENTS.md:7: explicit anchor") || strings.Contains(Diagnostics(err), "guide orm:0") {
+	if err == nil || !strings.HasPrefix(Diagnostics(err), `AGENTS.md:7: [anchor-missing] anchor "recipe-missing"`) || strings.Contains(Diagnostics(err), ":0") {
 		t.Fatalf("location lost: %v", err)
 	}
 }
@@ -73,7 +73,7 @@ func TestJSONInputErrorLines(t *testing.T) {
 		writeInput(t, root, TypeScriptInputs, input)
 		docs := []Document{{Inclusions: []Inclusion{{Source: "tests/fixtures/consumer/clientcontracts/testdata/example.ts"}}}}
 		err := CheckTypeScriptInputs(root, docs)
-		if err == nil || !strings.HasPrefix(Diagnostics(err), TypeScriptInputs+":3: invalid compiler input JSON:") {
+		if err == nil || !strings.HasPrefix(Diagnostics(err), TypeScriptInputs+":3: [doc-inputs] compiler input JSON: syntax or type error") {
 			t.Fatalf("JSON location lost: %v", err)
 		}
 	}

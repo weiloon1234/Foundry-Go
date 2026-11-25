@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
@@ -62,7 +63,7 @@ func Load(root string, cache *markdown.Cache) ([]Document, error) {
 		}
 		total += len(data)
 		if total > markdown.MaxRunBytes {
-			return nil, safeerror.New(fmt.Sprintf("documentation:0: inputs exceed maximum %d bytes per run; split the teaching corpus.", markdown.MaxRunBytes))
+			return nil, diagnostic.DocLimit.At("documentation", 0, 0).Say("inputs", fmt.Sprintf("over %d bytes per run", markdown.MaxRunBytes)).To("split the teaching corpus").Err()
 		}
 		document, err := parseDocument(cache, filepath.ToSlash(relative), data, func(name string) (source, error) {
 			if cached, ok := sources[name]; ok {
@@ -72,7 +73,7 @@ func Load(root string, cache *markdown.Cache) ([]Document, error) {
 			if err == nil {
 				total += value.bytes
 				if total > markdown.MaxRunBytes {
-					return source{}, safeerror.New(fmt.Sprintf("documentation:0: inputs exceed maximum %d bytes per run.", markdown.MaxRunBytes))
+					return source{}, diagnostic.DocLimit.At("documentation", 0, 0).Say("inputs", fmt.Sprintf("over %d bytes per run", markdown.MaxRunBytes)).To("split the teaching corpus").Err()
 				}
 				sources[name] = value
 			}
@@ -84,7 +85,7 @@ func Load(root string, cache *markdown.Cache) ([]Document, error) {
 		}
 		total += len(document.Rendered)
 		if total > markdown.MaxRunBytes {
-			return nil, safeerror.New(fmt.Sprintf("documentation:0: retained inputs and renderings exceed maximum %d bytes per run.", markdown.MaxRunBytes))
+			return nil, diagnostic.DocLimit.At("documentation", 0, 0).Say("retained inputs and renderings", fmt.Sprintf("over %d bytes per run", markdown.MaxRunBytes)).To("split the teaching corpus").Err()
 		}
 		documents = append(documents, document)
 	}
@@ -96,11 +97,11 @@ func Check(documents []Document) error {
 	var failures []error
 	for _, doc := range documents {
 		if !bytes.Equal(doc.Original, doc.Rendered) {
-			location := doc.Path + ":0"
+			line := 0
 			if len(doc.StaleLines) > 0 {
-				location = fmt.Sprintf("%s:%d", doc.Path, doc.StaleLines[0])
+				line = doc.StaleLines[0]
 			}
-			failures = append(failures, safeerror.New(fmt.Sprintf("%s: compiled source differs from the displayed block; run go run ./internal/cmd/renderdocs.", location)))
+			failures = append(failures, diagnostic.DocRendered.At(doc.Path, line, 0).Text("", "compiled source differs from the displayed block; run go run ./internal/cmd/renderdocs").Err())
 		}
 	}
 	return safeerror.Join("documentation check failed", failures...)
@@ -119,7 +120,7 @@ func documentPaths(root string) ([]string, error) {
 	var paths []string
 	err := filepath.WalkDir(root, func(filename string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
-			return safeerror.Owned(filename+":0: cannot read teaching directory; restore read access.", walkErr)
+			return diagnostic.DocFile.At(filename, 0, 0).Say("teaching directory", "cannot be read").To("restore read access").Caused(walkErr)
 		}
 		relative, err := filepath.Rel(root, filename)
 		if err != nil {
@@ -130,7 +131,7 @@ func documentPaths(root string) ([]string, error) {
 		// An owned tree has no name-based exclusions. Never open secret inputs.
 		if strings.HasPrefix(entry.Name(), ".env") {
 			if owned {
-				return safeerror.New(fmt.Sprintf("%s:0: secret input is inside a teaching directory; move it outside the teaching tree.", relative))
+				return diagnostic.DocFile.At(relative, 0, 0).Say("secret input", "found inside a teaching directory").To("move it outside the teaching tree").Err()
 			}
 			if entry.IsDir() {
 				return filepath.SkipDir
@@ -138,11 +139,11 @@ func documentPaths(root string) ([]string, error) {
 			return nil
 		}
 		if (owned || relative == "docs" || relative == ".claude" || entry.Name() == "AGENTS.md" || relative == ".") && entry.Type()&os.ModeSymlink != 0 {
-			return safeerror.New(fmt.Sprintf("%s:0: symlink inside a teaching directory; replace it with an owned file or directory.", relative))
+			return diagnostic.DocFile.At(relative, 0, 0).Say("symlink", "found inside a teaching directory").To("replace it with an owned file or directory").Err()
 		}
 		if entry.IsDir() {
 			if entry.Name() == "AGENTS.md" || owned && strings.HasSuffix(entry.Name(), ".md") {
-				return safeerror.New(relative + ":0: instruction must be a regular file.")
+				return diagnostic.DocFile.At(relative, 0, 0).Say("instruction", "not a regular file").To("use a regular file").Err()
 			}
 			if !owned {
 				switch entry.Name() {
@@ -154,11 +155,11 @@ func documentPaths(root string) ([]string, error) {
 		}
 		if entry.Name() == "AGENTS.md" || owned && strings.HasSuffix(relative, ".md") {
 			if !entry.Type().IsRegular() {
-				return safeerror.New(relative + ":0: teaching document must be a regular file.")
+				return diagnostic.DocFile.At(relative, 0, 0).Say("teaching document", "not a regular file").To("use a regular file").Err()
 			}
 			paths = append(paths, filename)
 			if len(paths) > markdown.MaxDocuments {
-				return safeerror.New(fmt.Sprintf("documentation:0: too many documents; maximum is %d.", markdown.MaxDocuments))
+				return diagnostic.DocLimit.At("documentation", 0, 0).Say("run", fmt.Sprintf("more than %d documents", markdown.MaxDocuments)).To("split the documentation run").Err()
 			}
 		}
 		return nil
@@ -222,15 +223,15 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 	anchorLine := 0
 	for _, block := range parsed.Blocks {
 		trimmed := strings.TrimSpace(block.Text)
-		fail := func(message string) (Document, error) {
-			return Document{}, safeerror.New(fmt.Sprintf("%s:%d: %s", name, block.First, message))
+		fail := func(rule diagnostic.Rule, message string) (Document, error) {
+			return Document{}, rule.At(name, block.First, 0).Text("", message).Err()
 		}
 		binding := func(message string) {
-			result.BindingErrors = append(result.BindingErrors, safeerror.New(fmt.Sprintf("%s:%d: %s", name, block.First, message)))
+			result.BindingErrors = append(result.BindingErrors, diagnostic.DocBinding.At(name, block.First, 0).Text("", message).Err())
 		}
 		if block.Kind == markdown.Comment {
 			if strings.HasPrefix(trimmed, "<!-- go-source:") || trimmed == "<!-- compiled-examples -->" || strings.HasPrefix(trimmed, "<!-- orm-example:") {
-				return fail("obsolete guide snippet marker; use <!-- compiled-source: path#region -->.")
+				return fail(diagnostic.DocMarker, "obsolete guide snippet marker; use <!-- compiled-source: path#region -->.")
 			}
 		}
 		anchor := ""
@@ -238,20 +239,20 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 			if id := anchors[line]; id != "" {
 				anchor = id
 				if block.Last != line {
-					return fail("anchor " + id + " must be followed by a # heading; move intervening content below that heading.")
+					return fail(diagnostic.DocSectionAnchor, "anchor "+id+" must be followed by a # heading; move intervening content below that heading.")
 				}
 			}
 		}
 		if anchor != "" {
 			if pendingAnchor != "" {
-				return fail("anchor " + pendingAnchor + " must be followed by a # heading; add the heading immediately after the anchor.")
+				return fail(diagnostic.DocSectionAnchor, "anchor "+pendingAnchor+" must be followed by a # heading; add the heading immediately after the anchor.")
 			}
 			for _, parent := range sections {
 				if parent.agent {
 					lines := strings.Split(strings.TrimSuffix(block.Text, "\n"), "\n")
 					for i, line := range lines[:len(lines)-1] {
 						if !taskLink.MatchString(strings.TrimSpace(line)) {
-							return fail("Agent entry permits task labels and links only, no fences or prose; move the explanation into a task section.")
+							return fail(diagnostic.DocAgentEntry, "Agent entry permits task labels and links only, no fences or prose; move the explanation into a task section.")
 						}
 						result.AgentLines = append(result.AgentLines, block.First+i)
 					}
@@ -263,11 +264,11 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 
 		if block.Kind == markdown.Heading {
 			if pendingAnchor != "" && !block.ATX {
-				return fail("anchor " + pendingAnchor + " must be followed by a # heading; use an ATX heading.")
+				return fail(diagnostic.DocSectionAnchor, "anchor "+pendingAnchor+" must be followed by a # heading; use an ATX heading.")
 			}
 			for _, parent := range sections {
 				if parent.agent && block.Level > parent.level {
-					return fail("Agent entry permits task links only, no subsections; move the subsection outside Agent entry.")
+					return fail(diagnostic.DocAgentEntry, "Agent entry permits task links only, no subsections; move the subsection outside Agent entry.")
 				}
 			}
 			for len(sections) > 0 && sections[len(sections)-1].level >= block.Level {
@@ -278,7 +279,7 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 			continue
 		}
 		if pendingAnchor != "" && trimmed != "" {
-			return fail("anchor " + pendingAnchor + " must be followed by a # heading; move intervening content below that heading.")
+			return fail(diagnostic.DocSectionAnchor, "anchor "+pendingAnchor+" must be followed by a # heading; move intervening content below that heading.")
 		}
 		agent := false
 		for _, section := range sections {
@@ -286,11 +287,11 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 		}
 		if agent && trimmed != "" {
 			if block.Kind != markdown.Prose {
-				return fail("Agent entry permits task labels and links only, no fences or prose; move the explanation into a task section.")
+				return fail(diagnostic.DocAgentEntry, "Agent entry permits task labels and links only, no fences or prose; move the explanation into a task section.")
 			}
 			for i, line := range strings.Split(strings.TrimSuffix(block.Text, "\n"), "\n") {
 				if !taskLink.MatchString(strings.TrimSpace(line)) {
-					return fail("Agent entry permits task labels and links only, no fences or prose; move the explanation into a task section.")
+					return fail(diagnostic.DocAgentEntry, "Agent entry permits task labels and links only, no fences or prose; move the explanation into a task section.")
 				}
 				result.AgentLines = append(result.AgentLines, block.First+i)
 			}
@@ -302,14 +303,14 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 			binding("HTML pre/code elements are unsupported; use a fenced block with a language tag.")
 		}
 		if block.Kind == markdown.HTML && strings.HasPrefix(trimmed, "<!-- compiled-source") {
-			return fail("compiled-source marker must stand alone on its line; remove the text after \"-->\".")
+			return fail(diagnostic.DocMarker, "compiled-source marker must stand alone on its line; remove the text after \"-->\".")
 		}
 		if block.Kind == markdown.Comment && strings.HasPrefix(trimmed, "<!-- compiled-source") {
 			if directive.FindStringSubmatch(trimmed) == nil {
-				return fail("malformed compiled-source directive; use <!-- compiled-source: path#region -->.")
+				return fail(diagnostic.DocMarker, "malformed compiled-source directive; use <!-- compiled-source: path#region -->.")
 			}
 			if next := sibling(block.Next); block.Next < 0 || next.Kind != markdown.Fence {
-				return fail("compiled-source must immediately precede a fence in the same container; put a tagged fence directly after the marker.")
+				return fail(diagnostic.DocMarker, "compiled-source must immediately precede a fence in the same container; put a tagged fence directly after the marker.")
 			}
 		}
 		if block.Kind != markdown.Fence {
@@ -337,31 +338,33 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 			continue
 		}
 		if !block.Closed {
-			return fail("unclosed compiled-source fence; add a matching closing delimiter.")
+			return fail(diagnostic.DocMarker, "unclosed compiled-source fence; add a matching closing delimiter.")
 		}
 		if block.Info == "tsx" {
 			binding("TSX block has no compiled source host in the framework; use a compiled plain-TypeScript recipe or move UI teaching to its application.")
 		}
 		if read == nil {
-			return fail("compiled source cannot be read; provide an owned source reader.")
+			return fail(diagnostic.DocMarker, "compiled source cannot be read; provide an owned source reader.")
 		}
 		source, err := read(match[1])
 		if err != nil {
 			if message, owned := safeerror.OwnedMessage(err); owned && strings.HasPrefix(message, match[1]+":") {
 				return Document{}, err
+			} else if owned {
+				return fail(diagnostic.DocMarker, message)
 			}
-			return Document{}, safeerror.Prefix(fmt.Sprintf("%s:%d", name, previous.First), err)
+			return fail(diagnostic.DocMarker, "compiled source cannot be read; restore the source file")
 		}
 		selected := source.whole
 		if match[2] != "" {
 			var found bool
 			selected, found = source.regions[match[2]]
 			if !found {
-				return fail("missing source region " + match[2] + "; bind an existing region or add matching begin and end markers to the source.")
+				return fail(diagnostic.DocRegion, "missing source region "+match[2]+"; bind an existing region or add matching begin and end markers to the source.")
 			}
 		}
 		if source.language != block.Info {
-			return fail("compiled source language differs from the fence tag; use the source language tag.")
+			return fail(diagnostic.DocMarker, "compiled source language differs from the fence tag; use the source language tag.")
 		}
 		result.Inclusions = append(result.Inclusions, Inclusion{Document: name, Line: previous.First, Source: match[1], Region: match[2], First: selected.first, Last: selected.last})
 		// Body lines keep the document's own line ending and the opener's
@@ -375,7 +378,7 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 		for _, line := range strings.SplitAfter(selected.text, "\n") {
 			if line != "" {
 				if body.Len()+len(block.Prefix)+len(line)+len(newline) > limit {
-					return fail(fmt.Sprintf("rendered document exceeds maximum %d bytes; split the source excerpt.", limit))
+					return fail(diagnostic.DocLimit, fmt.Sprintf("rendered document exceeds maximum %d bytes; split the source excerpt.", limit))
 				}
 				line = strings.TrimSuffix(line, "\n")
 				if line == "" {
@@ -389,7 +392,7 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 		}
 		rendered := body.String()
 		if out.Len()+len(data)-cursor-(block.BodyEnd-block.BodyStart)+len(rendered) > limit {
-			return fail(fmt.Sprintf("rendered document exceeds maximum %d bytes; split the source excerpt.", limit))
+			return fail(diagnostic.DocLimit, fmt.Sprintf("rendered document exceeds maximum %d bytes; split the source excerpt.", limit))
 		}
 		// Reparse the replacement using the same parser: a source delimiter must not
 		// close the author's fence. Delimiters themselves are never rewritten.
@@ -404,12 +407,12 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 		candidate = append(candidate, closing...)
 		reread, err := markdown.Read(name, candidate)
 		if err != nil {
-			return fail("compiled source breaks the document shape limits (line length, quote or list nesting, line endings); correct the source excerpt.")
+			return fail(diagnostic.DocLimit, "compiled source breaks the document shape limits (line length, quote or list nesting, line endings); correct the source excerpt.")
 		}
 		replacement := reread.Blocks
 		valid := len(replacement) == 1 && replacement[0].Kind == markdown.Fence && replacement[0].Closed && replacement[0].BodyEnd == len(opener)+len(plain)
 		if !valid {
-			return fail("compiled source closes the fence; choose a longer fence delimiter.")
+			return fail(diagnostic.DocMarker, "compiled source closes the fence; choose a longer fence delimiter.")
 		}
 		if !bytes.Equal(data[block.BodyStart:block.BodyEnd], []byte(rendered)) {
 			result.StaleLines = append(result.StaleLines, previous.First)
@@ -422,11 +425,11 @@ func parseDocument(cache *markdown.Cache, name string, data []byte, read func(st
 	for _, inline := range parsed.Inlines {
 		if inline.Kind == markdown.HTML && markdown.HasCodeElement(inline.Text) && !reported[inline.First] {
 			reported[inline.First] = true
-			result.BindingErrors = append(result.BindingErrors, safeerror.New(fmt.Sprintf("%s:%d: inline <pre> or <code> HTML in prose is unsupported; use backticks for a code span or a fenced block with a language tag.", name, inline.First)))
+			result.BindingErrors = append(result.BindingErrors, diagnostic.DocBinding.At(name, inline.First, 0).Text("", "inline <pre> or <code> HTML in prose is unsupported; use backticks for a code span or a fenced block with a language tag").Err())
 		}
 	}
 	if pendingAnchor != "" {
-		return Document{}, safeerror.New(fmt.Sprintf("%s:%d: anchor %s must be followed by a # heading before the document ends; add the heading or remove the anchor.", name, anchorLine, pendingAnchor))
+		return Document{}, diagnostic.DocSectionAnchor.At(name, anchorLine, 0).Text("", fmt.Sprintf("anchor %s must be followed by a # heading before the document ends; add the heading or remove the anchor", pendingAnchor)).Err()
 	}
 	out.Write(data[cursor:])
 	result.Rendered = out.Bytes()

@@ -17,7 +17,7 @@ func TestMarkdownContainerBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = CheckBindings([]Document{doc}); err == nil || !strings.Contains(err.Error(), "guide.md:4: Go block has no compiled source") {
+	if err = CheckBindings([]Document{doc}); err == nil || !strings.Contains(err.Error(), "guide.md:4: [doc-binding] Go block has no compiled source") {
 		t.Fatalf("container swallowed executable fence: %v", err)
 	}
 	for _, input := range []string{
@@ -108,13 +108,13 @@ func TestBoundedInputs(t *testing.T) {
 			root := t.TempDir()
 			writeInput(t, root, test.name, strings.Repeat(" ", test.limit+1))
 			err := test.load(root)
-			if err == nil || !strings.Contains(err.Error(), "exceeds maximum") {
+			if err == nil || !strings.Contains(err.Error(), "[doc-limit]") {
 				t.Fatalf("unbounded input: %v", err)
 			}
 		})
 	}
 	err := CheckGoInputs(t.TempDir(), nil, strings.NewReader(strings.Repeat(" ", markdown.MaxManifestBytes+1)))
-	if err == nil || !strings.Contains(err.Error(), "exceeds maximum") {
+	if err == nil || !strings.Contains(err.Error(), "[doc-limit]") {
 		t.Fatalf("unbounded stream: %v", err)
 	}
 }
@@ -135,7 +135,7 @@ func TestCompilerInputReadFailureIsPrivate(t *testing.T) {
 	if message := Diagnostics(err); strings.Contains(message, "PRIVATE-MARKER") || strings.Contains(message, "injected") {
 		t.Fatalf("reader error leaked: %s", message)
 	}
-	if !strings.Contains(Diagnostics(err), "cannot read input") {
+	if !strings.Contains(Diagnostics(err), "input: cannot be read") {
 		t.Fatal(err)
 	}
 }

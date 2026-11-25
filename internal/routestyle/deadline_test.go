@@ -6,6 +6,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 )
 
 func TestDeadlineDoesNotWaitForAnalysis(t *testing.T) {
@@ -17,7 +19,7 @@ func TestDeadlineDoesNotWaitForAnalysis(t *testing.T) {
 		defer func() { close(release); <-finished }()
 		result := make(chan error, 1)
 		go func() {
-			_, err := waitForCheck(ctx, func() ([]Diagnostic, error) {
+			_, err := waitForCheck(ctx, func() ([]diagnostic.Diagnostic, error) {
 				close(started)
 				<-release // Models a parser/type checker that cannot observe cancellation.
 				close(finished)
