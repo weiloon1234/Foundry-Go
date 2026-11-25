@@ -6,12 +6,15 @@
   naming `orm-migration` to a current task guide. The migration page is removed.
 - `go tool foundry docs check` now reads each active document (`AGENTS.md` files
   and `.claude/skills` Markdown) with the shared Goldmark v1.8.7 CommonMark reader
-  (MIT licence). Compared with v0.52.0 an application sees exactly these changes:
+  (MIT licence). Compared with v0.52.0 an application sees these changes (the list was not
+  checked line by line for completeness):
   - A document is refused, with its line number, when it is over 512 KiB, has a
     line over 16 KiB, has a line opening with more than 16 quote or list markers, or
     uses CR-only line endings. A path component starting with `.env` or a symlink is
     refused unread, and reads are confined to the application directory and to
     regular files.
+  - An HTML comment with no closing `-->` is refused, with the line it opens on,
+    instead of hiding the rest of the document.
   - Retired names inside HTML comments are no longer reported; text after a comment
     on the same line is still checked.
   - Fences inside quotes and list items are real fences, so a TypeScript or
@@ -21,7 +24,8 @@
     items and quotes, and no longer from indented or raw HTML blocks.
   - Diagnostics have new wording (`name is retired; use replacement.`) and report
     recorded replacements; replacement metadata adds no retirement-name, arity or
-    chain rule.
+    chain rule. The retirement diagnostic's heading is now
+    `documentation retirement check failed` (it was `operation failed`).
 - Compiled-source bindings, the closed fence-tag list, the restrictions on indented
   code and HTML `pre`/`code` elements, and the bare-name rule for code spans apply
   to the framework's own guides, instructions and skills. An application's

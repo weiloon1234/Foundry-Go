@@ -74,6 +74,9 @@ func leadingMarkers(line []byte) int {
 		case c == '>':
 			count++
 			i++
+		case (c == '-' || c == '*') && thematicBreak(line[i:]):
+			// CommonMark reads this as one thematic break, never as nested items.
+			return count
 		case (c == '-' || c == '*' || c == '+') && (i+1 == len(line) || line[i+1] == ' ' || line[i+1] == '\t'):
 			count++
 			i++
@@ -93,6 +96,22 @@ func leadingMarkers(line []byte) int {
 		}
 	}
 	return count
+}
+
+// thematicBreak reports whether rest is three or more of its first byte
+// (a hyphen or an asterisk) separated only by spaces and tabs.
+func thematicBreak(rest []byte) bool {
+	count := 0
+	for _, c := range rest {
+		switch c {
+		case rest[0]:
+			count++
+		case ' ', '\t':
+		default:
+			return false
+		}
+	}
+	return count >= 3
 }
 
 // Cache holds the parse of each document read in one run, so the binding,
