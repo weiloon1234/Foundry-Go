@@ -3,11 +3,11 @@
 ## Unreleased
 
 - Every compiler-independent check prints one finding shape,
-  `path:line:col: [rule] subject: problem; fix. Read docs/guides/<guide>.md#<anchor>`,
+  `path:line:col: [rule] subject: problem; fix. Foundry guide: <guide>#<anchor>`,
   and in an application also `(skill: name)` for each skill that declares that
-  anchor in a `Foundry guides:` line. It covers `foundry routes check`,
+  token in a `Foundry guides:` line. It covers `foundry routes check`,
   `models check`, `lint --no-raw` (which now names the symbol and column),
-  `generate --check` (one line per stale file) and `generate` declaration errors,
+  `generate --check` (one line per stale file, then one `scope:` line) and `generate` declaration errors,
   `docs check` and the framework's `make docs-check`. `:0` is never printed. Rule IDs
   are stable and listed in the developer tooling guide; the framework's docs check
   fails when a rule names a missing guide anchor. Machine readers of the old

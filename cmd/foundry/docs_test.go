@@ -187,16 +187,16 @@ func TestDocsRejectsWrongSelectedGuideAndToolBeforeScanning(t *testing.T) {
 	app, framework, goBinary, build := documentationFixture(t, "match")
 	putDocumentation(t, app, "docs/guides/orm.md", "<a id=\"only-in-app\"></a>\n")
 	putDocumentation(t, app, "AGENTS.md", "Foundry guides: `orm#only-in-app`\n")
-	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "not declared in the target guide") {
+	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), `[anchor-missing] anchor "only-in-app" of guide orm: not declared`) {
 		t.Fatal(err)
 	}
 	putDocumentation(t, framework, "docs/guides/orm.md", "# Old pin without anchors\n")
 	putDocumentation(t, app, "AGENTS.md", "Foundry guides: `orm#agent-entry`\n")
-	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "not declared in the target guide") {
+	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), `[anchor-missing] anchor "agent-entry" of guide orm: not declared`) {
 		t.Fatal(err)
 	}
 	build.Version = "v0.12.0"
-	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "v0.12.0") || strings.Contains(err.Error(), "not declared in the target guide") {
+	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "v0.12.0") || strings.Contains(err.Error(), "anchor-missing") {
 		t.Fatal(err)
 	}
 }

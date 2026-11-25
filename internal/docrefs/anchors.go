@@ -34,7 +34,7 @@ func IndexAnchors(cache *markdown.Cache, name string, data []byte) (Anchors, err
 		match := anchorLine.FindStringSubmatch(text)
 		if match == nil || !identifier.MatchString(match[1]) {
 			failures = append(failures, diagnostic.AnchorInvalid.At(name, line, 0).
-				Say("explicit anchor", "malformed").
+				Say(fmt.Sprintf("explicit anchor %q", clip(text)), "malformed").
 				To(`write <a id="lowercase-id"></a> alone on a line`).Err())
 			return
 		}
@@ -52,7 +52,8 @@ func IndexAnchors(cache *markdown.Cache, name string, data []byte) (Anchors, err
 
 // CheckFragment validates a raw fragment without its leading #. Framework
 // checkdocs can use this for guide navigation links as well as app references.
-func (a Anchors) CheckFragment(file string, line int, fragment string) error {
+// page names the page the fragment points into, as the message should read it.
+func (a Anchors) CheckFragment(file string, line int, page, fragment string) error {
 	if !identifier.MatchString(fragment) {
 		return diagnostic.AnchorInvalid.At(file, line, 0).
 			Say(fmt.Sprintf("fragment %q", fragment), "not an anchor id").
@@ -60,10 +61,19 @@ func (a Anchors) CheckFragment(file string, line int, fragment string) error {
 	}
 	if _, exists := a.lines[fragment]; !exists {
 		return diagnostic.AnchorMissing.At(file, line, 0).
-			Say(fmt.Sprintf("anchor %q", fragment), "not declared in the target guide").
-			To("link to an existing explicit anchor or add it to the guide").Err()
+			Say(fmt.Sprintf("anchor %q of %s", fragment, page), "not declared").
+			To("link to an existing explicit anchor or add it there").Err()
 	}
 	return nil
+}
+
+// clip bounds quoted source text in a message.
+func clip(text string) string {
+	const limit = 64
+	if len(text) <= limit {
+		return text
+	}
+	return strings.ToValidUTF8(text[:limit], "") + "..."
 }
 
 // Pages indexes each target at most once per run, including failed reads.
@@ -161,9 +171,9 @@ func (p *Pages) CheckReferences(guidesDir string, refs []Reference) error {
 		if err != nil {
 			failures = append(failures, diagnostic.GuideMissing.At(ref.File, ref.Line, 0).
 				Say("guide "+ref.Guide, "missing or not a regular file in the selected framework").
-				To("reference a guide file that exists in the pinned framework version").Err())
+				To("check the name against the guides of the pinned framework, or remove the reference").Err())
 		} else if ref.Anchor != "" {
-			failures = append(failures, anchors.CheckFragment(ref.File, ref.Line, ref.Anchor))
+			failures = append(failures, anchors.CheckFragment(ref.File, ref.Line, "guide "+ref.Guide, ref.Anchor))
 		}
 	}
 	return safeerror.Join("documentation references failed", failures...)

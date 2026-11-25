@@ -108,6 +108,9 @@ func TestCheckListsStaleFilesAndReasons(t *testing.T) {
 	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "user_foundry.gen.go: [generated-stale] generated output is stale (missing); run foundry generate") || !strings.Contains(err.Error(), manifestName+": [generated-stale] generated output is stale (ownership manifest differs)") {
 		t.Fatalf("fresh check lacked missing files: %v", err)
 	}
+	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); strings.Count(err.Error(), "[generated-stale]") < 2 || strings.Count(err.Error(), "same --dir and --recursive") != 1 || !strings.HasPrefix(err.Error()[strings.LastIndex(err.Error(), "\n")+1:], "scope: ") {
+		t.Fatalf("the package scope was not printed once after the findings: %v", err)
+	}
 	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}

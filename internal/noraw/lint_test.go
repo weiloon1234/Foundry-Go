@@ -50,7 +50,7 @@ func TestResolvedRawSymbols(t *testing.T) {
 		if want == "" || !strings.HasPrefix(d.Subject, want) {
 			t.Fatal(d)
 		}
-		if !strings.HasPrefix(d.String(), fmt.Sprintf("%s:%d:%d: [raw-sql] %s: raw SQL call; ", d.Path, d.Line, d.Column, d.Subject)) || !strings.HasSuffix(d.String(), "Read docs/guides/database-runtime.md#no-raw-policy") || d.Column < 1 {
+		if !strings.HasPrefix(d.String(), fmt.Sprintf("%s:%d:%d: [raw-sql] %s: raw SQL call; ", d.Path, d.Line, d.Column, d.Subject)) || !strings.HasSuffix(d.String(), "Foundry guide: database-runtime#no-raw-policy") || d.Column < 1 {
 			t.Fatalf("diagnostic must name its location, rule, symbol and teaching only: %q", d.String())
 		}
 		if strings.Contains(d.String(), "private_") {

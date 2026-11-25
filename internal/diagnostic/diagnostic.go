@@ -1,7 +1,7 @@
 // Package diagnostic is the one finding shape of every compiler-independent check
 // the foundry command and the framework's documentation gate print:
 //
-//	path:line:col: [rule] subject: problem; fix. Read docs/guides/<guide>.md#<anchor>
+//	path:line:col: [rule] subject: problem; fix. Foundry guide: <guide>#<anchor>
 //
 // A rule owns the guide and explicit anchor that teach its fix. Line and column
 // are omitted when a check has none; a zero is never printed.
@@ -17,14 +17,14 @@ import (
 // Diagnostic is one located finding. Skills names the application skills that
 // declare the rule's guide anchor; it is empty outside an application.
 type Diagnostic struct {
-	Rule    Rule     `json:"rule"`
-	Path    string   `json:"path"`
-	Line    int      `json:"line,omitempty"`
-	Column  int      `json:"column,omitempty"`
-	Subject string   `json:"subject,omitempty"`
-	Problem string   `json:"problem"`
-	Fix     string   `json:"fix,omitempty"`
-	Skills  []string `json:"skills,omitempty"`
+	Rule    Rule
+	Path    string
+	Line    int
+	Column  int
+	Subject string
+	Problem string
+	Fix     string
+	Skills  []string
 }
 
 // At starts a finding of rule at path. Line and column are one-based; zero omits them.
@@ -80,8 +80,8 @@ func (d Diagnostic) String() string {
 		text.WriteString("; ")
 		text.WriteString(strings.TrimSuffix(d.Fix, "."))
 	}
-	text.WriteString(". Read ")
-	text.WriteString(d.Rule.Teaching())
+	text.WriteString(". Foundry guide: ")
+	text.WriteString(d.Rule.Reference())
 	if len(d.Skills) > 0 {
 		text.WriteString(" (skill: ")
 		text.WriteString(strings.Join(d.Skills, ", "))

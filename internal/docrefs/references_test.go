@@ -81,12 +81,12 @@ func TestExplicitAnchorIndexAndNavigation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, fragment := range []string{"agent-entry", "recipe-2"} {
-		if err := index.CheckFragment("orm.md", 10, fragment); err != nil {
+		if err := index.CheckFragment("orm.md", 10, "page", fragment); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, fragment := range []string{"a-heading-is-not-an-id", "missing", "#agent-entry", "Agent-Entry", "%61gent-entry", ""} {
-		if err := index.CheckFragment("orm.md", 10, fragment); err == nil || !strings.Contains(err.Error(), "orm.md:10:") {
+		if err := index.CheckFragment("orm.md", 10, "page", fragment); err == nil || !strings.Contains(err.Error(), "orm.md:10:") {
 			t.Fatalf("fragment %q: %v", fragment, err)
 		}
 	}
@@ -113,7 +113,7 @@ func TestSelectedGuideResolution(t *testing.T) {
 	put("duplicate.md", "<a id=\"entry\"></a>\n<a id=\"entry\"></a>\n")
 	for _, tc := range []struct{ guide, anchor, want string }{
 		{"orm", "", ""}, {"orm", "entry", ""}, {"missing", "", "missing"},
-		{"orm", "heading", "[anchor-missing] anchor \"heading\""}, {"duplicate", "", "[guide-missing] guide duplicate"}, {"../orm", "", "[guide-name]"},
+		{"orm", "heading", "[anchor-missing] anchor \"heading\" of guide orm: not declared"}, {"duplicate", "", "[guide-missing] guide duplicate"}, {"../orm", "", "[guide-name]"},
 	} {
 		err := CheckReferences(dir, []Reference{{"AGENTS.md", 7, tc.guide, tc.anchor}})
 		if tc.want == "" {
@@ -157,10 +157,10 @@ func TestParserContainersAndComments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := anchors.CheckFragment("AGENTS.md", 12, "visible"); err != nil {
+	if err := anchors.CheckFragment("AGENTS.md", 12, "page", "visible"); err != nil {
 		t.Fatal(err)
 	}
-	if err := anchors.CheckFragment("AGENTS.md", 12, "hidden"); err == nil {
+	if err := anchors.CheckFragment("AGENTS.md", 12, "page", "hidden"); err == nil {
 		t.Fatal("comment became anchor")
 	}
 }
@@ -183,17 +183,17 @@ func TestAnchorTargetIsIndexedOncePerRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := again.CheckFragment("source.md", 1, "recipe-first"); err != nil {
+	if err := again.CheckFragment("source.md", 1, "page", "recipe-first"); err != nil {
 		t.Fatal(err)
 	}
-	if err := first.CheckFragment("source.md", 1, "recipe-second"); err == nil {
+	if err := first.CheckFragment("source.md", 1, "page", "recipe-second"); err == nil {
 		t.Fatal("cached target reread")
 	}
 	fresh, err := NewPages(root, nil).Load(target)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := fresh.CheckFragment("source.md", 1, "recipe-second"); err != nil {
+	if err := fresh.CheckFragment("source.md", 1, "page", "recipe-second"); err != nil {
 		t.Fatal(err)
 	}
 }

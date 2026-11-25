@@ -111,7 +111,7 @@ func TestNestedDeclarationsAndAllowedTerminals(t *testing.T) {
 				t.Fatalf("findings=%v, want %d", got, test.count)
 			}
 			for _, d := range got {
-				if d.Line < 1 || d.Column < 1 || !strings.Contains(d.String(), "named local") || !strings.Contains(d.String(), "[route-nesting] ") || !strings.HasSuffix(d.String(), ". Read docs/guides/flat-routes.md#staged-routes") {
+				if d.Line < 1 || d.Column < 1 || !strings.Contains(d.String(), "assign it to a local, then pass the local") || !strings.Contains(d.String(), "[route-nesting] ") || !strings.HasSuffix(d.String(), ". Foundry guide: flat-routes#staged-routes") {
 					t.Fatal(d)
 				}
 			}
@@ -237,7 +237,7 @@ func use(){`
 				t.Fatalf("findings=%v, want %d", got, test.count)
 			}
 			for _, d := range got {
-				if d.Rule.ID != "route-nesting" || !strings.Contains(d.String(), test.call+"(...)") || !strings.Contains(d.String(), "assign it to a named local") {
+				if d.Rule.ID != "route-nesting" || !strings.Contains(d.String(), test.call+"(...)") || !strings.Contains(d.String(), "assign it to a local, then pass the local") {
 					t.Fatal(d)
 				}
 			}

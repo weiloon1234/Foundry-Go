@@ -49,8 +49,8 @@ func (a *Analysis) CheckFile(file *ast.File) []diagnostic.Diagnostic {
 					if !a.Info.Types[inner.Fun].IsType() && a.IsStage(a.Info.TypeOf(inner)) {
 						position := a.Files.Position(inner.Pos())
 						result = append(result, diagnostic.RouteNesting.At(position.Filename, position.Line, position.Column).
-							Say(a.expression(inner.Fun)+"(...)", "route stage built inside another call").
-							To("assign it to a named local first, then pass the local as the route stage"))
+							Say(a.expression(inner.Fun)+"(...)", "route stage inside another call").
+							To("assign it to a local, then pass the local"))
 					}
 					// Each call's arguments are checked by the outer walk. Its receiver
 					// is not an argument: stage.Handle(...) and stage.URL(...) stay inline.

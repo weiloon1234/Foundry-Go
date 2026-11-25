@@ -15,21 +15,21 @@ func TestFindingsNameTheSkillsThatTeachThem(t *testing.T) {
 	putDocumentation(t, app, ".claude/skills/review/SKILL.md", "Foundry guides: `flat-routes#staged-routes`, `model-declarations`\n")
 	putDocumentation(t, app, ".claude/skills/review/references/api.md", "Foundry guides: `flat-routes#generated-helpers`\n")
 	findings := []diagnostic.Diagnostic{
-		diagnostic.RouteNesting.At("routes.go", 42, 9).Say("http.Scope(...)", "route stage built inside another call").To("assign it to a named local first"),
+		diagnostic.RouteNesting.At("routes.go", 42, 9).Say("http.Scope(...)", "route stage inside another call").To("assign it to a local, then pass the local"),
 		diagnostic.RouteHelper.At("routes.go", 50, 3).Say("http.JSONBody", "wraps a generated declaration").To("call the helper"),
 	}
 	var out bytes.Buffer
 	if err := printFindings(&out, app, findings); err != nil {
 		t.Fatal(err)
 	}
-	want := "routes.go:42:9: [route-nesting] http.Scope(...): route stage built inside another call; assign it to a named local first. Read docs/guides/flat-routes.md#staged-routes (skill: endpoint, review)\n" +
-		"routes.go:50:3: [route-helper] http.JSONBody: wraps a generated declaration; call the helper. Read docs/guides/flat-routes.md#generated-helpers\n"
+	want := "routes.go:42:9: [route-nesting] http.Scope(...): route stage inside another call; assign it to a local, then pass the local. Foundry guide: flat-routes#staged-routes (skill: endpoint, review)\n" +
+		"routes.go:50:3: [route-helper] http.JSONBody: wraps a generated declaration; call the helper. Foundry guide: flat-routes#generated-helpers\n"
 	if out.String() != want {
 		t.Fatalf("output:\n%s\nwant:\n%s", out.String(), want)
 	}
 
 	out.Reset()
-	if err := printFindings(&out, t.TempDir(), findings[:1]); err != nil || strings.Contains(out.String(), "(skill:") || !strings.Contains(out.String(), "Read docs/guides/flat-routes.md#staged-routes") {
+	if err := printFindings(&out, t.TempDir(), findings[:1]); err != nil || strings.Contains(out.String(), "(skill:") || !strings.Contains(out.String(), "Foundry guide: flat-routes#staged-routes") {
 		t.Fatalf("a directory without an application module named skills: %q %v", out.String(), err)
 	}
 	out.Reset()
@@ -49,8 +49,8 @@ func TestDocsCheckNamesSkillsAndGuides(t *testing.T) {
 	}
 	lines := strings.Split(err.Error(), "\n")
 	if len(lines) != 2 ||
-		!strings.HasPrefix(lines[0], "AGENTS.md:1: [guides-declaration] ") || !strings.HasSuffix(lines[0], "Read docs/guides/developer-tooling-and-testing.md#recipe-reference-guides (skill: workflow)") ||
-		!strings.HasPrefix(lines[1], "AGENTS.md:2: [retired-api] http.Endpoint.WithScopes is retired; ") || !strings.HasSuffix(lines[1], "Read docs/guides/developer-tooling-and-testing.md#pinned-documentation-checks") {
+		!strings.HasPrefix(lines[0], "AGENTS.md:1: [guides-declaration] ") || !strings.HasSuffix(lines[0], "Foundry guide: developer-tooling-and-testing#recipe-reference-guides (skill: workflow)") ||
+		!strings.HasPrefix(lines[1], "AGENTS.md:2: [retired-api] http.Endpoint.WithScopes is retired; ") || !strings.HasSuffix(lines[1], "Foundry guide: developer-tooling-and-testing#pinned-documentation-checks") {
 		t.Fatalf("findings:\n%s", err)
 	}
 }

@@ -292,7 +292,7 @@ func checkDocument(cache *markdown.Cache, root, path string, data []byte, curren
 			continue
 		}
 		if explicit {
-			if err := checkExplicitFragment(targets, path, lineNumber, local, link.Fragment); err != nil {
+			if err := checkExplicitFragment(targets, path, lineNumber, local, filepath.ToSlash(relative), link.Fragment); err != nil {
 				failures = append(failures, err)
 			}
 		}

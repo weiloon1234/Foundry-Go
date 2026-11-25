@@ -21,19 +21,19 @@ func TestFindingShape(t *testing.T) {
 		want string
 	}{
 		{"full", rule.At("a/b.go", 4, 7).Say("http.Scope", "stage nested").To("assign a local"),
-			"a/b.go:4:7: [sample-rule] http.Scope: stage nested; assign a local. Read docs/guides/sample-guide.md#sample-anchor"},
+			"a/b.go:4:7: [sample-rule] http.Scope: stage nested; assign a local. Foundry guide: sample-guide#sample-anchor"},
 		{"no column", rule.At("a.md", 9, 0).Say("link", "broken").To("fix it"),
-			"a.md:9: [sample-rule] link: broken; fix it. Read docs/guides/sample-guide.md#sample-anchor"},
+			"a.md:9: [sample-rule] link: broken; fix it. Foundry guide: sample-guide#sample-anchor"},
 		{"no line or column", rule.At("a.md", 0, 5).Say("file", "unreadable").To("restore it"),
-			"a.md: [sample-rule] file: unreadable; restore it. Read docs/guides/sample-guide.md#sample-anchor"},
+			"a.md: [sample-rule] file: unreadable; restore it. Foundry guide: sample-guide#sample-anchor"},
 		{"no subject", rule.At("a.md", 2, 0).Text("", "orm.X is retired; use orm.Y."),
-			"a.md:2: [sample-rule] orm.X is retired; use orm.Y. Read docs/guides/sample-guide.md#sample-anchor"},
+			"a.md:2: [sample-rule] orm.X is retired; use orm.Y. Foundry guide: sample-guide#sample-anchor"},
 		{"no fix", rule.At("a.md", 2, 0).Say("x", "bad."),
-			"a.md:2: [sample-rule] x: bad. Read docs/guides/sample-guide.md#sample-anchor"},
+			"a.md:2: [sample-rule] x: bad. Foundry guide: sample-guide#sample-anchor"},
 		{"skills", rule.At("a.md", 2, 0).Say("x", "bad").To("fix").WithSkills(Skills{"sample-guide#sample-anchor": {"a", "b"}}),
-			"a.md:2: [sample-rule] x: bad; fix. Read docs/guides/sample-guide.md#sample-anchor (skill: a, b)"},
+			"a.md:2: [sample-rule] x: bad; fix. Foundry guide: sample-guide#sample-anchor (skill: a, b)"},
 		{"unnamed skills", rule.At("a.md", 2, 0).Say("x", "bad").To("fix").WithSkills(Skills{"other#anchor": {"a"}}),
-			"a.md:2: [sample-rule] x: bad; fix. Read docs/guides/sample-guide.md#sample-anchor"},
+			"a.md:2: [sample-rule] x: bad; fix. Foundry guide: sample-guide#sample-anchor"},
 	} {
 		if got := test.d.String(); got != test.want || test.d.Error() != test.want {
 			t.Errorf("%s: got %q, want %q", test.name, got, test.want)

@@ -5,16 +5,13 @@ import "sort"
 // Rule is one check's finding kind. Its ID is stable machine-read output; Guide and
 // Anchor name the framework guide page and explicit anchor that teach the fix.
 type Rule struct {
-	ID     string `json:"id"`
-	Guide  string `json:"guide"`
-	Anchor string `json:"anchor"`
+	ID     string
+	Guide  string
+	Anchor string
 }
 
-// Teaching is the guide path inside the selected framework, with the anchor.
-func (r Rule) Teaching() string { return "docs/guides/" + r.Guide + ".md#" + r.Anchor }
-
-// Reference is the `guide#anchor` token an application skill declares in a
-// `Foundry guides:` line.
+// Reference is the `guide#anchor` token the message prints and an application skill
+// declares in a `Foundry guides:` line.
 func (r Rule) Reference() string { return r.Guide + "#" + r.Anchor }
 
 // Skills maps each `guide#anchor` reference to the application skills declaring it.
@@ -40,6 +37,7 @@ const (
 	tooling = "developer-tooling-and-testing"
 	authors = "recipe-author-examples"
 	pinned  = "pinned-documentation-checks"
+	limits  = "document-limits"
 	guides  = "recipe-reference-guides"
 )
 
@@ -63,9 +61,9 @@ var (
 	RetiredCommand    = Rule{"retired-command", tooling, pinned}
 	RetiredAPI        = Rule{"retired-api", tooling, pinned}
 	AmbiguousAPI      = Rule{"ambiguous-api", tooling, pinned}
-	DocLimit          = Rule{"doc-limit", tooling, pinned}
+	DocLimit          = Rule{"doc-limit", tooling, limits}
 	DocFile           = Rule{"doc-file", tooling, pinned}
-	DocComment        = Rule{"doc-comment", tooling, authors}
+	DocComment        = Rule{"doc-comment", tooling, limits}
 
 	DocRendered       = Rule{"doc-rendered", tooling, authors}
 	DocMarker         = Rule{"doc-marker", tooling, authors}

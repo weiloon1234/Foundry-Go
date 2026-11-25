@@ -571,15 +571,18 @@ owners retain control of which read and export alternatives to declare.
 
 Consumers that read the output of `foundry routes check`, `models check`,
 `lint --no-raw`, `generate --check`, `generate` or `docs check` see one finding
-shape: `path:line:col: [rule] subject: problem; fix. Read docs/guides/<guide>.md#<anchor>`,
-with `(skill: name)` appended in an application whose skill declares that anchor.
+shape: `path:line:col: [rule] subject: problem; fix. Foundry guide: <guide>#<anchor>`,
+where `<guide>#<anchor>` is the token a `Foundry guides:` line declares, with
+`(skill: name)` appended in an application whose skill declares that token.
 Each finding is its own line. `:col` (and `:line`) are omitted rather than printed
 as zero, so parsers must not expect `:0`; `docs check` no longer prints `file:0:`
 locations. Previously `routes check` printed `position: code: message`, `models check`
 `position: target: message`, `lint --no-raw` only `file:line`, and `generate --check`
 one heading line followed by indented `file: reason` lines. The exit codes, the
 closing error line and the checks' findings are unchanged; the message wording
-changed to state the public name and the fix. Rule IDs are stable and listed in
+changed to state the public name and the fix. `generate --check` prints the package scope once, as a closing `scope:` line, not on
+each finding. `foundry contracts` and `foundry deploy` still print their own shapes and
+are outside this change. Rule IDs are stable and listed in
 [Read a check finding](guides/developer-tooling-and-testing.md#diagnostic-rules).
 
 ## Pinned documentation

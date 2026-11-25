@@ -104,7 +104,7 @@ var Users = orm.Define("users", func(b orm.Builder[User], u *User) UserTable { r
 	if d.Line != 5 {
 		t.Errorf("expected position line 5, got %d", d.Line)
 	}
-	if text := d.String(); d.Column < 1 || !strings.Contains(text, "[model-table] model User: table is declared by hand; put the //foundry:model directive") || !strings.HasSuffix(text, ". Read docs/guides/model-declarations.md#recipe-declare-table") {
+	if text := d.String(); d.Column < 1 || !strings.Contains(text, "[model-table] model User: table is declared by hand; put the //foundry:model directive") || !strings.HasSuffix(text, ". Foundry guide: model-declarations#recipe-declare-table") {
 		t.Errorf("finding lost its rule, fix or teaching: %q", text)
 	}
 }

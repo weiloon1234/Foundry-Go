@@ -2,6 +2,7 @@
 package docrefs
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -37,22 +38,23 @@ func Parse(cache *markdown.Cache, name string, data []byte) ([]Reference, error)
 		}
 		var parsed []Reference
 		valid := true
+		bad := ""
 		for _, part := range strings.Split(strings.TrimPrefix(text, prefix), ",") {
 			part = strings.TrimSpace(part)
 			if len(part) < 3 || part[0] != '`' || part[len(part)-1] != '`' {
-				valid = false
+				valid, bad = false, part
 				break
 			}
 			guide, anchor, fragment := strings.Cut(part[1:len(part)-1], "#")
 			if !identifier.MatchString(guide) || fragment && !identifier.MatchString(anchor) {
-				valid = false
+				valid, bad = false, part
 				break
 			}
 			parsed = append(parsed, Reference{File: name, Line: line, Guide: guide, Anchor: anchor})
 		}
 		if !valid {
 			failures = append(failures, diagnostic.GuidesDeclaration.At(name, line, 0).
-				Say("Foundry guides line", "malformed declaration").
+				Say(fmt.Sprintf("Foundry guides token %s", clip(bad)), "malformed").
 				To("write comma-separated `guide` or `guide#anchor` tokens of lowercase letters, digits and internal hyphens").Err())
 			return
 		}

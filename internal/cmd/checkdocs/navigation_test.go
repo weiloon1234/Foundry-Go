@@ -20,7 +20,7 @@ func TestExplicitGuideFragments(t *testing.T) {
 		{"heading is not an anchor", "[Tasks](other.md#agent-entry)\n", "## Agent entry\n", `[anchor-missing] anchor "agent-entry"`},
 		{"fenced anchor", "[Read](other.md#recipe-read)\n", "````markdown\n```\n<a id=\"recipe-read\"></a>\n````\n", `[anchor-missing] anchor "recipe-read"`},
 		{"duplicate anchor", "", "<a id=\"recipe-read\"></a>\n## Read\n<a id=\"recipe-read\"></a>\n## Read again\n", "[anchor-duplicate]"},
-		{"malformed anchor", "", "<a id='recipe-read'></a>\n## Read\n", "[anchor-invalid]"},
+		{"malformed anchor", "", "<a id='recipe-read'></a>\n## Read\n", "[anchor-invalid] explicit anchor \"<a id='recipe-read'></a>\": malformed"},
 		{"other fragments unchanged", "[Any](other.md#arbitrary-slug)\n[Local](#other)\n", "# Other\n", ""},
 		{"external fragments unchanged", "[Remote](https://example.test/guide#recipe-read)\n", "", ""},
 		{"code is not a link", "`[Read](#recipe-missing)`\n~~~markdown\n[Read](#recipe-missing)\n~~~\n", "", ""},
@@ -113,9 +113,9 @@ func TestReferenceStyleNavigation(t *testing.T) {
 func TestFrameworkGuideDeclarations(t *testing.T) {
 	for _, name := range []string{"AGENTS.md", "docs/guides/example.md", ".claude/skills/workflow/references/api.md"} {
 		for _, test := range []struct{ text, want string }{
-			{"Foundry guides: `missing#anchor`\n", "[guide-missing] guide missing"},
-			{"Foundry guides: `other#missing`\n", `[anchor-missing] anchor "missing"`},
-			{"Foundry guides: `other` trailing\n", "[guides-declaration] Foundry guides line"},
+			{"Foundry guides: `missing#anchor`\n", "[guide-missing] guide missing: missing or not a regular file in the selected framework; check the name against the guides of the pinned framework, or remove the reference"},
+			{"Foundry guides: `other#missing`\n", `[anchor-missing] anchor "missing" of guide other: not declared`},
+			{"Foundry guides: `other` trailing\n", "[guides-declaration] Foundry guides token `other` trailing: malformed"},
 			{"Foundry guides: `other#recipe-read`\n", ""},
 			{"```markdown\nFoundry guides: `missing` trailing\n```\n", ""},
 		} {

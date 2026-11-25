@@ -357,13 +357,13 @@ func TestDiagnosticShape(t *testing.T) {
 		diagnostic.DocBinding.At("guide.md", 7, 0).Text("", "Go block has no compiled source; bind it").Err(),
 		diagnostic.DocFile.At("AGENTS.md", 0, 0).Say("input", "cannot be read").To("restore read access").Err(),
 	}}})
-	want := "guide.md:7: [doc-binding] Go block has no compiled source; bind it. Read docs/guides/developer-tooling-and-testing.md#recipe-author-examples\n" +
-		"AGENTS.md: [doc-file] input: cannot be read; restore read access. Read docs/guides/developer-tooling-and-testing.md#pinned-documentation-checks"
+	want := "guide.md:7: [doc-binding] Go block has no compiled source; bind it. Foundry guide: developer-tooling-and-testing#recipe-author-examples\n" +
+		"AGENTS.md: [doc-file] input: cannot be read; restore read access. Foundry guide: developer-tooling-and-testing#pinned-documentation-checks"
 	if got := Diagnostics(err); got != want {
 		t.Fatalf("got %q", got)
 	}
 	got := Diagnostics(errors.New("open guide.md: permission denied"))
-	if want := "guide.md: [doc-file] input: permission denied; restore the file and its required access permissions. Read docs/guides/developer-tooling-and-testing.md#pinned-documentation-checks"; got != want {
+	if want := "guide.md: [doc-file] input: permission denied; restore the file and its required access permissions. Foundry guide: developer-tooling-and-testing#pinned-documentation-checks"; got != want {
 		t.Fatalf("bare filesystem failure = %q", got)
 	}
 }

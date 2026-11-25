@@ -315,7 +315,9 @@ or an existing custom identity contract must remain. `identity=true` is redundan
 The fingerprint covers ordered field names and exact `foundry` tag presence and
 values, including ignored fields. The ORM recomputes it once at declaration time;
 there is no query-path hashing. `generate --check` covers generated output and
-ownership in addition to these two guards. Run it in the gate alongside
+ownership in addition to these two guards. It prints one `[generated-stale]` line per
+stale file and a closing `scope:` line: run `foundry generate` with the same `--dir`
+and `--recursive` that the check used. Run it in the gate alongside
 `foundry models check`; the latter checks declaration spelling, not freshness.
 
 <a id="diagnose-declarations"></a>
