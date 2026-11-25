@@ -6,12 +6,14 @@ Generated DTO contracts preserve the actual Go map key. Ordinary string and
 integer keys, Foundry enums, model IDs and supported formatted values are
 discovered from the field declaration:
 
+<!-- compiled-source: tests/fixtures/consumer/httpdto/map_keys.go#inventory-map-keys -->
 ```go
 //foundry:dto
 type InventoryResponse struct {
-    ByNumber map[int16]string
-    ByStatus map[models.Status]int
-    ByUser   map[model.ID[models.User]]string
+	ByWarehouse map[WarehouseKey]string
+	ByUser      map[model.ID[models.User]]string
+	ByStatus    map[models.Status]int
+	ByNumber    map[int16]string
 }
 ```
 
@@ -27,12 +29,33 @@ Custom native text keys declare a value method returning
 [WarehouseKey example](../../tests/fixtures/consumer/httpdto/map_keys.go) keeps its
 stored representation private and describes its string representation once:
 
+<!-- compiled-source: tests/fixtures/consumer/httpdto/map_keys.go#warehouse-json-key -->
 ```go
+// WarehouseKey has a private representation and a canonical native text key.
+type WarehouseKey struct{ number uint16 }
+
+func NewWarehouseKey(number uint16) WarehouseKey { return WarehouseKey{number: number} }
+func (k WarehouseKey) MarshalText() ([]byte, error) {
+	return []byte("warehouse_" + strconv.FormatUint(uint64(k.number), 10)), nil
+}
+func (k *WarehouseKey) UnmarshalText(data []byte) error {
+	text, ok := strings.CutPrefix(string(data), "warehouse_")
+	if !ok {
+		return fmt.Errorf("invalid warehouse key")
+	}
+	n, err := strconv.ParseUint(text, 10, 16)
+	if err != nil {
+		return err
+	}
+	*k = NewWarehouseKey(uint16(n))
+	return nil
+}
+
+// JSONKeyContract describes the native key without exposing its stored fields.
 func (WarehouseKey) JSONKeyContract() contract.JSONKey[WarehouseKey] {
-    return contract.DefineJSONKey(contract.DefineScalar[WarehouseKey](contract.Type{
-        ID: "foundry.test/consumer/httpdto.WarehouseKey",
-        Kind: contract.StringKind,
-    }))
+	return contract.DefineJSONKey(contract.DefineScalar[WarehouseKey](contract.Type{
+		ID: "foundry.test/consumer/httpdto.WarehouseKey", Kind: contract.StringKind,
+	}))
 }
 ```
 

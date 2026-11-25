@@ -7,20 +7,19 @@ selects the concrete inner field; `MergeQueries` combines descriptors of the
 same outer type. Neither introduces a wire-name prefix nor rewrites codecs.
 Overlapping wire names reject declaration rather than choosing a winner.
 
+<!-- compiled-source: tests/fixtures/consumer/httpquery/composition.go#composed-search-window -->
 ```go
 type SearchWindow struct {
-    Filters SearchInput
-    Size    int
+	Filters SearchInput
+	Size    int
 }
 
-var SearchWindowParameters = foundryhttp.MergeQueries(
-    foundryhttp.EmbedQuery(SearchInputDescriptor(),
-        func(input *SearchWindow) *SearchInput { return &input.Filters }),
-    foundryhttp.DefineQuery(foundryhttp.DefaultQueryParam(
-        "size", foundryhttp.IntegerQuery[int](), 20,
-        func(input *SearchWindow) *int { return &input.Size },
-    )),
-)
+func composeSearchWindow(filters foundryhttp.Query[SearchInput]) foundryhttp.Query[SearchWindow] {
+	return foundryhttp.MergeQueries(
+		foundryhttp.EmbedQuery(filters, func(input *SearchWindow) *SearchInput { return &input.Filters }),
+		foundryhttp.DefineQuery(foundryhttp.DefaultQueryParam("size", foundryhttp.IntegerQuery[int](), 20, func(input *SearchWindow) *int { return &input.Size })),
+	)
+}
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/httpquery/composition.go)

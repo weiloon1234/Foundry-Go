@@ -6,12 +6,14 @@ the complete declarations, handlers and shared rules below.
 
 ## Declare one concrete form
 
+<!-- compiled-source: tests/fixtures/consumer/requestflow/forms.go#submission-form -->
 ```go
 //foundry:form
 type Submission struct {
-    Name string `form:"name"`
-    Title value.Optional[string] `form:"title"`
-    Tags []string `form:"tags[]"`
+	Name    string                 `form:"name"`
+	Title   value.Optional[string] `form:"title"`
+	Blocked value.Optional[string] `form:"blocked"`
+	Tags    []string               `form:"tags[]"`
 }
 ```
 
@@ -45,23 +47,64 @@ non-form limit literals; a form endpoint requires positive form limits.
 
 ## Normalize, authorize, validate
 
-```go
-type Request = http.Input[http.NoPath, Search, Submission]
+`Prepare` supplies the default title. The endpoint rejects a supplied `Blocked` field.
 
-func prepare(ctx context.Context, input Request) (Search, Submission, error) {
-    body := input.Body
-    body.Name = strings.TrimSpace(body.Name)
-    if !body.Title.IsSet() {
-        body.Title = value.Set("Member")
-    }
-    return input.Query, body, nil
+<!-- compiled-source: tests/fixtures/consumer/requestflow/forms.go#submission-contracts -->
+```go
+//foundry:dto http=response
+type Reply struct {
+	Name  string   `json:"name"`
+	Title string   `json:"title"`
+	Query string   `json:"query"`
+	Tags  []string `json:"tags,omitzero"`
 }
 
-endpoint = http.PrepareEndpoint(endpoint, prepare)
-endpoint = http.ValidateBody(endpoint, validation.Rules(fields.Name, nameRules))
-endpoint = http.AuthorizeEndpoint(endpoint, func(ctx context.Context, input Request) error {
-    return authorizeSubmission(ctx, input.Body)
-})
+// The URL query uses its own typed value, even where a wire name matches a body field.
+type Search struct{ Name value.Optional[string] }
+type Request = foundryhttp.Input[foundryhttp.NoPath, Search, Submission]
+
+var NameRules = validation.All(validation.NonBlank[string](), validation.MinLength[string](2), validation.MaxLength[string](40))
+```
+
+The form endpoint registers each body rule once:
+
+<!-- compiled-source: tests/fixtures/consumer/requestflow/guide_recipes.go#form-endpoint -->
+```go
+func formEndpoint(access foundryhttp.Access) foundryhttp.Endpoint[foundryhttp.NoPath, Search, Submission, Reply] {
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "forms.submit", Method: foundryhttp.POST, Access: access}, foundryhttp.StaticPath("/form"))
+	search := foundryhttp.DefineQuery(foundryhttp.OptionalQueryParam("name", foundryhttp.StringQuery[string](), func(q *Search) *value.Optional[string] { return &q.Name }))
+	form := foundryhttp.DefineEndpoint(route, search, foundryhttp.FormBody(SubmissionDescriptor()), ReplyResponse(201))
+	fields := SubmissionValidationFields()
+	return foundryhttp.ValidateBody(form,
+		validation.Rules(fields.Name, NameRules),
+		validation.Rules(fields.Title, validation.Required(validation.MinLength[string](2))),
+		validation.Rules(fields.Blocked, validation.Absent[string]()),
+	)
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/requestflow/forms.go#prepare-submission -->
+```go
+func Prepare(_ context.Context, input Request) (Search, Submission, error) {
+	body := input.Body
+	body.Name = strings.TrimSpace(body.Name)
+	if !body.Title.IsSet() {
+		body.Title = value.Set("Member")
+	}
+	return input.Query, body, nil
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/requestflow/guide_recipes.go#forms-request-lifecycle-2 -->
+```go
+func preparedSubmission(authorizeSubmission func(context.Context, Submission) error) foundryhttp.Endpoint[foundryhttp.NoPath, Search, Submission, Reply] {
+	form := formEndpoint(foundryhttp.Public)
+	form = foundryhttp.PrepareEndpoint(form, Prepare)
+	form = foundryhttp.AuthorizeEndpoint(form, func(ctx context.Context, input Request) error {
+		return authorizeSubmission(ctx, input.Body)
+	})
+	return form
+}
 ```
 
 Existing credential, signature, CSRF and transport admission runs first, then
@@ -101,25 +144,42 @@ errors. A deadline that has already expired before or after a callback returns
 before releasing owned multipart files. Callbacks should observe their context
 to finish promptly.
 
-Both setters return independent endpoint values and replace their own prior hook.
+`PrepareEndpoint` and `AuthorizeEndpoint` each replace their own prior callback
+on an independent endpoint value. `ValidateBody`, `ValidateQuery`, `ValidatePath`,
+`ValidateHeaders`, and `ValidateInput` add rules in declaration order; they do not
+replace earlier validation.
 An explicitly nil callback fails registration. Without hooks, existing behavior
 is unchanged. Configure hooks before applying signing or resource-binding adapters.
 
 ## Concrete guard actors
 
+<!-- compiled-source: tests/fixtures/consumer/requestflow/forms.go#submission-actor -->
 ```go
-prepared := http.PrepareEndpoint(endpoint, prepare)
-secured := http.RequireAuthentication(prepared, transport, accountGuard)
-secured = http.AuthorizeActor(secured, func(ctx context.Context, actor Account, input Request) error {
-    return accountPolicy(ctx, actor, input.Body)
-})
+type Account struct {
+	ID      int64
+	Enabled bool
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/requestflow/guide_recipes.go#forms-request-lifecycle-3 -->
+```go
+func authorizedSubmission(transport *foundryhttp.Authentication, accountGuard auth.Guard[Account], accountPolicy func(context.Context, Account, Submission) error) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
+	form := formEndpoint(foundryhttp.Guarded)
+	prepared := foundryhttp.PrepareEndpoint(form, Prepare)
+	secured := foundryhttp.RequireAuthentication(prepared, transport, accountGuard)
+	secured = foundryhttp.AuthorizeActor(secured, func(ctx context.Context, actor Account, input Request) error {
+		return accountPolicy(ctx, actor, input.Body)
+	})
+	return secured
+}
 ```
 
 The route must declare Guarded access. A named guard chooses its concrete model
 at assembly; no context cast is needed. `http.OptionalAuthentication` instead
 passes `value.Optional[Account]` to its authorization hook and handler. Missing
 credentials may be anonymous; invalid supplied credentials fail before decoding.
-Authentication is not loaded a second time for authorization. The actor hook
+Authentication is not loaded a second time for authorization. `AuthorizeActor` and `AuthorizeOptionalActor` each replace their own actor callback;
+they retain any endpoint-level authorization. The actor hook
 runs at the request-authorization stage, after any endpoint-level authorization
 and before validation, on idempotent replays too. A resource-specific policy
 belongs after resource binding, where the loaded resource is available.

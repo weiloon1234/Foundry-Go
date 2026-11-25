@@ -5,6 +5,7 @@ and query bindings. A custom text codec is unnecessary for an ordinary float.
 The [independent consumer](../../tests/fixtures/consumer/httpquery/floats.go)
 declares these shapes:
 
+<!-- compiled-source: tests/fixtures/consumer/httpquery/floats.go#floating-url-types -->
 ```go
 type Latitude float32
 type Distance float64
@@ -12,15 +13,13 @@ type Distances []Distance
 
 //foundry:query
 type NearbyInput struct {
-    Latitude  Latitude
-    Maximum   value.Optional[Distance]
-    Distances Distances `query:"distance"`
+	Latitude  Latitude
+	Maximum   value.Optional[Distance]
+	Distances Distances `query:"distance"`
 }
 
 //foundry:path pattern=/positions/{latitude}
-type PositionPath struct {
-    Latitude Latitude
-}
+type PositionPath struct{ Latitude Latitude }
 ```
 
 Normal generation creates `NearbyInputDescriptor()` and

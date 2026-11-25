@@ -6,6 +6,7 @@ import (
 )
 
 // Priority retains its source identity in generated path/query and DTO metadata.
+// doc-example:begin priority-source-types
 type Priority uint8
 
 //foundry:path pattern=/priorities/{priority}
@@ -16,6 +17,8 @@ type PriorityQuery struct{ Priority Priority }
 
 //foundry:dto
 type PriorityResponse struct{ Priority Priority }
+
+// doc-example:end priority-source-types
 
 // PriorityCodec shows the generator's same-value source declaration boundary.
 func PriorityCodec() foundryhttp.PathCodec[Priority] {

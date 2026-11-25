@@ -6,19 +6,25 @@ the [master](../../blueprint/00-master-architecture-and-parity.md#typed-api-deli
 
 Declare a reusable Go envelope once. Its fields and JSON tags own the wire shape:
 
+<!-- compiled-source: tests/fixtures/consumer/genericdto/envelope.go#generic-envelope -->
 ```go
 //foundry:dto
 type Envelope[T any] struct {
-    Data T      `json:"data"`
-    Trace string `json:"trace"`
+	Data  T      `json:"data"`
+	Trace string `json:"trace"`
 }
 ```
 
 Generation emits `EnvelopeJSON[T](contract.JSON[T])`, returning
-`contract.JSON[Envelope[T]]`. Pass the argument's generated descriptor:
+`contract.JSON[Envelope[T]]`. The function receives the application's concrete
+`UserDTOJSON()` descriptor as `userJSON`:
 
+<!-- compiled-source: tests/fixtures/consumer/genericdto/guide_recipes.go#generic-dtos-2 -->
 ```go
-response := http.JSONResponse(200, EnvelopeJSON(UserDTOJSON()))
+func userEnvelopeResponse(userJSON contract.JSON[UserDTO]) http.Response[Envelope[UserDTO]] {
+	response := http.JSONResponse(200, EnvelopeJSON(userJSON))
+	return response
+}
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/genericdto/envelope.go)
@@ -39,10 +45,24 @@ Pass one typed JSON argument per parameter, in declaration order. A parameter us
 as a JSON map key additionally receives its existing `contract.JSONKey[K]` directly
 after its JSON argument. For `Lookup[K comparable,V any]`, with a `map[K]V` field:
 
+<!-- compiled-source: tests/fixtures/consumer/genericdto/guide_recipes.go#lookup-contract -->
 ```go
-descriptor := LookupJSON(
-    contract.StringJSON[string](), contract.StringJSONKey[string](), UserDTOJSON(),
-)
+// Lookup keeps JSON key and value descriptors separate.
+//
+//foundry:dto
+type Lookup[K comparable, V any] struct {
+	Values map[K]V `json:"values"`
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/genericdto/guide_recipes.go#generic-dtos-3 -->
+```go
+func userLookupContract(userJSON contract.JSON[UserDTO]) contract.JSON[Lookup[string, UserDTO]] {
+	descriptor := LookupJSON(
+		contract.StringJSON[string](), contract.StringJSONKey[string](), userJSON,
+	)
+	return descriptor
+}
 ```
 
 Key parsing and value parsing retain their existing owners; arbitrary comparable

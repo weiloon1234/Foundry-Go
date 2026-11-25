@@ -21,18 +21,17 @@ Decimal, temporal and standard Go time values reuse the same format definitions
 as generated JSON DTOs.
 
 Custom protocols need an explicit value contract. The [consumer example](../../tests/fixtures/consumer/httpquery/scalar_metadata.go)
-uses one typed declaration alongside its domain text methods:
+accepts the scalar declared with the [native TrackingCode methods](http-custom-json.md):
 
+<!-- compiled-source: tests/fixtures/consumer/httpquery/codec_recipe.go#tracking-url-codec -->
 ```go
-var TrackingScalar = contract.DefineScalar[TrackingCode](contract.Type{
-    ID:   "foundry.test/consumer/httpquery.TrackingCode",
-    Kind: contract.StringKind,
-})
-
-codec := foundryhttp.DescribeURL(
-    foundryhttp.TextQuery[TrackingCode, *TrackingCode](),
-    TrackingScalar,
-)
+func trackingCodec(TrackingScalar contract.Scalar[TrackingCode]) foundryhttp.QueryCodec[TrackingCode] {
+	codec := foundryhttp.DescribeURL(
+		foundryhttp.TextQuery[TrackingCode, *TrackingCode](),
+		TrackingScalar,
+	)
+	return codec
+}
 ```
 
 The scalar descriptor and codec must use the same Go value type. Their private

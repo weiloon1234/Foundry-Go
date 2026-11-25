@@ -2,9 +2,13 @@
 
 Use `ETags(DefaultETagConfig())` through ordinary middleware assembly:
 
+<!-- compiled-source: tests/fixtures/consumer/httpetags/http_etags_recipes.go#http-etags-1 -->
 ```go
-config := foundryhttp.DefaultETagConfig()
-handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.ETags(config))
+func conditionalHandler(router http.Handler) (http.Handler, error) {
+	config := foundryhttp.DefaultETagConfig()
+	handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.ETags(config))
+	return handler, err
+}
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/httpetags/etags.go)
@@ -67,17 +71,21 @@ reading the complete body; automatic hashing requires producing the bytes.
 `CacheControl(policy)` declares a typed `Cache-Control` for GET and HEAD
 responses and composes with ETags, so clients revalidate cheaply with 304:
 
+<!-- compiled-source: tests/fixtures/consumer/httpetags/http_etags_recipes.go#http-etags-2 -->
 ```go
-policy := foundryhttp.CachePolicy{
-    Visibility:           foundryhttp.CachePublic,
-    MaxAge:               time.Minute,
-    SharedMaxAge:         value.Set(5 * time.Minute), // s-maxage
-    StaleWhileRevalidate: 30 * time.Second,
+func cachedHandler(router http.Handler) (http.Handler, error) {
+	policy := foundryhttp.CachePolicy{
+		Visibility:           foundryhttp.CachePublic,
+		MaxAge:               time.Minute,
+		SharedMaxAge:         value.Set(5 * time.Minute), // s-maxage
+		StaleWhileRevalidate: 30 * time.Second,
+	}
+	handler, err := foundryhttp.ApplyMiddleware(router,
+		foundryhttp.CacheControl(policy),
+		foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
+	)
+	return handler, err
 }
-handler, err := foundryhttp.ApplyMiddleware(router,
-    foundryhttp.CacheControl(policy),
-    foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
-)
 ```
 
 `CachePrivate` limits storage to the requesting browser; `CachePublic` also

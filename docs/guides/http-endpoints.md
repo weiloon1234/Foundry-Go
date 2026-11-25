@@ -84,18 +84,24 @@ Declare the headers an endpoint reads alongside its query fields. Both bind into
 `Input.Query`, so preparation, authorization, binding and validation receive the
 same concrete type without changing the handler signature.
 
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#http-endpoints-2 -->
 ```go
+// ClientParameters combines URL search with application headers.
 type ClientParameters struct {
-    Search string
-    Version string
-    Device value.Optional[string]
+	Search  string
+	Version string
+	Device  value.Optional[string]
 }
 
-parameters := foundryhttp.DefineQuery(
-    foundryhttp.QueryParam("search", foundryhttp.StringQuery[string](), func(q *ClientParameters) *string { return &q.Search }),
-    foundryhttp.HeaderParam("X-App-Version", foundryhttp.StringQuery[string](), func(q *ClientParameters) *string { return &q.Version }),
-    foundryhttp.OptionalHeaderParam("X-Device-ID", foundryhttp.StringQuery[string](), func(q *ClientParameters) *value.Optional[string] { return &q.Device }),
-)
+func clientParameters() foundryhttp.Query[ClientParameters] {
+	parameters := foundryhttp.DefineQuery(
+		foundryhttp.QueryParam("search", foundryhttp.StringQuery[string](), func(q *ClientParameters) *string { return &q.Search }),
+		foundryhttp.HeaderParam("X-App-Version", foundryhttp.StringQuery[string](), func(q *ClientParameters) *string { return &q.Version }),
+		foundryhttp.OptionalHeaderParam("X-Device-ID", foundryhttp.StringQuery[string](), func(q *ClientParameters) *value.Optional[string] { return &q.Device }),
+	)
+
+	return parameters
+}
 ```
 
 Pass `parameters` as the query argument to `DefineEndpoint`. Header names match
@@ -173,17 +179,37 @@ Metadata (`EndpointInfo.Statuses`), OpenAPI and the TypeScript client expose
 every declared status; the client returns `{ status, body }`. Idempotent
 endpoints keep one status, because a replay reproduces it.
 
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#member-upsert-contracts -->
 ```go
-var Upsert = foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(),
-    MemberBody(), foundryhttp.JSONResponses(MemberJSON(), 200, 201))
+// Member carries the display name submitted to the upsert endpoint.
+//
+//foundry:dto http=body
+type Member struct {
+	Name string `json:"name"`
+}
 
-registration := Upsert.Handle(func(ctx context.Context, in Request) (foundryhttp.Statused[Member], error) {
-    member, created, err := members.Upsert(ctx, in.Body)
-    if created {
-        return foundryhttp.Statused[Member]{Status: 201, Value: member}, err
-    }
-    return foundryhttp.Statused[Member]{Value: member}, err
-})
+// Request keeps the upsert body concrete through the handler.
+type Request = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, Member]
+
+// MemberStore reports whether an upsert inserted a new member.
+type MemberStore interface {
+	Upsert(context.Context, Member) (Member, bool, error)
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#http-endpoints-3 -->
+```go
+func registerUpsert(route foundryhttp.Route[foundryhttp.NoPath], members MemberStore) foundryhttp.RouteRegistration {
+	var Upsert = foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), MemberBody(), foundryhttp.JSONResponses(MemberJSON(), 200, 201))
+	registration := Upsert.Handle(func(ctx context.Context, in Request) (foundryhttp.Statused[Member], error) {
+		member, created, err := members.Upsert(ctx, in.Body)
+		if created {
+			return foundryhttp.Statused[Member]{Status: 201, Value: member}, err
+		}
+		return foundryhttp.Statused[Member]{Value: member}, err
+	})
+	return registration
+}
 ```
 
 `RedirectResponse(303)` declares a bodiless redirect (301, 302, 303, 307 or 308),
@@ -212,9 +238,13 @@ must not read it. For large uploads raise `EndpointLimits.Raw.Bytes`, the route'
 media type, and the TypeScript client sends a `Blob`, `ArrayBuffer`, typed array
 or `ReadableStream`.
 
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#http-endpoints-4 -->
 ```go
-location, err := Update.URL(ctx, path, foundryhttp.NoQuery{})
-scoped := foundryhttp.ConfigureEndpoint(Update, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
+func updateURL(ctx context.Context, Update foundryhttp.Endpoint[UserPath, NearbyInput, UpdateUser, UserResponse], path UserPath, query NearbyInput) (string, error) {
+	scoped := foundryhttp.ConfigureEndpoint(Update, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
+	location, err := scoped.URL(ctx, path, query)
+	return location, err
+}
 ```
 
 `URL` combines the existing path and query codecs, escaping each source using its
@@ -247,11 +277,24 @@ support it; idempotent endpoints use `IdempotentHeaders`, whose
 headers are replayed exactly. Headers never change the status; declare
 alternatives with `JSONResponses`.
 
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#order-location-contracts -->
 ```go
-created := foundryhttp.EndpointHeaders(endpoint, func(_ context.Context, order OrderReply) ([]foundryhttp.ResponseHeader, error) {
-    location, err := foundryhttp.RouteLocation(ShowOrder, OrderPath{Order: order.ID})
-    return []foundryhttp.ResponseHeader{location}, err
-})
+// OrderReply carries the created resource identity.
+type OrderReply struct{ ID model.ID[models.Order] }
+
+// OrderPath binds the order identity used in a Location URL.
+type OrderPath struct{ Order model.ID[models.Order] }
+```
+
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#http-endpoints-5 -->
+```go
+func withLocation(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, OrderReply], ShowOrder foundryhttp.Route[OrderPath]) foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, OrderReply] {
+	created := foundryhttp.EndpointHeaders(endpoint, func(_ context.Context, order OrderReply) ([]foundryhttp.ResponseHeader, error) {
+		location, err := foundryhttp.RouteLocation(ShowOrder, OrderPath{Order: order.ID})
+		return []foundryhttp.ResponseHeader{location}, err
+	})
+	return created
+}
 ```
 
 `Timeout(d)` replaces the kernel `RequestTimeout` for one endpoint's route,
@@ -264,13 +307,20 @@ route matching, are bounded by `MaxRouteTimeout` (24 hours) and `MaxRouteBodyByt
 and are reported by `RouteInfo.Timeout` and `RouteInfo.MaxBodyBytes`. They are
 server policy and are not exported to client manifests.
 
+<!-- compiled-source: tests/fixtures/consumer/httpuploads/http_endpoints_recipe.go#http-endpoints-6 -->
 ```go
-upload := foundryhttp.DefineEndpoint(
-    route, foundryhttp.EmptyQuery(), ProfileInputBody(directory), foundryhttp.EmptyResponse(204),
-    foundryhttp.Limits(uploadLimits), // Multipart.Bytes/FileBytes: 512 MiB
-    foundryhttp.BodyLimit(512 << 20),
-    foundryhttp.Timeout(10 * time.Minute),
-)
+func uploadEndpoint(route foundryhttp.Route[foundryhttp.NoPath], body foundryhttp.Body[ProfileInput]) foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, ProfileInput, foundryhttp.NoContent] {
+	limits := foundryhttp.DefaultEndpointLimits()
+	limits.Multipart.Bytes, limits.Multipart.FileBytes = 520<<20, 512<<20
+
+	upload := foundryhttp.DefineEndpoint(
+		route, foundryhttp.EmptyQuery(), body, foundryhttp.EmptyResponse(204),
+		foundryhttp.Limits(limits), // Allow multipart overhead beyond the 512 MiB file.
+		foundryhttp.BodyLimit(520<<20),
+		foundryhttp.Timeout(10*time.Minute),
+	)
+	return upload
+}
 ```
 
 JSON input requires one Content-Type declaration: `application/json` or an

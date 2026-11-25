@@ -12,6 +12,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin submission-form
+
 //foundry:form
 type Submission struct {
 	Name    string                 `form:"name"`
@@ -19,6 +21,8 @@ type Submission struct {
 	Blocked value.Optional[string] `form:"blocked"`
 	Tags    []string               `form:"tags[]"`
 }
+
+// doc-example:end submission-form
 
 //foundry:dto http=body
 type JSONSubmission struct {
@@ -29,6 +33,8 @@ type JSONSubmission struct {
 type MultipartSubmission struct {
 	Name string `form:"name"`
 }
+
+// doc-example:begin submission-contracts
 
 //foundry:dto http=response
 type Reply struct {
@@ -44,21 +50,18 @@ type Request = foundryhttp.Input[foundryhttp.NoPath, Search, Submission]
 
 var NameRules = validation.All(validation.NonBlank[string](), validation.MinLength[string](2), validation.MaxLength[string](40))
 
-func endpoint(access foundryhttp.Access) foundryhttp.Endpoint[foundryhttp.NoPath, Search, Submission, Reply] {
-	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "forms.submit", Method: foundryhttp.POST, Access: access}, foundryhttp.StaticPath("/form"))
-	search := foundryhttp.DefineQuery(foundryhttp.OptionalQueryParam("name", foundryhttp.StringQuery[string](), func(q *Search) *value.Optional[string] { return &q.Name }))
-	fields := SubmissionValidationFields()
+// doc-example:end submission-contracts
+
+func submissionEndpoint(access foundryhttp.Access) foundryhttp.Endpoint[foundryhttp.NoPath, Search, Submission, Reply] {
+	form := formEndpoint(access)
 	limits := foundryhttp.DefaultEndpointLimits()
 	// Deliberately tiny unused JSON-body allowance proves form budget independence.
 	limits.Body.Bytes = 1
 	limits.Form = foundryhttp.QueryLimits{Bytes: 512, Pairs: 16, Issues: 4}
-
-	formsSubmitEndpoint := foundryhttp.DefineEndpoint(route, search, foundryhttp.FormBody(SubmissionDescriptor()), ReplyResponse(201))
-	formsSubmitEndpoint = foundryhttp.ConfigureEndpoint(formsSubmitEndpoint, foundryhttp.Limits(limits))
-
-	return foundryhttp.ValidateBody(formsSubmitEndpoint, validation.Rules(fields.Name, NameRules), validation.Rules(fields.Title, validation.Required(validation.MinLength[string](2))), validation.Rules(fields.Blocked, validation.Absent[string]()))
+	return foundryhttp.ConfigureEndpoint(form, foundryhttp.Limits(limits))
 }
 
+// doc-example:begin prepare-submission
 func Prepare(_ context.Context, input Request) (Search, Submission, error) {
 	body := input.Body
 	body.Name = strings.TrimSpace(body.Name)
@@ -68,8 +71,10 @@ func Prepare(_ context.Context, input Request) (Search, Submission, error) {
 	return input.Query, body, nil
 }
 
+// doc-example:end prepare-submission
+
 var Submit = func() foundryhttp.Endpoint[foundryhttp.NoPath, Search, Submission, Reply] {
-	formsSubmitEndpoint := endpoint(foundryhttp.Public)
+	formsSubmitEndpoint := submissionEndpoint(foundryhttp.Public)
 	formsSubmitEndpoint = foundryhttp.PrepareEndpoint(formsSubmitEndpoint, Prepare)
 
 	return foundryhttp.AuthorizeEndpoint(formsSubmitEndpoint, func(_ context.Context, input Request) error {
@@ -88,13 +93,16 @@ func Handle(_ context.Context, input Request) (Reply, error) {
 
 // Named guards select concrete models at assembly. Different actors retain
 // different callback signatures; no actor is obtained through context casts.
+// doc-example:begin submission-actor
 type Account struct {
 	ID      int64
 	Enabled bool
 }
 
+// doc-example:end submission-actor
+
 func AccountEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Account]) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
-	formsSubmitEndpoint := endpoint(foundryhttp.Guarded)
+	formsSubmitEndpoint := submissionEndpoint(foundryhttp.Guarded)
 	guardFormsSubmit := foundryhttp.RequireAuthentication(formsSubmitEndpoint, transport, guard)
 
 	guardFormsSubmit = foundryhttp.PrepareAuthenticated(guardFormsSubmit, Prepare)
@@ -107,7 +115,7 @@ func AccountEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Acc
 	})
 }
 func GuestEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Account]) foundryhttp.OptionalAuthenticationEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
-	formsSubmitEndpoint := endpoint(foundryhttp.Public)
+	formsSubmitEndpoint := submissionEndpoint(foundryhttp.Public)
 	guardFormsSubmit := foundryhttp.OptionalAuthentication(formsSubmitEndpoint, transport, guard)
 
 	guardFormsSubmit = foundryhttp.PrepareOptional(guardFormsSubmit, Prepare)

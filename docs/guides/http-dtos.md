@@ -9,13 +9,17 @@ Declare a public transport struct and run the existing Foundry generator. Its
 generated descriptor retains the concrete DTO type and owns one normalized schema
 for strict decoding and client contract export.
 
+<!-- compiled-source: tests/fixtures/consumer/httpdto/profile_recipes.go#http-dtos-1 -->
 ```go
+// UpdateProfile distinguishes omitted fields from explicit nickname clearing.
+//
 //foundry:dto
 type UpdateProfile struct {
-    Email value.Optional[string] `json:"email,omitzero"`
-    Nickname value.Optional[value.Nullable[string]] `json:"nickname,omitzero"`
+	Email    value.Optional[string]                 `json:"email,omitzero"`
+	Nickname value.Optional[value.Nullable[string]] `json:"nickname,omitzero"`
 }
 
+// ProfileBody retains the generated bounded JSON decoder.
 var ProfileBody = UpdateProfileJSON()
 ```
 
@@ -53,8 +57,14 @@ Nullable when a patch must distinguish omission from clearing.
 To publish a list that is never null, declare the field as `value.List[T]`, an
 ordinary slice type (`len`, `range`, `append` and indexing work unchanged):
 
+<!-- compiled-source: tests/fixtures/consumer/httpdto/profile_recipes.go#http-dtos-2 -->
 ```go
-Tags value.List[string] `json:"tags"`
+// ProfileTags publishes a non-null JSON array.
+//
+//foundry:dto role=response
+type ProfileTags struct {
+	Tags value.List[string] `json:"tags"`
+}
 ```
 
 A nil list encodes as `[]`, decoding rejects `null`, and OpenAPI and TypeScript
@@ -85,15 +95,19 @@ for helper names, signatures, collision failures and structural exclusions.
 The descriptor is immutable and can be reused concurrently. The lower-level
 decoding API accepts an already bounded byte buffer and explicit resource limits:
 
+<!-- compiled-source: tests/fixtures/consumer/httpdto/profile_recipes.go#http-dtos-3 -->
 ```go
-limits := contract.JSONLimits{
-    Bytes: 4096,
-    Depth: 16,
-    Nodes: 500,
-    Steps: 2000,
-    Issues: 20,
+func decodeProfile(ctx context.Context, payload []byte) (UpdateProfile, error) {
+	limits := contract.JSONLimits{
+		Bytes:  4096,
+		Depth:  16,
+		Nodes:  500,
+		Steps:  2000,
+		Issues: 20,
+	}
+	request, err := ProfileBody.Decode(ctx, payload, limits)
+	return request, err
 }
-request, err := ProfileBody.Decode(ctx, payload, limits)
 ```
 
 `contract` is Foundry's contract package. `request` has type `UpdateProfile`.

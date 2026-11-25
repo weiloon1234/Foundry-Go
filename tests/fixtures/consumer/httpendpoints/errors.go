@@ -8,6 +8,7 @@ import (
 
 // SeatUnavailable is the public failure declaration reused by transport and
 // domain behavior. Internal causes remain ordinary Go errors.
+// doc-example:begin declared-seat-error
 var SeatUnavailable = foundryhttp.DefineError("seats.unavailable", 409, "The selected seat is no longer available.")
 
 var Reserve = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent] {
@@ -18,6 +19,8 @@ var Reserve = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuer
 	)
 	return foundryhttp.ConfigureEndpoint(seatsReserveEndpoint, foundryhttp.Errors(SeatUnavailable))
 }()
+
+// doc-example:end declared-seat-error
 
 // ReservationService defines only the domain operation.
 type ReservationService interface{ Reserve(context.Context) error }

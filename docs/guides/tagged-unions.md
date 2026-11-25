@@ -7,21 +7,28 @@ owns milestone status.
 
 Declare ordinary payload DTOs and list their Go types once:
 
+<!-- compiled-source: tests/fixtures/consumer/unions/payment/payment.go#payment-variants -->
 ```go
+// CardDTO carries a payment-provider token.
+//
 //foundry:dto
 type CardDTO struct {
-    Token string `json:"token"`
+	Token string `json:"token"`
 }
 
+// BankDTO carries the bank transfer reference.
+//
 //foundry:dto
 type BankDTO struct {
-    Reference string `json:"reference"`
+	Reference string `json:"reference"`
 }
 
+// PaymentMethodVariants closes the set of supported checkout methods.
+//
 //foundry:union name=PaymentMethod discriminator=kind
 type PaymentMethodVariants struct {
-    Card CardDTO `union:"card"`
-    Bank BankDTO `union:"bank_transfer"`
+	Card CardDTO `union:"card"`
+	Bank BankDTO `union:"bank_transfer"`
 }
 ```
 
@@ -32,17 +39,23 @@ duplicate tags, payload fields named `kind`, invalid payloads and symbol collisi
 Payloads may be concrete instances of generic DTOs. Ordinary scalar enums remain
 separate. The first union representation is an internally tagged JSON object.
 
+<!-- compiled-source: tests/fixtures/consumer/unions/payment/payment.go#tagged-unions-2 -->
 ```go
-method, err := PaymentMethodFromCard(CardDTO{Token: "provider-token"})
-if err != nil { return err }
-
-card, selected := method.Card() // CardDTO, bool
-if selected { useToken(card.Token) }
-
-label, err := MatchPaymentMethod(method,
-    func(card CardDTO) (string, error) { return card.Token, nil },
-    func(bank BankDTO) (string, error) { return bank.Reference, nil },
-)
+func paymentLabel(useToken func(string)) (string, error) {
+	method, err := PaymentMethodFromCard(CardDTO{Token: "provider-token"})
+	if err != nil {
+		return "", err
+	}
+	card, selected := method.Card()
+	if selected {
+		useToken(card.Token)
+	}
+	label, err := MatchPaymentMethod(method,
+		func(card CardDTO) (string, error) { return card.Token, nil },
+		func(bank BankDTO) (string, error) { return bank.Reference, nil },
+	)
+	return label, err
+}
 ```
 
 Constructors validate and capture an immutable JSON snapshot, following the existing

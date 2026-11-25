@@ -4,18 +4,22 @@ Use `http.ContentSecurityPolicy` alongside [security headers](http-security-head
 It compiles explicit Go declarations at assembly and preserves native HTTP
 writers. Apply it around the router to cover fallback responses too.
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-1 -->
 ```go
-policy := foundryhttp.CSPPolicy{
-    DefaultSrc:     []foundryhttp.CSPSource{foundryhttp.CSPNone()},
-    ScriptSrc:      []foundryhttp.CSPSource{foundryhttp.CSPNonceSource(), foundryhttp.CSPStrictDynamic()},
-    ImgSrc:         []foundryhttp.CSPSource{foundryhttp.CSPSelf(), foundryhttp.CSPSchemeSource("data")},
-    ConnectSrc:     []foundryhttp.CSPSource{foundryhttp.CSPHostSource("wss://events.example.test")},
-    BaseURI:        []foundryhttp.CSPSource{foundryhttp.CSPNone()},
-    FrameAncestors: []foundryhttp.CSPSource{foundryhttp.CSPNone()},
+func noncePolicy() foundryhttp.Middleware {
+	policy := foundryhttp.CSPPolicy{
+		DefaultSrc:     []foundryhttp.CSPSource{foundryhttp.CSPNone()},
+		ScriptSrc:      []foundryhttp.CSPSource{foundryhttp.CSPNonceSource(), foundryhttp.CSPStrictDynamic()},
+		ImgSrc:         []foundryhttp.CSPSource{foundryhttp.CSPSelf(), foundryhttp.CSPSchemeSource("data")},
+		ConnectSrc:     []foundryhttp.CSPSource{foundryhttp.CSPHostSource("wss://events.example.test")},
+		BaseURI:        []foundryhttp.CSPSource{foundryhttp.CSPNone()},
+		FrameAncestors: []foundryhttp.CSPSource{foundryhttp.CSPNone()},
+	}
+	middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
+		Enforce: value.Set(policy),
+	})
+	return middleware
 }
-middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
-    Enforce: value.Set(policy),
-})
 ```
 
 `CSPConfig.ReportOnly` accepts an independent policy for monitoring. Neither policy
@@ -44,11 +48,15 @@ report receiver automatically. Configure and protect that endpoint explicitly.
 
 Add `http.CSPWasmUnsafeEval()` when a page compiles or instantiates WebAssembly:
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-2 -->
 ```go
-policy := foundryhttp.CSPPolicy{
-	DefaultSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
-	ScriptSrc:  []foundryhttp.CSPSource{foundryhttp.CSPSelf(), foundryhttp.CSPWasmUnsafeEval()},
-	ConnectSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+func wasmPolicy() foundryhttp.CSPPolicy {
+	policy := foundryhttp.CSPPolicy{
+		DefaultSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+		ScriptSrc:  []foundryhttp.CSPSource{foundryhttp.CSPSelf(), foundryhttp.CSPWasmUnsafeEval()},
+		ConnectSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+	}
+	return policy
 }
 ```
 
@@ -102,30 +110,38 @@ Collection environment values are JSON arrays. For `application.Settings`
 directly, omit `app.` from keys and `__APP` from environment names. An empty
 configured array clears the corresponding code default.
 
-The equivalent code default is:
+With `application.Settings` directly, the equivalent code default is:
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-3 -->
 ```go
-settings.App.HTTP.CSPAllowlist.Presets = []foundryhttp.CSPPreset{
-	foundryhttp.CSPPresetCloudflareWebAnalytics,
+func analyticsSettings(settings application.Settings) application.Settings {
+	settings.HTTP.CSPAllowlist.Presets = []foundryhttp.CSPPreset{
+		foundryhttp.CSPPresetCloudflareWebAnalytics,
+	}
+	return settings
 }
 ```
 
 Apply the loaded settings before constructing the middleware:
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-4 -->
 ```go
-policy, err := foundryhttp.ApplyCSPAllowlist(foundryhttp.CSPPolicy{
-	DefaultSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
-	ScriptSrc:  []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
-	ConnectSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
-	ImgSrc:     []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
-	FrameSrc:   []foundryhttp.CSPSource{foundryhttp.CSPNone()},
-}, settings.App.HTTP.CSPAllowlist)
-if err != nil {
-	return nil, err
+func allowlistedHandler(settings application.Settings, router http.Handler) (http.Handler, error) {
+	policy, err := foundryhttp.ApplyCSPAllowlist(foundryhttp.CSPPolicy{
+		DefaultSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+		ScriptSrc:  []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+		ConnectSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+		ImgSrc:     []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+		FrameSrc:   []foundryhttp.CSPSource{foundryhttp.CSPNone()},
+	}, settings.HTTP.CSPAllowlist)
+	if err != nil {
+		return nil, err
+	}
+	middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
+		Enforce: value.Set(policy),
+	})
+	return foundryhttp.ApplyMiddleware(router, middleware)
 }
-middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
-	Enforce: value.Set(policy),
-})
 ```
 
 `CSPPresetCloudflareWebAnalytics` allows `https://static.cloudflareinsights.com`
@@ -186,14 +202,18 @@ demonstrates the complete composition.
 middleware generates 32 cryptographically random bytes per request and exposes
 the base64 value through a concrete context accessor:
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-5 -->
 ```go
-nonce, ok := foundryhttp.CSPNonceFromContext(request.Context())
-if !ok {
-    // This handler requires a configured nonce policy.
-    return
+func renderPage(writer http.ResponseWriter, request *http.Request, page *template.Template) {
+	nonce, ok := foundryhttp.CSPNonceFromContext(request.Context())
+	if !ok {
+		// This handler requires a configured nonce policy.
+		return
+	}
+	data := struct{ Nonce string }{Nonce: nonce.String()}
+	_ = page.Execute(writer, data)
+
 }
-data := struct{ Nonce string }{Nonce: nonce.String()}
-// Pass data to a native html/template containing nonce="{{.Nonce}}".
 ```
 
 The [consumer example](../../tests/fixtures/consumer/httpsecurity/csp.go) includes

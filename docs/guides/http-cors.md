@@ -5,15 +5,19 @@ around the router so preflights reach it before method matching, decoding or
 route authentication. The [consumer fixture](../../tests/fixtures/consumer/httpcors/router.go)
 applies this to an existing generated endpoint; it declares no OPTIONS route.
 
+<!-- compiled-source: tests/fixtures/consumer/httpcors/http_cors_recipes.go#http-cors-1 -->
 ```go
-handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.CORS(foundryhttp.CORSConfig{
-    Origins:       []foundryhttp.Origin{"https://console.example.test"},
-    Methods:       []foundryhttp.Method{foundryhttp.PATCH},
-    Headers:       []foundryhttp.HeaderName{"Content-Type", "Authorization"},
-    ExposeHeaders: []foundryhttp.HeaderName{"X-Request-Id"},
-    Credentials:   true,
-    MaxAge:        10 * time.Minute,
-}))
+func browserHandler(router http.Handler) (http.Handler, error) {
+	handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.CORS(foundryhttp.CORSConfig{
+		Origins:       []foundryhttp.Origin{"https://console.example.test"},
+		Methods:       []foundryhttp.Method{foundryhttp.PATCH},
+		Headers:       []foundryhttp.HeaderName{"Content-Type", "Authorization"},
+		ExposeHeaders: []foundryhttp.HeaderName{"X-Request-Id"},
+		Credentials:   true,
+		MaxAge:        10 * time.Minute,
+	}))
+	return handler, err
+}
 ```
 
 Configuration is copied when `CORS` is declared. Assembly rejects invalid
@@ -41,11 +45,15 @@ meaning is broader than one particular website.
   nested wildcards, single-label suffixes (`*.com`) and IP suffixes are rejected.
   Public-suffix knowledge is not built in, so never declare `*.co.uk`-style suffixes.
 
+<!-- compiled-source: tests/fixtures/consumer/httpcors/http_cors_recipes.go#http-cors-2 -->
 ```go
-foundryhttp.CORSConfig{
-    Origins:        []foundryhttp.Origin{"https://console.example.com"},
-    OriginPatterns: []foundryhttp.OriginPattern{"capacitor://localhost", "https://*.tenants.example.com"},
-    Methods:        []foundryhttp.Method{foundryhttp.PATCH},
+func browserOrigins() foundryhttp.CORSConfig {
+	return foundryhttp.CORSConfig{
+		Origins:        []foundryhttp.Origin{"https://console.example.com"},
+		OriginPatterns: []foundryhttp.OriginPattern{"capacitor://localhost", "https://*.tenants.example.com"},
+		Methods:        []foundryhttp.Method{foundryhttp.PATCH},
+	}
+
 }
 ```
 
@@ -57,12 +65,16 @@ clean absolute path without a trailing slash and matches at a segment boundary
 (`/public` matches `/public` and `/public/x`, not `/publicity`). Path policies
 cannot nest further `Paths`:
 
+<!-- compiled-source: tests/fixtures/consumer/httpcors/http_cors_recipes.go#http-cors-3 -->
 ```go
-foundryhttp.CORSConfig{
-    Origins: []foundryhttp.Origin{"https://console.example.com"},
-    Paths: []foundryhttp.CORSPath{
-        {Prefix: "/public", Policy: foundryhttp.CORSConfig{AnyOrigin: true, AnyMethod: true}},
-    },
+func publicPathPolicy() foundryhttp.CORSConfig {
+	return foundryhttp.CORSConfig{
+		Origins: []foundryhttp.Origin{"https://console.example.com"},
+		Paths: []foundryhttp.CORSPath{
+			{Prefix: "/public", Policy: foundryhttp.CORSConfig{AnyOrigin: true, AnyMethod: true}},
+		},
+	}
+
 }
 ```
 

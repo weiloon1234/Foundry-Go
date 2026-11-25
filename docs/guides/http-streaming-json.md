@@ -12,22 +12,27 @@ its stored representation private. Its contract returns
 slice and inside `Optional[Nullable[StreamLabel]]`. No per-field codec
 registration is required.
 
+<!-- compiled-source: tests/fixtures/consumer/httpdto/stream.go#streaming-label -->
 ```go
-func (v StreamLabel) MarshalJSONTo(enc *jsontext.Encoder) error {
-    return enc.WriteToken(jsontext.String("label:" + v.text))
-}
+// StreamLabel owns its private representation and native streaming wire methods.
+type StreamLabel struct{ text string }
 
+func NewStreamLabel(text string) StreamLabel { return StreamLabel{text: text} }
+
+func (v StreamLabel) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return enc.WriteToken(jsontext.String("label:" + v.text))
+}
 func (v *StreamLabel) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
-    var text string
-    if err := jsonv2.UnmarshalDecode(dec, &text); err != nil {
-        return err
-    }
-    text, ok := strings.CutPrefix(text, "label:")
-    if !ok {
-        return fault.New(fault.Invalid, "invalid label")
-    }
-    *v = NewStreamLabel(text)
-    return nil
+	var text string
+	if err := jsonv2.UnmarshalDecode(dec, &text); err != nil {
+		return err
+	}
+	text, ok := strings.CutPrefix(text, "label:")
+	if !ok {
+		return fault.New(fault.Invalid, "invalid label")
+	}
+	*v = NewStreamLabel(text)
+	return nil
 }
 ```
 

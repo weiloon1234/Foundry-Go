@@ -5,19 +5,23 @@ origin with the relative URL produced by a typed route or endpoint. Workers and
 other request-independent kernels use `AbsoluteURL` with an explicit configured
 `Origin`; there is no global application URL or guessed request Host.
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/public_url_recipes.go#http-public-urls-1 -->
 ```go
-public := foundryhttp.PublicURLConfig{
-    AllowedOrigins: []foundryhttp.Origin{
-        "https://app.example.test",
-        "http://alias.example.test",
-    },
-    Canonical: value.Set(foundryhttp.Origin("https://app.example.test")),
+func publicHandler(router http.Handler, proxy foundryhttp.TrustedProxyConfig, security foundryhttp.SecurityHeadersConfig) (http.Handler, error) {
+	public := foundryhttp.PublicURLConfig{
+		AllowedOrigins: []foundryhttp.Origin{
+			"https://app.example.test",
+			"http://alias.example.test",
+		},
+		Canonical: value.Set(foundryhttp.Origin("https://app.example.test")),
+	}
+	handler, err := foundryhttp.ApplyMiddleware(router,
+		foundryhttp.TrustedProxy(proxy),
+		foundryhttp.PublicURLs(public),
+		foundryhttp.SecurityHeaders(security),
+	)
+	return handler, err
 }
-handler, err := foundryhttp.ApplyMiddleware(router,
-    foundryhttp.TrustedProxy(proxy),
-    foundryhttp.PublicURLs(public),
-    foundryhttp.SecurityHeaders(security),
-)
 ```
 
 Origins include the scheme and port. Hostname casing and default ports normalize
@@ -45,11 +49,15 @@ signature binds that exact tenant origin: another tenant cannot replay it.
 `ExemptPaths` lists exact request paths served without host admission, such as
 load-balancer or Kubernetes probes that arrive with `Host: <pod-ip>`:
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/public_url_recipes.go#http-public-urls-2 -->
 ```go
-public := foundryhttp.PublicURLConfig{
-    AllowedOrigins:  []foundryhttp.Origin{"https://app.example.com"},
-    AllowedPatterns: []foundryhttp.OriginPattern{"https://*.tenants.example.com"},
-    ExemptPaths:     []string{"/healthz", "/readyz"},
+func tenantOrigins() foundryhttp.PublicURLConfig {
+	public := foundryhttp.PublicURLConfig{
+		AllowedOrigins:  []foundryhttp.Origin{"https://app.example.com"},
+		AllowedPatterns: []foundryhttp.OriginPattern{"https://*.tenants.example.com"},
+		ExemptPaths:     []string{"/healthz", "/readyz"},
+	}
+	return public
 }
 ```
 
@@ -66,12 +74,16 @@ routes that call `PublicURL` with the `RequirePublicURLs()` route middleware to
 get the same check. A router served directly, without `ApplyMiddleware`, still
 answers such routes with a shared 500 instead of guessing an origin.
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/public_url_recipes.go#http-public-urls-3 -->
 ```go
-relative, err := endpoint.URL(ctx, path, query)
-if err != nil {
-    return err
+func absoluteURL(ctx context.Context, endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], path foundryhttp.NoPath, query foundryhttp.NoQuery) (string, error) {
+	relative, err := endpoint.URL(ctx, path, query)
+	if err != nil {
+		return "", err
+	}
+	absolute, err := foundryhttp.PublicURL(ctx, relative)
+	return absolute, err
 }
-absolute, err := foundryhttp.PublicURL(ctx, relative)
 ```
 
 `AbsoluteURL(origin, relative)` is also available for explicitly configured
@@ -86,13 +98,17 @@ and origin trust. `Headers` selects IP sources; `OriginHeaders` selects scheme a
 authority sources. Neither is automatic. Socket peer membership is checked before
 any forwarding data is accepted.
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/public_url_recipes.go#http-public-urls-4 -->
 ```go
-proxy := foundryhttp.TrustedProxyConfig{
-    Proxies: []netip.Prefix{netip.MustParsePrefix("10.20.0.0/16")},
-    Headers: []foundryhttp.ProxyHeader{foundryhttp.ForwardedHeader()},
-    OriginHeaders: []foundryhttp.ProxyOriginHeader{
-        foundryhttp.ForwardedOriginHeader(),
-    },
+func originProxy() foundryhttp.TrustedProxyConfig {
+	proxy := foundryhttp.TrustedProxyConfig{
+		Proxies: []netip.Prefix{netip.MustParsePrefix("10.20.0.0/16")},
+		Headers: []foundryhttp.ProxyHeader{foundryhttp.ForwardedHeader()},
+		OriginHeaders: []foundryhttp.ProxyOriginHeader{
+			foundryhttp.ForwardedOriginHeader(),
+		},
+	}
+	return proxy
 }
 ```
 

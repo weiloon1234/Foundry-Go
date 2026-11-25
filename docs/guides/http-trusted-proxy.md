@@ -4,18 +4,22 @@ The HTTP kernel initially attributes a request to its socket peer. Apply
 `TrustedProxy` through [global middleware](http-middleware.md) before rate limits,
 guards or domain services consume client attribution:
 
+<!-- compiled-source: tests/fixtures/consumer/httpproxy/http_trusted_proxy_recipes.go#http-trusted-proxy-1 -->
 ```go
-handler, err := foundryhttp.ApplyMiddleware(router,
-    foundryhttp.TrustedProxy(foundryhttp.TrustedProxyConfig{
-        Proxies: []netip.Prefix{
-            netip.MustParsePrefix("10.20.0.0/24"),
-        },
-        Headers: []foundryhttp.ProxyHeader{
-            foundryhttp.ForwardedHeader(),
-            foundryhttp.XForwardedForHeader(),
-        },
-    }),
-)
+func proxyHandler(router http.Handler) (http.Handler, error) {
+	handler, err := foundryhttp.ApplyMiddleware(router,
+		foundryhttp.TrustedProxy(foundryhttp.TrustedProxyConfig{
+			Proxies: []netip.Prefix{
+				netip.MustParsePrefix("10.20.0.0/24"),
+			},
+			Headers: []foundryhttp.ProxyHeader{
+				foundryhttp.ForwardedHeader(),
+				foundryhttp.XForwardedForHeader(),
+			},
+		}),
+	)
+	return handler, err
+}
 ```
 
 These networks are examples. Declare the actual proxy peers in the deployment.
@@ -56,8 +60,12 @@ Middleware that reads the resolved address or public origin must run inside
 `PublicURLs`, browser sessions or credential-request checks precede it, and a
 router whose route installs `TrustedProxy` beneath such a global policy.
 
+<!-- compiled-source: tests/fixtures/consumer/httpproxy/http_trusted_proxy_recipes.go#http-trusted-proxy-2 -->
 ```go
-client := foundryhttp.ClientIP(ctx) // netip.Addr from the service's context
+func clientAddress(ctx context.Context) netip.Addr {
+	client := foundryhttp.ClientIP(ctx) // netip.Addr from the service's context
+	return client
+}
 ```
 
 The [compiling consumer](../../tests/fixtures/consumer/httpproxy/router_test.go)
