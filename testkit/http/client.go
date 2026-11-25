@@ -162,11 +162,15 @@ func (c *Client) With(t testing.TB, configure ...Option) *Client {
 }
 
 // JSON uses the same generated request contract as production outbound calls.
+// The descriptor is the generated function named after the payload type plus
+// JSON: for a type PublishRequest it is PublishRequestJSON().
 func JSON[T any](ctx context.Context, request httpclient.Request, descriptor contract.JSON[T], payload T) (httpclient.Request, error) {
 	return httpclient.JSON(ctx, request, descriptor, payload)
 }
 
 // DecodeJSON validates the complete response against its generated DTO contract.
+// The descriptor is the generated function named after the DTO type plus JSON,
+// such as ReplyJSON() for a type Reply.
 // HTTP success/status assertions remain explicit.
 func DecodeJSON[T any](ctx context.Context, response httpclient.Response, descriptor contract.JSON[T]) (T, error) {
 	return httpclient.DecodeJSON(ctx, response, descriptor)

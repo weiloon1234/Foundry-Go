@@ -93,7 +93,9 @@ func (d *Dispatcher) begin(ctx context.Context) (func(), error) {
 // nonzero ID permits an intentional retry. Zero At means immediately eligible.
 // Queue optionally overrides the definition's default routing destination.
 type Options[P any] struct {
+	// ID is the dispatch identity. Zero generates a new one with NewID; a nonzero value is used as given, so a retry of an ambiguous dispatch can supply the same ID again.
 	ID ID[P]
+	// At is the earliest time the job becomes eligible to run. Zero means immediately eligible; a nonzero time must fall between years 1970 and 9999 (UTC) or the dispatch is refused as an invalid scheduled time.
 	At time.Time
 	// Queue sends this job to a different queue than its declared policy names; empty keeps the declared queue.
 	Queue Queue

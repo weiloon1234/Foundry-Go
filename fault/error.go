@@ -17,7 +17,8 @@ const (
 	Duplicate Code = "duplicate"
 	// Missing classifies a required or named item that does not exist.
 	Missing Code = "missing"
-	Cycle   Code = "cycle"
+	// Cycle classifies a dependency cycle (seeders, migrations) or a callback that re-enters or waits on its own owner, such as a recursive cache fill, authentication guard or policy evaluation, or a wait for its own shutdown.
+	Cycle Code = "cycle"
 	// Closed classifies use of an owner, binding or service that is closed, frozen, closing or no longer active.
 	Closed Code = "closed"
 	// Conflict classifies an operation that conflicts with the current state, such as starting something already started or closed.

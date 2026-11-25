@@ -79,8 +79,11 @@ type Route[P any] struct {
 	err            error
 }
 
-// DefineRoute declares a typed path route and applies its options; validation occurs
-// separately.
+// DefineRoute declares a typed path route and applies its options. It validates
+// nothing: a bad or nil option is retained by ConfigureRoute, and ValidateRoute
+// (also run by the endpoint, signed, assets and route-scope paths that contain the
+// route, and by contribution registration) reports it together with identity,
+// middleware and path errors.
 func DefineRoute[P any](spec RouteSpec, path Path[P], options ...RouteOption) Route[P] {
 	return ConfigureRoute(Route[P]{spec: spec, path: path}, options...)
 }

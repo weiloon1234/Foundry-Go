@@ -132,7 +132,10 @@ func ConfigureRoute[P any](route Route[P], options ...RouteOption) Route[P] {
 }
 
 // ConfigureEndpoint applies declaration options to a copy of endpoint and retains
-// option errors for validation.
+// option errors (the first one wins) instead of returning them. They are
+// reported by ValidateEndpoint, by the route registration built from the endpoint
+// (NewRouter returns it) and by registering the endpoint as a route contribution;
+// the call that applies the bad option does not fail.
 func ConfigureEndpoint[P, Q, B, R any](endpoint Endpoint[P, Q, B, R], options ...EndpointOption) Endpoint[P, Q, B, R] {
 	for _, option := range options {
 		if option == nil {
@@ -206,6 +209,11 @@ type requirementOption[M any] struct{ guardOption[M] }
 func (requirementOption[M]) requirementOption() {}
 
 // Scopes requires the credential to grant the supplied model-owned access scopes.
+// It is a RequirementOption: pass it to AllOf, not directly as an access rule.
+// Use it at most once per AllOf (a second use is a duplicate declaration error),
+// and with a nonempty set (an empty set is refused when the rule is validated).
+// The error is retained by AllOf and reported where the endpoint or route is
+// validated or registered, not at this call.
 func Scopes[M any](required auth.AccessScopes[M]) RequirementOption[M] {
 	return requirementOption[M]{guardOption[M]{apply: func(binding authenticationBinding[M]) authenticationBinding[M] {
 		return authenticationWithScopes(binding, required)
@@ -213,6 +221,11 @@ func Scopes[M any](required auth.AccessScopes[M]) RequirementOption[M] {
 }
 
 // Permissions snapshots model permissions required by the authentication binding.
+// It is a RequirementOption: pass it to AllOf, not directly as an access rule.
+// Use it at most once per AllOf (a second use is a duplicate declaration error)
+// with between one and auth.MaxRegistrations permissions (none, or more, is refused).
+// The error is retained by AllOf and reported where the endpoint or route is
+// validated or registered, not at this call.
 func Permissions[M any](required ...auth.Permission[M]) RequirementOption[M] {
 	required = slices.Clone(required)
 	return requirementOption[M]{guardOption[M]{apply: func(binding authenticationBinding[M]) authenticationBinding[M] {

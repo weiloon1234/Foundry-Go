@@ -1117,23 +1117,40 @@ type SettingsAppFeaturesEventsConfigConfigKeySet struct {
 // SettingsAppFeaturesOutboxConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesOutboxConfigKeySet struct {
 	// Enabled selects app.features.outbox.enabled. Set accepts bool.
+	//
+	// Enabled registers the outbox publisher and its migrations; the publisher fields are validated only when it is true.
+	//
 	Enabled config.Key[Settings, bool]
 	// Database selects app.features.outbox.database. Set accepts database.ConnectionName.
+	//
+	// Database is the database connection that holds the outbox table.
+	//
 	Database config.Key[Settings, database.ConnectionName]
 	// Schema selects app.features.outbox.schema. Set accepts string.
+	//
+	// Schema is the schema of the outbox table within Database; the default is public.
+	//
 	Schema config.Key[Settings, string]
 	// Jobs selects app.features.outbox.jobs. Set accepts map[jobs.ConnectionName]outbox.Destination.
+	//
+	// Jobs maps a job connection (the key, which must be configured under services.jobs.connections) to the outbox destination (the value) that carries that connection's jobs. At most 128 entries; each destination must be a semantic name.
+	//
 	Jobs config.Key[Settings, map[jobs.ConnectionName]outbox.Destination]
 	// Events selects app.features.outbox.events. Set accepts map[outbox.Destination]jobs.ConnectionName.
 	//
-	// Events maps declared EventOutbox destinations to durable job connections.
-	// Empty connection selects the default. Each connection uses its default
-	// queue and jobs.DefaultPolicy for the framework event delivery job.
+	// Events maps each declared EventOutbox destination (the key) to the durable job
+	// connection (the value) that delivers it; the reverse direction of Jobs. Empty connection selects the
+	// default job connection, which must be a Redis connection. Each destination needs an
+	// EventOutbox declaration and each declaration needs an entry here; at most 128 entries.
+	// Each connection uses its default queue and jobs.DefaultPolicy for the framework event delivery job.
 	//
 	Events config.Key[Settings, map[outbox.Destination]jobs.ConnectionName]
 	// Kernels selects app.features.outbox.kernels. Set accepts []foundation.KernelKind.
 	Kernels config.Key[Settings, []foundation.KernelKind]
 	// MaxAttempts selects app.features.outbox.max_attempts. Set accepts uint32.
+	//
+	// MaxAttempts is the number of publication attempts per row before the publisher gives up on it; from 1 to 1,000,000, default 1000.
+	//
 	MaxAttempts config.Key[Settings, uint32]
 	// RetryDelay selects app.features.outbox.retry_delay. Set accepts time.Duration.
 	RetryDelay config.Key[Settings, time.Duration]
@@ -1148,6 +1165,9 @@ type SettingsAppFeaturesOutboxConfigKeySet struct {
 	// MaxPollInterval selects app.features.outbox.max_poll_interval. Set accepts time.Duration.
 	MaxPollInterval config.Key[Settings, time.Duration]
 	// MaxInFlight selects app.features.outbox.max_in_flight. Set accepts int.
+	//
+	// MaxInFlight bounds both the rows claimed per transaction and the concurrent publications; from 1 to 1024, default 16.
+	//
 	MaxInFlight config.Key[Settings, int]
 }
 

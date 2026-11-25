@@ -25,6 +25,12 @@ type Definition[P any] struct {
 }
 
 // Define constructs a typed job definition with an owned snapshot of the policy.
+// It validates nothing: name, version, policy and payload type are checked by
+// Validate, which Declare and DeclareWith run, and Capture runs it before
+// dispatch. The name must match the semantic grammar ^[a-z0-9][a-z0-9_.-]*$ and be at
+// most 128 bytes; the version is the payload schema version and must be nonzero.
+// A job is identified by its name and version together; registering the same pair
+// twice is refused by NewRegistry (and by the module build) with a duplicate fault.
 func Define[P any](name Name, version Version, policy Policy) Definition[P] {
 	return Definition[P]{name: name, version: version, policy: policy.snapshot()}
 }
