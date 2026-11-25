@@ -7,11 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func TestReferenceDiagnosticsRetainTypedLocations(t *testing.T) {
-	_, err := Parse("AGENTS.md", []byte("Foundry guides: bad\nFoundry guides: also-bad\n"))
+	_, err := Parse(nil, "AGENTS.md", []byte("Foundry guides: bad\nFoundry guides: also-bad\n"))
 	message, owned := safeerror.OwnedMessage(err)
 	if !owned || !strings.Contains(message, "AGENTS.md:1:") || !strings.Contains(message, "AGENTS.md:2:") {
 		t.Fatalf("lost captured diagnostics: %q", message)
@@ -58,7 +59,7 @@ func TestReferenceGrammar(t *testing.T) {
 		{"internal hyphens", "Foundry guides: `orm#agent--entry`", 1, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			refs, err := Parse("AGENTS.md", []byte(tc.text))
+			refs, err := Parse(nil, "AGENTS.md", []byte(tc.text))
 			if (err != nil) != tc.bad || len(refs) != tc.count {
 				t.Fatalf("refs=%v err=%v", refs, err)
 			}
@@ -67,7 +68,7 @@ func TestReferenceGrammar(t *testing.T) {
 			}
 		})
 	}
-	refs, err := Parse("skills/recipe.md", []byte("intro\nFoundry guides: `orm#entry`\nFoundry guides: `http`"))
+	refs, err := Parse(nil, "skills/recipe.md", []byte("intro\nFoundry guides: `orm#entry`\nFoundry guides: `http`"))
 	if err != nil || refs[0] != (Reference{"skills/recipe.md", 2, "orm", "entry"}) || refs[1].Line != 3 {
 		t.Fatalf("%v %v", refs, err)
 	}
@@ -75,7 +76,7 @@ func TestReferenceGrammar(t *testing.T) {
 
 func TestExplicitAnchorIndexAndNavigation(t *testing.T) {
 	data := []byte("# A heading is not an ID\n<a id=\"agent-entry\"></a>\n## Agent entry\n```html\n<a id=\"agent-entry\"></a>\n<a id='BAD'></a>\n```\n<a id=\"recipe-2\"></a>\n## Recipe\n[entry](#agent-entry)\nAn ID uses `<a id=\"example\"></a>` syntax.")
-	index, err := IndexAnchors("orm.md", data)
+	index, err := IndexAnchors(nil, "orm.md", data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,11 +91,11 @@ func TestExplicitAnchorIndexAndNavigation(t *testing.T) {
 		}
 	}
 	for _, anchor := range []string{`<a id="UPPER"></a>`, `<a id="-edge"></a>`, `<a id="edge-"></a>`, `<a id=""></a>`, `<a id='entry'></a>`, `<a id="entry" />`, `<a id="entry"></a> trailing`, `<a id="a/b"></a>`} {
-		if _, err := IndexAnchors("guide.md", []byte("intro\n"+anchor)); err == nil || !strings.Contains(err.Error(), "guide.md:2:") {
+		if _, err := IndexAnchors(nil, "guide.md", []byte("intro\n"+anchor)); err == nil || !strings.Contains(err.Error(), "guide.md:2:") {
 			t.Fatalf("%s: %v", anchor, err)
 		}
 	}
-	_, err = IndexAnchors("guide.md", []byte("<a id=\"entry\"></a>\n# Title\n<a id=\"entry\"></a>"))
+	_, err = IndexAnchors(nil, "guide.md", []byte("<a id=\"entry\"></a>\n# Title\n<a id=\"entry\"></a>"))
 	if err == nil || !strings.Contains(err.Error(), "guide.md:3:") || !strings.Contains(err.Error(), "line 1") {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func TestSelectedGuideResolution(t *testing.T) {
 		t.Fatal("followed guide symlink")
 	}
 	// GitHub's pinned tree and offline reading use the same literal page/ID.
-	refs, err := Parse("AGENTS.md", []byte("Foundry guides: `orm#entry`"))
+	refs, err := Parse(nil, "AGENTS.md", []byte("Foundry guides: `orm#entry`"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,11 +149,11 @@ func TestSelectedGuideResolution(t *testing.T) {
 
 func TestParserContainersAndComments(t *testing.T) {
 	input := "> ```text\n> Foundry guides: bad\n\nFoundry guides: `orm`\n\n<!--\nFoundry guides: bad\n<a id=\"hidden\"></a>\n-->\n\n> <a id=\"visible\"></a>\n"
-	refs, err := Parse("AGENTS.md", []byte(input))
+	refs, err := Parse(nil, "AGENTS.md", []byte(input))
 	if err != nil || len(refs) != 1 || refs[0].Line != 4 {
 		t.Fatalf("references: %+v %v", refs, err)
 	}
-	anchors, err := IndexAnchors("AGENTS.md", []byte(input))
+	anchors, err := IndexAnchors(nil, "AGENTS.md", []byte(input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +171,7 @@ func TestAnchorTargetIsIndexedOncePerRun(t *testing.T) {
 	if err := os.WriteFile(target, []byte("<a id=\"recipe-first\"></a>\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	pages := NewPages(root)
+	pages := NewPages(root, nil)
 	first, err := pages.Load(target)
 	if err != nil {
 		t.Fatal(err)
@@ -188,7 +189,7 @@ func TestAnchorTargetIsIndexedOncePerRun(t *testing.T) {
 	if err := first.CheckFragment("source.md", 1, "recipe-second"); err == nil {
 		t.Fatal("cached target reread")
 	}
-	fresh, err := NewPages(root).Load(target)
+	fresh, err := NewPages(root, nil).Load(target)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,12 +200,55 @@ func TestAnchorTargetIsIndexedOncePerRun(t *testing.T) {
 
 func TestInlineCommentCannotHideMalformedDeclaration(t *testing.T) {
 	for _, input := range []string{"Foundry guides: bad <!-- comment -->\n", "Foundry guides: bad <!-- multiline\ncomment -->\n"} {
-		if _, err := Parse("AGENTS.md", []byte(input)); err == nil {
+		if _, err := Parse(nil, "AGENTS.md", []byte(input)); err == nil {
 			t.Fatalf("comment hid declaration: %q", input)
 		}
 	}
-	refs, err := Parse("AGENTS.md", []byte("# Foundry guides: bad\n"))
+	refs, err := Parse(nil, "AGENTS.md", []byte("# Foundry guides: bad\n"))
 	if err != nil || len(refs) != 0 {
 		t.Fatalf("heading became declaration: %v %v", refs, err)
+	}
+}
+
+// Declarations are read from paragraph text wherever Markdown nests it. Code,
+// raw HTML, comments, headings and table cells are not declarations.
+func TestParseReadsDeclarationsFromParagraphTextOnly(t *testing.T) {
+	for name, test := range map[string]struct {
+		text string
+		want int
+	}{
+		"paragraph":          {"Foundry guides: `orm`\n", 1},
+		"list item":          {"- Foundry guides: `orm`\n", 1},
+		"quote":              {"> Foundry guides: `orm`\n", 1},
+		"after a comment":    {"<!-- c --> Foundry guides: `orm`\n", 0},
+		"inside a comment":   {"<!-- Foundry guides: `orm` -->\n", 0},
+		"multi-line comment": {"<!--\nFoundry guides: `orm`\n-->\n", 0},
+		"heading":            {"# Foundry guides: `orm`\n", 0},
+		"indented block":     {"    Foundry guides: `orm`\n", 0},
+		"table cell":         {"| a |\n| --- |\n| Foundry guides: `orm` |\n", 0},
+		"fence":              {"```\nFoundry guides: `orm`\n```\n", 0},
+		"quoted fence":       {"> ```\n> Foundry guides: `orm`\n> ```\n", 0},
+		"raw HTML block":     {"<div>\nFoundry guides: `orm`\n</div>\n", 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			refs, err := Parse(nil, "AGENTS.md", []byte(test.text))
+			if err != nil || len(refs) != test.want {
+				t.Fatalf("refs = %v, err = %v; want %d", refs, err, test.want)
+			}
+		})
+	}
+}
+
+func TestPagesIndexUsesRepositoryRelativeNamesForTheSharedCache(t *testing.T) {
+	root := t.TempDir()
+	name := filepath.Join(root, "docs", "guides", "a.md")
+	pages := NewPages(root, markdown.NewCache())
+	data := []byte("<a id=\"entry\"></a>\n# T\n<a id=\"entry\"></a>\n")
+	_, err := pages.Index(name, data)
+	if err == nil || !strings.Contains(err.Error(), "docs/guides/a.md:3: duplicate explicit anchor") || strings.Contains(err.Error(), root) {
+		t.Fatalf("diagnostic should name the repository-relative path: %v", err)
+	}
+	if _, again := pages.Index(name, data); again == nil || again.Error() != err.Error() {
+		t.Fatalf("second index of the same page changed: %v", again)
 	}
 }

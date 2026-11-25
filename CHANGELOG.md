@@ -4,15 +4,32 @@
 
 - Before upgrading the application pin, retarget any `Foundry guides:` declaration
   naming `orm-migration` to a current task guide. The migration page is removed.
-  Documentation diagnostics have new wording and report recorded replacements;
-  replacement metadata adds no retirement-name, arity or chain rule.
-- Compiled-source bindings, the closed fence-tag list, and the restrictions on
-  indented code and HTML `pre`/`code` elements apply to the framework's own
-  guides, instructions and skills. An application's `foundry docs check` does
-  **not** enforce these binding, tag or block rules in this release and does not
-  require framework fixture sources.
-- Documentation readers share the Goldmark v1.8.7 Markdown parser (MIT licence),
-  with bounded regular-file inputs and repository-confined rendering.
+- `go tool foundry docs check` now reads each active document (`AGENTS.md` files
+  and `.claude/skills` Markdown) with the shared Goldmark v1.8.7 CommonMark reader
+  (MIT licence). Compared with v0.52.0 an application sees exactly these changes:
+  - A document is refused, with its line number, when it is over 512 KiB, has a
+    line over 16 KiB, has a line opening with more than 16 quote or list markers, or
+    uses CR-only line endings. A path component starting with `.env` or a symlink is
+    refused unread, and reads are confined to the application directory and to
+    regular files.
+  - Retired names inside HTML comments are no longer reported; text after a comment
+    on the same line is still checked.
+  - Fences inside quotes and list items are real fences, so a TypeScript or
+    JavaScript fence there is skipped like a top-level one; indented blocks are
+    checked as code, not prose; inline code spans pair as CommonMark pairs them.
+  - `Foundry guides:` declarations are read from paragraph text, including list
+    items and quotes, and no longer from indented or raw HTML blocks.
+  - Diagnostics have new wording (`name is retired; use replacement.`) and report
+    recorded replacements; replacement metadata adds no retirement-name, arity or
+    chain rule.
+- Compiled-source bindings, the closed fence-tag list, the restrictions on indented
+  code and HTML `pre`/`code` elements, and the bare-name rule for code spans apply
+  to the framework's own guides, instructions and skills. An application's
+  `foundry docs check` does **not** enforce binding, tag or block rules in this
+  release and does not require framework fixture sources.
+- Framework documentation checks parse each document once per run. Dated records
+  (`docs/evidence/`, `CHANGELOG.md`) may reach 1.5 MiB; every other document is
+  limited to 512 KiB.
 - Client guides use compiled, framework-neutral TypeScript examples. UI hooks
   remain application-owned, and the framework adds no React or TSX dependency.
 

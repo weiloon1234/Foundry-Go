@@ -98,12 +98,22 @@ The renderer opens files through a repository-confined filesystem root.
 
 One Goldmark AST reader supplies block, container, link, anchor and inline syntax
 to all documentation checks. A binding comment must be the immediately preceding
-node in the same container. Comments containing apparent code remain comments.
-Each input or rendered document is limited to 4 MiB, each source file to 8 MiB and each compiler-input
-manifest or stream to 16 MiB. Teaching-source loading (including rendered bytes) and the anchor cache each
-allow at most 128 MiB per run; each permits at most 4096 documents or targets.
-Oversized inputs fail with the limit in the diagnostic. Retirement rules compile
-once per command run, and each link target's anchors are indexed once.
+node in the same container. Comments containing apparent code remain comments, but
+text or an element after a comment on the same line is checked like any other.
+Every documentation command applies one size rule to every Markdown document it
+reads: at most 512 KiB, except the dated historical records (`docs/evidence/` and
+`CHANGELOG.md`, which the repository check reads for links), which may reach 1.5 MiB.
+Before parsing, a document is refused with its line number when a line is longer than
+16 KiB, opens with more than 16 quote or list markers, or ends with a lone carriage
+return (CR-only line endings). Each source file is limited to 8 MiB and each
+compiler-input manifest or stream to 16 MiB. Teaching-source loading (including rendered
+bytes) and the anchor cache each allow at most 128 MiB per run, and a run reads at most
+4096 documents or targets. Oversized inputs fail with the limit in the diagnostic.
+Each document is parsed once per run and that parse serves its binding, retirement,
+reference and link checks; retirement rules compile once, and each link target's
+anchors are indexed once. In framework documents a code span holding only a bare name
+that matches a retired member is reported as a match, not as that package's name; write
+the qualified name you mean.
 
 These binding, tag and block restrictions apply to the framework's documents.
 An application's `foundry docs check` does not enforce them in this release.

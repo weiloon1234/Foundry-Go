@@ -64,7 +64,9 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 	if !verified {
 		return safeerror.New(fmt.Sprintf("docs check requires a verified tool/framework version match; development builds and local replacements are unverifiable; run the module-pinned `go tool foundry docs check --dir .` with a released framework"))
 	}
-	checker, err := retirement.NewDocumentChecker(false)
+	cache := markdown.NewCache()
+	var budget markdown.Budget
+	checker, err := retirement.NewDocumentChecker(false, cache)
 	if err != nil {
 		return err
 	}
@@ -105,11 +107,14 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 		if !entry.Type().IsRegular() {
 			return safeerror.New(fmt.Sprintf("%s: active documentation must be a regular file", rel))
 		}
-		data, err := markdown.ReadFile(root, rel, markdown.MaxDocumentBytes)
+		data, err := markdown.ReadFile(root, rel, markdown.DocumentLimit(rel))
 		if err != nil {
 			return err
 		}
-		parsed, err := docrefs.Parse(rel, data)
+		if err := budget.Take(rel, len(data)); err != nil {
+			return err
+		}
+		parsed, err := docrefs.Parse(cache, rel, data)
 		refs = append(refs, parsed...)
 		failures = append(failures, err, checker.Check(rel, data))
 		return nil

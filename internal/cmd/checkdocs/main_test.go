@@ -167,7 +167,7 @@ func testRepository(t *testing.T) string {
 	writeTestFile(t, root, "go.mod", "module example.test/framework\n\ngo 1.20.0\n")
 	writeTestFile(t, root, "tests/fixtures/consumer/go.mod", "module example.test/consumer\n\ngo 1.20.0\n")
 	writeTestFile(t, root, "README.md", "[Blueprint](blueprint/00-master-architecture-and-parity.md)\n")
-	writeTestFile(t, root, "blueprint/00-master-architecture-and-parity.md", "# Master\n[Next](01-next.md)\n\n| Milestone | Blueprint | Depends on | Status |\n| 01 | [Next](01-next.md) | 00 | Complete |\n| 25 | Deferred extensions | Future work | Deferred |\n")
+	writeTestFile(t, root, "blueprint/00-master-architecture-and-parity.md", "# Master\n[Next](01-next.md)\n\n| Milestone | Blueprint | Depends on | Status |\n| --- | --- | --- | --- |\n| 01 | [Next](01-next.md) | 00 | Complete |\n| 25 | Deferred extensions | Future work | Deferred |\n")
 	writeTestFile(t, root, "blueprint/01-next.md", "# Next\n")
 	return root
 }

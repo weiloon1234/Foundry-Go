@@ -18,10 +18,14 @@ type Anchors struct{ lines map[string]int }
 
 // IndexAnchors rejects malformed and duplicate explicit anchors outside fences.
 // Callers must handle its error before using the index for fragment validation.
-func IndexAnchors(name string, data []byte) (Anchors, error) {
+func IndexAnchors(cache *markdown.Cache, name string, data []byte) (Anchors, error) {
 	index := Anchors{lines: make(map[string]int)}
 	var failures []error
-	markdown.Read(data).AnchorLines(func(line int, text string) {
+	parsed, err := cache.Read(name, data)
+	if err != nil {
+		return Anchors{}, err
+	}
+	parsed.AnchorLines(func(line int, text string) {
 		text = strings.TrimSpace(text)
 		if !anchorStart.MatchString(text) {
 			return
@@ -56,6 +60,7 @@ func (a Anchors) CheckFragment(file string, line int, fragment string) error {
 // Pages indexes each target at most once per run, including failed reads.
 type Pages struct {
 	root  string
+	cache *markdown.Cache
 	pages map[string]page
 	bytes int
 }
@@ -64,8 +69,20 @@ type page struct {
 	err     error
 }
 
-// NewPages creates a run-local cache confined to root.
-func NewPages(root string) *Pages { return &Pages{root: root, pages: make(map[string]page)} }
+// NewPages creates a run-local cache confined to root. Documents are parsed
+// through cache, shared with the run's other checks; nil parses privately.
+func NewPages(root string, cache *markdown.Cache) *Pages {
+	return &Pages{root: root, cache: cache, pages: make(map[string]page)}
+}
+
+// documentName is the repository-relative slash path the parser and its size
+// rule know a page by.
+func (p *Pages) documentName(name string) string {
+	if relative, err := filepath.Rel(p.root, name); err == nil {
+		return filepath.ToSlash(relative)
+	}
+	return filepath.ToSlash(name)
+}
 
 // Index reuses caller-read bytes while preserving the first snapshot of a target.
 func (p *Pages) Index(name string, data []byte) (Anchors, error) {
@@ -78,7 +95,7 @@ func (p *Pages) Index(name string, data []byte) (Anchors, error) {
 	if len(p.pages) >= markdown.MaxDocuments || p.bytes > markdown.MaxRunBytes {
 		result.err = safeerror.New(fmt.Sprintf("documentation:0: anchor index exceeds maximum %d targets or %d bytes; split the documentation run.", markdown.MaxDocuments, markdown.MaxRunBytes))
 	} else {
-		result.anchors, result.err = IndexAnchors(name, data)
+		result.anchors, result.err = IndexAnchors(p.cache, p.documentName(name), data)
 	}
 	if len(p.pages) < markdown.MaxDocuments {
 		p.pages[name] = result
@@ -98,7 +115,7 @@ func (p *Pages) Load(name string) (Anchors, error) {
 	relative, err := filepath.Rel(p.root, name)
 	if err == nil {
 		var data []byte
-		data, err = markdown.ReadFile(p.root, relative, markdown.MaxDocumentBytes)
+		data, err = markdown.ReadFile(p.root, relative, markdown.DocumentLimit(relative))
 		if err == nil {
 			return p.Index(name, data)
 		}
@@ -114,7 +131,7 @@ func CheckReferences(guidesDir string, refs []Reference) error {
 	if filepath.Base(guidesDir) == "guides" && filepath.Base(filepath.Dir(guidesDir)) == "docs" {
 		root = filepath.Dir(filepath.Dir(guidesDir))
 	}
-	return NewPages(root).CheckReferences(guidesDir, refs)
+	return NewPages(root, nil).CheckReferences(guidesDir, refs)
 }
 
 // CheckReferences shares target indexes with ordinary local links.

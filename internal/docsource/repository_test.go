@@ -9,7 +9,7 @@ import (
 
 func TestRepositoryGuideSources(t *testing.T) {
 	testkit.TrackExternalInputs(t)
-	documents, err := Load("../..")
+	documents, err := Load("../..", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

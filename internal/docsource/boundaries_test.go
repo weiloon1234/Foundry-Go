@@ -14,16 +14,16 @@ func TestIndentationColumnsAndHTMLOpenings(t *testing.T) {
 		"<pre class=example/>output</pre>", "<code class=example>output</code>",
 		"<PRE data-language='go'>output</PRE>", "<code\nclass=example>output</code>",
 	} {
-		doc, err := parseDocument("guide.md", []byte("# Guide\n\n"+body+"\n"), nil)
+		doc, err := parseDocument(nil, "guide.md", []byte("# Guide\n\n"+body+"\n"), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		err = CheckBindings([]Document{doc})
-		if err == nil || !strings.Contains(err.Error(), "guide.md:3:") || !strings.Contains(err.Error(), "use a fenced block") {
+		if err == nil || !strings.Contains(err.Error(), "guide.md:3:") || !strings.Contains(err.Error(), "use a fenced block") && !strings.Contains(err.Error(), "use backticks") {
 			t.Fatalf("accepted block %q: %v", body, err)
 		}
 	}
-	doc, err := parseDocument("guide.md", []byte("# Guide\n\n   Three-space prose.\n\n>  \toutput\n"), nil)
+	doc, err := parseDocument(nil, "guide.md", []byte("# Guide\n\n   Three-space prose.\n\n>  \toutput\n"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestMarkdownExecutableContent(t *testing.T) {
 		"```go\namount = 2\n```\n", "~~~typescript\nclient.send<Request>(request);\n~~~\n",
 		"> ```tsx\n> value\n> ```\n", "```go\n \n~~~\n",
 	} {
-		doc, err := parseDocument("guide.md", []byte("````markdown\n"+body+"````\n"), nil)
+		doc, err := parseDocument(nil, "guide.md", []byte("````markdown\n"+body+"````\n"), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -48,7 +48,7 @@ func TestMarkdownExecutableContent(t *testing.T) {
 		}
 	}
 	for _, body := range []string{"[Read](guide.md)\n", "<!-- compiled-source: tests/fixtures/consumer/example/query.go#read -->\n```go\n```\n"} {
-		doc, err := parseDocument("guide.md", []byte("````markdown\n"+body+"````\n"), nil)
+		doc, err := parseDocument(nil, "guide.md", []byte("````markdown\n"+body+"````\n"), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -97,7 +97,7 @@ func TestRegionCommentBoundaries(t *testing.T) {
 	sourcePath := "tests/fixtures/consumer/example/example.go"
 	writeInput(t, root, sourcePath, "package example\n\n// doc-example:begin example\n\n//\nvar Value = 1\n// doc-example:end example\n")
 	writeInput(t, root, "docs/guides/example.md", "<!-- compiled-source: "+sourcePath+"#example -->\n```go\n```\n")
-	_, err := Load(root)
+	_, err := Load(root, nil)
 	if err == nil || !strings.HasPrefix(err.Error(), sourcePath+":5:") {
 		t.Fatalf("boundary lost source location: %v", err)
 	}

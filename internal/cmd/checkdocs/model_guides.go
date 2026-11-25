@@ -19,8 +19,11 @@ var generatedModelTeaching = regexp.MustCompile(`\b(?:models|reports)\.\w+Fields
 
 const modelReferenceMarker = "<!-- model-declaration-reference -->"
 
-func checkModelGuide(name string, data []byte) error {
-	parsed := markdown.Read(data)
+func checkModelGuide(cache *markdown.Cache, name string, data []byte) error {
+	parsed, err := cache.Read(name, data)
+	if err != nil {
+		return err
+	}
 	nodes := append(append([]markdown.Node(nil), parsed.Blocks...), parsed.Inlines...)
 	for _, node := range nodes {
 		if node.Kind != markdown.Fence && node.Kind != markdown.Indented && node.Kind != markdown.CodeSpan && node.Kind != markdown.Text {

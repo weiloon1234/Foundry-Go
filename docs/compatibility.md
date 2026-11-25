@@ -599,13 +599,35 @@ Diagnostics have new wording and include replacements recorded in the
 [retired-names ledger](../internal/retirement/denied.json), or state that none is
 recorded. Replacement metadata adds no retirement-name, arity or chain rule.
 
-The framework's own guides, `AGENTS.md` files and skills require compiled-source
-bindings, supported fence tags and fenced code instead of indented blocks or
-HTML `pre`/`code` elements. An application's `foundry docs check` does **not**
-enforce these binding, tag or block rules in this release. Application checks
-continue to validate references and retired API teaching without requiring
-framework fixture sources. The shared Markdown reader uses Goldmark v1.8.7
-under the MIT licence; [dependency review](dependency-review.md) records its role.
+`go tool foundry docs check` reads each active document (`AGENTS.md` files and
+`.claude/skills` Markdown) with the shared Goldmark v1.8.7 CommonMark reader (MIT
+licence; [dependency review](dependency-review.md) records its role). Compared with
+v0.52.0, at the next pin an application sees exactly these changes:
+
+- A document is refused, with its line number, when it is over 512 KiB, has a line
+  over 16 KiB, has a line opening with more than 16 quote or list markers, or uses
+  CR-only line endings. A path component starting with `.env` or a symlink is
+  refused unread, and reads are confined to the application directory and to
+  regular files.
+- Retired names inside HTML comments are no longer reported; text after a comment
+  on the same line is still checked.
+- Fences inside quotes and list items are real fences, so a TypeScript or
+  JavaScript fence there is skipped like a top-level one; indented blocks are
+  checked as code rather than prose; inline code spans pair as CommonMark pairs
+  them.
+- `Foundry guides:` declarations are read from paragraph text, including list items
+  and quotes, and no longer from indented or raw HTML blocks.
+- The diagnostic wording is `name is retired; use replacement.`
+
+The framework's own guides, `AGENTS.md` files and skills additionally require
+compiled-source bindings, supported fence tags and fenced code instead of indented
+blocks or HTML `pre`/`code` elements, and reject a bare retired member name in a
+code span (the message names the retired members it matches and asks for the
+qualified name). An application's `foundry docs check` does **not** enforce these
+binding, tag, block or bare-name rules in this release. Application checks continue
+to validate references and retired API teaching without requiring framework fixture
+sources. Framework documents are limited to 512 KiB each, except the dated records
+`docs/evidence/` and `CHANGELOG.md` at 1.5 MiB.
 
 Review reference diagnostics alongside runtime and generator changes during an
 upgrade. A rollback must restore compatible application references and workflow

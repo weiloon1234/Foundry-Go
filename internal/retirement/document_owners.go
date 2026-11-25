@@ -380,23 +380,47 @@ func (r documentRules) bindingsAt(file *ast.File, pos token.Pos, aliases map[str
 func (r documentRules) retirementMessage(name string) string {
 	name = retirementName(name)
 	if !strings.Contains(name, ".") {
-		qualified := ""
-		for spelling := range r.replacements {
-			if strings.HasSuffix(spelling, "."+name) {
-				if qualified != "" {
-					return name + " is retired; qualify the owner to identify its replacement."
-				}
-				qualified = spelling
-			}
-		}
-		if qualified != "" {
-			name = qualified
-		}
+		return r.bareMessage(name)
 	}
 	if replacement := r.replacements[name]; replacement != "" {
 		return name + " is retired; use " + replacement + "."
 	}
 	return name + " is retired; no replacement is recorded; remove this use and consult the current task guide."
+}
+
+// bareMessage words a finding for a name the document wrote without a package:
+// it only matches retired members, so it says so rather than naming an owner
+// the document never wrote.
+func (r documentRules) bareMessage(name string) string {
+	var matches []string
+	for spelling := range r.replacements {
+		if strings.HasSuffix(spelling, "."+name) {
+			matches = append(matches, spelling)
+		}
+	}
+	slices.Sort(matches)
+	if len(matches) == 0 {
+		return "`" + name + "` is retired; no replacement is recorded; remove this use and consult the current task guide."
+	}
+	quoted := make([]string, len(matches))
+	for i, spelling := range matches {
+		quoted[i] = "`" + spelling + "`"
+	}
+	message := "`" + name + "` matches the retired " + strings.Join(quoted, ", ") + "; write the qualified name you mean (for example `pkg." + name + "`)"
+	var uses []string
+	for _, spelling := range matches {
+		if replacement := r.replacements[spelling]; replacement != "" {
+			if len(matches) == 1 {
+				uses = append(uses, "`"+replacement+"`")
+			} else {
+				uses = append(uses, "`"+replacement+"` for `"+spelling+"`")
+			}
+		}
+	}
+	if len(uses) > 0 {
+		message += ", or use " + strings.Join(uses, ", ")
+	}
+	return message + "."
 }
 
 // Canonicalize the resolved framework package path without changing ownership.

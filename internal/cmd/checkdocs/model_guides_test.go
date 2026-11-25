@@ -11,17 +11,17 @@ func TestCurrentModelGuideRejectsRetiredTeaching(t *testing.T) {
 		"models.UserFields()",
 		"reports.SummaryFieldsAt(scope)", "UserDraft{}", "models.QueryUsers()",
 	} {
-		if err := checkModelGuide("docs/guides/model-queries.md", []byte(example+link)); err == nil || !strings.Contains(err.Error(), "generated model/query API") {
+		if err := checkModelGuide(nil, "docs/guides/model-queries.md", []byte(example+link)); err == nil || !strings.Contains(err.Error(), "generated model/query API") {
 			t.Fatalf("accepted %q: %v", example, err)
 		}
 	}
-	if err := checkModelGuide("docs/guides/model-queries.md", []byte("Use `models.Users.Query()`.")); err != nil {
+	if err := checkModelGuide(nil, "docs/guides/model-queries.md", []byte("Use `models.Users.Query()`.")); err != nil {
 		t.Fatal(err)
 	}
-	if err := checkModelGuide("docs/guides/model-queries.md", []byte("Use `models.Users.Query()`."+link)); err != nil {
+	if err := checkModelGuide(nil, "docs/guides/model-queries.md", []byte("Use `models.Users.Query()`."+link)); err != nil {
 		t.Fatal(err)
 	}
-	if err := checkModelGuide("docs/guides/reference.md", []byte("Other teaching.")); err != nil {
+	if err := checkModelGuide(nil, "docs/guides/reference.md", []byte("Other teaching.")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -43,7 +43,7 @@ func TestRepositoryRetainsRetirementRulesWithoutMigrationLink(t *testing.T) {
 }
 
 func TestCurrentModelGuideAllowsModelDirective(t *testing.T) {
-	if err := checkModelGuide("docs/guides/model-queries.md", []byte("//foundry:model table=users var=Users key=ID\ntype User struct { ID int }")); err != nil {
+	if err := checkModelGuide(nil, "docs/guides/model-queries.md", []byte("//foundry:model table=users var=Users key=ID\ntype User struct { ID int }")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -59,7 +59,7 @@ func TestModelGuideDeclarationSpelling(t *testing.T) {
 		"import table \"github.com/weiloon1234/Foundry-Go/database/orm\"\ntype UserTable struct { table.Table[User, int] }",
 	} {
 		for _, name := range []string{"docs/guides/model-declarations.md", "database/orm/README.md", "database/AGENTS.md"} {
-			if err := checkModelGuide(name, []byte("```go\n"+code+"\n```\n")); err == nil || !strings.Contains(err.Error(), "//foundry:model") {
+			if err := checkModelGuide(nil, name, []byte("```go\n"+code+"\n```\n")); err == nil || !strings.Contains(err.Error(), "//foundry:model") {
 				t.Fatalf("accepted %s: %s: %v", name, code, err)
 			}
 		}
@@ -71,7 +71,7 @@ func TestModelGuideDeclarationSpelling(t *testing.T) {
 		"type UserRow struct { rows.Row[User]; ID rows.Field[User, int] }",
 		"// orm.Define is called by generated code\nvar note = \"orm.Define(\"",
 	} {
-		if err := checkModelGuide("docs/guides/model-declarations.md", []byte("```go\n"+code+"\n```\n")); err != nil {
+		if err := checkModelGuide(nil, "docs/guides/model-declarations.md", []byte("```go\n"+code+"\n```\n")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -79,11 +79,11 @@ func TestModelGuideDeclarationSpelling(t *testing.T) {
 
 func TestLowLevelModelReferenceIsOneSourceBoundBlock(t *testing.T) {
 	block := "<!-- compiled-source: tests/fixtures/example_test.go#binding -->\n```go\nvar Users = orm.Define(\"users\", bindUser)\n```\n"
-	if err := checkModelGuide("database/orm/README.md", []byte(modelReferenceMarker+"\n"+block)); err != nil {
+	if err := checkModelGuide(nil, "database/orm/README.md", []byte(modelReferenceMarker+"\n"+block)); err != nil {
 		t.Fatal(err)
 	}
 	for _, doc := range []string{modelReferenceMarker, modelReferenceMarker + "\n```go\nx\n```", modelReferenceMarker + "\n" + block + block, modelReferenceMarker + "\n" + strings.ReplaceAll(block, "example_test.go", "example.go")} {
-		if err := checkModelGuide("database/orm/README.md", []byte(doc)); err == nil {
+		if err := checkModelGuide(nil, "database/orm/README.md", []byte(doc)); err == nil {
 			t.Fatal("reference escaped its source-bound block")
 		}
 	}
@@ -101,13 +101,13 @@ func TestRepositoryChecksModelDeclarationTeaching(t *testing.T) {
 
 func TestHistoricalLabelCannotExemptGeneratedExamples(t *testing.T) {
 	doc := "<!-- orm-example: inputs-before -->\n```go\nreturn oldmutators.MemberDraft{}.SetEmail(input)\n```\n"
-	if err := checkModelGuide("docs/guides/orm-migration.md", []byte(doc)); err == nil {
+	if err := checkModelGuide(nil, "docs/guides/orm-migration.md", []byte(doc)); err == nil {
 		t.Fatal("historical label exempted generated examples")
 	}
 }
 
 func TestRetiredGeneratedModelDiagnosticKeepsLine(t *testing.T) {
-	err := checkModelGuide("guide.md", []byte("# Guide\n\nText.\n\nUse models.UserFields().\n"))
+	err := checkModelGuide(nil, "guide.md", []byte("# Guide\n\nText.\n\nUse models.UserFields().\n"))
 	if err == nil || !strings.Contains(err.Error(), "guide.md:5: guide teaches a retired generated model/query API; declare models with //foundry:model") {
 		t.Fatalf("lost located repair: %v", err)
 	}
