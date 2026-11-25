@@ -12,14 +12,18 @@ import (
 
 const Reports cache.StoreName = "reports"
 
+// doc-example:begin generated-configuration-settings
+
 //foundry:config
-type Settings struct { // doc-example:begin generated-configuration-settings
+type Settings struct {
 	Services      infrastructure.Settings
 	AppName       string `config:"app_name,public" client:"env=VITE_APP_NAME,fallback=ConsumerApp"`
 	DefaultLocale string `config:"default_locale,public" client:"env=VITE_DEFAULT_LOCALE,fallback=en,kind=locale"`
 	FormatLocale  string `config:"format_locale,public" client:"env=VITE_FORMAT_LOCALE,kind=format_locale,optional"`
 	TimeZone      string `config:"time_zone,public" client:"env=VITE_TIME_ZONE,kind=time_zone,optional"`
-} // doc-example:end generated-configuration-settings
+}
+
+// doc-example:end generated-configuration-settings
 
 // doc-example:begin named-services
 func Defaults() Settings {

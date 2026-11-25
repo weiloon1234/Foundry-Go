@@ -2,7 +2,7 @@
 
 PostgreSQL-backed hashed personal and renewable tokens retain model-owned IDs, bounded lifetimes and immutable scope ceilings. Refresh rotation detects reuse and invalidates the family.
 
-Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
+Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
 
 <a id="agent-entry"></a>
 ## Agent entry

@@ -1,8 +1,8 @@
 # Generic DTO contracts
 
 T01 passed native verification, consumer/client/compiler/editor acceptance and
-[cost measurements](../evidence/typed-api-t01.json). Delivery status belongs to
-the [master](../../blueprint/00-master-architecture-and-parity.md#typed-api-delivery).
+cost measurements. Delivery status belongs to
+the master.
 
 Declare a reusable Go envelope once. Its fields and JSON tags own the wire shape:
 

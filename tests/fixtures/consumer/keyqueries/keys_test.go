@@ -22,7 +22,9 @@ func buckets() rowset.Query[models.User, keyqueries.BucketCount] {
 		rowset.MapSelected(keyqueries.BucketCounts.Bucket, expr.AsSelected(bucket)),
 		rowset.MapSelected(keyqueries.BucketCounts.Count, expr.AsSelected(expr.Count[models.User]())),
 	), expr.Group(bucket)), expr.Asc(bucket))
-} // doc-example:end computed-query-keys
+}
+
+// doc-example:end computed-query-keys
 
 func TestComputedKeyContracts(t *testing.T) {
 	u := models.Users

@@ -21,26 +21,27 @@ const modelReferenceMarker = "<!-- model-declaration-reference -->"
 
 func checkModelGuide(name string, data []byte) error {
 	doc := string(data)
-	if docsource.RequiresCompiledSource(name) && generatedModelTeaching.MatchString(doc) {
-		return fmt.Errorf("%s: guide teaches a retired generated model/query API", name)
+	if match := generatedModelTeaching.FindStringIndex(doc); match != nil {
+		line := strings.Count(doc[:match[0]], "\n") + 1
+		return fmt.Errorf("%s:%d: guide teaches a retired generated model/query API; declare models with //foundry:model and foundry tags, then use their generated tables.", name, line)
 	}
 	lines := strings.Split(doc, "\n")
 	for i := 0; i < len(lines); i++ {
 		reference := strings.TrimSpace(lines[i]) == modelReferenceMarker
 		if reference {
 			if i+2 >= len(lines) || !strings.HasPrefix(strings.TrimSpace(lines[i+1]), "<!-- compiled-source: ") {
-				return fmt.Errorf("%s:%d: model-declaration-reference must immediately precede one compiled-source Go fence", name, i+1)
+				return fmt.Errorf("%s:%d: model-declaration-reference must immediately precede one compiled-source Go fence; move the marker directly before its compiled-source marker.", name, i+1)
 			}
 			source := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(lines[i+1]), "<!-- compiled-source: "), " -->")
 			source, _, _ = strings.Cut(source, "#")
 			if !strings.HasSuffix(source, "_test.go") && !strings.HasSuffix(source, "_foundry.gen.go") && !strings.HasPrefix(source, "database/orm/") {
-				return fmt.Errorf("%s:%d: model-declaration-reference requires generated code, a test file or the ORM owner source", name, i+1)
+				return fmt.Errorf("%s:%d: model-declaration-reference requires generated code, a test file or the ORM owner source; bind an eligible source file.", name, i+1)
 			}
 			i += 2
 		}
 		marker, language := docsource.FenceStart(lines[i])
 		if reference && (marker == "" || language != "go") {
-			return fmt.Errorf("%s:%d: model-declaration-reference requires a compiled-source Go fence", name, i+1)
+			return fmt.Errorf("%s:%d: model-declaration-reference requires a compiled-source Go fence; add a Go fence directly after the compiled-source marker.", name, i+1)
 		}
 		if marker == "" {
 			continue

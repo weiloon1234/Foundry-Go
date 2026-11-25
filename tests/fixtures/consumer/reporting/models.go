@@ -61,7 +61,9 @@ type MemberRow struct {
 	Nickname value.Nullable[string] `json:"nickname"`
 	State    State                  `json:"state"`
 	Balance  decimal.Decimal        `json:"balance"`
-} // doc-example:end datatable
+}
+
+// doc-example:end datatable
 
 //foundry:dto role=row
 type OrderRow struct {

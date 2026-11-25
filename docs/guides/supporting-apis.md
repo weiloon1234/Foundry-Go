@@ -2,7 +2,7 @@
 
 Milestone 20 passed native verification and consumer review. These helpers use
 focused packages and ordinary Go values. See the
-[master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-20-verification-and-consumer-review)
+master evidence
 for checks and operational limits.
 
 ## Cryptography and tokens

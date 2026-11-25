@@ -42,7 +42,8 @@ func checkSharedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
 	a, b := rowset.Scope(first), rowset.Scope(second)
 	joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, models.Users.ID), expr.At(b, models.Users.ID)))
 	fields := rowset.LeftScope(joined, rowset.Scope(first))
-	names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, models.Users.Email)))), expr.Asc(expr.At(fields, models.Users.Email))) // doc-example:end model-ctes
+	names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, models.Users.Email)))), expr.Asc(expr.At(fields, models.Users.Email)))
+	// doc-example:end model-ctes
 	s, err := rowset.CompileRead(rowset.ReadScalar(names))
 	if err != nil {
 		return err

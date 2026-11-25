@@ -30,7 +30,9 @@ func Webhooks() ([]http.CaptureDeclaration, error) {
 		http.CapturePrefix(prefix),
 		http.CapturePrefix(auth, http.ExcludeFromCapture()),
 	}, nil
-} // doc-example:end webhook-capture-declaration
+}
+
+// doc-example:end webhook-capture-declaration
 
 // CaptureRoutes mounts the framework viewer behind the developer gate.
 // doc-example:begin webhook-capture-routes
@@ -44,4 +46,6 @@ func CaptureRoutes(captures *capture.Store) ([]http.RouteRegistration, error) {
 		return nil, err
 	}
 	return capture.Routes(http.DefineScope("/developer", "developer"), captures, binding, http.Permissions(ReadCaptures))
-} // doc-example:end webhook-capture-routes
+}
+
+// doc-example:end webhook-capture-routes

@@ -24,7 +24,8 @@ func TestPostgresComputedJoinConditions(t *testing.T) {
 		q := models.Users.Query()
 		younger, older := rowset.As[youngerAlias](q, "younger"), rowset.As[olderAlias](q, "older")
 		y, o := rowset.Scope(younger), rowset.Scope(older)
-		adjacent := rowset.OnEqual(expr.Add(expr.At(y, models.Users.Age), expr.ParamOf(expr.AsSelected(expr.Row(expr.At(y, models.Users.Age))), 1)), expr.At(o, models.Users.Age)) // doc-example:end value-comparisons-and-joins
+		adjacent := rowset.OnEqual(expr.Add(expr.At(y, models.Users.Age), expr.ParamOf(expr.AsSelected(expr.Row(expr.At(y, models.Users.Age))), 1)), expr.At(o, models.Users.Age))
+		// doc-example:end value-comparisons-and-joins
 		for _, test := range []struct {
 			on    rowset.JoinOn[rowset.Alias[youngerAlias, models.User], rowset.Alias[olderAlias, models.User]]
 			count int64

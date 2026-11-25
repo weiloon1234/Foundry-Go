@@ -31,7 +31,9 @@ func descendants(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[mod
 	p, c := rowset.Scope(parent), rowset.Scope(child)
 	joined := rowset.InnerJoin(child, parent, rowset.OnEqual(expr.At(c, models.Users.IntroducerID), expr.NullableRow(expr.At(p, models.Users.ID))))
 	return rowset.SelectRecord(joined, rowset.LeftScope(joined, rowset.Scope(child)))
-} // doc-example:end model-recursive-ctes
+}
+
+// doc-example:end model-recursive-ctes
 
 func readUsers(t *testing.T, tx database.Executor, definition rowset.CommonTable[models.User]) []models.User {
 	t.Helper()

@@ -34,3 +34,14 @@ fails before execution. The same checks apply to typed row helpers such as
 See [result types and empty input](model-aggregates.md#loading-and-result-types),
 [conditional expressions](conditional-expressions.md) and
 [scalar calculations](scalar-calculations.md).
+
+## Read expression types in diagnostics
+
+Editor hover and compiler errors can show `expr.predicate[*models.Order]` or
+`expr.selected[*models.Order, int64]`. The pointer is an internal scope type
+argument. Application declarations use the public aliases
+`expr.Predicate[models.Order]` and `expr.Selected[models.Order, int64]` instead.
+These aliases preserve the source scope and expression phase; the selected type
+also preserves its value type. Distinct aliases, joins and correlations retain
+distinct scopes. Do not add a pointer to the model argument to match the internal
+name in a diagnostic.

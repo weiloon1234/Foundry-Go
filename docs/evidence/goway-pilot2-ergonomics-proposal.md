@@ -54,7 +54,7 @@ Reuse the existing bind/option paths. No Boolean carrier family, ordered/text op
 
 Docs only: explicitly call each descriptor's `Validate()` before query execution. `orm.Check` accepts table declarations, not these descriptors (`database/orm/declaration.go:158–170`); do not imply table registration validates unattached JSON bindings. Go checks payload/result types and field existence, but cannot prove arbitrary selector behavior, JSON-tag ambiguity or custom encoding at compile time. No new registry or duplicate analyzer is warranted.
 
-Extend the startup example in `docs/guides/orm-migration.md:962`; cover an invalid foreign/ignored selector failing before executor access, alongside existing owner/value negatives. No API or footprint change.
+Extend the startup example in `https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md:962`; cover an invalid foreign/ignored selector failing before executor access, alongside existing owner/value negatives. No API or footprint change.
 
 ## 9. Framework enums in rows
 

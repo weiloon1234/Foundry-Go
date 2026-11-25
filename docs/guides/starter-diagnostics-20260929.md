@@ -60,7 +60,7 @@ exception separately.
 
 ## Targeted verification
 
-The [evidence record](../evidence/starter-diagnostics-20260929.json) retains
+The evidence record retains
 commands, source hashes, results and limits. Verification uses disposable starter
 copies with the previously tested private candidate, whose compared runtime
 sources match the published revision. The actual starter is read-only in this

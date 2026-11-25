@@ -222,5 +222,5 @@ Add domain presentation tags and locale messages in the application's Go
 declarations; keep separate request and response views. Extend the installed
 package's tests with typed field lookup, actual descriptor calls and validation
 incompleteness. The framework's
-[acceptance record](../evidence/client-descriptors-20260930.json) covers its own
+acceptance record covers its own
 consumers; it does not replace the starter's upgrade checks or close B08.

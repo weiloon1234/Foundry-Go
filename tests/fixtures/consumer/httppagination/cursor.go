@@ -19,7 +19,9 @@ var CursorList = func() pagination.CursorEndpoint[foundryhttp.NoPath, MemberFilt
 		membersCursorRoute,
 		MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultCursorConfig(),
 	)
-}() // doc-example:end http-cursor-pagination-cursor-list-request
+}()
+
+// doc-example:end http-cursor-pagination-cursor-list-request
 
 type CursorService interface {
 	CursorList(context.Context, CursorListRequest) (CursorListResult, error)
@@ -36,4 +38,6 @@ func (s DatabaseService) CursorList(ctx context.Context, in CursorListRequest) (
 		return CursorListResult{}, err
 	}
 	return pagination.MapCursorPage(ctx, page, PresentMember)
-} // doc-example:end http-cursor-pagination-example-2
+}
+
+// doc-example:end http-cursor-pagination-example-2

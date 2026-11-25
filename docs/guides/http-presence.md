@@ -36,7 +36,6 @@ reuse generated JSON/validation declarations:
 
 <!-- compiled-source: tests/fixtures/consumer/validationrules/presence.go#presence-input-rules -->
 ```go
-//
 //foundry:dto http=body
 type PresenceInput struct {
 	Label     value.Optional[string]                 `json:"label,omitzero"`
@@ -84,7 +83,7 @@ the endpoint's validation adapter; errors use paths such as `/body/label`,
 `/query/label` and `/body/tags/1`.
 
 This guide covers JSON and query transport. [Multipart presence and upload
-cleanup](http-uploads.md) are also delivered. The [HTTP blueprint](../../blueprint/08-http-validation-and-responses.md)
+cleanup](http-uploads.md) are also delivered. The HTTP blueprint
 records complete milestone acceptance; the later framework audit remains required.
 
 <a id="recipe-patch-query"></a>

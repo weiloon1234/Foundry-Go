@@ -1,6 +1,6 @@
 # Application bootstrap
 
-C03 passed its [native acceptance gate](../evidence/consumer-startup-c03.json).
+C03 passed its native acceptance gate.
 C04 supporting services and [C05 final acceptance](consumer-startup-acceptance.md) also passed.
 A [compact runnable example](consumer-startup-acceptance.md) needs no external service.
 `application.New(settings)` assembles the configured providers, router and selected
@@ -214,7 +214,7 @@ framework acceptance fixtures, not a generated starter application.
 
 ## Measured build cost
 
-The native [C03 measurement](../evidence/consumer-startup-c03-cost.json) compared
+The native C03 measurement compared
 independent copies with empty build caches, existing dependencies and downloads
 disabled. One cold build measured 3.31s for the accepted smaller query consumer
 and 9.97s for the configured executable. Unchanged builds measured 0.24s for both;

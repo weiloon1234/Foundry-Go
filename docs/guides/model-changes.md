@@ -2,7 +2,7 @@
 
 `orm.Changes[M]` contains persisted snapshots and assignment metadata. Hooks receive it automatically after complete `RETURNING` hydration. `orm.ChangeOf` and `orm.NullableChangeOf` return `lifecycle.FieldChange[V]` and `lifecycle.FieldChange[value.Nullable[V]]` respectively.
 
-<!-- orm-example: changes-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#changes-after -->
 ```go
 func changes(changes orm.Changes[hooks.Member]) (bool, error) {
 	field, err := orm.ChangeOf(changes, hooks.Members.Name)
@@ -18,7 +18,7 @@ func changes(changes orm.Changes[hooks.Member]) (bool, error) {
 
 For a comparison outside a write:
 
-<!-- orm-example: stored-comparison -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#stored-comparison -->
 ```go
 func compareStored(before, after hooks.Member) (orm.Changes[hooks.Member], error) {
 	return orm.Compare(hooks.Members.Table, value.Set(before), value.Set(after),

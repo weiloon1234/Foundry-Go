@@ -12,8 +12,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/translations"
 )
 
-// Article is a methodless extension owner. Example: Article{ID:1}.
 // doc-example:begin model-extension-slots-article
+
+// Article is a methodless extension owner. Example: Article{ID:1}.
 //
 //foundry:model table=extension_articles var=Articles key=ID identity=false
 type Article struct {
@@ -27,7 +28,9 @@ type Article struct {
 	Gallery attachments.Many[Article]
 	// SEO binds a concrete metadata value. Example: extensions.BindSlot(Articles.Key(),Articles.SEO).
 	SEO metadata.Value[string]
-} // doc-example:end model-extension-slots-article
+}
+
+// doc-example:end model-extension-slots-article
 
 // Author supplies an unrelated owner for compiler fixtures. Example: Author{ID:1}.
 //
@@ -36,7 +39,9 @@ type Author struct{ ID int64 }
 
 // Owner pins storage identity independently of future table renames. Example: extensions.ORMIdentity(Owner).Reference(1).
 // doc-example:begin model-extension-slots-owner
-var Owner = extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table, Articles.Key()), extensions.OwnerOptions{StorageModel: "extension_articles"}) // doc-example:end model-extension-slots-owner
+var Owner = extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table, Articles.Key()), extensions.OwnerOptions{StorageModel: "extension_articles"})
+
+// doc-example:end model-extension-slots-owner
 
 // Descriptors groups concrete extension capabilities. Example: ArticleExtensions.From(runtime).
 type Descriptors struct {

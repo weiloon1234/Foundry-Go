@@ -23,14 +23,14 @@ func TestRepositoryChecks(t *testing.T) {
 				writeTestFile(t, root, "tests/fixtures/consumer/example/example.go", "package example\n// doc-example:begin value\nvar Value = 1\n// doc-example:end value\n")
 				writeTestFile(t, root, "docs/guides/example.md", "<!-- compiled-source: tests/fixtures/consumer/example/example.go#value -->\n```go\nvar Value = 2\n```\n")
 			},
-			wantError: "compiled-source fence differs",
+			wantError: "compiled source differs from the displayed block",
 		},
 		{
 			name: "unbound recipe fence",
 			change: func(t *testing.T, root string) {
 				writeTestFile(t, root, "docs/guides/example.md", "<a id=\"recipe-read\"></a>\n## Read\n```go\nvar Value = 1\n```\n")
 			},
-			wantError: "requires compiled-source",
+			wantError: "block has no compiled source",
 		},
 		{
 			name: "completed milestone future work",
@@ -63,7 +63,7 @@ func TestRepositoryChecks(t *testing.T) {
 		{
 			name: "history deferred work and code keep their meaning",
 			change: func(t *testing.T, root string) {
-				writeTestFile(t, root, "docs/guides/current.md", "Milestone 01 passed acceptance. This API remains milestone 25 work.\n\nUse `remain milestone 01 work` as a historical search example.\n\n```md\nEvents remain milestone 01 work.\n```\n")
+				writeTestFile(t, root, "docs/guides/current.md", "Milestone 01 passed acceptance. This API remains milestone 25 work.\n\nUse `remain milestone 01 work` as a historical search example.\n\n```markdown\nEvents remain milestone 01 work.\n```\n")
 				writeTestFile(t, root, "docs/guides/review-20261019.md", "Events remain milestone 01 work.\n")
 				writeTestFile(t, root, "docs/guides/review-2026-10-19.md", "Events remain milestone 01 work.\n")
 				writeTestFile(t, root, "blueprint/01-next.md", "Events remain milestone 01 work.\n")
@@ -117,7 +117,7 @@ func TestRepositoryChecks(t *testing.T) {
 		{
 			name: "remote links fragments and fenced examples",
 			change: func(t *testing.T, root string) {
-				writeTestFile(t, root, "README.md", "[Go](https://go.dev/)\n[Section](#section)\n```md\n[Example](not-created.md)\n```\n~~~md\n[Example](also-not-created.md)\n~~~\n")
+				writeTestFile(t, root, "README.md", "[Go](https://go.dev/)\n[Section](#section)\n```markdown\n[Example](not-created.md)\n```\n~~~markdown\n[Example](also-not-created.md)\n~~~\n")
 			},
 		},
 		{
@@ -180,5 +180,47 @@ func writeTestFile(t *testing.T, root, name, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTeachingLinksCannotTargetHistory(t *testing.T) {
+	for _, source := range []string{"docs/guides/example.md", ".claude/skills/example/SKILL.md"} {
+		for _, target := range []string{"docs/evidence/example.md", "blueprint/01-next.md", "CHANGELOG.md"} {
+			for _, reference := range []bool{false, true} {
+				root := testRepository(t)
+				writeTestFile(t, root, target, "# History\n")
+				relative, err := filepath.Rel(filepath.Dir(filepath.Join(root, source)), filepath.Join(root, target))
+				if err != nil {
+					t.Fatal(err)
+				}
+				text := "[Example](" + relative + ")\n"
+				if reference {
+					text = "[Example][owner]\n\n[owner]: " + relative + "\n"
+				}
+				writeTestFile(t, root, source, text)
+				err = checkRepository(root)
+				if err == nil || !strings.Contains(err.Error(), "targets historical material;") {
+					t.Fatalf("%s -> %s: %v", source, target, err)
+				}
+			}
+		}
+	}
+}
+
+func TestGoInputsAlsoChecksBindings(t *testing.T) {
+	root := t.TempDir()
+	guide := filepath.Join(root, "docs/guides/example.md")
+	if err := os.MkdirAll(filepath.Dir(guide), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(guide, []byte("# Example\n\n```go\nvar Value = 1\n```\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	inputs := filepath.Join(root, "inputs.json")
+	if err := os.WriteFile(inputs, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(root, inputs); err == nil || !strings.Contains(err.Error(), "example.md:3: Go block has no compiled source;") {
+		t.Fatalf("input mode escaped binding checks: %v", err)
 	}
 }

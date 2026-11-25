@@ -4,8 +4,8 @@
 
 Foundry-Go is a library/framework repository. Applications consume its public packages. The nested [consumer fixture](../../tests/fixtures/consumer/README.md) checks that external module boundary; it is not the future starter project.
 
-For milestone work, read the [blueprint index](../../blueprint/README.md) and
-[master roadmap](../../blueprint/00-master-architecture-and-parity.md). Foundry-Go
+For milestone work, read the blueprint index and
+master roadmap. Foundry-Go
 source, public contracts and executable consumers are the implementation authority.
 Inspect the relevant implementation and closest consumer before changing an API.
 Historical cross-repository mappings do not authorize consulting sibling projects.
@@ -140,6 +140,6 @@ Milestone status lives only in the master roadmap. Each subsystem blueprint owns
 
 Use inline Markdown links with relative local paths. The repository checker validates target files/directories, not remote URLs or heading fragments, and ignores fenced code blocks and matched inline code spans. It is a lightweight repository check, not a full Markdown parser. Keep future package/file names in code spans until those files actually exist.
 
-Add focused behavior tests for real guarantees, compile-fail fixtures for type safety, and integration tests for actual databases/providers. For [managed model time](model-timestamps.md), inject `testkit.Clock` through application assembly (or `database.WithClock` for direct pools); advance it instead of sleeping to test timestamp changes. Infrastructure cancellation still uses real context deadlines. Do not claim that a memory fake certifies distributed or cloud behavior. Isolate test data without destructive database resets. Update [CHANGELOG.md](../../CHANGELOG.md) for user-visible changes.
+Add focused behavior tests for real guarantees, compile-fail fixtures for type safety, and integration tests for actual databases/providers. For [managed model time](model-timestamps.md), inject `testkit.Clock` through application assembly (or `database.WithClock` for direct pools); advance it instead of sleeping to test timestamp changes. Infrastructure cancellation still uses real context deadlines. Do not claim that a memory fake certifies distributed or cloud behavior. Isolate test data without destructive database resets. Update CHANGELOG.md for user-visible changes.
 
 No Git commits, pushes, merges, releases or remote repositories are created by these commands.

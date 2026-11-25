@@ -12,23 +12,24 @@ import (
 )
 
 func main() {
-	check := flag.Bool("check", false, "compare without writing")
-	root := flag.String("root", ".", "framework source root")
+	flags := flag.NewFlagSet("renderdocs", flag.ContinueOnError)
+	check := flags.Bool("check", false, "compare without writing")
+	root := flags.String("root", ".", "framework source root")
 	var guides []string
-	flag.Func("guide", "render only this guide basename (repeatable)", func(name string) error {
+	flags.Func("guide", "render only this guide basename (repeatable)", func(name string) error {
 		if filepath.Base(name) != name || !strings.HasSuffix(name, ".md") {
 			return fmt.Errorf("guide must be a Markdown basename")
 		}
 		guides = append(guides, name)
 		return nil
 	})
-	flag.Parse()
-	if flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "renderdocs accepts flags only")
+	if err := docsource.ParseFlags(flags, os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, docsource.Diagnostics(err))
 		os.Exit(1)
 	}
+
 	if err := run(*root, *check, guides...); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, docsource.Diagnostics(err))
 		os.Exit(1)
 	}
 }
@@ -50,7 +51,7 @@ func run(root string, check bool, guides ...string) error {
 				}
 			}
 			if !found {
-				return fmt.Errorf("unknown guide %q", name)
+				return fmt.Errorf("renderdocs:0: unknown guide %q; pass the basename of an existing guide to --guide.", name)
 			}
 		}
 		documents = selected

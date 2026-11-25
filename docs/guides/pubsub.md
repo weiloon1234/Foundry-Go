@@ -229,4 +229,4 @@ and namespace scope, overflow, heartbeat, dropped connections, interrupted setup
 unknown publish outcomes and draining shutdown. Typed tests cover JSON validation,
 callback ownership, provider ordering, compiler rejection and real-gopls discovery.
 Full native verification passed in 430.4s with 2012 matching source inputs, required local PostgreSQL and Redis, all 675 compiler cases, 247 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Fresh focused native races, consumer checks and 1,519,877 queue fuzz executions also passed. No dependency was added.
-The [current master status](../../blueprint/00-master-architecture-and-parity.md) records completed coordination and source-parity scope.
+The current master status records completed coordination and source-parity scope.

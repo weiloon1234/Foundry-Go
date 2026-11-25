@@ -338,15 +338,15 @@ They never flush, scan or reconfigure a shared server. Owned protocol fixtures t
 lost replies, safe error formatting, stalled responses and shutdown independently
 of the real service.
 
-Full native verification passed in 493.4s with 1905 matching source inputs, required local PostgreSQL and Redis, all 656 compiler cases, 239 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Focused Redis/cache/consumer/editor races and shared memory/Redis contracts also passed. See the [master acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-09-redis-connection-and-cache-acceptance).
+Full native verification passed in 493.4s with 1905 matching source inputs, required local PostgreSQL and Redis, all 656 compiler cases, 239 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Focused Redis/cache/consumer/editor races and shared memory/Redis contracts also passed. See the master acceptance record.
 
-Full native verification passed in 327.6s with 1915 matching source inputs, required local PostgreSQL and Redis, all 656 compiler cases, 239 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Shared memory/Redis tag races, Redis failure/cross-client tests, consumer races and three actual-gopls probes passed. No dependency was added. See the [Redis tag acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-09-redis-tag-acceptance).
+Full native verification passed in 327.6s with 1915 matching source inputs, required local PostgreSQL and Redis, all 656 compiler cases, 239 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Shared memory/Redis tag races, Redis failure/cross-client tests, consumer races and three actual-gopls probes passed. No dependency was added. See the Redis tag acceptance record.
 
 ## Typed lease adapter
 
 The same client now implements the focused lease backend. See the [lease guide](leases.md)
 for typed declarations, guarded callbacks, provider ordering, validity and failure
-semantics. Shared/native races and full native acceptance pass. See the [lease acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-09-typed-lease-acceptance).
+semantics. Shared/native races and full native acceptance pass. See the lease acceptance record.
 
 ## Coordinated cache publication
 
@@ -354,7 +354,7 @@ semantics. Shared/native races and full native acceptance pass. See the [lease a
 reusing the ordinary/tagged cache scripts and bounded lease metadata reader. The
 [distributed cache guide](distributed-cache.md) describes the typed consumer API
 and uncertain-write behavior. Focused and full native acceptance pass. See the
-[acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-09-distributed-remember-acceptance).
+acceptance record.
 
 ## Typed rate-limit adapter
 
@@ -363,7 +363,7 @@ bounded versioned metadata. See [rate limiting](rate-limiting.md) for model-owne
 keys, HTTP middleware, Redis 7 prerequisites and uncertain-consumption semantics.
 
 Focused races and full native verification pass; see the
-[rate-limit acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-09-typed-rate-limit-acceptance).
+rate-limit acceptance record.
 
 ## Typed pub/sub adapter
 

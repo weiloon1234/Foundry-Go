@@ -56,7 +56,6 @@ var Users = orm.Define("users", func(b orm.Builder[User], u *User) UserTable {
 		deleted, orm.SoftDeletes(deleted)}
 })
 
-// migration:reads-after
 // doc-example:begin reads-after
 func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) error {
 	_, err := orm.All(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))
@@ -69,11 +68,10 @@ func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) 
 	}
 	_, err = orm.Require(ctx, db, models.Orders.Query().Where(orm.Eq(models.Orders.ID, id)))
 	return err
-} // doc-example:end reads-after
+}
 
-// migration:end
+// doc-example:end reads-after
 
-// guide:unique-column-lock
 // doc-example:begin unique-column-lock
 func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
 	return db.Transaction(ctx, func(tx *database.Tx) error {
@@ -84,37 +82,34 @@ func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
 		_, err := orm.Update(ctx, tx, selected, hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "guest"))
 		return err
 	})
-} // doc-example:end unique-column-lock
+}
 
-// guide:end
+// doc-example:end unique-column-lock
 
-// migration:writes-after
 // doc-example:begin writes-after
 func write(ctx context.Context, tx *database.Tx, id int64) error {
 	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))
 	return err
-} // doc-example:end writes-after
+}
 
-// migration:end
+// doc-example:end writes-after
 
-// migration:insert-after
+// doc-example:begin insert-after
 func insert(ctx context.Context, tx *database.Tx) error {
 	_, err := orm.Insert(ctx, tx, models.Users.Table, orm.Set(models.Users.Email, "ada@example.test"))
 	return err
 }
 
-// migration:end
+// doc-example:end insert-after
 
-// migration:force-after
 // doc-example:begin force-after
 func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
 	_, err := orm.ForceDelete(ctx, tx, Users.Query().WithTrashed(), Users.Soft, Users.Key(), id)
 	return err
-} // doc-example:end force-after
+}
 
-// migration:end
+// doc-example:end force-after
 
-// migration:relations-after
 // doc-example:begin relations-after
 var OrderBuyer = orm.BelongsToOf(models.Orders.Buyer, models.Orders.BuyerID, models.Users.ID)
 
@@ -125,11 +120,10 @@ func relations(ctx context.Context, db database.Executor, existing []models.Orde
 	}
 	_, err = orm.LoadFrom(ctx, db, models.Orders.Query().With(OrderBuyer), existing)
 	return err
-} // doc-example:end relations-after
+}
 
-// migration:end
+// doc-example:end relations-after
 
-// migration:hooks-after
 // doc-example:begin hooks-after
 func memberHooks() orm.Hooks[hooks.Member] {
 	return orm.Hooks[hooks.Member]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[hooks.Member]) error {
@@ -141,11 +135,11 @@ func memberHooks() orm.Hooks[hooks.Member] {
 		}
 		return nil
 	}}
-} // doc-example:end hooks-after
+}
 
-// migration:end
+// doc-example:end hooks-after
 
-// migration:unset-after
+// doc-example:begin unset-after
 func unset(draft *orm.Write[hooks.Member]) error {
 	return orm.WriteUnset(draft, func() func(arg0 coremodels.LabelInput) orm.Assignment[hooks.Member] {
 		receiver := hooks.Members.Note
@@ -155,31 +149,31 @@ func unset(draft *orm.Write[hooks.Member]) error {
 	}())
 }
 
-// migration:end
+// doc-example:end unset-after
 
-// migration:changes-after
+// doc-example:begin changes-after
 func changes(changes orm.Changes[hooks.Member]) (bool, error) {
 	field, err := orm.ChangeOf(changes, hooks.Members.Name)
 	return field.Changed(), err
 }
 
-// migration:end
+// doc-example:end changes-after
 
-// migration:observers-after
+// doc-example:begin observers-after
 func observer() (lifecycle.Declaration, error) {
 	return orm.NewObserver[hooks.Member]("members").Declare(memberHooks)
 }
 
-// migration:end
+// doc-example:end observers-after
 
-// migration:retrieved-after
+// doc-example:begin retrieved-after
 func retrieval() orm.RetrievalHooks[reads.Member] {
 	return orm.RetrievalHooks[reads.Member]{Retrieved: func(context.Context, database.Executor, reads.Member) error { return nil }}
 }
 
-// migration:end
+// doc-example:end retrieved-after
 
-// migration:scopes-after
+// doc-example:begin scopes-after
 func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[reads.Member], error) {
 		id, err := tenantID(ctx)
@@ -187,7 +181,7 @@ func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 	})
 }
 
-// migration:end
+// doc-example:end scopes-after
 
 type tenantKey struct{}
 
@@ -199,30 +193,30 @@ func tenantID(ctx context.Context) (int64, error) {
 	return id, nil
 }
 
-// migration:bypass-after
+// doc-example:begin bypass-after
 func bypass() orm.Query[reads.Member] {
 	return orm.WithoutGlobalScope(reads.Members.Query(), reads.MemberTenant(reads.Members))
 }
 
-// migration:end
+// doc-example:end bypass-after
 
-// migration:set-writes-after
+// doc-example:begin set-writes-after
 func setWrite(ctx context.Context, tx *database.Tx) error {
 	_, err := orm.UpdateAll(ctx, tx, orm.WithoutModelHooks(hooks.Members.Query()), orm.Set(hooks.Members.Name, "guest"))
 	return err
 }
 
-// migration:end
+// doc-example:end set-writes-after
 
-// migration:lookup-after
+// doc-example:begin lookup-after
 func lookup(ctx context.Context, tx *database.Tx) error {
 	_, err := orm.FirstOrCreate(ctx, tx, models.Users.Query().Where(orm.Eq(models.Users.Email, "ada@example.test")))
 	return err
 }
 
-// migration:end
+// doc-example:end lookup-after
 
-// migration:pagination-after
+// doc-example:begin pagination-after
 func page(ctx context.Context, db database.Executor) error {
 	_, err := orm.Paginate(ctx, db, models.Orders.Query(), orm.PageRequest{Number: 1, Size: 20})
 	if err != nil {
@@ -232,9 +226,8 @@ func page(ctx context.Context, db database.Executor) error {
 	return err
 }
 
-// migration:end
+// doc-example:end pagination-after
 
-// migration:application-after
 // doc-example:begin application-after
 func configuredApplication(settings application.Settings, pool foundation.Key[*database.DB]) *application.Builder {
 	observers := foundation.Module{Name: "member.observers", OnRegister: func(r *foundation.Registrar) error {
@@ -242,11 +235,11 @@ func configuredApplication(settings application.Settings, pool foundation.Key[*d
 			func(foundation.Resolver) (func() orm.Hooks[hooks.Member], error) { return memberHooks, nil })
 	}}
 	return application.New(settings, application.WithTables(Users.Table, hooks.Members.Table)).Register(observers)
-} // doc-example:end application-after
+}
 
-// migration:end
+// doc-example:end application-after
 
-// migration:seed-after
+// doc-example:begin seed-after
 func seeder() seed.Definition {
 	return seed.Definition{ID: "app.users", Run: func(ctx context.Context, tx *database.Tx) error {
 		_, err := orm.Insert(ctx, tx, models.Users.Table, orm.Set(models.Users.Email, "ada@example.test"))
@@ -254,39 +247,37 @@ func seeder() seed.Definition {
 	}}
 }
 
-// migration:end
+// doc-example:end seed-after
 
 func identity(user models.User) (model.Identity, error) {
 	return orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user).Identity()
 }
 
-// migration:scalar-after
+// doc-example:begin scalar-after
 func scalar(ctx context.Context, db database.Executor) error {
 	_, err := rows.Read(rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)).All(ctx, db)
 	return err
 }
 
-// migration:end
+// doc-example:end scalar-after
 
-// migration:inputs-after
 // doc-example:begin inputs-after
 func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
 	return orm.Set(mutators.Members.Email, input)
-} // doc-example:end inputs-after
+}
 
-// migration:end
+// doc-example:end inputs-after
 
-// migration:accessors-after
 // doc-example:begin accessors-after
 func accessor(member mutators.Member) (coremodels.EmailLink, error) {
 	return member.AccessEmail()
-} // doc-example:end accessors-after
+}
 
-// migration:end
+// doc-example:end accessors-after
 
-// migration:input-key-after
+// doc-example:begin input-key-after
 func inputKey(id model.ID[mutators.KeyRecord]) orm.Assignment[mutators.KeyRecord] {
 	return orm.Set(mutators.KeyRecords.ID, mutators.FreshID{Value: id})
 }
 
-// migration:end
+// doc-example:end input-key-after

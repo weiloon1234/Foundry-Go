@@ -6,7 +6,7 @@ findings and evidence below preserve what was true at the original review.
 
 Foundry-Go has **one confirmed cookie-response cache-safety gap** in the reviewed paths. Four additional priorities depend on release and application requirements. They are separated below from vulnerabilities and from capabilities already delivered. This is a review record; runtime behavior has not been changed.
 
-The [evidence record](../evidence/security-gap-review-20260923.json) contains the reproducible probe source, scanner findings, commands, test results, source fingerprints and limitations.
+The evidence record contains the reproducible probe source, scanner findings, commands, test results, source fingerprints and limitations.
 
 ## S01 — cookie-authenticated responses lack a safe cache default (P2)
 

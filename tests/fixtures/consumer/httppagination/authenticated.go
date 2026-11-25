@@ -32,7 +32,9 @@ var GuardedCursorList = func() pagination.CursorEndpoint[foundryhttp.NoPath, Mem
 // doc-example:begin http-pagination-authenticated-numbered
 func AuthenticatedNumbered(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
 	return pagination.Authenticated(GuardedList, binding)
-} // doc-example:end http-pagination-authenticated-numbered
+}
+
+// doc-example:end http-pagination-authenticated-numbered
 func AuthenticatedSimple(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedSimpleEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
 	return pagination.Authenticated(GuardedSimpleList, binding)
 }

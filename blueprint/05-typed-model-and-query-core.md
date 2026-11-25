@@ -13,7 +13,7 @@ Declare tables with `orm.Define` and typed carriers bound to model fields. Prima
 keys retain their owner and codec. Input, stored, managed and soft-delete roles
 are distinct capabilities. `Query[M]`, predicates and orderings retain owner types;
 `orm/expr` supplies expression phases and `orm/rows` supplies projections and sets.
-See the [compiled migration examples](../docs/guides/orm-migration.md).
+See the [compiled migration examples](https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md).
 
 ```go
 users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Eq(models.Users.Email, email)))

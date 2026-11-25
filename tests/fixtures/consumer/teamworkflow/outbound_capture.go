@@ -23,7 +23,9 @@ func OutboundCaptureRoutes(captures *outboundcapture.Store) ([]http.RouteRegistr
 		return nil, err
 	}
 	return outboundcapture.Routes(http.DefineScope("/developer", "developer"), captures, binding, http.Permissions(ReadCaptures))
-} // doc-example:end outbound-capture-routes
+}
+
+// doc-example:end outbound-capture-routes
 
 // SendCode texts a one-time code. The code is secret by meaning rather than
 // by field name, so the capture row keeps the call but not its bodies.
@@ -35,4 +37,6 @@ func SendCode(ctx context.Context, sms *httpclient.Client, to, code string) erro
 		return err
 	}
 	return response.EnsureSuccess()
-} // doc-example:end outbound-capture-decline
+}
+
+// doc-example:end outbound-capture-decline

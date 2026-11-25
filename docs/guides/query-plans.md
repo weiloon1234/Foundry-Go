@@ -2,7 +2,7 @@
 
 `orm.Explain(ctx, executor, q)` asks PostgreSQL for a plan without executing the selected statement. `orm.ExplainAnalyze` executes the SELECT and reports actual measurements. Both preserve compiled SQL, bindings, context scopes and executor ownership. They skip model hydration, retrieval hooks and eager loading.
 
-<!-- orm-example: explain -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#explain -->
 ```go
 func inspectOrders(ctx context.Context, db database.Executor) (orm.Plan, error) {
 	return orm.Explain(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))

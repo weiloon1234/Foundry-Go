@@ -47,12 +47,16 @@ type Preferences struct {
 // StorageModel pins the persisted owner identity, so renaming the profiles table
 // later keeps its metadata, translations and attachments.
 // doc-example:begin model-extensions-owners
-var Owners = extensions.DefineORMOwner("profiles", ProfileIdentity, extensions.OwnerOptions{StorageModel: "profiles"}) // doc-example:end model-extensions-owners
+var Owners = extensions.DefineORMOwner("profiles", ProfileIdentity, extensions.OwnerOptions{StorageModel: "profiles"})
+
+// doc-example:end model-extensions-owners
 
 var Files = storage.DefineDisk("profile-files")
 
 // doc-example:begin attachments-avatar
-var Avatar = attachments.Define(Owners, "avatar", attachments.Policy{Disk: Files, Cardinality: attachments.Single, Accepted: []storage.MediaType{"image/png", "image/jpeg"}, Image: value.Set(imaging.NewPlan().Fill(32, 32, false).Format(imaging.PNG))}) // doc-example:end attachments-avatar
+var Avatar = attachments.Define(Owners, "avatar", attachments.Policy{Disk: Files, Cardinality: attachments.Single, Accepted: []storage.MediaType{"image/png", "image/jpeg"}, Image: value.Set(imaging.NewPlan().Fill(32, 32, false).Format(imaging.PNG))})
+
+// doc-example:end attachments-avatar
 var Documents = attachments.Define(Owners, "documents", attachments.Policy{Disk: Files, Cardinality: attachments.Multiple, MaxFiles: 4, Accepted: []storage.MediaType{"text/plain"}})
 var Localized = attachments.Define(Owners, "localized", attachments.Policy{Disk: Files, Cardinality: attachments.Single, Localized: true, Accepted: []storage.MediaType{"text/plain"}})
 var PreferencesKey = metadata.Define(Owners, "preferences", 1, PreferencesJSON())
@@ -85,15 +89,21 @@ func New(store *extensions.Store, disks *storage.Registry, image *imaging.Engine
 // doc-example:begin attachments-example-2
 func (s Services) ReplaceAvatar(ctx context.Context, profile Profile, upload attachments.Upload) (attachments.Result[Profile, model.ID[Profile]], error) {
 	return Avatar.Replace(ctx, s.Attachments, ProfileIdentity.ReferenceOf(profile), upload)
-} // doc-example:end attachments-example-2
+}
+
+// doc-example:end attachments-example-2
 // doc-example:begin model-extensions-example-5
 func (s Services) SavePreferences(ctx context.Context, profile Profile, input Preferences) error {
 	return PreferencesKey.Set(ctx, s.Metadata, ProfileIdentity.ReferenceOf(profile), input)
-} // doc-example:end model-extensions-example-5
+}
+
+// doc-example:end model-extensions-example-5
 // doc-example:begin model-extensions-example-6
 func (s Services) SaveLabel(ctx context.Context, profile Profile, locale i18n.LocaleID, text string) error {
 	return Label.Set(ctx, s.Translations, ProfileIdentity.ReferenceOf(profile), locale, text)
-} // doc-example:end model-extensions-example-6
+}
+
+// doc-example:end model-extensions-example-6
 func (s Services) DefaultPageSize(ctx context.Context) (uint32, error) {
 	return PageSize.GetOr(ctx, s.Settings, 20)
 }

@@ -55,7 +55,9 @@ func BoundOrder(endpoint OrderTransport, resolver modelbinding.Resolver[OrderPat
 		}
 		return foundryhttp.NoContent{}, read(ctx, subject, input.Model)
 	})
-} // doc-example:end authenticated-resource
+}
+
+// doc-example:end authenticated-resource
 
 var nativeProfile = foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "profile.native", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/profile/native"))
 

@@ -16,7 +16,7 @@ func TestPaginationDocumentationOwners(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-				} else if err == nil || !strings.Contains(err.Error(), "retired API pagination.") || strings.Contains(err.Error(), "ambiguous") {
+				} else if err == nil || (!strings.Contains(err.Error(), "pagination.") || !strings.Contains(err.Error(), " is retired;")) || strings.Contains(err.Error(), "ambiguous") {
 					t.Fatalf("%s: %v", code, err)
 				}
 			}
@@ -26,7 +26,7 @@ func TestPaginationDocumentationOwners(t *testing.T) {
 		"e := pagination.Authenticated(page, binding)\ne.WithScopes(scopes)",
 		"package example\nimport p \"github.com/weiloon1234/Foundry-Go/http/pagination\"\nfunc use() { e := p.Authenticated(page, binding); e.WithAuthorization(policy) }",
 	} {
-		if err := CheckDocument("AGENTS.md", []byte("```go\n"+code+"\n```")); err == nil || !strings.Contains(err.Error(), "retired API pagination.") {
+		if err := CheckDocument("AGENTS.md", []byte("```go\n"+code+"\n```")); err == nil || (!strings.Contains(err.Error(), "pagination.") || !strings.Contains(err.Error(), " is retired;")) {
 			t.Fatalf("%s: %v", code, err)
 		}
 	}
@@ -55,7 +55,7 @@ func TestTransactionRowLockOwners(t *testing.T) {
 			}
 		}
 	}
-	if err := CheckDocument("AGENTS.md", []byte("```go\norm.Query[User].ForUpdate()\n```")); err == nil || !strings.Contains(err.Error(), "retired API orm.Query.ForUpdate") {
+	if err := CheckDocument("AGENTS.md", []byte("```go\norm.Query[User].ForUpdate()\n```")); err == nil || !strings.Contains(err.Error(), "orm.Query.ForUpdate is retired") {
 		t.Fatal(err)
 	}
 }
@@ -100,7 +100,7 @@ func TestApplicationDocumentationFrameworkImports(t *testing.T) {
 		{"package example\nimport . \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\nfunc example() { Count(items) }", true},
 	} {
 		text := []byte("```go\n" + tc.code + "\n```")
-		if err := CheckApplicationDocument("AGENTS.md", text); err == nil || !strings.Contains(err.Error(), "retired API") {
+		if err := CheckApplicationDocument("AGENTS.md", text); err == nil || !strings.Contains(err.Error(), " is retired;") {
 			t.Fatalf("accepted imported retirement: %v", err)
 		}
 		if err := CheckDocument("README.md", text); (err != nil) != tc.frameworkRetired {
@@ -138,10 +138,10 @@ func TestApplicationDocumentationDotImportReferences(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			code := "package example\nimport . \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\n" + tc.code
 			err := CheckApplicationDocument("AGENTS.md", []byte("```go\n"+code+"\n```"))
-			if err == nil || !strings.Contains(err.Error(), "AGENTS.md:4: retired API Count from framework dot import") {
+			if err == nil || !strings.Contains(err.Error(), "AGENTS.md:4: rows.Count is retired; use rows.Read(query).Count(ctx, executor).") {
 				t.Fatalf("accepted imported retirement or missing location: %v", err)
 			}
-			if strings.Count(err.Error(), "retired API Count from framework dot import") != 1 {
+			if strings.Count(err.Error(), "rows.Count is retired; use rows.Read(query).Count(ctx, executor).") != 1 {
 				t.Fatalf("expected one retired reference: %v", err)
 			}
 		})
@@ -210,7 +210,7 @@ func TestDocumentAmbiguousTeaching(t *testing.T) {
 	} {
 		for _, check := range []func(string, []byte) error{CheckDocument, CheckApplicationDocument} {
 			err := check("AGENTS.md", []byte("```go\n"+code+"\n```"))
-			if err == nil || !strings.Contains(err.Error(), "ambiguous API teaching") || strings.Contains(err.Error(), "retired API") {
+			if err == nil || !strings.Contains(err.Error(), "ambiguous API teaching") || strings.Contains(err.Error(), " is retired;") {
 				t.Fatalf("%s: %v", code, err)
 			}
 		}
@@ -238,9 +238,9 @@ func TestDocumentAmbiguousCallShapes(t *testing.T) {
 		{"rule.Check(makeArgs(), input)", ""},
 		{"validation.Check(rule, ctx, input, limits)", ""},
 		{"validation.Check(makeArgs())", ""},
-		{"var rule validation.Rule[string]\nrule.Check()", "retired API validation.Rule.Check"},
-		{"var rule validation.Rule[string]\nrule.Check(makeArgs())", "retired API validation.Rule.Check"},
-		{"var rule validation.Rule[string]\nrule.Check(args...)", "retired API validation.Rule.Check"},
+		{"var rule validation.Rule[string]\nrule.Check()", "validation.Rule.Check is retired"},
+		{"var rule validation.Rule[string]\nrule.Check(makeArgs())", "validation.Rule.Check is retired"},
+		{"var rule validation.Rule[string]\nrule.Check(args...)", "validation.Rule.Check is retired"},
 		{"rule.Check", "ambiguous API teaching"},
 		{"field.Rules()", "ambiguous API teaching"},
 		{"field.Rules(rules...)", "ambiguous API teaching"},
@@ -286,8 +286,8 @@ func TestDocumentRegionsAndHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := "<!-- orm-example: endpoint-before -->\n````go\nhttp.Endpoint.WithMiddleware(m)\n```\nhttp.Endpoint.WithScopes(scope)\n````\n"
-	if err := CheckDocument("docs/guides/orm-migration.md", []byte(before)); err != nil {
-		t.Fatal(err)
+	if err := CheckDocument("docs/guides/orm-migration.md", []byte(before)); err == nil {
+		t.Fatal("historical label exempted retired teaching")
 	}
 	if err := CheckDocument("AGENTS.md", []byte(before)); err == nil {
 		t.Fatal("app historical label exempted active teaching")

@@ -522,11 +522,12 @@ the portal really uses. See the [manifest 9 migration](../compatibility.md#typed
 
 For example, a client can use a built-in code:
 
-```typescript
-import { ErrorCode } from "./generated/contracts_foundry.gen.js";
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts):
 
-if (error.code === ErrorCode.ValidationFailed) {
-  // handle validation failure
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#validation-error-code -->
+```typescript
+export function isValidationFailure(error: unknown): boolean {
+  return error instanceof sdk.APIError && error.code === sdk.ErrorCode.ValidationFailed;
 }
 ```
 
@@ -1468,24 +1469,26 @@ capabilities support UI presentation; server authorization still decides access.
 React and Vue can share the generated module and one transport adapter. Keep
 network ownership in each component's lifecycle:
 
-```typescript
-// React effect body: invoke the generated operation and abort on cleanup.
-useEffect(() => {
-  const controller = new AbortController();
-  api.itemsEcho(request, { signal: controller.signal }).then(setValue, showError);
-  return () => controller.abort();
-}, [api, request]);
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts):
 
-// Vue setup: the same generated operation and controller need no Vue adapter.
-const controller = new AbortController();
-onMounted(() => {
-  api.itemsEcho(request, { signal: controller.signal }).then(setValue, showError);
-});
-onUnmounted(() => controller.abort());
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#request-lifecycle -->
+```typescript
+export function startRequest(
+  api: sdk.API,
+  request: sdk.Operations["itemsEcho"]["request"],
+  receive: (value: sdk.Operations["itemsEcho"]["response"]) => void,
+  report: (error: unknown) => void,
+): () => void {
+  const controller = new AbortController();
+  void api.itemsEcho(request, { signal: controller.signal }).then(receive, (error: unknown) => {
+    if (!controller.signal.aborted) report(error);
+  });
+  return () => controller.abort();
+}
 ```
 
-These are integration patterns, not framework-owned React/Vue dependencies.
-Ignore intentional aborts in `showError`. For realtime handle and connection
+Call `startRequest` when the component starts the request and call its returned
+cleanup function when the component releases it. Aborted requests do not call `report`. For realtime handle and connection
 cleanup, use the [realtime lifecycle recipe](#recipe-realtime-lifecycle).
 
 ## Versioning and acceptance
@@ -1552,7 +1555,7 @@ entries and shared runtime modules. These are steady-state rendering measurement
 CLI startup, first-use initialization and fresh-file publication are not timed.
 Allocated bytes describe allocation volume, not peak memory. Exact samples,
 output hashes, source fingerprints and verification are in the
-[performance evidence](../evidence/typescript-performance-20261011.json).
+performance evidence.
 
 Inbound idempotency uses the [same runtime policy](idempotent-operations.md) for its
 required typed client key and safe outcomes. Version 3 readers must regenerate.

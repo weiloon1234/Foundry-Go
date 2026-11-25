@@ -3,7 +3,7 @@
 Consumer-startup C01 passed native full verification, configuration/generator
 races and independent compiler/editor acceptance. It adds configuration
 descriptors to the existing Go generator. Verification status is owned by the
-[master](../../blueprint/00-master-architecture-and-parity.md#consumer-startup-delivery).
+master.
 This feature derives the configuration schema consumed by [configured application assembly](application-bootstrap.md). The application registers domain declarations and constructors; the builder assembles the selected services.
 
 <a id="agent-entry"></a>
@@ -231,6 +231,7 @@ uses the same settings type for server configuration and public metadata:
 
 <!-- compiled-source: tests/fixtures/consumer/configured/settings.go#generated-configuration-settings -->
 ```go
+//foundry:config
 type Settings struct {
 	Services      infrastructure.Settings
 	AppName       string `config:"app_name,public" client:"env=VITE_APP_NAME,fallback=ConsumerApp"`

@@ -17,7 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// migration:conflict-after
+// doc-example:begin conflict-after
 func upsert(ctx context.Context, tx *database.Tx) error {
 	f := models.Users
 	policy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(orm.ConflictIncoming(f.Age))
@@ -25,9 +25,9 @@ func upsert(ctx context.Context, tx *database.Tx) error {
 	return err
 }
 
-// migration:end
+// doc-example:end conflict-after
 
-// migration:excluded-after
+// doc-example:begin excluded-after
 func excluded() orm.Conflict[models.User] {
 	r := rows.ConflictRowsOf(models.Users.Query())
 	stored := expr.At(r.Stored(), models.Users.Age)
@@ -36,9 +36,9 @@ func excluded() orm.Conflict[models.User] {
 		rows.SetConflictValue(models.Users.Age, expr.Add(stored, proposed)))
 }
 
-// migration:end
+// doc-example:end excluded-after
 
-// migration:source-insert-after
+// doc-example:begin source-insert-after
 func insertSelect(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
 	plan := rows.InsertFrom(rows.From(f.Query()), f.Query(),
@@ -48,9 +48,9 @@ func insertSelect(ctx context.Context, tx *database.Tx) error {
 	return err
 }
 
-// migration:end
+// doc-example:end source-insert-after
 
-// migration:source-update-after
+// doc-example:begin source-update-after
 func updateFrom(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
 	_, err := rows.UpdateFrom(f.Query(), rows.From(f.Query())).
@@ -59,9 +59,9 @@ func updateFrom(ctx context.Context, tx *database.Tx) error {
 	return err
 }
 
-// migration:end
+// doc-example:end source-update-after
 
-// migration:source-delete-after
+// doc-example:begin source-delete-after
 func deleteUsing(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
 	q := f.Query().WithTrashed()
@@ -70,9 +70,9 @@ func deleteUsing(ctx context.Context, tx *database.Tx) error {
 	return err
 }
 
-// migration:end
+// doc-example:end source-delete-after
 
-// migration:aggregate-after
+// doc-example:begin aggregate-after
 func aggregate(ctx context.Context, db database.Executor) error {
 	count := expr.Count[models.Order]()
 	q := rows.GroupByScalar(rows.SelectScalar(rows.From(models.Orders.Query()), expr.AsSelected(count)),
@@ -81,11 +81,11 @@ func aggregate(ctx context.Context, db database.Executor) error {
 	return err
 }
 
-// migration:end
+// doc-example:end aggregate-after
 
 type orderSide struct{}
 
-// migration:window-after
+// doc-example:begin window-after
 func window(ctx context.Context, db database.Executor) error {
 	a := rows.As[orderSide](models.Orders.Query(), "o")
 	s := rows.Scope(a)
@@ -95,9 +95,9 @@ func window(ctx context.Context, db database.Executor) error {
 	return err
 }
 
-// migration:end
+// doc-example:end window-after
 
-// migration:cte-after
+// doc-example:begin cte-after
 func cte(ctx context.Context, db database.Executor) error {
 	cte := rows.CTE("eligible", rows.ModelRecord(models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100))))
 	a := rows.AsRecord[orderSide](cte, "o")
@@ -105,9 +105,9 @@ func cte(ctx context.Context, db database.Executor) error {
 	return err
 }
 
-// migration:end
+// doc-example:end cte-after
 
-// migration:sets-after
+// doc-example:begin sets-after
 func sets(ctx context.Context, db database.Executor) error {
 	a := models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100))
 	_, err := rows.ReadSet(rows.Union(rows.ModelRecord(a), rows.ModelRecord(models.Orders.Query()))).All(ctx, db)
@@ -118,9 +118,9 @@ func sets(ctx context.Context, db database.Executor) error {
 	return err
 }
 
-// migration:end
+// doc-example:end sets-after
 
-// migration:json-after
+// doc-example:begin json-after
 var Theme = expr.JSONFieldOf(func(p *jsonpaths.Preferences) *value.Optional[string] { return &p.Theme })
 
 func jsonTheme() expr.NullableTextRowExpression[jsonpaths.Document, string] {
@@ -129,9 +129,9 @@ func jsonTheme() expr.NullableTextRowExpression[jsonpaths.Document, string] {
 	return expr.JSONTextScalar(theme, codec.String[string]())
 }
 
-// migration:end
+// doc-example:end json-after
 
-// migration:projection-after
+// doc-example:begin projection-after
 func report() rows.Query[reports.Member, reports.MemberRow] {
 	f, r := reports.Members, reports.MemberRows
 	return rows.Select(rows.From(f.Query()), r,
@@ -140,9 +140,9 @@ func report() rows.Query[reports.Member, reports.MemberRow] {
 		rows.Map(r.Balance, expr.Value(f.Balance)))
 }
 
-// migration:end
+// doc-example:end projection-after
 
-// migration:datatable-after
+// doc-example:begin datatable-after
 func tableSource[A any](spec datatable.Spec[reports.Member, reports.MemberRow, A], tenant func(context.Context, A) (int64, error)) datatable.Spec[reports.Member, reports.MemberRow, A] {
 	// Keep the existing Spec authorization; tenant resolves the trusted actor scope.
 	spec.Source = func(ctx context.Context, actor A) (rows.SelectionSource[reports.Member], error) {
@@ -156,4 +156,4 @@ func tableSource[A any](spec datatable.Spec[reports.Member, reports.MemberRow, A
 	return spec
 }
 
-// migration:end
+// doc-example:end datatable-after

@@ -27,7 +27,7 @@ permission to repeat business work.
 
 ## Verification
 
-The [evidence record](../evidence/b07-shutdown-recheck-20260929.json) contains
+The evidence record contains
 commands, source identities and terminal results.
 
 | Check | Result |

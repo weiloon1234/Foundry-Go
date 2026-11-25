@@ -27,7 +27,9 @@ func userOrders[L any](outer rows.ScopeSource[L], scope expr.Scope[L, models.Use
 	inner := rows.InnerScope(c, rows.Scope(orders))
 	u, o := rows.OuterScope(c, scope), inner
 	return c.Where(expr.Equal(expr.At(o, models.Orders.BuyerID), expr.At(u, models.Users.ID))), inner
-} // doc-example:end lateral-joins
+}
+
+// doc-example:end lateral-joins
 
 func TestPostgresLateralPerParentRecords(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {

@@ -18,7 +18,7 @@ and existing AST remain the sole SQL owner.
 
 Use `database/orm` declarations, `orm/expr` computations and `orm/rows` result
 builders. See [typed field computations](../guides/typed-field-computations.md) and the
-[ORM migration guide](../guides/orm-migration.md). Queries snapshot captured slices;
+[model declaration guide](../guides/model-declarations.md). Queries snapshot captured slices;
 request scopes remain lazy, isolated and context-owned.
 
 The historical measurements below describe earlier engine reductions. Removed

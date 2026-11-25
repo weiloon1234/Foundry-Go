@@ -23,7 +23,8 @@ func TestMemberImportMapsTypedRowsAndReportsFailures(t *testing.T) {
 	report, err := reporting.MemberImports.Run(t.Context(), importer.CSVSource(strings.NewReader(upload)), func(_ context.Context, rows []importer.Row[reporting.MemberImport]) error {
 		imported = append(imported, rows...)
 		return nil
-	}) // doc-example:end datatable-6
+	})
+	// doc-example:end datatable-6
 	if err != nil {
 		t.Fatal(err)
 	}

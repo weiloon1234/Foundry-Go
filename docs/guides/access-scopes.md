@@ -2,7 +2,7 @@
 
 Access scopes place a typed ceiling on a credential and compose with current-model policies. See [tokens](tokens.md) for persistence and refresh rotation.
 
-Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
+Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
 
 <a id="agent-entry"></a>
 ## Agent entry

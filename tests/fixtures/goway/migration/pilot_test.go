@@ -53,7 +53,7 @@ type AdminRow struct {
 	Email    value.Nullable[string] `json:"email"`
 }
 
-// migration:pilot-columns
+// doc-example:begin pilot-columns
 func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
 	id := validation.DefineBinding("id", func(r *AdminRow) *int64 { return &r.ID })
 	username := validation.DefineBinding("username", func(r *AdminRow) *string { return &r.Username })
@@ -65,9 +65,9 @@ func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
 	}
 }
 
-// migration:end
+// doc-example:end pilot-columns
 
-// migration:pilot-source
+// doc-example:begin pilot-source
 func adminSource(tenantID int64, archived bool) rows.SelectionSource[Admin] {
 	source := Admins.Query().Where(orm.Eq(Admins.TenantID, tenantID))
 	if archived {
@@ -90,9 +90,9 @@ func adminTable[A any](spec datatable.Spec[Admin, AdminRow, A], tenant func(cont
 	return spec
 }
 
-// migration:end
+// doc-example:end pilot-source
 
-// migration:pilot-left-join-adapters
+// doc-example:begin pilot-left-join-adapters
 type auditAdminSide struct{}
 type auditCountrySide struct{}
 type AuditScope = rows.Left[rows.Alias[auditAdminSide, Admin], rows.Alias[auditCountrySide, countries.Country]]
@@ -146,9 +146,9 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 	return spec
 }
 
-// migration:end
+// doc-example:end pilot-left-join-adapters
 
-// migration:pilot-filter-families
+// doc-example:begin pilot-filter-families
 func orderGroupFilters() (datatable.FilterSource[models.Order, int64], datatable.FilterSource[models.Order, value.Nullable[decimal.Decimal]]) {
 	count := expr.Count[models.Order]()
 	total := expr.Sum(models.Orders.TotalCents)
@@ -169,9 +169,9 @@ func statusFilter() datatable.FilterSource[models.User, models.Status] {
 		expr.CompareFilter(expr.CompareRow(expr.Value(models.Users.Status))))
 }
 
-// migration:end
+// doc-example:end pilot-filter-families
 
-// migration:pilot-custom-filter
+// doc-example:begin pilot-custom-filter
 type officialNameFilter[S any] struct {
 	exists func(orm.Predicate[countries.Country]) expr.Predicate[S]
 }
@@ -195,9 +195,9 @@ func (f officialNameFilter[S]) IsNotNull() expr.Predicate[S] {
 	return f.exists(orm.IsNotNull(countries.Countries.OfficialName))
 }
 
-// migration:end
+// doc-example:end pilot-custom-filter
 
-// migration:pilot-joined-schema
+// doc-example:begin pilot-joined-schema
 type adminSide struct{}
 type countrySide struct{}
 type DirectoryScope = rows.Inner[rows.Alias[adminSide, Admin], rows.Alias[countrySide, countries.Country]]
@@ -207,9 +207,9 @@ type DirectoryRow struct {
 	OfficialName value.Nullable[string] `json:"officialName"`
 }
 
-// migration:end
+// doc-example:end pilot-joined-schema
 
-// migration:pilot-joined-source
+// doc-example:begin pilot-joined-source
 func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A], tenant func(context.Context, A) (int64, error)) datatable.Spec[DirectoryScope, DirectoryRow, A] {
 	a := rows.As[adminSide](Admins.Query(), "a")
 	c := rows.As[countrySide](countries.Countries.Query(), "c")
@@ -253,9 +253,9 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 	return spec
 }
 
-// migration:end
+// doc-example:end pilot-joined-source
 
-// migration:pilot-countries
+// doc-example:begin pilot-countries
 func countryRead(ctx context.Context, db *database.DB, code countries.Code) (value.Optional[countries.Country], error) {
 	country, err := orm.Find(ctx, db, countries.Countries.Table, code)
 	if err != nil || !country.IsSet() {
@@ -277,9 +277,9 @@ func countryWrite(ctx context.Context, tx *database.Tx, code countries.Code, rat
 	return err
 }
 
-// migration:end
+// doc-example:end pilot-countries
 
-// migration:pilot-lookup
+// doc-example:begin pilot-lookup
 type canonical struct {
 	validation.Lookup[string]
 }
@@ -296,14 +296,14 @@ func adminUsernameRule(tx *database.Tx, username validation.Rule[string]) valida
 	return UniqueUsername(tx, Admins.Query().WithTrashed(), Admins.Username, username)
 }
 
-// migration:end
+// doc-example:end pilot-lookup
 
-// migration:pilot-recipe-locked-find
+// doc-example:begin pilot-recipe-locked-find
 func requireAdminForUpdate(ctx context.Context, tx *database.Tx, id int64) (Admin, error) {
 	return orm.RequireLocked(ctx, tx, orm.Lock(Admins.Query().Where(orm.Eq(Admins.Key(), id))))
 }
 
-// migration:end
+// doc-example:end pilot-recipe-locked-find
 
 var adminIdentity = orm.IdentityOf(Admins.Table, Admins.Key())
 
@@ -315,16 +315,16 @@ func (a Admin) FoundryIdentity() (model.Identity, error) {
 	return a.FoundryReference().Identity()
 }
 
-// migration:pilot-recipe-datatable-test
+// doc-example:begin pilot-recipe-datatable-test
 func isolatedDatatableConfig(scope *postgres.Scope) datatable.Config {
 	config := datatable.DefaultConfig()
 	config.Schema = scope.Schema()
 	return config
 }
 
-// migration:end
+// doc-example:end pilot-recipe-datatable-test
 
-// migration:pilot-recipe-optional-insert
+// doc-example:begin pilot-recipe-optional-insert
 func insertAdmin(ctx context.Context, tx *database.Tx, tenantID int64, username string, email value.Optional[string]) (Admin, error) {
 	assignments := []orm.Assignment[Admin]{
 		orm.Set(Admins.TenantID, tenantID),
@@ -334,7 +334,7 @@ func insertAdmin(ctx context.Context, tx *database.Tx, tenantID int64, username 
 	return orm.Insert(ctx, tx, Admins.Table, assignments...)
 }
 
-// migration:end
+// doc-example:end pilot-recipe-optional-insert
 
 func TestPilotDeclarationsAndSources(t *testing.T) {
 	if err := orm.Check(Admins.Table, countries.Countries.Table); err != nil {

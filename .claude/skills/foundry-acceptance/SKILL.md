@@ -13,7 +13,7 @@ into a release or framework-wide audit.
 ## Establish the acceptance scope
 
 Read the [root instructions](../../../AGENTS.md), applicable scoped instructions
-and the task's owning blueprint/guide. Use the [master](../../../blueprint/00-master-architecture-and-parity.md)
+and the task's owning blueprint/guide. Use the master
 for milestone status; existing evidence is historical until its source matches.
 For ordinary documentation-only maintenance, stop here and follow the root's
 lightweight documentation checks instead.

@@ -1,6 +1,6 @@
 # Stored model references and attribution
 
-The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) records completed runtime, PostgreSQL, compiler-rejection, real-gopls and full-repository acceptance.
+The master roadmap records completed runtime, PostgreSQL, compiler-rejection, real-gopls and full-repository acceptance.
 
 The model directive generates identity methods from the table and its primary key:
 

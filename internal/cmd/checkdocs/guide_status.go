@@ -34,7 +34,7 @@ func completedMilestones(root string) (map[string]bool, error) {
 		}
 	}
 	if len(completed) == 0 {
-		return nil, fmt.Errorf("%s: missing completed milestone status rows", path)
+		return nil, fmt.Errorf("%s:0: missing completed milestone status rows; restore the master status table with its current completion states.", path)
 	}
 	return completed, nil
 }

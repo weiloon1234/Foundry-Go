@@ -23,7 +23,8 @@ func TestPostgresNamedWindowReuseAndFrames(t *testing.T) {
 		ordered := base.OrderBy(expr.Asc(expr.Value(f.ID))).Named("ordered")
 		framed := ordered.RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
 		count := expr.Over(expr.Count[framequeries.Sample](), framed)
-		result := rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), count), expr.AscValue(expr.RowNumber(framed))) // doc-example:end window-ranges-and-names-3
+		result := rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), count), expr.AscValue(expr.RowNumber(framed)))
+		// doc-example:end window-ranges-and-names-3
 		if got, err := rowset.ReadScalar(result).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{1, 2, 2, 2}) {
 			t.Fatal("named frame reuse", got, err)
 		}

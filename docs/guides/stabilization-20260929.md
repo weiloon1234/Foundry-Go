@@ -34,7 +34,7 @@ correction against the old shutdown condition and the supplied starter probe.
 
 ## Verification and evidence
 
-The [acceptance record](../evidence/stabilization-20260929.json) contains source
+The acceptance record contains source
 hashes, exact commands, exit statuses, package integrity, scanner results and
 retained evidence locations. Tests required the existing PostgreSQL and Redis
 services and used isolated retained namespaces. No database was reset, and no

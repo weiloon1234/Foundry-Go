@@ -361,7 +361,7 @@ There is no queue dashboard, autoscaling controller or automatic failed-workflow
 recovery. The framework owns queue execution and the reusable operator commands;
 the boilerplate supplies domain declarations, configuration and the CLI entry point.
 
-The [2026-09-28 verification record](../evidence/jobs-operations-20260928.json)
+The 2026-09-28 verification record
 captures the accepted source, full gate, real Redis/race checks, typed consumer,
 compiler and editor evidence. Use the [boilerplate handoff](jobs-boilerplate-handoff.md)
 for application integration and deployment acceptance.

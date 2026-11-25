@@ -38,7 +38,9 @@ func Claimed(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 	source := rows.AsTransaction[claimedAlias](definition, "candidate")
 	fields := recordAt(rows.TransactionScope(source))
 	return rows.SelectTransaction(source, Summaries, rows.MapSelected(Summaries.ID, expr.AsSelected(expr.Row(fields.ID))), rows.MapSelected(Summaries.Name, expr.AsSelected(expr.Row(fields.Name)))).All(ctx, tx)
-} // doc-example:end transaction-query-composition
+}
+
+// doc-example:end transaction-query-composition
 
 func Joined(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.ForShare(Records.Query()).Limit(1)))

@@ -4,7 +4,7 @@ See [request-aware validation messages](validation-messages.md) for automatic HT
 rendering, built-in translations, typed overrides and generated client presentation.
 
 Milestone 20 passed native verification and consumer review. The
-[master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-20-verification-and-consumer-review)
+master evidence
 records the checks and operational limits.
 
 Use one `i18n.LocaleSet` from application configuration for UI catalogs, model

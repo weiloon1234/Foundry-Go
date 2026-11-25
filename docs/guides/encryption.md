@@ -2,7 +2,7 @@
 
 The `encryption` package is the shared authenticated-encryption boundary for Foundry features. MFA uses it for stored factors; later features reuse the same keyring and cipher contracts.
 
-Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
+Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
 
 <a id="agent-entry"></a>
 ## Agent entry
@@ -124,6 +124,7 @@ inside `value.Nullable`) is stored as an envelope and used as plaintext:
 
 <!-- compiled-source: tests/fixtures/consumer/vault/entry.go#encryption-entry -->
 ```go
+// Entry keeps an API token and optional connection settings encrypted at rest.
 //
 //foundry:model table=vault_entries var=Entries key=ID identity=false
 type Entry struct {

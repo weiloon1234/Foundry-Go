@@ -4,7 +4,7 @@
 
 ## Select conflict behavior
 
-<!-- orm-example: upsert-user -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#upsert-user -->
 ```go
 func upsertUser(ctx context.Context, tx *database.Tx) (value.Optional[models.User], error) {
 	f := models.Users
@@ -25,7 +25,7 @@ Active destination scopes join conflict update conditions. An unconditional upda
 
 ## Calculating conflict updates
 
-<!-- orm-example: excluded-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/sql_test.go#excluded-after -->
 ```go
 func excluded() orm.Conflict[models.User] {
 	r := rows.ConflictRowsOf(models.Users.Query())

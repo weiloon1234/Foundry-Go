@@ -50,7 +50,7 @@ Explicit set-based writes skip per-model observers and audit. Use the existing `
 
 ## Read typed history
 
-<!-- orm-example: audit-page -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#audit-page -->
 ```go
 func memberHistoryPage(ctx context.Context, db database.Executor, recorder *audit.Recorder, member hooks.Member) error {
 	identity := orm.IdentityOf(hooks.Members.Table, hooks.Members.Key())
@@ -66,7 +66,7 @@ History is newest first by the database-assigned insertion `Sequence`. Rows writ
 
 For long histories, `audit.ModelTimeline` reads one indexed keyset page without a count query:
 
-<!-- orm-example: audit-timeline -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#audit-timeline -->
 ```go
 func memberHistory(ctx context.Context, db database.Executor, recorder *audit.Recorder, member hooks.Member) error {
 	identity := orm.IdentityOf(hooks.Members.Table, hooks.Members.Key())
@@ -87,7 +87,7 @@ func memberHistory(ctx context.Context, db database.Executor, recorder *audit.Re
 
 Each result exposes `ID`, `Changes`, `Sequence`, `Area`, `Origin`, `Correlation`, `Route` and `CreatedAt`. `Changes` is a model-owned audit representation. It is never an incompletely hydrated application model. The historical subject may already have been physically deleted.
 
-<!-- orm-example: audit-find -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#audit-find -->
 ```go
 func findHistory(ctx context.Context, db database.Executor, recorder *audit.Recorder, id audit.ModelID[hooks.Member]) error {
 	identity := orm.IdentityOf(hooks.Members.Table, hooks.Members.Key())
@@ -100,7 +100,7 @@ func findHistory(ctx context.Context, db database.Executor, recorder *audit.Reco
 
 `orm.AuditRead` and `orm.AuditReadNullable` read historical fields through current typed columns. Encrypted fields have the corresponding encrypted reader functions. They preserve the historical stored type without hydrating a partial application model.
 
-<!-- orm-example: audit-field -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#audit-field -->
 ```go
 func historicalName(history record.Model[hooks.Member, int64]) (value.Optional[record.FieldChange[string]], error) {
 	return orm.AuditRead(history, hooks.Members.Name)
@@ -133,7 +133,7 @@ Redacted fields keep assignment/change metadata and explicit redaction states. `
 
 Declare one reusable descriptor for a concrete audit DTO:
 
-<!-- orm-example: audit-action -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#audit-action -->
 ```go
 type Approval struct {
 	Reason string `json:"reason"`

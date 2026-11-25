@@ -2,7 +2,7 @@
 
 Typed failed-attempt policies use atomic Redis or an explicit local authority. Password and MFA throttles remain separate from HTTP request-rate limits.
 
-Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
+Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
 
 <a id="agent-entry"></a>
 ## Agent entry

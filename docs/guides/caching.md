@@ -602,9 +602,9 @@ model/value signatures and definitions. The master roadmap owns acceptance statu
 
 The typed-cache/memory and Remember slices passed full native macOS verification,
 including local PostgreSQL and the complete consumer/compiler/editor checks. See
-[the roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-09-local-remember-acceptance)
+the roadmap
 for acceptance evidence. The [Redis adapter](redis.md) now implements connection ownership, ordinary cache operations and counters; full native acceptance passed. Redis tags and leases passed full native acceptance. Distributed Remember, rate limiting and pub/sub also passed full native acceptance. Namespace invalidation, [typed Redis data](redis-data.md) and [raw commands](redis-commands.md) also passed full native acceptance.
 
-[Typed counters](../../blueprint/00-master-architecture-and-parity.md#milestone-09-typed-counter-acceptance)
+Typed counters
 also passed the full native gate and focused race, compiler, editor and arithmetic
 fuzz checks. Redis counter behavior passed real-service races and full native adapter acceptance.

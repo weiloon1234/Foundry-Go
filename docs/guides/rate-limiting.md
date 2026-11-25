@@ -225,4 +225,4 @@ concurrency, policy conflicts, cancellation and independent resources. Additiona
 tests cover window boundaries, namespaces, corrupt state, callback ownership,
 uncertain acknowledgements, HTTP behavior, wrong Go types and real gopls discovery.
 Full native verification passed in 465.6s with 1984 matching source inputs, required local PostgreSQL and Redis, all 670 compiler cases, 245 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Fresh focused rate-limit/Redis/HTTP races, consumer races, five new compiler rejections, two actual gopls probes and 2,861,333 timestamp fuzz executions also passed. No dependency was added.
-See the [acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-09-typed-rate-limit-acceptance). [Pub/sub](pubsub.md) and [authenticated actor quotas](authentication.md#middleware-after-authentication) are delivered integrations.
+See the acceptance record. [Pub/sub](pubsub.md) and [authenticated actor quotas](authentication.md#middleware-after-authentication) are delivered integrations.

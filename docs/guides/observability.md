@@ -1,7 +1,7 @@
 # Shared observations and trace context
 
 The recorder owns bounded observation and trace export for one application.
-The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) records
+The master roadmap records
 acceptance and verification evidence.
 
 Create one recorder and give it to one application:

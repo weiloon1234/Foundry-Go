@@ -22,4 +22,6 @@ func SummaryPage(ctx context.Context, db database.Executor, page orm.PageRequest
 		rows.Map(UserSummaries.Status, expr.Value(users.Status)),
 	)
 	return rows.Read(selected).Paginate(ctx, db, page)
-} // doc-example:end paginate-projection
+}
+
+// doc-example:end paginate-projection

@@ -32,4 +32,6 @@ func derivedReports() rows.SetQuery[reports.BuyerTotals] {
 		rows.Map(r.BuyerID, expr.Value(u.ID)), rows.MapSelected(r.Total, expr.AsSelected(expr.Sum(u.Age))),
 		rows.MapSelected(r.Orders, expr.AsSelected(expr.Count[models.User]())), rows.MapSelected(r.Average, expr.AsSelected(expr.Avg(u.Age)))), expr.Group(expr.Value(u.ID)))
 	return rows.UnionAll(rows.RecordOf(orders), rows.RecordOf(people))
-} // doc-example:end model-set-operations
+}
+
+// doc-example:end model-set-operations

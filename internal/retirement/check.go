@@ -24,14 +24,33 @@ var ledger embed.FS
 const framework = "github.com/weiloon1234/Foundry-Go/"
 const retiredPath = "database/" + "query"
 
-func declarations() (map[string][]string, error) {
+type retiredDeclaration struct {
+	Name        string `json:"name"`
+	Replacement string `json:"replacement,omitempty"`
+}
+
+func retiredDeclarations() (map[string][]retiredDeclaration, error) {
 	data, err := ledger.ReadFile("denied.json")
 	if err != nil {
 		return nil, err
 	}
-	var result map[string][]string
+	var result map[string][]retiredDeclaration
 	err = json.Unmarshal(data, &result)
 	return result, err
+}
+
+func declarations() (map[string][]string, error) {
+	entries, err := retiredDeclarations()
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string][]string, len(entries))
+	for owner, members := range entries {
+		for _, member := range members {
+			result[owner] = append(result[owner], member.Name)
+		}
+	}
+	return result, nil
 }
 
 // Check walks source regardless of build selection or module boundaries. Historical

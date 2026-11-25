@@ -2,7 +2,7 @@
 
 Foundation native measurements passed on 2026-09-17 against an independent private module
 candidate. The [C05 continuation results](#consumer-startup-c05-native-results) below
-add configured startup and runtime measurements. [Recorded results](../evidence/production24-native.json) contain the raw
+add configured startup and runtime measurements. Recorded results contain the raw
 phase timings, memory samples and generated sizes; interpretation follows below.
 Historical acceptance durations and constrained VM runs remain separate evidence.
 
@@ -38,7 +38,7 @@ toolchain selection, and uses ordinary native compiler defaults. `-mod=readonly`
 controls dependency changes; it does not change compiler optimization.
 
 Format-3 candidates add a separate Go-way consumer for package/source acceptance.
-Its performance is measured by the [synthetic harness](../../blueprint/goway-data-layer/README.md#synthetic-whole-app-harness).
+Its performance is measured by the synthetic harness.
 The release measurement profiles remain the following three, as in format 2.
 Historical format-1 candidates have ordinary/full only and remain supported:
 
@@ -188,7 +188,7 @@ peaks at 1.82 GB (8.88 s), `database/orm/rows` `[database/orm/rows.test]` at
 
 ## Consumer startup C05 native results
 
-[Recorded C05 evidence](../evidence/consumer-startup-c05-native.json) uses private
+Recorded C05 evidence uses private
 candidate `v0.0.0-candidate.startup.5`, after the complete C01–C05 implementation
 audit and final 494.9-second acceptance gate. The host/toolchain remained M4 Max,
 64 GiB, macOS 26.6.2, native Go 1.27.1 and gopls 0.23.0. No other Foundry gate ran
@@ -272,7 +272,7 @@ the [acceptance guide](consumer-startup-acceptance.md#final-acceptance-boundarie
 
 The [2026-09-18 review](performance-security-review.md) records fresh ordinary,
 configured and full-consumer profiles, five-sample before/after cache and stream
-measurements, and three-sample runtime checks. Its [native evidence](../evidence/performance-security-native.json)
+measurements, and three-sample runtime checks. Its native evidence
 retains cold, unchanged and edited builds, real editor timings and RSS. Historical
 C05 numbers above remain unchanged.
 ## Typed field capability regression
@@ -303,7 +303,7 @@ the shared query-engine refactor. They do not verify the combined source. See
 [query build resources](query-build-resources.md) for the subsequent engine/cache
 measurements and their source fingerprints.
 
-[Recorded local evidence](../evidence/typed-field-compilation-20261019.json) uses
+Recorded local evidence uses
 Go 1.27.1 on Apple M4 Max, ordinary optimization, the existing warm cache,
 `-p=1` and `GOMAXPROCS=2`. The same query/template workload is retained.
 

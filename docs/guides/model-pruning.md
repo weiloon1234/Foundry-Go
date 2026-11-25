@@ -2,7 +2,7 @@
 
 `database/prune` removes obsolete models in bounded batches. Register typed selections and run the registry explicitly; nothing prunes during application boot.
 
-<!-- orm-example: pruning -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#pruning -->
 ```go
 func pruneMembers(ctx context.Context, db database.Transactor, cutoff time.Time) (prune.Result, error) {
 	f := hooks.Members

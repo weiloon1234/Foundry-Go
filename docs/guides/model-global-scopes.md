@@ -4,7 +4,7 @@ Global scopes attach typed, additive predicates to a model declaration. A scope 
 
 ## Declare and attach scopes
 
-<!-- orm-example: scopes-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#scopes-after -->
 ```go
 func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[reads.Member], error) {
@@ -36,7 +36,7 @@ Raw SQL bypasses automatic scopes, including complete-model `orm.Raw`. Retrieval
 
 ## Query-local bypass
 
-<!-- orm-example: bypass-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#bypass-after -->
 ```go
 func bypass() orm.Query[reads.Member] {
 	return orm.WithoutGlobalScope(reads.Members.Query(), reads.MemberTenant(reads.Members))

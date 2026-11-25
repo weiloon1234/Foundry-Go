@@ -15,7 +15,7 @@ See [application timezones](application-timezone.md). Existing package functions
 continue to accept an explicit location, and interval schedules measure elapsed time.
 
 Milestone 13 passed native acceptance and consumer review. The
-[roadmap](../../blueprint/00-master-architecture-and-parity.md) owns acceptance
+roadmap owns acceptance
 status. The [independent consumer](../../tests/fixtures/consumer/scheduling/)
 demonstrates declarations, injected domain services and kernel assembly.
 

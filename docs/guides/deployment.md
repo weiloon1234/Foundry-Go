@@ -1308,7 +1308,7 @@ problem, and only when readiness is false, asking the operator to run the report
 as root to distinguish maintenance from an outage.
 
 The report runs only when someone asks for it, and nothing alerts on a failed or missing
-backup or certificate renewal. Alerts are [deferred](../../blueprint/25-deferred-extensions.md#backup-and-certificate-failure-alerts).
+backup or certificate renewal. Alerts are deferred.
 
 ## Container acceptance
 
@@ -1834,7 +1834,7 @@ not upgrade the host tooling. Hosts below generation 19 must first reach the
 supported upgrade floor. Preserve the ordinary deploy and readiness steps after
 the tools upgrade.
 
-The [B26 acceptance record](../evidence/b26-resource-provider-acceptance.md) owns
+The B26 acceptance record owns
 the resource, container and live R2 commands. It also records the implemented
 attachment/staging admission wiring and the outstanding execution evidence. Do not interpret generated paths or a
 passing nginx render test as certification of small-request isolation under full

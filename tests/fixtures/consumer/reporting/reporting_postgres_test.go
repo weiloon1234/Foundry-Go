@@ -124,7 +124,8 @@ func TestPublicJoinedAndGroupedReportsKeepCountsAndFilterPhases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer artifact.Close() // doc-example:end datatable-2
+	defer artifact.Close()
+	// doc-example:end datatable-2
 	data, err := io.ReadAll(artifact)
 	if err != nil {
 		t.Fatal(err)

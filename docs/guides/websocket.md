@@ -13,7 +13,7 @@
 
 Milestone 14 passed native acceptance, race checks, compiler/editor checks and
 bounded protocol fuzzing. The
-[roadmap](../../blueprint/00-master-architecture-and-parity.md) owns acceptance
+roadmap owns acceptance
 status. The [independent consumer](../../tests/fixtures/consumer/realtime/orders.go)
 shows typed declarations, a domain service and the WebSocket kernel. Distributed
 fan-out, TTL presence, revocation refresh and bounded replay are described in the

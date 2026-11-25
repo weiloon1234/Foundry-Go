@@ -87,7 +87,6 @@ itself. Nested fields retain the normal DTO rules.
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/member_create.go#http-application-errors-member-exists-details -->
 ```go
-//
 //foundry:dto
 type MemberExistsDetails struct {
 	ExistingMemberID model.ID[models.User] `json:"existing_member_id"`

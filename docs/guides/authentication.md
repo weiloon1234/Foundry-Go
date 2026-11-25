@@ -2,7 +2,7 @@
 
 Typed providers, guards, permissions and policies resolve concrete models once per request. HTTP adapters retain model and resource ownership through ordinary, signed and native handlers.
 
-Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
+Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
 
 <a id="agent-entry"></a>
 ## Agent entry
@@ -643,7 +643,7 @@ See [social login](social-login.md).
 
 See [authentication operations](auth-operations.md) for typed MFA observations,
 transactional outbox composition, bounded pruning and account retirement. The
-[parity inventory](../../blueprint/10-model-first-authentication-and-authorization.md#source-parity-closure)
+parity inventory
 records implemented behaviors, explicit redesigns and later milestone integrations.
 Milestone 10 acceptance includes these contracts.
 

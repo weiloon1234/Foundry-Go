@@ -1,6 +1,6 @@
 # Idempotent operations
 
-T06 native acceptance passed. The [evidence](../evidence/typed-api-t06.json) records
+T06 native acceptance passed. The evidence records
 commands, source hashes, process/crash coverage, fuzzing and repeated measurements.
 
 <a id="agent-entry"></a>
@@ -265,13 +265,17 @@ The core supports explicit versioned encoding for non-HTTP operations using
 
 Manifest version 4 includes replay policy, required key bounds, allowed headers
 and declared outcomes. OpenAPI exports the required header and `Retry-After`.
-Generated TypeScript requests require a branded `IdempotencyKey`:
+Generated TypeScript requests require a branded `IdempotencyKey`. Create it once
+for a submission and retain it with the request. If delivery is uncertain,
+reconcile or retry the same request with the same key:
 
-```ts
-const key = idempotencyKey(crypto.randomUUID());
-const request = { path: { workspace: "1" }, body: { name: "Order" }, idempotencyKey: key };
-const receipt = await client.ordersCreate(request);
-// Retry request unchanged if delivery is uncertain; do not generate another key.
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts):
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#submission-key -->
+```typescript
+export function submissionKey(): sdk.IdempotencyKey {
+  return sdk.idempotencyKey(crypto.randomUUID());
+}
 ```
 
 `APIError` exposes the safe code/status and bounded retry delay. The client owns the

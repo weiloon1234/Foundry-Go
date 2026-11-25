@@ -50,7 +50,9 @@ func FindDuplicates(ctx context.Context, tx *database.Tx, tables Tables, search 
 		expr.Asc(expr.At(addressScope, tables.Addresses.Key())),
 	)
 	return rows.Read(result).All(ctx, tx)
-} // doc-example:end find-duplicates
+}
+
+// doc-example:end find-duplicates
 
 // SimilarReviews uses the threshold already set in the supplied transaction.
 // doc-example:begin similar-reviews
@@ -59,4 +61,6 @@ func SimilarReviews(ctx context.Context, tx *database.Tx, reviews ReviewTable, s
 	query := expr.Where(reviews.Query().Where(orm.Ne(reviews.Key(), except)), expr.TrigramMatch(body, search))
 	query = expr.OrderBy(query, expr.Asc(expr.Value(reviews.Key()))).Limit(101)
 	return rows.ReadScalar(rows.SelectScalar(rows.From(query), expr.AsSelected(expr.Row(body)))).All(ctx, tx)
-} // doc-example:end similar-reviews
+}
+
+// doc-example:end similar-reviews

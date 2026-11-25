@@ -96,4 +96,4 @@ This preserves Rust Foundry's configurable header sources while changing its
 default CDN trust and leftmost-XFF selection to explicit peers and chain-aware
 resolution. Protocol references are [RFC 7239](https://www.rfc-editor.org/rfc/rfc7239.html)
 and Go's [proxy forwarding documentation](https://pkg.go.dev/net/http/httputil#ProxyRequest.SetXForwarded).
-The [HTTP blueprint](../../blueprint/08-http-validation-and-responses.md) records current milestone acceptance.
+The HTTP blueprint records current milestone acceptance.

@@ -6,7 +6,7 @@ inputs matched that revision when these checks completed. The private packaged
 consumers and ordinary starter gates passed, but additional Linux queue stress
 found one timeout. Release
 acceptance remains **incomplete** until that failure is explained and resolved.
-The [evidence record](../evidence/second-review-acceptance-20260929.json) preserves
+The evidence record preserves
 source and package hashes, exact commands, scanner findings, successful gates
 and the failed stress run.
 

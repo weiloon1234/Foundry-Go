@@ -317,7 +317,7 @@ ooo and Boss Club each taught framework APIs in their own skills, and those copi
 now own that teaching.
 - Executable guide examples are rendered from marked regions of compiled consumer fixtures; generation and
   documentation checks reject stale, duplicate and unbound recipe fences, and one mechanism owns every example
-  (the labelled `orm-migration.md` before/after examples remain the migration exception).
+  (every current guide uses compiled source bindings, without migration exceptions).
 - Guides used by application skills have a navigation-only `Agent entry` and stable `recipe-<task>` anchors
   covering the API recipes the applications' 19 mixed skills taught.
 - `go tool foundry docs check --dir .` validates an application's `Foundry guides:` references and owner-aware
@@ -670,7 +670,7 @@ SQL AST, validation and planning into a non-generic `internal/querycore` package
 model/key/value/nullability ownership, concrete hydration, lifecycle callbacks,
 request scope freshness and public metadata type identities are preserved.
 Optional stored-field computations move to typed functions; applications must
-follow the [migration guide](../docs/guides/typed-field-computations.md).
+follow the [model declaration guide](../docs/guides/typed-field-computations.md).
 Generated declarations and database schemas keep their formats.
 
 Final native `make verify` and PostgreSQL/race gates passed, including independent

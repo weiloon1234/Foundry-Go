@@ -1,6 +1,6 @@
 # Isolated PostgreSQL HTTP tests
 
-T05 native verification passed. The [master](../../blueprint/00-master-architecture-and-parity.md#typed-api-delivery)
+T05 native verification passed. The master
 owns acceptance status. The [independent consumer](../../tests/fixtures/consumer/isolatedhttp/application.go)
 uses ordinary application assembly, generated ORM declarations, typed HTTP DTOs and a real
 PostgreSQL transaction per write. Handlers contain no test schema argument.
@@ -260,7 +260,7 @@ func removeOriginal(t testing.TB, manager *attachments.Manager, file attachments
 
 ## Acceptance evidence
 
-The [recorded native checks](../evidence/typed-api-t05.json) include full verification,
+The recorded native checks include full verification,
 PostgreSQL/race integration, typed compiler failures and real gopls completion.
 Three local SELECT 1 samples had median checkout times of 25.5 microseconds unscoped
 and 75.1 microseconds scoped, with 32 and 57 allocations respectively. The extra

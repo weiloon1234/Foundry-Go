@@ -61,7 +61,7 @@ repeated native candidate measurements.
 
 Final gate, source hashes, packaged consumer and security results are recorded
 in the [acceptance guide](consumer-startup-acceptance.md) and
-[acceptance evidence](../evidence/consumer-startup-c05.json). Both packaged serve
+acceptance evidence. Both packaged serve
 commands also answered HTTP and exited successfully on SIGINT using a two-second
 configured shutdown timeout. No source was committed,
 pushed, merged or published as part of this work.
