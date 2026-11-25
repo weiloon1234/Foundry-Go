@@ -10,7 +10,7 @@ import (
 )
 
 // doc-example:begin account-provider
-//
+
 //foundry:model table=guide_accounts var=Accounts key=ID
 type Account struct {
 	ID      int64

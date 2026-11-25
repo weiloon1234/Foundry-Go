@@ -29,7 +29,7 @@ func RotateEncryption(ctx context.Context, keys *encryption.Keyring, owner encry
 }
 
 // doc-example:begin factor-request-inputs
-//
+
 //foundry:dto http=body
 type TOTPRequest struct {
 	Code mfa.TOTPCode `json:"code"`

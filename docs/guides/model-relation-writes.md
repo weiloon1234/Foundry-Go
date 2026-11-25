@@ -60,7 +60,6 @@ stores its link data in this application-owned `DocumentTag` model:
 
 <!-- compiled-source: tests/fixtures/consumer/tenantqueries/models.go#document-tag-pivot -->
 ```go
-//
 //foundry:model table=tenant_document_tags var=DocumentTags key=ID identity=false
 type DocumentTag struct {
 	ID         model.ID[DocumentTag]

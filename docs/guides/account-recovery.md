@@ -54,7 +54,6 @@ Declare the request body using the framework's actual input types:
 
 <!-- compiled-source: tests/fixtures/consumer/recovering/requests.go#recovery-request-inputs -->
 ```go
-//
 //foundry:dto http=body
 type ResetRequest struct {
 	Token    passwordreset.Token[Member] `json:"token"`

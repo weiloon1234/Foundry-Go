@@ -50,7 +50,7 @@ type Tag struct {
 }
 
 // doc-example:begin document-tag-pivot
-//
+
 //foundry:model table=tenant_document_tags var=DocumentTags key=ID identity=false
 type DocumentTag struct {
 	ID         model.ID[DocumentTag]

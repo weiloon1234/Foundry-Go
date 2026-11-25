@@ -10,7 +10,7 @@ import (
 )
 
 // doc-example:begin status-codec-declaration
-//
+
 //foundry:enum
 type Status string
 

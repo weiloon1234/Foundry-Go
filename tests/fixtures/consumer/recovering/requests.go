@@ -7,7 +7,7 @@ import (
 )
 
 // doc-example:begin recovery-request-inputs
-//
+
 //foundry:dto http=body
 type ResetRequest struct {
 	Token    passwordreset.Token[Member] `json:"token"`

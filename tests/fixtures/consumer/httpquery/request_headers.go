@@ -5,9 +5,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// RequestParameters keeps URL inputs and application headers in one typed input.
-//
 // doc-example:begin model-generation-1
+
+// RequestParameters keeps URL inputs and application headers in one typed input.
 //
 //foundry:query
 type RequestParameters struct {

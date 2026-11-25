@@ -188,7 +188,6 @@ Go declarations own request contracts:
 
 <!-- compiled-source: tests/fixtures/consumer/multifactor/primitives.go#factor-request-inputs -->
 ```go
-//
 //foundry:dto http=body
 type TOTPRequest struct {
 	Code mfa.TOTPCode `json:"code"`

@@ -46,7 +46,6 @@ account, hash or supplied password caused rejection.
 
 <!-- compiled-source: tests/fixtures/consumer/passwords/passwords.go#password-request-input -->
 ```go
-//
 //foundry:dto http=body
 type LoginRequest struct {
 	Email    string             `json:"email"`

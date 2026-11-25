@@ -96,6 +96,7 @@ header alongside URL query parameters:
 
 <!-- compiled-source: tests/fixtures/consumer/httpquery/request_headers.go#model-generation-1 -->
 ```go
+// RequestParameters keeps URL inputs and application headers in one typed input.
 //
 //foundry:query
 type RequestParameters struct {

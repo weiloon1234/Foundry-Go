@@ -167,7 +167,6 @@ The application's `localization` package also declares the welcome message:
 
 <!-- compiled-source: tests/fixtures/consumer/localization/messages.go#welcome-message-input -->
 ```go
-//
 //foundry:message key=welcome
 type WelcomeArgs struct {
 	Name string `json:"name"`

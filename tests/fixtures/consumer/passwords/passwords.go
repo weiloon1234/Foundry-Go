@@ -8,7 +8,7 @@ import (
 )
 
 // doc-example:begin password-request-input
-//
+
 //foundry:dto http=body
 type LoginRequest struct {
 	Email    string             `json:"email"`

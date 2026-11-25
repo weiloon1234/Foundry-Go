@@ -6,7 +6,7 @@ import (
 )
 
 // doc-example:begin window-input
-//
+
 //foundry:dto
 type AvailabilityWindow struct {
 	Start temporal.DateTime `json:"start"`

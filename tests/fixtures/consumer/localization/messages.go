@@ -13,7 +13,7 @@ import (
 )
 
 // doc-example:begin welcome-message-input
-//
+
 //foundry:message key=welcome
 type WelcomeArgs struct {
 	Name string `json:"name"`

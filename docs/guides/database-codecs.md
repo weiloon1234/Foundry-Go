@@ -17,7 +17,6 @@ The application declares the string-backed enum and its accepted values once:
 
 <!-- compiled-source: tests/fixtures/consumer/models/models.go#status-codec-declaration -->
 ```go
-//
 //foundry:enum
 type Status string
 

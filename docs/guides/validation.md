@@ -286,7 +286,6 @@ Declare the application enum and request once, then generate their selectors:
 
 <!-- compiled-source: tests/fixtures/consumer/validationrules/rules.go#registration-input -->
 ```go
-//
 //foundry:enum
 type OrganizationKind string
 
@@ -384,7 +383,6 @@ The application declares both temporal fields on one DTO:
 
 <!-- compiled-source: tests/fixtures/consumer/validationrules/window.go#window-input -->
 ```go
-//
 //foundry:dto
 type AvailabilityWindow struct {
 	Start temporal.DateTime `json:"start"`

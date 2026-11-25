@@ -7,7 +7,7 @@ import (
 )
 
 // doc-example:begin registration-input
-//
+
 //foundry:enum
 type OrganizationKind string
 

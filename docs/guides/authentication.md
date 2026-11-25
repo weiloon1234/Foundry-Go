@@ -32,7 +32,6 @@ key codec.
 
 <!-- compiled-source: tests/fixtures/goway/modelguide/account.go#account-provider -->
 ```go
-//
 //foundry:model table=guide_accounts var=Accounts key=ID
 type Account struct {
 	ID      int64
