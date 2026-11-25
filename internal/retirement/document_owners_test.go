@@ -30,7 +30,7 @@ func TestPaginationDocumentationOwners(t *testing.T) {
 			t.Fatalf("%s: %v", code, err)
 		}
 	}
-	if err := CheckDocument("AGENTS.md", []byte("```go\npagination.Authenticated(page, binding, http.Scopes(scopes))\npagination.AuthorizeActor(page, policy)\n```")); err != nil {
+	if err := CheckDocument("AGENTS.md", []byte("```go\npagination.Authenticated(page, binding, http.AllOf(http.Scopes(scopes)))\npagination.AuthorizeActor(page, policy)\n```")); err != nil {
 		t.Fatal(err)
 	}
 }

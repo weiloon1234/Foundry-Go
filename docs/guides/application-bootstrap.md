@@ -182,7 +182,7 @@ members, err := foundryhttp.BindGuard(cookieAuthentication, memberGuard)
 if err != nil {
 	return foundryhttp.RouteRegistration{}, err
 }
-route := foundryhttp.Authenticated(profileEndpoint, members).Handle(
+route := foundryhttp.Authenticated(profileEndpoint, members, members.AnyActor()).Handle(
 	func(ctx context.Context, actor Member, input ProfileInput) (Profile, error) {
 		return service.Profile(ctx, actor, input)
 	},

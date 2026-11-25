@@ -19,7 +19,7 @@ type authorizedListService interface {
 
 func registerMemberList(list pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse], binding foundryhttp.GuardBinding[Actor], readScopes auth.AccessScopes[Actor], readPermission auth.Permission[Actor], service authorizedListService) foundryhttp.RouteRegistration {
 	// doc-example:begin authenticated-pagination-20260928-1
-	secured := pagination.Authenticated(list, binding, foundryhttp.Scopes(readScopes), foundryhttp.Permissions(readPermission))
+	secured := pagination.Authenticated(list, binding, foundryhttp.AllOf(foundryhttp.Scopes(readScopes), foundryhttp.Permissions(readPermission)))
 	secured = pagination.AuthorizeActor(secured, service.AuthorizeList)
 	return pagination.HandleAuthenticated(secured, service.List)
 	// doc-example:end authenticated-pagination-20260928-1

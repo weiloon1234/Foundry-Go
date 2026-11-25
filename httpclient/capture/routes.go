@@ -13,16 +13,16 @@ import (
 //	GET ""           ID <group>.outbound-captures.list  newest-first cursor page of OutboundCapture
 //	GET "/{capture}" ID <group>.outbound-captures.show  OutboundCaptureDetail, 404 when unknown or expired
 //
-// Both routes authenticate through guard, require every access option before
-// decoding the query or path, and send Cache-Control: no-store. access must not
-// be empty: mounting the viewer always states who may read captured calls.
+// Both routes authenticate through guard, require access before
+// decoding the query or path, and send Cache-Control: no-store. access is
+// required: mounting the viewer always states who may read captured calls.
 // List requires a from time and a window of at most 30 days; pages hold 30
 // items by default and at most 100. Declarations are validated before return.
 //
-// Example: capture.Routes(group, captures, admins, http.Scopes(developerRead), http.Permissions(developerPermission))
-func Routes[M any](group http.Scope, captures *Store, guard http.GuardBinding[M], access ...http.GuardOption[M]) ([]http.RouteRegistration, error) {
-	if captures == nil || len(access) == 0 {
-		return nil, invalid("outbound capture routes require a store and at least one access requirement")
+// Example: capture.Routes(group, captures, admins, http.AllOf(http.Scopes(developerRead), http.Permissions(developerPermission)))
+func Routes[M any](group http.Scope, captures *Store, guard http.GuardBinding[M], access http.AccessRule[M]) ([]http.RouteRegistration, error) {
+	if captures == nil {
+		return nil, invalid("outbound capture routes require a store")
 	}
 	scope := http.DefineScope("/outbound-captures", "outbound-captures").Within(group).WithMiddleware(http.CacheControl(http.NoStoreCachePolicy()))
 	listRoute := http.DefineRoute(http.RouteSpec{ID: "list", Method: http.GET, Access: http.Guarded}, http.StaticPath(""))
@@ -30,14 +30,14 @@ func Routes[M any](group http.Scope, captures *Store, guard http.GuardBinding[M]
 	config := pagination.DefaultCursorConfig()
 	config.DefaultSize, config.MaximumSize = 30, 100
 	listEndpoint := pagination.DefineCursor[store.Summary](listRoute, OutboundCaptureFiltersDescriptor(), OutboundCaptureJSON(), config)
-	list := pagination.Authenticated(listEndpoint, guard, access...)
+	list := pagination.Authenticated(listEndpoint, guard, access)
 	if err := pagination.ValidateAuthenticated(list); err != nil {
 		return nil, err
 	}
 	showRoute := http.DefineRoute(http.RouteSpec{ID: "show", Method: http.GET, Access: http.Guarded}, OutboundCapturePathDescriptor())
 	showRoute = http.ConfigureRoute(showRoute, http.Within(scope))
 	showEndpoint := http.DefineEndpoint(showRoute, http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, OutboundCaptureDetailJSON()))
-	show := http.Authenticated(showEndpoint, guard, access...)
+	show := http.Authenticated(showEndpoint, guard, access)
 	if err := http.ValidateAuthenticated(show); err != nil {
 		return nil, err
 	}

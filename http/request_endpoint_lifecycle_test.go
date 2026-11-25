@@ -113,7 +113,7 @@ func TestRequestEndpointKindsPreserveLifecycleAndResponse(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				guarded := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(endpoint, transport, guard), func(_ context.Context, actor authAccount, _ pipelineInput) error {
+				guarded := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(endpoint, transport, guard, foundryhttp.AnyActorOf(guard)), func(_ context.Context, actor authAccount, _ pipelineInput) error {
 					stages = append(stages, "actor")
 					if actor.ID != 1 {
 						t.Error("wrong authorized actor")

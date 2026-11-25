@@ -1,0 +1,77 @@
+package http
+
+type AccessScopes[M any] struct{}
+type Permission[M any] struct{}
+type Endpoint[R any] struct{}
+type Route[P any] struct{}
+type Scope struct{}
+type Middleware func()
+type Registration struct{}
+type Authentication struct{}
+type Guard[M any] struct{}
+type GuardBinding[M any] struct{}
+type TicketRedeemer struct{}
+
+type bindingOption[M any] interface{ apply(M) }
+type RequirementOption[M any] interface {
+	GuardOption[M]
+	requirement()
+}
+type ActorOption[M any] interface {
+	GuardOption[M]
+	actor()
+}
+type GuardAlternative[M any] struct{}
+
+type req[M any] struct{}
+
+func (req[M]) apply(M)      {}
+func (req[M]) requirement() {}
+
+type act[M any] struct{}
+
+func (act[M]) apply(M) {}
+func (act[M]) actor()  {}
+
+func Scopes[M any](AccessScopes[M]) RequirementOption[M]       { return req[M]{} }
+func Permissions[M any](...Permission[M]) RequirementOption[M] { return req[M]{} }
+func ActorMiddleware[M any](...Middleware) ActorOption[M]      { return act[M]{} }
+func AllOf[M any](...RequirementOption[M]) GuardAlternative[M] { return GuardAlternative[M]{} }
+
+type AuthenticatedEndpoint[R, M any] struct{}
+
+func (AuthenticatedEndpoint[R, M]) Handle(func()) Registration { return Registration{} }
+
+type AuthenticatedRoute[P, M any] struct{}
+
+func (AuthenticatedRoute[P, M]) Handle(func()) Registration { return Registration{} }
+
+type TicketEndpoint[R, M any] struct{}
+
+func (TicketEndpoint[R, M]) Handle(func()) Registration { return Registration{} }
+
+type GuardOption[M any] interface{ bindingOption[M] }
+type anyOf[M any] struct{}
+
+func (anyOf[M]) apply(M) {}
+
+func AnyOf[M any](...GuardAlternative[M]) GuardOption[M] { return anyOf[M]{} }
+
+func Authenticated[R, M any](Endpoint[R], GuardBinding[M], ...GuardOption[M]) AuthenticatedEndpoint[R, M] {
+	return AuthenticatedEndpoint[R, M]{}
+}
+func RequireAuthentication[R, M any](Endpoint[R], *Authentication, Guard[M], ...GuardOption[M]) AuthenticatedEndpoint[R, M] {
+	return AuthenticatedEndpoint[R, M]{}
+}
+func RequireRouteAuthentication[P, M any](Route[P], *Authentication, Guard[M], ...GuardOption[M]) AuthenticatedRoute[P, M] {
+	return AuthenticatedRoute[P, M]{}
+}
+func TicketAuthenticated[R, M any](Endpoint[R], GuardBinding[M], TicketRedeemer, ...GuardOption[M]) TicketEndpoint[R, M] {
+	return TicketEndpoint[R, M]{}
+}
+func ConfigureAuthenticated[R, M any](e AuthenticatedEndpoint[R, M], _ ...GuardOption[M]) AuthenticatedEndpoint[R, M] {
+	return e
+}
+func ConfigureAuthenticatedRoute[P, M any](r AuthenticatedRoute[P, M], _ ...GuardOption[M]) AuthenticatedRoute[P, M] {
+	return r
+}

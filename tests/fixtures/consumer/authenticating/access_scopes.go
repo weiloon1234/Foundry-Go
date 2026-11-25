@@ -43,8 +43,8 @@ func ReadScopedOrder(ctx context.Context, api auth.Guard[models.User], readOrder
 }
 
 // doc-example:begin configure-scopes
-func ScopedProfile(endpoint ProfileEndpoint, required auth.AccessScopes[models.User]) ProfileEndpoint {
-	return foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Scopes(required))
+func ScopedProfile(endpoint ProfileDeclaration, binding foundryhttp.GuardBinding[models.User], required auth.AccessScopes[models.User]) ProfileEndpoint {
+	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.AllOf(foundryhttp.Scopes(required)))
 }
 
 // doc-example:end configure-scopes

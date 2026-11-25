@@ -1,0 +1,7 @@
+package capture
+
+import "github.com/weiloon1234/Foundry-Go/http"
+
+type Store struct{}
+
+func Routes[M any](http.Scope, *Store, http.GuardBinding[M], http.AccessRule[M]) error { return nil }

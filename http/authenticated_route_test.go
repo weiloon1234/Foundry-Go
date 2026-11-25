@@ -35,7 +35,7 @@ func TestAuthenticatedRawRoutesPreserveNativeTransportAndRequirements(t *testing
 				t.Fatal(err)
 			}
 			route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "raw.write", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.DefinePath("/raw/{order}", foundryhttp.Param("order", compositionCodec{&parses}, func(p *compositionPath) *int64 { return &p.Order })))
-			bound := foundryhttp.ConfigureAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(route, transport, guard), foundryhttp.AnyOf(foundryhttp.AllOf(foundryhttp.Permissions(permission))))
+			bound := foundryhttp.RequireRouteAuthentication(route, transport, guard, foundryhttp.AnyOf(foundryhttp.AllOf(foundryhttp.Permissions(permission))))
 			signer, now := compositionSigner(t)
 			var original *http.Request
 			var writer *httptest.ResponseRecorder
@@ -187,7 +187,7 @@ func TestRawAuthenticationRejectsWrongAccessAndUnregisteredGuard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := foundryhttp.ValidateAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(compositionRoute(foundryhttp.Public, &parses), transport, guard)); err == nil {
+	if err := foundryhttp.ValidateAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(compositionRoute(foundryhttp.Public, &parses), transport, guard, foundryhttp.AnyActorOf(guard))); err == nil {
 		t.Fatal("required binding accepted public declaration")
 	}
 	if err := foundryhttp.ValidateOptionalRoute(foundryhttp.OptionalRouteAuthentication(compositionRoute(foundryhttp.Guarded, &parses), transport, guard)); err == nil {
@@ -201,7 +201,7 @@ func TestRawAuthenticationRejectsWrongAccessAndUnregisteredGuard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := foundryhttp.ValidateAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(compositionRoute(foundryhttp.Guarded, &parses), other, guard)); err == nil {
+	if err := foundryhttp.ValidateAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(compositionRoute(foundryhttp.Guarded, &parses), other, guard, foundryhttp.AnyActorOf(guard))); err == nil {
 		t.Fatal("unregistered raw guard accepted")
 	}
 	if loads.Load() != 0 {

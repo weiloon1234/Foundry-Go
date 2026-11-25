@@ -158,16 +158,13 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 		return result, err
 	}
 
-	guardAccount := foundryhttp.RequireAuthentication(secure, transport, guard)
+	guardAccount := foundryhttp.RequireAuthentication(secure, transport, guard, accountAccess)
 
-	pageBindingGuardedList := pagination.Authenticated(httppagination.GuardedList, pageBinding)
-	pageBindingGuardedList = pagination.ConfigureAuthenticated(pageBindingGuardedList, foundryhttp.Permissions(Manage))
+	pageBindingGuardedList := pagination.Authenticated(httppagination.GuardedList, pageBinding, foundryhttp.AllOf(foundryhttp.Permissions(Manage)))
 
-	pageBindingGuardedSimpleList := pagination.Authenticated(httppagination.GuardedSimpleList, pageBinding)
-	pageBindingGuardedSimpleList = pagination.ConfigureAuthenticated(pageBindingGuardedSimpleList, foundryhttp.Permissions(Manage))
+	pageBindingGuardedSimpleList := pagination.Authenticated(httppagination.GuardedSimpleList, pageBinding, foundryhttp.AllOf(foundryhttp.Permissions(Manage)))
 
-	pageBindingGuardedCursorList := pagination.Authenticated(httppagination.GuardedCursorList, pageBinding)
-	pageBindingGuardedCursorList = pagination.ConfigureAuthenticated(pageBindingGuardedCursorList, foundryhttp.Permissions(Manage))
+	pageBindingGuardedCursorList := pagination.Authenticated(httppagination.GuardedCursorList, pageBinding, foundryhttp.AllOf(foundryhttp.Permissions(Manage)))
 
 	router, err := foundryhttp.NewRouter(append(append(append(pluralRoutes, transportRoutes(signer)...), browserAuthRoutes(transport, browserGuard)...),
 		InspectHeaders.Handle(handleInspectHeaders),
@@ -183,7 +180,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 			}
 			return input.Body, nil
 		}),
-		foundryhttp.ConfigureAuthenticated(guardAccount, accountAccess).Handle(func(_ context.Context, subject Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
+		guardAccount.Handle(func(_ context.Context, subject Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
 			return Member{Display: subject.Display}, nil
 		}),
 		broken.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {

@@ -493,11 +493,15 @@ func FromGuard(guard auth.Guard[Operator]) Authority {
 }
 ```
 
-Declare route access requirements as data and pass them to `ReadAccess` and
-`ExportAccess`. Do not invoke authorization with a synthetic actor to discover
-capabilities. An omitted access option adds no permission requirement; table
-authorization still runs. The app owns any wrapper that shares these declarations
-with its domain policy.
+Declare route access requirements as data and pass each as an `http.AccessRule` to
+`ReadAccess` and `ExportAccess`. `datatable.Routes` requires `ReadAccess`, and an
+exportable table also requires `ExportAccess`, so a table is never open by
+omission: a table every authenticated actor may use writes
+`datatable.ReadAccess(config.Guard.AnyActor())`. Do not invoke authorization with a
+synthetic actor to discover capabilities. Table authorization still runs on every
+rule. The app owns any wrapper that shares these declarations with its domain
+policy. Leaving out `ReadAccess` says `not enough arguments in call to datatable.Routes`
+and lists `datatable.ReadOption[M]` among the wanted arguments.
 
 For [alternative route guards](authentication.md#recipe-any-of-guards), keep
 separate typed read and export capability lists in the application's table
@@ -510,8 +514,8 @@ policy; do not copy names into a second route permission map.
 
 An editorial read list can contain write and approve capabilities. Export keeps
 its independently approved capability list; it never inherits read access.
-Reject an empty list when the application requires an access declaration. Keep
-export-disabled as an explicit table setting, not an empty `AnyOf`.
+An empty `AnyOf` is refused when the routes register. Keep export-disabled as an
+explicit table setting, not an empty `AnyOf`.
 
 Export alternatives run at both ticket issuance and ticket-authenticated download.
 Redemption rechecks current permissions and credential scope ceilings. The issuing
@@ -1017,16 +1021,16 @@ as described in the [tooling guide](developer-tooling-and-testing.md).
 Use `datatable.Routes` to register a table's query, ticket-export and download
 routes in one call. The parent scope stays application-owned. The helper uses
 explicit Part A bindings, so generated clients derive their table operations
-from the registered endpoints. `NumericLevels` is a table declared with `datatable.Define`, `group` the scope the routes live under, `config` the route configuration built next, and `read` and `export` the guard options for read and export access:
+from the registered endpoints. `NumericLevels` is a table declared with `datatable.Define`, `group` the scope the routes live under, `config` the route configuration built next, and `read` and `export` the access rules for read and export access:
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/table_routes.go#datatable-7 -->
 ```go
 // NumericLevelRoutes uses framework-owned query, ticket and download contracts.
 // The caller supplies current authority and token-owned tickets.
-func NumericLevelRoutes(group foundryhttp.Scope, config datatable.RoutesConfig[Operator, Authority], read, export []foundryhttp.GuardOption[Operator]) ([]foundryhttp.RouteRegistration, error) {
+func NumericLevelRoutes(group foundryhttp.Scope, config datatable.RoutesConfig[Operator, Authority], read, export foundryhttp.AccessRule[Operator]) ([]foundryhttp.RouteRegistration, error) {
 	return datatable.Routes(group, NumericLevels, config,
-		datatable.ReadAccess(read...),
-		datatable.ExportAccess(export...),
+		datatable.ReadAccess(read),
+		datatable.ExportAccess(export),
 	)
 }
 ```
@@ -1054,10 +1058,10 @@ the actor through the current request scope when authorization or loading runs.
 
 Supply `RoutesConfig[M, A]` with the manager, concrete `GuardBinding[M]` and an
 `Authority(context.Context, M) (A, error)` callback. Route guards use `M`; queries
-and exports use `A`. Build read and export guard options from your application's
-permission and credential-scope declarations. Each access option may appear once;
-the helper snapshots its slice. Table authorization still runs for every query
-and export.
+and exports use `A`. Build the read and export access rules from your application's
+permission and credential-scope declarations. `ReadAccess` is required and
+`ExportAccess` may appear once; each rule is an immutable snapshot. Table
+authorization still runs for every query and export.
 
 Exportable tables also require `Clock`, `Quota` and `Tickets[M]`. Construct tickets
 from the same model's token binding. Registration rejects disabled tickets or a

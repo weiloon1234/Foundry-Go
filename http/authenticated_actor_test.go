@@ -64,7 +64,7 @@ func TestActorMiddlewareRunsAfterAuthenticationWithConcreteModel(t *testing.T) {
 			next.ServeHTTP(w, r)
 		}), nil
 	})
-	route := foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Use(before)), transport, guard, foundryhttp.ActorMiddleware[authAccount](tenant)).Handle(func(_ context.Context, actor authAccount, _ authInput) (foundryhttp.NoContent, error) {
+	route := foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Use(before)), transport, guard, foundryhttp.AnyActorOf(guard), foundryhttp.ActorMiddleware[authAccount](tenant)).Handle(func(_ context.Context, actor authAccount, _ authInput) (foundryhttp.NoContent, error) {
 		order = append(order, "handler")
 		return foundryhttp.NoContent{}, nil
 	})
@@ -79,7 +79,7 @@ func TestActorMiddlewareRunsAfterAuthenticationWithConcreteModel(t *testing.T) {
 	if w := authServe(router, nil); w.Code != 401 || len(order) != 1 {
 		t.Fatal("actor stage ran without authentication", w.Code, order)
 	}
-	if registration := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.ActorMiddleware[authAccount]()).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	if registration := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AnyActorOf(guard), foundryhttp.ActorMiddleware[authAccount]()).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, nil
 	}); func() error { _, err := foundryhttp.NewRouter(registration); return err }() == nil {
 		t.Fatal("empty actor middleware declaration accepted")
@@ -129,12 +129,12 @@ func TestBrowserRouteRequiresRecentPasswordConfirmation(t *testing.T) {
 		_, err := s.web.Login(ctx, proof, session.IssueOptions{})
 		return foundryhttp.NoContent{}, err
 	})
-	confirm := foundryhttp.RequireAuthentication(browserEndpoint("/confirm", foundryhttp.POST, foundryhttp.Guarded), s.web.Authentication(), s.web.Guard()).Handle(func(ctx context.Context, _ authAccount, _ authInput) (foundryhttp.NoContent, error) {
+	confirm := foundryhttp.RequireAuthentication(browserEndpoint("/confirm", foundryhttp.POST, foundryhttp.Guarded), s.web.Authentication(), s.web.Guard(), foundryhttp.AnyActorOf(s.web.Guard())).Handle(func(ctx context.Context, _ authAccount, _ authInput) (foundryhttp.NoContent, error) {
 		// A real route re-verifies the password with auth.PasswordLogin.Confirm first.
 		_, err := s.sessions.ConfirmCurrent(ctx)
 		return foundryhttp.NoContent{}, err
 	})
-	sensitive := foundryhttp.RequireAuthentication(browserEndpoint("/sensitive", foundryhttp.POST, foundryhttp.Guarded), s.web.Authentication(), s.web.Guard(), foundryhttp.ActorMiddleware[authAccount](s.web.RequirePasswordConfirmation(15*time.Minute))).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	sensitive := foundryhttp.RequireAuthentication(browserEndpoint("/sensitive", foundryhttp.POST, foundryhttp.Guarded), s.web.Authentication(), s.web.Guard(), foundryhttp.AnyActorOf(s.web.Guard()), foundryhttp.ActorMiddleware[authAccount](s.web.RequirePasswordConfirmation(15*time.Minute))).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, nil
 	})
 	router, err := foundryhttp.NewRouter(login, confirm, sensitive)

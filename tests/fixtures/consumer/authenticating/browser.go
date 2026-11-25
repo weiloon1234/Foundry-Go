@@ -43,7 +43,7 @@ func BrowserRoutes(web *Browser, verify VerifiedLogin) (*foundryhttp.Router, err
 
 	profileEndpoint := endpoint("browser.profile", foundryhttp.GET, "/profile", foundryhttp.Guarded)
 
-	profile := foundryhttp.RequireAuthentication(profileEndpoint, web.Authentication(), web.Guard()).Handle(func(ctx context.Context, user models.User, _ ProfileInput) (foundryhttp.NoContent, error) {
+	profile := foundryhttp.RequireAuthentication(profileEndpoint, web.Authentication(), web.Guard(), foundryhttp.AnyActorOf(web.Guard())).Handle(func(ctx context.Context, user models.User, _ ProfileInput) (foundryhttp.NoContent, error) {
 		// Domain code receives the concrete model, and can use its typed getters.
 		_, err := web.Guard().Require(ctx)
 		return foundryhttp.NoContent{}, err
@@ -51,7 +51,7 @@ func BrowserRoutes(web *Browser, verify VerifiedLogin) (*foundryhttp.Router, err
 
 	rotateEndpoint := endpoint("browser.rotate", foundryhttp.POST, "/rotate", foundryhttp.Guarded)
 
-	rotate := foundryhttp.RequireAuthentication(rotateEndpoint, web.Authentication(), web.Guard()).Handle(func(ctx context.Context, _ models.User, _ ProfileInput) (foundryhttp.NoContent, error) {
+	rotate := foundryhttp.RequireAuthentication(rotateEndpoint, web.Authentication(), web.Guard(), foundryhttp.AnyActorOf(web.Guard())).Handle(func(ctx context.Context, _ models.User, _ ProfileInput) (foundryhttp.NoContent, error) {
 		_, err := BrowserRotate(ctx, web)
 		return foundryhttp.NoContent{}, err
 	})

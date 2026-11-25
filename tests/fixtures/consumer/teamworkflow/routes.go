@@ -66,7 +66,7 @@ func (s *Service) Routes() ([]http.RouteRegistration, error) {
 	resolver := projectResolver(s.db, func(p ProjectPath) int64 { return p.Team }, func(p ProjectPath) Slug { return p.Project })
 
 	workflowPatchEndpoint := PatchEndpoint()
-	guardWorkflowPatch := http.RequireAuthentication(workflowPatchEndpoint, transport, guard)
+	guardWorkflowPatch := http.RequireAuthentication(workflowPatchEndpoint, transport, guard, http.AnyActorOf(guard))
 
 	workflowPatchBinding := http.ForAuthenticatedBinding(guardWorkflowPatch)
 	patch := modelbinding.BindAuthenticated(workflowPatchBinding, resolver)
@@ -76,7 +76,7 @@ func (s *Service) Routes() ([]http.RouteRegistration, error) {
 	workflowShowRoute := http.DefineRoute(http.RouteSpec{ID: "workflow.show", Method: http.GET, Access: http.Guarded}, ProjectPathDescriptor())
 	show := http.DefineEndpoint(workflowShowRoute, http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, genericdto.EnvelopeJSON(ProjectViewJSON())))
 
-	guardWorkflowShow := http.RequireAuthentication(show, transport, guard)
+	guardWorkflowShow := http.RequireAuthentication(show, transport, guard, http.AnyActorOf(guard))
 	workflowShowBinding := http.ForAuthenticatedBinding(guardWorkflowShow)
 	boundShow := modelbinding.BindAuthenticated(workflowShowBinding, resolver)
 	boundShow = modelbinding.AuthorizeAuthenticatedResource(boundShow,
@@ -87,7 +87,7 @@ func (s *Service) Routes() ([]http.RouteRegistration, error) {
 	submissions := projectResolver(s.db, func(p SubmissionPath) int64 { return p.Team }, func(p SubmissionPath) Slug { return p.Project })
 
 	workflowSubmitEndpoint := SubmitEndpoint()
-	required := http.RequireAuthentication(workflowSubmitEndpoint, transport, guard)
+	required := http.RequireAuthentication(workflowSubmitEndpoint, transport, guard, http.AnyActorOf(guard))
 
 	required = http.AuthorizeActor(required, func(_ context.Context, _ Actor, in http.Input[SubmissionPath, http.NoQuery, SubmissionInput]) error {
 		if in.Body.Name == "request-denied" {

@@ -173,9 +173,9 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify func(context.Cont
 		profileEndpointRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
 
-	guardProfile := foundryhttp.RequireAuthentication(profileEndpoint, transport, guard)
+	guardProfile := foundryhttp.RequireAuthentication(profileEndpoint, transport, guard, foundryhttp.AllOf(foundryhttp.Scopes(scopes)))
 
-	profile := foundryhttp.ConfigureAuthenticated(guardProfile, foundryhttp.Scopes(scopes)).Handle(func(ctx context.Context, user models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
+	profile := guardProfile.Handle(func(ctx context.Context, user models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 		// user is the concrete model; code that has only ctx gets it again from guard.Require(ctx).
 		return foundryhttp.NoContent{}, nil
 	})
@@ -465,7 +465,7 @@ func TicketRoute(tokens *UserTokens, binding foundryhttp.GuardBinding[models.Use
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.TicketResponse[models.User, model.ID[models.User]](200, clock.System{}),
 	)
 
-	return foundryhttp.Authenticated(endpoint, binding).Handle(func(ctx context.Context, _ models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (token.Ticket[models.User, model.ID[models.User]], error) {
+	return foundryhttp.Authenticated(endpoint, binding, binding.AnyActor()).Handle(func(ctx context.Context, _ models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (token.Ticket[models.User, model.ID[models.User]], error) {
 		return tokens.IssueTicket(ctx)
 	}), nil
 }

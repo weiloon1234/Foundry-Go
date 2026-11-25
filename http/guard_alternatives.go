@@ -30,13 +30,14 @@ func (r guardRequirements[M]) info() GuardAlternativeInfo {
 }
 
 // GuardAlternative is an immutable conjunction of scopes and permissions for M.
-// Construct it with AllOf. Its zero value is invalid and cannot grant access.
+// Construct it with AllOf; it is an AccessRule and one branch of AnyOf. Its zero
+// value is invalid and cannot grant access.
 type GuardAlternative[M any] struct {
 	requirements guardRequirements[M]
 	err          error
 }
 
-// AllOf declares one nonempty alternative. Every scope and permission must pass.
+// AllOf declares one nonempty access rule. Every scope and permission must pass.
 // It retains declaration errors for endpoint/route validation before registration.
 func AllOf[M any](requirements ...RequirementOption[M]) GuardAlternative[M] {
 	var binding authenticationBinding[M]
@@ -58,32 +59,38 @@ func AllOf[M any](requirements ...RequirementOption[M]) GuardAlternative[M] {
 
 // AnyOf requires one complete alternative to pass, in declaration order.
 // An observed authority error stops admission; only a normal denial tries the
-// next branch. It cannot be mixed with flat Scopes/Permissions or another AnyOf.
-func AnyOf[M any](alternatives ...GuardAlternative[M]) GuardOption[M] {
-	owned := append([]GuardAlternative[M]{}, alternatives...)
-	return guardOption[M]{apply: func(binding authenticationBinding[M]) authenticationBinding[M] {
-		if binding.requirementError != nil {
-			return binding
+// next branch. It is a complete AccessRule, so it cannot be mixed with another
+// requirement.
+func AnyOf[M any](alternatives ...GuardAlternative[M]) AccessRule[M] {
+	return anyOfRule[M]{alternatives: append([]GuardAlternative[M]{}, alternatives...)}
+}
+
+type anyOfRule[M any] struct{ alternatives []GuardAlternative[M] }
+
+func (r anyOfRule[M]) applyAccess(binding authenticationBinding[M]) authenticationBinding[M] {
+	binding.accessDeclared = true
+	binding.alternatives = r.alternatives
+	if len(r.alternatives) == 0 || len(r.alternatives) > MaxGuardAlternatives {
+		binding.requirementError = safeerror.NewFault(fault.Invalid, "HTTP guard alternatives require a bounded nonempty declaration")
+	}
+	for _, alternative := range r.alternatives {
+		if binding.requirementError == nil {
+			binding.requirementError = alternative.err
 		}
-		if binding.alternatives != nil {
-			binding.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP guard alternatives are already declared")
-			return binding
-		}
-		if binding.requiredScopes != nil || binding.requiredPermissions != nil {
-			binding.requirementError = safeerror.NewFault(fault.Invalid, "HTTP guard alternatives cannot be mixed with flat requirements")
-			return binding
-		}
-		binding.alternatives = owned
-		if len(owned) == 0 || len(owned) > MaxGuardAlternatives {
-			binding.requirementError = safeerror.NewFault(fault.Invalid, "HTTP guard alternatives require a bounded nonempty declaration")
-		}
-		for _, alternative := range owned {
-			if binding.requirementError == nil {
-				binding.requirementError = alternative.err
-			}
-		}
-		return binding
-	}}
+	}
+	return binding
+}
+
+func (a GuardAlternative[M]) applyAccess(binding authenticationBinding[M]) authenticationBinding[M] {
+	binding.accessDeclared = true
+	binding.guardRequirements = a.requirements
+	if binding.requirementError == nil {
+		binding.requirementError = a.err
+	}
+	if binding.requirementError == nil && a.requirements.requiredScopes == nil && a.requirements.requiredPermissions == nil {
+		binding.requirementError = safeerror.NewFault(fault.Invalid, "HTTP access rule was not built by AllOf")
+	}
+	return binding
 }
 
 func (b authenticationBinding[M]) admitAlternative(ctx context.Context) (context.Context, error) {

@@ -53,7 +53,7 @@ func browserAuthRoutes(transport *foundryhttp.Authentication, guard auth.Guard[A
 		logout.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshCookieLogoutRequest]) (foundryhttp.NoContent, error) {
 			return foundryhttp.NoContent{}, nil
 		}),
-		foundryhttp.RequireAuthentication(profile, transport, guard).Handle(func(_ context.Context, actor Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
+		foundryhttp.RequireAuthentication(profile, transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(_ context.Context, actor Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
 			return Member{Display: actor.Display}, nil
 		}),
 	}

@@ -16,6 +16,7 @@ type wrongRequest struct{ Request datatable.Request }
 
 var table datatable.Table[struct{}, row, authority]
 var query = datatable.QueryEndpoint(table, h.Route[h.NoPath]{}, h.EmptyQuery())
-var _ = h.Authenticated(query, h.GuardBinding[actor]{}).Handle(func(context.Context, authority, h.Input[h.NoPath, h.NoQuery, datatable.Request]) (pagination.NumberedResponse[row], error) {
+var binding h.GuardBinding[actor]
+var _ = h.Authenticated(query, binding, binding.AnyActor()).Handle(func(context.Context, authority, h.Input[h.NoPath, h.NoQuery, datatable.Request]) (pagination.NumberedResponse[row], error) {
 	return pagination.NumberedResponse[row]{}, nil
 })

@@ -37,10 +37,13 @@ func (b GuardBinding[M]) Select(guard auth.Guard[M]) (GuardBinding[M], error) {
 // Guard returns the bound authentication guard.
 func (b GuardBinding[M]) Guard() auth.Guard[M] { return b.guard }
 
-// Authenticated requires the bound guard's concrete subject and applies guard options
-// to endpoint.
-func Authenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M], options ...GuardOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
-	return ConfigureAuthenticated(RequireAuthentication(endpoint, binding.authentication, binding.guard), options...)
+// Authenticated requires the bound guard's concrete subject and the access rule
+// that says who may call endpoint: AllOf, AnyOf or binding.AnyActor(). Actor
+// options run after the rule passes.
+//
+// Example: http.Authenticated(profileEndpoint, users, http.AllOf(http.Scopes(read)))
+func Authenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M], rule AccessRule[M], options ...ActorOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
+	return RequireAuthentication(endpoint, binding.authentication, binding.guard, rule, options...)
 }
 
 // OptionallyAuthenticated adds the bound guard's optional concrete subject and applies

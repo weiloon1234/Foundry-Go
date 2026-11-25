@@ -18,9 +18,10 @@ type AuthenticatedRoute[P, M any] struct {
 }
 
 // RequireRouteAuthentication binds a raw route to required typed authentication and
-// guard options.
-func RequireRouteAuthentication[P, M any](route Route[P], authentication *Authentication, guard auth.Guard[M], options ...GuardOption[M]) AuthenticatedRoute[P, M] {
-	return ConfigureAuthenticatedRoute(AuthenticatedRoute[P, M]{route: route, binding: authenticationBinding[M]{authentication: authentication, guard: guard}}, options...)
+// the access rule that says who may call it (AllOf, AnyOf or AnyActor).
+func RequireRouteAuthentication[P, M any](route Route[P], authentication *Authentication, guard auth.Guard[M], rule AccessRule[M], options ...ActorOption[M]) AuthenticatedRoute[P, M] {
+	binding := authenticationBinding[M]{authentication: authentication, guard: guard}.withAccess(rule)
+	return ConfigureAuthenticatedRoute(AuthenticatedRoute[P, M]{route: route, binding: binding}, options...)
 }
 
 // ValidateAuthenticatedRoute checks the raw route and required authentication binding.
@@ -91,7 +92,8 @@ type OptionalAuthenticationRoute[P, M any] struct{ required AuthenticatedRoute[P
 // OptionalRouteAuthentication adds optional typed authentication and actor options to a
 // raw route.
 func OptionalRouteAuthentication[P, M any](route Route[P], authentication *Authentication, guard auth.Guard[M], options ...ActorOption[M]) OptionalAuthenticationRoute[P, M] {
-	return ConfigureOptionalRoute(OptionalAuthenticationRoute[P, M]{required: RequireRouteAuthentication(route, authentication, guard)}, options...)
+	required := AuthenticatedRoute[P, M]{route: route, binding: authenticationBinding[M]{authentication: authentication, guard: guard}}
+	return ConfigureOptionalRoute(OptionalAuthenticationRoute[P, M]{required: required}, options...)
 }
 
 // ValidateOptionalRoute checks the raw route and optional authentication binding.

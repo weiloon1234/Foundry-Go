@@ -39,9 +39,9 @@ var showOrder = func() foundryhttp.Endpoint[OrderPath, foundryhttp.NoQuery, foun
 }()
 
 func Orders(transport *foundryhttp.Authentication, guard auth.Guard[models.User]) OrderEndpoint {
-	guardOrdersShow := foundryhttp.RequireAuthentication(showOrder, transport, guard)
+	guardOrdersShow := foundryhttp.RequireAuthentication(showOrder, transport, guard, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
 
-	return foundryhttp.ConfigureAuthenticated(guardOrdersShow, foundryhttp.Permissions(ViewAccount))
+	return guardOrdersShow
 }
 func SignedOrders(endpoint OrderEndpoint, signer foundryhttp.URLSigner) SignedOrderEndpoint {
 	return foundryhttp.SignedAuthenticated(endpoint, signer)
@@ -71,9 +71,9 @@ func BoundOrder(endpoint OrderTransport, resolver modelbinding.Resolver[OrderPat
 var nativeProfile = foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "profile.native", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/profile/native"))
 
 func NativeProfile(transport *foundryhttp.Authentication, guard auth.Guard[models.User]) foundryhttp.AuthenticatedRoute[foundryhttp.NoPath, models.User] {
-	profileNativeEndpoint := foundryhttp.RequireRouteAuthentication(nativeProfile, transport, guard)
+	profileNativeEndpoint := foundryhttp.RequireRouteAuthentication(nativeProfile, transport, guard, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
 
-	return foundryhttp.ConfigureAuthenticatedRoute(profileNativeEndpoint, foundryhttp.Permissions(ViewAccount))
+	return profileNativeEndpoint
 }
 func NativeProfileHandler(route foundryhttp.AuthenticatedRoute[foundryhttp.NoPath, models.User], handler func(stdhttp.ResponseWriter, *stdhttp.Request, models.User, foundryhttp.NoPath)) foundryhttp.RouteRegistration {
 	return foundryhttp.HandleAuthenticatedRaw(route, handler)

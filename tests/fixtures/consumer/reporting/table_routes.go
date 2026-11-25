@@ -10,10 +10,10 @@ import (
 // doc-example:begin datatable-7
 // NumericLevelRoutes uses framework-owned query, ticket and download contracts.
 // The caller supplies current authority and token-owned tickets.
-func NumericLevelRoutes(group foundryhttp.Scope, config datatable.RoutesConfig[Operator, Authority], read, export []foundryhttp.GuardOption[Operator]) ([]foundryhttp.RouteRegistration, error) {
+func NumericLevelRoutes(group foundryhttp.Scope, config datatable.RoutesConfig[Operator, Authority], read, export foundryhttp.AccessRule[Operator]) ([]foundryhttp.RouteRegistration, error) {
 	return datatable.Routes(group, NumericLevels, config,
-		datatable.ReadAccess(read...),
-		datatable.ExportAccess(export...),
+		datatable.ReadAccess(read),
+		datatable.ExportAccess(export),
 	)
 }
 

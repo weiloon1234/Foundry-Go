@@ -57,7 +57,7 @@ func TestDiagnosticsUseNormalPermissionsAndSeparateLiveFromReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "operations", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/profile"))
-	protected := foundryhttp.ConfigureAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(base, authentication, guard), foundryhttp.Permissions(permission))
+	protected := foundryhttp.RequireRouteAuthentication(base, authentication, guard, foundryhttp.AllOf(foundryhttp.Permissions(permission)))
 	for _, endpoint := range []diagnostics.Endpoint{diagnostics.Liveness, diagnostics.Readiness, diagnostics.Status, diagnostics.Metrics} {
 		router := newAuthRouter(t, diagnostics.Route(runtime, protected, endpoint))
 		before := checks.Load()

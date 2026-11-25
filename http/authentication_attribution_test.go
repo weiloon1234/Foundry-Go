@@ -55,7 +55,7 @@ func TestTypedHTTPEndpointsAutomaticallyAttributeOnlyVerifiedModels(t *testing.T
 					return check(ctx, subject)
 				})
 			} else {
-				registration = foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard).Handle(func(ctx context.Context, member authAccount, _ authInput) (foundryhttp.NoContent, error) {
+				registration = foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(ctx context.Context, member authAccount, _ authInput) (foundryhttp.NoContent, error) {
 					return check(ctx, value.Set(member))
 				})
 			}

@@ -81,7 +81,8 @@ are removed.
 ## Authenticated page reads
 
 Declare the route with `Access: foundryhttp.Guarded`, configure pagination as
-usual, and pass its concrete `foundryhttp.GuardBinding[Actor]` to
+usual, and pass its concrete `foundryhttp.GuardBinding[Actor]` and the access rule
+(`http.AllOf`, `http.AnyOf` or `binding.AnyActor()`) to
 `pagination.Authenticated`, then register it with
 `pagination.HandleAuthenticated(secured, service.List)`. Numbered, simple and cursor endpoints use the same
 adapter and infer all types from the endpoint and binding. `Actor` is the application's authenticated actor model, `guarded` an endpoint declared with a `Guarded` route, and `binding` the guard's `GuardBinding[Actor]`:
@@ -89,7 +90,7 @@ adapter and infer all types from the endpoint and binding. `Actor` is the applic
 <!-- compiled-source: tests/fixtures/consumer/httppagination/authenticated.go#http-pagination-authenticated-numbered -->
 ```go
 func AuthenticatedNumbered(guarded pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse], binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
-	return pagination.Authenticated(guarded, binding)
+	return pagination.Authenticated(guarded, binding, binding.AnyActor())
 }
 ```
 
@@ -117,8 +118,9 @@ Common options follow the HTTP endpoint forms. Pass `foundryhttp.Within(scope)`,
 `foundryhttp.Errors(declarations...)` after the config argument to `DefineNumbered`,
 `DefineSimple` or `DefineCursor`. Use `pagination.Configure(page, options...)`
 for a saved declaration. `pagination.ValidateFilters(page, rules...)` retains
-unprefixed filter names in validation metadata. Pass actor options to
-`pagination.Authenticated`, or use `pagination.ConfigureAuthenticated` afterward.
+unprefixed filter names in validation metadata. Pass actor options after the
+rule to `pagination.Authenticated`, or use `pagination.ConfigureAuthenticated`
+afterward; it accepts actor middleware only.
 
 ## Inputs and limits
 

@@ -79,7 +79,7 @@ access values are rejected. Ordinary typed endpoints support required or optiona
 ## Guard alternatives
 
 A guarded route can require any complete scope/permission alternative through
-`http.AnyOf(http.AllOf(...), ...)`. Use the same `GuardOption[M]` on typed endpoints,
+`http.AnyOf(http.AllOf(...), ...)`. Pass the same `AccessRule[M]` to typed endpoints,
 native routes, signed endpoints and pagination. Each branch retains the actor's
 model type. `Scopes` and `Permissions` inside one branch mean AND; branches mean OR.
 

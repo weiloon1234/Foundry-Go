@@ -102,11 +102,15 @@ func TestConfigAndRoutesValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	guard := http.GuardBinding[routeActor]{}
-	if _, err := Routes(http.DefineScope("/developer", "developer"), nil, guard, http.Permissions(developerRead)); !errors.Is(err, fault.Invalid) {
+	if _, err := Routes(http.DefineScope("/developer", "developer"), nil, guard, http.AllOf(http.Permissions(developerRead))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("routes accepted a nil store")
 	}
-	if _, err := Routes[routeActor](http.DefineScope("/developer", "developer"), &Store{}, guard); !errors.Is(err, fault.Invalid) {
-		t.Fatal("routes accepted no access requirement")
+	binding, scopes := routeGuard(t)
+	if _, err := Routes[routeActor](http.DefineScope("/developer", "developer"), &Store{}, binding, nil); !errors.Is(err, fault.Invalid) {
+		t.Fatal("routes accepted a nil access rule")
+	}
+	if _, err := Routes(http.DefineScope("/developer", "developer"), &Store{}, binding, http.AllOf(http.Scopes(scopes), http.Permissions(developerRead))); err != nil {
+		t.Fatal(err)
 	}
 }
 

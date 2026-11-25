@@ -2461,6 +2461,10 @@
   ],
   "datatable": [
     {
+      "name": "RouteOption",
+      "replacement": "datatable.ReadOption from datatable.ReadAccess and datatable.ExportOption from datatable.ExportAccess; each takes an http.AccessRule"
+    },
+    {
       "name": "Config.DownloadTimeout",
       "replacement": "datatable.Manager.DownloadTimeout (including a nil manager)"
     },
@@ -2495,8 +2499,12 @@
       "noReplacement": true
     },
     {
+      "name": "GuardOption",
+      "replacement": "http.AccessRule for the access rule of http.Authenticated (http.AllOf, http.AnyOf or the guard binding's AnyActor method); http.ActorOption for http.ConfigureAuthenticated"
+    },
+    {
       "name": "Endpoint.WithScopes",
-      "replacement": "http.Authenticated(endpoint, binding, http.Scopes(scopes))"
+      "replacement": "http.Authenticated(endpoint, binding, http.AllOf(http.Scopes(scopes)))"
     },
     {
       "name": "Endpoint.WithPermissions",
@@ -2708,7 +2716,7 @@
   "http/pagination": [
     {
       "name": "AuthenticatedNumberedEndpoint.WithScopes",
-      "replacement": "pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))"
+      "replacement": "pagination.Authenticated(endpoint, binding, http.AllOf(http.Scopes(scopes)))"
     },
     {
       "name": "AuthenticatedNumberedEndpoint.WithPermissions",
@@ -2720,7 +2728,7 @@
     },
     {
       "name": "AuthenticatedSimpleEndpoint.WithScopes",
-      "replacement": "pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))"
+      "replacement": "pagination.Authenticated(endpoint, binding, http.AllOf(http.Scopes(scopes)))"
     },
     {
       "name": "AuthenticatedSimpleEndpoint.WithPermissions",
@@ -2732,7 +2740,7 @@
     },
     {
       "name": "AuthenticatedCursorEndpoint.WithScopes",
-      "replacement": "pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))"
+      "replacement": "pagination.Authenticated(endpoint, binding, http.AllOf(http.Scopes(scopes)))"
     },
     {
       "name": "AuthenticatedCursorEndpoint.WithPermissions",

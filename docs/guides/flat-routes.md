@@ -79,7 +79,7 @@ endpoint := foundryhttp.DefineEndpoint(route, query, body, response)
 endpoint = foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Errors(PageProtected))
 endpoint = foundryhttp.PrepareEndpoint(endpoint, preparePage)
 endpoint = foundryhttp.ValidateBody(endpoint, pageRules)
-admin := foundryhttp.Authenticated(endpoint, adminGuard, foundryhttp.Scopes(manage))
+admin := foundryhttp.Authenticated(endpoint, adminGuard, foundryhttp.AllOf(foundryhttp.Scopes(manage)))
 return admin.Handle(createPage)
 ```
 
@@ -111,7 +111,7 @@ Inputs: `route foundryhttp.Route[foundryhttp.NoPath]`, `access foundryhttp.Guard
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-3 -->
 ```go
 endpoint := foundryhttp.DefineEndpoint(route, query, body, response)
-secured := foundryhttp.Authenticated(endpoint, access)
+secured := foundryhttp.Authenticated(endpoint, access, access.AnyActor())
 return foundryhttp.IdempotentAuthenticated(secured, store, definition)
 ```
 
@@ -129,7 +129,7 @@ are also allowed, including when the registration or URL is passed to another ca
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-4 -->
 ```go
 public := foundryhttp.DefineEndpoint(route, query, body, response).Handle(showPage)
-admin := foundryhttp.Authenticated(endpoint, adminGuard).Handle(createPage)
+admin := foundryhttp.Authenticated(endpoint, adminGuard, adminGuard.AnyActor()).Handle(createPage)
 url, err := foundryhttp.DefineEndpoint(route, query, body, response).URL(ctx, pathValue, queryValue)
 if err != nil {
 	return nil, "", err

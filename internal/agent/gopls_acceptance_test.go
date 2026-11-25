@@ -474,7 +474,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"token-refresh-input-secret", "authenticating/token_routes.go", "request.RefreshToken.", "Secret", []string{"Secret"}, []string{"secret.String"}, "/internal/authtransport/refresh_request.go"},
 		{"token-model-owned-issue", "authenticating/tokens.go", "tokens.", "Issue", []string{"Issue", "Refresh", "RevokeID", "Guard"}, []string{"Proof", "User", "IssueOptions", "Issued"}, "/auth/token/tokens.go"},
 		{"token-model-owned-refresh", "authenticating/tokens.go", "tokens.", "Refresh", []string{"Refresh", "List", "RevokeAll", "Touch"}, []string{"Context", "secret.String", "Issued", "User"}, "/auth/token/tokens.go"},
-		{"auth-http-any-of", "authenticating/any_of.go", "http.", "AnyOf", []string{"AnyOf", "AllOf", "Permissions"}, []string{"GuardAlternative", "GuardOption"}, "/http/guard_alternatives.go"},
+		{"auth-http-any-of", "authenticating/any_of.go", "http.", "AnyOf", []string{"AnyOf", "AllOf", "Permissions"}, []string{"GuardAlternative", "AccessRule"}, "/http/guard_alternatives.go"},
 		{"auth-http-all-of", "authenticating/any_of.go", "http.", "AllOf", []string{"AllOf", "Scopes", "Permissions"}, []string{"RequirementOption", "GuardAlternative"}, "/http/guard_alternatives.go"},
 		{"auth-model-scope-check", "authenticating/access_scopes.go", "api.", "RequireScopes", []string{"RequireScopes", "Require", "Optional"}, []string{"User", "AccessScopes", "error"}, "/auth/access_scopes.go"},
 		{"auth-http-scope-contract", "authenticating/access_scopes.go", "http.", "Scopes", []string{"Scopes", "Permissions", "ConfigureAuthenticated"}, []string{"User", "AccessScopes", "RequirementOption"}, "/http/options.go"},

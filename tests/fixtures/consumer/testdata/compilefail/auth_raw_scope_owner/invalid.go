@@ -6,5 +6,6 @@ import (
 	h "github.com/weiloon1234/Foundry-Go/http"
 )
 
-var route h.AuthenticatedRoute[h.NoPath, models.User]
-var _ = h.ConfigureAuthenticatedRoute[h.NoPath, models.User](route, h.Scopes(auth.AccessScopes[models.Order]{}))
+var route h.Route[h.NoPath]
+var guard auth.Guard[models.User]
+var _ = h.RequireRouteAuthentication(route, nil, guard, h.AllOf(h.Scopes(auth.AccessScopes[models.Order]{})))

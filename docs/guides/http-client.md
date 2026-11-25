@@ -307,13 +307,13 @@ request ID, trace ID and route of the inbound request that made the call.
 
 Mount the viewer inside an existing guarded group with the store from
 `services.OutboundCaptures()`, behind the same developer gate as the webhook
-viewer. At least one access option is required and the routes send
+viewer. The access rule is a required argument and the routes send
 `Cache-Control: no-store`. `Actor` is the application's authenticated model, `binding` the guard's `foundryhttp.GuardBinding[Actor]` and `viewCaptures` the application's developer-only `auth.Permission[Actor]`:
 
 <!-- compiled-source: tests/fixtures/consumer/teamworkflow/outbound_capture.go#outbound-capture-routes -->
 ```go
 func OutboundCaptureRoutes(captures *outboundcapture.Store, binding foundryhttp.GuardBinding[Actor], viewCaptures auth.Permission[Actor]) ([]foundryhttp.RouteRegistration, error) {
-	return outboundcapture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.Permissions(viewCaptures))
+	return outboundcapture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.AllOf(foundryhttp.Permissions(viewCaptures)))
 }
 ```
 

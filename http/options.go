@@ -171,21 +171,22 @@ func ConfigureEndpoint[P, Q, B, R any](endpoint Endpoint[P, Q, B, R], options ..
 	return endpoint
 }
 
-// GuardOption preserves ownership of credential scopes and permissions.
-type GuardOption[M any] interface {
+// bindingOption is the sealed set of declarations that update an authentication
+// binding: requirements inside AllOf and actor middleware.
+type bindingOption[M any] interface {
 	applyGuard(authenticationBinding[M]) authenticationBinding[M]
 }
 
 // RequirementOption is the sealed scope/permission subset accepted by AllOf.
-// It also remains a GuardOption for existing flat authenticated declarations.
 type RequirementOption[M any] interface {
-	GuardOption[M]
+	bindingOption[M]
 	requirementOption()
 }
 
-// ActorOption is the middleware-only subset accepted by optional authentication.
+// ActorOption is the middleware-only subset accepted by ConfigureAuthenticated and
+// optional authentication.
 type ActorOption[M any] interface {
-	GuardOption[M]
+	bindingOption[M]
 	actorOption()
 }
 type guardOption[M any] struct {
@@ -227,63 +228,34 @@ func ActorMiddleware[M any](middleware ...Middleware) ActorOption[M] {
 	}}}
 }
 
-// ConfigureAuthenticated applies guard options to a copy of endpoint, retaining
-// missing-option errors for validation.
-func ConfigureAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R], options ...GuardOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
-	for _, option := range options {
-		if option == nil {
-			if endpoint.binding.requirementError == nil {
-				endpoint.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
-			}
-		} else {
-			endpoint.binding = option.applyGuard(endpoint.binding)
-		}
-	}
+// ConfigureAuthenticated applies actor options to a copy of endpoint, retaining
+// missing-option errors for validation. The access rule is chosen where the
+// endpoint is bound; it cannot change here.
+//
+// Example: http.ConfigureAuthenticated(profile, http.ActorMiddleware[models.User](audit))
+func ConfigureAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R], options ...ActorOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
+	endpoint.binding = authenticationWithOptions(endpoint.binding, options)
 	return endpoint
 }
 
 // ConfigureOptional applies actor options to a copy of endpoint, retaining
 // missing-option errors for validation.
 func ConfigureOptional[P, Q, B, M, R any](endpoint OptionalAuthenticationEndpoint[P, Q, B, M, R], options ...ActorOption[M]) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
-	for _, option := range options {
-		if option == nil {
-			if endpoint.required.binding.requirementError == nil {
-				endpoint.required.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
-			}
-		} else {
-			endpoint.required.binding = option.applyGuard(endpoint.required.binding)
-		}
-	}
+	endpoint.required.binding = authenticationWithOptions(endpoint.required.binding, options)
 	return endpoint
 }
 
-// ConfigureAuthenticatedRoute applies guard options to a copy of route, retaining
+// ConfigureAuthenticatedRoute applies actor options to a copy of route, retaining
 // missing-option errors for validation.
-func ConfigureAuthenticatedRoute[P, M any](route AuthenticatedRoute[P, M], options ...GuardOption[M]) AuthenticatedRoute[P, M] {
-	for _, option := range options {
-		if option == nil {
-			if route.binding.requirementError == nil {
-				route.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
-			}
-		} else {
-			route.binding = option.applyGuard(route.binding)
-		}
-	}
+func ConfigureAuthenticatedRoute[P, M any](route AuthenticatedRoute[P, M], options ...ActorOption[M]) AuthenticatedRoute[P, M] {
+	route.binding = authenticationWithOptions(route.binding, options)
 	return route
 }
 
 // ConfigureOptionalRoute applies actor options to a copy of route, retaining
 // missing-option errors for validation.
 func ConfigureOptionalRoute[P, M any](route OptionalAuthenticationRoute[P, M], options ...ActorOption[M]) OptionalAuthenticationRoute[P, M] {
-	for _, option := range options {
-		if option == nil {
-			if route.required.binding.requirementError == nil {
-				route.required.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
-			}
-		} else {
-			route.required.binding = option.applyGuard(route.required.binding)
-		}
-	}
+	route.required.binding = authenticationWithOptions(route.required.binding, options)
 	return route
 }
 

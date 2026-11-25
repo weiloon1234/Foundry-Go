@@ -5,6 +5,65 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+<a id="access-rule"></a>
+## Access rule on guarded routes — unreleased
+
+Every constructor of a guarded route now requires its access rule, so a route cannot
+be declared without deciding who may call it. This is a breaking source change. Wire
+formats, route manifests, persisted data and the deployment protocol do not change: a
+route that was `Authenticated(e, b, http.Scopes(s))` has the same required scopes
+before and after.
+
+| From | To |
+| --- | --- |
+| `http.Authenticated(e, b, http.Scopes(s), http.Permissions(p))` | `http.Authenticated(e, b, http.AllOf(http.Scopes(s), http.Permissions(p)))` |
+| `http.Authenticated(e, b, http.AnyOf(...))` | unchanged spelling; `AnyOf` now returns an `http.AccessRule` |
+| `v := http.Authenticated(e, b)` then `http.ConfigureAuthenticated(v, http.Scopes(s))` | `v := http.Authenticated(e, b, http.AllOf(http.Scopes(s)))` |
+| `http.Authenticated(e, b)` (open to any authenticated actor) | `http.Authenticated(e, b, b.AnyActor())` |
+| `http.RequireAuthentication(e, a, g, ...)`, `RequireRouteAuthentication` | the rule follows the guard; the open case is `http.AnyActorOf(g)` |
+| `http.TicketAuthenticated(e, b, r, ...)`, `pagination.Authenticated(p, b, ...)` | the rule follows the binding or redeemer |
+| `http.ConfigureAuthenticated(v, ...)`, `ConfigureAuthenticatedRoute`, `pagination.ConfigureAuthenticated` | accept `http.ActorMiddleware` only |
+| `datatable.ReadAccess(opts...)`, `ExportAccess(opts...)`, `datatable.Routes(g, t, c, options...)` | `datatable.Routes(g, t, c, datatable.ReadAccess(rule), datatable.ExportAccess(rule))`; `ReadAccess` is required, an exportable table also requires `ExportAccess`; `RouteOption` is replaced by `ReadOption` and `ExportOption` |
+| webhook and outbound capture `Routes(group, store, guard, opts...)` | `Routes(group, store, guard, rule)` |
+
+`http.GuardOption` and `datatable.RouteOption` are removed and in the retired-names
+ledger. `GuardBinding.AnyActor` and `http.AnyActorOf` are the only spellings of an
+open route; the manifest shows such a route with no scope and no permission. A rule
+value no constructor produced (nil or the zero `GuardAlternative`) is refused when
+the route registers.
+
+Migrate with the codemod, from the application directory while the application still
+builds against the previous release (it type-checks against the pinned dependency, not
+against its own version):
+
+```
+go run github.com/weiloon1234/Foundry-Go/tools/accessmigrate@<release> --dir . ./...
+```
+
+`--dry-run` prints the plan and writes nothing; `--tags a,b` also loads files behind
+build tags. It wraps inline `Scopes` and `Permissions` in `AllOf`, keeps an `AnyOf` as
+the rule, folds a later `ConfigureAuthenticated` into the constructor that assigned the
+value (one assignment, one configure, in straight-line code of the same function; actor
+middleware stays in the configure call) and prints one line per call:
+`file:line:col: rewritten: ...` or `file:line:col: left: <reason>`. It never writes
+`AnyActor`. It leaves, and the developer decides:
+
+- a route with no scopes and no permissions: open to any authenticated actor, or a
+  missing rule; write `AnyActor()` only where it is open;
+- a helper that wraps a constructor and returns its result, and options passed as a
+  slice (`options...`);
+- a value configured more than once, conditionally, inside a function literal, used
+  before it is configured, or used unconfigured after the configure call;
+- `AnyOf` combined with `Scopes` or `Permissions` (the old API refused it) and option
+  values of a type other than the calls above;
+- `datatable.Routes` without `ReadAccess`, and datatable and capture options passed as
+  a slice.
+
+Run the codemod before repinning, then repin, regenerate and build; each remaining call
+site fails to compile with `not enough arguments in call to http.Authenticated` (the
+wanted arguments end in `AccessRule[M]`) or `type RequirementOption[User] of
+http.Scopes(...) does not match inferred type AccessRule[User]`.
+
 ## Retired-names ledger completeness — unreleased
 
 Every exported identifier removed since the previous release must now appear in the

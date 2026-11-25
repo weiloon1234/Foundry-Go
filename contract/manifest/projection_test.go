@@ -241,7 +241,7 @@ func guardedPortals(t *testing.T) *manifest.Manifest {
 			t.Fatal(err)
 		}
 		endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath(path)), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, contract.StringJSON[string]()))
-		return foundryhttp.RequireAuthentication(endpoint, transport, guard).Handle(func(context.Context, operator, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {
+		return foundryhttp.RequireAuthentication(endpoint, transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(context.Context, operator, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {
 			t.Fatal("metadata invoked handler")
 			return "", nil
 		})

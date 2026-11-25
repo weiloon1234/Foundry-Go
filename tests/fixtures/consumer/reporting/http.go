@@ -33,7 +33,7 @@ func DownloadRoute(manager *datatable.Manager, transport *foundryhttp.Authentica
 	)
 	endpoint = foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Timeout(manager.DownloadTimeout()))
 
-	return foundryhttp.RequireAuthentication(endpoint, transport, guard).Handle(func(ctx context.Context, _ Operator, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
+	return foundryhttp.RequireAuthentication(endpoint, transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(ctx context.Context, _ Operator, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
 		return Members.Download(ctx, manager, FromGuard(guard), datatable.Request{}, datatable.ExportOptions{Format: datatable.CSV, Presentation: presentation})
 	})
 }
@@ -47,7 +47,7 @@ func QueryRoute(manager *datatable.Manager, transport *foundryhttp.Authenticatio
 		foundryhttp.EmptyQuery(),
 	)
 
-	return foundryhttp.RequireAuthentication(endpoint, transport, guard).Handle(func(ctx context.Context, _ Operator, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, datatable.Request]) (pagination.NumberedResponse[MemberRow], error) {
+	return foundryhttp.RequireAuthentication(endpoint, transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(ctx context.Context, _ Operator, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, datatable.Request]) (pagination.NumberedResponse[MemberRow], error) {
 		page, err := ListMembers(ctx, manager, guard, in.Body)
 		if err != nil {
 			return pagination.NumberedResponse[MemberRow]{}, err

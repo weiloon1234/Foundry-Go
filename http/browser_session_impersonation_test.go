@@ -24,7 +24,7 @@ func TestBrowserImpersonationSwapsAndRestoresTheSessionCookie(t *testing.T) {
 		return foundryhttp.NoContent{}, err
 	})
 	guarded := func(path string) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, authAccount, foundryhttp.NoContent] {
-		return foundryhttp.RequireAuthentication(browserEndpoint(path, foundryhttp.POST, foundryhttp.Guarded), s.web.Authentication(), s.web.Guard())
+		return foundryhttp.RequireAuthentication(browserEndpoint(path, foundryhttp.POST, foundryhttp.Guarded), s.web.Authentication(), s.web.Guard(), foundryhttp.AnyActorOf(s.web.Guard()))
 	}
 	var seen int64
 	start := guarded("/impersonate").Handle(func(ctx context.Context, _ authAccount, _ authInput) (foundryhttp.NoContent, error) {

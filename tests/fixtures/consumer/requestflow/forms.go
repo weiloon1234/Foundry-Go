@@ -103,7 +103,7 @@ type Account struct {
 
 func AccountEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Account]) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
 	formsSubmitEndpoint := submissionEndpoint(foundryhttp.Guarded)
-	guardFormsSubmit := foundryhttp.RequireAuthentication(formsSubmitEndpoint, transport, guard)
+	guardFormsSubmit := foundryhttp.RequireAuthentication(formsSubmitEndpoint, transport, guard, foundryhttp.AnyActorOf(guard))
 
 	guardFormsSubmit = foundryhttp.PrepareAuthenticated(guardFormsSubmit, Prepare)
 

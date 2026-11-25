@@ -1,0 +1,13 @@
+package pagination
+
+import foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+
+type PageEndpoint struct{}
+type AuthenticatedPage[M any] struct{}
+
+func Authenticated[M any](PageEndpoint, foundryhttp.GuardBinding[M], foundryhttp.AccessRule[M], ...foundryhttp.ActorOption[M]) AuthenticatedPage[M] {
+	return AuthenticatedPage[M]{}
+}
+func ConfigureAuthenticated[M any](e AuthenticatedPage[M], _ ...foundryhttp.ActorOption[M]) AuthenticatedPage[M] {
+	return e
+}

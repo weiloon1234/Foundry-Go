@@ -31,15 +31,15 @@ var GuardedCursorList = func() pagination.CursorEndpoint[foundryhttp.NoPath, Mem
 
 // doc-example:begin http-pagination-authenticated-numbered
 func AuthenticatedNumbered(guarded pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse], binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
-	return pagination.Authenticated(guarded, binding)
+	return pagination.Authenticated(guarded, binding, binding.AnyActor())
 }
 
 // doc-example:end http-pagination-authenticated-numbered
 func AuthenticatedSimple(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedSimpleEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
-	return pagination.Authenticated(GuardedSimpleList, binding)
+	return pagination.Authenticated(GuardedSimpleList, binding, binding.AnyActor())
 }
 func AuthenticatedCursor(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedCursorEndpoint[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member, Actor, MemberResponse] {
-	return pagination.Authenticated(GuardedCursorList, binding)
+	return pagination.Authenticated(GuardedCursorList, binding, binding.AnyActor())
 }
 
 type AuthenticatedService interface {

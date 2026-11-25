@@ -64,7 +64,7 @@ func guardedRoutes(path string) application.Routes {
 			return nil, err
 		}
 		endpoint := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "capture.guarded", Method: http.POST, Access: http.Guarded}, http.StaticPath(path)), http.EmptyQuery(), http.EmptyBody(), http.EmptyResponse(204))
-		return []http.RouteRegistration{http.Authenticated(endpoint, binding).Handle(func(context.Context, captureOperator, http.Input[http.NoPath, http.NoQuery, http.NoBody]) (http.NoContent, error) {
+		return []http.RouteRegistration{http.Authenticated(endpoint, binding, binding.AnyActor()).Handle(func(context.Context, captureOperator, http.Input[http.NoPath, http.NoQuery, http.NoBody]) (http.NoContent, error) {
 			return http.NoContent{}, nil
 		})}, nil
 	}

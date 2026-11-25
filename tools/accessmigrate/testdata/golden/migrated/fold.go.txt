@@ -1,0 +1,50 @@
+package migrated
+
+import (
+	"github.com/weiloon1234/Foundry-Go/http"
+)
+
+func foldExpression() http.Registration {
+	profile := http.Authenticated(endpoint, users, http.AllOf(http.Scopes(read), http.Permissions(viewer)))
+	return profile.Handle(handler)
+}
+
+func foldReassign() http.Registration {
+	secured := http.RequireAuthentication(endpoint, auth, guard, http.AllOf(http.Scopes(read), http.Permissions(editor)))
+	// the rule is declared below
+	return secured.Handle(handler)
+}
+
+func foldNested() http.Registration {
+	return http.Authenticated(endpoint, users, http.AllOf(http.Permissions(viewer))).Handle(handler)
+}
+
+func foldKeepsActors() http.Registration {
+	e := http.Authenticated(endpoint, users, http.AllOf(http.Scopes(read), http.Permissions(viewer)))
+	e = http.ConfigureAuthenticated(e, http.ActorMiddleware[User](audit))
+	return e.Handle(handler)
+}
+
+func foldMerges() http.Registration {
+	e := http.Authenticated(endpoint, users, http.AllOf(http.Scopes(read), http.Permissions(viewer)))
+	return e.Handle(handler)
+}
+
+func foldAnyOf() http.Registration {
+	e := http.Authenticated(endpoint, users, http.AnyOf(http.AllOf(http.Permissions(viewer)), http.AllOf(http.Scopes(read))))
+	return e.Handle(handler)
+}
+
+func foldRoute() http.Registration {
+	r := http.RequireRouteAuthentication(route, auth, guard, http.AllOf(http.Permissions(editor)))
+	return r.Handle(handler)
+}
+
+func foldInList() []http.Registration {
+	a := http.Authenticated(endpoint, users, http.AllOf(http.Scopes(read)))
+	b := http.Authenticated(endpoint, users, http.AllOf(http.Scopes(write), http.Permissions(editor)))
+	return []http.Registration{
+		a.Handle(handler),
+		b.Handle(handler),
+	}
+}

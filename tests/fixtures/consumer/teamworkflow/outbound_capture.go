@@ -14,7 +14,7 @@ import (
 // same developer gate as the webhook viewer.
 // doc-example:begin outbound-capture-routes
 func OutboundCaptureRoutes(captures *outboundcapture.Store, binding foundryhttp.GuardBinding[Actor], viewCaptures auth.Permission[Actor]) ([]foundryhttp.RouteRegistration, error) {
-	return outboundcapture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.Permissions(viewCaptures))
+	return outboundcapture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.AllOf(foundryhttp.Permissions(viewCaptures)))
 }
 
 // doc-example:end outbound-capture-routes

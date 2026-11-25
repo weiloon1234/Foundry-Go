@@ -22,7 +22,7 @@ func TestBoundCredentialMetadataUsesActualHTTPSource(t *testing.T) {
 			t.Fatal(err)
 		}
 		route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "credential.inspect", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/"))
-		info, err := foundryhttp.InspectAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(route, transport, guard))
+		info, err := foundryhttp.InspectAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(route, transport, guard, foundryhttp.AnyActorOf(guard)))
 		if err != nil {
 			t.Fatal(err)
 		}

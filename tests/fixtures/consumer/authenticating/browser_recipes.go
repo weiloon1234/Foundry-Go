@@ -50,7 +50,7 @@ func logoutBrowser(ctx context.Context, web *UserBrowserSessions) error {
 
 func confirmPasswordRoute(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], browser *UserBrowserSessions) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent] {
 	// doc-example:begin confirm-password-route
-	route := foundryhttp.RequireAuthentication(endpoint, browser.Authentication(), browser.Guard(),
+	route := foundryhttp.RequireAuthentication(endpoint, browser.Authentication(), browser.Guard(), foundryhttp.AnyActorOf(browser.Guard()),
 		foundryhttp.ActorMiddleware[models.User](browser.RequirePasswordConfirmation(15*time.Minute)))
 	// doc-example:end confirm-password-route
 	return route

@@ -177,7 +177,7 @@ Inputs: `transport *foundryhttp.Authentication`, `accountGuard auth.Guard[Accoun
 ```go
 form := formEndpoint(foundryhttp.Guarded)
 prepared := foundryhttp.PrepareEndpoint(form, Prepare)
-secured := foundryhttp.RequireAuthentication(prepared, transport, accountGuard)
+secured := foundryhttp.RequireAuthentication(prepared, transport, accountGuard, foundryhttp.AnyActorOf(accountGuard))
 secured = foundryhttp.AuthorizeActor(secured, func(ctx context.Context, actor Account, input Request) error {
 	return accountPolicy(ctx, actor, input.Body)
 })

@@ -47,7 +47,7 @@ func (r routeTicketRedeemer) RedeemTicket(ctx context.Context, raw secret.String
 	return r.redeem(ctx, raw)
 }
 
-func routeConfig(t *testing.T, manager *Manager) (RoutesConfig[routeActor, reportActor], []h.GuardOption[routeActor]) {
+func routeConfig(t *testing.T, manager *Manager) (RoutesConfig[routeActor, reportActor], h.AccessRule[routeActor]) {
 	t.Helper()
 	required, err := auth.NewAccessScopes(auth.DefineAccessScope[routeActor]("tables.read"))
 	if err != nil {
@@ -98,12 +98,23 @@ func routeConfig(t *testing.T, manager *Manager) (RoutesConfig[routeActor, repor
 		}
 		bound, err := binder.Bind(raw)
 		return value.Set(bound), err
-	}}}, Quota: h.DefineMiddleware("table.quota", func(next stdhttp.Handler) (stdhttp.Handler, error) { return next, nil })}, []h.GuardOption[routeActor]{h.AnyOf(h.AllOf(h.Scopes(required), h.Permissions(unavailable)), h.AllOf(h.Scopes(required), h.Permissions(permission)))}
+	}}}, Quota: h.DefineMiddleware("table.quota", func(next stdhttp.Handler) (stdhttp.Handler, error) { return next, nil })}, h.AnyOf(h.AllOf(h.Scopes(required), h.Permissions(unavailable)), h.AllOf(h.Scopes(required), h.Permissions(permission)))
 }
 
-func routeRouter(t *testing.T, table Table[reportRecord, ReportRow, reportActor], config RoutesConfig[routeActor, reportActor], options ...RouteOption[routeActor]) *h.Router {
+// allActors is the explicit open rule for a table every authenticated actor may read and export.
+func allActors(config RoutesConfig[routeActor, reportActor]) (ReadOption[routeActor], ExportOption[routeActor]) {
+	return ReadAccess(config.Guard.AnyActor()), ExportAccess(config.Guard.AnyActor())
+}
+
+func routeRouter(t *testing.T, table Table[reportRecord, ReportRow, reportActor], config RoutesConfig[routeActor, reportActor]) *h.Router {
 	t.Helper()
-	registrations, err := Routes(h.DefineScope("/tables", "tables"), table, config, options...)
+	read, export := allActors(config)
+	return routeRouterWith(t, table, config, read, export)
+}
+
+func routeRouterWith(t *testing.T, table Table[reportRecord, ReportRow, reportActor], config RoutesConfig[routeActor, reportActor], read ReadOption[routeActor], export ...ExportOption[routeActor]) *h.Router {
+	t.Helper()
+	registrations, err := Routes(h.DefineScope("/tables", "tables"), table, config, read, export...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,28 +170,47 @@ func TestRoutesValidateDeclarationsAndSnapshotAccess(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			bad := config
 			tc.change(&bad)
-			registrations, err := Routes(h.Scope{}, table, bad)
+			read, export := allActors(bad)
+			registrations, err := Routes(h.Scope{}, table, bad, read, export)
 			if err == nil || registrations != nil {
 				t.Fatal("invalid configuration returned routes")
 			}
 		})
 	}
-	for _, options := range [][]RouteOption[routeActor]{{ReadAccess[routeActor](), ReadAccess[routeActor]()}, {ExportAccess[routeActor](), ExportAccess[routeActor]()}, {RouteOption[routeActor]{}}, {ReadAccess[routeActor](nil)}, {ExportAccess[routeActor](nil)}} {
-		if result, err := Routes(h.Scope{}, table, config, options...); err == nil || result != nil {
-			t.Fatal("invalid options returned routes")
+	openRead, openExport := allActors(config)
+	for name, invalid := range map[string]func() ([]h.RouteRegistration, error){
+		"export twice": func() ([]h.RouteRegistration, error) {
+			return Routes(h.Scope{}, table, config, openRead, openExport, openExport)
+		},
+		"missing export": func() ([]h.RouteRegistration, error) { return Routes(h.Scope{}, table, config, openRead) },
+		"zero read option": func() ([]h.RouteRegistration, error) {
+			return Routes(h.Scope{}, table, config, ReadOption[routeActor]{}, openExport)
+		},
+		"zero export option": func() ([]h.RouteRegistration, error) {
+			return Routes(h.Scope{}, table, config, openRead, ExportOption[routeActor]{})
+		},
+		"nil read rule": func() ([]h.RouteRegistration, error) {
+			return Routes(h.Scope{}, table, config, ReadAccess[routeActor](nil), openExport)
+		},
+		"nil export rule": func() ([]h.RouteRegistration, error) {
+			return Routes(h.Scope{}, table, config, openRead, ExportAccess[routeActor](nil))
+		},
+		"zero read rule": func() ([]h.RouteRegistration, error) {
+			return Routes(h.Scope{}, table, config, ReadAccess[routeActor](h.GuardAlternative[routeActor]{}), openExport)
+		},
+		"scope with trailing slash": func() ([]h.RouteRegistration, error) {
+			return Routes(h.DefineScope("/bad/", "bad"), table, config, openRead, openExport)
+		},
+		"different declaration": func() ([]h.RouteRegistration, error) {
+			return Routes(h.Scope{}, Define(reportSpec()), config, openRead, openExport)
+		},
+	} {
+		if result, err := invalid(); err == nil || result != nil {
+			t.Fatal(name, "returned routes")
 		}
 	}
-	if result, err := Routes(h.DefineScope("/bad/", "bad"), table, config); err == nil || result != nil {
-		t.Fatal("invalid scope returned routes")
-	}
-	if result, err := Routes(h.Scope{}, Define(reportSpec()), config); err == nil || result != nil {
-		t.Fatal("different declaration accepted")
-	}
-	read, export := ReadAccess(access...), ExportAccess(access...)
-	for i := range access {
-		access[i] = nil
-	}
-	router := routeRouter(t, table, config, read, export)
+	read, export := ReadAccess(access), ExportAccess(access)
+	router := routeRouterWith(t, table, config, read, export)
 	for _, suffix := range []string{"", "/export"} {
 		for _, token := range []string{"scope-denied", "permission-denied"} {
 			routeRequest(t, router, "POST", "https://example.test/tables/reports.members"+suffix, `{`, token, 403)
@@ -237,7 +267,7 @@ func TestPostgresRoutesTicketLifecycle(t *testing.T) {
 		}
 		return baseRedeemer.RedeemTicket(ctx, ticket)
 	}}
-	router := routeRouter(t, table, config, ReadAccess(access...), ExportAccess(access...))
+	router := routeRouterWith(t, table, config, ReadAccess(access), ExportAccess(access))
 	base := "https://example.test/tables/reports.members"
 	for _, body := range []string{`{`, `{"format":"pdf","request":{}}`, `{"format":"csv","request":{"sort":[{"column":"absent","direction":"asc"}]}}`, `{"format":"csv","request":{"page":-1}}`} {
 		routeRequest(t, router, "POST", base+"/export", body, "valid", 400)
@@ -346,7 +376,7 @@ func TestPostgresRoutesQueryOnlyAndEmptyPage(t *testing.T) {
 	config.Authority = func(context.Context, routeActor) (reportActor, error) {
 		return reportActor{Tenant: 999, Allowed: true}, nil
 	}
-	router := routeRouter(t, table, config, ReadAccess(access...))
+	router := routeRouterWith(t, table, config, ReadAccess(access))
 	if len(router.Routes()) != 1 {
 		t.Fatal("query-only table has export routes")
 	}

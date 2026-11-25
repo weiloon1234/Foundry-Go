@@ -96,7 +96,7 @@ func TestHTTPAuthenticationSuppliesModelOnceAndIsolatesRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoint := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard)
+	endpoint := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AnyActorOf(guard))
 	var contexts []context.Context
 	router := newAuthRouter(t, endpoint.Handle(func(ctx context.Context, subject authAccount, _ authInput) (foundryhttp.NoContent, error) {
 		contexts = append(contexts, ctx)
@@ -156,7 +156,7 @@ func TestHTTPAuthenticationFailureContractsBeforeHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 	var handled atomic.Int32
-	router := newAuthRouter(t, foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	router := newAuthRouter(t, foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		handled.Add(1)
 		return foundryhttp.NoContent{}, nil
 	}))
@@ -252,7 +252,7 @@ func TestHTTPGuardedRegistrationCannotBypassTypedAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, err := range []error{foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Public), transport, guard)), foundryhttp.ValidateOptional(foundryhttp.OptionalAuthentication(endpoint, transport, guard)), foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(endpoint, wrong, guard)), foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(endpoint, nil, guard))} {
+	for _, err := range []error{foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Public), transport, guard, foundryhttp.AnyActorOf(guard))), foundryhttp.ValidateOptional(foundryhttp.OptionalAuthentication(endpoint, transport, guard)), foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(endpoint, wrong, guard, foundryhttp.AnyActorOf(guard))), foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(endpoint, nil, guard, foundryhttp.AnyActorOf(guard)))} {
 		if err == nil {
 			t.Fatal("invalid authentication binding accepted")
 		}
@@ -273,7 +273,7 @@ func TestCookieCredentialsReuseBoundedTypedCookieParser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := newAuthRouter(t, foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	router := newAuthRouter(t, foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, nil
 	}))
 	for _, test := range []struct {
@@ -315,7 +315,7 @@ func TestHTTPAuthErrorClassificationOwnsCallbackFailures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			router := newAuthRouter(t, foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+			router := newAuthRouter(t, foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 				if mode == "forbidden" {
 					return foundryhttp.NoContent{}, auth.Forbidden.WithCause(errors.New("private permission"))
 				}
@@ -340,7 +340,7 @@ func TestHTTPAuthenticationRejectsURLCredentialsBeforeDecoding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := newAuthRouter(t, foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	router := newAuthRouter(t, foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		t.Error("URL credential authenticated")
 		return foundryhttp.NoContent{}, nil
 	}))
@@ -378,7 +378,7 @@ func TestAuthenticationPreservesExplicitDomainError(t *testing.T) {
 	}
 	declaration := foundryhttp.DefineError("account.suspended", 423, "Account suspended")
 	endpoint := foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Errors(declaration))
-	route := foundryhttp.RequireAuthentication(endpoint, transport, guard).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	route := foundryhttp.RequireAuthentication(endpoint, transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, declaration.WithCause(auth.Forbidden)
 	})
 	w := authServe(newAuthRouter(t, route), []string{"Bearer valid"})
@@ -422,7 +422,7 @@ func TestCyclicGuardLookupCompletesFailureAndReleasesRequestAuthority(t *testing
 	}
 	var calls atomic.Int32
 	var owned context.Context
-	router := newAuthRouter(t, foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard).Handle(func(ctx context.Context, _ authAccount, _ authInput) (foundryhttp.NoContent, error) {
+	router := newAuthRouter(t, foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(ctx context.Context, _ authAccount, _ authInput) (foundryhttp.NoContent, error) {
 		owned = ctx
 		calls.Add(1)
 		return foundryhttp.NoContent{}, nil

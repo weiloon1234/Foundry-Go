@@ -36,7 +36,7 @@ func TestHTTPPermissionsRunBeforeDecodingWithVerifiedAttribution(t *testing.T) {
 		t.Fatal(err)
 	}
 	permissions := []auth.Permission[authAccount]{view, feature}
-	endpoint := foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard), foundryhttp.Permissions(permissions...))
+	endpoint := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AllOf(foundryhttp.Permissions(permissions...)))
 	permissions[0] = auth.Permission[authAccount]{}
 	registration := endpoint.Handle(func(ctx context.Context, a authAccount, _ authInput) (foundryhttp.NoContent, error) {
 		handlerCalls++
@@ -85,7 +85,7 @@ func TestHTTPPermissionsRunBeforeDecodingWithVerifiedAttribution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	restricted := newAuthRouter(t, foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Scopes(required)).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	restricted := newAuthRouter(t, foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AllOf(foundryhttp.Scopes(required), foundryhttp.Permissions(view, feature))).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		t.Error("unscoped credential reached handler")
 		return foundryhttp.NoContent{}, nil
 	}))
@@ -96,12 +96,12 @@ func TestHTTPPermissionsRunBeforeDecodingWithVerifiedAttribution(t *testing.T) {
 	if firstCalls != before {
 		t.Fatal("permission ran before token ceiling")
 	}
-	for _, candidate := range []foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, authAccount, foundryhttp.NoContent]{foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Permissions(view)), foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard), foundryhttp.Permissions[authAccount]()), foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard), foundryhttp.Permissions(view, view)), foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard), foundryhttp.Permissions(auth.DefinePermission("not.registered", func(context.Context, authAccount) (bool, error) { return true, nil })))} {
+	for _, candidate := range []foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, authAccount, foundryhttp.NoContent]{foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AllOf(foundryhttp.Permissions(view), foundryhttp.Permissions(view))), foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AllOf(foundryhttp.Permissions[authAccount]())), foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AllOf(foundryhttp.Permissions(view, view))), foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AllOf(foundryhttp.Permissions(auth.DefinePermission("not.registered", func(context.Context, authAccount) (bool, error) { return true, nil }))))} {
 		if err := foundryhttp.ValidateAuthenticated(candidate); err == nil {
 			t.Fatal("invalid permission requirements accepted")
 		}
 	}
-	if err := foundryhttp.ValidateAuthenticated(foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Permissions(view))); !errors.Is(err, fault.Duplicate) {
+	if err := foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AllOf(foundryhttp.Permissions(view), foundryhttp.Permissions(view)))); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("repeated declaration lost error", err)
 	}
 }

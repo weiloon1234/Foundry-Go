@@ -88,7 +88,7 @@ func reportingContracts(t *testing.T) (*manifest.Manifest, *foundryhttp.Router) 
 		},
 		Tickets: datatable.TokenTickets(tokens),
 		Quota:   foundryhttp.DefineMiddleware("reports.quota", func(next http.Handler) (http.Handler, error) { return next, nil }),
-	}, nil, nil)
+	}, binding.AnyActor(), binding.AnyActor())
 	if err != nil {
 		t.Fatal(err)
 	}

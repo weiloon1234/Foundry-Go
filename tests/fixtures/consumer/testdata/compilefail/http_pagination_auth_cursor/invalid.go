@@ -9,6 +9,8 @@ import (
 
 type OtherActor struct{ ID int64 }
 
-var _ = pagination.HandleAuthenticated(pagination.Authenticated(httppagination.GuardedCursorList, foundryhttp.GuardBinding[OtherActor]{}), func(context.Context, httppagination.Actor, httppagination.CursorListRequest) (httppagination.CursorListResult, error) {
+var other foundryhttp.GuardBinding[OtherActor]
+
+var _ = pagination.HandleAuthenticated(pagination.Authenticated(httppagination.GuardedCursorList, other, other.AnyActor()), func(context.Context, httppagination.Actor, httppagination.CursorListRequest) (httppagination.CursorListResult, error) {
 	return httppagination.CursorListResult{}, nil
 })

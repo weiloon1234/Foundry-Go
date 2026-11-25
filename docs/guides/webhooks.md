@@ -203,7 +203,7 @@ snapshot, reserves no capture capacity, increments no `dropped_before` count
 and emits no capture log. The handler receives the original body as usual.
 
 Mount the viewer inside an existing guarded group with the store from
-`services.WebhookCaptures()`. At least one access option is required; in an
+`services.WebhookCaptures()`. The access rule is a required argument; in an
 admin portal use the developer read scope and the developer type permission so
 a wildcard grant cannot read captured payloads. The routes send
 `Cache-Control: no-store`.
@@ -224,7 +224,7 @@ Mount the viewer routes behind that permission:
 <!-- compiled-source: tests/fixtures/consumer/teamworkflow/capture.go#webhook-capture-routes -->
 ```go
 func CaptureRoutes(captures *capture.Store, binding foundryhttp.GuardBinding[Actor]) ([]foundryhttp.RouteRegistration, error) {
-	return capture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.Permissions(ReadCaptures))
+	return capture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.AllOf(foundryhttp.Permissions(ReadCaptures)))
 }
 ```
 

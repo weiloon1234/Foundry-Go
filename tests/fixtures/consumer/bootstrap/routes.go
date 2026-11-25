@@ -76,7 +76,7 @@ func Routes(settings Settings, services application.Services) ([]foundryhttp.Rou
 
 	bootstrapMemberEndpoint := profileEndpoint("bootstrap.member", "/api/member", foundryhttp.GET)
 
-	member := foundryhttp.Authenticated(bootstrapMemberEndpoint, members).Handle(func(ctx context.Context, actor Member, _ MemberProfileInput) (Profile, error) {
+	member := foundryhttp.Authenticated(bootstrapMemberEndpoint, members, members.AnyActor()).Handle(func(ctx context.Context, actor Member, _ MemberProfileInput) (Profile, error) {
 		return cached.Remember(ctx, actor.ID.String(), cache.Forever(), func(context.Context) (Profile, error) {
 			return Profile{Name: settings.Greeting + " " + actor.Name, Kind: "member"}, nil
 		})
@@ -84,7 +84,7 @@ func Routes(settings Settings, services application.Services) ([]foundryhttp.Rou
 
 	bootstrapOperatorEndpoint := profileEndpoint("bootstrap.operator", "/api/operator", foundryhttp.POST)
 
-	operator := foundryhttp.Authenticated(bootstrapOperatorEndpoint, operators).Handle(func(_ context.Context, actor Operator, _ MemberProfileInput) (Profile, error) {
+	operator := foundryhttp.Authenticated(bootstrapOperatorEndpoint, operators, operators.AnyActor()).Handle(func(_ context.Context, actor Operator, _ MemberProfileInput) (Profile, error) {
 		return Profile{Name: actor.Department, Kind: "operator"}, nil
 	})
 
@@ -92,7 +92,7 @@ func Routes(settings Settings, services application.Services) ([]foundryhttp.Rou
 	upload := foundryhttp.DefineEndpoint(bootstrapAvatarRoute, foundryhttp.EmptyQuery(), UploadInputBody(""), UploadResultResponse(201))
 	upload = foundryhttp.ValidateBody(upload, validation.Rules(UploadInputValidationFields().Image, validation.FileMaxSize[foundryhttp.UploadedFile](1<<20), validation.FileContentTypes[foundryhttp.UploadedFile]("image/png")))
 
-	saved := foundryhttp.Authenticated(upload, members).Handle(func(ctx context.Context, actor Member, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, UploadInput]) (UploadResult, error) {
+	saved := foundryhttp.Authenticated(upload, members, members.AnyActor()).Handle(func(ctx context.Context, actor Member, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, UploadInput]) (UploadResult, error) {
 		reader, err := input.Body.Image.Open(ctx)
 		if err != nil {
 			return UploadResult{}, err

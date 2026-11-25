@@ -8,9 +8,9 @@ func Configure[P, F, W, Page, Response any](endpoint pageEndpoint[P, F, W, Page,
 	return endpoint
 }
 
-// ConfigureAuthenticated applies guard options to a copy of the authenticated
+// ConfigureAuthenticated applies actor options to a copy of the authenticated
 // pagination transport.
-func ConfigureAuthenticated[P, F, W, A, Page, Response any](endpoint authenticatedPageEndpoint[P, F, W, A, Page, Response], options ...foundryhttp.GuardOption[A]) authenticatedPageEndpoint[P, F, W, A, Page, Response] {
+func ConfigureAuthenticated[P, F, W, A, Page, Response any](endpoint authenticatedPageEndpoint[P, F, W, A, Page, Response], options ...foundryhttp.ActorOption[A]) authenticatedPageEndpoint[P, F, W, A, Page, Response] {
 	endpoint.transport = foundryhttp.ConfigureAuthenticated(endpoint.transport, options...)
 	return endpoint
 }

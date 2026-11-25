@@ -23,7 +23,7 @@ func TestCookieAuthenticationPreventsPersonalizedCaching(t *testing.T) {
 	}
 	route := http.DefineRoute(http.RouteSpec{ID: "profile", Method: http.GET, Access: http.Guarded}, http.StaticPath("/profile"))
 	typed := http.DefineEndpoint(route, http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, contract.StringJSON[string]()))
-	raw := http.HandleAuthenticatedRaw(http.RequireRouteAuthentication(route, transport, guard), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, a authAccount, _ http.NoPath) {
+	raw := http.HandleAuthenticatedRaw(http.RequireRouteAuthentication(route, transport, guard, http.AnyActorOf(guard)), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, a authAccount, _ http.NoPath) {
 		w.Header().Set("Last-Modified", "Tue, 01 Sep 2026 00:00:00 GMT")
 		fmt.Fprintf(w, "account-%d", a.ID)
 	})
@@ -35,7 +35,7 @@ func TestCookieAuthenticationPreventsPersonalizedCaching(t *testing.T) {
 		anonymous    bool
 	}{
 		{"raw", raw, false},
-		{"typed", http.RequireAuthentication(typed, transport, guard).Handle(func(_ context.Context, a authAccount, _ authInput) (string, error) {
+		{"typed", http.RequireAuthentication(typed, transport, guard, http.AnyActorOf(guard)).Handle(func(_ context.Context, a authAccount, _ authInput) (string, error) {
 			return fmt.Sprintf("account-%d", a.ID), nil
 		}), false},
 		{"optional", http.OptionalAuthentication(optional, transport, guard).Handle(func(_ context.Context, a value.Optional[authAccount], _ authInput) (string, error) {
@@ -78,7 +78,7 @@ func TestCookieAuthenticationPreventsPersonalizedCaching(t *testing.T) {
 	}
 	// Origin rejection happens before credential/handler work and needs the same policy.
 	write := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "change", Method: http.POST, Access: http.Guarded}, http.StaticPath("/profile")), http.EmptyQuery(), http.EmptyBody(), http.EmptyResponse(204))
-	router := newAuthRouter(t, http.RequireAuthentication(write, transport, guard).Handle(func(context.Context, authAccount, authInput) (http.NoContent, error) {
+	router := newAuthRouter(t, http.RequireAuthentication(write, transport, guard, http.AnyActorOf(guard)).Handle(func(context.Context, authAccount, authInput) (http.NoContent, error) {
 		t.Fatal("cross-origin handler ran")
 		return http.NoContent{}, nil
 	}))

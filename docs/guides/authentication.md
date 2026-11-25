@@ -305,6 +305,41 @@ A handler receives its transport input as `foundryhttp.Input[Path, Query, Body]`
 Response DTOs remain declared separately; stored model fields never
 become an automatic JSON response. Use explicit custom getters when mapping DTOs.
 
+<a id="recipe-access-rule"></a>
+### State who may call a guarded route
+
+A guarded route also states who may call it. `http.Authenticated` takes the access
+rule as its required third argument: `http.AllOf(http.Scopes(...), http.Permissions(...))`
+requires every listed scope and permission, `http.AnyOf(...)` accepts one complete
+alternative, and `binding.AnyActor()` admits every authenticated actor of the guard.
+`AnyActor()` is the only spelling of "no scope and no permission", so a logout, a
+"who am I" route or a shared reference table is visibly open and a forgotten rule
+never is. `openProfile` writes the open case:
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#open-profile -->
+```go
+func openProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], binding foundryhttp.GuardBinding[models.User]) ProfileEndpoint {
+	return foundryhttp.Authenticated(endpoint, binding, binding.AnyActor())
+}
+```
+
+Two mistakes fail to compile. Leaving the rule out says
+`not enough arguments in call to http.Authenticated` and lists `AccessRule[M]` among
+the wanted arguments; write one of the three rules. Passing `http.Scopes(scopes)` or
+`http.Permissions(...)` directly says
+`type RequirementOption[User] of http.Scopes(scopes) does not match inferred type AccessRule[User]`;
+wrap them in `http.AllOf`. `http.ConfigureAuthenticated` takes only
+`http.ActorMiddleware`, so a scope passed to it fails the same way, naming
+`ActorOption[User]`.
+
+The rule is the same argument of `http.TicketAuthenticated`, `pagination.Authenticated`
+and the `Routes` of the webhook and outbound capture viewers, and the single argument
+of `datatable.ReadAccess` and `datatable.ExportAccess`. `http.RequireAuthentication`
+and `http.RequireRouteAuthentication` take it after the guard; they hold a guard, not a
+binding, so their open case is `http.AnyActorOf(guard)`. A rule that none of those
+constructors produced (a nil value or the zero `GuardAlternative`) is refused when
+the route registers, with the message `HTTP guarded route requires an access rule`.
+
 An unbound `Guarded` route cannot register a handler, including a raw handler.
 Required authentication runs before path/query/body decoding. Use
 `OptionalAuthentication` on a `Public` endpoint to receive `value.Optional[User]`:
@@ -369,12 +404,12 @@ an error from the authority never becomes an allow decision.
 type ProfileEndpoint = foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 ```
 
-`PermissionProfile` requires the `ViewAccount` permission on the profile endpoint:
+`PermissionProfile` binds the profile declaration to its guard and requires the `ViewAccount` permission:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/permissions.go#configure-permission -->
 ```go
-func PermissionProfile(endpoint ProfileEndpoint) ProfileEndpoint {
-	return foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Permissions(ViewAccount))
+func PermissionProfile(endpoint ProfileDeclaration, binding foundryhttp.GuardBinding[models.User]) ProfileEndpoint {
+	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
 }
 ```
 
@@ -396,8 +431,8 @@ contain the exact permission declarations, including those in later branches.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/any_of.go#editorial-alternatives -->
 ```go
-func EditorialProfile(endpoint ProfileEndpoint, writeScopes, approveScopes auth.AccessScopes[models.User], write, approve auth.Permission[models.User]) ProfileEndpoint {
-	return foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.AnyOf(
+func EditorialProfile(endpoint ProfileDeclaration, binding foundryhttp.GuardBinding[models.User], writeScopes, approveScopes auth.AccessScopes[models.User], write, approve auth.Permission[models.User]) ProfileEndpoint {
+	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.AnyOf(
 		foundryhttp.AllOf(foundryhttp.Scopes(writeScopes), foundryhttp.Permissions(write)),
 		foundryhttp.AllOf(foundryhttp.Scopes(approveScopes), foundryhttp.Permissions(approve)),
 	))
@@ -430,9 +465,9 @@ A single branch is valid. There are at most `http.MaxGuardAlternatives` (32)
 branches, 128 total scope references and 256 total permission references, counting
 repeated references in different branches.
 
-Do not mix `AnyOf` with top-level `Scopes` or `Permissions`, or attach it twice.
-Put a shared requirement in each branch where it applies. Existing flat guards
-keep their AND semantics. Input slices and inspection metadata are owned snapshots;
+`AnyOf` is a complete access rule: it is the only rule of the route, never
+combined with another `AnyOf`, `AllOf` or `Scopes` beside it. Put a shared requirement
+in each branch where it applies. A rule of one `AllOf` keeps AND semantics. Input slices and inspection metadata are owned snapshots;
 `AuthenticationInfo.AnyOf` preserves the branch pairing in the manifest and clients.
 See [contract alternatives](client-contracts.md#recipe-guard-contracts) and the
 [compatibility note](../compatibility.md#any-of-route-guards-manifest-10).
@@ -580,8 +615,7 @@ Configure scopes, permissions and ordinary endpoint options, then call `SignedAu
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#signed-bound-order -->
 ```go
-secured := foundryhttp.RequireAuthentication(endpoint, authentication, api)
-secured = foundryhttp.ConfigureAuthenticated(secured, foundryhttp.Permissions(ViewAccount))
+secured := foundryhttp.RequireAuthentication(endpoint, authentication, api, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
 signed := foundryhttp.SignedAuthenticated(secured, signer)
 binding := foundryhttp.ForSignedAuthenticatedBinding(signed)
 bound := modelbinding.BindAuthenticated(binding, orders)
@@ -620,8 +654,7 @@ For native `net/http` integration, bind authentication to the typed route itself
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#authenticated-raw-route -->
 ```go
-secured := foundryhttp.RequireRouteAuthentication(route, authentication, api)
-secured = foundryhttp.ConfigureAuthenticatedRoute(secured, foundryhttp.Permissions(ViewAccount))
+secured := foundryhttp.RequireRouteAuthentication(route, authentication, api, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
 registration := foundryhttp.HandleAuthenticatedRaw(secured, func(w stdhttp.ResponseWriter,
 	r *stdhttp.Request, user models.User, path OrderPath,
 ) {
@@ -696,7 +729,7 @@ limiter, err := ratelimit.Define("api.users", foundryhttp.ActorKeys(), ratelimit
 if err != nil {
 	return ProfileEndpoint{}, err
 }
-secured := foundryhttp.RequireAuthentication(endpoint, transport, api,
+secured := foundryhttp.RequireAuthentication(endpoint, transport, api, foundryhttp.AnyActorOf(api),
 	foundryhttp.ActorMiddleware[models.User](foundryhttp.RateLimitByActor(limiter, api), tenant))
 ```
 
@@ -780,7 +813,7 @@ not declare `ticket`.
 <!-- compiled-source: tests/fixtures/consumer/reporting/ticket_route.go#ticket-authentication -->
 ```go
 func ticketAuthentication(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.Download], binding foundryhttp.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]]) foundryhttp.TicketEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, Operator, foundryhttp.Download] {
-	return foundryhttp.TicketAuthenticated(endpoint, binding, tokens)
+	return foundryhttp.TicketAuthenticated(endpoint, binding, tokens, binding.AnyActor())
 }
 ```
 

@@ -20,9 +20,11 @@ type AuthenticatedEndpoint[P, Q, B, M, R any] struct {
 // RequireAuthentication binds a Guarded transport declaration. Authentication
 // runs before parameter/body decoding; its model is reused by the handler and
 // policies within this request. Verified identity is attached to shared attribution
-// before decoding, preserving request metadata. An unbound Guarded endpoint cannot register.
-func RequireAuthentication[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], authentication *Authentication, guard auth.Guard[M], options ...GuardOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
-	return ConfigureAuthenticated(AuthenticatedEndpoint[P, Q, B, M, R]{endpoint: endpoint, binding: authenticationBinding[M]{authentication: authentication, guard: guard}}, options...)
+// before decoding, preserving request metadata. An unbound Guarded endpoint, or one
+// whose access rule is nil or was not built by AllOf, AnyOf or AnyActor, cannot register.
+func RequireAuthentication[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], authentication *Authentication, guard auth.Guard[M], rule AccessRule[M], options ...ActorOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
+	binding := authenticationBinding[M]{authentication: authentication, guard: guard}.withAccess(rule)
+	return ConfigureAuthenticated(AuthenticatedEndpoint[P, Q, B, M, R]{endpoint: endpoint, binding: binding}, options...)
 }
 
 // ValidateAuthenticated checks the endpoint and its required authentication binding.
@@ -115,7 +117,8 @@ type OptionalAuthenticationEndpoint[P, Q, B, M, R any] struct {
 // OptionalAuthentication adds an optional concrete subject to endpoint; invalid
 // supplied credentials still fail authentication.
 func OptionalAuthentication[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], authentication *Authentication, guard auth.Guard[M], options ...ActorOption[M]) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
-	return ConfigureOptional(OptionalAuthenticationEndpoint[P, Q, B, M, R]{required: RequireAuthentication(endpoint, authentication, guard)}, options...)
+	required := AuthenticatedEndpoint[P, Q, B, M, R]{endpoint: endpoint, binding: authenticationBinding[M]{authentication: authentication, guard: guard}}
+	return ConfigureOptional(OptionalAuthenticationEndpoint[P, Q, B, M, R]{required: required}, options...)
 }
 
 // ValidateOptional checks the endpoint, optional authentication binding and any

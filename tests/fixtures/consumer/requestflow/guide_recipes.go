@@ -40,7 +40,7 @@ func authorizedSubmission(transport *foundryhttp.Authentication, accountGuard au
 	// doc-example:begin forms-request-lifecycle-3
 	form := formEndpoint(foundryhttp.Guarded)
 	prepared := foundryhttp.PrepareEndpoint(form, Prepare)
-	secured := foundryhttp.RequireAuthentication(prepared, transport, accountGuard)
+	secured := foundryhttp.RequireAuthentication(prepared, transport, accountGuard, foundryhttp.AnyActorOf(accountGuard))
 	secured = foundryhttp.AuthorizeActor(secured, func(ctx context.Context, actor Account, input Request) error {
 		return accountPolicy(ctx, actor, input.Body)
 	})

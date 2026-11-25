@@ -10,7 +10,8 @@ import (
 )
 
 var endpoint = n.Transport(foundryhttp.Guarded)
-var secured = foundryhttp.RequireAuthentication(endpoint, nil, auth.Guard[n.Team]{})
+var guard auth.Guard[n.Team]
+var secured = foundryhttp.RequireAuthentication(endpoint, nil, guard, foundryhttp.AnyActorOf(guard))
 var binding = foundryhttp.ForAuthenticatedBinding(secured)
 var resolver = n.Resolve(nil)
 var bound = modelbinding.BindAuthenticated(binding, resolver)

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Breaking: a guarded route's access rule is a required argument. `http.Authenticated`,
+  `http.TicketAuthenticated`, `http.RequireAuthentication`, `http.RequireRouteAuthentication`
+  and `pagination.Authenticated` take an `http.AccessRule` (`http.AllOf(http.Scopes(...),
+  http.Permissions(...))`, `http.AnyOf(...)` or the open case `binding.AnyActor()`, or
+  `http.AnyActorOf(guard)` for the two that take a guard), and
+  `ConfigureAuthenticated`, `ConfigureAuthenticatedRoute` and `pagination.ConfigureAuthenticated`
+  accept actor middleware only. Forgetting the rule does not compile
+  (`not enough arguments in call to http.Authenticated`), and the old flat spelling says
+  `type RequirementOption[User] of http.Scopes(...) does not match inferred type AccessRule[User]`.
+  `datatable.ReadAccess` and `ExportAccess` take the same rule, `datatable.Routes` requires
+  `ReadAccess` (and `ExportAccess` for an exportable table), and the webhook and outbound
+  capture `Routes` take one rule. `http.GuardOption` and `datatable.RouteOption` are retired
+  (`datatable.ReadOption` and `ExportOption` replace the second). A nil or zero rule is
+  refused when the route registers. Manifests, wire formats and stored data are unchanged.
+  Migrate with `go run github.com/weiloon1234/Foundry-Go/tools/accessmigrate@<release> --dir . ./...`
+  before repinning; the [compatibility policy](docs/compatibility.md#access-rule) lists what it
+  rewrites and what it leaves for a decision.
 - Retired-names ledger completeness: `make generate` records the exported API of
   the importable packages (`internal/retirement/exported-surface.txt`; an alias lists
   the members of its target), and `make generate-check` refuses any identifier removed

@@ -62,7 +62,7 @@ func TestTypedActorRequestLifecycle(t *testing.T) {
 					return foundryhttp.NoContent{}, nil
 				})
 			} else {
-				endpoint := foundryhttp.PrepareAuthenticated(foundryhttp.RequireAuthentication(base, transport, guard), prepare)
+				endpoint := foundryhttp.PrepareAuthenticated(foundryhttp.RequireAuthentication(base, transport, guard, foundryhttp.AnyActorOf(guard)), prepare)
 				if foundryhttp.ValidateAuthenticated(foundryhttp.AuthorizeActor(endpoint, nil)) == nil {
 					t.Fatal("nil actor callback accepted")
 				}
@@ -139,14 +139,14 @@ func TestTypedRequestAuthorizationMultipleGuards(t *testing.T) {
 		t.Fatal(err)
 	}
 	memberCalls, staffCalls := 0, 0
-	members := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Within(foundryhttp.DefineScope("/members", "members"))), transport, member), func(_ context.Context, actor authAccount, _ authInput) error {
+	members := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Within(foundryhttp.DefineScope("/members", "members"))), transport, member, foundryhttp.AnyActorOf(member)), func(_ context.Context, actor authAccount, _ authInput) error {
 		memberCalls++
 		if actor.ID != 1 || !actor.Enabled {
 			t.Error("member actor changed")
 		}
 		return nil
 	})
-	staffRoute := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Within(foundryhttp.DefineScope("/staff", "staff"))), transport, staff), func(_ context.Context, actor lifecycleStaff, _ authInput) error {
+	staffRoute := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Within(foundryhttp.DefineScope("/staff", "staff"))), transport, staff, foundryhttp.AnyActorOf(staff)), func(_ context.Context, actor lifecycleStaff, _ authInput) error {
 		staffCalls++
 		if actor.ID != 8 || actor.Department != "operations" {
 			t.Error("staff actor changed")

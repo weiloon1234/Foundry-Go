@@ -172,7 +172,7 @@ func TestDocsActiveModuleInstructions(t *testing.T) {
 	}
 	for _, want := range []string{
 		".claude/skills/workflow/references/recipe.md:2: [guide-missing] guide missing: missing or not a regular file in the selected framework",
-		".claude/skills/workflow/references/recipe.md:3: [retired-api] http.Endpoint.WithScopes is retired; use http.Authenticated(endpoint, binding, http.Scopes(scopes)).",
+		".claude/skills/workflow/references/recipe.md:3: [retired-api] http.Endpoint.WithScopes is retired; use http.Authenticated(endpoint, binding, http.AllOf(http.Scopes(scopes))).",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("missing %s: %v", want, err)
@@ -235,11 +235,11 @@ func TestDocsPaginationRetirement(t *testing.T) {
 		app, _, goBinary, build := documentationFixture(t, "match")
 		text := "```go\npackage example\nimport p \"github.com/weiloon1234/Foundry-Go/http/pagination\"\nfunc use(e p." + owner + ") { e.WithScopes(scopes) }\n```\n"
 		putDocumentation(t, app, ".claude/skills/endpoint/SKILL.md", text)
-		want := ".claude/skills/endpoint/SKILL.md:4: [retired-api] pagination." + strings.SplitN(owner, "[", 2)[0] + ".WithScopes is retired; use pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))."
+		want := ".claude/skills/endpoint/SKILL.md:4: [retired-api] pagination." + strings.SplitN(owner, "[", 2)[0] + ".WithScopes is retired; use pagination.Authenticated(endpoint, binding, http.AllOf(http.Scopes(scopes)))."
 		if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatal(err)
 		}
-		putDocumentation(t, app, ".claude/skills/endpoint/SKILL.md", "```go\npagination.Authenticated(page, binding, http.Scopes(scopes))\n```\n")
+		putDocumentation(t, app, ".claude/skills/endpoint/SKILL.md", "```go\npagination.Authenticated(page, binding, http.AllOf(http.Scopes(scopes)))\n```\n")
 		if err := checkDocs(t.Context(), app, goBinary, build); err != nil {
 			t.Fatal(err)
 		}

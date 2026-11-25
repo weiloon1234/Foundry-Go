@@ -1,0 +1,13 @@
+package datatable
+
+import "github.com/weiloon1234/Foundry-Go/http"
+
+type RouteOption[M any] struct{}
+
+func ReadAccess[M any](...http.GuardOption[M]) RouteOption[M]   { return RouteOption[M]{} }
+func ExportAccess[M any](...http.GuardOption[M]) RouteOption[M] { return RouteOption[M]{} }
+
+type Table struct{}
+type Config[M any] struct{}
+
+func Routes[M any](http.Scope, Table, Config[M], ...RouteOption[M]) error { return nil }
