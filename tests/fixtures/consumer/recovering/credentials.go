@@ -33,7 +33,7 @@ func CredentialRevocations(users auth.Provider[Member, model.ID[Member]], sessio
 		return nil, err
 	}
 	revocations, err := auth.NewRevocations(users, web, api)
-	// Pass revocations.Invalidate as the reset model's Invalidate callback.
+	// Pass the Invalidate method of revocations as the reset model's Invalidate callback.
 	// doc-example:end credential-revocations
 	return revocations, err
 }

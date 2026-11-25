@@ -25,7 +25,7 @@ if err != nil {
 	return nil, err
 }
 revocations, err := auth.NewRevocations(users, web, api)
-// Pass revocations.Invalidate as the reset model's Invalidate callback.
+// Pass the Invalidate method of revocations as the reset model's Invalidate callback.
 ```
 
 The [consumer composition](../../tests/fixtures/consumer/recovering/credentials.go)
