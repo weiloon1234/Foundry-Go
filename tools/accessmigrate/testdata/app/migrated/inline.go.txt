@@ -1,0 +1,35 @@
+package migrated
+
+import (
+	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/http/pagination"
+)
+
+func inline() []http.Registration {
+	return []http.Registration{
+		http.Authenticated(endpoint, users, http.Scopes(read)).Handle(handler),
+		http.Authenticated(endpoint, users, http.Scopes(read), http.Permissions(viewer)).Handle(handler),
+		http.Authenticated(endpoint, users, http.AnyOf(http.AllOf(http.Permissions(viewer)), http.AllOf(http.Permissions(editor)))).Handle(handler),
+		http.Authenticated(endpoint, users, http.Permissions(viewer), http.ActorMiddleware[User](audit)).Handle(handler),
+		http.Authenticated[Reply, User](endpoint, users, http.Scopes(read)).Handle(handler),
+		http.TicketAuthenticated(endpoint, users, redeemer, http.Scopes(read), http.Permissions(viewer)).Handle(handler),
+	}
+}
+
+func paged() {
+	var page pagination.PageEndpoint
+	_ = pagination.Authenticated(page, users, http.Scopes(read), http.Permissions(viewer))
+}
+
+func multiline() {
+	_ = http.Authenticated(endpoint, users,
+		http.Scopes(read),
+		http.Permissions(
+			viewer,
+		),
+	)
+	e := http.Authenticated(endpoint,
+		users,
+	)
+	_ = http.ConfigureAuthenticated(e, http.Scopes(read))
+}

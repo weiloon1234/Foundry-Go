@@ -8,4 +8,4 @@ import (
 type actor struct{ ID int }
 type authority struct{ Tenant int }
 
-var _ datatable.RouteOption[actor] = datatable.ReadAccess[authority](h.Permissions[authority]())
+var _ datatable.ReadOption[actor] = datatable.ReadAccess[authority](h.AllOf(h.Permissions[authority]()))

@@ -5,6 +5,117 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+<a id="access-rule"></a>
+## Access rule on guarded routes — unreleased
+
+Every constructor of a guarded route now requires its access rule, so a route cannot
+be declared without deciding who may call it. This is a breaking source change. Wire
+formats, route manifests, persisted data and the deployment protocol do not change: a
+route that was `Authenticated(e, b, http.Scopes(s))` has the same required scopes
+before and after.
+
+| From | To |
+| --- | --- |
+| `http.Authenticated(e, b, http.Scopes(s), http.Permissions(p))` | `http.Authenticated(e, b, http.AllOf(http.Scopes(s), http.Permissions(p)))` |
+| `http.Authenticated(e, b, http.AnyOf(...))` | unchanged spelling; `AnyOf` now returns an `http.AccessRule` |
+| `v := http.Authenticated(e, b)` then `http.ConfigureAuthenticated(v, http.Scopes(s))` | `v := http.Authenticated(e, b, http.AllOf(http.Scopes(s)))` |
+| `http.Authenticated(e, b)` (open to any authenticated actor) | `http.Authenticated(e, b, b.AnyActor())` |
+| `http.RequireAuthentication(e, a, g, ...)` | `b, err := http.BindGuard(a, g)` once, then `http.Authenticated(e, b, rule)` |
+| `http.RequireRouteAuthentication(r, a, g, ...)` | `b, err := http.BindGuard(a, g)` once, then `http.RouteAuthenticated(r, b, rule)` |
+| `http.OptionalAuthentication(e, a, g, ...)` | `http.OptionallyAuthenticated(e, b, ...)` with `b` from `http.BindGuard(a, g)` |
+| `http.OptionalRouteAuthentication(r, a, g, ...)` | `http.RouteOptionallyAuthenticated(r, b, ...)` with `b` from `http.BindGuard(a, g)` |
+| `http.AnyActorOf(g)` (never released; used between the two steps of this change) | `b.AnyActor()` |
+| `http.TicketAuthenticated(e, b, r, ...)`, `pagination.Authenticated(p, b, ...)` | the rule follows the binding or redeemer |
+| `http.ConfigureAuthenticated(v, ...)`, `ConfigureAuthenticatedRoute`, `pagination.ConfigureAuthenticated` | accept `http.ActorMiddleware` only |
+| `datatable.ReadAccess(opts...)`, `ExportAccess(opts...)`, `datatable.Routes(g, t, c, options...)` | `datatable.Routes(g, t, c, datatable.ReadAccess(rule), datatable.ExportAccess(rule))`; `ReadAccess` is required, an exportable table also requires `ExportAccess`; `RouteOption` is replaced by `ReadOption` and `ExportOption` |
+| webhook and outbound capture `Routes(group, store, guard, opts...)` | `Routes(group, store, guard, rule)` |
+
+`http.GuardOption`, `datatable.RouteOption`, `http.RequireAuthentication`,
+`http.RequireRouteAuthentication`, `http.OptionalAuthentication`,
+`http.OptionalRouteAuthentication` and `http.AnyActorOf` are removed and in the
+retired-names ledger. A guarded declaration always starts from a `GuardBinding`, so there
+is one constructor per kind: `Authenticated` (endpoint), `RouteAuthenticated` (raw route),
+`TicketAuthenticated`, `OptionallyAuthenticated` and `RouteOptionallyAuthenticated`.
+`GuardBinding.AnyActor` is the only spelling of an open route; the manifest shows such a
+route with no scope and no permission. A rule value no constructor produced (nil or the
+zero `GuardAlternative`) is refused when the route registers, with a message that names
+the route (`GET /profile (profile): invalid: a guarded route requires an access rule: ...`).
+
+Migrate with the codemod, from the application directory while the application still
+builds against the previous release (it type-checks against the pinned dependency, not
+against its own version):
+
+```
+go run github.com/weiloon1234/Foundry-Go/tools/accessmigrate@<release> --dir . ./...
+```
+
+`--dry-run` prints the plan and writes nothing; `--tags a,b` also loads files behind
+build tags. It wraps inline `Scopes` and `Permissions` in `AllOf`, keeps an `AnyOf` as
+the rule, folds a later `ConfigureAuthenticated` into the constructor that assigned the
+value (one assignment, one configure, in straight-line code of the same function; actor
+middleware stays in the configure call), and prints one line per call or declaration:
+`file:line:col: rewritten: ...` or `file:line:col: left: <reason>`. It also converts the
+two shapes applications use to build access options. A variable holding an options slice
+(`member := []http.GuardOption[User]{http.Scopes(s), http.Permissions(p)}`) becomes the
+rule (`member := http.AllOf(http.Scopes(s), http.Permissions(p))`), and every use
+`member...` becomes `member`; a helper whose every return is such a slice literal gets
+the result type `http.AccessRule[M]` and returns the `AllOf` (or the single `AnyOf`).
+A slice or helper is converted only when every use of it can be rewritten; otherwise
+both the declaration and each use are listed. Those lines are
+`left declaration:` or `rewritten declaration:` and are counted apart from calls. It
+never writes `AnyActor`. It leaves, and the developer decides, each with its recipe:
+
+- **A route with no scopes and no permissions** (`http.Authenticated(e, b)`): open to any
+  authenticated actor, or a missing rule. Where it is open (a sign-out route, a "who am I"
+  route, a route whose resource policy decides) write
+  `http.Authenticated(e, b, b.AnyActor())`; otherwise
+  `http.Authenticated(e, b, http.AllOf(http.Scopes(s), http.Permissions(p)))`.
+- **A helper that wraps a constructor and returns its result**: give the helper an
+  `http.AccessRule[M]` parameter and pass it to the constructor, or write `AnyActor()` in
+  the helper where it is open.
+- **A helper returning `[]http.GuardOption[M]` with a `nil` or empty path** (for
+  example `tableGuardOptions` returning `nil, nil` for "no capability"): `nil` meant "open
+  to every admin", which is now a written decision. Before:
+  `return nil, nil` / `return []http.GuardOption[models.Admin]{http.Scopes(s), http.Permissions(p)}, nil`.
+  After, with the result type `http.AccessRule[models.Admin]`: `return binding.AnyActor(), nil`
+  where the table is open, or the capability's `http.AllOf(http.Scopes(s), http.Permissions(p))`.
+  Then the callers' `datatable.ReadAccess(options...)` becomes `datatable.ReadAccess(rule)`.
+  A helper that picks among capabilities returns `http.AnyOf(alternatives...)`.
+- **An options slice that is also used as a slice** (`len(member)`, `append`, a loop, passed to
+  a function) **or reassigned**: build the rule once as an `http.AccessRule[M]` with
+  `http.AllOf(...)` and keep the slice only if something else needs it.
+- **An options slice holding actor middleware**: split it. The access part becomes
+  `http.AllOf(...)`; the `http.ActorMiddleware[M](...)` part stays an argument after the
+  rule: `http.Authenticated(e, b, rule, http.ActorMiddleware[M](m))`.
+- **An empty options slice** (`[]http.GuardOption[M]{}`): the open case, a decision for a
+  person: `b.AnyActor()` or a real rule.
+- **A constructor and a later configure call that both declare access**
+  (`Authenticated(e, b, http.Scopes(s))` then `ConfigureAuthenticated(e, member...)`):
+  merge them into one `http.AllOf(...)` on the constructor.
+- **A value configured more than once, conditionally, inside a function literal, used before
+  it is configured, or used unconfigured after the configure call**: choose the rule where
+  the constructor is called; `ConfigureAuthenticated` now takes actor middleware only, so
+  a conditional rule becomes a conditional choice of the rule argument.
+- **`AnyOf` combined with `Scopes` or `Permissions`** (the old API refused it) and option
+  values of a type other than the calls above: write one rule, `http.AnyOf(http.AllOf(...), ...)`.
+- **Every call of the removed guard-taking constructors** (`RequireAuthentication`,
+  `RequireRouteAuthentication`, `OptionalAuthentication`, `OptionalRouteAuthentication`):
+  the codemod cannot create the binding. Build it once, `b, err := http.BindGuard(a, g)`,
+  and write `http.Authenticated(e, b, rule)`, `http.RouteAuthenticated(r, b, rule)`,
+  `http.OptionallyAuthenticated(e, b)` or `http.RouteOptionallyAuthenticated(r, b)`; the
+  rule is the one the old call carried, wrapped in `AllOf`.
+- **`datatable.Routes` without `ReadAccess`**, and datatable and capture options passed as a
+  slice: write `datatable.ReadAccess(rule)` (and `datatable.ExportAccess(rule)` for an
+  exportable table); `datatable.ReadAccess(config.Guard.AnyActor())` for a table every actor
+  may read.
+
+Run the codemod before repinning, then repin, regenerate and build; each remaining call
+site fails to compile with `not enough arguments in call to http.Authenticated` (the
+wanted arguments include `AccessRule[M]`) or `type RequirementOption[User] of
+http.Scopes(...) does not match inferred type AccessRule[User]`; the
+[authentication guide](guides/authentication.md#recipe-access-rule) shows both messages
+in full.
+
 ## Retired-names ledger completeness — unreleased
 
 Every exported identifier removed since the previous release must now appear in the

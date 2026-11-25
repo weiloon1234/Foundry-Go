@@ -1,0 +1,60 @@
+package left
+
+import (
+	"github.com/weiloon1234/Foundry-Go/datatable"
+	"github.com/weiloon1234/Foundry-Go/http"
+)
+
+var audit http.Middleware
+
+func helperNil(capability bool) ([]http.GuardOption[User], error) {
+	if !capability {
+		return nil, nil
+	}
+	return []http.GuardOption[User]{http.Permissions(viewer)}, nil
+}
+
+func useHelperNil() {
+	opts, err := helperNil(true)
+	if err != nil {
+		return
+	}
+	_ = datatable.ReadAccess(opts...)
+}
+
+func reassigned() {
+	member := []http.GuardOption[User]{http.Permissions(viewer)}
+	member = append(member, http.Scopes(read))
+	_ = http.Authenticated(endpoint, users, member...)
+}
+
+func usedElsewhere() {
+	member := []http.GuardOption[User]{http.Permissions(viewer)}
+	_ = len(member)
+	_ = http.Authenticated(endpoint, users, member...)
+}
+
+func bothDeclare() {
+	member := []http.GuardOption[User]{http.Permissions(viewer)}
+	e := http.Authenticated(endpoint, users, http.Scopes(read))
+	_ = http.ConfigureAuthenticated(e, member...)
+}
+
+func withActor() {
+	member := []http.GuardOption[User]{http.Permissions(viewer), http.ActorMiddleware[User](audit)}
+	_ = http.Authenticated(endpoint, users, member...)
+}
+
+func empty() {
+	member := []http.GuardOption[User]{}
+	_ = http.Authenticated(endpoint, users, member...)
+}
+
+func asValue() {
+	f := valueHelper
+	_ = f
+}
+
+func valueHelper() []http.GuardOption[User] {
+	return []http.GuardOption[User]{http.Permissions(viewer)}
+}

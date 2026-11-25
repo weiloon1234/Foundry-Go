@@ -177,13 +177,13 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	configuredMemberEndpoint := profileEndpoint("configured.member", "/member", http.POST)
 	configuredMemberEndpoint = http.ConfigureEndpoint(configuredMemberEndpoint, http.Use(members.Browser.Middleware()))
 
-	memberRoute := http.Authenticated(configuredMemberEndpoint, members.Binding).Handle(func(_ context.Context, actor Member, _ MemberProfileInput) (Profile, error) {
+	memberRoute := http.Authenticated(configuredMemberEndpoint, members.Binding, members.Binding.AnyActor()).Handle(func(_ context.Context, actor Member, _ MemberProfileInput) (Profile, error) {
 		return Profile{Name: actor.Name, Kind: "member"}, nil
 	})
 
 	configuredOperatorEndpoint := profileEndpoint("configured.operator", "/operator", http.POST)
 
-	operatorRoute := http.Authenticated(configuredOperatorEndpoint, operators.Binding).Handle(func(_ context.Context, actor Operator, _ MemberProfileInput) (Profile, error) {
+	operatorRoute := http.Authenticated(configuredOperatorEndpoint, operators.Binding, operators.Binding.AnyActor()).Handle(func(_ context.Context, actor Operator, _ MemberProfileInput) (Profile, error) {
 		return Profile{Name: actor.Department, Kind: "operator"}, nil
 	})
 

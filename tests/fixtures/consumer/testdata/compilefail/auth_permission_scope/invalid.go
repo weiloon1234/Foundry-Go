@@ -7,5 +7,4 @@ import (
 	http "github.com/weiloon1234/Foundry-Go/http"
 )
 
-var endpoint authenticating.ProfileEndpoint
-var _ = http.ConfigureAuthenticated(endpoint, http.Permissions[models.User](auth.DefineAccessScope[models.User]("accounts.view")))
+var _ = http.AllOf(http.Permissions[models.User](auth.DefineAccessScope[models.User]("accounts.view")))

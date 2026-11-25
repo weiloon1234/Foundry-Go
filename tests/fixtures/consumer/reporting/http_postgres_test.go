@@ -33,7 +33,11 @@ func TestPublicReportHTTPAuthorizationRangesAndArtifactOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := foundryhttp.NewRouter(reporting.DownloadRoute(f.manager, transport, f.guard, datatable.Presentation{Locale: "en", TimeZone: "UTC"}))
+	binding, err := foundryhttp.BindGuard(transport, f.guard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router, err := foundryhttp.NewRouter(reporting.DownloadRoute(f.manager, binding, datatable.Presentation{Locale: "en", TimeZone: "UTC"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +99,11 @@ func TestPublicReportDownloadOwnsFrozenFilterTree(t *testing.T) {
 	reportsFrozenRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.frozen", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/frozen"))
 	endpoint := foundryhttp.DefineEndpoint(reportsFrozenRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8"))
 
-	route := foundryhttp.RequireAuthentication(endpoint, transport, f.guard).Handle(func(ctx context.Context, _ reporting.Operator, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
+	binding, err := foundryhttp.BindGuard(transport, f.guard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	route := foundryhttp.Authenticated(endpoint, binding, binding.AnyActor()).Handle(func(ctx context.Context, _ reporting.Operator, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
 		input := datatable.Request{Filters: []datatable.Filter{{Op: datatable.All, Children: []datatable.Filter{{Op: datatable.Equal, Column: "name", Values: []string{"Ada"}}}}}}
 		download, err := reporting.Members.Download(ctx, f.manager, reporting.FromGuard(f.guard), input, datatable.ExportOptions{Format: datatable.CSV})
 		input.Filters[0].Children[0].Values[0] = "Foreign"
@@ -122,7 +130,11 @@ func TestPublicReportQueryReturnsRequestErrorsUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := foundryhttp.NewRouter(reporting.QueryRoute(f.manager, transport, f.guard))
+	binding, err := foundryhttp.BindGuard(transport, f.guard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router, err := foundryhttp.NewRouter(reporting.QueryRoute(f.manager, binding))
 	if err != nil {
 		t.Fatal(err)
 	}

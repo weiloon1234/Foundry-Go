@@ -107,7 +107,7 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	exportAccess := h.AnyOf(h.AllOf(h.Scopes(otherScopes), h.Permissions(permission)), h.AllOf(h.Scopes(scopes), h.Permissions(permission)))
-	router := routeRouter(t, table, config, ExportAccess(exportAccess))
+	router := routeRouterWith(t, table, config, ReadAccess(config.Guard.AnyActor()), ExportAccess(exportAccess))
 	response := routeRequest(t, router, "POST", "https://example.test/tables/reports.members/export", `{"format":"csv","request":{}}`, issued.AccessSecret().Reveal(), 200)
 	var ticket ExportTicket
 	if err := json.Unmarshal(response.Body.Bytes(), &ticket); err != nil {
@@ -134,7 +134,7 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 		isolated.Authority = func(context.Context, routeActor) (reportActor, error) {
 			return reportActor{Tenant: 7, Allowed: true}, nil
 		}
-		guarded := routeRouter(t, table, isolated, ExportAccess(exportAccess))
+		guarded := routeRouterWith(t, table, isolated, ReadAccess(isolated.Guard.AnyActor()), ExportAccess(exportAccess))
 		tableOnly := routeRouter(t, table, isolated)
 		for _, tc := range []struct {
 			name   string
@@ -215,7 +215,7 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	config.Tickets = TokenTickets(disabledTokens)
-	if registrations, err := Routes(h.Scope{}, table, config); err == nil || registrations != nil {
+	if registrations, err := Routes(h.Scope{}, table, config, ReadAccess(config.Guard.AnyActor()), ExportAccess(config.Guard.AnyActor())); err == nil || registrations != nil {
 		t.Fatal("disabled tickets registered")
 	}
 	other, err := token.New(store, "other", provider, "other.source", scopes)
@@ -223,11 +223,11 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	config.Tickets = TokenTickets(other)
-	if registrations, err := Routes(h.Scope{}, table, config); err == nil || registrations != nil {
+	if registrations, err := Routes(h.Scope{}, table, config, ReadAccess(config.Guard.AnyActor()), ExportAccess(config.Guard.AnyActor())); err == nil || registrations != nil {
 		t.Fatal("wrong-source tickets registered")
 	}
 	config.Tickets = TokenTickets((*token.Tokens[routeActor, int64])(nil))
-	if registrations, err := Routes(h.Scope{}, table, config); err == nil || registrations != nil {
+	if registrations, err := Routes(h.Scope{}, table, config, ReadAccess(config.Guard.AnyActor()), ExportAccess(config.Guard.AnyActor())); err == nil || registrations != nil {
 		t.Fatal("nil tickets registered")
 	}
 }

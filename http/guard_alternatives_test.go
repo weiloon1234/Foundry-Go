@@ -272,38 +272,37 @@ func TestAnyOfOnlyNormalDenialPermitsFallback(t *testing.T) {
 	}
 }
 
-func TestAnyOfRejectsInvalidDeclarationsBeforeRegistration(t *testing.T) {
+func TestAccessRuleRejectsInvalidDeclarationsBeforeRegistration(t *testing.T) {
 	p := auth.DefinePermission("editorial.write", func(context.Context, authAccount) (bool, error) { return true, nil })
 	q := auth.DefinePermission("editorial.approve", func(context.Context, authAccount) (bool, error) { return true, nil })
 	scopes := alternativeScopes(t, "editorial.write")
 	binding, _ := alternativeBinding(t, scopes, p.Registration(), q.Registration())
 	branch := h.AllOf(h.Scopes(scopes), h.Permissions(p, q))
-	valid := h.AnyOf(branch)
 	impostor := auth.DefinePermission(p.Name(), func(context.Context, authAccount) (bool, error) { return true, nil })
-	cases := map[string][]h.GuardOption[authAccount]{
-		"empty group":              {h.AnyOf[authAccount]()},
-		"zero branch":              {h.AnyOf(h.GuardAlternative[authAccount]{})},
-		"empty branch":             {h.AnyOf(h.AllOf[authAccount]())},
-		"nil requirement":          {h.AnyOf(h.AllOf[authAccount](nil))},
-		"empty scopes":             {h.AnyOf(h.AllOf(h.Scopes(auth.AccessScopes[authAccount]{}), h.Permissions(p)))},
-		"empty permissions":        {h.AnyOf(h.AllOf(h.Scopes(scopes), h.Permissions[authAccount]()))},
-		"repeated scopes":          {h.AnyOf(h.AllOf(h.Scopes(scopes), h.Scopes(scopes)))},
-		"repeated permissions":     {h.AnyOf(h.AllOf(h.Permissions(p), h.Permissions(q)))},
-		"duplicate permissions":    {h.AnyOf(h.AllOf(h.Permissions(p, p)))},
-		"duplicate branch":         {h.AnyOf(branch, branch)},
-		"permuted branch":          {h.AnyOf(branch, h.AllOf(h.Permissions(q, p), h.Scopes(scopes)))},
-		"repeated group":           {valid, valid},
-		"mixed scopes first":       {h.Scopes(scopes), valid},
-		"mixed scopes last":        {valid, h.Scopes(scopes)},
-		"mixed permissions first":  {h.Permissions(p), valid},
-		"mixed permissions last":   {valid, h.Permissions(p)},
-		"impostor in later branch": {h.AnyOf(branch, h.AllOf(h.Permissions(impostor)))},
-		"undefined permission":     {h.AnyOf(h.AllOf(h.Permissions(auth.Permission[authAccount]{})))},
-		"too many branches":        {h.AnyOf(make([]h.GuardAlternative[authAccount], h.MaxGuardAlternatives+1)...)},
+	cases := map[string]h.AccessRule[authAccount]{
+		"missing rule":               nil,
+		"zero rule":                  h.GuardAlternative[authAccount]{},
+		"empty group":                h.AnyOf[authAccount](),
+		"zero branch":                h.AnyOf(h.GuardAlternative[authAccount]{}),
+		"empty branch":               h.AnyOf(h.AllOf[authAccount]()),
+		"empty rule":                 h.AllOf[authAccount](),
+		"nil requirement":            h.AnyOf(h.AllOf[authAccount](nil)),
+		"empty scopes":               h.AnyOf(h.AllOf(h.Scopes(auth.AccessScopes[authAccount]{}), h.Permissions(p))),
+		"empty permissions":          h.AnyOf(h.AllOf(h.Scopes(scopes), h.Permissions[authAccount]())),
+		"repeated scopes":            h.AnyOf(h.AllOf(h.Scopes(scopes), h.Scopes(scopes))),
+		"repeated permissions":       h.AnyOf(h.AllOf(h.Permissions(p), h.Permissions(q))),
+		"duplicate permissions":      h.AnyOf(h.AllOf(h.Permissions(p, p))),
+		"duplicate branch":           h.AnyOf(branch, branch),
+		"permuted branch":            h.AnyOf(branch, h.AllOf(h.Permissions(q, p), h.Scopes(scopes))),
+		"impostor in later branch":   h.AnyOf(branch, h.AllOf(h.Permissions(impostor))),
+		"undefined permission":       h.AnyOf(h.AllOf(h.Permissions(auth.Permission[authAccount]{}))),
+		"too many branches":          h.AnyOf(make([]h.GuardAlternative[authAccount], h.MaxGuardAlternatives+1)...),
+		"repeated scopes alone":      h.AllOf(h.Scopes(scopes), h.Scopes(scopes)),
+		"undefined permission alone": h.AllOf(h.Permissions(auth.Permission[authAccount]{})),
 	}
-	for name, options := range cases {
+	for name, rule := range cases {
 		t.Run(name, func(t *testing.T) {
-			endpoint := h.Authenticated(authEndpoint(h.Guarded), binding, options...)
+			endpoint := h.Authenticated(authEndpoint(h.Guarded), binding, rule)
 			if err := h.ValidateAuthenticated(endpoint); err == nil {
 				t.Fatal("invalid declaration accepted")
 			}
@@ -315,19 +314,17 @@ func TestAnyOfRejectsInvalidDeclarationsBeforeRegistration(t *testing.T) {
 			}
 		})
 	}
-	base := h.Authenticated(authEndpoint(h.Guarded), binding)
-	derived := h.ConfigureAuthenticated(base, valid)
+	valid := h.AnyOf(branch)
+	base := h.Authenticated(authEndpoint(h.Guarded), binding, valid)
+	derived := h.ConfigureAuthenticated(base, h.ActorMiddleware[authAccount](h.DefineMiddleware("test.alternative.derived", func(next stdhttp.Handler) (stdhttp.Handler, error) { return next, nil })))
 	if err := h.ValidateAuthenticated(base); err != nil {
 		t.Fatal("copied endpoint mutated base", err)
 	}
 	if err := h.ValidateAuthenticated(derived); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.ValidateAuthenticated(h.ConfigureAuthenticated(derived, h.Scopes(scopes))); err == nil {
-		t.Fatal("later configure bypassed exclusivity")
-	}
-	firstError := h.AnyOf(h.AllOf(h.Scopes(scopes), h.Scopes(scopes), nil))
-	if err := h.ValidateAuthenticated(h.Authenticated(authEndpoint(h.Guarded), binding, firstError, h.AnyOf[authAccount]())); !errors.Is(err, fault.Duplicate) {
+	firstError := h.AllOf(h.Scopes(scopes), h.Scopes(scopes), nil)
+	if err := h.ValidateAuthenticated(h.Authenticated(authEndpoint(h.Guarded), binding, firstError, h.ActorMiddleware[authAccount]())); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("later invalid options replaced the first declaration error", err)
 	}
 }

@@ -2,7 +2,7 @@
 
 The starter's B05 gap was valid: pagination retained its HTTP endpoint privately,
 so `foundryhttp.Authenticated` could not bind it while preserving the typed page handler.
-The framework now provides `pagination.Authenticated(endpoint, binding)` for
+The framework now provides `pagination.Authenticated(endpoint, binding, rule)` for
 numbered, simple and cursor pages. This is an additive public API; existing
 public pagination signatures and response formats remain compatible.
 
@@ -28,7 +28,7 @@ Inputs: `list pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, Mem
 
 <!-- compiled-source: tests/fixtures/consumer/httppagination/authorization_recipe.go#authenticated-pagination-20260928-1 -->
 ```go
-secured := pagination.Authenticated(list, binding, foundryhttp.Scopes(readScopes), foundryhttp.Permissions(readPermission))
+secured := pagination.Authenticated(list, binding, foundryhttp.AllOf(foundryhttp.Scopes(readScopes), foundryhttp.Permissions(readPermission)))
 secured = pagination.AuthorizeActor(secured, service.AuthorizeList)
 return pagination.HandleAuthenticated(secured, service.List)
 ```

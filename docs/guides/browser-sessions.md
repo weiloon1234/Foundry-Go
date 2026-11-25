@@ -50,7 +50,8 @@ The blocks in this section continue one scope: an `Inputs:` line names only what
 
 Public login/logout endpoints add `web.Middleware()` using ordinary
 `http.ConfigureEndpoint(endpoint, http.Use(web.Middleware()))`. Guarded endpoints use
-`http.RequireAuthentication(endpoint, web.Authentication(), web.Guard())`; that
+`http.Authenticated(endpoint, binding, rule)` with `binding` from
+`http.BindGuard(web.Authentication(), web.Guard())`, where `rule` is an `http.AllOf`, `http.AnyOf` or `binding.AnyActor()`; that
 transport automatically establishes browser-session policy before authentication.
 A scope-level browser middleware and its matching authenticated routes safely reuse
 one request binding. A different browser adapter cannot reuse that binding.
@@ -131,7 +132,11 @@ Protected routes add the actor-stage middleware:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/browser_recipes.go#confirm-password-route -->
 ```go
-route := foundryhttp.RequireAuthentication(endpoint, browser.Authentication(), browser.Guard(),
+binding, err := foundryhttp.BindGuard(browser.Authentication(), browser.Guard())
+if err != nil {
+	return foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]{}, err
+}
+route := foundryhttp.Authenticated(endpoint, binding, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)),
 	foundryhttp.ActorMiddleware[models.User](browser.RequirePasswordConfirmation(15*time.Minute)))
 ```
 

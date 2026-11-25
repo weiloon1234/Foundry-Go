@@ -91,7 +91,7 @@ func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 	binding, scopes, permission := pageBinding(t)
 	base := pagination.Configure(pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultConfig()), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 	policies, reads := 0, 0
-	endpoint := pagination.AuthorizeActor(pagination.ConfigureAuthenticated(pagination.Authenticated(base, binding), foundryhttp.AnyOf(foundryhttp.AllOf(foundryhttp.Scopes(scopes), foundryhttp.Permissions(permission)))), func(ctx context.Context, actor pageActor, in pageInput) error {
+	endpoint := pagination.AuthorizeActor(pagination.Authenticated(base, binding, foundryhttp.AnyOf(foundryhttp.AllOf(foundryhttp.Scopes(scopes), foundryhttp.Permissions(permission)))), func(ctx context.Context, actor pageActor, in pageInput) error {
 		policies++
 		if actor.ID == 3 {
 			return auth.Forbidden
@@ -155,7 +155,7 @@ func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 
 func TestAuthenticatedSimpleAndCursorKeepNavigationAndValidation(t *testing.T) {
 	binding, _, _ := pageBinding(t)
-	simple := pagination.Authenticated(pagination.DefineSimple(guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultConfig()), binding)
+	simple := pagination.Authenticated(pagination.DefineSimple(guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultConfig()), binding, binding.AnyActor())
 	simpleRegistration := pagination.HandleAuthenticated(simple, func(_ context.Context, actor pageActor, in pageInput) (orm.SimplePage[Item], error) {
 		if actor.ID != 1 {
 			t.Error("simple actor lost")
@@ -172,7 +172,7 @@ func TestAuthenticatedSimpleAndCursorKeepNavigationAndValidation(t *testing.T) {
 	}
 
 	token := tokenFor[cursorSource](t)
-	cursor := pagination.Authenticated(pagination.DefineCursor[cursorSource](guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultCursorConfig()), binding)
+	cursor := pagination.Authenticated(pagination.DefineCursor[cursorSource](guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultCursorConfig()), binding, binding.AnyActor())
 	reads := 0
 	cursorRegistration := pagination.HandleAuthenticated(cursor, func(ctx context.Context, actor pageActor, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
 		reads++
@@ -213,7 +213,7 @@ func TestAuthenticatedPageCompletionKeepsErrorsCancellationAndInvalidDeclaration
 	binding, _, _ := pageBinding(t)
 	declared := foundryhttp.DefineError("pages.unavailable", 409, "Page changed.")
 	base := pagination.Configure(pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultConfig()), foundryhttp.Errors(declared))
-	endpoint := pagination.Authenticated(base, binding)
+	endpoint := pagination.Authenticated(base, binding, binding.AnyActor())
 	for _, tc := range []struct {
 		page   orm.PageResult[Item]
 		err    error
@@ -247,10 +247,10 @@ func TestAuthenticatedPageCompletionKeepsErrorsCancellationAndInvalidDeclaration
 	for _, registration := range []foundryhttp.RouteRegistration{
 		pagination.HandleAuthenticated(endpoint, nil), pagination.HandleAuthenticated(pagination.AuthorizeActor(endpoint, nil), func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
 			return orm.PageResult[Item]{}, nil
-		}), pagination.HandleAuthenticated(pagination.Authenticated(pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.Config{}), binding), func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
+		}), pagination.HandleAuthenticated(pagination.Authenticated(pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.Config{}), binding, binding.AnyActor()), func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
 			return orm.PageResult[Item]{}, nil
 		}),
-		pagination.HandleAuthenticated(pagination.Authenticated(base, foundryhttp.GuardBinding[pageActor]{}), func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
+		pagination.HandleAuthenticated(pagination.Authenticated(base, foundryhttp.GuardBinding[pageActor]{}, foundryhttp.GuardBinding[pageActor]{}.AnyActor()), func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
 			return orm.PageResult[Item]{}, nil
 		}),
 	} {

@@ -25,11 +25,12 @@ type authenticatedPageEndpoint[P, F, W, A, Page, Response any] struct {
 
 // Authenticated binds a Guarded numbered, simple or cursor endpoint to its concrete
 // actor. Configure scope, middleware, limits, errors and validation on the page
-// before binding. Authentication and authority retain the ordinary HTTP lifecycle.
-func Authenticated[P, F, W, A, Page, Response any](endpoint pageEndpoint[P, F, W, Page, Response], binding foundryhttp.GuardBinding[A], options ...foundryhttp.GuardOption[A]) authenticatedPageEndpoint[P, F, W, A, Page, Response] {
+// before binding. rule says who may read the page (AllOf, AnyOf or AnyActor).
+// Authentication and authority retain the ordinary HTTP lifecycle.
+func Authenticated[P, F, W, A, Page, Response any](endpoint pageEndpoint[P, F, W, Page, Response], binding foundryhttp.GuardBinding[A], rule foundryhttp.AccessRule[A], options ...foundryhttp.ActorOption[A]) authenticatedPageEndpoint[P, F, W, A, Page, Response] {
 	return authenticatedPageEndpoint[P, F, W, A, Page, Response]{
 		page:      endpoint,
-		transport: foundryhttp.Authenticated(pageEndpointWithLinkRequirements(endpoint).transport, binding, options...),
+		transport: foundryhttp.Authenticated(pageEndpointWithLinkRequirements(endpoint).transport, binding, rule, options...),
 	}
 }
 

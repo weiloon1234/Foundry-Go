@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"slices"
+	"fmt"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/token"
@@ -58,30 +58,32 @@ type RoutesConfig[M, A any] struct {
 	WithLocale func(A, i18n.LocaleID) A
 }
 
-// RouteOption retains immutable guard options for one table operation.
-// Construct it with ReadAccess or ExportAccess; its zero value is invalid.
+// ReadOption retains the access rule of table queries. Construct it with
+// ReadAccess; its zero value is invalid.
 //
-// Example: datatable.ReadAccess(http.Permissions(readPermission))
-type RouteOption[M any] struct {
-	kind   contract.TableOperationKind
-	access []foundryhttp.GuardOption[M]
-}
+// Example: datatable.ReadAccess(http.AllOf(http.Permissions(readPermission)))
+type ReadOption[M any] struct{ rule foundryhttp.AccessRule[M] }
 
-// ReadAccess snapshots guard options applied before query request decoding.
-// Supplying ReadAccess more than once is an error, even with no guard options.
+// ExportOption retains the access rule of table export tickets and downloads.
+// Construct it with ExportAccess; its zero value is invalid.
 //
-// Example: datatable.ReadAccess(http.Scopes(readScopes), http.Permissions(readPermission))
-func ReadAccess[M any](options ...foundryhttp.GuardOption[M]) RouteOption[M] {
-	return RouteOption[M]{kind: contract.TableQuery, access: slices.Clone(options)}
-}
+// Example: datatable.ExportAccess(http.AllOf(http.Permissions(exportPermission)))
+type ExportOption[M any] struct{ rule foundryhttp.AccessRule[M] }
 
-// ExportAccess snapshots guard options applied before ticket request decoding.
-// Supplying ExportAccess more than once is an error. These requirements also
-// apply to ticket-authenticated downloads before table authorization.
+// ReadAccess is the access rule applied before query request decoding. Routes
+// requires it for every table, so who may read is always written out: AllOf or
+// AnyOf, or guard.AnyActor() for a table every authenticated actor may read.
 //
-// Example: datatable.ExportAccess(http.Scopes(exportScopes), http.Permissions(exportPermission))
-func ExportAccess[M any](options ...foundryhttp.GuardOption[M]) RouteOption[M] {
-	return RouteOption[M]{kind: contract.TableTicketExport, access: slices.Clone(options)}
+// Example: datatable.ReadAccess(http.AllOf(http.Scopes(readScopes), http.Permissions(readPermission)))
+func ReadAccess[M any](rule foundryhttp.AccessRule[M]) ReadOption[M] { return ReadOption[M]{rule} }
+
+// ExportAccess is the access rule applied before ticket request decoding. Routes
+// requires it for an exportable table and refuses it twice. The rule also applies
+// to ticket-authenticated downloads before table authorization.
+//
+// Example: datatable.ExportAccess(http.AllOf(http.Scopes(exportScopes), http.Permissions(exportPermission)))
+func ExportAccess[M any](rule foundryhttp.AccessRule[M]) ExportOption[M] {
+	return ExportOption[M]{rule}
 }
 
 // Routes declares POST /<table ID> for queries and, for exportable tables,
@@ -94,31 +96,23 @@ func ExportAccess[M any](options ...foundryhttp.GuardOption[M]) RouteOption[M] {
 // All declarations are validated before registrations are returned. HTTP owns
 // callback isolation and request lifetime; Manager owns deferred export work.
 //
-// Example: datatable.Routes(group, table, config, datatable.ReadAccess(read...), datatable.ExportAccess(export...))
-func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], config RoutesConfig[M, A], options ...RouteOption[M]) ([]foundryhttp.RouteRegistration, error) {
+// ExportAccess is a trailing option, not a required argument, only because
+// exportability is a property of the table, which the compiler cannot see: a table
+// declared without exports takes no export rule, and an exportable table refuses to
+// register without exactly one.
+//
+// Example: datatable.Routes(group, table, config, datatable.ReadAccess(read), datatable.ExportAccess(export))
+func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], config RoutesConfig[M, A], read ReadOption[M], export ...ExportOption[M]) ([]foundryhttp.RouteRegistration, error) {
 	if err := table.check(config.Manager); err != nil {
 		return nil, err
 	}
 	if config.Authority == nil {
 		return nil, invalid("datatable routes require authority")
 	}
-	var read, export []foundryhttp.GuardOption[M]
-	seen := make(map[contract.TableOperationKind]bool, 2)
-	for _, option := range options {
-		if option.kind != contract.TableQuery && option.kind != contract.TableTicketExport {
-			return nil, invalid("invalid datatable route option")
-		}
-		if seen[option.kind] {
-			return nil, safeerror.NewFault(fault.Duplicate, "duplicate datatable access option")
-		}
-		seen[option.kind] = true
-		if option.kind == contract.TableQuery {
-			read = option.access
-		} else {
-			export = option.access
-		}
-	}
 	id := string(table.ID())
+	if len(export) > 1 {
+		return nil, safeerror.NewFault(fault.Duplicate, fmt.Sprintf("datatable %s was given %d ExportAccess options; one rule covers its export tickets and downloads", id, len(export)))
+	}
 	scope := foundryhttp.DefineScope("/"+id, foundryhttp.RouteID(id)).Within(group)
 	route := func(method foundryhttp.Method, path string, id foundryhttp.RouteID, access foundryhttp.Access) foundryhttp.Route[foundryhttp.NoPath] {
 		route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path))
@@ -126,13 +120,16 @@ func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], confi
 	}
 	queryRoute := route(foundryhttp.POST, "", "query", foundryhttp.Guarded)
 	queryEndpoint := QueryEndpoint(table, queryRoute, foundryhttp.EmptyQuery())
-	query := foundryhttp.Authenticated(queryEndpoint, config.Guard, read...)
+	query := foundryhttp.Authenticated(queryEndpoint, config.Guard, read.rule)
 	if err := foundryhttp.ValidateAuthenticated(query); err != nil {
 		return nil, err
 	}
 	registrations := []foundryhttp.RouteRegistration{query.Handle(tablePage(table, config))}
 	if !table.definition.metadata.info.Exports {
 		return registrations, nil
+	}
+	if len(export) == 0 {
+		return nil, invalid("datatable " + id + " is exportable and requires ExportAccess after ReadAccess")
 	}
 	if config.Clock == nil || config.Tickets.issue == nil || config.Tickets.redeemer == nil || config.Tickets.validate == nil {
 		return nil, invalid("datatable export routes require clock and token tickets")
@@ -145,7 +142,7 @@ func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], confi
 	}
 	downloadRoute := route(foundryhttp.GET, "/download", "download", foundryhttp.Guarded)
 	downloadEndpoint := DownloadEndpoint(table, downloadRoute, DownloadQueryDescriptor(), foundryhttp.DownloadResponse("text/csv; charset=utf-8", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), foundryhttp.Timeout(config.Manager.DownloadTimeout()))
-	download := foundryhttp.TicketAuthenticated(downloadEndpoint, config.Guard, config.Tickets.redeemer, export...)
+	download := foundryhttp.TicketAuthenticated(downloadEndpoint, config.Guard, config.Tickets.redeemer, export[0].rule)
 	if err := foundryhttp.ValidateTicketAuthenticated(download); err != nil {
 		return nil, err
 	}
@@ -153,7 +150,7 @@ func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], confi
 	issueRoute = foundryhttp.ConfigureRoute(issueRoute, foundryhttp.Use(foundryhttp.CredentialRequests(), config.Quota))
 	issueEndpoint := foundryhttp.DefineEndpoint(issueRoute, foundryhttp.EmptyQuery(), foundryhttp.JSONBody(ExportRequestJSON()), foundryhttp.JSONResponse(200, ExportTicketJSON()))
 	issueEndpoint = BindTicketExport(table, issueEndpoint, ExportRequestValidationFields().Request)
-	issue := foundryhttp.Authenticated(issueEndpoint, config.Guard, export...)
+	issue := foundryhttp.Authenticated(issueEndpoint, config.Guard, export[0].rule)
 	if err := foundryhttp.ValidateAuthenticated(issue); err != nil {
 		return nil, err
 	}

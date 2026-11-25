@@ -1,0 +1,46 @@
+package migrated
+
+import (
+	"github.com/weiloon1234/Foundry-Go/http"
+)
+
+func foldExpression() http.Registration {
+	profile := http.Authenticated(endpoint, users)
+	return http.ConfigureAuthenticated(profile, http.Scopes(read), http.Permissions(viewer)).Handle(handler)
+}
+
+func foldReassign() http.Registration {
+	secured := http.Authenticated(endpoint, users)
+	// the rule is declared below
+	secured = http.ConfigureAuthenticated(secured, http.Scopes(read), http.Permissions(editor)) // both
+	return secured.Handle(handler)
+}
+
+func foldNested() http.Registration {
+	return http.ConfigureAuthenticated(http.Authenticated(endpoint, users), http.Permissions(viewer)).Handle(handler)
+}
+
+func foldKeepsActors() http.Registration {
+	e := http.Authenticated(endpoint, users)
+	e = http.ConfigureAuthenticated(e, http.Scopes(read), http.ActorMiddleware[User](audit), http.Permissions(viewer))
+	return e.Handle(handler)
+}
+
+func foldMerges() http.Registration {
+	e := http.Authenticated(endpoint, users, http.Scopes(read))
+	return http.ConfigureAuthenticated(e, http.Permissions(viewer)).Handle(handler)
+}
+
+func foldAnyOf() http.Registration {
+	e := http.Authenticated(endpoint, users)
+	return http.ConfigureAuthenticated(e, http.AnyOf(http.AllOf(http.Permissions(viewer)), http.AllOf(http.Scopes(read)))).Handle(handler)
+}
+
+func foldInList() []http.Registration {
+	a := http.Authenticated(endpoint, users)
+	b := http.Authenticated(endpoint, users)
+	return []http.Registration{
+		http.ConfigureAuthenticated(a, http.Scopes(read)).Handle(handler),
+		http.ConfigureAuthenticated(b, http.Scopes(write), http.Permissions(editor)).Handle(handler),
+	}
+}

@@ -51,7 +51,8 @@ func TestTypedActorRequestLifecycle(t *testing.T) {
 			}
 			var registration foundryhttp.RouteRegistration
 			if optional {
-				endpoint := foundryhttp.PrepareOptional(foundryhttp.OptionalAuthentication(base, transport, guard), prepare)
+				binding := authBinding(t, transport, guard)
+				endpoint := foundryhttp.PrepareOptional(foundryhttp.OptionallyAuthenticated(base, binding), prepare)
 				if foundryhttp.ValidateOptional(foundryhttp.AuthorizeOptionalActor(endpoint, nil)) == nil {
 					t.Fatal("nil optional callback accepted")
 				}
@@ -62,7 +63,8 @@ func TestTypedActorRequestLifecycle(t *testing.T) {
 					return foundryhttp.NoContent{}, nil
 				})
 			} else {
-				endpoint := foundryhttp.PrepareAuthenticated(foundryhttp.RequireAuthentication(base, transport, guard), prepare)
+				binding := authBinding(t, transport, guard)
+				endpoint := foundryhttp.PrepareAuthenticated(foundryhttp.Authenticated(base, binding, binding.AnyActor()), prepare)
 				if foundryhttp.ValidateAuthenticated(foundryhttp.AuthorizeActor(endpoint, nil)) == nil {
 					t.Fatal("nil actor callback accepted")
 				}
@@ -139,14 +141,16 @@ func TestTypedRequestAuthorizationMultipleGuards(t *testing.T) {
 		t.Fatal(err)
 	}
 	memberCalls, staffCalls := 0, 0
-	members := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Within(foundryhttp.DefineScope("/members", "members"))), transport, member), func(_ context.Context, actor authAccount, _ authInput) error {
+	binding := authBinding(t, transport, member)
+	members := foundryhttp.AuthorizeActor(foundryhttp.Authenticated(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Within(foundryhttp.DefineScope("/members", "members"))), binding, binding.AnyActor()), func(_ context.Context, actor authAccount, _ authInput) error {
 		memberCalls++
 		if actor.ID != 1 || !actor.Enabled {
 			t.Error("member actor changed")
 		}
 		return nil
 	})
-	staffRoute := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Within(foundryhttp.DefineScope("/staff", "staff"))), transport, staff), func(_ context.Context, actor lifecycleStaff, _ authInput) error {
+	staffBinding := authBinding(t, transport, staff)
+	staffRoute := foundryhttp.AuthorizeActor(foundryhttp.Authenticated(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Within(foundryhttp.DefineScope("/staff", "staff"))), staffBinding, staffBinding.AnyActor()), func(_ context.Context, actor lifecycleStaff, _ authInput) error {
 		staffCalls++
 		if actor.ID != 8 || actor.Department != "operations" {
 			t.Error("staff actor changed")

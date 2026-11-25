@@ -39,7 +39,7 @@ func MemberTicketRoute(manager *datatable.Manager, binding foundryhttp.GuardBind
 
 // doc-example:begin ticket-authentication
 func ticketAuthentication(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.Download], binding foundryhttp.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]]) foundryhttp.TicketEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, Operator, foundryhttp.Download] {
-	return foundryhttp.TicketAuthenticated(endpoint, binding, tokens)
+	return foundryhttp.TicketAuthenticated(endpoint, binding, tokens, binding.AnyActor())
 }
 
 // doc-example:end ticket-authentication

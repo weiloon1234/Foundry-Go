@@ -120,7 +120,7 @@ func RouteURL[P any](r Route[P], parameters P) (string, error) {
 
 // RawHandler receives decoded, concrete path parameters and native transport
 // objects. Request bodies and responses remain explicit application responsibilities
-// and are not typed client schemas. RequireRouteAuthentication supplies a verified
+// and are not typed client schemas. RouteAuthenticated supplies a verified
 // concrete subject without changing these native payload boundaries.
 type RawHandler[P any] func(stdhttp.ResponseWriter, *stdhttp.Request, P)
 

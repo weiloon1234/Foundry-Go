@@ -50,15 +50,12 @@ func TestHTTPAccessScopesRunBeforeDecodingAndKeepMetadataImmutable(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard)
-	endpoint := foundryhttp.ConfigureAuthenticated(base, foundryhttp.Scopes(required))
-	if err := foundryhttp.ValidateAuthenticated(base); err != nil {
-		t.Fatal("base was mutated", err)
-	}
-	if err := foundryhttp.ValidateAuthenticated(foundryhttp.ConfigureAuthenticated(base, foundryhttp.Scopes(auth.AccessScopes[authAccount]{}))); !errors.Is(err, fault.Invalid) {
+	binding := authBinding(t, transport, guard)
+	endpoint := foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, foundryhttp.AllOf(foundryhttp.Scopes(required)))
+	if err := foundryhttp.ValidateAuthenticated(foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, foundryhttp.AllOf(foundryhttp.Scopes(auth.AccessScopes[authAccount]{})))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("empty requirement", err)
 	}
-	if err := foundryhttp.ValidateAuthenticated(foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Scopes(required))); !errors.Is(err, fault.Duplicate) {
+	if err := foundryhttp.ValidateAuthenticated(foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, foundryhttp.AllOf(foundryhttp.Scopes(required), foundryhttp.Scopes(required)))); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("replaced scope requirement", err)
 	}
 	router := newAuthRouter(t, endpoint.Handle(func(ctx context.Context, subject authAccount, _ authInput) (foundryhttp.NoContent, error) {
@@ -130,27 +127,35 @@ func TestConfigureAuthenticatedPreservesFirstOptionError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard)
+	binding := authBinding(t, transport, guard)
+	base := foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, binding.AnyActor())
 
-	// First option is invalid (empty permissions), second option is nil.
-	// The first error ("HTTP permissions require a bounded nonempty declaration") must be preserved.
-	configured := foundryhttp.ConfigureAuthenticated(base, foundryhttp.Permissions[authAccount](), nil)
+	// First option is invalid (empty actor middleware), second option is nil.
+	// The first error ("HTTP actor middleware requires a declaration") must be preserved.
+	configured := foundryhttp.ConfigureAuthenticated(base, foundryhttp.ActorMiddleware[authAccount](), nil)
 	err = foundryhttp.ValidateAuthenticated(configured)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "HTTP permissions require a bounded nonempty declaration") {
+	if !strings.Contains(err.Error(), "HTTP actor middleware requires a declaration") {
 		t.Fatalf("expected first error preserved, got: %v", err)
 	}
 
-	// First option is nil, second option is invalid permissions.
+	// First option is nil, second option is invalid actor middleware.
 	// The first error ("authentication option is missing") must be preserved.
-	configuredSecond := foundryhttp.ConfigureAuthenticated(base, nil, foundryhttp.Permissions[authAccount]())
+	configuredSecond := foundryhttp.ConfigureAuthenticated(base, nil, foundryhttp.ActorMiddleware[authAccount]())
 	errSecond := foundryhttp.ValidateAuthenticated(configuredSecond)
 	if errSecond == nil {
 		t.Fatal("expected error, got nil")
 	}
 	if !strings.Contains(errSecond.Error(), "authentication option is missing") {
 		t.Fatalf("expected first error preserved, got: %v", errSecond)
+	}
+
+	// An invalid requirement inside the rule is kept ahead of the options that follow it.
+	rule := foundryhttp.AllOf(foundryhttp.Permissions[authAccount](), nil)
+	errRule := foundryhttp.ValidateAuthenticated(foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, rule, nil))
+	if errRule == nil || !strings.Contains(errRule.Error(), "HTTP permissions require a bounded nonempty declaration") {
+		t.Fatalf("expected the rule's first error preserved, got: %v", errRule)
 	}
 }

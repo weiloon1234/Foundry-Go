@@ -226,7 +226,11 @@ func TestPostgresTypedRequestAndResourcePolicyStages(t *testing.T) {
 		}
 		base := n.Transport(foundryhttp.Guarded)
 
-		secured := foundryhttp.RequireAuthentication(base, transport, guard)
+		binding, err := foundryhttp.BindGuard(transport, guard)
+		if err != nil {
+			return err
+		}
+		secured := foundryhttp.Authenticated(base, binding, binding.AnyActor())
 		secured = foundryhttp.AuthorizeActor(secured, func(_ context.Context, _ n.Team, in n.TransportRequest) error {
 			if in.Path.Project == "request-denied" {
 				return foundryhttp.Forbidden

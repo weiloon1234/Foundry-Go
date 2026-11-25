@@ -30,7 +30,7 @@ func TestPaginationDocumentationOwners(t *testing.T) {
 			t.Fatalf("%s: %v", code, err)
 		}
 	}
-	if err := CheckDocument("AGENTS.md", []byte("```go\npagination.Authenticated(page, binding, http.Scopes(scopes))\npagination.AuthorizeActor(page, policy)\n```")); err != nil {
+	if err := CheckDocument("AGENTS.md", []byte("```go\npagination.Authenticated(page, binding, http.AllOf(http.Scopes(scopes)))\npagination.AuthorizeActor(page, policy)\n```")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -69,7 +69,7 @@ func TestDocumentOwnerRetirements(t *testing.T) {
 		"modelbinding.Endpoint.WithAuthorization(policy)",
 		"e := http.DefineEndpoint(route, query, body, response)\ne.WithBodyValidation(rule)",
 		"e := foundryhttp.DefineEndpoint(route, query, body, response)\ne.WithMiddleware(middleware)",
-		"e := http.RequireAuthentication(endpoint, authentication, guard)\ne.WithScopes(scope)",
+		"e := http.Authenticated(endpoint, binding, rule)\ne.WithScopes(scope)",
 		"validation.Field[Request,string].Rules(rule)", "validation.Rule[string].Check(ctx, input, limits)",
 		"f := validation.DefineField[Request](\"name\", selectName)\nf.Rules(rule)",
 		"r := validation.Email[string]()\nr.Check(ctx, input, limits)",

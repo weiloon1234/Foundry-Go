@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Breaking: a guarded route's access rule is a required argument, and a guarded
+  declaration has one spelling: it starts from a `GuardBinding`. `http.Authenticated`,
+  `http.RouteAuthenticated` (a raw route), `http.TicketAuthenticated` and
+  `pagination.Authenticated` take an `http.AccessRule` (`http.AllOf(http.Scopes(...),
+  http.Permissions(...))`, `http.AnyOf(...)` or the open case `binding.AnyActor()`), and
+  `ConfigureAuthenticated`, `ConfigureAuthenticatedRoute` and `pagination.ConfigureAuthenticated`
+  accept actor middleware only. The guard-taking constructors are removed:
+  `http.RequireAuthentication` becomes `http.BindGuard` once and `http.Authenticated`,
+  `http.RequireRouteAuthentication` becomes `http.RouteAuthenticated`,
+  `http.OptionalAuthentication` becomes `http.OptionallyAuthenticated` and
+  `http.OptionalRouteAuthentication` becomes `http.RouteOptionallyAuthenticated`.
+  Forgetting the rule does not compile (`not enough arguments in call to http.Authenticated`),
+  and the old flat spelling says `type RequirementOption[User] of http.Scopes(...) does not
+  match inferred type AccessRule[User]`; the authentication guide quotes both in full and a
+  test keeps the quotation equal to the compiler's output.
+  `datatable.ReadAccess` and `ExportAccess` take the same rule, `datatable.Routes` requires
+  `ReadAccess` (and `ExportAccess` for an exportable table, a refusal that names the table),
+  and the webhook and outbound capture `Routes` take one rule. `http.GuardOption`,
+  `datatable.RouteOption`, the four constructors above and `http.AnyActorOf` are retired
+  (`datatable.ReadOption` and `ExportOption` replace the second). A nil or zero rule is
+  refused when the route registers, naming the route's method, pattern and ID. Manifests,
+  wire formats and stored data are unchanged.
+  Migrate with `go run github.com/weiloon1234/Foundry-Go/tools/accessmigrate@<release> --dir . ./...`
+  before repinning; it also converts a variable or helper holding `[]http.GuardOption[M]`,
+  and the [compatibility policy](docs/compatibility.md#access-rule) lists what it
+  rewrites and, for each shape it leaves for a decision, the recipe.
 - Retired-names ledger completeness: `make generate` records the exported API of
   the importable packages (`internal/retirement/exported-surface.txt`; an alias lists
   the members of its target), and `make generate-check` refuses any identifier removed

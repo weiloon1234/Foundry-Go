@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 
-	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -17,14 +16,6 @@ type AuthenticatedEndpoint[P, Q, B, M, R any] struct {
 	binding       authenticationBinding[M]
 }
 
-// RequireAuthentication binds a Guarded transport declaration. Authentication
-// runs before parameter/body decoding; its model is reused by the handler and
-// policies within this request. Verified identity is attached to shared attribution
-// before decoding, preserving request metadata. An unbound Guarded endpoint cannot register.
-func RequireAuthentication[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], authentication *Authentication, guard auth.Guard[M], options ...GuardOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
-	return ConfigureAuthenticated(AuthenticatedEndpoint[P, Q, B, M, R]{endpoint: endpoint, binding: authenticationBinding[M]{authentication: authentication, guard: guard}}, options...)
-}
-
 // ValidateAuthenticated checks the endpoint and its required authentication binding.
 func ValidateAuthenticated[P, Q, B, M, R any](e AuthenticatedEndpoint[P, Q, B, M, R]) error {
 	return authenticatedEndpointValidate(e, false)
@@ -33,7 +24,7 @@ func authenticatedEndpointValidate[P, Q, B, M, R any](e AuthenticatedEndpoint[P,
 	if e.authorization != nil && *e.authorization == nil {
 		return safeerror.NewFault(fault.Invalid, "request authorization callback is missing")
 	}
-	if err := authenticationValidate(e.binding, e.endpoint.route.spec.Access, optional); err != nil {
+	if err := authenticationValidate(e.binding, e.endpoint.route.spec.Access, optional, EndpointMethod(e.endpoint), EndpointPattern(e.endpoint), EndpointID(e.endpoint)); err != nil {
 		return err
 	}
 	return ValidateEndpoint(e.endpoint)
@@ -110,12 +101,6 @@ func authenticatedEndpointAuthorized[P, Q, B, M, R any](e AuthenticatedEndpoint[
 type OptionalAuthenticationEndpoint[P, Q, B, M, R any] struct {
 	required      AuthenticatedEndpoint[P, Q, B, M, R]
 	authorization *func(context.Context, value.Optional[M], Input[P, Q, B]) error
-}
-
-// OptionalAuthentication adds an optional concrete subject to endpoint; invalid
-// supplied credentials still fail authentication.
-func OptionalAuthentication[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], authentication *Authentication, guard auth.Guard[M], options ...ActorOption[M]) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
-	return ConfigureOptional(OptionalAuthenticationEndpoint[P, Q, B, M, R]{required: RequireAuthentication(endpoint, authentication, guard)}, options...)
 }
 
 // ValidateOptional checks the endpoint, optional authentication binding and any

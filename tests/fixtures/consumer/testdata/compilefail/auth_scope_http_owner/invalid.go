@@ -7,6 +7,6 @@ import (
 	http "github.com/weiloon1234/Foundry-Go/http"
 )
 
-func bad(endpoint authenticating.ProfileEndpoint, scopes auth.AccessScopes[models.Group]) {
-	_ = http.ConfigureAuthenticated[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent](endpoint, http.Scopes(scopes))
+func bad(endpoint authenticating.ProfileDeclaration, binding http.GuardBinding[models.User], scopes auth.AccessScopes[models.Group]) {
+	_ = http.Authenticated(endpoint, binding, http.AllOf(http.Scopes(scopes)))
 }

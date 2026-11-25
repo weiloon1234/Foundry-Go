@@ -31,7 +31,7 @@ func TestPostgresTicketAuthenticatedRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoint := h.TicketAuthenticated(h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "download", Method: h.GET, Access: h.Guarded}, h.StaticPath("/download")), h.EmptyQuery(), h.EmptyBody(), h.EmptyResponse(204)), binding, s.tokens, h.Scopes(s.grants), h.Permissions(permission))
+	endpoint := h.TicketAuthenticated(h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "download", Method: h.GET, Access: h.Guarded}, h.StaticPath("/download")), h.EmptyQuery(), h.EmptyBody(), h.EmptyResponse(204)), binding, s.tokens, h.AllOf(h.Scopes(s.grants), h.Permissions(permission)))
 	called := 0
 	router, err := h.NewRouter(endpoint.Handle(func(ctx context.Context, actor member, _ h.Input[h.NoPath, h.NoQuery, h.NoBody]) (h.NoContent, error) {
 		called++
@@ -173,7 +173,7 @@ func TestPostgresTicketAuthenticatedRoutes(t *testing.T) {
 		request("GET", location(ticket.Secret()), 403)
 	})
 	t.Run("routing-responses-preserve-ticket", func(t *testing.T) {
-		folder := h.TicketAuthenticated(h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "folder", Method: h.GET, Access: h.Guarded}, h.StaticPath("/folder/")), h.EmptyQuery(), h.EmptyBody(), h.EmptyResponse(204)), binding, s.tokens)
+		folder := h.TicketAuthenticated(h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "folder", Method: h.GET, Access: h.Guarded}, h.StaticPath("/folder/")), h.EmptyQuery(), h.EmptyBody(), h.EmptyResponse(204)), binding, s.tokens, binding.AnyActor())
 		routes, err := h.NewRouter(endpoint.Handle(func(context.Context, member, h.Input[h.NoPath, h.NoQuery, h.NoBody]) (h.NoContent, error) {
 			t.Error("routing failure reached download handler")
 			return h.NoContent{}, nil

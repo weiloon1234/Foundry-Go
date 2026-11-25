@@ -25,7 +25,7 @@ func ListMembers(ctx context.Context, manager *datatable.Manager, guard auth.Gua
 // DownloadRoute composes the existing authenticated endpoint and seekable file
 // response. The framework owns response ranges and artifact cleanup. The route
 // declares the manager's download deadline, which covers generation and transfer.
-func DownloadRoute(manager *datatable.Manager, transport *foundryhttp.Authentication, guard auth.Guard[Operator], presentation datatable.Presentation) foundryhttp.RouteRegistration {
+func DownloadRoute(manager *datatable.Manager, binding foundryhttp.GuardBinding[Operator], presentation datatable.Presentation) foundryhttp.RouteRegistration {
 	reportsMembersCsvRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.members.csv", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/reports/members.csv"))
 	endpoint := datatable.DownloadEndpoint(Members,
 		reportsMembersCsvRoute,
@@ -33,22 +33,22 @@ func DownloadRoute(manager *datatable.Manager, transport *foundryhttp.Authentica
 	)
 	endpoint = foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Timeout(manager.DownloadTimeout()))
 
-	return foundryhttp.RequireAuthentication(endpoint, transport, guard).Handle(func(ctx context.Context, _ Operator, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
-		return Members.Download(ctx, manager, FromGuard(guard), datatable.Request{}, datatable.ExportOptions{Format: datatable.CSV, Presentation: presentation})
+	return foundryhttp.Authenticated(endpoint, binding, binding.AnyActor()).Handle(func(ctx context.Context, _ Operator, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
+		return Members.Download(ctx, manager, FromGuard(binding.Guard()), datatable.Request{}, datatable.ExportOptions{Format: datatable.CSV, Presentation: presentation})
 	})
 }
 
 // QueryRoute returns table errors unchanged; the framework owns client rejection
 // classification and current guard/policy checks.
-func QueryRoute(manager *datatable.Manager, transport *foundryhttp.Authentication, guard auth.Guard[Operator]) foundryhttp.RouteRegistration {
+func QueryRoute(manager *datatable.Manager, binding foundryhttp.GuardBinding[Operator]) foundryhttp.RouteRegistration {
 	reportsMembersQueryRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.members.query", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/reports/members/query"))
 	endpoint := datatable.QueryEndpoint(Members,
 		reportsMembersQueryRoute,
 		foundryhttp.EmptyQuery(),
 	)
 
-	return foundryhttp.RequireAuthentication(endpoint, transport, guard).Handle(func(ctx context.Context, _ Operator, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, datatable.Request]) (pagination.NumberedResponse[MemberRow], error) {
-		page, err := ListMembers(ctx, manager, guard, in.Body)
+	return foundryhttp.Authenticated(endpoint, binding, binding.AnyActor()).Handle(func(ctx context.Context, _ Operator, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, datatable.Request]) (pagination.NumberedResponse[MemberRow], error) {
+		page, err := ListMembers(ctx, manager, binding.Guard(), in.Body)
 		if err != nil {
 			return pagination.NumberedResponse[MemberRow]{}, err
 		}

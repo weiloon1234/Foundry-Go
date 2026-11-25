@@ -51,11 +51,13 @@ func TestTypedHTTPEndpointsAutomaticallyAttributeOnlyVerifiedModels(t *testing.T
 			}
 			var registration foundryhttp.RouteRegistration
 			if optional {
-				registration = foundryhttp.OptionalAuthentication(authEndpoint(foundryhttp.Public), transport, guard).Handle(func(ctx context.Context, subject value.Optional[authAccount], _ authInput) (foundryhttp.NoContent, error) {
+				binding := authBinding(t, transport, guard)
+				registration = foundryhttp.OptionallyAuthenticated(authEndpoint(foundryhttp.Public), binding).Handle(func(ctx context.Context, subject value.Optional[authAccount], _ authInput) (foundryhttp.NoContent, error) {
 					return check(ctx, subject)
 				})
 			} else {
-				registration = foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard).Handle(func(ctx context.Context, member authAccount, _ authInput) (foundryhttp.NoContent, error) {
+				binding := authBinding(t, transport, guard)
+				registration = foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, binding.AnyActor()).Handle(func(ctx context.Context, member authAccount, _ authInput) (foundryhttp.NoContent, error) {
 					return check(ctx, value.Set(member))
 				})
 			}

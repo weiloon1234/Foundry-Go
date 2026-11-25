@@ -34,10 +34,17 @@ func TokenBinding(tokens *UserTokens) (foundryhttp.GuardBinding[models.User], er
 
 // doc-example:begin configure-bound-scopes
 func securedProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], binding foundryhttp.GuardBinding[models.User], scopes auth.AccessScopes[models.User], viewAccount auth.Permission[models.User]) ProfileEndpoint {
-	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(viewAccount))
+	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.AllOf(foundryhttp.Scopes(scopes), foundryhttp.Permissions(viewAccount)))
 }
 
 // doc-example:end configure-bound-scopes
+
+// doc-example:begin open-profile
+func openProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], binding foundryhttp.GuardBinding[models.User]) ProfileEndpoint {
+	return foundryhttp.Authenticated(endpoint, binding, binding.AnyActor())
+}
+
+// doc-example:end open-profile
 
 // doc-example:begin scoped-resource-policy
 func ScopedOrderRoute(db database.Executor, endpoint OrderEndpoint, binding foundryhttp.GuardBinding[models.User], read func(context.Context, models.User, models.Order) error) foundryhttp.RouteRegistration {
@@ -81,7 +88,7 @@ func TicketRoute(tokens *UserTokens, binding foundryhttp.GuardBinding[models.Use
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.TicketResponse[models.User, model.ID[models.User]](200, clock.System{}),
 	)
 
-	return foundryhttp.Authenticated(endpoint, binding).Handle(func(ctx context.Context, _ models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (token.Ticket[models.User, model.ID[models.User]], error) {
+	return foundryhttp.Authenticated(endpoint, binding, binding.AnyActor()).Handle(func(ctx context.Context, _ models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (token.Ticket[models.User, model.ID[models.User]], error) {
 		return tokens.IssueTicket(ctx)
 	}), nil
 }
@@ -99,5 +106,5 @@ func SecuredOrder(binding foundryhttp.GuardBinding[models.User]) (OrderEndpoint,
 	if err != nil {
 		return OrderEndpoint{}, err
 	}
-	return foundryhttp.Authenticated(showOrder, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(ViewAccount)), nil
+	return foundryhttp.Authenticated(showOrder, binding, foundryhttp.AllOf(foundryhttp.Scopes(scopes), foundryhttp.Permissions(ViewAccount))), nil
 }

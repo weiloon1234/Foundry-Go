@@ -35,7 +35,8 @@ func TestAuthenticatedRawRoutesPreserveNativeTransportAndRequirements(t *testing
 				t.Fatal(err)
 			}
 			route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "raw.write", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.DefinePath("/raw/{order}", foundryhttp.Param("order", compositionCodec{&parses}, func(p *compositionPath) *int64 { return &p.Order })))
-			bound := foundryhttp.ConfigureAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(route, transport, guard), foundryhttp.AnyOf(foundryhttp.AllOf(foundryhttp.Permissions(permission))))
+			binding := authBinding(t, transport, guard)
+			bound := foundryhttp.RouteAuthenticated(route, binding, foundryhttp.AnyOf(foundryhttp.AllOf(foundryhttp.Permissions(permission))))
 			signer, now := compositionSigner(t)
 			var original *http.Request
 			var writer *httptest.ResponseRecorder
@@ -145,7 +146,8 @@ func TestOptionalRawRoutesKeepAnonymousDistinctFromInvalid(t *testing.T) {
 		t.Fatal(err)
 	}
 	route := compositionRoute(foundryhttp.Public, &parses)
-	optional := foundryhttp.OptionalRouteAuthentication(route, transport, guard)
+	binding := authBinding(t, transport, guard)
+	optional := foundryhttp.RouteOptionallyAuthenticated(route, binding)
 	signer, now := compositionSigner(t)
 	signed := foundryhttp.SignOptionalRoute(optional, signer)
 	location, err := foundryhttp.SignedAuthenticatedRouteURL(signed, t.Context(), compositionOrigin, compositionPath{7}, now.Now().Add(time.Minute))
@@ -187,10 +189,11 @@ func TestRawAuthenticationRejectsWrongAccessAndUnregisteredGuard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := foundryhttp.ValidateAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(compositionRoute(foundryhttp.Public, &parses), transport, guard)); err == nil {
+	binding := authBinding(t, transport, guard)
+	if err := foundryhttp.ValidateAuthenticatedRoute(foundryhttp.RouteAuthenticated(compositionRoute(foundryhttp.Public, &parses), binding, binding.AnyActor())); err == nil {
 		t.Fatal("required binding accepted public declaration")
 	}
-	if err := foundryhttp.ValidateOptionalRoute(foundryhttp.OptionalRouteAuthentication(compositionRoute(foundryhttp.Guarded, &parses), transport, guard)); err == nil {
+	if err := foundryhttp.ValidateOptionalRoute(foundryhttp.RouteOptionallyAuthenticated(compositionRoute(foundryhttp.Guarded, &parses), binding)); err == nil {
 		t.Fatal("optional binding weakened guarded declaration")
 	}
 	empty, err := auth.NewRegistry(auth.DefaultConfig())
@@ -201,8 +204,8 @@ func TestRawAuthenticationRejectsWrongAccessAndUnregisteredGuard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := foundryhttp.ValidateAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(compositionRoute(foundryhttp.Guarded, &parses), other, guard)); err == nil {
-		t.Fatal("unregistered raw guard accepted")
+	if _, err := foundryhttp.BindGuard(other, guard); err == nil {
+		t.Fatal("unregistered raw guard bound")
 	}
 	if loads.Load() != 0 {
 		t.Fatal("route validation performed model lookup")

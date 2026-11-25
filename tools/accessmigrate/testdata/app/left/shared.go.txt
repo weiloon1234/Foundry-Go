@@ -1,0 +1,98 @@
+package left
+
+import (
+	"github.com/weiloon1234/Foundry-Go/datatable"
+	"github.com/weiloon1234/Foundry-Go/http"
+)
+
+type User struct{}
+type Reply struct{}
+
+var (
+	read     http.AccessScopes[User]
+	viewer   http.Permission[User]
+	editor   http.Permission[User]
+	endpoint http.Endpoint[Reply]
+	users    http.GuardBinding[User]
+	guard    http.Guard[User]
+	auth     *http.Authentication
+	route    http.Route[Reply]
+	handler  = func() {}
+)
+
+func open() http.Registration {
+	return http.Authenticated(endpoint, users).Handle(handler)
+}
+
+func helper(e http.Endpoint[Reply], b http.GuardBinding[User]) http.AuthenticatedEndpoint[Reply, User] {
+	return http.Authenticated(e, b)
+}
+
+func spread(options ...http.GuardOption[User]) {
+	_ = http.Authenticated(endpoint, users, options...)
+}
+
+func twice() http.Registration {
+	e := http.Authenticated(endpoint, users)
+	e = http.ConfigureAuthenticated(e, http.Scopes(read))
+	e = http.ConfigureAuthenticated(e, http.Permissions(viewer))
+	return e.Handle(handler)
+}
+
+func conditional(strict bool) http.Registration {
+	e := http.Authenticated(endpoint, users)
+	if strict {
+		e = http.ConfigureAuthenticated(e, http.Scopes(read))
+	}
+	return e.Handle(handler)
+}
+
+func usedBefore() http.Registration {
+	e := http.Authenticated(endpoint, users)
+	_ = e.Handle(handler)
+	return http.ConfigureAuthenticated(e, http.Scopes(read)).Handle(handler)
+}
+
+func usedAfter() (http.Registration, http.Registration) {
+	e := http.Authenticated(endpoint, users)
+	return http.ConfigureAuthenticated(e, http.Scopes(read)).Handle(handler), e.Handle(handler)
+}
+
+func parameter(e http.AuthenticatedEndpoint[Reply, User]) http.Registration {
+	return http.ConfigureAuthenticated(e, http.Scopes(read)).Handle(handler)
+}
+
+func mixed() {
+	_ = http.Authenticated(endpoint, users, http.Scopes(read), http.AnyOf(http.AllOf(http.Permissions(viewer))))
+}
+
+func literal() {
+	f := func() http.AuthenticatedEndpoint[Reply, User] {
+		e := http.Authenticated(endpoint, users)
+		return http.ConfigureAuthenticated(e, http.Scopes(read))
+	}
+	g := http.Authenticated(endpoint, users)
+	_ = func() { _ = http.ConfigureAuthenticated(g, http.Scopes(read)) }
+	_ = f
+}
+
+func tables() {
+	_ = datatable.ReadAccess[User]()
+}
+
+func mount() {
+	var scope http.Scope
+	var table datatable.Table
+	var config datatable.Config[User]
+	_ = datatable.Routes(scope, table, config)
+	_ = datatable.Routes(scope, table, config, datatable.ExportAccess(http.Scopes(read)))
+}
+
+func guardTaking() {
+	_ = http.RequireAuthentication(endpoint, auth, guard, http.Scopes(read))
+	_ = http.RequireRouteAuthentication(route, auth, guard, http.Permissions(viewer))
+	_ = http.OptionalAuthentication(endpoint, auth, guard)
+	_ = http.OptionalRouteAuthentication(route, auth, guard)
+	r := http.RequireRouteAuthentication(route, auth, guard)
+	_ = http.ConfigureAuthenticatedRoute(r, http.Permissions(editor))
+}

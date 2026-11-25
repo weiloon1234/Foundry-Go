@@ -97,11 +97,11 @@ func TestMigrationIdentityAndConfigValidation(t *testing.T) {
 		t.Fatal("full-body declaration accepted an invalid client name")
 	}
 	guard := foundryhttp.GuardBinding[struct{}]{}
-	if _, err := Routes(foundryhttp.DefineScope("/developer", "developer"), nil, guard, foundryhttp.Permissions[struct{}]()); !errors.Is(err, fault.Invalid) {
+	if _, err := Routes(foundryhttp.DefineScope("/developer", "developer"), nil, guard, foundryhttp.AllOf(foundryhttp.Permissions[struct{}]())); !errors.Is(err, fault.Invalid) {
 		t.Fatal("routes accepted a nil store")
 	}
-	if _, err := Routes[struct{}](foundryhttp.DefineScope("/developer", "developer"), &Store{}, guard); !errors.Is(err, fault.Invalid) {
-		t.Fatal("routes accepted no access requirement")
+	if _, err := Routes[struct{}](foundryhttp.DefineScope("/developer", "developer"), &Store{}, guard, nil); !errors.Is(err, fault.Invalid) {
+		t.Fatal("routes accepted a nil access rule")
 	}
 }
 

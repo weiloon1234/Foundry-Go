@@ -81,7 +81,7 @@ func TestTicketEndpointFailuresAndRecovery(t *testing.T) {
 			next.ServeHTTP(w, r)
 		}), nil
 	})
-	endpoint := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer, h.ActorMiddleware[authAccount](actor))
+	endpoint := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer, binding.AnyActor(), h.ActorMiddleware[authAccount](actor))
 	router := newAuthRouter(t, endpoint.Handle(func(context.Context, authAccount, authInput) (h.NoContent, error) { return h.NoContent{}, nil }))
 	serve := func(status int) {
 		t.Helper()
@@ -140,19 +140,19 @@ func TestTicketEndpointDeclarationAndMetadata(t *testing.T) {
 	binding, redeemer := ticketEndpointSetup(t)
 	for _, method := range []h.Method{h.POST, h.HEAD, h.PUT} {
 		endpoint := h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "ticket", Method: method, Access: h.Guarded}, h.StaticPath("/ticket")), h.EmptyQuery(), h.EmptyBody(), h.EmptyResponse(204))
-		if h.ValidateTicketAuthenticated(h.TicketAuthenticated(endpoint, binding, redeemer)) == nil {
+		if h.ValidateTicketAuthenticated(h.TicketAuthenticated(endpoint, binding, redeemer, binding.AnyActor())) == nil {
 			t.Fatal("non-GET ticket route accepted")
 		}
 	}
 	query := h.DefineQuery(h.QueryParam("ticket", h.StringQuery[string](), func(q *string) *string { return q }))
 	duplicate := h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "ticket", Method: h.GET, Access: h.Guarded}, h.StaticPath("/ticket")), query, h.EmptyBody(), h.EmptyResponse(204))
-	if h.ValidateTicketAuthenticated(h.TicketAuthenticated(duplicate, binding, redeemer)) == nil {
+	if h.ValidateTicketAuthenticated(h.TicketAuthenticated(duplicate, binding, redeemer, binding.AnyActor())) == nil {
 		t.Fatal("domain ticket parameter accepted")
 	}
 	for _, endpoint := range []h.TicketEndpoint[h.NoPath, h.NoQuery, h.NoBody, authAccount, h.NoContent]{
-		h.TicketAuthenticated(authEndpoint(h.Public), binding, redeemer),
-		h.TicketAuthenticated(authEndpoint(h.Guarded), binding, nil),
-		h.TicketAuthenticated(authEndpoint(h.Guarded), h.GuardBinding[authAccount]{}, redeemer),
+		h.TicketAuthenticated(authEndpoint(h.Public), binding, redeemer, binding.AnyActor()),
+		h.TicketAuthenticated(authEndpoint(h.Guarded), binding, nil, binding.AnyActor()),
+		h.TicketAuthenticated(authEndpoint(h.Guarded), h.GuardBinding[authAccount]{}, redeemer, h.GuardBinding[authAccount]{}.AnyActor()),
 		h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer, nil),
 	} {
 		if h.ValidateTicketAuthenticated(endpoint) == nil {
@@ -160,12 +160,12 @@ func TestTicketEndpointDeclarationAndMetadata(t *testing.T) {
 		}
 	}
 	redeemer.source = "wrong"
-	sticky := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer)
+	sticky := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer, binding.AnyActor())
 	redeemer.source = "ticket.source"
 	if h.ValidateTicketAuthenticated(sticky) == nil {
 		t.Fatal("lost sticky validation")
 	}
-	endpoint := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer)
+	endpoint := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer, binding.AnyActor())
 	info, err := h.InspectTicketAuthenticated(endpoint)
 	if err != nil {
 		t.Fatal(err)
@@ -201,7 +201,7 @@ func TestTicketPrivacyHeadersWinOverRouteMiddleware(t *testing.T) {
 				w.WriteHeader(status)
 			}), nil
 		})
-		endpoint := h.TicketAuthenticated(h.ConfigureEndpoint(authEndpoint(h.Guarded), h.Use(middleware)), binding, redeemer)
+		endpoint := h.TicketAuthenticated(h.ConfigureEndpoint(authEndpoint(h.Guarded), h.Use(middleware)), binding, redeemer, binding.AnyActor())
 		router := newAuthRouter(t, endpoint.Handle(func(context.Context, authAccount, authInput) (h.NoContent, error) {
 			t.Error("unexpected handler")
 			return h.NoContent{}, nil
@@ -229,7 +229,7 @@ func TestTicketEndpointIgnoresCookieAndCSRFTransport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoint := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer)
+	endpoint := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer, binding.AnyActor())
 	router := newAuthRouter(t, endpoint.Handle(func(context.Context, authAccount, authInput) (h.NoContent, error) { return h.NoContent{}, nil }))
 	r := httptest.NewRequest("GET", "https://example.test/profile?ticket=one", nil)
 	r.Header.Set("Sec-Fetch-Site", "cross-site")
@@ -284,7 +284,7 @@ func TestTicketScopeSurvivesStreamingAndCloses(t *testing.T) {
 	for _, mode := range []string{"success", "handler-error", "handler-panic"} {
 		t.Run(mode, func(t *testing.T) {
 			binding, redeemer := ticketEndpointSetup(t)
-			endpoint := h.TicketAuthenticated(h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "stream", Method: h.GET, Access: h.Guarded}, h.StaticPath("/stream")), h.EmptyQuery(), h.EmptyBody(), h.DownloadResponse("text/csv; charset=utf-8")), binding, redeemer)
+			endpoint := h.TicketAuthenticated(h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "stream", Method: h.GET, Access: h.Guarded}, h.StaticPath("/stream")), h.EmptyQuery(), h.EmptyBody(), h.DownloadResponse("text/csv; charset=utf-8")), binding, redeemer, binding.AnyActor())
 			w := httptest.NewRecorder()
 			var held context.Context
 			var body *ticketRowsReader
@@ -340,7 +340,7 @@ func TestTicketEndpointBypassesBrowserSessionAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ticket := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer)
+	ticket := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer, binding.AnyActor())
 	calls := 0
 	router := newAuthRouter(t, ticket.Handle(func(ctx context.Context, actor authAccount, _ authInput) (h.NoContent, error) {
 		calls++
@@ -359,7 +359,7 @@ func TestTicketEndpointBypassesBrowserSessionAdapter(t *testing.T) {
 		handler.ServeHTTP(w, r)
 		return w
 	}
-	ordinary := newAuthRouter(t, h.Authenticated(authEndpoint(h.Guarded), binding).Handle(func(context.Context, authAccount, authInput) (h.NoContent, error) {
+	ordinary := newAuthRouter(t, h.Authenticated(authEndpoint(h.Guarded), binding, binding.AnyActor()).Handle(func(context.Context, authAccount, authInput) (h.NoContent, error) {
 		t.Error("ordinary browser authentication accepted malformed transport")
 		return h.NoContent{}, nil
 	}))
@@ -374,7 +374,7 @@ func TestTicketEndpointBypassesBrowserSessionAdapter(t *testing.T) {
 
 func TestTicketRoutingPreservesDomainTicketParameters(t *testing.T) {
 	binding, redeemer := ticketEndpointSetup(t)
-	ticket := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer)
+	ticket := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer, binding.AnyActor())
 	registrations := []h.RouteRegistration{ticket.Handle(func(context.Context, authAccount, authInput) (h.NoContent, error) {
 		t.Error("routing probe invoked ticket handler")
 		return h.NoContent{}, nil
@@ -416,7 +416,7 @@ func TestTicketRoutingPreservesDomainTicketParameters(t *testing.T) {
 
 func TestRouterTicketPrivacyOnNativeError(t *testing.T) {
 	binding, redeemer := ticketEndpointSetup(t)
-	router := newAuthRouter(t, h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer).Handle(func(context.Context, authAccount, authInput) (h.NoContent, error) {
+	router := newAuthRouter(t, h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer, binding.AnyActor()).Handle(func(context.Context, authAccount, authInput) (h.NoContent, error) {
 		t.Error("native error reached handler")
 		return h.NoContent{}, nil
 	}))

@@ -22,6 +22,7 @@ type ProfileEndpoint = foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, fou
 
 // doc-example:end profile-endpoint-type
 
+type ProfileDeclaration = foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent]
 type OptionalProfileEndpoint = foundryhttp.OptionalAuthenticationEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 
 // Users reuses the declared stored primary-key codec and ordinary typed query.
@@ -68,11 +69,14 @@ func RestoreIdentity(provider UserProvider, identity model.Identity) (model.Refe
 	return provider.Parse(identity)
 }
 
-func Profile(transport *foundryhttp.Authentication, guard auth.Guard[models.User]) ProfileEndpoint {
+func DeclareProfile() ProfileDeclaration {
 	profileRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "profile", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/profile"))
-	endpoint := foundryhttp.DefineEndpoint(profileRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+	return foundryhttp.DefineEndpoint(profileRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+}
 
-	return foundryhttp.RequireAuthentication(endpoint, transport, guard)
+func Profile(binding foundryhttp.GuardBinding[models.User], rule foundryhttp.AccessRule[models.User]) ProfileEndpoint {
+	declaration := DeclareProfile()
+	return foundryhttp.Authenticated(declaration, binding, rule)
 }
 func ProfileRoute(endpoint ProfileEndpoint, guard auth.Guard[models.User]) foundryhttp.RouteRegistration {
 	return endpoint.Handle(func(ctx context.Context, user models.User, _ ProfileInput) (foundryhttp.NoContent, error) {

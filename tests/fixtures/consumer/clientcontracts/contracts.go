@@ -120,6 +120,10 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	if err != nil {
 		return result, err
 	}
+	browserBinding, err := foundryhttp.BindGuard(transport, browserGuard)
+	if err != nil {
+		return result, err
+	}
 	private := websocket.OwnedRooms[PrivateOwner]("accounts", websocket.DefineRooms(foundryhttp.IntegerPath[int64]()), guard, (Account{}).FoundryReference())
 	presence := websocket.WithPresence(private, MemberJSON(), func(_ context.Context, account Account) (Member, error) { return Member{Display: account.Display}, nil })
 	channels, err := websocket.NewRegistry(websocket.Register(Updates, Updated.Registration(), Relay.Authorize(func(context.Context, websocket.MessageContext[int64, websocket.Anonymous], Payload) error { return nil }).Relay(Updated)), websocket.Register(presence.Channel()))
@@ -158,18 +162,15 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 		return result, err
 	}
 
-	guardAccount := foundryhttp.RequireAuthentication(secure, transport, guard)
+	guardAccount := foundryhttp.Authenticated(secure, pageBinding, accountAccess)
 
-	pageBindingGuardedList := pagination.Authenticated(httppagination.GuardedList, pageBinding)
-	pageBindingGuardedList = pagination.ConfigureAuthenticated(pageBindingGuardedList, foundryhttp.Permissions(Manage))
+	pageBindingGuardedList := pagination.Authenticated(httppagination.GuardedList, pageBinding, foundryhttp.AllOf(foundryhttp.Permissions(Manage)))
 
-	pageBindingGuardedSimpleList := pagination.Authenticated(httppagination.GuardedSimpleList, pageBinding)
-	pageBindingGuardedSimpleList = pagination.ConfigureAuthenticated(pageBindingGuardedSimpleList, foundryhttp.Permissions(Manage))
+	pageBindingGuardedSimpleList := pagination.Authenticated(httppagination.GuardedSimpleList, pageBinding, foundryhttp.AllOf(foundryhttp.Permissions(Manage)))
 
-	pageBindingGuardedCursorList := pagination.Authenticated(httppagination.GuardedCursorList, pageBinding)
-	pageBindingGuardedCursorList = pagination.ConfigureAuthenticated(pageBindingGuardedCursorList, foundryhttp.Permissions(Manage))
+	pageBindingGuardedCursorList := pagination.Authenticated(httppagination.GuardedCursorList, pageBinding, foundryhttp.AllOf(foundryhttp.Permissions(Manage)))
 
-	router, err := foundryhttp.NewRouter(append(append(append(pluralRoutes, transportRoutes(signer)...), browserAuthRoutes(transport, browserGuard)...),
+	router, err := foundryhttp.NewRouter(append(append(append(pluralRoutes, transportRoutes(signer)...), browserAuthRoutes(browserBinding)...),
 		InspectHeaders.Handle(handleInspectHeaders),
 		MemberCreate.Handle(HandleMemberCreate),
 		requestflow.Submit.Handle(requestflow.Handle),
@@ -183,7 +184,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 			}
 			return input.Body, nil
 		}),
-		foundryhttp.ConfigureAuthenticated(guardAccount, accountAccess).Handle(func(_ context.Context, subject Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
+		guardAccount.Handle(func(_ context.Context, subject Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
 			return Member{Display: subject.Display}, nil
 		}),
 		broken.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {

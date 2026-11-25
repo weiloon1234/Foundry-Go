@@ -109,7 +109,7 @@ func Route(binding foundryhttp.GuardBinding[Actor], scopes auth.AccessScopes[Act
 		foundryhttp.Use(auditMiddleware),
 	)
 	validated := foundryhttp.ValidateBody(endpoint, itemBodyRules())
-	secured := foundryhttp.Authenticated(validated, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(permission))
+	secured := foundryhttp.Authenticated(validated, binding, foundryhttp.AllOf(foundryhttp.Scopes(scopes), foundryhttp.Permissions(permission)))
 	return secured.Handle(func(_ context.Context, _ Actor, in foundryhttp.Input[ItemPath, ItemQuery, ItemBody]) (ItemReply, error) {
 		return ItemReply{Message: in.Body.Name}, nil
 	})

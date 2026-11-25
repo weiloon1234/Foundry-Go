@@ -40,7 +40,7 @@ func TestApplicationRequiresCookieProtectionRegardlessOfPath(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		registration := foundryhttp.Authenticated(endpoint, group).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+		registration := foundryhttp.Authenticated(endpoint, group, group.AnyActor()).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 			return foundryhttp.NoContent{}, nil
 		})
 		settings := application.DefaultSettings()

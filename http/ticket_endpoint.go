@@ -28,9 +28,9 @@ type TicketEndpoint[P, Q, B, M, R any] struct {
 
 // TicketAuthenticated binds a GET endpoint to ticket-only authentication. The
 // query must not declare ticket; the transport consumes it before typed decoding.
-// Guard options retain their ordinary scopes, permissions and actor middleware.
-func TicketAuthenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M], redeemer auth.TicketRedeemer, options ...GuardOption[M]) TicketEndpoint[P, Q, B, M, R] {
-	e := TicketEndpoint[P, Q, B, M, R]{authenticated: Authenticated(endpoint, binding, options...)}
+// The access rule and actor options are those of Authenticated.
+func TicketAuthenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M], redeemer auth.TicketRedeemer, rule AccessRule[M], options ...ActorOption[M]) TicketEndpoint[P, Q, B, M, R] {
+	e := TicketEndpoint[P, Q, B, M, R]{authenticated: Authenticated(endpoint, binding, rule, options...)}
 	e.authenticated.binding.ticket = redeemer
 	e.err = validateTicketDeclaration(e)
 	return e

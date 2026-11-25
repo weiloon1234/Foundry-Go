@@ -6,5 +6,6 @@ import (
 	h "github.com/weiloon1234/Foundry-Go/http"
 )
 
-var route h.AuthenticatedRoute[h.NoPath, models.User]
-var _ = h.ConfigureAuthenticatedRoute[h.NoPath, models.User](route, h.Permissions(auth.Permission[models.Order]{}))
+var route h.Route[h.NoPath]
+var binding h.GuardBinding[models.User]
+var _ = h.RouteAuthenticated(route, binding, h.AllOf(h.Permissions(auth.Permission[models.Order]{})))

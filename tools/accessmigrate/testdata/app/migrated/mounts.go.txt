@@ -1,0 +1,18 @@
+package migrated
+
+import (
+	"github.com/weiloon1234/Foundry-Go/datatable"
+	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/httpclient/capture"
+	webhook "github.com/weiloon1234/Foundry-Go/webhook/capture"
+)
+
+func mounts() {
+	var scope http.Scope
+	var store *capture.Store
+	var hooks *webhook.Store
+	_ = datatable.ReadAccess(http.Scopes(read), http.Permissions(viewer))
+	_ = datatable.ExportAccess(http.AnyOf(http.AllOf(http.Permissions(editor))))
+	_ = capture.Routes(scope, store, users, http.Scopes(read), http.Permissions(viewer))
+	_ = webhook.Routes(scope, hooks, users, http.Permissions(viewer))
+}

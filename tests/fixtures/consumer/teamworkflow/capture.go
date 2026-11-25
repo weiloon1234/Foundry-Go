@@ -38,7 +38,7 @@ func Webhooks() ([]foundryhttp.CaptureDeclaration, error) {
 
 // doc-example:begin webhook-capture-routes
 func CaptureRoutes(captures *capture.Store, binding foundryhttp.GuardBinding[Actor]) ([]foundryhttp.RouteRegistration, error) {
-	return capture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.Permissions(ReadCaptures))
+	return capture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.AllOf(foundryhttp.Permissions(ReadCaptures)))
 }
 
 // doc-example:end webhook-capture-routes

@@ -22,8 +22,8 @@ func CheckAccountPermission(ctx context.Context, guard auth.Guard[models.User]) 
 }
 
 // doc-example:begin configure-permission
-func PermissionProfile(endpoint ProfileEndpoint) ProfileEndpoint {
-	return foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Permissions(ViewAccount))
+func PermissionProfile(endpoint ProfileDeclaration, binding foundryhttp.GuardBinding[models.User]) ProfileEndpoint {
+	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
 }
 
 // doc-example:end configure-permission

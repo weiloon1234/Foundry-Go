@@ -17,8 +17,10 @@ type authenticationBinding[M any] struct {
 	authentication   *Authentication
 	guard            auth.Guard[M]
 	alternatives     []GuardAlternative[M]
+	accessDeclared   bool
 	actorMiddleware  []Middleware
 	requirementError error
+	accessError      error
 	ticket           auth.TicketRedeemer
 }
 
@@ -35,18 +37,27 @@ func authenticationWithActorMiddleware[M any](b authenticationBinding[M], middle
 	return b
 }
 
+// authenticationWithOptions applies actor options, retaining the first missing-option
+// error for validation.
+func authenticationWithOptions[M any](b authenticationBinding[M], options []ActorOption[M]) authenticationBinding[M] {
+	for _, option := range options {
+		if option == nil {
+			if b.requirementError == nil {
+				b.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
+			}
+		} else {
+			b = option.applyGuard(b)
+		}
+	}
+	return b
+}
+
 // authenticationChain is the authentication middleware followed by the actor stage.
 func authenticationChain[M any](b authenticationBinding[M], optional bool) []Middleware {
 	return append([]Middleware{authenticationMiddleware(b, optional)}, b.actorMiddleware...)
 }
 
 func authenticationWithScopes[M any](b authenticationBinding[M], required auth.AccessScopes[M]) authenticationBinding[M] {
-	if b.alternatives != nil {
-		if b.requirementError == nil {
-			b.requirementError = safeerror.NewFault(fault.Invalid, "HTTP guard alternatives cannot be mixed with flat requirements")
-		}
-		return b
-	}
 	if b.requiredScopes != nil {
 		if b.requirementError == nil {
 			b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP access scopes are already declared")
@@ -57,12 +68,6 @@ func authenticationWithScopes[M any](b authenticationBinding[M], required auth.A
 	return b
 }
 func authenticationWithPermissions[M any](b authenticationBinding[M], required ...auth.Permission[M]) authenticationBinding[M] {
-	if b.alternatives != nil {
-		if b.requirementError == nil {
-			b.requirementError = safeerror.NewFault(fault.Invalid, "HTTP guard alternatives cannot be mixed with flat requirements")
-		}
-		return b
-	}
 	if b.requiredPermissions != nil {
 		if b.requirementError == nil {
 			b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP permissions are already declared")
@@ -78,7 +83,10 @@ func authenticationWithPermissions[M any](b authenticationBinding[M], required .
 	b.requiredPermissions = slices.Clone(required)
 	return b
 }
-func authenticationValidate[M any](b authenticationBinding[M], access Access, optional bool) error {
+func authenticationValidate[M any](b authenticationBinding[M], access Access, optional bool, method Method, pattern string, id RouteID) error {
+	if !optional && (b.accessError != nil || !b.accessDeclared) {
+		return b.accessRefusal(method, pattern, id)
+	}
 	if b.requirementError != nil {
 		return b.requirementError
 	}

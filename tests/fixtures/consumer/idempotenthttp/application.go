@@ -101,9 +101,13 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 		if err != nil {
 			return nil, err
 		}
+		binding, err := foundryhttp.BindGuard(transport, guard)
+		if err != nil {
+			return nil, err
+		}
 
 		ordersCreateEndpoint := Endpoint()
-		required := foundryhttp.RequireAuthentication(ordersCreateEndpoint, transport, guard)
+		required := foundryhttp.Authenticated(ordersCreateEndpoint, binding, binding.AnyActor())
 
 		required = foundryhttp.AuthorizeActor(required, func(_ context.Context, _ Actor, in Request) error {
 			if in.Body.Name == "request-denied" || hooks.Deny != nil && hooks.Deny.Load() {

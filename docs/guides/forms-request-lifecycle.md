@@ -171,20 +171,21 @@ type Account struct {
 }
 ```
 
-Inputs: `transport *foundryhttp.Authentication`, `accountGuard auth.Guard[Account]`, `accountPolicy func(context.Context, Account, Submission) error`.
+Inputs: `binding foundryhttp.GuardBinding[Account]`, `accountPolicy func(context.Context, Account, Submission) error`.
 
 <!-- compiled-source: tests/fixtures/consumer/requestflow/guide_recipes.go#forms-request-lifecycle-3 -->
 ```go
 form := formEndpoint(foundryhttp.Guarded)
 prepared := foundryhttp.PrepareEndpoint(form, Prepare)
-secured := foundryhttp.RequireAuthentication(prepared, transport, accountGuard)
+secured := foundryhttp.Authenticated(prepared, binding, binding.AnyActor())
 secured = foundryhttp.AuthorizeActor(secured, func(ctx context.Context, actor Account, input Request) error {
 	return accountPolicy(ctx, actor, input.Body)
 })
 ```
 
-The route must declare Guarded access. A named guard chooses its concrete model
-at assembly; no context cast is needed. `http.OptionalAuthentication` instead
+The route must declare Guarded access. `AnyActor()` is the rule here because the
+`AuthorizeActor` callback is where this route decides who may submit. A named guard chooses its concrete model
+at assembly; no context cast is needed. `http.OptionallyAuthenticated` instead
 passes `value.Optional[Account]` to its authorization hook and handler. Missing
 credentials may be anonymous; invalid supplied credentials fail before decoding.
 Authentication is not loaded a second time for authorization. `AuthorizeActor` and `AuthorizeOptionalActor` each replace their own actor callback;

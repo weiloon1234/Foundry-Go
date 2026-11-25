@@ -103,28 +103,31 @@ operations intended to enforce token capabilities.
 type ProfileEndpoint = foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 ```
 
-`ScopedProfile` requires the scopes in `required` on an existing endpoint:
+`ScopedProfile` binds the profile declaration to its guard and requires the scopes in `required`:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#configure-scopes -->
 ```go
-func ScopedProfile(endpoint ProfileEndpoint, required auth.AccessScopes[models.User]) ProfileEndpoint {
-	return foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Scopes(required))
+func ScopedProfile(endpoint ProfileDeclaration, binding foundryhttp.GuardBinding[models.User], required auth.AccessScopes[models.User]) ProfileEndpoint {
+	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.AllOf(foundryhttp.Scopes(required)))
 }
 ```
 
-For a new endpoint, apply the same requirements with its bound guard:
+`securedProfile` requires scopes and a permission together; both must pass:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#configure-bound-scopes -->
 ```go
 func securedProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], binding foundryhttp.GuardBinding[models.User], scopes auth.AccessScopes[models.User], viewAccount auth.Permission[models.User]) ProfileEndpoint {
-	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(viewAccount))
+	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.AllOf(foundryhttp.Scopes(scopes), foundryhttp.Permissions(viewAccount)))
 }
 ```
 
 The scope check runs before request decoding and supplies the same concrete model
-to the ordinary authenticated handler. `Scopes` takes a nonempty immutable
-set and may be attached once; a repeated attachment returns a validation error
-rather than replacing an earlier requirement. The endpoint's inspection metadata
+to the ordinary authenticated handler. `Scopes` sits inside `AllOf`, takes a
+nonempty immutable set and may appear once there; a repeated one returns a
+validation error rather than replacing an earlier requirement. `http.Authenticated`
+requires the rule, so a route that needs only scopes writes
+`http.AllOf(http.Scopes(read))`; [the authentication guide](authentication.md#recipe-access-rule)
+shows the open case and what the compiler says when the rule is missing. The endpoint's inspection metadata
 includes `Authentication.RequiredScopes`; returned metadata is a detached copy.
 This metadata is also available for later client-contract generation.
 

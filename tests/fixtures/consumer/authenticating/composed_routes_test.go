@@ -68,7 +68,11 @@ func TestConsumerSignedOrderAndNativeRoutesKeepConcreteModels(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	signedEndpoint := authenticating.Orders(transport, guard)
+	binding, err := foundryhttp.BindGuard(transport, guard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signedEndpoint := authenticating.Orders(binding)
 	signed := authenticating.SignedOrders(signedEndpoint, signer)
 
 	resolver := modelbinding.Define(func(_ context.Context, p authenticating.OrderPath) (value.Optional[models.Order], error) {
@@ -92,7 +96,7 @@ func TestConsumerSignedOrderAndNativeRoutesKeepConcreteModels(t *testing.T) {
 		return nil
 	})
 
-	nativeRoute := authenticating.NativeProfile(transport, guard)
+	nativeRoute := authenticating.NativeProfile(binding)
 
 	native := authenticating.NativeProfileHandler(nativeRoute, func(w http.ResponseWriter, r *http.Request, subject models.User, _ foundryhttp.NoPath) {
 		calls++

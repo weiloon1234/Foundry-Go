@@ -1,0 +1,23 @@
+package migrated
+
+import (
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+)
+
+type User struct{}
+type Reply struct{}
+
+var (
+	read     foundryhttp.AccessScopes[User]
+	write    foundryhttp.AccessScopes[User]
+	viewer   foundryhttp.Permission[User]
+	editor   foundryhttp.Permission[User]
+	endpoint foundryhttp.Endpoint[Reply]
+	route    foundryhttp.Route[Reply]
+	users    foundryhttp.GuardBinding[User]
+	guard    foundryhttp.Guard[User]
+	auth     *foundryhttp.Authentication
+	audit    foundryhttp.Middleware
+	redeemer foundryhttp.TicketRedeemer
+	handler  = func() {}
+)

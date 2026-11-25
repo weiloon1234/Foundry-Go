@@ -28,6 +28,11 @@ func BindGuard[M any](authentication *Authentication, guard auth.Guard[M]) (Guar
 	return GuardBinding[M]{authentication, guard}, nil
 }
 
+// declaration is the authentication state every constructor of a guarded route starts from.
+func (b GuardBinding[M]) declaration() authenticationBinding[M] {
+	return authenticationBinding[M]{authentication: b.authentication, guard: b.guard}
+}
+
 // Select returns another binding for this model, leaving the group's default
 // unchanged. A different actor model cannot be passed to this method.
 func (b GuardBinding[M]) Select(guard auth.Guard[M]) (GuardBinding[M], error) {
@@ -37,16 +42,23 @@ func (b GuardBinding[M]) Select(guard auth.Guard[M]) (GuardBinding[M], error) {
 // Guard returns the bound authentication guard.
 func (b GuardBinding[M]) Guard() auth.Guard[M] { return b.guard }
 
-// Authenticated requires the bound guard's concrete subject and applies guard options
-// to endpoint.
-func Authenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M], options ...GuardOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
-	return ConfigureAuthenticated(RequireAuthentication(endpoint, binding.authentication, binding.guard), options...)
+// Authenticated binds a Guarded transport declaration to the bound guard's concrete
+// subject and the access rule that says who may call endpoint: AllOf, AnyOf or
+// binding.AnyActor(). Authentication runs before parameter/body decoding; its model
+// is reused by the handler and policies within this request. Actor options run after
+// the rule passes. A nil or zero rule cannot register.
+//
+// Example: http.Authenticated(profileEndpoint, users, http.AllOf(http.Scopes(read)))
+func Authenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M], rule AccessRule[M], options ...ActorOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
+	required := binding.declaration().withAccess(rule)
+	return ConfigureAuthenticated(AuthenticatedEndpoint[P, Q, B, M, R]{endpoint: endpoint, binding: required}, options...)
 }
 
 // OptionallyAuthenticated adds the bound guard's optional concrete subject and applies
 // actor options to endpoint.
 func OptionallyAuthenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M], options ...ActorOption[M]) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
-	return ConfigureOptional(OptionalAuthentication(endpoint, binding.authentication, binding.guard), options...)
+	required := AuthenticatedEndpoint[P, Q, B, M, R]{endpoint: endpoint, binding: binding.declaration()}
+	return ConfigureOptional(OptionalAuthenticationEndpoint[P, Q, B, M, R]{required: required}, options...)
 }
 
 // NewCookieAuthentication protects every selected cookie guard with the same
