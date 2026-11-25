@@ -29,8 +29,11 @@ type OperationID = model.ID[Operation]
 type Publication uint8
 
 const (
+	// Unpublished is the zero Publication: the upload was not published as the owner's attachment.
 	Unpublished Publication = iota
+	// Published means the ownership transaction committed and Result.Attachment is set.
 	Published
+	// PublicationUnknown means the ownership transaction's outcome is unknown; it is neither retried nor treated as rolled back.
 	PublicationUnknown
 )
 

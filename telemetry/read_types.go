@@ -12,7 +12,11 @@ import (
 )
 
 // Window selects a bounded number of minutes. Applications may offer a narrower list.
-type Window struct{ Minutes int }
+type Window struct {
+	// Minutes is the window length in minutes. It must be at least 1 and at most the longest retention
+	// (thirty days). A traffic read above 60 minutes uses hourly buckets.
+	Minutes int
+}
 
 // Validate rejects windows outside one minute through the maximum retention.
 func (w Window) Validate() error {
@@ -23,24 +27,37 @@ func (w Window) Validate() error {
 }
 
 // OverviewQuery selects the UI window; retained runs and incidents remain visible independently of it.
-type OverviewQuery struct{ Window Window }
+type OverviewQuery struct {
+	// Window is validated, but it does not change which runs, incidents or buckets Overview returns.
+	Window Window
+}
 
 // TrafficQuery selects aggregated traffic, optionally including excluded routes.
 type TrafficQuery struct {
-	Window          Window
+	// Window is the span of traffic to aggregate, ending now and limited by the retained buckets.
+	Window Window
+	// IncludeExcluded includes routes excluded by the collector's RoutePolicy. Without it they are
+	// skipped.
 	IncludeExcluded bool
 }
 
 // IssueQuery selects one source and a strictly bounded page.
 type IssueQuery struct {
+	// Source selects the issues of one source. It must be a known Source.
 	Source Source
-	Page   orm.PageRequest
+	// Page selects the page. It must be valid and within the configured ReadLimits.MaxPage and
+	// MaxPageSize.
+	Page orm.PageRequest
 }
 
 // EventQuery selects retained samples for a canonical issue fingerprint.
 type EventQuery struct {
+	// Fingerprint identifies the issue group whose events are read. It must be a canonical lowercase
+	// SHA-256 identity.
 	Fingerprint Fingerprint
-	Page        orm.PageRequest
+	// Page selects the page. It must be valid and within the configured ReadLimits.MaxPage and
+	// MaxPageSize.
+	Page orm.PageRequest
 }
 
 // AlertQuery optionally filters incident state and selects a bounded page.

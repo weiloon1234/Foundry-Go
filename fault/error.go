@@ -11,15 +11,21 @@ import (
 type Code string
 
 const (
-	Invalid   Code = "invalid"
+	// Invalid classifies input, configuration or a declaration the framework rejects.
+	Invalid Code = "invalid"
+	// Duplicate classifies a name, ID or key that is registered or declared more than once.
 	Duplicate Code = "duplicate"
-	Missing   Code = "missing"
-	Cycle     Code = "cycle"
-	Closed    Code = "closed"
-	Conflict  Code = "conflict"
-	Internal  Code = "internal"
-	Panicked  Code = "panicked"
-	Timeout   Code = "timeout"
+	// Missing classifies a required or named item that does not exist.
+	Missing Code = "missing"
+	Cycle   Code = "cycle"
+	// Closed classifies use of an owner, binding or service that is closed, frozen, closing or no longer active.
+	Closed Code = "closed"
+	// Conflict classifies an operation that conflicts with the current state, such as starting something already started or closed.
+	Conflict Code = "conflict"
+	// Internal classifies a framework invariant failure, or a failure or unexpected result from a dependency.
+	Internal Code = "internal"
+	Panicked Code = "panicked"
+	Timeout  Code = "timeout"
 	// Overloaded reports temporarily exhausted concurrency or queue capacity.
 	// The operation was not started; the same request may be retried later.
 	// Transports map it to "service unavailable" rather than an internal error.

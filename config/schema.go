@@ -163,12 +163,16 @@ type Lookup func(string) (string, bool)
 // file or the collection's own variable, or create entries in an empty one,
 // then decode through the same element schema. _FILE applies to them too.
 type Inputs[T any] struct {
-	Files       []Values
+	Files []Values
+	// Environment looks up a declared setting's environment variable by name. A nil Lookup disables
+	// variable lookup, unless EnvFile supplies a path.
 	Environment Lookup
 	Environ     func() []string
 	Prefix      string
-	Overrides   []Override[T]
-	Validate    func(T) error
+	// Overrides are typed values built with Key.Set. They apply after the files and environment and win
+	// over them. An override for an undeclared setting fails loading.
+	Overrides []Override[T]
+	Validate  func(T) error
 	// EnvFile selects an optional bounded dotenv document. A zero Path disables it.
 	EnvFile EnvFile
 }

@@ -29,17 +29,26 @@ const (
 // BrowserFrame is a location in a portal's deployed JavaScript asset. File must
 // be exactly portal/_assets/basename.js, with no URL, encoding or traversal.
 type BrowserFrame struct {
-	File         string
-	Line, Column int
+	// File is the asset path, exactly portal/_assets/basename.js, where portal is the report's portal and
+	// basename is a bounded identity ending in .js.
+	File string
+	// Line is the line in File. It must be 1..1,000,000.
+	Line int
+	// Column is the column in File. It must be 0..1,000,000.
+	Column int
 }
 
 // BrowserError supplies only an allowlisted portal, current release, class and
 // at most twenty frames. It carries no browser messages, URLs or payloads.
 type BrowserError struct {
-	Portal  Portal
+	// Portal names the reporting portal. It must be one of the collector's configured browser portals.
+	Portal Portal
+	// Release names the build that reported. It must equal the collector's configured release.
 	Release Release
-	Code    BrowserCode
-	Frames  []BrowserFrame
+	// Code is the exception class. It must be a known BrowserCode.
+	Code BrowserCode
+	// Frames locates the error in the portal's assets. At most twenty are accepted.
+	Frames []BrowserFrame
 }
 
 // RecordBrowser validates and snapshots an untrusted browser observation into

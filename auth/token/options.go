@@ -14,7 +14,14 @@ type options struct {
 }
 
 // Lifetimes are one guard's issuance lifetimes by mode.
-type Lifetimes struct{ Personal, Renewable, Challenge Lifetime }
+type Lifetimes struct {
+	// Personal is the lifetime of tokens issued without a refresh token. A zero value uses the store's lifetime; otherwise it must be valid for the mode and not exceed the store's.
+	Personal Lifetime
+	// Renewable is the lifetime of renewable access and refresh token pairs. A zero value uses the store's lifetime; otherwise it must be valid for the mode and not exceed the store's.
+	Renewable Lifetime
+	// Challenge is the lifetime of pending-MFA challenge tokens. A zero value uses the store's lifetime; otherwise it must be valid for the mode and not exceed the store's.
+	Challenge Lifetime
+}
 
 // WithLifetimes shortens this guard's issuance lifetimes, for example admin
 // tokens that expire sooner than user tokens issued from the same store. A zero

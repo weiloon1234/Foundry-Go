@@ -13,6 +13,7 @@ import (
 type DiskDriver string
 
 const (
+	// LocalDisk stores objects under DiskSettings.Local.Root on the local filesystem.
 	LocalDisk DiskDriver = "local"
 	S3Disk    DiskDriver = "s3"
 	R2Disk    DiskDriver = "r2"

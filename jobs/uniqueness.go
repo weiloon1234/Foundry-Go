@@ -33,7 +33,9 @@ func (UniqueKey[P]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job uni
 // starts, so a new job with the same key can be queued while this one runs; the
 // window still bounds how long a job that never starts suppresses others.
 type Unique[P any] struct {
-	Key             UniqueKey[P]
+	// Key is the business key that identifies duplicate dispatches; it is required whenever uniqueness is used.
+	Key UniqueKey[P]
+	// For is how long a successful enqueue suppresses other dispatches with the same key, in whole milliseconds from 1 ms to MaxDelay.
 	For             time.Duration
 	UntilProcessing bool
 }
@@ -71,4 +73,5 @@ func (u Unique[P]) capture(name Name, version Version) (Uniqueness, error) {
 	return result, result.Validate()
 }
 
+// ErrNotUnique is the fault.Conflict error an enqueue returns while an earlier job with the same name, version, queue and unique key still holds its uniqueness window.
 var ErrNotUnique = safeerror.Sentinel(fault.Conflict, "job uniqueness window is active")

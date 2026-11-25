@@ -39,7 +39,9 @@ func (c Code) Validate() error {
 type Status string
 
 const (
-	EnabledStatus  Status = "enabled"
+	// EnabledStatus marks a country that Enabled returns.
+	EnabledStatus Status = "enabled"
+	// DisabledStatus marks a country that Enabled leaves out. Seeding inserts new reference countries with it.
 	DisabledStatus Status = "disabled"
 )
 

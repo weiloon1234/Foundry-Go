@@ -20,11 +20,16 @@ const ListScanLimit = 128
 // zero Name/Version and State select all records. Pagination is weakly consistent
 // under concurrent enqueue/expiry; Next may be nonzero for an empty filtered page.
 type ListOptions struct {
-	After   ExecutionID
-	Name    Name
+	// After is the execution ID the scan continues after, in ascending order; zero begins the scan.
+	After ExecutionID
+	// Name filters by job name; it must be set together with Version, and zero selects every job.
+	Name Name
+	// Version filters by job schema version; it must be set together with Name, and zero selects every version.
 	Version Version
-	State   State
-	Limit   int
+	// State filters to executions in one recognized state; empty selects all states.
+	State State
+	// Limit is the most records one page returns, from 1 to MaxListLimit. It is required.
+	Limit int
 }
 
 // Validate checks the page limit, paired schema filter, and recognized state.

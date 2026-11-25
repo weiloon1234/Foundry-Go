@@ -3,7 +3,9 @@ package attachments
 import "github.com/weiloon1234/Foundry-Go/database/migrate"
 
 const (
-	MigrationOrigin    migrate.Origin  = "foundry.attachments"
+	// MigrationOrigin is the migration origin of every definition Migrations returns.
+	MigrationOrigin migrate.Origin = "foundry.attachments"
+	// CreateAttachments is the ID, under MigrationOrigin, of the migration that creates the attachments table with its indexes.
 	CreateAttachments  migrate.ID      = "000001_create_attachments"
 	CreateVariants     migrate.ID      = "000002_create_variants"
 	ExpandOriginalSize migrate.ID      = "000003_expand_original_size"

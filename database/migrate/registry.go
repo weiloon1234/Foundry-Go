@@ -31,8 +31,10 @@ type Version string
 
 // Key identifies one migration without ambiguous delimiter concatenation.
 type Key struct {
+	// Origin names the owner of the migration, the application, the framework or a plugin; it must be a semantic identifier.
 	Origin Origin `json:"origin"`
-	ID     ID     `json:"id"`
+	// ID names the migration within its origin and must be a semantic identifier; a sortable numeric prefix is conventional.
+	ID ID `json:"id"`
 }
 
 // ExecutionMode selects atomic execution or individually journaled statements.
@@ -49,7 +51,9 @@ const (
 type Availability string
 
 const (
-	Available       Availability = ""
+	// Available is the zero value: the definition runs normally when pending.
+	Available Availability = ""
+	// FeatureDisabled keeps a definition in the history but never runs it; status reports it as PendingDisabled.
 	FeatureDisabled Availability = "feature_disabled"
 )
 
@@ -82,11 +86,16 @@ type Definition struct {
 	// Availability is deployment metadata, excluded from the checksum.
 	Availability Availability
 	Mode         ExecutionMode
-	Key          Key
-	Version      Version
-	SQL          []string
-	Down         []string
-	Requires     []Key
+	// Key identifies the migration and must be unique among the registered definitions.
+	Key Key
+	// Version is the release that introduced the migration, a semantic identifier. It is part of the checksum, so changing it changes the migration's recorded identity.
+	Version Version
+	// SQL lists the statements to run in order. At least one is required and none may be blank.
+	SQL []string
+	// Down lists optional statements that reverse the migration on rollback. Without it rollback refuses to cross the migration; NonTransactional mode refuses Down.
+	Down []string
+	// Requires lists migrations that must run before this one. Entries must be registered and may not repeat, name the migration itself, or form a cycle.
+	Requires []Key
 }
 
 // Clone returns a copy that shares no SQL, Down or Requires storage with d.

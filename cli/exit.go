@@ -14,7 +14,10 @@ import (
 type ExitCode int
 
 const (
-	Success      ExitCode = 0
+	// Success is the exit code of a nil error or a clean help result.
+	Success ExitCode = 0
+	// Failure is the exit code of any error that no other code classifies, including an error whose
+	// inspection is incomplete.
 	Failure      ExitCode = 1
 	InvalidUsage ExitCode = 2
 	TimedOut     ExitCode = 124

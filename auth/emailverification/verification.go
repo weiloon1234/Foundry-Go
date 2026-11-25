@@ -35,12 +35,17 @@ func ParseToken[M any](raw secret.String) (Token[M], error) {
 // Eligible optionally replaces the provider's eligibility for this flow, for
 // example when the provider only admits accounts with verified addresses.
 type Model[M model.Identifiable, K any] struct {
-	Lock          func(context.Context, *database.Tx, K) (value.Optional[M], error)
-	Email         func(M) string
+	// Lock loads the model by key on the given transaction with a row lock and returns an unset value when none exists. It is required.
+	Lock func(context.Context, *database.Tx, K) (value.Optional[M], error)
+	// Email returns the model's stored email address, which the challenge is bound to. It is required.
+	Email func(M) string
+	// EmailRevision returns the stored revision of the email address, bound into the challenge together with it. It is required.
 	EmailRevision func(M) challenge.Revision[M]
-	Verified      func(M) bool
-	MarkVerified  func(context.Context, *database.Tx, M) (M, error)
-	Eligible      func(context.Context, M) (bool, error)
+	// Verified reports whether the model's email is already verified; a verified model gets no new challenge. It is required.
+	Verified func(M) bool
+	// MarkVerified stores the verified state on the given transaction and returns the updated model. Complete fails when the result is not verified or its email or revision differs. It is required.
+	MarkVerified func(context.Context, *database.Tx, M) (M, error)
+	Eligible     func(context.Context, M) (bool, error)
 }
 
 // Verification owns the typed single-use email-verification flow and its model

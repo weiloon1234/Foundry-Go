@@ -20,17 +20,24 @@ import (
 // FeatureDeclarations retains the framework's typed registration envelopes.
 // This is an assembly boundary, never a dynamic runtime model/service container.
 type FeatureDeclarations struct {
-	Owners        []extensions.Declaration
-	Settings      []settings.Registration
-	Metadata      []metadata.Registration
-	Translations  []translations.Registration
+	Owners []extensions.Declaration
+	// Settings registers application settings with the settings manager. Enabling extensions is required.
+	Settings     []settings.Registration
+	Metadata     []metadata.Registration
+	Translations []translations.Registration
+	// Attachments registers attachment declarations with the attachment manager. Enabling attachments is
+	// required.
 	Attachments   []attachments.Registration
 	Notifications []notifications.Registration
-	Reports       []datatable.Registration
-	Messages      []i18n.MessageDefinition
-	Catalog       map[i18n.LocaleID]map[i18n.MessageKey]i18n.Template
-	Outbox        []publisher.Route
-	Readiness     []health.Probe
+	// Reports registers datatable reports with the report manager. Enabling reports is required.
+	Reports []datatable.Registration
+	// Messages adds message definitions to the locale catalog. Enabling locales is required.
+	Messages []i18n.MessageDefinition
+	// Catalog supplies locale message templates by locale and message key. Declaring the same key for the
+	// same locale in two Features constructors is refused when the declarations are merged. Enabling locales is required.
+	Catalog   map[i18n.LocaleID]map[i18n.MessageKey]i18n.Template
+	Outbox    []publisher.Route
+	Readiness []health.Probe
 	// Pruning joins application stores to the maintenance schedule
 	// (features.maintenance); it is ignored while that schedule is disabled.
 	Pruning []Pruning

@@ -17,6 +17,7 @@ const cspNonceSourceBytes = len("'nonce-'") + 44 // 32 random bytes in padded ba
 // CSPConfig permits independent enforced and report-only policies. Zero emits
 // neither. Declarations are copied during middleware construction.
 type CSPConfig struct {
+	// Enforce is the policy sent in the Content-Security-Policy header; unset sends none.
 	Enforce    value.Optional[CSPPolicy]
 	ReportOnly value.Optional[CSPPolicy]
 }

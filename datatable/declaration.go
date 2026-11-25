@@ -27,7 +27,8 @@ import (
 type Action string
 
 const (
-	QueryAction   Action = "query"
+	QueryAction Action = "query"
+	// ExportAction is passed to Authorize when an export ticket is requested and when an export file is generated.
 	ExportAction  Action = "export"
 	InspectAction Action = "inspect"
 )
@@ -44,16 +45,26 @@ const (
 //
 // Example: var spec datatable.Spec[User, UserRow, Actor]
 type Spec[S, R, A any] struct {
-	ID          contract.TableID
-	Row         contract.JSON[R]
-	Columns     []ColumnRegistration[S, R]
-	Dynamic     []DynamicBinding[S, A]
-	Filters     []FilterRegistration[S]
+	// ID names the table; it must be a semantic identifier and also forms the route path and route ID.
+	ID contract.TableID
+	// Row is the JSON contract of one row.
+	Row contract.JSON[R]
+	// Columns declares every row field: displayed columns, hidden fields and dynamic column slots; at least one must be displayed.
+	Columns []ColumnRegistration[S, R]
+	// Dynamic binds each dynamic column slot declared in Columns exactly once.
+	Dynamic []DynamicBinding[S, A]
+	// Filters declares extra named filters that are not displayed columns; a filter on a displayed column is declared with that column, and a name equal to a displayed column is refused.
+	Filters []FilterRegistration[S]
+	// DefaultSort orders results when the request gives no sort; each entry must name a sortable column.
 	DefaultSort []Sort
-	Stable      []expr.ProjectionOrder[S]
-	Authorize   func(context.Context, A, Action) error
-	Source      func(context.Context, A) (rows.SelectionSource[S], error)
-	Exports     bool
+	// Stable is the ordering appended after the requested sort so results have a unique order; at least one entry is required.
+	Stable []expr.ProjectionOrder[S]
+	// Authorize decides whether the trusted context may perform the Action; it is required.
+	Authorize func(context.Context, A, Action) error
+	// Source returns the unpaginated base source for the trusted context A, with tenant, visibility and soft-delete policy already applied.
+	Source func(context.Context, A) (rows.SelectionSource[S], error)
+	// Exports enables CSV and XLSX export; at least one column must then be exportable.
+	Exports bool
 }
 
 type tableIdentity struct{ marker byte }

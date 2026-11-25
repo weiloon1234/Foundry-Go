@@ -20,6 +20,9 @@ import (
 )
 
 const SessionProvider foundation.ProviderID = "foundry.application.sessions"
+
+// TokenProvider names the module that registers the token store under TokenKey. It exists only when
+// tokens are enabled; list it in Requires to start after the store.
 const TokenProvider foundation.ProviderID = "foundry.application.tokens"
 const MFAProvider foundation.ProviderID = "foundry.application.mfa"
 

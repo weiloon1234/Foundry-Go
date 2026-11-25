@@ -3,7 +3,9 @@ package settings
 import "github.com/weiloon1234/Foundry-Go/database/migrate"
 
 const (
-	MigrationOrigin          migrate.Origin  = "foundry.settings"
+	// MigrationOrigin is the migration origin of every definition Migrations returns.
+	MigrationOrigin migrate.Origin = "foundry.settings"
+	// CreateSettings is the ID, under MigrationOrigin, of the migration that creates the settings table.
 	CreateSettings           migrate.ID      = "000001_create_settings"
 	AddPresentationOwnership migrate.ID      = "000002_add_presentation_ownership"
 	Introduced               migrate.Version = "v0.1.0"

@@ -23,17 +23,21 @@ import (
 type Code string
 
 const (
-	QueryFailed          Code = "query_failed"
-	NotFound             Code = "not_found"
-	TooManyRows          Code = "too_many_rows"
-	Unavailable          Code = "unavailable"
-	Canceled             Code = "canceled"
-	DeadlineExceeded     Code = "deadline_exceeded"
-	Closed               Code = "closed"
-	NotReady             Code = "not_ready"
-	Busy                 Code = "busy"
-	UniqueViolation      Code = "unique_violation"
-	ForeignKeyViolation  Code = "foreign_key_violation"
+	QueryFailed Code = "query_failed"
+	// NotFound is the code of a query that requires exactly one row and finds none, such as orm.RequireKey.
+	NotFound         Code = "not_found"
+	TooManyRows      Code = "too_many_rows"
+	Unavailable      Code = "unavailable"
+	Canceled         Code = "canceled"
+	DeadlineExceeded Code = "deadline_exceeded"
+	Closed           Code = "closed"
+	NotReady         Code = "not_ready"
+	Busy             Code = "busy"
+	// UniqueViolation is the code of a unique-constraint failure; the PostgreSQL adapter maps SQLSTATE 23505 to it.
+	UniqueViolation Code = "unique_violation"
+	// ForeignKeyViolation is the code of a foreign-key constraint failure; the PostgreSQL adapter maps SQLSTATE 23503 to it.
+	ForeignKeyViolation Code = "foreign_key_violation"
+	// CheckViolation is the code of a check-constraint failure; the PostgreSQL adapter maps SQLSTATE 23514 to it.
 	CheckViolation       Code = "check_violation"
 	NotNullViolation     Code = "not_null_violation"
 	SerializationFailure Code = "serialization_failure"
@@ -45,8 +49,9 @@ const (
 	QueryCanceled Code = "query_canceled"
 	// LockNotAvailable reports NOWAIT or lock_timeout expiry. The statement did
 	// not acquire its lock; retry policy belongs to the caller.
-	LockNotAvailable          Code = "lock_not_available"
-	ExclusionViolation        Code = "exclusion_violation"
+	LockNotAvailable   Code = "lock_not_available"
+	ExclusionViolation Code = "exclusion_violation"
+	// RestrictViolation is the code of a restrict-constraint failure; the PostgreSQL adapter maps SQLSTATE 23001 to it.
 	RestrictViolation         Code = "restrict_violation"
 	ReadOnlyTransaction       Code = "read_only_sql_transaction"
 	StringDataRightTruncation Code = "string_data_right_truncation"
@@ -72,10 +77,14 @@ type Outcome string
 
 const (
 	Unspecified Outcome = "unspecified"
-	NoCommit    Outcome = "no_commit"
-	Committed   Outcome = "committed"
-	RolledBack  Outcome = "rolled_back"
-	Unknown     Outcome = "unknown"
+	// NoCommit marks a failure known not to have committed anything, such as a statement that was never performed.
+	NoCommit Outcome = "no_commit"
+	// Committed marks a failure after the transaction committed, such as a failing after-commit callback; the data is persisted.
+	Committed Outcome = "committed"
+	// RolledBack marks a failure after a confirmed rollback, or after the adapter confirmed the server rejected the statement or the commit; nothing was committed.
+	RolledBack Outcome = "rolled_back"
+	// Unknown marks a failure whose commit may or may not have happened; the error carries CommitUnknown and needs reconciliation, not a blind retry.
+	Unknown Outcome = "unknown"
 )
 
 // Detail is the safe, structured classification produced by a driver adapter.

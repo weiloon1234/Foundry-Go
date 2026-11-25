@@ -24,8 +24,10 @@ import (
 // (LRU with a second chance for entries read since they were last ordered)
 // applies after expired entries have been reclaimed. An oversized entry is rejected.
 type Config struct {
+	// MaxEntries is the most entries the cache holds before it evicts the least recently used; it must be positive (DefaultConfig uses 10000).
 	MaxEntries int
-	MaxBytes   int
+	// MaxBytes is the most bytes of keys and payloads the cache holds, and must be positive (DefaultConfig uses 64 MiB). An entry larger than it is rejected.
+	MaxBytes int
 }
 
 // DefaultConfig returns limits of 10,000 entries and 64 MiB of key and payload bytes.

@@ -54,13 +54,25 @@ func ParseAsset(text string) (Asset, error) {
 // Clock is required, borrowed, and invoked only by Prune. Release is protected
 // from pruning; historical releases remain readable.
 type Config struct {
-	Directory    string
-	Release      telemetry.Release
-	Portals      []telemetry.Portal
-	MaxBytes     int
-	Retention    time.Duration
+	// Directory is the private build directory that holds one subdirectory per release. Empty means no
+	// filesystem access: Read returns os.ErrNotExist and Prune removes nothing.
+	Directory string
+	// Release is the active release; Prune never removes it.
+	Release telemetry.Release
+	// Portals lists the portals whose source maps may be read and pruned. One to 32 distinct names are
+	// accepted; a Read for another portal is refused.
+	Portals []telemetry.Portal
+	// MaxBytes is the largest source map Read will load. It must be 1 byte to 10 MiB.
+	MaxBytes int
+	// Retention is how long Prune keeps a release other than the active one, measured from the newest
+	// modification time of its files. It must be one hour to thirty days. Releases with unrecognised files or portals are never removed.
+	Retention time.Duration
+	// StorageBytes is the total size Prune keeps across releases; it removes older releases while the
+	// total is over it, and fails with a conflict if the active release alone exceeds it. It must be at least MaxBytes
+	// and at most 1 GiB.
 	StorageBytes int64
-	Clock        clock.Clock
+	// Clock supplies the current time to Prune. It is required.
+	Clock clock.Clock
 }
 
 // Map owns a fresh byte slice containing the build's opaque source map.

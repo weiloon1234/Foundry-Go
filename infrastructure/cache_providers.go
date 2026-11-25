@@ -128,8 +128,14 @@ func (p *Plan) cache(name cache.StoreName, settings CacheSettings) {
 // never runs during normal application boot. Multiple stores sharing one target
 // return one contribution; the existing migration registry owns deduplication.
 type MigrationTarget struct {
-	Connection  database.ConnectionName
-	Schema      string
+	// Connection names the database connection the definitions run on. Empty selects the default
+	// connection, and an unconfigured name is refused.
+	Connection database.ConnectionName
+	// Schema is the schema the definitions run in. Empty selects the connection's primary schema, or
+	// public when that has none. It must be a valid PostgreSQL schema name.
+	Schema string
+	// Definitions are the migration definitions the target contributes. A target without any contributes
+	// nothing.
 	Definitions []migrate.Definition
 }
 

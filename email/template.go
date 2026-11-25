@@ -20,9 +20,15 @@ import (
 // html/template. Do not put untrusted template source or template.HTML in DTOs.
 // Layout optionally wraps the Text and HTML bodies.
 type TemplateSource struct {
-	Subject, Text, HTML string
-	Layout              Layout
-	MaxBytes            int
+	// Subject is a text template for the subject line. It renders to at most 2000 bytes of valid header text, and a field missing from the data fails the render.
+	Subject string
+	// Text is the plain-text body template. At least one of Text and HTML is required.
+	Text string
+	// HTML is the HTML body template, escaped by html/template. At least one of Text and HTML is required.
+	HTML   string
+	Layout Layout
+	// MaxBytes bounds the combined size of all template sources, and separately the combined output of the subject, text and HTML parts of one render. It is required, from 1 to 32 MiB.
+	MaxBytes int
 }
 
 // Layout is a shared trusted wrapper for message bodies: its HTML and Text

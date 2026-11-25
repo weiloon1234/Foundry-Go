@@ -17,10 +17,12 @@ type Format string
 const (
 	JPEG Format = "jpeg"
 	PNG  Format = "png"
+	// WebP is the WebP format. The built-in format table lists it as readable and writable, with animation in both directions; Engine.Capabilities reports what an engine supports.
 	WebP Format = "webp"
 	GIF  Format = "gif"
 	BMP  Format = "bmp"
 	TIFF Format = "tiff"
+	// AVIF is the AVIF format. The built-in format table lists it as readable and writable, with animation readable but not writable; Engine.Capabilities reports what an engine supports.
 	AVIF Format = "avif"
 	ICO  Format = "ico"
 	HEIF Format = "heif"

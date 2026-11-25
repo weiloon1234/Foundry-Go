@@ -20,6 +20,7 @@ import (
 type Operator string
 
 const (
+	// Equal matches rows whose column equals the single filter value.
 	Equal               Operator = "eq"
 	NotEqual            Operator = "ne"
 	In                  Operator = "in"
@@ -32,11 +33,13 @@ const (
 	Contains            Operator = "contains"
 	InsensitiveContains Operator = "icontains"
 	Like                Operator = "like"
-	IsNull              Operator = "is_null"
-	IsNotNull           Operator = "is_not_null"
-	All                 Operator = "and"
-	Any                 Operator = "or"
-	Not                 Operator = "not"
+	// IsNull matches rows whose column is SQL null; it takes no values and needs a nullable column.
+	IsNull Operator = "is_null"
+	// IsNotNull matches rows whose column is not SQL null; it takes no values and needs a nullable column.
+	IsNotNull Operator = "is_not_null"
+	All       Operator = "and"
+	Any       Operator = "or"
+	Not       Operator = "not"
 )
 
 // Direction selects ascending or descending ordering for a declared column.
@@ -47,7 +50,9 @@ const (
 type Direction string
 
 const (
-	Ascending  Direction = "asc"
+	// Ascending orders the column from lowest to highest.
+	Ascending Direction = "asc"
+	// Descending orders the column from highest to lowest.
 	Descending Direction = "desc"
 )
 
@@ -57,7 +62,9 @@ const (
 //
 //foundry:dto
 type Sort struct {
-	Column    string    `json:"column"`
+	// Column is the name of a declared sortable column.
+	Column string `json:"column"`
+	// Direction orders that column; any value other than Ascending or Descending is rejected.
 	Direction Direction `json:"direction"`
 }
 

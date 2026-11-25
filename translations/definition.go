@@ -20,6 +20,7 @@ type Name string
 // batch holds at most owners × supported locales rows. MaxBatchBytes bounds
 // the text retained by one Load or All result.
 const (
+	// MaxValueBytes is the largest text one locale of a translated field may hold, and the value Options.MaxBytes takes when zero.
 	MaxValueBytes     = 64 << 10
 	MaxFieldsPerOwner = 64
 	MaxRowsPerOwner   = MaxFieldsPerOwner * i18n.MaxLocales
@@ -32,8 +33,10 @@ const (
 // selects MaxValueBytes. Require selects the locales that slot input rules and
 // exact synchronization demand; lower-level writes do not enforce it.
 type Options struct {
+	// MaxBytes is the largest text each locale of the field may hold, MaxValueBytes when zero; Validate refuses anything outside 1 to MaxValueBytes.
 	MaxBytes int
-	Require  i18n.LocaleRequirement
+	// Require selects the locales that complete slot input (SyncIn, Rule) must give nonblank text for: none by default, the default locale, or all supported locales. Partial SaveIn input and lower-level writes do not enforce it.
+	Require i18n.LocaleRequirement
 }
 
 type declarationID struct{ nonzero byte }

@@ -8,14 +8,26 @@ import (
 
 // PageRequest selects a one-based page. Size must be between 1 and MaxPageSize.
 // Invalid requests fail rather than being silently clamped.
-type PageRequest struct{ Number, Size int }
+type PageRequest struct {
+	// Number is the one-based page to read. Values below 1 are refused.
+	Number int
+	// Size is the number of rows per page, from 1 to MaxPageSize.
+	Size int
+}
 
 // Page contains complete results and an unpaginated matching count. Count and
 // rows are separate queries; use a repeatable-read transaction for one snapshot.
 type Page[M any] struct {
-	Items        []M
-	Number, Size int
-	Total, Pages int64
+	// Items are the rows of the requested page.
+	Items []M
+	// Number is the page number that was requested.
+	Number int
+	// Size is the page size that was requested.
+	Size int
+	// Total is the count of all rows matching the query, not only this page.
+	Total int64
+	// Pages is Total divided by Size, rounded up.
+	Pages int64
 }
 
 // SimplePage contains complete results without a total count. HasMore indicates

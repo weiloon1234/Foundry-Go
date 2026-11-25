@@ -20,6 +20,7 @@ import (
 type Middleware[P any] struct {
 	Before Handler[P]
 	After  Handler[P]
+	// Failed runs, for each entered middleware in reverse order, when a Before, the handler or an After fails or the context ends, receiving the failure so far. An error it returns joins the failure.
 	Failed func(context.Context, P, error) error
 }
 
@@ -39,6 +40,7 @@ type Skip[P any] func(context.Context, P) (bool, error)
 // delay from Admission, Throttle or Overlap releases the reservation without
 // consuming an attempt.
 type HandlerOptions[P any] struct {
+	// Middleware wraps the handler: each Before runs in registration order, and each After and Failed unwinds in reverse.
 	Middleware []Middleware[P]
 	Admission  Admission[P]
 	Skip       Skip[P]

@@ -28,6 +28,7 @@ const (
 	MapKind     Kind = "map"
 	AliasKind   Kind = "alias"
 	QuotedKind  Kind = "quoted"
+	// DynamicKind is unrestricted JSON that DynamicJSON accepts after the parser's syntax and limit checks; no shape is checked beyond them.
 	DynamicKind Kind = "dynamic"
 	UnionKind   Kind = "union"
 )
@@ -74,8 +75,11 @@ type Variant struct {
 // string codecs may declare it explicitly through DefineJSONValue or
 // DefineScalar.
 type Type struct {
-	ID            TypeID              `json:"id"`
-	Kind          Kind                `json:"kind"`
+	// ID names this type; Schema.Root, Element, Property.Type and Variant.Type refer to it.
+	ID TypeID `json:"id"`
+	// Kind selects which of the other fields apply to this type.
+	Kind Kind `json:"kind"`
+	// Nullable allows JSON null as the wire value.
 	Nullable      bool                `json:"nullable"`
 	NonEmpty      bool                `json:"non_empty,omitempty"`
 	Discriminator string              `json:"discriminator,omitempty"`
@@ -98,6 +102,8 @@ type Type struct {
 // typed JSON descriptors through generated code; definitions are validated and
 // copied before use. Description returns another owned snapshot.
 type Schema struct {
-	Root  TypeID `json:"root"`
+	// Root is the ID of the Type that describes the whole document.
+	Root TypeID `json:"root"`
+	// Types holds every Type the document uses, each identified by its ID.
 	Types []Type `json:"types"`
 }

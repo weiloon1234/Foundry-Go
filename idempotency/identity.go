@@ -25,7 +25,9 @@ type OperationID string
 // Definition versions both the operation's meaning and its wire fingerprint.
 // A version change creates a new address and can execute an old client key again.
 type Definition struct {
-	ID      OperationID
+	// ID names the operation; it must be a semantic identifier.
+	ID OperationID
+	// Version must be nonzero; changing it starts a new address, so a client key already used can run again.
 	Version uint32
 }
 

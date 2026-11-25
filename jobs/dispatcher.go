@@ -93,9 +93,11 @@ func (d *Dispatcher) begin(ctx context.Context) (func(), error) {
 // nonzero ID permits an intentional retry. Zero At means immediately eligible.
 // Queue optionally overrides the definition's default routing destination.
 type Options[P any] struct {
-	ID     ID[P]
-	At     time.Time
-	Queue  Queue
+	ID ID[P]
+	At time.Time
+	// Queue sends this job to a different queue than its declared policy names; empty keeps the declared queue.
+	Queue Queue
+	// Unique suppresses dispatches with the same key within its window; the zero value disables uniqueness.
 	Unique Unique[P]
 	// PropagateTrace captures the current immutable trace when present.
 	// Trace is optional within the current envelope format.

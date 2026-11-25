@@ -16,6 +16,7 @@ import (
 type State string
 
 const (
+	// Waiting is an execution queued for a worker; a Result with this state releases the job or schedules its retry.
 	Waiting   State = "waiting"
 	Blocked   State = "blocked"
 	Reserved  State = "reserved"

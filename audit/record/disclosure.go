@@ -23,6 +23,7 @@ const (
 	Automatic Disclosure = iota
 	Exclude
 	Redact
+	// Ignore omits the field from audit records and, when an update touches only ignored fields and the managed updated_at, skips the automatic update record.
 	Ignore
 )
 

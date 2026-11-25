@@ -26,9 +26,22 @@ type ImageMeasurer[F any] interface {
 // at least one constraint is required. RatioWidth and RatioHeight together
 // require an exact aspect ratio, such as 16 by 9.
 type DimensionConstraints struct {
-	MinWidth, MaxWidth, MinHeight, MaxHeight int
-	Width, Height                            int
-	RatioWidth, RatioHeight                  int
+	// MinWidth is the smallest width in pixels; zero is unbounded.
+	MinWidth int
+	// MaxWidth is the largest width in pixels; zero is unbounded, and it must not be below MinWidth when set.
+	MaxWidth int
+	// MinHeight is the smallest height in pixels; zero is unbounded.
+	MinHeight int
+	// MaxHeight is the largest height in pixels; zero is unbounded, and it must not be below MinHeight when set.
+	MaxHeight int
+	// Width is the exact width in pixels; zero is unbounded.
+	Width int
+	// Height is the exact height in pixels; zero is unbounded.
+	Height int
+	// RatioWidth is the width part of the required aspect ratio; it must be set together with RatioHeight.
+	RatioWidth int
+	// RatioHeight is the height part of the required aspect ratio; it must be set together with RatioWidth.
+	RatioHeight int
 }
 
 // Validate checks dimension bounds, paired ratio values, and the presence of at least one

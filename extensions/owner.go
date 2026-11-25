@@ -52,7 +52,9 @@ type ownerDefinition[M any, K comparable] struct {
 // re-scope maintenance commands; rows of any other earlier model are reported,
 // never moved.
 type OwnerOptions struct {
-	StorageModel   string
+	// StorageModel is the model name recorded in the owner scope of every stored extension row, registration key and attachment object path. Empty uses the declared table name; a set value must be a valid table name.
+	StorageModel string
+	// PreviousModels lists model names the owner's rows were recorded under before a rename: at most 16 valid table names, none repeated or equal to the current or storage model.
 	PreviousModels []string
 }
 

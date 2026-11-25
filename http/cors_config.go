@@ -21,13 +21,17 @@ type CORSConfig struct {
 	// reflected exactly. Unlisted and malformed origins receive no sharing
 	// headers; ordinary requests still reach the handler.
 	OriginPatterns []OriginPattern
-	AnyOrigin      bool
-	Methods        []Method
-	AnyMethod      bool
-	Headers        []HeaderName
-	AnyHeaders     bool
-	ExposeHeaders  []HeaderName
-	Credentials    bool
+	// AnyOrigin shares with every origin; it cannot be combined with Origins, OriginPatterns or Credentials.
+	AnyOrigin bool
+	// Methods lists the methods a preflight may request; a preflight for another method is refused with Forbidden unless AnyMethod is set.
+	Methods   []Method
+	AnyMethod bool
+	// Headers lists the request headers a preflight may ask for; each must be an explicit valid field name, not "*", and a preflight naming another header is refused with Forbidden unless AnyHeaders is set.
+	Headers    []HeaderName
+	AnyHeaders bool
+	// ExposeHeaders lists the response headers sent in Access-Control-Expose-Headers; each must be an explicit valid field name.
+	ExposeHeaders []HeaderName
+	Credentials   bool
 	// MaxAge is a whole number of seconds from zero through 24 hours.
 	// Zero explicitly disables preflight caching.
 	MaxAge time.Duration
@@ -41,7 +45,9 @@ type CORSConfig struct {
 // continues below it at a segment boundary (/api matches /api and /api/x, not
 // /apix). Prefix is an absolute, clean path without a trailing slash.
 type CORSPath struct {
+	// Prefix is the path this policy covers, with everything below it.
 	Prefix string
+	// Policy replaces the outer policy for matching requests and cannot declare its own Paths.
 	Policy CORSConfig
 }
 

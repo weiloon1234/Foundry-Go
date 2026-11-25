@@ -14,9 +14,12 @@ import (
 // Options selects an existing output directory and stable file prefix. OpenAPI
 // requires the application's title/version. Check is strictly read-only.
 type Options struct {
-	Dir     string
-	Prefix  string
-	Check   bool
+	// Dir is the output directory for the generated files; it is required.
+	Dir    string
+	Prefix string
+	// Check compares the generated files with those on disk without writing or removing anything, and returns an error when they differ.
+	Check bool
+	// OpenAPI supplies the title, version and servers of the generated OpenAPI document; its title and version are required.
 	OpenAPI openapi.Options
 	// Surfaces adds one client entry per declared surface beside the full one.
 	Surfaces []Surface

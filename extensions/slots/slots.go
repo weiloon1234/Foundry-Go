@@ -35,10 +35,15 @@ import (
 // so descriptors bound in job handlers never depend on the job dispatcher.
 // The application owns these lifetimes; Runtime owns nothing.
 type Runtime struct {
+	// Translations is the manager that translation slots use; when nil those slots are unbound and using one reports fault.Missing.
 	Translations *translations.Manager
-	Attachments  *attachments.Manager
-	Metadata     *metadata.Manager
-	Store        *extensions.Store
+	// Attachments is the manager that attachment slots use; when nil those slots are unbound and using one reports fault.Missing.
+	Attachments *attachments.Manager
+	// Metadata is the manager that metadata slots use; when nil those slots are unbound and using one reports fault.Missing.
+	Metadata *metadata.Manager
+	// Store is the extension store of the managers. With it, deletion cleanup also handles owners deleted through another pool; Declaration.Register requires it for such pools.
+	Store *extensions.Store
+	// CleanupQueue makes deletion cleanup durable by enqueueing CleanupJob in the deletion's transaction; it requires Store. When nil the cleanup is process-local work after commit.
 	CleanupQueue *CleanupQueue
 }
 
@@ -48,10 +53,14 @@ func (Runtime) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("model extens
 // Parts lists one model's slot registrations by kind, and each slot's
 // inspection description in field order.
 type Parts struct {
+	// Translations lists the model's translation slot registrations; Runtime.Translations is then required.
 	Translations []translations.Registration
-	Attachments  []attachments.Registration
-	Metadata     []metadata.Registration
-	Slots        []extensions.SlotDescription
+	// Attachments lists the model's attachment slot registrations; Runtime.Attachments is then required.
+	Attachments []attachments.Registration
+	// Metadata lists the model's metadata slot registrations; Runtime.Metadata is then required.
+	Metadata []metadata.Registration
+	// Slots describes each slot in field order for inspection.
+	Slots []extensions.SlotDescription
 }
 
 func (p Parts) clone() Parts {

@@ -14,14 +14,15 @@ const (
 	NotFound               Code = "storage_not_found"
 	Forbidden              Code = "storage_forbidden"
 	RehearsalLimitExceeded Code = "storage_rehearsal_limit_exceeded"
-	Unsupported            Code = "storage_unsupported"
-	PreconditionFailed     Code = "storage_precondition_failed"
-	RangeNotSatisfiable    Code = "storage_range_not_satisfiable"
-	LimitExceeded          Code = "storage_limit_exceeded"
-	Invalid                Code = "storage_invalid"
-	Unavailable            Code = "storage_unavailable"
-	IntegrityFailed        Code = "storage_integrity_failed"
-	Closed                 Code = "storage_closed"
+	// Unsupported is the code of an operation or option the adapter or disk does not support, such as a conditional write or object metadata its capabilities lack.
+	Unsupported         Code = "storage_unsupported"
+	PreconditionFailed  Code = "storage_precondition_failed"
+	RangeNotSatisfiable Code = "storage_range_not_satisfiable"
+	LimitExceeded       Code = "storage_limit_exceeded"
+	Invalid             Code = "storage_invalid"
+	Unavailable         Code = "storage_unavailable"
+	IntegrityFailed     Code = "storage_integrity_failed"
+	Closed              Code = "storage_closed"
 )
 
 // Error returns the classification string.

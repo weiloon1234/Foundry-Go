@@ -18,6 +18,7 @@ type Assurance uint8
 
 const (
 	PendingMFA Assurance = iota + 1
+	// Authenticated is the assurance of a fully verified credential, the only one an ordinary authenticated handler or policy accepts; a password login yields it unless MFA is still required.
 	Authenticated
 )
 

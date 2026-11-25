@@ -17,6 +17,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/maintenance/cachestore"
 )
 
+// MaintenanceProvider names the module that registers the admission gate under MaintenanceKey and, with
+// a store, polls it. It is always registered.
 const MaintenanceProvider foundation.ProviderID = "foundry.application.maintenance"
 
 // MaintenanceKey resolves the application's admission gate. It exists whether

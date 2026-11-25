@@ -13,8 +13,13 @@ import (
 type MailDriver string
 
 const (
-	LogMail        MailDriver = "log"
-	MemoryMail     MailDriver = "memory"
+	// LogMail simulates acceptance and logs only message counts and size, never recipients or bodies;
+	// nothing is delivered.
+	LogMail MailDriver = "log"
+	// MemoryMail retains outbound messages in process memory for tests and development; once
+	// MailerSettings.MemoryCapacity messages are held, further sends fail as transient. Nothing is delivered.
+	MemoryMail MailDriver = "memory"
+	// SMTPMail sends through the SMTP server configured in MailerSettings.SMTP.
 	SMTPMail       MailDriver = "smtp"
 	SESMail        MailDriver = "ses"
 	ResendMail     MailDriver = "resend"

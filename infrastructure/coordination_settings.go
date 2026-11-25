@@ -11,7 +11,9 @@ type CoordinationDriver string
 
 const (
 	MemoryCoordination CoordinationDriver = "memory"
-	RedisCoordination  CoordinationDriver = "redis"
+	// RedisCoordination keeps leases in the Redis connection named by CoordinationSettings.Redis, or the
+	// default Redis connection when it is empty.
+	RedisCoordination CoordinationDriver = "redis"
 )
 
 // CoordinationSettings configures coordination enablement, backend, leases, and capacity.

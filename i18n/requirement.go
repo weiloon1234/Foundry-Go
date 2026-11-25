@@ -6,8 +6,11 @@ package i18n
 type LocaleRequirement uint8
 
 const (
+	// OptionalLocales is the zero requirement: no locale is required.
 	OptionalLocales LocaleRequirement = iota
+	// DefaultLocale requires nonempty text for the catalog's default locale.
 	DefaultLocale
+	// AllLocales requires nonempty text for every supported locale of the catalog.
 	AllLocales
 )
 

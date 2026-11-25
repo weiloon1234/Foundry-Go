@@ -49,12 +49,19 @@ func TokenTickets[M model.Identifiable, K any](tokens *token.Tokens[M, K]) Ticke
 //
 // Example: datatable.RoutesConfig[Actor, Authority]{Manager: manager, Guard: guard, Authority: authority}
 type RoutesConfig[M, A any] struct {
-	Manager    *Manager
-	Guard      foundryhttp.GuardBinding[M]
-	Authority  func(context.Context, M) (A, error)
-	Tickets    Tickets[M]
-	Clock      clock.Clock
-	Quota      foundryhttp.Middleware
+	// Manager is the table manager that runs queries and owns deferred export work; it is required.
+	Manager *Manager
+	// Guard is the authentication guard of every route the table registers.
+	Guard foundryhttp.GuardBinding[M]
+	// Authority converts the authenticated actor into the trusted context A that Authorize and Source receive; it is required.
+	Authority func(context.Context, M) (A, error)
+	// Tickets issues and redeems the single-use export tickets; exportable tables require it.
+	Tickets Tickets[M]
+	// Clock supplies the UTC timestamp in export file names; exportable tables require it.
+	Clock clock.Clock
+	// Quota is the middleware applied to export ticket issuance; exportable tables require it to be valid.
+	Quota foundryhttp.Middleware
+	// WithLocale, when set, returns the authority carrying the download's locale before deferred row loading; nil leaves the authority unchanged.
 	WithLocale func(A, i18n.LocaleID) A
 }
 

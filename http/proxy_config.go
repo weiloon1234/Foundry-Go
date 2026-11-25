@@ -70,6 +70,7 @@ func (h ProxyHeader) Validate() error {
 // A trusted peer must append trustworthy chain entries or overwrite single-IP
 // headers; CIDR membership alone cannot prove its forwarding configuration.
 type TrustedProxyConfig struct {
+	// Proxies lists the peer networks trusted to forward client addresses; at most 256, and a nonempty list needs Headers or OriginHeaders.
 	Proxies []netip.Prefix
 	// Headers select client-IP forwarding sources.
 	Headers []ProxyHeader

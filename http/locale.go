@@ -35,7 +35,8 @@ const maxLocaleSelectorBytes = 64
 type LocaleNegotiation struct {
 	QueryParameter string
 	Cookie         CookieName
-	Preferred      func(*stdhttp.Request) (i18n.LocaleID, bool, error)
+	// Preferred returns an application-chosen locale for the request, such as a stored user preference; it reports false for none. It is consulted after the query parameter and cookie, when set, and before the context locale and Accept-Language.
+	Preferred func(*stdhttp.Request) (i18n.LocaleID, bool, error)
 }
 
 // Validate checks optional query-parameter and cookie names used for locale selection.

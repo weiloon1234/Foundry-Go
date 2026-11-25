@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// MaxCountries is the most countries a list may return; a store holding more makes the list fail with fault.Conflict.
 const MaxCountries = 1000
 
 // Find looks up a validated country code, returning an absent value when missing.

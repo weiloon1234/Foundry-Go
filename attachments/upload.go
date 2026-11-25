@@ -28,7 +28,9 @@ import (
 // policy performs actual bounded decode/re-encoding. Invisible bidirectional
 // and zero-width characters are removed from OriginalName.
 type Upload struct {
-	Source       io.Reader
+	// Source supplies the file bytes. It is required, read only up to the policy's size limit, and never closed by the framework.
+	Source io.Reader
+	// OriginalName is the recorded filename. Invisible characters are removed first; it is refused when longer than 1024 bytes, not valid UTF-8, or containing a slash, backslash or control character.
 	OriginalName string
 	ContentType  storage.MediaType
 	Properties   value.JSON[json.RawMessage]

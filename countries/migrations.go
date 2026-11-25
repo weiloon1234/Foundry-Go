@@ -3,7 +3,9 @@ package countries
 import "github.com/weiloon1234/Foundry-Go/database/migrate"
 
 const (
-	MigrationOrigin      migrate.Origin  = "foundry.countries"
+	// MigrationOrigin is the migration origin of every definition Migrations returns.
+	MigrationOrigin migrate.Origin = "foundry.countries"
+	// CreateCountries is the ID, under MigrationOrigin, of the migration that creates the countries table.
 	CreateCountries      migrate.ID      = "000001_create_countries"
 	SingleDefaultCountry migrate.ID      = "000002_single_default_country"
 	Introduced           migrate.Version = "v0.1.0"

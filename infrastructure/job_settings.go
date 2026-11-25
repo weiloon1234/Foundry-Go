@@ -14,7 +14,9 @@ type JobDriver string
 
 const (
 	MemoryJobs JobDriver = "memory"
-	RedisJobs  JobDriver = "redis"
+	// RedisJobs keeps the queue in the Redis connection named by JobConnectionSettings.Redis, or the
+	// default Redis connection when it is empty, so workers in other processes can run the jobs.
+	RedisJobs JobDriver = "redis"
 	// SyncJobs runs each dispatched job inline in the dispatching caller
 	// (jobs/inline). Like memory it is process-local and non-durable.
 	SyncJobs JobDriver = "sync"

@@ -20,12 +20,19 @@ type RouteID string
 type Method string
 
 const (
-	GET     Method = stdhttp.MethodGet
-	HEAD    Method = stdhttp.MethodHead
-	POST    Method = stdhttp.MethodPost
-	PUT     Method = stdhttp.MethodPut
-	PATCH   Method = stdhttp.MethodPatch
-	DELETE  Method = stdhttp.MethodDelete
+	// GET selects GET requests; it also matches HEAD.
+	GET Method = stdhttp.MethodGet
+	// HEAD selects HEAD requests.
+	HEAD Method = stdhttp.MethodHead
+	// POST selects POST requests.
+	POST Method = stdhttp.MethodPost
+	// PUT selects PUT requests.
+	PUT Method = stdhttp.MethodPut
+	// PATCH selects PATCH requests.
+	PATCH Method = stdhttp.MethodPatch
+	// DELETE selects DELETE requests.
+	DELETE Method = stdhttp.MethodDelete
+	// OPTIONS selects OPTIONS requests.
 	OPTIONS Method = stdhttp.MethodOptions
 	TRACE   Method = stdhttp.MethodTrace
 )
@@ -52,8 +59,11 @@ const (
 
 // RouteSpec contains declaration metadata. DefineRoute takes a value snapshot.
 type RouteSpec struct {
-	ID     RouteID
+	// ID is the route's semantic identity; it must be a semantic identifier.
+	ID RouteID
+	// Method must be one of the Method constants.
 	Method Method
+	// Access must be Public or Guarded.
 	Access Access
 }
 

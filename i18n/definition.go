@@ -45,6 +45,7 @@ const (
 // typed messages derive it from their existing JSON contract. Plural names one
 // numeric parameter; Kind is empty unless Plural is set.
 type MessageDefinition struct {
+	// Key identifies the message and must be a semantic identifier.
 	Key        MessageKey  `json:"key"`
 	Parameters []Parameter `json:"parameters,omitempty"`
 	Plural     string      `json:"plural,omitempty"`

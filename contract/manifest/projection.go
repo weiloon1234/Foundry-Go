@@ -26,8 +26,9 @@ import (
 type Selection struct {
 	Routes   []foundryhttp.RouteID
 	Channels []websocket.ChannelID
-	Paths    []string
-	Guards   []auth.GuardName
+	// Paths lists literal path prefixes; each selects the routes whose path equals it or continues it after a slash.
+	Paths  []string
+	Guards []auth.GuardName
 }
 
 // Project returns the manifest restricted to selection: the selected operations,

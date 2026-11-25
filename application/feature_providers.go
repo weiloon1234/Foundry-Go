@@ -25,12 +25,20 @@ import (
 	"github.com/weiloon1234/Foundry-Go/translations"
 )
 
+// ExtensionProvider names the module that registers the extension store under ExtensionKey. It exists
+// only when extensions are enabled; list it in Requires to start after the store.
 const ExtensionProvider foundation.ProviderID = "foundry.application.extensions"
 const NotificationProvider foundation.ProviderID = "foundry.application.notifications"
 const AttachmentProvider foundation.ProviderID = "foundry.application.attachments"
 const ReportProvider foundation.ProviderID = "foundry.application.reports"
 const LocaleProvider foundation.ProviderID = "foundry.application.locales"
+
+// HealthProvider names the module that registers the readiness registry under HealthKey. It exists only
+// when health is enabled; list it in Requires to start after the registry.
 const HealthProvider foundation.ProviderID = "foundry.application.health"
+
+// AuditProvider names the module that registers the audit recorder under AuditKey. It exists only when
+// audit is enabled; list it in Requires to start after the recorder.
 const AuditProvider foundation.ProviderID = "foundry.application.audit"
 
 var ExtensionKey = foundation.NewKey[*extensions.Store](string(ExtensionProvider))
@@ -41,6 +49,9 @@ var NotificationKey = foundation.NewKey[*notifications.Manager](string(Notificat
 var AttachmentKey = foundation.NewKey[*attachments.Manager](string(AttachmentProvider))
 var ReportKey = foundation.NewKey[*datatable.Manager](string(ReportProvider))
 var LocaleKey = foundation.NewKey[*i18n.Catalog](string(LocaleProvider))
+
+// HealthKey resolves the readiness registry registered by HealthProvider; it exists only when health is
+// enabled.
 var HealthKey = foundation.NewKey[*health.Registry](string(HealthProvider))
 var AuditKey = foundation.NewKey[*audit.Recorder](string(AuditProvider))
 

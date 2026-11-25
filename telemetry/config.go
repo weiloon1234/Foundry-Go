@@ -17,44 +17,98 @@ import (
 // alert/read aggregation. HTTP metrics and security classification still run.
 // Prefixes match declared identities, never raw request paths.
 type RoutePolicy struct {
-	ExcludedRoutes            []http.RouteID
-	ExcludedPrefixes          []string
-	ExcludedOperations        []observability.Name
+	// ExcludedRoutes lists route identities whose requests are excluded. Each entry must be a distinct
+	// semantic identity.
+	ExcludedRoutes []http.RouteID
+	// ExcludedPrefixes excludes every route whose identity starts with one of these strings. Each entry must be a distinct
+	// semantic identity (lowercase letters, digits, . _ -, starting with a letter or digit).
+	ExcludedPrefixes []string
+	// ExcludedOperations lists operation names whose backend issues are not collected. Each entry must be a distinct
+	// semantic identity. An operation named telemetry or starting with telemetry. is always excluded.
+	ExcludedOperations []observability.Name
+	// ExcludedOperationPrefixes excludes every operation whose name starts with one of these strings. Each entry must be a
+	// distinct semantic identity.
 	ExcludedOperationPrefixes []string
 }
 
 // BrowserPolicy enables anonymous admission for an explicit portal allowlist.
 type BrowserPolicy struct {
+	// Enabled turns on browser error intake. While false, RecordBrowser refuses every report.
 	Enabled bool
+	// Portals is the allowlist of portals that may report. It must be non-empty when Enabled is true, and
+	// each entry must be a distinct bounded identity.
 	Portals []Portal
 }
 
 // CollectorConfig supplies identity and memory bounds. No zero-value defaults
 // or alert thresholds are inferred. PendingRetention is one minute to one hour.
 type CollectorConfig struct {
-	Instance                                Instance
-	Release                                 Release
-	MaxSeries, MaxEvents, MaxPendingBatches int
-	PendingRetention                        time.Duration
-	Routes                                  RoutePolicy
-	Browser                                 BrowserPolicy
+	// Instance names this process instance and is stored on its run. It must be 1 to 128 bytes of letters, digits
+	// and . _ - characters, starting with a letter or digit and without "..".
+	Instance Instance
+	// Release names the deployed build. It is stored on the run and on every collected issue, and a
+	// browser report whose release differs is refused. It follows the same identity rules as Instance.
+	Release Release
+	// MaxSeries bounds the in-memory request-metric series. It must be 1..4096.
+	MaxSeries int
+	// MaxEvents bounds the issue observations held before the next capture; observations over the bound
+	// are counted as dropped. Browser issues may use at most MaxEvents/4 of it and security issues MaxEvents/2
+	// (rounded down), which also caps the security issues one capture holds. It must be 1..4096.
+	MaxEvents int
+	// MaxPendingBatches bounds the captured batches waiting to be stored; when that many are pending a
+	// new capture is dropped and counted. It must be 1..60.
+	MaxPendingBatches int
+	// PendingRetention is how long a captured batch may wait to be stored before it is discarded as
+	// expired. It must be one minute to one hour.
+	PendingRetention time.Duration
+	// Routes excludes routes and operations from backend issue collection, and excluded routes from
+	// alert evaluation and from traffic reads unless a read includes them.
+	Routes RoutePolicy
+	// Browser configures anonymous browser error intake.
+	Browser BrowserPolicy
 }
 
 // Thresholds supplies explicit application choices. Ratios must be finite and in
 // (0,1]; latency is in (0,60s], requests in 1..1,000,000 and auth failures in 1..4096.
 type Thresholds struct {
-	Latency                       time.Duration
-	ErrorRatio, PoolUsageRatio    float64
-	MinimumRequests, AuthFailures int
+	// Latency is the 95th-percentile request latency at or above which the latency rule is bad. It must
+	// be above zero and at most one minute.
+	Latency time.Duration
+	// ErrorRatio is the share of requests answered with status 500 or above at or over which the HTTP
+	// errors rule is bad. It must be finite and in (0,1].
+	ErrorRatio float64
+	// PoolUsageRatio is the database connection pool usage (open connections in use over the pool's
+	// maximum, the higher of the primary and read pools) at or over which the pool pressure rule is bad.
+	// It must be finite and in (0,1].
+	PoolUsageRatio float64
+	// MinimumRequests is the request count a capture needs before the latency and HTTP errors rules are
+	// judged; below it those rules neither worsen nor recover. It must be 1..1,000,000.
+	MinimumRequests int
+	// AuthFailures is the number of authentication_failed and rate_limited security issues in one
+	// capture at or over which the authentication burst rule is bad. It must be 1..4096, but a capture holds at most
+	// CollectorConfig.MaxEvents/2 security issues, so a larger value never fires.
+	AuthFailures int
 }
 
 // AlertPolicy selects built-in rules and capture-count sustain/recovery periods.
 // Disabled policies may omit thresholds and counts entirely.
 type AlertPolicy struct {
-	Enabled                          bool
-	Rules                            []Rule
-	Thresholds                       Thresholds
-	SustainCaptures, RecoverCaptures int
+	// Enabled turns on incident evaluation as batches are stored. An enabled policy needs rules,
+	// thresholds and both capture counts.
+	Enabled bool
+	// Rules lists the built-in rules to evaluate. Each must be a known rule, listed once.
+	Rules []Rule
+	// Thresholds supplies the limits the rules compare against. They are validated when Enabled is true
+	// or any value is set.
+	Thresholds Thresholds
+	// SustainCaptures is how many consecutive bad captures open an incident for a rule, or reopen a recovered one as
+	// a new episode. A capture below Thresholds.MinimumRequests restarts the count for the latency and HTTP errors
+	// rules. It must be 1..60 when the policy is enabled or a count is set.
+	SustainCaptures int
+	// RecoverCaptures is how many consecutive healthy captures recover an open or acknowledged incident for a rule.
+	// A capture below Thresholds.MinimumRequests restarts the count for the latency and HTTP errors rules. It must be
+	// 1..60 when the policy is enabled or a count is set.
+	RecoverCaptures int
 }
 
 // RetentionPolicy bounds future storage and pruning. Minute/Security are one
@@ -62,9 +116,33 @@ type AlertPolicy struct {
 // Row ranges are runs 100..10,000, metrics 100..1,000,000, issues 100..10,000 and
 // events 100..100,000. Receipt capacity and prune interval must be positive.
 type RetentionPolicy struct {
-	Minute, Hour, Issue, Security                                      time.Duration
-	MaxRuns, MaxReceiptRows, MaxMetricRows, MaxIssueRows, MaxEventRows int
-	PruneInterval                                                      time.Duration
+	// Minute is how long minute-resolution metric buckets are kept. It must be one hour to seven days.
+	Minute time.Duration
+	// Hour is how long hour-resolution metric buckets and run records are kept. It must be at least
+	// Minute and at most thirty days, and must exceed the receipt retry horizon.
+	Hour time.Duration
+	// Issue is how long backend and browser issues and their events are kept. It must be one hour to
+	// thirty days.
+	Issue time.Duration
+	// Security is how long security issues and their events are kept. It must be one hour to seven days.
+	Security time.Duration
+	// MaxRuns bounds the stored process runs. At the bound, a new run is stored only if enough empty runs (quiet for
+	// EmptyRunQuietPeriod) can be reclaimed; otherwise its batch is refused as overloaded. It must be 100..10,000.
+	MaxRuns int
+	// MaxReceiptRows bounds the stored flush receipts; at the bound a flush fails as overloaded. It must
+	// be positive.
+	MaxReceiptRows int
+	// MaxMetricRows bounds the stored metric buckets; buckets over the bound are dropped and counted. It
+	// must be 100..1,000,000.
+	MaxMetricRows int
+	// MaxIssueRows bounds the stored issue groups; groups over the bound are dropped and counted. It
+	// must be 100..10,000.
+	MaxIssueRows int
+	// MaxEventRows bounds the stored issue events; events over the bound are dropped and counted. It
+	// must be 100..100,000.
+	MaxEventRows int
+	// PruneInterval is the minimum time between pruning passes in the engine's loop. It must be positive.
+	PruneInterval time.Duration
 	// EmptyRunQuietPeriod defaults to one hour; explicit values are one hour to thirty days.
 	EmptyRunQuietPeriod time.Duration
 }
@@ -72,9 +150,27 @@ type RetentionPolicy struct {
 // ReadLimits contains explicit positive admission, result, page and timeout
 // bounds. Config.Validate also compares result limits with storage capacities.
 type ReadLimits struct {
-	MaxConcurrent, MaxOverviewRuns, MaxOverviewAlerts      int
-	MaxTrafficRows, MaxTrafficGroups, MaxPage, MaxPageSize int
-	Timeout                                                time.Duration
+	// MaxConcurrent bounds the reads in flight; another read fails as overloaded. It must be positive.
+	MaxConcurrent int
+	// MaxOverviewRuns bounds the runs an overview returns; more are truncated. It must be positive and
+	// at most Retention.MaxRuns.
+	MaxOverviewRuns int
+	// MaxOverviewAlerts bounds the incidents an overview returns; more are truncated. It must be
+	// positive and at most Retention.MaxRuns times the number of built-in rules.
+	MaxOverviewAlerts int
+	// MaxTrafficRows bounds the metric rows a traffic read scans; more are truncated. It must be
+	// positive and at most Retention.MaxMetricRows.
+	MaxTrafficRows int
+	// MaxTrafficGroups bounds the distinct traffic groups a traffic read returns; more are truncated. It
+	// must be positive and at most MaxTrafficRows.
+	MaxTrafficGroups int
+	// MaxPage is the highest page number a paged read accepts. It must be positive.
+	MaxPage int
+	// MaxPageSize is the largest page size a paged read accepts. It must be positive and at most
+	// Retention.MaxIssueRows and Retention.MaxEventRows.
+	MaxPageSize int
+	// Timeout bounds one read; a read whose context ends before it completes fails with a timeout fault. It must be positive.
+	Timeout time.Duration
 }
 
 // Config supplies future engine timing, retention, alert and read policy without
@@ -82,10 +178,19 @@ type ReadLimits struct {
 // positive. Retry/receipt horizons additionally require the collector's retention
 // at the eventual engine construction boundary; this value alone cannot check it.
 type Config struct {
-	FlushInterval, FlushTimeout, DrainTimeout time.Duration
-	Retention                                 RetentionPolicy
-	Alerts                                    AlertPolicy
-	Reads                                     ReadLimits
+	// FlushInterval is how often the engine captures and stores a batch. It must be one second to one
+	// minute.
+	FlushInterval time.Duration
+	// FlushTimeout bounds one storage or pruning attempt. It must be positive.
+	FlushTimeout time.Duration
+	// DrainTimeout bounds the final drain of pending batches at shutdown. It must be positive.
+	DrainTimeout time.Duration
+	// Retention bounds how long and how much telemetry is stored.
+	Retention RetentionPolicy
+	// Alerts configures the built-in incident rules, their thresholds and the capture counts that open and recover incidents. Evaluation runs only when Alerts.Enabled is true.
+	Alerts AlertPolicy
+	// Reads bounds concurrent reads, result sizes, page sizes and the read timeout; its result and page sizes must not exceed the matching storage capacities in Retention.
+	Reads ReadLimits
 }
 
 func invalid(message string) error { return safeerror.NewFault(fault.Invalid, message) }

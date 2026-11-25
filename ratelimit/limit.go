@@ -15,8 +15,10 @@ const MaxWindow = 24 * time.Hour
 // its Key.WindowOffset, so many keys do not reset at the same instant. A fixed
 // window permits bursts on both sides of a boundary; it is not a sliding window.
 type Limit struct {
+	// Requests is the number of units admitted per Window; it must be positive.
 	Requests uint32
-	Window   time.Duration
+	// Window is the length of the fixed window; it must be a whole number of milliseconds from one millisecond through MaxWindow.
+	Window time.Duration
 }
 
 // PerSecond declares a fixed-window capacity per second.

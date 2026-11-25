@@ -12,9 +12,11 @@ import (
 type Code string
 
 const (
+	// Unauthenticated is returned when credentials are missing, invalid or no longer resolve to an eligible subject.
 	Unauthenticated Code = "unauthenticated"
-	Forbidden       Code = "forbidden"
-	MFARequired     Code = "mfa_required"
+	// Forbidden is returned when the caller is identified but not allowed the operation, such as a denied policy or a requested token scope beyond the binding's allowed scopes.
+	Forbidden   Code = "forbidden"
+	MFARequired Code = "mfa_required"
 	// CredentialLimit rejects issuing another session/token when the subject's
 	// active-credential cap is reached under a reject-new policy. It is a client
 	// conflict (revoke an existing credential), not a server failure.

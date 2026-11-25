@@ -21,7 +21,9 @@ import (
 type Visibility uint8
 
 const (
+	// Private is the zero Visibility: Disk.PublicURL refuses the disk with Forbidden, so access goes through other means such as signed links.
 	Private Visibility = iota
+	// Public lets Disk.PublicURL return stable public URLs when the disk's adapter supplies them.
 	Public
 )
 

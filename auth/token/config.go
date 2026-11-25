@@ -15,6 +15,8 @@ import (
 const MaxLifetime = 365 * 24 * time.Hour
 const MaxTokens = 1024
 const MaxRotations = 4096
+
+// MaxPruneFamilies is the most token families one prune batch may remove; a larger batch or limit is refused.
 const MaxPruneFamilies = 1024
 
 // MaxPrefixBytes bounds Config.Prefix.
@@ -36,7 +38,14 @@ const (
 
 // Lifetime preserves a family's absolute expiry across every refresh. Access
 // activity never extends refresh idle expiry. Only successful refresh does so.
-type Lifetime struct{ Access, RefreshIdle, Absolute time.Duration }
+type Lifetime struct {
+	// Access is how long an access token stays valid. It must not exceed Absolute.
+	Access time.Duration
+	// RefreshIdle is how long a refresh token stays valid without a successful refresh. It is required for Renewable and must be zero otherwise; it must lie between Access and Absolute.
+	RefreshIdle time.Duration
+	// Absolute is the family's total lifetime from issuance, which refreshes never extend. It is at most MaxLifetime; Personal and Challenge require it to equal Access.
+	Absolute time.Duration
+}
 
 func durationValid(d time.Duration) bool {
 	return d >= time.Millisecond && d <= MaxLifetime && d%time.Microsecond == 0
@@ -147,7 +156,10 @@ func validatePrefix(prefix string) error {
 // from a login DTO. Requested scopes must fit this binding's declared ceiling.
 // A scoped proof can only issue a subset of its own grants.
 type IssueOptions[M any] struct {
-	Name    string
-	Scopes  auth.AccessScopes[M]
+	// Name is a display label for the token, at most 128 bytes of valid UTF-8 with no control characters or surrounding space.
+	Name string
+	// Scopes are the access scopes the token carries. They must lie within the binding's allowed scopes and, when the proof is scoped, within the proof's scopes, otherwise issuance returns auth.Forbidden; a pending-MFA proof must have none.
+	Scopes auth.AccessScopes[M]
+	// Refresh issues a renewable access and refresh pair instead of a personal token. A pending-MFA proof cannot set it.
 	Refresh bool
 }

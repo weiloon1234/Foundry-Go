@@ -15,8 +15,11 @@ import (
 // error. Before returning, the source owns cleanup of any resources it opens.
 // Source reads must honor the context supplied to DownloadSource.
 type DownloadContent struct {
-	Body      io.ReadSeekCloser
-	Name      string
+	// Body is the seekable content; Foundry owns and closes it once the source returns.
+	Body io.ReadSeekCloser
+	// Name is the file name used in Content-Disposition unless the download overrides it.
+	Name string
+	// MediaType is the content's media type unless the download overrides it; the type in effect must be valid and one the endpoint declared, otherwise the response fails with an internal error.
 	MediaType MediaType
 	Modified  time.Time
 	EntityTag EntityTag

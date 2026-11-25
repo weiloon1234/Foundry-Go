@@ -33,9 +33,14 @@ type FileInfo struct {
 // Consumers parse complete lines and use Next to continue; a range can end in
 // the middle of a record. Data is owned by the caller and must be treated as text.
 type FileRead struct {
-	ID     FileID
+	// ID selects the log file generation to read, as listed by Files. An ID that is not 64 bytes
+	// long is invalid, and one that matches no current generation fails as a conflict.
+	ID FileID
+	// Offset is the byte position to start at. -1 starts at the newest Limit bytes; a position past the
+	// end of the file fails as a conflict, and a value below -1 is invalid.
 	Offset int64
-	Limit  int
+	// Limit is the most bytes to read. It must be 1..MaxFileReadBytes.
+	Limit int
 }
 
 // FileChunk contains a log file chunk and its continuation position.

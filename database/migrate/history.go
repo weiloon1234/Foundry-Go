@@ -22,7 +22,8 @@ type Applied struct {
 type State string
 
 const (
-	Pending         State = "pending"
+	Pending State = "pending"
+	// PendingDisabled is the state of an unapplied FeatureDisabled definition, which status lists apart from the other migrations.
 	PendingDisabled State = "pending_feature_disabled"
 	Incomplete      State = "incomplete"
 	Complete        State = "applied"

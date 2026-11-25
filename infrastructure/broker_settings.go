@@ -61,6 +61,8 @@ type RealtimeDriver string
 
 const (
 	LocalRealtime RealtimeDriver = "local"
+	// RedisRealtime relays realtime messages between processes through the Redis connection named by
+	// RealtimeConnectionSettings.Redis, or the default Redis connection when it is empty.
 	RedisRealtime RealtimeDriver = "redis"
 )
 

@@ -24,7 +24,9 @@ type SinkDriver string
 const (
 	Stderr SinkDriver = "stderr"
 	Stdout SinkDriver = "stdout"
-	File   SinkDriver = "file"
+	// File appends records to the file at SinkConfig.Path, which must be absolute. Rotation applies unless
+	// SinkConfig.Rotation.Disabled is set.
+	File SinkDriver = "file"
 	// Syslog writes each JSON record to a local or remote syslog daemon with a
 	// severity derived from the record level. It is unavailable on Windows/Plan 9.
 	Syslog SinkDriver = "syslog"
@@ -37,6 +39,8 @@ const MaxFallbackBytes = 256 << 10
 // SinkConfig selects an application-owned JSON destination. File sinks append
 // with automatic rotation/retention unless Rotation.Disabled is explicit.
 type SinkConfig struct {
+	// Driver selects the destination. Stderr is the default of DefaultSinkConfig; the zero value is
+	// refused as an unsupported sink.
 	Driver    SinkDriver
 	Path      string
 	Level     slog.Level

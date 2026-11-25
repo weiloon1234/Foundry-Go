@@ -3,8 +3,10 @@ package translations
 import "github.com/weiloon1234/Foundry-Go/database/migrate"
 
 const (
-	MigrationOrigin    migrate.Origin = "foundry.translations"
-	CreateTranslations migrate.ID     = "000001_create_translations"
+	// MigrationOrigin is the migration origin of every definition Migrations returns.
+	MigrationOrigin migrate.Origin = "foundry.translations"
+	// CreateTranslations is the ID, under MigrationOrigin, of the migration that creates the translations table.
+	CreateTranslations migrate.ID = "000001_create_translations"
 	// IndexValues adds a hash index for Matching's exact-value lookups. Hash
 	// entries store only a hash code, so 64 KiB values stay indexable, unlike
 	// a btree over the text itself.

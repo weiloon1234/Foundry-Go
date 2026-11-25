@@ -23,9 +23,12 @@ type ID string
 // Run must use the supplied Tx. Idempotence is its own business contract; no
 // history table silently suppresses later explicit invocations.
 type Definition struct {
-	ID       ID
+	// ID names the seeder and must be a unique semantic identifier.
+	ID ID
+	// Requires lists seeders that run before this one. Entries may not repeat or name the seeder itself, and each must be registered without a cycle.
 	Requires []ID
-	Run      func(context.Context, *database.Tx) error
+	// Run does the seeding inside the transaction it is given. It is required, and no history stops a later explicit run from calling it again.
+	Run func(context.Context, *database.Tx) error
 }
 
 // Registry snapshots declarations and validates dependencies before execution.

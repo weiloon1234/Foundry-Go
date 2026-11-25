@@ -27,7 +27,9 @@ type Name string
 type Cardinality uint8
 
 const (
+	// Single makes a collection hold at most one file; Policy.MaxFiles must then be 1 (or omitted).
 	Single Cardinality = iota + 1
+	// Multiple makes a collection hold several files, up to Policy.MaxFiles (100 when omitted).
 	Multiple
 )
 const (
@@ -41,15 +43,23 @@ const (
 // Policy declares storage, cardinality, accepted media, resource bounds and image
 // processing for a collection.
 type Policy struct {
-	Disk           storage.Declaration
-	Cardinality    Cardinality
-	Localized      bool
-	MaxFiles       int
-	MaxBytes       int64
+	// Disk declares the storage disk that holds the files. It is resolved against the configured disks when the collection is registered.
+	Disk storage.Declaration
+	// Cardinality is Single or Multiple; a collection declared with Define needs one of them. A slot takes it from its slot type and refuses a different value.
+	Cardinality Cardinality
+	// Localized keeps a separate set of files per locale, selected with ForLocale. A slot refuses it, and registration requires a valid locale catalog.
+	Localized bool
+	// MaxFiles is the most files one collection (one locale when Localized) may hold: 1 for Single and 100 for Multiple when zero, at most MaxCollectionFiles. A write that would exceed it is refused.
+	MaxFiles int
+	// MaxBytes is the largest upload accepted, 8 MiB when zero and at least 1 otherwise. With Image or Variants it may not exceed MaxBufferedBytes.
+	MaxBytes int64
+	// MaxStoredBytes is the largest file stored after any Image processing, MaxBytes when zero. A larger result is refused with a storage limit failure.
 	MaxStoredBytes int64
-	Accepted       []storage.MediaType
-	AnyMedia       bool
-	Image          value.Optional[imaging.Plan]
+	// Accepted lists the media types a file may have, each a bare type without parameters, at most 32 and no duplicates, compared with the type detected from the bytes. It must be empty with AnyMedia, and may be empty only with AnyMedia or Image.
+	Accepted []storage.MediaType
+	AnyMedia bool
+	// Image, when set, runs each upload through the imaging plan and stores the re-encoded result; unset stores the bytes as uploaded. The plan must be valid.
+	Image value.Optional[imaging.Plan]
 	// Variants are named derived images (for example thumbnails) generated
 	// from each ready original and stored beside it. They require image input:
 	// an Image plan or an Accepted list of decodable image types.

@@ -32,6 +32,9 @@ func EventOutbox(key foundation.Key[*events.Outbox], destination outbox.Destinat
 	}
 }
 
+// EventOutboxProvider names the module that registers the queued event outboxes declared with
+// EventOutbox. It exists only when features.outbox.events configures at least one destination; each
+// configured destination needs an EventOutbox declaration and each declaration a configured destination.
 const EventOutboxProvider foundation.ProviderID = "foundry.application.events.outbox"
 
 var eventOutboxRoutesKey = foundation.NewKey[[]publisher.Route](string(EventOutboxProvider) + ".routes")

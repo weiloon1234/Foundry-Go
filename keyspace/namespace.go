@@ -11,7 +11,12 @@ type Feature string
 
 // Namespace separates applications and environments sharing a backend.
 // Components contain 1–128 ASCII letters, digits, dots, underscores or hyphens.
-type Namespace struct{ Application, Environment string }
+type Namespace struct {
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	Application string
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	Environment string
+}
 
 // Validate validates the application and environment names.
 func (n Namespace) Validate() error {

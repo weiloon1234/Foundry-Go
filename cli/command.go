@@ -45,8 +45,12 @@ type Handler[A any] func(context.Context, A, Streams) error
 
 // Streams holds the command's input, output, and error streams.
 type Streams struct {
-	In       io.Reader
-	Out, Err io.Writer
+	// In is the command's input. Confirm reads the answer from it and refuses when it is an *os.File that is not a terminal; any other reader is accepted.
+	In io.Reader
+	// Out is the command's output stream. In, Out and Err must all be non-nil.
+	Out io.Writer
+	// Err is the command's diagnostic stream; Confirm writes its prompt to it.
+	Err io.Writer
 }
 
 // Validate checks that all three streams are supplied.

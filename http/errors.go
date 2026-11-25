@@ -24,23 +24,30 @@ import (
 type ErrorCode string
 
 const (
-	BadRequest           ErrorCode = "bad_request"
-	Unauthenticated      ErrorCode = "unauthenticated"
-	Forbidden            ErrorCode = "forbidden"
-	MFARequired          ErrorCode = "mfa_required"
-	NotFound             ErrorCode = "not_found"
-	NotAcceptable        ErrorCode = "not_acceptable"
-	MethodNotAllowed     ErrorCode = "method_not_allowed"
-	Conflict             ErrorCode = "conflict"
-	PreconditionFailed   ErrorCode = "precondition_failed"
-	RangeNotSatisfiable  ErrorCode = "range_not_satisfiable"
+	// BadRequest is the 400 response "Invalid request".
+	BadRequest      ErrorCode = "bad_request"
+	Unauthenticated ErrorCode = "unauthenticated"
+	// Forbidden is the 403 response "Access denied".
+	Forbidden   ErrorCode = "forbidden"
+	MFARequired ErrorCode = "mfa_required"
+	// NotFound is the 404 response "Resource not found".
+	NotFound         ErrorCode = "not_found"
+	NotAcceptable    ErrorCode = "not_acceptable"
+	MethodNotAllowed ErrorCode = "method_not_allowed"
+	// Conflict is the 409 response "Request conflicts with current state".
+	Conflict ErrorCode = "conflict"
+	// PreconditionFailed is the 412 response used when a conditional request's precondition fails.
+	PreconditionFailed  ErrorCode = "precondition_failed"
+	RangeNotSatisfiable ErrorCode = "range_not_satisfiable"
+	// ValidationFailed is the 422 response "Validation failed".
 	ValidationFailed     ErrorCode = "validation_failed"
 	PayloadTooLarge      ErrorCode = "payload_too_large"
 	UnsupportedMediaType ErrorCode = "unsupported_media_type"
 	RequestTimeout       ErrorCode = "request_timeout"
 	RateLimited          ErrorCode = "rate_limited"
 	InternalError        ErrorCode = "internal_error"
-	Unavailable          ErrorCode = "unavailable"
+	// Unavailable is the 503 response "Service unavailable"; the framework uses it while draining or in maintenance and when a dependency such as a file source, authentication backend or rate-limit store fails.
+	Unavailable ErrorCode = "unavailable"
 )
 
 // ErrorDefinition is the shared runtime/client-contract description of a code.

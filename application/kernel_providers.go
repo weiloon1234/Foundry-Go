@@ -19,6 +19,9 @@ import (
 )
 
 const JobDeclarationsProvider foundation.ProviderID = "foundry.application.jobs"
+
+// EventProvider names the module that registers the event bus under EventKey. It exists only when events
+// are enabled; list it in Requires to start after the bus.
 const EventProvider foundation.ProviderID = "foundry.application.events"
 const EventDeclarationsProvider foundation.ProviderID = "foundry.application.listeners"
 const WorkerProvider foundation.ProviderID = "foundry.application.worker"
@@ -26,6 +29,7 @@ const SchedulerProvider foundation.ProviderID = "foundry.application.scheduler"
 const RealtimeProvider foundation.ProviderID = "foundry.application.realtime"
 const RealtimePublisherProvider foundation.ProviderID = "foundry.application.realtime.publisher"
 
+// EventKey resolves the event bus registered by EventProvider; it exists only when events are enabled.
 var EventKey = foundation.NewKey[*events.Bus](string(EventProvider))
 var SchedulerKey = foundation.NewKey[*schedule.Scheduler](string(SchedulerProvider))
 var RealtimeKey = foundation.NewKey[*websocket.Hub](string(RealtimeProvider))

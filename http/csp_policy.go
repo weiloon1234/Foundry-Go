@@ -13,15 +13,48 @@ import (
 // rule, with an empty slice enabling the full sandbox. A wholly empty policy
 // is rejected. Browser enforcement and reporting remain browser responsibilities.
 type CSPPolicy struct {
-	DefaultSrc, ScriptSrc, ScriptSrcElem, ScriptSrcAttr []CSPSource
-	StyleSrc, StyleSrcElem, StyleSrcAttr                []CSPSource
-	ChildSrc, ConnectSrc, FontSrc, FrameSrc, ImgSrc     []CSPSource
-	ManifestSrc, MediaSrc, ObjectSrc, WorkerSrc         []CSPSource
-	BaseURI, FormAction, FrameAncestors                 []CSPSource
-	Sandbox                                             []CSPSandboxToken
-	UpgradeInsecureRequests                             bool
-	ReportTo                                            CSPReportGroup
-	ReportURI                                           []CSPReportURI
+	// DefaultSrc lists the sources of the default-src directive; nil omits the directive and an empty slice emits 'none'.
+	DefaultSrc []CSPSource
+	// ScriptSrc lists the sources of the script-src directive; nil omits the directive and an empty slice emits 'none'.
+	ScriptSrc []CSPSource
+	// ScriptSrcElem lists the sources of the script-src-elem directive; nil omits the directive and an empty slice emits 'none'.
+	ScriptSrcElem []CSPSource
+	// ScriptSrcAttr lists the sources of the script-src-attr directive; nil omits the directive and an empty slice emits 'none'.
+	ScriptSrcAttr []CSPSource
+	// StyleSrc lists the sources of the style-src directive; nil omits the directive and an empty slice emits 'none'.
+	StyleSrc []CSPSource
+	// StyleSrcElem lists the sources of the style-src-elem directive; nil omits the directive and an empty slice emits 'none'.
+	StyleSrcElem []CSPSource
+	// StyleSrcAttr lists the sources of the style-src-attr directive; nil omits the directive and an empty slice emits 'none'.
+	StyleSrcAttr []CSPSource
+	// ChildSrc lists the sources of the child-src directive; nil omits the directive and an empty slice emits 'none'.
+	ChildSrc []CSPSource
+	// ConnectSrc lists the sources of the connect-src directive; nil omits the directive and an empty slice emits 'none'.
+	ConnectSrc []CSPSource
+	// FontSrc lists the sources of the font-src directive; nil omits the directive and an empty slice emits 'none'.
+	FontSrc []CSPSource
+	// FrameSrc lists the sources of the frame-src directive; nil omits the directive and an empty slice emits 'none'.
+	FrameSrc []CSPSource
+	// ImgSrc lists the sources of the img-src directive; nil omits the directive and an empty slice emits 'none'.
+	ImgSrc []CSPSource
+	// ManifestSrc lists the sources of the manifest-src directive; nil omits the directive and an empty slice emits 'none'.
+	ManifestSrc []CSPSource
+	// MediaSrc lists the sources of the media-src directive; nil omits the directive and an empty slice emits 'none'.
+	MediaSrc []CSPSource
+	// ObjectSrc lists the sources of the object-src directive; nil omits the directive and an empty slice emits 'none'.
+	ObjectSrc []CSPSource
+	// WorkerSrc lists the sources of the worker-src directive; nil omits the directive and an empty slice emits 'none'.
+	WorkerSrc []CSPSource
+	// BaseURI lists the sources of the base-uri directive; nil omits the directive and an empty slice emits 'none'.
+	BaseURI []CSPSource
+	// FormAction lists the sources of the form-action directive; nil omits the directive and an empty slice emits 'none'.
+	FormAction []CSPSource
+	// FrameAncestors lists the sources of the frame-ancestors directive; nil omits the directive and an empty slice emits 'none'.
+	FrameAncestors          []CSPSource
+	Sandbox                 []CSPSandboxToken
+	UpgradeInsecureRequests bool
+	ReportTo                CSPReportGroup
+	ReportURI               []CSPReportURI
 }
 
 // CSPSandboxToken is one explicit permission granted back to a CSP sandbox.

@@ -28,6 +28,7 @@ const MaxOperations = 4096
 // Sources contains actual registered descriptors. Schemas adds explicitly
 // public DTOs with no operation; persistence models are never inspected.
 type Sources struct {
+	// HTTP is the router whose endpoints, raw routes and error definitions the manifest describes.
 	HTTP          *foundryhttp.Router
 	Realtime      *websocket.ClientDescription
 	Notifications *notifications.Registry
@@ -37,8 +38,10 @@ type Sources struct {
 	Frontend      fs.FS
 	Enums         []enum.Definition
 	Permissions   []auth.PermissionDescription
-	Schemas       []contract.Schema
-	PublicConfig  []PublicSetting
+	// Schemas lists public DTO schemas to include even when no operation uses them.
+	Schemas []contract.Schema
+	// PublicConfig lists the browser-visible settings; each needs a unique name and env key, and an empty kind means PublicString.
+	PublicConfig []PublicSetting
 }
 
 // Document is the serialized inspection boundary. All payload references point
@@ -189,9 +192,10 @@ type Locales struct {
 type PublicKind = config.PublicKind
 
 const (
-	PublicString       = config.PublicString
-	PublicBoolean      = config.PublicBoolean
-	PublicNumber       = config.PublicNumber
+	PublicString  = config.PublicString
+	PublicBoolean = config.PublicBoolean
+	PublicNumber  = config.PublicNumber
+	// PublicLocale marks a public setting whose value must be a supported locale of the manifest, or a parseable locale when the manifest has no locale catalog.
 	PublicLocale       = config.PublicLocale
 	PublicFormatLocale = config.PublicFormatLocale
 	PublicCurrency     = config.PublicCurrency

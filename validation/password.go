@@ -9,7 +9,9 @@ import (
 // PasswordOptions counts Unicode code points. Composition requirements are
 // opt-in; no normalization, trimming, hashing or external breach request occurs.
 type PasswordOptions struct {
+	// MinLength is the fewest code points allowed; it must be at least 1.
 	MinLength int
+	// MaxLength is the most code points allowed; it must not be less than MinLength.
 	MaxLength int
 	Letters   bool
 	MixedCase bool

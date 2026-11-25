@@ -67,12 +67,21 @@ type AuditSettings struct {
 // primary schema, or public for an unscoped connection. Empty Kernels selects
 // HTTP, worker and scheduler. Alert thresholds remain explicit in Config.
 type TelemetrySettings struct {
-	Enabled   bool
-	Database  database.ConnectionName
-	Schema    string
-	Kernels   []foundation.KernelKind `config:",json"`
+	// Enabled turns on persisted telemetry. It requires observability to be enabled.
+	Enabled bool
+	// Database names the database connection that stores telemetry. Empty selects the default connection.
+	Database database.ConnectionName
+	// Schema is the schema that holds the telemetry tables. Empty selects the connection's primary schema,
+	// or public when that has none.
+	Schema string
+	// Kernels lists the kernels whose processes run the telemetry engine; empty selects HTTP, worker and
+	// scheduler. Each must be a known kernel kind, listed once.
+	Kernels []foundation.KernelKind `config:",json"`
+	// Collector configures the in-memory collector; it is validated at assembly.
 	Collector telemetry.CollectorConfig
-	Config    telemetry.Config
+	// Config configures the engine's timing, retention, alerts and read limits; it is validated at
+	// assembly.
+	Config telemetry.Config
 }
 
 // AttachmentSettings configures the attachment feature.

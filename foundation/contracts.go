@@ -24,9 +24,14 @@ type ResourceID string
 type KernelKind string
 
 const (
-	HTTP      KernelKind = "http"
-	CLI       KernelKind = "cli"
-	Worker    KernelKind = "worker"
+	// HTTP selects the kernel that serves HTTP; pass it to App.Run to start the server.
+	HTTP KernelKind = "http"
+	// CLI selects the one-shot command kernel. It must run alone, and cancelling its context stays an
+	// error.
+	CLI KernelKind = "cli"
+	// Worker selects the kernel that runs queued jobs.
+	Worker KernelKind = "worker"
+	// Scheduler selects the kernel that runs scheduled tasks.
 	Scheduler KernelKind = "scheduler"
 	WebSocket KernelKind = "websocket"
 )

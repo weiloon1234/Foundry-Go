@@ -113,10 +113,15 @@ const MaxJSONDepth = jsonwire.MaxDepth
 // object names. Steps bounds graph visits, including aliases and missing fields.
 // Issues caps returned field diagnostics. Transport adapters own their defaults.
 type JSONLimits struct {
-	Bytes  int
-	Depth  int
-	Nodes  int
-	Steps  int
+	// Bytes is the largest document size in bytes; it must be positive.
+	Bytes int
+	// Depth is the deepest child nesting allowed, with the root at zero; it must be from 0 to MaxJSONDepth.
+	Depth int
+	// Nodes is the most wire tree nodes allowed, object names included; it must be positive.
+	Nodes int
+	// Steps is the most schema graph visits allowed, aliases and missing fields included; it must be positive.
+	Steps int
+	// Issues is the most field diagnostics returned; it must be positive.
 	Issues int
 }
 

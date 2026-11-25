@@ -28,8 +28,13 @@ type Portal string
 type Source string
 
 const (
-	SourceBackend  Source = "backend"
-	SourceBrowser  Source = "browser"
+	// SourceBackend marks issues the collector records from error reports of HTTP, job and schedule
+	// operations.
+	SourceBackend Source = "backend"
+	// SourceBrowser marks issues recorded from browser error reports accepted by RecordBrowser.
+	SourceBrowser Source = "browser"
+	// SourceSecurity marks issues the collector records from security observations of HTTP requests,
+	// such as failed authentication.
 	SourceSecurity Source = "security"
 )
 

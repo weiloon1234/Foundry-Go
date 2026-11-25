@@ -67,8 +67,10 @@ func (k Kind) Validate() error {
 // widget; settings storage does not encrypt values. Parameters are explicitly
 // dynamic JSON object data for the application's chosen widget.
 type Presentation struct {
-	Kind        Kind
-	Group       Group
+	Kind Kind
+	// Group is the group the setting is listed under, "general" when empty. It must be a semantic identifier, and Filter.Group selects by it.
+	Group Group
+	// Label is the form label, optional, at most 512 bytes of valid UTF-8 without NUL characters.
 	Label       string
 	Description string
 	Order       int32

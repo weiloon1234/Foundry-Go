@@ -32,13 +32,18 @@ const MaxPayloadBytes = MaxEnvelopeBytes - (64 << 10)
 // again and a failed attempt is final. Declared policies normally leave it zero
 // and dispatches set it with Options.RetryUntil.
 type Policy struct {
-	Queue         Queue           `json:"queue"`
-	Attempts      uint32          `json:"attempts"`
-	Timeout       time.Duration   `json:"timeout"`
-	Backoff       []time.Duration `json:"backoff"`
-	Jitter        time.Duration   `json:"jitter"`
-	MaxExceptions uint32          `json:"max_exceptions,omitzero"`
-	RetryUntil    time.Time       `json:"retry_until,omitzero"`
+	// Queue is the default queue of the job; it must be a semantic name, and Options.Queue overrides it per dispatch.
+	Queue Queue `json:"queue"`
+	// Attempts is the most executions a job may start, from 1 to MaxAttempts.
+	Attempts uint32 `json:"attempts"`
+	// Timeout bounds one attempt's handler context; it must be positive and at most MaxTimeout.
+	Timeout time.Duration `json:"timeout"`
+	// Backoff lists the retry delay after each failed attempt, the last entry repeating for later attempts. It needs 1 to MaxAttempts entries, each at most MaxDelay minus Jitter.
+	Backoff []time.Duration `json:"backoff"`
+	// Jitter is the lower bound of the retry spread: each retry adds a random duration between 0 and max(Jitter, delay/5), capped at MaxDelay. It is from 0 to MaxDelay; zero disables jitter.
+	Jitter        time.Duration `json:"jitter"`
+	MaxExceptions uint32        `json:"max_exceptions,omitzero"`
+	RetryUntil    time.Time     `json:"retry_until,omitzero"`
 }
 
 // DefaultPolicy returns the default attempt, timeout, backoff, and jitter policy for queue.

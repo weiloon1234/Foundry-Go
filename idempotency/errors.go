@@ -11,10 +11,14 @@ import (
 type Code string
 
 const (
-	BadKey      Code = "idempotency_bad_key"
-	Mismatch    Code = "idempotency_mismatch"
-	InProgress  Code = "idempotency_in_progress"
-	Capacity    Code = "idempotency_capacity"
+	// BadKey reports an idempotency key that fails ParseKey or exceeds the store's maximum key length.
+	BadKey Code = "idempotency_bad_key"
+	// Mismatch reports a key already used with a different input fingerprint.
+	Mismatch Code = "idempotency_mismatch"
+	// InProgress reports that another submission with the same key has not yet committed; retry with the same key.
+	InProgress Code = "idempotency_in_progress"
+	Capacity   Code = "idempotency_capacity"
+	// Unavailable reports that the outcome could not be claimed, stored or replayed, including local admission being exhausted; retry with the same scope, key and input, but a stored outcome that cannot be replayed keeps returning it.
 	Unavailable Code = "idempotency_unavailable"
 )
 

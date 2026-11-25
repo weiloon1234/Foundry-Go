@@ -11,9 +11,11 @@ import (
 type PublicKind string
 
 const (
-	PublicString       PublicKind = "string"
-	PublicBoolean      PublicKind = "boolean"
-	PublicNumber       PublicKind = "number"
+	PublicString  PublicKind = "string"
+	PublicBoolean PublicKind = "boolean"
+	PublicNumber  PublicKind = "number"
+	// PublicLocale marks a string setting that the generated client accepts only if it is a supported locale of the
+	// contract manifest, or a valid locale when the manifest has no locale catalog. The Go config does not check it.
 	PublicLocale       PublicKind = "locale"
 	PublicFormatLocale PublicKind = "format_locale"
 	PublicCurrency     PublicKind = "currency"

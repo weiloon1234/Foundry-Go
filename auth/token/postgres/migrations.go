@@ -5,6 +5,7 @@ package postgres
 import "github.com/weiloon1234/Foundry-Go/database/migrate"
 
 const (
+	// MigrationOrigin is the migration origin of every definition Migrations returns.
 	MigrationOrigin migrate.Origin = "foundry.tokens"
 	CreateTokens    migrate.ID     = "000001_create_tokens"
 	AddTokenState   migrate.ID     = "000002_token_device_refresh_history"

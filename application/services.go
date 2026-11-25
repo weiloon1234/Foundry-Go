@@ -22,6 +22,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+// Provider names the module that registers Services. List it in Requires from a module that resolves Services.
 const Provider foundation.ProviderID = "foundry.application"
 const ImageProvider foundation.ProviderID = "foundry.application.image"
 const RouterProvider foundation.ProviderID = "foundry.application.router"
@@ -29,6 +30,8 @@ const HTTPProvider foundation.ProviderID = "foundry.application.http"
 
 var servicesKey = foundation.NewKey[Services]("foundry.application.services")
 var ImageKey = foundation.NewKey[*imaging.Engine]("foundry.application.image")
+
+// RouterKey resolves the HTTP router registered by RouterProvider; it exists only when HTTP is enabled.
 var RouterKey = foundation.NewKey[*http.Router]("foundry.application.router")
 var HTTPKey = foundation.NewKey[*http.Server]("foundry.application.http")
 

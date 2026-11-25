@@ -15,10 +15,14 @@ import (
 // error. Reads must terminate or honor the source context. Foundry never
 // abandons a callback or closes its body concurrently with a read.
 type StreamContent struct {
-	Body      io.ReadCloser
-	Name      string
+	// Body is the content to send; Foundry owns and closes it once the source returns.
+	Body io.ReadCloser
+	// Name is the file name used in Content-Disposition unless the stream overrides it.
+	Name string
+	// MediaType is the content's media type unless the stream overrides it; the type in effect must be valid and one the endpoint declared, otherwise the response fails with an internal error.
 	MediaType MediaType
-	Length    value.Optional[int64]
+	// Length is the exact byte count when known; unset means unknown and Set(0) means empty.
+	Length value.Optional[int64]
 }
 
 // StreamSource opens a representation only after its endpoint handler succeeds.

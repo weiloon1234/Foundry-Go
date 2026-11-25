@@ -20,14 +20,17 @@ type Isolation uint8
 const (
 	DefaultIsolation Isolation = iota
 	ReadCommitted
+	// RepeatableRead runs the transaction at PostgreSQL's repeatable read isolation level.
 	RepeatableRead
 	Serializable
 )
 
 // TxOptions controls one transaction. The zero value uses server defaults.
 type TxOptions struct {
+	// Isolation selects the transaction's isolation level; DefaultIsolation, the zero value, uses the server default, and an unknown level is refused.
 	Isolation Isolation
-	ReadOnly  bool
+	// ReadOnly starts the transaction as read-only; the server rejects writes in it.
+	ReadOnly bool
 }
 
 func (o TxOptions) sqlOptions() (*sql.TxOptions, error) {

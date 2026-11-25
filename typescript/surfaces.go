@@ -23,6 +23,7 @@ const MaxSurfaces = 64
 // <prefix>_<Name>_foundry.gen.ts, embedding only its projection of the
 // manifest; the realtime runtime is imported only when it has channels.
 type Surface struct {
+	// Name names the surface and appears in its file name; it follows the same pattern as the artifact prefix, is unique ignoring case, and cannot be "manifest", "openapi" or start with "runtime".
 	Name     string
 	Routes   []foundryhttp.RouteID
 	Channels []websocket.ChannelID
@@ -37,12 +38,18 @@ type Surface struct {
 // Helpers supply only the login body: routes cannot require path/query/header inputs,
 // signed URLs, idempotency keys, or bodies on refresh, logout and profile.
 type SurfaceAuth struct {
-	Guard      auth.GuardName
-	Login      foundryhttp.RouteID
-	Refresh    foundryhttp.RouteID
-	Logout     foundryhttp.RouteID
-	Profile    foundryhttp.RouteID
-	Identifier string // Case-sensitive JSON property name of the login identifier (e.g. "email").
+	// Guard is the guard of the profile route; generation fails when the profile route is guarded by another guard.
+	Guard auth.GuardName
+	// Login is the route that signs in; it must have a request body and use TokenCookieResponse.
+	Login foundryhttp.RouteID
+	// Refresh is the route that renews the session; it must use RefreshTokenCookie and TokenCookieResponse.
+	Refresh foundryhttp.RouteID
+	// Logout is the route that ends the session; it must use RefreshTokenCookieLogout and clear the cookie.
+	Logout foundryhttp.RouteID
+	// Profile is the route that returns the signed-in user; its guard must equal Guard.
+	Profile foundryhttp.RouteID
+	// Identifier is the case-sensitive JSON property name of the login identifier (e.g. "email").
+	Identifier string
 }
 
 // reservedSurfaceNames are artifact names of the same prefix. Names beginning

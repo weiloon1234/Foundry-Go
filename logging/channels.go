@@ -28,7 +28,11 @@ const Custom SinkDriver = "custom"
 //
 //foundry:config
 type ChannelSettings struct {
-	Sink  SinkConfig
+	// Sink configures the channel's destination. With the Stack driver, only the driver is set and the
+	// destination options belong to the child channels; with Custom, only Level is set.
+	Sink SinkConfig
+	// Stack lists the child channels a Stack channel writes to, in order. It requires one to sixteen
+	// distinct children and is refused for any other driver.
 	Stack []ChannelName `config:",json"`
 }
 

@@ -57,10 +57,13 @@ type Command struct {
 type Resources struct {
 	Migrations       *migrate.Postgres
 	MigrationTargets []MigrationTarget
-	Seeders          *seed.Registry
-	Prunables        *prune.Registry
-	Database         *database.DB
-	DatabaseName     database.ConnectionName
+	// Seeders is the seeder registry that seed list and seed run use; those commands fail when it is nil.
+	Seeders   *seed.Registry
+	Prunables *prune.Registry
+	// Database is the pool that seed run and prune run use; those commands fail when it is nil.
+	Database *database.DB
+	// DatabaseName names the connection that Database and MigrationTargets belong to; a --database selection must equal it, and an empty name accepts no selection.
+	DatabaseName database.ConnectionName
 }
 
 // MigrationTarget is the runner of one schema's migration history.

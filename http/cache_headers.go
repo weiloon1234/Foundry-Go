@@ -36,16 +36,22 @@ const maxCacheLifetime = 365 * 24 * time.Hour
 // when set, also sends an Expires date of now+MaxAge for HTTP/1.0 caches using
 // that application clock; HTTP/1.1 caches prefer max-age.
 type CachePolicy struct {
-	Visibility           CacheVisibility
-	MaxAge               time.Duration
-	SharedMaxAge         value.Optional[time.Duration]
+	// Visibility must be CachePrivate or CachePublic; with NoStore it must be left unset.
+	Visibility CacheVisibility
+	// MaxAge is the max-age value in whole seconds; zero sends max-age=0.
+	MaxAge time.Duration
+	// SharedMaxAge sets s-maxage for shared caches when set; it requires CachePublic and is omitted from the private form of the header.
+	SharedMaxAge value.Optional[time.Duration]
+	// StaleWhileRevalidate adds stale-while-revalidate in whole seconds when positive.
 	StaleWhileRevalidate time.Duration
 	StaleIfError         time.Duration
-	NoCache              bool
-	MustRevalidate       bool
-	Immutable            bool
-	NoStore              bool
-	ExpiresFrom          clock.Clock
+	// NoCache adds the no-cache directive so every use is revalidated.
+	NoCache        bool
+	MustRevalidate bool
+	// Immutable adds the immutable directive; it requires a positive MaxAge and no NoCache.
+	Immutable   bool
+	NoStore     bool
+	ExpiresFrom clock.Clock
 }
 
 // NoStoreCachePolicy forbids any cache from storing the response.

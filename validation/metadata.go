@@ -50,7 +50,9 @@ type Parameter struct {
 // Spec is a custom rule's public declaration. Message contains approved static
 // public text; an execution error's text is never used as a validation message.
 type Spec struct {
-	ID          RuleID              `json:"id"`
+	// ID identifies the rule and becomes the issue code; it must be a semantic identifier, and the foundry. prefix is reserved for built-in rules.
+	ID RuleID `json:"id"`
+	// Message is the public text of the failure; it must not be empty.
 	Message     string              `json:"message"`
 	Parameters  []Parameter         `json:"parameters,omitempty"`
 	Translation *i18n.MessageRecipe `json:"translation,omitempty"`

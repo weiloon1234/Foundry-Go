@@ -22,6 +22,7 @@ import (
 type TLSMode string
 
 const (
+	// VerifyTLS encrypts the connection with TLS 1.2 or newer and verifies the server certificate and host name; DefaultConfig uses it, and a TLSConfig that skips verification is refused with it.
 	VerifyTLS  TLSMode = "verify-full"
 	DisableTLS TLSMode = "disable"
 )

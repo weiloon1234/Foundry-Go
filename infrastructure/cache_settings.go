@@ -18,7 +18,9 @@ import (
 type CacheDriver string
 
 const (
-	MemoryCache   CacheDriver = "memory"
+	MemoryCache CacheDriver = "memory"
+	// RedisCache stores entries in the Redis connection the store names, or the default Redis connection
+	// when it names none.
 	RedisCache    CacheDriver = "redis"
 	FileCache     CacheDriver = "file"
 	PostgresCache CacheDriver = "postgres"

@@ -21,8 +21,10 @@ import (
 // Config's schema is shared by challenge and domain-model queries inside the
 // callback. Instances must share synchronized clocks. Construction does no I/O.
 type Config struct {
+	// Schema is the PostgreSQL schema the adapter's transactions put first on the search path (DefaultConfig uses "public"). It must be a valid SQL name.
 	Schema string
-	Clock  clock.Clock
+	// Clock supplies the current time for challenge expiry (DefaultConfig uses the system clock). It must not be nil.
+	Clock clock.Clock
 }
 
 // DefaultConfig returns the public schema and system clock.

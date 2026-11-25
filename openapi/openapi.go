@@ -26,7 +26,9 @@ const SpecificationVersion = "3.1.1"
 // absolute http(s) URLs without credentials, query or fragment, or paths
 // relative to the document such as "/api".
 type Options struct {
-	Title      string
+	// Title is the document's info.title; it is required and must not be blank.
+	Title string
+	// APIVersion is the document's info.version; it is required and must not be blank.
 	APIVersion string
 	Servers    []Server
 }

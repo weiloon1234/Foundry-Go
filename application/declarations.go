@@ -184,10 +184,14 @@ func (b *Builder) Schedules(construct Schedules) *Builder {
 // must also be declared by Authentication. The framework owns the selected hub,
 // listener and shutdown.
 type RealtimeDeclarations struct {
-	Channels       []websocket.Registration
+	// Channels registers the domain channels the hub serves. The framework copies the slice before
+	// building the channel registry from it.
+	Channels []websocket.Registration
+	// Authentication supplies the guards that authenticate hub connections. It must be set when Tickets is non-empty.
 	Authentication *http.Authentication
 	Middleware     []http.Middleware
-	Tickets        []auth.TicketRedeemer
+	// Tickets lists the token guards whose single-use handshake tickets the hub redeems. It requires Authentication.
+	Tickets []auth.TicketRedeemer
 }
 
 // hubOptions turns declared collaborators into hub construction options.

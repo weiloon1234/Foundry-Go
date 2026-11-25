@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	// MaxPasswordBytes is the longest plaintext password NewPlaintext accepts.
 	MaxPasswordBytes        = 4096
 	MaxEncodedBytes         = 512
 	MaxMemoryKiB     uint32 = 1024 * 1024
@@ -25,8 +26,11 @@ const (
 // or truncation is performed. ParseHash accepts bounded older costs; new hashing
 // requires at least 19 MiB and two passes, with 64 MiB/three passes the default.
 type Parameters struct {
-	MemoryKiB   uint32
-	Iterations  uint32
+	// MemoryKiB is the Argon2 memory cost in KiB, from 8 times Parallelism up to MaxMemoryKiB; Config.Validate requires at least 19 MiB for new hashes.
+	MemoryKiB uint32
+	// Iterations is the number of Argon2 passes, from 1 to MaxIterations; Config.Validate requires at least 2 for new hashes.
+	Iterations uint32
+	// Parallelism is the Argon2 lane count, from 1 to MaxParallelism.
 	Parallelism uint8
 }
 

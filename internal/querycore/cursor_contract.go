@@ -47,8 +47,12 @@ func ParseCursor[M any](token string) (Cursor[M], error) {
 // CursorRequest selects a bounded forward or backward page in the query's
 // declared order. After and Before are mutually exclusive; omit both to start.
 type CursorRequest[M any] struct {
-	Size          int
-	After, Before value.Optional[Cursor[M]]
+	// Size is the number of rows per page, from 1 to MaxPageSize.
+	Size int
+	// After continues forward from a cursor taken from an earlier page. It excludes Before.
+	After value.Optional[Cursor[M]]
+	// Before continues backward from a cursor taken from an earlier page. It excludes After.
+	Before value.Optional[Cursor[M]]
 }
 
 // CursorPage keeps canonical query order even for backward traversal. Next and
