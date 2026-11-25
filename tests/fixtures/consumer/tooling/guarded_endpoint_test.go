@@ -30,8 +30,11 @@ type memoryTokens struct {
 
 func (m *memoryTokens) Create(_ context.Context, address token.Address, creation token.Creation) (token.Record, error) {
 	record, err := creation.At(address, time.Now())
+	if err != nil {
+		return token.Record{}, err
+	}
 	m.records = append(m.records, record)
-	return record, err
+	return record, nil
 }
 
 func (m *memoryTokens) Lookup(_ context.Context, _ token.Address, digest token.Digest, _ bool) (value.Optional[token.Record], error) {
@@ -49,7 +52,7 @@ func (m *memoryTokens) Lookup(_ context.Context, _ token.Address, digest token.D
 
 var publishScope = auth.DefineAccessScope[models.User]("accounts.create")
 
-// guardedAccounts serves POST /accounts for an user holding the accounts.create scope.
+// guardedAccounts serves POST /accounts for a user holding the accounts.create scope.
 func guardedAccounts(t *testing.T) (*httptest.Client, *token.Tokens[models.User, model.ID[models.User]]) {
 	t.Helper()
 	provider := auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(models.User{}), func(_ context.Context, id model.ID[models.User]) (value.Optional[models.User], error) {

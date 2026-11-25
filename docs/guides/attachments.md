@@ -247,7 +247,8 @@ The existing writer exclusion, settlement delay, and cleanup grace still apply.
 
 Configure the manager `Timeout` to cover one maximum-sized verification plus its
 database work. Verification uses that operation budget; `CleanupTimeout` remains
-the shorter detached cleanup budget.
+the shorter detached cleanup budget. Ingress/deployment limits and a live-provider
+check remain the application's responsibility before production rollout.
 
 Before hooks run in declaration order with detected metadata and the typed
 owner. AfterStored hooks run after storage acknowledgement inside the ownership

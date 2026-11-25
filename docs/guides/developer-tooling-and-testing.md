@@ -995,13 +995,14 @@ request descriptor and asserts the typed statuses. It needs no database when the
 token store is in memory. Framework imports from `github.com/weiloon1234/Foundry-Go`:
 `auth`, `auth/token`, `database/orm`, `http` as `foundryhttp`, `httpclient`,
 `keyspace`, `model`, `testkit/http` as `httptest`, `validation`, `value`; the
-the application's own packages are `models` (its declared models, here `models.User`
+application's own packages are `models` (its declared models, here `models.User`
 with its generated `Users` table and a `Status` enum) and `outgoing` (its request and
 response DTOs: `CreateAccount` with a `Name`, and `AccountReceipt`).
 
 A test token backend keeps issued tokens in memory; the token service verifies each
 request against it, so scope, provider eligibility and verification behave as in
-production:
+production. The backend implements only the methods this test uses (`Create` and
+`Lookup`), so a test that refreshes or revokes a token must implement those methods too:
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guarded_endpoint_test.go#guarded-test-backend -->
 ```go
@@ -1014,8 +1015,11 @@ type memoryTokens struct {
 
 func (m *memoryTokens) Create(_ context.Context, address token.Address, creation token.Creation) (token.Record, error) {
 	record, err := creation.At(address, time.Now())
+	if err != nil {
+		return token.Record{}, err
+	}
 	m.records = append(m.records, record)
-	return record, err
+	return record, nil
 }
 
 func (m *memoryTokens) Lookup(_ context.Context, _ token.Address, digest token.Digest, _ bool) (value.Optional[token.Record], error) {
@@ -1037,7 +1041,7 @@ credentials from:
 ```go
 var publishScope = auth.DefineAccessScope[models.User]("accounts.create")
 
-// guardedAccounts serves POST /accounts for an user holding the accounts.create scope.
+// guardedAccounts serves POST /accounts for a user holding the accounts.create scope.
 func guardedAccounts(t *testing.T) (*httptest.Client, *token.Tokens[models.User, model.ID[models.User]]) {
 	t.Helper()
 	provider := auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(models.User{}), func(_ context.Context, id model.ID[models.User]) (value.Optional[models.User], error) {
@@ -1087,7 +1091,7 @@ func guardedAccounts(t *testing.T) (*httptest.Client, *token.Tokens[models.User,
 `CreateAccountBody()` and `AccountReceiptResponse(201)` are the generated endpoint
 descriptors, `CreateAccountJSON()` and `AccountReceiptJSON()` the generated client
 descriptors that `httptest.JSON` and `httptest.DecodeJSON` take. Inputs: `t *testing.T`,
-`client *httptest.Client` and `tokens *token.Tokens[Editor, int64]` from `guardedAccounts(t)`,
+`client *httptest.Client` and `tokens *token.Tokens[models.User, model.ID[models.User]]` from `guardedAccounts(t)`,
 `proof` from `auth.NewProof` for the user, and `scopes` holding `accounts.create`.
 A call without a token returns 401, a valid call 201 with the receipt, an invalid body
 422, and a token that lacks the required scope 403:

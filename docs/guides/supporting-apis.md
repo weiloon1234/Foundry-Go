@@ -7,8 +7,8 @@ focused packages and ordinary Go values.
 
 Use the existing [encryption package](encryption.md) for versioned authenticated
 encryption and retained-key rotation, `auth/password` for password hashing and
-the HTTP URL-signing API for purpose-bound signatures., reusing
-their implementations and compatibility tests.
+the HTTP URL-signing API for purpose-bound signatures. These supporting APIs reuse those
+implementations and their compatibility tests.
 
 `randomtoken.Bytes(size)` obtains cryptographic entropy. `Hex(size)` and
 `Base64(size)` encode that number of bytes; `Generate(length)` returns exactly that

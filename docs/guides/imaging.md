@@ -7,8 +7,6 @@
 - [Validate image uploads](http-uploads.md#recipe-image-kinds)
 - [Declare attachment image policy](attachments.md#recipe-declare-collection)
 
-## Overview
-
 <a id="recipe-process-image"></a>
 ## Configure an engine and process an image
 
@@ -427,7 +425,7 @@ Dependency review used the standard image codecs plus
 [Go's supplementary image codecs](https://pkg.go.dev/golang.org/x/image),
 [GIFT transforms](https://github.com/disintegration/gift),
 [vpx portable WebP encoding](https://github.com/gen2brain/vpx), and
-[gav1d AVIF codec](https://github.com/gen2brain/gav1d). The reviewed versions are installed and aligned across the framework and.
+[gav1d AVIF codec](https://github.com/gen2brain/gav1d). The reviewed versions are installed and aligned across the framework and its consumers.
 
 ## Automatically discovered libvips runtime
 

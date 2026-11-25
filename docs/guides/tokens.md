@@ -535,7 +535,7 @@ Configured applications can instead return `application.PruneTokens(guard)` in
 
 ## Credential changes and checked issuance
 
-The [credential-change integration](credential-changes.md) uses `Revocation()` to contribute contributes this guard to a typed group; `RevokeAllIn`
+The [credential-change integration](credential-changes.md) uses `Revocation()` to contribute this guard to a typed group; `RevokeAllIn`
 joins a caller-owned model transaction without committing. Checked password proofs
 lock and revalidate their current model before issuance in the same transaction.
 

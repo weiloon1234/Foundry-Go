@@ -411,7 +411,7 @@ add conditional delete to R2 or change the requirements of `MoveTo`.
 
 R2's upload-generation response header is also not a retained-version selector:
 its `ObjectInfo.Version` stays empty and follow-up reads pin the ETag. Supported
-provider options must never be silently ignored..
+provider options must never be silently ignored.
 
 `CompatibleConfig(bucket, region, endpoint, capabilities)` selects a generic
 S3-compatible service (MinIO, DigitalOcean Spaces, Backblaze B2 and similar)

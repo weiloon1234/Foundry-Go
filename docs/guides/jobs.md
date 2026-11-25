@@ -389,10 +389,15 @@ func (p *WelcomeProducer) Enqueue(ctx context.Context, tx *database.Tx, id model
 ```
 
 In a configured application the job outbox is declared in TOML. `connection` names
-an existing job connection (here `background`, declared under `services.jobs`) and
-the worker consumes that connection's default queue:
+an existing job connection (here `background`, declared under `services.jobs`). The
+Redis connection it names is declared under `services.redis`, and the worker consumes
+only the queues listed in `worker.config.queues` (at least one, at most 64, each with
+a weight above zero), so list the queue the jobs use, here the connection's
+`default_queue`:
 
 ```toml
+[services.redis.connections.default]
+host = 'redis.example.test'
 [services.jobs]
 default = 'background'
 [services.jobs.connections.background]
@@ -409,6 +414,8 @@ background = 'app.background'
 [worker]
 enabled = true
 connection = 'background'
+[worker.config]
+queues = [{Queue = 'reports', Weight = 1}]
 ```
 
 `features.outbox.jobs` maps a **job connection name** to the **outbox destination**
@@ -422,6 +429,10 @@ then returns the producer for that connection; an empty name selects the default
 connection, and a connection with no entry fails with "job outbox is not configured". The connection must be durable: only a Redis connection qualifies, and a memory connection is refused with "outbox publication requires a durable job backend".
 `schema` and `database` select where the outbox table lives; `kernels` selects which
 running kernels also run the publisher.
+
+Tests use isolated keys and test-owned database schemas, removed by
+[passing-test cleanup](contributing.md#postgresql-acceptance); no reset or provider
+provisioning is needed.
 
 Outside configured assembly, prepare a `jobs.Outbox` with a destination and dispatcher. Inside a business
 transaction use `Definition.Enqueue`, or capture once and use `Pending.Enqueue`
