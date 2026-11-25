@@ -12,26 +12,25 @@ Declare query fields in an ordinary Go struct and run the shared Foundry
 generator. The same generated descriptor decodes request queries and encodes
 queries for links. The consumer owns field types and names once.
 
+The [SearchInput declaration](http-presence.md#recipe-patch-query) owns the generated
+`SearchInputDescriptor()` used here.
+
+<!-- compiled-source: tests/fixtures/consumer/httpquery/query_recipes.go#http-queries-1 -->
 ```go
-//foundry:query
-type SearchInput struct {
-    User     model.ID[models.User]
-    Search   value.Optional[string] `query:"q"`
-    Statuses []models.Status         `query:"status"`
+func normalizeQuery(ctx context.Context, request *http.Request, parameters foundryhttp.Query[SearchInput]) (string, error) {
+	limits := foundryhttp.QueryLimits{Bytes: 4096, Pairs: 64, Issues: 8}
+
+	input, err := foundryhttp.DecodeQuery(parameters, ctx, request.URL.RawQuery, limits)
+	if err != nil {
+		return "", err
+	}
+
+	// input.User retains model.ID[models.User].
+	// input.Search distinguishes omission from an explicitly empty string.
+	// input.Statuses is an ordinary []models.Status.
+	encoded, err := foundryhttp.EncodeQuery(parameters, ctx, input, limits)
+	return encoded, err
 }
-
-parameters := SearchInputDescriptor()
-limits := foundryhttp.QueryLimits{Bytes: 4096, Pairs: 64, Issues: 8}
-
-input, err := foundryhttp.DecodeQuery(parameters, ctx, request.URL.RawQuery, limits)
-if err != nil {
-    return err
-}
-
-// input.User retains model.ID[models.User].
-// input.Search distinguishes omission from an explicitly empty string.
-// input.Statuses is an ordinary []models.Status.
-encoded, err := foundryhttp.EncodeQuery(parameters, ctx, input, limits)
 ```
 
 Here `model`, `value` and `foundryhttp` are framework imports; `models` is the

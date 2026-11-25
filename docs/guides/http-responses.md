@@ -6,9 +6,23 @@ A generated JSON descriptor can prepare a response body while preserving the DTO
 type. Encoding checks the same normalized schema used by decoding and [client exporters](client-contracts.md). The framework returns bytes only after encoding and schema
 validation succeed; a transport can then write its success headers and body.
 
+<!-- compiled-source: tests/fixtures/consumer/httpdto/dto.go#user-response-contract -->
 ```go
-response := UserResponse{ID: userID, Email: email, State: activeState}
-body, err := UserResponseJSON().Encode(ctx, response, limits)
+//foundry:dto http=response
+type UserResponse struct {
+	ID    model.ID[models.User] `json:"id"`
+	Email string                `json:"email"`
+	State models.Status         `json:"state"`
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/httpdto/response_recipes.go#http-responses-1 -->
+```go
+func encodeUser(ctx context.Context, userID model.ID[models.User], email string, activeState models.Status, limits contract.JSONLimits) ([]byte, error) {
+	response := UserResponse{ID: userID, Email: email, State: activeState}
+	body, err := UserResponseJSON().Encode(ctx, response, limits)
+	return body, err
+}
 ```
 
 `response` must have the descriptor's concrete DTO type. Passing another model's
@@ -20,13 +34,24 @@ The encoder does not choose or apply model getters automatically.
 
 Compose descriptors from an existing generated descriptor:
 
+<!-- compiled-source: tests/fixtures/consumer/httpdto/response_recipes.go#http-responses-2 -->
 ```go
-users := contract.Slice(UserResponseJSON())
-body, err := users.Encode(ctx, []UserResponse{response}, limits)
+func encodeUsers(ctx context.Context, response UserResponse, limits contract.JSONLimits) ([]byte, error) {
+	users := contract.Slice(UserResponseJSON())
+	body, err := users.Encode(ctx, []UserResponse{response}, limits)
+	return body, err
+}
 
-optionalUser := contract.Nullable(UserResponseJSON())
-body, err = optionalUser.Encode(ctx, value.Of(response), limits)
-body, err = optionalUser.Encode(ctx, value.Null[UserResponse](), limits)
+func encodePresentUser(ctx context.Context, response UserResponse, limits contract.JSONLimits) ([]byte, error) {
+	optionalUser := contract.Nullable(UserResponseJSON())
+	body, err := optionalUser.Encode(ctx, value.Of(response), limits)
+	return body, err
+}
+func encodeNullUser(ctx context.Context, limits contract.JSONLimits) ([]byte, error) {
+	optionalUser := contract.Nullable(UserResponseJSON())
+	body, err := optionalUser.Encode(ctx, value.Null[UserResponse](), limits)
+	return body, err
+}
 ```
 
 These APIs return descriptors for ordinary `[]UserResponse` and

@@ -13,18 +13,18 @@ Further reading: [Localized messages](validation-messages.md).
 Declare a public error once and reuse the value in the endpoint and handler. The declaration owns a semantic `ErrorCode`, a status from 400 through
 599, and static public text. This is the same metadata the router exports.
 
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/errors.go#declared-seat-error -->
 ```go
-var SeatUnavailable = foundryhttp.DefineError(
-    "seats.unavailable", 409, "The selected seat is no longer available.",
-)
+var SeatUnavailable = foundryhttp.DefineError("seats.unavailable", 409, "The selected seat is no longer available.")
 
-reserveRoute := foundryhttp.DefineRoute(
-    foundryhttp.RouteSpec{ID: "seats.reserve", Method: foundryhttp.POST, Access: foundryhttp.Public},
-    foundryhttp.StaticPath("/seats/reserve"),
-)
-reserve := foundryhttp.DefineEndpoint(reserveRoute, foundryhttp.EmptyQuery(),
-    foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
-reserve = foundryhttp.ConfigureEndpoint(reserve, foundryhttp.Errors(SeatUnavailable))
+var Reserve = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent] {
+	seatsReserveRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "seats.reserve", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/seats/reserve"))
+	seatsReserveEndpoint := foundryhttp.DefineEndpoint(
+		seatsReserveRoute,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204),
+	)
+	return foundryhttp.ConfigureEndpoint(seatsReserveEndpoint, foundryhttp.Errors(SeatUnavailable))
+}()
 ```
 
 The [consumer example](../../tests/fixtures/consumer/httpendpoints/errors.go)

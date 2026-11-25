@@ -52,10 +52,17 @@ except `.` (it delimits the signed content) and `,`, so provider IDs such as
 
 ## Provider HMAC schemes
 
+<!-- compiled-source: tests/fixtures/consumer/security/provider_recipe.go#webhooks-2 -->
 ```go
-config := webhook.GitHubConfig("github") // or ShopifyConfig / SlackConfig
-verifier, err := webhook.New(config, RepositoryAccountID(7),
-    []secret.String{githubSecret}, clock.System{})
+// RepositoryAccountID identifies the configured repository owner.
+type RepositoryAccountID int64
+
+func repositoryVerifier(githubSecret secret.String) (*webhook.Verifier[RepositoryAccountID], error) {
+	config := webhook.GitHubConfig("github") // or ShopifyConfig / SlackConfig
+	verifier, err := webhook.New(config, RepositoryAccountID(7),
+		[]secret.String{githubSecret}, clock.System{})
+	return verifier, err
+}
 ```
 
 `HMACScheme` names the `SignatureHeader`, an optional `Prefix` (for example
@@ -313,22 +320,65 @@ replicas from duplicating work.
 `webhook/outbound` sends signed webhooks to registered endpoints through typed
 jobs and the transactional outbox, and keeps a delivery log.
 
+<!-- compiled-source: tests/fixtures/consumer/security/outbound_recipe.go#invoice-event -->
 ```go
-var InvoicePaid = outbound.DefineEvent("invoice.paid", InvoicePaidJSON())
+// InvoicePaidPayload contains the merchant's public invoice reference.
+//
+//foundry:dto
+type InvoicePaidPayload struct {
+	Invoice string `json:"invoice"`
+}
 
-service, err := outbound.New(outbound.Dependencies{DB: db, Keys: keyring,
-    Client: restrictedClient, Clock: clock.System{}}, outbound.DefaultConfig())
-job := outbound.DefineDeliveryJob("webhooks.deliver", jobs.DefaultPolicy("webhooks"))
-declaration, err := job.Declare(service) // register with the job registry
-sink, err := job.FailureSink(service)    // register with every worker running it
-queue, err := job.ToOutbox(service, producer)
+// InvoicePaid binds the public event name to its generated payload contract.
+var InvoicePaid = outbound.DefineEvent("invoice.paid", InvoicePaidPayloadJSON())
+var deliverWebhooks = outbound.DefineDeliveryJob("webhooks.deliver", jobs.DefaultPolicy("webhooks"))
+```
 
-endpoint, signingSecret, err := service.CreateEndpoint(ctx, outbound.EndpointOptions{
-    URL: customerURL, Events: []outbound.EventType{"invoice.paid"},
-})
-// Inside the business transaction:
-id, err := outbound.Send(ctx, tx, queue, endpoint, InvoicePaid, payload)
-ids, err := outbound.Publish(ctx, tx, queue, InvoicePaid, payload) // fan-out
+<!-- compiled-source: tests/fixtures/consumer/security/outbound_recipe.go#webhooks-6 -->
+```go
+func runWebhookWorker(ctx context.Context, db *database.DB, keyring *encryption.Keyring, restrictedClient *httpclient.Client, backend jobs.Backend, workerConfig jobs.WorkerConfig) error {
+	service, err := outbound.New(outbound.Dependencies{DB: db, Keys: keyring, Client: restrictedClient, Clock: clock.System{}}, outbound.DefaultConfig())
+	if err != nil {
+		return err
+	}
+	defer service.Close(context.Background())
+	declaration, err := deliverWebhooks.Declare(service)
+	if err != nil {
+		return err
+	}
+	sink, err := deliverWebhooks.FailureSink(service)
+	if err != nil {
+		return err
+	}
+	registry, err := jobs.NewRegistry(declaration)
+	if err != nil {
+		return err
+	}
+	worker, err := jobs.NewWorker(backend, registry, workerConfig, jobs.WithFailureSink(sink))
+	if err != nil {
+		return err
+	}
+	return worker.Run(ctx)
+}
+
+func invoiceDeliveryQueue(service *outbound.Service, producer *jobs.Outbox) (outbound.Queue, error) {
+	queue, err := deliverWebhooks.ToOutbox(service, producer)
+	return queue, err
+}
+
+func subscribeInvoices(ctx context.Context, service *outbound.Service, customerURL string) (outbound.EndpointID, secret.String, error) {
+	return service.CreateEndpoint(ctx, outbound.EndpointOptions{URL: customerURL, Events: []outbound.EventType{"invoice.paid"}})
+}
+
+// Call one dispatch form inside the business transaction, according to its audience.
+func sendInvoice(ctx context.Context, tx *database.Tx, queue outbound.Queue, endpoint outbound.EndpointID, payload InvoicePaidPayload) (outbound.DeliveryID, error) {
+	id, err := outbound.Send(ctx, tx, queue, endpoint, InvoicePaid, payload)
+	return id, err
+}
+func publishInvoice(ctx context.Context, tx *database.Tx, queue outbound.Queue, payload InvoicePaidPayload) ([]outbound.DeliveryID, error) {
+	ids, err := outbound.Publish(ctx, tx, queue, InvoicePaid, payload)
+	return ids, err
+}
 ```
 
 Apply `outbound.Migrations()` in the same schema as the job outbox;

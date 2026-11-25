@@ -28,11 +28,15 @@ type ProjectDTO struct {
 	Title string            `json:"title"`
 }
 
+// doc-example:begin generic-envelope
+
 //foundry:dto
 type Envelope[T any] struct {
 	Data  T      `json:"data"`
 	Trace string `json:"trace"`
 }
+
+// doc-example:end generic-envelope
 
 //foundry:dto
 type UserEnvelope struct {

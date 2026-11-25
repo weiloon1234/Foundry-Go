@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "files": {
+    "bank_dto_foundry.gen.go": "700c0cef160a04ff6504a2abc679e12b89fc54862f0f530f838c5d20c8d8fdea",
+    "card_dto_foundry.gen.go": "5795bad91326796bbaad43028e4d7d8e69e900698fa9218267d197f353698928",
+    "payment_method_foundry.gen.go": "03bcb1d52b1ddc856ad8a03358e3576b80f8e5ee8e5ffceef45050c0bd58e600"
+  }
+}

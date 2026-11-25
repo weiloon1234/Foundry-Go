@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin tracking-scalar
 // TrackingCode is an application-owned text protocol. The scalar declaration
 // describes its wire value; the methods own its domain representation checks.
 type TrackingCode string
@@ -31,6 +32,8 @@ func (v *TrackingCode) UnmarshalText(data []byte) error {
 var TrackingScalar = contract.DefineScalar[TrackingCode](contract.Type{
 	ID: "foundry.test/consumer/httpquery.TrackingCode", Kind: contract.StringKind,
 })
+
+// doc-example:end tracking-scalar
 
 type TrackingInput struct{ Code value.Optional[TrackingCode] }
 

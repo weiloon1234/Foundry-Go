@@ -9,29 +9,49 @@ HTTP permits servers to ignore Range; see [RFC 9110](https://www.rfc-editor.org/
 
 Declare the media and return a deferred source from the typed handler:
 
+<!-- compiled-source: tests/fixtures/consumer/httpstreams/guide_recipes.go#report-stream-contracts -->
 ```go
-route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
-    ID: "reports.export", Method: foundryhttp.GET, Access: foundryhttp.Public,
-}, httpkernel.UserPathDescriptor())
-endpoint := foundryhttp.DefineEndpoint(
-    route,
-    foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
-    foundryhttp.StreamResponse("text/csv; charset=utf-8"),
-)
-registration := endpoint.Handle(func(ctx context.Context, input Request) (foundryhttp.Stream, error) {
-    return foundryhttp.StreamFrom(func(ctx context.Context) (foundryhttp.StreamContent, error) {
-        body, err := reports.Open(ctx, input.Path.User)
-        return foundryhttp.StreamContent{
-            Body: body, Name: "report.csv", MediaType: "text/csv; charset=utf-8",
-        }, err
-    }), nil
-})
+// UserPath selects the user whose report is exported.
+//
+//foundry:path pattern=/users/{user}
+type UserPath struct{ User model.ID[models.User] }
+
+// ExportRequest carries the decoded user identity to the stream handler.
+type ExportRequest = foundryhttp.Input[UserPath, foundryhttp.NoQuery, foundryhttp.NoBody]
+
+// ReportSource authorizes access before returning a context-aware reader.
+type ReportSource interface {
+	Open(context.Context, model.ID[models.User]) (io.ReadCloser, error)
+}
 ```
 
-`Request` aliases `Input[httpkernel.UserPath, NoQuery, NoBody]`; the generated
-path retains `model.ID[models.User]`. The complete
-[independent consumer](../../tests/fixtures/consumer/httpstreams/streams.go)
-shows the domain service, declaration and router assembly. No framework-facing
+<!-- compiled-source: tests/fixtures/consumer/httpstreams/guide_recipes.go#http-streams-1 -->
+```go
+func registerReportExport(reports ReportSource) foundryhttp.RouteRegistration {
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
+		ID: "reports.export", Method: foundryhttp.GET, Access: foundryhttp.Public,
+	}, UserPathDescriptor())
+	endpoint := foundryhttp.DefineEndpoint(
+		route,
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
+		foundryhttp.StreamResponse("text/csv; charset=utf-8"),
+	)
+	registration := endpoint.Handle(func(ctx context.Context, input ExportRequest) (foundryhttp.Stream, error) {
+		return foundryhttp.StreamFrom(func(ctx context.Context) (foundryhttp.StreamContent, error) {
+			body, err := reports.Open(ctx, input.Path.User)
+			return foundryhttp.StreamContent{
+				Body: body, Name: "report.csv", MediaType: "text/csv; charset=utf-8",
+			}, err
+		}), nil
+	})
+	return registration
+}
+```
+
+`ExportRequest` aliases `foundryhttp.Input[UserPath, foundryhttp.NoQuery, foundryhttp.NoBody]`.
+The recipe declares its own `UserPath`; its generated descriptor retains
+`model.ID[models.User]`. `ReportSource` supplies the domain reader, and
+`registerReportExport` assembles the typed route and handler. No framework-facing
 writer or string model identifier appears in the handler.
 
 `StreamContent.Length` is `value.Optional[int64]`. Leave it unset when length
@@ -75,24 +95,47 @@ A raw route can publish typed server-sent events (`text/event-stream`) with
 `ServeEvents`. Each event's data is encoded by a declared `contract.JSON[T]`,
 so the payload type and wire checks match typed responses:
 
+<!-- compiled-source: tests/fixtures/consumer/httpstreams/guide_recipes.go#order-event-contracts -->
 ```go
-route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
-    ID: "orders.events", Method: foundryhttp.GET, Access: foundryhttp.Public,
-}, foundryhttp.StaticPath("/orders/events"))
-route = foundryhttp.ConfigureRoute(route, foundryhttp.Timeout(time.Hour))
+// OrderEvent carries one order transition to a subscriber.
+//
+//foundry:dto
+type OrderEvent struct {
+	Number string `json:"number"`
+	State  string `json:"state"`
+}
+type orderUpdate struct {
+	Cursor string
+	Event  OrderEvent
+}
+type orderWatcher interface {
+	// Watch closes its channel when ctx ends.
+	Watch(context.Context, string) <-chan orderUpdate
+}
+```
 
-registration := foundryhttp.HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
-    err := foundryhttp.ServeEvents(w, r, OrderEventJSON(), foundryhttp.DefaultEventStreamConfig(),
-        func(ctx context.Context, sink *foundryhttp.EventSink[OrderEvent]) error {
-            for update := range orders.Watch(ctx, r.Header.Get("Last-Event-ID")) {
-                if err := sink.Send(ctx, foundryhttp.Event[OrderEvent]{ID: update.Cursor, Name: "order", Data: update.Event}); err != nil {
-                    return err
-                }
-            }
-            return nil
-        })
-    _ = err // The stream is committed; log a redacted diagnostic if needed.
-})
+<!-- compiled-source: tests/fixtures/consumer/httpstreams/guide_recipes.go#http-streams-2 -->
+```go
+func registerRawEvents(orders orderWatcher) foundryhttp.RouteRegistration {
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
+		ID: "orders.events", Method: foundryhttp.GET, Access: foundryhttp.Public,
+	}, foundryhttp.StaticPath("/orders/events"))
+	route = foundryhttp.ConfigureRoute(route, foundryhttp.Timeout(time.Hour))
+
+	registration := foundryhttp.HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
+		err := foundryhttp.ServeEvents(w, r, OrderEventJSON(), foundryhttp.DefaultEventStreamConfig(),
+			func(ctx context.Context, sink *foundryhttp.EventSink[OrderEvent]) error {
+				for update := range orders.Watch(ctx, r.Header.Get("Last-Event-ID")) {
+					if err := sink.Send(ctx, foundryhttp.Event[OrderEvent]{ID: update.Cursor, Name: "order", Data: update.Event}); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		_ = err // The stream is committed; log a redacted diagnostic if needed.
+	})
+	return registration
+}
 ```
 
 `ServeEvents` commits 200 with `Cache-Control: no-store`, then writes and flushes
@@ -118,22 +161,28 @@ response, described in the manifest, OpenAPI (`text/event-stream` with
 request as usual and returns `EventsFrom(producer)`; the stream starts only after
 the handler succeeded:
 
+<!-- compiled-source: tests/fixtures/consumer/httpstreams/guide_recipes.go#http-streams-3 -->
 ```go
-orderEvents := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
-    foundryhttp.EventStreamResponse(OrderEventJSON()))
-orderEvents = foundryhttp.ConfigureEndpoint(orderEvents, foundryhttp.Timeout(time.Hour))
+func registerOrderEvents(orders orderWatcher) foundryhttp.RouteRegistration {
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "orders.events", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/orders/events"))
 
-registration := orderEvents.Handle(func(ctx context.Context, in Request) (foundryhttp.Events[OrderEvent], error) {
-    return foundryhttp.EventsFrom(func(ctx context.Context, sink *foundryhttp.EventSink[OrderEvent]) error {
-        after, _ := foundryhttp.LastEventID(ctx) // Set when the client resumes.
-        for update := range orders.Watch(ctx, after) {
-            if err := sink.Send(ctx, foundryhttp.Event[OrderEvent]{ID: update.Cursor, Data: update.Event}); err != nil {
-                return err
-            }
-        }
-        return nil
-    }), nil
-})
+	orderEvents := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
+		foundryhttp.EventStreamResponse(OrderEventJSON()))
+	orderEvents = foundryhttp.ConfigureEndpoint(orderEvents, foundryhttp.Timeout(time.Hour))
+
+	registration := orderEvents.Handle(func(ctx context.Context, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Events[OrderEvent], error) {
+		return foundryhttp.EventsFrom(func(ctx context.Context, sink *foundryhttp.EventSink[OrderEvent]) error {
+			after, _ := foundryhttp.LastEventID(ctx) // Set when the client resumes.
+			for update := range orders.Watch(ctx, after) {
+				if err := sink.Send(ctx, foundryhttp.Event[OrderEvent]{ID: update.Cursor, Data: update.Event}); err != nil {
+					return err
+				}
+			}
+			return nil
+		}), nil
+	})
+	return registration
+}
 ```
 
 Each typed event's data is bounded by `EndpointLimits.Response`, which clients receive.

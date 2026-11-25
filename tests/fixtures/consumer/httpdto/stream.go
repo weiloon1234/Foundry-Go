@@ -10,11 +10,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin streaming-label
 // StreamLabel owns its private representation and native streaming wire methods.
 type StreamLabel struct{ text string }
 
 func NewStreamLabel(text string) StreamLabel { return StreamLabel{text: text} }
-func (v StreamLabel) Text() string           { return v.text }
+
 func (v StreamLabel) MarshalJSONTo(enc *jsontext.Encoder) error {
 	return enc.WriteToken(jsontext.String("label:" + v.text))
 }
@@ -30,6 +31,10 @@ func (v *StreamLabel) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	*v = NewStreamLabel(text)
 	return nil
 }
+
+// doc-example:end streaming-label
+
+func (v StreamLabel) Text() string { return v.text }
 func (StreamLabel) JSONContract() contract.JSON[StreamLabel] {
 	return contract.ScalarJSON(contract.DefineScalar[StreamLabel](contract.Type{
 		ID: "foundry.test/consumer/httpdto.StreamLabel", Kind: contract.StringKind,

@@ -145,12 +145,17 @@ HTTP kernel's `MaxBodyBytes` remains an additional ceiling; to accept files larg
 than that server-wide default on one upload route only, declare the route's own
 ceiling with `BodyLimit` and a matching `Timeout` for slow transfers:
 
+<!-- compiled-source: tests/fixtures/consumer/httpuploads/http_uploads_recipe.go#http-uploads-3 -->
 ```go
-limits := foundryhttp.DefaultEndpointLimits()
-limits.Multipart.Bytes, limits.Multipart.FileBytes = 520<<20, 512<<20
-upload := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), ProfileInputBody(directory), foundryhttp.EmptyResponse(204))
-upload = foundryhttp.ConfigureEndpoint(upload, foundryhttp.Limits(limits),
-    foundryhttp.BodyLimit(520 << 20), foundryhttp.Timeout(10 * time.Minute))
+func largeUploadEndpoint(route foundryhttp.Route[foundryhttp.NoPath], directory string) foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, ProfileInput, foundryhttp.NoContent] {
+
+	limits := foundryhttp.DefaultEndpointLimits()
+	limits.Multipart.Bytes, limits.Multipart.FileBytes = 520<<20, 512<<20
+	upload := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), ProfileInputBody(directory), foundryhttp.EmptyResponse(204))
+	upload = foundryhttp.ConfigureEndpoint(upload, foundryhttp.Limits(limits),
+		foundryhttp.BodyLimit(520<<20), foundryhttp.Timeout(10*time.Minute))
+	return upload
+}
 ```
 
 Other routes keep the kernel default. Multipart Bytes

@@ -2,16 +2,21 @@ package httpkernel
 
 import (
 	"foundry.test/consumer/models"
+
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 // UserPath declares a model-specific route key without handwritten codec wiring.
 //
+// doc-example:begin user-path-declaration
+
 //foundry:path pattern=/users/{user}
 type UserPath struct {
 	User model.ID[models.User]
 }
+
+// doc-example:end user-path-declaration
 
 // UserFeedPath reuses the imported enum's generated membership validation.
 //

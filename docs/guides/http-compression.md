@@ -5,15 +5,14 @@ a route's middleware chain. The [independent consumer](../../tests/fixtures/cons
 adds this wrapper to an existing typed endpoint; its service and DTOs stay ordinary
 Go contracts.
 
+<!-- compiled-source: tests/fixtures/consumer/httpcompression/http_compression_recipes.go#http-compression-1 -->
 ```go
-router, err := httpendpoints.Router(service)
-if err != nil {
-    return nil, err
+func compressedHandler(router http.Handler) (http.Handler, error) {
+	return foundryhttp.ApplyMiddleware(
+		router,
+		foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
+	)
 }
-return foundryhttp.ApplyMiddleware(
-    router,
-    foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
-)
 ```
 
 The excerpt uses the consumer's imports and declarations. Runtime configuration
@@ -28,9 +27,16 @@ Brotli uses the stable writer API behind Foundry's private adapter.
 `CompressionConfig.Encoders` contains `CompressionEncoder` values, with server
 preference in declaration order. Construct them with:
 
+<!-- compiled-source: tests/fixtures/consumer/httpcompression/http_compression_recipes.go#http-compression-2 -->
 ```go
-foundryhttp.GzipCompression(foundryhttp.GzipFastest)
-foundryhttp.BrotliCompression(foundryhttp.BrotliQuality(4), foundryhttp.BrotliWindow(20))
+func compressionConfig() foundryhttp.CompressionConfig {
+	config := foundryhttp.DefaultCompressionConfig()
+	config.Encoders = []foundryhttp.CompressionEncoder{
+		foundryhttp.GzipCompression(foundryhttp.GzipFastest),
+		foundryhttp.BrotliCompression(foundryhttp.BrotliQuality(4), foundryhttp.BrotliWindow(20)),
+	}
+	return config
+}
 ```
 
 Gzip levels and Brotli quality/window values have distinct Go types. Invalid
@@ -91,12 +97,15 @@ after the first final `WriteHeader` cannot rewrite the response snapshot.
 
 When using automatic validators, declare `ETags` before `Compression`:
 
+<!-- compiled-source: tests/fixtures/consumer/httpcompression/http_compression_recipes.go#http-compression-3 -->
 ```go
-return foundryhttp.ApplyMiddleware(
-    router,
-    foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
-    foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
-)
+func compressedETags(router http.Handler) (http.Handler, error) {
+	return foundryhttp.ApplyMiddleware(
+		router,
+		foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
+		foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
+	)
+}
 ```
 
 The first middleware is outermost. This matches Rust Foundry's priority order

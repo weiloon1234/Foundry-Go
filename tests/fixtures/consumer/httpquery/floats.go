@@ -2,6 +2,7 @@ package httpquery
 
 import "github.com/weiloon1234/Foundry-Go/value"
 
+// doc-example:begin floating-url-types
 type Latitude float32
 type Distance float64
 type Distances []Distance
@@ -15,3 +16,5 @@ type NearbyInput struct {
 
 //foundry:path pattern=/positions/{latitude}
 type PositionPath struct{ Latitude Latitude }
+
+// doc-example:end floating-url-types

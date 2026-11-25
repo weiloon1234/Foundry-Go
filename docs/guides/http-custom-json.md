@@ -8,11 +8,39 @@ DTOs discover the method automatically, retain the concrete field type and
 include the declared wire shape instead of inspecting private representation.
 
 The [TrackingCode consumer](../../tests/fixtures/consumer/httpquery/json_contract.go)
-shares one scalar declaration with its URL codec:
+shares one scalar declaration with its URL codec. `Type.ID` is the value type's
+actual import path and name; use your application's identity when copying it:
 
+<!-- compiled-source: tests/fixtures/consumer/httpquery/scalar_metadata.go#tracking-scalar -->
+```go
+// TrackingCode is an application-owned text protocol. The scalar declaration
+// describes its wire value; the methods own its domain representation checks.
+type TrackingCode string
+
+func (v TrackingCode) MarshalText() ([]byte, error) {
+	if !strings.HasPrefix(string(v), "track_") {
+		return nil, fault.New(fault.Invalid, "invalid tracking code")
+	}
+	return []byte(v), nil
+}
+func (v *TrackingCode) UnmarshalText(data []byte) error {
+	candidate := TrackingCode(data)
+	if _, err := candidate.MarshalText(); err != nil {
+		return err
+	}
+	*v = candidate
+	return nil
+}
+
+var TrackingScalar = contract.DefineScalar[TrackingCode](contract.Type{
+	ID: "foundry.test/consumer/httpquery.TrackingCode", Kind: contract.StringKind,
+})
+```
+
+<!-- compiled-source: tests/fixtures/consumer/httpquery/json_contract.go#tracking-json -->
 ```go
 func (TrackingCode) JSONContract() contract.JSON[TrackingCode] {
-    return contract.ScalarJSON(TrackingScalar)
+	return contract.ScalarJSON(TrackingScalar)
 }
 ```
 

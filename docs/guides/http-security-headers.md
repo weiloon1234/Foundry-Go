@@ -3,14 +3,18 @@
 Use the shared [middleware assembly](http-middleware.md) to apply response policy
 before the router and its error responses:
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/http_security_headers_recipes.go#http-security-headers-1 -->
 ```go
-config := foundryhttp.DefaultSecurityHeadersConfig()
-config.Frame = foundryhttp.FrameSameOrigin
-config.Referrer = foundryhttp.ReferrerNoReferrer
-config.HSTS = value.Set(foundryhttp.HSTSPolicy{
-    MaxAge: 24 * time.Hour,
-})
-handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.SecurityHeaders(config))
+func secureHandler(router http.Handler) (http.Handler, error) {
+	config := foundryhttp.DefaultSecurityHeadersConfig()
+	config.Frame = foundryhttp.FrameSameOrigin
+	config.Referrer = foundryhttp.ReferrerNoReferrer
+	config.HSTS = value.Set(foundryhttp.HSTSPolicy{
+		MaxAge: 24 * time.Hour,
+	})
+	handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.SecurityHeaders(config))
+	return handler, err
+}
 ```
 
 The [consumer fixture](../../tests/fixtures/consumer/httpsecurity/router.go)
@@ -41,15 +45,19 @@ for middleware order and typed source declarations.
 Four more typed, opt-in fields cover the isolation and feature-policy headers.
 Each is omitted when zero and rejects unsupported values at assembly:
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/http_security_headers_recipes.go#http-security-headers-2 -->
 ```go
-config.CrossOriginOpener = foundryhttp.OpenerSameOrigin       // Cross-Origin-Opener-Policy
-config.CrossOriginEmbedder = foundryhttp.EmbedderRequireCORP  // Cross-Origin-Embedder-Policy
-config.CrossOriginResource = foundryhttp.ResourceSameSite     // Cross-Origin-Resource-Policy
-config.Permissions = []foundryhttp.PermissionDirective{
-    {Feature: foundryhttp.PermissionCamera},               // camera=()
-    {Feature: foundryhttp.PermissionGeolocation, Self: true,
-        Origins: []foundryhttp.Origin{"https://maps.example"}},
-    {Feature: foundryhttp.PermissionFullscreen, Any: true}, // fullscreen=*
+func isolationPolicy(config foundryhttp.SecurityHeadersConfig) foundryhttp.SecurityHeadersConfig {
+	config.CrossOriginOpener = foundryhttp.OpenerSameOrigin      // Cross-Origin-Opener-Policy
+	config.CrossOriginEmbedder = foundryhttp.EmbedderRequireCORP // Cross-Origin-Embedder-Policy
+	config.CrossOriginResource = foundryhttp.ResourceSameSite    // Cross-Origin-Resource-Policy
+	config.Permissions = []foundryhttp.PermissionDirective{
+		{Feature: foundryhttp.PermissionCamera}, // camera=()
+		{Feature: foundryhttp.PermissionGeolocation, Self: true,
+			Origins: []foundryhttp.Origin{"https://maps.example"}},
+		{Feature: foundryhttp.PermissionFullscreen, Any: true}, // fullscreen=*
+	}
+	return config
 }
 ```
 
@@ -69,9 +77,13 @@ typed field is set, `Extra` cannot repeat that header; without it, an existing
 
 Custom native response fields use separate `HeaderName` and `HeaderValue` types:
 
+<!-- compiled-source: tests/fixtures/consumer/httpsecurity/http_security_headers_recipes.go#http-security-headers-3 -->
 ```go
-config.Extra = []foundryhttp.ResponseHeader{
-    {Name: "X-Build", Value: "release-1"},
+func buildHeader(config foundryhttp.SecurityHeadersConfig) foundryhttp.SecurityHeadersConfig {
+	config.Extra = []foundryhttp.ResponseHeader{
+		{Name: "X-Build", Value: "release-1"},
+	}
+	return config
 }
 ```
 

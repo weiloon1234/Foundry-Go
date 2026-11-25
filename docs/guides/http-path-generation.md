@@ -7,23 +7,25 @@ gopls can navigate it in the consumer workspace. The
 and [route tests](../../tests/fixtures/consumer/httpkernel/generated_routes_test.go)
 show the complete usage.
 
+<!-- compiled-source: tests/fixtures/consumer/httpkernel/path_declarations.go#user-path-declaration -->
 ```go
 //foundry:path pattern=/users/{user}
 type UserPath struct {
-    User model.ID[models.User]
+	User model.ID[models.User]
 }
+```
 
-ShowUser := foundryhttp.DefineRoute(
-    foundryhttp.RouteSpec{
-        ID: "users.show",
-        Method: foundryhttp.GET,
-        Access: foundryhttp.Public,
-    },
-    UserPathDescriptor(),
-)
-ShowUser = foundryhttp.ConfigureRoute(ShowUser, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
-
-location, err := foundryhttp.RouteURL(ShowUser, UserPath{User: user.ID})
+<!-- compiled-source: tests/fixtures/consumer/httpkernel/path_recipe.go#generated-user-url -->
+```go
+func userURL(user models.User) (string, error) {
+	ShowUser := foundryhttp.DefineRoute(
+		foundryhttp.RouteSpec{ID: "users.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
+		UserPathDescriptor(),
+	)
+	ShowUser = foundryhttp.ConfigureRoute(ShowUser, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
+	location, err := foundryhttp.RouteURL(ShowUser, UserPath{User: user.ID})
+	return location, err
+}
 ```
 
 Here `models.User` is the application's model, `model` is Foundry's model package,

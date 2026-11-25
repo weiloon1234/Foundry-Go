@@ -10,17 +10,18 @@ namespace as well.
 
 Declare ordinary types and let generation supply the metadata:
 
+<!-- compiled-source: tests/fixtures/consumer/httpquery/source_identity.go#priority-source-types -->
 ```go
 type Priority uint8
 
 //foundry:path pattern=/priorities/{priority}
-type PriorityPath struct { Priority Priority }
+type PriorityPath struct{ Priority Priority }
 
 //foundry:query
-type PriorityQuery struct { Priority Priority }
+type PriorityQuery struct{ Priority Priority }
 
 //foundry:dto
-type PriorityResponse struct { Priority Priority }
+type PriorityResponse struct{ Priority Priority }
 ```
 
 All three descriptors expose the same qualified Priority identity. Integer

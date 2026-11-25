@@ -3,6 +3,7 @@ package httpdto
 
 import (
 	"foundry.test/consumer/models"
+
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -18,12 +19,16 @@ type UpdateUser struct {
 
 // doc-example:end patch-presence
 
+// doc-example:begin user-response-contract
+
 //foundry:dto http=response
 type UserResponse struct {
 	ID    model.ID[models.User] `json:"id"`
 	Email string                `json:"email"`
 	State models.Status         `json:"state"`
 }
+
+// doc-example:end user-response-contract
 
 //foundry:dto
 type OrderResponse struct {

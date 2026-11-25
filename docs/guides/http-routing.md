@@ -9,26 +9,31 @@ For ordinary path structs, [generate the bindings](http-path-generation.md) from
 `//foundry:path` declarations. The explicit primitives below remain useful for
 custom `PathCodec` implementations.
 
+<!-- compiled-source: tests/fixtures/consumer/httpkernel/route_recipe.go#http-routing-1 -->
 ```go
+// MemberPath binds the URL segment to the concrete member key.
 type MemberPath struct {
-    Member model.ID[Member]
+	Member model.ID[Member]
 }
 
-MemberShow := foundryhttp.DefineRoute(
-    foundryhttp.RouteSpec{
-        ID: "members.show",
-        Method: foundryhttp.GET,
-        Access: foundryhttp.Public,
-    },
-    foundryhttp.DefinePath("/members/{member}",
-        foundryhttp.Param("member", foundryhttp.ModelIDPath[Member](),
-            func(path *MemberPath) *model.ID[Member] { return &path.Member }),
-    ),
-)
-MemberShow = foundryhttp.ConfigureRoute(MemberShow, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
+func memberURL(member Member) (string, error) {
+	MemberShow := foundryhttp.DefineRoute(
+		foundryhttp.RouteSpec{
+			ID:     "members.show",
+			Method: foundryhttp.GET,
+			Access: foundryhttp.Public,
+		},
+		foundryhttp.DefinePath("/members/{member}",
+			foundryhttp.Param("member", foundryhttp.ModelIDPath[Member](),
+				func(path *MemberPath) *model.ID[Member] { return &path.Member }),
+		),
+	)
+	MemberShow = foundryhttp.ConfigureRoute(MemberShow, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 
-location, err := foundryhttp.RouteURL(MemberShow, MemberPath{Member: member.ID})
-// /api/members/<member UUID>
+	location, err := foundryhttp.RouteURL(MemberShow, MemberPath{Member: member.ID})
+	// /api/members/<member UUID>
+	return location, err
+}
 ```
 
 Here `Member` is the consumer's model, `model` is Foundry's model package and
