@@ -2499,6 +2499,26 @@
       "noReplacement": true
     },
     {
+      "name": "RequireAuthentication",
+      "replacement": "http.BindGuard once, then http.Authenticated(endpoint, binding, rule)"
+    },
+    {
+      "name": "RequireRouteAuthentication",
+      "replacement": "http.BindGuard once, then http.RouteAuthenticated(route, binding, rule)"
+    },
+    {
+      "name": "OptionalAuthentication",
+      "replacement": "http.BindGuard once, then http.OptionallyAuthenticated(endpoint, binding)"
+    },
+    {
+      "name": "OptionalRouteAuthentication",
+      "replacement": "http.BindGuard once, then http.RouteOptionallyAuthenticated(route, binding)"
+    },
+    {
+      "name": "AnyActorOf",
+      "replacement": "the guard binding's AnyActor method"
+    },
+    {
       "name": "GuardOption",
       "replacement": "http.AccessRule for the access rule of http.Authenticated (http.AllOf, http.AnyOf or the guard binding's AnyActor method); http.ActorOption for http.ConfigureAuthenticated"
     },

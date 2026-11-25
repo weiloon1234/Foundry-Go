@@ -8562,7 +8562,6 @@ http	func	ActorMiddleware
 http	func	AfterAuthenticatedValidation
 http	func	AfterValidation
 http	func	AllOf
-http	func	AnyActorOf
 http	func	AnyOf
 http	func	ApplyCSPAllowlist
 http	func	ApplyMiddleware
@@ -8760,7 +8759,6 @@ http	func	NewURLSigner
 http	func	NewUploadPool
 http	func	NoStoreCachePolicy
 http	func	OpenAssets
-http	func	OptionalAuthentication
 http	func	OptionalEndpointID
 http	func	OptionalEndpointMethod
 http	func	OptionalEndpointPattern
@@ -8768,7 +8766,6 @@ http	func	OptionalFilePart
 http	func	OptionalHeaderParam
 http	func	OptionalJSONPart
 http	func	OptionalQueryParam
-http	func	OptionalRouteAuthentication
 http	func	OptionalRouteURL
 http	func	OptionallyAuthenticated
 http	func	Param
@@ -8830,13 +8827,13 @@ http	func	RepeatedQueryParam
 http	func	RequestHeaderParameters
 http	func	RequestID
 http	func	RequestOrigin
-http	func	RequireAuthentication
 http	func	RequirePublicURLs
-http	func	RequireRouteAuthentication
 http	func	ResponseExample
+http	func	RouteAuthenticated
 http	func	RouteIDOf
 http	func	RouteLocation
 http	func	RouteMethod
+http	func	RouteOptionallyAuthenticated
 http	func	RouteParameters
 http	func	RoutePattern
 http	func	RouteURL

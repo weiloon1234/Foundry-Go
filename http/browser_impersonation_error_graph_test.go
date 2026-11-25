@@ -44,7 +44,8 @@ func TestStopImpersonatingContainsBackendErrorMatching(t *testing.T) {
 				return foundryhttp.NoContent{}, err
 			})
 			guarded := func(path string) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, authAccount, foundryhttp.NoContent] {
-				return foundryhttp.RequireAuthentication(browserEndpoint(path, foundryhttp.POST, foundryhttp.Guarded), s.web.Authentication(), s.web.Guard(), foundryhttp.AnyActorOf(s.web.Guard()))
+				binding := authBinding(t, s.web.Authentication(), s.web.Guard())
+				return foundryhttp.Authenticated(browserEndpoint(path, foundryhttp.POST, foundryhttp.Guarded), binding, binding.AnyActor())
 			}
 			start := guarded("/start").Handle(func(ctx context.Context, _ authAccount, _ authInput) (foundryhttp.NoContent, error) {
 				_, err := s.web.Impersonate(ctx, impersonation, authAccount{ID: 9}.reference(), time.Minute)

@@ -93,8 +93,8 @@ func reportingContracts(t *testing.T) (*manifest.Manifest, *foundryhttp.Router) 
 		t.Fatal(err)
 	}
 	routes = append(routes,
-		reporting.QueryRoute(manager, transport, guard),
-		reporting.DownloadRoute(manager, transport, guard, datatable.Presentation{Locale: "en", TimeZone: "UTC"}),
+		reporting.QueryRoute(manager, binding),
+		reporting.DownloadRoute(manager, binding, datatable.Presentation{Locale: "en", TimeZone: "UTC"}),
 	)
 	router, err := foundryhttp.NewRouter(routes...)
 	if err != nil {

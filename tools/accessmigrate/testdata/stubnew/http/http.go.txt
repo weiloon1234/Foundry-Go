@@ -59,12 +59,6 @@ func (GuardBinding[M]) AnyActor() AccessRule[M]         { return GuardAlternativ
 func Authenticated[R, M any](Endpoint[R], GuardBinding[M], AccessRule[M], ...ActorOption[M]) AuthenticatedEndpoint[R, M] {
 	return AuthenticatedEndpoint[R, M]{}
 }
-func RequireAuthentication[R, M any](Endpoint[R], *Authentication, Guard[M], AccessRule[M], ...ActorOption[M]) AuthenticatedEndpoint[R, M] {
-	return AuthenticatedEndpoint[R, M]{}
-}
-func RequireRouteAuthentication[P, M any](Route[P], *Authentication, Guard[M], AccessRule[M], ...ActorOption[M]) AuthenticatedRoute[P, M] {
-	return AuthenticatedRoute[P, M]{}
-}
 func TicketAuthenticated[R, M any](Endpoint[R], GuardBinding[M], TicketRedeemer, AccessRule[M], ...ActorOption[M]) TicketEndpoint[R, M] {
 	return TicketEndpoint[R, M]{}
 }

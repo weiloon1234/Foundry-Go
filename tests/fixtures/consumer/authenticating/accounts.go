@@ -74,9 +74,9 @@ func DeclareProfile() ProfileDeclaration {
 	return foundryhttp.DefineEndpoint(profileRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
 }
 
-func Profile(transport *foundryhttp.Authentication, guard auth.Guard[models.User], rule foundryhttp.AccessRule[models.User]) ProfileEndpoint {
+func Profile(binding foundryhttp.GuardBinding[models.User], rule foundryhttp.AccessRule[models.User]) ProfileEndpoint {
 	declaration := DeclareProfile()
-	return foundryhttp.RequireAuthentication(declaration, transport, guard, rule)
+	return foundryhttp.Authenticated(declaration, binding, rule)
 }
 func ProfileRoute(endpoint ProfileEndpoint, guard auth.Guard[models.User]) foundryhttp.RouteRegistration {
 	return endpoint.Handle(func(ctx context.Context, user models.User, _ ProfileInput) (foundryhttp.NoContent, error) {

@@ -120,6 +120,10 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	if err != nil {
 		return result, err
 	}
+	browserBinding, err := foundryhttp.BindGuard(transport, browserGuard)
+	if err != nil {
+		return result, err
+	}
 	private := websocket.OwnedRooms[PrivateOwner]("accounts", websocket.DefineRooms(foundryhttp.IntegerPath[int64]()), guard, (Account{}).FoundryReference())
 	presence := websocket.WithPresence(private, MemberJSON(), func(_ context.Context, account Account) (Member, error) { return Member{Display: account.Display}, nil })
 	channels, err := websocket.NewRegistry(websocket.Register(Updates, Updated.Registration(), Relay.Authorize(func(context.Context, websocket.MessageContext[int64, websocket.Anonymous], Payload) error { return nil }).Relay(Updated)), websocket.Register(presence.Channel()))
@@ -158,7 +162,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 		return result, err
 	}
 
-	guardAccount := foundryhttp.RequireAuthentication(secure, transport, guard, accountAccess)
+	guardAccount := foundryhttp.Authenticated(secure, pageBinding, accountAccess)
 
 	pageBindingGuardedList := pagination.Authenticated(httppagination.GuardedList, pageBinding, foundryhttp.AllOf(foundryhttp.Permissions(Manage)))
 
@@ -166,7 +170,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 
 	pageBindingGuardedCursorList := pagination.Authenticated(httppagination.GuardedCursorList, pageBinding, foundryhttp.AllOf(foundryhttp.Permissions(Manage)))
 
-	router, err := foundryhttp.NewRouter(append(append(append(pluralRoutes, transportRoutes(signer)...), browserAuthRoutes(transport, browserGuard)...),
+	router, err := foundryhttp.NewRouter(append(append(append(pluralRoutes, transportRoutes(signer)...), browserAuthRoutes(browserBinding)...),
 		InspectHeaders.Handle(handleInspectHeaders),
 		MemberCreate.Handle(HandleMemberCreate),
 		requestflow.Submit.Handle(requestflow.Handle),

@@ -308,13 +308,15 @@ become an automatic JSON response. Use explicit custom getters when mapping DTOs
 <a id="recipe-access-rule"></a>
 ### State who may call a guarded route
 
-A guarded route also states who may call it. `http.Authenticated` takes the access
+A guarded route also states who may call it. Every guarded declaration starts from a
+binding, the one `http.BindGuard(authentication, guard)` returns, and takes the access
 rule as its required third argument: `http.AllOf(http.Scopes(...), http.Permissions(...))`
 requires every listed scope and permission, `http.AnyOf(...)` accepts one complete
 alternative, and `binding.AnyActor()` admits every authenticated actor of the guard.
-`AnyActor()` is the only spelling of "no scope and no permission", so a logout, a
-"who am I" route or a shared reference table is visibly open and a forgotten rule
-never is. `openProfile` writes the open case:
+`AnyActor()` is the only spelling of "no scope and no permission". Write it only where
+being signed in is the whole decision, such as a sign-out route, a "who am I" route or a
+route whose resource policy decides; every other route names a scope and a permission,
+so a forgotten rule never reads as an open one. `openProfile` writes the open case:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#open-profile -->
 ```go
@@ -323,26 +325,42 @@ func openProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.N
 }
 ```
 
-Two mistakes fail to compile. Leaving the rule out says
-`not enough arguments in call to http.Authenticated` and lists `AccessRule[M]` among
-the wanted arguments; write one of the three rules. Passing `http.Scopes(scopes)` or
-`http.Permissions(...)` directly says
-`type RequirementOption[User] of http.Scopes(scopes) does not match inferred type AccessRule[User]`;
-wrap them in `http.AllOf`. `http.ConfigureAuthenticated` takes only
-`http.ActorMiddleware`, so a scope passed to it fails the same way, naming
-`ActorOption[User]`.
+Two mistakes fail to compile. Leaving the rule out is refused with this message; write
+one of the three rules (the `have` line shows your own types):
 
-The rule is the same argument of `http.TicketAuthenticated`, `pagination.Authenticated`
-and the `Routes` of the webhook and outbound capture viewers, and the single argument
-of `datatable.ReadAccess` and `datatable.ExportAccess`. `http.RequireAuthentication`
-and `http.RequireRouteAuthentication` take it after the guard; they hold a guard, not a
-binding, so their open case is `http.AnyActorOf(guard)`. A rule that none of those
-constructors produced (a nil value or the zero `GuardAlternative`) is refused when
-the route registers, with the message `HTTP guarded route requires an access rule`.
+```text
+not enough arguments in call to http.Authenticated
+	have ("github.com/weiloon1234/Foundry-Go/http".Endpoint["github.com/weiloon1234/Foundry-Go/http".NoPath, "github.com/weiloon1234/Foundry-Go/http".NoQuery, "github.com/weiloon1234/Foundry-Go/http".NoBody, "github.com/weiloon1234/Foundry-Go/http".NoContent], "github.com/weiloon1234/Foundry-Go/http".GuardBinding[models.User])
+	want ("github.com/weiloon1234/Foundry-Go/http".Endpoint[P, Q, B, R], "github.com/weiloon1234/Foundry-Go/http".GuardBinding[M], "github.com/weiloon1234/Foundry-Go/http".AccessRule[M], ..."github.com/weiloon1234/Foundry-Go/http".ActorOption[M])
+```
+
+Passing `http.Scopes(scopes)` or `http.Permissions(...)` directly is refused with the next
+message; wrap them in `http.AllOf`:
+
+```text
+in call to http.Authenticated, type "github.com/weiloon1234/Foundry-Go/http".RequirementOption[models.User] of http.Scopes(scopes) does not match inferred type "github.com/weiloon1234/Foundry-Go/http".AccessRule[models.User] for "github.com/weiloon1234/Foundry-Go/http".AccessRule[M]
+```
+
+`http.ConfigureAuthenticated` takes only `http.ActorMiddleware`, so a scope passed to it
+is refused the same way, naming `ActorOption`:
+
+```text
+in call to http.ConfigureAuthenticated, type "github.com/weiloon1234/Foundry-Go/http".RequirementOption[models.User] of http.Scopes(scopes) does not match inferred type "github.com/weiloon1234/Foundry-Go/http".ActorOption[models.User] for "github.com/weiloon1234/Foundry-Go/http".ActorOption[M]
+```
+
+The rule is the same argument of `http.TicketAuthenticated`, `http.RouteAuthenticated`
+(a raw route), `pagination.Authenticated` and the `Routes` of the webhook and outbound
+capture viewers, and the single argument of `datatable.ReadAccess` and
+`datatable.ExportAccess`. There is no second spelling: a constructor that takes a guard
+instead of a binding does not exist. A rule that none of those constructors produced (a
+nil value or the zero `GuardAlternative`) is refused when the route registers, and the
+message names the route and the fix, for example
+`GET /profile (profile): invalid: a guarded route requires an access rule: http.AllOf, http.AnyOf or binding.AnyActor()`.
 
 An unbound `Guarded` route cannot register a handler, including a raw handler.
 Required authentication runs before path/query/body decoding. Use
-`OptionalAuthentication` on a `Public` endpoint to receive `value.Optional[User]`:
+`http.OptionallyAuthenticated` (`http.RouteOptionallyAuthenticated` for a raw route) on a
+`Public` endpoint to receive `value.Optional[User]`:
 only an absent credential is anonymous. Invalid, disabled, revoked or pending
 credentials remain errors. An adapter validates the guard registration and source
 at assembly. Route inspection includes the actual guard/provider names and
@@ -609,20 +627,20 @@ The application owns the path type:
 type OrderPath struct{ Order model.ID[models.Order] }
 ```
 
-Inputs: `endpoint foundryhttp.Endpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent]`, `authentication *foundryhttp.Authentication`, `api auth.Guard[models.User]`, `signer foundryhttp.URLSigner`, `orders modelbinding.Resolver[OrderPath, models.Order]`.
+Inputs: `endpoint foundryhttp.Endpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent]`, `binding foundryhttp.GuardBinding[models.User]`, `signer foundryhttp.URLSigner`, `orders modelbinding.Resolver[OrderPath, models.Order]`.
 
 Configure scopes, permissions and ordinary endpoint options, then call `SignedAuthenticated`. Pass the endpoint and resource resolver explicitly:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#signed-bound-order -->
 ```go
-secured := foundryhttp.RequireAuthentication(endpoint, authentication, api, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
+secured := foundryhttp.Authenticated(endpoint, binding, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
 signed := foundryhttp.SignedAuthenticated(secured, signer)
-binding := foundryhttp.ForSignedAuthenticatedBinding(signed)
-bound := modelbinding.BindAuthenticated(binding, orders)
+transport := foundryhttp.ForSignedAuthenticatedBinding(signed)
+bound := modelbinding.BindAuthenticated(transport, orders)
 registration := bound.Handle(func(ctx context.Context, user models.User,
 	in modelbinding.Input[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Order],
 ) (foundryhttp.NoContent, error) {
-	return foundryhttp.NoContent{}, ReadOrder.Authorize(ctx, api, in.Model)
+	return foundryhttp.NoContent{}, ReadOrder.Authorize(ctx, binding.Guard(), in.Model)
 })
 ```
 
@@ -648,13 +666,13 @@ resources never produce partially populated models for a handler.
 
 ## Authenticated native handlers
 
-Inputs: `route foundryhttp.Route[OrderPath]`, `authentication *foundryhttp.Authentication`, `api auth.Guard[models.User]`, `handle func(stdhttp.ResponseWriter, *stdhttp.Request, models.User, OrderPath)`.
+Inputs: `route foundryhttp.Route[OrderPath]`, `binding foundryhttp.GuardBinding[models.User]`, `handle func(stdhttp.ResponseWriter, *stdhttp.Request, models.User, OrderPath)`.
 
 For native `net/http` integration, bind authentication to the typed route itself:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#authenticated-raw-route -->
 ```go
-secured := foundryhttp.RequireRouteAuthentication(route, authentication, api, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
+secured := foundryhttp.RouteAuthenticated(route, binding, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
 registration := foundryhttp.HandleAuthenticatedRaw(secured, func(w stdhttp.ResponseWriter,
 	r *stdhttp.Request, user models.User, path OrderPath,
 ) {
@@ -662,7 +680,7 @@ registration := foundryhttp.HandleAuthenticatedRaw(secured, func(w stdhttp.Respo
 })
 ```
 
-`OptionalRouteAuthentication` supplies `value.Optional[User]` and requires a Public
+`http.RouteOptionallyAuthenticated` supplies `value.Optional[User]` and requires a Public
 route declaration. Required authentication requires Guarded. Unbound guarded
 routes remain rejected. Native adapters reuse the same credential, scope,
 permission, attribution and cleanup implementation as DTO endpoints.
@@ -683,8 +701,8 @@ authentication. The composition examples and tests passed milestone 10 acceptanc
 ## Middleware after authentication
 
 Middleware added with `Use` runs before authentication. Use
-`ActorMiddleware[User](middleware...)` on `RequireAuthentication`, `OptionalAuthentication` and
-their native route forms for middleware that needs the actor. It runs after the
+`ActorMiddleware[User](middleware...)` on `Authenticated`, `OptionallyAuthenticated` and
+their native route forms (`RouteAuthenticated`, `RouteOptionallyAuthenticated`) for middleware that needs the actor. It runs after the
 guard, access scopes and permissions, inside the request's auth scope, and reads
 the concrete model with `guard.Require(r.Context())` (or `Optional`) from the
 scope cache, without another provider lookup.
@@ -704,7 +722,7 @@ func WithTenant(ctx context.Context, tenant TenantID) context.Context {
 }
 ```
 
-Inputs: `endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent]`, `transport *foundryhttp.Authentication`, `api auth.Guard[models.User]`, `store *ratelimit.Store`, `tenantOf func(context.Context, models.User) (TenantID, error)`.
+Inputs: `endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent]`, `binding foundryhttp.GuardBinding[models.User]`, `store *ratelimit.Store`, `tenantOf func(context.Context, models.User) (TenantID, error)`.
 
 Declare the tenant middleware and install it with the rate limiter as actor middleware:
 
@@ -712,7 +730,7 @@ Declare the tenant middleware and install it with the rate limiter as actor midd
 ```go
 tenant := foundryhttp.DefineMiddleware("app.tenant", func(next stdhttp.Handler) (stdhttp.Handler, error) {
 	return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-		user, err := api.Require(r.Context())
+		user, err := binding.Guard().Require(r.Context())
 		if err != nil {
 			foundryhttp.WriteError(w, r, err)
 			return
@@ -729,8 +747,8 @@ limiter, err := ratelimit.Define("api.users", foundryhttp.ActorKeys(), ratelimit
 if err != nil {
 	return ProfileEndpoint{}, err
 }
-secured := foundryhttp.RequireAuthentication(endpoint, transport, api, foundryhttp.AnyActorOf(api),
-	foundryhttp.ActorMiddleware[models.User](foundryhttp.RateLimitByActor(limiter, api), tenant))
+secured := foundryhttp.Authenticated(endpoint, binding, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)),
+	foundryhttp.ActorMiddleware[models.User](foundryhttp.RateLimitByActor(limiter, binding.Guard()), tenant))
 ```
 
 `RateLimitByActor` keys a quota by a digest of the authenticated model identity,
@@ -816,6 +834,9 @@ func ticketAuthentication(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foun
 	return foundryhttp.TicketAuthenticated(endpoint, binding, tokens, binding.AnyActor())
 }
 ```
+
+`AnyActor()` is the rule here because the ticket redeems only what an already authorized
+request issued; the policy of the data the route serves still runs on every download.
 
 Issue a ticket inside an authenticated token scope, then deliver its URL through
 a protected, no-store response. `TicketEndpoint.URL` is the explicit disclosure

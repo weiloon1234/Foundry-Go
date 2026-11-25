@@ -38,8 +38,8 @@ var showOrder = func() foundryhttp.Endpoint[OrderPath, foundryhttp.NoQuery, foun
 	)
 }()
 
-func Orders(transport *foundryhttp.Authentication, guard auth.Guard[models.User]) OrderEndpoint {
-	guardOrdersShow := foundryhttp.RequireAuthentication(showOrder, transport, guard, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
+func Orders(binding foundryhttp.GuardBinding[models.User]) OrderEndpoint {
+	guardOrdersShow := foundryhttp.Authenticated(showOrder, binding, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
 
 	return guardOrdersShow
 }
@@ -70,8 +70,8 @@ func BoundOrder(endpoint OrderTransport, resolver modelbinding.Resolver[OrderPat
 
 var nativeProfile = foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "profile.native", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/profile/native"))
 
-func NativeProfile(transport *foundryhttp.Authentication, guard auth.Guard[models.User]) foundryhttp.AuthenticatedRoute[foundryhttp.NoPath, models.User] {
-	profileNativeEndpoint := foundryhttp.RequireRouteAuthentication(nativeProfile, transport, guard, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
+func NativeProfile(binding foundryhttp.GuardBinding[models.User]) foundryhttp.AuthenticatedRoute[foundryhttp.NoPath, models.User] {
+	profileNativeEndpoint := foundryhttp.RouteAuthenticated(nativeProfile, binding, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)))
 
 	return profileNativeEndpoint
 }

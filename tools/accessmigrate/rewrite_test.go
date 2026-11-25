@@ -123,7 +123,7 @@ func TestMigratedCodeBuildsAgainstTheNewAPIAndRunsAreIdempotent(t *testing.T) {
 	copyTree(t, filepath.Join("testdata", "stubnew"), filepath.Join(root, "framework"))
 	goCommand(t, dir, "build", "./migrated/...")
 	again := migrate(t, dir, "--dry-run", "./migrated/...")
-	if !strings.Contains(again, "would rewrite 0 call(s) in 0 file(s); left 0 call(s)") {
+	if !strings.Contains(again, "would rewrite 0 call(s) and 0 declaration(s) in 0 file(s); left 0 call(s) and 0 declaration(s)") {
 		t.Fatalf("a migrated module changed again:\n%s", again)
 	}
 }

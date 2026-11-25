@@ -86,7 +86,8 @@ func TestSignedAuthenticatedModelBindingPreservesAllBoundaries(t *testing.T) {
 	}
 	signer, now := compositionSigner(t)
 	endpoint := foundryhttp.DefineEndpoint(compositionRoute(foundryhttp.Guarded, &parses), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204), foundryhttp.TableOperation(contract.TableOperationBinding{Table: "orders", Kind: contract.TableQuery}))
-	signed := foundryhttp.SignedAuthenticated(foundryhttp.RequireAuthentication(endpoint, transport, guard, foundryhttp.AnyOf(foundryhttp.AllOf(foundryhttp.Permissions(permission)))), signer)
+	binding := authBinding(t, transport, guard)
+	signed := foundryhttp.SignedAuthenticated(foundryhttp.Authenticated(endpoint, binding, foundryhttp.AnyOf(foundryhttp.AllOf(foundryhttp.Permissions(permission)))), signer)
 	resolver := modelbinding.Define(func(ctx context.Context, path compositionPath) (value.Optional[compositionOrder], error) {
 		lookups.Add(1)
 		if origin := attribution.FromContext(ctx); origin.Guard() != "api" {
@@ -202,7 +203,8 @@ func TestOptionalSignedModelBindingRetainsOptionalSubject(t *testing.T) {
 	}
 	signer, now := compositionSigner(t)
 	endpoint := foundryhttp.DefineEndpoint(compositionRoute(foundryhttp.Public, &parses), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
-	signed := foundryhttp.SignedOptionalAuthentication(foundryhttp.OptionalAuthentication(endpoint, transport, guard), signer)
+	binding := authBinding(t, transport, guard)
+	signed := foundryhttp.SignedOptionalAuthentication(foundryhttp.OptionallyAuthenticated(endpoint, binding), signer)
 	resolver := modelbinding.Define(func(_ context.Context, p compositionPath) (value.Optional[compositionOrder], error) {
 		return value.Set(compositionOrder{ID: p.Order}), nil
 	})

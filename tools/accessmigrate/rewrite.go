@@ -23,24 +23,30 @@ type callee struct{ pkg, name string }
 // constructors maps every function that took optional access options to the
 // number of arguments before them; the access rule now sits at that position.
 var constructors = map[callee]int{
-	{httpPath, "Authenticated"}:              2,
-	{httpPath, "RequireAuthentication"}:      3,
-	{httpPath, "RequireRouteAuthentication"}: 3,
-	{httpPath, "TicketAuthenticated"}:        3,
-	{paginationPath, "Authenticated"}:        2,
-	{datatablePath, "ReadAccess"}:            0,
-	{datatablePath, "ExportAccess"}:          0,
-	{webhookCapturePath, "Routes"}:           3,
-	{httpclientCapturePath, "Routes"}:        3,
+	{httpPath, "Authenticated"}:       2,
+	{httpPath, "TicketAuthenticated"}: 3,
+	{paginationPath, "Authenticated"}: 2,
+	{datatablePath, "ReadAccess"}:     0,
+	{datatablePath, "ExportAccess"}:   0,
+	{webhookCapturePath, "Routes"}:    3,
+	{httpclientCapturePath, "Routes"}: 3,
+}
+
+// removed maps the guard-taking constructors, which no longer exist, to the
+// spelling that replaces them. They need a binding, which only the developer can
+// supply, so every call is listed.
+var removed = map[callee]string{
+	{httpPath, "RequireAuthentication"}:       "take a binding from http.BindGuard(authentication, guard) once and write http.Authenticated(endpoint, binding, rule)",
+	{httpPath, "RequireRouteAuthentication"}:  "take a binding from http.BindGuard(authentication, guard) once and write http.RouteAuthenticated(route, binding, rule)",
+	{httpPath, "OptionalAuthentication"}:      "take a binding from http.BindGuard(authentication, guard) once and write http.OptionallyAuthenticated(endpoint, binding)",
+	{httpPath, "OptionalRouteAuthentication"}: "take a binding from http.BindGuard(authentication, guard) once and write http.RouteOptionallyAuthenticated(route, binding)",
 }
 
 // folding constructors accept a later Configure call on the value they return.
 var folding = map[callee]bool{
-	{httpPath, "Authenticated"}:              true,
-	{httpPath, "RequireAuthentication"}:      true,
-	{httpPath, "RequireRouteAuthentication"}: true,
-	{httpPath, "TicketAuthenticated"}:        false,
-	{paginationPath, "Authenticated"}:        true,
+	{httpPath, "Authenticated"}:       true,
+	{httpPath, "TicketAuthenticated"}: false,
+	{paginationPath, "Authenticated"}: true,
 }
 
 var configurers = map[callee]bool{
@@ -58,6 +64,7 @@ type finding struct {
 	file      string
 	line, col int
 	rewritten bool
+	decl      bool // a declaration of an options slice or helper, not a call
 	text      string
 }
 
@@ -66,9 +73,11 @@ type optionParts struct {
 	anyOf   ast.Expr
 	actors  []ast.Expr
 	unknown ast.Expr
+	// spread is an options slice, passed as name..., that becomes the rule itself.
+	spread ast.Expr
 }
 
-func (o optionParts) hasAccess() bool { return len(o.reqs) > 0 || o.anyOf != nil }
+func (o optionParts) hasAccess() bool { return len(o.reqs) > 0 || o.anyOf != nil || o.spread != nil }
 
 // engine rewrites one source package at a time.
 type engine struct {
@@ -76,6 +85,7 @@ type engine struct {
 	src      map[string][]byte
 	edits    map[string]map[edit]bool
 	findings map[finding]bool
+	shapes   *shapes
 }
 
 type fileWalk struct {
@@ -87,11 +97,12 @@ type fileWalk struct {
 	parents map[ast.Node]ast.Node
 	folded  map[*ast.CallExpr]bool
 	reasons map[*ast.CallExpr]string
+	leftAt  map[*ast.CallExpr]string
 }
 
-func (e *engine) visit(pkg sourcePackage, file *ast.File) {
+func (e *engine) newWalk(pkg sourcePackage, file *ast.File) *fileWalk {
 	name := e.fset.Position(file.Pos()).Filename
-	w := &fileWalk{e: e, pkg: pkg, file: file, name: name, src: e.src[name], parents: map[ast.Node]ast.Node{}, folded: map[*ast.CallExpr]bool{}, reasons: map[*ast.CallExpr]string{}}
+	w := &fileWalk{e: e, pkg: pkg, file: file, name: name, src: e.src[name], parents: map[ast.Node]ast.Node{}, folded: map[*ast.CallExpr]bool{}, reasons: map[*ast.CallExpr]string{}, leftAt: map[*ast.CallExpr]string{}}
 	var stack []ast.Node
 	ast.Inspect(file, func(n ast.Node) bool {
 		if n == nil {
@@ -104,6 +115,12 @@ func (e *engine) visit(pkg sourcePackage, file *ast.File) {
 		stack = append(stack, n)
 		return true
 	})
+	return w
+}
+
+func (e *engine) visit(pkg sourcePackage, file *ast.File) {
+	w := e.newWalk(pkg, file)
+	w.rewriteShapes()
 	var calls []*ast.CallExpr
 	ast.Inspect(file, func(n ast.Node) bool {
 		if c, ok := n.(*ast.CallExpr); ok {
@@ -113,6 +130,9 @@ func (e *engine) visit(pkg sourcePackage, file *ast.File) {
 	})
 	for _, c := range calls {
 		if fn, ok := w.callee(c); ok {
+			if replacement, gone := removed[fn]; gone {
+				w.left(c, fn.name+" no longer exists: "+replacement+"; the codemod cannot create the binding")
+			}
 			if fixed, isCtor := constructors[fn]; isCtor {
 				w.constructor(c, fn, fixed)
 			}
@@ -126,7 +146,7 @@ func (e *engine) visit(pkg sourcePackage, file *ast.File) {
 		if !ok || !configurers[fn] || w.folded[c] {
 			continue
 		}
-		parts := w.classify(c.Args[1:])
+		parts := w.classifyCall(c, 1)
 		if !parts.hasAccess() && parts.unknown == nil {
 			continue
 		}
@@ -135,6 +155,9 @@ func (e *engine) visit(pkg sourcePackage, file *ast.File) {
 			reason = "its value was not assigned from a constructor call in this function"
 		}
 		w.left(c, fn.name+" with access options: "+reason)
+	}
+	for c, reason := range w.leftAt {
+		w.shapesLeft(c, reason)
 	}
 }
 
@@ -188,10 +211,15 @@ func (w *fileWalk) add(start, end int, text string) {
 
 func (w *fileWalk) record(n ast.Node, rewritten bool, text string) {
 	p := w.e.fset.Position(n.Pos())
-	w.e.findings[finding{p.Filename, p.Line, p.Column, rewritten, text}] = true
+	w.e.findings[finding{p.Filename, p.Line, p.Column, rewritten, false, text}] = true
 }
 
-func (w *fileWalk) left(n ast.Node, reason string) { w.record(n, false, reason) }
+func (w *fileWalk) left(n ast.Node, reason string) {
+	if c, ok := n.(*ast.CallExpr); ok {
+		w.leftAt[c] = reason
+	}
+	w.record(n, false, reason)
+}
 
 // migrated reports a constructor that already takes the rule, so a second run
 // over a migrated module changes nothing.
@@ -202,6 +230,19 @@ func (w *fileWalk) migrated(c *ast.CallExpr, fixed int) bool {
 	}
 	named, ok := sig.Params().At(fixed).Type().(*types.Named)
 	return ok && named.Obj().Name() == "AccessRule" && named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == httpPath
+}
+
+// classifyCall classifies the option arguments of c that follow its first fixed
+// arguments, including an options slice passed as name... that the codemod turns
+// into the rule.
+func (w *fileWalk) classifyCall(c *ast.CallExpr, fixed int) optionParts {
+	if c.Ellipsis.IsValid() && len(c.Args) == fixed+1 {
+		if w.e.shapes.convertible(w.pkg, c.Args[fixed]) {
+			return optionParts{spread: c.Args[fixed]}
+		}
+		return optionParts{unknown: c.Args[fixed]}
+	}
+	return w.classify(c.Args[fixed:])
 }
 
 func (w *fileWalk) classify(args []ast.Expr) optionParts {
@@ -273,6 +314,8 @@ func (w *fileWalk) qualifier() (string, bool) {
 // be built.
 func (w *fileWalk) ruleText(parts optionParts) (string, string) {
 	switch {
+	case parts.spread != nil:
+		return w.text(parts.spread), ""
 	case parts.anyOf != nil && len(parts.reqs) > 0:
 		return "", "AnyOf is mixed with Scopes/Permissions; the old API refused this combination"
 	case parts.anyOf != nil:
@@ -293,11 +336,11 @@ func (w *fileWalk) constructor(c *ast.CallExpr, fn callee, fixed int) {
 	if len(c.Args) < fixed || w.migrated(c, fixed) {
 		return
 	}
-	if c.Ellipsis.IsValid() && len(c.Args) > fixed {
-		w.left(c, fn.name+": access options are passed as a slice (...); build the rule by hand")
+	parts := w.classifyCall(c, fixed)
+	if c.Ellipsis.IsValid() && len(c.Args) > fixed && parts.spread == nil {
+		w.left(c, fn.name+": access options are passed as a slice (...)"+w.e.shapes.whyNot(w.pkg, c.Args[len(c.Args)-1])+"; build the rule by hand")
 		return
 	}
-	parts := w.classify(c.Args[fixed:])
 	if parts.unknown != nil {
 		w.left(c, fn.name+": an option is not a Scopes, Permissions, AnyOf or ActorMiddleware call (type "+types.TypeString(w.pkg.info.TypeOf(parts.unknown), nil)+"); build the rule by hand")
 		return
@@ -310,10 +353,12 @@ func (w *fileWalk) constructor(c *ast.CallExpr, fn callee, fixed int) {
 	found := k
 	var kparts optionParts
 	if k != nil {
-		kparts = w.classify(k.Args[1:])
+		kparts = w.classifyCall(k, 1)
 		switch {
-		case k.Ellipsis.IsValid():
-			reason, k = "options are passed as a slice (...)", nil
+		case k.Ellipsis.IsValid() && kparts.spread == nil:
+			reason, k = "options are passed as a slice (...)"+w.e.shapes.whyNot(w.pkg, k.Args[len(k.Args)-1]), nil
+		case kparts.spread != nil && (parts.anyOf != nil || len(parts.reqs) > 0 || parts.spread != nil):
+			reason, k = "the constructor and the configure call both declare access", nil
 		case kparts.unknown != nil:
 			reason, k = "an option is not a Scopes, Permissions, AnyOf or ActorMiddleware call", nil
 		case kparts.anyOf != nil && (parts.anyOf != nil || len(parts.reqs) > 0), parts.anyOf != nil && len(kparts.reqs) > 0:
@@ -328,6 +373,9 @@ func (w *fileWalk) constructor(c *ast.CallExpr, fn callee, fixed int) {
 		combined.reqs = append(append([]ast.Expr{}, parts.reqs...), kparts.reqs...)
 		if kparts.anyOf != nil {
 			combined.anyOf = kparts.anyOf
+		}
+		if kparts.spread != nil {
+			combined.spread = kparts.spread
 		}
 		combined.actors = append(append([]ast.Expr{}, parts.actors...), kparts.actors...)
 	}
@@ -351,6 +399,9 @@ func (w *fileWalk) constructor(c *ast.CallExpr, fn callee, fixed int) {
 	summary := "wrapped the access options in the rule"
 	if parts.anyOf != nil {
 		summary = "kept AnyOf as the rule"
+	}
+	if combined.spread != nil {
+		summary = "the options slice is now the rule"
 	}
 	if k != nil {
 		w.fold(c, k, kparts)
@@ -408,6 +459,9 @@ func (w *fileWalk) plainConstructor(c *ast.CallExpr, fn callee, fixed int, parts
 	if parts.anyOf != nil {
 		summary = "kept AnyOf as the rule"
 	}
+	if parts.spread != nil {
+		summary = "the options slice is now the rule"
+	}
 	w.record(c, true, fn.name+": "+summary)
 }
 
@@ -418,7 +472,11 @@ func (w *fileWalk) setRule(c *ast.CallExpr, fixed int, rule string, actors []ast
 		tail += ", " + w.text(a)
 	}
 	if len(c.Args) > fixed {
-		w.add(w.offset(c.Args[fixed].Pos()), w.offset(c.Args[len(c.Args)-1].End()), tail)
+		end := w.offset(c.Args[len(c.Args)-1].End())
+		if c.Ellipsis.IsValid() {
+			end = w.offset(c.Ellipsis) + len("...")
+		}
+		w.add(w.offset(c.Args[fixed].Pos()), end, tail)
 		return
 	}
 	rparen := w.offset(c.Rparen)
@@ -654,6 +712,9 @@ func (f finding) String() string {
 	kind := "left"
 	if f.rewritten {
 		kind = "rewritten"
+	}
+	if f.decl {
+		kind += " declaration"
 	}
 	return fmt.Sprintf("%s:%d:%d: %s: %s", f.file, f.line, f.col, kind, f.text)
 }

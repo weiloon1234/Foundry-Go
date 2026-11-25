@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/token"
@@ -95,6 +96,11 @@ func ExportAccess[M any](rule foundryhttp.AccessRule[M]) ExportOption[M] {
 // All declarations are validated before registrations are returned. HTTP owns
 // callback isolation and request lifetime; Manager owns deferred export work.
 //
+// ExportAccess is a trailing option, not a required argument, only because
+// exportability is a property of the table, which the compiler cannot see: a table
+// declared without exports takes no export rule, and an exportable table refuses to
+// register without exactly one.
+//
 // Example: datatable.Routes(group, table, config, datatable.ReadAccess(read), datatable.ExportAccess(export))
 func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], config RoutesConfig[M, A], read ReadOption[M], export ...ExportOption[M]) ([]foundryhttp.RouteRegistration, error) {
 	if err := table.check(config.Manager); err != nil {
@@ -103,10 +109,10 @@ func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], confi
 	if config.Authority == nil {
 		return nil, invalid("datatable routes require authority")
 	}
-	if len(export) > 1 {
-		return nil, safeerror.NewFault(fault.Duplicate, "duplicate datatable access option")
-	}
 	id := string(table.ID())
+	if len(export) > 1 {
+		return nil, safeerror.NewFault(fault.Duplicate, fmt.Sprintf("datatable %s was given %d ExportAccess options; one rule covers its export tickets and downloads", id, len(export)))
+	}
 	scope := foundryhttp.DefineScope("/"+id, foundryhttp.RouteID(id)).Within(group)
 	route := func(method foundryhttp.Method, path string, id foundryhttp.RouteID, access foundryhttp.Access) foundryhttp.Route[foundryhttp.NoPath] {
 		route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path))
@@ -123,7 +129,7 @@ func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], confi
 		return registrations, nil
 	}
 	if len(export) == 0 {
-		return nil, invalid("datatable export routes require ExportAccess")
+		return nil, invalid("datatable " + id + " is exportable and requires ExportAccess after ReadAccess")
 	}
 	if config.Clock == nil || config.Tickets.issue == nil || config.Tickets.redeemer == nil || config.Tickets.validate == nil {
 		return nil, invalid("datatable export routes require clock and token tickets")

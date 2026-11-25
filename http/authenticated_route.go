@@ -3,7 +3,6 @@ package http
 import (
 	stdhttp "net/http"
 
-	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -17,11 +16,14 @@ type AuthenticatedRoute[P, M any] struct {
 	binding authenticationBinding[M]
 }
 
-// RequireRouteAuthentication binds a raw route to required typed authentication and
-// the access rule that says who may call it (AllOf, AnyOf or AnyActor).
-func RequireRouteAuthentication[P, M any](route Route[P], authentication *Authentication, guard auth.Guard[M], rule AccessRule[M], options ...ActorOption[M]) AuthenticatedRoute[P, M] {
-	binding := authenticationBinding[M]{authentication: authentication, guard: guard}.withAccess(rule)
-	return ConfigureAuthenticatedRoute(AuthenticatedRoute[P, M]{route: route, binding: binding}, options...)
+// RouteAuthenticated binds a raw route to the binding's guard and the access rule
+// that says who may call it: AllOf, AnyOf or binding.AnyActor(). Authentication runs
+// before path decoding.
+//
+// Example: http.RouteAuthenticated(downloadRoute, users, http.AllOf(http.Scopes(read)))
+func RouteAuthenticated[P, M any](route Route[P], binding GuardBinding[M], rule AccessRule[M], options ...ActorOption[M]) AuthenticatedRoute[P, M] {
+	required := binding.declaration().withAccess(rule)
+	return ConfigureAuthenticatedRoute(AuthenticatedRoute[P, M]{route: route, binding: required}, options...)
 }
 
 // ValidateAuthenticatedRoute checks the raw route and required authentication binding.
@@ -29,7 +31,7 @@ func ValidateAuthenticatedRoute[P, M any](r AuthenticatedRoute[P, M]) error {
 	return authenticatedRouteValidate(r, false)
 }
 func authenticatedRouteValidate[P, M any](r AuthenticatedRoute[P, M], optional bool) error {
-	if err := authenticationValidate(r.binding, r.route.spec.Access, optional); err != nil {
+	if err := authenticationValidate(r.binding, r.route.spec.Access, optional, RouteMethod(r.route), RoutePattern(r.route), RouteIDOf(r.route)); err != nil {
 		return err
 	}
 	return ValidateRoute(r.route)
@@ -89,10 +91,10 @@ func HandleAuthenticatedRaw[P, M any](r AuthenticatedRoute[P, M], handler func(s
 // credentials with value.Optional[M]. Only absent credentials reach it anonymously.
 type OptionalAuthenticationRoute[P, M any] struct{ required AuthenticatedRoute[P, M] }
 
-// OptionalRouteAuthentication adds optional typed authentication and actor options to a
-// raw route.
-func OptionalRouteAuthentication[P, M any](route Route[P], authentication *Authentication, guard auth.Guard[M], options ...ActorOption[M]) OptionalAuthenticationRoute[P, M] {
-	required := AuthenticatedRoute[P, M]{route: route, binding: authenticationBinding[M]{authentication: authentication, guard: guard}}
+// RouteOptionallyAuthenticated adds the binding's optional typed subject and actor
+// options to a raw route.
+func RouteOptionallyAuthenticated[P, M any](route Route[P], binding GuardBinding[M], options ...ActorOption[M]) OptionalAuthenticationRoute[P, M] {
+	required := AuthenticatedRoute[P, M]{route: route, binding: binding.declaration()}
 	return ConfigureOptionalRoute(OptionalAuthenticationRoute[P, M]{required: required}, options...)
 }
 

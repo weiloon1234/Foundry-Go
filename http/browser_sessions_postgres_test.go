@@ -129,14 +129,15 @@ func TestBrowserSessionLoginRotateLogoutWithConcreteModel(t *testing.T) {
 		_, err := s.web.Login(ctx, proof, session.IssueOptions{})
 		return foundryhttp.NoContent{}, err
 	})
-	profile := foundryhttp.RequireAuthentication(browserEndpoint("/profile", foundryhttp.GET, foundryhttp.Guarded), s.web.Authentication(), s.web.Guard(), foundryhttp.AnyActorOf(s.web.Guard())).Handle(func(ctx context.Context, a authAccount, _ authInput) (foundryhttp.NoContent, error) {
+	binding := authBinding(t, s.web.Authentication(), s.web.Guard())
+	profile := foundryhttp.Authenticated(browserEndpoint("/profile", foundryhttp.GET, foundryhttp.Guarded), binding, binding.AnyActor()).Handle(func(ctx context.Context, a authAccount, _ authInput) (foundryhttp.NoContent, error) {
 		if a.ID != 7 {
 			t.Error("wrong authenticated model")
 		}
 		_, err := s.web.Guard().Require(ctx)
 		return foundryhttp.NoContent{}, err
 	})
-	rotate := foundryhttp.RequireAuthentication(browserEndpoint("/rotate", foundryhttp.POST, foundryhttp.Guarded), s.web.Authentication(), s.web.Guard(), foundryhttp.AnyActorOf(s.web.Guard())).Handle(func(ctx context.Context, _ authAccount, _ authInput) (foundryhttp.NoContent, error) {
+	rotate := foundryhttp.Authenticated(browserEndpoint("/rotate", foundryhttp.POST, foundryhttp.Guarded), binding, binding.AnyActor()).Handle(func(ctx context.Context, _ authAccount, _ authInput) (foundryhttp.NoContent, error) {
 		_, err := s.web.Rotate(ctx)
 		return foundryhttp.NoContent{}, err
 	})
@@ -330,7 +331,8 @@ func TestBrowserSessionResponseEncodingFailureWithholdsCookie(t *testing.T) {
 }
 func TestBrowserSessionMiddlewareCompositionAndConfig(t *testing.T) {
 	s := browserPrepare(t)
-	profile := foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(browserEndpoint("/profile", foundryhttp.GET, foundryhttp.Guarded), foundryhttp.Use(s.web.Middleware())), s.web.Authentication(), s.web.Guard(), foundryhttp.AnyActorOf(s.web.Guard())).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	binding := authBinding(t, s.web.Authentication(), s.web.Guard())
+	profile := foundryhttp.Authenticated(foundryhttp.ConfigureEndpoint(browserEndpoint("/profile", foundryhttp.GET, foundryhttp.Guarded), foundryhttp.Use(s.web.Middleware())), binding, binding.AnyActor()).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, nil
 	})
 	if w := browserServe(newAuthRouter(t, profile), "GET", "/profile", nil); w.Code != 401 {

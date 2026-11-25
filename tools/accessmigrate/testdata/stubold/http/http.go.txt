@@ -75,3 +75,13 @@ func ConfigureAuthenticated[R, M any](e AuthenticatedEndpoint[R, M], _ ...GuardO
 func ConfigureAuthenticatedRoute[P, M any](r AuthenticatedRoute[P, M], _ ...GuardOption[M]) AuthenticatedRoute[P, M] {
 	return r
 }
+
+type OptionalAuthenticationEndpoint[R, M any] struct{}
+type OptionalAuthenticationRoute[P, M any] struct{}
+
+func OptionalAuthentication[R, M any](Endpoint[R], *Authentication, Guard[M], ...GuardOption[M]) OptionalAuthenticationEndpoint[R, M] {
+	return OptionalAuthenticationEndpoint[R, M]{}
+}
+func OptionalRouteAuthentication[P, M any](Route[P], *Authentication, Guard[M], ...GuardOption[M]) OptionalAuthenticationRoute[P, M] {
+	return OptionalAuthenticationRoute[P, M]{}
+}

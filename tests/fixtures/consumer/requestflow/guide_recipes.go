@@ -3,7 +3,6 @@ package requestflow
 import (
 	"context"
 
-	"github.com/weiloon1234/Foundry-Go/auth"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -36,11 +35,11 @@ func preparedSubmission(authorizeSubmission func(context.Context, Submission) er
 
 // doc-example:end forms-request-lifecycle-2
 
-func authorizedSubmission(transport *foundryhttp.Authentication, accountGuard auth.Guard[Account], accountPolicy func(context.Context, Account, Submission) error) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
+func authorizedSubmission(binding foundryhttp.GuardBinding[Account], accountPolicy func(context.Context, Account, Submission) error) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
 	// doc-example:begin forms-request-lifecycle-3
 	form := formEndpoint(foundryhttp.Guarded)
 	prepared := foundryhttp.PrepareEndpoint(form, Prepare)
-	secured := foundryhttp.RequireAuthentication(prepared, transport, accountGuard, foundryhttp.AnyActorOf(accountGuard))
+	secured := foundryhttp.Authenticated(prepared, binding, binding.AnyActor())
 	secured = foundryhttp.AuthorizeActor(secured, func(ctx context.Context, actor Account, input Request) error {
 		return accountPolicy(ctx, actor, input.Body)
 	})

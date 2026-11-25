@@ -3,6 +3,7 @@ package http_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
@@ -14,27 +15,20 @@ func TestAnyActorAdmitsEveryAuthenticatedActorAndRequiresNothingElse(t *testing.
 	required := alternativeScopes(t, "editorial.write")
 	binding, _ := alternativeBinding(t, required)
 	handler := func(context.Context, authAccount, authInput) (h.NoContent, error) { return h.NoContent{}, nil }
-	for name, rule := range map[string]h.AccessRule[authAccount]{
-		"binding":  binding.AnyActor(),
-		"by guard": h.AnyActorOf(binding.Guard()),
-	} {
-		t.Run(name, func(t *testing.T) {
-			endpoint := h.Authenticated(authEndpoint(h.Guarded), binding, rule)
-			info, err := h.InspectAuthenticated(endpoint)
-			if err != nil {
-				t.Fatal(err)
-			}
-			authentication := info.Route.Authentication
-			if authentication == nil || len(authentication.RequiredScopes) != 0 || len(authentication.RequiredPermissions) != 0 || len(authentication.AnyOf) != 0 {
-				t.Fatal("the open rule declared a requirement", authentication)
-			}
-			router := newAuthRouter(t, endpoint.Handle(handler))
-			for token, status := range map[string]int{"": 401, "invalid": 401, "pending": 403, "unscoped": 204, "empty": 204, "valid": 204} {
-				if response := authServe(router, []string{"Bearer " + token}); response.Code != status {
-					t.Fatal("open rule admission", token, response.Code)
-				}
-			}
-		})
+	endpoint := h.Authenticated(authEndpoint(h.Guarded), binding, binding.AnyActor())
+	info, err := h.InspectAuthenticated(endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authentication := info.Route.Authentication
+	if authentication == nil || len(authentication.RequiredScopes) != 0 || len(authentication.RequiredPermissions) != 0 || len(authentication.AnyOf) != 0 {
+		t.Fatal("the open rule declared a requirement", authentication)
+	}
+	router := newAuthRouter(t, endpoint.Handle(handler))
+	for token, status := range map[string]int{"": 401, "invalid": 401, "pending": 403, "unscoped": 204, "empty": 204, "valid": 204} {
+		if response := authServe(router, []string{"Bearer " + token}); response.Code != status {
+			t.Fatal("open rule admission", token, response.Code)
+		}
 	}
 }
 
@@ -52,12 +46,17 @@ func TestGuardedRouteRefusesAMissingOrZeroRuleAtRegistration(t *testing.T) {
 		if !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, "was not refused", err)
 		}
+		if !strings.Contains(err.Error(), "GET /profile (profile): ") {
+			t.Fatal(name, "refusal does not name the route:", err)
+		}
 		if _, err := h.NewRouter(endpoint.Handle(handler)); err == nil {
 			t.Fatal(name, "registered")
 		}
 	}
-	if err := h.ValidateAuthenticated(h.Authenticated(authEndpoint(h.Guarded), binding, nil)); err == nil || err.Error() == "" {
-		t.Fatal("the refusal names nothing")
+	err := h.ValidateAuthenticated(h.Authenticated(authEndpoint(h.Guarded), binding, nil))
+	want := "GET /profile (profile): invalid: a guarded route requires an access rule: http.AllOf, http.AnyOf or binding.AnyActor()"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("the refusal does not name the route and the fix: %v", err)
 	}
 }
 

@@ -50,11 +50,12 @@ func TestHTTPAccessScopesRunBeforeDecodingAndKeepMetadataImmutable(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoint := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AllOf(foundryhttp.Scopes(required)))
-	if err := foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AllOf(foundryhttp.Scopes(auth.AccessScopes[authAccount]{})))); !errors.Is(err, fault.Invalid) {
+	binding := authBinding(t, transport, guard)
+	endpoint := foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, foundryhttp.AllOf(foundryhttp.Scopes(required)))
+	if err := foundryhttp.ValidateAuthenticated(foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, foundryhttp.AllOf(foundryhttp.Scopes(auth.AccessScopes[authAccount]{})))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("empty requirement", err)
 	}
-	if err := foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AllOf(foundryhttp.Scopes(required), foundryhttp.Scopes(required)))); !errors.Is(err, fault.Duplicate) {
+	if err := foundryhttp.ValidateAuthenticated(foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, foundryhttp.AllOf(foundryhttp.Scopes(required), foundryhttp.Scopes(required)))); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("replaced scope requirement", err)
 	}
 	router := newAuthRouter(t, endpoint.Handle(func(ctx context.Context, subject authAccount, _ authInput) (foundryhttp.NoContent, error) {
@@ -126,7 +127,8 @@ func TestConfigureAuthenticatedPreservesFirstOptionError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AnyActorOf(guard))
+	binding := authBinding(t, transport, guard)
+	base := foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, binding.AnyActor())
 
 	// First option is invalid (empty actor middleware), second option is nil.
 	// The first error ("HTTP actor middleware requires a declaration") must be preserved.
@@ -152,7 +154,7 @@ func TestConfigureAuthenticatedPreservesFirstOptionError(t *testing.T) {
 
 	// An invalid requirement inside the rule is kept ahead of the options that follow it.
 	rule := foundryhttp.AllOf(foundryhttp.Permissions[authAccount](), nil)
-	errRule := foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, rule, nil))
+	errRule := foundryhttp.ValidateAuthenticated(foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, rule, nil))
 	if errRule == nil || !strings.Contains(errRule.Error(), "HTTP permissions require a bounded nonempty declaration") {
 		t.Fatalf("expected the rule's first error preserved, got: %v", errRule)
 	}

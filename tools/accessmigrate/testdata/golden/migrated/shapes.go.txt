@@ -1,0 +1,42 @@
+package migrated
+
+import (
+	"github.com/weiloon1234/Foundry-Go/datatable"
+	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/http/pagination"
+)
+
+func memberSlice() []http.Registration {
+	member := http.AllOf(http.Scopes(read), http.Permissions(viewer))
+	a := http.Authenticated(endpoint, users, member)
+	return []http.Registration{
+		a.Handle(handler),
+		http.Authenticated(endpoint, users, member).Handle(handler),
+	}
+}
+
+func pagedSlice() {
+	var page pagination.PageEndpoint
+	member := http.AnyOf(http.AllOf(http.Permissions(viewer)))
+	_ = pagination.Authenticated(page, users, member)
+}
+
+func ruleOptions() (http.AccessRule[User], error) {
+	return http.AllOf(http.Scopes(read), http.Permissions(viewer)), nil
+}
+
+func mountRead() {
+	opts, err := ruleOptions()
+	if err != nil {
+		return
+	}
+	_ = datatable.ReadAccess(opts)
+}
+
+func single() http.AccessRule[User] {
+	return http.AllOf(http.Permissions(editor))
+}
+
+func direct() {
+	_ = datatable.ExportAccess(single())
+}

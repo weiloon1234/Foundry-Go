@@ -57,7 +57,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	e := &engine{fset: fset, src: map[string][]byte{}, edits: map[string]map[edit]bool{}, findings: map[finding]bool{}}
+	e := &engine{fset: fset, src: map[string][]byte{}, shapes: newShapes(fset)}
 	for _, pkg := range packages {
 		for _, file := range pkg.files {
 			name := fset.Position(file.Pos()).Filename
@@ -72,9 +72,29 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 				}
 				e.src[name] = data
 			}
-			e.visit(pkg, file)
 		}
 	}
+	// A slice of access options becomes a rule only when every use of it can be
+	// rewritten; a use that is left excludes the slice, and the pass repeats.
+	for {
+		e.edits, e.findings = map[string]map[edit]bool{}, map[finding]bool{}
+		e.shapes.pending = map[string]string{}
+		e.analyze(packages)
+		for _, pkg := range packages {
+			for _, file := range pkg.files {
+				if _, ok := e.src[fset.Position(file.Pos()).Filename]; ok {
+					e.visit(pkg, file)
+				}
+			}
+		}
+		if len(e.shapes.pending) == 0 {
+			break
+		}
+		for key, reason := range e.shapes.pending {
+			e.shapes.excluded[key] = reason
+		}
+	}
+	e.reportShapes()
 	changed, err := e.apply(root, *dry)
 	if err != nil {
 		return err
@@ -93,14 +113,19 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		}
 		return a.col < b.col
 	})
-	rewritten, left := 0, 0
+	var rewritten, left, rewrittenDecls, leftDecls int
 	for _, f := range lines {
 		rel, _ := filepath.Rel(root, f.file)
 		f.file = filepath.ToSlash(rel)
 		fmt.Fprintln(stdout, f)
-		if f.rewritten {
+		switch {
+		case f.rewritten && f.decl:
+			rewrittenDecls++
+		case f.rewritten:
 			rewritten++
-		} else {
+		case f.decl:
+			leftDecls++
+		default:
 			left++
 		}
 	}
@@ -108,7 +133,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if *dry {
 		verb = "would rewrite"
 	}
-	fmt.Fprintf(stdout, "%s %d call(s) in %d file(s); left %d call(s) for a decision (each is listed above)\n", verb, rewritten, changed, left)
+	fmt.Fprintf(stdout, "%s %d call(s) and %d declaration(s) in %d file(s); left %d call(s) and %d declaration(s) for a decision (each is listed above)\n", verb, rewritten, rewrittenDecls, changed, left, leftDecls)
 	return nil
 }
 

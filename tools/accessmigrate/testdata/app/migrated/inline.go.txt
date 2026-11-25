@@ -12,8 +12,6 @@ func inline() []http.Registration {
 		http.Authenticated(endpoint, users, http.AnyOf(http.AllOf(http.Permissions(viewer)), http.AllOf(http.Permissions(editor)))).Handle(handler),
 		http.Authenticated(endpoint, users, http.Permissions(viewer), http.ActorMiddleware[User](audit)).Handle(handler),
 		http.Authenticated[Reply, User](endpoint, users, http.Scopes(read)).Handle(handler),
-		http.RequireAuthentication(endpoint, auth, guard, http.Scopes(write)).Handle(handler),
-		http.RequireRouteAuthentication(route, auth, guard, http.Permissions(editor)).Handle(handler),
 		http.TicketAuthenticated(endpoint, users, redeemer, http.Scopes(read), http.Permissions(viewer)).Handle(handler),
 	}
 }

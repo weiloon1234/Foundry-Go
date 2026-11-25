@@ -7,5 +7,5 @@ import (
 )
 
 var route h.Route[h.NoPath]
-var guard auth.Guard[models.User]
-var _ = h.RequireRouteAuthentication(route, nil, guard, h.AllOf(h.Permissions(auth.Permission[models.Order]{})))
+var binding h.GuardBinding[models.User]
+var _ = h.RouteAuthenticated(route, binding, h.AllOf(h.Permissions(auth.Permission[models.Order]{})))

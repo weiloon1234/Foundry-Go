@@ -74,7 +74,8 @@ func TestAfterAuthenticatedValidationNilHandlerReturnsInternalError(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	authEndpoint := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.AnyActorOf(guard))
+	binding := authBinding(t, transport, guard)
+	authEndpoint := foundryhttp.Authenticated(authEndpoint(foundryhttp.Guarded), binding, binding.AnyActor())
 	lateTransport := foundryhttp.AfterAuthenticatedValidation(customAuthenticatedTransport{authEndpoint})
 	registration := lateTransport.HandleBound(func(ctx context.Context, actor authAccount, input authInput) (func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error), error) {
 		return nil, nil

@@ -497,7 +497,11 @@ Declare route access requirements as data and pass each as an `http.AccessRule` 
 `ReadAccess` and `ExportAccess`. `datatable.Routes` requires `ReadAccess`, and an
 exportable table also requires `ExportAccess`, so a table is never open by
 omission: a table every authenticated actor may use writes
-`datatable.ReadAccess(config.Guard.AnyActor())`. Do not invoke authorization with a
+`datatable.ReadAccess(config.Guard.AnyActor())`. `ExportAccess` is a trailing argument
+rather than a required one only because exportability is a property of the table (its
+`Exports` setting), which the compiler cannot see: `Routes` refuses an exportable table
+without exactly one `ExportAccess`, naming the table, and takes no export rule for a
+table that does not export. Do not invoke authorization with a
 synthetic actor to discover capabilities. Table authorization still runs on every
 rule. The app owns any wrapper that shares these declarations with its domain
 policy. Leaving out `ReadAccess` says `not enough arguments in call to datatable.Routes`

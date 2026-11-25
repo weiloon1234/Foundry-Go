@@ -189,6 +189,8 @@ route := foundryhttp.Authenticated(profileEndpoint, members, members.AnyActor())
 )
 ```
 
+`AnyActor()` is the rule of this profile route because being signed in as a member is the whole decision; a route that reads or changes other data names a scope and a permission instead.
+
 Another actor model gets its own `GuardBinding[Operator]`. `members.Select(guard)`
 returns an alternative binding of the same model without mutating the default.
 The compiler rejects another actor type. Existing access-scope and resource

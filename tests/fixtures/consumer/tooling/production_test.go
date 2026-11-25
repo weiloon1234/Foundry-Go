@@ -82,7 +82,11 @@ func TestProductionCompositionUsesConcreteOperatorAndSharedRuntime(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	routes, paths, err := tooling.OperationalRoutes(status, authentication, guard, permission)
+	binding, err := foundryhttp.BindGuard(authentication, guard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes, paths, err := tooling.OperationalRoutes(status, binding, permission)
 	if err != nil {
 		t.Fatal(err)
 	}

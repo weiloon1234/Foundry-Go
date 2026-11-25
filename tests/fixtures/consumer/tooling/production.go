@@ -32,7 +32,7 @@ var MetricsRoute = foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "operations
 
 // OperationalRoutes requires the application's concrete operator guard and
 // permission. Maintenance paths are derived from those same route descriptors.
-func OperationalRoutes(runtime *diagnostics.Runtime, authentication *foundryhttp.Authentication, guard auth.Guard[models.User], permission auth.Permission[models.User]) ([]foundryhttp.RouteRegistration, []string, error) {
+func OperationalRoutes(runtime *diagnostics.Runtime, binding foundryhttp.GuardBinding[models.User], permission auth.Permission[models.User]) ([]foundryhttp.RouteRegistration, []string, error) {
 	var registrations []foundryhttp.RouteRegistration
 	var paths []string
 	for _, item := range []struct {
@@ -41,7 +41,7 @@ func OperationalRoutes(runtime *diagnostics.Runtime, authentication *foundryhttp
 	}{
 		{LiveRoute, diagnostics.Liveness}, {ReadyRoute, diagnostics.Readiness}, {StatusRoute, diagnostics.Status}, {MetricsRoute, diagnostics.Metrics},
 	} {
-		protected := foundryhttp.RequireRouteAuthentication(item.route, authentication, guard, foundryhttp.AllOf(foundryhttp.Permissions(permission)))
+		protected := foundryhttp.RouteAuthenticated(item.route, binding, foundryhttp.AllOf(foundryhttp.Permissions(permission)))
 
 		path, err := foundryhttp.AuthenticatedRouteURL(protected, foundryhttp.NoPath{})
 		if err != nil {

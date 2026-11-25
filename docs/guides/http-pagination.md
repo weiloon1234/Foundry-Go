@@ -82,15 +82,15 @@ are removed.
 
 Declare the route with `Access: foundryhttp.Guarded`, configure pagination as
 usual, and pass its concrete `foundryhttp.GuardBinding[Actor]` and the access rule
-(`http.AllOf`, `http.AnyOf` or `binding.AnyActor()`) to
+(`http.AllOf`, `http.AnyOf` or `binding.AnyActor()`; a page of members names the scope it needs) to
 `pagination.Authenticated`, then register it with
 `pagination.HandleAuthenticated(secured, service.List)`. Numbered, simple and cursor endpoints use the same
-adapter and infer all types from the endpoint and binding. `Actor` is the application's authenticated actor model, `guarded` an endpoint declared with a `Guarded` route, and `binding` the guard's `GuardBinding[Actor]`:
+adapter and infer all types from the endpoint and binding. `Actor` is the application's authenticated actor model, `guarded` an endpoint declared with a `Guarded` route, `binding` the guard's `GuardBinding[Actor]` and `read` the `auth.AccessScopes[Actor]` a reader must hold:
 
 <!-- compiled-source: tests/fixtures/consumer/httppagination/authenticated.go#http-pagination-authenticated-numbered -->
 ```go
-func AuthenticatedNumbered(guarded pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse], binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
-	return pagination.Authenticated(guarded, binding, binding.AnyActor())
+func AuthenticatedNumbered(guarded pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse], binding foundryhttp.GuardBinding[Actor], read auth.AccessScopes[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
+	return pagination.Authenticated(guarded, binding, foundryhttp.AllOf(foundryhttp.Scopes(read)))
 }
 ```
 

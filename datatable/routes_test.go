@@ -209,6 +209,14 @@ func TestRoutesValidateDeclarationsAndSnapshotAccess(t *testing.T) {
 			t.Fatal(name, "returned routes")
 		}
 	}
+	_, twice := Routes(h.Scope{}, table, config, openRead, openExport, openExport)
+	if twice == nil || !strings.Contains(twice.Error(), "datatable reports.members was given 2 ExportAccess options") {
+		t.Fatalf("a second export rule is refused without naming the table: %v", twice)
+	}
+	_, missing := Routes(h.Scope{}, table, config, openRead)
+	if missing == nil || !strings.Contains(missing.Error(), "datatable reports.members is exportable and requires ExportAccess") {
+		t.Fatalf("a missing export rule is refused without naming the table: %v", missing)
+	}
 	read, export := ReadAccess(access), ExportAccess(access)
 	router := routeRouterWith(t, table, config, read, export)
 	for _, suffix := range []string{"", "/export"} {

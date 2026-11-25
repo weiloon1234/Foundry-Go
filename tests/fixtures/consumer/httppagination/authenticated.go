@@ -5,6 +5,7 @@ import (
 
 	"foundry.test/consumer/internal/authfixture"
 	"foundry.test/consumer/mutatorqueries"
+	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
@@ -30,16 +31,16 @@ var GuardedCursorList = func() pagination.CursorEndpoint[foundryhttp.NoPath, Mem
 }()
 
 // doc-example:begin http-pagination-authenticated-numbered
-func AuthenticatedNumbered(guarded pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse], binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
-	return pagination.Authenticated(guarded, binding, binding.AnyActor())
+func AuthenticatedNumbered(guarded pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse], binding foundryhttp.GuardBinding[Actor], read auth.AccessScopes[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
+	return pagination.Authenticated(guarded, binding, foundryhttp.AllOf(foundryhttp.Scopes(read)))
 }
 
 // doc-example:end http-pagination-authenticated-numbered
-func AuthenticatedSimple(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedSimpleEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
-	return pagination.Authenticated(GuardedSimpleList, binding, binding.AnyActor())
+func AuthenticatedSimple(binding foundryhttp.GuardBinding[Actor], read auth.AccessScopes[Actor]) pagination.AuthenticatedSimpleEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
+	return pagination.Authenticated(GuardedSimpleList, binding, foundryhttp.AllOf(foundryhttp.Scopes(read)))
 }
-func AuthenticatedCursor(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedCursorEndpoint[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member, Actor, MemberResponse] {
-	return pagination.Authenticated(GuardedCursorList, binding, binding.AnyActor())
+func AuthenticatedCursor(binding foundryhttp.GuardBinding[Actor], read auth.AccessScopes[Actor]) pagination.AuthenticatedCursorEndpoint[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member, Actor, MemberResponse] {
+	return pagination.Authenticated(GuardedCursorList, binding, foundryhttp.AllOf(foundryhttp.Scopes(read)))
 }
 
 type AuthenticatedService interface {
@@ -48,11 +49,11 @@ type AuthenticatedService interface {
 	CursorList(context.Context, Actor, CursorListRequest) (CursorListResult, error)
 }
 
-func AuthenticatedRouter(binding foundryhttp.GuardBinding[Actor], service AuthenticatedService) (*foundryhttp.Router, error) {
-	endpoint := AuthenticatedNumbered(GuardedList, binding)
+func AuthenticatedRouter(binding foundryhttp.GuardBinding[Actor], read auth.AccessScopes[Actor], service AuthenticatedService) (*foundryhttp.Router, error) {
+	endpoint := AuthenticatedNumbered(GuardedList, binding, read)
 
-	membersSecureSimpleEndpoint := AuthenticatedSimple(binding)
-	membersSecureCursorEndpoint := AuthenticatedCursor(binding)
+	membersSecureSimpleEndpoint := AuthenticatedSimple(binding, read)
+	membersSecureCursorEndpoint := AuthenticatedCursor(binding, read)
 
 	return foundryhttp.NewRouter(pagination.HandleAuthenticated(endpoint, service.List), pagination.HandleAuthenticated(membersSecureSimpleEndpoint, service.SimpleList), pagination.HandleAuthenticated(membersSecureCursorEndpoint, service.CursorList))
 }

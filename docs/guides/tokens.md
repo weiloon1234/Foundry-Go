@@ -146,6 +146,10 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify func(context.Cont
 	if err != nil {
 		return nil, err
 	}
+	binding, err := foundryhttp.BindGuard(transport, guard)
+	if err != nil {
+		return nil, err
+	}
 	route := func(id foundryhttp.RouteID, method foundryhttp.Method, path string, access foundryhttp.Access) foundryhttp.Route[foundryhttp.NoPath] {
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path))
 	}
@@ -173,7 +177,7 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify func(context.Cont
 		profileEndpointRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
 
-	guardProfile := foundryhttp.RequireAuthentication(profileEndpoint, transport, guard, foundryhttp.AllOf(foundryhttp.Scopes(scopes)))
+	guardProfile := foundryhttp.Authenticated(profileEndpoint, binding, foundryhttp.AllOf(foundryhttp.Scopes(scopes)))
 
 	profile := guardProfile.Handle(func(ctx context.Context, user models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 		// user is the concrete model; code that has only ctx gets it again from guard.Require(ctx).
@@ -471,7 +475,8 @@ func TicketRoute(tokens *UserTokens, binding foundryhttp.GuardBinding[models.Use
 }
 ```
 
-`TicketResponse` uses the same credential boundary as `TokenResponse` (POST, TLS
+The route is open to any actor of the guard (`AnyActor()`) because a ticket carries only
+the identity that asked for it. `TicketResponse` uses the same credential boundary as `TokenResponse` (POST, TLS
 or `TrustedProxy`, `no-store`, never delivered after the request ended) and writes
 `{"ticket": "...", "expires_in": 30}`. Only the ticket's hash is stored, in
 `foundry_token_tickets` (migration `000004_create_tickets`). A ticket expires

@@ -21,7 +21,7 @@ type BrowserLogin struct {
 // profile without requiring a token store. This contract fixture has no issuing
 // authority, so login and refresh deny credentials. The authenticating consumer
 // exercises issuance and rotation against its PostgreSQL token store.
-func browserAuthRoutes(transport *foundryhttp.Authentication, guard auth.Guard[Account]) []foundryhttp.RouteRegistration {
+func browserAuthRoutes(binding foundryhttp.GuardBinding[Account]) []foundryhttp.RouteRegistration {
 	cookie := foundryhttp.DefineRefreshCookie("__Host-refresh-client", foundryhttp.CSRFConfig{})
 	route := func(id string) foundryhttp.Route[foundryhttp.NoPath] {
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: foundryhttp.RouteID("browser." + id), Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/browser/"+id))
@@ -53,7 +53,7 @@ func browserAuthRoutes(transport *foundryhttp.Authentication, guard auth.Guard[A
 		logout.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshCookieLogoutRequest]) (foundryhttp.NoContent, error) {
 			return foundryhttp.NoContent{}, nil
 		}),
-		foundryhttp.RequireAuthentication(profile, transport, guard, foundryhttp.AnyActorOf(guard)).Handle(func(_ context.Context, actor Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
+		foundryhttp.Authenticated(profile, binding, binding.AnyActor()).Handle(func(_ context.Context, actor Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
 			return Member{Display: actor.Display}, nil
 		}),
 	}

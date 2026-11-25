@@ -26,8 +26,8 @@
   ],
   "constructors": {
     "http.DefineEndpoint": "http.Endpoint",
-    "http.RequireAuthentication": "http.AuthenticatedEndpoint",
-    "http.OptionalAuthentication": "http.OptionalAuthenticationEndpoint",
+    "http.Authenticated": "http.AuthenticatedEndpoint",
+    "http.OptionallyAuthenticated": "http.OptionalAuthenticationEndpoint",
     "http.Signed": "http.SignedEndpoint",
     "http.DefineScope": "http.Scope",
     "validation.DefineField": "validation.Field",

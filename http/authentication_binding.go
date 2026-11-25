@@ -20,6 +20,7 @@ type authenticationBinding[M any] struct {
 	accessDeclared   bool
 	actorMiddleware  []Middleware
 	requirementError error
+	accessError      error
 	ticket           auth.TicketRedeemer
 }
 
@@ -82,12 +83,12 @@ func authenticationWithPermissions[M any](b authenticationBinding[M], required .
 	b.requiredPermissions = slices.Clone(required)
 	return b
 }
-func authenticationValidate[M any](b authenticationBinding[M], access Access, optional bool) error {
+func authenticationValidate[M any](b authenticationBinding[M], access Access, optional bool, method Method, pattern string, id RouteID) error {
+	if !optional && (b.accessError != nil || !b.accessDeclared) {
+		return b.accessRefusal(method, pattern, id)
+	}
 	if b.requirementError != nil {
 		return b.requirementError
-	}
-	if !optional && !b.accessDeclared {
-		return safeerror.NewFault(fault.Invalid, "HTTP guarded route requires an access rule: http.AllOf, http.AnyOf or AnyActor")
 	}
 	if b.requiredScopes != nil && (optional || b.requiredScopes.Len() == 0) {
 		return safeerror.NewFault(fault.Invalid, "HTTP scope requirements need a nonempty authenticated declaration")

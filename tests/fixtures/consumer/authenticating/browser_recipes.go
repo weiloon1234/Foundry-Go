@@ -48,12 +48,16 @@ func logoutBrowser(ctx context.Context, web *UserBrowserSessions) error {
 
 // doc-example:end rotate-and-logout-browser
 
-func confirmPasswordRoute(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], browser *UserBrowserSessions) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent] {
+func confirmPasswordRoute(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], browser *UserBrowserSessions) (foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent], error) {
 	// doc-example:begin confirm-password-route
-	route := foundryhttp.RequireAuthentication(endpoint, browser.Authentication(), browser.Guard(), foundryhttp.AnyActorOf(browser.Guard()),
+	binding, err := foundryhttp.BindGuard(browser.Authentication(), browser.Guard())
+	if err != nil {
+		return foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]{}, err
+	}
+	route := foundryhttp.Authenticated(endpoint, binding, foundryhttp.AllOf(foundryhttp.Permissions(ViewAccount)),
 		foundryhttp.ActorMiddleware[models.User](browser.RequirePasswordConfirmation(15*time.Minute)))
 	// doc-example:end confirm-password-route
-	return route
+	return route, nil
 }
 
 func browserLoginRoute(web *UserBrowserSessions, verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error)) foundryhttp.RouteRegistration {

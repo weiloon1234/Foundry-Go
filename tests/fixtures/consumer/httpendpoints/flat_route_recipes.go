@@ -69,17 +69,17 @@ func registerPage(adminGuard foundryhttp.GuardBinding[Admin], manage auth.Access
 	// doc-example:end flat-routes-1
 }
 
-func replayablePage(route foundryhttp.Route[foundryhttp.NoPath], access foundryhttp.GuardBinding[Admin], store *idempotency.Store, definition idempotency.Definition) foundryhttp.AuthenticatedIdempotentEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, SavePageRequest, Admin, PageResource] {
+func replayablePage(route foundryhttp.Route[foundryhttp.NoPath], access foundryhttp.GuardBinding[Admin], manage auth.AccessScopes[Admin], store *idempotency.Store, definition idempotency.Definition) foundryhttp.AuthenticatedIdempotentEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, SavePageRequest, Admin, PageResource] {
 	query, body, response := foundryhttp.EmptyQuery(), SavePageBody(), PageResponse(201)
 
 	// doc-example:begin flat-routes-3
 	endpoint := foundryhttp.DefineEndpoint(route, query, body, response)
-	secured := foundryhttp.Authenticated(endpoint, access, access.AnyActor())
+	secured := foundryhttp.Authenticated(endpoint, access, foundryhttp.AllOf(foundryhttp.Scopes(manage)))
 	return foundryhttp.IdempotentAuthenticated(secured, store, definition)
 	// doc-example:end flat-routes-3
 }
 
-func pageRoutes(ctx context.Context, publicRoute foundryhttp.Route[foundryhttp.NoPath], guardedRoute foundryhttp.Route[foundryhttp.NoPath], adminGuard foundryhttp.GuardBinding[Admin], service pageService) ([]foundryhttp.RouteRegistration, string, error) {
+func pageRoutes(ctx context.Context, publicRoute foundryhttp.Route[foundryhttp.NoPath], guardedRoute foundryhttp.Route[foundryhttp.NoPath], adminGuard foundryhttp.GuardBinding[Admin], manage auth.AccessScopes[Admin], service pageService) ([]foundryhttp.RouteRegistration, string, error) {
 	route := publicRoute
 	query, body, response := foundryhttp.EmptyQuery(), SavePageBody(), PageResponse(200)
 	endpoint := foundryhttp.DefineEndpoint(guardedRoute, query, body, response)
@@ -88,7 +88,7 @@ func pageRoutes(ctx context.Context, publicRoute foundryhttp.Route[foundryhttp.N
 
 	// doc-example:begin flat-routes-4
 	public := foundryhttp.DefineEndpoint(route, query, body, response).Handle(showPage)
-	admin := foundryhttp.Authenticated(endpoint, adminGuard, adminGuard.AnyActor()).Handle(createPage)
+	admin := foundryhttp.Authenticated(endpoint, adminGuard, foundryhttp.AllOf(foundryhttp.Scopes(manage))).Handle(createPage)
 	url, err := foundryhttp.DefineEndpoint(route, query, body, response).URL(ctx, pathValue, queryValue)
 	if err != nil {
 		return nil, "", err

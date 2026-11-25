@@ -6,7 +6,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/weiloon1234/Foundry-Go/auth"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -101,9 +100,9 @@ type Account struct {
 
 // doc-example:end submission-actor
 
-func AccountEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Account]) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
+func AccountEndpoint(binding foundryhttp.GuardBinding[Account]) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
 	formsSubmitEndpoint := submissionEndpoint(foundryhttp.Guarded)
-	guardFormsSubmit := foundryhttp.RequireAuthentication(formsSubmitEndpoint, transport, guard, foundryhttp.AnyActorOf(guard))
+	guardFormsSubmit := foundryhttp.Authenticated(formsSubmitEndpoint, binding, binding.AnyActor())
 
 	guardFormsSubmit = foundryhttp.PrepareAuthenticated(guardFormsSubmit, Prepare)
 
@@ -114,9 +113,9 @@ func AccountEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Acc
 		return nil
 	})
 }
-func GuestEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Account]) foundryhttp.OptionalAuthenticationEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
+func GuestEndpoint(binding foundryhttp.GuardBinding[Account]) foundryhttp.OptionalAuthenticationEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
 	formsSubmitEndpoint := submissionEndpoint(foundryhttp.Public)
-	guardFormsSubmit := foundryhttp.OptionalAuthentication(formsSubmitEndpoint, transport, guard)
+	guardFormsSubmit := foundryhttp.OptionallyAuthenticated(formsSubmitEndpoint, binding)
 
 	guardFormsSubmit = foundryhttp.PrepareOptional(guardFormsSubmit, Prepare)
 

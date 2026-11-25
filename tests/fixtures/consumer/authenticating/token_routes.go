@@ -26,6 +26,10 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify func(context.Cont
 	if err != nil {
 		return nil, err
 	}
+	binding, err := foundryhttp.BindGuard(transport, guard)
+	if err != nil {
+		return nil, err
+	}
 	route := func(id foundryhttp.RouteID, method foundryhttp.Method, path string, access foundryhttp.Access) foundryhttp.Route[foundryhttp.NoPath] {
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path))
 	}
@@ -53,7 +57,7 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify func(context.Cont
 		profileEndpointRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
 
-	guardProfile := foundryhttp.RequireAuthentication(profileEndpoint, transport, guard, foundryhttp.AllOf(foundryhttp.Scopes(scopes)))
+	guardProfile := foundryhttp.Authenticated(profileEndpoint, binding, foundryhttp.AllOf(foundryhttp.Scopes(scopes)))
 
 	profile := guardProfile.Handle(func(ctx context.Context, user models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 		// user is the concrete model; code that has only ctx gets it again from guard.Require(ctx).

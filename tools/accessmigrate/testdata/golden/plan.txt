@@ -1,46 +1,71 @@
-left/shared.go:21:9: left: Authenticated: no scopes or permissions; open to any authenticated actor? write binding.AnyActor(), or add the rule
-left/shared.go:25:9: left: Authenticated: the result is returned from a helper, so the helper decides access; give it a rule parameter or write AnyActor() where it is open
-left/shared.go:29:6: left: Authenticated: access options are passed as a slice (...); build the rule by hand
-left/shared.go:33:7: left: Authenticated: no access rule and the later configure call could not be folded: the value is configured more than once
-left/shared.go:34:6: left: ConfigureAuthenticated with access options: the value is configured more than once
-left/shared.go:35:6: left: ConfigureAuthenticated with access options: the value is configured more than once
-left/shared.go:40:7: left: Authenticated: no access rule and the later configure call could not be folded: it is configured conditionally
-left/shared.go:42:7: left: ConfigureAuthenticated with access options: it is configured conditionally
-left/shared.go:48:7: left: Authenticated: no access rule and the later configure call could not be folded: the value is used before it is configured
-left/shared.go:50:9: left: ConfigureAuthenticated with access options: the value is used before it is configured
-left/shared.go:54:7: left: Authenticated: no access rule and the later configure call could not be folded: the value is also used unconfigured after the configure call
-left/shared.go:55:9: left: ConfigureAuthenticated with access options: the value is also used unconfigured after the configure call
-left/shared.go:59:9: left: ConfigureAuthenticated with access options: its value was not assigned from a constructor call in this function
-left/shared.go:63:6: left: Authenticated: AnyOf is mixed with Scopes/Permissions; the old API refused this combination
-left/shared.go:68:8: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 69
-left/shared.go:71:7: left: Authenticated: no access rule and the later configure call could not be folded: it is configured inside a function literal
-left/shared.go:72:19: left: ConfigureAuthenticated with access options: it is configured inside a function literal
-left/shared.go:77:6: left: ReadAccess: no scopes or permissions; open to any authenticated actor? write binding.AnyActor(), or add the rule
-left/shared.go:84:6: left: Routes: ReadAccess is now required after the config; write datatable.ReadAccess(rule), or datatable.ReadAccess(config.Guard.AnyActor()) for a table every actor may read
-left/shared.go:85:6: left: Routes: ReadAccess is now required after the config; write datatable.ReadAccess(rule), or datatable.ReadAccess(config.Guard.AnyActor()) for a table every actor may read
-left/shared.go:85:45: rewritten: ExportAccess: wrapped the access options in the rule
+left/shapes.go:10:6: left declaration: the helper helperNil was not converted: it returns nil at shapes.go:12: returning no options is the open case, a decision for a person (AnyActor() or a capability); make it return an http.AccessRule: http.AllOf(...) for one rule, the binding's AnyActor() for the open case
+left/shapes.go:18:2: left declaration: the options slice opts was not converted: the helper helperNil cannot become a rule; build it with http.AllOf(...), http.AnyOf(...) or the binding's AnyActor() as an http.AccessRule
+left/shapes.go:22:6: left: ReadAccess: access options are passed as a slice (...); opts was not converted: the helper helperNil cannot become a rule; build the rule by hand
+left/shapes.go:26:2: left declaration: the options slice member was not converted: it is reassigned at shapes.go:27; build it with http.AllOf(...), http.AnyOf(...) or the binding's AnyActor() as an http.AccessRule
+left/shapes.go:28:6: left: Authenticated: access options are passed as a slice (...); member was not converted: it is reassigned at shapes.go:27; build the rule by hand
+left/shapes.go:32:2: left declaration: the options slice member was not converted: it is used at shapes.go:33 other than as the single options argument of an access constructor or configure call; build it with http.AllOf(...), http.AnyOf(...) or the binding's AnyActor() as an http.AccessRule
+left/shapes.go:34:6: left: Authenticated: access options are passed as a slice (...); member was not converted: it is used at shapes.go:33 other than as the single options argument of an access constructor or configure call; build the rule by hand
+left/shapes.go:38:2: left declaration: the options slice member was not converted: its use at shapes.go:40 was left: ConfigureAuthenticated with access options: the constructor and the configure call both declare access; build it with http.AllOf(...), http.AnyOf(...) or the binding's AnyActor() as an http.AccessRule
+left/shapes.go:39:7: rewritten: Authenticated: wrapped the access options in the rule
+left/shapes.go:40:6: left: ConfigureAuthenticated with access options: options are passed as a slice (...); member was not converted: its use at shapes.go:40 was left: ConfigureAuthenticated with access options: the constructor and the configure call both declare access
+left/shapes.go:44:2: left declaration: the options slice member was not converted: the value assigned at shapes.go:44 holds actor middleware, which stays an actor option of the constructor; build it with http.AllOf(...), http.AnyOf(...) or the binding's AnyActor() as an http.AccessRule
+left/shapes.go:45:6: left: Authenticated: access options are passed as a slice (...); member was not converted: the value assigned at shapes.go:44 holds actor middleware, which stays an actor option of the constructor; build the rule by hand
+left/shapes.go:49:2: left declaration: the options slice member was not converted: the value assigned at shapes.go:49 is empty, which is the open case: decide AnyActor() or a capability; build it with http.AllOf(...), http.AnyOf(...) or the binding's AnyActor() as an http.AccessRule
+left/shapes.go:50:6: left: Authenticated: access options are passed as a slice (...); member was not converted: the value assigned at shapes.go:49 is empty, which is the open case: decide AnyActor() or a capability; build the rule by hand
+left/shapes.go:58:6: left declaration: the helper valueHelper was not converted: it is used as a value at shapes.go:54; make it return an http.AccessRule: http.AllOf(...) for one rule, the binding's AnyActor() for the open case
+left/shared.go:24:9: left: Authenticated: no scopes or permissions; open to any authenticated actor? write binding.AnyActor(), or add the rule
+left/shared.go:28:9: left: Authenticated: the result is returned from a helper, so the helper decides access; give it a rule parameter or write AnyActor() where it is open
+left/shared.go:32:6: left: Authenticated: access options are passed as a slice (...); build the rule by hand
+left/shared.go:36:7: left: Authenticated: no access rule and the later configure call could not be folded: the value is configured more than once
+left/shared.go:37:6: left: ConfigureAuthenticated with access options: the value is configured more than once
+left/shared.go:38:6: left: ConfigureAuthenticated with access options: the value is configured more than once
+left/shared.go:43:7: left: Authenticated: no access rule and the later configure call could not be folded: it is configured conditionally
+left/shared.go:45:7: left: ConfigureAuthenticated with access options: it is configured conditionally
+left/shared.go:51:7: left: Authenticated: no access rule and the later configure call could not be folded: the value is used before it is configured
+left/shared.go:53:9: left: ConfigureAuthenticated with access options: the value is used before it is configured
+left/shared.go:57:7: left: Authenticated: no access rule and the later configure call could not be folded: the value is also used unconfigured after the configure call
+left/shared.go:58:9: left: ConfigureAuthenticated with access options: the value is also used unconfigured after the configure call
+left/shared.go:62:9: left: ConfigureAuthenticated with access options: its value was not assigned from a constructor call in this function
+left/shared.go:66:6: left: Authenticated: AnyOf is mixed with Scopes/Permissions; the old API refused this combination
+left/shared.go:71:8: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 72
+left/shared.go:74:7: left: Authenticated: no access rule and the later configure call could not be folded: it is configured inside a function literal
+left/shared.go:75:19: left: ConfigureAuthenticated with access options: it is configured inside a function literal
+left/shared.go:80:6: left: ReadAccess: no scopes or permissions; open to any authenticated actor? write binding.AnyActor(), or add the rule
+left/shared.go:87:6: left: Routes: ReadAccess is now required after the config; write datatable.ReadAccess(rule), or datatable.ReadAccess(config.Guard.AnyActor()) for a table every actor may read
+left/shared.go:88:6: left: Routes: ReadAccess is now required after the config; write datatable.ReadAccess(rule), or datatable.ReadAccess(config.Guard.AnyActor()) for a table every actor may read
+left/shared.go:88:45: rewritten: ExportAccess: wrapped the access options in the rule
+left/shared.go:92:6: left: RequireAuthentication no longer exists: take a binding from http.BindGuard(authentication, guard) once and write http.Authenticated(endpoint, binding, rule); the codemod cannot create the binding
+left/shared.go:93:6: left: RequireRouteAuthentication no longer exists: take a binding from http.BindGuard(authentication, guard) once and write http.RouteAuthenticated(route, binding, rule); the codemod cannot create the binding
+left/shared.go:94:6: left: OptionalAuthentication no longer exists: take a binding from http.BindGuard(authentication, guard) once and write http.OptionallyAuthenticated(endpoint, binding); the codemod cannot create the binding
+left/shared.go:95:6: left: OptionalRouteAuthentication no longer exists: take a binding from http.BindGuard(authentication, guard) once and write http.RouteOptionallyAuthenticated(route, binding); the codemod cannot create the binding
+left/shared.go:96:7: left: RequireRouteAuthentication no longer exists: take a binding from http.BindGuard(authentication, guard) once and write http.RouteAuthenticated(route, binding, rule); the codemod cannot create the binding
+left/shared.go:97:6: left: ConfigureAuthenticatedRoute with access options: its value was not assigned from a constructor call in this function
 migrated/fold.go:8:13: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 9
-migrated/fold.go:13:13: rewritten: RequireAuthentication: wrapped the access options in the rule; folded ConfigureAuthenticated at line 15
+migrated/fold.go:13:13: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 15
 migrated/fold.go:20:37: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 20
 migrated/fold.go:24:7: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 25
 migrated/fold.go:30:7: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 31
 migrated/fold.go:35:7: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 36
-migrated/fold.go:40:7: rewritten: RequireRouteAuthentication: wrapped the access options in the rule; folded ConfigureAuthenticatedRoute at line 41
-migrated/fold.go:46:7: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 49
-migrated/fold.go:47:7: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 50
+migrated/fold.go:40:7: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 43
+migrated/fold.go:41:7: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 44
 migrated/inline.go:10:3: rewritten: Authenticated: wrapped the access options in the rule
 migrated/inline.go:11:3: rewritten: Authenticated: wrapped the access options in the rule
 migrated/inline.go:12:3: rewritten: Authenticated: kept AnyOf as the rule
 migrated/inline.go:13:3: rewritten: Authenticated: wrapped the access options in the rule
 migrated/inline.go:14:3: rewritten: Authenticated: wrapped the access options in the rule
-migrated/inline.go:15:3: rewritten: RequireAuthentication: wrapped the access options in the rule
-migrated/inline.go:16:3: rewritten: RequireRouteAuthentication: wrapped the access options in the rule
-migrated/inline.go:17:3: rewritten: TicketAuthenticated: wrapped the access options in the rule
-migrated/inline.go:23:6: rewritten: Authenticated: wrapped the access options in the rule
-migrated/inline.go:27:6: rewritten: Authenticated: wrapped the access options in the rule
-migrated/inline.go:33:7: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 36
+migrated/inline.go:15:3: rewritten: TicketAuthenticated: wrapped the access options in the rule
+migrated/inline.go:21:6: rewritten: Authenticated: wrapped the access options in the rule
+migrated/inline.go:25:6: rewritten: Authenticated: wrapped the access options in the rule
+migrated/inline.go:31:7: rewritten: Authenticated: wrapped the access options in the rule; folded ConfigureAuthenticated at line 34
 migrated/mounts.go:14:6: rewritten: ReadAccess: wrapped the access options in the rule
 migrated/mounts.go:15:6: rewritten: ExportAccess: kept AnyOf as the rule
 migrated/mounts.go:16:6: rewritten: Routes: wrapped the access options in the rule
 migrated/mounts.go:17:6: rewritten: Routes: wrapped the access options in the rule
-rewrote 26 call(s) in 4 file(s); left 19 call(s) for a decision (each is listed above)
+migrated/shapes.go:10:12: rewritten declaration: member: the options slice is now the rule
+migrated/shapes.go:11:7: rewritten: Authenticated: the options slice is now the rule; folded ConfigureAuthenticated at line 13
+migrated/shapes.go:14:3: rewritten: Authenticated: the options slice is now the rule
+migrated/shapes.go:20:12: rewritten declaration: member: the options slice is now the rule
+migrated/shapes.go:21:6: rewritten: Authenticated: the options slice is now the rule
+migrated/shapes.go:33:6: rewritten: ReadAccess: the options slice is now the rule
+migrated/shapes.go:41:6: rewritten: ExportAccess: the options slice is now the rule
+rewrote 29 call(s) and 2 declaration(s) in 6 file(s); left 31 call(s) and 8 declaration(s) for a decision (each is listed above)
