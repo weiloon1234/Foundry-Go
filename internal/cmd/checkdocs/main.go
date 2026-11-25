@@ -42,7 +42,7 @@ func run(root, inputs string) error {
 	if inputs == "" {
 		return checkRepository(root)
 	}
-	documents, err := docsource.Load(root)
+	documents, err := docsource.Load(root, nil)
 	if err != nil {
 		return err
 	}
@@ -55,32 +55,34 @@ func run(root, inputs string) error {
 }
 
 func checkRepository(root string) error {
-	checker, err := retirement.NewDocumentChecker(true)
+	// One parse per document serves the binding, anchor, retirement, reference
+	// and link checks of the run; one budget bounds every document read.
+	cache := markdown.NewCache()
+	var budget markdown.Budget
+	checker, err := retirement.NewDocumentChecker(true, cache)
 	if err != nil {
 		return err
 	}
-	targets := docrefs.NewPages(root)
+	targets := docrefs.NewPages(root, cache)
 	var failures []error
 	var references []docrefs.Reference
 	agentLines := make(map[string]map[int]bool)
-	documents, sourceErr := docsource.Load(root)
+	documents, sourceErr := docsource.Load(root, cache)
 	if sourceErr != nil {
 		failures = append(failures, sourceErr)
 	}
-	{
-		failures = append(failures, docsource.CheckBindings(documents), docsource.Check(documents), docsource.CheckTypeScriptInputs(root, documents))
-		for _, document := range documents {
-			path := filepath.Join(root, filepath.FromSlash(document.Path))
-			_, err := targets.Index(path, document.Original)
-			failures = append(failures, err)
-			lines := make(map[int]bool, len(document.AgentLines))
-			for _, line := range document.AgentLines {
-				lines[line] = true
-			}
-			agentLines[path] = lines
+	failures = append(failures, docsource.CheckBindings(documents), docsource.Check(documents), docsource.CheckTypeScriptInputs(root, documents))
+	for _, document := range documents {
+		path := filepath.Join(root, filepath.FromSlash(document.Path))
+		_, err := targets.Index(path, document.Original)
+		failures = append(failures, err)
+		lines := make(map[int]bool, len(document.AgentLines))
+		for _, line := range document.AgentLines {
+			lines[line] = true
 		}
+		agentLines[path] = lines
 	}
-	completed, err := completedMilestones(root)
+	completed, err := completedMilestones(root, cache)
 	if err != nil {
 		failures = append(failures, err)
 	}
@@ -122,28 +124,21 @@ func checkRepository(root string) error {
 				return err
 			}
 			relative = filepath.ToSlash(relative)
-			active := currentGuide(root, path) || entry.Name() == "AGENTS.md" || entry.Name() == "README.md" && !strings.HasPrefix(relative, "blueprint/") && !strings.HasPrefix(relative, "docs/evidence/") && !strings.Contains(relative, "/testdata/")
-			skill := strings.HasPrefix(relative, ".claude/skills/")
-			if active || skill {
-				relativeName, relErr := filepath.Rel(root, path)
-				if relErr != nil {
-					return relErr
-				}
-				data, err := markdown.ReadFile(root, relativeName, markdown.MaxDocumentBytes)
-				if err != nil {
-					return err
-				}
-				parsed, err := docrefs.Parse(relative, data)
-				references = append(references, parsed...)
-				failures = append(failures, err)
-				if active || skill {
-					failures = append(failures, checkModelGuide(relative, data))
-					if err := checker.Check(relative, data); err != nil {
-						failures = append(failures, err)
-					}
-				}
+			data, err := markdown.ReadFile(root, relative, markdown.DocumentLimit(relative))
+			if err != nil {
+				return err
 			}
-			if err := checkDocument(root, path, currentGuide(root, path), completed, agentLines[path], targets); err != nil {
+			if err := budget.Take(relative, len(data)); err != nil {
+				return err
+			}
+			current := currentGuide(root, path)
+			active := current || entry.Name() == "AGENTS.md" || entry.Name() == "README.md" && !strings.HasPrefix(relative, "blueprint/") && !strings.HasPrefix(relative, "docs/evidence/") && !strings.Contains(relative, "/testdata/")
+			if active || strings.HasPrefix(relative, ".claude/skills/") {
+				parsed, err := docrefs.Parse(cache, relative, data)
+				references = append(references, parsed...)
+				failures = append(failures, err, checkModelGuide(cache, relative, data), checker.Check(relative, data))
+			}
+			if err := checkDocument(cache, root, path, data, current, completed, agentLines[path], targets); err != nil {
 				failures = append(failures, err)
 			}
 		}
@@ -204,16 +199,15 @@ func goRequirement(path string) (string, error) {
 	return "", fmt.Errorf("%s:0: missing Go requirement; add the go directive matching the root go.mod.", path)
 }
 
-func checkDocument(root, path string, current bool, completed map[string]bool, agentLines map[int]bool, targets *docrefs.Pages) error {
+func checkDocument(cache *markdown.Cache, root, path string, data []byte, current bool, completed map[string]bool, agentLines map[int]bool, targets *docrefs.Pages) error {
 	relative, err := filepath.Rel(root, path)
 	if err != nil {
 		return err
 	}
-	data, err := markdown.ReadFile(root, relative, markdown.MaxDocumentBytes)
+	parsed, err := cache.Read(filepath.ToSlash(relative), data)
 	if err != nil {
 		return err
 	}
-	parsed := markdown.Read(data)
 	var failures []error
 	if current {
 		inlineIndex := 0
@@ -250,57 +244,55 @@ func checkDocument(root, path string, current bool, completed map[string]bool, a
 		}
 		lineNumber := node.First
 		destination := node.Destination
-		{
-			target := strings.Trim(strings.TrimSpace(destination), "<>")
-			link, err := url.Parse(target)
-			if err != nil {
-				failures = append(failures, fmt.Errorf("%s:%d: invalid link %q: %v; use a valid local path or URL.", path, lineNumber, target, err))
-				continue
-			}
-			explicit := link.Fragment == "agent-entry" || strings.HasPrefix(link.Fragment, "recipe-")
-			if agentLines[lineNumber] && (!explicit || link.IsAbs() || link.Host != "") {
-				failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide's explicit agent-entry or recipe-* anchor; select an existing task anchor.", path, lineNumber, target))
-				continue
-			}
-			if link.IsAbs() || link.Host != "" || link.Path == "" && !explicit {
-				continue
-			}
-			local := filepath.Join(filepath.Dir(path), filepath.FromSlash(link.Path))
-			if link.Path == "" {
-				local = path
-			}
-			relative, err := filepath.Rel(root, local)
-			if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-				failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root; link to a file inside the repository.", path, lineNumber, target))
-				continue
-			}
-			if historicalTeachingTarget(root, path, relative) {
-				failures = append(failures, fmt.Errorf("%s:%d: teaching link %q targets historical material; link to the current task guide or retain an unlinked historical citation.", path, lineNumber, target))
-				continue
-			}
-			if _, err := os.Stat(local); err != nil {
-				failures = append(failures, fmt.Errorf("%s:%d: local link %q: %v; correct the link target or restore the missing file.", path, lineNumber, target, err))
-				continue
-			}
-			resolvedRoot, rootErr := filepath.EvalSymlinks(root)
-			resolvedLocal, localErr := filepath.EvalSymlinks(local)
-			if rootErr != nil || localErr != nil {
-				failures = append(failures, fmt.Errorf("%s:%d: local link %q: %v; correct the link target or restore the missing file.", path, lineNumber, target, errors.Join(rootErr, localErr)))
-				continue
-			}
-			relative, err = filepath.Rel(resolvedRoot, resolvedLocal)
-			if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-				failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root; link to a file inside the repository.", path, lineNumber, target))
-				continue
-			}
-			if agentLines[lineNumber] && (filepath.Dir(local) != filepath.Join(root, "docs", "guides") || filepath.Ext(local) != ".md") {
-				failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide; link to an existing task in docs/guides.", path, lineNumber, target))
-				continue
-			}
-			if explicit {
-				if err := checkExplicitFragment(targets, path, lineNumber, local, link.Fragment); err != nil {
-					failures = append(failures, err)
-				}
+		target := strings.Trim(strings.TrimSpace(destination), "<>")
+		link, err := url.Parse(target)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("%s:%d: invalid link %q: %v; use a valid local path or URL.", path, lineNumber, target, err))
+			continue
+		}
+		explicit := link.Fragment == "agent-entry" || strings.HasPrefix(link.Fragment, "recipe-")
+		if agentLines[lineNumber] && (!explicit || link.IsAbs() || link.Host != "") {
+			failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide's explicit agent-entry or recipe-* anchor; select an existing task anchor.", path, lineNumber, target))
+			continue
+		}
+		if link.IsAbs() || link.Host != "" || link.Path == "" && !explicit {
+			continue
+		}
+		local := filepath.Join(filepath.Dir(path), filepath.FromSlash(link.Path))
+		if link.Path == "" {
+			local = path
+		}
+		relative, err := filepath.Rel(root, local)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root; link to a file inside the repository.", path, lineNumber, target))
+			continue
+		}
+		if historicalTeachingTarget(root, path, relative) {
+			failures = append(failures, fmt.Errorf("%s:%d: teaching link %q targets historical material; link to the current task guide or retain an unlinked historical citation.", path, lineNumber, target))
+			continue
+		}
+		if _, err := os.Stat(local); err != nil {
+			failures = append(failures, fmt.Errorf("%s:%d: local link %q: %v; correct the link target or restore the missing file.", path, lineNumber, target, err))
+			continue
+		}
+		resolvedRoot, rootErr := filepath.EvalSymlinks(root)
+		resolvedLocal, localErr := filepath.EvalSymlinks(local)
+		if rootErr != nil || localErr != nil {
+			failures = append(failures, fmt.Errorf("%s:%d: local link %q: %v; correct the link target or restore the missing file.", path, lineNumber, target, errors.Join(rootErr, localErr)))
+			continue
+		}
+		relative, err = filepath.Rel(resolvedRoot, resolvedLocal)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root; link to a file inside the repository.", path, lineNumber, target))
+			continue
+		}
+		if agentLines[lineNumber] && (filepath.Dir(local) != filepath.Join(root, "docs", "guides") || filepath.Ext(local) != ".md") {
+			failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide; link to an existing task in docs/guides.", path, lineNumber, target))
+			continue
+		}
+		if explicit {
+			if err := checkExplicitFragment(targets, path, lineNumber, local, link.Fragment); err != nil {
+				failures = append(failures, err)
 			}
 		}
 	}

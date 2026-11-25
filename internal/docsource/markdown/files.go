@@ -13,8 +13,12 @@ import (
 
 // Limits apply before parsing and to streams as well as filesystem inputs.
 const (
-	// MaxDocumentBytes bounds each Markdown document before parsing.
-	MaxDocumentBytes = 4 << 20
+	// MaxDocumentBytes bounds every Markdown document a documentation command
+	// reads or parses. The repository's largest current guide is under 140 KB.
+	MaxDocumentBytes = 512 << 10
+	// MaxRecordBytes bounds the dated historical records (docs/evidence and the
+	// changelog). The repository's largest record is 1.2 MB; see DocumentLimit.
+	MaxRecordBytes = 3 << 19
 	// MaxSourceBytes bounds each compiled source input.
 	MaxSourceBytes = 8 << 20
 	// MaxManifestBytes bounds each compiler-input manifest or stream.

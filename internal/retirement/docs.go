@@ -18,7 +18,7 @@ var proseSelector = regexp.MustCompile(`[A-Za-z_][A-Za-z_0-9]*(\(\))?(\.[A-Za-z_
 
 // CheckDocument rejects retired spellings in active documentation without historical exemptions.
 func CheckDocument(name string, data []byte) error {
-	checker, err := NewDocumentChecker(true)
+	checker, err := NewDocumentChecker(true, nil)
 	if err != nil {
 		return err
 	}
@@ -28,24 +28,46 @@ func CheckDocument(name string, data []byte) error {
 // CheckApplicationDocument checks framework teaching in application instructions.
 // Bare names alone do not establish framework ownership.
 func CheckApplicationDocument(name string, data []byte) error {
-	checker, err := NewDocumentChecker(false)
+	checker, err := NewDocumentChecker(false, nil)
 	if err != nil {
 		return err
 	}
 	return checker.Check(name, data)
 }
 
+// spellingPattern is a retired spelling's pattern with the literal text every match
+// contains. The literal is a cheap necessary condition checked before the
+// regular expression, which would otherwise run once per ledger member per line.
+type spellingPattern struct {
+	literal string
+	pattern *regexp.Regexp
+}
+
+func newSpelling(literal, pattern string) spellingPattern {
+	return spellingPattern{literal: literal, pattern: regexp.MustCompile(pattern)}
+}
+
+func (s spellingPattern) find(line string) string {
+	if !strings.Contains(line, s.literal) {
+		return ""
+	}
+	return s.pattern.FindString(line)
+}
+
 // DocumentChecker compiles immutable retirement rules once for a document run.
 type DocumentChecker struct {
 	rules       documentRules
 	commands    map[*regexp.Regexp]string
-	patterns    []*regexp.Regexp
+	patterns    []spellingPattern
 	unqualified map[string]bool
 	strict      bool
+	cache       *markdown.Cache
 }
 
-// NewDocumentChecker snapshots the ledger and compiles rules for framework or application teaching.
-func NewDocumentChecker(strict bool) (*DocumentChecker, error) {
+// NewDocumentChecker snapshots the ledger and compiles rules for framework or
+// application teaching. Documents are parsed through cache, which the run shares
+// with its other checks; nil parses every document privately.
+func NewDocumentChecker(strict bool, cache *markdown.Cache) (*DocumentChecker, error) {
 	denied, err := declarations()
 	if err != nil {
 		return nil, err
@@ -62,12 +84,12 @@ func NewDocumentChecker(strict bool) (*DocumentChecker, error) {
 		}
 		commands[regexp.MustCompile(`\b`+strings.Join(words, `[ \t]+`)+`\b`)] = replacement
 	}
-	patterns := []*regexp.Regexp{regexp.MustCompile(`database/query\b`), regexp.MustCompile(`\bquery\.[A-Z]\w*`)}
+	patterns := []spellingPattern{newSpelling("database/query", `database/query\b`), newSpelling("query.", `\bquery\.[A-Z]\w*`)}
 	for _, directive := range rules.RetiredDirectives {
-		patterns = append(patterns, regexp.MustCompile(`foundry:`+regexp.QuoteMeta(directive)+`\b`))
+		patterns = append(patterns, newSpelling("foundry:"+directive, `foundry:`+regexp.QuoteMeta(directive)+`\b`))
 	}
 	if strict {
-		patterns = append(patterns, regexp.MustCompile(`\bLegacy[A-Z]\w*`))
+		patterns = append(patterns, newSpelling("Legacy", `\bLegacy[A-Z]\w*`))
 	}
 	unqualified := map[string]bool{}
 	for owner, names := range denied {
@@ -80,18 +102,18 @@ func NewDocumentChecker(strict bool) (*DocumentChecker, error) {
 			}
 			unqualified[path.Base(owner)+"."+member] = true
 			name := member
-			patterns = append(patterns, regexp.MustCompile(`\b`+regexp.QuoteMeta(path.Base(owner)+"."+name)+`\b`))
+			patterns = append(patterns, newSpelling(path.Base(owner)+"."+name, `\b`+regexp.QuoteMeta(path.Base(owner)+"."+name)+`\b`))
 		}
 	}
-	return &DocumentChecker{rules: rules, commands: commands, patterns: patterns, unqualified: unqualified, strict: strict}, nil
+	return &DocumentChecker{rules: rules, commands: commands, patterns: patterns, unqualified: unqualified, strict: strict, cache: cache}, nil
 }
 
 // Check retains import ownership across each complete code block.
 func (c *DocumentChecker) Check(name string, data []byte) error {
-	if len(data) > markdown.MaxDocumentBytes {
-		return safeerror.New(fmt.Sprintf("%s:0: document exceeds maximum %d bytes.", name, markdown.MaxDocumentBytes))
+	parsed, err := c.cache.Read(name, data)
+	if err != nil {
+		return err
 	}
-	parsed := markdown.Read(data)
 	var failures []error
 	report := func(line int, message string) {
 		failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, line, message)))
@@ -104,7 +126,7 @@ func (c *DocumentChecker) Check(name string, data []byte) error {
 				}
 			}
 			for _, pattern := range c.patterns {
-				if spelling := pattern.FindString(value); spelling != "" {
+				if spelling := pattern.find(value); spelling != "" {
 					message := "retired API in teaching; no replacement is recorded for this spelling; remove it and consult the current task guide."
 					if _, exists := c.rules.replacements[retirementName(spelling)]; exists {
 						message = c.rules.retirementMessage(spelling)

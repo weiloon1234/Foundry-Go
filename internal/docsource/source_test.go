@@ -12,7 +12,7 @@ import (
 func TestAgentNavigationLines(t *testing.T) {
 	for _, heading := range []string{"## Agent entry", "<a id=\"agent-entry\"></a>\n## Tasks"} {
 		text := heading + "\n\n- Read: [Read](#recipe-read)\n\n## Background\n\n[Other](#other)\n"
-		document, err := parseDocument("guide.md", []byte(text), nil)
+		document, err := parseDocument(nil, "guide.md", []byte(text), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -25,12 +25,12 @@ func TestAgentNavigationLines(t *testing.T) {
 
 func TestRecipeAnchorRequiresHeading(t *testing.T) {
 	for _, tail := range []string{"<!-- explanation -->\n## Read", "Some prose\n## Read", "<a id=\"recipe-other\"></a>\n## Read", "<a id=\"other\"></a>\n## Read", "Read\n----", ""} {
-		_, err := parseDocument("guide.md", []byte("<a id=\"recipe-read\"></a>\n"+tail), nil)
+		_, err := parseDocument(nil, "guide.md", []byte("<a id=\"recipe-read\"></a>\n"+tail), nil)
 		if err == nil || !strings.Contains(err.Error(), "must be followed by a # heading") {
 			t.Fatalf("displaced anchor %q: %v", tail, err)
 		}
 	}
-	if _, err := parseDocument("guide.md", []byte("<a id=\"recipe-read\"></a>\n\n## Read\n"), nil); err != nil {
+	if _, err := parseDocument(nil, "guide.md", []byte("<a id=\"recipe-read\"></a>\n\n## Read\n"), nil); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -68,7 +68,7 @@ func TestLiteralMarkersCannotClaimCompilerProof(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if _, err := Load(root); err == nil || !strings.Contains(err.Error(), "actual line comment") {
+			if _, err := Load(root, nil); err == nil || !strings.Contains(err.Error(), "actual line comment") {
 				t.Fatalf("literal marker accepted as compiler proof: %v", err)
 			}
 		})
@@ -138,10 +138,10 @@ func TestWholeFileRetainsBoundaryBlankLines(t *testing.T) {
 
 func TestObsoleteSnippetConventionsRejected(t *testing.T) {
 	for _, marker := range []string{"<!-- go-source: example.go -->", "<!-- compiled-examples -->", "<!-- orm-example: example -->", "<!-- orm-example: example-before -->"} {
-		if _, err := parseDocument("guide.md", []byte(marker+"\n"), nil); err == nil || !strings.Contains(err.Error(), "obsolete guide snippet marker") {
+		if _, err := parseDocument(nil, "guide.md", []byte(marker+"\n"), nil); err == nil || !strings.Contains(err.Error(), "obsolete guide snippet marker") {
 			t.Fatalf("accepted obsolete marker %q: %v", marker, err)
 		}
-		if _, err := parseDocument("guide.md", []byte("```markdown\n"+marker+"\n```\n"), nil); err != nil {
+		if _, err := parseDocument(nil, "guide.md", []byte("```markdown\n"+marker+"\n```\n"), nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -154,7 +154,7 @@ func TestRenderPreservesProseAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	read := func(string) (source, error) { return src, nil }
-	first, err := parseDocument("guide.md", []byte(original), read)
+	first, err := parseDocument(nil, "guide.md", []byte(original), read)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestRenderPreservesProseAndIsIdempotent(t *testing.T) {
 	if err := Check([]Document{first}); err == nil {
 		t.Fatal("edited fence passed equality")
 	}
-	second, err := parseDocument("guide.md", first.Rendered, read)
+	second, err := parseDocument(nil, "guide.md", first.Rendered, read)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestRenderPreservesProseAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	src.regions["example"] = excerpt{text: "changed\n"}
-	changed, err := parseDocument("guide.md", first.Rendered, read)
+	changed, err := parseDocument(nil, "guide.md", first.Rendered, read)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestDocumentBoundaries(t *testing.T) {
 		{"syntax in fence", "```markdown\n<!-- compiled-source: absent.go -->\n<a id=\"recipe-read\"></a>\n```\n", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			doc, err := parseDocument("guide.md", []byte(test.text), read)
+			doc, err := parseDocument(nil, "guide.md", []byte(test.text), read)
 			if err == nil {
 				err = CheckBindings([]Document{doc})
 			}
@@ -226,7 +226,7 @@ func TestRepeatedInclusionAcrossDocuments(t *testing.T) {
 	for _, name := range []string{"docs/guides/one.md", "docs/guides/two.md", "AGENTS.md", ".claude/skills/example/SKILL.md"} {
 		writeInput(t, root, name, "<!-- compiled-source: "+file+"#value -->\n```go\nvar Value = 1\n```\n")
 	}
-	docs, err := Load(root)
+	docs, err := Load(root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +306,7 @@ func TestEveryTeachingDocumentRequiresBindings(t *testing.T) {
 			writeInput(t, root, name, "# Guide\n```go\nvar x = 1\n```\n\n```tsx\nconst view = <Input />;\n```\n")
 			writeInput(t, root, "docs/evidence/record.md", "```go\nvar historical = 1\n```\n")
 			writeInput(t, root, "blueprint/design.md", "```go\nvar planned = 1\n```\n")
-			docs, err := Load(root)
+			docs, err := Load(root, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -327,7 +327,7 @@ func TestHiddenExecutableFences(t *testing.T) {
 		"> ```typescript\n> const value = 1;\n> ```", "- ````go\n  var value = 1\n  ````",
 		"```ts\nconst value = 1;\n```", "```tsx\nconst value = <Input />;\n```",
 	} {
-		doc, err := parseDocument("guide.md", []byte(text), nil)
+		doc, err := parseDocument(nil, "guide.md", []byte(text), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -363,7 +363,7 @@ func TestDiagnosticShape(t *testing.T) {
 
 func TestShellGoCommandsAreNotGoStatements(t *testing.T) {
 	text := "```sh\ngo list -m -f '{{.Dir}}' example.test/framework\ngo get -tool \"example.test/framework@${VERSION:?select a version}\"\n```"
-	doc, err := parseDocument("guide.md", []byte(text), nil)
+	doc, err := parseDocument(nil, "guide.md", []byte(text), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

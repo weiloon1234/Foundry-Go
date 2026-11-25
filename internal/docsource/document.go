@@ -12,7 +12,6 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
-	"github.com/yuin/goldmark/ast"
 )
 
 var directive = regexp.MustCompile(`^<!-- compiled-source: ([^\s#]+)(?:#([a-z0-9]+(?:-[a-z0-9]+)*))? -->$`)
@@ -43,7 +42,7 @@ type Document struct {
 
 // Load reads all guide directives. It validates ownership and section coverage,
 // but leaves rendering comparison and publication to the caller.
-func Load(root string) ([]Document, error) {
+func Load(root string, cache *markdown.Cache) ([]Document, error) {
 	paths, err := documentPaths(root)
 	if err != nil {
 		return nil, err
@@ -57,7 +56,7 @@ func Load(root string) ([]Document, error) {
 		if err != nil {
 			return nil, err
 		}
-		data, err := markdown.ReadFile(root, relative, markdown.MaxDocumentBytes)
+		data, err := markdown.ReadFile(root, relative, markdown.DocumentLimit(relative))
 		if err != nil {
 			return nil, err
 		}
@@ -65,7 +64,7 @@ func Load(root string) ([]Document, error) {
 		if total > markdown.MaxRunBytes {
 			return nil, safeerror.New(fmt.Sprintf("documentation:0: inputs exceed maximum %d bytes per run; split the teaching corpus.", markdown.MaxRunBytes))
 		}
-		document, err := parseDocument(filepath.ToSlash(relative), data, func(name string) (source, error) {
+		document, err := parseDocument(cache, filepath.ToSlash(relative), data, func(name string) (source, error) {
 			if cached, ok := sources[name]; ok {
 				return cached, nil
 			}
@@ -196,18 +195,25 @@ type section struct {
 	agent bool
 }
 
-func parseDocument(name string, data []byte, read func(string) (source, error)) (Document, error) {
+func parseDocument(cache *markdown.Cache, name string, data []byte, read func(string) (source, error)) (Document, error) {
 	result := Document{Path: name, Original: data}
-	parsed := markdown.Read(data)
+	parsed, err := cache.Read(name, data)
+	if err != nil {
+		return Document{}, err
+	}
 	anchors := make(map[int]string)
 	parsed.AnchorLines(func(line int, text string) {
 		if match := sectionAnchor.FindStringSubmatch(strings.TrimSpace(text)); match != nil {
 			anchors[line] = match[1]
 		}
 	})
-	byNode := make(map[ast.Node]markdown.Node)
-	for _, block := range parsed.Blocks {
-		byNode[block.AST] = block
+	// sibling resolves an adjacent block of the same container; a node that is
+	// not a block (a list, an absent neighbour) yields the zero Node.
+	sibling := func(index int) markdown.Node {
+		if index < 0 {
+			return markdown.Node{}
+		}
+		return parsed.Blocks[index]
 	}
 	var out bytes.Buffer
 	cursor := 0
@@ -293,13 +299,13 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 			binding("indented code is unsupported; use a fenced block with a language tag.")
 		}
 		if block.Kind == markdown.HTML && markdown.HasCodeElement(block.Text) {
-			binding("HTML code blocks are unsupported; use a fenced block with a language tag.")
+			binding("HTML pre/code elements are unsupported; use a fenced block with a language tag.")
 		}
 		if block.Kind == markdown.Comment && strings.HasPrefix(trimmed, "<!-- compiled-source") {
 			if directive.FindStringSubmatch(trimmed) == nil {
 				return fail("malformed compiled-source directive; use <!-- compiled-source: path#region -->.")
 			}
-			if next, ok := byNode[block.AST.NextSibling()]; !ok || next.Kind != markdown.Fence {
+			if next := sibling(block.Next); block.Next < 0 || next.Kind != markdown.Fence {
 				return fail("compiled-source must immediately precede a fence in the same container; put a tagged fence directly after the marker.")
 			}
 		}
@@ -309,13 +315,13 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 		if problem := fenceProblem(block.Info); problem != "" {
 			binding(problem)
 		}
-		previous := byNode[block.AST.PreviousSibling()]
+		previous := sibling(block.Previous)
 		match := directive.FindStringSubmatch(strings.TrimSpace(previous.Text))
 		if previous.Kind != markdown.Comment {
 			match = nil
 		}
 		if match == nil {
-			if executable(block.Info) || (block.Info == "text" || block.Info == "markdown") && executableTeaching(block.Text) {
+			if executable(block.Info) || (block.Info == "text" || block.Info == "markdown") && executableTeaching(name, block.Text) {
 				label := "Executable"
 				if block.Info == "go" {
 					label = "Go"
@@ -355,27 +361,37 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 			return fail("compiled source language differs from the fence tag; use the source language tag.")
 		}
 		result.Inclusions = append(result.Inclusions, Inclusion{Document: name, Line: previous.First, Source: match[1], Region: match[2], First: selected.first, Last: selected.last})
+		// Body lines keep the document's own line ending and the opener's
+		// container prefix; an empty line carries no trailing whitespace.
+		limit := int(markdown.DocumentLimit(name))
+		newline := "\n"
+		if block.BodyStart >= 2 && string(data[block.BodyStart-2:block.BodyStart]) == "\r\n" {
+			newline = "\r\n"
+		}
 		var body strings.Builder
 		for _, line := range strings.SplitAfter(selected.text, "\n") {
 			if line != "" {
-				if body.Len()+len(block.Prefix)+len(line)+1 > markdown.MaxDocumentBytes {
-					return fail(fmt.Sprintf("rendered document exceeds maximum %d bytes; split the source excerpt.", markdown.MaxDocumentBytes))
+				if body.Len()+len(block.Prefix)+len(line)+len(newline) > limit {
+					return fail(fmt.Sprintf("rendered document exceeds maximum %d bytes; split the source excerpt.", limit))
 				}
-				body.WriteString(block.Prefix)
-				body.WriteString(line)
-				if !strings.HasSuffix(line, "\n") {
-					body.WriteByte('\n')
+				line = strings.TrimSuffix(line, "\n")
+				if line == "" {
+					body.WriteString(strings.TrimRight(block.Prefix, " \t"))
+				} else {
+					body.WriteString(block.Prefix)
+					body.WriteString(line)
 				}
+				body.WriteString(newline)
 			}
 		}
 		rendered := body.String()
-		if out.Len()+len(data)-cursor-(block.BodyEnd-block.BodyStart)+len(rendered) > markdown.MaxDocumentBytes {
-			return fail(fmt.Sprintf("rendered document exceeds maximum %d bytes; split the source excerpt.", markdown.MaxDocumentBytes))
+		if out.Len()+len(data)-cursor-(block.BodyEnd-block.BodyStart)+len(rendered) > limit {
+			return fail(fmt.Sprintf("rendered document exceeds maximum %d bytes; split the source excerpt.", limit))
 		}
 		// Reparse the replacement using the same parser: a source delimiter must not
 		// close the author's fence. Delimiters themselves are never rewritten.
 		opener := data[block.Start:block.BodyStart]
-		closing := data[block.BodyEnd+len(block.Prefix) : block.End]
+		closing := data[block.BodyEnd+len(block.ClosePrefix) : block.End]
 		plain := selected.text
 		if plain != "" && !strings.HasSuffix(plain, "\n") {
 			plain += "\n"
@@ -383,7 +399,11 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 		candidate := append([]byte(nil), opener...)
 		candidate = append(candidate, plain...)
 		candidate = append(candidate, closing...)
-		replacement := markdown.Read(candidate).Blocks
+		reread, err := markdown.Read(name, candidate)
+		if err != nil {
+			return fail("compiled source breaks the document shape limits (line length, quote or list nesting, line endings); correct the source excerpt.")
+		}
+		replacement := reread.Blocks
 		valid := len(replacement) == 1 && replacement[0].Kind == markdown.Fence && replacement[0].Closed && replacement[0].BodyEnd == len(opener)+len(plain)
 		if !valid {
 			return fail("compiled source closes the fence; choose a longer fence delimiter.")
@@ -395,9 +415,11 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 		out.WriteString(rendered)
 		cursor = block.BodyEnd
 	}
+	reported := make(map[int]bool)
 	for _, inline := range parsed.Inlines {
-		if inline.Kind == markdown.HTML && markdown.HasCodeElement(inline.Text) {
-			result.BindingErrors = append(result.BindingErrors, safeerror.New(fmt.Sprintf("%s:%d: HTML code blocks are unsupported; use a fenced block with a language tag.", name, inline.First)))
+		if inline.Kind == markdown.HTML && markdown.HasCodeElement(inline.Text) && !reported[inline.First] {
+			reported[inline.First] = true
+			result.BindingErrors = append(result.BindingErrors, safeerror.New(fmt.Sprintf("%s:%d: inline <pre> or <code> HTML in prose is unsupported; use backticks for a code span or a fenced block with a language tag.", name, inline.First)))
 		}
 	}
 	if pendingAnchor != "" {
@@ -415,11 +437,17 @@ func executable(language string) bool {
 // Recognize declarations and statements even when a fence hides its language.
 var executableStatement = regexp.MustCompile(`(?m)^\s*(?:(?:export\s+)?(?:async\s+)?(?:func|function|interface|type|const|let|var|package|import)\s+[A-Za-z_({*]|[A-Za-z_][\w., ]*\s*:=|(?:return|await)\s+[A-Za-z_]|[A-Za-z_][\w.]*\(|(?:if|for|switch|select|throw|try|catch)\b[^\n]*[({]|(?:go|defer)\s+[A-Za-z_][\w.]*\(|<[A-Z][A-Za-z_0-9]*(?:[ />]))`)
 
-func executableTeaching(code string) bool {
+func executableTeaching(name, code string) bool {
 	if executableStatement.MatchString(code) {
 		return true
 	}
-	for _, block := range markdown.Read([]byte(code)).Blocks {
+	// A fence body is part of a document already shaped by Read; a refusal here
+	// would repeat that diagnostic, so an unreadable fragment is not executable.
+	fragment, err := markdown.Read(name, []byte(code))
+	if err != nil {
+		return false
+	}
+	for _, block := range fragment.Blocks {
 		if block.Kind == markdown.Fence && executable(block.Info) && strings.TrimSpace(block.Text) != "" {
 			return true
 		}

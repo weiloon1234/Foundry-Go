@@ -26,7 +26,7 @@ func TestClosedBlockSyntax(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			doc, err := parseDocument("guide.md", []byte("# Example\n\n"+test.block+"\n"), nil)
+			doc, err := parseDocument(nil, "guide.md", []byte("# Example\n\n"+test.block+"\n"), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -40,7 +40,7 @@ func TestClosedBlockSyntax(t *testing.T) {
 		if executable(tag) {
 			continue
 		}
-		doc, err := parseDocument("guide.md", []byte("```"+tag+"\nplain output\n```\n"), nil)
+		doc, err := parseDocument(nil, "guide.md", []byte("```"+tag+"\nplain output\n```\n"), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -57,7 +57,7 @@ func TestOwnedTreesHaveNoDirectoryNameExemptions(t *testing.T) {
 				root := t.TempDir()
 				name := rootName + "/" + dir + "/example.md"
 				writeInput(t, root, name, "```go\nvar Value = 1\n```\n")
-				docs, err := Load(root)
+				docs, err := Load(root, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -76,7 +76,7 @@ func TestOwnedTreesHaveNoDirectoryNameExemptions(t *testing.T) {
 			if err := os.Symlink(target, name); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := Load(root); err == nil || !strings.Contains(err.Error(), "symlink") {
+			if _, err := Load(root, nil); err == nil || !strings.Contains(err.Error(), "symlink") {
 				t.Fatalf("directory symlink accepted: %v", err)
 			}
 		})
@@ -91,7 +91,7 @@ func TestContainerRendering(t *testing.T) {
 	for _, container := range []struct{ prefix, continuation string }{{"> ", "> "}, {"- ", "  "}, {"> - ", ">   "}, {"1. ", "   "}} {
 		prefix, continuation := container.prefix, container.continuation
 		input := prefix + "<!-- compiled-source: example.ts#value -->\n" + continuation + "```typescript\n" + continuation + "const value = 1;\n" + continuation + "```\n"
-		doc, err := parseDocument("guide.md", []byte(input), func(string) (source, error) { return src, nil })
+		doc, err := parseDocument(nil, "guide.md", []byte(input), func(string) (source, error) { return src, nil })
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,7 +109,7 @@ func TestSourceDiagnosticKeepsUnclosedRegionLine(t *testing.T) {
 	name := "tests/fixtures/consumer/example/example.go"
 	writeInput(t, root, name, "package example\n\n// doc-example:begin value\nvar Value = 1\n")
 	writeInput(t, root, "docs/guides/example.md", "<!-- compiled-source: "+name+"#value -->\n```go\n```\n")
-	_, err := Load(root)
+	_, err := Load(root, nil)
 	if err == nil || !strings.Contains(Diagnostics(err), name+":3: unclosed region value; add its matching end marker.") {
 		t.Fatalf("lost source location: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestManifestDiagnosticsKeepLines(t *testing.T) {
 
 func TestLiteralHTMLNamesAreNotBlocks(t *testing.T) {
 	for _, text := range []string{"Use `http.error.<code>` keys.", "The ``literal ` <pre> `` is an inline example."} {
-		doc, err := parseDocument("guide.md", []byte(text), nil)
+		doc, err := parseDocument(nil, "guide.md", []byte(text), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -148,11 +148,11 @@ func TestLiteralHTMLNamesAreNotBlocks(t *testing.T) {
 			t.Fatalf("inline literal treated as HTML: %v", err)
 		}
 	}
-	doc, err := parseDocument("guide.md", []byte("Use `<code>` literally. <pre>actual HTML</pre>"), nil)
+	doc, err := parseDocument(nil, "guide.md", []byte("Use `<code>` literally. <pre>actual HTML</pre>"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := CheckBindings([]Document{doc}); err == nil || !strings.Contains(err.Error(), "use a fenced block") {
+	if err := CheckBindings([]Document{doc}); err == nil || !strings.Contains(err.Error(), "use backticks") {
 		t.Fatalf("inline literal hid real HTML: %v", err)
 	}
 }

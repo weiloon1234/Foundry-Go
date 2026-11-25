@@ -516,7 +516,7 @@ validation.Rule.Check`)
 
 func TestUnqualifiedRetirementKeepsCodeLine(t *testing.T) {
 	err := CheckDocument("guide.md", []byte("# Guide\n\n```go\nvar current = 1\n\nDoesntHave(relation)\n```\n"))
-	if err == nil || !strings.Contains(err.Error(), "guide.md:6: orm.DoesntHave is retired; use orm.Not(") {
+	if err == nil || !strings.Contains(err.Error(), "guide.md:6: `DoesntHave` matches the retired `orm.DoesntHave`; write the qualified name you mean") {
 		t.Fatalf("retirement lost its source line: %v", err)
 	}
 }

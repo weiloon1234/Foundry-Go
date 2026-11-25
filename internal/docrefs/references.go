@@ -37,10 +37,14 @@ type Reference struct {
 
 // Parse reads complete Foundry guides: declarations outside Markdown fences.
 // Each line is independent; malformed lines yield no partial references.
-func Parse(name string, data []byte) ([]Reference, error) {
+func Parse(cache *markdown.Cache, name string, data []byte) ([]Reference, error) {
 	var refs []Reference
 	var failures []error
-	markdown.Read(data).ProseLines(func(line int, text string) {
+	parsed, err := cache.Read(name, data)
+	if err != nil {
+		return nil, err
+	}
+	parsed.ProseLines(func(line int, text string) {
 		const prefix = "Foundry guides:"
 		text = strings.TrimSpace(text)
 		if !strings.HasPrefix(text, prefix) {

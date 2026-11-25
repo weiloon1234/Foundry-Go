@@ -36,7 +36,7 @@ func main() {
 }
 
 func run(root string, check bool, guides ...string) error {
-	documents, err := docsource.Load(root)
+	documents, err := docsource.Load(root, nil)
 	if err != nil {
 		return err
 	}

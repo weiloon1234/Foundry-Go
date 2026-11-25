@@ -24,7 +24,7 @@ copying, notice and patent files for the actual build.
 | github.com/yuin/goldmark v1.8.7 | Direct dependency for the shared CommonMark/GFM AST reader used by documentation binding, rendering, retirement, references and links. Pure Go with no dependencies of its own. MIT licence, copyright 2019 Yusuke Inuzuka; retain its LICENSE in dependency notice inventories. |
 | TOML, semver, cron | Configuration parsing, plugin requirements and schedule parsing. Review malformed input bounds and compatibility, not only successful examples. |
 
-At the milestone 24 review, all 42 pinned root modules had cached top-level license/copying/notice files in
+At the milestone 24 review (before Goldmark was added above), all 42 pinned root modules had cached top-level license/copying/notice files in
 the source inventory. MIT, BSD-style and Apache-2.0 texts predominate; this
 inventory preserves actual files and does not replace their terms. The gav1d
 source identifies a pure-Go AV1/AVIF implementation with architecture-specific

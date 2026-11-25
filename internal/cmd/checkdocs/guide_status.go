@@ -13,28 +13,32 @@ var (
 	pendingMilestone = regexp.MustCompile(`(?i)\b(?:remains?(?:\s+(?:in|part\s+of|separate))?|planned\s+in|arrives?\s+in)\s+\[?milestone\s+([0-9]{1,2})\b|\bmilestone\s+([0-9]{1,2})\s+(?:remains?\s+open|still\s+requires)\b`)
 )
 
-func completedMilestones(root string) (map[string]bool, error) {
-	path := filepath.Join(root, "blueprint", "00-master-architecture-and-parity.md")
-	data, err := markdown.ReadFile(root, "blueprint/00-master-architecture-and-parity.md", markdown.MaxDocumentBytes)
+func completedMilestones(root string, cache *markdown.Cache) (map[string]bool, error) {
+	const name = "blueprint/00-master-architecture-and-parity.md"
+	data, err := markdown.ReadFile(root, name, markdown.DocumentLimit(name))
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := cache.Read(name, data)
 	if err != nil {
 		return nil, err
 	}
 	completed := make(map[string]bool)
-	for _, line := range strings.Split(string(data), "\n") {
-		columns := strings.Split(line, "|")
-		if len(columns) != 6 {
+	for _, row := range parsed.Blocks {
+		// The status table has four columns: number, blueprint, requires, status.
+		if row.Kind != markdown.TableRow || len(row.Cells) != 4 {
 			continue
 		}
-		number := strings.TrimSpace(columns[1])
+		number := row.Cells[0]
 		if len(number) != 2 || number[0] < '0' || number[0] > '9' || number[1] < '0' || number[1] > '9' {
 			continue
 		}
-		if strings.HasPrefix(strings.TrimSpace(columns[4]), "Complete") {
+		if strings.HasPrefix(row.Cells[3], "Complete") {
 			completed[number] = true
 		}
 	}
 	if len(completed) == 0 {
-		return nil, fmt.Errorf("%s:0: missing completed milestone status rows; restore the master status table with its current completion states.", path)
+		return nil, fmt.Errorf("%s:0: missing completed milestone status rows; restore the master status table with its current completion states.", filepath.Join(root, name))
 	}
 	return completed, nil
 }
