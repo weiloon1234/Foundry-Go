@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- `foundry models check` compares each enum column's database value list with its
+  enum, without a database: the newest live `CHECK (col IN (...))`, `col <@ '[...]'`
+  or `col = ANY (ARRAY[...])` list on the column of a model field typed as a
+  `//foundry:enum` (or `value.Nullable`, `value.JSON`, slice or array of one) must equal
+  the enum's cases. A missing case is a `[enum-list]` finding at the case that names the
+  table, column, constraint and the migration that last wrote the list and prints the
+  `DROP CONSTRAINT` and `ADD CONSTRAINT` statements for a new migration; a value that is
+  not a case, a list the check cannot read (a `DO` block, `RENAME`, `NOT IN`, a
+  non-literal member) and a run-time-built migration that names a model table are
+  findings too. A column that holds fewer cases declares them with the new tag option
+  `values=Case|Case`, and its list must equal exactly those cases. A migration function
+  that no list registers is a `[migration-unregistered]` finding. The migrations guide
+  teaches both; the consumer fixture's `enumlists` package is the positive case.
+- Application effect of the enum rule: an application whose constraint lists fewer
+  values than its enum fails `models check` at the next pin until the field declares
+  `values=` or a new migration writes the list again. Nothing changes for lists that
+  already equal their enums.
+
 - Retired-names ledger completeness: `make generate` records the exported API of
   the importable packages (`internal/retirement/exported-surface.txt`; an alias lists
   the members of its target), and `make generate-check` refuses any identifier removed

@@ -38,24 +38,17 @@ func discoverEnum(p *packageInput, spec *ast.TypeSpec, named *types.Named, args 
 		return e, p.diagnostic(spec.Pos(), "enum must have a string or integer underlying type")
 	}
 	e.base = base
-	constants := p.enumConstants()
+	files := make([]*ast.File, len(p.files))
+	for i, file := range p.files {
+		files[i] = file.syntax
+	}
+	cases, unexported := enumCaseConstants(p.types.Scope(), enumConstants(files), named)
+	if unexported != nil {
+		return e, p.diagnostic(unexported.Pos(), fmt.Sprintf("unexported constant %s of enum %s declares its own value; export it to keep it as a case, or mark it //%s to exclude it from the enum's wire values", unexported.Name(), e.name, enumIgnoreDirective))
+	}
 	seen := make(map[string]string)
-	for _, name := range p.types.Scope().Names() {
-		v, ok := p.types.Scope().Lookup(name).(*types.Const)
-		if !ok || !types.Identical(v.Type(), named) {
-			continue
-		}
-		// Cases are exported constants declared as values. Aliases of another
-		// case and explicitly ignored constants keep their Go meaning without
-		// becoming wire values. An unexported value was a case before, so it is
-		// never dropped silently: export it or mark it ignored.
-		declaration := constants[name]
-		if declaration.ignored || p.enumAlias(declaration.value, named) {
-			continue
-		}
-		if !v.Exported() {
-			return e, p.diagnostic(v.Pos(), fmt.Sprintf("unexported constant %s of enum %s declares its own value; export it to keep it as a case, or mark it //%s to exclude it from the enum's wire values", name, e.name, enumIgnoreDirective))
-		}
+	for _, v := range cases {
+		name := v.Name()
 		literal := v.Val().ExactString()
 		if v.Val().Kind() == constant.String {
 			if !utf8.ValidString(constant.StringVal(v.Val())) {
@@ -87,7 +80,7 @@ func discoverEnum(p *packageInput, spec *ast.TypeSpec, named *types.Named, args 
 
 // enumAlias reports a constant whose declared value is another constant of the
 // same enum type, directly or through an explicit conversion to that type.
-func (p *packageInput) enumAlias(value ast.Expr, named *types.Named) bool {
+func enumAlias(scope *types.Scope, value ast.Expr, named *types.Named) bool {
 	for {
 		switch expression := value.(type) {
 		case *ast.ParenExpr:
@@ -97,13 +90,13 @@ func (p *packageInput) enumAlias(value ast.Expr, named *types.Named) bool {
 			if len(expression.Args) != 1 {
 				return false
 			}
-			if conversion, ok := p.types.Scope().Lookup(identifierName(expression.Fun)).(*types.TypeName); !ok || !types.Identical(conversion.Type(), named) {
+			if conversion, ok := scope.Lookup(identifierName(expression.Fun)).(*types.TypeName); !ok || !types.Identical(conversion.Type(), named) {
 				return false
 			}
 			value = expression.Args[0]
 			continue
 		case *ast.Ident:
-			target, ok := p.types.Scope().Lookup(expression.Name).(*types.Const)
+			target, ok := scope.Lookup(expression.Name).(*types.Const)
 			return ok && types.Identical(target.Type(), named)
 		}
 		return false
@@ -123,12 +116,36 @@ func identifierName(expression ast.Expr) string {
 	}
 }
 
+// enumCaseConstants returns the constants that are cases of named, in scope
+// order. Cases are exported constants declared as values. Aliases of another
+// case and explicitly ignored constants keep their Go meaning without becoming
+// wire values. An unexported value was a case before, so it is never dropped
+// silently: the first one is returned separately, to export or mark ignored.
+func enumCaseConstants(scope *types.Scope, declarations map[string]enumConstant, named *types.Named) ([]*types.Const, *types.Const) {
+	var cases []*types.Const
+	for _, name := range scope.Names() {
+		v, ok := scope.Lookup(name).(*types.Const)
+		if !ok || !types.Identical(v.Type(), named) {
+			continue
+		}
+		declaration := declarations[name]
+		if declaration.ignored || enumAlias(scope, declaration.value, named) {
+			continue
+		}
+		if !v.Exported() {
+			return nil, v
+		}
+		cases = append(cases, v)
+	}
+	return cases, nil
+}
+
 // enumConstants resolves each package-level constant's declared expression,
 // following Go's implicit repetition of the previous expression list.
-func (p *packageInput) enumConstants() map[string]enumConstant {
+func enumConstants(files []*ast.File) map[string]enumConstant {
 	result := make(map[string]enumConstant)
-	for _, file := range p.files {
-		for _, decl := range file.syntax.Decls {
+	for _, file := range files {
+		for _, decl := range file.Decls {
 			gen, ok := decl.(*ast.GenDecl)
 			if !ok || gen.Tok != token.CONST {
 				continue

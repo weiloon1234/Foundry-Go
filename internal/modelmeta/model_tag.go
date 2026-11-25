@@ -18,6 +18,9 @@ type ModelTag struct {
 	DatabaseDefault                             bool
 	Role, Input, Mutate, Codec, Member, KeyRole string
 	Slot, Ignore                                bool
+	// Values names the cases of the field's enum that its column may hold, as
+	// written, when the column is deliberately narrower than the enum.
+	Values []string
 }
 
 // StorageTag returns the existing column/default grammar without generator options.
@@ -100,7 +103,7 @@ func parseModelOption(result *ModelTag, part string, seen map[string]bool) error
 		return nil
 	}
 	switch key {
-	case "column", "default", "role", "input", "mutate", "codec", "member", "key-role":
+	case "column", "default", "role", "input", "mutate", "codec", "member", "key-role", "values":
 	default:
 		return safeerror.New(fmt.Sprintf("unknown foundry option %s", key))
 	}
@@ -141,6 +144,17 @@ func parseModelOption(result *ModelTag, part string, seen map[string]bool) error
 			return safeerror.New("member requires a Go identifier or none")
 		}
 		result.Member = value
+	case "values":
+		names := strings.Split(value, "|")
+		for i, name := range names {
+			if !ModelIdentifier(name) {
+				return safeerror.New("values requires enum case names separated by |")
+			}
+			if slices.Contains(names[:i], name) {
+				return safeerror.New(fmt.Sprintf("values names %s twice", name))
+			}
+		}
+		result.Values = names
 	case "key-role":
 		switch value {
 		case "lookup", "primary", "input", "number", "text", "primary-number", "primary-text":

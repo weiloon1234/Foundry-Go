@@ -125,6 +125,9 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 			f.bytes = true
 		}
 	}
+	if len(tag.Values) != 0 && modelmeta.FieldEnum(f.stored, func(named *types.Named) bool { return p.enumTypes[named] || hasEnumDescriptor(named) }) == nil {
+		return fail("values applies only to an enum field or a collection of enums")
+	}
 	if f.slot {
 		if f.nullable {
 			return fail("Nullable does not apply to a slot")

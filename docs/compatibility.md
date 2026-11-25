@@ -5,6 +5,31 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+## Enum lists and registered migrations in `models check` — unreleased
+
+`foundry models check` (and so each application's quick gate and the framework's
+`make models-check`) gains two rules that read the migrations without a database. The
+`[enum-list]` rule requires the newest `CHECK (col IN (...))`, `col <@ '[...]'::jsonb`
+and `col = ANY (ARRAY[...])` list on the column of every enum-typed model field (or
+`value.Nullable`, `value.JSON`, slice or array of one) to equal the enum's cases, and
+prints the two SQL statements of the migration to write. The `[migration-unregistered]`
+rule reports a migration function that no list registers. The foundry tag gains
+`values=Case|Case`, which declares the cases a deliberately narrower column holds; the
+list must then equal exactly those cases. The generator refuses `values` on a field that
+holds no enum, and `models check` refuses a name that is not a case and a list that names
+every case. The two rules are listed in the rule table of the
+[tooling guide](guides/developer-tooling-and-testing.md#diagnostic-rules) and taught in the
+[migrations guide](guides/migrations-and-seeding.md#recipe-enum-lists).
+
+This is a source and gate compatibility change. An application whose constraint lists
+fewer or more values than its enum fails `models check` at the next pin until it either
+declares the narrowing with `values=` on the field (no database change) or adds a new
+migration that writes the list again with every case. A list the rule cannot read (a `DO`
+block that rewrites the constraint, for example) is a finding until a new migration
+writes the constraint as literal `DROP CONSTRAINT` and `ADD CONSTRAINT` statements. An
+application whose lists already equal their enums, or whose enum columns carry no list,
+sees no change. No runtime behavior, persisted format or generated wire contract changes.
+
 ## Retired-names ledger completeness — unreleased
 
 Every exported identifier removed since the previous release must now appear in the

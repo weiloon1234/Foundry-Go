@@ -42,6 +42,11 @@ func TestModelTagRejections(t *testing.T) {
 		{`foundry:"member=-"`, "member requires a Go identifier or none"},
 		{`foundry:"member=_"`, "member requires a Go identifier or none"},
 		{`foundry:"mutate=foo"`, "mutate requires input"},
+		{`foundry:"values="`, "foundry option requires key=value: values"},
+		{`foundry:"values=A||B"`, "values requires enum case names separated by |"},
+		{`foundry:"values=A|B-C"`, "values requires enum case names separated by |"},
+		{`foundry:"values=A|B|A"`, "values names A twice"},
+		{`foundry:"values=A,values=B"`, "duplicate foundry option values"},
 		{`foundry:"role=text`, "malformed quoted struct tag"},
 		{`foundry:"role=text" foundry:"role=column"`, "duplicate struct tag namespace foundry"},
 	} {
@@ -62,6 +67,13 @@ func TestModelTagRejections(t *testing.T) {
 		if _, err := ParseModelTag(key + `:"name"`); err != nil {
 			t.Errorf("unrelated namespace %s: %v", key, err)
 		}
+	}
+}
+
+func TestModelTagValuesNarrowTheEnum(t *testing.T) {
+	got, err := ParseModelTag(`foundry:"default=database,values=Draft|Published"`)
+	if err != nil || strings.Join(got.Values, ",") != "Draft,Published" || got.StorageTag() != "default=database" {
+		t.Fatalf("values: %+v %v", got, err)
 	}
 }
 
