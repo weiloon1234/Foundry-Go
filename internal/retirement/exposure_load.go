@@ -50,28 +50,38 @@ func exposureImporters(fset *token.FileSet, packages map[string]*sourcePackage) 
 		if len(imports) == 0 {
 			continue
 		}
-		cmd := exec.Command("go", append([]string{"list", "-export", "-deps", "-json=ImportPath,Export"}, imports...)...)
-		cmd.Dir = dir
-		data, err := cmd.Output()
+		imp, err := exportImporter(fset, dir, imports)
 		if err != nil {
 			return nil, safeerror.Prefix(dir+": resolve exposure imports", err)
 		}
-		exports := make(map[string]string)
-		decoder := json.NewDecoder(bytes.NewReader(data))
-		for {
-			var pkg struct{ ImportPath, Export string }
-			if err := decoder.Decode(&pkg); err == io.EOF {
-				break
-			} else if err != nil {
-				return nil, err
-			}
-			exports[pkg.ImportPath] = pkg.Export
-		}
-		result[dir] = importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
-			return os.Open(exports[path])
-		})
+		result[dir] = imp
 	}
 	return result, nil
+}
+
+// exportImporter reads compiler export data for the imports and their
+// dependencies as the module in dir builds them.
+func exportImporter(fset *token.FileSet, dir string, imports []string) (types.Importer, error) {
+	cmd := exec.Command("go", append([]string{"list", "-export", "-deps", "-json=ImportPath,Export"}, imports...)...)
+	cmd.Dir = dir
+	data, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	exports := make(map[string]string)
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	for {
+		var pkg struct{ ImportPath, Export string }
+		if err := decoder.Decode(&pkg); err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+		exports[pkg.ImportPath] = pkg.Export
+	}
+	return importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
+		return os.Open(exports[path])
+	}), nil
 }
 
 func sortedKeys[V any](m map[string]V) []string {

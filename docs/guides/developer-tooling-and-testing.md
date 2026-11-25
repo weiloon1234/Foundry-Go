@@ -165,11 +165,19 @@ cache. Reading a released recipe needs no compiler or renderer.
 
 Guides teach only the current API. The retired-name ledger in
 [`internal/retirement/denied.json`](../../internal/retirement/denied.json) records
-retired names and optional replacement text in the same entries. The retired-names
-ledger gives the replacement when one was documented; diagnostics print that text
-or say that no replacement is recorded. Its replacement package names are checked
-against current declarations. Historical labels
+retired names, each with either `replacement` text or `noReplacement: true`.
+Diagnostics print the replacement or say that none exists. An entry marked
+`qualifiedOnly: true` names an identifier that a current package also exports;
+documents may write it bare, and only its qualified spelling is refused. Its replacement package
+names are checked against current declarations. Historical labels
 do not exempt a fence, table or paragraph from retirement checks.
+
+Removing an exported identifier of the framework requires its ledger entry in the
+same change. `make generate` records the exported API of the importable packages in
+`internal/retirement/exported-surface.txt`; `make generate-check` refuses a stale
+record and any identifier present in the previous release's record
+(`internal/retirement/release/`) that is gone and not in the ledger, and the ledger
+test refuses a lost entry. The message names the identifier and the file to add it to.
 
 <a id="recipe-reference-guides"></a>
 ## Reference pinned guides

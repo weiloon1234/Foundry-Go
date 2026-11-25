@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Retired-names ledger completeness: `make generate` records the exported API of
+  the importable packages (`internal/retirement/exported-surface.txt`), and
+  `make generate-check` refuses any identifier removed since the previous release
+  (`internal/retirement/release/`) that has no ledger entry; ledger entries cannot
+  disappear. Every entry now states `replacement` or `noReplacement: true`. The
+  ledger gains the 354 removed names that earlier releases left unrecorded (per-kind
+  ORM operators, `database/query`, `datatable.DefineColumn`, `attachments.MaxUploadBytes`
+  and the TypeScript `Options.React`/`Options.Vue`). A retired package import is refused
+  from the ledger, and a compile-fail case that names a retired name is not a use of it.
 - Before upgrading the application pin, retarget any `Foundry guides:` declaration
   naming `orm-migration` to a current task guide. The migration page is removed.
 - `go tool foundry docs check` now reads each active document (`AGENTS.md` files

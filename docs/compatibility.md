@@ -5,6 +5,32 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+## Retired-names ledger completeness — unreleased
+
+Every exported identifier removed since the previous release must now appear in the
+[retired-names ledger](../internal/retirement/denied.json). `make generate` records
+the exported API of the importable packages in
+`internal/retirement/exported-surface.txt`; `make generate-check` and `make verify`
+compare that record with the previous release's record and refuse a removed function,
+type, method, field, constant, variable, alias or package that has no entry. A removed
+type covers its members; a member removed from a type that remains needs its own entry.
+A ledger entry never disappears: the names retired in the previous release must still
+be in the ledger.
+
+Each ledger entry now states either `replacement` or `noReplacement: true`, never
+neither and never both; the 103 entries that recorded no replacement now say so
+explicitly. An entry whose bare name a current package also exports is marked
+`qualifiedOnly: true`, so documents may keep writing the live name bare. The ledger gains the per-kind ORM operator, assignment, adapter and
+audit functions that earlier releases removed, `database/query` and its public
+names, `attachments.MaxUploadBytes`, `datatable.DefineColumn` and the TypeScript
+`Options.React` and `Options.Vue` fields, each with its replacement. Source checks
+refuse an import of any package the ledger retires as a package. A compile-fail
+case that names a retired name on purpose is not a use of it: its runner asserts
+that the compiler rejects it.
+
+No runtime behavior, persisted format or generated wire contract changes. Application
+code that already compiled against the previous release is unaffected.
+
 ## Telemetry run admission — v0.52.0
 
 Ordinary console commands and provider-only application boots now leave no

@@ -1,7 +1,9 @@
 package retirement
 
 import (
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -276,6 +278,53 @@ func TestDocumentationRetiredCommands(t *testing.T) {
 						t.Fatalf("missing retired command remedy: %v", err)
 					}
 				}
+			}
+		}
+	}
+}
+
+// A name the ledger marks qualifiedOnly is a current API in another package,
+// so only its qualified spelling is refused; other retired names stay refused bare.
+func TestQualifiedOnlyEntriesAllowTheBareName(t *testing.T) {
+	bare := []byte("# Guide\n\nThe `JSONContains` filter takes a document.\n\n```go\nvar current = JSONContains\n```\n")
+	if err := CheckDocument("guide.md", bare); err != nil {
+		t.Fatalf("a bare name that expr.JSONContains exports today was refused: %v", err)
+	}
+	qualified := []byte("# Guide\n\n```go\nvar old = orm.JSONContains\n```\n")
+	if err := CheckDocument("guide.md", qualified); err == nil || !strings.Contains(err.Error(), "orm.JSONContains is retired; use orm.ContainsDocument.") {
+		t.Fatalf("the retired qualified spelling must stay refused: %v", err)
+	}
+	gone := []byte("# Guide\n\nThe `KeyColumnNe` filter.\n")
+	if err := CheckDocument("guide.md", gone); err == nil {
+		t.Fatal("a retired name no package exports must stay refused when bare")
+	}
+}
+
+func TestQualifiedOnlyEntriesNameCurrentExports(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", SurfaceFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := parseSurface(data, SurfaceFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := make(map[string]bool)
+	for _, entry := range entries {
+		_, last, _ := strings.Cut(entry.name, ".")
+		if last == "" {
+			last = entry.name
+		}
+		current[last] = true
+	}
+	ledger, err := retiredDeclarations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for owner, members := range ledger {
+		for _, member := range members {
+			if member.QualifiedOnly && !current[member.Name] {
+				t.Errorf("%s.%s is marked qualifiedOnly but no current package exports that name; drop the flag", owner, member.Name)
 			}
 		}
 	}

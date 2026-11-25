@@ -33,6 +33,22 @@ ownership or provider behavior. Never claim a later account/provider check from
 historical evidence. Optional real-account email smoke sends remain unverified;
 local SMTP/TLS and provider contract fixtures are the recorded email evidence.
 
+## Retired-names baseline
+
+The retired-names check compares the current exported API with the previous
+release. After tagging a release, replace that baseline from the tagged source:
+
+```sh
+go run ./internal/cmd/exportsurface --release vX.Y.Z
+```
+
+The command rewrites `internal/retirement/release/exported-surface.txt` and
+`internal/retirement/release/retired-names.txt` from the current tree, so the next
+release's removals are measured against this one. Review the diff of both files
+and of `internal/retirement/exported-surface.txt`, then commit them with the release
+bookkeeping. Do not run it for any other purpose: the baseline is the last tag, not
+the working tree.
+
 ## Private packaged consumer gate
 
 [tools/release](../tools/release) is an independent development module using

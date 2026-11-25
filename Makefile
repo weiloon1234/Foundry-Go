@@ -91,11 +91,13 @@ generate:
 	$(GO) generate ./internal/httppath
 	@$(call generate_packages,)
 	$(GO) run ./internal/cmd/renderdocs
+	$(GO) run ./internal/cmd/exportsurface
 
 generate-check:
 	cd internal/httppath && $(GO) run ./cmd/export -check
 	@$(call generate_packages,--check)
 	$(GO) run ./internal/cmd/renderdocs --check
+	$(GO) run ./internal/cmd/exportsurface --check
 
 gopls-install:
 	@mkdir -p bin
