@@ -6,7 +6,7 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
 <a id="access-rule"></a>
-## Access rule on guarded routes — unreleased
+## Access rule on guarded routes — v0.53.0
 
 Every constructor of a guarded route now requires its access rule, so a route cannot
 be declared without deciding who may call it. This is a breaking source change. Wire
@@ -116,7 +116,7 @@ http.Scopes(...) does not match inferred type AccessRule[User]`; the
 in full.
 
 <a id="telemetry-auth-failures-threshold"></a>
-## Telemetry authentication threshold — unreleased
+## Telemetry authentication threshold — v0.53.0
 
 A telemetry configuration whose `Alerts.Thresholds.AuthFailures` is larger than half of
 the collector's `MaxEvents` is now refused: at application startup, and by
@@ -129,7 +129,7 @@ runtime behaviour, persisted data or wire format changes. Fix: lower
 `features.telemetry.config.alerts.thresholds.auth_failures` or raise
 `features.telemetry.collector.max_events`; the error names `AuthFailures` and `MaxEvents`.
 
-## Enum lists and registered migrations in `models check` — unreleased
+## Enum lists and registered migrations in `models check` — v0.53.0
 
 `foundry models check` (and so each application's quick gate and the framework's
 `make models-check`) gains two rules that read the migrations without a database. The
@@ -166,7 +166,7 @@ column to another column restricted by a second constraint (`status = other` bes
 `CHECK (other = 'draft')`) is not detected. An application whose constraints reject no case, or
 whose enum columns carry no constraint, sees no change. No runtime behavior, persisted format or generated wire contract changes.
 
-## Retired-names ledger completeness — unreleased
+## Retired-names ledger completeness — v0.53.0
 
 Every exported identifier removed since the previous release must now appear in the
 [retired-names ledger](../internal/retirement/denied.json). `make generate` records
@@ -766,7 +766,7 @@ required. Resource and tenant policies still run after admission. Application
 owners retain control of which read and export alternatives to declare.
 
 <a id="diagnostic-output-shape"></a>
-## Diagnostic output shape — unreleased
+## Diagnostic output shape — v0.53.0
 
 Consumers that read the output of `foundry routes check`, `models check`,
 `lint --no-raw`, `generate --check`, `generate` or `docs check` see one finding
@@ -864,7 +864,7 @@ owns the grammar, offline lookup, scan scope, and command instructions.
 
 <a id="application-documents"></a>
 
-## Application documents bind to the application's own code — unreleased
+## Application documents bind to the application's own code — v0.53.0
 
 At the first pin that carries this change, `go tool foundry docs check` refuses an
 application's `AGENTS.md` or `.claude/skills` Markdown that does not meet the binding

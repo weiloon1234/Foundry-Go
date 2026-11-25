@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.53.0 — 2026-11-26
 
 - Breaking: a guarded route's access rule is a required argument, and a guarded
   declaration has one spelling: it starts from a `GuardBinding`. `http.Authenticated`,
@@ -195,6 +195,7 @@
   lists each rule's teaching reference only (the `Check` column is removed); the
   retired-names check reports an empty or malformed recorded release file as a
   `ledger-shape` finding; `apicomments` prints its success count without a rule tag.
+- Declarations without a doc comment: 3538 are staged in `internal/apicomment/uncommented.txt`; the target is zero.
 
 ## v0.52.0 — 2026-11-25
 

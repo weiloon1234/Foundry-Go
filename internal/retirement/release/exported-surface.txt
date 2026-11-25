@@ -1,4 +1,4 @@
-# Recorded at release v0.52.0.
+# Recorded at release v0.53.0.
 # Exported API of the framework's importable packages: every non-internal,
 # non-main package of the root module, type-checked for linux/amd64,
 # darwin/arm64 and windows/amd64 with cgo off (the union of the three).
@@ -7015,6 +7015,7 @@ datatable	type	DownloadQuery
 datatable	type	DynamicBinding
 datatable	type	DynamicSlot
 datatable	type	ExportFormat
+datatable	type	ExportOption
 datatable	type	ExportOptions
 datatable	type	ExportOptionsValidationFieldSet
 datatable	type	ExportRequest
@@ -7035,11 +7036,11 @@ datatable	type	NamedFilterInfo
 datatable	type	Operator
 datatable	type	Presentation
 datatable	type	PresentationValidationFieldSet
+datatable	type	ReadOption
 datatable	type	Registration
 datatable	type	Registry
 datatable	type	Request
 datatable	type	RequestValidationFieldSet
-datatable	type	RouteOption
 datatable	type	RoutesConfig
 datatable	type	RowEquality
 datatable	type	RowNullable
@@ -8759,7 +8760,6 @@ http	func	NewURLSigner
 http	func	NewUploadPool
 http	func	NoStoreCachePolicy
 http	func	OpenAssets
-http	func	OptionalAuthentication
 http	func	OptionalEndpointID
 http	func	OptionalEndpointMethod
 http	func	OptionalEndpointPattern
@@ -8767,7 +8767,6 @@ http	func	OptionalFilePart
 http	func	OptionalHeaderParam
 http	func	OptionalJSONPart
 http	func	OptionalQueryParam
-http	func	OptionalRouteAuthentication
 http	func	OptionalRouteURL
 http	func	OptionallyAuthenticated
 http	func	Param
@@ -8829,13 +8828,13 @@ http	func	RepeatedQueryParam
 http	func	RequestHeaderParameters
 http	func	RequestID
 http	func	RequestOrigin
-http	func	RequireAuthentication
 http	func	RequirePublicURLs
-http	func	RequireRouteAuthentication
 http	func	ResponseExample
+http	func	RouteAuthenticated
 http	func	RouteIDOf
 http	func	RouteLocation
 http	func	RouteMethod
+http	func	RouteOptionallyAuthenticated
 http	func	RouteParameters
 http	func	RoutePattern
 http	func	RouteURL
@@ -9012,6 +9011,7 @@ http	method	FallbackConfig.Validate
 http	method	FileResponseInfo.TransferBytes
 http	method	FileResponseLimits.Validate
 http	method	FramePolicy.Validate
+http	method	GuardBinding.AnyActor
 http	method	GuardBinding.Guard
 http	method	GuardBinding.Select
 http	method	HSTSPolicy.Validate
@@ -9189,6 +9189,7 @@ http	method*	UploadPool.Close
 http	method*	UploadPool.RetryCleanup
 http	method*	UploadPool.Usage
 http	type	Access
+http	type	AccessRule
 http	type	ActorKey
 http	type	ActorOption
 http	type	AssetExtension
@@ -9274,7 +9275,6 @@ http	type	FramePolicy
 http	type	GuardAlternative
 http	type	GuardAlternativeInfo
 http	type	GuardBinding
-http	type	GuardOption
 http	type	GzipLevel
 http	type	HSTSPolicy
 http	type	Handler
@@ -14560,6 +14560,7 @@ telemetry	method	BrowserCode.Value
 telemetry	method	BrowserPolicy.Validate
 telemetry	method	CollectorConfig.Validate
 telemetry	method	Config.Validate
+telemetry	method	Config.ValidateWith
 telemetry	method	ReadLimits.Validate
 telemetry	method	RetentionPolicy.Validate
 telemetry	method	RoutePolicy.Validate

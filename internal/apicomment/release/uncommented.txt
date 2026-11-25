@@ -1,4 +1,4 @@
-# Recorded at release v0.52.0.
+# Recorded at release v0.53.0.
 # Declarations that need a doc comment and still lack one, one per line:
 # package, kind (const, var or field) and name, separated by tabs, sorted.
 # Checked by internal/cmd/apicomments (make docs-check). The file only shrinks:
@@ -146,19 +146,13 @@ application	field	OutboundCaptureSettings.Config
 application	field	OutboundCaptureSettings.Database
 application	field	OutboundCaptureSettings.Enabled
 application	field	OutboundCaptureSettings.Schema
-application	field	OutboxSettings.Database
-application	field	OutboxSettings.Enabled
 application	field	OutboxSettings.Jitter
-application	field	OutboxSettings.Jobs
 application	field	OutboxSettings.Kernels
-application	field	OutboxSettings.MaxAttempts
-application	field	OutboxSettings.MaxInFlight
 application	field	OutboxSettings.MaxPollInterval
 application	field	OutboxSettings.MaxRetryDelay
 application	field	OutboxSettings.OperationTimeout
 application	field	OutboxSettings.PollInterval
 application	field	OutboxSettings.RetryDelay
-application	field	OutboxSettings.Schema
 application	field	ProbeSettings.Liveness
 application	field	ProbeSettings.LivenessPath
 application	field	ProbeSettings.Readiness
@@ -1306,7 +1300,6 @@ extensions/slots	field	CleanupRequest.Identity
 extensions/slots	field	CleanupRequest.Owner
 extensions/slots	field	Description.Owner
 extensions/slots	field	Description.Slots
-fault	const	Cycle
 fault	const	Panicked
 fault	const	Timeout
 fault	field	Attribute.Key
@@ -2525,8 +2518,6 @@ jobs	field	Middleware.After
 jobs	field	Middleware.Before
 jobs	field	NamedConnection.Name
 jobs	field	NamedConnection.Value
-jobs	field	Options.At
-jobs	field	Options.ID
 jobs	field	OverlapOptions.Delay
 jobs	field	OverlapOptions.Mode
 jobs	field	OverlapOptions.TTL
