@@ -18,16 +18,12 @@ func MemberTicketEndpoint(binding http.GuardBinding[Operator], tokens *token.Tok
 		reportsTicketRoute,
 		http.EmptyQuery(), http.DownloadResponse("text/csv; charset=utf-8"),
 	)
-	// doc-example:begin ticket-authentication
-	return http.TicketAuthenticated(endpoint, binding, tokens)
-	// doc-example:end ticket-authentication
+	return ticketAuthentication(endpoint, binding, tokens)
 }
 
 // MemberTicketURL is the explicit secret-to-URL delivery boundary.
 func MemberTicketURL(ctx context.Context, binding http.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]], ticket secret.String) (string, error) {
-	// doc-example:begin authentication-example-3
-	return MemberTicketEndpoint(binding, tokens).URL(ctx, http.NoPath{}, http.NoQuery{}, ticket)
-	// doc-example:end authentication-example-3
+	return ticketURL(ctx, MemberTicketEndpoint(binding, tokens), ticket)
 }
 
 // MemberTicketRoute keeps the guard available when the deferred download opens.
@@ -39,3 +35,17 @@ func MemberTicketRoute(manager *datatable.Manager, binding http.GuardBinding[Ope
 		return Members.Download(ctx, manager, FromGuard(binding.Guard()), datatable.Request{}, datatable.ExportOptions{Format: datatable.CSV})
 	})
 }
+
+// doc-example:begin ticket-authentication
+func ticketAuthentication(endpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, http.Download], binding http.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]]) http.TicketEndpoint[http.NoPath, http.NoQuery, http.NoBody, Operator, http.Download] {
+	return http.TicketAuthenticated(endpoint, binding, tokens)
+}
+
+// doc-example:end ticket-authentication
+
+// doc-example:begin authentication-example-3
+func ticketURL(ctx context.Context, endpoint http.TicketEndpoint[http.NoPath, http.NoQuery, http.NoBody, Operator, http.Download], ticket secret.String) (string, error) {
+	return endpoint.URL(ctx, http.NoPath{}, http.NoQuery{}, ticket)
+}
+
+// doc-example:end authentication-example-3

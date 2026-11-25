@@ -7,13 +7,21 @@ decision. It uses only the standard library cryptography.
 
 ## Providers
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/oauth_recipes.go#social-providers -->
 ```go
-google := oauth.Google(oauth.Credentials{
-    ClientID:     settings.GoogleClientID,
-    ClientSecret: settings.GoogleClientSecret, // secret.String from a secret file
-    RedirectURL:  "https://app.example/auth/google/callback",
-})
-github := oauth.GitHub(oauth.Credentials{ /* ... */ })
+func socialProviders(googleID string, googleSecret secret.String, githubID string, githubSecret secret.String) (oauth.Provider, oauth.Provider) {
+	google := oauth.Google(oauth.Credentials{
+		ClientID:     googleID,
+		ClientSecret: googleSecret, // Loaded through the application's secret configuration.
+		RedirectURL:  "https://app.example/auth/google/callback",
+	})
+	github := oauth.GitHub(oauth.Credentials{
+		ClientID:     githubID,
+		ClientSecret: githubSecret,
+		RedirectURL:  "https://app.example/auth/github/callback",
+	})
+	return google, github
+}
 ```
 
 `Google` is an OpenID Connect provider (scopes `openid email profile`): its ID
@@ -29,47 +37,143 @@ Provider requests go through a destination-restricted `httpclient.Client`, so a
 provider URL cannot reach internal services. `provider.Destinations()` returns a
 policy admitting only that provider's hosts on port 443:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/oauth_recipes.go#social-client -->
 ```go
-policy, err := google.Destinations()
-config := httpclient.DefaultConfig("oauth.google")
-config.Destination = policy
-outbound, err := httpclient.New(config, nil)
-client, err := oauth.NewClient(google, outbound, clock.System{})
+func socialClient(ctx context.Context, google oauth.Provider) (*oauth.Client, *httpclient.Client, error) {
+	policy, err := google.Destinations()
+	if err != nil {
+		return nil, nil, err
+	}
+	config := httpclient.DefaultConfig("oauth.google")
+	config.Destination = policy
+	outbound, err := httpclient.New(config, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	client, err := oauth.NewClient(google, outbound, clock.System{})
+	if err != nil {
+		return nil, nil, errors.Join(err, outbound.Close(ctx))
+	}
+	// The application owns outbound and closes it during shutdown.
+	return client, outbound, nil
+}
 ```
 
-`NewClient` rejects an unrestricted client.
+`NewClient` rejects an unrestricted client. The application owns the returned
+outbound client and closes it during shutdown.
 
 ## Redirect and callback
 
 `oauth.Flow` keeps the pending request (state, nonce and PKCE verifier) in an
-encrypted, short-lived cookie, so no server-side store is needed. It uses the
+encrypted, short-lived cookie, so the provider round trip needs no server-side
+pending-request store. It uses the
 [application key ring](encryption.md#application-key-ring) through
 `Services.CookieEncrypter()`:
 
-```go
-encrypter, err := services.CookieEncrypter()
-flow, err := oauth.NewFlow(client, encrypter, "__Host-foundry_oauth_google")
+The application must supply `SocialHandoffs`: a bounded, expiring, atomic single-use store that resolves the verified provider identity to its current local account and assurance policy.
 
-redirect := http.DefineRoute(http.RouteSpec{ID: "auth.google", Method: http.GET, Access: http.Public}, http.StaticPath("/auth/google")).
-    HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
-        location, err := flow.Start(r.Context(), w)
-        if err != nil {
-            _ = http.WriteError(w, r, err)
-            return
-        }
-        stdhttp.Redirect(w, r, location, stdhttp.StatusFound)
-    })
-callback := http.DefineRoute(http.RouteSpec{ID: "auth.google.callback", Method: http.GET, Access: http.Public}, http.StaticPath("/auth/google/callback")).
-    HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
-        profile, err := flow.Finish(w, r)
-        if err != nil {
-            _ = http.WriteError(w, r, err)
-            return
-        }
-        // Find or create the user by (profile.Provider, profile.Subject), then
-        // issue a session, for example browser.Login(ctx, proof, options).
-    })
+<!-- compiled-source: tests/fixtures/consumer/authenticating/oauth_recipes.go#social-handoff-state -->
+```go
+// SocialHandoffs is application-owned, bounded, expiring, single-use login state.
+// Stage returns an unguessable token and stores only the verified identity needed
+// for login. Consume atomically removes it, resolves the current local account
+// and returns its proof with the application's required assurance.
+type SocialHandoffs interface {
+	Stage(context.Context, oauth.Profile) (secret.String, error)
+	Consume(context.Context, secret.String) (auth.Proof[models.User, model.ID[models.User]], error)
+}
+
+type socialHandoffContextKey struct{}
 ```
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/oauth_recipes.go#social-flow-routes -->
+```go
+func socialLoginRoutes(services application.Services, client *oauth.Client, web *http.BrowserSessions[models.User, model.ID[models.User]], handoffs SocialHandoffs) (*http.Router, error) {
+	encrypter, err := services.CookieEncrypter()
+	if err != nil {
+		return nil, err
+	}
+	flow, err := oauth.NewFlow(client, encrypter, "__Host-foundry_oauth_google")
+	if err != nil {
+		return nil, err
+	}
+	cookie := http.DefineCookie("__Host-social-handoff", http.SecretCookie(), http.DefaultCookieOptions())
+
+	startRoute := http.DefineRoute(http.RouteSpec{ID: "auth.google", Method: http.GET, Access: http.Public}, http.StaticPath("/auth/google"))
+	start := http.HandleRaw(startRoute, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
+		location, err := flow.Start(r.Context(), w)
+		if err != nil {
+			_ = http.WriteError(w, r, err)
+			return
+		}
+		stdhttp.Redirect(w, r, location, stdhttp.StatusFound)
+	})
+	callbackRoute := http.DefineRoute(http.RouteSpec{ID: "auth.google.callback", Method: http.GET, Access: http.Public}, http.StaticPath("/auth/google/callback"))
+	callback := http.HandleRaw(callbackRoute, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
+		profile, err := flow.Finish(w, r)
+		if err != nil {
+			_ = http.WriteError(w, r, err)
+			return
+		}
+		handoff, err := handoffs.Stage(r.Context(), profile)
+		if err != nil {
+			_ = http.WriteError(w, r, err)
+			return
+		}
+		if err := cookie.Set(r.Context(), w, handoff); err != nil {
+			_ = http.WriteError(w, r, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		_, _ = io.WriteString(w, `<form method="post" action="/auth/google/complete"><button>Continue signing in</button></form>`)
+	})
+	capture := http.DefineMiddleware("auth.google.handoff", func(next stdhttp.Handler) (stdhttp.Handler, error) {
+		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+			supplied, err := cookie.Read(r)
+			if err != nil {
+				_ = http.WriteError(w, r, err)
+				return
+			}
+			handoff, present := supplied.Get()
+			if !present {
+				_ = http.WriteError(w, r, auth.Unauthenticated)
+				return
+			}
+			if err := cookie.Clear(w); err != nil {
+				_ = http.WriteError(w, r, err)
+				return
+			}
+			ctx := context.WithValue(r.Context(), socialHandoffContextKey{}, handoff)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		}), nil
+	})
+	completeRoute := http.DefineRoute(http.RouteSpec{ID: "auth.google.complete", Method: http.POST, Access: http.Public}, http.StaticPath("/auth/google/complete"))
+	endpoint := http.DefineEndpoint(completeRoute, http.EmptyQuery(), http.EmptyBody(), http.EmptyResponse(204))
+	complete := http.ConfigureEndpoint(endpoint, http.Use(web.Middleware(), capture)).Handle(func(ctx context.Context, _ http.Input[http.NoPath, http.NoQuery, http.NoBody]) (http.NoContent, error) {
+		handoff, ok := ctx.Value(socialHandoffContextKey{}).(secret.String)
+		if !ok {
+			return http.NoContent{}, auth.Unauthenticated
+		}
+		proof, err := handoffs.Consume(ctx, handoff)
+		if err != nil {
+			return http.NoContent{}, err
+		}
+		_, err = web.Login(ctx, proof, session.IssueOptions{})
+		return http.NoContent{}, err
+	})
+	return http.NewRouter(start, callback, complete)
+}
+```
+
+The callback writes only an opaque handoff to a Secure, HttpOnly cookie and shows a
+same-origin confirmation form. Browser middleware protects the POST against CSRF;
+its typed handler consumes the handoff before calling `web.Login`. The GET callback
+never mutates the browser session. This is transport wiring, not a complete login
+application: the handoff store and account-linking policy remain application code.
+A failed POST can consume the handoff without delivering a session, so restart
+login rather than retrying it automatically.
 
 `Start` creates 256-bit state, nonce and PKCE verifier and returns the provider
 URL with `response_type=code`, the exact redirect URI and the S256 code challenge

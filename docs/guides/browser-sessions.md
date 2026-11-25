@@ -1,5 +1,8 @@
 # Browser sessions and CSRF
 
+In the examples, `models` is the application's model package. Its models and
+stored references come from the application's declarations and `foundry generate`.
+
 `http.BrowserSessions[M,K]` connects a [persistent model session](sessions.md) to
 ordinary typed HTTP endpoints. It owns cookie parsing, CSRF policy, credential
 changes and cookie publication. Handlers keep returning their declared DTOs.
@@ -9,11 +12,15 @@ including 721 compiler cases, 271 editor probes and current generated output.
 
 ## Assemble once
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/browser_recipes.go#browser-session-transport -->
 ```go
-registry, err := auth.NewRegistry(auth.DefaultConfig(), sessions.Guard().Registration())
-// Check err before continuing.
-web, err := http.NewBrowserSessions(registry, sessions, http.DefaultBrowserSessionConfig())
-// Check err before registering routes.
+func browserSessionTransport(sessions *session.Sessions[models.User, model.ID[models.User]]) (*http.BrowserSessions[models.User, model.ID[models.User]], error) {
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), sessions.Guard().Registration())
+	if err != nil {
+		return nil, err
+	}
+	return http.NewBrowserSessions(registry, sessions, http.DefaultBrowserSessionConfig())
+}
 ```
 
 `sessions` is the existing `*session.Sessions[User, model.ID[User]]` (or the model's
@@ -42,9 +49,34 @@ one request binding. A different browser adapter cannot reuse that binding.
 
 Inside a public typed login handler, after trusted credential verification:
 
+The verifier must authenticate the submitted credentials or consume an application-owned browser-bound handoff. Credential issuance happens in this typed POST handler:
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/browser_recipes.go#typed-browser-login -->
 ```go
-info, err := web.Login(ctx, verifiedProof, session.IssueOptions{Remember: true})
-// Check err, then build your ordinary response DTO from allowed presentation values.
+func browserLoginRoute(web *http.BrowserSessions[models.User, model.ID[models.User]], verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error)) http.RouteRegistration {
+	route := http.DefineRoute(http.RouteSpec{ID: "browser.login", Method: http.POST, Access: http.Public}, http.StaticPath("/login"))
+	endpoint := http.DefineEndpoint(route, http.EmptyQuery(), http.EmptyBody(), http.EmptyResponse(204))
+	return http.ConfigureEndpoint(endpoint, http.Use(web.Middleware())).Handle(func(ctx context.Context, _ http.Input[http.NoPath, http.NoQuery, http.NoBody]) (http.NoContent, error) {
+		proof, err := verify(ctx)
+		if err != nil {
+			return http.NoContent{}, err
+		}
+		_, err = web.Login(ctx, proof, session.IssueOptions{Remember: true})
+		return http.NoContent{}, err
+	})
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/browser_recipes.go#remember-browser-login -->
+```go
+func rememberBrowserLogin(ctx context.Context, web *http.BrowserSessions[models.User, model.ID[models.User]], verifiedProof auth.Proof[models.User, model.ID[models.User]]) (session.Info[models.User, model.ID[models.User]], error) {
+	info, err := web.Login(ctx, verifiedProof, session.IssueOptions{Remember: true})
+	if err != nil {
+		return session.Info[models.User, model.ID[models.User]]{}, err
+	}
+	// Build the response DTO from allowed presentation values.
+	return info, nil
+}
 ```
 
 `verifiedProof` must match the concrete model and stored key type. Calling
@@ -53,9 +85,15 @@ verifier callback is an acceptance fixture, not a production password login flow
 
 Other handlers use:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/browser_recipes.go#rotate-and-logout-browser -->
 ```go
-info, err := web.Rotate(ctx)
-err = web.Logout(ctx)
+func rotateBrowser(ctx context.Context, web *http.BrowserSessions[models.User, model.ID[models.User]]) (session.Info[models.User, model.ID[models.User]], error) {
+	return web.Rotate(ctx)
+}
+
+func logoutBrowser(ctx context.Context, web *http.BrowserSessions[models.User, model.ID[models.User]]) error {
+	return web.Logout(ctx)
+}
 ```
 
 These are alternative operations, not a sequence in one handler. Only one
@@ -84,9 +122,12 @@ brute-force the password there: configure the login with
 (a locked subject gets 429 before any hashing), and add an HTTP rate limit.
 Protected routes add the actor-stage middleware:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/browser_recipes.go#confirm-password-route -->
 ```go
-route := http.RequireAuthentication(endpoint, browser.Authentication(), browser.Guard(),
-    http.ActorMiddleware[User](browser.RequirePasswordConfirmation(15 * time.Minute)))
+func confirmPasswordRoute(endpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, http.NoContent], browser *http.BrowserSessions[models.User, model.ID[models.User]]) http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent] {
+	return http.RequireAuthentication(endpoint, browser.Authentication(), browser.Guard(),
+		http.ActorMiddleware[models.User](browser.RequirePasswordConfirmation(15*time.Minute)))
+}
 ```
 
 Without a confirmation within the window, checked against the session store's

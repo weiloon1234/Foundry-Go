@@ -5,6 +5,7 @@ import (
 
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -15,7 +16,8 @@ type RefreshInput = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, f
 // TokenRoutes demonstrates verified login, refresh and one-model hydration.
 // verify is the trusted credential verifier; submitted identity is never proof.
 // The response descriptor owns disclosure, TLS, cache and generated wire contracts.
-func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLogin) (*foundryhttp.Router, error) {
+// doc-example:begin native-token-delivery
+func TokenRoutes(tokens *token.Tokens[models.User, model.ID[models.User]], clock clock.Clock, verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error), scopes auth.AccessScopes[models.User]) (*foundryhttp.Router, error) {
 	guard := tokens.Guard()
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration())
 	if err != nil {
@@ -25,11 +27,6 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLogin) (*
 	if err != nil {
 		return nil, err
 	}
-	scopes, err := OrderReadScopes()
-	if err != nil {
-		return nil, err
-	}
-	// doc-example:begin native-token-delivery
 	route := func(id foundryhttp.RouteID, method foundryhttp.Method, path string, access foundryhttp.Access) foundryhttp.Route[foundryhttp.NoPath] {
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path))
 	}
@@ -38,21 +35,20 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLogin) (*
 	loginRoute := route("api.login", foundryhttp.POST, "/login", foundryhttp.Public)
 
 	login := foundryhttp.DefineEndpoint(loginRoute,
-		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ ProfileInput) (IssuedUserToken, error) {
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (token.Issued[models.User, model.ID[models.User]], error) {
 		proof, err := verify(ctx)
 		if err != nil {
-			return IssuedUserToken{}, err
+			return token.Issued[models.User, model.ID[models.User]]{}, err
 		}
-		return StartVerifiedToken(ctx, tokens, proof, "API client", true)
+		return StartVerifiedToken(ctx, tokens, proof, "API client", true, scopes)
 	})
 
 	refreshRoute := route("api.refresh", foundryhttp.POST, "/refresh", foundryhttp.Public)
 
 	refresh := foundryhttp.DefineEndpoint(refreshRoute,
-		foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenBody(), response).Handle(func(ctx context.Context, input RefreshInput) (IssuedUserToken, error) {
+		foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenBody(), response).Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshTokenRequest]) (token.Issued[models.User, model.ID[models.User]], error) {
 		return RefreshFromBody(ctx, tokens, input.Body)
 	})
-	// doc-example:end native-token-delivery
 	profileEndpointRoute := route("api.profile", foundryhttp.GET, "/profile", foundryhttp.Guarded)
 	profileEndpoint := foundryhttp.DefineEndpoint(
 		profileEndpointRoute,
@@ -60,7 +56,7 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLogin) (*
 
 	guardProfile := foundryhttp.RequireAuthentication(profileEndpoint, transport, guard)
 
-	profile := foundryhttp.ConfigureAuthenticated(guardProfile, foundryhttp.Scopes(scopes)).Handle(func(ctx context.Context, user models.User, _ ProfileInput) (foundryhttp.NoContent, error) {
+	profile := foundryhttp.ConfigureAuthenticated(guardProfile, foundryhttp.Scopes(scopes)).Handle(func(ctx context.Context, user models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 		// Policies and additional guard calls reuse this concrete model.
 		_, err := guard.Require(ctx)
 		return foundryhttp.NoContent{}, err
@@ -69,6 +65,11 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLogin) (*
 	return foundryhttp.NewRouter(login, refresh, profile)
 }
 
-func RefreshFromBody(ctx context.Context, tokens *UserTokens, request foundryhttp.RefreshTokenRequest) (IssuedUserToken, error) {
+// doc-example:end native-token-delivery
+
+// doc-example:begin refresh-from-body
+func RefreshFromBody(ctx context.Context, tokens *token.Tokens[models.User, model.ID[models.User]], request foundryhttp.RefreshTokenRequest) (token.Issued[models.User, model.ID[models.User]], error) {
 	return tokens.Refresh(ctx, request.RefreshToken.Secret())
 }
+
+// doc-example:end refresh-from-body

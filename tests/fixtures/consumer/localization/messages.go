@@ -12,10 +12,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/i18n/message"
 )
 
+// doc-example:begin welcome-message-input
+//
 //foundry:message key=welcome
 type WelcomeArgs struct {
 	Name string `json:"name"`
 }
+
+// doc-example:end welcome-message-input
 
 // doc-example:begin typed-plural-message
 

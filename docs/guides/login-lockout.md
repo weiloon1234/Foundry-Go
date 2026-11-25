@@ -17,8 +17,8 @@ Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/
 ```go
 var PasswordAttempts = lockout.DefineLogin("password.accounts", keyspace.StringKeys[string](), lockout.DefaultLimits())
 
-func ProtectPasswordLogin(resolver foundation.Resolver, login *passwords.Login) (*passwords.Login, error) {
-	store, err := foundation.Resolve(resolver, CredentialProtectionKey)
+func ProtectPasswordLogin(resolver foundation.Resolver, protectionKey foundation.Key[*lockout.Store], login *auth.PasswordLogin[PasswordAccount, model.ID[PasswordAccount], string]) (*auth.PasswordLogin[PasswordAccount, model.ID[PasswordAccount], string], error) {
+	store, err := foundation.Resolve(resolver, protectionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +112,15 @@ request quotas. The consumer test covers this composition.
 
 For another credential stage, such as MFA, the public typed operation is:
 
+<!-- compiled-source: tests/fixtures/consumer/multifactor/lockout_recipes.go#throttle-factor-check -->
 ```go
-verified, err := throttle.Run(ctx, key, func(op context.Context) (bool, error) {
-    return verifyFactor(op, submittedCode)
-})
-// Only a true result with no error may grant authority or issue credentials.
+func throttleFactorCheck(ctx context.Context, throttle lockout.Throttle[model.ID[Account]], key model.ID[Account], submittedCode mfa.TOTPCode, verifyFactor func(context.Context, mfa.TOTPCode) (bool, error)) (bool, error) {
+	verified, err := throttle.Run(ctx, key, func(op context.Context) (bool, error) {
+		return verifyFactor(op, submittedCode)
+	})
+	// Only a true result with no error may grant authority or issue credentials.
+	return verified, err
+}
 ```
 
 Do not issue credentials inside that callback: a final lock/expiry check remains.

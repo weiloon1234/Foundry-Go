@@ -3,14 +3,19 @@ package passwords
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/auth/password"
 )
 
+// doc-example:begin password-request-input
+//
 //foundry:dto http=body
 type LoginRequest struct {
 	Email    string             `json:"email"`
 	Password password.Plaintext `json:"password" client:"kind=password"`
 }
+
+// doc-example:end password-request-input
 
 // HashForRegistration returns a hash, never a plaintext string. Persistence
 // and authenticated proofs are separate explicit boundaries.

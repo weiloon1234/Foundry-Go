@@ -14,7 +14,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// doc-example:begin order-path
+// OrderPath carries the application order key parsed from the route.
 type OrderPath struct{ Order model.ID[models.Order] }
+
+// doc-example:end order-path
 type OrderInput = modelbinding.Input[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Order]
 type OrderEndpoint = foundryhttp.AuthenticatedEndpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 type SignedOrderEndpoint = foundryhttp.SignedAuthenticatedEndpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]

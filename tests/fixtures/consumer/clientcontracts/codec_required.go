@@ -21,6 +21,7 @@ import (
 
 // AppSKU is an application-owned scalar codec that rejects empty text and
 // declares NonEmpty: true through the public contract.DefineJSONValue boundary.
+// doc-example:begin sku-scalar-codec
 type AppSKU string
 
 func (s AppSKU) MarshalText() ([]byte, error) {
@@ -55,8 +56,11 @@ func (s *AppSKU) UnmarshalJSON(data []byte) error {
 	return s.UnmarshalText([]byte(text))
 }
 
+// doc-example:end sku-scalar-codec
+
 // JSONContract declares AppSKU as a non-empty JSON string so form bindings
 // publish required: true whenever presence is required on every path to it.
+// doc-example:begin nonempty-sku-contract
 func (AppSKU) JSONContract() contract.JSON[AppSKU] {
 	typ := reflect.TypeFor[AppSKU]()
 	id := contract.TypeID(typ.PkgPath() + "." + typ.Name())
@@ -65,6 +69,8 @@ func (AppSKU) JSONContract() contract.JSON[AppSKU] {
 		Types: []contract.Type{{ID: id, Kind: contract.StringKind, NonEmpty: true}},
 	})
 }
+
+// doc-example:end nonempty-sku-contract
 
 // AppNote is an application-owned scalar codec that does NOT declare NonEmpty.
 // Without NonEmpty: true, bindings keep required: false unless a rule demands it.

@@ -25,7 +25,6 @@ var foundryRegistrationJSON = sync.OnceValue(func() foundrycontract.JSON[Registr
 				{Name: "email", Type: "string", Required: true},
 				{Name: "kind", Type: "foundry.test/consumer/validationrules.OrganizationKind", Required: true},
 				{Name: "tags", Type: "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0", Required: true},
-				{Name: "website", Type: "github.com/weiloon1234/Foundry-Go/value.Optional[string]", Required: false},
 			},
 		},
 		{ID: "github.com/weiloon1234/Foundry-Go/value.Optional[string]", Kind: foundrycontract.Kind("alias"), Nullable: false,
@@ -49,8 +48,6 @@ type RegistrationValidationFieldSet struct {
 	Kind foundryvalidation.Field[Registration, OrganizationKind]
 	// Tags validates the declared JSON property "tags".
 	Tags foundryvalidation.Field[Registration, []string]
-	// Website validates the declared JSON property "website".
-	Website foundryvalidation.Field[Registration, foundryvalue.Optional[string]]
 }
 
 // RegistrationValidationFields returns typed field descriptors.
@@ -73,9 +70,6 @@ var foundryRegistrationValidationFields = sync.OnceValue(func() *RegistrationVal
 		}),
 		Tags: foundryvalidation.DefineField("tags", func(input Registration) []string {
 			return input.Tags
-		}),
-		Website: foundryvalidation.DefineField("website", func(input Registration) foundryvalue.Optional[string] {
-			return input.Website
 		}),
 	}
 })

@@ -6,6 +6,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin registration-input
+//
 //foundry:enum
 type OrganizationKind string
 
@@ -20,10 +22,12 @@ type Registration struct {
 	Email   string                 `json:"email"`
 	Company value.Optional[string] `json:"company,omitzero"`
 	Tags    []string               `json:"tags"`
-	Website value.Optional[string] `json:"website,omitzero"`
 }
 
-func Rules() validation.Rule[Registration] {
+// doc-example:end registration-input
+
+// doc-example:begin conditional-registration-rules
+func registrationRules() validation.Rule[Registration] {
 	fields := RegistrationValidationFields()
 	business := validation.Rules(fields.Kind, validation.OneOf(Business))
 	return validation.All(
@@ -32,6 +36,12 @@ func Rules() validation.Rule[Registration] {
 		validation.When(business, validation.Rules(fields.Company, validation.Bail(validation.Present[string](), validation.Optional(validation.NonBlank[string]())))),
 		validation.Unless(business, validation.Rules(fields.Company, validation.Absent[string]())),
 		validation.Rules(fields.Tags, validation.MinItems[[]string](1), validation.MaxItems[[]string](8), validation.Distinct[[]string](), validation.Each[[]string](validation.NonBlank[string]())),
-		validation.Rules(fields.Website, validation.Optional(validation.URL[string]())),
 	)
+}
+
+// doc-example:end conditional-registration-rules
+
+// Rules exposes the conditional registration rules to consumer checks.
+func Rules() validation.Rule[Registration] {
+	return registrationRules()
 }

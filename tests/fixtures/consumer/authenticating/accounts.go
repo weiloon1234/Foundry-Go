@@ -40,7 +40,7 @@ var ReadOrder = auth.DefinePolicy("orders.read", func(_ context.Context, user mo
 // provider. Built-in session persistence is demonstrated in sessions.go; these
 // arguments are verified strategy adapters, not a request-level credential bypass.
 // doc-example:begin register-guards
-func AccountGuards(provider UserProvider, token UserStrategy, session UserStrategy) (*auth.Registry, auth.Guard[models.User], auth.Guard[models.User], error) {
+func AccountGuards(provider auth.Provider[models.User, model.ID[models.User]], token auth.Strategy[models.User, model.ID[models.User]], session auth.Strategy[models.User, model.ID[models.User]]) (*auth.Registry, auth.Guard[models.User], auth.Guard[models.User], error) {
 	api := auth.DefineGuard("users.api", provider, token)
 	web := auth.DefineGuard("users.web", provider, session)
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), api.Registration(), web.Registration(), ReadOrder.Registration(), ViewAccount.Registration())

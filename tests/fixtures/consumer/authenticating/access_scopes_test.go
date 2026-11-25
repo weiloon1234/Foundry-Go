@@ -52,7 +52,7 @@ func TestConsumerAccessScopesKeepGeneratedModelAndResourcePolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer scope.Close()
-	subject, err := authenticating.ReadScopedOrder(scope.Context(), api, grants, models.Order{BuyerID: id})
+	subject, err := authenticating.ReadScopedOrder(scope.Context(), api, authenticating.ReadOrder, grants, models.Order{BuyerID: id})
 	if err != nil || subject.ID != id {
 		t.Fatal(subject, err)
 	}
@@ -60,7 +60,7 @@ func TestConsumerAccessScopesKeepGeneratedModelAndResourcePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	subject, err = authenticating.ReadScopedOrder(scope.Context(), api, grants, models.Order{BuyerID: other})
+	subject, err = authenticating.ReadScopedOrder(scope.Context(), api, authenticating.ReadOrder, grants, models.Order{BuyerID: other})
 	if !errors.Is(err, auth.Forbidden) || !subject.ID.IsZero() {
 		t.Fatal("scopes bypassed resource policy", err)
 	}

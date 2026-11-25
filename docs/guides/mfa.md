@@ -97,12 +97,19 @@ A pending credential proves only the first authentication stage. Ordinary guards
 continue to reject it. Construct a typed verifier from the submitted factor and
 pass it to the original session or token binding:
 
+<!-- compiled-source: tests/fixtures/consumer/multifactor/completion.go#complete-totp-session -->
 ```go
-response, err := mfa.TOTPResponse(request.Code)
-if err != nil { return err }
-factor, err := factors.Verifier(response)
-if err != nil { return err }
-issued, err := sessions.CompleteMFA(ctx, pending, factor, session.IssueOptions{})
+func CompleteSession(ctx context.Context, factors *mfa.Factors[Account, model.ID[Account]], sessions *session.Sessions[Account, model.ID[Account]], pending secret.String, request TOTPRequest) (session.Issued[Account, model.ID[Account]], error) {
+	response, err := mfa.TOTPResponse(request.Code)
+	if err != nil {
+		return session.Issued[Account, model.ID[Account]]{}, err
+	}
+	factor, err := factors.Verifier(response)
+	if err != nil {
+		return session.Issued[Account, model.ID[Account]]{}, err
+	}
+	return sessions.CompleteMFA(ctx, pending, factor, session.IssueOptions{})
+}
 ```
 
 `Tokens.CompleteMFA` has the same shape with `token.IssueOptions[User]`. Choose
@@ -179,15 +186,17 @@ an adapter. Parsing is input validation, never authentication.
 
 Go declarations own request contracts:
 
+<!-- compiled-source: tests/fixtures/consumer/multifactor/primitives.go#factor-request-inputs -->
 ```go
-//foundry:dto
+//
+//foundry:dto http=body
 type TOTPRequest struct {
-    Code mfa.TOTPCode `json:"code"`
+	Code mfa.TOTPCode `json:"code"`
 }
 
-//foundry:dto
+//foundry:dto http=body
 type RecoveryRequest struct {
-    Code mfa.RecoveryCode `json:"code"`
+	Code mfa.RecoveryCode `json:"code"`
 }
 ```
 

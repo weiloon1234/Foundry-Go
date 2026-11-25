@@ -17,7 +17,7 @@ import (
 )
 
 // doc-example:begin bind-token-guard
-func TokenBinding(tokens *UserTokens) (foundryhttp.GuardBinding[models.User], error) {
+func TokenBinding(tokens *token.Tokens[models.User, model.ID[models.User]]) (foundryhttp.GuardBinding[models.User], error) {
 	guard := tokens.Guard()
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration(), ViewAccount.Registration(), ReadOrder.Registration())
 	if err != nil {
@@ -33,12 +33,8 @@ func TokenBinding(tokens *UserTokens) (foundryhttp.GuardBinding[models.User], er
 // doc-example:end bind-token-guard
 
 // doc-example:begin configure-bound-scopes
-func SecuredOrder(binding foundryhttp.GuardBinding[models.User]) (OrderEndpoint, error) {
-	scopes, err := OrderReadScopes()
-	if err != nil {
-		return OrderEndpoint{}, err
-	}
-	return foundryhttp.Authenticated(showOrder, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(ViewAccount)), nil
+func securedProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], binding foundryhttp.GuardBinding[models.User], scopes auth.AccessScopes[models.User], viewAccount auth.Permission[models.User]) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent] {
+	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(viewAccount))
 }
 
 // doc-example:end configure-bound-scopes
@@ -72,11 +68,7 @@ func ScopedOrderRoute(db database.Executor, binding foundryhttp.GuardBinding[mod
 // doc-example:end scoped-resource-policy
 
 // doc-example:begin token-lifetime
-func ShortLivedTokens(store *token.Store, provider UserProvider) (*UserTokens, error) {
-	scopes, err := OrderReadScopes()
-	if err != nil {
-		return nil, err
-	}
+func ShortLivedTokens(store *token.Store, provider auth.Provider[models.User, model.ID[models.User]], scopes auth.AccessScopes[models.User]) (*token.Tokens[models.User, model.ID[models.User]], error) {
 	return token.New(store, "users.short", provider, "users.short.bearer", scopes,
 		token.WithLifetimes(token.Lifetimes{Renewable: token.Lifetime{
 			Access: 5 * time.Minute, RefreshIdle: 12 * time.Hour, Absolute: 24 * time.Hour,
@@ -86,19 +78,14 @@ func ShortLivedTokens(store *token.Store, provider UserProvider) (*UserTokens, e
 // doc-example:end token-lifetime
 
 // doc-example:begin token-ticket
-func TicketRoute(tokens *UserTokens) (foundryhttp.RouteRegistration, error) {
-	binding, err := TokenBinding(tokens)
-	if err != nil {
-		return foundryhttp.RouteRegistration{}, err
-	}
-
+func TicketRoute(tokens *token.Tokens[models.User, model.ID[models.User]], binding foundryhttp.GuardBinding[models.User]) (foundryhttp.RouteRegistration, error) {
 	realtimeTicketRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "realtime.ticket", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/realtime/ticket"))
 	endpoint := foundryhttp.DefineEndpoint(
 		realtimeTicketRoute,
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.TicketResponse[models.User, model.ID[models.User]](200, clock.System{}),
 	)
 
-	return foundryhttp.Authenticated(endpoint, binding).Handle(func(ctx context.Context, _ models.User, _ ProfileInput) (token.Ticket[models.User, model.ID[models.User]], error) {
+	return foundryhttp.Authenticated(endpoint, binding).Handle(func(ctx context.Context, _ models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (token.Ticket[models.User, model.ID[models.User]], error) {
 		return tokens.IssueTicket(ctx)
 	}), nil
 }
@@ -109,3 +96,12 @@ func TicketRoute(tokens *UserTokens) (foundryhttp.RouteRegistration, error) {
 var UserRefreshCookie = foundryhttp.DefineRefreshCookie("__Host-refresh-user", foundryhttp.CSRFConfig{})
 
 // doc-example:end refresh-cookie
+
+// SecuredOrder applies this application's declared scopes and permission to its order route.
+func SecuredOrder(binding foundryhttp.GuardBinding[models.User]) (OrderEndpoint, error) {
+	scopes, err := OrderReadScopes()
+	if err != nil {
+		return OrderEndpoint{}, err
+	}
+	return foundryhttp.Authenticated(showOrder, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(ViewAccount)), nil
+}
