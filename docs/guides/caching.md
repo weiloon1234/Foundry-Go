@@ -42,6 +42,8 @@ var ProfileEntries = cache.Define("member-profiles-v1", keyspace.TextKeys[model.
 func Bind(store *cache.Store) (Profiles, error) { return ProfileEntries.Bind(store) }
 ```
 
+`SaveProfile` caches a snapshot built from the member's read accessor for five minutes:
+
 <!-- compiled-source: tests/fixtures/consumer/caching/profiles.go#cache-snapshot -->
 ```go
 // SaveProfile explicitly selects the model's read accessor. The stored model and
@@ -61,6 +63,8 @@ func profileSnapshot(member models.Member) (Profile, error) {
 	return Profile{Email: email, Labels: []string{"active"}}, nil
 }
 ```
+
+`ReadProfile` returns the cached profile, whether it was found, and any error:
 
 <!-- compiled-source: tests/fixtures/consumer/caching/profiles.go#read-cache -->
 ```go

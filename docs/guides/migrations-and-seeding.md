@@ -248,6 +248,8 @@ Protocol tests exercise apply-once history, drift, bounded history reads/growth,
 <a id="recipe-online-migration"></a>
 ## Concurrent indexes and nontransactional statements
 
+The origin `security-consumer` and the table `consumer_security_records` belong to the example application; use your own migration origin and table name.
+
 `OnlineMigrations` registers a table, then an index created concurrently with `Mode: migrate.NonTransactional`, which depends on the table:
 
 <!-- compiled-source: tests/fixtures/consumer/security/contracts.go#online-migrations -->

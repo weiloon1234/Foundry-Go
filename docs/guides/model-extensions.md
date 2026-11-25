@@ -220,6 +220,8 @@ or automatically inferred owner table is created.
 
 ## Translated model fields
 
+`SaveLabel` stores one locale's text of a profile's translated label:
+
 <!-- compiled-source: tests/fixtures/consumer/profiles/profile.go#model-extensions-example-6 -->
 ```go
 func (s Services) SaveLabel(ctx context.Context, profile Profile, locale i18n.LocaleID, text string) error {

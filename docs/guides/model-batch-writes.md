@@ -4,6 +4,8 @@ Use `orm.CreateEach`, `orm.UpdateEach`, `orm.DeleteEach`, `orm.RestoreEach` and 
 
 ## Create and update models
 
+`updateMembers` and `createMembers` update and create models in batches inside the caller's transaction:
+
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#each-writes -->
 ```go
 func updateMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
@@ -31,6 +33,8 @@ The update callback receives the stored model and the operation's actual transac
 
 ## Delete and restore
 
+`restoreMembers` restores soft-deleted members and `removeMembers` permanently deletes them, in the caller's transaction:
+
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#each-soft-writes -->
 ```go
 func restoreMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
@@ -56,6 +60,8 @@ Cancellation, panic and `runtime.Goexit` follow ordinary lifecycle failure handl
 
 ## Set-based writes
 
+`setWrite` updates every member the query matches:
+
 <!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#set-writes-after -->
 ```go
 func setWrite(ctx context.Context, tx *database.Tx) error {
@@ -69,6 +75,8 @@ func setWrite(ctx context.Context, tx *database.Tx) error {
 `orm.InsertMany` and `orm.UpsertMany` use assignment batches with explicit set semantics. They never switch to per-model callbacks based on row count. Choose `CreateEach` when those callbacks are required.
 
 ## Atomic numeric adjustments
+
+`addCredit` increments a numeric column atomically:
 
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#adjustments -->
 ```go

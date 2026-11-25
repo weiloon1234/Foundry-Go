@@ -6,13 +6,17 @@ only executable result belongs to the enclosing transaction query.
 
 ## Declare the parent and child
 
-`Record` is the application's model with an `int64` `ID` and a text `Name`, and `Records` its generated table; `rows`, `expr` and `orm` are the framework's `database/orm/rows`, `database/orm/expr` and `database/orm` packages. Two empty tag types alias the parent and child sources, and `recordAt` lifts a scope into the record's field expressions:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`, `database/orm/expr`, `database/orm/rows`.
+
+`Record` is the application's model with an `int64` `ID` and a text `Name`, and `Records` its generated table. Two empty tag types alias the parent and child sources, and `recordAt` lifts a scope into the record's field expressions:
 
 <!-- compiled-source: tests/fixtures/consumer/transactionqueries/models.go#transaction-aliases -->
 ```go
 type claimedAlias struct{}
 type otherAlias struct{}
 ```
+
+`recordExpressions` binds the fields of a record to one scope:
 
 <!-- compiled-source: tests/fixtures/consumer/transactionqueries/orm.go#record-expressions -->
 ```go

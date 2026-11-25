@@ -85,6 +85,8 @@ rewrites SQL, creates a database/server, or wraps the whole test in rollback.
 <a id="recipe-run-kernels"></a>
 ## Run test-owned kernels
 
+A test builds the application and runs its HTTP kernel:
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_recipes_test.go#run-http-test -->
 ```go
 func TestConfiguredHTTPKernel(t *testing.T) {

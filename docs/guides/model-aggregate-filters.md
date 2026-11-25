@@ -4,6 +4,8 @@
 all calculations; `rows.Having` filters completed groups. Adapt model predicates
 with `expr.ModelPredicate`; aliased operands already produce expression predicates.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`, `database/orm/expr`, `database/orm/rows`, `decimal`.
+
 `models.Order` is the application's model with an integer `TotalCents`, and `models.Orders` its generated table. `OrderSummary` is the result struct with a nullable decimal `Total` and an `int64` count field, and `OrderSummaries` its `rows.Define` schema. `FilteredOrderSummary` filters each aggregate to orders with a positive total and keeps groups where all three hold:
 
 <!-- compiled-source: tests/fixtures/consumer/reports/guide_summaries.go#model-aggregate-filters -->

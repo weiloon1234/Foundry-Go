@@ -9,9 +9,7 @@ func retrieval() orm.RetrievalHooks[reads.Member] {
 }
 ```
 
-Attach the package-local retrieval factory through the model directive:
-
-Add `retrieval=memberRetrieval` to the model directive and define that
+Attach the package-local retrieval factory through the model directive: add `retrieval=memberRetrieval` to the model directive and define that
 package-local function as `func() orm.RetrievalHooks[Member]`. Register provider
 observers with `orm.RegisterRetrievalObserver` for the same typed pool key.
 

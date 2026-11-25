@@ -96,10 +96,14 @@ operations intended to enforce token capabilities.
 <a id="recipe-http-scopes"></a>
 ## Require scopes at the HTTP boundary
 
+`ProfileEndpoint` names the authenticated profile endpoint type that the next block configures:
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#profile-endpoint-type -->
 ```go
 type ProfileEndpoint = foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 ```
+
+`ScopedProfile` requires the scopes in `required` on an existing endpoint:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#configure-scopes -->
 ```go

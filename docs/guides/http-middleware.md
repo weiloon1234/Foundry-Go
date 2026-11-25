@@ -120,6 +120,8 @@ Use the [typed idempotency adapter](idempotent-operations.md#recipe-idempotent-e
 <a id="recipe-credential-quota"></a>
 ## Typed rate limiting
 
+`CredentialGroup` attaches an IP rate limit to a route scope nested under `parent`; `limiter` is the application's bound typed quota:
+
 <!-- compiled-source: tests/fixtures/consumer/httpmiddleware/router.go#middleware-credential-group -->
 ```go
 func CredentialGroup(parent foundryhttp.Scope, limiter ratelimit.Limiter[netip.Addr]) foundryhttp.Scope {

@@ -8,7 +8,9 @@ constructing a second field set. For projected records use `rows.AsRecord` and
 
 ## Join typed inputs
 
-`models.User` is the application's model, with a nullable `IntroducerID` naming the user who introduced it; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. Two empty tag types alias the same users table as referrals and sponsors:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm/expr`, `database/orm/rows`.
+
+`models.User` is the application's model, with a nullable `IntroducerID` naming the user who introduced it. Two empty tag types alias the same users table as referrals and sponsors:
 
 <!-- compiled-source: tests/fixtures/consumer/joinqueries/outer/guide_outer.go#join-aliases -->
 ```go

@@ -7,7 +7,9 @@ helpers require that owner as their left input.
 
 ## Select records per parent
 
-`models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID`; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. `OrdersAlias` is an empty type that names the aliased orders source, and `CorrelatedOrders` correlates it with an outer users source:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm/expr`, `database/orm/rows`.
+
+`models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID`. `OrdersAlias` is an empty type that names the aliased orders source, and `CorrelatedOrders` correlates it with an outer users source:
 
 <!-- compiled-source: tests/fixtures/consumer/lateralqueries/guide_lateral.go#lateral-joins -->
 ```go

@@ -14,6 +14,8 @@
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: the root package as `foundry`, `application`, `foundation`, and `http` as `foundryhttp` (with `net/http` as `stdhttp`). `source` is a `foundryhttp.AssetSource` the application builds with `DirectoryAssets` or `FilesystemAssets`; `models` and other domain types are not needed here.
 
+The key names `consumer.web.assets` and `consumer.web.server` belong to the example application; choose your own application-owned names for your keys.
+
 The application declares one typed service key for the assets and one for the server:
 
 <!-- compiled-source: tests/fixtures/consumer/httpassets/assets.go#asset-keys -->
@@ -21,6 +23,8 @@ The application declares one typed service key for the assets and one for the se
 var AssetsKey = foundation.NewKey[*foundryhttp.Assets]("consumer.web.assets")
 var ServerKey = foundation.NewKey[*foundryhttp.Server]("consumer.web.server")
 ```
+
+`Build` sets up the example for a test run: its listen address `127.0.0.1:0` picks a free port and its discard logger silences output. An application sets its configured listen address and its own logger instead.
 
 `Build` registers both services and serves the assets under `/assets`:
 

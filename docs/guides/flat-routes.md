@@ -30,6 +30,8 @@ type PageResource struct {
 }
 ```
 
+The page handlers receive the authenticated `Admin` and use these request and service types:
+
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#page-contracts -->
 ```go
 // Admin is the authenticated editor passed to page handlers.

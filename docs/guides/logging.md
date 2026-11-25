@@ -298,6 +298,8 @@ func Inspect(ctx context.Context, services application.Services, channel logging
 }
 ```
 
+`TailLog` reads one chunk of a log file through its owning sink:
+
 <!-- compiled-source: tests/fixtures/consumer/developeroperations/log_files.go#log-file-controls -->
 ```go
 func TailLog(ctx context.Context, owner *logging.Sink, id logging.FileID) (logging.FileChunk, error) {

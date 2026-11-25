@@ -47,6 +47,8 @@ Those read handles call their required-first terminal `RequireFirst`.
 for large results. Ordinary in-memory Go slice operations issue no SQL; sorting a
 page after reading it does not order the full matching dataset.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`, `database/orm/expr`, `database/orm/rows`, `model`, `value`.
+
 `models.Order` is the application's model and `models.Orders` its generated table. The three terminals read a filtered list, one order by key and one required order:
 
 <!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#reads-after -->
@@ -101,7 +103,7 @@ the exact string type, scope, codec and SQL NULL semantics without applying
 `lower()`. Stored column metadata must grant text capability; string enums are
 rejected. Use `TextRow` or `TextNullableRow` for stored text columns.
 
-`Sample` is the application's model with a nullable text `Note` and an integer `ID`, `Samples` its generated table and `Label` its string-backed text type; `rows`, `expr` and `orm` are the framework's `database/orm/rows`, `database/orm/expr` and `database/orm` packages. `NoteSide` is an empty tag type naming the aliased source. `NoteSearch` finds samples whose note, read through a correlated scalar, contains the term:
+`Sample` is the application's model with a nullable text `Note` and an integer `ID`, `Samples` its generated table and `Label` its string-backed text type. `NoteSide` is an empty tag type naming the aliased source. `NoteSearch` finds samples whose note, read through a correlated scalar, contains the term:
 
 <!-- compiled-source: tests/fixtures/consumer/scalarqueries/guide_calculations.go#computed-text -->
 ```go

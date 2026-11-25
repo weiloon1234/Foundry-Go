@@ -35,6 +35,8 @@ type Welcome struct {
 }
 ```
 
+`WelcomeJob` declares a job with a stable name, a payload version and a queue policy:
+
 <!-- compiled-source: tests/fixtures/consumer/background/welcome.go#job-definition -->
 ```go
 var WelcomeJob = jobs.Define[Welcome]("members.welcome", 1, jobs.DefaultPolicy("communications"))
@@ -61,6 +63,8 @@ func ConfigureWelcome(builder *application.Builder, connection jobs.ConnectionNa
 	}).On(connection))
 }
 ```
+
+`DispatchWelcome` dispatches the job for a user ID and returns the receipt:
 
 <!-- compiled-source: tests/fixtures/consumer/background/welcome.go#dispatch-job -->
 ```go
@@ -364,6 +368,8 @@ transitions have already been committed. See [retry semantics](jobs-operations.m
 
 <a id="recipe-enqueue-job"></a>
 ## Transactional publication
+
+`WelcomeProducer` resolves the job outbox for a connection and keeps it:
 
 <!-- compiled-source: tests/fixtures/consumer/background/guide.go#enqueue-job -->
 ```go

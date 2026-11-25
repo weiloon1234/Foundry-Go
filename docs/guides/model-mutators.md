@@ -12,7 +12,9 @@ Further reading: [Bulk writes](#set-based-and-conflict-writes).
 
 A mutation input column separates the value accepted by writes from the value stored in the model. An input assignment retains input until persistence; reads and predicates use the stored type. Declare `input=Type` even when input and stored types are identical.
 
-The [complete declaration](model-declarations.md) uses a distinct `SlugInput` with a value-receiver `MutateSlug` method. `Member` is the application's model; `Members` is its generated table; `coremodels` is the application's package declaring `EmailInput`, the input type of `Member.Email`, which is stored as a different type. `orm` is the framework's `database/orm` package. `emailInput` builds the assignment:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`.
+
+The [complete declaration](model-declarations.md) uses a distinct `SlugInput` with a value-receiver `MutateSlug` method. `Member` is the application's model; `Members` is its generated table; `coremodels` is the application's package declaring `EmailInput`, the input type of `Member.Email`, which is stored as a different type. `emailInput` builds the assignment:
 
 <!-- compiled-source: tests/fixtures/goway/models/mutators/guide_examples.go#inputs-after -->
 ```go

@@ -19,6 +19,8 @@ Write a defined, nongeneric struct in a non-test Go file. Attach
 required options name the SQL table, generated table variable and persisted key
 field. Directive options are separated by spaces; `foundry` tag options use commas.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`.
+
 This complete fixture file declares two plain models:
 
 <!-- compiled-source: tests/fixtures/consumer/bootstrap/models.go -->
@@ -284,7 +286,7 @@ change the stored schema or response contracts.
 ## Register tables and use identity
 
 Pass the complete table list to `application.WithTables` before resources start.
-For a direct declaration check, use the same list with `orm.Check`. `Tables()` is the application's function returning the generated tables of all its models, and `orm` is the framework's `database/orm` package; the statements run in a function returning `error`:
+For a direct declaration check, use the same list with `orm.Check`. `Tables()` is the application's function returning the generated tables of all its models. The statements run in a function returning `error`:
 
 <!-- compiled-source: tests/fixtures/consumer/productionprofile/queries.go#check-table-registry -->
 ```go

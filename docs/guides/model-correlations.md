@@ -15,7 +15,9 @@ its outer row. Lift each side through `rows.OuterScope` and `rows.InnerScope`;
 <a id="recipe-correlate-rows"></a>
 ## Find users with matching orders
 
-`models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID` and an integer `TotalCents`; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. The block builds the correlated sources and two scalar subqueries in one scope:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm/expr`, `database/orm/rows`.
+
+`models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID` and an integer `TotalCents`. The block builds the correlated sources and two scalar subqueries in one scope:
 
 <!-- compiled-source: tests/fixtures/consumer/correlations/guide_correlations.go#model-correlations -->
 ```go

@@ -536,10 +536,8 @@ metadata; use `Inspect(ctx, manager, authority)` when exposing it to clients.
 ## Use an isolated test schema
 
 The manager sets its configured schema as the transaction's search path on each
-request. With `testkit/postgres.Isolate`, pass the test scope's schema in the
-manager configuration:
-
-`postgres` is the framework's `testkit/postgres` package:
+request. `postgres` is the framework's `testkit/postgres` package. With
+`postgres.Isolate`, pass the test scope's schema in the manager configuration:
 
 <!-- compiled-source: tests/fixtures/goway/migration/pilot_test.go#pilot-recipe-datatable-test -->
 ```go

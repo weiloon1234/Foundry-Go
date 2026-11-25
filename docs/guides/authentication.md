@@ -78,12 +78,16 @@ var ReadOrder = auth.DefinePolicy("orders.read", func(_ context.Context, user mo
 })
 ```
 
+`ViewAccount` is a permission that holds for active users:
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/permissions.go#declare-permission -->
 ```go
 var ViewAccount = auth.DefinePermission("accounts.view", func(_ context.Context, user models.User) (bool, error) {
 	return user.Status == models.StatusActive, nil
 })
 ```
+
+`AccountGuards` registers the user guards from a provider and a token strategy:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#register-guards -->
 ```go
@@ -197,12 +201,16 @@ stored values. Do not call `Close` from a callback belonging to that scope.
 <a id="recipe-resource-policy"></a>
 ## Concrete policies and handlers
 
+`ReadOrder` is a policy between a user and an order:
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#resource-policy -->
 ```go
 var ReadOrder = auth.DefinePolicy("orders.read", func(_ context.Context, user models.User, order models.Order) (bool, error) {
 	return order.BuyerID == user.ID, nil
 })
 ```
+
+`CheckOrder` authorizes the guard's actor against one order:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#check-resource-policy -->
 ```go
@@ -267,11 +275,15 @@ present.
 <a id="recipe-bind-guard"></a>
 ## Bind a guard to HTTP
 
+These aliases name the token service and the issued token for the application's user model:
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#user-token-types -->
 ```go
 type UserTokens = token.Tokens[models.User, model.ID[models.User]]
 type IssuedUserToken = token.Issued[models.User, model.ID[models.User]]
 ```
+
+`TokenBinding` binds the token guard for HTTP:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#bind-token-guard -->
 ```go
@@ -356,6 +368,8 @@ an error from the authority never becomes an allow decision.
 ```go
 type ProfileEndpoint = foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 ```
+
+`PermissionProfile` requires the `ViewAccount` permission on the profile endpoint:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/permissions.go#configure-permission -->
 ```go

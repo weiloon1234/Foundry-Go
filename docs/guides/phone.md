@@ -86,6 +86,8 @@ empty text does not imply omission or null.
 <a id="recipe-phone-messages"></a>
 ## Translate phone messages
 
+`PhoneMessages` returns the message definitions for the validation and phone rules:
+
 <!-- compiled-source: tests/fixtures/consumer/codecs/phone.go#phone-messages -->
 ```go
 func PhoneMessages() []i18n.MessageDefinition {

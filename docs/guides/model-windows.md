@@ -6,7 +6,9 @@ predicates. Filter a declared derived result to select rows by their computed ra
 
 ## Define and consume a window
 
-`models.Order` is the application's model, an order holding its buyer in `BuyerID` and an integer `TotalCents`; `RankingRow` is the result struct and `Rankings` its `rows.Define` schema with one field per mapped value below; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. `Ranking` ranks each buyer's orders:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm/expr`, `database/orm/rows`.
+
+`models.Order` is the application's model, an order holding its buyer in `BuyerID` and an integer `TotalCents`; `RankingRow` is the result struct and `Rankings` its `rows.Define` schema with one field per mapped value below. `Ranking` ranks each buyer's orders:
 
 <!-- compiled-source: tests/fixtures/consumer/windowqueries/guide_ranking.go#model-windows -->
 ```go

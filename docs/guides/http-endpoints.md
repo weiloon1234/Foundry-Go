@@ -95,6 +95,8 @@ type ClientParameters struct {
 }
 ```
 
+`clientParameters` declares the typed query and header parameters of an endpoint:
+
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#http-endpoints-2 -->
 ```go
 func clientParameters() foundryhttp.Query[ClientParameters] {
@@ -285,6 +287,8 @@ type UpdateUser struct {
 ```
 
 
+
+A response DTO declares its wire contract with `//foundry:dto`:
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/dto.go#user-response-contract -->
 ```go

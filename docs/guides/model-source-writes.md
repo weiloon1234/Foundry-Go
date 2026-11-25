@@ -4,6 +4,8 @@
 
 ## Match identities and map stored values
 
+`updateMemberBodies` updates members from a source query:
+
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#source-update -->
 ```go
 func updateMemberBodies(ctx context.Context, tx *database.Tx) (int64, error) {
@@ -29,6 +31,8 @@ Destination predicates, scopes and soft-delete visibility stay effective. Source
 An SQL-mapped update with multiple source matches for one affected destination fails with `database.TooManyRows` and rolls back. It never selects an arbitrary first source value. The complete source window is materialized and matches use the database's key comparison. Fixed-only updates can accept repeated matches because each destination receives the same inputs once. Deletes also affect each matching destination once.
 
 ## Delete using a source
+
+`deleteMatchingMembers` deletes the members a source query matches:
 
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#source-delete -->
 ```go

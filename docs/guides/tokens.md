@@ -67,6 +67,8 @@ validates the checks in its own transaction without blocking reads or writes.
 <a id="recipe-issue-token"></a>
 ## Issue only after trusted verification
 
+`StartVerifiedToken` issues a token for a trusted `proof`; `name` labels the credential, `renewable` asks for a refresh token and `granted` lists the scopes it carries:
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#issue-token -->
 ```go
 func StartVerifiedToken(ctx context.Context, tokens *UserTokens, proof auth.Proof[models.User, model.ID[models.User]], name string, renewable bool, granted auth.AccessScopes[models.User]) (IssuedUserToken, error) {
@@ -130,6 +132,8 @@ func RefreshFromBody(ctx context.Context, tokens *UserTokens, request foundryhtt
 }
 ```
 
+`TokenRoutes` serves login, refresh and a guarded profile route from one token guard. `verify` is the application's trusted credential verifier (a submitted identity is never proof), `scopes` are the access scopes the login issues and the profile route requires, and `clock` lets the token response report `expires_in`:
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/token_routes.go#native-token-delivery -->
 ```go
 func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error), scopes auth.AccessScopes[models.User]) (*foundryhttp.Router, error) {
@@ -172,9 +176,8 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify func(context.Cont
 	guardProfile := foundryhttp.RequireAuthentication(profileEndpoint, transport, guard)
 
 	profile := foundryhttp.ConfigureAuthenticated(guardProfile, foundryhttp.Scopes(scopes)).Handle(func(ctx context.Context, user models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
-		// Policies and additional guard calls reuse this concrete model.
-		_, err := guard.Require(ctx)
-		return foundryhttp.NoContent{}, err
+		// user is the concrete model; code that has only ctx gets it again from guard.Require(ctx).
+		return foundryhttp.NoContent{}, nil
 	})
 
 	return foundryhttp.NewRouter(login, refresh, profile)
@@ -233,6 +236,8 @@ the refresh token. The same guard serves it with a cookie transport:
 ```go
 var UserRefreshCookie = foundryhttp.DefineRefreshCookie("__Host-refresh-user", foundryhttp.CSRFConfig{})
 ```
+
+`browserTokenDelivery` serves the same token guard to a browser with a refresh cookie:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/browser_tokens.go#browser-token-delivery -->
 ```go
@@ -340,6 +345,8 @@ The request type aliases expose the same descriptor without a copied schema.
 
 <a id="recipe-refresh-token"></a>
 ## Refresh and reuse
+
+`RefreshVerifiedToken` exchanges the raw refresh secret `raw` for a new issued pair:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#refresh-token -->
 ```go

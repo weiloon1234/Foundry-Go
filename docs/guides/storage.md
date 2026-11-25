@@ -437,12 +437,16 @@ deadline is not treated as a credential expiry and does not shorten signed URLs.
 <a id="recipe-storage-http"></a>
 ## HTTP and links
 
+`PersistUpload` stores an already validated upload under a key:
+
 <!-- compiled-source: tests/fixtures/consumer/storing/files.go#persist-upload -->
 ```go
 func PersistUpload(ctx context.Context, disk *storage.Disk, key storage.ObjectKey, file foundryhttp.UploadedFile) (storage.StoredObject, error) {
 	return storagehttp.StoreUpload(ctx, disk, key, file, storage.PutOptions{})
 }
 ```
+
+`DownloadDocument` returns the object as a download named `document.bin`:
 
 <!-- compiled-source: tests/fixtures/consumer/storing/files.go#download-document -->
 ```go

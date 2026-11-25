@@ -61,6 +61,8 @@ type Lookup[K comparable, V any] struct {
 }
 ```
 
+Build the descriptor by passing the key descriptor and the value descriptor:
+
 <!-- compiled-source: tests/fixtures/consumer/genericdto/guide_recipes.go#generic-dtos-3 -->
 ```go
 descriptor := LookupJSON(

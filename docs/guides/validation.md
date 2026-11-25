@@ -79,6 +79,8 @@ type UpdateUser struct {
 }
 ```
 
+`UserResponse` is a response DTO with a typed ID, a text field and an enum:
+
 <!-- compiled-source: tests/fixtures/consumer/httpdto/dto.go#user-response-contract -->
 ```go
 //foundry:dto http=response
@@ -208,6 +210,8 @@ func UpdateRules() validation.Rule[UpdateUser] {
 }
 ```
 
+`CheckUpdate` validates an input outside HTTP:
+
 <!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#check-update -->
 ```go
 func CheckUpdate(ctx context.Context, input UpdateUser) error {
@@ -264,6 +268,8 @@ must have an accessible Go selector and a type the generating package can name.
 
 <a id="recipe-custom-rule"></a>
 ## Custom rules and metadata
+
+`SingleLineName` is a custom rule with a translated message:
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#custom-translated-rule -->
 ```go
@@ -337,6 +343,8 @@ type UsernameArgs struct {
 }
 ```
 
+`Username` builds a custom rule from a specification and a format check:
+
 <!-- compiled-source: tests/fixtures/consumer/validationrules/guide_recipes.go#publish-username-bounds -->
 ```go
 func Username(spec validation.Spec, check func(context.Context, string) (bool, error)) validation.Rule[string] {
@@ -391,6 +399,8 @@ type Registration struct {
 	Tags    []string               `json:"tags"`
 }
 ```
+
+These rules combine enum, conditional (`When` and `Unless`) and collection rules for a registration:
 
 <!-- compiled-source: tests/fixtures/consumer/validationrules/rules.go#conditional-registration-rules -->
 ```go
@@ -475,6 +485,8 @@ type AvailabilityWindow struct {
 	End   temporal.DateTime `json:"end"`
 }
 ```
+
+`BeforeField` compares two temporal fields:
 
 <!-- compiled-source: tests/fixtures/consumer/validationrules/window.go#compare-window-fields -->
 ```go
@@ -674,6 +686,8 @@ func (s *AppSKU) UnmarshalJSON(data []byte) error {
 }
 ```
 
+`JSONContract` declares the non-empty wire codec of `AppSKU`:
+
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/codec_required.go#nonempty-sku-contract -->
 ```go
 func (AppSKU) JSONContract() contract.JSON[AppSKU] {
@@ -723,6 +737,8 @@ the existing aggregate metadata limit. Wire decoding errors omit the label.
 
 <a id="recipe-decimal-precision"></a>
 ## Numbers and decimals
+
+`CheckAmount` validates an exact decimal against a rule, and `WholeUnits` converts one to `int64` and fails when the value is not a whole number in range:
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#decimal-precision -->
 ```go

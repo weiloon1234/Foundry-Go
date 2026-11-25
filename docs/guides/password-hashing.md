@@ -52,6 +52,8 @@ account, hash or supplied password caused rejection.
 
 ## Generated login inputs
 
+A login DTO declares the password with `password.Plaintext`:
+
 <!-- compiled-source: tests/fixtures/consumer/passwords/passwords.go#password-request-input -->
 ```go
 //foundry:dto http=body
@@ -123,6 +125,8 @@ does not promise that passwords or Argon2 working memory can be securely erased 
 Go's process memory. Rate limiting and model login policy remain separate controls.
 
 ## Typed stored model fields
+
+The model stores the password hash as a `password.Hash`, under a name that does not mark it sensitive:
 
 <!-- compiled-source: tests/fixtures/consumer/passwords/tables.go#password-hashing-account-table -->
 ```go

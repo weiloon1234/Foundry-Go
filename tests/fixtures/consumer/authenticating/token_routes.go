@@ -56,9 +56,8 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify func(context.Cont
 	guardProfile := foundryhttp.RequireAuthentication(profileEndpoint, transport, guard)
 
 	profile := foundryhttp.ConfigureAuthenticated(guardProfile, foundryhttp.Scopes(scopes)).Handle(func(ctx context.Context, user models.User, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
-		// Policies and additional guard calls reuse this concrete model.
-		_, err := guard.Require(ctx)
-		return foundryhttp.NoContent{}, err
+		// user is the concrete model; code that has only ctx gets it again from guard.Require(ctx).
+		return foundryhttp.NoContent{}, nil
 	})
 
 	return foundryhttp.NewRouter(login, refresh, profile)

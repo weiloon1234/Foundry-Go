@@ -21,7 +21,7 @@ store data in shared framework tables, not columns in the model's own table.
 The [articles consumer](../../tests/fixtures/consumer/articles/tables.go) contains
 the full declaration and HTTP workflow.
 
-`Article` and its generated `Articles` table are the application's own model. Two articles appear below: a minimal one with an `int64` key for the declaration, and the application's `Article` with a `model.ID[Article]` key for assembly, reads and writes. Framework imports from `github.com/weiloon1234/Foundry-Go`: `attachments`, `contract`, `database`, `database/orm`, `extensions`, `extensions/slots`, `i18n`, `metadata`, `storage`, `translations`, `validation`, `value`; the framework's `http` package is imported as `foundryhttp`.
+`Article` and its generated `Articles` table are the application's own model. Two `Article` declarations appear below. The declaration, owner and `ArticleSlots` blocks use the minimal one: an `int64` key and the slots `Title`, `Cover`, `Gallery` and `SEO`. The blocks from `ArticleSlotHandles` onward use the application's `Article`: a `model.ID[Article]` key and the slots `Title`, `Summary`, `Logo`, `Galleries` and `SEO`, for assembly, reads and writes. Framework imports from `github.com/weiloon1234/Foundry-Go`: `attachments`, `contract`, `database`, `database/orm`, `extensions`, `extensions/slots`, `i18n`, `metadata`, `storage`, `translations`, `validation`, `value`; the framework's `http` package is imported as `foundryhttp`.
 
 <a id="recipe-declare-slots"></a>
 ## Declare slots on the model
@@ -116,6 +116,8 @@ func (d ArticleSlotHandles) From(runtime slots.Runtime) ArticleSlotHandles {
 	return d
 }
 ```
+
+`All` lists the slot relations of the article table:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/tables.go#slot-relations -->
 ```go
@@ -220,6 +222,8 @@ that can delete its owner and supplies `slots.Runtime.Store` for cross-pool clea
 <a id="recipe-load-slots"></a>
 ## Loading slots
 
+`LoadArticles` loads articles together with their slots:
+
 <!-- compiled-source: tests/fixtures/goway/models/extensions/slot_recipes.go#model-extension-slots-articles -->
 ```go
 func LoadArticles(ctx context.Context, db database.Executor, runtime slots.Runtime) ([]Article, error) {
@@ -265,6 +269,8 @@ func EditorValues(article Article) (map[i18n.LocaleID]string, value.Optional[SEO
 }
 ```
 
+`DisplayTitle` resolves the title slot for the request locale:
+
 <!-- compiled-source: tests/fixtures/consumer/articles/slot_recipes.go#resolve-slot-text -->
 ```go
 func DisplayTitle(ctx context.Context, article Article) (value.Optional[string], error) {
@@ -294,6 +300,8 @@ Slots refuse implicit JSON serialization. Map loaded values into explicit DTOs.
 
 <a id="recipe-write-slots"></a>
 ## Writing slots
+
+`SaveArticle` writes a title slot in the caller's transaction:
 
 <!-- compiled-source: tests/fixtures/goway/models/extensions/slot_recipes.go#model-extension-slots-save-article -->
 ```go

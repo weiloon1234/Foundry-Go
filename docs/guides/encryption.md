@@ -37,6 +37,10 @@ func LoadRecordKeys(id encryption.KeyID, material secret.String, previous ...enc
 }
 ```
 
+`consumer.records.secret.v1` is the example application's own purpose label; choose a stable, versioned purpose of your own for each kind of record you encrypt.
+
+`RecordContext` binds an encryption context to a trusted record binding:
+
 <!-- compiled-source: tests/fixtures/consumer/developeroperations/encryption.go#encrypt-record -->
 ```go
 func RecordContext(trustedRecordBinding secret.String) (encryption.Context, error) {

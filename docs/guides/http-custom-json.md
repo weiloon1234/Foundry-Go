@@ -43,6 +43,8 @@ var TrackingScalar = contract.DefineScalar[TrackingCode](contract.Type{
 })
 ```
 
+`JSONContract` declares the wire contract of `TrackingCode`:
+
 <!-- compiled-source: tests/fixtures/consumer/httpquery/json_contract.go#tracking-json -->
 ```go
 func (TrackingCode) JSONContract() contract.JSON[TrackingCode] {

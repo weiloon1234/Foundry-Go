@@ -24,6 +24,8 @@ Milestone 12 adds the [shared publisher and typed job/event delivery](jobs.md#tr
 
 `models.Plain` is your application model with a typed `ID`; `RecordCreated` and `PublicationService` are the payload DTO and service declared in [typed events](events.md#recipe-declare-event) and [durable event assembly](events.md#recipe-durable-events); `Durable` is the producer's typed `foundation.Key` and `Bus` the key of the `events.Bus`. Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `database`, `events`, `foundation`, `model`, `outbox`, `value`.
 
+`consumer.domain` in the block below is the example application's own destination name; use your own application-owned destination.
+
 Configured applications declare the destination in
 [durable event assembly](events.md#recipe-durable-events). Advanced foundation
 providers register the same typed producer through `events.RegisterOutbox`:
@@ -79,6 +81,8 @@ idempotent. Origin records attribution, never reusable authorization credentials
 
 <a id="recipe-reload-event"></a>
 ## Typed reload and model fields
+
+`Payload` reloads a published event by its outbox ID:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#reload-event -->
 ```go

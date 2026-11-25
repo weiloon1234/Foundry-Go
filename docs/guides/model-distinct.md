@@ -6,9 +6,11 @@ type, source boundary and codecs.
 
 ## Unique values and complete models
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm/expr`, `database/orm/rows`.
+
 Use `rows.FromModel` followed by `rows.Distinct` for a complete-model projection,
 `rows.Distinct` for a rows projection, or `rows.DistinctRecord` for a complete
-record selected from a join. `models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID`; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. Two empty tag types alias the joined sources:
+record selected from a join. `models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID`. Two empty tag types alias the joined sources:
 
 <!-- compiled-source: tests/fixtures/consumer/distinctqueries/guide_distinct.go#distinct-aliases -->
 ```go

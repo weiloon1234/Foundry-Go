@@ -6,9 +6,11 @@ PostgreSQL 18 is the tested backend for these operations, including its explicit
 
 ## Calendar fields and instants
 
-Calendar extraction accepts dates or local date-times. Clock extraction accepts times or local date-times. For an instant, use `expr.LocalAt(input, zone)` to select the timezone before extracting calendar or clock components. This example groups a date field by year:
+Calendar extraction accepts dates or local date-times. Clock extraction accepts times or local date-times. For an instant, use `expr.LocalAt(input, zone)` to select the timezone before extracting calendar or clock components. This example groups a date field by year.
 
-`Sample` is the application's model with a `temporal.Date` field `Date`, and `Samples` is its generated table. `CalendarSummary` is the result struct with `Year` and `Rows` as `int64` and `Latest` as the latest date, and `CalendarSummaries` its `rows.Define` schema; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. `YearlySummary` groups the samples by year:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm/expr`, `database/orm/rows`.
+
+`Sample` is the application's model with a `temporal.Date` field `Date`, and `Samples` is its generated table. `CalendarSummary` is the result struct with `Year` and `Rows` as `int64` and `Latest` as the latest date, and `CalendarSummaries` its `rows.Define` schema. `YearlySummary` groups the samples by year:
 
 <!-- compiled-source: tests/fixtures/consumer/temporalqueries/orm.go#temporal-calculations -->
 ```go
@@ -47,9 +49,7 @@ Date and timestamp truncation units have distinct Go types. Invalid zero units o
 
 `AddDateDays(date, int32)` returns a date; negative days subtract. `DateDifference(left, right)` returns signed whole days as `int64`.
 
-`AddDateInterval`/`SubtractDateInterval` return local date-times because intervals can include clock components. `AddLocalInterval`/`SubtractLocalInterval` preserve local date-times. `AddInstantInterval`/`SubtractInstantInterval` preserve the instant's Go type and require an explicit timezone:
-
-See the [compiled calendar-day and elapsed-hour comparison](interval-queries.md#calculations).
+`AddDateInterval`/`SubtractDateInterval` return local date-times because intervals can include clock components. `AddLocalInterval`/`SubtractLocalInterval` preserve local date-times. `AddInstantInterval`/`SubtractInstantInterval` preserve the instant's Go type and require an explicit timezone. See the [compiled calendar-day and elapsed-hour comparison](interval-queries.md#calculations).
 
 The excerpt uses dynamic interval operands to contrast a calendar day with 24 elapsed
 hours; the literal `Add*Interval` forms retain the same arithmetic semantics.

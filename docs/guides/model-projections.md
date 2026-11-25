@@ -226,7 +226,7 @@ Use `rows.BoolOf(b, &r.Enabled)` for built-in or named Boolean fields. Use
 `rows.EnumOf(b, &r.Status)` when Status is `countries.Status`: it already exports
 `EnumDescriptor()` and `StatusCodec()`. The enum constructor retains enum validation
 and aggregate restrictions; a custom string field is not equivalent metadata.
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/goway/migration/pilot2_test.go):
+`CountryFlag` is a result struct with an enum and a Boolean field, `CountryFlagColumns` its typed columns, and `CountryFlags` its schema; `countries.Status` is the framework's enum:
 
 <!-- compiled-source: tests/fixtures/goway/migration/pilot2_test.go#pilot2-boolean-enum -->
 ```go

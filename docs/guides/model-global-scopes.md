@@ -4,6 +4,8 @@ Global scopes attach typed, additive predicates to a model declaration. A scope 
 
 ## Declare and attach scopes
 
+`scope` declares a global scope named `tenant` for the member table:
+
 <!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#scopes-after -->
 ```go
 func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
@@ -14,9 +16,7 @@ func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 }
 ```
 
-In this [compiled example](../../tests/fixtures/goway/migration/examples_test.go), `tenantID` reads typed context metadata and returns an error when it is missing. It never substitutes a permissive tenant. Name the source in the model directive:
-
-Add `scopes=memberScopes` to the directive. Define a package-local
+In this [compiled example](../../tests/fixtures/goway/migration/examples_test.go), `tenantID` reads typed context metadata and returns an error when it is missing. It never substitutes a permissive tenant. Name the source in the model directive: add `scopes=memberScopes` to the directive. Define a package-local
 `func memberScopes(t MemberTable) []orm.GlobalScope[Member]` returning the scopes
 for that model. See the [complete scoped model](../../tests/fixtures/goway/models/reads/models.go).
 
@@ -35,6 +35,8 @@ Inserts are unfiltered. Lookup creation derives supported equality defaults from
 Raw SQL bypasses automatic scopes, including complete-model `orm.Raw`. Retrieval callbacks on raw models do not restore tenant filtering. Applications own authorization for bypass and raw paths.
 
 ## Query-local bypass
+
+`bypass` removes the tenant scope for one query:
 
 <!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#bypass-after -->
 ```go

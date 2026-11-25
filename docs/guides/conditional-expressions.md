@@ -7,7 +7,9 @@ Aggregates and windows cannot become WHERE predicates.
 
 ## Row values and NULL handling
 
-`models.User` is the application's model with an integer `Age` and text `Nickname` (nullable) and `Email`, and `models.Users` is its generated table; `rows` is the framework's `database/orm/rows` package and `orm` is `database/orm`. `LabelsByAge` selects a CASE label for each user with a display name, ordered by that label:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/codec`, `database/orm`, `database/orm/expr`, `database/orm/rows`, `decimal`.
+
+`models.User` is the application's model with an integer `Age` and text `Nickname` (nullable) and `Email`, and `models.Users` is its generated table. `LabelsByAge` selects a CASE label for each user with a display name, ordered by that label:
 
 <!-- compiled-source: tests/fixtures/consumer/expressionqueries/guide_expressions.go#conditional-expressions -->
 ```go

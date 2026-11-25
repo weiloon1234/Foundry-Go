@@ -6,6 +6,8 @@ partitioning. Neither operation erases scope or makes an aggregate a row operand
 
 ## Group by a computed value
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`, `database/orm/expr`, `database/orm/rows`.
+
 `models.User` is the application's model with an integer `Age`, and `models.Users` its generated table. `BucketCount` is the result struct with `Bucket int` and `Count int64`, and `BucketCounts` its handwritten `rows.Define` schema. `Buckets` counts users by age bucket:
 
 <!-- compiled-source: tests/fixtures/consumer/keyqueries/guide_keys.go#computed-query-keys -->

@@ -4,6 +4,8 @@
 
 ## Find first or create
 
+`firstOrCreateUser` returns the first matching user or creates one:
+
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#first-or-create-user -->
 ```go
 func firstOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, error) {
@@ -20,6 +22,8 @@ On creation, omitted fields default from supported top-level equality predicates
 After creation, the stored identity must satisfy the original predicates and visibility. A default, normalization or hook that moves it outside those conditions causes rollback. This postcondition does not create a unique index.
 
 ## Create first or update an existing model
+
+`createOrFindUser` creates a user or returns the competing row, and `updateOrCreateUser` updates a matching user or creates one:
 
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#lookup-branches -->
 ```go

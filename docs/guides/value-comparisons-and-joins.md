@@ -23,7 +23,9 @@ These are predicates, separate from result DISTINCT clauses.
 
 ## Computed join conditions
 
-`models.User` is the application's model with an integer `Age`, and `models.Users` its generated table; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. Two empty tag types alias the same users table as the younger and older side:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm/expr`, `database/orm/rows`.
+
+`models.User` is the application's model with an integer `Age`, and `models.Users` its generated table. Two empty tag types alias the same users table as the younger and older side:
 
 <!-- compiled-source: tests/fixtures/consumer/comparisonqueries/guide_joins.go#comparison-aliases -->
 ```go

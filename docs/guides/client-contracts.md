@@ -399,6 +399,8 @@ export function wireValues(body: sdk.Operations["itemsEcho"]["request"]["body"])
 }
 ```
 
+A locale map is typed by its element, and `field(...).at(locale)` and `.element()` address one entry of a locale-keyed map or a list in the request body:
+
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#locale-fields -->
 ```typescript
 export function localeFields() {
@@ -1102,9 +1104,7 @@ For a new connection, create a new client and deliberately request replay.
 ## Portal sign-in sessions
 
 Declare `Surface.Auth` alongside the portal's route selection. The referenced
-login, refresh, logout, and profile routes must all belong to the surface:
-
-See the [compiled surface declaration](#recipe-select-surfaces), whose browser
+login, refresh, logout, and profile routes must all belong to the surface. See the [compiled surface declaration](#recipe-select-surfaces), whose browser
 surface supplies these route identities and the `login_id` identifier.
 
 `Identifier` is the case-sensitive JSON property name in the login body. It must
@@ -1133,6 +1133,8 @@ when at least one surface declares `Auth`; other entries do not import it.
 
 <a id="recipe-portal-session"></a>
 ### Own a portal session
+
+This function restores a saved session, signs in, signs out and returns the profile, then disposes the session:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#portal-lifecycle -->
 ```typescript
@@ -1260,9 +1262,7 @@ messages. Outside a browser, default coordination is session-owned memory.
 
 Mark browser-visible scalar or enum fields in a `//foundry:config` declaration
 with `config:",public"` and a full environment key. Existing configuration paths
-can precede `,public`:
-
-See the [public configuration declaration](generated-configuration.md#public-browser-configuration)
+can precede `,public`. See the [public configuration declaration](generated-configuration.md#public-browser-configuration)
 for the compiled Go tags and generated metadata owner.
 
 Pass the generated `SettingsPublicConfig()` to `manifest.Sources.PublicConfig`.
@@ -1341,6 +1341,8 @@ export function cartMessages(messages: ValidationMessages) {
   ];
 }
 ```
+
+`lockoutMessage` formats a catalog message with a plural argument:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-text-message -->
 ```typescript

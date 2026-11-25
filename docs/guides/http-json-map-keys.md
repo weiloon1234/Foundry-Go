@@ -4,9 +4,7 @@
 
 Generated DTO contracts preserve the actual Go map key. Ordinary string and
 integer keys, Foundry enums, model IDs and supported formatted values are
-discovered from the field declaration:
-
-Declare the application text key and its JSON key contract before the response that uses it.
+discovered from the field declaration. Declare the application text key and its JSON key contract before the response that uses it.
 
 The application owns `models.User` and any generated tables or identities used below.
 
@@ -45,6 +43,8 @@ func (WarehouseKey) JSONKeyContract() contract.JSONKey[WarehouseKey] {
 }
 ```
 
+A response DTO declares the map with its key type:
+
 <!-- compiled-source: tests/fixtures/consumer/httpdto/map_keys.go#inventory-map-keys -->
 ```go
 //foundry:dto
@@ -65,10 +65,8 @@ these types together.
 
 Custom native text keys declare a value method returning
 `contract.JSONKey[TheSameKeyType]`. The
-[WarehouseKey example](../../tests/fixtures/consumer/httpdto/map_keys.go) keeps its
-stored representation private and describes its string representation once:
-
-
+[WarehouseKey example](../../tests/fixtures/consumer/httpdto/map_keys.go) above keeps its
+stored representation private and describes its string representation once.
 
 The generator discovers this method wherever that key is used; individual DTO
 fields need no registration. Its native text methods remain responsible for

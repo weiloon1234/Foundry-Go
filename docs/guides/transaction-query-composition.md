@@ -16,7 +16,9 @@ are shared with ordinary reads.
 <a id="recipe-locked-cte"></a>
 ## Lock inside a CTE
 
-The application declares its model and the result struct, and one empty tag type for the alias; `Summaries` is the result struct's handwritten `rows.Define` schema. `database`, `orm`, `rows` and `expr` are the framework's `database`, `database/orm`, `database/orm/rows` and `database/orm/expr` packages:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm/expr`, `database/orm/rows`.
+
+The application declares its model and the result struct, and one empty tag type for the alias; `Summaries` is the result struct's handwritten `rows.Define` schema:
 
 <!-- compiled-source: tests/fixtures/consumer/transactionqueries/models.go#transaction-models -->
 ```go
@@ -31,6 +33,8 @@ type Summary struct {
 	Name string
 }
 ```
+
+These empty types distinguish the two aliases of the same table:
 
 <!-- compiled-source: tests/fixtures/consumer/transactionqueries/models.go#transaction-aliases -->
 ```go

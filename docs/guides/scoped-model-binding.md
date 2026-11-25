@@ -20,6 +20,8 @@ type Path struct {
 }
 ```
 
+These aliases name the resolved models of a team and its project, and of that pair and a task:
+
 <!-- compiled-source: tests/fixtures/consumer/nestedbindings/bindings.go#scoped-model-binding-types -->
 ```go
 type TeamProject = modelbinding.Models[Team, Project]
@@ -56,6 +58,8 @@ It does not reinterpret a many-to-many pivot as a direct foreign key. Use `Then`
 with an explicit typed custom resolver when the domain relationship is different.
 
 ## Add another level
+
+`Resolve` adds the task level to the resolver:
 
 <!-- compiled-source: tests/fixtures/consumer/nestedbindings/bindings.go#scoped-model-binding-resolve -->
 ```go

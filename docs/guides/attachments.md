@@ -38,12 +38,16 @@ Framework imports from `github.com/weiloon1234/Foundry-Go`: `attachments`, `data
 var Avatar = attachments.Define(Owners, "avatar", attachments.Policy{Disk: Files, Cardinality: attachments.Single, Accepted: []storage.MediaType{"image/png", "image/jpeg"}, Image: value.Set(imaging.NewPlan().Fill(32, 32, false).Format(imaging.PNG))})
 ```
 
+`ReplaceAvatar` replaces the single file of a one-file collection for a profile:
+
 <!-- compiled-source: tests/fixtures/consumer/profiles/profile.go#attachments-example-2 -->
 ```go
 func (s Services) ReplaceAvatar(ctx context.Context, profile Profile, upload attachments.Upload) (attachments.Result[Profile, model.ID[Profile]], error) {
 	return Avatar.Replace(ctx, s.Attachments, ProfileIdentity.ReferenceOf(profile), upload)
 }
 ```
+
+`AddDocument` adds one upload to a many-file collection for a profile:
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/attachment_recipes.go#add-collection-file -->
 ```go
@@ -350,6 +354,8 @@ func (s Services) PrepareDocument(ctx context.Context, profile Profile, file att
 }
 ```
 
+`AddDocumentIn` publishes the prepared upload inside the caller's transaction:
+
 <!-- compiled-source: tests/fixtures/consumer/profiles/attachment_recipes.go#publish-collection-file -->
 ```go
 func (s Services) AddDocumentIn(ctx context.Context, tx *database.Tx, profile Profile, prepared attachments.Prepared[Profile, model.ID[Profile]]) (attachments.Result[Profile, model.ID[Profile]], error) {
@@ -523,6 +529,8 @@ IDs only, and exits with an error when any attachment failed.
 
 ## Ordinary jobs and outbox
 
+`QueuedPhotos` declares the reconcile job and returns a collection whose publication goes through the outbox:
+
 <!-- compiled-source: tests/fixtures/goway/models/extensions/slot_recipes.go#attachments-queued-photos -->
 ```go
 func QueuedPhotos(producer *jobs.Outbox) (attachments.Collection[Article, int64], error) {
@@ -547,6 +555,8 @@ settlement.
 
 <a id="recipe-read-files"></a>
 ## Reads and localization
+
+`CurrentFiles` reads an article's logo file and its gallery inside the caller's transaction:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#transaction-current-files -->
 ```go
@@ -668,6 +678,8 @@ predicate is a captured membership list, not a live subquery.
 <a id="recipe-retire-files"></a>
 ## Deletion and inspection
 
+`DetachDocumentIn` retires one file of a collection inside the caller's transaction:
+
 <!-- compiled-source: tests/fixtures/consumer/profiles/attachment_recipes.go#retire-collection-files -->
 ```go
 func (s Services) DetachDocumentIn(ctx context.Context, tx *database.Tx, profile Profile, id attachments.ID[Profile]) (attachments.ChangeResult, error) {
@@ -678,6 +690,8 @@ func (s Services) ClearDocumentsIn(ctx context.Context, tx *database.Tx, profile
 	return Documents.ClearIn(ctx, tx, s.Attachments, ProfileIdentity.ReferenceOf(profile))
 }
 ```
+
+`ClearFiles` locks the visible article and clears its slot files in the caller's transaction:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#clear-slot-files -->
 ```go

@@ -5,7 +5,9 @@
 model or `rows.RecordOf` for a projection. Inputs can have different query scopes,
 but must return the same record type and compatible column/codec declarations.
 
-`models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID`; `BuyerTotals` is the result struct and `BuyerTotalRows` its `rows.Define` schema, with `BuyerID`, `Total`, `Orders` and `Average` fields; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. `DerivedReports` unions two reports of the same record type:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm/expr`, `database/orm/rows`.
+
+`models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID`; `BuyerTotals` is the result struct and `BuyerTotalRows` its `rows.Define` schema, with `BuyerID`, `Total`, `Orders` and `Average` fields. `DerivedReports` unions two reports of the same record type:
 
 <!-- compiled-source: tests/fixtures/consumer/reports/guide_summaries.go#model-set-operations -->
 ```go

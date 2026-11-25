@@ -7,7 +7,7 @@ HTTP kernel. The existing `foundry.New().Register(...).Build(...)` remains the
 narrow advanced entry point.
 
 The independent [executable consumer](../../tests/fixtures/consumer/bootstrap/cmd/serve/main.go)
-loads concrete settings and runs this ordinary path:
+loads concrete settings and runs this ordinary path.
 
 `bootstrap` is the application's assembly package. Its
 [loading helper](../../tests/fixtures/consumer/bootstrap/settings.go) has the contract
@@ -162,6 +162,8 @@ type Profile struct {
 	Kind string `json:"kind"`
 }
 ```
+
+`ProfileInput` and the handler below combine the route, query and body types of the profile endpoint:
 
 <!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_assembly.go#profile-handler-contract -->
 ```go

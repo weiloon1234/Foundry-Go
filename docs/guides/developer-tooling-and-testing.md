@@ -339,6 +339,8 @@ func GreetingDeclaration() (cli.Declaration, error) {
 }
 ```
 
+`Run` parses the command line before it bootstraps the application:
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/commands.go#parse-before-bootstrap -->
 ```go
 func Run(ctx context.Context, args []string, streams cli.Streams) error {

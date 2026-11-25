@@ -87,12 +87,16 @@ func Load(path string) (Settings, config.Report, error) {
 }
 ```
 
+`Defaults` returns the settings used before any file or environment value:
+
 <!-- compiled-source: tests/fixtures/consumer/startupconfig/settings.go#configuration-defaults -->
 ```go
 func Defaults() Settings {
 	return Settings{HTTP: HTTPSettings{Listen: "127.0.0.1", Port: 8080, Timeout: 5 * time.Second}, Environment: Development}
 }
 ```
+
+`Validate` rejects settings the application cannot run with:
 
 <!-- compiled-source: tests/fixtures/consumer/startupconfig/settings.go#configuration-validation -->
 ```go

@@ -4,7 +4,9 @@
 `rows.ModelRecord(query)` for a complete model, or `rows.RecordOf(projection)` for
 a handwritten rows projection. Alias the definition with `rows.AsRecord[Tag]`.
 
-`models.User` is the application's model with an integer `Age` and a text `Email`; `orm`, `rows` and `expr` are the framework's `database/orm`, `database/orm/rows` and `database/orm/expr` packages. Two empty tag types name the aliases of one definition:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`, `database/orm/expr`, `database/orm/rows`.
+
+`models.User` is the application's model with an integer `Age` and a text `Email`. Two empty tag types name the aliases of one definition:
 
 <!-- compiled-source: tests/fixtures/consumer/ctes/guide_ctes.go#cte-aliases -->
 ```go

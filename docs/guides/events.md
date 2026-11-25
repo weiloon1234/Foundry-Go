@@ -187,6 +187,8 @@ transactional event outbox below for required durable delivery.
 <a id="recipe-durable-events"></a>
 ## Durable events with application.New
 
+`consumer.publications` is the example application's own key and destination name; use your own application-owned name, and the same destination name in the TOML mapping below.
+
 Declare a producer key and its destination alongside the typed topic:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/configured_outbox.go#event-outbox -->
@@ -199,6 +201,8 @@ func ConfigurePublications(builder *application.Builder) *application.Builder {
 	return builder.Events(application.Topic(Created), application.EventOutbox(Publications, "consumer.publications"))
 }
 ```
+
+`PublicationService` resolves the event outbox from the application services and keeps it:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#configured-event-producer -->
 ```go

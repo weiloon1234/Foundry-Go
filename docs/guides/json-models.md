@@ -128,7 +128,7 @@ SQL and [plans](query-plans.md) before choosing an index.
 Call each binding's `Validate()` before executor access; `orm.Check` only checks
 table declarations, not unattached JSON fields. Go checks the payload and result
 types, while startup validation checks pointer ownership, JSON tags and custom
-encoding constraints. [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/jsonqueries/tables.go):
+encoding constraints. `validateJSONDeclarations` validates the three bindings declared above:
 
 <!-- compiled-source: tests/fixtures/consumer/jsonqueries/tables.go#validate-json-fields -->
 ```go

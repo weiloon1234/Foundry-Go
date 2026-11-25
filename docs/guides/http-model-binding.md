@@ -76,9 +76,7 @@ preparation, after validation. Signature checks on a `SignedEndpoint` still
 happen before any path decoding or model resolution.
 
 `WithMissing` replaces the default 404 for an omitted result, for example with a
-declared application error or a 410 for archived resources:
-
-Use `modelbinding.WithMissing(UserByID(db), handler)`, where `handler` has type
+declared application error or a 410 for archived resources. Use `modelbinding.WithMissing(UserByID(db), handler)`, where `handler` has type
 `func(context.Context, UserPath) error` and returns a declared
 application error.
 

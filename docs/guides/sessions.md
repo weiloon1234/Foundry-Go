@@ -135,6 +135,8 @@ stored activity backward; clock synchronization remains an operational concern.
 
 ## List and revoke
 
+`ListedSessions` returns a user's live sessions and `RevokeListedSession` revokes one of them by its `id`:
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/sessions.go#sessions-listed-sessions -->
 ```go
 func ListedSessions(ctx context.Context, sessions *session.Sessions[models.User, model.ID[models.User]], user models.User) ([]session.Info[models.User, model.ID[models.User]], error) {

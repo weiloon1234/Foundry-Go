@@ -10,7 +10,9 @@
 
 Further reading: [Callback contracts](#callback-contracts).
 
-Declare a per-write factory returning `orm.Hooks[M]` and name it with `hooks=memberHooks` on the model directive. `hooks.Member` is the application's model in its `hooks` package and `hooks.Members` its generated table; `database` and `orm` are the framework's packages. This factory gives a new member the name `guest` when the write supplies none:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`, `foundation`.
+
+Declare a per-write factory returning `orm.Hooks[M]` and name it with `hooks=memberHooks` on the model directive. `hooks.Member` is the application's model in its `hooks` package and `hooks.Members` its generated table. This factory gives a new member the name `guest` when the write supplies none:
 
 <!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#hooks-after -->
 ```go

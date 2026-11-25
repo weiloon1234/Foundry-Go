@@ -94,6 +94,8 @@ existing BCP 47 locale parser and must belong to the configured supported set.
 }
 ```
 
+`LoadMessages` loads the message catalog from the files and the supported locales:
+
 <!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#load-message-catalog -->
 ```go
 func LoadMessages(ctx context.Context, files fs.FS, locales i18n.LocaleCatalog) (*i18n.Catalog, error) {
@@ -175,6 +177,8 @@ type WelcomeArgs struct {
 }
 ```
 
+`MessageCatalog` returns the application's catalog from its services:
+
 <!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#request-message -->
 ```go
 func MessageCatalog(services application.Services) (*i18n.Catalog, error) {
@@ -242,9 +246,7 @@ order.
 
 `i18n.LocaleResolver[S]` selects a locale for a typed subject — an HTTP request,
 an authenticated user or a notification recipient — from ordered steps, then the
-catalog default:
-
-This example uses an application-owned recipient:
+catalog default. This example uses an application-owned recipient:
 
 <!-- compiled-source: tests/fixtures/consumer/localization/resolver_recipes.go#locale-recipient -->
 ```go
@@ -298,6 +300,8 @@ receive runtime signature checks rather than generated Go argument typing.
 
 <a id="recipe-feature-labels"></a>
 ## Feature labels
+
+An enum declares its labels with `//foundry:enum labels=...`:
 
 <!-- compiled-source: tests/fixtures/consumer/localization/messages.go#enum-labels -->
 ```go

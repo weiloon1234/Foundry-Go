@@ -456,6 +456,8 @@ replace them with a browser regex.
 <a id="recipe-form-outcomes"></a>
 ## Outcomes and issues
 
+`submitForm` sends one request and returns a `Submission`: saved, invalid (the client rejected it before sending), rejected (a definite 4xx answer) or uncertain:
+
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#form-outcomes -->
 ```typescript
 type Submission =

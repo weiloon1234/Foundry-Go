@@ -14,7 +14,9 @@ Audit is opt-in. Foundry records stored model changes through the actual write t
 <a id="recipe-register-audit"></a>
 ## Register models and storage
 
-`hooks.Member` is the application's model and `hooks.Members` its generated table; `foundation`, `audit` and `record` are framework packages. `registerAudit` registers the recorder alongside the application's database provider. `pool` and `history` are the typed service keys of the database pool and the recorder:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `audit`, `audit/record`, `database`, `database/orm`, `foundation`, `value`.
+
+`hooks.Member` is the application's model and `hooks.Members` its generated table. `registerAudit` registers the recorder alongside the application's database provider. `pool` and `history` are the typed service keys of the database pool and the recorder:
 
 <!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#audit-registration -->
 ```go
@@ -49,6 +51,8 @@ Auditing runs in the operation's transaction at `Created`, `Updated`, `Deleted` 
 Explicit set-based writes skip per-model observers and audit. Use the existing `orm.CreateEach`, `orm.UpdateEach`, `orm.DeleteEach`, `orm.RestoreEach` and `orm.ForceDeleteEach` alternatives when every affected model requires lifecycle history. An explicit domain audit action can record the intent/result of a bulk operation without claiming to contain every model's before/after values.
 
 ## Read typed history
+
+`memberHistoryPage` reads the first page of 20 history records of a member and returns any error:
 
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#audit-page -->
 ```go

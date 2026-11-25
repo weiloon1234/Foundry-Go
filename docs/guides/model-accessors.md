@@ -10,6 +10,8 @@
 
 Call `Access<Field>` methods explicitly when mapping stored values into response DTOs. Model hydration, queries and JSON serialization do not call them automatically or replace stored fields with their results.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: none; the block uses only the application's own packages.
+
 `Member` is the application's model with a stored email and an `AccessEmail` method; `coremodels.EmailLink` is the application's presentation type. `emailLink` maps one member:
 
 <!-- compiled-source: tests/fixtures/goway/models/mutators/guide_examples.go#accessors-after -->

@@ -2,6 +2,8 @@
 
 The model directive generates identity methods from the table and its primary key.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `attribution`, `model`.
+
 Use `user.FoundryReference()` and `user.FoundryIdentity()`. In the model package,
 reuse the generated `usersIdentity` for `Reference` and `Parse` operations. See
 [generated names and identity](model-declarations.md#recipe-register-tables).
@@ -34,7 +36,7 @@ explicitly for presentation; identity remains a persistence boundary.
 
 ## Capturing provenance
 
-`WithOrigin` records which stored model acted. `subject` is any generated model value, for example the application's `models.User`; `attribution`, `model` and `database` are framework packages:
+`WithOrigin` records which stored model acted. `subject` is any generated model value, for example the application's `models.User`:
 
 <!-- compiled-source: tests/fixtures/goway/guideadapters/guide_pages.go#model-references-with-origin -->
 ```go
@@ -79,9 +81,7 @@ exports only the tagged key representation. SQL NULL and malformed or oversized
 keys fail; the complete encoded key is limited to 4096 bytes. Ordinary formatting
 of a reference, identity or origin omits its captured data.
 
-At a transport boundary, restore the concrete model and key types:
-
-Restore an exported identity with `UserIdentity.Parse(identity)`.
+At a transport boundary, restore the concrete model and key types. Restore an exported identity with `UserIdentity.Parse(identity)`.
 
 Restoration checks the expected model namespace and database codec. A value must
 round trip without changing its persisted representation. It performs no query

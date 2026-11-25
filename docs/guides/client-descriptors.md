@@ -128,6 +128,8 @@ declarations, cookie requirements, and session ownership.
 <a id="recipe-field-presentation"></a>
 ## Declare presentation once
 
+The `client` tag declares presentation for the already declared public fields of a DTO:
+
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/dto.go#field-presentation -->
 ```go
 Amount   decimal.Decimal                        `json:"amount" client:"kind=money,label=fields.amount,help=help.amount"`

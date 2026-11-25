@@ -15,7 +15,9 @@ Further reading: [Transaction outcomes](#transaction-ownership-and-failures).
 <a id="recipe-write-models"></a>
 ## Create and update
 
-`hooks.Member` is the application's model in its `hooks` package, with an `int64` key `ID`, a `Name`, a nullable `Note` and a `Body` of bytes; `hooks.Members` is its generated table. `database` and `orm` are the framework's packages. `insertMember` creates one member with explicit key and name:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`.
+
+`hooks.Member` is the application's model in its `hooks` package, with an `int64` key `ID`, a `Name`, a nullable `Note` and a `Body` of bytes; `hooks.Members` is its generated table. `insertMember` creates one member with explicit key and name:
 
 <!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#insert-member -->
 ```go

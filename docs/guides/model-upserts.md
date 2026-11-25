@@ -4,6 +4,8 @@
 
 ## Select conflict behavior
 
+`upsertUser` inserts a user, or on an email conflict takes the incoming age:
+
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#upsert-user -->
 ```go
 func upsertUser(ctx context.Context, tx *database.Tx) (value.Optional[models.User], error) {
@@ -24,6 +26,8 @@ A single upsert returns `value.Optional[M]`. Absence means `DO NOTHING` or a fal
 Active destination scopes join conflict update conditions. An unconditional update that skips a row outside those scopes fails with `fault.Conflict`; a user-supplied condition retains its ordinary skipped-result meaning. This prevents a globally unique key from bypassing tenant filtering during update. Applications still authorize supplied insert values.
 
 ## Calculating conflict updates
+
+`excluded` builds a conflict update that adds the proposed age to the stored age:
 
 <!-- compiled-source: tests/fixtures/goway/migration/sql_test.go#excluded-after -->
 ```go

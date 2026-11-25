@@ -98,7 +98,9 @@ Applications can format those decimal values at their output boundary.
 <a id="recipe-trigram-search"></a>
 ## Search within a transaction
 
-`Tables` is the application's struct of handwritten table handles: `Entities` (with a `Country`), `Names` (with `EntityID` and a `Normalized` text), `Addresses` (with `EntityID` and decimal `Latitude` and `Longitude`) and `Reviews` (with a text `Body`), each keyed by `Key()`. `Normalized` is a string-backed text type. `Duplicate` is the result struct, with `ID`, `Normalized`, a `float64` `Similarity` and the two decimals, and `Duplicates` its `rows.Define` schema. `database`, `orm`, `expr` and `rows` are the framework's `database`, `database/orm`, `database/orm/expr` and `database/orm/rows` packages. Three empty tag types alias the joined sources:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`, `database/orm/expr`, `database/orm/rows`.
+
+`Tables` is the application's struct of handwritten table handles: `Entities` (with a `Country`), `Names` (with `EntityID` and a `Normalized` text), `Addresses` (with `EntityID` and decimal `Latitude` and `Longitude`) and `Reviews` (with a text `Body`), each keyed by `Key()`. `Normalized` is a string-backed text type. `Duplicate` is the result struct, with `ID`, `Normalized`, a `float64` `Similarity` and the two decimals, and `Duplicates` its `rows.Define` schema. Three empty tag types alias the joined sources:
 
 <!-- compiled-source: tests/fixtures/consumer/trigramqueries/search.go#trigram-aliases -->
 ```go

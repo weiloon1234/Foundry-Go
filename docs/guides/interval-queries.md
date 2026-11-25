@@ -6,6 +6,8 @@
 
 Declare an ordinary Go field such as `Period temporal.Interval`, or `MaybePeriod value.Nullable[temporal.Interval]`. The model directive infers interval handles backed by `codec.Interval()`; no role tag is needed. A supplied zero interval differs from an omitted assignment and SQL NULL.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm/expr`, `database/orm/rows`, `temporal`, `value`.
+
 This complete scalar fixture includes ordinary and nullable intervals:
 
 <!-- compiled-source: tests/fixtures/goway/models/scalars/scalars.go -->
@@ -71,7 +73,7 @@ All operands retain the owning model or query scope. These functions use the sha
 | `ShiftLocal(local, interval)` | `temporal.LocalDateTime` |
 | `ShiftInstant(instant, interval, zone)` | Same Go instant type |
 
-The dynamic examples below use this application model, with `Samples` as its generated table; `expr` is the framework's `database/orm/expr` package and `temporal` is `temporal`:
+The dynamic examples below use this application model, with `Samples` as its generated table:
 
 <!-- compiled-source: tests/fixtures/consumer/intervalqueries/models.go#interval-queries -->
 ```go
@@ -111,7 +113,7 @@ PostgreSQL normalizes timestamp differences into 24-hour day components plus rem
 
 Use `expr.SumInterval`, `expr.AvgInterval`, `expr.Min`, `expr.Max`, counts and their filters/window adapters. `SumInterval` and `AvgInterval` return `value.Nullable[temporal.Interval]`, including NULL for empty or all-NULL input. PostgreSQL owns interval averaging and whole-microsecond rounding; fractional months can become days and fractional days can become elapsed time. Overflow remains an execution or decode error.
 
-`Summary` is the result struct with nullable `Total` and `Average` intervals and an `int64` count field, and `Summaries` is its `rows.Define` schema. `rows` is the framework's `database/orm/rows` package. `PeriodSummary` sums, averages and counts the periods:
+`Summary` is the result struct with nullable `Total` and `Average` intervals and an `int64` count field, and `Summaries` is its `rows.Define` schema. `PeriodSummary` sums, averages and counts the periods:
 
 <!-- compiled-source: tests/fixtures/consumer/intervalqueries/orm.go#interval-queries-3 -->
 ```go

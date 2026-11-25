@@ -4,7 +4,9 @@ These APIs extend the [window-function contracts](model-windows.md), using the s
 
 ## Numeric distances
 
-`Sample` is the application's model with an integer `ID` and a `time.Time` field `At`, and `Samples` is its generated table; `expr` and `rows` are the framework's `database/orm/expr` and `database/orm/rows` packages. `IDRange` returns the range builder and a frame covering the previous ID and the current row:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm/expr`, `database/orm/rows`, `temporal`.
+
+`Sample` is the application's model with an integer `ID` and a `time.Time` field `At`, and `Samples` is its generated table. `IDRange` returns the range builder and a frame covering the previous ID and the current row:
 
 <!-- compiled-source: tests/fixtures/consumer/framequeries/guide_frames.go#window-ranges-and-names -->
 ```go

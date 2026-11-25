@@ -87,6 +87,8 @@ func formEndpoint(access foundryhttp.Access) foundryhttp.Endpoint[foundryhttp.No
 }
 ```
 
+`Prepare` normalizes the request into a search and a submission and returns an error when it cannot:
+
 <!-- compiled-source: tests/fixtures/consumer/requestflow/forms.go#prepare-submission -->
 ```go
 func Prepare(_ context.Context, input Request) (Search, Submission, error) {
@@ -98,6 +100,8 @@ func Prepare(_ context.Context, input Request) (Search, Submission, error) {
 	return input.Query, body, nil
 }
 ```
+
+`preparedSubmission` attaches `Prepare` and the application's authorization callback to a form endpoint:
 
 <!-- compiled-source: tests/fixtures/consumer/requestflow/guide_recipes.go#forms-request-lifecycle-2 -->
 ```go
@@ -156,6 +160,8 @@ An explicitly nil callback fails registration. Without hooks, existing behavior
 is unchanged. Configure hooks before applying signing or resource-binding adapters.
 
 ## Concrete guard actors
+
+`Account` is the concrete actor type of the guarded form:
 
 <!-- compiled-source: tests/fixtures/consumer/requestflow/forms.go#submission-actor -->
 ```go

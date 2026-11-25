@@ -2,7 +2,9 @@
 
 Row calculations preserve their model or alias scope and compose with generated column declarations, [conditional values](conditional-expressions.md), predicates and ordering. Values and patterns are bound through their codecs; callers never supply SQL function or operator names.
 
-`Sample` is the application's model with an `int16` `Quantity` and a text `Name` of the string-backed type `Label`, and `Samples` is its generated table; `orm` and `expr` are the framework's `database/orm` and `database/orm/expr` packages. `IncrementedAtLeast` filters on a computed quantity:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`, `database/orm/expr`.
+
+`Sample` is the application's model with an `int16` `Quantity` and a text `Name` of the string-backed type `Label`, and `Samples` is its generated table. `IncrementedAtLeast` filters on a computed quantity:
 
 <!-- compiled-source: tests/fixtures/consumer/scalarqueries/guide_calculations.go#scalar-calculations -->
 ```go

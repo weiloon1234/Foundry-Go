@@ -51,6 +51,8 @@ func CredentialStores(connection redis.ConnectionName) application.Option {
 }
 ```
 
+`CredentialStoreInventory` lists the Redis keys the credential stores need for a configured connection:
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#credential-store-inventory -->
 ```go
 func CredentialStoreInventory(settings application.Settings, connection redis.ConnectionName) ([]infrastructure.RedisConnectionInventory, error) {

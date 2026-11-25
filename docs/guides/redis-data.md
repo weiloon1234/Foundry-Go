@@ -227,6 +227,8 @@ type Activity struct {
 type ActivityCounts = data.Hash[model.ID[Member], ActivityKind, int64]
 ```
 
+`Counts` declares a hash of integer counters per member and activity kind:
+
 <!-- compiled-source: tests/fixtures/consumer/redisdata/rankings.go#redis-data-5 -->
 ```go
 var Counts = data.DefineHash[model.ID[Member], ActivityKind, int64]("member-activity", 1, keyspace.TextKeys[model.ID[Member]](), keyspace.StringKeys[ActivityKind]()).

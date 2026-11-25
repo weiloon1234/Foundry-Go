@@ -12,6 +12,8 @@ These values are ordinary Go types visible to the compiler and gopls. The [exter
 <a id="recipe-allocate-model-id"></a>
 ## Model identity
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `model`.
+
 Declare `ID model.ID[User]` on a `User` model, here the application's smallest one:
 
 <!-- compiled-source: tests/fixtures/consumer/guide_values.go#model-id-user -->
@@ -21,7 +23,7 @@ type User struct{ ID model.ID[User] }
 
 `model.NewIDAt[User](clock.Now())` generates an identity using explicit time for deterministic timestamp behavior. IDs remain comparable and usable as map keys even when the model contains slices or maps. An order ID cannot be passed as a user ID or converted directly between those instantiated ID types.
 
-`NewUser` takes the clock reading from its caller; `model` is the framework's `model` package:
+`NewUser` takes the clock reading from its caller:
 
 <!-- compiled-source: tests/fixtures/consumer/guide_values.go#allocate-model-id -->
 ```go

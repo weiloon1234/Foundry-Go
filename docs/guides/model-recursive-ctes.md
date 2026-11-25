@@ -5,7 +5,9 @@ a step callback. The callback receives `rows.RecursiveSelf[R]` and must return t
 same complete record type. The ordinary struct and rows/model declaration own
 column order, nullability and codecs; no model generator is involved.
 
-`models.User` is the application's model, with a nullable `IntroducerID` naming the parent user; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. Two empty tag types alias the current rows and the next level:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm/expr`, `database/orm/rows`.
+
+`models.User` is the application's model, with a nullable `IntroducerID` naming the parent user. Two empty tag types alias the current rows and the next level:
 
 <!-- compiled-source: tests/fixtures/consumer/recursivequeries/guide_recursive.go#recursive-aliases -->
 ```go

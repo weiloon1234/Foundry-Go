@@ -107,6 +107,8 @@ func NewSender(mailer *email.Mailer, from email.Address) (*Sender, error) {
 }
 ```
 
+`Build` renders the template and returns the message without sending it:
+
 <!-- compiled-source: tests/fixtures/consumer/mailing/welcome.go#send-templated-mail -->
 ```go
 func (s *Sender) Build(ctx context.Context, input Welcome) (email.Message, error) {
@@ -117,6 +119,8 @@ func (s *Sender) Build(ctx context.Context, input Welcome) (email.Message, error
 	return body.Message(s.from, input.Recipient).Attach(input.Documents...), nil
 }
 ```
+
+`Send` builds the message and sends it:
 
 <!-- compiled-source: tests/fixtures/consumer/mailing/welcome.go#send-mail -->
 ```go
