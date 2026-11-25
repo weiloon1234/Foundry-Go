@@ -178,10 +178,10 @@ Keep secrets out of query parameters and use separate domain state when consumin
 an action exactly once. A URL may protect a download or preview while the handler
 still applies its normal authorization and validation rules.
 
-## Authenticated signatures (milestone 10)
+## Authenticated signatures
 
 Required and optional typed authentication endpoints and native route adapters
-now expose `Signed(signer)`. Their signatures reuse this guide's origin, purpose,
+expose `Signed(signer)`. Their signatures reuse this guide's origin, purpose,
 expiry and key rules; authentication still requires its own live credentials.
 An authenticated signed endpoint can also use `modelbinding.BindAuthenticated`
 without losing its subject type, resource type or DTO contracts. See

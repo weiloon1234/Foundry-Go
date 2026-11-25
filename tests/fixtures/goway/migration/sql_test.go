@@ -27,7 +27,7 @@ func upsert(ctx context.Context, tx *database.Tx) error {
 
 // doc-example:end conflict-after
 
-// doc-example:begin excluded-after
+// doc-example:begin conflict-stored-plus-proposed
 func excluded() orm.Conflict[models.User] {
 	r := rows.ConflictRowsOf(models.Users.Query())
 	stored := expr.At(r.Stored(), models.Users.Age)
@@ -36,7 +36,7 @@ func excluded() orm.Conflict[models.User] {
 		rows.SetConflictValue(models.Users.Age, expr.Add(stored, proposed)))
 }
 
-// doc-example:end excluded-after
+// doc-example:end conflict-stored-plus-proposed
 
 // doc-example:begin source-insert-after
 func insertSelect(ctx context.Context, tx *database.Tx) error {

@@ -1,7 +1,5 @@
 # Typed query composition and defaults
 
-**Status: focused runtime, consumer, compiler and editor acceptance passed.**
-
 Reuse generated filter bindings inside a larger query value. `EmbedQuery`
 selects the concrete inner field; `MergeQueries` combines descriptors of the
 same outer type. Neither introduces a wire-name prefix nor rewrites codecs.
@@ -79,5 +77,3 @@ Explicit client-value rejection remains an ordinary safe query error.
 requests, applies defaults and bounds, maps models to declared response DTOs,
 and generates filter-preserving links from approved origins.
 [Cursor pagination](http-cursor-pagination.md) retains the same ownership rules.
-
-Combined transport full regression passed.

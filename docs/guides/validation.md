@@ -592,8 +592,8 @@ Metadata carries the same empty-content category used at runtime and flags custo
 wire encodings as server-only. These are checks of the decoded native value;
 dynamic documents/custom transport representations need their own content rules.
 Plain `omitempty` fields still cannot prove wire presence from their Go zero
-value. Use explicit wrappers; additional ordinary-field presence metadata remains
-milestone work.
+value. Use explicit wrappers; additional ordinary-field presence metadata is not
+provided.
 
 ### Non-empty wire codecs
 

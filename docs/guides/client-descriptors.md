@@ -20,6 +20,8 @@ consume them without runtime package dependencies. A form binds its fields
 through the [field binder](client-forms.md#recipe-form-values), which reads these
 descriptors.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `contract`, `decimal`, `http` as `foundryhttp`, `value`.
+
 `sdk` is your application's generated client module: `import * as sdk from "./contracts_foundry.gen.js"` (the path of the generated file in your client source). The operation, schema and field names in the TypeScript blocks of this guide (`itemsEcho`, `unionsEcho`, `ExplicitLabels` and their fields) belong to the example application's generated client and stand for your own.
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#field-descriptors -->
@@ -225,4 +227,4 @@ Review explicit schema-type imports if a name collides with a new SDK declaratio
 Add domain presentation tags and locale messages in the application's Go
 declarations; keep separate request and response views. Extend the installed
 package's tests with typed field lookup, actual descriptor calls and validation
-incompleteness. The framework's acceptance covers its own consumers; it does not replace the starter's upgrade checks or close B08.
+incompleteness. The framework's acceptance covers its own consumers; it does not replace the starter's upgrade checks.

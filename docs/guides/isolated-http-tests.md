@@ -270,6 +270,3 @@ Three local SELECT 1 samples had median checkout times of 25.5 microseconds unsc
 and 75.1 microseconds scoped, with 32 and 57 allocations respectively. The extra
 round trip applies once per checkout, not to each statement within one transaction.
 These are local microbenchmarks, not whole-application throughput promises.
-The evidence also records actual concurrent application setup/migration times
-and observed pool use. The later [T07 integrated audit](typed-api-audit.md)
-records acceptance of the complete typed API workflow.

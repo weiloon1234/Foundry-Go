@@ -26,7 +26,7 @@ type authorizedListService interface {
 
 Inputs: `list pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse]`, `binding foundryhttp.GuardBinding[Actor]`, `readScopes auth.AccessScopes[Actor]`, `readPermission auth.Permission[Actor]`, `service authorizedListService`.
 
-<!-- compiled-source: tests/fixtures/consumer/httppagination/authorization_recipe.go#authenticated-pagination-20260928-1 -->
+<!-- compiled-source: tests/fixtures/consumer/httppagination/authorization_recipe.go#authorized-secured-list -->
 ```go
 secured := pagination.Authenticated(list, binding, foundryhttp.AllOf(foundryhttp.Scopes(readScopes), foundryhttp.Permissions(readPermission)))
 secured = pagination.AuthorizeActor(secured, service.AuthorizeList)

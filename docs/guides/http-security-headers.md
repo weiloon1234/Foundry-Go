@@ -107,5 +107,4 @@ The [HTML frame policy](https://html.spec.whatwg.org/multipage/browsing-the-web.
 and [Referrer Policy](https://www.w3.org/TR/referrer-policy/) standards define
 browser behavior. [Typed CSP and request nonces](http-content-security-policy.md) now accompany
 this middleware. [Public origins and trusted-proxy HTTPS](http-public-urls.md)
-supply the explicit transport policy for HSTS. Security-header/CSP and proxy
-HSTS integration passed focused and combined full regression checks.
+supply the explicit transport policy for HSTS.

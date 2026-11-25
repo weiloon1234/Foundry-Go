@@ -10,8 +10,6 @@
 <a id="recipe-presence"></a>
 ## Declare presence and rules
 
-**Status: native HTTP consumer race acceptance passed.**
-
 Use generated DTO fields with `Optional[T]` to distinguish omission from a
 supplied value. Use `Optional[Nullable[T]]` when explicit JSON null is valid.
 Rules inspect presence and content without trimming, replacing or unsetting

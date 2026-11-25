@@ -1,5 +1,7 @@
 # Model pruning
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`, `database/prune`.
+
 `database/prune` removes obsolete models in bounded batches. Register typed selections and run the registry explicitly; nothing prunes during application boot.
 
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#pruning -->

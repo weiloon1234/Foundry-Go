@@ -4,6 +4,8 @@ Use `orm.CreateEach`, `orm.UpdateEach`, `orm.DeleteEach`, `orm.RestoreEach` and 
 
 ## Create and update models
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`. `models` is the application's own package of declared models.
+
 `updateMembers` and `createMembers` update and create models in batches inside the caller's transaction:
 
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#each-writes -->
@@ -62,7 +64,7 @@ Cancellation, panic and `runtime.Goexit` follow ordinary lifecycle failure handl
 
 `setWrite` updates every member the query matches:
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#set-writes-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#set-write-without-hooks -->
 ```go
 func setWrite(ctx context.Context, tx *database.Tx) error {
 	_, err := orm.UpdateAll(ctx, tx, orm.WithoutModelHooks(hooks.Members.Query()), orm.Set(hooks.Members.Name, "guest"))

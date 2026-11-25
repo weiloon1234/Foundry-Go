@@ -14,7 +14,7 @@ Workers support shared observations, maintenance admission and optional
 trace snapshots. Every envelope uses format 3 (`jobs.CurrentEnvelopeVersion`).
 Follow the [envelope activation requirements](job-trace-rollout.md), including
 stopped-writer conversion of retained older formats. Trace propagation is optional. The [independent consumer](../../tests/fixtures/consumer/background/)
-contains compiling public API examples; acceptance results are recorded separately.
+contains compiling public API examples.
 
 [Worker operations](jobs-operations.md) covers automatic failure logging,
 failed-job inspection, explicit retry tokens, application CLI registration and
@@ -388,7 +388,42 @@ func (p *WelcomeProducer) Enqueue(ctx context.Context, tx *database.Tx, id model
 }
 ```
 
-Prepare a `jobs.Outbox` with a destination and dispatcher. Inside a business
+In a configured application the job outbox is declared in TOML. `connection` names
+an existing job connection (here `background`, declared under `services.jobs`) and
+the worker consumes that connection's default queue:
+
+```toml
+[services.jobs]
+default = 'background'
+[services.jobs.connections.background]
+driver = 'redis'
+redis = 'default'
+default_queue = 'reports'
+[features.outbox]
+enabled = true
+database = 'default'
+schema = 'public'
+kernels = ['worker']
+[features.outbox.jobs]
+background = 'app.background'
+[worker]
+enabled = true
+connection = 'background'
+```
+
+`features.outbox.jobs` maps a **job connection name** to the **outbox destination**
+its jobs publish through (`map[jobs.ConnectionName]outbox.Destination`): the key is
+the connection, the value is the destination. `features.outbox.events` goes the
+other way: it maps an event **destination** to the **job connection** that delivers
+it (`map[outbox.Destination]jobs.ConnectionName`). Every key under
+`features.outbox.jobs` must name a configured job connection, each destination must
+be a semantic name, and at most 128 entries are accepted. `services.JobOutbox("background")`
+then returns the producer for that connection; an empty name selects the default
+connection, and a connection with no entry fails with "job outbox is not configured". The connection must be durable: only a Redis connection qualifies, and a memory connection is refused with "outbox publication requires a durable job backend".
+`schema` and `database` select where the outbox table lives; `kernels` selects which
+running kernels also run the publisher.
+
+Outside configured assembly, prepare a `jobs.Outbox` with a destination and dispatcher. Inside a business
 transaction use `Definition.Enqueue`, or capture once and use `Pending.Enqueue`
 when preserving execution identity across uncertain outcomes is necessary.
 Rollback suppresses publication. The returned typed outbox ID does not establish
@@ -431,15 +466,6 @@ and policy validation without naming the private payload. Typed event `Enqueue`
 then delivers through workers with fresh listener payloads and `Topic.OutboxID(ctx)`
 for stable inline idempotency. Earlier listeners can run again after a later failure.
 
-## Verification
-
-The milestone gate includes native `make verify`, required local PostgreSQL and
-Redis, job/event/consumer races, compiler rejection, actual gopls probes and current
-generation. Tests use isolated keys and test-owned database schemas, with
-[passing-test cleanup](contributing.md#postgresql-acceptance). No reset or provider
-provisioning is needed. The roadmap records results only after execution.
-
-
 ## Terminal attempt failures
 
 `jobs.Permanent(err)` stops automatic retries while recording a failed attempt.
@@ -448,7 +474,7 @@ when a handler timeout has elapsed; cancellation still follows queue semantics.
 Error classification runs inside owned callback isolation so custom `Is`, `As`
 and `Unwrap` implementations cannot abandon worker ownership on panic or Goexit.
 The [email integration](email.md) uses this for permanent/construction failures
-and uncertain provider acceptance. These additions passed milestone 16 acceptance.
+and uncertain provider acceptance.
 
 `jobs.PreventRetry(ctx)` marks a live started attempt after a known side effect.
 A later timeout, middleware failure or abnormal error classifier becomes terminal

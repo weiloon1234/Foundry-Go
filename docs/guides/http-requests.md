@@ -154,9 +154,6 @@ TCP. Runtime and consumer race tests cover spoofed IDs, anonymous request scope,
 bounded streams, early `100-continue` rejection, error identity, header preservation
 and agreement between error metadata and actual responses.
 
-Full repository verification also passed for this slice, including the real
-PostgreSQL and gopls checks, compiler-rejection fixtures and generation freshness.
-
 ## Table operation declarations
 
 `http.TableOperation(contract.TableOperationBinding{Table: tableID, Kind: contract.TableQuery})`

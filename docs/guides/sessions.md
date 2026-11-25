@@ -3,9 +3,7 @@
 `auth/session` provides model-owned session credentials and a PostgreSQL backend.
 It uses the existing model-first guards and providers. The
 [consumer example](../../tests/fixtures/consumer/authenticating/sessions.go)
-compiles independently of the framework. Focused race tests and full native
-regression with local PostgreSQL/Redis passed. [Browser integration](browser-sessions.md)
-also passed focused races and full native regression. This guide describes credential persistence. [Password login](password-hashing.md) and [MFA verification](mfa.md) compose with it through explicit adapters.
+compiles independently of the framework. See [Browser integration](browser-sessions.md) for browser sessions. This guide describes credential persistence. [Password login](password-hashing.md) and [MFA verification](mfa.md) compose with it through explicit adapters.
 
 ## Construct once, register explicitly
 
@@ -305,14 +303,13 @@ sliding activity is enabled.
 
 ## Credential changes and checked issuance
 
-The [credential-change integration](credential-changes.md) is verified. `Revocation()` contributes this guard to a typed group; `RevokeAllIn`
+The [credential-change integration](credential-changes.md) uses `Revocation()` to contribute contributes this guard to a typed group; `RevokeAllIn`
 joins a caller-owned model transaction without committing. Checked password proofs
 lock and revalidate their current model before issuance in the same transaction.
-The complete milestone gate covers this integration.
 
 ## MFA completion
 
-`CompleteMFA` passed the milestone gate. Pass a
+`CompleteMFA` takes a
 model-bound verifier from `Factors.Verifier`; it consumes a live pending credential
 and factor in the same transaction that creates the authenticated replacement.
 The original guard/provider and current model eligibility remain authoritative.

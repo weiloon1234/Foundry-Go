@@ -19,7 +19,7 @@ Write a defined, nongeneric struct in a non-test Go file. Attach
 required options name the SQL table, generated table variable and persisted key
 field. Directive options are separated by spaces; `foundry` tag options use commas.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `attachments`, `database`, `database/orm`, `decimal`, `fault`, `model`, `translations`, `value`. A complete file block shows its own import list; the guide's blocks that import `models` use the application's own package of declared models.
 
 This complete fixture file declares two plain models:
 
@@ -75,8 +75,8 @@ behavior; redundant options fail generation.
 | Struct field or option | Generated behavior |
 | --- | --- |
 | String, integer or float | Text or number handle, retaining named types. |
-| Boolean, bytes or `model.ID[Other]` | Boolean, bytes or ID codec with a column handle. A foreign ID does not create a foreign-key constraint. |
-| Generated enum | Enum handle and its descriptor's codec. Do not add `role=enum`. |
+| Boolean, bytes or `model.ID[Other]` | Boolean, bytes or ID codec with a column handle. A foreign ID does not create a foreign-key constraint. A `model.ID[T]` is stored in a PostgreSQL `uuid` column, so a migration declares it as `uuid`. |
+| Generated enum | Enum handle and its descriptor's codec. Do not add `role=enum`. Declare the enum with `//foundry:enum` as shown in [database values](database-codecs.md#binding-scanning-and-validation). |
 | `value.Nullable[T]` | Nullable handle for the stored family. NULL remains distinct from a supplied zero. |
 | `decimal.Decimal` | Choose `role=number` for numeric operations or `role=column` for a plain column. |
 | `time.Time`, `temporal.DateTime`, `Date`, `Time`, `LocalDateTime`, `Interval` | Ordinary time or interval handle unless a managed role is explicit. See conventional-name rules below. |

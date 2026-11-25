@@ -1,7 +1,5 @@
 # Typed JSON response preparation
 
-**Status: response encoding and descriptor composition are available.** Focused runtime, generator and independent consumer acceptance passed, including canonical consumer checks and actual-workspace completion, hover and definition. Full repository regression verification also passed, including real PostgreSQL, actual gopls, all generated-output freshness targets and documentation checks.
-
 A generated JSON descriptor can prepare a response body while preserving the DTO
 type. Encoding checks the same normalized schema used by decoding and [client exporters](client-contracts.md). The framework returns bytes only after encoding and schema
 validation succeed; a transport can then write its success headers and body.

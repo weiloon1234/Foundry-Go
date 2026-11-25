@@ -287,11 +287,9 @@ routes must use uniform responses, request/recipient throttling and stored-addre
 only delivery. The current `Issue` result is in-process delivery data and does
 not claim crash-durable email publication. [Email adapters](email.md) and [durable job publication](jobs.md) provide separate delivery contracts.
 
-## Acceptance evidence
+## Delivery requirements
 
-Native PostgreSQL, JSON/HTTP, requester ownership/quota/diagnostics, historical
-email revisions, rollback, compiler and real-gopls tests passed. Generation is
-current for framework stores and consumer DTOs. Email transport acceptance and durable job delivery retain their separate operational requirements.
+Email transport acceptance and durable job delivery retain their separate operational requirements.
 
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

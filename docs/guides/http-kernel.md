@@ -128,9 +128,7 @@ boundaries follow the standard server's [shutdown contract](https://pkg.go.dev/n
 Focused race tests cover normal requests, graceful completion, forced connection
 closure with unfinished handlers, hijacked handler cancellation, binding failure,
 single-use startup, raw panic/abort/Goexit, and application dependency retention.
-The kernel passed full repository acceptance.
-
-Milestone 24 delivered verified production admission: `MaxConnections` defaults
+Production admission: `MaxConnections` defaults
 to 4,096 accepted connections and reserves capacity before native Accept, including
 slow header readers. Additional peers wait in the OS listen backlog. Hijacks keep
 their connection permit until their explicit owner closes them. The listener's

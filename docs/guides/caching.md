@@ -1,11 +1,11 @@
 # Typed caching
 
-Milestone 09 provides typed cache declarations, local coalescing through Remember,
+The cache package provides typed cache declarations, local coalescing through Remember,
 exact atomic counters and typed tag views with a bounded memory adapter. The
 [Redis adapter](redis.md) supplies connection ownership, ordinary caching and counters.
-Redis also implements typed tags and [leases](leases.md) with full native acceptance.
-[Distributed Remember](distributed-cache.md), [rate limiting](rate-limiting.md) and
-[pub/sub](pubsub.md) also passed full native acceptance. Namespace invalidation also passed full native acceptance. For general Redis values and commands, see the delivered
+Redis also implements typed tags and [leases](leases.md).
+See also [distributed Remember](distributed-cache.md), [rate limiting](rate-limiting.md) and
+[pub/sub](pubsub.md). For general Redis values and commands, see the
 [typed data](redis-data.md) and [raw command](redis-commands.md) guides.
 
 <a id="agent-entry"></a>
@@ -187,8 +187,7 @@ but cache eviction/retention policies still govern entries never read again.
 
 TaggedBackend and TaggedCounterBackend are explicit adapter contracts. Memory and
 [Redis](redis.md#typed-tags-across-redis-clients) implement both; the same typed view
-API works across them. Redis tags passed shared contract races, cross-client
-invalidation and full native verification. Redis tag scripts require Redis 7 or newer.
+API works across them. Redis tag scripts require Redis 7 or newer.
 
 <a id="recipe-invalidate-cache"></a>
 ## Invalidate a complete cache namespace
@@ -242,10 +241,8 @@ tagged capability so they cannot bypass namespace protection.
 The native typed-store storage layout now includes the namespace stamp for both
 ordinary and explicitly tagged entries. Earlier layouts are separate cold cache
 entries; rotate all participating framework versions together. Direct adapter
-writes bypass the typed-store invalidation contract. Redis typed stores now require
+writes bypass the typed-store invalidation contract. Redis typed stores require
 Redis 7+ for the shared tag scripts and their metadata/read/cleanup permissions.
-
-Full native verification passed in 350.4s with 2018 matching source inputs, required local PostgreSQL and Redis, all 248 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. The existing 675-case compiler suite reused cached results; all 20 affected cache and cross-feature compiler rejection cases were additionally rerun uncached and passed. Fresh complete milestone 09 races and independent consumer races passed. No dependency was added.
 
 ## Atomic counters
 
@@ -295,10 +292,10 @@ Binding rejects unsupported adapters; Foundry never substitutes a read/write pai
 for an atomic increment. A Store must permit at least 20 value bytes to represent
 the whole signed int64 range. Per-entry backend capacity can still reject writes.
 
-The memory adapter implements this capability now. Get/Put/Add/Forget and Increment
+The memory adapter implements this capability. Get/Put/Add/Forget and Increment
 operate on the same storage under the same lock. Remote errors may hide a completed
 mutation, so no automatic retry is permitted. Redis implements the same counter
-capability and passed real-service and full native acceptance.
+capability.
 
 ## Existence, expiry and batch removal
 
@@ -388,9 +385,6 @@ Use tag or namespace invalidation when old fills must be rejected. Batch atomici
 does not make cache changes part of a database transaction or recall values that
 callers have already read. General Redis hash/set/data-key operations use the separate
 [typed data API](redis-data.md); these adapter methods target Foundry cache envelopes.
-
-Focused native races, consumer/getter checks, five new compiler rejections and three
-actual editor probes passed. Full native verification passed in 436.6 seconds.
 
 ## Load on a miss with Remember
 
@@ -643,9 +637,3 @@ model IDs, floating-point deltas and string values. An arbitrary-precision fuzz
 oracle checks exact arithmetic and overflow boundaries. Actual gopls probes check the bound
 model/value signatures and definitions.
 
-The typed-cache/memory and Remember slices passed full native macOS verification,
-including local PostgreSQL and the complete consumer/compiler/editor checks. The [Redis adapter](redis.md) now implements connection ownership, ordinary cache operations and counters; full native acceptance passed. Redis tags and leases passed full native acceptance. Distributed Remember, rate limiting and pub/sub also passed full native acceptance. Namespace invalidation, [typed Redis data](redis-data.md) and [raw commands](redis-commands.md) also passed full native acceptance.
-
-Typed counters
-also passed the full native gate and focused race, compiler, editor and arithmetic
-fuzz checks. Redis counter behavior passed real-service races and full native adapter acceptance.

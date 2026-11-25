@@ -2,6 +2,8 @@
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `value`.
+
 Foundry preserves native and named `float32`/`float64` values in generated path
 and query bindings. A custom text codec is unnecessary for an ordinary float.
 The [independent consumer](../../tests/fixtures/consumer/httpquery/floats.go)
@@ -78,9 +80,6 @@ writer stays outside the callback.
 
 ## Verification scope
 
-Focused runtime and consumer race checks, native float bit-roundtrip fuzzing,
-generated path/query runtime checks, deterministic generation, freshness and
-three compiler-rejection cases passed for this change. Canonical generation, consumer and actual editor checks also passed. Broader
-regression verification also passed. [Endpoint adapters](http-endpoints.md),
+[Endpoint adapters](http-endpoints.md),
 [scalar metadata](http-parameter-contracts.md) and [validation](validation.md)
 reuse these same typed codecs.

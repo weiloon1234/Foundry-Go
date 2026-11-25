@@ -191,7 +191,7 @@ Eager loading uses separate SQL statements. Use a caller-owned transaction with 
 
 ## Current delivery and verification
 
-Milestone 06 implements belongs-to, has-one, has-many and many-to-many with typed pivots, nullable/self/natural keys, typed scopes, nested eager loading, explicit LoadFrom/LoadMissingFrom and bounded model iteration. [Typed relation aggregates](model-aggregates.md) use declared computed slots without loading related models. [Declared projections](model-projections.md) return independent result types for partial reads, grouped reports and scalar summaries. [Typed joins](model-joins.md) include inner/outer/self joins with explicit scoped fields. The milestone completion review connects these APIs and advanced queries to their consumer coverage.
+The relation API covers belongs-to, has-one, has-many and many-to-many with typed pivots, nullable/self/natural keys, typed scopes, nested eager loading, explicit LoadFrom/LoadMissingFrom and bounded model iteration. [Typed relation aggregates](model-aggregates.md) use declared computed slots without loading related models. [Declared projections](model-projections.md) return independent result types for partial reads, grouped reports and scalar summaries. [Typed joins](model-joins.md) include inner/outer/self joins with explicit scoped fields.
 
 The [PostgreSQL acceptance fixture](../../tests/fixtures/consumer/model_relations_postgres_test.go) verifies query counts, key batching, cardinality errors, nullable inverses, empty collections, nested loading, explicit scopes, natural keys, loaded-state preservation and resource bounds. Negative compiler fixtures reject incompatible keys, owners, targets and scope predicates. Native declaration tests reject invalid slots, keys and ownership before SQL.
 
@@ -202,7 +202,7 @@ The [many-to-many PostgreSQL fixture](../../tests/fixtures/consumer/model_throug
 
 `models.Order` and `models.User` are the application's models and `models.Orders.Buyer` the relation slot on `Order` that holds the buyer, keyed by `BuyerID`. `database` and `orm` are the framework's packages. `OrderBuyer` declares the relation; `ordersWithBuyers` eager-loads it, and `loadBuyers` loads it onto parents the caller already holds:
 
-<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#relations-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#belongs-to-eager-load -->
 ```go
 var OrderBuyer = orm.BelongsToOf(models.Orders.Buyer, models.Orders.BuyerID, models.Users.ID)
 

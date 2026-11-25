@@ -290,14 +290,14 @@ Written primitive tests include RFC SHA1 vectors, time boundaries, accepted-step
 replay, bounded drift, recovery state ownership and consumption, URI encoding,
 secret redaction, input decoding, and generated DTO contracts. Written compiler
 and editor cases cover separate secret/code/ciphertext types and model-preserving
-password rechecks. These passed with the rest of milestone 10.
+password rechecks.
 
 The [PostgreSQL consumer tests](../../tests/fixtures/consumer/multifactor/factors_postgres_test.go)
 are written for replacement/confirmation, real session/token revocation, stale
 password results, TOTP/recovery reuse, rollback across failures/cancellation/expiry,
 late lockout, concurrent consumption, required-factor policy, pruning, key rotation
 and committed after-commit failures. Runtime tests cover malformed callback order,
-omitted/repeated calls and suppressed errors. These tests passed.
+omitted/repeated calls and suppressed errors.
 
 The [completion tests](../../tests/fixtures/consumer/multifactor/completion_postgres_test.go)
 cover one current-model read, original guard/provider ownership, invalid scopes,
@@ -306,11 +306,11 @@ expiry before commit, committed failures and foreign database pools. The
 [HTTP tests](../../tests/fixtures/consumer/multifactor/http_postgres_test.go) cover
 actual enrollment/confirmation wire contracts, browser CSRF/cookies, token
 completion, malformed input, response failure/redaction and stale delivery.
-Compiler and editor cases verify model/key/response ownership. Authentication events, attribution, recovery transport and operational cleanup are covered by the completed milestone.
+Compiler and editor cases verify model/key/response ownership.
 
 ## Security observations and account retirement
 
 `WithObserver` exposes typed transactional change notices and separate immediate
 rejection notices. `RetireIn` joins an authorized administrative account-deletion
 transaction. See [events and maintenance](auth-operations.md) for concrete consumer
-composition, rollback semantics, lock ordering and limits. These additions passed the milestone gate.
+composition, rollback semantics, lock ordering and limits.

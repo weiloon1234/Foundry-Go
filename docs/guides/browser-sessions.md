@@ -3,8 +3,6 @@
 `http.BrowserSessions[M,K]` connects a [persistent model session](sessions.md) to
 ordinary typed HTTP endpoints. It owns cookie parsing, CSRF policy, credential
 changes and cookie publication. Handlers keep returning their declared DTOs.
-This HTTP slice passed focused races and full native regression in 503.3 seconds,
-including 721 compiler cases, 271 editor probes and current generated output.
 [Password verification](password-hashing.md) and [MFA challenge flows](mfa.md) compose with these session credentials through their declared login and completion adapters.
 
 ## Assemble once
@@ -220,7 +218,7 @@ with Rust or Laravel is implied.
 
 ## Complete a pending MFA cookie
 
-`BrowserSessions.CompleteMFA` passed milestone 10 acceptance. On a public typed
+`BrowserSessions.CompleteMFA` completes a pending MFA cookie. On a public typed
 challenge endpoint protected by `browser.Middleware()`, pass the model-bound
 second-factor verifier and server-selected session options. It consumes the bound
 pending cookie and stages a fresh authenticated cookie using the same CSRF,

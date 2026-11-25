@@ -9,9 +9,6 @@
 
 ## Overview
 
-**Milestone 11 passed live Cloudflare R2 and AWS S3 verification.** Native
-framework/consumer checks and the scoped cloud suites cover the contracts below.
-
 `storage.Disk` owns operation limits, cancellation and returned readers.
 `storage/local` supplies a managed filesystem store. `storage/s3` uses the official
 AWS SDK with separate AWS and R2 profiles and a generic S3-compatible profile with
@@ -391,8 +388,7 @@ metadata, not authorization, and must remain inside trusted operational tooling.
 
 AWS advertises conditional writes/deletes and immutable version selection. The
 R2 profile advertises ranges, conditional reads, and conditional create and
-replace through multipart completion up to `MaxObjectBytes`. Live certification
-passed on 2026-11-15.
+replace through multipart completion up to `MaxObjectBytes`.
 Conditional deletion and historical versions remain unsupported. AWS
 conditional deletion cannot be combined with historical-version selection; the
 provider evaluates its condition against the current object. S3's mutable `null`
@@ -415,8 +411,7 @@ add conditional delete to R2 or change the requirements of `MoveTo`.
 
 R2's upload-generation response header is also not a retained-version selector:
 its `ObjectInfo.Version` stays empty and follow-up reads pin the ETag. Supported
-provider options must never be silently ignored. Separate live R2 and AWS checks
-passed; the owning blueprint records their evidence and tested scope.
+provider options must never be silently ignored..
 
 `CompatibleConfig(bucket, region, endpoint, capabilities)` selects a generic
 S3-compatible service (MinIO, DigitalOcean Spaces, Backblaze B2 and similar)
@@ -547,15 +542,11 @@ profile must declare `FormUploads` (`cloud.compatible.form_uploads`).
 key identity, empty values, interrupted reads, conditional operations, ranges,
 listing and cancellation. Local cases add confinement, publication, cleanup,
 copy/move, seek and lifecycle behavior. SDK wire cases inject part/completion/abort
-failures and check signing/expiry. Native checks passed, including the independent
-consumer, five storage compiler-rejection cases and two real-gopls storage probes.
-The complete regression includes 810 invalid API cases, 310 editor probes and six
-automatic getter/setter field notices. Focused storage/consumer races and 640,168
-key/range fuzz inputs also passed. Wire peers are not provider certification;
-live R2 verification additionally passed uploads, conditional writes, ranges,
+failures and check signing/expiry. Wire peers are not provider certification.
+The live R2 cases cover uploads, conditional writes, ranges,
 listing, signed/public URL payload integrity, interrupted multipart aborts and
-scoped cleanup. Its conditional-delete case skips because that capability is
-explicitly unsupported. AWS live verification also passed immutable version reads, conditional deletion,
+scoped cleanup; its conditional-delete case skips because that capability is
+explicitly unsupported. The live AWS cases cover immutable version reads, conditional deletion,
 encoded-key object/multipart pagination, signed payload integrity and cleanup of
 historical versions/delete markers. AWS public-URL reads remain an optional test:
 the dedicated private bucket keeps public access blocked.
@@ -607,7 +598,7 @@ for journal ownership and inspection behavior.
 ### Large conditional publication certification
 
 R2 conditional create and replace support multipart objects above `PartBytes`,
-up to `MaxObjectBytes`, after live certification on 2026-11-15. The tests use the
+up to `MaxObjectBytes`. The tests use the
 production backend directly. Generic compatible providers retain their declared
 `SingleRequestConditions` and its `PartBytes` cap; those conditional writes
 require a declared size and reject unknown-length or larger input before reading it.

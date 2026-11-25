@@ -9,11 +9,6 @@
 - [Configure durable events](#recipe-durable-events)
 - [Enqueue in a business transaction](outbox.md#recipe-enqueue-event)
 
-## Overview
-
-Runtime and consumer races, PostgreSQL, compiler-rejection, actual-gopls and
-full repository checks have passed.
-
 <a id="recipe-declare-event"></a>
 ## Declare and dispatch an event
 

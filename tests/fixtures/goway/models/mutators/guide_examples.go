@@ -6,16 +6,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-// doc-example:begin inputs-after
+// doc-example:begin input-assignment
 func emailInput(input coremodels.EmailInput) orm.Assignment[Member] {
 	return orm.Set(Members.Email, input)
 }
 
-// doc-example:end inputs-after
+// doc-example:end input-assignment
 
-// doc-example:begin accessors-after
+// doc-example:begin read-accessor
 func emailLink(member Member) (coremodels.EmailLink, error) {
 	return member.AccessEmail()
 }
 
-// doc-example:end accessors-after
+// doc-example:end read-accessor

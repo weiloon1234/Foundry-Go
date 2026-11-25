@@ -1,8 +1,5 @@
 # Protected production diagnostics
 
-Protected diagnostics passed native lifecycle, authorization, bounded-probe and
-consumer acceptance. See [production acceptance](../production-acceptance.md).
-
 `diagnostics.Runtime` borrows the application's recorder, its maintenance gate and
 an explicit `health.Registry`. It starts no listener or background task and does
 not dump configuration, credentials, SQL or arbitrary error messages. Readiness and

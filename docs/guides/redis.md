@@ -297,8 +297,8 @@ uses the same declarations and namespace; it owns its own connection pool.
 
 Redis implements `TaggedBackend` and `TaggedCounterBackend`. Tag operations require
 Redis 7 or newer for [script permission checks](https://redis.io/docs/latest/develop/interact/programmability/lua-api/#redisacl_check_cmdcommand-arg).
-An unavailable script capability fails before creating metadata. Only the current
-local Redis service is covered by integration acceptance; Cluster/Sentinel routing
+An unavailable script capability fails before creating metadata. Integration tests
+cover only the local Redis service; Cluster/Sentinel routing
 remains outside this adapter.
 
 Missing metadata receives a fresh random version in a versioned wire envelope;
@@ -349,10 +349,9 @@ Restoring server state or losing accepted writes during failover remains a Redis
 durability concern. Cache tags do not claim crash-durable domain events.
 
 Ordinary stores coalesce Remember locally. [Coordinated stores](distributed-cache.md)
-add distributed fill ownership and atomic publication; typed leases and both cache
-modes passed full native acceptance. Rate limiting and pub/sub are also accepted;
-namespace invalidation, [typed data](redis-data.md) and
-[scoped commands](redis-commands.md) are also accepted.
+add distributed fill ownership and atomic publication. Typed leases, rate limiting,
+pub/sub, namespace invalidation, [typed data](redis-data.md) and
+[scoped commands](redis-commands.md) build on the same client.
 
 ## Verification
 
@@ -376,30 +375,24 @@ They never flush, scan or reconfigure a shared server. Owned protocol fixtures t
 lost replies, safe error formatting, stalled responses and shutdown independently
 of the real service.
 
-Full native verification passed in 493.4s with 1905 matching source inputs, required local PostgreSQL and Redis, all 656 compiler cases, 239 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Focused Redis/cache/consumer/editor races and shared memory/Redis contracts also passed.
-
-Full native verification passed in 327.6s with 1915 matching source inputs, required local PostgreSQL and Redis, all 656 compiler cases, 239 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Shared memory/Redis tag races, Redis failure/cross-client tests, consumer races and three actual-gopls probes passed. No dependency was added.
-
 ## Typed lease adapter
 
 The same client now implements the focused lease backend. See the [lease guide](leases.md)
 for typed declarations, guarded callbacks, provider ordering, validity and failure
-semantics. Shared/native races and full native acceptance pass.
+semantics.
 
 ## Coordinated cache publication
 
 `PutLeased` and `PutTaggedLeased` check exact fill ownership and publish atomically,
 reusing the ordinary/tagged cache scripts and bounded lease metadata reader. The
 [distributed cache guide](distributed-cache.md) describes the typed consumer API
-and uncertain-write behavior. Focused and full native acceptance pass.
+and uncertain-write behavior.
 
 ## Typed rate-limit adapter
 
 The same client implements atomic typed rate decisions using its server clock and
 bounded versioned metadata. See [rate limiting](rate-limiting.md) for model-owned
 keys, HTTP middleware, Redis 7 prerequisites and uncertain-consumption semantics.
-
-Focused races and full native verification pass.
 
 ## Typed pub/sub adapter
 
@@ -414,7 +407,7 @@ isolated even though Redis database numbers do not isolate pub/sub channels.
 Use [typed Redis hashes and sets](redis-data.md) for resource field maps and
 membership. `redis/data` declarations preserve keys, fields and values while the
 existing client supplies their focused adapter capabilities. Cache invalidation
-does not affect these separate data addresses. Full native acceptance passed.
+does not affect these separate data addresses.
 
 ## Test-owned keys
 

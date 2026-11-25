@@ -4,10 +4,10 @@
 ## Agent entry
 
 - Declare: [Public rows and columns](#recipe-declare-table)
-- Select: [Joined and grouped tables](#recipe-join-group-tables)
-- Filter: [Typed adapters](#recipe-table-filter-adapters), [Outer-joined text](#recipe-filter-outer-joined-text)
 - Authorize: [Current server authority](#recipe-authorize-table)
 - Register: [Standard routes and tickets](#recipe-table-routes)
+- Select: [Joined and grouped tables](#recipe-join-group-tables)
+- Filter: [Typed adapters](#recipe-table-filter-adapters), [Outer-joined text](#recipe-filter-outer-joined-text)
 - Bind custom endpoints: [HTTP operation bindings](#recipe-table-operation-bindings)
 - Export: [Bounded artifacts](#recipe-export-table)
 - Consume: [Generated table bindings](client-contracts.md#recipe-table-bindings)
@@ -28,7 +28,7 @@ The members, orders and totals tables below cover model, joined and grouped sour
 
 The application owns the models `Member` (with `ID`, `TenantID`, `Name`, `Nickname`, `State` and `Balance`) and `Order` (with `ID`, `TenantID`, `MemberID`, `Label` and `Amount`), their generated tables `MemberModels` and `OrderModels` and relations `MemberModelRelations` and `OrderModelRelations`, and `State`, a string-backed enum. It also owns `Operator`, the authenticated actor (with a `TenantID`); `Authority`, the value a table receives to authorize and build its source, which holds the current request's guard (`authority.subject(ctx)` returns the current `Operator`); `authorize`, the table's `Authorize` callback; the row DTOs and their generated `…JSON()` and `…Columns()` functions; and the label keys (`i18n.MessageKey` constants such as `MemberNameLabel`). `OrderScope` is the scope of the joined members-and-orders source declared under [Joined and grouped tables](#recipe-join-group-tables).
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `database/orm`, `database/orm/expr`, `database/orm/rows`, `datatable`, `datatable/importer`, `decimal`, `http` as `foundryhttp`, `i18n`, `model`, `validation`, `value`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `auth/token`, `clock`, `database/codec`, `database/orm`, `database/orm/expr`, `database/orm/rows`, `datatable`, `datatable/importer`, `decimal`, `http` as `foundryhttp`, `http/pagination`, `i18n`, `model`, `testkit/postgres`, `validation`, `value`. `Member`, `Order` and the other models, `Operator` and the row DTOs belong to the application.
 
 Declare a row DTO:
 
@@ -109,81 +109,6 @@ Arrays, objects and dynamic fields cannot be scalar table columns.
 database type needs a custom codec. Only the scan codec is replaced: the selected
 column's own declaration error and enum check still apply.
 
-<a id="request-dependent-columns"></a>
-### Request-dependent columns
-
-Most expressions are fixed when the table is declared. A few depend on the
-request, such as a label in the caller's locale or an overdue flag computed from
-the current time. Such a column uses a typed slot:
-
-1. `slot := datatable.NewDynamicSlot[Scope, string]()` creates a slot for one
-   value type.
-2. `datatable.DynamicColumn(w.Category, label, slot, options...)` declares the
-   column in `Spec.Columns`.
-3. `Spec.Dynamic` binds the slot once with
-   `datatable.BindDynamic(slot, func(ctx context.Context, authority A) expr.Selected[Scope, string] { … })`.
-
-The slot, the column and the binding must share the same scope and value type.
-This table shows the whole family on the joined orders source. `HiddenSelected`
-selects the order's member key from the joined expression without displaying it,
-`ScanWith` gives the name-length column an explicit scan codec, and the scope
-column is a `DynamicColumn` whose value depends on the caller. Its `SortBy` is
-the static member name:
-
-<!-- compiled-source: tests/fixtures/consumer/reporting/examples_columns.go#dynamic-table -->
-```go
-func orderLineSpec() datatable.Spec[OrderScope, OrderLineRow, Authority] {
-	joined, member, order := orderJoin()
-	w := OrderLineRowColumns()
-	memberName := expr.TextRowAt(member, MemberModels.Name)
-	scope := datatable.NewDynamicSlot[OrderScope, string]()
-	return datatable.Spec[OrderScope, OrderLineRow, Authority]{
-		ID: "reports.order_lines", Row: OrderLineRowJSON(),
-		Columns: []datatable.ColumnRegistration[OrderScope, OrderLineRow]{
-			datatable.HiddenSelected(w.ID, expr.AsSelected(expr.Row(expr.At(order, OrderModels.ID)))),
-			datatable.HiddenSelected(w.MemberID, expr.AsSelected(expr.Row(expr.At(order, OrderModels.MemberID)))),
-			datatable.Column(w.MemberName, OrderLineMemberLabel, expr.AsSelected(memberName),
-				datatable.SortBy(expr.AsSelected(memberName))),
-			datatable.Column(w.NameLength, OrderLineLengthLabel, expr.LengthValue(expr.AsSelected(memberName)),
-				datatable.ScanWith[OrderScope](orm.Codec(codec.Signed[int64]()))),
-			datatable.DynamicColumn(w.Scope, OrderLineScopeLabel, scope,
-				datatable.SortBy(expr.AsSelected(memberName))),
-		},
-		Dynamic: []datatable.DynamicBinding[OrderScope, Authority]{
-			datatable.BindDynamic(scope, func(ctx context.Context, authority Authority) expr.Selected[OrderScope, string] {
-				operator, err := authority.subject(ctx)
-				if err != nil {
-					// Authorize has already run and a builder cannot return an error:
-					// an unresolved actor selects no tenant label.
-					return expr.AsSelected(expr.Constant[OrderScope](codec.String[string](), ""))
-				}
-				return expr.AsSelected(expr.Constant[OrderScope](codec.String[string](), fmt.Sprintf("tenant-%d", operator.TenantID)))
-			}),
-		},
-		Stable:    []expr.ProjectionOrder[OrderScope]{expr.Asc(expr.At(order, OrderModels.ID))},
-		Authorize: authorize,
-		Source: func(ctx context.Context, authority Authority) (rows.SelectionSource[OrderScope], error) {
-			actor, err := authority.subject(ctx)
-			if err != nil {
-				return nil, err
-			}
-			return rows.WhereSource(joined, expr.Eq(expr.At(order, OrderModels.TenantID), actor.TenantID)), nil
-		},
-	}
-}
-```
-
-The [test](../../tests/fixtures/consumer/reporting/examples_columns_test.go) checks
-that `Validate` passes and, through `datatable.Compile`, that the statement
-selects each of these columns.
-
-`Define` checks that every slot used by a `DynamicColumn` is bound exactly once
-and that no other binding exists, without calling any builder. The table calls
-the builder once per query, count or export request, after authorization. A
-wrong scope, value type or authority type fails compilation. A dynamic column's
-`SortBy` is an explicit static expression, so a table can show a localized label
-and sort by a stable code.
-
 Labels use `i18n.MessageKey`, independent of the locale. Keys use the shared
 semantic identifier grammar; constructing a key does not prove catalog
 membership. The manager borrows a locale catalog and heading resolver for exports.
@@ -191,6 +116,58 @@ The [localization guide](localization.md) covers UI catalogs, enum label
 declarations (`//foundry:enum labels=…`) and locale resolution. Clients consume
 the [generated enum metadata](client-contracts.md#recipe-table-bindings); keep
 unknown received values distinct from the declared choices.
+
+The tables below authorize through application code. Declare the policy and its
+domain decision (`Access`, `canReport`), the `Authority` value a table receives
+(private fields, no JSON contract), its `subject` method that returns the current
+actor, and the `authorize` function that becomes `Spec.Authorize`:
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/authority.go#table-authority -->
+```go
+// Access is registered with the same auth registry as the interactive guard.
+// Queued execution reloads the actor and reuses this domain decision below.
+var Access = auth.DefinePolicy("reports.access", canReport)
+
+func canReport(_ context.Context, operator Operator, action datatable.Action) (bool, error) {
+	return operator.Active && operator.CanView && (action != datatable.ExportAction || operator.CanExport), nil
+}
+
+// Authority is trusted server context. Its fields are private, and it has no
+// JSON contract. Transport requests contain filters, never authority or roles.
+type Authority struct {
+	guard    value.Optional[auth.Guard[Operator]]
+	actor    Operator
+	resolved bool
+}
+
+func (a Authority) subject(ctx context.Context) (Operator, error) {
+	if guard, present := a.guard.Get(); present {
+		return guard.Require(ctx)
+	}
+	if !a.resolved {
+		return Operator{}, auth.Unauthenticated
+	}
+	return a.actor, nil
+}
+
+func authorize(ctx context.Context, authority Authority, action datatable.Action) error {
+	if guard, present := authority.guard.Get(); present {
+		return Access.Authorize(ctx, guard, action)
+	}
+	actor, err := authority.subject(ctx)
+	if err != nil {
+		return err
+	}
+	allowed, err := canReport(ctx, actor, action)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return auth.Forbidden
+	}
+	return nil
+}
+```
 
 This table combines computed text, enum, nullable and exact decimal columns, a
 relation filter, stable ordering and a tenant-scoped base source. A
@@ -241,12 +218,187 @@ descriptor and the column bindings. A change to a column's SQL expression or to
 the source alone needs no generation. Re-export client contracts after public
 table metadata or route changes; see [export ownership](client-contracts.md#recipe-export-contracts).
 
+<a id="recipe-authorize-table"></a>
+## Authorization and server scope
+
+`datatable.Spec[S, R, A]` fixes the SQL scope, response type and trusted server
+authority. `Authorize(ctx, authority, action)` and `Source(ctx, authority)` are
+mandatory. Actions distinguish query, export and inspection. Public/system
+reports still declare an explicit authorization callback.
+
+The source supplies mandatory tenant, visibility and soft-delete restrictions.
+Client predicates are added outside that scope. List, count and export all use
+the same preparation and source pipeline. A request cannot replace the scope or
+select arbitrary SQL names. Invalid names, operators and scalar values fail
+before execution. Authorization runs before source construction, locale/heading
+callbacks, temporary files and database work.
+
+An interactive service can pass an `auth.Guard[M]` and invoke a registered typed
+policy in its authorization callback. The application's private `Authority`
+supports both authenticated requests and freshly resolved job actors. It shares the domain
+permission decision and never accepts roles or authority in request JSON.
+
+Retain the current request guard in authority, including after ticket redemption.
+Do not snapshot the redeemed actor for deferred row loading:
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/authority.go#current-table-authority -->
+```go
+func FromGuard(guard auth.Guard[Operator]) Authority {
+	return Authority{guard: value.Set(guard)}
+}
+```
+
+Declare route access requirements as data and pass each as an `http.AccessRule` to
+`ReadAccess` and `ExportAccess`. `datatable.Routes` requires `ReadAccess`, and an
+exportable table also requires `ExportAccess`, so a table is never open by
+omission: a table every authenticated actor may use writes
+`datatable.ReadAccess(config.Guard.AnyActor())`. `ExportAccess` is a trailing argument
+rather than a required one only because exportability is a property of the table (its
+`Exports` setting), which the compiler cannot see: `Routes` refuses an exportable table
+without exactly one `ExportAccess`, naming the table, and takes no export rule for a
+table that does not export. Do not invoke authorization with a
+synthetic actor to discover capabilities. Table authorization still runs on every
+rule. The app owns any wrapper that shares these declarations with its domain
+policy. Leaving out `ReadAccess` says `not enough arguments in call to datatable.Routes`
+and lists `datatable.ReadOption[M]` among the wanted arguments.
+
+For [alternative route guards](authentication.md#recipe-any-of-guards), keep
+separate typed read and export capability lists in the application's table
+wrapper. Derive one `http.AllOf(http.Scopes(scopes), http.Permissions(permission))`
+from each existing capability declaration, then pass the resulting
+`[]http.GuardAlternative[Actor]` to `datatable.ReadAccess(http.AnyOf(read...))` and
+`datatable.ExportAccess(http.AnyOf(export...))`. A single-capability table uses one
+branch. Snapshot the capability lists and use the same declarations in the table
+policy; do not copy names into a second route permission map.
+
+An editorial read list can contain write and approve capabilities. Export keeps
+its independently approved capability list; it never inherits read access.
+An empty `AnyOf` is refused when the routes register. Keep export-disabled as an
+explicit table setting, not an empty `AnyOf`.
+
+Export alternatives run at both ticket issuance and ticket-authenticated download.
+Redemption rechecks current permissions and credential scope ceilings. The issuing
+branch is not saved as an authorization grant. `Spec.Authorize`, tenant constraints
+and scoped source construction continue to run after route admission. The
+framework does not infer equality between arbitrary application policy callbacks.
+
+Register each declaration once in the manager used by the routes:
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/http.go#register-tables -->
+```go
+func New(dependencies datatable.Dependencies, config datatable.Config) (*datatable.Manager, error) {
+	return datatable.New(dependencies, config, Members.Registration(), NumericLevels.Registration(), Orders.Registration(), Totals.Registration())
+}
+```
+
+Managers require the exact registered table declaration. A second declaration
+with the same ID cannot substitute a different authorization callback. Registry
+construction rejects duplicate IDs. `Table.Description()` is trusted assembly
+metadata; use `Inspect(ctx, manager, authority)` when exposing it to clients.
+
+<a id="recipe-table-routes"></a>
+## Register the standard table routes
+
+Use `datatable.Routes` to register a table's query, ticket-export and download
+routes in one call. The parent scope stays application-owned. The helper uses
+explicit Part A bindings, so generated clients derive their table operations
+from the registered endpoints. `NumericLevels` is a table declared with `datatable.Define`, `group` the scope the routes live under, `config` the route configuration built next, and `read` and `export` the access rules for read and export access:
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/table_routes.go#datatable-7 -->
+```go
+// NumericLevelRoutes uses framework-owned query, ticket and download contracts.
+// The caller supplies current authority and token-owned tickets.
+func NumericLevelRoutes(group foundryhttp.Scope, config datatable.RoutesConfig[Operator, Authority], read, export foundryhttp.AccessRule[Operator]) ([]foundryhttp.RouteRegistration, error) {
+	return datatable.Routes(group, NumericLevels, config,
+		datatable.ReadAccess(read),
+		datatable.ExportAccess(export),
+	)
+}
+```
+
+Build one configuration per route group and reuse it for the group's tables. `Operator` and `Authority` are the application's actor and authority types, `FromGuard(guard)` builds an `Authority` that retains the current guard, and `tokens` is the `*token.Tokens` of the operator model (framework imports also include `auth/token`, `clock` and `model`):
+
+<!-- compiled-source: tests/fixtures/consumer/reports/datatable_routes.go#table-routes-config -->
+```go
+func TableRoutesConfig(manager *datatable.Manager, guard foundryhttp.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]], clock clock.Clock, quota foundryhttp.Middleware) datatable.RoutesConfig[Operator, Authority] {
+	return datatable.RoutesConfig[Operator, Authority]{
+		Manager: manager,
+		Guard:   guard,
+		Authority: func(context.Context, Operator) (Authority, error) {
+			return FromGuard(guard.Guard()), nil
+		},
+		Tickets: datatable.TokenTickets(tokens),
+		Clock:   clock,
+		Quota:   quota,
+	}
+}
+```
+
+The authority callback retains the route binding's guard. The guard resolves
+the actor through the current request scope when authorization or loading runs.
+
+Supply `RoutesConfig[M, A]` with the manager, concrete `GuardBinding[M]` and an
+`Authority(context.Context, M) (A, error)` callback. Route guards use `M`; queries
+and exports use `A`. Build the read and export access rules from your application's
+permission and credential-scope declarations. `ReadAccess` is required and
+`ExportAccess` may appear once; each rule is an immutable snapshot. Table
+authorization still runs for every query and export.
+
+Exportable tables also require `Clock`, `Quota` and `Tickets[M]`. Construct tickets
+from the same model's token binding. Registration rejects disabled tickets or a
+redeemer whose source differs from the route guard.
+
+See the [compiled token-ticket adapter](tokens.md#websocket-handshake-tickets).
+
+Query-only tables need no ticket, clock or quota configuration. The framework owns
+redemption and the fresh authentication scope, including deferred row loading.
+
+For table ID `reports.numeric_levels`, the helper registers these paths below
+your scope. The normal declared status is 200; downloads also support 206
+(partial content) and 304 (not modified):
+
+| Method | Suffix | Request | Response |
+| --- | --- | --- | --- |
+| POST | `/reports.numeric_levels` | `Request` | Canonical numbered page |
+| POST | `/reports.numeric_levels/export` | `ExportRequest` | `ExportTicket` |
+| GET | `/reports.numeric_levels/download` | `DownloadQuery` | CSV or XLSX file |
+
+Route IDs append the table ID and `.query`, `.export` or `.download` to the scope
+ID. Issuance alone receives `CredentialRequests()` and your quota middleware.
+It requires secure transport, authorizes the table, validates the bounded request,
+and encodes the download URL before issuing a ticket. It checks the URL again with
+the issued secret; final rejection can leave an unused expiring ticket.
+
+The download uses `TicketAuthenticated` and enforces the same `ExportAccess`
+options as issuance. Its concrete actor passes through `Authority(ctx, actor)`.
+It decodes the request, resolves the optional locale and calls
+`Table.Download`, which authorizes again when the file opens. Set `WithLocale`
+when your authority carries language into deferred row loading. Omitted locale
+uses the download request's negotiated language. The route deadline comes from
+`Manager.DownloadTimeout()` and covers generation and transfer. HTTP owns file
+closure. Filenames use the table ID and the injected clock's UTC timestamp.
+
+The framework generates `ExportRequestJSON`, `ExportRequestValidationFields`,
+`DownloadQueryDescriptor` and `ExportTicketJSON` from its transport declarations.
+The format field carries no application translation key; keep visual labels in
+your UI. For other wire shapes, use the [endpoint constructors and binders](#declare-http-operation-bindings).
+
+Open the issued URL directly. Never append a bearer token or copy the ticket
+into an application query DTO. The single-use ticket is bound to the sign-in and
+uses the token service's ticket lifetime.
+
+`DownloadQuery` contains format, request and optional locale. The ticket is a
+server-issued credential consumed before typed decoding. Follow the
+[ticket-route security notes](authentication.md#ticket-authenticated-routes): use
+HTTPS, redact query credentials and obtain a fresh ticket for retries and ranges.
+
+
 <a id="recipe-table-filter-adapters"></a>
-## Migrate report sources to ORM declarations
+## Select expressions and filter adapters
 
 `Spec.Source` returns the base `rows.SelectionSource[S]`, before any selection.
-Keep the DTO type, package and JSON descriptor; mark the DTO `role=row` and use
-its generated `…Columns()` bindings. Each column declares the expression it
+The row DTO is marked `role=row` and its generated `…Columns()` bindings name the
+columns. Each column declares the expression it
 selects, so there is no `rows.Define` schema or `rows.Select` mapping list. The
 [model directives](../../tests/fixtures/consumer/reporting/models.go)
 use primary key roles and `role=soft-delete` to retain declaration roles; the
@@ -293,7 +445,7 @@ and membership without ordering or text operators. `NullableCompareFilter` accep
 `expr.RowValue[S, value.Nullable[V]]`; pair it with `datatable.NullableWhere` and a
 codec for present `V` values. It also supplies SQL null tests. Both adapters retain
 the exact scope and value type. Selected values and aggregates cannot enter these
-row filters. Existing `CompareRow` and `CompareNullableRow` inputs still work.
+row filters.
 
 `Related` maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, normally
 with `expr.Has(ParentRelations.Children, predicate)`. `expr.ModelPredicate`
@@ -463,83 +615,80 @@ func ReferralTextFilters() (datatable.FilterSource[ReferralScope, value.Nullable
 }
 ```
 
-<a id="recipe-authorize-table"></a>
-## Authorization and server scope
+<a id="request-dependent-columns"></a>
+## Request-dependent columns (advanced)
 
-`datatable.Spec[S, R, A]` fixes the SQL scope, response type and trusted server
-authority. `Authorize(ctx, authority, action)` and `Source(ctx, authority)` are
-mandatory. Actions distinguish query, export and inspection. Public/system
-reports still declare an explicit authorization callback.
+Most expressions are fixed when the table is declared. A few depend on the
+request, such as a label in the caller's locale or an overdue flag computed from
+the current time. Such a column uses a typed slot:
 
-The source supplies mandatory tenant, visibility and soft-delete restrictions.
-Client predicates are added outside that scope. List, count and export all use
-the same preparation and source pipeline. A request cannot replace the scope or
-select arbitrary SQL names. Invalid names, operators and scalar values fail
-before execution. Authorization runs before source construction, locale/heading
-callbacks, temporary files and database work.
+1. `slot := datatable.NewDynamicSlot[Scope, string]()` creates a slot for one
+   value type.
+2. `datatable.DynamicColumn(w.Category, label, slot, options...)` declares the
+   column in `Spec.Columns`.
+3. `Spec.Dynamic` binds the slot once with
+   `datatable.BindDynamic(slot, func(ctx context.Context, authority A) expr.Selected[Scope, string] { … })`.
 
-An interactive service can pass an `auth.Guard[M]` and invoke a registered typed
-policy in its authorization callback. The application's private `Authority`
-supports both authenticated requests and freshly resolved job actors. It shares the domain
-permission decision and never accepts roles or authority in request JSON.
+The slot, the column and the binding must share the same scope and value type.
+This table shows the whole family on the joined orders source. `HiddenSelected`
+selects the order's member key from the joined expression without displaying it,
+`ScanWith` gives the name-length column an explicit scan codec, and the scope
+column is a `DynamicColumn` whose value depends on the caller. Its `SortBy` is
+the static member name:
 
-Retain the current request guard in authority, including after ticket redemption.
-Do not snapshot the redeemed actor for deferred row loading:
-
-<!-- compiled-source: tests/fixtures/consumer/reporting/authority.go#current-table-authority -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/examples_columns.go#dynamic-table -->
 ```go
-func FromGuard(guard auth.Guard[Operator]) Authority {
-	return Authority{guard: value.Set(guard)}
+func orderLineSpec() datatable.Spec[OrderScope, OrderLineRow, Authority] {
+	joined, member, order := orderJoin()
+	w := OrderLineRowColumns()
+	memberName := expr.TextRowAt(member, MemberModels.Name)
+	scope := datatable.NewDynamicSlot[OrderScope, string]()
+	return datatable.Spec[OrderScope, OrderLineRow, Authority]{
+		ID: "reports.order_lines", Row: OrderLineRowJSON(),
+		Columns: []datatable.ColumnRegistration[OrderScope, OrderLineRow]{
+			datatable.HiddenSelected(w.ID, expr.AsSelected(expr.Row(expr.At(order, OrderModels.ID)))),
+			datatable.HiddenSelected(w.MemberID, expr.AsSelected(expr.Row(expr.At(order, OrderModels.MemberID)))),
+			datatable.Column(w.MemberName, OrderLineMemberLabel, expr.AsSelected(memberName),
+				datatable.SortBy(expr.AsSelected(memberName))),
+			datatable.Column(w.NameLength, OrderLineLengthLabel, expr.LengthValue(expr.AsSelected(memberName)),
+				datatable.ScanWith[OrderScope](orm.Codec(codec.Signed[int64]()))),
+			datatable.DynamicColumn(w.Scope, OrderLineScopeLabel, scope,
+				datatable.SortBy(expr.AsSelected(memberName))),
+		},
+		Dynamic: []datatable.DynamicBinding[OrderScope, Authority]{
+			datatable.BindDynamic(scope, func(ctx context.Context, authority Authority) expr.Selected[OrderScope, string] {
+				operator, err := authority.subject(ctx)
+				if err != nil {
+					// Authorize has already run and a builder cannot return an error:
+					// an unresolved actor selects no tenant label.
+					return expr.AsSelected(expr.Constant[OrderScope](codec.String[string](), ""))
+				}
+				return expr.AsSelected(expr.Constant[OrderScope](codec.String[string](), fmt.Sprintf("tenant-%d", operator.TenantID)))
+			}),
+		},
+		Stable:    []expr.ProjectionOrder[OrderScope]{expr.Asc(expr.At(order, OrderModels.ID))},
+		Authorize: authorize,
+		Source: func(ctx context.Context, authority Authority) (rows.SelectionSource[OrderScope], error) {
+			actor, err := authority.subject(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return rows.WhereSource(joined, expr.Eq(expr.At(order, OrderModels.TenantID), actor.TenantID)), nil
+		},
+	}
 }
 ```
 
-Declare route access requirements as data and pass each as an `http.AccessRule` to
-`ReadAccess` and `ExportAccess`. `datatable.Routes` requires `ReadAccess`, and an
-exportable table also requires `ExportAccess`, so a table is never open by
-omission: a table every authenticated actor may use writes
-`datatable.ReadAccess(config.Guard.AnyActor())`. `ExportAccess` is a trailing argument
-rather than a required one only because exportability is a property of the table (its
-`Exports` setting), which the compiler cannot see: `Routes` refuses an exportable table
-without exactly one `ExportAccess`, naming the table, and takes no export rule for a
-table that does not export. Do not invoke authorization with a
-synthetic actor to discover capabilities. Table authorization still runs on every
-rule. The app owns any wrapper that shares these declarations with its domain
-policy. Leaving out `ReadAccess` says `not enough arguments in call to datatable.Routes`
-and lists `datatable.ReadOption[M]` among the wanted arguments.
+The [test](../../tests/fixtures/consumer/reporting/examples_columns_test.go) checks
+that `Validate` passes and, through `datatable.Compile`, that the statement
+selects each of these columns.
 
-For [alternative route guards](authentication.md#recipe-any-of-guards), keep
-separate typed read and export capability lists in the application's table
-wrapper. Derive one `http.AllOf(http.Scopes(scopes), http.Permissions(permission))`
-from each existing capability declaration, then pass the resulting
-`[]http.GuardAlternative[Actor]` to `datatable.ReadAccess(http.AnyOf(read...))` and
-`datatable.ExportAccess(http.AnyOf(export...))`. A single-capability table uses one
-branch. Snapshot the capability lists and use the same declarations in the table
-policy; do not copy names into a second route permission map.
-
-An editorial read list can contain write and approve capabilities. Export keeps
-its independently approved capability list; it never inherits read access.
-An empty `AnyOf` is refused when the routes register. Keep export-disabled as an
-explicit table setting, not an empty `AnyOf`.
-
-Export alternatives run at both ticket issuance and ticket-authenticated download.
-Redemption rechecks current permissions and credential scope ceilings. The issuing
-branch is not saved as an authorization grant. `Spec.Authorize`, tenant constraints
-and scoped source construction continue to run after route admission. The
-framework does not infer equality between arbitrary application policy callbacks.
-
-Register each declaration once in the manager used by the routes:
-
-<!-- compiled-source: tests/fixtures/consumer/reporting/http.go#register-tables -->
-```go
-func New(dependencies datatable.Dependencies, config datatable.Config) (*datatable.Manager, error) {
-	return datatable.New(dependencies, config, Members.Registration(), NumericLevels.Registration(), Orders.Registration(), Totals.Registration())
-}
-```
-
-Managers require the exact registered table declaration. A second declaration
-with the same ID cannot substitute a different authorization callback. Registry
-construction rejects duplicate IDs. `Table.Description()` is trusted assembly
-metadata; use `Inspect(ctx, manager, authority)` when exposing it to clients.
+`Define` checks that every slot used by a `DynamicColumn` is bound exactly once
+and that no other binding exists, without calling any builder. The table calls
+the builder once per query, count or export request, after authorization. A
+wrong scope, value type or authority type fails compilation. A dynamic column's
+`SortBy` is an explicit static expression, so a table can show a localized label
+and sort by a stable code.
 
 ## Use an isolated test schema
 
@@ -1018,99 +1167,3 @@ after reviewing an intentional contract change.
 real completion, hover and definition requests. Select the existing native tools
 as described in the [tooling guide](developer-tooling-and-testing.md).
 
-
-<a id="recipe-table-routes"></a>
-## Register the standard table routes
-
-Use `datatable.Routes` to register a table's query, ticket-export and download
-routes in one call. The parent scope stays application-owned. The helper uses
-explicit Part A bindings, so generated clients derive their table operations
-from the registered endpoints. `NumericLevels` is a table declared with `datatable.Define`, `group` the scope the routes live under, `config` the route configuration built next, and `read` and `export` the access rules for read and export access:
-
-<!-- compiled-source: tests/fixtures/consumer/reporting/table_routes.go#datatable-7 -->
-```go
-// NumericLevelRoutes uses framework-owned query, ticket and download contracts.
-// The caller supplies current authority and token-owned tickets.
-func NumericLevelRoutes(group foundryhttp.Scope, config datatable.RoutesConfig[Operator, Authority], read, export foundryhttp.AccessRule[Operator]) ([]foundryhttp.RouteRegistration, error) {
-	return datatable.Routes(group, NumericLevels, config,
-		datatable.ReadAccess(read),
-		datatable.ExportAccess(export),
-	)
-}
-```
-
-Build one configuration per route group and reuse it for the group's tables. `Operator` and `Authority` are the application's actor and authority types, `FromGuard(guard)` builds an `Authority` that retains the current guard, and `tokens` is the `*token.Tokens` of the operator model (framework imports also include `auth/token`, `clock` and `model`):
-
-<!-- compiled-source: tests/fixtures/consumer/reports/datatable_routes.go#table-routes-config -->
-```go
-func TableRoutesConfig(manager *datatable.Manager, guard foundryhttp.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]], clock clock.Clock, quota foundryhttp.Middleware) datatable.RoutesConfig[Operator, Authority] {
-	return datatable.RoutesConfig[Operator, Authority]{
-		Manager: manager,
-		Guard:   guard,
-		Authority: func(context.Context, Operator) (Authority, error) {
-			return FromGuard(guard.Guard()), nil
-		},
-		Tickets: datatable.TokenTickets(tokens),
-		Clock:   clock,
-		Quota:   quota,
-	}
-}
-```
-
-The authority callback retains the route binding's guard. The guard resolves
-the actor through the current request scope when authorization or loading runs.
-
-Supply `RoutesConfig[M, A]` with the manager, concrete `GuardBinding[M]` and an
-`Authority(context.Context, M) (A, error)` callback. Route guards use `M`; queries
-and exports use `A`. Build the read and export access rules from your application's
-permission and credential-scope declarations. `ReadAccess` is required and
-`ExportAccess` may appear once; each rule is an immutable snapshot. Table
-authorization still runs for every query and export.
-
-Exportable tables also require `Clock`, `Quota` and `Tickets[M]`. Construct tickets
-from the same model's token binding. Registration rejects disabled tickets or a
-redeemer whose source differs from the route guard.
-
-See the [compiled token-ticket adapter](tokens.md#websocket-handshake-tickets).
-
-Query-only tables need no ticket, clock or quota configuration. The framework owns
-redemption and the fresh authentication scope, including deferred row loading.
-
-For table ID `reports.numeric_levels`, the helper registers these paths below
-your scope. The normal declared status is 200; downloads also support 206
-(partial content) and 304 (not modified):
-
-| Method | Suffix | Request | Response |
-| --- | --- | --- | --- |
-| POST | `/reports.numeric_levels` | `Request` | Canonical numbered page |
-| POST | `/reports.numeric_levels/export` | `ExportRequest` | `ExportTicket` |
-| GET | `/reports.numeric_levels/download` | `DownloadQuery` | CSV or XLSX file |
-
-Route IDs append the table ID and `.query`, `.export` or `.download` to the scope
-ID. Issuance alone receives `CredentialRequests()` and your quota middleware.
-It requires secure transport, authorizes the table, validates the bounded request,
-and encodes the download URL before issuing a ticket. It checks the URL again with
-the issued secret; final rejection can leave an unused expiring ticket.
-
-The download uses `TicketAuthenticated` and enforces the same `ExportAccess`
-options as issuance. Its concrete actor passes through `Authority(ctx, actor)`.
-It decodes the request, resolves the optional locale and calls
-`Table.Download`, which authorizes again when the file opens. Set `WithLocale`
-when your authority carries language into deferred row loading. Omitted locale
-uses the download request's negotiated language. The route deadline comes from
-`Manager.DownloadTimeout()` and covers generation and transfer. HTTP owns file
-closure. Filenames use the table ID and the injected clock's UTC timestamp.
-
-The framework generates `ExportRequestJSON`, `ExportRequestValidationFields`,
-`DownloadQueryDescriptor` and `ExportTicketJSON` from its transport declarations.
-The format field carries no application translation key; keep visual labels in
-your UI. For other wire shapes, use the [endpoint constructors and binders](#declare-http-operation-bindings).
-
-Open the issued URL directly. Never append a bearer token or copy the ticket
-into an application query DTO. The single-use ticket is bound to the sign-in and
-uses the token service's ticket lifetime.
-
-`DownloadQuery` contains format, request and optional locale. The ticket is a
-server-issued credential consumed before typed decoding. Follow the
-[ticket-route security notes](authentication.md#ticket-authenticated-routes): use
-HTTPS, redact query credentials and obtain a fresh ticket for retries and ranges.

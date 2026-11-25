@@ -64,15 +64,15 @@ func insert(ctx context.Context, tx *database.Tx) error {
 
 // doc-example:end insert-after
 
-// doc-example:begin force-after
+// doc-example:begin force-delete
 func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
 	_, err := orm.ForceDelete(ctx, tx, Users.Query().WithTrashed(), Users.Soft, Users.Key(), id)
 	return err
 }
 
-// doc-example:end force-after
+// doc-example:end force-delete
 
-// doc-example:begin unset-after
+// doc-example:begin unset-assignment
 func unset(draft *orm.Write[hooks.Member]) error {
 	return orm.WriteUnset(draft, func() func(arg0 coremodels.LabelInput) orm.Assignment[hooks.Member] {
 		receiver := hooks.Members.Note
@@ -82,15 +82,15 @@ func unset(draft *orm.Write[hooks.Member]) error {
 	}())
 }
 
-// doc-example:end unset-after
+// doc-example:end unset-assignment
 
-// doc-example:begin changes-after
+// doc-example:begin read-field-change
 func changes(changes orm.Changes[hooks.Member]) (bool, error) {
 	field, err := orm.ChangeOf(changes, hooks.Members.Name)
 	return field.Changed(), err
 }
 
-// doc-example:end changes-after
+// doc-example:end read-field-change
 
 // doc-example:begin observers-after
 func observer() (lifecycle.Declaration, error) {
@@ -99,14 +99,14 @@ func observer() (lifecycle.Declaration, error) {
 
 // doc-example:end observers-after
 
-// doc-example:begin retrieved-after
+// doc-example:begin retrieved-hook
 func retrieval() orm.RetrievalHooks[reads.Member] {
 	return orm.RetrievalHooks[reads.Member]{Retrieved: func(context.Context, database.Executor, reads.Member) error { return nil }}
 }
 
-// doc-example:end retrieved-after
+// doc-example:end retrieved-hook
 
-// doc-example:begin scopes-after
+// doc-example:begin tenant-global-scope
 func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[reads.Member], error) {
 		id, err := tenantID(ctx)
@@ -114,7 +114,7 @@ func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 	})
 }
 
-// doc-example:end scopes-after
+// doc-example:end tenant-global-scope
 
 type tenantKey struct{}
 
@@ -126,20 +126,20 @@ func tenantID(ctx context.Context) (int64, error) {
 	return id, nil
 }
 
-// doc-example:begin bypass-after
+// doc-example:begin bypass-global-scope
 func bypass() orm.Query[reads.Member] {
 	return orm.WithoutGlobalScope(reads.Members.Query(), reads.MemberTenant(reads.Members))
 }
 
-// doc-example:end bypass-after
+// doc-example:end bypass-global-scope
 
-// doc-example:begin set-writes-after
+// doc-example:begin set-write-without-hooks
 func setWrite(ctx context.Context, tx *database.Tx) error {
 	_, err := orm.UpdateAll(ctx, tx, orm.WithoutModelHooks(hooks.Members.Query()), orm.Set(hooks.Members.Name, "guest"))
 	return err
 }
 
-// doc-example:end set-writes-after
+// doc-example:end set-write-without-hooks
 
 // doc-example:begin lookup-after
 func lookup(ctx context.Context, tx *database.Tx) error {

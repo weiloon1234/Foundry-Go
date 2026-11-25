@@ -16,7 +16,7 @@ Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`.
 
 The [complete declaration](model-declarations.md) uses a distinct `SlugInput` with a value-receiver `MutateSlug` method. `Member` is the application's model; `Members` is its generated table; `coremodels` is the application's package declaring `EmailInput`, the input type of `Member.Email`, which is stored as a different type. `emailInput` builds the assignment:
 
-<!-- compiled-source: tests/fixtures/goway/models/mutators/guide_examples.go#inputs-after -->
+<!-- compiled-source: tests/fixtures/goway/models/mutators/guide_examples.go#input-assignment -->
 ```go
 func emailInput(input coremodels.EmailInput) orm.Assignment[Member] {
 	return orm.Set(Members.Email, input)

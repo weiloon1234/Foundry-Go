@@ -9,6 +9,8 @@ attachments and metadata as typed fields on the model itself.
 
 The model directive generates its identity once. Reuse that identity for extension ownership. The example below binds that identity with `extensions.DefineORMOwner` and pins `StorageModel`.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`, `extensions`, `i18n`.
+
 Use the generated `articlesIdentity` inside the model package. Pass it to
 `extensions.DefineORMOwner` together with the explicit owner name and
 `extensions.OwnerOptions{StorageModel: "guide_articles"}`.

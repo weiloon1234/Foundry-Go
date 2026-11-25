@@ -370,10 +370,10 @@ Real-account sends have not been run. Provider credentials, verified sender iden
 
 ## Explicit durable rendered snapshots
 
-Milestone 17 adds `CaptureMessage(message)` and `Snapshot.Message()` for
+`CaptureMessage(message)` and `Snapshot.Message()` serve
 notification orchestration. This explicit snapshot freezes validated addresses,
 headers, bodies and pinned attachment references within `value.JSONMaxBytes`.
 `Message.MarshalJSON` still rejects implicit runtime serialization. Snapshot
 formatting stays redacted; its explicit JSON contains private email content and
 must be protected. See [notifications](notifications.md) for delivery-time
-eligibility and retry behavior. These additions passed milestone 17 verification.
+eligibility and retry behavior.

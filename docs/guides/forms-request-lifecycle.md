@@ -1,6 +1,6 @@
 # Typed forms and request lifecycle
 
-T03 adds URL-encoded bodies and opt-in preparation/authorization. Native verification passed.
+Typed forms support URL-encoded bodies and opt-in preparation/authorization.
 The [public consumer](../../tests/fixtures/consumer/requestflow/forms.go) contains
 the complete declarations, handlers and shared rules below.
 
@@ -207,5 +207,3 @@ but reports `complete: false` with `request_preparation` skipped. Server validat
 is authoritative after normalization; a client cannot reproduce an arbitrary Go
 callback. Form and query scalar budgets are independent of the JSON body budget.
 
-Runtime, generator, independent consumer, strict TypeScript, compiler/editor,
-fuzz and race checks form the T03 acceptance gate.

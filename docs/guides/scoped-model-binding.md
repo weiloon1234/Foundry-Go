@@ -98,6 +98,6 @@ making ownership-sensitive writes should recheck or lock inside its transaction;
 an earlier read is not a concurrency guarantee. Configured eager loads may query
 additional records, independently of the one parent lookup per chain level.
 
-T04 tests cover native PostgreSQL, duplicate/scoped keys, deeper relations,
+Tests cover native PostgreSQL, duplicate/scoped keys, deeper relations,
 soft deletion, policy ordering, hooks, metadata, compiler rejection, IDE support
 and owned cancellation/concurrency.

@@ -146,7 +146,7 @@ revalidating each level. Custom resolver errors preserve private causes;
 response classification follows the endpoint's existing error declarations.
 
 
-## Typed authentication composition (milestone 10)
+## Typed authentication composition
 
 `BindAuthenticated(transport, resolver)` combines a required or optional typed
 authentication transport with a distinct bound resource. Its handler receives

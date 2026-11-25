@@ -1,7 +1,5 @@
 # Shared source identities for transport contracts
 
-**Status: focused runtime, generation, consumer, compiler and editor acceptance passed.**
-
 Generated path, query, JSON value and map-key metadata use the same source
 identity for a Go type. This matters in an executable `main` package: runtime
 reflection reports `main.Code`, while generation knows the actual module path.
@@ -43,5 +41,3 @@ The source identifier is supplied by the generator. A custom descriptor author
 owns agreement between that identifier and the actual Go source type. Returned
 metadata is an independent snapshot; assigning a new source identity does not
 mutate the original codec or execute its Parse/Format methods.
-
-Combined transport full regression passed.

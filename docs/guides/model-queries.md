@@ -51,7 +51,7 @@ Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `databas
 
 `models.Order` is the application's model and `models.Orders` its generated table. The three terminals read a filtered list, one order by key and one required order:
 
-<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#reads-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#query-and-find -->
 ```go
 func largeOrders(ctx context.Context, db database.Executor) ([]models.Order, error) {
 	return orm.All(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))

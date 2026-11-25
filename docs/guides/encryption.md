@@ -203,4 +203,4 @@ application deliberately reveals a value.
 Written tests cover tampering across every envelope byte, owner/purpose/key-ID
 substitution, binary context preservation, retained-key rotation, missing keys,
 input/resource bounds, cancellation, concurrent local budget exhaustion and
-redaction. They passed milestone 10 acceptance.
+redaction.

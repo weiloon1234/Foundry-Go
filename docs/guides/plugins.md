@@ -130,11 +130,8 @@ and test-owned cleanup. Use `testkit.Start` with a full builder when testing
 application dependencies, custom runtime options or contribution overrides.
 The independent [base](../../tests/fixtures/plugin_base/README.md),
 [dependent](../../tests/fixtures/plugin_dep/README.md) and
-[application](../../tests/fixtures/consumer/README.md) modules passed ordinary and
+[application](../../tests/fixtures/consumer/README.md) modules run ordinary and
 race checks with `GOWORK=off`. Acceptance covers real PostgreSQL history, actual
 worker/event/route use, owned publication, repeated recovery and injected failures.
-The full gate passed all 903 compiler-rejection cases and 357 editor scenarios,
-including ten compiler cases and seven editor scenarios added for plugins.
-Fifteen-second fuzz runs passed 434,543 path inputs and 1,412,117 manifest inputs.
 Run `make verify` with the documented existing test services and language tools;
 `make fixture-check` and `make race` include both independent plugin modules.

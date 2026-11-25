@@ -1,8 +1,5 @@
 # Primary and read database pools
 
-Primary/read routing passed independent connector, PostgreSQL, lifecycle and
-consumer acceptance. See [production acceptance](../production-acceptance.md).
-
 The `models` namespace in the read examples is the application model package;
 `Users` is its generated table declaration.
 

@@ -25,7 +25,7 @@ PostgreSQL-backed hashed personal and renewable tokens retain model-owned IDs, b
 explicitly in the same schema as its `Config.Schema`; construction does not connect
 or migrate. Register the binding's `Guard()` once alongside other auth declarations.
 The [consumer example](../../tests/fixtures/consumer/authenticating/tokens.go)
-shows independent use verified by the milestone gate.
+shows independent use.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `clock`, `database`, `datatable`, `http` as `foundryhttp`, `model`, `schedule`, `secret`, `auth/token`, `auth/token/postgres` as `tokenpg`.
 
@@ -190,7 +190,7 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify func(context.Cont
 
 The [independent consumer](../../tests/fixtures/consumer/authenticating/token_routes.go)
 shows login, refresh, scoped bearer authentication and concrete handler models.
-These examples and tests passed the milestone gate. Handlers return
+Handlers return
 `token.Issued[User, ID]`; a different model or key cannot satisfy the response type.
 Foundry performs explicit JSON disclosure only through `TokenResponse`, preserving
 ordinary redacted serialization of both issuance and incoming refresh credentials.
@@ -533,18 +533,15 @@ return calendar.Hourly("auth.tokens.prune", func(ctx context.Context, _ schedule
 Configured applications can instead return `application.PruneTokens(guard)` in
 `FeatureDeclarations.Pruning` to let the [housekeeping schedule](production-operations.md#housekeeping-schedule) prune each guard.
 
-These behaviors passed the milestone tests and consumer review.
-
 ## Credential changes and checked issuance
 
-The [credential-change integration](credential-changes.md) is verified. `Revocation()` contributes this guard to a typed group; `RevokeAllIn`
+The [credential-change integration](credential-changes.md) uses `Revocation()` to contribute contributes this guard to a typed group; `RevokeAllIn`
 joins a caller-owned model transaction without committing. Checked password proofs
 lock and revalidate their current model before issuance in the same transaction.
-The complete milestone gate covers this integration.
 
 ## MFA completion
 
-`CompleteMFA` passed the milestone gate. Pass a
+`CompleteMFA` takes a
 model-bound verifier from `Factors.Verifier`; it consumes a live pending credential
 and factor in the same transaction that creates the authenticated replacement.
 The original guard/provider and current model eligibility remain authoritative.

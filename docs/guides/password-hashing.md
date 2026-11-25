@@ -6,7 +6,7 @@ Typed Argon2id passwords and hashes integrate with handwritten ORM fields, model
 
 The application owns `Account` and any generated tables or identities used below.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `model`, `auth/password`, `secret`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `database/orm`, `model`, `auth/password`, `secret`, `value`.
 
 Inputs: `ctx context.Context`, `submittedPassword string`.
 
@@ -220,7 +220,7 @@ check that locks and revalidates the post-rehash model inside the issuance
 transaction. A reset that wins that lock prevents issuance from the old proof;
 a reset that follows issuance revokes its credentials. HTTP delivery remains
 outside the transaction. See [credential changes](credential-changes.md) for the
-typed revocation group and lock/rollback contracts. These additions passed the milestone gate.
+typed revocation group and lock/rollback contracts.
 
 Missing accounts, disabled models, unusable hashes and mismatched passwords all
 produce `auth.Unauthenticated`. Missing or unusable credentials run bounded dummy
@@ -238,11 +238,11 @@ work. Callbacks that ignore cancellation retain capacity until their actual exit
 Apply request-rate limiting before verification and use `login.WithLockout` for
 shared failed-password protection. See [typed login lockout](login-lockout.md).
 The callback capacity bound is not a request-rate limit; successful passwords do
-not clear IP quotas. Lockout/HTTP integration passed the milestone verification phase.
+not clear IP quotas.
 
 `provider.RecheckPassword(ctx, tx, result)` reuses that issuance validator and
 returns the current locked model for a sensitive password-authorized change.
 It requires the same provider declaration as the original login and performs
 no second provider lookup. Keep the result request-local; the recheck verifies
 current state, not a persisted ticket's age. Pending MFA still requires its
-second factor. See [typed MFA factors](mfa.md). This addition passed the milestone gate.
+second factor. See [typed MFA factors](mfa.md).

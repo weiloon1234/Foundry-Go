@@ -4,6 +4,8 @@
 
 ## Match identities and map stored values
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`, `database/orm/expr`, `database/orm/rows`.
+
 `updateMemberBodies` updates members from a source query:
 
 <!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#source-update -->

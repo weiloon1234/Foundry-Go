@@ -1,8 +1,5 @@
 # Binary model values
 
-Binary models passed native PostgreSQL, ownership, consumer, compiler,
-generator and editor acceptance. See [production acceptance](../production-acceptance.md).
-
 Persisted `[]byte`, named byte-slice types such as `type Payload []byte`, aliases
 of those types, and `value.Nullable` wrappers use PostgreSQL `bytea`. A slice
 whose element is a distinct named octet type is not `~[]byte` and cannot use
