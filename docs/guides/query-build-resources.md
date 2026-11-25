@@ -11,7 +11,5 @@ function symbols before linker elimination. Every surviving ceiling stays fixed.
 Measure the affected consumer archive with the same toolchain and build settings;
 a smaller linked binary alone does not prove a smaller generic compile footprint.
 
-See [typed field computations](typed-field-computations.md), the
-[model projection guide](model-projections.md), and the
-historical measurements.
+See [typed field computations](typed-field-computations.md) and the [model projection guide](model-projections.md).
 The historical source names describe their measured revisions, not current APIs.

@@ -45,9 +45,8 @@ func referralBuyers(ctx context.Context, db database.Executor) ([]models.User, e
 		Where(orm.Has(models.UserLinks.Orders.
 			Where(orm.Gte(models.Orders.TotalCents, 1000))))
 
-	introducers, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(referralsWithOrders)))
+	return orm.All(ctx, db, models.Users.Query().Where(orm.Has(referralsWithOrders)))
 	// doc-example:end model-relationship-filters-3
-	return introducers, err
 }
 
 func teamMembers(ctx context.Context, db database.Executor) ([]models.User, error) {
@@ -56,14 +55,12 @@ func teamMembers(ctx context.Context, db database.Executor) ([]models.User, erro
 		Where(orm.Like(models.Groups.Name, "team%")).
 		WherePivot(orm.Gte(models.Memberships.Priority, 2))
 
-	members, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(groups)))
+	return orm.All(ctx, db, models.Users.Query().Where(orm.Has(groups)))
 	// doc-example:end model-relationship-filters-4
-	return members, err
 }
 
 func loadedBuyers(ctx context.Context, db database.Executor, orders orm.HasMany[models.User, models.Order]) ([]models.User, error) {
 	// doc-example:begin model-relationship-filters-5
-	users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(orders)).With(orders))
+	return orm.All(ctx, db, models.Users.Query().Where(orm.Has(orders)).With(orders))
 	// doc-example:end model-relationship-filters-5
-	return users, err
 }

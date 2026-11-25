@@ -31,12 +31,12 @@ pub/sub channels. Scheduler cursors share the coordination lease prefix.
 Maintenance and other cache-backed features use their selected cache's prefixes.
 Explicit namespace overrides retain their configured application and environment.
 
-Declare application rate-limit and credential-protection stores alongside the
-application settings so construction and inspection use the same declarations:
-
 `Profile` is the application's cache snapshot DTO.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `cache`, `foundation`, `module root` as `foundry`, `infrastructure`, `keyspace`, `auth/lockout`, `model`, `ratelimit`, `redis`, `secret`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `cache`, `foundation`, the root package `github.com/weiloon1234/Foundry-Go` as `foundry`, `infrastructure`, `keyspace`, `auth/lockout`, `model`, `ratelimit`, `redis`, `secret`.
+
+Declare application rate-limit and credential-protection stores alongside the
+application settings so construction and inspection use the same declarations:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#credential-stores -->
 ```go
@@ -258,14 +258,14 @@ hide an applied rotation; the command is never retried automatically.
 
 ## Typed tags across Redis clients
 
-Bind the same tag declarations used with memory to the Redis-backed Store:
-
 `Profiles` is the application's alias for
 `cache.Cache[model.ID[Member], Profile]`, as declared by its
 [cache owner](../../tests/fixtures/consumer/caching/profiles.go). It retains a
 concrete model key and snapshot type; the `profiles` parameter is that bound cache.
 
 Inputs: `ctx context.Context`, `store *cache.Store`, `profiles Profiles`, `member mutatorqueries.Member`, `loadProfile func(context.Context) (Profile, error)`, `MemberChanges cache.TagDeclaration[model.ID[mutatorqueries.Member]]`.
+
+Bind the same tag declarations used with memory to the Redis-backed Store:
 
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_redis.go#redis-2 -->
 ```go
@@ -374,23 +374,22 @@ They never flush, scan or reconfigure a shared server. Owned protocol fixtures t
 lost replies, safe error formatting, stalled responses and shutdown independently
 of the real service.
 
-Full native verification passed in 493.4s with 1905 matching source inputs, required local PostgreSQL and Redis, all 656 compiler cases, 239 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Focused Redis/cache/consumer/editor races and shared memory/Redis contracts also passed. See the master acceptance record.
+Full native verification passed in 493.4s with 1905 matching source inputs, required local PostgreSQL and Redis, all 656 compiler cases, 239 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Focused Redis/cache/consumer/editor races and shared memory/Redis contracts also passed.
 
-Full native verification passed in 327.6s with 1915 matching source inputs, required local PostgreSQL and Redis, all 656 compiler cases, 239 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Shared memory/Redis tag races, Redis failure/cross-client tests, consumer races and three actual-gopls probes passed. No dependency was added. See the Redis tag acceptance record.
+Full native verification passed in 327.6s with 1915 matching source inputs, required local PostgreSQL and Redis, all 656 compiler cases, 239 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Shared memory/Redis tag races, Redis failure/cross-client tests, consumer races and three actual-gopls probes passed. No dependency was added.
 
 ## Typed lease adapter
 
 The same client now implements the focused lease backend. See the [lease guide](leases.md)
 for typed declarations, guarded callbacks, provider ordering, validity and failure
-semantics. Shared/native races and full native acceptance pass. See the lease acceptance record.
+semantics. Shared/native races and full native acceptance pass.
 
 ## Coordinated cache publication
 
 `PutLeased` and `PutTaggedLeased` check exact fill ownership and publish atomically,
 reusing the ordinary/tagged cache scripts and bounded lease metadata reader. The
 [distributed cache guide](distributed-cache.md) describes the typed consumer API
-and uncertain-write behavior. Focused and full native acceptance pass. See the
-acceptance record.
+and uncertain-write behavior. Focused and full native acceptance pass.
 
 ## Typed rate-limit adapter
 
@@ -398,8 +397,7 @@ The same client implements atomic typed rate decisions using its server clock an
 bounded versioned metadata. See [rate limiting](rate-limiting.md) for model-owned
 keys, HTTP middleware, Redis 7 prerequisites and uncertain-consumption semantics.
 
-Focused races and full native verification pass; see the
-rate-limit acceptance record.
+Focused races and full native verification pass.
 
 ## Typed pub/sub adapter
 

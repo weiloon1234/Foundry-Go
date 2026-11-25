@@ -1,8 +1,6 @@
 # Settings
 
-Milestone 18 passed native verification and consumer review. The
-master evidence
-records the checks and operational limits.
+Milestone 18 passed native verification and consumer review.
 
 <a id="agent-entry"></a>
 ## Agent entry
@@ -87,11 +85,11 @@ Corrupt stored data, incompatible versions and invalid presentation return error
 
 ## Cached reads
 
-Hot settings can opt into a per-process read cache owned by the manager:
-
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
 Inputs: `store *extensions.Store`.
+
+Hot settings can opt into a per-process read cache owned by the manager:
 
 <!-- compiled-source: tests/fixtures/consumer/configured/settings_cache_recipes.go#cache-site-name -->
 ```go

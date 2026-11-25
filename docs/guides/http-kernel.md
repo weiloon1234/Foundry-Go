@@ -3,9 +3,7 @@
 The HTTP kernel integrates standard `net/http` handlers with Foundry's
 [application lifecycle](foundation.md). This guide covers server ownership and
 request deadlines. [Typed endpoints](http-endpoints.md)
-compose generated input and response contracts on this same kernel. The
-HTTP blueprint owns that
-milestone scope.
+compose generated input and response contracts on this same kernel.
 
 ## Application registration
 
@@ -18,7 +16,7 @@ HTTP listener unopened.
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `foundation`, `module root` as `foundry`, `http` as `foundryhttp`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `foundation`, the root package `github.com/weiloon1234/Foundry-Go` as `foundry`, `http` as `foundryhttp`. Standard-library aliases: `net/http` as `stdhttp`.
 
 Inputs: `ctx context.Context`, `handler http.Handler`.
 
@@ -28,7 +26,7 @@ serverKey := foundation.NewKey[*foundryhttp.Server]("app.http")
 config := foundryhttp.DefaultServerConfig()
 config.Address = "127.0.0.1:8080"
 module := foundryhttp.Module("http", serverKey, config,
-	func(resolver foundation.Resolver) (http.Handler, error) {
+	func(resolver foundation.Resolver) (stdhttp.Handler, error) {
 		return handler, nil
 	},
 )
@@ -36,7 +34,7 @@ app, err := foundry.New().Register(module).Build(ctx)
 if err != nil {
 	return err
 }
-runErr := app.Run(ctx, foundation.HTTP)
+return app.Run(ctx, foundation.HTTP)
 ```
 
 Here `foundryhttp` imports `github.com/weiloon1234/Foundry-Go/http`, `http` imports
@@ -130,7 +128,7 @@ boundaries follow the standard server's [shutdown contract](https://pkg.go.dev/n
 Focused race tests cover normal requests, graceful completion, forced connection
 closure with unfinished handlers, hijacked handler cancellation, binding failure,
 single-use startup, raw panic/abort/Goexit, and application dependency retention.
-The kernel passed full repository acceptance. The HTTP blueprint records the complete milestone status.
+The kernel passed full repository acceptance.
 
 Milestone 24 delivered verified production admission: `MaxConnections` defaults
 to 4,096 accepted connections and reserves capacity before native Accept, including

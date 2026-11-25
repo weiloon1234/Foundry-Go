@@ -21,11 +21,11 @@ concrete model IDs, enum types and `value.Nullable` wrappers.
 
 Declare the result struct, then bind its fields with `rows.Define`:
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reports/rows.go):
-
 `models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `countries`, `database`, `decimal`, `database/orm/expr`, `model`, `database/orm`, `database/orm/rows`, `database/orm/rows` as `rowset`, `value`.
+
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reports/rows.go):
 
 <!-- compiled-source: tests/fixtures/consumer/reports/rows.go#user-summary -->
 ```go
@@ -193,16 +193,15 @@ A total and data read need a suitable transaction isolation level for one snapsh
 See [pagination](model-pagination.md), [derived records](model-subqueries.md),
 [joins](model-joins.md) and [transaction-required composition](transaction-query-composition.md).
 
-
 ### Boolean fields and framework enums
+
+`countries` is the framework package `github.com/weiloon1234/Foundry-Go/countries`; this projection declares its own row and column mapping.
 
 Use `rows.BoolOf(b, &r.Enabled)` for built-in or named Boolean fields. Use
 `rows.EnumOf(b, &r.Status)` when Status is `countries.Status`: it already exports
 `EnumDescriptor()` and `StatusCodec()`. The enum constructor retains enum validation
 and aggregate restrictions; a custom string field is not equivalent metadata.
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/goway/migration/pilot2_test.go):
-
-`countries` is the framework package `github.com/weiloon1234/Foundry-Go/countries`; this projection declares its own row and column mapping.
 
 <!-- compiled-source: tests/fixtures/goway/migration/pilot2_test.go#pilot2-boolean-enum -->
 ```go

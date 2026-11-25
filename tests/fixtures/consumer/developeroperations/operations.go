@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/application"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/logging"
 )
 
@@ -19,4 +19,4 @@ func Inspect(ctx context.Context, services application.Services, channel logging
 
 // doc-example:end inspect-log-files
 
-func Observer() (http.RequestObserver, error) { return http.NewRequestMetrics(512) }
+func Observer() (foundryhttp.RequestObserver, error) { return foundryhttp.NewRequestMetrics(512) }

@@ -2,8 +2,6 @@
 
 Typed security observations compose with existing events and outbox storage. Maintenance remains bounded, and account retirement joins the domain transaction.
 
-Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
-
 ## Security events
 
 `mfa.Factors.WithObserver` returns an immutable factor service with one typed

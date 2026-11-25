@@ -1,6 +1,6 @@
 # Typed forms and request lifecycle
 
-T03 adds URL-encoded bodies and opt-in preparation/authorization. Native verification passed; milestone acceptance is owned by the master.
+T03 adds URL-encoded bodies and opt-in preparation/authorization. Native verification passed.
 The [public consumer](../../tests/fixtures/consumer/requestflow/forms.go) contains
 the complete declarations, handlers and shared rules below.
 
@@ -201,5 +201,4 @@ is authoritative after normalization; a client cannot reproduce an arbitrary Go
 callback. Form and query scalar budgets are independent of the JSON body budget.
 
 Runtime, generator, independent consumer, strict TypeScript, compiler/editor,
-fuzz and race checks form the T03 acceptance gate. The acceptance evidence records commands,
-source hashes, outcomes and measured hook overhead.
+fuzz and race checks form the T03 acceptance gate.

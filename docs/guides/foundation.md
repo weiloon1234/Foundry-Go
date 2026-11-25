@@ -44,8 +44,7 @@ Every application has a maintenance gate. `WithMaintenance(gate)` supplies one (
 ## Typed configuration
 
 [Generated configuration](generated-configuration.md) derives typed keys and the
-same schema below from ordinary Go settings declarations. Its continuation
-verification status is recorded in the master.
+same schema below from ordinary Go settings declarations.
 
 Each feature owns its settings struct, default values, keys, and validation. `config.New(fields...)` validates the schema. Keys carry both the settings owner and field value type. Built-in declarations cover string, integer, boolean, duration, and secret fields; `NewKey` accepts a typed decoder. `config.JSON` declares structured values such as slices, string-keyed maps, or structs, using a JSON text representation shared by file and environment sources. It rejects unknown struct fields and trailing values; custom JSON codecs retain their own semantics.
 

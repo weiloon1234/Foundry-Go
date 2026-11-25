@@ -20,12 +20,11 @@ parameters describe each scalar item, with cardinality retained separately.
 Decimal, temporal and standard Go time values reuse the same format definitions
 as generated JSON DTOs.
 
-Custom protocols need an explicit value contract. The [consumer example](../../tests/fixtures/consumer/httpquery/scalar_metadata.go)
-accepts the scalar declared with the [native TrackingCode methods](http-custom-json.md):
-
-The text codec and scalar metadata share this declaration. Use your application package path for the scalar identity.
-
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `contract`, `fault`, `http` as `foundryhttp`.
+
+Custom protocols need an explicit value contract. The scalar below is declared with the
+[native TrackingCode methods](http-custom-json.md); the text codec and scalar metadata share
+this declaration, so use your application package path for the scalar identity:
 
 <!-- compiled-source: tests/fixtures/consumer/httpquery/scalar_metadata.go#tracking-scalar -->
 ```go

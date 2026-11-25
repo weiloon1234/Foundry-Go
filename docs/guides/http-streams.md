@@ -7,11 +7,11 @@ range or conditional requests. Streams do not supply cache validators and
 respond to Range requests with the full representation and `Accept-Ranges: none`.
 HTTP permits servers to ignore Range; see [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-14.2).
 
-Declare the media and return a deferred source from the typed handler:
-
 The application owns `models.User` and any generated tables or identities used below.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `model`. Standard-library aliases: `net/http` as `stdhttp`.
+
+Declare the media and return a deferred source from the typed handler:
 
 <!-- compiled-source: tests/fixtures/consumer/httpstreams/guide_recipes.go#report-stream-contracts -->
 ```go
@@ -160,13 +160,13 @@ inspection, not in generated clients.
 
 ### Typed event stream endpoints
 
+Inputs: `orders orderWatcher`.
+
 `EventStreamResponse(descriptor)` makes the same stream a typed endpoint
 response, described in the manifest, OpenAPI (`text/event-stream` with
 `x-foundry-event-data`) and the TypeScript client. The handler validates the
 request as usual and returns `EventsFrom(producer)`; the stream starts only after
 the handler succeeded:
-
-Inputs: `orders orderWatcher`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpstreams/guide_recipes.go#http-streams-3 -->
 ```go
@@ -210,5 +210,4 @@ Focused canonical acceptance passed: HTTP and consumer races, compiler rejection
 cases, actual gopls, fuzzing, bounded-copy benchmarks, vet and documentation checks.
 Combined full regression including all three generation-freshness targets also
 passed. [Static/SPA integration](http-assets.md) and [automatic ETags](http-etags.md)
-also passed full regression. The HTTP blueprint
-records compression integration and final milestone acceptance.
+also passed full regression.

@@ -1,16 +1,14 @@
 # Shared observations and trace context
 
 The recorder owns bounded observation and trace export for one application.
-The master roadmap records
-acceptance and verification evidence.
-
-Create one recorder and give it to one application:
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `foundation`, `observability`, `secret`.
 
 Inputs: `exportSpan observability.TraceExporter`, `reportFailure observability.Reporter`.
+
+Create one recorder and give it to one application:
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_observability.go#observability-1 -->
 ```go
@@ -111,12 +109,12 @@ without stopping the world: `go_info`, `go_goroutines`, `go_gomaxprocs`,
 `process_cpu_seconds_total` and `process_max_fds` on Unix, and
 `process_open_fds` and `process_resident_memory_bytes` on Linux.
 
+Inputs: `recorder *observability.Recorder`, `queue interface{ Len() int }`.
+
 `Recorder.RegisterCollector(name, collector)` adds a typed collector. It runs
 synchronously during each scrape inside callback isolation, so it must only read
 in-memory statistics. It emits samples through `MetricWriter.Gauge` and
 `MetricWriter.Counter` with typed `Label` values:
-
-Inputs: `recorder *observability.Recorder`, `queue interface{ Len() int }`.
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_observability.go#observability-2 -->
 ```go

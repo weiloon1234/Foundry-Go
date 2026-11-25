@@ -6,7 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/datatable"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -23,7 +23,7 @@ func ReferralTextFilters() (datatable.FilterSource[ReferralScope, value.Nullable
 		expr.At(rows.Scope(sponsors), models.Users.ID),
 	))
 	sponsor := rows.NullableRightScope(joined, rows.Scope(sponsors))
-	text := http.StringQuery[string]()
+	text := foundryhttp.StringQuery[string]()
 	email := expr.TextNullableRowValue(expr.AtNullable(sponsor, models.Users.Email))
 	nickname := expr.TextNullableRowValue(expr.AtNullableValue(sponsor, models.Users.Nickname))
 	return datatable.NullableWhere(text, expr.NullableTextFilter(email)),
@@ -35,7 +35,7 @@ func ReferralTextFilters() (datatable.FilterSource[ReferralScope, value.Nullable
 // doc-example:begin nullable-ordered-filter
 func MeasurementScoreFilter() datatable.FilterSource[models.Measurement, value.Nullable[float64]] {
 	score := expr.OrderNullableRow(expr.Value(models.Measurements.Score))
-	return datatable.NullableWhere(http.FloatQuery[float64](), expr.NullableOrderFilter(score))
+	return datatable.NullableWhere(foundryhttp.FloatQuery[float64](), expr.NullableOrderFilter(score))
 }
 
 // doc-example:end nullable-ordered-filter

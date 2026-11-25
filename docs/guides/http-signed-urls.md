@@ -6,13 +6,13 @@ from an application name or environment global. Ordinary formatting redacts key
 material. Configure scope, middleware, validation and limits on a route/endpoint
 before binding its signer.
 
-Declare the path and query types used to assemble signed links:
-
 The application owns `models.User` and any generated tables or identities used below.
 
 `models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `clock`, `http` as `foundryhttp`, `model`, `value`.
+
+Declare the path and query types used to assemble signed links:
 
 <!-- compiled-source: tests/fixtures/consumer/httpsigned/guide_recipes.go#signed-preview-inputs -->
 ```go
@@ -33,10 +33,10 @@ type SearchInput struct {
 }
 ```
 
+Inputs: `ctx context.Context`, `keys foundryhttp.SigningKeys`, `applicationClock clock.Clock`, `publicOrigin foundryhttp.Origin`, `userID model.ID[models.User]`, `expiresAt time.Time`, `Preview foundryhttp.Endpoint[UserPath, SearchInput, foundryhttp.NoBody, foundryhttp.NoContent]`.
+
 Generate their descriptors and supply a configured `Preview` endpoint with these
 concrete input types:
-
-Inputs: `ctx context.Context`, `keys foundryhttp.SigningKeys`, `applicationClock clock.Clock`, `publicOrigin foundryhttp.Origin`, `userID model.ID[models.User]`, `expiresAt time.Time`, `Preview foundryhttp.Endpoint[UserPath, SearchInput, foundryhttp.NoBody, foundryhttp.NoContent]`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpsigned/guide_recipes.go#http-signed-urls-1 -->
 ```go
@@ -96,9 +96,9 @@ relative signature never verifies as an absolute one. It is **not** bound to an
 origin: it verifies on every origin `PublicURLs` admits for the route. Use `URL`
 when a link must stay on one host or tenant.
 
-Links without expiry require an explicit opt-in on the signed descriptor:
-
 `AvatarPath` aliases the following `httpkernel.AssetPath`; `AvatarRoute` is a route built with `AssetPathDescriptor()`.
+
+Links without expiry require an explicit opt-in on the signed descriptor:
 
 <!-- compiled-source: tests/fixtures/consumer/httpkernel/path_declarations.go#asset-path-declaration -->
 ```go

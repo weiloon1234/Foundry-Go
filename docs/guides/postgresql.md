@@ -35,11 +35,11 @@ with three operations:
 - `RegisterDefaultPgType(value, name)` maps a Go type to a registered PostgreSQL
   type for queries that need type inference.
 
-For example, after migrations have created `app.order_status`:
-
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/postgres`.
+
+For example, after migrations have created `app.order_status`:
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_postgres.go#postgresql-1 -->
 ```go

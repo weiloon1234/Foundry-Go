@@ -12,7 +12,7 @@
 
 Runtime and consumer PostgreSQL races, vet, current generation, and clean-copy
 generation/compilation have passed. Seven compiler-rejection cases and four
-real-gopls probes also passed, followed by full repository acceptance. The master roadmap owns status.
+real-gopls probes also passed, followed by full repository acceptance.
 
 An outbox stores a message in the same transaction as its business write. A
 successful enqueue returns a typed message ID; the outer transaction still owns

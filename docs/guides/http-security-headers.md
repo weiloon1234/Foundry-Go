@@ -1,13 +1,13 @@
 # Typed security-header defaults
 
-Use the shared [middleware assembly](http-middleware.md) to apply response policy
-before the router and its error responses:
-
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `value`.
 
 Inputs: `router http.Handler`.
+
+Use the shared [middleware assembly](http-middleware.md) to apply response policy
+before the router and its error responses:
 
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/http_security_headers_recipes.go#http-security-headers-1 -->
 ```go
@@ -17,7 +17,7 @@ config.Referrer = foundryhttp.ReferrerNoReferrer
 config.HSTS = value.Set(foundryhttp.HSTSPolicy{
 	MaxAge: 24 * time.Hour,
 })
-handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.SecurityHeaders(config))
+return foundryhttp.ApplyMiddleware(router, foundryhttp.SecurityHeaders(config))
 ```
 
 The [consumer fixture](../../tests/fixtures/consumer/httpsecurity/router.go)
@@ -45,10 +45,10 @@ for middleware order and typed source declarations.
 
 ## Cross-origin isolation and permissions
 
+Inputs: `config foundryhttp.SecurityHeadersConfig`.
+
 Four more typed, opt-in fields cover the isolation and feature-policy headers.
 Each is omitted when zero and rejects unsupported values at assembly:
-
-Inputs: `config foundryhttp.SecurityHeadersConfig`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/http_security_headers_recipes.go#http-security-headers-2 -->
 ```go
@@ -77,9 +77,9 @@ typed field is set, `Extra` cannot repeat that header; without it, an existing
 
 ## Custom headers
 
-Custom native response fields use separate `HeaderName` and `HeaderValue` types:
-
 Inputs: `config foundryhttp.SecurityHeadersConfig`.
+
+Custom native response fields use separate `HeaderName` and `HeaderValue` types:
 
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/http_security_headers_recipes.go#http-security-headers-3 -->
 ```go

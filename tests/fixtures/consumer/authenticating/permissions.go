@@ -5,7 +5,7 @@ import (
 
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
 // ViewAccount is a current model capability. A real domain may query its typed
@@ -23,7 +23,7 @@ func CheckAccountPermission(ctx context.Context, guard auth.Guard[models.User]) 
 
 // doc-example:begin configure-permission
 func PermissionProfile(endpoint ProfileEndpoint) ProfileEndpoint {
-	return http.ConfigureAuthenticated(endpoint, http.Permissions(ViewAccount))
+	return foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Permissions(ViewAccount))
 }
 
 // doc-example:end configure-permission

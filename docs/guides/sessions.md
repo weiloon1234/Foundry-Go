@@ -116,7 +116,7 @@ Inputs: `ctx context.Context`, `web *session.Sessions[models.User, model.ID[mode
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/session_recipes.go#rotate-session -->
 ```go
-rotated, err := web.Rotate(ctx, currentSecret)
+return web.Rotate(ctx, currentSecret)
 ```
 
 Rotation atomically replaces the secret and invalidates the old one. It retains
@@ -272,6 +272,8 @@ passed immediately afterwards, so a committed credential is never silently lost.
 Custom adapters must honor the same atomicity, scope, expiry and resource
 contracts as the PostgreSQL adapter.
 
+Inputs: `calendar schedule.Calendar`, `web *session.Sessions[models.User, model.ID[models.User]]`.
+
 Call `web.Prune(ctx, limit)` in a maintenance task to remove a bounded page of
 expired sessions for this address in one set-based, index-backed statement. Rows
 locked by concurrent work are skipped and expiry is rechecked on the row actually
@@ -279,8 +281,6 @@ deleted, so a session touched meanwhile survives. `web.PruneExpired(ctx, batch,
 maxBatches)` prunes in batches until a short batch and reports the removed count.
 Call it from a [scheduler](scheduler.md) handler; the auth packages do not import
 the scheduler:
-
-Inputs: `calendar schedule.Calendar`, `web *session.Sessions[models.User, model.ID[models.User]]`.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/pruning_recipes.go#prune-sessions-hourly -->
 ```go
@@ -301,7 +301,6 @@ transaction, so a successful issuance never escapes an uncommitted caller
 transaction. Session storage must be writable even during authentication when
 sliding activity is enabled.
 
-
 ## Credential changes and checked issuance
 
 The [credential-change integration](credential-changes.md) is verified. `Revocation()` contributes this guard to a typed group; `RevokeAllIn`
@@ -317,6 +316,5 @@ and factor in the same transaction that creates the authenticated replacement.
 The original guard/provider and current model eligibility remain authoritative.
 See [MFA completion and HTTP delivery](mfa.md#complete-a-pending-login) for the
 actual API, failure behavior and transport composition.
-
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

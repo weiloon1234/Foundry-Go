@@ -83,8 +83,7 @@ the endpoint's validation adapter; errors use paths such as `/body/label`,
 `/query/label` and `/body/tags/1`.
 
 This guide covers JSON and query transport. [Multipart presence and upload
-cleanup](http-uploads.md) are also delivered. The HTTP blueprint
-records complete milestone acceptance; the later framework audit remains required.
+cleanup](http-uploads.md) are also delivered.
 
 <a id="recipe-patch-query"></a>
 ## Declare PATCH and query inputs

@@ -3,11 +3,6 @@
 Primary/read routing passed independent connector, PostgreSQL, lifecycle and
 consumer acceptance. See [production acceptance](../production-acceptance.md).
 
-`postgres.RoutingConfig` contains `Primary Config`, optional `Read Config`, and
-`MaxConnections`. Each endpoint keeps its own `PoolConfig`; their `MaxOpen` sum
-must fit the combined process ceiling. Replicas are optional. Use explicit
-configuration from the application's normal secret loader:
-
 The `models` namespace in the read examples is the application model package;
 `Users` is its generated table declaration.
 
@@ -16,6 +11,11 @@ The application owns `models.User` and any generated tables or identities used b
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `foundation`, `database/orm`, `database/postgres`, `value`.
 
 Inputs: `primaryConfig postgres.Config`, `readConfig postgres.Config`, `DatabaseProvider foundation.ProviderID`, `DatabaseKey foundation.Key[*database.DB]`.
+
+`postgres.RoutingConfig` contains `Primary Config`, optional `Read Config`, and
+`MaxConnections`. Each endpoint keeps its own `PoolConfig`; their `MaxOpen` sum
+must fit the combined process ceiling. Replicas are optional. Use explicit
+configuration from the application's normal secret loader:
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_routing.go#database-routing-1 -->
 ```go

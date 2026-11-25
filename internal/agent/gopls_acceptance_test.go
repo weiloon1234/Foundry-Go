@@ -271,7 +271,7 @@ type consumerEditorProbe struct {
 
 func consumerEditorProbes() []consumerEditorProbe {
 	return []consumerEditorProbe{
-		{"ticket-http-endpoint", "reporting/ticket_route.go", "return http.", "TicketAuthenticated", []string{"TicketAuthenticated", "ValidateTicketAuthenticated", "InspectTicketAuthenticated"}, []string{"GuardBinding", "TicketRedeemer", "TicketEndpoint"}, "/http/ticket_endpoint.go"},
+		{"ticket-http-endpoint", "reporting/ticket_route.go", "return foundryhttp.", "TicketAuthenticated", []string{"TicketAuthenticated", "ValidateTicketAuthenticated", "InspectTicketAuthenticated"}, []string{"GuardBinding", "TicketRedeemer", "TicketEndpoint"}, "/http/ticket_endpoint.go"},
 		{"ticket-http-url", "reporting/ticket_route.go", "endpoint.", "URL", []string{"URL", "Handle"}, []string{"secret.String", "NoPath", "NoQuery"}, "/http/ticket_endpoint.go"},
 		{"ticket-datatable-model", "reporting/table_routes.go", "return datatable.", "TokenTickets", []string{"TokenTickets", "Routes"}, []string{"Identifiable", "Tokens", "Tickets"}, "/datatable/routes.go"},
 		{"client-presentation", "clientcontracts/presentation.go", "parameter.", "WithPresentation", []string{"WithPresentation"}, []string{"Presentation", "QueryParameter"}, "/http/presentation.go"},

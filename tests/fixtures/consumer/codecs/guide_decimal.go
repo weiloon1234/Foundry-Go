@@ -6,7 +6,10 @@ import (
 
 func taxAndShare(subtotal, total decimal.Decimal) error {
 	// doc-example:begin supporting-apis-1
-	rate, _ := decimal.Parse("0.0825")
+	rate, err := decimal.Parse("0.0825")
+	if err != nil {
+		return err
+	}
 	tax, err := subtotal.Mul(rate)
 	if err != nil {
 		return err

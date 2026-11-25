@@ -3,13 +3,13 @@ package reporting
 import (
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/datatable"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 // NumericLevelRoutes uses framework-owned query, ticket and download contracts.
 // The caller supplies current authority and token-owned tickets.
-func NumericLevelRoutes(group http.Scope, config datatable.RoutesConfig[Operator, Authority], read, export []http.GuardOption[Operator]) ([]http.RouteRegistration, error) {
+func NumericLevelRoutes(group foundryhttp.Scope, config datatable.RoutesConfig[Operator, Authority], read, export []foundryhttp.GuardOption[Operator]) ([]foundryhttp.RouteRegistration, error) {
 	// doc-example:begin datatable-7
 	return datatable.Routes(group, NumericLevels, config,
 		datatable.ReadAccess(read...),

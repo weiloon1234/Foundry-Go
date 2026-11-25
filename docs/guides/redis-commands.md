@@ -63,7 +63,7 @@ Inputs: `ctx context.Context`, `store *raw.Store`, `scoreboardKey raw.Key`.
 command := raw.NewCommand("ZREVRANGE", raw.DecodeArray(raw.DecodeString())).
 	Key(scoreboardKey).
 	Arg(raw.Int64(0)).Arg(raw.Int64(9)).Arg(raw.Text("WITHSCORES"))
-ranking, err := command.Run(ctx, store) // []string
+return command.Run(ctx, store) // []string
 ```
 
 `NewCommand` initially returns a builder with no `Run` method. `Key` creates the
@@ -155,7 +155,7 @@ script := raw.NewScript(
 	"return redis.call('INCRBY',KEYS[1],ARGV[1])",
 	key, raw.DecodeInt64(),
 ).Arg(raw.Int64(3))
-count, err := script.Run(ctx, store)
+return script.Run(ctx, store)
 ```
 
 Scripts require a key and use one EVAL, without an EVALSHA/NOSCRIPT fallback.

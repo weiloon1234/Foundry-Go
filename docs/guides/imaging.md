@@ -9,9 +9,7 @@
 
 ## Overview
 
-Milestone 18 passed native verification and consumer review. The
-master evidence
-records the checks and operational limits.
+Milestone 18 passed native verification and consumer review.
 The imaging expansion
 also passed its final portable/native, consumer and framework verification gates.
 The runtime-loading follow-up
@@ -20,10 +18,10 @@ passed ordinary native builds, missing-library consumers and the full gate.
 <a id="recipe-process-image"></a>
 ## Configure an engine and process an image
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `imaging`, `value`.
+
 An image plan owns transformation policy and can be reused by an attachment
 collection. In an ordinary configured application, enable the built-in engine:
-
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `imaging`, `value`.
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/image_recipes.go#configured-image-engine -->
 ```go
@@ -440,11 +438,11 @@ consumer; focused round trips for all eight output formats passed.
 
 ## Automatically discovered libvips runtime
 
+Inputs: `settings application.Settings`.
+
 Consumers import only Foundry and build normally; no custom build tag, libvips
 headers or pkg-config is required. `DefaultConfig()` selects `AutoBackend`.
 Enabling the configured image service is enough:
-
-Inputs: `settings application.Settings`.
 
 <!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_imaging.go#imaging-5 -->
 ```go

@@ -355,14 +355,14 @@ engine's database, locks the incident, rejects recovered incidents, and returns
 `Acknowledgement{Key, Episode}`. It never authorizes. Success inside the callback
 does not promise that the outer transaction commits.
 
+The application owns `TelemetryConsoleActor` and any generated tables or identities used below.
+
 An application acknowledgement table can use `alert_key text PRIMARY KEY`,
 `episode bigint NOT NULL`, its concrete actor foreign key, and an acknowledgement
 timestamp. In one transaction, the application locks and rechecks the current
 actor, calls `AcknowledgeIn`, and upserts attribution for the returned episode.
 The [independent consumer example](../../tests/fixtures/consumer/telemetry_consumer_test.go)
 shows this order with an application-owned actor repository:
-
-The application owns `TelemetryConsoleActor` and any generated tables or identities used below.
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/telemetry_acknowledgement.go#persisted-telemetry-1 -->
 ```go
@@ -427,12 +427,12 @@ limiting, and portal checks before calling `RecordBrowser`. Framework validation
 is in-memory admission, not an HTTP security policy or delivery guarantee.
 Capacity loss returns nil and increments loss accounting.
 
+Inputs: `ctx context.Context`, `services application.Services`.
+
 Configured applications resolve the engine through `Services.Telemetry()` and
 call `RecordBrowser`; they do not retain or construct a collector. For example,
 a handler's service factory can retain the resolved engine and admit a validated
 transport DTO as follows:
-
-Inputs: `ctx context.Context`, `services application.Services`.
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_telemetry.go#persisted-telemetry-2 -->
 ```go
@@ -440,7 +440,7 @@ engine, err := services.Telemetry()
 if err != nil {
 	return err
 }
-recordErr := engine.RecordBrowser(ctx, telemetry.BrowserError{
+return engine.RecordBrowser(ctx, telemetry.BrowserError{
 	Portal: "admin", Release: "release-1", Code: telemetry.BrowserCodeTypeError,
 	Frames: []telemetry.BrowserFrame{{File: "admin/_assets/app.js", Line: 1}},
 })
@@ -541,11 +541,11 @@ The application owns scheduling and recovery after a failed deletion.
 
 ## Testing
 
+Inputs: `t *testing.T`, `app *application.App`.
+
 `App.Start` without a selected kernel starts no telemetry loop. After applying
 the migrations to an isolated test schema and starting the app, use
 `testkit/telemetry.Flush` to persist observations before asserting reads:
-
-Inputs: `t *testing.T`, `app *application.App`.
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_telemetry_test.go#persisted-telemetry-3 -->
 ```go

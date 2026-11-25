@@ -6,8 +6,7 @@ registrations. Start with `application.New(settings)` and the existing
 [configured consumer](consumer-startup-acceptance.md), then follow the
 [complete typed API workflow](typed-api-workflow.md) for authenticated database work.
 
-Use the master status and
-current guides to select delivered APIs. The
+Use the current guides to select delivered APIs. The
 [September 27 readiness review](final-readiness-20260927.md) records verification,
 races and independent package consumption for its reviewed revision. Distribution
 still follows the release checks for the source you intend to publish.

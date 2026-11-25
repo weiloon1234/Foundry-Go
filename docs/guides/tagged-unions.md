@@ -1,13 +1,11 @@
 # Tagged payload unions
 
 T02 passed the native gate, typed consumer/client/compiler/editor checks, fuzzing
-and cost measurements. The
-master
-owns milestone status.
-
-Declare ordinary payload DTOs and list their Go types once:
+and cost measurements.
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Declare ordinary payload DTOs and list their Go types once:
 
 <!-- compiled-source: tests/fixtures/consumer/unions/payment/payment.go#payment-variants -->
 ```go

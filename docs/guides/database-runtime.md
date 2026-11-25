@@ -1,6 +1,6 @@
 # Database runtime
 
-The `database` package provides connector-based pooling, application lifecycle integration, parameterized SQL execution, streaming rows, callback-scoped transactions and sessions, explicit savepoints, and after-commit callbacks. [Migrations and seeders](migrations-and-seeding.md) build on these contracts. The [PostgreSQL adapter](postgresql.md) supplies the concrete driver. Protocol fixtures and real PostgreSQL acceptance verify their behavior; the master roadmap records milestone progress.
+The `database` package provides connector-based pooling, application lifecycle integration, parameterized SQL execution, streaming rows, callback-scoped transactions and sessions, explicit savepoints, and after-commit callbacks. [Migrations and seeders](migrations-and-seeding.md) build on these contracts. The [PostgreSQL adapter](postgresql.md) supplies the concrete driver. Protocol fixtures and real PostgreSQL acceptance verify their behavior.
 
 ## Pool ownership
 
@@ -136,15 +136,15 @@ COMMIT and ROLLBACK use driver methods and emit no statement events. Application
 SQL is counted even when its text names transaction control. Counts include failed statements that reached execution.
 Nested scopes of the same detector replace their parent's counters.
 
-To assert statement shapes in a test, pass connection settings and an operation
-with the signature `func(context.Context, *database.DB) error`. This helper registers
-the detector on the pool it opens. The operation must close its rows before returning:
-
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `testkit/dbassert`, `database/postgres`.
 
 Inputs: `t *testing.T`, `config postgres.Config`, `run func(context.Context, *database.DB) error`.
+
+To assert statement shapes in a test, pass connection settings and an operation
+with the signature `func(context.Context, *database.DB) error`. This helper registers
+the detector on the pool it opens. The operation must close its rows before returning:
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_statement_shapes_test.go#database-runtime-1 -->
 ```go

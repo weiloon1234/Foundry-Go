@@ -32,8 +32,7 @@ and the [compatibility policy](../compatibility.md) records the rollout rules.
 
 These items were reviewed and deliberately left for later work:
 
-- Token-family impersonation (sessions are supported), Dart clients and the other
-  roadmap items in deferred extensions.
+- Token-family impersonation (sessions are supported), Dart clients and the other deferred roadmap items.
 - A cache failover store (tag and namespace versions differ between backends) and
   typed Redis pattern subscriptions.
 - Autocommit for model patches/deletes (inserts only), and skipping the pre-hook

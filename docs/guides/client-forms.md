@@ -16,28 +16,28 @@ A form field is written once, as the generated field. The Go request
 declaration owns its name, label, help text, required state and limits, and
 the server owns its issues; the frontend keeps the values and draws the
 controls. There is one way to bind a form: the generated `fieldBinder`. The SDK
-has no form state controller and no UI adapter; a React form keeps its values
-in component state and submits with its own action, and other frameworks do the
-same with their own state.
+has no form state controller and no UI adapter; an application's UI adapter (for
+example a React hook) wraps the binder and keeps the form's values and state in
+the UI library's own state.
 
 <a id="recipe-form-values"></a>
 ## Bind a form's values
 
-[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts).
+`sdk` is your application's generated client module: `import * as sdk from "./contracts_foundry.gen.js"` (the path of the generated file in your client source).
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#form-values -->
 ```typescript
 export function formValues(issues: readonly sdk.Issue[]) {
   type Body = sdk.Operations["itemsEcho"]["request"]["body"];
   let values: Required<Pick<sdk.FormValues<Body>, "amount">> = { amount: "999.99" };
-  // A React state setter fits `update`; it receives a function of the values.
+  // A state setter fits `update`; it receives a function of the values.
   const update: sdk.FormUpdate<typeof values> = (next) => { values = next(values); };
-  // One state per form instance, kept while it is mounted (in React, a hook).
+  // One state per form instance, kept while it is mounted.
   const form = sdk.formFieldState();
   const fields = sdk.fieldBinder((key) => key, () => form);
   const amount = fields(sdk.operation("itemsEcho"), values, update, issues).amount;
-  // Binding computes; the form publishes the render it shows (in React, a
-  // layout effect), and its bindings then write through its update function.
+  // Binding computes; the form publishes the render it shows (after the UI
+  // library shows it), and its bindings then write through its update function.
   sdk.commitFormFields(form);
   amount.onChange("123456789012345678901234567890.123");
   return { name: amount.name, label: amount.label, limits: amount.limits, checks: amount.checks, issues: amount.issues, values };
@@ -46,9 +46,8 @@ export function formValues(issues: readonly sdk.Issue[]) {
 
 `fieldBinder(label, form)` makes a binder. `label` translates a field's Go label
 and help keys; `form` returns the state of the form instance being bound, made
-by `formFieldState()` and kept while that form is mounted (in React, a hook
-that holds it in state; the binder calls `form` once per call, so it may be a
-hook). The state remembers the bindings it handed out, the length of each
+by `formFieldState()` and kept while that form is mounted (the binder calls
+`form` once per call, so it may read a UI-library hook that holds the state). The state remembers the bindings it handed out, the length of each
 list, the issues with the lists they point into, and the value each field held
 when the form first bound it: a field is edited while its value differs from
 that one, however it changed (its control, another field's listener, the
@@ -57,9 +56,10 @@ update function or code), so a field changed back is not edited.
 Binding a form only computes: it changes nothing the form has committed.
 `commitFormFields(form)` publishes what the latest call learned (its update
 function, its issues and list lengths, the values it first bound) once the
-render that made the call is the one shown; in React that is a layout effect
-of the form component. A render React computes and discards (a transition that
-suspends, a render it restarts) therefore changes nothing: a binding from the
+render that made the call is the one shown; in a UI library that is the
+after-render phase of the form component (for example a layout effect). A render
+the library computes and discards (a transition that suspends, a render it
+restarts) therefore changes nothing: a binding from the
 shown render keeps writing through the shown render's update function until
 the next commit, and a list the discarded render shortened forgets nothing.
 A render whose root binding throws leaves no uncommitted render attached to
@@ -67,6 +67,8 @@ the form state. A binding first created after commit (for example in an event
 handler or a child component's own re-render via `.at(...)`) still remembers
 its first-bound value for the next commit. Before a form's first commit its
 bindings write through the call that made them.
+
+The following examples use the same `sdk` generated client module.
 
 `fields(operation, values, update, issues)` returns the bindings of the fields
 of the operation's request body that the form's values type holds and the
@@ -79,7 +81,7 @@ form's one state: the values must fit every operation's request, and each
 control binds through the operation the form will submit. A child or per-row
 component receives the bindings it shows as props and never calls the binder
 again for the same form. `update` receives a function
-from the current values to the next; a React state setter fits. Values are the
+from the current values to the next; a state setter fits. Values are the
 control values: `FormValues<T>` holds each field as its non-null type (a nested
 object as its own values, a list as its rows), and the form decides what the
 request sends (see [presence](#recipe-form-presence)). A form's values may leave
@@ -95,8 +97,6 @@ element's generated type, omit the unset leaf in the initial values under
 `exactOptionalPropertyTypes` (a form that writes `undefined` into its own
 values declares that leaf `?: V | undefined` in its values type instead), and
 narrow it before building the request:
-
-[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/limits/types.ts).
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/limits/types.ts#form-unset-nested -->
 ```typescript
@@ -260,8 +260,7 @@ typed as the request (or, for a PATCH, an object of the request's type assigned
 field by field). The request encoder rejects a key the request does not
 declare. The compiler checks undeclared keys only in a fresh literal without a
 spread: a spread, or a wider variable given to the request, compiles. A
-type-aware convention test in the application (the baseline's
-`web/build/form-conventions.test.ts`) rejects both at any depth (nested
+type-aware convention test in the application rejects both at any depth (nested
 objects, rows, map entries, and both branches of a conditional expression), a
 second binder call in one component, a binder call outside a component's body
 (named functions, anonymous default exports and expression-bodied arrow
@@ -401,7 +400,7 @@ required form never silently omits or sends something the user did not see.
 Narrow `values.<field>` before placing it in a required request field; Go
 remains the judge of whether the ID exists or is authorized.
 
-[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/limits/recipes.ts).
+`sdk` is the same generated client module.
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/limits/recipes.ts#form-identity-text -->
 ```typescript
@@ -504,7 +503,7 @@ Every generated client entry exports the form-binding values and types below:
 - `commitFormFields(form: FormFieldState): void` — publishes what the latest
   binder call on `form` computed (and any post-commit `.at(...)` bindings) as
   the form's committed state. Call once the render that bound the form is
-  shown (in React, in a layout effect of the form component); a no-op when
+  shown (in the after-render phase of the form component); a no-op when
   nothing is pending.
 - `fieldIssues(descriptor, issues)` — returns the issues addressed to
   `descriptor` or below it, in order, matched by the descriptor's escaped

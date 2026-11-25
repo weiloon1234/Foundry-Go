@@ -37,7 +37,6 @@ func runHTTP(ctx context.Context, configPath string) error {
 	}
 	// A signal is a graceful stop: Run drains within the application shutdown
 	// budget and returns nil, or the task/cleanup failures it observed.
-	runErr := app.Run(ctx, foundation.HTTP)
+	return app.Run(ctx, foundation.HTTP)
 	// doc-example:end application-bootstrap-1
-	return runErr
 }

@@ -3,9 +3,7 @@
 See [request-aware validation messages](validation-messages.md) for automatic HTTP
 rendering, built-in translations, typed overrides and generated client presentation.
 
-Milestone 20 passed native verification and consumer review. The
-master evidence
-records the checks and operational limits.
+Milestone 20 passed native verification and consumer review.
 
 Use one `i18n.LocaleSet` from application configuration for UI catalogs, model
 translations and localized attachments. Translated model fields declared as
@@ -33,9 +31,9 @@ selected message fallback.
 <a id="recipe-declare-messages"></a>
 ## Declare typed messages
 
-The Go argument struct is the source of truth for parameter names and types:
-
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `decimal`, `i18n`, `i18n/message`, `validation`.
+
+The Go argument struct is the source of truth for parameter names and types:
 
 <!-- compiled-source: tests/fixtures/consumer/localization/messages.go#typed-plural-message -->
 ```go
@@ -165,9 +163,9 @@ See [generated browser message formatting](client-contracts.md#recipe-browser-me
 <a id="recipe-request-locale"></a>
 ## Resolution and fallback
 
-The application's `localization` package also declares the welcome message:
-
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+The application's `localization` package also declares the welcome message:
 
 <!-- compiled-source: tests/fixtures/consumer/localization/messages.go#welcome-message-input -->
 ```go
@@ -275,6 +273,8 @@ resolution, err := resolver.Resolve(ctx, recipient)
 if err != nil {
 	return ctx, resolution, err
 }
+// resolution.Locale is supported; resolution.Source is "context", "user",
+// "accept_language" or "default" ("user" is this application's source name).
 // WithResolvedLocale also attaches the supported locale to the context.
 resolvedContext, resolution, err := resolver.WithResolvedLocale(ctx, recipient)
 ```

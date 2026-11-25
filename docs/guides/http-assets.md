@@ -217,8 +217,6 @@ exclusions, without exposing local paths or fabricating a JSON DTO. Download
 and stream response guides describe the shared transfer and cleanup behavior.
 
 Runtime, lifecycle, independent-consumer, compiler and actual-gopls checks passed.
-The master acceptance record
-tracks verification and the remaining milestone scope.
 
 <a id="recipe-declare-spa"></a>
 ## SPA fallbacks with application.New

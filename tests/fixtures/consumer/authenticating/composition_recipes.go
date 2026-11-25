@@ -6,32 +6,32 @@ import (
 
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
 
-func signedBoundOrder(endpoint http.Endpoint[OrderPath, http.NoQuery, http.NoBody, http.NoContent], authentication *http.Authentication, api auth.Guard[models.User], signer http.URLSigner, orders modelbinding.Resolver[OrderPath, models.Order]) http.RouteRegistration {
+func signedBoundOrder(endpoint foundryhttp.Endpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], authentication *foundryhttp.Authentication, api auth.Guard[models.User], signer foundryhttp.URLSigner, orders modelbinding.Resolver[OrderPath, models.Order]) foundryhttp.RouteRegistration {
 	// doc-example:begin signed-bound-order
-	secured := http.RequireAuthentication(endpoint, authentication, api)
-	secured = http.ConfigureAuthenticated(secured, http.Permissions(ViewAccount))
-	signed := http.SignedAuthenticated(secured, signer)
-	binding := http.ForSignedAuthenticatedBinding(signed)
+	secured := foundryhttp.RequireAuthentication(endpoint, authentication, api)
+	secured = foundryhttp.ConfigureAuthenticated(secured, foundryhttp.Permissions(ViewAccount))
+	signed := foundryhttp.SignedAuthenticated(secured, signer)
+	binding := foundryhttp.ForSignedAuthenticatedBinding(signed)
 	bound := modelbinding.BindAuthenticated(binding, orders)
 	registration := bound.Handle(func(ctx context.Context, user models.User,
-		in modelbinding.Input[OrderPath, http.NoQuery, http.NoBody, models.Order],
-	) (http.NoContent, error) {
-		return http.NoContent{}, ReadOrder.Authorize(ctx, api, in.Model)
+		in modelbinding.Input[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Order],
+	) (foundryhttp.NoContent, error) {
+		return foundryhttp.NoContent{}, ReadOrder.Authorize(ctx, api, in.Model)
 	})
 	// doc-example:end signed-bound-order
 	return registration
 }
 
-func authenticatedRawRoute(route http.Route[OrderPath], authentication *http.Authentication, api auth.Guard[models.User], handle func(stdhttp.ResponseWriter, *stdhttp.Request, models.User, OrderPath)) http.RouteRegistration {
+func authenticatedRawRoute(route foundryhttp.Route[OrderPath], authentication *foundryhttp.Authentication, api auth.Guard[models.User], handle func(stdhttp.ResponseWriter, *stdhttp.Request, models.User, OrderPath)) foundryhttp.RouteRegistration {
 	// doc-example:begin authenticated-raw-route
-	secured := http.RequireRouteAuthentication(route, authentication, api)
-	secured = http.ConfigureAuthenticatedRoute(secured, http.Permissions(ViewAccount))
-	registration := http.HandleAuthenticatedRaw(secured, func(w stdhttp.ResponseWriter,
+	secured := foundryhttp.RequireRouteAuthentication(route, authentication, api)
+	secured = foundryhttp.ConfigureAuthenticatedRoute(secured, foundryhttp.Permissions(ViewAccount))
+	registration := foundryhttp.HandleAuthenticatedRaw(secured, func(w stdhttp.ResponseWriter,
 		r *stdhttp.Request, user models.User, path OrderPath,
 	) {
 		handle(w, r, user, path)
@@ -40,29 +40,29 @@ func authenticatedRawRoute(route http.Route[OrderPath], authentication *http.Aut
 	return registration
 }
 
-func actorMiddlewareOrder(endpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, http.NoContent], transport *http.Authentication, api auth.Guard[models.User], store *ratelimit.Store, tenantOf func(context.Context, models.User) (TenantID, error)) (http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent], error) {
+func actorMiddlewareOrder(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], transport *foundryhttp.Authentication, api auth.Guard[models.User], store *ratelimit.Store, tenantOf func(context.Context, models.User) (TenantID, error)) (ProfileEndpoint, error) {
 	// doc-example:begin actor-middleware-order
-	tenant := http.DefineMiddleware("app.tenant", func(next stdhttp.Handler) (stdhttp.Handler, error) {
+	tenant := foundryhttp.DefineMiddleware("app.tenant", func(next stdhttp.Handler) (stdhttp.Handler, error) {
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			user, err := api.Require(r.Context())
 			if err != nil {
-				http.WriteError(w, r, err)
+				foundryhttp.WriteError(w, r, err)
 				return
 			}
 			tenantID, err := tenantOf(r.Context(), user)
 			if err != nil {
-				http.WriteError(w, r, err)
+				foundryhttp.WriteError(w, r, err)
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(WithTenant(r.Context(), tenantID)))
 		}), nil
 	})
-	limiter, err := ratelimit.Define("api.users", http.ActorKeys(), ratelimit.PerMinute(120)).Bind(store)
+	limiter, err := ratelimit.Define("api.users", foundryhttp.ActorKeys(), ratelimit.PerMinute(120)).Bind(store)
 	if err != nil {
-		return http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent]{}, err
+		return ProfileEndpoint{}, err
 	}
-	secured := http.RequireAuthentication(endpoint, transport, api,
-		http.ActorMiddleware[models.User](http.RateLimitByActor(limiter, api), tenant))
+	secured := foundryhttp.RequireAuthentication(endpoint, transport, api,
+		foundryhttp.ActorMiddleware[models.User](foundryhttp.RateLimitByActor(limiter, api), tenant))
 	// doc-example:end actor-middleware-order
 	return secured, nil
 }

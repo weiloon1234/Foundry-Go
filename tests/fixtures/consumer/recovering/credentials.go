@@ -25,6 +25,7 @@ func CredentialRevocations(users auth.Provider[Member, model.ID[Member]], sessio
 	// doc-example:begin credential-revocations
 	web, err := sessions.Revocation()
 	if err != nil {
+		// The session backend must support joining a transaction.
 		return nil, err
 	}
 	api, err := tokens.Revocation()
@@ -32,6 +33,7 @@ func CredentialRevocations(users auth.Provider[Member, model.ID[Member]], sessio
 		return nil, err
 	}
 	revocations, err := auth.NewRevocations(users, web, api)
+	// Pass revocations.Invalidate as the reset model's Invalidate callback.
 	// doc-example:end credential-revocations
 	return revocations, err
 }

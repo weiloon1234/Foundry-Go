@@ -27,9 +27,6 @@ permission to repeat business work.
 
 ## Verification
 
-The evidence record contains
-commands, source identities and terminal results.
-
 | Check | Result |
 | --- | --- |
 | Controlled old-behavior check | A temporary Go overlay restoring the old shutdown cancellation test made the existing deterministic regression fail for unavailable, deadline and commit-unknown classifications; checkout runtime files were untouched |

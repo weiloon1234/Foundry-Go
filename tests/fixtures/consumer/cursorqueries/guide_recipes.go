@@ -24,9 +24,8 @@ func paginateSummaries(ctx context.Context, db database.Executor, users models.U
 	cursor := rows.CursorFor(rows.RecordOf(report))
 	ordered := cursor.OrderBy(expr.Asc(rows.At(cursor.Scope(), r.Nickname))).
 		UniqueBy(expr.Group(rows.At(cursor.Scope(), r.ID)))
-	page, err := ordered.Paginate(ctx, db, orm.CursorRequest[reports.UserSummary]{Size: 20})
+	return ordered.Paginate(ctx, db, orm.CursorRequest[reports.UserSummary]{Size: 20})
 	// doc-example:end result-cursor-pagination-1
-	return page, err
 }
 
 func paginateNicknames(ctx context.Context, db database.Executor, users models.UserTable) (orm.CursorPage[value.Nullable[string]], error) {

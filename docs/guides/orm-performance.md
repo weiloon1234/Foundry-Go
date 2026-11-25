@@ -50,8 +50,6 @@ on an Apple M4 Max with 64 GiB RAM and local PostgreSQL 18.6. Runtime GC and
 CPU settings were Go's defaults (16 logical CPUs). Compilation finished before
 the timing comparison; both paths include the same adapter's schema checkout
 checks. Each entry below is the median of five one-second samples.
-The acceptance evidence retains every
-sample, range, source fingerprint and check result.
 
 | Rows per read | Direct SQL after optimization | Typed ORM before | Typed ORM after | Added ORM cost after |
 | --- | ---: | ---: | ---: | ---: |

@@ -142,14 +142,14 @@ unexpected filesystem failures without recursively deleting unrelated entries.
 
 A larger per-request ceiling also needs [admission before capture](#admit-large-multipart-requests-before-capture) and independent disk capacity.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Inputs: `route foundryhttp.Route[foundryhttp.NoPath]`, `directory string`.
+
 Use DefaultEndpointLimits and modify its Multipart limits for the route. The
 HTTP kernel's `MaxBodyBytes` remains an additional ceiling; to accept files larger
 than that server-wide default on one upload route only, declare the route's own
 ceiling with `BodyLimit` and a matching `Timeout` for slow transfers:
-
-These recipes need no application model; the transport and helper types they use are declared or described on this page.
-
-Inputs: `route foundryhttp.Route[foundryhttp.NoPath]`, `directory string`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpuploads/http_uploads_recipe.go#http-uploads-3 -->
 ```go

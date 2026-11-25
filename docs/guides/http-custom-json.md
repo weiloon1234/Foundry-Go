@@ -7,13 +7,13 @@ Go serialization methods. It returns `contract.JSON[ThatSameValue]`. Generated
 DTOs discover the method automatically, retain the concrete field type and
 include the declared wire shape instead of inspecting private representation.
 
-The [TrackingCode consumer](../../tests/fixtures/consumer/httpquery/json_contract.go)
-shares one scalar declaration with its URL codec. `Type.ID` is the value type's
-actual import path and name; use your application's identity when copying it:
-
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `contract`, `fault`, `value`.
+
+The [TrackingCode consumer](../../tests/fixtures/consumer/httpquery/json_contract.go)
+shares one scalar declaration with its URL codec. `Type.ID` is the value type's
+actual import path and name; use your application's identity when copying it:
 
 <!-- compiled-source: tests/fixtures/consumer/httpquery/scalar_metadata.go#tracking-scalar -->
 ```go

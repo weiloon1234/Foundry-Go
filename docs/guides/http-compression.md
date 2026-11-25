@@ -96,9 +96,9 @@ The middleware merges `Vary: Accept-Encoding`. Encoding removes the original
 headers/trailers. Other declared trailers retain their values. Header changes
 after the first final `WriteHeader` cannot rewrite the response snapshot.
 
-When using automatic validators, declare `ETags` before `Compression`:
-
 Inputs: `router http.Handler`.
+
+When using automatic validators, declare `ETags` before `Compression`:
 
 <!-- compiled-source: tests/fixtures/consumer/httpcompression/http_compression_recipes.go#http-compression-3 -->
 ```go
@@ -157,7 +157,6 @@ round trips, clean 406/503 responses, encoder saturation/release, HEAD/304,
 prefix bounds, canceled writes, write failures, native controls, trailers,
 compiler rejections and real-gopls lookup. Resource benchmarks report allocations
 for small and large inputs; total allocated bytes are not a peak-memory claim.
-
 
 The acceptance fixtures also compose compression with typed
 Download/Stream responses and framework-owned assets/SPA fallback. They verify

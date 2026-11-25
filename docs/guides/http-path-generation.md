@@ -28,7 +28,7 @@ ShowUser := foundryhttp.DefineRoute(
 	UserPathDescriptor(),
 )
 ShowUser = foundryhttp.ConfigureRoute(ShowUser, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
-location, err := foundryhttp.RouteURL(ShowUser, UserPath{User: user.ID})
+return foundryhttp.RouteURL(ShowUser, UserPath{User: user.ID})
 ```
 
 Here `models.User` is the application's model, `model` is Foundry's model package,

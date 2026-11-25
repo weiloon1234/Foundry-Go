@@ -2,8 +2,7 @@
 
 **Accepted for team boilerplate development on the supported stack.** The audit,
 fixes and final source/package verification are complete. Use the [team adoption
-guide](team-adoption.md) to start. The evidence record
-retains exact commands, source fingerprints, findings and package identities.
+guide](team-adoption.md) to start.
 
 Scope: use Foundry-Go as a dependency in an independently owned team boilerplate.
 The source review covers all 66 current module families. It reconciles the prior

@@ -13,10 +13,9 @@ func recordBrowserError(ctx context.Context, services application.Services) erro
 	if err != nil {
 		return err
 	}
-	recordErr := engine.RecordBrowser(ctx, telemetry.BrowserError{
+	return engine.RecordBrowser(ctx, telemetry.BrowserError{
 		Portal: "admin", Release: "release-1", Code: telemetry.BrowserCodeTypeError,
 		Frames: []telemetry.BrowserFrame{{File: "admin/_assets/app.js", Line: 1}},
 	})
 	// doc-example:end persisted-telemetry-2
-	return recordErr
 }

@@ -1,8 +1,7 @@
 # Request-aware validation messages — accepted design
 
 Status: implemented and accepted on 2026-09-26. See the
-[usage guide](validation-messages.md) and
-current-source acceptance evidence.
+[usage guide](validation-messages.md).
 The design below is retained as the implemented acceptance scope.
 
 ## Intended experience

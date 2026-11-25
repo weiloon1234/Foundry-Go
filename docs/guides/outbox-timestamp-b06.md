@@ -3,7 +3,6 @@
 Status: framework correction verified on native macOS on 2026-09-28. The full
 `make verify` gate and the relevant runtime/consumer race checks passed on identical
 source snapshots, using required existing PostgreSQL/Redis and tool integrations.
-See the verification record.
 
 B06 remains open until the starter's unchanged required independent verification
 passes on both macOS and Linux against an available revision containing the

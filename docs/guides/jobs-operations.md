@@ -102,8 +102,6 @@ heterogeneous `Dispatcher.Inspect` and `Dispatcher.List` support operator tools.
 Full records contain private payloads. `Record.Summary()` returns only operational
 metadata and a retry token when the record is eligible.
 
-For a retained independent failed job:
-
 `Welcome` is the application's job payload type; `WelcomeJob` is its typed job definition.
 
 `Welcome` is your job payload struct; `WelcomeJob` is its `jobs.Definition[Welcome]`, registered on the `communications` connection. `id` is the retained `jobs.ID[Welcome]` of the job to inspect.
@@ -113,6 +111,8 @@ These recipes need no application model; the transport and helper types they use
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `jobs`.
 
 Inputs: `ctx context.Context`, `dispatcher *jobs.Dispatcher`, `id jobs.ID[Welcome]`, `WelcomeJob jobs.Definition[Welcome]`.
+
+For a retained independent failed job:
 
 <!-- compiled-source: tests/fixtures/consumer/background/guide_retry.go#jobs-operations-1 -->
 ```go
@@ -380,8 +380,5 @@ maintenance, including lease expiry, retention, accounting or workflow advanceme
 There is no queue dashboard, autoscaling controller or automatic failed-workflow
 recovery. The framework owns queue execution and the reusable operator commands;
 the boilerplate supplies domain declarations, configuration and the CLI entry point.
-
-The 2026-09-28 verification record
-captures the accepted source, full gate, real Redis/race checks, typed consumer,
-compiler and editor evidence. Use the [boilerplate handoff](jobs-boilerplate-handoff.md)
+ Use the [boilerplate handoff](jobs-boilerplate-handoff.md)
 for application integration and deployment acceptance.

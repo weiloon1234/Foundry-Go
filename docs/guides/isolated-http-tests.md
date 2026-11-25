@@ -1,7 +1,6 @@
 # Isolated PostgreSQL HTTP tests
 
-T05 native verification passed. The master
-owns acceptance status. The [independent consumer](../../tests/fixtures/consumer/isolatedhttp/application.go)
+T05 native verification passed. The [independent consumer](../../tests/fixtures/consumer/isolatedhttp/application.go)
 uses ordinary application assembly, generated ORM declarations, typed HTTP DTOs and a real
 PostgreSQL transaction per write. Handlers contain no test schema argument.
 

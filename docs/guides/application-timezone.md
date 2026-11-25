@@ -47,40 +47,23 @@ Inputs: `s application.Services`.
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/guide_timezone.go#application-timezone-2 -->
 ```go
-reports := NewReports(s.Time())
+return NewReports(s.Time())
 ```
-
-The following operations return a value and an error. Handle each error normally:
 
 Inputs: `s application.Services`.
 
+The following operations each return a value and an error; check the error after every call as usual (the sequence stays short here):
+
 <!-- compiled-source: tests/fixtures/consumer/reporting/guide_timezone.go#application-timezone-3 -->
 ```go
+// Check err after each call.
 dates := s.Time()
-now, err := dates.Now() // UTC instant
-if err != nil {
-	return err
-}
+now, err := dates.Now()     // UTC instant
 today, err := dates.Today() // date in the application zone
-if err != nil {
-	return err
-}
 when, err := dates.Parse("2026-09-26T09:00:00")
-if err != nil {
-	return err
-}
-text, err := dates.Format(when) // 2026-09-26T09:00:00+08:00
-if err != nil {
-	return err
-}
-start, err := dates.StartOfDay(when) // local midnight as a UTC instant
-if err != nil {
-	return err
-}
+text, err := dates.Format(when)         // 2026-09-26T09:00:00+08:00
+start, err := dates.StartOfDay(when)    // local midnight as a UTC instant
 tomorrow, err := dates.AddDays(when, 1) // same local time next calendar day
-if err != nil {
-	return err
-}
 ```
 
 `Date(instant)` and `Local(instant)` extract typed calendar values. `Location()`
@@ -105,9 +88,9 @@ so a day may be 23 or 25 elapsed hours; it also rejects resulting gaps/overlaps.
 | JSON logging and daily file rollover | Each sink inherits the application zone; `Sink.TimeZone` overrides |
 | Datatable export presentation | Report `Config.TimeZone` inherits the application zone; per-export `Presentation.TimeZone` overrides |
 
-Inside an application schedule constructor:
-
 Inputs: `s application.Services`, `handler schedule.Handler`.
+
+Inside an application schedule constructor:
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/guide_timezone.go#application-timezone-4 -->
 ```go

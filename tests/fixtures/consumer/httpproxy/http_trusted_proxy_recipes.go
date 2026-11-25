@@ -27,7 +27,6 @@ func proxyHandler(router http.Handler) (http.Handler, error) {
 
 func clientAddress(ctx context.Context) netip.Addr {
 	// doc-example:begin http-trusted-proxy-2
-	client := foundryhttp.ClientIP(ctx) // netip.Addr from the service's context
+	return foundryhttp.ClientIP(ctx) // netip.Addr from the service's context
 	// doc-example:end http-trusted-proxy-2
-	return client
 }

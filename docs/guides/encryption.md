@@ -2,8 +2,6 @@
 
 The `encryption` package is the shared authenticated-encryption boundary for Foundry features. MFA uses it for stored factors; later features reuse the same keyring and cipher contracts.
 
-Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
-
 <a id="agent-entry"></a>
 ## Agent entry
 

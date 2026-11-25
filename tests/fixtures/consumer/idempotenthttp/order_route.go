@@ -8,14 +8,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/events"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // doc-example:begin authenticated-idempotency
-func OrderRoute(db database.Executor, endpoint http.AuthenticatedEndpoint[Path, http.NoQuery, Submission, Actor, Receipt], guard auth.Guard[Actor], store *idempotency.Store, create func(context.Context, *database.Tx, Actor, BoundRequest) (Receipt, error)) http.RouteRegistration {
+func OrderRoute(db database.Executor, endpoint foundryhttp.AuthenticatedEndpoint[Path, foundryhttp.NoQuery, Submission, Actor, Receipt], guard auth.Guard[Actor], store *idempotency.Store, create func(context.Context, *database.Tx, Actor, BoundRequest) (Receipt, error)) foundryhttp.RouteRegistration {
 	resolver := modelbinding.Define(func(ctx context.Context, path Path) (value.Optional[Workspace], error) {
 		actor, err := guard.Require(ctx)
 		if err != nil {
@@ -25,20 +25,20 @@ func OrderRoute(db database.Executor, endpoint http.AuthenticatedEndpoint[Path, 
 		return orm.Keyed(workspaces, Workspaces.Key()).Find(ctx, db, path.Workspace)
 	})
 
-	endpointReplay := http.IdempotentAuthenticated(endpoint, store, idempotency.Definition{ID: "orders.create", Version: 1})
+	endpointReplay := foundryhttp.IdempotentAuthenticated(endpoint, store, idempotency.Definition{ID: "orders.create", Version: 1})
 	operation := modelbinding.BindAuthenticatedIdempotent(endpointReplay, resolver)
 	operation = modelbinding.AuthorizeAuthenticatedIdempotentResource(
 		operation,
 		func(_ context.Context, _ Actor, in BoundRequest) error {
 			if !in.Model.Enabled {
-				return http.Forbidden
+				return foundryhttp.Forbidden
 			}
 			return nil
 		},
 	)
 
-	operation = modelbinding.AuthenticatedIdempotentHeaders(operation, func(_ context.Context, result Receipt) ([]http.ResponseHeader, error) {
-		return []http.ResponseHeader{{Name: "Location", Value: http.HeaderValue("/orders/" + result.ID.String())}}, nil
+	operation = modelbinding.AuthenticatedIdempotentHeaders(operation, func(_ context.Context, result Receipt) ([]foundryhttp.ResponseHeader, error) {
+		return []foundryhttp.ResponseHeader{{Name: "Location", Value: foundryhttp.HeaderValue("/orders/" + result.ID.String())}}, nil
 	})
 	return operation.Handle(func(_ context.Context, actor Actor, _ BoundRequest) (idempotency.Scope, error) {
 		return idempotency.NewScope(actor.Tenant, strconv.FormatInt(actor.ID, 10))

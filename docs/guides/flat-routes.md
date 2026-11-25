@@ -10,7 +10,7 @@ request, response, guard, scope and handler used by the eight stage statements.
 <details>
 <summary>Declarations and inputs for the stage sequence</summary>
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `http`, `idempotency`, `validation`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `http` as `foundryhttp`, `idempotency`, `validation`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-6 -->
 ```go
@@ -34,16 +34,16 @@ type PageResource struct {
 ```go
 // Admin is the authenticated editor passed to page handlers.
 type Admin struct{ ID int64 }
-type pageRequest = http.Input[http.NoPath, http.NoQuery, SavePageRequest]
+type pageRequest = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, SavePageRequest]
 type pageService interface {
 	Create(context.Context, Admin, pageRequest) (PageResource, error)
 	Show(context.Context, pageRequest) (PageResource, error)
 }
 
 // PageProtected is the safe public failure for edits to protected pages.
-var PageProtected = http.DefineError("page.protected", 409, "The page is protected.")
+var PageProtected = foundryhttp.DefineError("page.protected", 409, "The page is protected.")
 
-func preparePage(_ context.Context, in pageRequest) (http.NoQuery, SavePageRequest, error) {
+func preparePage(_ context.Context, in pageRequest) (foundryhttp.NoQuery, SavePageRequest, error) {
 	in.Body.Title = strings.TrimSpace(in.Body.Title)
 	return in.Query, in.Body, nil
 }
@@ -57,10 +57,10 @@ Inputs: `service pageService`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#page-stage-inputs -->
 ```go
-spec := http.RouteSpec{ID: "pages.create", Method: http.POST, Access: http.Guarded}
-path := http.StaticPath("/pages")
-adminScope := http.DefineScope("/admin", "admin")
-query, body, response := http.EmptyQuery(), SavePageBody(), PageResponse(201)
+spec := foundryhttp.RouteSpec{ID: "pages.create", Method: foundryhttp.POST, Access: foundryhttp.Guarded}
+path := foundryhttp.StaticPath("/pages")
+adminScope := foundryhttp.DefineScope("/admin", "admin")
+query, body, response := foundryhttp.EmptyQuery(), SavePageBody(), PageResponse(201)
 pageRules := validation.Rules(SavePageRequestValidationFields().Title, validation.NonBlank[string]())
 createPage := service.Create
 ```
@@ -71,14 +71,14 @@ Inputs: `adminGuard http.GuardBinding[Admin]`, `manage auth.AccessScopes[Admin]`
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-1 -->
 ```go
-route := http.DefineRoute(spec, path)
-route = http.ConfigureRoute(route, http.Within(adminScope))
-endpoint := http.DefineEndpoint(route, query, body, response)
-endpoint = http.ConfigureEndpoint(endpoint, http.Errors(PageProtected))
-endpoint = http.PrepareEndpoint(endpoint, preparePage)
-endpoint = http.ValidateBody(endpoint, pageRules)
-admin := http.Authenticated(endpoint, adminGuard, http.Scopes(manage))
-registration := admin.Handle(createPage)
+route := foundryhttp.DefineRoute(spec, path)
+route = foundryhttp.ConfigureRoute(route, foundryhttp.Within(adminScope))
+endpoint := foundryhttp.DefineEndpoint(route, query, body, response)
+endpoint = foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Errors(PageProtected))
+endpoint = foundryhttp.PrepareEndpoint(endpoint, preparePage)
+endpoint = foundryhttp.ValidateBody(endpoint, pageRules)
+admin := foundryhttp.Authenticated(endpoint, adminGuard, foundryhttp.Scopes(manage))
+return admin.Handle(createPage)
 ```
 
 The existing typed functions and handler contracts remain the API. The request
@@ -107,10 +107,14 @@ Inputs: `route http.Route[http.NoPath]`, `access http.GuardBinding[Admin]`, `sto
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-3 -->
 ```go
-endpoint := http.DefineEndpoint(route, query, body, response)
-secured := http.Authenticated(endpoint, access)
-create := http.IdempotentAuthenticated(secured, store, definition)
+endpoint := foundryhttp.DefineEndpoint(route, query, body, response)
+secured := foundryhttp.Authenticated(endpoint, access)
+return foundryhttp.IdempotentAuthenticated(secured, store, definition)
 ```
+
+`route` is the public `http.Route[http.NoPath]`; `endpoint` is the guarded endpoint assembled above. Use `query = http.EmptyQuery()`, `body = SavePageBody()`, and `response = PageResponse(200)`. `showPage` and `createPage` are `service.Show` and `service.Create`; `pathValue` and `queryValue` are `http.NoPath{}` and `http.NoQuery{}`.
+
+Inputs: `ctx context.Context`, `adminGuard http.GuardBinding[Admin]`.
 
 Descriptors (`XBody()`, `XResponse(...)`, `http.EmptyQuery()`), options
 (`http.Scopes(...)`, `http.Errors(...)`, `http.Within(...)`), scopes and
@@ -119,15 +123,11 @@ conversions cannot hide a nested stage call. Stage calls as statements,
 assignments or return operands are allowed. Terminal methods on call results
 are also allowed, including when the registration or URL is passed to another call:
 
-`route` is the public `http.Route[http.NoPath]`; `endpoint` is the guarded endpoint assembled above. Use `query = http.EmptyQuery()`, `body = SavePageBody()`, and `response = PageResponse(200)`. `showPage` and `createPage` are `service.Show` and `service.Create`; `pathValue` and `queryValue` are `http.NoPath{}` and `http.NoQuery{}`.
-
-Inputs: `ctx context.Context`, `adminGuard http.GuardBinding[Admin]`.
-
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-4 -->
 ```go
-public := http.DefineEndpoint(route, query, body, response).Handle(showPage)
-admin := http.Authenticated(endpoint, adminGuard).Handle(createPage)
-url, err := http.DefineEndpoint(route, query, body, response).URL(ctx, pathValue, queryValue)
+public := foundryhttp.DefineEndpoint(route, query, body, response).Handle(showPage)
+admin := foundryhttp.Authenticated(endpoint, adminGuard).Handle(createPage)
+url, err := foundryhttp.DefineEndpoint(route, query, body, response).URL(ctx, pathValue, queryValue)
 ```
 
 Use named stages before free-function terminals such as `pagination.Handle`.
@@ -136,14 +136,14 @@ inside a typed initializer function when several statements are necessary.
 
 ## Generated HTTP pieces
 
-Use the concrete helper beside a generated DTO declaration:
-
 Inputs: `create http.Route[http.NoPath]`.
+
+Use the concrete helper beside a generated DTO declaration:
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-5 -->
 ```go
 response := PageResponse(200)
-endpoint := http.DefineEndpoint(create, http.EmptyQuery(), SavePageBody(), response)
+return foundryhttp.DefineEndpoint(create, foundryhttp.EmptyQuery(), SavePageBody(), response)
 ```
 
 The `http` directive key selects transport independently of validation role:

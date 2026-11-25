@@ -108,9 +108,9 @@ Collection environment values are JSON arrays. For `application.Settings`
 directly, omit `app.` from keys and `__APP` from environment names. An empty
 configured array clears the corresponding code default.
 
-With `application.Settings` directly, the equivalent code default is:
-
 Inputs: `settings application.Settings`.
+
+With `application.Settings` directly, the equivalent code default is:
 
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-3 -->
 ```go
@@ -119,9 +119,9 @@ settings.HTTP.CSPAllowlist.Presets = []foundryhttp.CSPPreset{
 }
 ```
 
-Apply the loaded settings before constructing the middleware:
-
 Inputs: `settings application.Settings`, `router http.Handler`.
+
+Apply the loaded settings before constructing the middleware:
 
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-4 -->
 ```go
@@ -138,7 +138,7 @@ if err != nil {
 middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
 	Enforce: value.Set(policy),
 })
-handler, err := foundryhttp.ApplyMiddleware(router, middleware)
+return foundryhttp.ApplyMiddleware(router, middleware)
 ```
 
 `CSPPresetCloudflareWebAnalytics` allows `https://static.cloudflareinsights.com`
@@ -195,11 +195,11 @@ demonstrates the complete composition.
 
 ## Rendering with a nonce
 
+Inputs: `writer http.ResponseWriter`, `request *http.Request`, `page *template.Template`.
+
 `CSPNonceSource()` requests a nonce for script/style element directives. The
 middleware generates 32 cryptographically random bytes per request and exposes
 the base64 value through a concrete context accessor:
-
-Inputs: `writer http.ResponseWriter`, `request *http.Request`, `page *template.Template`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-5 -->
 ```go

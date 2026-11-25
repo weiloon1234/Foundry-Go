@@ -5,8 +5,6 @@ stored references come from the application's declarations and `foundry generate
 
 Access scopes place a typed ceiling on a credential and compose with current-model policies. See [tokens](tokens.md) for persistence and refresh rotation.
 
-Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
-
 <a id="agent-entry"></a>
 ## Agent entry
 
@@ -17,7 +15,7 @@ Milestone 10 passed native acceptance. See the master roadmap for verification e
 <a id="recipe-access-scopes"></a>
 ## Declare scopes and immutable sets
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `http` as `foundryhttp`, `http`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `http` as `foundryhttp`.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#declare-scopes -->
 ```go
@@ -42,16 +40,16 @@ persistence/contract identifier; a scope does not register a permission or polic
 
 ## Verify a credential, then enforce its grant
 
-An authoritative strategy constructs a scoped proof only after verifying its
-credential and restoring the persisted grant:
-
 The application owns `models.User` and `models.Order` and any generated tables or identities used below.
 
 Inputs: `user models.User`, `grants auth.AccessScopes[models.User]`.
 
+An authoritative strategy constructs a scoped proof only after verifying its
+credential and restoring the persisted grant:
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#verified-scoped-user -->
 ```go
-verified, err := auth.NewScopedProof(user.FoundryReference(), auth.Authenticated, grants)
+return auth.NewScopedProof(user.FoundryReference(), auth.Authenticated, grants)
 ```
 
 This constructor does not verify a submitted model ID or scope list. Never turn
@@ -60,9 +58,9 @@ returns the immutable grant and a boolean distinguishing a scoped proof from an
 ordinary `NewProof`. An empty scoped proof still grants nothing. Neither an empty
 scoped proof nor an ordinary unscoped proof satisfies a nonempty requirement.
 
-In an existing authentication request scope:
-
 Inputs: `ctx context.Context`, `api auth.Guard[models.User]`, `readOrder auth.Policy[models.User, models.Order]`, `required auth.AccessScopes[models.User]`, `order models.Order`.
+
+In an existing authentication request scope:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#read-scoped-order -->
 ```go
@@ -70,6 +68,7 @@ user, err := api.RequireScopes(ctx, required)
 if err != nil {
 	return models.User{}, err
 }
+// Then authorize the concrete resource with its current model policy.
 if err := readOrder.Authorize(ctx, api, order); err != nil {
 	return models.User{}, err
 }
@@ -105,7 +104,7 @@ type ProfileEndpoint = foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, fou
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#configure-scopes -->
 ```go
 func ScopedProfile(endpoint ProfileEndpoint, required auth.AccessScopes[models.User]) ProfileEndpoint {
-	return http.ConfigureAuthenticated(endpoint, http.Scopes(required))
+	return foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Scopes(required))
 }
 ```
 
@@ -113,7 +112,7 @@ For a new endpoint, apply the same requirements with its bound guard:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#configure-bound-scopes -->
 ```go
-func securedProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], binding foundryhttp.GuardBinding[models.User], scopes auth.AccessScopes[models.User], viewAccount auth.Permission[models.User]) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent] {
+func securedProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], binding foundryhttp.GuardBinding[models.User], scopes auth.AccessScopes[models.User], viewAccount auth.Permission[models.User]) ProfileEndpoint {
 	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(viewAccount))
 }
 ```

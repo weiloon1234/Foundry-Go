@@ -179,4 +179,4 @@ The final native `make verify` passed with required PostgreSQL, Redis, TypeScrip
 and real gopls checks, including independent consumers, compiler negatives and
 current generation. Relevant framework and consumer races passed. The review
 also tightened client output bounds and preserved explicit unbound message
-arguments. See the acceptance record.
+arguments.

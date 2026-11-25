@@ -1,11 +1,11 @@
 # Native URL floats and callback ownership
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
 Foundry preserves native and named `float32`/`float64` values in generated path
 and query bindings. A custom text codec is unnecessary for an ordinary float.
 The [independent consumer](../../tests/fixtures/consumer/httpquery/floats.go)
 declares these shapes:
-
-These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
 <!-- compiled-source: tests/fixtures/consumer/httpquery/floats.go#floating-url-types -->
 ```go

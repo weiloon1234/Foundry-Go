@@ -2,8 +2,6 @@
 
 Typed Argon2id passwords and hashes integrate with handwritten ORM fields, model-first login, lockout and checked credential issuance. See [recovery](account-recovery.md) and [credential changes](credential-changes.md) for related flows.
 
-Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
-
 ## Hash and check
 
 The application owns `Account` and any generated tables or identities used below.
@@ -14,6 +12,7 @@ Inputs: `ctx context.Context`, `submittedPassword string`.
 
 <!-- compiled-source: tests/fixtures/consumer/passwords/hashing_recipes.go#hash-and-check -->
 ```go
+// Share one hasher across login and reset operations.
 hasher, err := password.New(password.DefaultConfig())
 if err != nil {
 	return false, err
@@ -28,6 +27,11 @@ if err != nil {
 	return false, err
 }
 matches, err := hasher.Check(ctx, plain, stored)
+if err != nil {
+	return false, err
+}
+// Construct an authenticated proof only when matches is true.
+return matches, nil
 ```
 
 `password.Plaintext` and `password.Hash` are distinct types. Formatting and JSON

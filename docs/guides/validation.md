@@ -79,8 +79,6 @@ type UpdateUser struct {
 }
 ```
 
-
-
 <!-- compiled-source: tests/fixtures/consumer/httpdto/dto.go#user-response-contract -->
 ```go
 //foundry:dto http=response
@@ -366,8 +364,6 @@ private; cancellation and infrastructure errors still fail the whole check.
 Conditions and branches share the work budget. Reuse pure condition rules so
 validation does not cause domain side effects.
 
-The independent `validationrules` consumer composes generated fields:
-
 Declare the application enum and request once, then generate their selectors:
 
 <!-- compiled-source: tests/fixtures/consumer/validationrules/rules.go#registration-input -->
@@ -439,7 +435,6 @@ Detection does not invoke codecs; enum declaration validation executes them at
 construction inside the owned callback boundary. Client generation must retain
 these distinctions and the exact numeric metadata.
 
-
 ## Text formats and temporal comparisons
 
 Use the optional [phone validation adapter](phone.md) for selected-region phone
@@ -461,7 +456,7 @@ configured timezone database; there is no implicit process-local fallback.
 
 For concrete temporal fields, `Before`, `BeforeOrEqual`, `After` and
 `AfterOrEqual` take same-type bounds. `BeforeField` and `AfterOrEqualField`
-compare generated fields directly:
+compare generated fields directly.
 
 The application declares both temporal fields on one DTO:
 
@@ -493,9 +488,9 @@ retained in comparisons and metadata; clients must not reduce these
 checks to JavaScript Date's millisecond precision. Bound rules capture a declared
 value and do not read the current clock.
 
-Relative rules read the clock at every check:
-
 Inputs: `services application.Services`.
+
+Relative rules read the clock at every check:
 
 <!-- compiled-source: tests/fixtures/consumer/validationrules/guide_recipes.go#relative-time-rules -->
 ```go
@@ -514,7 +509,6 @@ makes the declaration invalid instead of silently reading the host clock in UTC.
 A clock failure is an execution failure. These
 rules are server-only and have their own message keys, such as
 `validation.after_now`.
-
 
 ## Required, prohibited and empty content
 
@@ -545,7 +539,6 @@ func PresenceRules() validation.Rule[PresenceInput] {
 	)
 }
 ```
-
 
 `Required` accepts `Optional[T]`; `RequiredNullable` accepts
 `Optional[Nullable[T]]`. Both reject omission and empty content; the nullable
@@ -633,7 +626,7 @@ boundary (and `http.TextPath` / `http.TextQuery` / `http.TextPart` propagate it
 automatically from `JSONContract()` when the type also implements
 `encoding.TextMarshaler` and `encoding.TextUnmarshaler`). Declaring
 `NonEmpty: true` means the framework will reject `""` on every JSON, query,
-path, multipart text and header boundary before calling the application's codec:
+path, multipart text and header boundary before calling the application's codec.
 
 The application scalar and its text/JSON codec are:
 
@@ -774,9 +767,9 @@ swap width and height. Absent, oversized, unsupported or malformed files reject;
 open/read failures are execution failures. `validation.Dimensions` accepts any
 `ImageMeasurer` for other file sources.
 
-To include the configured native codecs, borrow the application's image engine:
-
 Inputs: `engine *imaging.Engine`.
+
+To include the configured native codecs, borrow the application's image engine:
 
 <!-- compiled-source: tests/fixtures/consumer/validationrules/upload_recipes.go#engine-upload-dimensions -->
 ```go
@@ -905,6 +898,5 @@ metadata is shared with endpoint inspection. Bounded image inspection is availab
 clients execute supported rules and explicitly report skipped server checks.
 Request-locale rule messages are described in
 [validation messages](validation-messages.md).
-
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

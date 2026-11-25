@@ -1,9 +1,7 @@
 # Supporting APIs
 
 Milestone 20 passed native verification and consumer review. These helpers use
-focused packages and ordinary Go values. See the
-master evidence
-for checks and operational limits.
+focused packages and ordinary Go values.
 
 ## Cryptography and tokens
 
@@ -138,7 +136,10 @@ Inputs: `subtotal decimal.Decimal`, `total decimal.Decimal`.
 
 <!-- compiled-source: tests/fixtures/consumer/codecs/guide_decimal.go#supporting-apis-1 -->
 ```go
-rate, _ := decimal.Parse("0.0825")
+rate, err := decimal.Parse("0.0825")
+if err != nil {
+	return err
+}
 tax, err := subtotal.Mul(rate)
 if err != nil {
 	return err

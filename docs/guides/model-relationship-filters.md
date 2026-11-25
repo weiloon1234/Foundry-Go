@@ -47,9 +47,9 @@ Existence asks whether any matching row exists. It does not hydrate a singular r
 
 ## Compose nested and alternative conditions
 
-`orm.Has(relation)` returns a predicate owned by the parent model. This integrates with the ordinary boolean query API:
-
 Inputs: `ctx context.Context`, `db database.Executor`, `orders orm.HasMany[models.User, models.Order]`.
+
+`orm.Has(relation)` returns a predicate owned by the parent model. This integrates with the ordinary boolean query API:
 
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_filters.go#model-relationship-filters-2 -->
 ```go
@@ -60,9 +60,9 @@ users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Or(
 )))
 ```
 
-Nested related filters use the same descriptors:
-
 Inputs: `ctx context.Context`, `db database.Executor`.
+
+Nested related filters use the same descriptors:
 
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_filters.go#model-relationship-filters-3 -->
 ```go
@@ -70,7 +70,7 @@ referralsWithOrders := models.UserLinks.Referrals.
 	Where(orm.Has(models.UserLinks.Orders.
 		Where(orm.Gte(models.Orders.TotalCents, 1000))))
 
-introducers, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(referralsWithOrders)))
+return orm.All(ctx, db, models.Users.Query().Where(orm.Has(referralsWithOrders)))
 ```
 
 Each `Where` accepts the related model's predicates. Nested self-relations work without application alias tags or SQL strings. Foundry chooses deterministic aliases that avoid names in the complete supplied query tree, including [explicit correlated subqueries](model-correlations.md).
@@ -85,7 +85,7 @@ groups := models.UserLinks.Groups.
 	Where(orm.Like(models.Groups.Name, "team%")).
 	WherePivot(orm.Gte(models.Memberships.Priority, 2))
 
-members, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(groups)))
+return orm.All(ctx, db, models.Users.Query().Where(orm.Has(groups)))
 ```
 
 Target and pivot predicates retain their separate model types. Both must match the same joined link. A pivot with a NULL key or absent target does not count as a related model. Duplicate links can satisfy existence without duplicating parents. Named natural keys retain their existing relation compatibility and codec contracts.
@@ -98,7 +98,7 @@ Inputs: `ctx context.Context`, `db database.Executor`, `orders orm.HasMany[model
 
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_filters.go#model-relationship-filters-5 -->
 ```go
-users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(orders)).With(orders))
+return orm.All(ctx, db, models.Users.Query().Where(orm.Has(orders)).With(orders))
 ```
 
 `orm.Has` filters parents; `With` loads the matching orders into those returned models. Existence alone leaves relation slots unloaded. A descriptor's ordering and eager-loading clauses do not contribute to its existence test. They remain intact for `With`; existence construction does not mutate the descriptor. Use nested `.Where(orm.Has(child))` to filter by a deeper relationship, rather than relying on `.With(child)`.
@@ -112,5 +112,4 @@ The compiler checks bound relationship metadata and declared keys, then validate
 Alias analysis and SQL compilation are bounded. Cyclic or excessive private query trees fail rather than recurse indefinitely. Bindings share one statement's parameter sequence and limits. Deriving or compiling another query does not alter captured descriptors or their predicates.
 
 Execution uses the caller's context and executor. Canceled operations do not reach the database. Collected results are discarded on query/decoding failure, and ordinary transaction/savepoint outcomes still apply to [model writes](model-writes.md).
-
-The master roadmap owns verification status; milestone 06 records delivered advanced-query contracts. Filtered model queries also support [bounded batch iteration](model-chunks.md).
+ Filtered model queries also support [bounded batch iteration](model-chunks.md).

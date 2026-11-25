@@ -2,14 +2,13 @@ package genericdto
 
 import (
 	"github.com/weiloon1234/Foundry-Go/contract"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-func userEnvelopeResponse(userJSON contract.JSON[UserDTO]) http.Response[Envelope[UserDTO]] {
+func userEnvelopeResponse(userJSON contract.JSON[UserDTO]) foundryhttp.Response[Envelope[UserDTO]] {
 	// doc-example:begin generic-dtos-2
-	response := http.JSONResponse(200, EnvelopeJSON(userJSON))
+	return foundryhttp.JSONResponse(200, EnvelopeJSON(userJSON))
 	// doc-example:end generic-dtos-2
-	return response
 }
 
 // doc-example:begin lookup-contract

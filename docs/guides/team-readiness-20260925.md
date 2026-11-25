@@ -4,8 +4,7 @@ Scope: adopting Foundry-Go as a dependency while a team builds its own boilerpla
 **Accepted for team boilerplate development on the supported stack.** The review,
 corrections and final verification are complete. The team must select a retrievable
 framework version before remote installation. The [adoption guide](team-adoption.md)
-supplies the development path; the evidence record
-retains commands, hashes, corrections and limits.
+supplies the development path.
 
 ## Review method and coverage
 

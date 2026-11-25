@@ -5,7 +5,7 @@ import (
 
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -22,9 +22,8 @@ func OrderReadScopes() (auth.AccessScopes[models.User], error) {
 // persisted credential before supplying this proof; a submitted ID is not proof.
 func VerifiedScopedUser(user models.User, grants auth.AccessScopes[models.User]) (auth.Proof[models.User, model.ID[models.User]], error) {
 	// doc-example:begin verified-scoped-user
-	verified, err := auth.NewScopedProof(user.FoundryReference(), auth.Authenticated, grants)
+	return auth.NewScopedProof(user.FoundryReference(), auth.Authenticated, grants)
 	// doc-example:end verified-scoped-user
-	return verified, err
 }
 
 // ReadScopedOrder combines the credential ceiling with the current domain policy.
@@ -35,6 +34,7 @@ func ReadScopedOrder(ctx context.Context, api auth.Guard[models.User], readOrder
 	if err != nil {
 		return models.User{}, err
 	}
+	// Then authorize the concrete resource with its current model policy.
 	if err := readOrder.Authorize(ctx, api, order); err != nil {
 		return models.User{}, err
 	}
@@ -44,7 +44,7 @@ func ReadScopedOrder(ctx context.Context, api auth.Guard[models.User], readOrder
 
 // doc-example:begin configure-scopes
 func ScopedProfile(endpoint ProfileEndpoint, required auth.AccessScopes[models.User]) ProfileEndpoint {
-	return http.ConfigureAuthenticated(endpoint, http.Scopes(required))
+	return foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Scopes(required))
 }
 
 // doc-example:end configure-scopes

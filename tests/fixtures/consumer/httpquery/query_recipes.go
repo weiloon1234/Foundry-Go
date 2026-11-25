@@ -19,7 +19,6 @@ func normalizeQuery(ctx context.Context, request *http.Request, parameters found
 	// input.User retains model.ID[models.User].
 	// input.Search distinguishes omission from an explicitly empty string.
 	// input.Statuses is an ordinary []models.Status.
-	encoded, err := foundryhttp.EncodeQuery(parameters, ctx, input, limits)
+	return foundryhttp.EncodeQuery(parameters, ctx, input, limits)
 	// doc-example:end http-queries-1
-	return encoded, err
 }

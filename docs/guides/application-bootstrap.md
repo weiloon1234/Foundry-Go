@@ -1,7 +1,6 @@
 # Application bootstrap
 
-C03 passed its native acceptance gate.
-C04 supporting services and [C05 final acceptance](consumer-startup-acceptance.md) also passed.
+C03 and C04 passed their native acceptance gates, and [C05 final acceptance](consumer-startup-acceptance.md) also passed.
 A [compact runnable example](consumer-startup-acceptance.md) needs no external service.
 `application.New(settings)` assembles the configured providers, router and selected
 HTTP kernel. The existing `foundry.New().Register(...).Build(...)` remains the
@@ -25,7 +24,7 @@ with its table declarations and options, registers its HTTP routes, and returns
 
 The application owns `Member`, `models.User`, `models.Order`, and `models.WriteRecord` and any generated tables or identities used below.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `auth`, `foundation`, `http`, `validation`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `auth`, `foundation`, `http` as `foundryhttp`, `validation`.
 
 Inputs: `ctx context.Context`, `configPath string`.
 
@@ -41,7 +40,7 @@ if err != nil {
 }
 // A signal is a graceful stop: Run drains within the application shutdown
 // budget and returns nil, or the task/cleanup failures it observed.
-runErr := app.Run(ctx, foundation.HTTP)
+return app.Run(ctx, foundation.HTTP)
 ```
 
 A signal cancels `ctx`; `Run` then drains within `Settings.ShutdownTimeout` and
@@ -86,7 +85,7 @@ Inputs: `ctx context.Context`, `settings application.Settings`.
 
 <!-- compiled-source: tests/fixtures/goway/guideadapters/guide_bootstrap.go#application-bootstrap-2 -->
 ```go
-app, err := application.New(settings, application.WithTables(models.Tables()...)).Build(ctx)
+return application.New(settings, application.WithTables(models.Tables()...)).Build(ctx)
 ```
 
 `WithTables` reuses `orm.Check` and reports the list's declaration errors through
@@ -150,11 +149,11 @@ request reads its own writes. Default security headers precede custom middleware
 put an explicitly configured trusted-proxy policy before CORS/browser policies
 when operating behind a trusted edge. No forwarding headers are trusted by default.
 
-Bind a model-specific default once per route group:
-
 `Member` and `Profile` below are the application's actor model and response DTO.
 
 The profile endpoint returns this public response DTO. Generate its response descriptor beside the declaration.
+
+Bind a model-specific default once per route group:
 
 <!-- compiled-source: tests/fixtures/consumer/bootstrap/routes.go#profile-response -->
 ```go
@@ -168,7 +167,7 @@ type Profile struct {
 <!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_assembly.go#profile-handler-contract -->
 ```go
 // ProfileInput combines the route, query and body types of the profile endpoint.
-type ProfileInput = http.Input[http.NoPath, http.NoQuery, http.NoBody]
+type ProfileInput = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]
 type profileService interface {
 	Profile(context.Context, Member, ProfileInput) (Profile, error)
 }
@@ -178,11 +177,11 @@ Inputs: `ctx context.Context`, `cookieAuthentication *http.Authentication`, `mem
 
 <!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_assembly.go#application-bootstrap-3 -->
 ```go
-members, err := http.BindGuard(cookieAuthentication, memberGuard)
+members, err := foundryhttp.BindGuard(cookieAuthentication, memberGuard)
 if err != nil {
-	return http.RouteRegistration{}, err
+	return foundryhttp.RouteRegistration{}, err
 }
-route := http.Authenticated(profileEndpoint, members).Handle(
+route := foundryhttp.Authenticated(profileEndpoint, members).Handle(
 	func(ctx context.Context, actor Member, input ProfileInput) (Profile, error) {
 		return service.Profile(ctx, actor, input)
 	},
