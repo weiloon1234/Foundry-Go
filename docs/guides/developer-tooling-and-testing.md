@@ -198,6 +198,38 @@ heading, fails. `database/orm/testdata/public-methods.txt` stays
 a separate record: it pins method and field signatures and promoted members, which the
 name-and-kind inventory does not hold.
 
+<a id="api-comments"></a>
+## Comment the framework's caller inputs
+
+Editors and coding agents learn the framework from hover text, so a constant, variable
+or field an application sets or names without a comment is a guess. A framework author
+comments every exported constant and variable of an importable package and every exported
+field of a **caller-input** struct. A struct is a caller input when its type, followed
+through pointers, slices, arrays, maps, channels, function types, interface methods,
+generic type arguments and aliases, is a parameter of an exported function, method,
+interface method or function-typed field, or the type of an exported or embedded field of
+another caller input. A struct that appears only in results is not required yet. Types
+declared in `internal` count when an importable package exposes them. Generated
+declarations are checked as well: the fix belongs in the generator or its metadata.
+
+A comment is the declaration's own doc comment or trailing line comment, and its first
+sentence starts with the declared name (the bare name, also for a constant or a field) and
+says more than the name: once the name, its words, articles and linking words (`is`,
+`of`, `to`, and the like) are removed, a word must remain, so `Timeout is the timeout.`
+fails. Each member of a grouped `const (` or `var (` block needs its own comment; the
+block's heading does not count. Names declared together (`A, B int`) cannot share one:
+split them.
+
+`go run ./internal/cmd/apicomments`, part of `make docs-check`, prints a finding with rule
+`api-comment` for every required declaration without such a comment, at its location. The
+declarations that lack one today are listed in
+[`internal/apicomment/uncommented.txt`](../../internal/apicomment/uncommented.txt), one
+`package`, kind and name per line. The file only shrinks: a missing comment that is not
+listed fails (new API is commented), and a listed declaration that now has a comment, or
+that no longer exists or is no longer required, fails until its line is removed. Write the
+comment, then run `go run ./internal/cmd/apicomments --shrink`, which removes such lines
+and never adds one. The release target is an empty file.
+
 <a id="recipe-reference-guides"></a>
 ## Reference pinned guides
 
@@ -830,7 +862,7 @@ The rule IDs are stable output. `foundry routes check`, `foundry models check`,
 `foundry lint --no-raw`, `foundry generate --check`, `foundry generate`,
 `foundry docs check`, the framework's `make docs-check` and
 `go run ./internal/cmd/exportsurface` (the `make generate-check` step that checks the
-retired-names ledger) print these rules, and a
+retired-names ledger) and `go run ./internal/cmd/apicomments` print these rules, and a
 rule's guide and anchor are validated by `make docs-check`. The last column names the
 anchor that a finding raised for an application's own documents teaches when it differs
 from the framework's; the table must state it exactly and `make docs-check` refuses a
@@ -863,6 +895,7 @@ mismatch:
 | `doc-limit` | `docs check` | `developer-tooling-and-testing#document-limits` |  |
 | `doc-file` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
 | `doc-comment` | `docs check` | `developer-tooling-and-testing#document-limits` |  |
+| `api-comment` | `apicomments` | `developer-tooling-and-testing#api-comments` |  |
 | `doc-rendered` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
 | `doc-marker` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
 | `doc-region` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |

@@ -159,6 +159,7 @@ func (policy sourcePolicy) sourceName(path string) bool {
 		"internal/retirement/exported-surface.txt",
 		"internal/retirement/release/exported-surface.txt",
 		"internal/retirement/release/retired-names.txt",
+		"internal/apicomment/uncommented.txt",
 		"typescript/testdata/reserved-names.txt",
 		"docs/evidence/goway-6a12-capability-audit.tsv",
 		"docs/evidence/goway-stage8d3a-api-removals.tsv",

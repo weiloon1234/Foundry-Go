@@ -52,15 +52,33 @@ func ReleaseSurface(current []byte, tag string) []byte {
 	return append([]byte("# Recorded at release "+tag+".\n"), current...)
 }
 
-// Surface computes the recorded inventory of root as the file's bytes.
-func Surface(root string) ([]byte, error) {
+// SurfacePackage is one type-checked framework package with its syntax, as one
+// build configuration selects its files.
+type SurfacePackage struct {
+	Dir   string
+	Types *types.Package
+	Files []*ast.File
+}
+
+// SurfaceConfig is the framework as one supported build configuration loads it:
+// Importable holds the non-internal, non-main packages in directory order, and
+// All every loaded package (internal ones too) by import path.
+type SurfaceConfig struct {
+	Importable []SurfacePackage
+	All        map[string]SurfacePackage
+}
+
+// LoadSurface type-checks every importable package of root, and what they
+// import from the framework, for each supported build configuration. Positions
+// of all configurations share the returned file set.
+func LoadSurface(root string) (*token.FileSet, []SurfaceConfig, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	dirs, err := surfaceDirs(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var contexts []build.Context
 	for _, config := range surfaceConfigs {
@@ -71,7 +89,7 @@ func Surface(root string) ([]byte, error) {
 	external := make(map[string]bool)
 	for _, ctx := range contexts {
 		if err := collectExternalImports(root, ctx, dirs, external); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	fset := token.NewFileSet()
@@ -79,24 +97,47 @@ func Surface(root string) ([]byte, error) {
 	if len(external) != 0 {
 		imports, err = exportImporter(fset, root, sortedKeys(external))
 		if err != nil {
-			return nil, safeerror.Prefix(root+": resolve surface imports", err)
+			return nil, nil, safeerror.Prefix(root+": resolve surface imports", err)
 		}
 	}
-	lines := make(map[string]bool)
+	var configs []SurfaceConfig
 	for _, ctx := range contexts {
-		loader := &surfaceLoader{fset: fset, root: root, ctx: ctx, external: imports, packages: make(map[string]*types.Package), loading: make(map[string]bool)}
+		loader := &surfaceLoader{fset: fset, root: root, ctx: ctx, external: imports, packages: make(map[string]*types.Package), files: make(map[string][]*ast.File), loading: make(map[string]bool)}
+		var config SurfaceConfig
 		for _, dir := range dirs {
 			if strings.Contains("/"+dir+"/", "/internal/") {
 				continue
 			}
 			pkg, err := loader.load(dir)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if pkg == nil || pkg.Name() == "main" {
 				continue
 			}
-			recordSurface(pkg, dir, lines)
+			config.Importable = append(config.Importable, SurfacePackage{Dir: dir, Types: pkg, Files: loader.files[dir]})
+		}
+		config.All = make(map[string]SurfacePackage, len(loader.packages))
+		for dir, pkg := range loader.packages {
+			if pkg != nil {
+				config.All[pkg.Path()] = SurfacePackage{Dir: dir, Types: pkg, Files: loader.files[dir]}
+			}
+		}
+		configs = append(configs, config)
+	}
+	return fset, configs, nil
+}
+
+// Surface computes the recorded inventory of root as the file's bytes.
+func Surface(root string) ([]byte, error) {
+	_, configs, err := LoadSurface(root)
+	if err != nil {
+		return nil, err
+	}
+	lines := make(map[string]bool)
+	for _, config := range configs {
+		for _, pkg := range config.Importable {
+			recordSurface(pkg.Types, pkg.Dir, lines)
 		}
 	}
 	var out strings.Builder
@@ -200,6 +241,7 @@ type surfaceLoader struct {
 	ctx      build.Context
 	external types.Importer
 	packages map[string]*types.Package
+	files    map[string][]*ast.File
 	loading  map[string]bool
 }
 
@@ -251,7 +293,7 @@ func (l *surfaceLoader) load(dir string) (*types.Package, error) {
 	}
 	var files []*ast.File
 	for _, name := range found.GoFiles {
-		file, err := parser.ParseFile(l.fset, filepath.Join(abs, name), nil, parser.SkipObjectResolution)
+		file, err := parser.ParseFile(l.fset, filepath.Join(abs, name), nil, parser.SkipObjectResolution|parser.ParseComments)
 		if err != nil {
 			return nil, err
 		}
@@ -271,6 +313,7 @@ func (l *surfaceLoader) load(dir string) (*types.Package, error) {
 		return nil, safeerror.New(fmt.Sprintf("%s: no scope for surface check", dir))
 	}
 	l.packages[dir] = pkg
+	l.files[dir] = files
 	return pkg, nil
 }
 

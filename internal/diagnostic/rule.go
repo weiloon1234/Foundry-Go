@@ -82,6 +82,7 @@ var (
 	DocLimit          = Rule{"doc-limit", tooling, limits, ""}
 	DocFile           = Rule{"doc-file", tooling, pinned, ""}
 	DocComment        = Rule{"doc-comment", tooling, limits, ""}
+	APIComment        = Rule{"api-comment", tooling, "api-comments", ""}
 
 	DocRendered       = Rule{"doc-rendered", tooling, authors, apps}
 	DocMarker         = Rule{"doc-marker", tooling, authors, apps}
@@ -106,7 +107,7 @@ func Rules() []Rule {
 		RouteNesting, RouteHelper, RouteHelperMissing, ModelTable, RawSQL, GeneratedStale, GenerateDecl,
 		EnumList, MigrationUnregistered,
 		GuidesDeclaration, AnchorInvalid, AnchorDuplicate, AnchorMissing, GuideName, GuideMissing,
-		RetiredCommand, RetiredAPI, AmbiguousAPI, LedgerShape, RemovalUnledgered, LedgerEntryLost, SurfaceStale, DocLimit, DocFile, DocComment,
+		RetiredCommand, RetiredAPI, AmbiguousAPI, LedgerShape, RemovalUnledgered, LedgerEntryLost, SurfaceStale, DocLimit, DocFile, DocComment, APIComment,
 		DocRendered, DocMarker, DocRegion, DocBinding, DocSectionAnchor, DocAgentEntry, DocInputs, DocWorkedExample,
 		DocLink, DocMilestone, DocModelExample, FixtureGoVersion, BlueprintNumbered, RuleCatalogue,
 	}

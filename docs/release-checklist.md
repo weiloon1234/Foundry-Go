@@ -56,6 +56,12 @@ without the baseline, or the baseline without the heading, fails in that commit 
 CI. Do not run it for any other purpose: the baseline is the last release, not the
 working tree.
 
+## Declarations without a doc comment
+
+Report the line count of `internal/apicomment/uncommented.txt` (the first line of
+`go run ./internal/cmd/apicomments` output says it) in the release notes. The file only
+shrinks and the target is an empty file.
+
 ## Private packaged consumer gate
 
 [tools/release](../tools/release) is an independent development module using

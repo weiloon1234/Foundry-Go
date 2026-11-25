@@ -315,16 +315,24 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 	// constraint the migration did not name is dropped by PostgreSQL's default name.
 	migration := func(constraints ...*checkConstraint) string {
 		var drops []string
+		several := false
 		for _, c := range constraints {
 			if !c.known() {
 				drops = append(drops, fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s", f.table, sqlName(c.dropName())))
+				several = several || len(c.idents) != 1
 			}
 		}
 		if len(drops) == 0 {
 			return "add a new migration that re-declares the constraint with this list: "
 		}
-		return fmt.Sprintf("add a new migration that drops the unnamed %s (%s, PostgreSQL's default %s for %s) and re-declares the constraint with this list: ",
-			plural(len(drops), "CHECK", "CHECKs"), strings.Join(drops, "; "), plural(len(drops), "name", "names"), plural(len(drops), "it", "them"))
+		// An unnamed constraint over several columns holds conditions on the
+		// others, which the new constraint must keep.
+		keep := ""
+		if several {
+			keep = " (keep its conditions on the other columns and replace only the list)"
+		}
+		return fmt.Sprintf("add a new migration that drops the unnamed %s (%s, PostgreSQL's default %s for %s) and re-declares the constraint with this list%s: ",
+			plural(len(drops), "CHECK", "CHECKs"), strings.Join(drops, "; "), plural(len(drops), "name", "names"), plural(len(drops), "it", "them"), keep)
 	}
 	list := renderList(func() []listValue {
 		values := make([]listValue, len(f.expected))
@@ -377,7 +385,7 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 			if v.integer || strings.HasSuffix(v.text, " ") || n > 0 && utf8.RuneCountInString(v.text) > n {
 				size := "unbounded"
 				if n > 0 {
-					size = strconv.Itoa(n) + " characters"
+					size = strconv.Itoa(n) + plural(n, " character", " characters")
 				}
 				why := fmt.Sprintf("the column's type pads its values (%s), and %s is not a value that compares exactly: it has trailing spaces or more characters", size, v)
 				return unreadableFinding(f, subject, []unreadableReason{{text: why, inexact: true}}, table), false

@@ -313,6 +313,13 @@ func TestStatementFormsThePostgreSQLRuleDoesNotApply(t *testing.T) {
 		if findings, _ := compareField(trailing, h); len(findings) != 1 || !strings.Contains(findings[0].Problem, "pads its values") {
 			t.Fatalf("a case with a trailing space: %v", findings)
 		}
+		one, _ := replay(map[string]map[string]bool{"flags": {"mark": true}}, []string{`CREATE TABLE flags (mark char(1) NOT NULL CHECK(mark IN ('a','b')))`})
+		if findings, _ := compareField(textField("flags", "mark", "a", "bc"), one); len(findings) != 1 || !strings.Contains(findings[0].Problem, "(1 character)") || strings.Contains(findings[0].Problem, "1 characters") {
+			t.Fatalf("a width of one agrees in number: %v", findings)
+		}
+		if findings, _ := compareField(long, h); len(findings) != 1 || !strings.Contains(findings[0].Problem, "(2 characters)") {
+			t.Fatalf("a width of two: %v", findings)
+		}
 	})
 	t.Run("a citext column without a CHECK on it is not a finding", func(t *testing.T) {
 		if got, compared := check(`CREATE TABLE invoices (id uuid, status citext)`); len(got) != 0 || compared {
@@ -502,5 +509,33 @@ func TestTheDropAFindingPrintsRemovesTheUnnamedConstraint(t *testing.T) {
 		if findings, compared := compareField(field, h); len(findings) != 0 || !compared {
 			t.Fatalf("%s: the printed drops %v leave %v", create, drops, findings)
 		}
+	}
+}
+
+// TestUnnamedMultiColumnFixKeepsTheOtherConditions: the advice for a rejecting
+// unnamed constraint over several columns says to keep its conditions on the
+// other columns, and advice for a single-column constraint does not.
+func TestUnnamedMultiColumnFixKeepsTheOtherConditions(t *testing.T) {
+	const keep = "keep its conditions on the other columns and replace only the list"
+	cases := []struct {
+		name string
+		sql  string
+		keep bool
+	}{
+		{"several columns", `CREATE TABLE invoices (id uuid PRIMARY KEY, status text NOT NULL, n int, CHECK (status IN ('draft','paid') AND n > 0))`, true},
+		{"one column", `CREATE TABLE invoices (id uuid PRIMARY KEY, status text NOT NULL, n int, CHECK (status IN ('draft','paid')))`, false},
+		{"several columns, named", `CREATE TABLE invoices (id uuid PRIMARY KEY, status text NOT NULL, n int, CONSTRAINT shape CHECK (status IN ('draft','paid') AND n > 0))`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := replay(map[string]map[string]bool{"invoices": {"status": true}}, []string{tc.sql})
+			findings, _ := compareField(textField("invoices", "status", "draft", "paid", "void"), h)
+			if len(findings) != 1 || !strings.Contains(findings[0].Problem, "can never be stored") {
+				t.Fatalf("%v", findings)
+			}
+			if got := strings.Contains(findings[0].Fix, keep); got != tc.keep {
+				t.Fatalf("keep advice = %v, want %v:\n%s", got, tc.keep, findings[0].Fix)
+			}
+		})
 	}
 }

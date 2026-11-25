@@ -241,6 +241,12 @@ a membership test compares it with, that is not an enum case, is a finding at th
 field, "holds X, which is not an enum case", unless the constraints reject it or depend on a
 test the rule cannot read for it. So `status <> 'archived' OR n > 1` and
 `col BETWEEN 0 AND 5` hold nothing, and `status IN ('a', 'b', 'x') AND n > 0` holds `x`.
+A range test (`BETWEEN` and the ordering operators) never reports a value that is not an
+enum case: its bounds are not values the column holds. Non-case values are collected from
+positive membership tests only (`=`, `IN`, `= ANY` and `<@`); a value that only a negated
+test admits (`<>`, `NOT IN`, `<> ALL`) is not reported. A cast that could change the value
+being compared (see above) makes the test unreadable, so no value is reported through it;
+that is by design.
 A column that
 declares `values=` has its named cases checked as above, and every case it does not name
 must be rejected by some constraint: a case that every constraint passes is a finding.

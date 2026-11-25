@@ -124,6 +124,7 @@ models-check:
 
 docs-check:
 	$(GO) run ./internal/cmd/checkdocs
+	$(GO) run ./internal/cmd/apicomments
 
 release-tools-check:
 	cd tools/release && $(GO) vet ./... && $(GO) test ./...
