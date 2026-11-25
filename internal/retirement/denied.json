@@ -1278,7 +1278,8 @@
       "name": "Endpoint.WithBodyValidation"
     },
     {
-      "name": "Endpoint.WithScopes"
+      "name": "Endpoint.WithScopes",
+      "replacement": "http.Authenticated(endpoint, binding, http.Scopes(scopes))"
     },
     {
       "name": "Endpoint.WithPermissions"
@@ -1438,7 +1439,8 @@
   ],
   "http/pagination": [
     {
-      "name": "AuthenticatedNumberedEndpoint.WithScopes"
+      "name": "AuthenticatedNumberedEndpoint.WithScopes",
+      "replacement": "pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))"
     },
     {
       "name": "AuthenticatedNumberedEndpoint.WithPermissions"
@@ -1447,7 +1449,8 @@
       "name": "AuthenticatedNumberedEndpoint.WithAuthorization"
     },
     {
-      "name": "AuthenticatedSimpleEndpoint.WithScopes"
+      "name": "AuthenticatedSimpleEndpoint.WithScopes",
+      "replacement": "pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))"
     },
     {
       "name": "AuthenticatedSimpleEndpoint.WithPermissions"
@@ -1456,7 +1459,8 @@
       "name": "AuthenticatedSimpleEndpoint.WithAuthorization"
     },
     {
-      "name": "AuthenticatedCursorEndpoint.WithScopes"
+      "name": "AuthenticatedCursorEndpoint.WithScopes",
+      "replacement": "pagination.ConfigureAuthenticated(endpoint, http.Scopes(scopes))"
     },
     {
       "name": "AuthenticatedCursorEndpoint.WithPermissions"

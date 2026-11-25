@@ -150,7 +150,7 @@ func TestDocumentationPackagedOfflineConsumer(t *testing.T) {
 	put(t, app, "AGENTS.md", "Foundry guides: `developer-tooling-and-testing#"+anchor+"`\nUse `http.Endpoint.WithBodyValidation`.\n")
 	beforeApp = documentationTree(t, app)
 	output, err = documentationResult(t, app, offline, goBinary, "tool", "foundry", "docs", "check", "--dir", ".")
-	if err == nil || !strings.Contains(output, "AGENTS.md:2:") || !strings.Contains(output, "retired API") {
+	if err == nil || !strings.Contains(output, "AGENTS.md:2: http.Endpoint.WithBodyValidation is retired;") {
 		t.Fatalf("packaged checker did not apply its embedded retirement rules: %v\n%s", err, output)
 	}
 	if !reflect.DeepEqual(beforeApp, documentationTree(t, app)) || !reflect.DeepEqual(beforeCache, documentationTree(t, cache)) {
