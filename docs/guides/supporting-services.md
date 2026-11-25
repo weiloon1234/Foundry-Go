@@ -60,12 +60,32 @@ Go settings/defaults and generated override keys remain the source of truth.
 
 ## Typed jobs and domain dependencies
 
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_jobs.go#supporting-services-1 -->
 ```go
-connection, err := services.JobConnection()
-if err != nil { return err }
-work, err := ReportJob.On(connection)
-if err != nil { return err }
-_, err = work.Dispatch(ctx, ReportPayload{ReportID: id}, jobs.Options[ReportPayload]{})
+// ReportID identifies the report requested by a queued task.
+type ReportID string
+
+// ReportPayload carries the report identifier across the job boundary.
+type ReportPayload struct {
+	// ReportID selects the report to build.
+	ReportID ReportID `json:"report_id"`
+}
+
+// ReportJob shares its identity between registration and dispatch.
+var ReportJob = jobs.Define[ReportPayload]("reports.build", 1, jobs.DefaultPolicy("reports"))
+
+func queueReport(ctx context.Context, services application.Services, id ReportID) error {
+	connection, err := services.JobConnection()
+	if err != nil {
+		return err
+	}
+	work, err := ReportJob.On(connection)
+	if err != nil {
+		return err
+	}
+	_, err = work.Dispatch(ctx, ReportPayload{ReportID: id}, jobs.Options[ReportPayload]{})
+	return err
+}
 ```
 
 An empty per-call queue uses the connection default. An explicit queue wins. The

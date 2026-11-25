@@ -368,30 +368,32 @@ binary with `-ldflags=-w`, and restarts the server child process. It also adds
 `--gcflags`, either as a separate field or followed by `=...`.
 If compilation fails, the previous server keeps running uninterrupted.
 
-Configure `devserver.Options`:
+Configure `devserver.Options`. Supply `validatePortals` as the application callback
+that checks portal folder layout before a rebuild:
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_devserver.go#developer-tooling-and-testing-1 -->
 ```go
-opts := devserver.Options{
-	Root:    projectRoot,
-	Target:  "./cmd/artisan",
-	Args:    []string{"serve"},
-	Env:     []string{"WEB__ENABLED=true", "WEB__DEV_PROXY=true"},
-	Watched: []string{"config/*.toml", "web/portals/*/portal.json", localEnvPath},
-	Helpers: []devserver.Helper{
-		{
-			Name:       "admin",
-			Executable: "npm",
-			Args:       []string{"--prefix", "web", "run", "dev", "--", "admin", "--port", "5173", "--strictPort"},
-			Banner:     "admin: http://127.0.0.1:8080/admin (Vite on 5173)",
+func runDevelopmentServer(ctx context.Context, projectRoot, localEnvPath string, streams cli.Streams, validatePortals func() error) error {
+	opts := devserver.Options{
+		Root:    projectRoot,
+		Target:  "./cmd/artisan",
+		Args:    []string{"serve"},
+		Env:     []string{"WEB__ENABLED=true", "WEB__DEV_PROXY=true"},
+		Watched: []string{"config/*.toml", "web/portals/*/portal.json", localEnvPath},
+		Helpers: []devserver.Helper{
+			{
+				Name:       "admin",
+				Executable: "npm",
+				Args:       []string{"--prefix", "web", "run", "dev", "--", "admin", "--port", "5173", "--strictPort"},
+				Banner:     "admin: http://127.0.0.1:8080/admin (Vite on 5173)",
+			},
 		},
-	},
-	OnChange: func() error {
-		// Validates dynamic changes before rebuild (e.g. portal folder layout changes).
-		return nil
-	},
-}
-if err := devserver.Run(ctx, opts, streams); err != nil {
-	return err
+		OnChange: validatePortals,
+	}
+	if err := devserver.Run(ctx, opts, streams); err != nil {
+		return err
+	}
+	return nil
 }
 ```
 

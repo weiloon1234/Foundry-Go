@@ -2,7 +2,9 @@ package consumer_test
 
 import (
 	"context"
+
 	"errors"
+	"foundry.test/consumer/tooling"
 	"io"
 	"log/slog"
 	"testing"
@@ -58,37 +60,9 @@ func Example_telemetryDependencies() {
 	_ = prepare
 }
 
-type telemetryConsoleActor struct {
-	ID model.ID[telemetryConsoleActor]
-}
-
-type telemetryActorAttribution struct {
-	Key     telemetry.AlertKey
-	Episode telemetry.Episode
-	Actor   model.ID[telemetryConsoleActor]
-}
-
-type telemetryActorRepository interface {
-	LockAuthorized(context.Context, *database.Tx, model.ID[telemetryConsoleActor]) (telemetryConsoleActor, error)
-	RecordAcknowledgement(context.Context, *database.Tx, telemetryActorAttribution) error
-}
-
-// Actor policy and attribution remain consumer-owned, in the caller's actual
-// transaction. Returning from AcknowledgeIn alone does not promise commit.
+// Actor policy and attribution execute in the same transaction as acknowledgement.
 func Example_telemetryAcknowledgement() {
-	acknowledge := func(ctx context.Context, db *database.DB, engine *telemetry.Engine, actors telemetryActorRepository, actorID model.ID[telemetryConsoleActor], key telemetry.AlertKey) error {
-		return db.Transaction(ctx, func(tx *database.Tx) error {
-			actor, err := actors.LockAuthorized(ctx, tx, actorID)
-			if err != nil {
-				return err
-			}
-			ack, err := engine.AcknowledgeIn(ctx, tx, key)
-			if err != nil {
-				return err
-			}
-			return actors.RecordAcknowledgement(ctx, tx, telemetryActorAttribution{Key: ack.Key, Episode: ack.Episode, Actor: actor.ID})
-		})
-	}
+	acknowledge := tooling.AcknowledgeAlert
 	_ = acknowledge
 }
 
@@ -108,7 +82,7 @@ func TestConsumerTelemetryDTOsRetainConcreteIdentityOwners(t *testing.T) {
 	if alert.RunID != runID || event.ID != eventID {
 		t.Fatal("public snapshots lost their concrete identity")
 	}
-	attribution := telemetryActorAttribution{Episode: 1}
+	attribution := tooling.TelemetryActorAttribution{Episode: 1}
 	if attribution.Episode == alert.Episode {
 		t.Fatal("old actor attribution matched the reopened episode")
 	}

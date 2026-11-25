@@ -3,9 +3,13 @@
 Set one application timezone; UTC is the default. The setting is owned by each
 application, so independent applications in the same process remain isolated.
 
+<!-- compiled-source: tests/fixtures/consumer/reporting/guide_timezone.go#application-timezone-1 -->
 ```go
-settings := application.DefaultSettings()
-settings.TimeZone = "Asia/Kuala_Lumpur" // temporal.ZoneName
+func zoneSettings() application.Settings {
+	settings := application.DefaultSettings()
+	settings.TimeZone = "Asia/Kuala_Lumpur" // temporal.ZoneName
+	return settings
+}
 ```
 
 For configuration rooted at `application.Settings`:
@@ -29,27 +33,60 @@ It borrows the application's injected clock, including `application.WithClock`
 test clocks, and binds calendar/presentation operations to the selected timezone.
 No request context or repeated service-container forwarding is needed.
 
+<!-- compiled-source: tests/fixtures/consumer/reporting/guide_timezone.go#report-dates-constructor -->
 ```go
-type Reports struct { dates temporal.Service }
+// Reports retains the application clock and zone for report dates.
+type Reports struct{ dates temporal.Service }
 
-func NewReports(dates temporal.Service) *Reports {
-    return &Reports{dates: dates}
+// NewReports injects the configured temporal service.
+func NewReports(dates temporal.Service) *Reports { return &Reports{dates: dates} }
+```
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/guide_timezone.go#application-timezone-2 -->
+```go
+func reportService(s application.Services) *Reports {
+	reports := NewReports(s.Time())
+	return reports
 }
-
-// In an application declaration constructor:
-reports := NewReports(s.Time())
 ```
 
 The following operations return a value and an error. Handle each error normally:
 
+<!-- compiled-source: tests/fixtures/consumer/reporting/guide_timezone.go#application-timezone-3 -->
 ```go
-dates := s.Time()
-now, err := dates.Now()                    // UTC instant
-today, err := dates.Today()                // date in the application zone
-when, err := dates.Parse("2026-09-26T09:00:00")
-text, err := dates.Format(when)            // 2026-09-26T09:00:00+08:00
-start, err := dates.StartOfDay(when)       // local midnight as a UTC instant
-tomorrow, err := dates.AddDays(when, 1)    // same local time next calendar day
+func calendarDates(s application.Services) error {
+	dates := s.Time()
+	now, err := dates.Now() // UTC instant
+	if err != nil {
+		return err
+	}
+	today, err := dates.Today() // date in the application zone
+	if err != nil {
+		return err
+	}
+	when, err := dates.Parse("2026-09-26T09:00:00")
+	if err != nil {
+		return err
+	}
+	text, err := dates.Format(when) // 2026-09-26T09:00:00+08:00
+	if err != nil {
+		return err
+	}
+	start, err := dates.StartOfDay(when) // local midnight as a UTC instant
+	if err != nil {
+		return err
+	}
+	tomorrow, err := dates.AddDays(when, 1) // same local time next calendar day
+	if err != nil {
+		return err
+	}
+	_ = now
+	_ = today
+	_ = text
+	_ = start
+	_ = tomorrow
+	return err
+}
 ```
 
 `Date(instant)` and `Local(instant)` extract typed calendar values. `Location()`
@@ -76,9 +113,13 @@ so a day may be 23 or 25 elapsed hours; it also rejects resulting gaps/overlaps.
 
 Inside an application schedule constructor:
 
+<!-- compiled-source: tests/fixtures/consumer/reporting/guide_timezone.go#application-timezone-4 -->
 ```go
-calendar := s.Calendar()
-daily, err := calendar.DailyAt("reports.daily", "09:00", handler)
+func dailyReport(s application.Services, handler schedule.Handler) (schedule.Declaration, error) {
+	calendar := s.Calendar()
+	daily, err := calendar.DailyAt("reports.daily", "09:00", handler)
+	return daily, err
+}
 ```
 
 Enable/configure the scheduler and coordination as described in the

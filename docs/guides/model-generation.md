@@ -94,12 +94,14 @@ the existing descriptor; naming collisions abort generation. See
 Use `header:"Explicit-Name"` on a `//foundry:query` field to declare a request
 header alongside URL query parameters:
 
+<!-- compiled-source: tests/fixtures/consumer/httpquery/request_headers.go#model-generation-1 -->
 ```go
+//
 //foundry:query
 type RequestParameters struct {
-    Search     value.Optional[string] `query:"q"`
-    AppVersion string                 `header:"X-App-Version"`
-    DeviceID   value.Optional[string] `header:"X-Device-ID"`
+	Search     value.Optional[string] `query:"q"`
+	AppVersion string                 `header:"X-App-Version"`
+	DeviceID   value.Optional[string] `header:"X-Device-ID"`
 }
 ```
 

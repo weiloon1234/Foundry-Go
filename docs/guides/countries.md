@@ -8,13 +8,31 @@ records the checks and operational limits.
 natural primary key `countries.Code`. Reference data is installed only through an
 explicit seeder invocation.
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_countries.go#countries-1 -->
 ```go
-// Register countries.Migrations() in the ordinary migration registry first.
-seeders, err := seed.New(countries.Seeder(store))
-result, err := seeders.Run(ctx, database, countries.SeederID)
+func seedCountries(ctx context.Context, store *extensions.Store, database *database.DB) error {
+	// Register countries.Migrations() in the ordinary migration registry first.
+	seeders, err := seed.New(countries.Seeder(store))
+	if err != nil {
+		return err
+	}
+	result, err := seeders.Run(ctx, database, countries.SeederID)
+	if err != nil {
+		return err
+	}
 
-code, err := countries.ParseCode("my")
-malaysia, err := countries.Find(ctx, store, code)
+	code, err := countries.ParseCode("my")
+	if err != nil {
+		return err
+	}
+	malaysia, err := countries.Find(ctx, store, code)
+	if err != nil {
+		return err
+	}
+	_ = result
+	_ = malaysia
+	return err
+}
 ```
 
 The seeder uses the [extension store](model-extensions.md#shared-owners)'s schema

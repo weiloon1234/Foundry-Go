@@ -9,14 +9,32 @@ heterogeneous pipeline results. No vendor client escapes this boundary.
 
 ## Declare and resolve keys
 
+In these recipes, `Member` is the application model with its typed `ID` and
+`AccessEmail` accessor. `DisplayEmail` is the accessor's application-owned result type.
+
+<!-- compiled-source: tests/fixtures/consumer/rediscommands/commands.go#redis-commands-1 -->
 ```go
-var Visits = raw.DefineKeys[model.ID[Member]](
-    "member-visits", 1, keyspace.TextKeys[model.ID[Member]](),
-)
-store, err := raw.NewStore(client, raw.DefaultConfig(namespace))
-// Handle err before binding.
-keys, err := Visits.Bind(store)
-key, err := keys.For(ctx, member.ID)
+var Visits = raw.DefineKeys[model.ID[Member]]("member-visits", 1, keyspace.TextKeys[model.ID[Member]]())
+```
+
+<!-- compiled-source: tests/fixtures/consumer/rediscommands/guide_operations.go#redis-commands-1 -->
+```go
+func memberKey(ctx context.Context, client *redis.Client, namespace keyspace.Namespace, member Member) error {
+	store, err := raw.NewStore(client, raw.DefaultConfig(namespace))
+	if err != nil {
+		return err
+	}
+	keys, err := Visits.Bind(store)
+	if err != nil {
+		return err
+	}
+	key, err := keys.For(ctx, member.ID)
+	if err != nil {
+		return err
+	}
+	_ = key
+	return err
+}
 ```
 
 The store borrows the existing [Redis client](redis.md). Construction and binding
@@ -38,11 +56,15 @@ raw writes must not introduce invalid JSON or violate collection bounds.
 
 ## Build immutable commands with concrete results
 
+<!-- compiled-source: tests/fixtures/consumer/rediscommands/guide_operations.go#redis-commands-2 -->
 ```go
-command := raw.NewCommand("ZREVRANGE", raw.DecodeArray(raw.DecodeString())).
-    Key(scoreboardKey).
-    Arg(raw.Int64(0)).Arg(raw.Int64(9)).Arg(raw.Text("WITHSCORES"))
-ranking, err := command.Run(ctx, store) // []string
+func rawRanking(ctx context.Context, store *raw.Store, scoreboardKey raw.Key) ([]string, error) {
+	command := raw.NewCommand("ZREVRANGE", raw.DecodeArray(raw.DecodeString())).
+		Key(scoreboardKey).
+		Arg(raw.Int64(0)).Arg(raw.Int64(9)).Arg(raw.Text("WITHSCORES"))
+	ranking, err := command.Run(ctx, store) // []string
+	return ranking, err
+}
 ```
 
 `NewCommand` initially returns a builder with no `Run` method. `Key` creates the
@@ -64,20 +86,44 @@ explicit custom decoders.
 
 ## Queue heterogeneous typed results
 
+<!-- compiled-source: tests/fixtures/consumer/rediscommands/guide_operations.go#redis-commands-3 -->
 ```go
-pipeline, err := raw.NewPipeline(raw.Transaction)
-// Handle err before queueing.
-err = raw.Ignore(pipeline,
-    raw.NewCommand("SET", raw.DecodeString()).Key(key).Arg(raw.Int64(0)))
-count, err := raw.Queue(pipeline,
-    raw.NewCommand("INCRBY", raw.DecodeInt64()).Key(key).Arg(raw.Int64(1)))
-stored, err := raw.Queue(pipeline,
-    raw.NewCommand("GET", raw.DecodeString()).Key(key))
-// Handle every queue error before Run.
-err = pipeline.Run(ctx, store)
-// Handle err before reading results.
-number, err := count.Value()  // int64
-text, err := stored.Value()   // string
+func visitPipeline(ctx context.Context, store *raw.Store, key raw.Key) error {
+	pipeline, err := raw.NewPipeline(raw.Transaction)
+	if err != nil {
+		return err
+	}
+	err = raw.Ignore(pipeline,
+		raw.NewCommand("SET", raw.DecodeString()).Key(key).Arg(raw.Int64(0)))
+	if err != nil {
+		return err
+	}
+	count, err := raw.Queue(pipeline,
+		raw.NewCommand("INCRBY", raw.DecodeInt64()).Key(key).Arg(raw.Int64(1)))
+	if err != nil {
+		return err
+	}
+	stored, err := raw.Queue(pipeline,
+		raw.NewCommand("GET", raw.DecodeString()).Key(key))
+	if err != nil {
+		return err
+	}
+	err = pipeline.Run(ctx, store)
+	if err != nil {
+		return err
+	}
+	number, err := count.Value() // int64
+	if err != nil {
+		return err
+	}
+	text, err := stored.Value() // string
+	if err != nil {
+		return err
+	}
+	_ = number
+	_ = text
+	return err
+}
 ```
 
 `Queue` is a generic package function because Go methods cannot declare their own
@@ -105,12 +151,16 @@ not hide a later command error.
 
 ## Trusted scripts and explicit key operations
 
+<!-- compiled-source: tests/fixtures/consumer/rediscommands/guide_operations.go#redis-commands-4 -->
 ```go
-script := raw.NewScript(
-    "return redis.call('INCRBY',KEYS[1],ARGV[1])",
-    key, raw.DecodeInt64(),
-).Arg(raw.Int64(3))
-count, err := script.Run(ctx, store)
+func incrementScript(ctx context.Context, store *raw.Store, key raw.Key) (int64, error) {
+	script := raw.NewScript(
+		"return redis.call('INCRBY',KEYS[1],ARGV[1])",
+		key, raw.DecodeInt64(),
+	).Arg(raw.Int64(3))
+	count, err := script.Run(ctx, store)
+	return count, err
+}
 ```
 
 Scripts require a key and use one EVAL, without an EVALSHA/NOSCRIPT fallback.

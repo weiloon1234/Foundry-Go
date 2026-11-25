@@ -49,6 +49,8 @@ type Tag struct {
 	Documents relation.Through[Document, DocumentTag]
 }
 
+// doc-example:begin document-tag-pivot
+//
 //foundry:model table=tenant_document_tags var=DocumentTags key=ID identity=false
 type DocumentTag struct {
 	ID         model.ID[DocumentTag]
@@ -58,3 +60,5 @@ type DocumentTag struct {
 	CreatedAt  time.Time `foundry:"role=created-at"`
 	UpdatedAt  time.Time `foundry:"role=updated-at"`
 }
+
+// doc-example:end document-tag-pivot

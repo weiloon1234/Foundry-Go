@@ -15,7 +15,11 @@ import (
 type MemberKeys = raw.Keys[model.ID[mutatorqueries.Member]]
 type GroupKeys = raw.Keys[model.ID[models.Group]]
 
-var Visits = raw.DefineKeys[model.ID[mutatorqueries.Member]]("member-visits", 1, keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
+// doc-example:begin redis-commands-1
+var Visits = raw.DefineKeys[model.ID[Member]]("member-visits", 1, keyspace.TextKeys[model.ID[Member]]())
+
+// doc-example:end redis-commands-1
+
 var Scoreboards = raw.DefineKeys[model.ID[models.Group]]("group-scores", 1, keyspace.TextKeys[model.ID[models.Group]]())
 
 // Ranking is an explicit raw Redis projection. Applications own the meaning of

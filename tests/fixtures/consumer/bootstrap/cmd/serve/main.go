@@ -22,7 +22,12 @@ func run() error {
 	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	settings, err := bootstrap.Load(*path)
+	return runHTTP(ctx, *path)
+}
+
+// doc-example:begin application-bootstrap-1
+func runHTTP(ctx context.Context, configPath string) error {
+	settings, err := bootstrap.Load(configPath)
 	if err != nil {
 		return err
 	}
@@ -34,3 +39,5 @@ func run() error {
 	// budget and returns nil, or the task/cleanup failures it observed.
 	return app.Run(ctx, foundation.HTTP)
 }
+
+// doc-example:end application-bootstrap-1

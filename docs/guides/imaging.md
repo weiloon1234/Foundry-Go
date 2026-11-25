@@ -114,19 +114,27 @@ under the same limits and lifecycle as `Process`. Its default output is PNG.
 `Process` still accepts any `io.Reader`; paths/storage/uploads are opened by their
 existing owners and supplied as readers.
 
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_imaging.go#imaging-1 -->
 ```go
-watermark, err := engine.Process(ctx, watermarkReader,
-    imaging.NewPlan().Fit(160, 80, false).Format(imaging.PNG))
-if err != nil {
-    return err
+func watermarkedPhoto(ctx context.Context, engine *imaging.Engine, watermarkReader, photoReader io.Reader) error {
+	watermark, err := engine.Process(ctx, watermarkReader,
+		imaging.NewPlan().Fit(160, 80, false).Format(imaging.PNG))
+	if err != nil {
+		return err
+	}
+	plan := imaging.NewPlan().
+		Contain(1200, 630, color.NRGBA{R: 255, G: 255, B: 255, A: 255}, imaging.Center).
+		Insert(watermark, imaging.Placement{
+			Position: imaging.BottomRight, X: -16, Y: -16,
+			Opacity: value.Set(0.75),
+		}).Format(imaging.WebP)
+	result, err := engine.Process(ctx, photoReader, plan)
+	if err != nil {
+		return err
+	}
+	_ = result
+	return err
 }
-plan := imaging.NewPlan().
-    Contain(1200, 630, color.NRGBA{R: 255, G: 255, B: 255, A: 255}, imaging.Center).
-    Insert(watermark, imaging.Placement{
-        Position: imaging.BottomRight, X: -16, Y: -16,
-        Opacity: value.Set(0.75),
-    }).Format(imaging.WebP)
-result, err := engine.Process(ctx, photoReader, plan)
 ```
 
 An inserted layer is an immutable `Result`, prepared once and reusable in direct
@@ -156,22 +164,27 @@ Custom fonts are application assets, not arbitrary uploaded fonts. Parsing is
 limited to 8 MiB; collections, WOFF and bitmap/color glyph rendering are not
 supported. Built-in fonts need no files, downloads or additional dependencies.
 
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_imaging.go#imaging-2 -->
 ```go
-font, err := imaging.BuiltinFont(imaging.FontBold)
-if err != nil {
-    return err
+func captionPlan() error {
+	font, err := imaging.BuiltinFont(imaging.FontBold)
+	if err != nil {
+		return err
+	}
+	plan := imaging.NewPlan().
+		Contain(320, 160, color.NRGBA{R: 255, G: 255, B: 255, A: 255}, imaging.Center).
+		Rectangle(8, 100, 304, 52, imaging.ShapeStyle{
+			Fill: color.NRGBA{R: 20, G: 40, B: 70, A: 255},
+		}).
+		Text("Foundry profile", imaging.TextOptions{
+			Font: font, Size: 24,
+			Color:    color.NRGBA{R: 255, G: 255, B: 255, A: 255},
+			Position: imaging.Bottom, Y: -20,
+			MaxWidth: 280, Align: imaging.AlignCenter,
+		}).Format(imaging.PNG)
+	_ = plan
+	return nil
 }
-plan := imaging.NewPlan().
-    Contain(320, 160, color.NRGBA{R: 255, G: 255, B: 255, A: 255}, imaging.Center).
-    Rectangle(8, 100, 304, 52, imaging.ShapeStyle{
-        Fill: color.NRGBA{R: 20, G: 40, B: 70, A: 255},
-    }).
-    Text("Foundry profile", imaging.TextOptions{
-        Font: font, Size: 24,
-        Color: color.NRGBA{R: 255, G: 255, B: 255, A: 255},
-        Position: imaging.Bottom, Y: -20,
-        MaxWidth: 280, Align: imaging.AlignCenter,
-    }).Format(imaging.PNG)
 ```
 
 Text is antialiased with alpha colors, fractional pixel sizes (1..512 pixels per
@@ -223,13 +236,23 @@ frame. Output must be GIF, PNG (APNG) or WebP; unsupported outputs reject instea
 silently discarding animation. TIFF pages are not animations. Static inputs stay
 static even with the preserve policy.
 
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_imaging.go#imaging-3 -->
 ```go
-plan := imaging.NewPlan().Frames(imaging.PreserveAnimation).
-    Fit(320, 320, false).Format(imaging.PNG)
-result, err := engine.Process(ctx, uploadReader, plan)
+func animatedPhoto(ctx context.Context, engine *imaging.Engine, uploadReader io.Reader) error {
+	plan := imaging.NewPlan().Frames(imaging.PreserveAnimation).
+		Fit(320, 320, false).Format(imaging.PNG)
+	result, err := engine.Process(ctx, uploadReader, plan)
+	if err != nil {
+		return err
+	}
 
-capability, known := engine.Capabilities().ForFormat(imaging.PNG)
-// capability.Read, Write, ReadAnimation, WriteAnimation are separate flags.
+	capability, known := engine.Capabilities().ForFormat(imaging.PNG)
+	// capability.Read, Write, ReadAnimation, WriteAnimation are separate flags.
+	_ = result
+	_ = capability
+	_ = known
+	return err
+}
 ```
 
 Capabilities are owned snapshots and report the engine's actual implemented
@@ -313,11 +336,15 @@ explicit AVIF output. Quality 100 uses the lowest quantizer, but RGB conversion
 and 4:2:0 chroma subsampling still apply; it does not promise an exact RGB round
 trip. Slower synchronous encoding retains engine capacity until it exits.
 
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_imaging.go#imaging-4 -->
 ```go
-pngPlan := imaging.NewPlan().Format(imaging.PNG).
-    PNGCompression(imaging.PNGBestCompression)
-avifPlan := imaging.NewPlan().Format(imaging.AVIF).
-    AVIFQuality(65).AVIFSpeed(6).AVIFAlphaQuality(100)
+func encodingPlans() (imaging.Plan, imaging.Plan) {
+	pngPlan := imaging.NewPlan().Format(imaging.PNG).
+		PNGCompression(imaging.PNGBestCompression)
+	avifPlan := imaging.NewPlan().Format(imaging.AVIF).
+		AVIFQuality(65).AVIFSpeed(6).AVIFAlphaQuality(100)
+	return pngPlan, avifPlan
+}
 ```
 
 See the executable [encoding plans](../../tests/fixtures/consumer/profiles/image_encoding.go).
@@ -426,8 +453,12 @@ Consumers import only Foundry and build normally; no custom build tag, libvips
 headers or pkg-config is required. `DefaultConfig()` selects `AutoBackend`.
 Enabling the configured image service is enough:
 
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_imaging.go#imaging-5 -->
 ```go
-settings.Image.Enabled = true
+func enableImages(settings application.Settings) application.Settings {
+	settings.Image.Enabled = true
+	return settings
+}
 ```
 
 On first engine construction, Foundry looks for a compatible libvips 8.x runtime
@@ -499,12 +530,16 @@ portable. Both inspect detected bytes and ignore the client's MIME/filename hint
 
 Color and metadata operations are explicit:
 
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_imaging.go#imaging-6 -->
 ```go
-plan := imaging.NewPlan().
-    ToSRGB().
-    SmartFill(512, 512, false, imaging.CropAttention).
-    Metadata(imaging.PreserveColorProfile).
-    Format(imaging.JPEG)
+func colorManagedPlan() imaging.Plan {
+	plan := imaging.NewPlan().
+		ToSRGB().
+		SmartFill(512, 512, false, imaging.CropAttention).
+		Metadata(imaging.PreserveColorProfile).
+		Format(imaging.JPEG)
+	return plan
+}
 ```
 
 - `ToSRGB()` uses an embedded ICC profile to convert pixels before transforms.

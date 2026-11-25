@@ -50,6 +50,7 @@ type Employee struct {
 	Region   relation.One[Region]
 }
 
+// doc-example:begin model-relations-5
 // MorphName declares the stored discriminator of regions in polymorphic relationships.
 func (Region) MorphName() model.MorphName { return "region" }
 
@@ -67,6 +68,8 @@ type Note struct {
 	Region      relation.One[Region]
 	Office      relation.One[Office]
 }
+
+// doc-example:end model-relations-5
 
 //foundry:model table=office_labels var=Labels key=ID identity=false
 type Label struct {

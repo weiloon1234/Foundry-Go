@@ -10,12 +10,34 @@ narrow advanced entry point.
 The independent [executable consumer](../../tests/fixtures/consumer/bootstrap/cmd/serve/main.go)
 loads concrete settings and runs this ordinary path:
 
+`bootstrap` is the application's assembly package. Its
+[loading helper](../../tests/fixtures/consumer/bootstrap/settings.go) has the contract
+`bootstrap.Load(path string, overrides ...config.Override[bootstrap.Settings]) (bootstrap.Settings, error)`.
+It combines application defaults, optional TOML, explicit environment lookup and
+typed overrides into the application's `Settings`, whose `App` field contains
+`application.Settings`. An empty path uses the defaults and environment without a TOML file.
+
+The same package's `bootstrap.Build(ctx context.Context, settings bootstrap.Settings, options ...application.Option) (*application.App, error)`
+validates the application's required inputs, calls `application.New(settings.App, ...)`
+with its table declarations and options, registers its HTTP routes, and returns
+`Builder.Build(ctx)`. These are application helpers; the framework constructor is
+`application.New`.
+
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/cmd/serve/main.go#application-bootstrap-1 -->
 ```go
-settings, err := bootstrap.Load(configPath)
-if err != nil { return err }
-app, err := bootstrap.Build(ctx, settings)
-if err != nil { return err }
-return app.Run(ctx, foundation.HTTP)
+func runHTTP(ctx context.Context, configPath string) error {
+	settings, err := bootstrap.Load(configPath)
+	if err != nil {
+		return err
+	}
+	app, err := bootstrap.Build(ctx, settings)
+	if err != nil {
+		return err
+	}
+	// A signal is a graceful stop: Run drains within the application shutdown
+	// budget and returns nil, or the task/cleanup failures it observed.
+	return app.Run(ctx, foundation.HTTP)
+}
 ```
 
 A signal cancels `ctx`; `Run` then drains within `Settings.ShutdownTimeout` and
@@ -44,8 +66,24 @@ portal's client-route fallback to that router; see
 
 Register generated ORM declarations explicitly at application construction:
 
+`models.Tables` is the application's table-list helper. It returns a fresh
+`[]orm.CheckedTable` containing the thin `.Table` handles from its generated tables:
+
+<!-- compiled-source: tests/fixtures/goway/models/tables.go#application-table-list -->
 ```go
-app, err := application.New(settings, application.WithTables(models.Tables()...)).Build(ctx)
+// Tables returns an owned list of declarations for startup validation.
+// Example: application.WithTables(models.Tables()...).
+func Tables() []orm.CheckedTable {
+	return []orm.CheckedTable{Users.Table, Orders.Table, WriteRecords.Table}
+}
+```
+
+<!-- compiled-source: tests/fixtures/goway/guideadapters/guide_bootstrap.go#application-bootstrap-2 -->
+```go
+func modelApplication(ctx context.Context, settings application.Settings) (*application.App, error) {
+	app, err := application.New(settings, application.WithTables(models.Tables()...)).Build(ctx)
+	return app, err
+}
 ```
 
 `WithTables` reuses `orm.Check` and reports the list's declaration errors through
@@ -111,14 +149,29 @@ when operating behind a trusted edge. No forwarding headers are trusted by defau
 
 Bind a model-specific default once per route group:
 
+`Member` and `Profile` below are the application's actor model and response DTO.
+
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_assembly.go#application-bootstrap-3 -->
 ```go
-members, err := http.BindGuard(cookieAuthentication, memberGuard)
-if err != nil { return err }
-route := http.Authenticated(profileEndpoint, members).Handle(
-    func(ctx context.Context, actor Member, input ProfileInput) (Profile, error) {
-        return service.Profile(ctx, actor, input)
-    },
-)
+// ProfileInput combines the route, query and body types of the profile endpoint.
+type ProfileInput = http.Input[http.NoPath, http.NoQuery, http.NoBody]
+type profileService interface {
+	Profile(context.Context, Member, ProfileInput) (Profile, error)
+}
+
+func guardedProfile(ctx context.Context, cookieAuthentication *http.Authentication, memberGuard auth.Guard[Member], profileEndpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, Profile], service profileService) error {
+	members, err := http.BindGuard(cookieAuthentication, memberGuard)
+	if err != nil {
+		return err
+	}
+	route := http.Authenticated(profileEndpoint, members).Handle(
+		func(ctx context.Context, actor Member, input ProfileInput) (Profile, error) {
+			return service.Profile(ctx, actor, input)
+		},
+	)
+	_ = route
+	return nil
+}
 ```
 
 Another actor model gets its own `GuardBinding[Operator]`. `members.Select(guard)`

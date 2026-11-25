@@ -170,6 +170,7 @@ option's behavior. To keep channel level filtering and delivery counters, use
 `logging.WithHandler` in direct `logging.PrepareChannels` assembly. Declare the
 channel and its minimum level, and pass `nil` for the borrowed default logger:
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_logging.go#vendor-log-channel -->
 ```go
 func prepareVendorChannels(handler slog.Handler) (*logging.ChannelSet, error) {
 	settings := map[logging.ChannelName]logging.ChannelSettings{
@@ -216,9 +217,15 @@ objects still require explicit safe logging contracts. See
 to every record logged with it, under the reserved `context` group, next to the
 `correlation` group (`request_id`, `trace_id`, `span_id`):
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_logging.go#logging-2 -->
 ```go
-ctx = logging.WithAttrs(ctx, slog.String("tenant", string(tenant.ID)), slog.String("route", "orders.show"))
-logger.InfoContext(ctx, "order loaded") // {"msg":"order loaded","context":{"tenant":"t1","route":"orders.show"}}
+type tenantLogIdentity struct{ ID string }
+
+func logTenant(ctx context.Context, logger *slog.Logger, tenant tenantLogIdentity) error {
+	ctx = logging.WithAttrs(ctx, slog.String("tenant", string(tenant.ID)), slog.String("route", "orders.show"))
+	logger.InfoContext(ctx, "order loaded") // {"msg":"order loaded","context":{"tenant":"t1","route":"orders.show"}}
+	return nil
+}
 ```
 
 A later field replaces an earlier one with the same key. At most
@@ -234,18 +241,25 @@ record. `logging.AttrsFromContext(ctx)` returns an owned copy.
 Context values do not cross a queue. Snapshot them when dispatching and restore
 them in the handler:
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_logging.go#logging-3 -->
 ```go
-type SendInvoice struct {
-	InvoiceID InvoiceID              `json:"invoice_id"`
-	Request   attribution.RequestID  `json:"request_id,omitempty"`
-	Log       logging.ContextFields  `json:"log,omitzero"`
+// InvoiceID is the application invoice key carried by its job payload.
+type InvoiceID string
+
+func invoiceLog(ctx context.Context, logger *slog.Logger, id InvoiceID) error {
+	type SendInvoice struct {
+		InvoiceID InvoiceID             `json:"invoice_id"`
+		Request   attribution.RequestID `json:"request_id,omitempty"`
+		Log       logging.ContextFields `json:"log,omitzero"`
+	}
+
+	payload := SendInvoice{InvoiceID: id, Request: attribution.FromContext(ctx).Request().ID, Log: logging.FieldsFromContext(ctx)}
+
+	// In the job handler:
+	ctx = payload.Log.Context(ctx)
+	logger.InfoContext(ctx, "sending invoice", slog.String("origin_request_id", string(payload.Request)))
+	return nil
 }
-
-payload := SendInvoice{InvoiceID: id, Request: attribution.FromContext(ctx).Request().ID, Log: logging.FieldsFromContext(ctx)}
-
-// In the job handler:
-ctx = payload.Log.Context(ctx)
-logger.InfoContext(ctx, "sending invoice", slog.String("origin_request_id", string(payload.Request)))
 ```
 
 `logging.ContextFields` is a bounded JSON object; decoding reapplies every limit

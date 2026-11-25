@@ -4,10 +4,22 @@
 
 ## Attach a model
 
+Here `models` is the application model package. Its `MemberLinks.Groups`
+relation and generated `Memberships` and `Groups` tables come from the
+[typed declarations](../../tests/fixtures/consumer/linkqueries/orm.go).
+
+<!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relation_writes.go#model-relation-writes-1 -->
 ```go
-groups := linkqueries.MemberLinks.Groups
-membership, err := orm.Attach(ctx, db, groups, member, group,
-    orm.Set(linkqueries.Memberships.Role, " ADMIN "))
+func attachMembership(ctx context.Context, db *database.DB, member models.Member, group models.Group) error {
+	groups := models.MemberLinks.Groups
+	membership, err := orm.Attach(ctx, db, groups, member, group,
+		orm.Set(models.Memberships.Role, " ADMIN "))
+	if err != nil {
+		return err
+	}
+	_ = membership
+	return err
+}
 ```
 
 `membership` is a complete `Membership` model. Foundry refreshes the stored member and group by their typed primary identities, then derives the pivot keys from the relationship metadata. Omitted draft keys receive those defaults before the usual UUID preparation and creating/saving hooks. The pivot's `MutateRole` setter, managed timestamps and local/provider observers run through the same pipeline as ordinary `orm.Insert`. The original draft and supplied endpoint structs remain unchanged.
@@ -18,10 +30,23 @@ Repeated attachments create separate pivots unless a database constraint rejects
 
 ## Detach and force detach
 
+<!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relation_writes.go#model-relation-writes-2 -->
 ```go
-removed, err := orm.Detach(ctx, db, groups, member, group)
-permanentlyRemoved, err := orm.ForceDetach(ctx, db, groups.WithTrashedPivot(),
-    linkqueries.Memberships.Soft, member, group)
+func detachMembership(ctx context.Context, db *database.DB, member models.Member, group models.Group) error {
+	groups := models.MemberLinks.Groups
+	removed, err := orm.Detach(ctx, db, groups, member, group)
+	if err != nil {
+		return err
+	}
+	permanentlyRemoved, err := orm.ForceDetach(ctx, db, groups.WithTrashedPivot(),
+		models.Memberships.Soft, member, group)
+	if err != nil {
+		return err
+	}
+	_ = removed
+	_ = permanentlyRemoved
+	return err
+}
 ```
 
 Both results are `[]Membership`, one complete model for each selected pivot. `Detach` runs normal per-model deletion: soft-delete pivots remain stored, while ordinary pivots are physically removed. Soft deletion returns the stored post-write model; physical deletion returns its pre-write model. Duplicate links invoke separate hooks. All selected removals commit or roll back together, including when a later pivot hook fails. Detachment shares its bounded candidate selection and ordinary mutation runtime with [per-model batch writes](model-batch-writes.md).
@@ -30,11 +55,44 @@ Both results are `[]Membership`, one complete model for each selected pivot. `De
 
 ## Synchronizing many links
 
+`Document` and `Tag` are the application's models. Their many-to-many relation
+stores its link data in this application-owned `DocumentTag` model:
+
+<!-- compiled-source: tests/fixtures/consumer/tenantqueries/models.go#document-tag-pivot -->
 ```go
-tags := DocumentLinks.Tags
-changes, err := orm.Sync(ctx, db, tags, document, []Tag{goTag, sqlTag},
-    []orm.Assignment[DocumentTag]{orm.Set(DocumentTags.Weight, 1)},
-    []orm.Assignment[DocumentTag]{orm.Set(DocumentTags.Weight, 5)})
+//
+//foundry:model table=tenant_document_tags var=DocumentTags key=ID identity=false
+type DocumentTag struct {
+	ID         model.ID[DocumentTag]
+	DocumentID model.ID[Document] `foundry:"role=column"`
+	TagCode    TagCode
+	Weight     int64
+	CreatedAt  time.Time `foundry:"role=created-at"`
+	UpdatedAt  time.Time `foundry:"role=updated-at"`
+}
+```
+
+The model directive generates `DocumentTagTable` and the `DocumentTags` value.
+[The generated table type](../../tests/fixtures/consumer/tenantqueries/models_foundry.gen.go)
+embeds `orm.Table[DocumentTag, model.ID[DocumentTag]]`, exposes the typed
+`DocumentID` and `TagCode` columns, and gives `Weight` the type
+`orm.Number[DocumentTag, int64]`. Its `CreatedAt` and `UpdatedAt` fields carry
+the managed timestamp roles. The function receives this generated table and the
+typed `DocumentLinks` relation explicitly; it never constructs a second table binding.
+
+<!-- compiled-source: tests/fixtures/consumer/tenantqueries/guide_sync.go#model-relation-writes-3 -->
+```go
+func syncDocumentTags(ctx context.Context, db *database.DB, document Document, goTag, sqlTag Tag, DocumentLinks orm.ThroughRelation[Document, Tag, DocumentTag], DocumentTags DocumentTagTable) error {
+	tags := DocumentLinks
+	changes, err := orm.Sync(ctx, db, tags, document, []Tag{goTag, sqlTag},
+		[]orm.Assignment[DocumentTag]{orm.Set(DocumentTags.Weight, 1)},
+		[]orm.Assignment[DocumentTag]{orm.Set(DocumentTags.Weight, 5)})
+	if err != nil {
+		return err
+	}
+	_ = changes
+	return err
+}
 ```
 
 The [tenant consumer](../../tests/fixtures/consumer/tenantqueries/tenant_postgres_test.go) exercises every operation:
@@ -54,12 +112,20 @@ Each call is one transaction (or one savepoint of the caller's). The source and 
 
 ## Filters, keys and bounded writes
 
+<!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relation_writes.go#model-relation-writes-4 -->
 ```go
-adminGroups := linkqueries.MemberLinks.Groups.
-    Where(orm.Eq(linkqueries.Groups.Name, "staff")).
-    WherePivot(orm.Eq(linkqueries.Memberships.Role, "admin"))
-adminGroups = orm.WithRelationWriteLimit(adminGroups, 50)
-removed, err := orm.Detach(ctx, db, adminGroups, member, group)
+func detachAdminMembership(ctx context.Context, db *database.DB, member models.Member, group models.Group) error {
+	adminGroups := models.MemberLinks.Groups.
+		Where(orm.Eq(models.Groups.Name, "staff")).
+		WherePivot(orm.Eq(models.Memberships.Role, "admin"))
+	adminGroups = orm.WithRelationWriteLimit(adminGroups, 50)
+	removed, err := orm.Detach(ctx, db, adminGroups, member, group)
+	if err != nil {
+		return err
+	}
+	_ = removed
+	return err
+}
 ```
 
 Target and pivot filters retain their model ownership. Endpoint arguments identify existing rows; stale non-primary relation keys are refreshed before deriving the link. A missing or filtered-out endpoint returns `database.NotFound`. The source must be active. Target `WithTrashed`/`OnlyTrashed` visibility is explicit and independent of pivot visibility. NULL endpoint relation keys fail with `fault.Missing`. A non-primary target key matching multiple targets within the relation scope returns `database.TooManyRows`; migrations must enforce uniqueness when concurrent inserts could create ambiguity.

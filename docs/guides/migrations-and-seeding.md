@@ -74,12 +74,15 @@ Failed lock cleanup discards the physical connection, releasing session-owned lo
 
 A definition may declare `Down` SQL that reverses it:
 
+<!-- compiled-source: tests/fixtures/consumer/migrations/guide_rollback.go#reversible-migration -->
 ```go
-migrate.Definition{
-    Key:     migrate.Key{Origin: "app", ID: "20260911000001_add_record_label"},
-    Version: "v0.1.0",
-    SQL:     []string{"ALTER TABLE records ADD COLUMN label text"},
-    Down:    []string{"ALTER TABLE records DROP COLUMN label"},
+func reversibleMigration() migrate.Definition {
+	return migrate.Definition{
+		Key:     migrate.Key{Origin: "app", ID: "20260911000001_add_record_label"},
+		Version: "v0.1.0",
+		SQL:     []string{"ALTER TABLE records ADD COLUMN label text"},
+		Down:    []string{"ALTER TABLE records DROP COLUMN label"},
+	}
 }
 ```
 

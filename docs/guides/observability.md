@@ -6,12 +6,19 @@ acceptance and verification evidence.
 
 Create one recorder and give it to one application:
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_observability.go#observability-1 -->
 ```go
-config := observability.DefaultConfig()
-config.TraceExporters = []observability.TraceExporter{exportSpan}
-recorder, err := observability.New(config, reportFailure)
-// Handle err before using the recorder.
-builder := foundation.NewBuilder(foundation.WithObservability(recorder))
+func observedBuilder(exportSpan observability.TraceExporter, reportFailure observability.Reporter) error {
+	config := observability.DefaultConfig()
+	config.TraceExporters = []observability.TraceExporter{exportSpan}
+	recorder, err := observability.New(config, reportFailure)
+	if err != nil {
+		return err
+	}
+	builder := foundation.NewBuilder(foundation.WithObservability(recorder))
+	_ = builder
+	return err
+}
 ```
 
 `TraceExporter` receives a completed `observability.Entry`; `TraceBatchExporter`
@@ -107,10 +114,17 @@ synchronously during each scrape inside callback isolation, so it must only read
 in-memory statistics. It emits samples through `MetricWriter.Gauge` and
 `MetricWriter.Counter` with typed `Label` values:
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_observability.go#observability-2 -->
 ```go
-err := recorder.RegisterCollector("orders.queue", func(w *observability.MetricWriter) {
-	w.Gauge("orders_queue_depth", "Queued orders.", float64(queue.Len()), observability.Label{Name: "queue", Value: "default"})
-})
+func queueCollector(recorder *observability.Recorder, queue interface{ Len() int }) error {
+	err := recorder.RegisterCollector("orders.queue", func(w *observability.MetricWriter) {
+		w.Gauge("orders_queue_depth", "Queued orders.", float64(queue.Len()), observability.Label{Name: "queue", Value: "default"})
+	})
+	if err != nil {
+		return err
+	}
+	return err
+}
 ```
 
 Names follow Prometheus syntax; counters end in `_total` with non-negative values;
@@ -201,6 +215,7 @@ intended limits and trace sampling on `config` before calling `observability.New
 Disable configured telemetry, error-log reporting and observability maintenance
 for this path; a supplied recorder owns those policies.
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_observability.go#otlp-builder -->
 ```go
 func tracedBuilder(settings application.Settings, token string) (*application.Builder, error) {
 	exporter, err := observability.NewOTLPExporter(observability.OTLPConfig{
@@ -293,21 +308,33 @@ Configured applications enable it on the default logger with
 `max_fingerprints`, `dont_report_faults` and `dont_report_statuses`. A supplied
 recorder owns its reporters, so combining it with the setting is rejected.
 
-A third-party service is another `Reporter`. For example, a Sentry-style
-reporter maps the same safe metadata to an event without a new framework
-dependency:
+A third-party service is another `Reporter`. This application-owned event and
+delivery callback map the same safe metadata without a framework dependency.
+The application implements the delivery callback with its vendor SDK, such as Sentry:
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_observability.go#external-error-reporter -->
 ```go
-func sentryReporter(client *sentry.Client) observability.Reporter {
+type externalEvent struct {
+	Message     string
+	Fingerprint []string
+	Tags        map[string]string
+	Frames      map[string]string
+}
+
+type deliverEvent func(context.Context, externalEvent) error
+
+func externalReporter(deliver deliverEvent) observability.Reporter {
 	return func(ctx context.Context, report observability.ErrorReport) error {
-		event := sentry.NewEvent()
-		event.Message = string(report.Entry.Operation.Kind) + " " + string(report.Entry.Operation.Name) + " " + string(report.Entry.Result.Outcome)
-		event.Fingerprint = []string{string(report.Entry.Operation.Name), strings.Join(report.Diagnostic.Types, ",")}
-		event.Tags = map[string]string{"trace_id": report.Entry.TraceID.String(), "request_id": string(report.Entry.RequestID)}
-		for _, frame := range report.Diagnostic.Frames {
-			event.Extra[frame.Function] = frame.File + ":" + strconv.Itoa(frame.Line)
+		event := externalEvent{
+			Message:     string(report.Entry.Operation.Kind) + " " + string(report.Entry.Operation.Name) + " " + string(report.Entry.Result.Outcome),
+			Fingerprint: []string{string(report.Entry.Operation.Name), strings.Join(report.Diagnostic.Types, ",")},
+			Tags:        map[string]string{"trace_id": report.Entry.TraceID.String(), "request_id": string(report.Entry.RequestID)},
+			Frames:      make(map[string]string, len(report.Diagnostic.Frames)),
 		}
-		return client.CaptureEvent(ctx, event)
+		for _, frame := range report.Diagnostic.Frames {
+			event.Frames[frame.Function] = frame.File + ":" + strconv.Itoa(frame.Line)
+		}
+		return deliver(ctx, event)
 	}
 }
 ```

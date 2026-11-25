@@ -10,13 +10,45 @@
 
 The [consumer codec tests](../../tests/fixtures/consumer/codecs_test.go) and [PostgreSQL consumer test](../../tests/fixtures/consumer/postgres_test.go) exercise these public APIs. For a generated enum:
 
+The `models` namespace below is the application model package. Its `Status` enum
+declaration generates `StatusCodec` and owns the `StatusActive` constant.
+
+The application declares the string-backed enum and its accepted values once:
+
+<!-- compiled-source: tests/fixtures/consumer/models/models.go#status-codec-declaration -->
 ```go
-statusCodec := models.StatusCodec()
-bound, err := statusCodec.Bind(models.StatusActive)
-// Pass bound as a SQL parameter after checking err.
-var status models.Status
-scanner := statusCodec.Scan(&status)
-// Pass scanner as a scan destination for the matching column.
+//
+//foundry:enum
+type Status string
+
+const (
+	StatusActive   Status = "active"
+	StatusDisabled Status = "disabled"
+)
+```
+
+From that declaration, generation produces `models.StatusCodec() codec.Codec[models.Status]`.
+Its implementation uses `codec.String[Status]().Validated(Status.Validate)`;
+[the generated validator and codec](../../tests/fixtures/consumer/models/status_foundry.gen.go)
+accept only `StatusActive` and `StatusDisabled`. Binding validates before producing
+a SQL driver value, and scanning validates before assigning the destination.
+
+<!-- compiled-source: tests/fixtures/consumer/codecs/guide_status.go#database-codecs-1 -->
+```go
+func statusCodecExample() error {
+	statusCodec := models.StatusCodec()
+	bound, err := statusCodec.Bind(models.StatusActive)
+	if err != nil {
+		return err
+	}
+	// Pass bound as a SQL parameter after checking err.
+	var status models.Status
+	scanner := statusCodec.Scan(&status)
+	// Pass scanner as a scan destination for the matching column.
+	_ = bound
+	_ = scanner
+	return err
+}
 ```
 
 The driver value and SQL column order remain runtime boundaries. A whole row scan can fill earlier destinations before a later column fails, even though each individual codec assigns atomically. Discard the entire attempted row on failure. Model queries construct a fresh model and publish it only after every persisted column decodes successfully.

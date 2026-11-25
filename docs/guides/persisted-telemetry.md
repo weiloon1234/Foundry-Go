@@ -360,20 +360,48 @@ actor, calls `AcknowledgeIn`, and upserts attribution for the returned episode.
 The [independent consumer example](../../tests/fixtures/consumer/telemetry_consumer_test.go)
 shows this order with an application-owned actor repository:
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/telemetry_acknowledgement.go#persisted-telemetry-1 -->
 ```go
-return db.Transaction(ctx, func(tx *database.Tx) error {
-	actor, err := actors.LockAuthorized(ctx, tx, actorID)
-	if err != nil {
-		return err
-	}
-	ack, err := engine.AcknowledgeIn(ctx, tx, key)
-	if err != nil {
-		return err
-	}
-	return actors.RecordAcknowledgement(ctx, tx, telemetryActorAttribution{
-		Key: ack.Key, Episode: ack.Episode, Actor: actor.ID,
+// TelemetryConsoleActor identifies the operator whose current authority is checked.
+type TelemetryConsoleActor struct {
+	// ID retains the actor's concrete model owner.
+	ID model.ID[TelemetryConsoleActor]
+}
+
+// TelemetryActorAttribution records which episode the operator acknowledged.
+type TelemetryActorAttribution struct {
+	// Key identifies the alert being acknowledged.
+	Key telemetry.AlertKey
+	// Episode distinguishes a reopened alert from a previous acknowledgement.
+	Episode telemetry.Episode
+	// Actor identifies the authorized operator.
+	Actor model.ID[TelemetryConsoleActor]
+}
+
+// TelemetryActorRepository owns current authorization and durable actor attribution.
+type TelemetryActorRepository interface {
+	// LockAuthorized locks and checks the actor using the caller's transaction.
+	LockAuthorized(context.Context, *database.Tx, model.ID[TelemetryConsoleActor]) (TelemetryConsoleActor, error)
+	// RecordAcknowledgement persists actor attribution in the same transaction.
+	RecordAcknowledgement(context.Context, *database.Tx, TelemetryActorAttribution) error
+}
+
+// AcknowledgeAlert runs authority checks and attribution in the acknowledgement transaction.
+func AcknowledgeAlert(ctx context.Context, db *database.DB, engine *telemetry.Engine, actors TelemetryActorRepository, actorID model.ID[TelemetryConsoleActor], key telemetry.AlertKey) error {
+	return db.Transaction(ctx, func(tx *database.Tx) error {
+		actor, err := actors.LockAuthorized(ctx, tx, actorID)
+		if err != nil {
+			return err
+		}
+		ack, err := engine.AcknowledgeIn(ctx, tx, key)
+		if err != nil {
+			return err
+		}
+		return actors.RecordAcknowledgement(ctx, tx, TelemetryActorAttribution{
+			Key: ack.Key, Episode: ack.Episode, Actor: actor.ID,
+		})
 	})
-})
+}
 ```
 
 The repository and attribution type in that snippet belong to the example
@@ -400,15 +428,19 @@ call `RecordBrowser`; they do not retain or construct a collector. For example,
 a handler's service factory can retain the resolved engine and admit a validated
 transport DTO as follows:
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_telemetry.go#persisted-telemetry-2 -->
 ```go
-engine, err := services.Telemetry()
-if err != nil {
-	return err
+func recordBrowserError(ctx context.Context, services application.Services) error {
+	engine, err := services.Telemetry()
+	if err != nil {
+		return err
+	}
+	return engine.RecordBrowser(ctx, telemetry.BrowserError{
+		Portal: "admin", Release: "release-1", Code: telemetry.BrowserCodeTypeError,
+		Frames: []telemetry.BrowserFrame{{File: "admin/_assets/app.js", Line: 1}},
+	})
+
 }
-return engine.RecordBrowser(ctx, telemetry.BrowserError{
-	Portal: "admin", Release: "release-1", Code: telemetry.BrowserCodeTypeError,
-	Frames: []telemetry.BrowserFrame{{File: "admin/_assets/app.js", Line: 1}},
-})
 ```
 
 The portal and release in this example must match the configured collector
@@ -510,28 +542,26 @@ The application owns scheduling and recovery after a failed deletion.
 the migrations to an isolated test schema and starting the app, use
 `testkit/telemetry.Flush` to persist observations before asserting reads:
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_telemetry_test.go#persisted-telemetry-3 -->
 ```go
-import (
-    "github.com/weiloon1234/Foundry-Go/database/orm"
-    "github.com/weiloon1234/Foundry-Go/telemetry"
-    telemetrytest "github.com/weiloon1234/Foundry-Go/testkit/telemetry"
-)
+func assertBrowserIssue(t *testing.T, app *application.App) {
+	engine, err := app.Resources().Telemetry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Exercise browser admission and wait for any asynchronous error reporters.
+	telemetrytest.Flush(t, engine)
+	issues, err := engine.Reader().Issues(t.Context(), telemetry.IssueQuery{
+		Source: telemetry.SourceBrowser,
+		Page:   orm.Page(1, 10),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issues.Total != 1 {
+		t.Fatalf("browser issues = %d, want 1", issues.Total)
+	}
 
-engine, err := app.Resources().Telemetry()
-if err != nil {
-    t.Fatal(err)
-}
-// Exercise browser admission and wait for any asynchronous error reporters.
-telemetrytest.Flush(t, engine)
-issues, err := engine.Reader().Issues(t.Context(), telemetry.IssueQuery{
-    Source: telemetry.SourceBrowser,
-    Page:   orm.Page(1, 10),
-})
-if err != nil {
-    t.Fatal(err)
-}
-if issues.Total != 1 {
-    t.Fatalf("browser issues = %d, want 1", issues.Total)
 }
 ```
 

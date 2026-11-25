@@ -104,15 +104,31 @@ metadata and a retry token when the record is eligible.
 
 For a retained independent failed job:
 
+`Welcome` is the application's job payload type; `WelcomeJob` is its typed job definition.
+
+<!-- compiled-source: tests/fixtures/consumer/background/guide_retry.go#jobs-operations-1 -->
 ```go
-found, err := WelcomeJob.Inspect(ctx, dispatcher, id, "communications")
-if err != nil { return err }
-record, present := found.Get()
-if !present { return jobs.ErrNotRetryable }
-token, err := record.RetryToken()
-if err != nil { return err }
-// Save token before executing the operator-approved action.
-changed, err := WelcomeJob.Retry(ctx, dispatcher, id, "communications", token)
+func inspectAndRetryWelcome(ctx context.Context, dispatcher *jobs.Dispatcher, id jobs.ID[Welcome], WelcomeJob jobs.Definition[Welcome]) error {
+	found, err := WelcomeJob.Inspect(ctx, dispatcher, id, "communications")
+	if err != nil {
+		return err
+	}
+	record, present := found.Get()
+	if !present {
+		return jobs.ErrNotRetryable
+	}
+	token, err := record.RetryToken()
+	if err != nil {
+		return err
+	}
+	// Save token before executing the operator-approved action.
+	changed, err := WelcomeJob.Retry(ctx, dispatcher, id, "communications", token)
+	if err != nil {
+		return err
+	}
+	_ = changed
+	return err
+}
 ```
 
 `changed=true` with no error means this request reopened the job. `changed=false`

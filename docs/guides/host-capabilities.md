@@ -2047,6 +2047,7 @@ One application binary runs HTTP, worker, scheduler, and console processes.
 Load bindings once during assembly and register the media preparation handler
 only when this process holds the grant. For example:
 
+<!-- compiled-source: tests/fixtures/consumer/hostcapabilities/guide_workers.go#media-preparation-cache -->
 ```go
 func mediaPreparationCache() (deployment.SharedDirectory, bool, error) {
 	bindings, present, err := deployment.LoadBindings()
@@ -2309,15 +2310,23 @@ startup must wait for the provider; Unix consumers require their provider.
 
 `Bindings.Copies(name)` returns `[]deployment.Copy` ordered by `Ordinal`:
 
+<!-- compiled-source: tests/fixtures/consumer/hostcapabilities/guide_workers.go#host-capabilities-2 -->
 ```go
-copies, err := bindings.Copies("renderers")
-if err != nil {
-	return err
-}
-for _, copy := range copies {
-	// Pass these concrete values to the application-owned worker client.
-	client := NewWorkerClient(copy.Ordinal, copy.Endpoint, copy.SecretFile)
-	workers = append(workers, client)
+type workerClient interface{ Run(context.Context) error }
+
+func rendererWorkers(bindings deployment.Bindings, NewWorkerClient func(int, deployment.Endpoint, string) workerClient) error {
+	var workers []workerClient
+	copies, err := bindings.Copies("renderers")
+	if err != nil {
+		return err
+	}
+	for _, copy := range copies {
+		// Pass these concrete values to the application-owned worker client.
+		client := NewWorkerClient(copy.Ordinal, copy.Endpoint, copy.SecretFile)
+		workers = append(workers, client)
+	}
+	_ = workers
+	return nil
 }
 ```
 

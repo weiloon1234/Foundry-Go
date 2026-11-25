@@ -12,19 +12,22 @@ import (
 	"github.com/weiloon1234/Foundry-Go/redis/data"
 )
 
+// doc-example:begin redis-data-1
 type ProfileField string
 
 const DisplayProfile ProfileField = "display"
 
 type Profile struct {
-	Email  mutatorqueries.DisplayEmail
+	Email  DisplayEmail
 	Labels []string
 }
-type Profiles = data.Hash[model.ID[mutatorqueries.Member], ProfileField, Profile]
-type MemberGroups = data.Set[model.ID[mutatorqueries.Member], model.ID[models.Group]]
+type Profiles = data.Hash[model.ID[Member], ProfileField, Profile]
+type MemberGroups = data.Set[model.ID[Member], model.ID[models.Group]]
 
-var ProfileHashes = data.DefineHash[model.ID[mutatorqueries.Member], ProfileField, Profile]("member-profiles", 1, keyspace.TextKeys[model.ID[mutatorqueries.Member]](), keyspace.StringKeys[ProfileField]())
-var Groups = data.DefineSet[model.ID[mutatorqueries.Member], model.ID[models.Group]]("member-groups", 1, keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
+var ProfileHashes = data.DefineHash[model.ID[Member], ProfileField, Profile]("member-profiles", 1, keyspace.TextKeys[model.ID[Member]](), keyspace.StringKeys[ProfileField]())
+var Groups = data.DefineSet[model.ID[Member], model.ID[models.Group]]("member-groups", 1, keyspace.TextKeys[model.ID[Member]]())
+
+// doc-example:end redis-data-1
 
 func SaveProfile(ctx context.Context, profiles Profiles, member mutatorqueries.Member) (bool, error) {
 	email, err := member.AccessEmail()

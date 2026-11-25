@@ -9,6 +9,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin status-codec-declaration
+//
 //foundry:enum
 type Status string
 
@@ -16,6 +18,8 @@ const (
 	StatusActive   Status = "active"
 	StatusDisabled Status = "disabled"
 )
+
+// doc-example:end status-codec-declaration
 
 //foundry:enum
 type Level uint8
