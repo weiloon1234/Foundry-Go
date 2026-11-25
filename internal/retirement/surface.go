@@ -2,6 +2,7 @@ package retirement
 
 import (
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/ast"
 	"go/build"
@@ -473,7 +474,7 @@ var liveTopLevelNames = sync.OnceValues(func() (map[string]bool, error) {
 // that the current inventory no longer has and the ledger does not retire. A
 // removed package is one entry; a removed type covers its members; a member of
 // a type that still exists needs its own entry.
-func RemovedWithoutEntry(previous, current []byte, ledger map[string][]retiredDeclaration) ([]string, error) {
+func RemovedWithoutEntry(previous, current []byte, ledger map[string][]retiredDeclaration) ([]diagnostic.Diagnostic, error) {
 	before, err := parseSurface(previous, ReleaseSurfaceFile)
 	if err != nil {
 		return nil, err
@@ -489,19 +490,19 @@ func RemovedWithoutEntry(previous, current []byte, ledger map[string][]retiredDe
 		packages[entry.pkg] = true
 	}
 	retired := ledgerNames(ledger)
-	var missing []string
+	var missing []diagnostic.Diagnostic
 	reportedPackage := make(map[string]bool)
 	for _, entry := range before {
 		if kind, ok := have[entry.pkg+"\t"+entry.name]; ok {
 			if kindClass(kind) != kindClass(entry.kind) && !retired[entry.pkg][entry.name] {
-				missing = append(missing, fmt.Sprintf("%s: %s.%s changed from %s to %s since the previous release, so code using it no longer compiles; add it to %s under %q with its replacement (or \"noReplacement\": true)", LedgerFile, entry.pkg, entry.name, entry.kind, kind, LedgerFile, entry.pkg))
+				missing = append(missing, diagnostic.RemovalUnledgered.At(LedgerFile, 0, 0).Text("", fmt.Sprintf("%s.%s changed from %s to %s since the previous release, so code using it no longer compiles; add it to %s under %q with its replacement (or \"noReplacement\": true)", entry.pkg, entry.name, entry.kind, kind, LedgerFile, entry.pkg)))
 			}
 			continue
 		}
 		if !packages[entry.pkg] {
 			if !retired[entry.pkg][PackageEntry] && !reportedPackage[entry.pkg] {
 				reportedPackage[entry.pkg] = true
-				missing = append(missing, fmt.Sprintf("%s: package %s was removed since the previous release; add {\"name\": %q} with its replacement (or \"noReplacement\": true) under %q in %s", LedgerFile, entry.pkg, PackageEntry, entry.pkg, LedgerFile))
+				missing = append(missing, diagnostic.RemovalUnledgered.At(LedgerFile, 0, 0).Text("", fmt.Sprintf("package %s was removed since the previous release; add {\"name\": %q} with its replacement (or \"noReplacement\": true) under %q in %s", entry.pkg, PackageEntry, entry.pkg, LedgerFile)))
 			}
 			continue
 		}
@@ -512,9 +513,9 @@ func RemovedWithoutEntry(previous, current []byte, ledger map[string][]retiredDe
 			// A removed owner is covered by its own entry, or reported itself.
 			continue
 		}
-		missing = append(missing, fmt.Sprintf("%s: %s.%s (%s) was removed since the previous release; add it to %s under %q with its replacement (or \"noReplacement\": true)", LedgerFile, entry.pkg, entry.name, entry.kind, LedgerFile, entry.pkg))
+		missing = append(missing, diagnostic.RemovalUnledgered.At(LedgerFile, 0, 0).Text("", fmt.Sprintf("%s.%s (%s) was removed since the previous release; add it to %s under %q with its replacement (or \"noReplacement\": true)", entry.pkg, entry.name, entry.kind, LedgerFile, entry.pkg)))
 	}
-	sort.Strings(missing)
+	sortFindings(missing)
 	return missing, nil
 }
 
@@ -563,17 +564,40 @@ func CheckRemovalsOf(root string, current []byte) error {
 	if err != nil {
 		return err
 	}
-	for _, line := range missing {
-		failures = append(failures, safeerror.New(line))
+	for _, finding := range missing {
+		failures = append(failures, finding.Err())
 	}
 	data, err := os.ReadFile(filepath.Join(root, ReleaseLedgerFile))
 	if err != nil {
 		return err
 	}
-	for _, line := range LostEntries(data, ledger) {
-		failures = append(failures, safeerror.New(line))
+	for _, finding := range LostEntries(data, ledger) {
+		failures = append(failures, finding.Err())
 	}
 	return safeerror.Join("operation failed", failures...)
+}
+
+// CheckBaselineVersion refuses a release baseline whose version is not the newest
+// released heading of the changelog. The release commit changes both together.
+func CheckBaselineVersion(baseline, changelog []byte) error {
+	recorded, ok := ReleaseVersion(baseline)
+	if !ok {
+		return safeerror.New(ReleaseSurfaceFile + " must start with the line \"# Recorded at release vX.Y.Z.\"")
+	}
+	var newest string
+	for _, line := range strings.Split(string(changelog), "\n") {
+		if heading, ok := strings.CutPrefix(line, "## "); ok && ValidReleaseTag(strings.Fields(heading + " ")[0]) {
+			newest = strings.Fields(heading)[0]
+			break
+		}
+	}
+	if newest == "" {
+		return safeerror.New("CHANGELOG.md has no released version heading")
+	}
+	if recorded != newest {
+		return safeerror.New(fmt.Sprintf("%s records %s but CHANGELOG.md's newest released version is %s; run go run ./internal/cmd/exportsurface --release %s in the release commit, with the heading (docs/release-checklist.md)", ReleaseSurfaceFile, recorded, newest, newest))
+	}
+	return nil
 }
 
 // ReleaseVersion is the tag a baseline inventory was recorded at.
@@ -587,3 +611,14 @@ var releaseTag = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9
 
 // ValidReleaseTag reports whether tag has the form vMAJOR.MINOR.PATCH.
 func ValidReleaseTag(tag string) bool { return releaseTag.MatchString(tag) }
+
+// sortFindings orders findings by their printed text, so a report is stable.
+func sortFindings(findings []diagnostic.Diagnostic) {
+	sort.Slice(findings, func(i, j int) bool { return findings[i].String() < findings[j].String() })
+}
+
+// StaleSurface is the finding that the recorded exported API no longer matches
+// the source tree.
+func StaleSurface() diagnostic.Diagnostic {
+	return diagnostic.SurfaceStale.At(SurfaceFile, 0, 0).Text("", "the recorded exported API is stale; run go run ./internal/cmd/exportsurface and review the diff")
+}

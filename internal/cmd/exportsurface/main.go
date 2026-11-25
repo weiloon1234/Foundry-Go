@@ -72,7 +72,7 @@ func run(root, out string, check bool, release string) error {
 	recorded, err := os.ReadFile(filepath.Join(root, retirement.SurfaceFile))
 	if check {
 		if err != nil || !bytes.Equal(recorded, current) {
-			return safeerror.New(retirement.SurfaceFile + ":0: the recorded exported API is stale; run go run ./internal/cmd/exportsurface and review the diff")
+			return retirement.StaleSurface().Err()
 		}
 	} else if err := write(root, retirement.SurfaceFile, current); err != nil {
 		return err

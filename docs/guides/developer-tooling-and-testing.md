@@ -146,6 +146,7 @@ Rendered guides ship as readable Markdown. Source links name files in the matchi
 GitHub source tree; nested fixture modules need not exist in the installed module
 cache. Reading a released recipe needs no compiler or renderer.
 
+<a id="retired-names"></a>
 ### Current API teaching
 
 Guides teach only the current API. The retired-name ledger in
@@ -156,10 +157,23 @@ the qualified spelling of an entry (package name, dot, retired name) is always r
 and application documents. A bare retired name is refused only in the framework's own
 documents, and only when no current top-level export (function, type, alias, constant
 or variable) of any importable package has that name, read from the recorded
-inventory; a method or field with that name does not count as a live namesake. One
+inventory, even a package unrelated to the retired owner: a bare word cannot be
+attributed to a package, so a live namesake anywhere makes it ordinary text. A method
+or field with that name does not count as a live namesake. When two retired owners
+share a bare name, the message lists each replacement once. One
 rule decides every entry; an entry carries no flag. Its replacement package
 names are checked against current declarations. Historical labels
 do not exempt a fence, table or paragraph from retirement checks.
+
+The ledger checks print findings in the shared shape (see
+[Read a check finding](#diagnostic-rules)): `ledger-shape` for a ledger that is not
+valid JSON of the entry schema or an entry with neither or both of `replacement` and
+`noReplacement`; `removal-unledgered` for an identifier removed or changed kind since
+the previous release with no entry (fix: add the entry the message names to
+`denied.json`); `ledger-entry-lost` for an entry the previous release held and the
+ledger dropped (fix: restore it); and `surface-stale` for a recorded inventory that no
+longer matches the source (fix: run `go run ./internal/cmd/exportsurface`, review the
+diff). Each names the file it is about and has no line.
 
 Removing an exported identifier of the framework requires its ledger entry in the
 same change. `make generate` records the exported API of the importable packages in
@@ -174,8 +188,10 @@ package such as `a/tools` is recorded. A package that does not type-check, or a 
 file with exported declarations, fails the generator with its location instead of
 producing a partial record. The message names the identifier and the file to add it to.
 `go run ./internal/cmd/exportsurface --release vX.Y.Z` replaces the baseline only
-when the removal check passes; a test ties the baseline's version to the newest
-released heading of `CHANGELOG.md`. `database/orm/testdata/public-methods.txt` stays
+when the removal check passes, in the release commit that renames the changelog
+heading to X.Y.Z; a test ties the baseline's version to the newest released heading
+of `CHANGELOG.md`, so a heading without the baseline, or the baseline without the
+heading, fails. `database/orm/testdata/public-methods.txt` stays
 a separate record: it pins method and field signatures and promoted members, which the
 name-and-kind inventory does not hold.
 
@@ -604,8 +620,12 @@ Every compiler-independent check prints each finding as one line of one shape:
 path:line:col: [rule] subject: problem; fix. Foundry guide: <guide>#<anchor> (skill: name)
 ```
 
-`:col` is omitted when a check has no column, and `:line` when it has no line; a
-zero is never printed. `subject:` is omitted when the problem sentence begins with
+A finding is something wrong in a source file, a document or a recorded file that the
+developer fixes by editing it. It has a rule in the table below, a teaching reference,
+and the shape above. A command error is a wrong invocation or an environment problem
+(an unknown flag, a missing tool, an unreadable directory): it prints plain text and
+has no rule. `:col` is omitted when a check has no column, and `:line` when it has no
+line; a zero is never printed. `subject:` is omitted when the problem sentence begins with
 the public name. `Foundry guide:` is the `guide#anchor` token that names the guide
 page and explicit anchor that teach the fix, the same token a `Foundry guides:` line
 declares; it resolves inside the pinned framework (see
@@ -617,7 +637,9 @@ guide only. The command reads the skills once per run, and only when it has a fi
 
 The rule IDs are stable output. `foundry routes check`, `foundry models check`,
 `foundry lint --no-raw`, `foundry generate --check`, `foundry generate`,
-`foundry docs check` and the framework's `make docs-check` print these rules, and a
+`foundry docs check`, the framework's `make docs-check` and
+`go run ./internal/cmd/exportsurface` (the `make generate-check` step that checks the
+retired-names ledger) print these rules, and a
 rule's guide and anchor are validated by `make docs-check`:
 
 | Rule | Check | Teaching |
@@ -638,6 +660,10 @@ rule's guide and anchor are validated by `make docs-check`:
 | `retired-command` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
 | `retired-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
 | `ambiguous-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
+| `ledger-shape` | `exportsurface` | `developer-tooling-and-testing#retired-names` |
+| `removal-unledgered` | `exportsurface` | `developer-tooling-and-testing#retired-names` |
+| `ledger-entry-lost` | `exportsurface` | `developer-tooling-and-testing#retired-names` |
+| `surface-stale` | `exportsurface` | `developer-tooling-and-testing#retired-names` |
 | `doc-limit` | `docs check` | `developer-tooling-and-testing#document-limits` |
 | `doc-file` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
 | `doc-comment` | `docs check` | `developer-tooling-and-testing#document-limits` |

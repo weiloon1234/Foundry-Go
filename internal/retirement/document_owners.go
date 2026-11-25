@@ -413,14 +413,25 @@ func (r documentRules) bareMessage(name string) string {
 		quoted[i] = "`" + spelling + "`"
 	}
 	message := "`" + name + "` matches the retired " + strings.Join(quoted, ", ") + "; write the qualified name you mean (for example `pkg." + name + "`)"
-	var uses []string
+	// Owners that share a replacement list it once.
+	var order []string
+	spellings := make(map[string][]string)
 	for _, spelling := range matches {
-		if replacement := r.replacements[spelling]; replacement != "" {
-			if len(matches) == 1 {
-				uses = append(uses, "`"+replacement+"`")
-			} else {
-				uses = append(uses, "`"+replacement+"` for `"+spelling+"`")
-			}
+		replacement := r.replacements[spelling]
+		if replacement == "" {
+			continue
+		}
+		if spellings[replacement] == nil {
+			order = append(order, replacement)
+		}
+		spellings[replacement] = append(spellings[replacement], "`"+spelling+"`")
+	}
+	var uses []string
+	for _, replacement := range order {
+		if len(matches) == 1 {
+			uses = append(uses, "`"+replacement+"`")
+		} else {
+			uses = append(uses, "`"+replacement+"` for "+strings.Join(spellings[replacement], ", "))
 		}
 	}
 	if len(uses) > 0 {

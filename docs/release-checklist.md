@@ -36,7 +36,9 @@ local SMTP/TLS and provider contract fixtures are the recorded email evidence.
 ## Retired-names baseline
 
 The retired-names check compares the current exported API with the previous
-release. After tagging a release, replace that baseline from the tagged source:
+release. The baseline for version X is the exported surface as of X, so the release
+commit replaces it: in the same commit that renames the `CHANGELOG.md` heading
+`Unreleased` to `vX.Y.Z`, and before tagging, run:
 
 ```sh
 go run ./internal/cmd/exportsurface --release vX.Y.Z
@@ -48,10 +50,11 @@ or changed identifier has no ledger entry. Otherwise it rewrites
 `internal/retirement/release/retired-names.txt` and
 `internal/retirement/exported-surface.txt` from the current tree, so the next
 release's removals are measured against this one. Review the diff of all three files,
-then commit them with the release bookkeeping. A test compares the baseline's version
-with the newest released heading of `CHANGELOG.md`, so skipping this step fails the
-next change's tests. Do not run it for any other purpose: the baseline is the last tag, not
-the working tree.
+then commit them with the heading change; tag that commit. A test compares the
+baseline's version with the newest released heading of `CHANGELOG.md`, so a heading
+without the baseline, or the baseline without the heading, fails in that commit and its
+CI. Do not run it for any other purpose: the baseline is the last release, not the
+working tree.
 
 ## Private packaged consumer gate
 

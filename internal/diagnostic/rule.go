@@ -39,6 +39,7 @@ const (
 	pinned  = "pinned-documentation-checks"
 	limits  = "document-limits"
 	guides  = "recipe-reference-guides"
+	retired = "retired-names"
 )
 
 // The rules of every check. Each guide anchor is validated by the framework's
@@ -61,6 +62,10 @@ var (
 	RetiredCommand    = Rule{"retired-command", tooling, pinned}
 	RetiredAPI        = Rule{"retired-api", tooling, pinned}
 	AmbiguousAPI      = Rule{"ambiguous-api", tooling, pinned}
+	LedgerShape       = Rule{"ledger-shape", tooling, retired}
+	RemovalUnledgered = Rule{"removal-unledgered", tooling, retired}
+	LedgerEntryLost   = Rule{"ledger-entry-lost", tooling, retired}
+	SurfaceStale      = Rule{"surface-stale", tooling, retired}
 	DocLimit          = Rule{"doc-limit", tooling, limits}
 	DocFile           = Rule{"doc-file", tooling, pinned}
 	DocComment        = Rule{"doc-comment", tooling, limits}
@@ -86,7 +91,7 @@ func Rules() []Rule {
 	return []Rule{
 		RouteNesting, RouteHelper, RouteHelperMissing, ModelTable, RawSQL, GeneratedStale, GenerateDecl,
 		GuidesDeclaration, AnchorInvalid, AnchorDuplicate, AnchorMissing, GuideName, GuideMissing,
-		RetiredCommand, RetiredAPI, AmbiguousAPI, DocLimit, DocFile, DocComment,
+		RetiredCommand, RetiredAPI, AmbiguousAPI, LedgerShape, RemovalUnledgered, LedgerEntryLost, SurfaceStale, DocLimit, DocFile, DocComment,
 		DocRendered, DocMarker, DocRegion, DocBinding, DocSectionAnchor, DocAgentEntry, DocInputs,
 		DocLink, DocMilestone, DocModelExample, FixtureGoVersion, BlueprintNumbered, RuleCatalogue,
 	}

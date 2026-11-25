@@ -42,6 +42,18 @@ func TestBareNameReportListsEveryRetiredMember(t *testing.T) {
 	}
 }
 
+func TestBareNameReportListsASharedReplacementOnce(t *testing.T) {
+	rules := documentRules{replacements: map[string]string{
+		"expr.JSONNull":  "database.JSONNull",
+		"query.JSONNull": "database.JSONNull",
+		"rows.JSONNull":  "rows.Null",
+	}}
+	want := "`JSONNull` matches the retired `expr.JSONNull`, `query.JSONNull`, `rows.JSONNull`; write the qualified name you mean (for example `pkg.JSONNull`), or use `database.JSONNull` for `expr.JSONNull`, `query.JSONNull`, `rows.Null` for `rows.JSONNull`."
+	if got := rules.retirementMessage("JSONNull"); got != want {
+		t.Fatalf("got  %q\nwant %q", got, want)
+	}
+}
+
 func TestCommentDoesNotHideRetiredTextAfterIt(t *testing.T) {
 	for name, text := range map[string]string{
 		"after a comment":            "<!-- c --> rows.Count(q)\n",

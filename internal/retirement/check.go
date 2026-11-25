@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/ast"
 	"go/parser"
@@ -49,13 +50,13 @@ func parseLedger(data []byte, source string) (map[string][]retiredDeclaration, e
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&result); err != nil {
-		return nil, safeerror.New(fmt.Sprintf("%s:0: %s; the ledger is a JSON object of package paths to arrays of {name, replacement | noReplacement} entries", source, err))
+		return nil, diagnostic.LedgerShape.At(source, 0, 0).Say("", err.Error()).To("make the ledger a JSON object of package paths to arrays of {name, replacement | noReplacement} entries").Err()
 	}
 	var failures []error
 	for owner, members := range result {
 		for _, member := range members {
 			if (member.Replacement == "") == !member.NoReplacement {
-				failures = append(failures, safeerror.New(fmt.Sprintf("%s:0: %s.%s must have exactly one of replacement and noReplacement: true; name its replacement, or set noReplacement when nothing replaces it", source, owner, member.Name)))
+				failures = append(failures, diagnostic.LedgerShape.At(source, 0, 0).Text("", fmt.Sprintf("%s.%s must have exactly one of replacement and noReplacement: true; name its replacement, or set noReplacement when nothing replaces it", owner, member.Name)).Err())
 			}
 		}
 	}
@@ -87,16 +88,16 @@ func RetiredNames(entries map[string][]retiredDeclaration) []byte {
 
 // LostEntries names each name of the previous release's ledger that the
 // current ledger no longer holds: a retired name stays retired.
-func LostEntries(previous []byte, current map[string][]retiredDeclaration) []string {
+func LostEntries(previous []byte, current map[string][]retiredDeclaration) []diagnostic.Diagnostic {
 	have := ledgerNames(current)
-	var lost []string
+	var lost []diagnostic.Diagnostic
 	for _, line := range strings.Split(string(previous), "\n") {
 		owner, name, ok := strings.Cut(line, "\t")
 		if ok && !have[owner][name] {
-			lost = append(lost, fmt.Sprintf("%s:0: %s.%s was retired in the previous release and is missing from the ledger; restore the entry", LedgerFile, owner, name))
+			lost = append(lost, diagnostic.LedgerEntryLost.At(LedgerFile, 0, 0).Text("", fmt.Sprintf("%s.%s was retired in the previous release and is missing from the ledger; restore the entry", owner, name)))
 		}
 	}
-	sort.Strings(lost)
+	sortFindings(lost)
 	return lost
 }
 

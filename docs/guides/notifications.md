@@ -107,7 +107,7 @@ returned. A delivered channel is never run again by notification retries.
 <a id="recipe-notification-channels"></a>
 ## Channel outputs and timing
 
-`NewOrders` declares the notification with its email and realtime channels:
+`NewOrders` declares the notification with its email, realtime and database channels:
 
 <!-- compiled-source: tests/fixtures/consumer/notifying/orders.go#notification-channels -->
 ```go

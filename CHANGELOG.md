@@ -21,14 +21,22 @@
   next pin. The diagnostic prints the replacement (`orm.TextEq is retired; use
   orm.Eq.`). Application code that compiled is unaffected. In the framework's own
   strict documents a bare retired name is refused only when no current top-level
-  export of any importable package has that name (decided from the recorded
-  inventory, one rule for every entry; a method or field of that name does not count).
+  export of any importable package has that name, even an unrelated package: a bare
+  word cannot be attributed to a package (decided from the recorded inventory, one rule
+  for every entry; a method or field of that name does not count).
 - `go run ./internal/cmd/exportsurface --release vX.Y.Z` now validates the tag, runs
   the removal check against the existing baseline before replacing it, and its flags
   `--check`, `--out` and `--release` are mutually exclusive; `--root` reads that
   root's ledger. A test ties the baseline's version to the newest released heading of
-  this file, so a release cut without replacing the baseline fails the next change.
-- Every compiler-independent check prints one finding shape,
+  this file; the release commit renames the heading and runs `--release` together, so a
+  heading without the baseline, or the baseline without the heading, fails.
+- A finding is something wrong in a source file, a document or a recorded file that
+  the developer fixes by editing it; a command error is a wrong invocation or an
+  environment problem. Findings print the shape below and have a rule; command errors
+  are plain text. The retired-names ledger checks are findings: `ledger-shape`,
+  `removal-unledgered`, `ledger-entry-lost` and `surface-stale` (teaching reference
+  `developer-tooling-and-testing#retired-names`), and print no `:0`.
+- Every finding of a compiler-independent check prints one finding shape,
   `path:line:col: [rule] subject: problem; fix. Foundry guide: <guide>#<anchor>`,
   and in an application also `(skill: name)` for each skill that declares that
   token in a `Foundry guides:` line. It covers `foundry routes check`,

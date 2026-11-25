@@ -20,7 +20,8 @@ be in the ledger.
 Each ledger entry now states either `replacement` or `noReplacement: true`, never
 neither and never both; the 103 entries that recorded no replacement now say so
 explicitly. A bare name is refused in the framework's own documents only when no
-current top-level export of any importable package has that name, decided from the
+current top-level export of any importable package has that name, even an unrelated
+package (a bare word cannot be attributed to a package), decided from the
 recorded inventory; the same rule applies to every entry, and a method or field of
 that name does not count as a live namesake. The qualified spelling of an entry is
 always refused. The ledger gains 354 names that earlier releases removed and left

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 )
 
 func surfaceOf(lines ...string) []byte {
@@ -40,7 +42,7 @@ func TestRemovedIdentifierNeedsLedgerEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := strings.Join(missing, "\n")
+	got := findingLines(missing)
 	for _, want := range []string{
 		"pkg.Gone (func) was removed since the previous release; add it to internal/retirement/denied.json under \"pkg\"",
 		"pkg.Box.Open (method)",
@@ -90,7 +92,7 @@ func TestRemovedMembersOfARemovedTypeFollowTheTypeEntry(t *testing.T) {
 	previous := surfaceOf("pkg\ttype\tSet", "pkg\tmethod\tSet.Add", "pkg\tfield\tSet.Name")
 	current := surfaceOf("pkg\tfunc\tOther")
 	missing, err := RemovedWithoutEntry(previous, current, nil)
-	if err != nil || len(missing) != 1 || !strings.Contains(missing[0], "pkg.Set (type)") {
+	if err != nil || len(missing) != 1 || !strings.Contains(missing[0].String(), "pkg.Set (type)") {
 		t.Fatalf("only the removed type is reported: %v %v", err, missing)
 	}
 	missing, err = RemovedWithoutEntry(previous, current, ledgerOf(retiredDeclaration{Name: "Set", Replacement: "pkg.Other"}))
@@ -133,10 +135,10 @@ func TestLedgerEntriesCannotDisappear(t *testing.T) {
 		t.Fatal("the previous release's retired names are empty")
 	}
 	if lost := LostEntries(previous, current); len(lost) != 0 {
-		t.Fatalf("%s", strings.Join(lost, "\n"))
+		t.Fatalf("%s", findingLines(lost))
 	}
 	lost := LostEntries([]byte("pkg\tA\npkg\tB\n"), map[string][]retiredDeclaration{"pkg": {{Name: "A", NoReplacement: true}}})
-	if len(lost) != 1 || !strings.Contains(lost[0], "pkg.B was retired in the previous release and is missing from the ledger; restore the entry") {
+	if len(lost) != 1 || !strings.Contains(lost[0].String(), "pkg.B was retired in the previous release and is missing from the ledger; restore the entry") {
 		t.Fatalf("a dropped entry must be named: %v", lost)
 	}
 }
@@ -256,7 +258,7 @@ func TestKindChangeIsReported(t *testing.T) {
 	previous := surfaceOf("pkg\tfunc\tLimit", "pkg\ttype\tBox", "pkg\tmethod\tBox.Open", "pkg\ttype\tOld", "pkg\tvar\tShared")
 	current := surfaceOf("pkg\tconst\tLimit", "pkg\ttype\tBox", "pkg\tmethod*\tBox.Open", "pkg\talias\tOld", "pkg\tvar\tShared")
 	missing, err := RemovedWithoutEntry(previous, current, nil)
-	if err != nil || len(missing) != 1 || !strings.Contains(missing[0], "pkg.Limit changed from func to const since the previous release") {
+	if err != nil || len(missing) != 1 || !strings.Contains(missing[0].String(), "pkg.Limit changed from func to const since the previous release") {
 		t.Fatalf("only the func to const change is a break (a pointer receiver or an alias is not): %v %v", err, missing)
 	}
 	missing, err = RemovedWithoutEntry(previous, current, ledgerOf(retiredDeclaration{Name: "Limit", NoReplacement: true}))
@@ -287,7 +289,7 @@ func TestTypeBecomingAliasKeepsItsMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	missing, err := RemovedWithoutEntry(before, after, nil)
-	if err != nil || len(missing) != 2 || !strings.Contains(strings.Join(missing, "\n"), "kit.Box.Open (method)") || !strings.Contains(strings.Join(missing, "\n"), "kit.Box.Size (field)") {
+	if err != nil || len(missing) != 2 || !strings.Contains(findingLines(missing), "kit.Box.Open (method)") || !strings.Contains(findingLines(missing), "kit.Box.Size (field)") {
 		t.Fatalf("members the target lost are removed: %v %v", err, missing)
 	}
 }
@@ -322,26 +324,42 @@ func TestBaselineIsTheNewestReleasedVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	recorded, ok := ReleaseVersion(baseline)
-	if !ok {
-		t.Fatalf("%s must start with the line \"# Recorded at release vX.Y.Z.\"", ReleaseSurfaceFile)
-	}
 	changelog, err := os.ReadFile(filepath.Join("../..", "CHANGELOG.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var newest string
-	for _, line := range strings.Split(string(changelog), "\n") {
-		if heading, ok := strings.CutPrefix(line, "## "); ok && ValidReleaseTag(strings.Fields(heading + " ")[0]) {
-			newest = strings.Fields(heading)[0]
-			break
+	if err := CheckBaselineVersion(baseline, changelog); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The release commit renames the changelog heading and replaces the baseline
+// together, so the tagged tree is the only state where the two agree on the new
+// version; each half alone is refused.
+func TestBaselineVersionAgreesWithTheChangelogHeading(t *testing.T) {
+	baseline := func(version string) []byte { return []byte("# Recorded at release " + version + ".\nrest\n") }
+	changelog := func(headings ...string) []byte {
+		return []byte("# Changelog\n\n## Unreleased\n\n- change\n\n" + strings.Join(headings, "\n\n- text\n\n") + "\n")
+	}
+	for name, tc := range map[string]struct {
+		baseline  []byte
+		changelog []byte
+		want      string
+	}{
+		"release commit":                {baseline("v0.53.0"), changelog("## v0.53.0 (2026-12-01)", "## v0.52.0"), ""},
+		"between releases":              {baseline("v0.52.0"), changelog("## v0.52.0"), ""},
+		"heading without the baseline":  {baseline("v0.52.0"), changelog("## v0.53.0", "## v0.52.0"), "records v0.52.0 but CHANGELOG.md's newest released version is v0.53.0"},
+		"baseline without the heading":  {baseline("v0.53.0"), changelog("## v0.52.0"), "records v0.53.0 but CHANGELOG.md's newest released version is v0.52.0"},
+		"baseline without a version":    {[]byte("pkg\tfunc\tA\n"), changelog("## v0.52.0"), "must start with the line"},
+		"changelog without any release": {baseline("v0.52.0"), changelog(), "has no released version heading"},
+	} {
+		err := CheckBaselineVersion(tc.baseline, tc.changelog)
+		if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+			t.Errorf("%s: got %v, want %q", name, err, tc.want)
 		}
 	}
-	if newest == "" {
-		t.Fatal("CHANGELOG.md has no released version heading")
-	}
-	if recorded != newest {
-		t.Fatalf("%s records %s but CHANGELOG.md's newest released version is %s; run go run ./internal/cmd/exportsurface --release %s after tagging (docs/release-checklist.md)", ReleaseSurfaceFile, recorded, newest, newest)
+	if err := CheckBaselineVersion(baseline("v0.52.0"), changelog("## v0.53.0", "## v0.52.0")); err == nil || !strings.Contains(err.Error(), "run go run ./internal/cmd/exportsurface --release v0.53.0 in the release commit, with the heading") {
+		t.Errorf("the message names the release step: %v", err)
 	}
 }
 
@@ -353,5 +371,52 @@ func TestReleaseTagForm(t *testing.T) {
 	}
 	if version, ok := ReleaseVersion([]byte("# Recorded at release v0.52.0.\nrest")); !ok || version != "v0.52.0" {
 		t.Fatalf("version of a baseline: %q %v", version, ok)
+	}
+}
+
+func findingLines(findings []diagnostic.Diagnostic) string {
+	lines := make([]string, len(findings))
+	for i, finding := range findings {
+		lines[i] = finding.String()
+	}
+	return strings.Join(lines, "\n")
+}
+
+// Every finding of the ledger lane is a file the developer edits, so each has the
+// shared shape: a rule, the retired-names teaching reference, no printed zero.
+func TestLedgerFindingsUseTheSharedShape(t *testing.T) {
+	removed, err := RemovedWithoutEntry(surfaceOf("pkg\tfunc\tGone", "pkg\tfunc\tLimit", "old\tfunc\tOne"), surfaceOf("pkg\tconst\tLimit"), nil)
+	if err != nil || len(removed) != 3 {
+		t.Fatalf("removed, changed kind and removed package: %v %v", err, removed)
+	}
+	lost := LostEntries([]byte("pkg\tB\n"), nil)
+	_, entry := parseLedger([]byte(`{"pkg":[{"name":"A"}]}`), LedgerFile)
+	_, decode := parseLedger([]byte(`[]`), LedgerFile)
+	findings := append(removed, lost...)
+	for _, err := range []error{entry, decode, StaleSurface().Err()} {
+		found, other := diagnostic.Findings(err)
+		if len(found) != 1 || len(other) != 0 {
+			t.Fatalf("one finding expected: %v %v", found, other)
+		}
+		findings = append(findings, found...)
+	}
+	wantRules := map[string]bool{"removal-unledgered": false, "ledger-entry-lost": false, "ledger-shape": false, "surface-stale": false}
+	for _, finding := range findings {
+		text := finding.String()
+		if _, known := wantRules[finding.Rule.ID]; !known {
+			t.Errorf("unexpected rule in %s", text)
+		}
+		wantRules[finding.Rule.ID] = true
+		if !strings.Contains(text, "["+finding.Rule.ID+"] ") || !strings.HasSuffix(text, ". Foundry guide: developer-tooling-and-testing#retired-names") || strings.Contains(text, ":0") {
+			t.Errorf("not the shared shape: %s", text)
+		}
+		if !strings.HasPrefix(text, "internal/retirement/") {
+			t.Errorf("a finding names its file: %s", text)
+		}
+	}
+	for rule, seen := range wantRules {
+		if !seen {
+			t.Errorf("rule %s was never printed", rule)
+		}
 	}
 }

@@ -96,7 +96,7 @@ func Defaults() Settings {
 }
 ```
 
-`Validate` rejects settings the application cannot run with:
+`Validate` rejects a zero HTTP port or a non-positive HTTP timeout:
 
 <!-- compiled-source: tests/fixtures/consumer/startupconfig/settings.go#configuration-validation -->
 ```go

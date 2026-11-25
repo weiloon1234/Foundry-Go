@@ -32,7 +32,7 @@ func newRoot(t *testing.T, source string) string {
 func TestGenerateCheckAndReleaseCycle(t *testing.T) {
 	root := newRoot(t, "package kit\n\nfunc Keep() {}\nfunc Drop() {}\n")
 
-	if err := run(root, "", true, ""); err == nil || !strings.Contains(err.Error(), "the recorded exported API is stale") {
+	if err := run(root, "", true, ""); err == nil || !strings.Contains(err.Error(), "internal/retirement/exported-surface.txt: [surface-stale] the recorded exported API is stale") {
 		t.Fatalf("a missing record must fail the check: %v", err)
 	}
 	// Record a release, then remove.
