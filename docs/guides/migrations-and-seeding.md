@@ -67,7 +67,8 @@ database, and the database then rejects the value at run time.
 type is an enum, or a `value.Nullable`, `value.JSON`, slice or array of one, it finds the
 CHECK constraints that are live on that table and column after the last migration (the
 migrations are replayed in the registry's order: prerequisites first, then by ID) and
-requires each list to equal the enum's cases. The fixture's declarations:
+evaluates each one once per enum case, requiring that none rejects a case. The fixture's
+declarations:
 
 <!-- compiled-source: tests/fixtures/consumer/enumlists/documents.go#enum-list-declarations -->
 ```go
@@ -152,78 +153,106 @@ ALTER TABLE admins DROP CONSTRAINT admins_permissions_check;
 ALTER TABLE admins ADD CONSTRAINT admins_permissions_check CHECK (jsonb_typeof(permissions) = 'array' AND (permissions = '["*"]'::jsonb OR permissions <@ '["admins.read","admins.manage","pages.export"]'::jsonb));
 ```
 
-Keep the other conditions of the constraint and replace only the list. A value written as
-an equality branch beside the list, as in
-`permissions = '["*"]'::jsonb OR permissions <@ '[...]'::jsonb`, counts as admitted and
-stays out of the list the finding prints.
+Keep the other conditions of the constraint and replace only the list. The list a finding
+prints holds every case; a value that an equality branch beside the list already admits, as
+in `permissions = '["*"]'::jsonb OR permissions <@ '[...]'::jsonb`, may stay in it.
 
-A finding for a missing case is one line:
-`enums.go:10:2: [enum-list] enum Permission: case "pages.export" (PermissionPagesExport) is missing from the list of constraint admins_permissions_check on admins.permissions, last written at migrations.go:8; either (a) the column should hold the new case: add a new migration that re-declares the constraint with this list: '["admins.read","admins.manage","pages.export"]'; or (b) the column deliberately holds only some cases: declare values=PermissionAll|PermissionAdminsRead|PermissionAdminsManage on Admin.Permissions and run foundry generate`.
+A finding for a case a constraint rejects is one line:
+`enums.go:10:2: [enum-list] enum Permission: case "pages.export" (PermissionPagesExport) can never be stored: it is rejected by constraint admins_permissions_check on admins.permissions, last written at migrations.go:8; either (a) the column should hold the new case: add a new migration that re-declares the constraint with this list: '["*","admins.read","admins.manage","pages.export"]'; or (b) the column deliberately holds only some cases: declare values=PermissionAll|PermissionAdminsRead|PermissionAdminsManage on Admin.Permissions and run foundry generate`.
 Neither alternative is the default: the first is right when the new case is a case the
 column should accept, the second when the list was a narrowing from the start (a column
 that marks only some of an enum's cases, for example).
 
-### What the check reads, and what is a finding
+### What the check decides, and what it cannot see
 
-The check says a list equals the enum only for a test it reads in full. **A CHECK that
-constrains an enum column in any way the check does not fully understand is reported as
-unreadable, never passed in silence.** The forms it reads are the ones people write and
-PostgreSQL prints:
+For each enum case the check evaluates every live CHECK constraint that mentions the
+column, with the column set to that case's stored value, and decides one of four things:
 
-- `col IN ('a', 'b')`, with any casts, qualifiers and extra parentheses around the column;
-- `col = ANY (ARRAY['a', 'b'])`, with or without casts, including the form `pg_dump` and
-  `\d` print, `((col)::text = ANY ((ARRAY['a'::character varying, ...])::text[]))`;
-- a chain `col = 'a' OR col = 'b'` over one column (two or more equalities; a single
-  `col = 'a'` is not a list);
-- `col <@ '["a","b"]'::jsonb` for a JSON array of cases;
-- `col BETWEEN 0 AND 4` over integers, as the integers in the range (a range of 1,000
-  values or more is unreadable);
-- any of these followed by `IS TRUE`, an `OR col IS NULL` branch, and beside them in an
-  `AND`: `col IS NOT NULL`, a comparison of the column with another column
-  (`type = col`), and a shape guard on a JSON column (`jsonb_typeof(col) = 'array'`,
-  `jsonb_array_length(col) > 0`), because none of these changes which values are allowed.
+- **false**: no row can pass the constraint, so the case can never be stored. This is the
+  finding "case X can never be stored"; a case several constraints reject is reported once,
+  naming each of them.
+- **true**: every row passes. No finding.
+- **depends on other columns**: no finding. A part of the expression that does not mention
+  the column (`paid_at IS NULL OR status IN (...)`, a transition table of
+  `action = 'x' AND from_status = 'y'` branches, `(status IN ('paid')) = (paid_at IS NOT NULL)`)
+  neither proves nor refutes, so an `OR` with such a part can always pass and an `AND` with
+  it follows the part that mentions the column.
+- **cannot be read**: a finding that names the sub-expression, unless the rest of the
+  expression or another constraint already decides the case without it. A test of the
+  column the check does not evaluate is never passed in silence.
 
-The check also understands conditions that relate columns without limiting one of them to a
-list: `(status IN ('paid')) = (paid_at IS NOT NULL)`, a `CASE WHEN ... THEN ... END` of
-tests, and a transition table of `action = 'x' AND from_status = 'y'` branches. A column
-that appears only there has no list, which is not a finding.
+The check evaluates the column compared with literals, with any casts, qualifiers and
+parentheses around the column: `=`, `<>`, `!=`, `IN`, `NOT IN`, `= ANY (ARRAY[...])` and
+`<> ALL (ARRAY[...])` (hand-written or as `pg_dump` and `\d` print them,
+`((col)::text = ANY ((ARRAY['a'::character varying, ...])::text[]))`), `BETWEEN` and
+`NOT BETWEEN`, the ordering operators `<`, `<=`, `>` and `>=` for an integer-backed enum,
+`IS NULL` and `IS NOT NULL`, and `IS TRUE`, `IS FALSE`, `NOT`, `AND`, `OR` and `CASE` in both
+forms (`CASE WHEN ... END` and `CASE col WHEN ... END`) by evaluating their branches. A range
+is not enumerated, so no cost depends on its size. For a collection column (a slice, array
+or `value.JSON` of an enum, stored as a `jsonb` array) the column is the one-element array
+holding the case: `col <@ '["a","b"]'::jsonb` is decided by membership,
+`jsonb_typeof(col)` is `'array'`, `jsonb_array_length(col)` is 1, and
+`col = '["*"]'::jsonb`, the form an application uses for "all", is decided by equality.
 
-Every other test that mentions the enum column is the finding "the CHECK list on this enum
-column cannot be read statically", with the specific reason: a regular-expression operator
-(`~`), `SIMILAR TO`, `LIKE`, a function applied to the column (`lower(col)`), a negated
-test, a `CASE` with an operand, a comparison of the column with a literal other than `=`, a
-concatenation, a `NOT IN` or `<>` beside the list, two lists on one column, an `IN` list
-with a member that is not a string or integer literal, `E'...'` strings with an escape
-PostgreSQL rejects (the others are decoded as PostgreSQL does), an expression nested more
-than 32 levels or with more than 500 `AND`/`OR` operators. The fix is the same two
-statements in a new migration, written with a plain `IN (...)`, `= ANY (ARRAY[...])` or
-`<@ '[...]'` list of every case; the newest literal list is the one compared, so one such
-migration ends the finding. The same finding is made when a statement the check cannot
-follow may have written the constraint: a `DO` block that names the constraint, table or
-column, a `RENAME` of a column or constraint the table holds, `ALTER TABLE ... SET SCHEMA`
-or `INHERIT`, `ALTER SCHEMA`, `CREATE TABLE ... (LIKE ...)`, `INHERITS` or `PARTITION OF`, a
+Anything else that mentions the enum column cannot be read, and the finding says which
+part: a function applied to the column (`lower(col)`), a regular expression (`~`),
+`SIMILAR TO`, `LIKE`, arithmetic, a subquery, a concatenation, a function or arithmetic of
+another column (`col = lower(other)`), the ordering of text (it depends on the collation), a
+JSON test other than the two above, a list member that is not a string or integer literal,
+a number that does not fit in 64 bits, `E'...'` strings with an escape PostgreSQL rejects
+(the others are decoded as PostgreSQL does), and an expression nested more than 32 levels or
+with more than 500 `AND`, `OR`, `NOT`, `IS` and `WHEN` words. The fix is the same two
+statements in a new migration, written with tests that only compare the column with
+literals, such as a plain `IN (...)`, `= ANY (ARRAY[...])` or `<@ '[...]'`; the newest
+literal constraint is the one evaluated, so one such migration ends the finding.
+
+The other direction is checked too. A literal a constraint compares the column with that
+is not an enum case, and that no constraint rejects, is a finding at the model field: "holds
+X, which is not an enum case". `col BETWEEN 0 AND 4` over the cases 0, 1, 2 and 4 holds no
+such value, because only its two ends are compared; `BETWEEN 0 AND 5` holds 5. A column that
+declares `values=` has its named cases checked as above, and every case it does not name
+must be rejected by some constraint: a case that every constraint passes is a finding.
+
+A comparison of the column with another plain column (`type = col`,
+`from_level <> to_level`) depends on that column's value, so it counts as depending on other
+columns. The check does not reason across columns, because it evaluates one column at a
+time: a constraint that ties the enum column to another column whose own values a second
+constraint restricts is not detected (`CHECK (status = other AND status IN (...))` beside
+`CHECK (other = 'draft')` leaves `status` able to hold only `draft`, and nothing is reported).
+
+The check reads CHECK constraints and nothing else. It cannot see, by design, a trigger that
+enforces a list, a foreign key to a lookup table, a generated column derived from the
+enum column, the bounds of a partition (`PARTITION BY LIST` with
+`PARTITION OF ... FOR VALUES IN`), an exclusion constraint, a rule, or a function the
+database calls. A column whose type is a `CREATE DOMAIN` or `CREATE TYPE ... AS ENUM`
+created in the history is reported as unreadable, because the values live in the type: add
+a literal `CHECK` on the column. Such a constraint is never a finding when it is missing:
+the database constraint is optional.
+
+The same "cannot be read" finding is made when a statement the check cannot follow may have
+written or changed a constraint that compares the column with literals: a `DO` block that
+names the constraint, table or column, a `RENAME` of a column or constraint the table
+holds, `ALTER TABLE ... SET SCHEMA` or `INHERIT`, `ALTER SCHEMA`,
+`CREATE TABLE ... (LIKE ...)`, `CREATE TABLE ... AS`, `INHERITS` or `PARTITION OF`, a
 statement that changes `pg_constraint`, and a migration that sets `search_path` (every
-unqualified table name in that migration is unreadable). A column whose type is a
-`CREATE DOMAIN` or `CREATE TYPE ... AS ENUM` created in the history is unreadable too: the
-rule compares CHECK lists, so add a literal `CHECK` list on the column.
+unqualified table name in that migration is unreadable).
 
 Other findings and what is not one:
 
-- A value in the list that is not an enum case is a finding at the model field. Remove it
-  in a new migration with the same two statements.
+- A literal that is not an enum case is a finding at the model field. Remove it in a new
+  migration with the same two statements.
 - A column that deliberately holds fewer cases declares them on the field with
   `foundry:"values=Draft|Published"`, naming the cases by their Go constant names, then
-  runs `foundry generate`. The list must then equal exactly those cases, so a new enum
-  case does not touch the column, and a case dropped from the list is still found. The
-  option is refused on a field that holds no enum, with a name that is not a case, and when
-  it names every case. See
+  runs `foundry generate`. Every constraint must then reject each case the tag leaves out
+  and admit the named ones, so a new enum case does not touch the column, and a case the
+  database admits but the tag leaves out is still found. The option is refused on a field
+  that holds no enum, with a name that is not a case, and when it names every case. See
   [enum columns and their lists](model-declarations.md#recipe-enum-narrowing).
 - A table is identified by schema and name: a table written without a schema is in
   `public`, a model's `table=` may be `schema.table`, and a statement about
   `archive.invoices` never touches `public.invoices`. A quoted name keeps its case and an
   unquoted one is folded to lower case, as in PostgreSQL.
-- A column with an enum type and no list in any migration is not a finding: the database
-  constraint is optional.
+- A column that no CHECK constraint mentions is not a finding.
 - A migration whose SQL is built at run time (not written as string constants) is a
   finding when the text it does show names a table of a model.
 - Lists inside functions and triggers, `DO` blocks that do not name the table, constraint
@@ -233,14 +262,12 @@ Other findings and what is not one:
   `DROP COLUMN`, `ALTER COLUMN ... TYPE`, `RENAME TO` and `DROP TABLE`. Each migration SQL
   string is limited to 1 MiB and a module to 10,000 migrations.
 
-A constraint is named in the finding when the migration names it. For an unnamed `CHECK`
-the check reproduces PostgreSQL's choice only when it can be certain: the table's columns
-and constraint names must be known from its `CREATE TABLE`, and the name must fit in 63
-bytes. PostgreSQL names the constraint `<table>_<column>_check` when the expression uses
-exactly one distinct column, wherever the constraint is written, and `<table>_check`
-otherwise, adding a number (`..._check1`) when the name is taken. When the name is not
-certain the finding says "the unnamed CHECK" and names its file and line, and the statements
-it suggests carry a placeholder in angle brackets for the name to take from `\d table`.
+A constraint is named in a finding only when the migration names it. PostgreSQL chooses
+the name of an unnamed `CHECK` over the whole schema and avoids the names other tables'
+constraints already hold, so the check never guesses one: the finding says "the unnamed
+CHECK" and names its file and line, and the statements it suggests carry the placeholder
+`<constraint name, shown by \d table>`. In `psql`, `\d table` lists every constraint of the
+table with the name PostgreSQL gave it; put that name in the placeholder's place.
 
 <a id="recipe-register-migration"></a>
 ## Register every migration

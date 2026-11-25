@@ -16,7 +16,7 @@ func TestGuideQuotesWhatTheCompilerPrintsForAccessRuleMistakes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"access_rule_omitted", "access_rule_flat_scopes", "access_rule_configure_scopes"} {
+	for _, name := range []string{"access_rule_omitted", "access_rule_flat_scopes", "access_rule_configure_scopes", "access_route_type_as_constructor"} {
 		t.Run(name, func(t *testing.T) {
 			cmd := exec.CommandContext(t.Context(), "go", "build", "-o", os.DevNull, "./testdata/compilefail/"+name)
 			cmd.Env = append(os.Environ(), "GOWORK=off", "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local")

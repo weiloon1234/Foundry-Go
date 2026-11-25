@@ -67,7 +67,7 @@ var (
 	MigrationUnregistered = Rule{"migration-unregistered", "migrations-and-seeding", "recipe-register-migration", ""}
 
 	GuidesDeclaration = Rule{"guides-declaration", tooling, guides, ""}
-	AnchorInvalid     = Rule{"anchor-invalid", tooling, authors, ""}
+	AnchorInvalid     = Rule{"anchor-invalid", tooling, authors, guides}
 	AnchorDuplicate   = Rule{"anchor-duplicate", tooling, authors, ""}
 	AnchorMissing     = Rule{"anchor-missing", tooling, guides, ""}
 	GuideName         = Rule{"guide-name", tooling, guides, ""}
@@ -87,8 +87,8 @@ var (
 	DocMarker         = Rule{"doc-marker", tooling, authors, apps}
 	DocRegion         = Rule{"doc-region", tooling, authors, apps}
 	DocBinding        = Rule{"doc-binding", tooling, authors, apps}
-	DocSectionAnchor  = Rule{"doc-section-anchor", tooling, authors, ""}
-	DocAgentEntry     = Rule{"doc-agent-entry", tooling, authors, ""}
+	DocSectionAnchor  = Rule{"doc-section-anchor", tooling, authors, apps}
+	DocAgentEntry     = Rule{"doc-agent-entry", tooling, authors, apps}
 	DocInputs         = Rule{"doc-inputs", tooling, authors, apps}
 	DocWorkedExample  = Rule{"doc-worked-example", tooling, apps, ""}
 	DocLink           = Rule{"doc-link", tooling, authors, ""}

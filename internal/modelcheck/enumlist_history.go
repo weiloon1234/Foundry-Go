@@ -2,7 +2,6 @@ package modelcheck
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -48,14 +47,9 @@ func declaredKey(table string) tableKey {
 type tableState struct {
 	checks []*checkConstraint
 	// dynamic maps a column to where a statement the rule cannot read may have
-	// written its constraints. A later literal list for the column clears it.
+	// written its constraints. A later constraint that compares the column with
+	// literals clears it.
 	dynamic map[string]string
-	// columns and names are complete only when the history creates the table
-	// and no statement the rule cannot follow touched it.
-	columns      map[string]bool
-	columnsKnown bool
-	names        map[string]bool
-	namesKnown   bool
 }
 
 // history replays migration SQL in execution order and keeps the CHECK
@@ -156,7 +150,7 @@ func qualifiedName(tokens []sqlToken, i int) (schema, name string, next int, ok 
 func (h *history) resolve(schema, name string) (tableKey, bool) {
 	if schema == "" {
 		if h.searchPath != "" {
-			h.touchNamed(name, "a search_path change at "+h.searchPath+" makes the unqualified table names of its migration ambiguous")
+			h.touchNamed(name, "a search_path change at "+h.searchPath+", which makes the unqualified table names of its migration ambiguous")
 			return tableKey{}, false
 		}
 		schema = defaultSchema
@@ -198,11 +192,11 @@ func (h *history) create(src *sqlSource, tokens []sqlToken) {
 	if !ok {
 		return
 	}
-	state := &tableState{columns: make(map[string]bool), columnsKnown: true, names: make(map[string]bool), namesKnown: true}
+	state := &tableState{}
 	h.tables[key] = state
 	where := src.where(tokens[0].start)
 	if i >= len(tokens) || !tokens[i].punct("(") {
-		h.opaqueTable(key, "CREATE TABLE at "+where+" does not list its columns, so its constraints come from elsewhere")
+		h.opaqueTable(key, "a CREATE TABLE at "+where+" that does not list its columns")
 		return
 	}
 	closeAt := matching(tokens, i)
@@ -210,7 +204,7 @@ func (h *history) create(src *sqlSource, tokens []sqlToken) {
 		return
 	}
 	if closeAt+1 < len(tokens) && tokens[closeAt+1].word("inherits") {
-		h.opaqueTable(key, "CREATE TABLE at "+where+" inherits constraints from another table")
+		h.opaqueTable(key, "a CREATE TABLE at "+where+" that inherits constraints from another table")
 	}
 	elements := splitTopLevel(tokens[i+1 : closeAt])
 	for _, element := range elements {
@@ -219,12 +213,10 @@ func (h *history) create(src *sqlSource, tokens []sqlToken) {
 		}
 		switch first := element[0]; {
 		case first.word("like"):
-			h.opaqueTable(key, "CREATE TABLE at "+where+" copies columns and constraints with LIKE")
+			h.opaqueTable(key, "a CREATE TABLE at "+where+" that copies columns and constraints with LIKE")
 		case first.name() && !(first.kind == sqlWord && elementKeywords[first.text]):
-			state.columns[first.text] = true
 			h.noteColumnType(src, key, first.text, element[1:])
 		}
-		h.noteNames(state, element)
 	}
 	for _, element := range elements {
 		h.element(src, key, element)
@@ -234,7 +226,6 @@ func (h *history) create(src *sqlSource, tokens []sqlToken) {
 // opaqueTable marks a table whose constraints and columns the rule cannot follow.
 func (h *history) opaqueTable(key tableKey, why string) {
 	state := h.table(key)
-	state.columnsKnown, state.namesKnown = false, false
 	for column := range h.watch[key] {
 		state.markDynamic(column, why)
 	}
@@ -283,24 +274,7 @@ func (h *history) noteColumnType(src *sqlSource, key tableKey, column string, ty
 		found = h.types[tableKey{defaultSchema, name}]
 	}
 	if found != "" {
-		h.table(key).markDynamic(column, "the column's type "+name+" is "+found+", whose values the rule does not read; the type")
-	}
-}
-
-// noteNames records the constraint names a table element writes.
-func (h *history) noteNames(state *tableState, element []sqlToken) {
-	depth := 0
-	for k, t := range element {
-		switch {
-		case t.punct("(") || t.punct("["):
-			depth++
-		case t.punct(")") || t.punct("]"):
-			depth--
-		case depth == 0 && t.word("constraint") && k+1 < len(element) && element[k+1].name():
-			if state.names != nil {
-				state.names[element[k+1].text] = true
-			}
-		}
+		h.table(key).markDynamic(column, "the column's type "+name+" is "+found+", whose values the rule does not read")
 	}
 }
 
@@ -331,56 +305,13 @@ func (h *history) element(src *sqlSource, key tableKey, element []sqlToken) {
 		}
 		state := h.table(key)
 		c := parseCheck(key, key.name, name, explicit, src, element[k+2:closeAt], t.start)
-		if !explicit {
-			defaultConstraintName(state, c)
-		}
 		state.checks = append(state.checks, c)
-		for column := range c.lists {
-			delete(state.dynamic, column)
+		for column := range state.dynamic {
+			if c.decides(column) {
+				delete(state.dynamic, column)
+			}
 		}
 		k = closeAt
-	}
-}
-
-// maxNameBytes is PostgreSQL's identifier limit.
-const maxNameBytes = 63
-
-// defaultConstraintName gives an unnamed CHECK the name PostgreSQL chooses, when
-// the rule can reproduce the choice exactly. PostgreSQL (AddRelationNewConstraints
-// and ChooseConstraintName) names a CHECK <table>_<column>_check when the
-// expression refers to exactly one distinct column, wherever the constraint is
-// written (a column constraint is named by the columns it uses, not by the column
-// it follows), and <table>_check otherwise; when that name is taken by another
-// constraint of the table it tries <table>_<column>_check1, check2 and so on. The
-// name is certain only when the table's columns and constraint names are all
-// known and the name fits in 63 bytes; otherwise the constraint stays unnamed.
-func defaultConstraintName(state *tableState, c *checkConstraint) {
-	if !state.columnsKnown || !state.namesKnown {
-		return
-	}
-	var referenced []string
-	for column := range c.idents {
-		if state.columns[column] {
-			referenced = append(referenced, column)
-		}
-	}
-	for pass := 0; pass < 100; pass++ {
-		label := "check"
-		if pass > 0 {
-			label += strconv.Itoa(pass)
-		}
-		name := c.tableName + "_" + label
-		if len(referenced) == 1 {
-			name = c.tableName + "_" + referenced[0] + "_" + label
-		}
-		if len(name) > maxNameBytes {
-			return
-		}
-		if !state.names[name] {
-			c.name, c.nameKnown = name, true
-			state.names[name] = true
-			return
-		}
 	}
 }
 
@@ -473,14 +404,10 @@ func (h *history) add(src *sqlSource, key tableKey, action []sqlToken) {
 	if len(element) == 0 {
 		return
 	}
-	state := h.table(key)
+	h.table(key)
 	if first := element[0]; first.name() && (hasColumn || !(first.kind == sqlWord && elementKeywords[first.text])) {
-		if state.columns != nil {
-			state.columns[first.text] = true
-		}
 		h.noteColumnType(src, key, first.text, element[1:])
 	}
-	h.noteNames(state, element)
 	h.element(src, key, element)
 }
 
@@ -523,7 +450,6 @@ func (h *history) dropAction(key tableKey, action []sqlToken) {
 			}
 		}
 		state.checks = kept
-		delete(state.names, name)
 		return
 	}
 	if action[j].word("column") {
@@ -538,12 +464,9 @@ func (h *history) dropAction(key tableKey, action []sqlToken) {
 	for _, c := range state.checks {
 		if !c.idents[column] {
 			kept = append(kept, c)
-		} else if c.known() {
-			delete(state.names, c.name)
 		}
 	}
 	state.checks = kept
-	delete(state.columns, column)
 }
 
 // rename follows a renamed table and treats a renamed column or constraint as a
@@ -728,7 +651,6 @@ func (c *checkConstraint) containsAll(needles []string) bool {
 // changed by a statement the rule cannot follow.
 func (h *history) touch(key tableKey, where string) {
 	state := h.table(key)
-	state.columnsKnown, state.namesKnown = false, false
 	for column := range h.watch[key] {
 		state.markDynamic(column, where)
 	}

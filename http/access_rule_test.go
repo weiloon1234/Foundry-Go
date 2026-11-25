@@ -60,6 +60,40 @@ func TestGuardedRouteRefusesAMissingOrZeroRuleAtRegistration(t *testing.T) {
 	}
 }
 
+// The raw-route and ticket constructors take the same rule argument as Authenticated,
+// so a missing or zero rule is refused with the same located message.
+func TestRawAndTicketRoutesRefuseAMissingOrZeroRuleWithTheRoute(t *testing.T) {
+	binding, _ := alternativeBinding(t, alternativeScopes(t, "editorial.write"))
+	route := h.DefineRoute(h.RouteSpec{ID: "profile", Method: h.GET, Access: h.Guarded}, h.StaticPath("/profile"))
+	ticketBinding, redeemer := ticketEndpointSetup(t)
+	const want = "GET /profile (profile): invalid: a guarded route requires an access rule: http.AllOf, http.AnyOf or binding.AnyActor()"
+	for name, rule := range map[string]h.AccessRule[authAccount]{
+		"nil":                nil,
+		"zero alternative":   h.GuardAlternative[authAccount]{},
+		"empty all-of":       h.AllOf[authAccount](),
+		"anyof without rule": h.AnyOf[authAccount](),
+	} {
+		refusals := map[string]error{
+			"raw route": h.ValidateAuthenticatedRoute(h.RouteAuthenticated(route, binding, rule)),
+			"ticket":    h.ValidateTicketAuthenticated(h.TicketAuthenticated(authEndpoint(h.Guarded), ticketBinding, redeemer, rule)),
+		}
+		for form, err := range refusals {
+			if !errors.Is(err, fault.Invalid) {
+				t.Fatal(form, name, "was not refused", err)
+			}
+			if !strings.Contains(err.Error(), "GET /profile (profile): ") {
+				t.Fatal(form, name, "refusal does not name the route:", err)
+			}
+			if name == "nil" && !strings.Contains(err.Error(), want) {
+				t.Fatalf("%s: the refusal does not name the route and the fix: %v", form, err)
+			}
+		}
+	}
+	if _, err := h.InspectAuthenticatedRoute(h.RouteAuthenticated(route, binding, nil)); err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("inspection does not name the route and the fix: %v", err)
+	}
+}
+
 func TestOptionalAuthenticationNeedsNoRule(t *testing.T) {
 	binding, _ := alternativeBinding(t, auth.AccessScopes[authAccount]{})
 	endpoint := h.OptionallyAuthenticated(authEndpoint(h.Public), binding)

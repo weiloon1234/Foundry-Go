@@ -680,6 +680,14 @@ registration := foundryhttp.HandleAuthenticatedRaw(secured, func(w stdhttp.Respo
 })
 ```
 
+The constructor is `http.RouteAuthenticated`; `http.AuthenticatedRoute` is the type it
+returns. Calling the type name as the constructor is refused with this message, which
+names no replacement, so write `RouteAuthenticated`:
+
+```text
+cannot use generic type http.AuthenticatedRoute without instantiation
+```
+
 `http.RouteOptionallyAuthenticated` supplies `value.Optional[User]` and requires a Public
 route declaration. Required authentication requires Guarded. Unbound guarded
 routes remain rejected. Native adapters reuse the same credential, scope,

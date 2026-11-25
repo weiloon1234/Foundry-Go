@@ -120,12 +120,16 @@ in full.
 
 `foundry models check` (and so each application's quick gate and the framework's
 `make models-check`) gains two rules that read the migrations without a database. The
-`[enum-list]` rule requires the newest `CHECK` list on the column of every enum-typed
-model field (or `value.Nullable`, `value.JSON`, slice or array of one) to equal the enum's
-cases: `col IN (...)`, `col = ANY (ARRAY[...])` (hand-written or as `pg_dump` prints it),
-a chain of equalities, `col <@ '[...]'::jsonb` and integer `col BETWEEN a AND b`. Any other
-CHECK that constrains an enum column is reported as unreadable, never passed in silence.
-It prints the list a new migration must hold. The `[migration-unregistered]`
+`[enum-list]` rule evaluates every live `CHECK` constraint that mentions the column of an
+enum-typed model field (or `value.Nullable`, `value.JSON`, slice or array of one) once per
+enum case, with the column set to that case: a constraint that rejects a case means the
+case can never be stored, whatever form the constraint takes (`IN`, `=`, `<>`, `NOT IN`,
+`= ANY (ARRAY[...])`, `BETWEEN`, ordering operators on integers, `CASE`, `<@ '[...]'::jsonb`).
+A part of the expression that does not mention the column neither proves nor refutes. A
+test of the column the rule does not evaluate (a function, a regular expression, `LIKE`) is
+reported as unreadable, never passed in silence, and a
+literal the database admits that is no enum case is a finding too. It prints the list a new
+migration must hold. The `[migration-unregistered]`
 rule reports a migration function that no list registers. The foundry tag gains
 `values=Case|Case`, which declares the cases a deliberately narrower column holds; the
 list must then equal exactly those cases. The generator refuses `values` on a field that
@@ -135,16 +139,19 @@ every case. The two rules are listed in the rule table of the
 [migrations guide](guides/migrations-and-seeding.md#recipe-enum-lists).
 
 This is a source and gate compatibility change. An application whose constraint lists
-fewer or more values than its enum fails `models check` at the next pin until it either
+rejects a case of its enum, or admits a literal that is no case, fails `models check` at
+the next pin until it either
 declares the narrowing with `values=` on the field and runs `foundry generate` (no
 database change; the option is part of the model's declaration, so the generated-output
 check fails until it is regenerated) or adds a new migration that writes the list again
-with every case. A list the rule cannot read (a `DO` block that rewrites the constraint,
-a regular-expression or `LIKE` test, a function on the column, a domain or database enum
-type) is a finding until a new migration writes the constraint as literal `DROP CONSTRAINT`
-and `ADD CONSTRAINT` statements with a plain list. An
-application whose lists already equal their enums, or whose enum columns carry no list,
-sees no change. No runtime behavior, persisted format or generated wire contract changes.
+with every case. A constraint the rule cannot read (a `DO` block that rewrites it, a
+regular-expression or `LIKE` test, a function on the column, a domain or database enum type) is a finding until a new migration
+writes the constraint as literal `DROP CONSTRAINT` and `ADD CONSTRAINT` statements that
+compare the column with literals. The rule evaluates one column at a time: a comparison with
+another plain column counts as depending on other data, so a constraint that ties the enum
+column to another column restricted by a second constraint (`status = other` beside
+`CHECK (other = 'draft')`) is not detected. An application whose constraints reject no case, or
+whose enum columns carry no constraint, sees no change. No runtime behavior, persisted format or generated wire contract changes.
 
 ## Retired-names ledger completeness — unreleased
 

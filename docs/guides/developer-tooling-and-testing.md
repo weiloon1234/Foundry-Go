@@ -363,11 +363,13 @@ go tool foundry docs bindings --language typescript --dir .
 
 `docs render` writes the bound blocks of the application's documents from their source
 regions, byte for byte outside the replaced block bodies, and nothing else. It is all or
-nothing. It first runs the binding check of `docs check` without the toolchain, and when
-any document has any finding other than a block that differs from its source (an unbound
-fence, an unknown tag, indented code, a refused or unreadable source, a missing region,
-an empty or invalid `worked-example` region) it writes nothing, prints every finding and
-exits non-zero. It then prepares the new content of every document and opens every
+nothing. It first runs the binding check of `docs check`, and when any document has any
+finding other than a block that differs from its source (an unbound fence, an unknown
+tag, indented code, a refused or unreadable source, a missing region, an empty or invalid
+`worked-example` region) it writes nothing, prints every finding and exits non-zero. When
+a document binds a Go source it also proves, with one offline `go list` of the module,
+that the source belongs to a package, before it writes anything: `docs render` needs the Go
+toolchain then, and an application whose documents bind no Go source needs none. It then prepares the new content of every document and opens every
 target for writing, a regular file inside the module, before it writes the first; a
 target that cannot be written stops it with nothing changed. A failure while writing,
 which no check can exclude across several files, names the documents already written and
@@ -444,7 +446,8 @@ and that the gate that runs those programs is part of the application's verifica
 A bound file that no program loads would otherwise show code the compiler never saw.
 
 Findings use the rules `doc-binding`, `doc-marker`, `doc-region`, `doc-rendered`,
-`doc-inputs` and `doc-worked-example` of [Read a check finding](#diagnostic-rules). A
+`doc-inputs`, `doc-worked-example`, `doc-section-anchor` and `doc-agent-entry` of
+[Read a check finding](#diagnostic-rules). A
 finding raised for an application's documents points at this recipe; the same rule
 raised for the framework's own guides points at the framework-author recipe. Each
 finding and its fix:
@@ -481,6 +484,15 @@ finding and its fix:
 - `doc-worked-example`: the `worked-example` region is empty, holds a bound block with
   no code, holds text other than the explicit statement, or holds a fence beside the
   statement. Fix it to one of the two states above.
+- `doc-agent-entry`, "Agent entry permits task labels and links only": a section titled
+  `Agent entry` (or anchored `agent-entry`) in an `AGENTS.md` or a skill is a menu, so
+  every line in it is a task label followed by a Markdown link
+  (`- Declare a command: [Commands](#commands)`), with no fence, prose or subsection.
+  Move the explanation into a section of its own below the entry and link to it.
+- `doc-section-anchor`, "anchor must be followed by a # heading": an
+  `<a id="agent-entry"></a>` or `<a id="recipe-name"></a>` line names the section whose
+  heading comes next. Put the `#` heading on the line right after the anchor and move
+  anything between them below the heading.
 
 <a id="recipe-declare-command"></a>
 ## Commands and bootstrap
@@ -836,7 +848,7 @@ mismatch:
 | `generated-stale` | `generate --check` | `model-declarations#recipe-stale-declarations` |  |
 | `generate-declaration` | `generate` | `model-declarations#diagnose-declarations` |  |
 | `guides-declaration` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |  |
-| `anchor-invalid` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |  |
+| `anchor-invalid` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-reference-guides` |
 | `anchor-duplicate` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |  |
 | `anchor-missing` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |  |
 | `guide-name` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |  |
@@ -855,8 +867,8 @@ mismatch:
 | `doc-marker` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
 | `doc-region` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
 | `doc-binding` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
-| `doc-section-anchor` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |  |
-| `doc-agent-entry` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |  |
+| `doc-section-anchor` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-agent-entry` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
 | `doc-inputs` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
 | `doc-worked-example` | `docs check` | `developer-tooling-and-testing#recipe-application-documents` |  |
 | `doc-link` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |  |

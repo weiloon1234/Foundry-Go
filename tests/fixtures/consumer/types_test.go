@@ -348,6 +348,7 @@ func compilerCases() []compilerCase {
 		{"access_rule_omitted", "not enough arguments in call to http.Authenticated"},
 		{"access_rule_flat_scopes", ".RequirementOption[models.User] of http.Scopes(scopes) does not match inferred type"},
 		{"access_rule_configure_scopes", "in call to http.ConfigureAuthenticated, type"},
+		{"access_route_type_as_constructor", "cannot use generic type http.AuthenticatedRoute without instantiation"},
 		{"access_rule_pagination_omitted", ".AccessRule[A], ..."},
 		{"access_rule_datatable_read_omitted", ".Scope, datatable.Table[S, R, A], datatable.RoutesConfig[M, A], datatable.ReadOption[M], ...datatable.ExportOption[M])"},
 

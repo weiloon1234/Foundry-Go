@@ -57,6 +57,6 @@ func runModels(ctx context.Context, args []string, stdout, stderr io.Writer) (re
 	if len(diagnostics) > 0 {
 		return safeerror.New(fmt.Sprintf("models check: %d finding(s); each names the guide that teaches its fix", len(diagnostics)))
 	}
-	_, err = fmt.Fprintln(stdout, "Model tables are declared through the generator, enum lists match their enums and every migration is registered.")
+	_, err = fmt.Fprintln(stdout, "Model tables are declared through the generator, no CHECK constraint rejects a case of an enum column and every migration is registered.")
 	return err
 }

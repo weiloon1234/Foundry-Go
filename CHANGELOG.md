@@ -28,32 +28,38 @@
   before repinning; it also converts a variable or helper holding `[]http.GuardOption[M]`,
   and the [compatibility policy](docs/compatibility.md#access-rule) lists what it
   rewrites and, for each shape it leaves for a decision, the recipe.
-- `foundry models check` compares each enum column's database value list with its
-  enum, without a database: the newest live `CHECK` list on the column of a model field
-  typed as a `//foundry:enum` (or `value.Nullable`, `value.JSON`, slice or array of one)
-  must equal the enum's cases. It reads `col IN (...)`, `col = ANY (ARRAY[...])` in the
-  hand-written and the `pg_dump` forms, a chain of `col = 'a' OR col = 'b'`,
-  `col <@ '[...]'::jsonb` and integer `col BETWEEN a AND b`. The rule fails closed: any
-  other CHECK that constrains an enum column (a regular expression, `LIKE`, `SIMILAR TO`,
-  a function on the column, a domain or database enum type, a `DO` block that names it,
-  `search_path` changes, `LIKE`/`INHERITS` table copies) is a finding that says the list
-  cannot be read, never silence. Tables are identified by schema and name and quoted
-  names keep their case. A missing case is a one-line `[enum-list]` finding at the case
-  that names the table, column, constraint (or says it is unnamed), the migration that
-  last wrote the list, and two alternatives: a new migration that re-declares the
-  constraint with the printed list, or `values=` on the field plus `foundry generate`. A
-  value that is not a case and a run-time-built migration that names a model table are
-  findings too. A column that holds fewer cases declares them with the new tag option
-  `values=Case|Case`, and its list must equal exactly those cases. A migration function
+- `foundry models check` evaluates each enum column's live `CHECK` constraints against
+  its enum, without a database: for every case of the `//foundry:enum` behind a model
+  field (or `value.Nullable`, `value.JSON`, slice or array of one) it evaluates each
+  constraint that mentions the column with the column set to that case, in three-valued
+  logic. It decides `=`, `<>`, `IN`, `NOT IN`, `= ANY (ARRAY[...])` and `<> ALL (ARRAY[...])`
+  (hand-written and in the `pg_dump` form), `BETWEEN` and the ordering operators on
+  integer enums, `IS NULL`, `IS TRUE`, `NOT`, `AND`, `OR`, `CASE` and, for a collection
+  column, `<@ '[...]'::jsonb`, `jsonb_typeof`, `jsonb_array_length` and equality with a
+  JSON array. A part of the expression that does not mention the column neither proves nor
+  refutes, including a comparison with another plain column (the rule evaluates one column
+  at a time and does not follow constraints across columns). The rule fails closed: a test of the column it does not evaluate (a regular
+  expression, `LIKE`, `SIMILAR TO`, a function on the column, a domain or database enum type, a `DO` block that names it, `search_path`
+  changes, `LIKE`/`INHERITS` table copies) is a finding that names the sub-expression and
+  says it cannot be read, never silence. Tables are identified by schema and name and
+  quoted names keep their case. A case a constraint rejects is a one-line `[enum-list]`
+  finding at the case that names the table, column, constraint (only when the migration
+  names it; an unnamed one is described by its file and line), the migration that last
+  wrote it, and two alternatives: a new migration that re-declares the constraint with
+  the printed list, or `values=` on the field plus `foundry generate`. A literal the
+  database admits that is not a case and a run-time-built migration that names a model
+  table are findings too. A column that holds fewer cases declares them with the new tag
+  option `values=Case|Case`, and the constraints must then reject every other case. A migration function
   that no list registers is a `[migration-unregistered]` finding; a function that builds
   its definition in a local and returns it counts as a migration, and a reference to a
   migration function as a value counts as registering it. The migrations guide teaches
   both; the consumer fixture's `enumlists` package is the positive case.
-- Application effect of the enum rule: an application whose constraint lists fewer
-  values than its enum fails `models check` at the next pin until the field declares
-  `values=` and `foundry generate` is run, or a new migration writes the list again. A
-  list written in a form the rule does not read is a finding until a new migration
-  writes it as a plain list. Nothing changes for lists that already equal their enums.
+- Application effect of the enum rule: an application whose constraint rejects a case of
+  its enum fails `models check` at the next pin until the field declares `values=` and
+  `foundry generate` is run, or a new migration writes the constraint again. A constraint
+  written in a form the rule does not read is a finding until a new migration writes it
+  with tests that compare the column with literals. Nothing changes for constraints that
+  reject no case.
 - `foundry docs check` binds an application's own documents to the application's own
   code. In `AGENTS.md` and `.claude/skills` Markdown every `go`, `typescript` and `tsx`
   fence must carry a `<!-- compiled-source: path#region -->` directive and equal that
@@ -148,8 +154,8 @@
 - Compiled-source bindings, the closed fence-tag list, the restrictions on indented
   code and HTML `pre`/`code` elements, and the bare-name rule for code spans apply
   to the framework's own guides, instructions and skills. An application's
-  `foundry docs check` does **not** enforce binding, tag or block rules in this
-  release and does not require framework fixture sources.
+  `foundry docs check` applies the same rules to its own documents, bound to its own
+  code, and does not require framework fixture sources.
 - Framework documentation checks parse each document once per run. Dated records
   (`docs/evidence/`, `CHANGELOG.md`) may reach 1.5 MiB; every other document is
   limited to 512 KiB.

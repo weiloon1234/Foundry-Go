@@ -212,10 +212,12 @@ func TestApplicationFindingsTeachTheApplicationRecipe(t *testing.T) {
 	root := t.TempDir()
 	writeApplicationFile(t, root, "internal/pages/page.go", "package pages\n\n// doc-example:begin page\nvar x = 1\n// doc-example:end page\n")
 	for name, text := range map[string]string{
-		"doc-binding":  "```go\nvar x = 1\n```\n",
-		"doc-marker":   "<!-- compiled-source: portals.go#x -->\n```go\n```\n",
-		"doc-region":   "<!-- compiled-source: internal/pages/page.go#nowhere -->\n```go\n```\n",
-		"doc-rendered": "<!-- compiled-source: internal/pages/page.go#page -->\n```go\nold\n```\n",
+		"doc-binding":        "```go\nvar x = 1\n```\n",
+		"doc-marker":         "<!-- compiled-source: portals.go#x -->\n```go\n```\n",
+		"doc-region":         "<!-- compiled-source: internal/pages/page.go#nowhere -->\n```go\n```\n",
+		"doc-rendered":       "<!-- compiled-source: internal/pages/page.go#page -->\n```go\nold\n```\n",
+		"doc-agent-entry":    "## Agent entry\n\nExplain the tasks here instead of linking them.\n",
+		"doc-section-anchor": "<a id=\"recipe-first\"></a>\nProse where the heading belongs.\n",
 	} {
 		writeApplicationFile(t, root, ".claude/skills/a/SKILL.md", text)
 		documents, err := LoadDocuments(ApplicationPolicy(), root, []string{".claude/skills/a/SKILL.md"}, nil)
@@ -226,8 +228,10 @@ func TestApplicationFindingsTeachTheApplicationRecipe(t *testing.T) {
 	}
 	// The framework policy keeps the framework-author recipe.
 	for name, text := range map[string]string{
-		"doc-binding": "```go\nvar x = 1\n```\n",
-		"doc-marker":  "<!-- compiled-source: internal/x.go#x -->\n```go\n```\n",
+		"doc-binding":        "```go\nvar x = 1\n```\n",
+		"doc-marker":         "<!-- compiled-source: internal/x.go#x -->\n```go\n```\n",
+		"doc-agent-entry":    "## Agent entry\n\nExplain the tasks here instead of linking them.\n",
+		"doc-section-anchor": "<a id=\"recipe-first\"></a>\nProse where the heading belongs.\n",
 	} {
 		writeApplicationFile(t, root, "docs/guides/a.md", text)
 		documents, err := LoadDocuments(FrameworkPolicy(), root, []string{"docs/guides/a.md"}, nil)

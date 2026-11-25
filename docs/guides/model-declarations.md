@@ -173,14 +173,14 @@ convention opt-out. Choose those only when a plain column is the intended API.
 <a id="recipe-enum-narrowing"></a>
 ### Enum columns and their lists
 
-When an enum column carries a database `CHECK` that lists values,
-`foundry models check` requires the list to equal the enum's cases (see
+When an enum column carries a database `CHECK` constraint, `foundry models check`
+evaluates it for every case of the enum and requires that none is rejected (see
 [keep an enum and its database list equal](migrations-and-seeding.md#recipe-enum-lists)).
 A column that deliberately holds fewer cases says so on the field:
 ``Stage Status `foundry:"values=Draft|Published"` ``. The names are the Go constants of
 the enum's cases, separated by `|`. The option is part of the model's declaration, so run
-`foundry generate` after adding it; the generated-output check fails until you do. Then the
-list must equal exactly those cases, a new
+`foundry generate` after adding it; the generated-output check fails until you do. Then
+the constraints must reject every case the tag leaves out and admit the named ones, a new
 enum case leaves the column alone, and the generator refuses `values` on a field that
 holds no enum (a field of an enum, `value.Nullable`, `value.JSON`, slice or array of one
 qualifies). `models check` refuses a name that is not a case and a list that names every

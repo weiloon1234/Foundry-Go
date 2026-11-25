@@ -9,98 +9,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
 )
 
-// readCheck replays one CREATE TABLE holding the expression and returns its
-// constraint.
-func readCheck(t *testing.T, expr string) *checkConstraint {
-	t.Helper()
-	h, problems := replay(nil, []string{`CREATE TABLE t (status text, type text, roles jsonb, level int, p jsonb, CHECK (` + expr + `))`})
-	if len(problems) != 0 {
-		t.Fatal(problems)
-	}
-	checks := tableOf(h, "t").checks
-	if len(checks) != 1 {
-		t.Fatalf("%d checks", len(checks))
-	}
-	return checks[0]
-}
-
-// TestCheckExpressionFailsClosed holds the rule's principle: a list is equal only
-// for a form the rule reads in full, and any other test of an enum column in a
-// CHECK is "cannot be read", never silence.
-func TestCheckExpressionFailsClosed(t *testing.T) {
-	for _, tc := range []struct {
-		name, expr, column string
-		want               string // admitted values, "none", or "problem: text"
-	}{
-		{"pg_dump form", `((status)::text = ANY ((ARRAY['a'::character varying, 'b'::character varying])::text[]))`, "status", `"a" "b"`},
-		{"text array with casts", `((status)::text = ANY (ARRAY['a'::text, 'b'::text]))`, "status", `"a" "b"`},
-		{"array cast outside the parentheses", `status = ANY ((ARRAY['a', 'b'])::text[])`, "status", `"a" "b"`},
-		{"extra parentheses around the column", `(((status))) IN ('a')`, "status", `"a"`},
-		{"equality chain", `status = 'a' OR status = 'b'`, "status", `"a" "b"`},
-		{"equality chain with null and parentheses", `(status = 'a' OR status = 'b') OR status IS NULL`, "status", `"a" "b"`},
-		{"integer equality chain", `level = 1 OR level = 2`, "level", `1 2`},
-		{"trailing IS TRUE", `status IN ('a', 'b') IS TRUE`, "status", `"a" "b"`},
-		{"type guard beside a json list", `jsonb_typeof(roles) = 'array' AND roles <@ '["x"]'::jsonb`, "roles", `"x"`},
-		{"not null beside a list", `status IS NOT NULL AND status IN ('a')`, "status", `"a"`},
-		{"comparison with another column beside a list", `type = status AND status IN ('a')`, "status", `"a"`},
-		{"comparison with another column alone is a condition", `type = status`, "status", "none"},
-		{"not null alone", `status IS NOT NULL`, "status", "none"},
-		{"CASE of conditions is a condition", `CASE WHEN status IS NULL THEN level = 1 WHEN status = 'a' THEN level = 2 ELSE false END`, "status", "none"},
-		{"integer range", `level BETWEEN 0 AND 3`, "level", `0 1 2 3`},
-		{"negative integer range", `level BETWEEN -1 AND 1 AND type = 'x'`, "level", `-1 0 1`},
-		{"length guard beside a json list", `jsonb_array_length(roles) > 0 AND roles <@ '["x"]'::jsonb`, "roles", `"x"`},
-		{"length range guard", `jsonb_array_length(roles) BETWEEN 1 AND 3 AND roles <@ '["x"]'::jsonb`, "roles", `"x"`},
-		{"a single equality is not a list", `status = 'a'`, "status", "none"},
-
-		{"SIMILAR TO", `status SIMILAR TO '(a|b)'`, "status", "problem: a SIMILAR TO test"},
-		{"regular expression", `status ~ '^(a|b)$'`, "status", "problem: a regular-expression match"},
-		{"regular expression beside a list", `status IN ('a', 'b') AND status ~ '^a'`, "status", "problem: a regular-expression match"},
-		{"LIKE beside a list in an OR", `status LIKE 'a%' OR status IN ('b')`, "status", "problem: a LIKE test"},
-		{"function applied to the column", `lower(status) IN ('a')`, "status", "problem: a function call"},
-		{"function beside a list", `status IN ('a', 'b') AND length(status) > 0`, "status", "problem: a function call"},
-		{"negated list", `NOT (status IN ('a'))`, "status", "problem: a negated test"},
-		{"concatenation", `status = type || 'x'`, "status", "problem: a string concatenation"},
-		{"CASE with an operand", `CASE status WHEN 'a' THEN true ELSE false END`, "status", "problem: a CASE expression"},
-		{"CASE with an unreadable condition", `CASE WHEN lower(status) = 'a' THEN type = 'x' ELSE false END`, "status", "problem: a function call"},
-		{"comparison with a literal", `status >= 'a'`, "status", "problem: an expression that is not a comparison with literals"},
-		{"a range that is not integers", `status BETWEEN 'a' AND 'c'`, "status", "problem: BETWEEN is not followed by two integer literals"},
-		{"an empty range", `level BETWEEN 5 AND 1`, "level", "problem: the BETWEEN range is empty"},
-		{"an enormous range", `level BETWEEN 0 AND 100000000`, "level", "problem: the BETWEEN range is empty or holds 1000 values or more"},
-		{"equality chain of json values", `p = '["a"]'::jsonb OR p = '["b"]'::jsonb`, "p", "problem: compared with JSON values as a whole"},
-		{"an OR branch that is not a list", `status IN ('a') OR status IS NOT NULL`, "status", "problem: a branch of an OR admits the column through a test that is not a value list"},
-		{"too deep", strings.Repeat("(", maxExprDepth+8) + `status IN ('a')` + strings.Repeat(")", maxExprDepth+8), "status", "problem: nested deeper than"},
-		{"too many tests", strings.TrimSuffix(strings.Repeat(`status = 'a' OR `, maxExprTests+2), " OR "), "status", "problem: more than"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			c := readCheck(t, tc.expr)
-			if reason, isProblem := strings.CutPrefix(tc.want, "problem: "); isProblem {
-				if got := c.problems[tc.column]; !strings.Contains(got, reason) {
-					t.Fatalf("problem %q, want %q (lists %v)", got, reason, c.lists)
-				}
-				if _, ok := c.lists[tc.column]; ok {
-					t.Fatalf("a refused form must not leave a list: %v", c.lists)
-				}
-				return
-			}
-			if got := admitted(c, tc.column); got != tc.want {
-				t.Fatalf("admits %s, want %s (problems %v)", got, tc.want, c.problems)
-			}
-			if got := c.problems[tc.column]; got != "" {
-				t.Fatalf("unexpected problem %q", got)
-			}
-		})
-	}
-}
-
-// TestCheckExpressionNestingCostIsLinear shows the depth bound holds the cost of
-// a hostile expression: a megabyte of parentheses is refused without being parsed.
-func TestCheckExpressionNestingCostIsLinear(t *testing.T) {
-	c := readCheck(t, strings.Repeat("(", 150000)+`status IN ('a')`+strings.Repeat(")", 150000))
-	if !strings.Contains(c.problems["status"], "nested deeper than") {
-		t.Fatalf("problems %v", c.problems)
-	}
-}
-
 func TestEscapeStringsAreDecodedExactly(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{"hex", `E'vo\x69d'`, "void"},
@@ -137,9 +45,8 @@ func TestEscapeStringsAreDecodedExactly(t *testing.T) {
 			}
 		})
 	}
-	h, _ := replay(nil, []string{`CREATE TABLE t (status text CHECK (status IN (E'vo\x69d', E'a\nb')))`})
-	if got := admitted(tableOf(h, "t").checks[0], "status"); got != `"void" "a\nb"` {
-		t.Fatalf("a list holding escape strings admits %s", got)
+	if got := strings.Join(evaluateCheck(t, `status IN (E'vo\x69d', E'a\nb')`, "status", false, strs("void", "a\nb", "x")...), " "); got != "true true false" {
+		t.Fatalf("a list holding escape strings decides %s", got)
 	}
 }
 
@@ -148,10 +55,10 @@ func TestIdentifiersAreComparedAsPostgreSQLDoes(t *testing.T) {
 	good := `CREATE TABLE invoices (id uuid, status text CHECK (status IN ('draft', 'paid', 'void')))`
 	t.Run("another schema's table is another table", func(t *testing.T) {
 		h, _ := replay(watch, []string{good, `CREATE TABLE archive.invoices (id uuid, status text CHECK (status IN ('draft', 'paid')))`})
-		if got := lists(h, "invoices", "status"); !slices.Equal(got, []string{`invoices_status_check="draft" "paid" "void"`}) {
+		if got := lists(h, "invoices", "status"); !slices.Equal(got, []string{`unnamed=draft paid void`}) {
 			t.Fatalf("public invoices: %q", got)
 		}
-		if got := lists(h, "archive.invoices", "status"); !slices.Equal(got, []string{`invoices_status_check="draft" "paid"`}) {
+		if got := lists(h, "archive.invoices", "status"); !slices.Equal(got, []string{`unnamed=draft paid`}) {
 			t.Fatalf("archive.invoices: %q", got)
 		}
 	})
@@ -170,16 +77,16 @@ func TestIdentifiersAreComparedAsPostgreSQLDoes(t *testing.T) {
 	t.Run("a model table declared with its schema", func(t *testing.T) {
 		keyed := map[string]map[string]bool{"archive.invoices": {"status": true}}
 		h, _ := replay(keyed, []string{good, `CREATE TABLE archive.invoices (id uuid, status text CHECK (status IN ('draft')))`})
-		if got := lists(h, "archive.invoices", "status"); !slices.Equal(got, []string{`invoices_status_check="draft"`}) {
+		if got := lists(h, "archive.invoices", "status"); !slices.Equal(got, []string{`unnamed=draft`}) {
 			t.Fatalf("archive.invoices: %q", got)
 		}
 	})
 	t.Run("a quoted column keeps its case and an unquoted one is folded", func(t *testing.T) {
 		h, _ := replay(nil, []string{`CREATE TABLE t ("Status" text CHECK ("Status" IN ('a')), status text CHECK (STATUS IN ('b')))`})
-		if got := lists(h, "t", "status"); len(got) != 1 || !strings.HasSuffix(got[0], `="b"`) {
+		if got := lists(h, "t", "status"); len(got) != 1 || !strings.HasSuffix(got[0], `=b`) {
 			t.Fatalf("status: %q", got)
 		}
-		if got := lists(h, "t", "Status"); len(got) != 1 || !strings.HasSuffix(got[0], `="a"`) {
+		if got := lists(h, "t", "Status"); len(got) != 1 || !strings.HasSuffix(got[0], `=a`) {
 			t.Fatalf("Status: %q", got)
 		}
 	})
@@ -232,66 +139,47 @@ func TestIdentifiersAreComparedAsPostgreSQLDoes(t *testing.T) {
 	})
 }
 
-func TestUnnamedCheckNamesFollowPostgreSQL(t *testing.T) {
-	name := func(h *history, table string, which int) string {
-		c := tableOf(h, table).checks[which]
-		if !c.known() {
-			return "unnamed"
-		}
-		return c.name
-	}
+// TestUnnamedCheckNamesAreNeverGuessed shows an unnamed constraint stays unnamed:
+// PostgreSQL chooses its name over the whole schema, which the rule cannot see.
+func TestUnnamedCheckNamesAreNeverGuessed(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		migrations [][]string
-		want       []string
 	}{
-		{"a column constraint over its own column", [][]string{{`CREATE TABLE t (id int, status text CHECK (status IN ('a')))`}}, []string{"t_status_check"}},
-		{"a column constraint is named by the columns it uses", [][]string{{`CREATE TABLE t (note text CHECK (status IN ('a')), status text)`}}, []string{"t_status_check"}},
-		{"a table constraint over one column", [][]string{{`CREATE TABLE t (status text, paid int, CHECK (status IN ('a')))`}}, []string{"t_status_check"}},
-		{"a table constraint over several columns", [][]string{{`CREATE TABLE t (status text, paid int, CHECK (status IN ('a') AND paid > 0))`}}, []string{"t_check"}},
-		{"a constraint over no column", [][]string{{`CREATE TABLE t (status text, CHECK (true))`}}, []string{"t_check"}},
-		{"a column named twice counts once", [][]string{{`CREATE TABLE t (status text, CHECK (status IN ('a') AND length(status) > 0))`}}, []string{"t_status_check"}},
-		{"a taken name gets a number", [][]string{{`CREATE TABLE t (status text, CHECK (status IN ('a')), CHECK (status <> 'b'))`}}, []string{"t_status_check", "t_status_check1"}},
-		{"an explicit name takes the default one", [][]string{{`CREATE TABLE t (status text CONSTRAINT t_status_check CHECK (status <> 'b'), CHECK (status IN ('a')))`}}, []string{"t_status_check", "t_status_check1"}},
-		{"added to a known table", [][]string{{`CREATE TABLE t (status text, paid int)`}, {`ALTER TABLE t ADD CHECK (status IN ('a') AND paid > 0)`}}, []string{"t_check"}},
-		{"added with a new column", [][]string{{`CREATE TABLE t (id int)`}, {`ALTER TABLE t ADD COLUMN status text CHECK (status IN ('a'))`}}, []string{"t_status_check"}},
-		{"a table the history did not create", [][]string{{`ALTER TABLE t ADD CHECK (status IN ('a'))`}}, []string{"unnamed"}},
-		{"a table touched by a rename", [][]string{{`CREATE TABLE t (status text)`}, {`ALTER TABLE t RENAME COLUMN status TO state`}, {`ALTER TABLE t ADD CHECK (state IN ('a'))`}}, []string{"unnamed"}},
-		{"a table created from another", [][]string{{`CREATE TABLE t (LIKE other, status text)`}, {`ALTER TABLE t ADD CHECK (status IN ('a'))`}}, []string{"unnamed"}},
-		{"a name longer than the limit", [][]string{{`CREATE TABLE ` + strings.Repeat("x", 58) + ` (status text CHECK (status IN ('a')))`}}, []string{"unnamed"}},
+		{"a column constraint", [][]string{{`CREATE TABLE t (id int, status text CHECK (status IN ('a')))`}}},
+		{"a table constraint", [][]string{{`CREATE TABLE t (status text, paid int, CHECK (status IN ('a') AND paid > 0))`}}},
+		{"a name another table's constraint may have taken", [][]string{{`CREATE TABLE other (status text CONSTRAINT t_status_check CHECK (status IN ('a')))`}, {`CREATE TABLE t (status text CHECK (status IN ('a')))`}}},
+		{"added later", [][]string{{`CREATE TABLE t (status text)`}, {`ALTER TABLE t ADD CHECK (status IN ('a'))`}}},
+		{"a table the history did not create", [][]string{{`ALTER TABLE t ADD CHECK (status IN ('a'))`}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, problems := replay(nil, tc.migrations...)
 			if len(problems) != 0 {
 				t.Fatal(problems)
 			}
-			table := "t"
-			if strings.Contains(tc.name, "longer") {
-				table = strings.Repeat("x", 58)
-			}
-			var got []string
-			for i := range tableOf(h, table).checks {
-				got = append(got, name(h, table, i))
-			}
-			if !slices.Equal(got, tc.want) {
-				t.Fatalf("names %q, want %q", got, tc.want)
+			for _, c := range tableOf(h, "t").checks {
+				if c.known() || c.name != "" {
+					t.Fatalf("an unnamed constraint got the name %q", c.name)
+				}
 			}
 		})
 	}
-	t.Run("a known default name is dropped exactly", func(t *testing.T) {
-		h, _ := replay(nil, []string{`CREATE TABLE t (status text, paid int, CHECK (status IN ('a') AND paid > 0))`}, []string{`ALTER TABLE t DROP CONSTRAINT t_status_check`})
-		if len(tableOf(h, "t").checks) != 1 {
-			t.Fatal("the name t_status_check is not this constraint's name (t_check)")
-		}
-		h, _ = replay(nil, []string{`CREATE TABLE t (status text, paid int, CHECK (status IN ('a') AND paid > 0))`}, []string{`ALTER TABLE t DROP CONSTRAINT t_check`})
-		if len(tableOf(h, "t").checks) != 0 {
-			t.Fatal("t_check is this constraint's name")
+	t.Run("an explicit name is known", func(t *testing.T) {
+		h, _ := replay(nil, []string{`CREATE TABLE t (status text CONSTRAINT keep_me CHECK (status IN ('a')))`})
+		if c := tableOf(h, "t").checks[0]; !c.known() || c.name != "keep_me" {
+			t.Fatalf("%+v", c)
 		}
 	})
-	t.Run("a name that is not certain is dropped by any default name it could have", func(t *testing.T) {
-		h, _ := replay(nil, []string{`ALTER TABLE t ADD CHECK (status IN ('a'))`}, []string{`ALTER TABLE t DROP CONSTRAINT t_status_check`})
-		if len(tableOf(h, "t").checks) != 0 {
-			t.Fatal("dropped")
+	t.Run("a drop by any default name the constraint could have removes it", func(t *testing.T) {
+		for _, name := range []string{"t_check", "t_status_check"} {
+			h, _ := replay(nil, []string{`CREATE TABLE t (status text, paid int, CHECK (status IN ('a') AND paid > 0))`}, []string{`ALTER TABLE t DROP CONSTRAINT ` + name})
+			if len(tableOf(h, "t").checks) != 0 {
+				t.Fatalf("%s must drop the unnamed constraint", name)
+			}
+		}
+		h, _ := replay(nil, []string{`CREATE TABLE t (status text, paid int, CHECK (status IN ('a') AND paid > 0))`}, []string{`ALTER TABLE t DROP CONSTRAINT t_other_check`})
+		if len(tableOf(h, "t").checks) != 1 {
+			t.Fatal("a name over a column the constraint does not use is not one of its names")
 		}
 	})
 }
@@ -303,7 +191,7 @@ func TestUnnamedConstraintIsDescribedByItsPlace(t *testing.T) {
 	t.Run("a missing case", func(t *testing.T) {
 		h, _ := replay(watch, []string{`ALTER TABLE admins ADD CHECK (permissions IN ('a'))`})
 		findings, _ := compareField(field, h)
-		if len(findings) != 1 || !strings.Contains(findings[0].Problem, "is missing from the list of the unnamed CHECK on admins.permissions, last written at m1.go:10") ||
+		if len(findings) != 1 || !strings.Contains(findings[0].Problem, "is rejected by the unnamed CHECK on admins.permissions, last written at m1.go:10") ||
 			strings.Contains(findings[0].Problem+findings[0].Fix, "admins_permissions_check") {
 			t.Fatalf("%v", findings)
 		}
@@ -316,11 +204,11 @@ func TestUnnamedConstraintIsDescribedByItsPlace(t *testing.T) {
 			t.Fatalf("%v", findings)
 		}
 	})
-	t.Run("a certain default name is printed", func(t *testing.T) {
+	t.Run("a name PostgreSQL would probably choose is still not printed", func(t *testing.T) {
 		h, _ := replay(watch, []string{`CREATE TABLE admins (permissions text, CHECK (lower(permissions) IN ('a')))`})
 		findings, _ := compareField(field, h)
-		if len(findings) != 1 || !strings.Contains(findings[0].Problem, "constraint admins_permissions_check at m1.go:10") ||
-			!strings.Contains(findings[0].Fix, "DROP CONSTRAINT admins_permissions_check and ALTER TABLE admins ADD CONSTRAINT admins_permissions_check") {
+		if len(findings) != 1 || !strings.Contains(findings[0].Problem, "the unnamed CHECK at m1.go:10") || strings.Contains(findings[0].Problem+findings[0].Fix, "admins_permissions_check") ||
+			!strings.Contains(findings[0].Fix, `read the constraint's name from psql's \d admins`) {
 			t.Fatalf("%v", findings)
 		}
 	})
@@ -469,5 +357,115 @@ func TestMigrationRegistrationShapes(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("findings\n got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func integerCases(values ...string) []generate.EnumCase {
+	var cases []generate.EnumCase
+	for _, v := range values {
+		cases = append(cases, generate.EnumCase{Name: "Level" + v, Value: v, Integer: true})
+	}
+	return cases
+}
+
+// TestFindingsReadAsSentences holds the three message defects of the review: the
+// verb agrees with the number of values, an opaque CREATE TABLE is a noun phrase
+// that fits its sentence, and a domain or database enum type is named once.
+func TestFindingsReadAsSentences(t *testing.T) {
+	level := func(table string) enumField {
+		return enumField{model: "Member", field: "Level", table: table, column: "level", enum: "Level",
+			cases: integerCases("0", "1", "2", "4"), expected: integerCases("0", "1", "2", "4"), enumPackage: &generate.AnalysisPackage{Fset: token.NewFileSet()}}
+	}
+	watch := map[string]map[string]bool{"members": {"level": true}, "t": {"level": true}}
+	for _, tc := range []struct{ name, expr, want string }{
+		{"one value", `level BETWEEN 0 AND 5`, "holds 5, which is not an enum case"},
+		{"two values", `level IN (0, 1, 2, 3, 4, 5)`, "holds 3, 5, which are not enum cases"},
+		{"one value in a list", `level IN (0, 1, 2, 3, 4)`, "holds 3, which is not an enum case"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := replay(watch, []string{`CREATE TABLE members (level integer CONSTRAINT members_level CHECK (` + tc.expr + `))`})
+			findings, _ := compareField(level("members"), h)
+			if len(findings) != 1 || !strings.Contains(findings[0].Problem, tc.want) {
+				t.Fatalf("%v", findings)
+			}
+		})
+	}
+	t.Run("a range between cases is not a value the column holds", func(t *testing.T) {
+		h, _ := replay(watch, []string{`CREATE TABLE members (level integer CHECK (level BETWEEN 0 AND 4))`})
+		if findings, compared := compareField(level("members"), h); len(findings) != 0 || !compared {
+			t.Fatalf("%v compared=%v", findings, compared)
+		}
+	})
+	field := enumField{model: "Row", field: "Status", table: "t", column: "status", enum: "Status",
+		cases: enumCases("a"), expected: enumCases("a"), enumPackage: &generate.AnalysisPackage{Fset: token.NewFileSet()}}
+	watch = map[string]map[string]bool{"t": {"status": true}}
+	for _, tc := range []struct{ name, sql, want string }{
+		{"CREATE TABLE AS", `CREATE TABLE t AS SELECT 1 AS status`, "a CREATE TABLE at m1.go:10 that does not list its columns, so the rule cannot tell which constraints the column has"},
+		{"LIKE", `CREATE TABLE t (LIKE other INCLUDING ALL)`, "a CREATE TABLE at m1.go:10 that copies columns and constraints with LIKE, so the rule cannot tell which constraints the column has"},
+		{"INHERITS", `CREATE TABLE t (id int) INHERITS (other)`, "a CREATE TABLE at m1.go:10 that inherits constraints from another table, so the rule cannot tell which constraints the column has"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := replay(watch, []string{tc.sql})
+			findings, _ := compareField(field, h)
+			if len(findings) != 1 || !strings.HasSuffix(findings[0].Problem, "cannot be read statically: "+tc.want) {
+				t.Fatalf("%v", findings)
+			}
+		})
+	}
+	t.Run("a domain is named once", func(t *testing.T) {
+		h, _ := replay(watch, []string{`CREATE DOMAIN st AS text`, `CREATE TABLE t (status st)`})
+		findings, _ := compareField(field, h)
+		const want = "cannot be read statically: the column's type st is a domain created at m1.go:10, whose values the rule does not read"
+		if len(findings) != 1 || !strings.HasSuffix(findings[0].Problem, want) {
+			t.Fatalf("%v", findings)
+		}
+	})
+}
+
+// TestATaintedConstraintMattersOnlyForItsColumns shows a statement the rule cannot
+// read makes a column unreadable only where a constraint the statement may have
+// changed compares that column with literals.
+func TestATaintedConstraintMattersOnlyForItsColumns(t *testing.T) {
+	watch := map[string]map[string]bool{"offers": {"basis": true, "unit": true}}
+	create := `CREATE TABLE offers (basis text, unit text, CONSTRAINT offers_shape CHECK ((basis = 'fixed' AND unit IS NULL) OR (basis = 'per_unit' AND unit IS NOT NULL)))`
+	do := `DO $$ BEGIN ALTER TABLE offers DROP CONSTRAINT offers_shape; END $$`
+	h, _ := replay(watch, []string{create}, []string{do})
+	field := func(column string, cases ...string) enumField {
+		return enumField{model: "Offer", field: "F", table: "offers", column: column, enum: "E",
+			cases: enumCases(cases...), expected: enumCases(cases...), enumPackage: &generate.AnalysisPackage{Fset: token.NewFileSet()}}
+	}
+	if findings, _ := compareField(field("basis", "fixed", "per_unit"), h); len(findings) != 1 || !strings.Contains(findings[0].Problem, "cannot be read statically: constraint offers_shape was added at m1.go:10, and a DO block at m2.go:10 may have changed it") {
+		t.Fatalf("basis is compared with literals by the constraint the block may have changed: %v", findings)
+	}
+	if findings, _ := compareField(field("unit", "kg"), h); len(findings) != 0 {
+		t.Fatalf("unit is only tested for NULL there, so the block changes nothing about its values: %v", findings)
+	}
+}
+
+// TestTheRuleDoesNotReasonAcrossColumns states the limit by design: a constraint
+// that ties the enum column to another column whose own values are restricted by a
+// second constraint is not detected, because the rule evaluates one column at a time.
+func TestTheRuleDoesNotReasonAcrossColumns(t *testing.T) {
+	watch := map[string]map[string]bool{"invoices": {"status": true}}
+	h, _ := replay(watch, []string{`CREATE TABLE invoices (status text, other text,
+		CONSTRAINT tie CHECK (status = other AND status IN ('draft','paid','void')),
+		CONSTRAINT other_fixed CHECK (other = 'draft'))`})
+	field := enumField{model: "Invoice", field: "Status", table: "invoices", column: "status", enum: "Status",
+		cases: enumCases("draft", "paid", "void"), expected: enumCases("draft", "paid", "void"), enumPackage: &generate.AnalysisPackage{Fset: token.NewFileSet()}}
+	if findings, _ := compareField(field, h); len(findings) != 0 {
+		t.Fatalf("status can only be draft, which the rule does not see: %v", findings)
+	}
+}
+
+// TestACaseTwoConstraintsRejectIsReportedOnce shows one finding names every
+// constraint that rejects a case.
+func TestACaseTwoConstraintsRejectIsReportedOnce(t *testing.T) {
+	watch := map[string]map[string]bool{"t": {"status": true}}
+	h, _ := replay(watch, []string{`CREATE TABLE t (status text, CONSTRAINT one CHECK (status IN ('a','b')), CONSTRAINT two CHECK (status <> 'c' AND status <> 'z'))`})
+	field := enumField{model: "Row", field: "Status", table: "t", column: "status", enum: "Status",
+		cases: enumCases("a", "b", "c"), expected: enumCases("a", "b", "c"), enumPackage: &generate.AnalysisPackage{Fset: token.NewFileSet()}}
+	findings, _ := compareField(field, h)
+	if len(findings) != 1 || !strings.Contains(findings[0].Problem, "case \"c\" (CaseC) can never be stored: it is rejected by constraint one on t.status, last written at m1.go:10 and constraint two on t.status, last written at m1.go:10") {
+		t.Fatalf("%v", findings)
 	}
 }

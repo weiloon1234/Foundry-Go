@@ -38,26 +38,33 @@ func IsFrameworkType(named *types.Named, pkg, name string) bool {
 // it. isEnum decides which named types are enums. The result is nil for a
 // field that holds no enum, including maps and structs that contain one.
 func FieldEnum(t types.Type, isEnum func(*types.Named) bool) *types.Named {
+	enum, _ := FieldEnumKind(t, isEnum)
+	return enum
+}
+
+// FieldEnumKind is FieldEnum that also reports whether the field is a
+// collection of the enum: a slice or array on the way to it.
+func FieldEnumKind(t types.Type, isEnum func(*types.Named) bool) (enum *types.Named, collection bool) {
 	for depth := 0; depth < 8; depth++ {
 		switch current := types.Unalias(t).(type) {
 		case *types.Pointer:
 			t = current.Elem()
 		case *types.Slice:
-			t = current.Elem()
+			t, collection = current.Elem(), true
 		case *types.Array:
-			t = current.Elem()
+			t, collection = current.Elem(), true
 		case *types.Named:
 			if isEnum(current) {
-				return current
+				return current, collection
 			}
 			if current.TypeArgs().Len() == 1 && (IsFrameworkType(current, "/value", "Nullable") || IsFrameworkType(current, "/value", "JSON")) {
 				t = current.TypeArgs().At(0)
 				continue
 			}
-			return nil
+			return nil, false
 		default:
-			return nil
+			return nil, false
 		}
 	}
-	return nil
+	return nil, false
 }
