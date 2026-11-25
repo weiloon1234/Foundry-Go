@@ -46,7 +46,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		{"doctor", "Inspect local framework/tool prerequisites without starting services", runDoctor},
 		{"routes", "Check staged route declarations and generated DTO helpers", runRoutes},
 		{"models", "Check model table declarations", runModels},
-		{"docs", "Check documentation references and API teaching against the pinned framework", runDocs},
+		{"docs", "Check, render and list an application's documentation against its pinned framework and its own code", runDocs},
 		{"deploy", "Run the deploy tool from the application's pinned framework", runDeploy},
 	} {
 		command := cli.Define(entry.name, entry.summary, func(args []string, _ io.Writer) (arguments, error) { return arguments{values: args}, nil })

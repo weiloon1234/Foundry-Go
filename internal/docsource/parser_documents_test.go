@@ -13,7 +13,7 @@ import (
 
 func TestMarkdownContainerBoundaries(t *testing.T) {
 	input := "> ```sh\n> echo ok\n\n```go\nvar Value = 1\n```\n"
-	doc, err := parseDocument(nil, "guide.md", []byte(input), nil)
+	doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(input), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func TestMarkdownContainerBoundaries(t *testing.T) {
 		"> <!-- compiled-source: example.go -->\n\n```go\nvar Value = 1\n```\n",
 		"<!-- compiled-source: example.go -->\nIntervening paragraph.\n```go\nvar Value = 1\n```\n",
 	} {
-		_, err := parseDocument(nil, "guide.md", []byte(input), nil)
+		_, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(input), nil)
 		if err == nil || !strings.Contains(err.Error(), "immediately precede") {
 			t.Fatalf("cross-container binding accepted: %v", err)
 		}
@@ -40,7 +40,7 @@ func TestMarkdownProseCommentsAndTables(t *testing.T) {
 		"<!--\n```go\nvar Value = 1\n```\n    apparent indentation\n<code>hidden</code>\n-->\n",
 		"Name | Meaning\n--- | ---\n```literal``` | ordinary table text\n",
 	} {
-		doc, err := parseDocument(nil, "guide.md", []byte(input), nil)
+		doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(input), nil)
 		if err != nil {
 			t.Fatalf("%q: %v", input, err)
 		}
@@ -50,7 +50,7 @@ func TestMarkdownProseCommentsAndTables(t *testing.T) {
 	}
 	src, _ := parseSource("var Value = 1\n", "go")
 	input := "- Parent\n  - Child\n\n    <!-- compiled-source: example.go -->\n    ```go\n    stale\n    ```\n"
-	doc, err := parseDocument(nil, "guide.md", []byte(input), func(string) (source, error) { return src, nil })
+	doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(input), func(string) (source, error) { return src, nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,10 @@ func TestBoundedInputs(t *testing.T) {
 		load  func(string) error
 	}{
 		{"docs/guides/large.md", markdown.MaxDocumentBytes, func(root string) error { _, err := Load(root, nil); return err }},
-		{"tests/fixtures/consumer/large.go", markdown.MaxSourceBytes, func(root string) error { _, err := readSource(root, "tests/fixtures/consumer/large.go"); return err }},
+		{"tests/fixtures/consumer/large.go", markdown.MaxSourceBytes, func(root string) error {
+			_, err := readSource(FrameworkPolicy(), root, "docs/guides/x.md", "tests/fixtures/consumer/large.go")
+			return err
+		}},
 		{TypeScriptInputs, markdown.MaxManifestBytes, func(root string) error {
 			return CheckTypeScriptInputs(root, []Document{{Inclusions: []Inclusion{{Source: "tests/fixtures/consumer/clientcontracts/testdata/example.ts"}}}})
 		}},
@@ -147,7 +150,7 @@ func TestBoundSourceCannotChangeFenceSyntax(t *testing.T) {
 	} {
 		src, _ := parseSource(test.body, "typescript")
 		input := "<!-- compiled-source: example.ts -->\n```" + test.tag + "\nstale\n```\n"
-		if _, err := parseDocument(nil, "guide.md", []byte(input), func(string) (source, error) { return src, nil }); err == nil || !strings.Contains(err.Error(), test.want) {
+		if _, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(input), func(string) (source, error) { return src, nil }); err == nil || !strings.Contains(err.Error(), test.want) {
 			t.Fatalf("rewrote fence syntax: %v", err)
 		}
 	}
@@ -176,7 +179,7 @@ func TestEveryInputReaderRequiresRegularFiles(t *testing.T) {
 func TestRenderedDocumentIsBounded(t *testing.T) {
 	src, _ := parseSource(strings.Repeat("x", markdown.MaxDocumentBytes), "go")
 	input := "<!-- compiled-source: example.go -->\n```go\nstale\n```\n"
-	_, err := parseDocument(nil, "guide.md", []byte(input), func(string) (source, error) { return src, nil })
+	_, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(input), func(string) (source, error) { return src, nil })
 	if err == nil || !strings.Contains(err.Error(), "rendered document exceeds maximum") {
 		t.Fatalf("unbounded rendering: %v", err)
 	}

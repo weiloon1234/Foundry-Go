@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -80,15 +82,17 @@ func CheckTypeScriptInputs(root string, documents []Document) error {
 }
 
 // CheckGoInputs consumes concatenated go list -json ./... results from the exact
-// fixture modules and build environment used by make fixture-check. Test files
-// count because that gate uses go test, not just go build. IgnoredGoFiles do not.
+// module and build environment of the gate (make fixture-check for fixtures, the
+// offline go list of docs check for an application). Test files count because
+// the gates compile them, not just the packages. IgnoredGoFiles do not.
 func CheckGoInputs(root string, documents []Document, input io.Reader) error {
 	inputs := make(map[string]bool)
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return err
 	}
-	data, err := markdown.ReadAll("fixture compiler inputs", input, markdown.MaxManifestBytes)
+	words := policyOf(documents).words()
+	data, err := markdown.ReadAll(words.inputs, input, markdown.MaxManifestBytes)
 	if err != nil {
 		return err
 	}
@@ -105,10 +109,10 @@ func CheckGoInputs(root string, documents []Document, input io.Reader) error {
 			break
 		}
 		if err != nil {
-			return diagnostic.DocInputs.At("fixture compiler inputs", 0, 0).Say("JSON", fmt.Sprintf("invalid near byte %d", decoder.InputOffset())).To("regenerate the list with go list -json in the fixture module").Caused(err)
+			return diagnostic.DocInputs.At(words.inputs, 0, 0).Say("JSON", fmt.Sprintf("invalid near byte %d", decoder.InputOffset())).To("regenerate the list with go list -json in the module").Caused(err)
 		}
 		if pkg.Incomplete || pkg.Error != nil || !filepath.IsAbs(pkg.Dir) {
-			return diagnostic.DocInputs.At("fixture compiler inputs", 0, 0).Say(fmt.Sprintf("package %q", pkg.Dir), "incomplete").To("regenerate the input list with go list -json in the fixture module").Err()
+			return diagnostic.DocInputs.At(words.inputs, 0, 0).Say(fmt.Sprintf("package %q", pkg.Dir), "incomplete").To("regenerate the input list with go list -json in the module").Err()
 		}
 		for _, group := range [][]string{pkg.GoFiles, pkg.CgoFiles, pkg.TestGoFiles, pkg.XTestGoFiles} {
 			for _, file := range group {
@@ -127,9 +131,38 @@ func checkInputs(documents []Document, extension string, inputs map[string]bool)
 	for _, document := range documents {
 		for _, inclusion := range document.Inclusions {
 			if strings.HasSuffix(inclusion.Source, extension) && !inputs[inclusion.Source] {
-				return diagnostic.DocInputs.At(inclusion.Document, inclusion.Line, 0).Say(inclusion.Source+"#"+inclusion.Region, "not a compiler input").To("move the example into a selected fixture source or add it to the fixture’s compiler inputs").Err()
+				return diagnostic.DocInputs.At(inclusion.Document, inclusion.Line, 0).Say(inclusion.Source+"#"+inclusion.Region, "not a compiler input").To(document.policyOrFramework().words().inputsFix).Err()
 			}
 		}
 	}
 	return nil
+}
+
+// policyOf names the policy the documents were loaded with; the framework's
+// when there are none.
+func policyOf(documents []Document) Policy {
+	if len(documents) == 0 {
+		return FrameworkPolicy()
+	}
+	return documents[0].policyOrFramework()
+}
+
+// Bindings lists the sources the documents bind in one language ("go" or
+// "typescript", which includes TSX), sorted and without duplicates.
+func Bindings(documents []Document, language string) []string {
+	seen := make(map[string]bool)
+	for _, document := range documents {
+		for _, inclusion := range document.Inclusions {
+			ext := path.Ext(inclusion.Source)
+			if language == "go" && ext == ".go" || language == "typescript" && (ext == ".ts" || ext == ".tsx") {
+				seen[inclusion.Source] = true
+			}
+		}
+	}
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

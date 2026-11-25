@@ -19,11 +19,12 @@ const maxOutputBytes = 64 << 10
 // bypassing Write's bound. Tool stderr is discarded, never replayed in reports.
 type output struct {
 	data   bytes.Buffer
+	limit  int
 	cancel context.CancelFunc
 }
 
 func (o *output) Write(p []byte) (int, error) {
-	if len(p) > maxOutputBytes-o.data.Len() {
+	if len(p) > o.limit-o.data.Len() {
 		o.cancel()
 		return 0, safeerror.NewFault(fault.Invalid, "doctor tool output exceeds its bound")
 	}
@@ -31,13 +32,17 @@ func (o *output) Write(p []byte) (int, error) {
 }
 
 func run(ctx context.Context, options Options, executable string, args ...string) ([]byte, error) {
+	return runBounded(ctx, options, maxOutputBytes, executable, args...)
+}
+
+func runBounded(ctx context.Context, options Options, limit int, executable string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, options.Timeout)
 	defer cancel()
 	command := exec.CommandContext(ctx, executable, args...)
 	command.Dir = options.Dir
 	command.WaitDelay = time.Second
 	command.Env = offlineEnvironment(os.Environ())
-	stdout := &output{cancel: cancel}
+	stdout := &output{limit: limit, cancel: cancel}
 	command.Stdout = stdout
 	command.Stderr = io.Discard
 	err := command.Run()

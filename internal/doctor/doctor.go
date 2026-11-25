@@ -87,6 +87,24 @@ func selectedFramework(ctx context.Context, options Options, execute probe) (Fra
 	return Framework{Dir: module.Dir, Selection: module.selection()}, nil
 }
 
+// maxPackageListBytes bounds the package list of an application module.
+const maxPackageListBytes = 16 << 20
+
+// ModulePackages lists the packages of the module at options.Dir without
+// resolving dependencies, as concatenated JSON objects holding each package's
+// directory, its Go, cgo and test files, and whether it is complete. It uses
+// the same offline environment as the other probes.
+func ModulePackages(ctx context.Context, options Options) ([]byte, error) {
+	if options.Go == "" {
+		options.Go = "go"
+	}
+	data, err := runBounded(ctx, options, maxPackageListBytes, options.Go, "list", "-find", "-json=Dir,GoFiles,CgoFiles,TestGoFiles,XTestGoFiles,Incomplete,Error", "./...")
+	if err != nil {
+		return nil, safeerror.New("The packages of the application module could not be listed. Check --dir and that `go list ./...` works offline in the module")
+	}
+	return data, nil
+}
+
 func Inspect(ctx context.Context, options Options) (Report, error) { return inspect(ctx, options, run) }
 func inspect(ctx context.Context, options Options, execute probe) (Report, error) {
 	var result Report

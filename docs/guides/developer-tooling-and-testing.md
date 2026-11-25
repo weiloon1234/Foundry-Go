@@ -8,6 +8,7 @@ executable consumer recipes.
 ## Agent entry
 
 - [Author compiled guide examples](#recipe-author-examples)
+- [Bind an application's documents to its own code](#recipe-application-documents)
 - [Reference pinned guides](#recipe-reference-guides)
 - [Read pinned guides offline](#recipe-read-pinned-guides)
 - [Commands and bootstrap](#recipe-declare-command)
@@ -100,8 +101,10 @@ One Goldmark AST reader supplies block, container, link, anchor and inline synta
 to all documentation checks. A binding comment must be the immediately preceding
 node in the same container. Comments containing apparent code remain comments, but
 text or an element after a comment on the same line is checked like any other.
-These binding, tag and block restrictions apply to the framework's documents.
-An application's `foundry docs check` does not enforce them in this release.
+These binding, tag and block restrictions apply to the framework's documents and,
+with the application source policy of
+[Bind an application's documents to its own code](#recipe-application-documents),
+to an application's own `AGENTS.md` files and skills.
 
 `renderdocs --check` checks source equality. `checkdocs`, including its
 `--go-inputs` mode, additionally reports every unbound block. Historical records in `docs/evidence`, blueprints and the changelog
@@ -282,9 +285,12 @@ than falling back to another release. It requires a verified match between the
 running tool and selected framework module path and version, including versioned
 replacements. Equal versions from different module paths fail. A global binary from a different
 release, an unversioned build, or a local replacement fails. There is no version
-bypass or mutation mode. The checker reads instructions and shipped guides; it
-does not compile the application, render guide sources, run Node, or start
-services. `go tool` may compile the checker into Go's normal build cache.
+bypass or mutation mode. The checker reads instructions and shipped guides and
+binds the documents' code blocks to the application's own sources
+([Bind an application's documents to its own code](#recipe-application-documents));
+when a document binds Go it runs one offline `go list -find` of the module. It does
+not compile the application, render guide sources, run Node, or start services.
+`go tool` may compile the checker into Go's normal build cache.
 
 The selected release also owns retirement rules. The checker distinguishes
 qualified owners and local constructor bindings, preserving valid scope
@@ -302,6 +308,113 @@ ambiguous teaching. Qualify that owner or replace the example
 with a guide reference. App-owned regions cannot exempt stale teaching by labeling
 it an example. See the [compatibility policy](../compatibility.md#pinned-documentation)
 for upgrades and rollback.
+
+<a id="recipe-application-documents"></a>
+## Bind an application's documents to its own code
+
+`foundry docs check` applies the same binding rules to an application's `AGENTS.md`
+files and `.claude/skills` Markdown. Every `go`, `typescript` and `tsx` fence is
+preceded by a `<!-- compiled-source: path#region -->` directive and equals that source
+region byte for byte; a fence tag outside the closed list, indented code and HTML
+`pre`/`code` elements are refused; the document size and shape limits apply. The paths
+are relative to the module root, and a directive without `#region` binds the whole
+file. A fence with another tag (`sh`, `json`, `sql`, `text`) claims no compiler proof.
+
+An application binds only its own handwritten code:
+
+| Language | Bindable under | Fence tag |
+| --- | --- | --- |
+| Go | `internal/`, `cmd/`, `examples/` | `go` |
+| TypeScript | `web/`, `client/tests/` | `typescript` |
+| TSX | `web/`, `client/tests/` | `tsx` |
+
+Refused: generated files (`*_foundry.gen.*`, `client/generated`), `*.d.ts`, anything
+below a `node_modules`, `dist`, `testdata`, `deploy` or `config` directory, a file of
+a nested Go module, a symlink, a path starting `.env`, and any path outside the
+application root. A test file (`_test.go`, `*.test.ts`, `*.test.tsx`) is bindable only
+from the `testing` skill (`.claude/skills/testing/`), because a test is the lesson of
+exactly one task; every other skill binds the code under test.
+
+A Go source must belong to a package of the module that the default build compiles.
+`docs check` lists the module once per run with `go list -find` in the same offline
+environment as the version check (no downloads, no workspace), and only when a
+document binds Go. A file excluded by a build tag, a platform suffix or by being in no
+package is refused. Compilation itself is proved by the application's own gate
+(`go vet ./...`).
+
+Region markers in TypeScript and TSX are `// doc-example:begin name` and
+`// doc-example:end name` line comments, as in Go. A line comment cannot sit inside JSX,
+where a double slash is text, so a TSX region wraps whole declarations: a component or
+hook function, or statements before its `return`. A marker inside a JSX element (its
+text, attributes or expressions), a template literal or a block comment is refused.
+These marker lines are directives, not prose, in the application's code.
+
+Two commands work on these documents, neither needs the framework pin to match:
+
+```sh
+go tool foundry docs render --dir .
+go tool foundry docs render --check --dir .
+go tool foundry docs bindings --language typescript --dir .
+```
+
+`docs render` writes the bound blocks of the application's documents from their source
+regions, byte for byte outside the replaced block bodies, and nothing else. It writes
+nothing when any document is refused. `docs render --check` reports what `docs check`
+reports for bindings (path policy, regions, equality, the worked-example region, Go
+membership) and changes nothing. `docs bindings --language go|typescript` prints the
+source files the documents bind in that language (`typescript` includes TSX): one
+module-root-relative, slash-separated path per line, sorted, without duplicates, a
+newline after each, and nothing else on standard output; it prints nothing when there
+are none. A refusal prints its finding on standard error, exits non-zero and prints no
+path.
+
+<a id="worked-example"></a>
+A skill can carry an app-owned region named `worked-example`, delimited by the two
+marker lines `<!-- app-owned:begin worked-example -->` and
+`<!-- app-owned:end worked-example -->`, each alone on its line, as the Starter
+baseline tool delimits every app-owned region. When a skill has this region,
+`docs check` requires one of two states, and nothing else. Which skills must have the
+region is the application's baseline's decision, not the command's.
+
+````markdown
+<!-- app-owned:begin worked-example -->
+<!-- compiled-source: internal/pages/page.go#page -->
+```go
+```
+<!-- app-owned:end worked-example -->
+````
+
+The first state holds at least one bound block; a lead sentence may stand beside it. The
+second says that the application has no such code yet:
+
+````markdown
+<!-- app-owned:begin worked-example -->
+This application has no worked example for this task yet.
+
+Foundry guides: `model-declarations#recipe-declare-table`
+<!-- app-owned:end worked-example -->
+````
+
+The statement is exactly that sentence and one `Foundry guides:` line naming one
+`guide#recipe-*` anchor, which `docs check` resolves in the pinned framework like any
+other reference. An empty region, any other text, a second guide, an anchor that is not
+a recipe, or the statement beside a bound block is a `doc-worked-example` finding. The
+marker lines and the bound block belong to the application: re-point the directive at the
+application's own file and region, then run `docs render`.
+
+For TypeScript and TSX, `docs check` proves the path policy, that the file is a regular
+file inside the module, that the markers are real line comments outside JSX and
+literals, and that the block equals its region. It does not prove that the file
+type-checks or that a tsconfig covers it: Go does not read tsconfig files and never runs
+Node. An application with TypeScript bindings therefore owns a convention test in its
+TypeScript suite. The test runs `go tool foundry docs bindings --language typescript --dir <module root>`,
+fails when the command exits non-zero, splits standard output into its paths, and asserts
+that every path is among the source files of the application's type-checked program (the
+union of the programs its type-check gate builds, read with the TypeScript compiler API).
+A bound file that no program loads would otherwise show code the compiler never saw.
+
+Findings use the rules `doc-binding`, `doc-marker`, `doc-region`, `doc-rendered`,
+`doc-inputs` and `doc-worked-example` of [Read a check finding](#diagnostic-rules).
 
 <a id="recipe-declare-command"></a>
 ## Commands and bootstrap
@@ -667,13 +780,14 @@ rule's guide and anchor are validated by `make docs-check`:
 | `doc-limit` | `docs check` | `developer-tooling-and-testing#document-limits` |
 | `doc-file` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
 | `doc-comment` | `docs check` | `developer-tooling-and-testing#document-limits` |
-| `doc-rendered` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-marker` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-region` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-binding` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-rendered` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-marker` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-region` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-binding` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
 | `doc-section-anchor` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
 | `doc-agent-entry` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-inputs` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-inputs` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
+| `doc-worked-example` | `docs check` | `developer-tooling-and-testing#recipe-application-documents` |
 | `doc-link` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
 | `doc-milestone` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
 | `doc-model-example` | `checkdocs` | `model-declarations#recipe-declare-table` |

@@ -77,6 +77,7 @@ var (
 	DocSectionAnchor  = Rule{"doc-section-anchor", tooling, authors}
 	DocAgentEntry     = Rule{"doc-agent-entry", tooling, authors}
 	DocInputs         = Rule{"doc-inputs", tooling, authors}
+	DocWorkedExample  = Rule{"doc-worked-example", tooling, "recipe-application-documents"}
 	DocLink           = Rule{"doc-link", tooling, authors}
 	DocMilestone      = Rule{"doc-milestone", tooling, authors}
 	DocModelExample   = Rule{"doc-model-example", "model-declarations", "recipe-declare-table"}
@@ -92,7 +93,7 @@ func Rules() []Rule {
 		RouteNesting, RouteHelper, RouteHelperMissing, ModelTable, RawSQL, GeneratedStale, GenerateDecl,
 		GuidesDeclaration, AnchorInvalid, AnchorDuplicate, AnchorMissing, GuideName, GuideMissing,
 		RetiredCommand, RetiredAPI, AmbiguousAPI, LedgerShape, RemovalUnledgered, LedgerEntryLost, SurfaceStale, DocLimit, DocFile, DocComment,
-		DocRendered, DocMarker, DocRegion, DocBinding, DocSectionAnchor, DocAgentEntry, DocInputs,
+		DocRendered, DocMarker, DocRegion, DocBinding, DocSectionAnchor, DocAgentEntry, DocInputs, DocWorkedExample,
 		DocLink, DocMilestone, DocModelExample, FixtureGoVersion, BlueprintNumbered, RuleCatalogue,
 	}
 }

@@ -58,7 +58,7 @@ func TestRenderKeepsDocumentLayoutAndIsIdempotent(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			read := regionReader(t, "first\n\nsecond\n")
-			first, err := parseDocument(nil, "guide.md", []byte(test.original), read)
+			first, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(test.original), read)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -68,7 +68,7 @@ func TestRenderKeepsDocumentLayoutAndIsIdempotent(t *testing.T) {
 			if strings.Contains(string(first.Rendered), " \n") || strings.Contains(string(first.Rendered), " \r\n") {
 				t.Fatalf("rendered trailing whitespace in %q", first.Rendered)
 			}
-			second, err := parseDocument(nil, "guide.md", first.Rendered, read)
+			second, err := parseDocument(FrameworkPolicy(), nil, "guide.md", first.Rendered, read)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,7 +92,7 @@ func TestCommentDoesNotHideWhatFollowsIt(t *testing.T) {
 		"after a document comment block":  "# T\n\n<!-- c -->\n\n<!-- d --><code>x</code>\n",
 	} {
 		t.Run(name, func(t *testing.T) {
-			doc, err := parseDocument(nil, "guide.md", []byte(text), nil)
+			doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(text), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -108,7 +108,7 @@ func TestCommentDoesNotHideWhatFollowsIt(t *testing.T) {
 		"two comments":                          "<!-- a --> <!-- b -->\n",
 		"comment then prose":                    "<!-- c --> plain text\n",
 	} {
-		doc, err := parseDocument(nil, "guide.md", []byte(text), nil)
+		doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(text), nil)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -117,7 +117,7 @@ func TestCommentDoesNotHideWhatFollowsIt(t *testing.T) {
 		}
 	}
 	// The element's own line is reported, not the comment's first line.
-	doc, err := parseDocument(nil, "guide.md", []byte("# T\n\n<!-- a\nb --><pre>x</pre>\n"), nil)
+	doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte("# T\n\n<!-- a\nb --><pre>x</pre>\n"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestCommentDoesNotHideWhatFollowsIt(t *testing.T) {
 }
 
 func TestInlineHTMLCodeInProseIsOneDiagnosticAboutBackticks(t *testing.T) {
-	doc, err := parseDocument(nil, "guide.md", []byte("Use <code>x</code> and <pre>y</pre> here.\n\nSecond <code>z</code> line.\n"), nil)
+	doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte("Use <code>x</code> and <pre>y</pre> here.\n\nSecond <code>z</code> line.\n"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestInlineHTMLCodeInProseIsOneDiagnosticAboutBackticks(t *testing.T) {
 }
 
 func TestLoneCarriageReturnDocumentIsRefused(t *testing.T) {
-	_, err := parseDocument(nil, "guide.md", []byte("# T\r\r```go\rx := 1\r```\r"), nil)
+	_, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte("# T\r\r```go\rx := 1\r```\r"), nil)
 	if err == nil || !strings.Contains(err.Error(), "guide.md:1: [doc-limit] line ending: a lone CR") {
 		t.Fatalf("CR-only document accepted: %v", err)
 	}

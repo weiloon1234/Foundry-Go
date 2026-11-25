@@ -26,7 +26,7 @@ func TestClosedBlockSyntax(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			doc, err := parseDocument(nil, "guide.md", []byte("# Example\n\n"+test.block+"\n"), nil)
+			doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte("# Example\n\n"+test.block+"\n"), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -40,7 +40,7 @@ func TestClosedBlockSyntax(t *testing.T) {
 		if executable(tag) {
 			continue
 		}
-		doc, err := parseDocument(nil, "guide.md", []byte("```"+tag+"\nplain output\n```\n"), nil)
+		doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte("```"+tag+"\nplain output\n```\n"), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -91,7 +91,7 @@ func TestContainerRendering(t *testing.T) {
 	for _, container := range []struct{ prefix, continuation string }{{"> ", "> "}, {"- ", "  "}, {"> - ", ">   "}, {"1. ", "   "}} {
 		prefix, continuation := container.prefix, container.continuation
 		input := prefix + "<!-- compiled-source: example.ts#value -->\n" + continuation + "```typescript\n" + continuation + "const value = 1;\n" + continuation + "```\n"
-		doc, err := parseDocument(nil, "guide.md", []byte(input), func(string) (source, error) { return src, nil })
+		doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(input), func(string) (source, error) { return src, nil })
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,7 +140,7 @@ func TestManifestDiagnosticsKeepLines(t *testing.T) {
 
 func TestLiteralHTMLNamesAreNotBlocks(t *testing.T) {
 	for _, text := range []string{"Use `http.error.<code>` keys.", "The ``literal ` <pre> `` is an inline example."} {
-		doc, err := parseDocument(nil, "guide.md", []byte(text), nil)
+		doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte(text), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -148,7 +148,7 @@ func TestLiteralHTMLNamesAreNotBlocks(t *testing.T) {
 			t.Fatalf("inline literal treated as HTML: %v", err)
 		}
 	}
-	doc, err := parseDocument(nil, "guide.md", []byte("Use `<code>` literally. <pre>actual HTML</pre>"), nil)
+	doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte("Use `<code>` literally. <pre>actual HTML</pre>"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestLiteralHTMLNamesAreNotBlocks(t *testing.T) {
 }
 
 func TestMarkerFollowedByTextMustStandAlone(t *testing.T) {
-	doc, err := parseDocument(nil, "guide.md", []byte("# T\n\n<!-- compiled-source: a.go#r --> text\n```go\nx := 1\n```\n"), nil)
+	doc, err := parseDocument(FrameworkPolicy(), nil, "guide.md", []byte("# T\n\n<!-- compiled-source: a.go#r --> text\n```go\nx := 1\n```\n"), nil)
 	if err == nil || !strings.Contains(err.Error(), "guide.md:3: [doc-marker] compiled-source marker must stand alone on its line") || strings.Contains(err.Error(), "no compiled source") {
 		t.Fatalf("want the stand-alone message, got %v (%v)", err, doc)
 	}
