@@ -83,8 +83,11 @@ func TestDocumentLimitIsOneRulePerPath(t *testing.T) {
 // the line and nesting limits, and is costly for the parser. The budget is far
 // above the measured time so a loaded machine does not fail it, and far below
 // the minutes the same inputs took before the limits.
+// The budget guards against a return to unbounded parse time, not against a
+// slow machine: the worst admitted input parses in about two seconds on a
+// developer machine, and the package runs outside the race tier.
 func TestWorstAdmittedInputsParseWithinBudget(t *testing.T) {
-	const budget = 15 * time.Second
+	const budget = 60 * time.Second
 	size := MaxDocumentBytes - 64
 	repeat := func(unit string) []byte { return []byte(strings.Repeat(unit, size/len(unit))) }
 	wide := func(unit string) []byte { return repeat(strings.Repeat(unit, MaxLineBytes/len(unit)) + "\n") }

@@ -728,7 +728,7 @@ three modules. Local runs default to `1/1` and retain the full sorted execution
 order. The Makefile's `RACE_EXEMPT_PACKAGES` list removes
 packages from `make race` and race-enabled PostgreSQL checks, while `make test`
 retains their ordinary coverage. The exemptions are `internal/retirement`,
-`internal/noraw`, and `cmd/foundry`. A parser guard rejects missing exempt packages,
+`internal/noraw`, `cmd/foundry`, and `internal/docsource/markdown`. A parser guard rejects missing exempt packages,
 `go` statements, calls to methods named `Go`, and errgroup imports. It checks every
 non-test Go file regardless of build tags.
 

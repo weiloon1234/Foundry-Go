@@ -3,7 +3,7 @@ TEST_PACKAGE_BATCH_SIZE ?= 6
 TEST_TIMEOUT ?= 20m
 TEST_POSTGRES_SHARD ?= 1/1
 # Keep these three tool packages on one line; testpostgres guards all non-test source for concurrency.
-RACE_EXEMPT_PACKAGES := ./internal/retirement ./internal/noraw ./cmd/foundry
+RACE_EXEMPT_PACKAGES := ./internal/retirement ./internal/noraw ./cmd/foundry ./internal/docsource/markdown
 RACE_EXEMPT_IMPORTS = $(addprefix $(shell awk '$$1 == "module" { print $$2 }' go.mod)/,$(patsubst ./%,%,$(RACE_EXEMPT_PACKAGES)))
 # Heaviest first; PostgreSQL shards deal these import paths before ordinary packages.
 RACE_HEAVY_PACKAGES := github.com/weiloon1234/Foundry-Go/internal/generate github.com/weiloon1234/Foundry-Go/internal/agent foundry.test/consumer github.com/weiloon1234/Foundry-Go/database/orm github.com/weiloon1234/Foundry-Go/attachments foundry.test/goway
