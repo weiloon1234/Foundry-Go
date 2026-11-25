@@ -17,6 +17,10 @@ safe 500 responses.
 <a id="recipe-configure-messages"></a>
 ## Configured applications
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `i18n`, `validation`.
+In the examples, `localization` is the application's own package of message and
+validation declarations.
+
 Enable `settings.Features.Locales.Enabled` and configure its `Default`, `Locales`
 and optional `Fallback`. The HTTP kernel automatically applies `http.Locale` and
 registers `application.MessageDefinitions()`: the validation, HTTP and pagination
@@ -81,6 +85,8 @@ Successful responses retain their own language/cache policy.
 <a id="recipe-translate-rule"></a>
 ## Typed overrides and non-HTTP use
 
+A rule's translated message takes its arguments from a struct tagged `//foundry:message`:
+
 <!-- compiled-source: tests/fixtures/consumer/localization/messages.go#rule-message-arguments -->
 ```go
 // RuleArgs is approved declaration data, never submitted field contents.
@@ -91,6 +97,19 @@ type RuleArgs struct {
 	Team      string `json:"team"`
 }
 ```
+
+The rule below validates another struct of the same package. `foundry generate`
+produces `RuleArgsMessage()` and `WelcomeArgsValidationFields()` from the declarations:
+
+<!-- compiled-source: tests/fixtures/consumer/localization/messages.go#welcome-message-input -->
+```go
+//foundry:message key=welcome
+type WelcomeArgs struct {
+	Name string `json:"name"`
+}
+```
+
+The field rule attaches the message to `Name`:
 
 <!-- compiled-source: tests/fixtures/consumer/localization/validation.go#translated-field-rule -->
 ```go

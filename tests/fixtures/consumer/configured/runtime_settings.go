@@ -54,9 +54,8 @@ func MailPortRegistration() settings.Registration {
 	}})
 }
 
-func ReconcileSettings(ctx context.Context, manager *settings.Manager) error {
-	_, err := settings.Reconcile(ctx, manager)
-	return err
+func ReconcileSettings(ctx context.Context, manager *settings.Manager) (settings.Reconciliation, error) {
+	return settings.Reconcile(ctx, manager)
 }
 
 // doc-example:end upgrade-runtime-setting

@@ -16,6 +16,13 @@ concrete settings. It reuses the existing providers and lifecycle. The
 passes its typed services into ordinary domain constructors. The following API
 is also available directly for advanced composition.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `cache`, `foundation`, `infrastructure`.
+`Settings` is the application's `//foundry:config` struct with a nested
+`infrastructure.Settings` field named `Services`, and `Reports` is its own
+`cache.StoreName`.
+
+Declare defaults with a second cache store and assemble the application:
+
 <!-- compiled-source: tests/fixtures/consumer/configured/settings.go#named-services -->
 ```go
 func Defaults() Settings {
@@ -31,6 +38,8 @@ func Build(ctx context.Context, settings Settings) (*foundation.App, error) {
 	return plan.Register(foundation.NewBuilder()).Build(ctx)
 }
 ```
+
+Select the named store from the resolved services:
 
 <!-- compiled-source: tests/fixtures/consumer/configured/settings.go#select-named-cache -->
 ```go

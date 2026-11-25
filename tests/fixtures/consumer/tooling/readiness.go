@@ -20,16 +20,14 @@ func WithDatabaseReadiness(builder *application.Builder) *application.Builder {
 
 // doc-example:end feature-readiness
 
-// doc-example:begin pause-admission
 func Pause(app *application.App, paused bool) {
+	// doc-example:begin pause-admission
 	app.Maintenance().Set(paused)
+	// doc-example:end pause-admission
 }
 
-// doc-example:end pause-admission
-
-// doc-example:begin storage-probe
 func ProbeStorage(ctx context.Context, builder *application.Builder, output io.Writer) error {
+	// doc-example:begin storage-probe
 	return application.ProbeStorage(ctx, builder, output)
+	// doc-example:end storage-probe
 }
-
-// doc-example:end storage-probe

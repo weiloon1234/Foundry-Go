@@ -191,6 +191,8 @@ observed by the scheduler like any schedule.
 | declared name | Declared with `application.PruneWith` | Another store's bounded prune (challenge flows, verifications, resets, MFA factors, outbound webhook deliveries) |
 | declared name | Declared with `application.PruneService` | A module-owned service's bounded prune, resolved by its typed service key during schedule construction |
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `foundation`, `webhook/outbound`.
+
 Declared tasks are returned in `FeatureDeclarations.Pruning`; guards are
 constructed there with `NewBrowserGuard`/`NewTokenGuard` because a guard's
 provider, not configuration, identifies its credentials. Defaults run each task

@@ -3,7 +3,7 @@ package httpvalidation
 import (
 	"context"
 
-	"foundry.test/consumer/httpdto"
+	dto "foundry.test/consumer/httpdto"
 	"foundry.test/consumer/httpendpoints"
 	"foundry.test/consumer/models"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
@@ -13,14 +13,18 @@ import (
 
 // AsyncRouter uses the same request lifecycle and 422 mapping as local rules.
 // The lookup may be a scoped database query or an application API adapter.
-// doc-example:begin validation-expanded-async-router
 func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]) (*foundryhttp.Router, error) {
-	fields := httpdto.UpdateUserValidationFields()
-	endpoint := foundryhttp.ValidateBody(httpendpoints.Update, validation.Parallel(
+	endpoint := asyncValidatedUpdate(httpendpoints.Update, lookup)
+	return foundryhttp.NewRouter(endpoint.Handle(service.Update))
+}
+
+// doc-example:begin validation-expanded-async-router
+func asyncValidatedUpdate(endpoint UpdateEndpoint, lookup validation.Lookup[string]) UpdateEndpoint {
+	fields := dto.UpdateUserValidationFields()
+	return foundryhttp.ValidateBody(endpoint, validation.Parallel(
 		validation.Rules(validation.WithLabel(fields.Email, "Email address"), validation.Optional(validation.Bail(validation.Email[string](), validation.Unique(lookup)))),
 		validation.Rules(fields.Nickname, validation.Optional(validation.Nullable(validation.Lowercase[string]()))),
 	))
-	return foundryhttp.NewRouter(endpoint.Handle(service.Update))
 }
 
 // doc-example:end validation-expanded-async-router
@@ -29,8 +33,8 @@ func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]
 // updated is provided per request through a validation slot, so the lookup
 // can exclude that user's own address while the rule selects the body field.
 func OwnEmailRouter(service httpendpoints.Service, current validation.Slot[model.ID[models.User]], emails validation.Lookup[string]) (*foundryhttp.Router, error) {
-	body := validation.DefineField("body", func(input httpendpoints.UpdateRequest) httpdto.UpdateUser { return input.Body })
-	fields := httpdto.UpdateUserValidationFields()
+	body := validation.DefineField("body", func(input httpendpoints.UpdateRequest) dto.UpdateUser { return input.Body })
+	fields := dto.UpdateUserValidationFields()
 	endpoint := foundryhttp.ValidateInput(httpendpoints.Update, validation.Provide(current,
 		func(_ context.Context, input httpendpoints.UpdateRequest) (model.ID[models.User], error) {
 			return input.Path.User, nil

@@ -43,20 +43,24 @@ Password strength does not verify an existing credential or contact a breach API
 
 ## Concurrent I/O
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `http` as `foundryhttp`, `model`, `database/orm`, `validation`, `validation/database` as `databasevalidation`.
+In the examples, `models` is the application's model package, `dto` its DTO package, and `UpdateEndpoint` the endpoint of its update route declared in [typed validation](validation.md#recipe-compose-rules).
+
+Parallel branches wrap an endpoint's body rules:
+
 <!-- compiled-source: tests/fixtures/consumer/httpvalidation/async.go#validation-expanded-async-router -->
 ```go
-func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]) (*foundryhttp.Router, error) {
-	fields := httpdto.UpdateUserValidationFields()
-	endpoint := foundryhttp.ValidateBody(httpendpoints.Update, validation.Parallel(
+func asyncValidatedUpdate(endpoint UpdateEndpoint, lookup validation.Lookup[string]) UpdateEndpoint {
+	fields := dto.UpdateUserValidationFields()
+	return foundryhttp.ValidateBody(endpoint, validation.Parallel(
 		validation.Rules(validation.WithLabel(fields.Email, "Email address"), validation.Optional(validation.Bail(validation.Email[string](), validation.Unique(lookup)))),
 		validation.Rules(fields.Nickname, validation.Optional(validation.Nullable(validation.Lowercase[string]()))),
 	))
-	return foundryhttp.NewRouter(endpoint.Handle(service.Update))
 }
 ```
 
 Pass `databasevalidation.Lookup(db, models.Users.Query(), models.Users.Email)`
-as the typed lookup to this router. Go request handlers already
+as the typed lookup to this function. Go request handlers already
 run independently; no async/await keyword or future is needed. Rules receiving a
 context can call database or HTTP clients directly. `Parallel` runs independent
 branches concurrently, defaulting to four per `Check`; `ParallelLimit` accepts
@@ -127,7 +131,7 @@ value from one outside the caller's scope.
 
 For lists of objects, select one field per element:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#validation-expanded-assignment -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/validation_recipes.go#validation-expanded-assignment -->
 ```go
 type Assignment struct{ Assignee model.ID[models.User] }
 

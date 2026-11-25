@@ -27,7 +27,7 @@ Applications compose ordinary Go rule values and inject dependencies explicitly.
 Validation leaves input values unchanged.
 
 The [consumer HTTP validation fixture](../../tests/fixtures/consumer/httpvalidation/validation.go)
-adds rules to an existing typed endpoint:
+adds rules to an existing typed endpoint.
 
 `dto`, `routes`, and `filters` below are application packages containing the request,
 response, path and query declarations. Pass the application endpoint explicitly.
@@ -97,6 +97,8 @@ type UpdateEndpoint = foundryhttp.Endpoint[routes.UserPath, filters.NearbyInput,
 ```
 
 The application owns `Account` and `models.User` and any generated tables or identities used below.
+
+Add labelled rules to the update endpoint:
 
 <!-- compiled-source: tests/fixtures/consumer/httpvalidation/validation.go#validate-http-body -->
 ```go
@@ -191,6 +193,10 @@ Generated field sets and the public `contract.JSON[T]` API are unchanged.
 <a id="recipe-check-values"></a>
 ## Using rules outside HTTP
 
+The rules below belong to the `UpdateUser` request DTO declared above;
+`foundry generate` produces `UpdateUserValidationFields()`. Build the rule once and
+check an input with it:
+
 <!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#patch-rules -->
 ```go
 func UpdateRules() validation.Rule[UpdateUser] {
@@ -270,7 +276,8 @@ func SingleLineName() validation.Rule[string] {
 }
 ```
 
-Declare and register the typed arguments through
+`localization` is the application's own package; it declares `RuleArgs` and
+generates `RuleArgsMessage()`. Declare and register the typed arguments through
 [translated rule messages](validation-messages.md#recipe-translate-rule). Reuse the
 same domain rule across HTTP, console input and provisioning. Sign-in validation
 checks format; account existence belongs to the credential verifier.
@@ -787,7 +794,7 @@ and other available native formats. The rule does not close the engine.
 Import `validation/database` as `databasevalidation`. The adapter composes the
 ORM declarations and typed column handles:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#database-rules -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/validation_recipes.go#database-rules -->
 ```go
 func availableEmail(db database.Executor) validation.Rule[string] {
 	return databasevalidation.Unique(db, models.Users.Query(), models.Users.Email)
@@ -845,7 +852,7 @@ A rule tree is declared once, yet some scopes depend on the request: the row
 being updated, or the tenant of the authenticated actor. Declare a typed
 `validation.Slot` and provide its value per check instead of rebuilding rules:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#validation-email-change -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/validation_recipes.go#validation-email-change -->
 ```go
 type EmailChange struct {
 	ID    model.ID[models.User]

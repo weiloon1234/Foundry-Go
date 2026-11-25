@@ -1229,7 +1229,7 @@ with the journaled effective environment, not guessed from the profile.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `deployment`, `fault`.
 
-This consumer fixture loads the three HTTP-role bindings from the worked example:
+This example loads the relay's control endpoint, JSON tool and public listener from the worked example:
 
 <!-- compiled-source: tests/fixtures/consumer/hostcapabilities/bindings.go#host-capability-bindings -->
 ```go

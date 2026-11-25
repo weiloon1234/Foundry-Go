@@ -289,8 +289,8 @@ func TokenBinding(tokens *UserTokens) (foundryhttp.GuardBinding[models.User], er
 }
 ```
 
-`ProfileInput` is an alias for the matching `http.Input` type, as in the consumer
-fixture. Response DTOs remain declared separately; stored model fields never
+A handler receives its transport input as `foundryhttp.Input[Path, Query, Body]`.
+Response DTOs remain declared separately; stored model fields never
 become an automatic JSON response. Use explicit custom getters when mapping DTOs.
 
 An unbound `Guarded` route cannot register a handler, including a raw handler.

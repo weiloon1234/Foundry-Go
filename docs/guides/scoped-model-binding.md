@@ -5,6 +5,29 @@ contains complete typed declarations and a three-level handler.
 
 ## Bind declared keys and relationships
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`, `http/modelbinding`, `model`.
+The application owns the `Team`, `Project` and `Task` models, their generated
+`TeamRecords`, `ProjectRecords`, `TaskRecords`, `TeamLinks` and `ProjectLinks`,
+and the string type `Slug`. The request path and the bound result types are:
+
+<!-- compiled-source: tests/fixtures/consumer/nestedbindings/bindings.go#scoped-model-binding-path -->
+```go
+//foundry:path pattern=/teams/{team}/projects/{project}/tasks/{task}
+type Path struct {
+	Team    model.ID[Team]
+	Project Slug
+	Task    Slug
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/nestedbindings/bindings.go#scoped-model-binding-types -->
+```go
+type TeamProject = modelbinding.Models[Team, Project]
+type Resources = modelbinding.Models[TeamProject, Task]
+```
+
+Resolve a team and one of its enabled projects:
+
 <!-- compiled-source: tests/fixtures/consumer/nestedbindings/bindings.go#scoped-model-binding-projects -->
 ```go
 func Projects(db database.Executor) modelbinding.Resolver[Path, TeamProject] {

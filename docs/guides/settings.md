@@ -14,6 +14,7 @@ These settings are application data, with explicit typed declarations
 and migrations. They are separate from deployment configuration and secrets.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `contract`, `database`, `extensions`, `settings`.
+`MailPortRegistration` is declared under [versions and upgrades](#recipe-upgrade-settings).
 
 <!-- compiled-source: tests/fixtures/consumer/configured/runtime_settings.go#declare-runtime-setting -->
 ```go
@@ -127,9 +128,8 @@ func MailPortRegistration() settings.Registration {
 	}})
 }
 
-func ReconcileSettings(ctx context.Context, manager *settings.Manager) error {
-	_, err := settings.Reconcile(ctx, manager)
-	return err
+func ReconcileSettings(ctx context.Context, manager *settings.Manager) (settings.Reconciliation, error) {
+	return settings.Reconcile(ctx, manager)
 }
 ```
 

@@ -677,16 +677,18 @@ the disk, stage, and storage error code. Check that disk's bucket and credential
 If deletion fails, `leftover_key` identifies the probe object to remove. No list
 permission is needed to prove deletion. A release without this command is refused
 with `storage_probe_unavailable` when the instance has cloud disks. Register the
-command in the application's console catalog and rebuild the release:
+command in the application's console catalog and rebuild the release.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`.
+
+Inputs: `ctx context.Context`, `builder *application.Builder`, `output io.Writer`.
 
 The command catalog and settings loader remain application-owned. Compose the
 builder with web serving disabled, then call the public helper:
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/readiness.go#storage-probe -->
 ```go
-func ProbeStorage(ctx context.Context, builder *application.Builder, output io.Writer) error {
-	return application.ProbeStorage(ctx, builder, output)
-}
+return application.ProbeStorage(ctx, builder, output)
 ```
 
 The helper writes one JSON object, including failures, and returns a non-usage
