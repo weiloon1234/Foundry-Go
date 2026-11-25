@@ -28,6 +28,34 @@
   before repinning; it also converts a variable or helper holding `[]http.GuardOption[M]`,
   and the [compatibility policy](docs/compatibility.md#access-rule) lists what it
   rewrites and, for each shape it leaves for a decision, the recipe.
+
+- `foundry models check` compares each enum column's database value list with its
+  enum, without a database: the newest live `CHECK` list on the column of a model field
+  typed as a `//foundry:enum` (or `value.Nullable`, `value.JSON`, slice or array of one)
+  must equal the enum's cases. It reads `col IN (...)`, `col = ANY (ARRAY[...])` in the
+  hand-written and the `pg_dump` forms, a chain of `col = 'a' OR col = 'b'`,
+  `col <@ '[...]'::jsonb` and integer `col BETWEEN a AND b`. The rule fails closed: any
+  other CHECK that constrains an enum column (a regular expression, `LIKE`, `SIMILAR TO`,
+  a function on the column, a domain or database enum type, a `DO` block that names it,
+  `search_path` changes, `LIKE`/`INHERITS` table copies) is a finding that says the list
+  cannot be read, never silence. Tables are identified by schema and name and quoted
+  names keep their case. A missing case is a one-line `[enum-list]` finding at the case
+  that names the table, column, constraint (or says it is unnamed), the migration that
+  last wrote the list, and two alternatives: a new migration that re-declares the
+  constraint with the printed list, or `values=` on the field plus `foundry generate`. A
+  value that is not a case and a run-time-built migration that names a model table are
+  findings too. A column that holds fewer cases declares them with the new tag option
+  `values=Case|Case`, and its list must equal exactly those cases. A migration function
+  that no list registers is a `[migration-unregistered]` finding; a function that builds
+  its definition in a local and returns it counts as a migration, and a reference to a
+  migration function as a value counts as registering it. The migrations guide teaches
+  both; the consumer fixture's `enumlists` package is the positive case.
+- Application effect of the enum rule: an application whose constraint lists fewer
+  values than its enum fails `models check` at the next pin until the field declares
+  `values=` and `foundry generate` is run, or a new migration writes the list again. A
+  list written in a form the rule does not read is a finding until a new migration
+  writes it as a plain list. Nothing changes for lists that already equal their enums.
+
 - Retired-names ledger completeness: `make generate` records the exported API of
   the importable packages (`internal/retirement/exported-surface.txt`; an alias lists
   the members of its target), and `make generate-check` refuses any identifier removed

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "files": {
+    "documents_foundry.gen.go": "a7d1c9c2db03302da28667eb69b23f8cc68a3542f72db1e727c8f6f2224f293d",
+    "role_foundry.gen.go": "c2faf8b9589e25b8656ed3cb97366b408f2c17288853e9180939dd3d0bf846e3",
+    "status_foundry.gen.go": "65e4584f9544855b1a663075e12c2c2fcafc401109d4ed703679dfe4096bb0e7"
+  }
+}

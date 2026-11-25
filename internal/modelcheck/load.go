@@ -4,6 +4,7 @@ package modelcheck
 import (
 	"context"
 	"maps"
+	"path/filepath"
 	"sort"
 
 	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
@@ -56,6 +57,21 @@ func Check(ctx context.Context, dir string, patterns []string) (result []diagnos
 				seen[key] = true
 				result = append(result, d)
 			}
+		}
+	}
+	root, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+	analysisByPackage := make(map[*generate.AnalysisPackage]*Analysis, len(pkgs))
+	for i, pkg := range pkgs {
+		analysisByPackage[pkg] = analyses[i]
+	}
+	for _, d := range checkEnumLists(root, pkgs, analysisByPackage) {
+		key := d.String()
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, d)
 		}
 	}
 	sort.Slice(result, func(i, j int) bool {

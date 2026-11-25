@@ -53,6 +53,9 @@ var (
 	GeneratedStale     = Rule{"generated-stale", "model-declarations", "recipe-stale-declarations"}
 	GenerateDecl       = Rule{"generate-declaration", "model-declarations", "diagnose-declarations"}
 
+	EnumList              = Rule{"enum-list", "migrations-and-seeding", "recipe-enum-lists"}
+	MigrationUnregistered = Rule{"migration-unregistered", "migrations-and-seeding", "recipe-register-migration"}
+
 	GuidesDeclaration = Rule{"guides-declaration", tooling, guides}
 	AnchorInvalid     = Rule{"anchor-invalid", tooling, authors}
 	AnchorDuplicate   = Rule{"anchor-duplicate", tooling, authors}
@@ -90,6 +93,7 @@ var (
 func Rules() []Rule {
 	return []Rule{
 		RouteNesting, RouteHelper, RouteHelperMissing, ModelTable, RawSQL, GeneratedStale, GenerateDecl,
+		EnumList, MigrationUnregistered,
 		GuidesDeclaration, AnchorInvalid, AnchorDuplicate, AnchorMissing, GuideName, GuideMissing,
 		RetiredCommand, RetiredAPI, AmbiguousAPI, LedgerShape, RemovalUnledgered, LedgerEntryLost, SurfaceStale, DocLimit, DocFile, DocComment,
 		DocRendered, DocMarker, DocRegion, DocBinding, DocSectionAnchor, DocAgentEntry, DocInputs,

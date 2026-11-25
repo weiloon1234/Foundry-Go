@@ -88,6 +88,7 @@ behavior; redundant options fail generation.
 | `mutate=normalizeEmail` | Names a package-local `func(EmailInput) (Stored, error)` instead of the conventional `MutateEmail` method. Requires `input`. |
 | `codec=emailCodec` | Calls a package-local `func() codec.Codec[Stored]` and selects a plain column. Do not combine it with a role. |
 | `role=column` | Selects a plain column when that differs from the inferred constructor. |
+| `values=Draft\|Published` | Declares the enum cases a deliberately narrower column holds, by Go constant name. Only on an enum field or a collection of enums; run `foundry generate` after adding it. See [enum columns and their lists](#recipe-enum-narrowing). |
 | `foundry:"-"` | Excludes a transient field from persistence; it still participates in the structural guard. |
 
 `value.Optional` is a write or transport state, not a persisted column. Embedded
@@ -168,6 +169,22 @@ when that convention is disabled. Explicit managed roles take precedence over
 conventional names; ignored fields and slots do not participate. A custom codec or
 explicit plain-column role on a conventional field retains the ORM's existing
 convention opt-out. Choose those only when a plain column is the intended API.
+
+<a id="recipe-enum-narrowing"></a>
+### Enum columns and their lists
+
+When an enum column carries a database `CHECK` that lists values,
+`foundry models check` requires the list to equal the enum's cases (see
+[keep an enum and its database list equal](migrations-and-seeding.md#recipe-enum-lists)).
+A column that deliberately holds fewer cases says so on the field:
+``Stage Status `foundry:"values=Draft|Published"` ``. The names are the Go constants of
+the enum's cases, separated by `|`. The option is part of the model's declaration, so run
+`foundry generate` after adding it; the generated-output check fails until you do. Then the
+list must equal exactly those cases, a new
+enum case leaves the column alone, and the generator refuses `values` on a field that
+holds no enum (a field of an enum, `value.Nullable`, `value.JSON`, slice or array of one
+qualifies). `models check` refuses a name that is not a case and a list that names every
+case.
 
 ### Key capabilities and member names
 
@@ -342,6 +359,9 @@ angle-bracket names stand for the offending field, type or option.
 | Guess a directive option | `unknown directive option <name>`; `type`, `table-type`, `identity-var`, `members` and `soft` are not options. |
 | Guess a tag option | `unknown foundry option <name>` |
 | Repeat an inferred role | `role=enum is inferred from the field type; remove it` |
+| Name a case that does not exist in `values` | `[enum-list]` from `foundry models check`: `values names Missing, which is not a case of enum Phase` |
+| Name every case in `values` | `[enum-list]` from `foundry models check`: `values names every case of enum Phase; remove the values option` |
+| Put `values` on a field that holds no enum | `values applies only to an enum field or a collection of enums` |
 | Omit a decimal role | `decimal field requires role=column or role=number` |
 | Omit managed roles on an eligible conventional pair | `declare role=created-at on CreatedAt and role=updated-at on UpdatedAt, or use timestamps=none on the model and remove timestamp role tags` |
 | Omit an eligible conventional deletion role | `declare role=soft-delete on DeletedAt, or use softdeletes=none on the model and remove its role tag` |

@@ -4,6 +4,8 @@
 ## Agent entry
 
 - [Declare immutable migrations](#recipe-declare-migration)
+- [Keep an enum and its database list equal](#recipe-enum-lists)
+- [Register every migration](#recipe-register-migration)
 - [Register and run migration commands](#recipe-migration-targets)
 - [Inspect and explicitly run migrations](#recipe-run-migrations)
 - [Seed reference data](#recipe-seed-data)
@@ -50,6 +52,216 @@ Use imports from `github.com/weiloon1234/Foundry-Go/database/migrate`. Semantic 
 `migrate.New` rejects duplicate identities, invalid SQL text, missing dependencies, repeated/self dependencies, and cycles before database I/O. Independent definitions sort by ID then origin; declared dependencies execute first. Input slices and returned metadata are copied. Code that retains definitions before calling `migrate.New`, such as a plugin contribution, snapshots them with `Definition.Clone`, which copies `SQL`, `Down` and `Requires`. The SHA-256 checksum covers versioned canonical metadata, SQL in execution order, and sorted prerequisites. Even SQL whitespace changes the checksum. Keep applied definitions unchanged and add a new migration for a later change.
 
 By default, each statement must be valid inside a PostgreSQL transaction. Use separate SQL entries for separate statements. Do not include `BEGIN`, `COMMIT`, `ROLLBACK`, or manual savepoint commands, and use explicit `Mode: migrate.NonTransactional` for operations requiring execution outside a transaction. Foundry owns the transaction and its history insertion. SQL content is an explicit reviewed boundary; Go types cannot prove SQL semantics.
+
+<a id="recipe-enum-lists"></a>
+## Keep an enum and its database list equal
+
+A column that holds a `//foundry:enum` often carries a `CHECK` constraint that lists
+the enum's values in SQL: `CHECK (status IN ('draft','published'))`, or
+`CHECK (roles <@ '["reader","editor"]'::jsonb)` for a JSON array of cases. The Go enum is
+the source of truth; the migration holds a copy that nothing at compile time ties to it.
+An enum case added without a migration compiles and passes every check that needs no
+database, and the database then rejects the value at run time.
+
+`foundry models check` closes that gap without a database. For every model field whose
+type is an enum, or a `value.Nullable`, `value.JSON`, slice or array of one, it finds the
+CHECK constraints that are live on that table and column after the last migration (the
+migrations are replayed in the registry's order: prerequisites first, then by ID) and
+requires each list to equal the enum's cases. The fixture's declarations:
+
+<!-- compiled-source: tests/fixtures/consumer/enumlists/documents.go#enum-list-declarations -->
+```go
+//foundry:enum
+type Status string
+
+const (
+	Draft     Status = "draft"
+	Published Status = "published"
+	Archived  Status = "archived"
+)
+
+//foundry:enum
+type Role string
+
+const (
+	Reader Role = "reader"
+	Editor Role = "editor"
+)
+
+//foundry:model table=enum_list_documents var=Documents key=ID
+type Document struct {
+	ID    model.ID[Document]
+	Title string
+	// Status holds every Status case; its constraint lists them all.
+	Status Status
+	// Roles holds a JSON array of Role cases; its constraint lists them all.
+	Roles value.JSON[[]Role] `foundry:"default=database"`
+	// Stage is a deliberately narrower column: it never holds Archived.
+	Stage Status `foundry:"values=Draft|Published"`
+}
+```
+
+### Add an enum case
+
+A new case always needs a new migration. An applied migration is immutable: its checksum
+covers its SQL, so editing the list inside it is drift, and a helper that renders the list
+from the enum when the definition is built would change an old migration the day the next
+case is added. The new migration writes the constraint again, with every case, as a
+literal:
+
+1. Add the constant to the enum and run `foundry generate`.
+2. Run `foundry models check ./...`. The finding is printed at the new case. It names the
+   table, the column, the constraint (or says the constraint is unnamed) and the file and
+   line of the migration that last wrote the list, and prints the list a new migration
+   must hold.
+3. Decide which of the two alternatives the finding names is true. If the column should
+   hold the new case, create the migration with the
+   [scaffold command](#development-scaffolding), put the two statements below in its
+   `SQL`, list the migration where the application registers its migrations and record its
+   checksum wherever the application pins them. If the column deliberately holds only some
+   cases, declare them with `values=` on the field instead (see below) and run
+   `foundry generate`: the option is part of the model's declaration, so the generated
+   output is stale until it is regenerated.
+4. Run `foundry models check ./...` again. The newest list now equals the enum.
+
+<!-- compiled-source: tests/fixtures/consumer/enumlists/migrations.go#enum-list-new-migration -->
+```go
+// ArchivedStatus widens the status list after Archived joined the enum. The
+// first migration stays as it was applied; this one drops the constraint and
+// writes it again with every case as a literal.
+func ArchivedStatus() migrate.Definition {
+	return migrate.Definition{
+		Key:      migrate.Key{Origin: "consumer.enumlists", ID: ArchivedStatusID},
+		Version:  "v0.1.0",
+		Requires: []migrate.Key{CreateDocuments().Key},
+		SQL: []string{
+			`ALTER TABLE enum_list_documents DROP CONSTRAINT enum_list_documents_status_check`,
+			`ALTER TABLE enum_list_documents ADD CONSTRAINT enum_list_documents_status_check CHECK (status IN ('draft', 'published', 'archived'))`,
+		},
+	}
+}
+```
+
+The two statements drop the constraint and add it again with every case. Use the
+constraint's name from the finding; when the finding says the CHECK is unnamed,
+`\d table` in `psql` shows the name PostgreSQL gave it. With a worked example, for a
+`permissions` column that gained `pages.export`:
+
+```sql
+ALTER TABLE admins DROP CONSTRAINT admins_permissions_check;
+ALTER TABLE admins ADD CONSTRAINT admins_permissions_check CHECK (jsonb_typeof(permissions) = 'array' AND (permissions = '["*"]'::jsonb OR permissions <@ '["admins.read","admins.manage","pages.export"]'::jsonb));
+```
+
+Keep the other conditions of the constraint and replace only the list. A value written as
+an equality branch beside the list, as in
+`permissions = '["*"]'::jsonb OR permissions <@ '[...]'::jsonb`, counts as admitted and
+stays out of the list the finding prints.
+
+A finding for a missing case is one line:
+`enums.go:10:2: [enum-list] enum Permission: case "pages.export" (PermissionPagesExport) is missing from the list of constraint admins_permissions_check on admins.permissions, last written at migrations.go:8; either (a) the column should hold the new case: add a new migration that re-declares the constraint with this list: '["admins.read","admins.manage","pages.export"]'; or (b) the column deliberately holds only some cases: declare values=PermissionAll|PermissionAdminsRead|PermissionAdminsManage on Admin.Permissions and run foundry generate`.
+Neither alternative is the default: the first is right when the new case is a case the
+column should accept, the second when the list was a narrowing from the start (a column
+that marks only some of an enum's cases, for example).
+
+### What the check reads, and what is a finding
+
+The check says a list equals the enum only for a test it reads in full. **A CHECK that
+constrains an enum column in any way the check does not fully understand is reported as
+unreadable, never passed in silence.** The forms it reads are the ones people write and
+PostgreSQL prints:
+
+- `col IN ('a', 'b')`, with any casts, qualifiers and extra parentheses around the column;
+- `col = ANY (ARRAY['a', 'b'])`, with or without casts, including the form `pg_dump` and
+  `\d` print, `((col)::text = ANY ((ARRAY['a'::character varying, ...])::text[]))`;
+- a chain `col = 'a' OR col = 'b'` over one column (two or more equalities; a single
+  `col = 'a'` is not a list);
+- `col <@ '["a","b"]'::jsonb` for a JSON array of cases;
+- `col BETWEEN 0 AND 4` over integers, as the integers in the range (a range of 1,000
+  values or more is unreadable);
+- any of these followed by `IS TRUE`, an `OR col IS NULL` branch, and beside them in an
+  `AND`: `col IS NOT NULL`, a comparison of the column with another column
+  (`type = col`), and a shape guard on a JSON column (`jsonb_typeof(col) = 'array'`,
+  `jsonb_array_length(col) > 0`), because none of these changes which values are allowed.
+
+The check also understands conditions that relate columns without limiting one of them to a
+list: `(status IN ('paid')) = (paid_at IS NOT NULL)`, a `CASE WHEN ... THEN ... END` of
+tests, and a transition table of `action = 'x' AND from_status = 'y'` branches. A column
+that appears only there has no list, which is not a finding.
+
+Every other test that mentions the enum column is the finding "the CHECK list on this enum
+column cannot be read statically", with the specific reason: a regular-expression operator
+(`~`), `SIMILAR TO`, `LIKE`, a function applied to the column (`lower(col)`), a negated
+test, a `CASE` with an operand, a comparison of the column with a literal other than `=`, a
+concatenation, a `NOT IN` or `<>` beside the list, two lists on one column, an `IN` list
+with a member that is not a string or integer literal, `E'...'` strings with an escape
+PostgreSQL rejects (the others are decoded as PostgreSQL does), an expression nested more
+than 32 levels or with more than 500 `AND`/`OR` operators. The fix is the same two
+statements in a new migration, written with a plain `IN (...)`, `= ANY (ARRAY[...])` or
+`<@ '[...]'` list of every case; the newest literal list is the one compared, so one such
+migration ends the finding. The same finding is made when a statement the check cannot
+follow may have written the constraint: a `DO` block that names the constraint, table or
+column, a `RENAME` of a column or constraint the table holds, `ALTER TABLE ... SET SCHEMA`
+or `INHERIT`, `ALTER SCHEMA`, `CREATE TABLE ... (LIKE ...)`, `INHERITS` or `PARTITION OF`, a
+statement that changes `pg_constraint`, and a migration that sets `search_path` (every
+unqualified table name in that migration is unreadable). A column whose type is a
+`CREATE DOMAIN` or `CREATE TYPE ... AS ENUM` created in the history is unreadable too: the
+rule compares CHECK lists, so add a literal `CHECK` list on the column.
+
+Other findings and what is not one:
+
+- A value in the list that is not an enum case is a finding at the model field. Remove it
+  in a new migration with the same two statements.
+- A column that deliberately holds fewer cases declares them on the field with
+  `foundry:"values=Draft|Published"`, naming the cases by their Go constant names, then
+  runs `foundry generate`. The list must then equal exactly those cases, so a new enum
+  case does not touch the column, and a case dropped from the list is still found. The
+  option is refused on a field that holds no enum, with a name that is not a case, and when
+  it names every case. See
+  [enum columns and their lists](model-declarations.md#recipe-enum-narrowing).
+- A table is identified by schema and name: a table written without a schema is in
+  `public`, a model's `table=` may be `schema.table`, and a statement about
+  `archive.invoices` never touches `public.invoices`. A quoted name keeps its case and an
+  unquoted one is folded to lower case, as in PostgreSQL.
+- A column with an enum type and no list in any migration is not a finding: the database
+  constraint is optional.
+- A migration whose SQL is built at run time (not written as string constants) is a
+  finding when the text it does show names a table of a model.
+- Lists inside functions and triggers, `DO` blocks that do not name the table, constraint
+  or column, constraints on other tables, and a database enum type or domain nothing in the
+  history uses for an enum column are not read. The check reads `CREATE TABLE`,
+  `ALTER TABLE ... ADD [CONSTRAINT] CHECK`, `ADD COLUMN ... CHECK`, `DROP CONSTRAINT`,
+  `DROP COLUMN`, `ALTER COLUMN ... TYPE`, `RENAME TO` and `DROP TABLE`. Each migration SQL
+  string is limited to 1 MiB and a module to 10,000 migrations.
+
+A constraint is named in the finding when the migration names it. For an unnamed `CHECK`
+the check reproduces PostgreSQL's choice only when it can be certain: the table's columns
+and constraint names must be known from its `CREATE TABLE`, and the name must fit in 63
+bytes. PostgreSQL names the constraint `<table>_<column>_check` when the expression uses
+exactly one distinct column, wherever the constraint is written, and `<table>_check`
+otherwise, adding a number (`..._check1`) when the name is taken. When the name is not
+certain the finding says "the unnamed CHECK" and names its file and line, and the statements
+it suggests carry a placeholder in angle brackets for the name to take from `\d table`.
+
+<a id="recipe-register-migration"></a>
+## Register every migration
+
+A migration that exists but is missing from the application's list is neither run nor
+noticed. `foundry models check` reports each migration function that is never used outside
+another migration's literal (the `Requires` of a later migration does not register it). A
+migration function has no parameters and its body is `return migrate.Definition{...}`, or
+one local declared from the literal and returned unchanged. A call registers it, and so
+does a reference to the function as a value, as in `[]func() migrate.Definition{M2}`:
+
+```text
+migrations.go:38:6: [migration-unregistered] migration Forgotten (app/006_forgotten): is never listed with the application's other migrations, so it never runs; add Forgotten() to the list of migrate.Definition values the application registers, or delete the file. Foundry guide: migrations-and-seeding#recipe-register-migration
+```
+
+Add the call to the list the application passes to `migrate.New`, or delete the file. A
+function that is never registered is also left out of the history the enum check replays.
+Definitions written inline in a `[]migrate.Definition` literal cannot be forgotten and are
+not checked. A function that does anything else with the definition (changes it before it
+returns, or takes parameters) is a builder: the check cannot tell it is a migration, so it
+never reports it.
 
 <a id="recipe-run-migrations"></a>
 ## History and explicit execution

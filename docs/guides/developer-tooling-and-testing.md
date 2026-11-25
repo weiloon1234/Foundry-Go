@@ -648,6 +648,8 @@ rule's guide and anchor are validated by `make docs-check`:
 | `route-helper` | `routes check` | `flat-routes#generated-helpers` |
 | `route-helper-missing` | `routes check` | `flat-routes#generated-helpers` |
 | `model-table` | `models check` | `model-declarations#recipe-declare-table` |
+| `enum-list` | `models check` | `migrations-and-seeding#recipe-enum-lists` |
+| `migration-unregistered` | `models check` | `migrations-and-seeding#recipe-register-migration` |
 | `raw-sql` | `lint --no-raw` | `database-runtime#no-raw-policy` |
 | `generated-stale` | `generate --check` | `model-declarations#recipe-stale-declarations` |
 | `generate-declaration` | `generate` | `model-declarations#diagnose-declarations` |

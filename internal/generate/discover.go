@@ -295,24 +295,8 @@ func discover(p *packageInput) (metadata, error) {
 	return result, nil
 }
 
-// Imported enum metadata is an ordinary typed method, so consumers and gopls
-// see the same contract. A matching name alone is not sufficient.
 func hasEnumDescriptor(named *types.Named) bool {
-	for i := 0; i < named.NumMethods(); i++ {
-		method := named.Method(i)
-		if method.Name() != "EnumDescriptor" {
-			continue
-		}
-		sig, ok := method.Type().(*types.Signature)
-		if !ok || sig.Params().Len() != 0 || sig.Results().Len() != 1 {
-			continue
-		}
-		result, ok := types.Unalias(sig.Results().At(0).Type()).(*types.Named)
-		if ok && isNamed(result, framework+"/enum", "Descriptor") && result.TypeArgs().Len() == 1 && types.Identical(result.TypeArgs().At(0), named) {
-			return true
-		}
-	}
-	return false
+	return modelmeta.HasEnumDescriptor(named)
 }
 
 func directive(group *ast.CommentGroup) (string, map[string]string, error) {

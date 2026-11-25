@@ -14,7 +14,7 @@ import (
 )
 
 func runModels(ctx context.Context, args []string, stdout, stderr io.Writer) (resultErr error) {
-	const usage = "usage: foundry models check [--dir .] [--timeout 5m] [./...]\nCheck that table-backed models are declared only through the generator. No files are changed.\n--timeout bounds how long the CLI waits, including parsing and type checking; expiry exits with status 124."
+	const usage = "usage: foundry models check [--dir .] [--timeout 5m] [./...]\nCheck that table-backed models are declared only through the generator, that the CHECK value list of an enum column in the migrations equals its enum, and that every migration function is registered. No files are changed.\n--timeout bounds how long the CLI waits, including parsing and type checking; expiry exits with status 124."
 	if handled, err := subcommandHelp(args, stdout, usage); handled {
 		return err
 	}
@@ -55,8 +55,8 @@ func runModels(ctx context.Context, args []string, stdout, stderr io.Writer) (re
 		return ctx.Err()
 	}
 	if len(diagnostics) > 0 {
-		return safeerror.New(fmt.Sprintf("models check: %d finding(s); declare tables with //foundry:model", len(diagnostics)))
+		return safeerror.New(fmt.Sprintf("models check: %d finding(s); each names the guide that teaches its fix", len(diagnostics)))
 	}
-	_, err = fmt.Fprintln(stdout, "Model tables are declared through the generator.")
+	_, err = fmt.Fprintln(stdout, "Model tables are declared through the generator, enum lists match their enums and every migration is registered.")
 	return err
 }
