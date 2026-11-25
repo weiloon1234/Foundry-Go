@@ -78,8 +78,14 @@ func (a *analysis) walkRoots(importable []retirement.SurfacePackage) {
 			}
 		}
 	}
+	// The snapshot keeps the answer independent of declaration order: a type
+	// the fallback walk itself reaches does not count as reached by a root.
+	reachedByRoots := make(map[string]bool, len(a.reached))
+	for key := range a.reached {
+		reachedByRoots[key] = true
+	}
 	for _, named := range callbacks {
-		if !a.reached[types.TypeString(named.Origin(), nil)] {
+		if !reachedByRoots[types.TypeString(named.Origin(), nil)] {
 			a.visit(named, appSupplies, false, named.Obj().Name())
 		}
 	}

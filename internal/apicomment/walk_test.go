@@ -92,6 +92,13 @@ type Config struct{ Store Repo }
 func F(c Config) {}`, "Config.Store Q.B"},
 		{"interface method returning an interface", `type Repo interface{ Next() Cursor }
 type Cursor interface{ Take(P) Q }`, "Q.B"},
+		{"unreached function types give one answer when the outer name sorts last", `type Inner func(Ev) Res
+type Zouter func(Inner)`, "Ev.A Res.B"},
+		{"unreached function types give the same answer when the outer name sorts first", `type Aouter func(Zinner)
+type Zinner func(Ev) Res`, "Ev.A Res.B"},
+		{"interface literal parameter is implemented by the application", `func F(x interface{ Find(P) Q }) {}`, "Q.B"},
+		{"generic function type passed with a type argument", `type Fn[T any] func(T) Res
+func Use(f Fn[Ev]) {}`, "Ev.A Res.B"},
 		{"method parameters and results", `type S struct{}
 func (S) Do(s Spec) Out { return Out{} }`, "Spec.A"},
 		{"promoted method", `type Inner struct{}

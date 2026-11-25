@@ -35,8 +35,14 @@ type JobConnectionSettingsDispatchConfigKeySet struct {
 // JobConnectionSettingsDispatchNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type JobConnectionSettingsDispatchNamespaceConfigKeySet struct {
 	// Application selects dispatch.namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[JobConnectionSettings, string]
 	// Environment selects dispatch.namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[JobConnectionSettings, string]
 }
 

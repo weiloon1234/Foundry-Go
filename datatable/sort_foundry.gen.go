@@ -32,8 +32,14 @@ var foundrySortJSON = sync.OnceValue(func() foundrycontract.JSON[Sort] {
 // Example: SortValidationFields()
 type SortValidationFieldSet struct {
 	// Column validates the declared JSON property "column".
+	//
+	// Column is the name of a declared sortable column.
+	//
 	Column foundryvalidation.Field[Sort, string]
 	// Direction validates the declared JSON property "direction".
+	//
+	// Direction orders that column; any value other than Ascending or Descending is rejected.
+	//
 	Direction foundryvalidation.Field[Sort, Direction]
 }
 

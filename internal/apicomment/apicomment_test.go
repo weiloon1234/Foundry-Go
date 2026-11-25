@@ -215,7 +215,7 @@ func TestStagingFileRules(t *testing.T) {
 	all := strings.Join(lines, "\n")
 	for _, want := range []string{
 		"kit/kit.go:3: [api-comment] kit.Spec.New (field): has no doc comment; add a comment that starts with \"New\"",
-		"internal/apicomment/uncommented.txt:8: [api-comment] kit field Spec.Fixed: is listed but now has an acceptable comment; remove the line",
+		"internal/apicomment/uncommented.txt:10: [api-comment] kit field Spec.Fixed: is listed but now has an acceptable comment; remove the line",
 		"kit field Spec.Gone: is listed but is not a declaration that needs a comment",
 	} {
 		if !strings.Contains(all, want) {
@@ -258,7 +258,7 @@ func TestHandAddedStagingLineFails(t *testing.T) {
 		t.Fatalf("one finding for the added line: %v", findings)
 	}
 	for _, want := range []string{
-		"uncommented.txt:8: [api-comment] kit field Spec.Added: is not in the copy recorded at release v1.2.3",
+		"uncommented.txt:10: [api-comment] kit field Spec.Added: is not in the copy recorded at release v1.2.3",
 		"a declaration added after a release must have its comment, because the staging file can only shrink",
 		"remove the line and comment the declaration",
 	} {

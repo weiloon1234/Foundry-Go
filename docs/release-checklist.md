@@ -72,7 +72,9 @@ The command refuses a malformed tag and any staging file the check refuses, then
 `internal/apicomment/release/uncommented.txt` from the staging file. Review the diff (it can
 only have lost lines), then commit it with the heading change. A test compares the copy's
 version with the newest released heading of `CHANGELOG.md`, as it does for the retired-names
-baseline. Do not run it for any other purpose.
+baseline. The first recorded copy is a starting point written under the label of the newest
+released version at the time; the next `--release vX.Y.Z` replaces it. Do not run it for any other
+purpose.
 
 ## Private packaged consumer gate
 

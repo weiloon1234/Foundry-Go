@@ -35,6 +35,8 @@ const StagedHeader = `# Declarations that need a doc comment and still lack one,
 # The file may hold only lines of the copy recorded at the last release
 # (internal/apicomment/release/uncommented.txt); a line added by hand fails.
 # The release target is an empty file; the line count is reported at each release.
+# The first recorded copy is a starting point written under the label of the newest
+# released version; the next go run ./internal/cmd/apicomments --release vX.Y.Z replaces it.
 `
 
 // Staged is the parsed staging file.

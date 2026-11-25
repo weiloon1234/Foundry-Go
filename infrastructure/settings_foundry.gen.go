@@ -38,8 +38,14 @@ type SettingsConfigKeySet struct {
 // SettingsNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsNamespaceConfigKeySet struct {
 	// Application selects namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[Settings, string]
 	// Environment selects namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[Settings, string]
 }
 
@@ -152,8 +158,14 @@ type SettingsCoordinationConfigConfigKeySet struct {
 // SettingsCoordinationConfigNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsCoordinationConfigNamespaceConfigKeySet struct {
 	// Application selects coordination.config.namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[Settings, string]
 	// Environment selects coordination.config.namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[Settings, string]
 }
 

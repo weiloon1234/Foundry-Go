@@ -6,6 +6,8 @@
 # The file may hold only lines of the copy recorded at the last release
 # (internal/apicomment/release/uncommented.txt); a line added by hand fails.
 # The release target is an empty file; the line count is reported at each release.
+# The first recorded copy is a starting point written under the label of the newest
+# released version; the next go run ./internal/cmd/apicomments --release vX.Y.Z replaces it.
 application	const	AttachmentProvider
 application	const	EncryptionProvider
 application	const	EventDeclarationsProvider
@@ -1713,10 +1715,6 @@ http/pagination	field	Links.Last
 http/pagination	field	Links.Next
 http/pagination	field	Links.Previous
 http/pagination	field	Links.Window
-http/pagination	field	NumberedMeta.Number
-http/pagination	field	NumberedMeta.Pages
-http/pagination	field	NumberedMeta.Size
-http/pagination	field	NumberedMeta.Total
 http/pagination	field	NumberedResponse.Data
 http/pagination	field	NumberedResponse.Links
 http/pagination	field	NumberedResponse.Meta
@@ -2983,8 +2981,6 @@ schedule	const	Skipped
 schedule	const	Stopped
 schedule	const	Succeeded
 schedule	const	TimedOut
-schedule	field	CatchUp.Max
-schedule	field	CatchUp.Window
 schedule	field	Config.Clock
 schedule	field	Config.Concurrency
 schedule	field	Config.Group

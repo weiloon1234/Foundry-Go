@@ -26,10 +26,10 @@ func TestShrinkFlagRemovesOnlyAndTheCheckThenPasses(t *testing.T) {
 	write(t, root, "kit/kit.go", "package kit\n\ntype Spec struct {\n\t// Name labels the spec in listings.\n\tName string\n\tSize int\n}\n\nfunc Define(Spec) {}\n")
 	write(t, root, apicomment.StagedFile, apicomment.StagedHeader+"kit\tfield\tSpec.Name\nkit\tfield\tSpec.Size\n")
 	write(t, root, apicomment.RecordedFile, string(apicomment.RecordedCopy([]byte(apicomment.StagedHeader+"kit\tfield\tSpec.Name\nkit\tfield\tSpec.Size\n"), "v1.0.0")))
-	if err := run(root, false, ""); err == nil || !strings.Contains(err.Error(), "[api-comment]") || !strings.Contains(err.Error(), "Spec.Name") {
+	if err := run(root, false, nil); err == nil || !strings.Contains(err.Error(), "[api-comment]") || !strings.Contains(err.Error(), "Spec.Name") {
 		t.Fatalf("a stale line fails the check: %v", err)
 	}
-	if err := run(root, true, ""); err != nil {
+	if err := run(root, true, nil); err != nil {
 		t.Fatalf("after shrinking: %v", err)
 	}
 	data, _ := os.ReadFile(filepath.Join(root, apicomment.StagedFile))
@@ -37,7 +37,7 @@ func TestShrinkFlagRemovesOnlyAndTheCheckThenPasses(t *testing.T) {
 		t.Fatalf("shrunk file: %q", data)
 	}
 	write(t, root, "kit/kit.go", "package kit\n\ntype Spec struct {\n\tName string\n\tSize int\n\tMore int\n}\n\nfunc Define(Spec) {}\n")
-	if err := run(root, true, ""); err == nil || !strings.Contains(err.Error(), "Spec.More") {
+	if err := run(root, true, nil); err == nil || !strings.Contains(err.Error(), "Spec.More") {
 		t.Fatalf("shrinking does not list a new field; it still fails: %v", err)
 	}
 	data, _ = os.ReadFile(filepath.Join(root, apicomment.StagedFile))
@@ -52,10 +52,10 @@ func TestShrinkFlagSortsTheFileItFixes(t *testing.T) {
 	write(t, root, "kit/kit.go", "package kit\n\ntype Spec struct {\n\tA int\n\tB int\n}\n\nfunc Define(Spec) {}\n")
 	write(t, root, apicomment.StagedFile, apicomment.StagedHeader+"kit\tfield\tSpec.B\nkit\tfield\tSpec.A\n")
 	write(t, root, apicomment.RecordedFile, string(apicomment.RecordedCopy([]byte(apicomment.StagedHeader+"kit\tfield\tSpec.A\nkit\tfield\tSpec.B\n"), "v1.0.0")))
-	if err := run(root, false, ""); err == nil || !strings.Contains(err.Error(), "line is out of order") {
+	if err := run(root, false, nil); err == nil || !strings.Contains(err.Error(), "line is out of order") {
 		t.Fatalf("an unsorted file fails: %v", err)
 	}
-	if err := run(root, true, ""); err != nil {
+	if err := run(root, true, nil); err != nil {
 		t.Fatalf("the command the finding names fixes it: %v", err)
 	}
 }
@@ -67,15 +67,15 @@ func TestReleaseRecordsTheStagingFileAndRefusesBadInput(t *testing.T) {
 	staged := apicomment.StagedHeader + "kit\tfield\tSpec.A\nkit\tfield\tSpec.B\n"
 	write(t, root, apicomment.StagedFile, staged)
 	write(t, root, apicomment.RecordedFile, string(apicomment.RecordedCopy([]byte(apicomment.StagedHeader+"kit\tfield\tSpec.A\nkit\tfield\tSpec.B\n"), "v1.0.0")))
-	for _, tag := range []string{"1.2.3", "v1.2", "v1.2.3\n#"} {
-		if err := run(root, false, tag); err == nil || !strings.Contains(err.Error(), "want a tag of the form vMAJOR.MINOR.PATCH") {
+	for _, tag := range []string{"", "1.2.3", "v1.2", "v1.2.3\n#"} {
+		if err := run(root, false, &tag); err == nil || !strings.Contains(err.Error(), "want a tag of the form vMAJOR.MINOR.PATCH") {
 			t.Errorf("tag %q: %v", tag, err)
 		}
 	}
-	if err := run(root, true, "v1.2.3"); err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+	if err := run(root, true, ptr("v1.2.3")); err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
 		t.Errorf("both flags: %v", err)
 	}
-	if err := run(root, false, "v1.2.3"); err != nil {
+	if err := run(root, false, ptr("v1.2.3")); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(filepath.Join(root, apicomment.RecordedFile))
@@ -84,10 +84,12 @@ func TestReleaseRecordsTheStagingFileAndRefusesBadInput(t *testing.T) {
 	}
 	// A staging file with a fault is not recorded.
 	write(t, root, "kit/kit.go", "package kit\n\ntype Spec struct {\n\tA int\n\tB int\n\tC int\n}\n\nfunc Define(Spec) {}\n")
-	if err := run(root, false, "v1.2.4"); err == nil || !strings.Contains(err.Error(), "Spec.C") {
+	if err := run(root, false, ptr("v1.2.4")); err == nil || !strings.Contains(err.Error(), "Spec.C") {
 		t.Fatalf("a failing check is not recorded: %v", err)
 	}
 	if after, _ := os.ReadFile(filepath.Join(root, apicomment.RecordedFile)); string(after) != string(data) {
 		t.Fatal("the copy changed")
 	}
 }
+
+func ptr(s string) *string { return &s }

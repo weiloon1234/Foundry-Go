@@ -25,18 +25,26 @@ func main() {
 		fmt.Fprintln(os.Stderr, docsource.Diagnostics(err))
 		os.Exit(1)
 	}
-	if err := run(*root, *shrink, *release); err != nil {
+	var tag *string
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == "release" {
+			tag = release
+		}
+	})
+	if err := run(*root, *shrink, tag); err != nil {
 		fmt.Fprintln(os.Stderr, docsource.Diagnostics(err))
 		os.Exit(1)
 	}
 }
 
-func run(root string, shrink bool, release string) error {
-	if shrink && release != "" {
+// run executes one command; release is nil when --release was not given, so an
+// empty tag is refused like any other bad tag.
+func run(root string, shrink bool, release *string) error {
+	if shrink && release != nil {
 		return safeerror.New("--shrink and --release are mutually exclusive; give at most one")
 	}
-	if release != "" {
-		return apicomment.Release(root, release)
+	if release != nil {
+		return apicomment.Release(root, *release)
 	}
 	if shrink {
 		declarations, err := apicomment.Analyze(root)

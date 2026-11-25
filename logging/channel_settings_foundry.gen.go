@@ -13,14 +13,26 @@ import (
 
 // ChannelSettingsConfigKeySet exposes compiler-checked configuration overrides.
 type ChannelSettingsConfigKeySet struct {
+	//
+	// Sink configures the channel's destination. With the Stack driver, only the driver is set and the
+	// destination options belong to the child channels; with Custom, only Level is set.
+	//
 	Sink ChannelSettingsSinkConfigKeySet
 	// Stack selects stack. Set accepts []ChannelName.
+	//
+	// Stack lists the child channels a Stack channel writes to, in order. It requires one to sixteen
+	// distinct children and is refused for any other driver.
+	//
 	Stack config.Key[ChannelSettings, []ChannelName]
 }
 
 // ChannelSettingsSinkConfigKeySet exposes compiler-checked configuration overrides.
 type ChannelSettingsSinkConfigKeySet struct {
 	// Driver selects sink.driver. Set accepts SinkDriver.
+	//
+	// Driver selects the destination. Stderr is the default of DefaultSinkConfig; the zero value is
+	// refused as an unsupported sink.
+	//
 	Driver config.Key[ChannelSettings, SinkDriver]
 	// Path selects sink.path. Set accepts string.
 	Path config.Key[ChannelSettings, string]

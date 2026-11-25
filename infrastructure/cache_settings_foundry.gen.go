@@ -74,16 +74,28 @@ type CacheSettingsConfigConfigKeySet struct {
 // CacheSettingsConfigNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type CacheSettingsConfigNamespaceConfigKeySet struct {
 	// Application selects config.namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[CacheSettings, string]
 	// Environment selects config.namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[CacheSettings, string]
 }
 
 // CacheSettingsMemoryConfigKeySet exposes compiler-checked configuration overrides.
 type CacheSettingsMemoryConfigKeySet struct {
 	// MaxEntries selects memory.max_entries. Set accepts int.
+	//
+	// MaxEntries is the most entries the cache holds before it evicts the least recently used; it must be positive (DefaultConfig uses 10000).
+	//
 	MaxEntries config.Key[CacheSettings, int]
 	// MaxBytes selects memory.max_bytes. Set accepts int.
+	//
+	// MaxBytes is the most bytes of keys and payloads the cache holds, and must be positive (DefaultConfig uses 64 MiB). An entry larger than it is rejected.
+	//
 	MaxBytes config.Key[CacheSettings, int]
 }
 
@@ -147,8 +159,14 @@ type CacheSettingsLeasesConfigKeySet struct {
 // CacheSettingsLeasesNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type CacheSettingsLeasesNamespaceConfigKeySet struct {
 	// Application selects leases.namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[CacheSettings, string]
 	// Environment selects leases.namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[CacheSettings, string]
 }
 

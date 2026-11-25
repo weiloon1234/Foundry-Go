@@ -38,8 +38,14 @@ type BrokerSettingsConfigConfigKeySet struct {
 // BrokerSettingsConfigNamespaceConfigKeySet exposes compiler-checked configuration overrides.
 type BrokerSettingsConfigNamespaceConfigKeySet struct {
 	// Application selects config.namespace.application. Set accepts string.
+	//
+	// Application names the application sharing the backend. It is required: 1 to 128 ASCII letters, digits, dots, underscores or hyphens.
+	//
 	Application config.Key[BrokerSettings, string]
 	// Environment selects config.namespace.environment. Set accepts string.
+	//
+	// Environment names the deployment environment sharing the backend. It is required and follows the same rules as Application.
+	//
 	Environment config.Key[BrokerSettings, string]
 }
 
