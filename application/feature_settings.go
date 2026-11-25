@@ -120,19 +120,27 @@ type LocaleSettings struct {
 // kernels also run the publisher; empty runs it under every kernel. Prefer the
 // worker and/or scheduler kernels so CLI commands and HTTP replicas do not poll.
 type OutboxSettings struct {
-	Enabled  bool
+	// Enabled registers the outbox publisher and its migrations; the publisher fields are validated only when it is true.
+	Enabled bool
+	// Database is the database connection that holds the outbox table.
 	Database database.ConnectionName
-	Schema   string
-	Jobs     map[jobs.ConnectionName]outbox.Destination `config:",json"`
-	// Events maps declared EventOutbox destinations to durable job connections.
-	// Empty connection selects the default. Each connection uses its default
-	// queue and jobs.DefaultPolicy for the framework event delivery job.
-	Events                                     map[outbox.Destination]jobs.ConnectionName `config:",json"`
-	Kernels                                    []foundation.KernelKind                    `config:",json"`
+	// Schema is the schema of the outbox table within Database; the default is public.
+	Schema string
+	// Jobs maps a job connection (the key, which must be configured under services.jobs.connections) to the outbox destination (the value) that carries that connection's jobs. At most 128 entries; each destination must be a semantic name.
+	Jobs map[jobs.ConnectionName]outbox.Destination `config:",json"`
+	// Events maps each declared EventOutbox destination (the key) to the durable job
+	// connection (the value) that delivers it; the reverse direction of Jobs. Empty connection selects the
+	// default job connection. Every connection used here, explicit or default, must be a Redis job connection. Each destination needs an
+	// EventOutbox declaration and each declaration needs an entry here; at most 128 entries.
+	// Each connection uses its default queue and jobs.DefaultPolicy for the framework event delivery job.
+	Events  map[outbox.Destination]jobs.ConnectionName `config:",json"`
+	Kernels []foundation.KernelKind                    `config:",json"`
+	// MaxAttempts is the number of publication attempts per row before the publisher gives up on it; from 1 to 1,000,000, default 1000.
 	MaxAttempts                                uint32
 	RetryDelay, OperationTimeout, PollInterval time.Duration
 	MaxRetryDelay, Jitter, MaxPollInterval     time.Duration
-	MaxInFlight                                int
+	// MaxInFlight bounds both the rows claimed per transaction and the concurrent publications; from 1 to 1024, default 16.
+	MaxInFlight int
 }
 
 // DefaultOutboxSettings returns default outbox publisher settings in the public schema.

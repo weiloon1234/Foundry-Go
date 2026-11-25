@@ -18,7 +18,10 @@ type PageResult[M any] = querycore.Page[M]
 // Page selects a one-based page. Example: orm.Paginate(ctx, db, Orders.Query(), Page(2,20)).
 func Page(number, size int) PageRequest { return PageRequest{Number: number, Size: size} }
 
-// Paginate reads a matching total and a stable page. Example: orm.Paginate(ctx, db, Orders.Query(), Page(1,20)).
+// Paginate reads a matching total and a stable page. A page Number below 1, a Size
+// outside 1 to 1000, or an offset that overflows an int returns a fault.Invalid
+// error before any database access, as does a query that already sets a limit or
+// offset. Example: orm.Paginate(ctx, db, Orders.Query(), Page(1,20)).
 func Paginate[M any](ctx context.Context, ex database.Executor, q Query[M], request PageRequest) (PageResult[M], error) {
 	return paginate[M](ctx, ex, q.state, request)
 }

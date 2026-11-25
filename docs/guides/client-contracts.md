@@ -502,7 +502,7 @@ Full clients include all registered definitions. Portal entries retain built-ins
 and application errors referenced by their selected operations, even when the
 application has no detailed errors. Regeneration can remove previously exported
 members: remove the unused import/access, or declare the error on an operation
-the portal really uses. See the [manifest 9 migration](../compatibility.md#typed-error-details-manifest-9--unreleased).
+the portal really uses. See the [manifest 9 migration](../compatibility.md#typed-error-details-manifest-9-v070).
 
 For example, a client can use a built-in code:
 

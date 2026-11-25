@@ -62,7 +62,9 @@ type Endpoint[P, Q, B, R any] struct {
 }
 
 // DefineEndpoint connects typed path, query, body and response contracts with default
-// limits and the supplied options.
+// limits and the supplied options. A bad or nil option does not fail this call:
+// ConfigureEndpoint retains the error, and ValidateEndpoint, the route
+// registration (reported by NewRouter) or contribution registration returns it.
 func DefineEndpoint[P, Q, B, R any](route Route[P], query Query[Q], body Body[B], response Response[R], options ...EndpointOption) Endpoint[P, Q, B, R] {
 	return ConfigureEndpoint(Endpoint[P, Q, B, R]{route: route, query: query, body: body, response: response, endpointCore: endpointCore{limits: DefaultEndpointLimits()}}, options...)
 }

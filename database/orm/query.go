@@ -16,6 +16,9 @@ import (
 )
 
 // Table retains the model and primary-key types. Example: Table[Order,model.ID[Order]].
+// For a struct declared with //foundry:model, the generator emits the table type
+// named <Model>Table (Order gives OrderTable), so an application must not declare
+// its own type with that name; use another name, such as OrderListTable.
 type Table[M any, K comparable] struct {
 	core *tableCore
 	key  func() Key[M, K]
@@ -55,6 +58,8 @@ func (t *Table[M, K]) ormAttach(core *tableCore) *tableCore { old := t.core; t.c
 func (t Table[M, K]) ormError() error                       { return tableError(t.core) }
 
 // Key returns the already bound primary column. Example: orm.Set(tbl.Key(), id).
+// A generated table has a member for the key field (Orders.ID) only when that
+// field's foundry tag declares member=ID; otherwise select the key with Key().
 func (t Table[M, K]) Key() Key[M, K] {
 	if t.key == nil {
 		return Key[M, K]{}

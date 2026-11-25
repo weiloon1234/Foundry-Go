@@ -107,7 +107,7 @@ regenerate outputs after choosing the public framework revision.
    are configured. Bootstrap does not migrate automatically.
 4. For existing Redis job queues, stop/drain all old workers, dispatchers and
    operators, then run `jobs migrate-layout --confirm` for each configured queue
-   and connection as described in [jobs operations](jobs-operations.md#redis-queue-layout-upgrade).
+   and connection as described in [jobs operations](jobs-operations.md#redis-queue-storage-layout).
    Upgrade all envelope readers before enabling format-3 features. Fresh queues
    do not need legacy-layout migration.
 5. During mixed-version deployment, use new cache/rate-limit namespaces and retain

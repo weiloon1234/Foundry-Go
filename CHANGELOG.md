@@ -2971,7 +2971,7 @@ The first immutable client contract cohort is `contracts-v0.3.0`.
   documented package functions: `pagination.Handle`, `pagination.URL`,
   `pagination.HandleAuthenticated`, and `pagination.AuthenticatedURL`. Pass the
   endpoint first; the former methods are removed. See the
-  [migration table](docs/guides/http-pagination.md#v03-migration).
+  [migration table](docs/guides/http-pagination.md#operations-are-package-functions).
 - Changed (breaking): `audit.metadata` → `audit.Metadata` and
   `redis/data.handle[K]` → `data.Handle[K]` are exported defined types, making
   their 14 methods discoverable in `go doc`. Audit records and Redis containers

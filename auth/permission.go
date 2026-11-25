@@ -20,7 +20,12 @@ type Permission[M any] struct {
 }
 
 // DefinePermission declares a named model permission evaluated through the policy
-// machinery.
+// machinery. The name must be a semantic name (^[a-z0-9][a-z0-9_.-]*$, at most 128
+// bytes) and the callback must not be nil; both are checked by Validate, not here.
+// Permissions and policies share one registry namespace, so a permission may not
+// reuse the name of a policy, and a repeated name is refused as a duplicate. The callback
+// returns whether the model holds the permission. A callback error never grants
+// access: the check returns the error (a returned *Denial becomes a typed deny).
 func DefinePermission[M any](name PermissionName, evaluate func(context.Context, M) (bool, error)) Permission[M] {
 	var check func(context.Context, M, struct{}) (bool, error)
 	if evaluate != nil {

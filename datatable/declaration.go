@@ -113,7 +113,10 @@ type Description struct {
 	Exports     bool              `json:"exports"`
 }
 
-// Define snapshots a typed table specification and retains declaration errors for validation.
+// Define snapshots a typed table specification and retains declaration errors instead
+// of returning them; the call itself never fails. Table.Validate and Table.Description,
+// and datatable.Compile, return the retained error, and NewRegistry (and so datatable.New) refuses
+// the table's Registration with it.
 //
 // Example: datatable.Define(spec)
 func Define[S, R, A any](spec Spec[S, R, A]) Table[S, R, A] {

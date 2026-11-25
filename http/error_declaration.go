@@ -19,7 +19,8 @@ import (
 type ErrorDeclaration struct{ definition ErrorDefinition }
 
 // DefineError declares a stable code, error status (400–599), and static public
-// message. The same value supplies runtime responses and endpoint metadata.
+// message. The argument order is code, status, message: DefineError("note_locked",
+// 409, "Note is locked."). The same value supplies runtime responses and endpoint metadata.
 // Built-in codes are reserved. MessageDefinition enables localized messages.
 func DefineError(code ErrorCode, status int, message string) ErrorDeclaration {
 	return ErrorDeclaration{definition: ErrorDefinition{Code: code, Status: status, Message: message}}
