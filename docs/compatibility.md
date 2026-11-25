@@ -19,14 +19,23 @@ be in the ledger.
 
 Each ledger entry now states either `replacement` or `noReplacement: true`, never
 neither and never both; the 103 entries that recorded no replacement now say so
-explicitly. An entry whose bare name a current package also exports is marked
-`qualifiedOnly: true`, so documents may keep writing the live name bare. The ledger gains the per-kind ORM operator, assignment, adapter and
-audit functions that earlier releases removed, `database/query` and its public
-names, `attachments.MaxUploadBytes`, `datatable.DefineColumn` and the TypeScript
-`Options.React` and `Options.Vue` fields, each with its replacement. Source checks
-refuse an import of any package the ledger retires as a package. A compile-fail
+explicitly. A bare name is refused in the framework's own documents only when no
+current top-level export of any importable package has that name, decided from the
+recorded inventory; the same rule applies to every entry, and a method or field of
+that name does not count as a live namesake. The qualified spelling of an entry is
+always refused. The ledger gains 354 names that earlier releases removed and left
+unrecorded and now holds 752: 295 `database/orm` names (262 functions and 33 types
+by the v0.47.0 inventory; the v0.48.0 note below counts 262 and 36), `database/query`
+and its public names, `attachments.MaxUploadBytes`, `datatable.DefineColumn` and the
+TypeScript `Options.React` and `Options.Vue` fields, each with its replacement. Source
+checks refuse an import of any package the ledger retires as a package. A compile-fail
 case that names a retired name on purpose is not a use of it: its runner asserts
 that the compiler rejects it.
+
+Application effect: `go tool foundry docs check` refuses the qualified spelling of
+every ledger name in an application's active documents, so a document that writes
+`orm.TextEq` or `datatable.DefineColumn` fails at the next pin; the diagnostic prints
+the replacement (`orm.TextEq is retired; use orm.Eq.`).
 
 No runtime behavior, persisted format or generated wire contract changes. Application
 code that already compiled against the previous release is unaffected.

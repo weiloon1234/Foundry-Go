@@ -32,6 +32,18 @@ func main() {
 }
 
 func run(root, out string, check bool, release string) error {
+	modes := 0
+	for _, set := range []bool{check, out != "", release != ""} {
+		if set {
+			modes++
+		}
+	}
+	if modes > 1 {
+		return safeerror.New("--check, --out and --release are mutually exclusive; give at most one")
+	}
+	if release != "" && !retirement.ValidReleaseTag(release) {
+		return safeerror.New("--release " + release + ": want a tag of the form vMAJOR.MINOR.PATCH, for example v0.53.0")
+	}
 	current, err := retirement.Surface(root)
 	if err != nil {
 		return err
@@ -40,7 +52,12 @@ func run(root, out string, check bool, release string) error {
 		return os.WriteFile(out, current, 0o644)
 	}
 	if release != "" {
-		ledger, err := retirement.LedgerNames()
+		// A removal the ledger does not name must be fixed before the baseline
+		// that would hide it is replaced.
+		if err := retirement.CheckRemovalsOf(root, current); err != nil {
+			return err
+		}
+		ledger, err := retirement.LedgerNamesAt(root)
 		if err != nil {
 			return err
 		}

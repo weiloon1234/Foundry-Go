@@ -91,17 +91,9 @@ func NewDocumentChecker(strict bool, cache *markdown.Cache) (*DocumentChecker, e
 	if strict {
 		patterns = append(patterns, newSpelling("Legacy", `\bLegacy[A-Z]\w*`))
 	}
-	entries, err := retiredDeclarations()
+	live, err := liveTopLevelNames()
 	if err != nil {
 		return nil, err
-	}
-	qualifiedOnly := make(map[string]bool)
-	for owner, members := range entries {
-		for _, member := range members {
-			if member.QualifiedOnly {
-				qualifiedOnly[owner+"."+member.Name] = true
-			}
-		}
 	}
 	unqualified := map[string]bool{}
 	for owner, names := range denied {
@@ -109,7 +101,7 @@ func NewDocumentChecker(strict bool, cache *markdown.Cache) (*DocumentChecker, e
 			if rules.owns(owner, member) {
 				continue
 			}
-			if strict && !qualifiedOnly[owner+"."+member] {
+			if strict && !live[member] {
 				unqualified[member] = true
 			}
 			unqualified[path.Base(owner)+"."+member] = true

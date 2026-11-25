@@ -22,21 +22,18 @@ import (
 	"sync"
 )
 
-//go:embed denied.json document_rules.json
+//go:embed denied.json document_rules.json exported-surface.txt
 var ledger embed.FS
 
 const framework = "github.com/weiloon1234/Foundry-Go/"
 const retiredPath = "database/" + "query"
 
 // A retired name records either the API that replaces it or, explicitly, that
-// nothing does; an entry with neither is a ledger error. QualifiedOnly marks a
-// name that a current package also exports: documents may write it bare, and
-// only its qualified spelling is refused.
+// nothing does; an entry with neither is a ledger error.
 type retiredDeclaration struct {
 	Name          string `json:"name"`
 	Replacement   string `json:"replacement,omitempty"`
 	NoReplacement bool   `json:"noReplacement,omitempty"`
-	QualifiedOnly bool   `json:"qualifiedOnly,omitempty"`
 }
 
 var retiredDeclarations = sync.OnceValues(func() (map[string][]retiredDeclaration, error) {

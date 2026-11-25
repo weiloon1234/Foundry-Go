@@ -1176,13 +1176,11 @@
     },
     {
       "name": "JSONContainedBy",
-      "replacement": "orm.ContainedByDocument",
-      "qualifiedOnly": true
+      "replacement": "orm.ContainedByDocument"
     },
     {
       "name": "JSONContains",
-      "replacement": "orm.ContainsDocument",
-      "qualifiedOnly": true
+      "replacement": "orm.ContainsDocument"
     },
     {
       "name": "JSONDesc",
@@ -1686,8 +1684,7 @@
     },
     {
       "name": "NullableTextContains",
-      "replacement": "orm.Contains",
-      "qualifiedOnly": true
+      "replacement": "orm.Contains"
     },
     {
       "name": "NullableTextDesc",
@@ -1695,8 +1692,7 @@
     },
     {
       "name": "NullableTextEndsWith",
-      "replacement": "orm.EndsWith",
-      "qualifiedOnly": true
+      "replacement": "orm.EndsWith"
     },
     {
       "name": "NullableTextEq",
@@ -1708,23 +1704,19 @@
     },
     {
       "name": "NullableTextIContains",
-      "replacement": "orm.IContains",
-      "qualifiedOnly": true
+      "replacement": "orm.IContains"
     },
     {
       "name": "NullableTextIEndsWith",
-      "replacement": "orm.IEndsWith",
-      "qualifiedOnly": true
+      "replacement": "orm.IEndsWith"
     },
     {
       "name": "NullableTextILike",
-      "replacement": "orm.ILike",
-      "qualifiedOnly": true
+      "replacement": "orm.ILike"
     },
     {
       "name": "NullableTextIStartsWith",
-      "replacement": "orm.IStartsWith",
-      "qualifiedOnly": true
+      "replacement": "orm.IStartsWith"
     },
     {
       "name": "NullableTextIn",
@@ -1740,8 +1732,7 @@
     },
     {
       "name": "NullableTextLike",
-      "replacement": "orm.Like",
-      "qualifiedOnly": true
+      "replacement": "orm.Like"
     },
     {
       "name": "NullableTextNe",
@@ -1757,8 +1748,7 @@
     },
     {
       "name": "NullableTextStartsWith",
-      "replacement": "orm.StartsWith",
-      "qualifiedOnly": true
+      "replacement": "orm.StartsWith"
     },
     {
       "name": "NullableTimeAsc",
@@ -1910,8 +1900,7 @@
     },
     {
       "name": "TextContains",
-      "replacement": "orm.Contains",
-      "qualifiedOnly": true
+      "replacement": "orm.Contains"
     },
     {
       "name": "TextDesc",
@@ -1919,8 +1908,7 @@
     },
     {
       "name": "TextEndsWith",
-      "replacement": "orm.EndsWith",
-      "qualifiedOnly": true
+      "replacement": "orm.EndsWith"
     },
     {
       "name": "TextEq",
@@ -1940,23 +1928,19 @@
     },
     {
       "name": "TextIContains",
-      "replacement": "orm.IContains",
-      "qualifiedOnly": true
+      "replacement": "orm.IContains"
     },
     {
       "name": "TextIEndsWith",
-      "replacement": "orm.IEndsWith",
-      "qualifiedOnly": true
+      "replacement": "orm.IEndsWith"
     },
     {
       "name": "TextILike",
-      "replacement": "orm.ILike",
-      "qualifiedOnly": true
+      "replacement": "orm.ILike"
     },
     {
       "name": "TextIStartsWith",
-      "replacement": "orm.IStartsWith",
-      "qualifiedOnly": true
+      "replacement": "orm.IStartsWith"
     },
     {
       "name": "TextIn",
@@ -1964,8 +1948,7 @@
     },
     {
       "name": "TextLike",
-      "replacement": "orm.Like",
-      "qualifiedOnly": true
+      "replacement": "orm.Like"
     },
     {
       "name": "TextNe",
@@ -1981,8 +1964,7 @@
     },
     {
       "name": "TextStartsWith",
-      "replacement": "orm.StartsWith",
-      "qualifiedOnly": true
+      "replacement": "orm.StartsWith"
     },
     {
       "name": "TimeAsc",
@@ -1990,8 +1972,7 @@
     },
     {
       "name": "TimeBetween",
-      "replacement": "orm.Between",
-      "qualifiedOnly": true
+      "replacement": "orm.Between"
     },
     {
       "name": "TimeDesc",
@@ -2865,213 +2846,171 @@
     },
     {
       "name": "PageRequest",
-      "replacement": "orm.PageRequest",
-      "qualifiedOnly": true
+      "replacement": "orm.PageRequest"
     },
     {
       "name": "Page",
-      "replacement": "orm.PageResult",
-      "qualifiedOnly": true
+      "replacement": "orm.PageResult"
     },
     {
       "name": "SimplePage",
-      "replacement": "orm.SimplePage",
-      "qualifiedOnly": true
+      "replacement": "orm.SimplePage"
     },
     {
       "name": "CursorRequest",
-      "replacement": "orm.CursorRequest",
-      "qualifiedOnly": true
+      "replacement": "orm.CursorRequest"
     },
     {
       "name": "CursorPage",
-      "replacement": "orm.CursorPage",
-      "qualifiedOnly": true
+      "replacement": "orm.CursorPage"
     },
     {
       "name": "Cursor",
-      "replacement": "orm.Cursor",
-      "qualifiedOnly": true
+      "replacement": "orm.Cursor"
     },
     {
       "name": "ParseCursor",
-      "replacement": "orm.ParseCursor",
-      "qualifiedOnly": true
+      "replacement": "orm.ParseCursor"
     },
     {
       "name": "CursorInputError",
-      "replacement": "orm.CursorInputError",
-      "qualifiedOnly": true
+      "replacement": "orm.CursorInputError"
     },
     {
       "name": "Plan",
-      "replacement": "orm.Plan",
-      "qualifiedOnly": true
+      "replacement": "orm.Plan"
     },
     {
       "name": "PlanNode",
-      "replacement": "orm.PlanNode",
-      "qualifiedOnly": true
+      "replacement": "orm.PlanNode"
     },
     {
       "name": "Statement",
-      "replacement": "orm.Statement",
-      "qualifiedOnly": true
+      "replacement": "orm.Statement"
     },
     {
       "name": "WriteError",
-      "replacement": "orm.WriteError",
-      "qualifiedOnly": true
+      "replacement": "orm.WriteError"
     },
     {
       "name": "RelationLimits",
-      "replacement": "orm.RelationLimits",
-      "qualifiedOnly": true
+      "replacement": "orm.RelationLimits"
     },
     {
       "name": "DefaultRelationLimits",
-      "replacement": "orm.DefaultRelationLimits",
-      "qualifiedOnly": true
+      "replacement": "orm.DefaultRelationLimits"
     },
     {
       "name": "MaxExpressionDepth",
-      "replacement": "orm.MaxExpressionDepth",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxExpressionDepth"
     },
     {
       "name": "MaxExpressionNodes",
-      "replacement": "orm.MaxExpressionNodes",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxExpressionNodes"
     },
     {
       "name": "MaxParameters",
-      "replacement": "orm.MaxParameters",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxParameters"
     },
     {
       "name": "MaxMembershipValues",
-      "replacement": "orm.MaxMembershipValues",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxMembershipValues"
     },
     {
       "name": "MaxScalarSQLBytes",
-      "replacement": "orm.MaxScalarSQLBytes",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxScalarSQLBytes"
     },
     {
       "name": "MaxPageSize",
-      "replacement": "orm.MaxPageSize",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxPageSize"
     },
     {
       "name": "MaxCursorBytes",
-      "replacement": "orm.MaxCursorBytes",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxCursorBytes"
     },
     {
       "name": "MaxCursorFields",
-      "replacement": "orm.MaxCursorFields",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxCursorFields"
     },
     {
       "name": "MaxInsertRows",
-      "replacement": "orm.MaxInsertRows",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxInsertRows"
     },
     {
       "name": "MaxPerModelWriteRows",
-      "replacement": "orm.MaxPerModelWriteRows",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxPerModelWriteRows"
     },
     {
       "name": "MaxRelationWriteRows",
-      "replacement": "orm.MaxRelationWriteRows",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxRelationWriteRows"
     },
     {
       "name": "MaxIdentityBatch",
-      "replacement": "orm.MaxIdentityBatch",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxIdentityBatch"
     },
     {
       "name": "MaxChunkSize",
-      "replacement": "orm.MaxChunkSize",
-      "qualifiedOnly": true
+      "replacement": "orm.MaxChunkSize"
     },
     {
       "name": "DefaultChunkSize",
-      "replacement": "orm.DefaultChunkSize",
-      "qualifiedOnly": true
+      "replacement": "orm.DefaultChunkSize"
     },
     {
       "name": "JSONKind",
-      "replacement": "database.JSONKind",
-      "qualifiedOnly": true
+      "replacement": "database.JSONKind"
     },
     {
       "name": "JSONNull",
-      "replacement": "database.JSONNull",
-      "qualifiedOnly": true
+      "replacement": "database.JSONNull"
     },
     {
       "name": "JSONBoolean",
-      "replacement": "database.JSONBoolean",
-      "qualifiedOnly": true
+      "replacement": "database.JSONBoolean"
     },
     {
       "name": "JSONNumber",
-      "replacement": "database.JSONNumber",
-      "qualifiedOnly": true
+      "replacement": "database.JSONNumber"
     },
     {
       "name": "JSONString",
-      "replacement": "database.JSONString",
-      "qualifiedOnly": true
+      "replacement": "database.JSONString"
     },
     {
       "name": "JSONArray",
-      "replacement": "database.JSONArray",
-      "qualifiedOnly": true
+      "replacement": "database.JSONArray"
     },
     {
       "name": "JSONObject",
-      "replacement": "database.JSONObject",
-      "qualifiedOnly": true
+      "replacement": "database.JSONObject"
     },
     {
       "name": "MorphName",
-      "replacement": "model.MorphName",
-      "qualifiedOnly": true
+      "replacement": "model.MorphName"
     },
     {
       "name": "Morphable",
-      "replacement": "model.Morphable",
-      "qualifiedOnly": true
+      "replacement": "model.Morphable"
     },
     {
       "name": "DateUnit",
-      "replacement": "expr.DateUnit",
-      "qualifiedOnly": true
+      "replacement": "expr.DateUnit"
     },
     {
       "name": "TimestampUnit",
-      "replacement": "expr.TimestampUnit",
-      "qualifiedOnly": true
+      "replacement": "expr.TimestampUnit"
     },
     {
       "name": "TimeZone",
-      "replacement": "expr.TimeZone",
-      "qualifiedOnly": true
+      "replacement": "expr.TimeZone"
     },
     {
       "name": "LocalResolution",
-      "replacement": "expr.LocalResolution",
-      "qualifiedOnly": true
+      "replacement": "expr.LocalResolution"
     },
     {
       "name": "GeographicPoint",
-      "replacement": "expr.GeographicPoint",
-      "qualifiedOnly": true
+      "replacement": "expr.GeographicPoint"
     },
     {
       "name": "MaxPlanBytes",
@@ -3107,8 +3046,7 @@
     },
     {
       "name": "ModelScope",
-      "replacement": "rows.As or rows.Scope",
-      "qualifiedOnly": true
+      "replacement": "rows.As or rows.Scope"
     },
     {
       "name": "RecordScope",

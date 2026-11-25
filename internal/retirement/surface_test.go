@@ -200,6 +200,11 @@ func (hiddenType) Method() {}
 	writeSource(t, root, "shape/internal/inner/t.go", "package inner\n\ntype T struct{ Field int }\n")
 	writeSource(t, root, "cmd/tool/main.go", "package main\n\nfunc Exported() {}\n\nfunc main() {}\n")
 	writeSource(t, root, "tests/fixtures/x/x.go", "package x\n\nfunc Fixture() {}\n")
+	writeSource(t, root, "tools/gen/gen.go", "package gen\n\nfunc Tool() {}\n")
+	writeSource(t, root, "cmd/lib/lib.go", "package lib\n\nfunc Command() {}\n")
+	writeSource(t, root, "a/tools/tools.go", "package tools\n\nfunc Public() {}\n")
+	writeSource(t, root, "a/tests/tests.go", "package tests\n\nfunc Public() {}\n")
+	writeSource(t, root, "a/cmd/cmd.go", "package cmd\n\nfunc Public() {}\n")
 	writeSource(t, root, "other/testdata/t/t.go", "package t\n\nfunc Data() {}\n")
 	writeSource(t, root, "nested/go.mod", "module nested\n")
 	writeSource(t, root, "nested/n.go", "package nested\n\nfunc Nested() {}\n")
@@ -209,8 +214,13 @@ func (hiddenType) Method() {}
 	}
 	got := strings.TrimPrefix(string(data), surfaceHeader)
 	want := strings.Join([]string{
+		"a/cmd\tfunc\tPublic",
+		"a/tests\tfunc\tPublic",
+		"a/tools\tfunc\tPublic",
 		"shape\talias\tAlias",
 		"shape\tconst\tLimit",
+		"shape\tfield\tAlias.Embedded",
+		"shape\tfield\tAlias.Size",
 		"shape\tfield\tBox.Embedded",
 		"shape\tfield\tBox.Size",
 		"shape\tfield\tEmbedded.Inner",
@@ -218,14 +228,17 @@ func (hiddenType) Method() {}
 		"shape\tfunc\tMap",
 		"shape\tfunc\tNew",
 		"shape\tfunc\tWindowsOnly",
+		"shape\tmethod\tAlias.Value",
 		"shape\tmethod\tBox.Value",
 		"shape\tmethod\tReader.Read",
+		"shape\tmethod*\tAlias.Pointer",
 		"shape\tmethod*\tBox.Pointer",
 		"shape\ttype\tBox",
 		"shape\ttype\tEmbedded",
 		"shape\ttype\tReader",
 		"shape\tvar\tDefault",
 		"shape/uses\talias\tWrapped",
+		"shape/uses\tfield\tWrapped.Field",
 		"",
 	}, "\n")
 	if got != want {
@@ -236,5 +249,109 @@ func (hiddenType) Method() {}
 	}
 	if _, err := os.Stat(filepath.Join(root, SurfaceFile)); err == nil {
 		t.Fatal("computing the inventory must not write it")
+	}
+}
+
+func TestKindChangeIsReported(t *testing.T) {
+	previous := surfaceOf("pkg\tfunc\tLimit", "pkg\ttype\tBox", "pkg\tmethod\tBox.Open", "pkg\ttype\tOld", "pkg\tvar\tShared")
+	current := surfaceOf("pkg\tconst\tLimit", "pkg\ttype\tBox", "pkg\tmethod*\tBox.Open", "pkg\talias\tOld", "pkg\tvar\tShared")
+	missing, err := RemovedWithoutEntry(previous, current, nil)
+	if err != nil || len(missing) != 1 || !strings.Contains(missing[0], "pkg.Limit changed from func to const since the previous release") {
+		t.Fatalf("only the func to const change is a break (a pointer receiver or an alias is not): %v %v", err, missing)
+	}
+	missing, err = RemovedWithoutEntry(previous, current, ledgerOf(retiredDeclaration{Name: "Limit", NoReplacement: true}))
+	if err != nil || len(missing) != 0 {
+		t.Fatalf("a ledger entry covers the kind change: %v %v", err, missing)
+	}
+}
+
+func TestTypeBecomingAliasKeepsItsMembers(t *testing.T) {
+	root := t.TempDir()
+	writeSource(t, root, "go.mod", "module "+strings.TrimSuffix(framework, "/")+"\n\ngo 1.22\n")
+	writeSource(t, root, "kit/kit.go", "package kit\n\ntype Box struct{ Size int }\n\nfunc (Box) Open() {}\n")
+	before, err := Surface(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeSource(t, root, "kit/kit.go", "package kit\n\ntype Core struct{ Size int }\n\nfunc (Core) Open() {}\n\ntype Box = Core\n")
+	after, err := Surface(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if missing, err := RemovedWithoutEntry(before, after, nil); err != nil || len(missing) != 0 {
+		t.Fatalf("an alias has the members of its target, so none is removed: %v %v", err, missing)
+	}
+	writeSource(t, root, "kit/kit.go", "package kit\n\ntype Core struct{}\n\ntype Box = Core\n")
+	after, err = Surface(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing, err := RemovedWithoutEntry(before, after, nil)
+	if err != nil || len(missing) != 2 || !strings.Contains(strings.Join(missing, "\n"), "kit.Box.Open (method)") || !strings.Contains(strings.Join(missing, "\n"), "kit.Box.Size (field)") {
+		t.Fatalf("members the target lost are removed: %v %v", err, missing)
+	}
+}
+
+func TestSurfaceLoadFailureIsLocated(t *testing.T) {
+	root := t.TempDir()
+	writeSource(t, root, "go.mod", "module "+strings.TrimSuffix(framework, "/")+"\n\ngo 1.22\n")
+	writeSource(t, root, "kit/kit.go", "package kit\n\nfunc Keep() {}\n\nvar Broken Missing\n")
+	_, err := Surface(root)
+	if err == nil || !strings.Contains(err.Error(), "kit/kit.go:5: type-check for linux/amd64 failed: undefined: Missing") {
+		t.Fatalf("a type error must fail with its location, not yield a partial inventory: %v", err)
+	}
+
+	root = t.TempDir()
+	writeSource(t, root, "go.mod", "module "+strings.TrimSuffix(framework, "/")+"\n\ngo 1.22\n")
+	writeSource(t, root, "kit/kit.go", "package kit\n\nfunc Keep() {}\n")
+	writeSource(t, root, "kit/native.go", "package kit\n\n// #include <stdio.h>\nimport \"C\"\n\nfunc Native() {}\n")
+	_, err = Surface(root)
+	if err == nil || !strings.Contains(err.Error(), "kit/native.go:6: a cgo file declares exported API that the inventory cannot record") {
+		t.Fatalf("exported API in a cgo file must fail, not vanish: %v", err)
+	}
+	writeSource(t, root, "kit/native.go", "package kit\n\n// #include <stdio.h>\nimport \"C\"\n\nfunc native() {}\n")
+	if _, err := Surface(root); err != nil {
+		t.Fatalf("a cgo file without exported API is not a failure: %v", err)
+	}
+}
+
+// Cutting a release without replacing the baseline would let a name added and
+// removed within one release need an entry; the ordinary tests catch the step.
+func TestBaselineIsTheNewestReleasedVersion(t *testing.T) {
+	baseline, err := os.ReadFile(filepath.Join("../..", ReleaseSurfaceFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorded, ok := ReleaseVersion(baseline)
+	if !ok {
+		t.Fatalf("%s must start with the line \"# Recorded at release vX.Y.Z.\"", ReleaseSurfaceFile)
+	}
+	changelog, err := os.ReadFile(filepath.Join("../..", "CHANGELOG.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var newest string
+	for _, line := range strings.Split(string(changelog), "\n") {
+		if heading, ok := strings.CutPrefix(line, "## "); ok && ValidReleaseTag(strings.Fields(heading + " ")[0]) {
+			newest = strings.Fields(heading)[0]
+			break
+		}
+	}
+	if newest == "" {
+		t.Fatal("CHANGELOG.md has no released version heading")
+	}
+	if recorded != newest {
+		t.Fatalf("%s records %s but CHANGELOG.md's newest released version is %s; run go run ./internal/cmd/exportsurface --release %s after tagging (docs/release-checklist.md)", ReleaseSurfaceFile, recorded, newest, newest)
+	}
+}
+
+func TestReleaseTagForm(t *testing.T) {
+	for tag, want := range map[string]bool{"v0.53.0": true, "v1.20.3": true, "0.53.0": false, "v0.53": false, "v0.53.0-rc1": false, "v01.2.3": false, "v0.53.0\n# x": false, "": false} {
+		if ValidReleaseTag(tag) != want {
+			t.Errorf("ValidReleaseTag(%q) = %v, want %v", tag, !want, want)
+		}
+	}
+	if version, ok := ReleaseVersion([]byte("# Recorded at release v0.52.0.\nrest")); !ok || version != "v0.52.0" {
+		t.Fatalf("version of a baseline: %q %v", version, ok)
 	}
 }
