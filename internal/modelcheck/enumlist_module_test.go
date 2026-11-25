@@ -115,9 +115,8 @@ func TestEnumListWrongGuessMessage(t *testing.T) {
 		t.Fatalf("%d findings: %v", len(findings), findings)
 	}
 	want := dir + `/enums.go:10:2: [enum-list] enum Permission: case "pages.export" (PermissionPagesExport) is missing from the list of constraint admins_permissions_check on admins.permissions, last written at migrations.go:8; ` +
-		`add a new migration (an applied one is never edited) with these two SQL statements in order: 1) ALTER TABLE admins DROP CONSTRAINT admins_permissions_check 2) ` +
-		`ALTER TABLE admins ADD CONSTRAINT admins_permissions_check CHECK (jsonb_typeof(permissions) = 'array' AND (permissions = '["*"]'::jsonb OR permissions <@ '["admins.read","admins.manage","pages.export"]'::jsonb)); ` +
-		`if the column is deliberately narrower than the enum, instead declare the cases it holds on Admin.Permissions with the foundry tag option values=PermissionAll|PermissionAdminsRead|PermissionAdminsManage. ` +
+		`either (a) the column should hold the new case: add a new migration that re-declares the constraint with this list: '["admins.read","admins.manage","pages.export"]'; ` +
+		`or (b) the column deliberately holds only some cases: declare values=PermissionAll|PermissionAdminsRead|PermissionAdminsManage on Admin.Permissions and run foundry generate. ` +
 		`Foundry guide: migrations-and-seeding#recipe-enum-lists`
 	if got := findings[0].String(); got != want {
 		t.Fatalf("message\n got %s\nwant %s", got, want)
@@ -273,13 +272,13 @@ func TestEnumListCases(t *testing.T) {
 	}
 	const guide = ". Foundry guide: migrations-and-seeding#recipe-enum-lists"
 	wants := []string{
-		`enums.go:16:2: [enum-list] enum Phase: case "review" (Review) is missing from the list of constraint posts_stage_check on posts.stage, last written at migrations.go:13; add a new migration (an applied one is never edited) with these two SQL statements in order: 1) ALTER TABLE posts DROP CONSTRAINT posts_stage_check 2) ALTER TABLE posts ADD CONSTRAINT posts_stage_check CHECK (stage IN ('draft', 'review'))` + guide,
+		`enums.go:16:2: [enum-list] enum Phase: case "review" (Review) is missing from the list of constraint posts_stage_check on posts.stage, last written at migrations.go:13; either (a) the column should hold the case: add a new migration that re-declares the constraint with this list: 'draft', 'review'; or (b) the column should not hold it: remove it from values= on Post.Stage and run foundry generate` + guide,
 		`migrations.go:34: [enum-list] migration: cannot be read by the enum list check: a SQL statement is built at run time, not written as a string constant; write the key and the SQL as constants, and a constraint as literal ALTER TABLE DROP CONSTRAINT and ADD CONSTRAINT statements` + guide,
 		`migrations.go:38:6: [migration-unregistered] migration Forgotten (app/006_forgotten): is never listed with the application's other migrations, so it never runs; add Forgotten() to the list of migrate.Definition values the application registers, or delete the file. Foundry guide: migrations-and-seeding#recipe-register-migration`,
-		`models.go:8:2: [enum-list] Ticket.Priority: the list of constraint tickets_priority_check on tickets.priority, last written at migrations.go:7 holds "urgent", which is not an enum case; add a new migration (an applied one is never edited) with these two SQL statements in order: 1) ALTER TABLE tickets DROP CONSTRAINT tickets_priority_check 2) ALTER TABLE tickets ADD CONSTRAINT tickets_priority_check CHECK (priority IN ('low', 'high'))` + guide,
+		`models.go:8:2: [enum-list] Ticket.Priority: the list of constraint tickets_priority_check on tickets.priority, last written at migrations.go:7 holds "urgent", which is not an enum case; add a new migration that re-declares the constraint with this list: 'low', 'high'` + guide,
 		`models.go:19:2: [enum-list] Post.Step: values names Missing, which is not a case of enum Phase; name only cases of the enum, written as their Go constant names separated by |` + guide,
 		`models.go:21:2: [enum-list] Post.Round: values names every case of enum Phase; remove the values option; it narrows a column to some cases` + guide,
-		`models.go:27:2: [enum-list] orders.mode: the CHECK list on this enum column cannot be read statically: constraint orders_mode_check was added at migrations.go:19, and a DO block at migrations.go:20 may have changed it; write the constraint again in a new migration as literal ALTER TABLE orders DROP CONSTRAINT orders_mode_check and ALTER TABLE orders ADD CONSTRAINT orders_mode_check CHECK (...) statements listing every case; the newest literal list is the one compared` + guide,
+		`models.go:27:2: [enum-list] orders.mode: the CHECK list on this enum column cannot be read statically: constraint orders_mode_check was added at migrations.go:19, and a DO block at migrations.go:20 may have changed it; write the constraint again in a new migration as literal ALTER TABLE orders DROP CONSTRAINT orders_mode_check and ALTER TABLE orders ADD CONSTRAINT orders_mode_check CHECK (...) statements whose test is a plain IN (...), = ANY (ARRAY[...]) or <@ '[...]' holding every case; the newest literal list is the one compared` + guide,
 	}
 	if strings.Join(got, "\n") != strings.Join(wants, "\n") {
 		t.Fatalf("findings\n got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(wants, "\n"))

@@ -4,7 +4,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 )
 
-func reversibleMigration() migrate.Definition {
+// reversibleMigration holds the guide example; it is not an application migration.
+func reversibleMigration() {
 	// doc-example:begin reversible-migration
 	definition := migrate.Definition{
 		Key:     migrate.Key{Origin: "app", ID: "20260911000001_add_record_label"},
@@ -13,5 +14,5 @@ func reversibleMigration() migrate.Definition {
 		Down:    []string{"ALTER TABLE records DROP COLUMN label"},
 	}
 	// doc-example:end reversible-migration
-	return definition
+	_ = definition
 }

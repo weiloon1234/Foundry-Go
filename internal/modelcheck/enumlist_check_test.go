@@ -13,11 +13,19 @@ import (
 // replay applies each migration, a list of SQL strings, in order. The strings
 // are written as raw literals starting at line one of file m<n>.go.
 func replay(watch map[string]map[string]bool, migrations ...[]string) (*history, []string) {
-	h := newHistory(watch)
+	keyed := make(map[tableKey]map[string]bool)
+	for table, columns := range watch {
+		keyed[declaredKey(table)] = columns
+	}
+	h := newHistory(keyed)
 	var problems []string
 	for i, statements := range migrations {
+		var sources []*sqlSource
 		for j, text := range statements {
-			src := &sqlSource{text: text, display: fmt.Sprintf("m%d.go", i+1), path: fmt.Sprintf("/m%d.go", i+1), line: 10 + j, raw: true}
+			sources = append(sources, &sqlSource{text: text, display: fmt.Sprintf("m%d.go", i+1), path: fmt.Sprintf("/m%d.go", i+1), line: 10 + j, raw: true})
+		}
+		h.begin(sources)
+		for _, src := range sources {
 			if why := h.apply(src); why != "" {
 				problems = append(problems, why)
 			}
@@ -25,6 +33,9 @@ func replay(watch map[string]map[string]bool, migrations ...[]string) (*history,
 	}
 	return h, problems
 }
+
+// tableOf returns what the history knows about a table, given as declared.
+func tableOf(h *history, table string) *tableState { return h.tables[declaredKey(table)] }
 
 func admitted(c *checkConstraint, column string) string {
 	list, ok := c.lists[column]
@@ -71,7 +82,7 @@ func TestCheckExpressionForms(t *testing.T) {
 			if len(problems) != 0 {
 				t.Fatal(problems)
 			}
-			checks := h.tables["t"].checks
+			checks := tableOf(h, "t").checks
 			if len(checks) != 1 {
 				t.Fatalf("%d checks", len(checks))
 			}
@@ -84,8 +95,8 @@ func TestCheckExpressionForms(t *testing.T) {
 			if got := admitted(checks[0], tc.column); got != tc.want {
 				t.Fatalf("admits %s, want %s (problems %v)", got, tc.want, checks[0].problems)
 			}
-			if len(checks[0].problems) != 0 {
-				t.Fatalf("unexpected problems %v", checks[0].problems)
+			if got := checks[0].problems[tc.column]; got != "" {
+				t.Fatalf("unexpected problem %q", got)
 			}
 		})
 	}
@@ -93,15 +104,15 @@ func TestCheckExpressionForms(t *testing.T) {
 
 func TestCheckExpressionOpaque(t *testing.T) {
 	h, _ := replay(nil, []string{`CREATE TABLE t (c text CHECK (lower(status) IN ('a')))`})
-	c := h.tables["t"].checks[0]
-	if c.opaque == "" || !c.idents["status"] {
-		t.Fatalf("a list test on lower(status) must be opaque and mention the column: %+v", c)
+	c := tableOf(h, "t").checks[0]
+	if got := c.problems["status"]; !strings.Contains(got, "a function call") || !c.idents["status"] {
+		t.Fatalf("a list test on lower(status) must be unreadable for the column it mentions: %+v", c.problems)
 	}
 }
 
 func lists(h *history, table, column string) []string {
 	var result []string
-	for _, c := range h.tables[table].checks {
+	for _, c := range tableOf(h, table).checks {
 		if _, ok := c.lists[column]; ok {
 			result = append(result, c.name+"="+admitted(c, column))
 		}
@@ -126,7 +137,7 @@ func TestReplayNewestListWins(t *testing.T) {
 			[]string{`t_status_check="a" "b"`, `t_status_wider="a" "b" "c"`}},
 		{"unnamed inline check is dropped by its default name", [][]string{{`CREATE TABLE t (status text CHECK (status IN ('a')))`}, {`ALTER TABLE t DROP CONSTRAINT t_status_check`}}, nil},
 		{"unnamed check added to a column", [][]string{{`CREATE TABLE t (id int)`}, {`ALTER TABLE t ADD COLUMN IF NOT EXISTS status text NOT NULL CHECK (status IN ('a'))`}}, []string{`t_status_check="a"`}},
-		{"unnamed table check", [][]string{{`CREATE TABLE t (id int)`}, {`ALTER TABLE t ADD CHECK (status IN ('a'))`}}, []string{`t_status_check="a"`}},
+		{"unnamed table check", [][]string{{`CREATE TABLE t (id int, status text)`}, {`ALTER TABLE t ADD CHECK (status IN ('a'))`}}, []string{`t_status_check="a"`}},
 		{"dropping the column drops its constraint", [][]string{{create}, {`ALTER TABLE t DROP COLUMN status`}}, nil},
 		{"dropping the table drops its constraints", [][]string{{create}, {`DROP TABLE IF EXISTS t`}, {`CREATE TABLE t (status text)`}}, nil},
 		{"a renamed table keeps its constraint", [][]string{{create}, {`ALTER TABLE t RENAME TO t`}}, []string{`t_status_check="a" "b"`}},
@@ -150,9 +161,9 @@ func TestReplayStatementsItCannotReadAreRemembered(t *testing.T) {
 	do := `DO $$ DECLARE previous text; BEGIN SELECT pg_get_constraintdef(oid) INTO STRICT previous FROM pg_constraint WHERE conrelid='admins'::regclass AND conname='admins_permissions_check'; ALTER TABLE admins DROP CONSTRAINT admins_permissions_check; EXECUTE 'ALTER TABLE admins ADD CONSTRAINT admins_permissions_check ' || replace(previous,'permissions','(permissions - ''x'')'); END $$`
 	t.Run("a DO block that names the constraint taints it", func(t *testing.T) {
 		h, _ := replay(watch, []string{create}, []string{do})
-		c := h.tables["admins"].checks[0]
-		if !strings.Contains(c.taint, "a DO block at m2.go:10") || h.tables["admins"].dynamic["permissions"] == "" {
-			t.Fatalf("taint %q dynamic %v", c.taint, h.tables["admins"].dynamic)
+		c := tableOf(h, "admins").checks[0]
+		if !strings.Contains(c.taint, "a DO block at m2.go:10") || tableOf(h, "admins").dynamic["permissions"] == "" {
+			t.Fatalf("taint %q dynamic %v", c.taint, tableOf(h, "admins").dynamic)
 		}
 	})
 	t.Run("a literal list written after it is readable again", func(t *testing.T) {
@@ -160,7 +171,7 @@ func TestReplayStatementsItCannotReadAreRemembered(t *testing.T) {
 			`ALTER TABLE admins DROP CONSTRAINT admins_permissions_check`,
 			`ALTER TABLE admins ADD CONSTRAINT admins_permissions_check CHECK (permissions <@ '["a","b"]'::jsonb)`,
 		})
-		tableState := h.tables["admins"]
+		tableState := tableOf(h, "admins")
 		if len(tableState.checks) != 1 || tableState.checks[0].taint != "" || len(tableState.dynamic) != 0 {
 			t.Fatalf("checks %+v dynamic %v", tableState.checks, tableState.dynamic)
 		}
@@ -168,30 +179,30 @@ func TestReplayStatementsItCannotReadAreRemembered(t *testing.T) {
 	t.Run("a table name inside a permission string is not a table", func(t *testing.T) {
 		text := `DO $$ BEGIN ALTER TABLE admins DROP CONSTRAINT admins_permissions_check; EXECUTE 'ALTER TABLE admins ADD CONSTRAINT admins_permissions_check CHECK (permissions <@ ''["pages.read"]'')'; END $$`
 		h, _ := replay(watch, []string{create, `CREATE TABLE pages (kind text CONSTRAINT pages_kind_check CHECK (kind IN ('a')))`}, []string{text})
-		if h.tables["pages"].checks[0].taint != "" || len(h.tables["pages"].dynamic) != 0 {
-			t.Fatalf("pages was touched: %+v", h.tables["pages"])
+		if tableOf(h, "pages").checks[0].taint != "" || len(tableOf(h, "pages").dynamic) != 0 {
+			t.Fatalf("pages was touched: %+v", tableOf(h, "pages"))
 		}
 	})
 	t.Run("a pattern drop taints only constraints holding every pattern word", func(t *testing.T) {
 		drop := `DO $$ DECLARE c record; BEGIN FOR c IN SELECT conname FROM pg_constraint WHERE conrelid='admins'::regclass AND pg_get_constraintdef(oid) LIKE '%permissions%' AND pg_get_constraintdef(oid) LIKE '%secret%' LOOP EXECUTE format('ALTER TABLE admins DROP CONSTRAINT %I', c.conname); END LOOP; END $$`
 		h, _ := replay(watch, []string{create}, []string{drop})
-		if h.tables["admins"].checks[0].taint != "" || len(h.tables["admins"].dynamic) != 0 {
-			t.Fatalf("a pattern the constraint does not match must leave it alone: %+v", h.tables["admins"].checks[0])
+		if tableOf(h, "admins").checks[0].taint != "" || len(tableOf(h, "admins").dynamic) != 0 {
+			t.Fatalf("a pattern the constraint does not match must leave it alone: %+v", tableOf(h, "admins").checks[0])
 		}
 		h, _ = replay(watch, []string{create}, []string{strings.ReplaceAll(drop, "%secret%", "%jsonb%")})
-		if h.tables["admins"].checks[0].taint == "" {
+		if tableOf(h, "admins").checks[0].taint == "" {
 			t.Fatal("a pattern the constraint matches must taint it")
 		}
 	})
 	t.Run("a DO block without a constraint is ignored", func(t *testing.T) {
 		h, _ := replay(watch, []string{create}, []string{`DO $$ BEGIN UPDATE admins SET permissions = '[]'; END $$`})
-		if h.tables["admins"].checks[0].taint != "" {
+		if tableOf(h, "admins").checks[0].taint != "" {
 			t.Fatal("tainted")
 		}
 	})
 	t.Run("a renamed column is not followed", func(t *testing.T) {
 		h, _ := replay(watch, []string{create}, []string{`ALTER TABLE admins RENAME COLUMN permissions TO grants`})
-		if h.tables["admins"].checks[0].taint == "" || h.tables["admins"].dynamic["permissions"] == "" {
+		if tableOf(h, "admins").checks[0].taint == "" || tableOf(h, "admins").dynamic["permissions"] == "" {
 			t.Fatal("a column rename must be remembered")
 		}
 	})
@@ -236,9 +247,8 @@ func TestCompareFieldMessages(t *testing.T) {
 		if d.Subject != "enum Permission" || d.Problem != `case "pages.export" (CasePages.export) is missing from the list of constraint admins_permissions_check on admins.permissions, last written at m2.go:10` {
 			t.Fatalf("subject %q problem %q", d.Subject, d.Problem)
 		}
-		const fix = `add a new migration (an applied one is never edited) with these two SQL statements in order: 1) ALTER TABLE admins DROP CONSTRAINT admins_permissions_check 2) ` +
-			`ALTER TABLE admins ADD CONSTRAINT admins_permissions_check CHECK (jsonb_typeof(permissions) = 'array' AND (permissions = '["*"]'::jsonb OR permissions <@ '["admins.read","admins.manage","pages.export"]'::jsonb))` +
-			`; if the column is deliberately narrower than the enum, instead declare the cases it holds on Admin.Permissions with the foundry tag option values=Case*|CaseAdmins.read|CaseAdmins.manage`
+		const fix = `either (a) the column should hold the new case: add a new migration that re-declares the constraint with this list: '["admins.read","admins.manage","pages.export"]'; ` +
+			`or (b) the column deliberately holds only some cases: declare values=Case*|CaseAdmins.read|CaseAdmins.manage on Admin.Permissions and run foundry generate`
 		if d.Fix != fix {
 			t.Fatalf("fix\n got %s\nwant %s", d.Fix, fix)
 		}
@@ -249,7 +259,7 @@ func TestCompareFieldMessages(t *testing.T) {
 			findings[0].Problem != `the list of constraint admins_permissions_check on admins.permissions, last written at m2.go:10 holds "admins.manage", which is not an enum case` {
 			t.Fatalf("%v", findings)
 		}
-		if !strings.Contains(findings[0].Fix, `permissions <@ '["admins.read"]'::jsonb`) {
+		if !strings.Contains(findings[0].Fix, `with this list: '["admins.read"]'`) {
 			t.Fatalf("the new list must drop the value: %s", findings[0].Fix)
 		}
 	})
@@ -267,7 +277,7 @@ func TestCompareFieldMessages(t *testing.T) {
 		}
 		narrowed.expected = append(slices.Clone(narrowed.cases[:3]), narrowed.cases[3])
 		findings, _ = compareField(narrowed, h)
-		if len(findings) != 1 || strings.Contains(findings[0].Fix, "values=") {
+		if len(findings) != 1 || strings.Contains(findings[0].Fix, "declare values=") || !strings.Contains(findings[0].Fix, "(b) the column should not hold it: remove it from values= on Admin.Permissions and run foundry generate") {
 			t.Fatalf("a narrowed field is not told to declare a narrowing again: %v", findings)
 		}
 	})
@@ -285,7 +295,7 @@ func TestCompareFieldMessages(t *testing.T) {
 		findings, compared := compareField(field("*", "admins.read", "admins.manage"), unread)
 		if len(findings) != 1 || compared || findings[0].Subject != "admins.permissions" ||
 			!strings.Contains(findings[0].Problem, "cannot be read statically: constraint admins_permissions_check was added at m1.go:10, and a DO block at m2.go:10 may have changed it") ||
-			!strings.Contains(findings[0].Fix, "write the constraint again in a new migration as literal ALTER TABLE admins DROP CONSTRAINT admins_permissions_check and ALTER TABLE admins ADD CONSTRAINT admins_permissions_check CHECK (...) statements") {
+			!strings.Contains(findings[0].Fix, "write the constraint again in a new migration as literal ALTER TABLE admins DROP CONSTRAINT admins_permissions_check and ALTER TABLE admins ADD CONSTRAINT admins_permissions_check CHECK (...) statements whose test is a plain IN (...)") {
 			t.Fatalf("%v", findings)
 		}
 	})
@@ -299,7 +309,7 @@ func TestCompareFieldMessages(t *testing.T) {
 	t.Run("a test on an expression the rule cannot read is a finding", func(t *testing.T) {
 		opaque, _ := replay(watch, []string{`CREATE TABLE admins (permissions text CONSTRAINT admins_opaque CHECK (lower(permissions) IN ('x')))`})
 		findings, _ := compareField(field("a"), opaque)
-		if len(findings) != 1 || !strings.Contains(findings[0].Problem, "holds a list test on an expression that is not a plain column") {
+		if len(findings) != 1 || !strings.Contains(findings[0].Problem, "constraint admins_opaque at m1.go:10: the column is used in a function call, which the rule does not read") {
 			t.Fatalf("%v", findings)
 		}
 	})

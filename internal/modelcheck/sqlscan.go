@@ -3,6 +3,7 @@ package modelcheck
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
@@ -94,13 +95,13 @@ func scanSQL(src string) ([]sqlToken, error) {
 		gap = false
 		switch {
 		case c == '\'':
-			text, end, err := scanQuoted(src, i, '\'', false)
+			text, end, err := scanQuoted(src, i, '\'')
 			if err != nil {
 				return nil, err
 			}
 			token.kind, token.text, token.end = sqlString, text, end
 		case (c == 'e' || c == 'E') && i+1 < len(src) && src[i+1] == '\'':
-			text, end, err := scanQuoted(src, i+1, '\'', true)
+			text, end, err := scanEscapeString(src, i+1)
 			if err != nil {
 				return nil, err
 			}
@@ -108,7 +109,7 @@ func scanSQL(src string) ([]sqlToken, error) {
 		case (c == 'u' || c == 'U') && strings.HasPrefix(src[i+1:], "&'"):
 			return nil, safeerror.New(fmt.Sprintf("unicode-escape string at byte %d is not supported", i))
 		case c == '"':
-			text, end, err := scanQuoted(src, i, '"', false)
+			text, end, err := scanQuoted(src, i, '"')
 			if err != nil {
 				return nil, err
 			}
@@ -126,7 +127,7 @@ func scanSQL(src string) ([]sqlToken, error) {
 			for j < len(src) && isSQLWordPart(src[j]) {
 				j++
 			}
-			token.kind, token.text, token.end = sqlWord, strings.ToLower(src[i:j]), j
+			token.kind, token.text, token.end = sqlWord, foldASCII(src[i:j]), j
 		case c == '$' && i+1 < len(src) && src[i+1] >= '0' && src[i+1] <= '9':
 			j := i + 1
 			for j < len(src) && src[j] >= '0' && src[j] <= '9' {
@@ -168,14 +169,11 @@ func scanSQL(src string) ([]sqlToken, error) {
 }
 
 // scanQuoted reads a quoted run whose opening quote is at src[open]. A doubled
-// quote is one quote; an escape string also reads backslash escapes.
-func scanQuoted(src string, open int, quote byte, escapes bool) (string, int, error) {
+// quote is one quote.
+func scanQuoted(src string, open int, quote byte) (string, int, error) {
 	var text strings.Builder
 	for i := open + 1; i < len(src); i++ {
 		switch {
-		case escapes && src[i] == '\\' && i+1 < len(src):
-			i++
-			text.WriteByte(src[i])
 		case src[i] == quote && i+1 < len(src) && src[i+1] == quote:
 			text.WriteByte(quote)
 			i++
@@ -186,6 +184,146 @@ func scanQuoted(src string, open int, quote byte, escapes bool) (string, int, er
 		}
 	}
 	return "", 0, safeerror.New(fmt.Sprintf("unterminated quoted text at byte %d", open))
+}
+
+// scanEscapeString reads E'...' whose opening quote is at src[open] and decodes
+// its backslash escapes as PostgreSQL does: \b \f \n \r \t, one to three octal
+// digits, \x and one or two hex digits, \u and four or \U and eight hex digits
+// (a \u surrogate pair is one character), and any other character after a
+// backslash as itself. An escape that PostgreSQL rejects, a zero character and
+// text that is not valid UTF-8 are errors, so a value is never mis-decoded.
+func scanEscapeString(src string, open int) (string, int, error) {
+	fail := func(why string, at int) (string, int, error) {
+		return "", 0, safeerror.New(fmt.Sprintf("%s in the escape string at byte %d", why, at))
+	}
+	var text []byte
+	for i := open + 1; i < len(src); {
+		c := src[i]
+		switch {
+		case c == '\\':
+			if i+1 >= len(src) {
+				return fail("unterminated escape", open)
+			}
+			n := src[i+1]
+			switch {
+			case n == 'b' || n == 'f' || n == 'n' || n == 'r' || n == 't':
+				text = append(text, map[byte]byte{'b': '\b', 'f': '\f', 'n': '\n', 'r': '\r', 't': '\t'}[n])
+				i += 2
+			case n >= '0' && n <= '7':
+				value, j := 0, i+1
+				for j < len(src) && j < i+4 && src[j] >= '0' && src[j] <= '7' {
+					value = value*8 + int(src[j]-'0')
+					j++
+				}
+				if value == 0 || value > 255 {
+					return fail("an octal escape outside 1 to 255", i)
+				}
+				text = append(text, byte(value))
+				i = j
+			case n == 'x' && i+2 < len(src) && hexValue(src[i+2]) >= 0:
+				value, j := 0, i+2
+				for j < len(src) && j < i+4 && hexValue(src[j]) >= 0 {
+					value = value*16 + hexValue(src[j])
+					j++
+				}
+				if value == 0 {
+					return fail("a zero character", i)
+				}
+				text = append(text, byte(value))
+				i = j
+			case n == 'u' || n == 'U':
+				r, j, ok := readUnicodeEscape(src, i)
+				if !ok {
+					return fail("an invalid Unicode escape", i)
+				}
+				text = utf8.AppendRune(text, r)
+				i = j
+			default:
+				text = append(text, n)
+				i += 2
+			}
+		case c == '\'' && i+1 < len(src) && src[i+1] == '\'':
+			text = append(text, '\'')
+			i += 2
+		case c == '\'':
+			if !utf8.Valid(text) {
+				return fail("text that is not valid UTF-8", open)
+			}
+			return string(text), i + 1, nil
+		default:
+			text = append(text, c)
+			i++
+		}
+	}
+	return fail("unterminated text", open)
+}
+
+// readUnicodeEscape reads \uXXXX, \UXXXXXXXX or a \u surrogate pair at src[i]
+// and returns the character and the offset after the escape.
+func readUnicodeEscape(src string, i int) (rune, int, bool) {
+	digits := 4
+	if src[i+1] == 'U' {
+		digits = 8
+	}
+	read := func(at int) (rune, bool) {
+		if at+2+digits > len(src) {
+			return 0, false
+		}
+		var value rune
+		for _, d := range []byte(src[at+2 : at+2+digits]) {
+			h := hexValue(d)
+			if h < 0 {
+				return 0, false
+			}
+			value = value<<4 | rune(h)
+		}
+		return value, true
+	}
+	r, ok := read(i)
+	if !ok || r == 0 {
+		return 0, 0, false
+	}
+	end := i + 2 + digits
+	if r >= 0xD800 && r <= 0xDBFF {
+		if end+1 < len(src) && src[end] == '\\' && src[end+1] == 'u' && digits == 4 {
+			if low, ok := read(end); ok && low >= 0xDC00 && low <= 0xDFFF {
+				return 0x10000 + (r-0xD800)<<10 + (low - 0xDC00), end + 6, true
+			}
+		}
+		return 0, 0, false
+	}
+	if r >= 0xDC00 && r <= 0xDFFF || r > utf8.MaxRune {
+		return 0, 0, false
+	}
+	return r, end, true
+}
+
+func hexValue(c byte) int {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0')
+	case c >= 'a' && c <= 'f':
+		return int(c-'a') + 10
+	case c >= 'A' && c <= 'F':
+		return int(c-'A') + 10
+	}
+	return -1
+}
+
+// foldASCII lower-cases ASCII letters only, as PostgreSQL folds an unquoted name.
+func foldASCII(s string) string {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 'A' && s[i] <= 'Z' {
+			b := []byte(s)
+			for j := i; j < len(b); j++ {
+				if b[j] >= 'A' && b[j] <= 'Z' {
+					b[j] += 'a' - 'A'
+				}
+			}
+			return string(b)
+		}
+	}
+	return s
 }
 
 // dollarTagEnd returns the offset after the opening $tag$ at src[i], or 0 when
@@ -225,6 +363,21 @@ func splitStatements(tokens []sqlToken) [][]sqlToken {
 		result = append(result, tokens[start:])
 	}
 	return result
+}
+
+// maxNesting reports the deepest parenthesis, bracket and CASE nesting of the tokens.
+func maxNesting(tokens []sqlToken) int {
+	depth, deepest := 0, 0
+	for _, t := range tokens {
+		switch {
+		case t.punct("(") || t.punct("[") || t.word("case"):
+			depth++
+			deepest = max(deepest, depth)
+		case t.punct(")") || t.punct("]") || t.word("end"):
+			depth--
+		}
+	}
+	return deepest
 }
 
 // matching returns the index of the parenthesis or bracket that closes the one

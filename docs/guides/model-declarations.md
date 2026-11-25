@@ -88,6 +88,7 @@ behavior; redundant options fail generation.
 | `mutate=normalizeEmail` | Names a package-local `func(EmailInput) (Stored, error)` instead of the conventional `MutateEmail` method. Requires `input`. |
 | `codec=emailCodec` | Calls a package-local `func() codec.Codec[Stored]` and selects a plain column. Do not combine it with a role. |
 | `role=column` | Selects a plain column when that differs from the inferred constructor. |
+| `values=Draft\|Published` | Declares the enum cases a deliberately narrower column holds, by Go constant name. Only on an enum field or a collection of enums; run `foundry generate` after adding it. See [enum columns and their lists](#recipe-enum-narrowing). |
 | `foundry:"-"` | Excludes a transient field from persistence; it still participates in the structural guard. |
 
 `value.Optional` is a write or transport state, not a persisted column. Embedded
@@ -177,7 +178,9 @@ When an enum column carries a database `CHECK` that lists values,
 [keep an enum and its database list equal](migrations-and-seeding.md#recipe-enum-lists)).
 A column that deliberately holds fewer cases says so on the field:
 ``Stage Status `foundry:"values=Draft|Published"` ``. The names are the Go constants of
-the enum's cases, separated by `|`. Then the list must equal exactly those cases, a new
+the enum's cases, separated by `|`. The option is part of the model's declaration, so run
+`foundry generate` after adding it; the generated-output check fails until you do. Then the
+list must equal exactly those cases, a new
 enum case leaves the column alone, and the generator refuses `values` on a field that
 holds no enum (a field of an enum, `value.Nullable`, `value.JSON`, slice or array of one
 qualifies). `models check` refuses a name that is not a case and a list that names every

@@ -78,6 +78,59 @@ func functionKey(info *types.Info, expr ast.Expr) string {
 	return ""
 }
 
+// migrationLiteral returns the migrate.Definition literal a migration function
+// builds, or nil when the function is not one. A migration function has no
+// receiver and no parameters, returns a migrate.Definition, and its body is
+// either "return migrate.Definition{...}" or one local declared from the literal
+// and returned unchanged. A function that does anything else with the definition,
+// takes parameters or returns something else is a helper: the rule cannot tell
+// that it is a migration, so it never reports it as unregistered.
+func migrationLiteral(info *types.Info, fn *ast.FuncDecl) *ast.CompositeLit {
+	if fn.Recv != nil || fn.Body == nil || len(fn.Body.List) == 0 || fn.Type.Params.NumFields() != 0 || fn.Type.Results.NumFields() != 1 {
+		return nil
+	}
+	isDefinition := func(expr ast.Expr) *ast.CompositeLit {
+		if lit, ok := unparen(expr).(*ast.CompositeLit); ok && isNamedFramework(info.TypeOf(lit), "/database/migrate", "Definition") {
+			return lit
+		}
+		return nil
+	}
+	body := fn.Body.List
+	last, ok := body[len(body)-1].(*ast.ReturnStmt)
+	if !ok || len(last.Results) != 1 {
+		return nil
+	}
+	if len(body) == 1 {
+		return isDefinition(last.Results[0])
+	}
+	if len(body) != 2 {
+		return nil
+	}
+	returned, ok := unparen(last.Results[0]).(*ast.Ident)
+	if !ok {
+		return nil
+	}
+	var local *ast.Ident
+	var value ast.Expr
+	switch decl := body[0].(type) {
+	case *ast.AssignStmt:
+		if decl.Tok == token.DEFINE && len(decl.Lhs) == 1 && len(decl.Rhs) == 1 {
+			local, _ = decl.Lhs[0].(*ast.Ident)
+			value = decl.Rhs[0]
+		}
+	case *ast.DeclStmt:
+		if gen, ok := decl.Decl.(*ast.GenDecl); ok && gen.Tok == token.VAR && len(gen.Specs) == 1 {
+			if spec, ok := gen.Specs[0].(*ast.ValueSpec); ok && len(spec.Names) == 1 && len(spec.Values) == 1 {
+				local, value = spec.Names[0], spec.Values[0]
+			}
+		}
+	}
+	if local == nil || local.Name != returned.Name || info.ObjectOf(local) != info.ObjectOf(returned) {
+		return nil
+	}
+	return isDefinition(value)
+}
+
 func displayPath(root, path string) string {
 	if rel, err := filepath.Rel(root, path); err == nil && !strings.HasPrefix(rel, "..") {
 		return filepath.ToSlash(rel)
@@ -106,16 +159,10 @@ func collectMigrations(root string, pkgs []*generate.AnalysisPackage, analyses m
 		for _, file := range sourceFiles(pkg) {
 			wholeBody := make(map[*ast.CompositeLit]*ast.FuncDecl)
 			for _, decl := range file.Decls {
-				fn, ok := decl.(*ast.FuncDecl)
-				if !ok || fn.Recv != nil || fn.Body == nil || len(fn.Body.List) != 1 || fn.Type.Params.NumFields() != 0 || fn.Type.Results.NumFields() != 1 {
-					continue
-				}
-				result, ok := fn.Body.List[0].(*ast.ReturnStmt)
-				if !ok || len(result.Results) != 1 {
-					continue
-				}
-				if lit, ok := unparen(result.Results[0]).(*ast.CompositeLit); ok {
-					wholeBody[lit] = fn
+				if fn, ok := decl.(*ast.FuncDecl); ok {
+					if lit := migrationLiteral(info, fn); lit != nil {
+						wholeBody[lit] = fn
+					}
 				}
 			}
 			ast.Inspect(file, func(n ast.Node) bool {
@@ -264,11 +311,15 @@ func collectMigrations(root string, pkgs []*generate.AnalysisPackage, analyses m
 					return true
 				}
 				stack = append(stack, n)
-				call, ok := n.(*ast.CallExpr)
+				id, ok := n.(*ast.Ident)
 				if !ok {
 					return true
 				}
-				key := functionKey(info, call.Fun)
+				fn, isFunc := info.Uses[id].(*types.Func)
+				if !isFunc || fn.Pkg() == nil {
+					return true
+				}
+				key := fn.Pkg().Path() + "." + fn.Name()
 				if byFunction[key] == nil {
 					return true
 				}

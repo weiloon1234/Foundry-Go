@@ -75,21 +75,23 @@ func analyzeEnumLists(root string, all []*generate.AnalysisPackage, analyses map
 	}
 	var result []diagnostic.Diagnostic
 	var fields []enumField
-	watch := make(map[string]map[string]bool)
+	watch := make(map[tableKey]map[string]bool)
 	for _, pkg := range pkgs {
 		found, findings := enumFields(pkg, byPath)
 		fields = append(fields, found...)
 		result = append(result, findings...)
 	}
 	for _, f := range fields {
-		if watch[f.table] == nil {
-			watch[f.table] = make(map[string]bool)
+		key := declaredKey(f.table)
+		if watch[key] == nil {
+			watch[key] = make(map[string]bool)
 		}
-		watch[f.table][f.column] = true
+		watch[key][f.column] = true
 	}
 	set := collectMigrations(root, pkgs, analyses)
 	state := newHistory(watch)
 	for _, definition := range set.ordered {
+		state.begin(definition.sql)
 		for _, src := range definition.sql {
 			if why := state.apply(src); why != "" {
 				words := make(map[string]bool)
@@ -126,12 +128,12 @@ func analyzeEnumLists(root string, all []*generate.AnalysisPackage, analyses map
 }
 
 // concerns reports whether the problem's migration names a table of a model.
-func (p migrationProblem) concerns(watch map[string]map[string]bool) bool {
+func (p migrationProblem) concerns(watch map[tableKey]map[string]bool) bool {
 	if p.words == nil {
 		return len(watch) != 0
 	}
 	for table := range watch {
-		if p.words[table] {
+		if p.words[table.name] {
 			return true
 		}
 	}
@@ -230,16 +232,47 @@ func (f enumField) value(c generate.EnumCase) listValue {
 	return listValue{text: c.Value, integer: c.Integer}
 }
 
+// unreadableReason is one cause of an enum column's CHECK list being unreadable.
+type unreadableReason struct {
+	text string
+	// constraint is the constraint concerned, when there is one.
+	constraint *checkConstraint
+	// literal says the cause is a domain or database enum type: the advice is a
+	// literal CHECK list, not a rewrite of a constraint.
+	literal bool
+}
+
+// namePlaceholder stands for a constraint name the rule cannot know.
+func namePlaceholder(table string) string {
+	return "<constraint name, shown by \\d " + table + ">"
+}
+
+// sqlName renders a constraint name, quoted when it is not a plain lower-case name.
+func sqlName(name string) string {
+	plain := name != ""
+	for i := 0; i < len(name); i++ {
+		if c := name[i]; !(c >= 'a' && c <= 'z' || c == '_' || i > 0 && (c >= '0' && c <= '9' || c == '$')) {
+			plain = false
+		}
+	}
+	if plain {
+		return name
+	}
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
 // compareField compares one enum field's column with the constraints that are
 // live for it after the last migration.
 func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, compared bool) {
 	subject := f.table + "." + f.column
 	at := f.at
-	table := h.tables[f.table]
+	table := h.tables[declaredKey(f.table)]
 	if table == nil {
 		return nil, false
 	}
-	fix := func(c *checkConstraint, list listAtom) string {
+	// newList is the list a new migration re-declares: every expected case, less
+	// the values the constraint admits through equality branches.
+	newList := func(c *checkConstraint, atom listAtom) string {
 		var equal []listValue
 		if column, ok := c.lists[f.column]; ok {
 			equal = column.equal
@@ -250,49 +283,45 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 				values = append(values, v)
 			}
 		}
-		drop := fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %s", f.table, c.name)
-		add := fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s CHECK (%s)", f.table, c.name, c.replace(list, values))
-		return fmt.Sprintf("add a new migration (an applied one is never edited) with these two SQL statements in order: 1) %s 2) %s", drop, add)
+		return renderList(values, atom.json)
 	}
+	const migration = "add a new migration that re-declares the constraint with this list: "
 
-	var unreadable []string
+	var unreadable []unreadableReason
 	var readable []*checkConstraint
 	for _, c := range table.checks {
-		mentioned := c.idents[f.column]
 		_, holdsList := c.lists[f.column]
+		at := c.src.where(c.atOffset)
 		switch {
 		case c.taint != "" && holdsList:
-			unreadable = append(unreadable, fmt.Sprintf("constraint %s was added at %s, and %s may have changed it", c.name, c.src.where(c.atOffset), c.taint))
+			unreadable = append(unreadable, unreadableReason{text: fmt.Sprintf("%s was added at %s, and %s may have changed it", c.describe(), at, c.taint), constraint: c})
 		case c.problems[f.column] != "":
-			unreadable = append(unreadable, fmt.Sprintf("constraint %s at %s: %s", c.name, c.src.where(c.atOffset), c.problems[f.column]))
-		case c.opaque != "" && mentioned:
-			unreadable = append(unreadable, fmt.Sprintf("constraint %s at %s holds %s", c.name, c.src.where(c.atOffset), c.opaque))
+			unreadable = append(unreadable, unreadableReason{text: fmt.Sprintf("%s at %s: %s", c.describe(), at, c.problems[f.column]), constraint: c})
 		default:
-			if _, ok := c.lists[f.column]; ok {
+			if holdsList {
 				readable = append(readable, c)
 			}
 		}
 	}
 	if where := table.dynamic[f.column]; where != "" {
-		unreadable = append(unreadable, where+" names the column and may have written its constraint")
+		reason := unreadableReason{text: where + " names the column and may have written its constraint"}
+		if strings.HasPrefix(where, "the column's type ") {
+			reason = unreadableReason{text: where + " is not read", literal: true}
+		}
+		unreadable = append(unreadable, reason)
 	}
 	if len(unreadable) != 0 {
-		name := f.table + "_" + f.column + "_check"
-		return []diagnostic.Diagnostic{diagnostic.EnumList.At(at.Filename, at.Line, at.Column).
-			Say(subject, "the CHECK list on this enum column cannot be read statically: "+unreadable[0]).
-			To(fmt.Sprintf("write the constraint again in a new migration as literal ALTER TABLE %s DROP CONSTRAINT %s and ALTER TABLE %s ADD CONSTRAINT %s CHECK (...) statements listing every case; the newest literal list is the one compared", f.table, name, f.table, name))}, false
-	}
-
-	// narrowing names the other way to resolve a missing case: the column is
-	// deliberately narrower than the enum, which its field declares.
-	narrowing := func(admitted []listValue) string {
-		var names []string
-		for _, c := range f.cases {
-			if containsValue(admitted, f.value(c)) {
-				names = append(names, c.Name)
-			}
+		first := unreadable[0]
+		name := namePlaceholder(f.table)
+		if first.constraint != nil && first.constraint.known() {
+			name = sqlName(first.constraint.name)
 		}
-		return fmt.Sprintf("; if the column is deliberately narrower than the enum, instead declare the cases it holds on %s.%s with the foundry tag option values=%s", f.model, f.field, strings.Join(names, "|"))
+		fix := fmt.Sprintf("write the constraint again in a new migration as literal ALTER TABLE %s DROP CONSTRAINT %s and ALTER TABLE %s ADD CONSTRAINT %s CHECK (...) statements whose test is a plain IN (...), = ANY (ARRAY[...]) or <@ '[...]' holding every case; the newest literal list is the one compared", f.table, name, f.table, name)
+		if first.literal {
+			fix = fmt.Sprintf("constrain the column with a literal list in a new migration: ALTER TABLE %s ADD CONSTRAINT %s CHECK (%s IN (...)) listing every case; the rule compares CHECK lists only", f.table, sqlName(f.table+"_"+f.column+"_check"), f.column)
+		}
+		return []diagnostic.Diagnostic{diagnostic.EnumList.At(at.Filename, at.Line, at.Column).
+			Say(subject, "the CHECK list on this enum column cannot be read statically: "+first.text).To(fix)}, false
 	}
 
 	var result []diagnostic.Diagnostic
@@ -317,11 +346,12 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 				extra = append(extra, v.String())
 			}
 		}
-		where := fmt.Sprintf("constraint %s on %s, last written at %s", c.name, subject, c.src.where(c.atOffset))
+		where := fmt.Sprintf("%s on %s, last written at %s", c.describe(), subject, c.src.where(c.atOffset))
 		scope := "an enum case"
 		if f.narrowed {
 			scope = fmt.Sprintf("among the cases named by values= on %s.%s", f.model, f.field)
 		}
+		list := newList(c, column.list)
 		if len(missing) != 0 {
 			position := f.enumPackage.Fset.Position(missing[0].Pos)
 			names := make([]string, len(missing))
@@ -332,9 +362,18 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 			if len(missing) > 1 {
 				problem = fmt.Sprintf("cases %s are missing from the list of %s", strings.Join(names, ", "), where)
 			}
-			advice := fix(c, column.list)
-			if !f.narrowed && len(extra) == 0 {
-				advice += narrowing(admitted)
+			advice := migration + list
+			switch {
+			case f.narrowed:
+				advice = fmt.Sprintf("either (a) the column should hold the case: %s; or (b) the column should not hold it: remove it from values= on %s.%s and run foundry generate", advice, f.model, f.field)
+			case len(extra) == 0:
+				var names []string
+				for _, k := range f.cases {
+					if containsValue(admitted, f.value(k)) {
+						names = append(names, k.Name)
+					}
+				}
+				advice = fmt.Sprintf("either (a) the column should hold the new case: %s; or (b) the column deliberately holds only some cases: declare values=%s on %s.%s and run foundry generate", advice, strings.Join(names, "|"), f.model, f.field)
 			}
 			result = append(result, diagnostic.EnumList.At(position.Filename, position.Line, position.Column).
 				Say("enum "+f.enum, problem).To(advice))
@@ -342,7 +381,7 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 		if len(extra) != 0 {
 			problem := fmt.Sprintf("the list of %s holds %s, which is not %s", where, strings.Join(extra, ", "), scope)
 			result = append(result, diagnostic.EnumList.At(at.Filename, at.Line, at.Column).
-				Say(f.model+"."+f.field, problem).To(fix(c, column.list)))
+				Say(f.model+"."+f.field, problem).To(migration+list))
 		}
 	}
 	return result, len(readable) != 0
