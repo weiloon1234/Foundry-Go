@@ -9,8 +9,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// doc-example:begin http-content-security-policy-1
 func noncePolicy() foundryhttp.Middleware {
+	// doc-example:begin http-content-security-policy-1
 	policy := foundryhttp.CSPPolicy{
 		DefaultSrc:     []foundryhttp.CSPSource{foundryhttp.CSPNone()},
 		ScriptSrc:      []foundryhttp.CSPSource{foundryhttp.CSPNonceSource(), foundryhttp.CSPStrictDynamic()},
@@ -22,32 +22,32 @@ func noncePolicy() foundryhttp.Middleware {
 	middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
 		Enforce: value.Set(policy),
 	})
+	// doc-example:end http-content-security-policy-1
 	return middleware
 }
 
-// doc-example:end http-content-security-policy-1
-// doc-example:begin http-content-security-policy-2
 func wasmPolicy() foundryhttp.CSPPolicy {
+	// doc-example:begin http-content-security-policy-2
 	policy := foundryhttp.CSPPolicy{
 		DefaultSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
 		ScriptSrc:  []foundryhttp.CSPSource{foundryhttp.CSPSelf(), foundryhttp.CSPWasmUnsafeEval()},
 		ConnectSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
 	}
+	// doc-example:end http-content-security-policy-2
 	return policy
 }
 
-// doc-example:end http-content-security-policy-2
-// doc-example:begin http-content-security-policy-3
 func analyticsSettings(settings application.Settings) application.Settings {
+	// doc-example:begin http-content-security-policy-3
 	settings.HTTP.CSPAllowlist.Presets = []foundryhttp.CSPPreset{
 		foundryhttp.CSPPresetCloudflareWebAnalytics,
 	}
+	// doc-example:end http-content-security-policy-3
 	return settings
 }
 
-// doc-example:end http-content-security-policy-3
-// doc-example:begin http-content-security-policy-4
 func allowlistedHandler(settings application.Settings, router http.Handler) (http.Handler, error) {
+	// doc-example:begin http-content-security-policy-4
 	policy, err := foundryhttp.ApplyCSPAllowlist(foundryhttp.CSPPolicy{
 		DefaultSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
 		ScriptSrc:  []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
@@ -61,20 +61,21 @@ func allowlistedHandler(settings application.Settings, router http.Handler) (htt
 	middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
 		Enforce: value.Set(policy),
 	})
-	return foundryhttp.ApplyMiddleware(router, middleware)
+	handler, err := foundryhttp.ApplyMiddleware(router, middleware)
+	// doc-example:end http-content-security-policy-4
+	return handler, err
 }
 
-// doc-example:end http-content-security-policy-4
-// doc-example:begin http-content-security-policy-5
 func renderPage(writer http.ResponseWriter, request *http.Request, page *template.Template) {
+	// doc-example:begin http-content-security-policy-5
 	nonce, ok := foundryhttp.CSPNonceFromContext(request.Context())
 	if !ok {
 		// This handler requires a configured nonce policy.
 		return
 	}
 	data := struct{ Nonce string }{Nonce: nonce.String()}
-	_ = page.Execute(writer, data)
-
+	if err := page.Execute(writer, data); err != nil {
+		return
+	}
+	// doc-example:end http-content-security-policy-5
 }
-
-// doc-example:end http-content-security-policy-5

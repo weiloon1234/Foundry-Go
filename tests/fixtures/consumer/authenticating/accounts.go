@@ -16,7 +16,12 @@ import (
 type UserProvider = auth.Provider[models.User, model.ID[models.User]]
 type UserStrategy = auth.Strategy[models.User, model.ID[models.User]]
 type ProfileInput = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]
+
+// doc-example:begin profile-endpoint-type
 type ProfileEndpoint = foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
+
+// doc-example:end profile-endpoint-type
+
 type OptionalProfileEndpoint = foundryhttp.OptionalAuthenticationEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 
 // Users reuses the declared stored primary-key codec and ordinary typed query.

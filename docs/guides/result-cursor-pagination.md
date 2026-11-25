@@ -4,19 +4,26 @@
 
 ## Declare the result identity
 
+`reports.UserSummary` is a projection struct with `ID model.ID[models.User]`, `Email string`, `Nickname value.Nullable[string]`, and `Status models.Status`; `reports.UserSummaryColumns` embeds `rows.Row[UserSummary]` and binds those fields with `rows.IDOf`, `rows.TextOf`, `rows.NullableTextOf`, and `rows.EnumOf` in `rows.Define`. `summaries` is that mapping; `users` is the generated `models.UserTable`.
+
+The application owns `models.User` and any generated tables or identities used below.
+
+`models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm/expr`, `database/orm`, `database/orm/rows`, `value`.
+
+Inputs: `ctx context.Context`, `db database.Executor`, `users models.UserTable`, `summaries reports.UserSummaryColumns`.
+
 <!-- compiled-source: tests/fixtures/consumer/cursorqueries/guide_recipes.go#result-cursor-pagination-1 -->
 ```go
-func paginateSummaries(ctx context.Context, db database.Executor, users models.UserTable, summaries reports.UserSummaryColumns) (orm.CursorPage[reports.UserSummary], error) {
-	u, r := users, summaries
-	report := rows.Select(rows.From(u.Query()), r.Row,
-		rows.Map(r.ID, expr.Value(u.Key())), rows.Map(r.Email, expr.Value(u.Email)),
-		rows.Map(r.Nickname, expr.Value(u.Nickname)), rows.Map(r.Status, expr.Value(u.Status)))
-	cursor := rows.CursorFor(rows.RecordOf(report))
-	ordered := cursor.OrderBy(expr.Asc(rows.At(cursor.Scope(), r.Nickname))).
-		UniqueBy(expr.Group(rows.At(cursor.Scope(), r.ID)))
-	page, err := ordered.Paginate(ctx, db, orm.CursorRequest[reports.UserSummary]{Size: 20})
-	return page, err
-}
+u, r := users, summaries
+report := rows.Select(rows.From(u.Query()), r.Row,
+	rows.Map(r.ID, expr.Value(u.Key())), rows.Map(r.Email, expr.Value(u.Email)),
+	rows.Map(r.Nickname, expr.Value(u.Nickname)), rows.Map(r.Status, expr.Value(u.Status)))
+cursor := rows.CursorFor(rows.RecordOf(report))
+ordered := cursor.OrderBy(expr.Asc(rows.At(cursor.Scope(), r.Nickname))).
+	UniqueBy(expr.Group(rows.At(cursor.Scope(), r.ID)))
+page, err := ordered.Paginate(ctx, db, orm.CursorRequest[reports.UserSummary]{Size: 20})
 ```
 
 `rows.CursorQuery.Scope()` identifies the completed output as `CursorScope[Result]`. `rows.At` on declared row columns retain each field's result owner, value type and nullability. Input model predicates and ordering descriptors cannot be used as output descriptors. Select a computed sort expression into a declared result field first, then order that output field.
@@ -37,16 +44,15 @@ The outer order is explicit and independent of an inner order. An inner order ma
 
 ## Nullable values and navigation
 
+Inputs: `ctx context.Context`, `db database.Executor`, `users models.UserTable`.
+
 <!-- compiled-source: tests/fixtures/consumer/cursorqueries/guide_recipes.go#result-cursor-pagination-2 -->
 ```go
-func paginateNicknames(ctx context.Context, db database.Executor, users models.UserTable) (orm.CursorPage[value.Nullable[string]], error) {
-	values := rows.DistinctScalar(rows.SelectScalar(rows.From(users.Query()),
-		expr.AsSelected(expr.Row(expr.Value(users.Nickname)))))
-	cursor := rows.ValueCursorFor(rows.Values(values))
-	ordered := cursor.OrderBy(expr.Asc(cursor.Value())).UniqueBy(expr.Group(cursor.Value()))
-	page, err := ordered.Paginate(ctx, db, orm.CursorRequest[value.Nullable[string]]{Size: 20})
-	return page, err
-}
+values := rows.DistinctScalar(rows.SelectScalar(rows.From(users.Query()),
+	expr.AsSelected(expr.Row(expr.Value(users.Nickname)))))
+cursor := rows.ValueCursorFor(rows.Values(values))
+ordered := cursor.OrderBy(expr.Asc(cursor.Value())).UniqueBy(expr.Group(cursor.Value()))
+page, err := ordered.Paginate(ctx, db, orm.CursorRequest[value.Nullable[string]]{Size: 20})
 ```
 
 `Value()` retains the exact scalar codec; `expr.Group(cursor.Value())` identifies its output column. `UniqueBy(expr.Group(cursor.Value()))` asserts that values are unique. The explicit `rows.DistinctScalar` above removes duplicates, including repeated NULLs. No deduplication is implicit in the cursor builder.
@@ -71,15 +77,14 @@ Query, row decoding, lookahead decoding, cleanup and token-generation errors ret
 
 Results remain idiomatic Go slices. Sorting a copy in memory is explicit:
 
+Inputs: `page orm.CursorPage[reports.UserSummary]`.
+
 <!-- compiled-source: tests/fixtures/consumer/cursorqueries/guide_recipes.go#result-cursor-pagination-3 -->
 ```go
-func sortPageByEmail(page orm.CursorPage[reports.UserSummary]) []reports.UserSummary {
-	items := slices.Clone(page.Items)
-	slices.SortFunc(items, func(a, b reports.UserSummary) int {
-		return cmp.Compare(a.Email, b.Email)
-	})
-	return items
-}
+items := slices.Clone(page.Items)
+slices.SortFunc(items, func(a, b reports.UserSummary) int {
+	return cmp.Compare(a.Email, b.Email)
+})
 ```
 
 This uses the standard [slices helpers](https://pkg.go.dev/slices#SortFunc) and `cmp` package. It sorts only the fetched items. Keep the original page ordering and cursors together for database navigation; use `OrderBy` when sorting should apply across the full dataset. A separate collection wrapper is not required for these operations.

@@ -219,38 +219,41 @@ text, the application's `fieldLabel` line fails to compile and names the key.
 
 ## Supply the form state
 
-`fieldBinder` takes a label function and a state provider. Keep one state per form
-instance and commit the bindings when the form publishes them. Bind all operations
-submitted by the same form in one call. This recipe shows separate single-operation
-and two-operation form instances; its label function returns the message key.
+The application's shared form module provides the hook for its UI library.
+That adapter must keep one `formFieldState()` object and the form values alive
+across renders for each mounted form instance. Its `FormUpdate` applies the
+updater to the latest values and schedules a render.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts):
+Call the binder once during every render, passing every operation that the form
+can validate or submit in that one call. Pass the returned field bindings to the
+controls. After each render that the UI actually shows, the adapter must call
+`commitFormFields(state)` for that state; do not commit during render or for an
+abandoned render. Keep the state until the form unmounts.
+
+This compiled, framework-neutral recipe shows the binder's contract. It is not
+component code. The adapter supplies persistent `state`, current `values`, the
+state updater, issues, and the application's message translator. Here `sdk` is
+the application's generated client module, and `itemsEcho` and `genericEcho`
+stand for the generated operation names submitted by this form.
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#form-state-provider -->
 ```typescript
-export function bindFormOperations(issues: readonly sdk.Issue[]) {
-  type Draft = Required<Pick<sdk.FormValues<sdk.Operations["itemsEcho"]["request"]["body"]>, "amount">>;
-  const label = (key: sdk.FieldMessageKey): string => key;
-  let values: Draft = { amount: "0" };
-  const update: sdk.FormUpdate<Draft> = (next) => { values = next(values); };
+type Draft = Required<Pick<sdk.FormValues<sdk.Operations["itemsEcho"]["request"]["body"]>, "amount">>;
 
-  const singleState = sdk.formFieldState();
-  const singleFields = sdk.fieldBinder(label, () => singleState);
-  const single = singleFields(sdk.operation("itemsEcho"), values, update, issues);
-  sdk.commitFormFields(singleState);
-
-  const combinedState = sdk.formFieldState();
-  const combinedFields = sdk.fieldBinder(label, () => combinedState);
-  const [items, generic] = combinedFields(
+export function bindFormOperations(
+  state: ReturnType<typeof sdk.formFieldState>,
+  values: Draft,
+  update: sdk.FormUpdate<Draft>,
+  issues: readonly sdk.Issue[],
+  label: (key: sdk.FieldMessageKey) => string,
+) {
+  const fields = sdk.fieldBinder(label, () => state);
+  const [items, generic] = fields(
     [sdk.operation("itemsEcho"), sdk.operation("genericEcho")], values, update, issues,
   );
-  sdk.commitFormFields(combinedState);
-  return { single, items, generic };
+  return { items, generic };
 }
 ```
-
-An application wraps the state provider in its UI library's hook and supplies its
-translator. Starter's `web/shared/forms` owns this wrapper for React.
 
 Build each request body with exactly its fields, as a fresh object literal
 typed as the request (or, for a PATCH, an object of the request's type assigned

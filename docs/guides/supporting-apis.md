@@ -130,23 +130,25 @@ negative scale, a scale above `MaxDigits` and results beyond `MaxDigits` fail.
 `Fixed(scale)` presents exactly `scale` fractional digits (`"2.50"`) and fails
 instead of rounding when the value has more digits.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `decimal`.
+
+Inputs: `subtotal decimal.Decimal`, `total decimal.Decimal`.
+
 <!-- compiled-source: tests/fixtures/consumer/codecs/guide_decimal.go#supporting-apis-1 -->
 ```go
-func taxAndShare(subtotal, total decimal.Decimal) error {
-	rate, _ := decimal.Parse("0.0825")
-	tax, err := subtotal.Mul(rate)
-	if err != nil {
-		return err
-	}
-	if err == nil {
-		tax, err = tax.Round(2, decimal.HalfEven)
-	}
-	share, err := total.Div(decimal.FromInt64(3), 2, decimal.HalfUp)
-	if err != nil {
-		return err
-	}
-	_ = tax
-	_ = share
+rate, _ := decimal.Parse("0.0825")
+tax, err := subtotal.Mul(rate)
+if err != nil {
+	return err
+}
+tax, err = tax.Round(2, decimal.HalfEven)
+if err != nil {
+	return err
+}
+share, err := total.Div(decimal.FromInt64(3), 2, decimal.HalfUp)
+if err != nil {
 	return err
 }
 ```

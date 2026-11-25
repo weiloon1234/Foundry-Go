@@ -8,16 +8,15 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-// doc-example:begin bind-validation-rule
 func bindRegistrationCheck(rule validation.Rule[Registration]) func(context.Context, Registration, validation.Limits) error {
+	// doc-example:begin bind-validation-rule
 	bound := rule
 	check := func(ctx context.Context, input Registration, limits validation.Limits) error {
 		return validation.Check(bound, ctx, input, limits)
 	}
+	// doc-example:end bind-validation-rule
 	return check
 }
-
-// doc-example:end bind-validation-rule
 
 // Username composes published bounds with an application-owned format rule.
 // doc-example:begin publish-username-bounds
@@ -28,11 +27,10 @@ func Username(spec validation.Spec, check func(context.Context, string) (bool, e
 
 // doc-example:end publish-username-bounds
 
-// doc-example:begin relative-time-rules
 func relativeTimeRules(services application.Services) (validation.Rule[temporal.DateTime], validation.Rule[temporal.Date]) {
+	// doc-example:begin relative-time-rules
 	future := validation.AfterNow[temporal.DateTime](services.Time())
 	dueDate := validation.AfterOrEqualToday[temporal.Date](services.Time())
+	// doc-example:end relative-time-rules
 	return future, dueDate
 }
-
-// doc-example:end relative-time-rules

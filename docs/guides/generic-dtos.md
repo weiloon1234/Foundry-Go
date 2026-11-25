@@ -6,6 +6,12 @@ the master.
 
 Declare a reusable Go envelope once. Its fields and JSON tags own the wire shape:
 
+`UserDTO` denotes your concrete response struct, and `userJSON` is its `contract.JSON[UserDTO]` descriptor returned by the generated `UserDTOJSON()` helper.
+
+The application owns `User` and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `contract`, `http`.
+
 <!-- compiled-source: tests/fixtures/consumer/genericdto/envelope.go#generic-envelope -->
 ```go
 //foundry:dto
@@ -19,12 +25,11 @@ Generation emits `EnvelopeJSON[T](contract.JSON[T])`, returning
 `contract.JSON[Envelope[T]]`. The function receives the application's concrete
 `UserDTOJSON()` descriptor as `userJSON`:
 
+Inputs: `userJSON contract.JSON[UserDTO]`.
+
 <!-- compiled-source: tests/fixtures/consumer/genericdto/guide_recipes.go#generic-dtos-2 -->
 ```go
-func userEnvelopeResponse(userJSON contract.JSON[UserDTO]) http.Response[Envelope[UserDTO]] {
-	response := http.JSONResponse(200, EnvelopeJSON(userJSON))
-	return response
-}
+response := http.JSONResponse(200, EnvelopeJSON(userJSON))
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/genericdto/envelope.go)
@@ -55,14 +60,13 @@ type Lookup[K comparable, V any] struct {
 }
 ```
 
+Inputs: `userJSON contract.JSON[UserDTO]`.
+
 <!-- compiled-source: tests/fixtures/consumer/genericdto/guide_recipes.go#generic-dtos-3 -->
 ```go
-func userLookupContract(userJSON contract.JSON[UserDTO]) contract.JSON[Lookup[string, UserDTO]] {
-	descriptor := LookupJSON(
-		contract.StringJSON[string](), contract.StringJSONKey[string](), userJSON,
-	)
-	return descriptor
-}
+descriptor := LookupJSON(
+	contract.StringJSON[string](), contract.StringJSONKey[string](), userJSON,
+)
 ```
 
 Key parsing and value parsing retain their existing owners; arbitrary comparable

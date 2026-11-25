@@ -6,24 +6,28 @@ Milestone 10 passed native acceptance. See the master roadmap for verification e
 
 ## Hash and check
 
+The application owns `Account` and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `model`, `database/orm`, `auth/password`, `secret`, `value`.
+
+Inputs: `ctx context.Context`, `submittedPassword string`.
+
 <!-- compiled-source: tests/fixtures/consumer/passwords/hashing_recipes.go#hash-and-check -->
 ```go
-func hashAndCheck(ctx context.Context, submittedPassword string) (bool, error) {
-	hasher, err := password.New(password.DefaultConfig())
-	if err != nil {
-		return false, err
-	}
-	plain, err := password.NewPlaintext(secret.New(submittedPassword))
-	if err != nil {
-		return false, err
-	}
-	// Apply the application's password-strength rules before storing a new hash.
-	stored, err := hasher.Hash(ctx, plain)
-	if err != nil {
-		return false, err
-	}
-	return hasher.Check(ctx, plain, stored)
+hasher, err := password.New(password.DefaultConfig())
+if err != nil {
+	return false, err
 }
+plain, err := password.NewPlaintext(secret.New(submittedPassword))
+if err != nil {
+	return false, err
+}
+// Apply the application's password-strength rules before storing a new hash.
+stored, err := hasher.Hash(ctx, plain)
+if err != nil {
+	return false, err
+}
+matches, err := hasher.Check(ctx, plain, stored)
 ```
 
 `password.Plaintext` and `password.Hash` are distinct types. Formatting and JSON
@@ -170,18 +174,19 @@ whether MFA is required. The existing
 provider still owns current model eligibility. All callbacks are required; no
 implicit MFA policy is assumed.
 
+`LoginRequest` is the body DTO shown above; `login` is an `*auth.PasswordLogin[Account, model.ID[Account], string]` configured for email lookup.
+
+Inputs: `ctx context.Context`, `login *auth.PasswordLogin[Account, model.ID[Account], string]`, `email string`, `request LoginRequest`.
+
 <!-- compiled-source: tests/fixtures/consumer/passwords/hashing_recipes.go#password-result -->
 ```go
-func passwordResult(ctx context.Context, login *auth.PasswordLogin[Account, model.ID[Account], string], email string, request LoginRequest) (Account, auth.Proof[Account, model.ID[Account]], error) {
-	result, err := login.Authenticate(ctx, email, request.Password)
-	if err != nil {
-		return Account{}, auth.Proof[Account, model.ID[Account]]{}, err
-	}
-	account := result.Subject() // Already resolved concrete model.
-	proof := result.Proof()     // Model/key types retained.
-	// Pass proof to session/token issuance using its matching assurance mode.
-	return account, proof, nil
+result, err := login.Authenticate(ctx, email, request.Password)
+if err != nil {
+	return Account{}, auth.Proof[Account, model.ID[Account]]{}, err
 }
+account := result.Subject() // Already resolved concrete model.
+proof := result.Proof()     // Model/key types retained.
+// Pass proof to session/token issuance using its matching assurance mode.
 ```
 
 The [complete consumer binding](../../tests/fixtures/consumer/passwords/login.go)

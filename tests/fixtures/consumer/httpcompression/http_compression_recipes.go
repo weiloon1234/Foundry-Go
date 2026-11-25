@@ -6,35 +6,34 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-// doc-example:begin http-compression-1
 func compressedHandler(router http.Handler) (http.Handler, error) {
-	return foundryhttp.ApplyMiddleware(
+	// doc-example:begin http-compression-1
+	handler, err := foundryhttp.ApplyMiddleware(
 		router,
 		foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
 	)
+	// doc-example:end http-compression-1
+	return handler, err
 }
 
-// doc-example:end http-compression-1
-
-// doc-example:begin http-compression-2
 func compressionConfig() foundryhttp.CompressionConfig {
+	// doc-example:begin http-compression-2
 	config := foundryhttp.DefaultCompressionConfig()
 	config.Encoders = []foundryhttp.CompressionEncoder{
 		foundryhttp.GzipCompression(foundryhttp.GzipFastest),
 		foundryhttp.BrotliCompression(foundryhttp.BrotliQuality(4), foundryhttp.BrotliWindow(20)),
 	}
+	// doc-example:end http-compression-2
 	return config
 }
 
-// doc-example:end http-compression-2
-
-// doc-example:begin http-compression-3
 func compressedETags(router http.Handler) (http.Handler, error) {
-	return foundryhttp.ApplyMiddleware(
+	// doc-example:begin http-compression-3
+	handler, err := foundryhttp.ApplyMiddleware(
 		router,
 		foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
 		foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
 	)
+	// doc-example:end http-compression-3
+	return handler, err
 }
-
-// doc-example:end http-compression-3

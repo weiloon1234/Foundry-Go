@@ -13,11 +13,15 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
+// doc-example:begin profile-response
+
 //foundry:dto http=response
 type Profile struct {
 	Name string `json:"name"`
 	Kind string `json:"kind"`
 }
+
+// doc-example:end profile-response
 
 //foundry:multipart http=body
 type UploadInput struct{ Image http.UploadedFile }

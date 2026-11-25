@@ -7,6 +7,24 @@ selects the concrete inner field; `MergeQueries` combines descriptors of the
 same outer type. Neither introduces a wire-name prefix nor rewrites codecs.
 Overlapping wire names reject declaration rather than choosing a winner.
 
+Declare the query in the same package and run `foundry generate`; `SearchInputDescriptor()` returns its typed query descriptor.
+
+`models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `model`, `value`.
+
+<!-- compiled-source: tests/fixtures/consumer/httpquery/query.go#query-presence -->
+```go
+//foundry:query
+type SearchInput struct {
+	User     model.ID[models.User]
+	Search   value.Optional[string] `query:"q"`
+	Statuses []models.Status        `query:"status"`
+}
+```
+
+The application owns `models.User` and any generated tables or identities used below.
+
 <!-- compiled-source: tests/fixtures/consumer/httpquery/composition.go#composed-search-window -->
 ```go
 type SearchWindow struct {

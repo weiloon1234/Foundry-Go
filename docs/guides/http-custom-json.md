@@ -11,6 +11,10 @@ The [TrackingCode consumer](../../tests/fixtures/consumer/httpquery/json_contrac
 shares one scalar declaration with its URL codec. `Type.ID` is the value type's
 actual import path and name; use your application's identity when copying it:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `contract`, `fault`, `value`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpquery/scalar_metadata.go#tracking-scalar -->
 ```go
 // TrackingCode is an application-owned text protocol. The scalar declaration
@@ -32,8 +36,10 @@ func (v *TrackingCode) UnmarshalText(data []byte) error {
 	return nil
 }
 
+var trackingType = reflect.TypeFor[TrackingCode]()
+
 var TrackingScalar = contract.DefineScalar[TrackingCode](contract.Type{
-	ID: "foundry.test/consumer/httpquery.TrackingCode", Kind: contract.StringKind,
+	ID: contract.TypeID(trackingType.PkgPath() + "." + trackingType.Name()), Kind: contract.StringKind,
 })
 ```
 

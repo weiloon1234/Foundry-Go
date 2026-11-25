@@ -31,6 +31,8 @@ This example accepts settings whose database and HTTP configuration already
 belong to the application. The numbers are explicit application choices, not
 framework defaults. Alerts and browser admission remain disabled here.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `clock`, `database`, `model`, `database/orm`, `telemetry/sourcemap`, `telemetry`, `testkit/telemetry` as `telemetrytest`.
+
 <!-- compiled-source: tests/fixtures/consumer/developeroperations/telemetry_settings.go#configure-telemetry -->
 ```go
 func BuildTelemetry(ctx context.Context, settings application.Settings) (*application.App, error) {
@@ -360,6 +362,8 @@ actor, calls `AcknowledgeIn`, and upserts attribution for the returned episode.
 The [independent consumer example](../../tests/fixtures/consumer/telemetry_consumer_test.go)
 shows this order with an application-owned actor repository:
 
+The application owns `TelemetryConsoleActor` and any generated tables or identities used below.
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/telemetry_acknowledgement.go#persisted-telemetry-1 -->
 ```go
 // TelemetryConsoleActor identifies the operator whose current authority is checked.
@@ -428,19 +432,18 @@ call `RecordBrowser`; they do not retain or construct a collector. For example,
 a handler's service factory can retain the resolved engine and admit a validated
 transport DTO as follows:
 
+Inputs: `ctx context.Context`, `services application.Services`.
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_telemetry.go#persisted-telemetry-2 -->
 ```go
-func recordBrowserError(ctx context.Context, services application.Services) error {
-	engine, err := services.Telemetry()
-	if err != nil {
-		return err
-	}
-	return engine.RecordBrowser(ctx, telemetry.BrowserError{
-		Portal: "admin", Release: "release-1", Code: telemetry.BrowserCodeTypeError,
-		Frames: []telemetry.BrowserFrame{{File: "admin/_assets/app.js", Line: 1}},
-	})
-
+engine, err := services.Telemetry()
+if err != nil {
+	return err
 }
+recordErr := engine.RecordBrowser(ctx, telemetry.BrowserError{
+	Portal: "admin", Release: "release-1", Code: telemetry.BrowserCodeTypeError,
+	Frames: []telemetry.BrowserFrame{{File: "admin/_assets/app.js", Line: 1}},
+})
 ```
 
 The portal and release in this example must match the configured collector
@@ -542,26 +545,25 @@ The application owns scheduling and recovery after a failed deletion.
 the migrations to an isolated test schema and starting the app, use
 `testkit/telemetry.Flush` to persist observations before asserting reads:
 
+Inputs: `t *testing.T`, `app *application.App`.
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_telemetry_test.go#persisted-telemetry-3 -->
 ```go
-func assertBrowserIssue(t *testing.T, app *application.App) {
-	engine, err := app.Resources().Telemetry()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Exercise browser admission and wait for any asynchronous error reporters.
-	telemetrytest.Flush(t, engine)
-	issues, err := engine.Reader().Issues(t.Context(), telemetry.IssueQuery{
-		Source: telemetry.SourceBrowser,
-		Page:   orm.Page(1, 10),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if issues.Total != 1 {
-		t.Fatalf("browser issues = %d, want 1", issues.Total)
-	}
-
+engine, err := app.Resources().Telemetry()
+if err != nil {
+	t.Fatal(err)
+}
+// Exercise browser admission and wait for any asynchronous error reporters.
+telemetrytest.Flush(t, engine)
+issues, err := engine.Reader().Issues(t.Context(), telemetry.IssueQuery{
+	Source: telemetry.SourceBrowser,
+	Page:   orm.Page(1, 10),
+})
+if err != nil {
+	t.Fatal(err)
+}
+if issues.Total != 1 {
+	t.Fatalf("browser issues = %d, want 1", issues.Total)
 }
 ```
 

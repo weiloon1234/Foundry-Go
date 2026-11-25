@@ -9,8 +9,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/redis"
 )
 
-// doc-example:begin pubsub-1
 func publishAndReceive(ctx context.Context, broker *pubsub.Broker, member Member) error {
+	// doc-example:begin pubsub-1
 	topic, err := MemberChanged.Bind(broker)
 	if err != nil {
 		return err
@@ -33,23 +33,21 @@ func publishAndReceive(ctx context.Context, broker *pubsub.Broker, member Member
 	if err != nil {
 		return err
 	}
+	// doc-example:end pubsub-1
 	_ = subscribers
 	_ = change
 	return err
 }
 
-// doc-example:end pubsub-1
-
-// doc-example:begin pubsub-2
 func redisBroker(client *redis.Client, namespace keyspace.Namespace) (*pubsub.Broker, error) {
+	// doc-example:begin pubsub-2
 	broker, err := pubsub.NewBroker(client, pubsub.DefaultConfig(namespace))
+	// doc-example:end pubsub-2
 	return broker, err
 }
 
-// doc-example:end pubsub-2
-
-// doc-example:begin pubsub-3
 func superviseMember(ctx context.Context, topic pubsub.Topic[model.ID[Member], MemberChange], member Member, apply func(context.Context, MemberChange) error, reloadMember func(context.Context, model.ID[Member]) error) error {
+	// doc-example:begin pubsub-3
 	err := topic.Supervise(ctx, member.ID, pubsub.DefaultSupervisePolicy(),
 		func(ctx context.Context, change MemberChange) error { return apply(ctx, change) },
 		func(ctx context.Context, gap pubsub.Gap) error { return reloadMember(ctx, member.ID) },
@@ -57,7 +55,6 @@ func superviseMember(ctx context.Context, topic pubsub.Topic[model.ID[Member], M
 	if err != nil {
 		return err
 	}
+	// doc-example:end pubsub-3
 	return err
 }
-
-// doc-example:end pubsub-3

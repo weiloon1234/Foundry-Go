@@ -27,6 +27,8 @@ multipart cleanup or HTTP file transport.
 The [independent consumer](../../tests/fixtures/consumer/storing/files.go) supplies
 complete imports and application assembly.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `foundation`, `http` as `foundryhttp`, `storage/local`, `storage/s3`, `storage`, `storage/http` as `storagehttp`, `value`.
+
 <!-- compiled-source: tests/fixtures/consumer/storing/guide.go#store-and-open -->
 ```go
 func StoreAndCopy(ctx context.Context, disk *storage.Disk, input io.Reader, destination io.Writer) error {
@@ -97,21 +99,21 @@ version is deleted by `Version` alone, which removes exactly that version withou
 a delete marker. `Capabilities.ValidatePut`, `ValidateRead`, `ValidateDelete` and
 `ValidateList` are the shared checks used by `Disk` and the adapters.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Inputs: `ctx context.Context`, `disk *storage.Disk`.
+
 <!-- compiled-source: tests/fixtures/consumer/storing/guide_listing.go#storage-1 -->
 ```go
-func listReports(ctx context.Context, disk *storage.Disk) error {
-	prefix, err := storage.ParsePrefix("reports/")
-	if err != nil {
-		return err
-	}
-	page, err := disk.List(ctx, storage.ListOptions{Prefix: prefix, Limit: 100})
-	if err != nil {
-		return err
-	}
-	// Use page.Next unchanged with the same disk and prefix for the next page.
-	_ = page
-	return nil
+prefix, err := storage.ParsePrefix("reports/")
+if err != nil {
+	return storage.Page{}, err
 }
+page, err := disk.List(ctx, storage.ListOptions{Prefix: prefix, Limit: 100})
+if err != nil {
+	return storage.Page{}, err
+}
+// Use page.Next unchanged with the same disk and prefix for the next page.
 ```
 
 Listings are bounded pages, not transactionally consistent snapshots. A cursor

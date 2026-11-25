@@ -1,6 +1,7 @@
 package httpquery
 
 import (
+	"reflect"
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
@@ -29,8 +30,10 @@ func (v *TrackingCode) UnmarshalText(data []byte) error {
 	return nil
 }
 
+var trackingType = reflect.TypeFor[TrackingCode]()
+
 var TrackingScalar = contract.DefineScalar[TrackingCode](contract.Type{
-	ID: "foundry.test/consumer/httpquery.TrackingCode", Kind: contract.StringKind,
+	ID: contract.TypeID(trackingType.PkgPath() + "." + trackingType.Name()), Kind: contract.StringKind,
 })
 
 // doc-example:end tracking-scalar

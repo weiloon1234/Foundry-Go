@@ -9,6 +9,10 @@ Declare a public transport struct and run the existing Foundry generator. Its
 generated descriptor retains the concrete DTO type and owns one normalized schema
 for strict decoding and client contract export.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `contract`, `value`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpdto/profile_recipes.go#http-dtos-1 -->
 ```go
 // UpdateProfile distinguishes omitted fields from explicit nickname clearing.
@@ -95,19 +99,18 @@ for helper names, signatures, collision failures and structural exclusions.
 The descriptor is immutable and can be reused concurrently. The lower-level
 decoding API accepts an already bounded byte buffer and explicit resource limits:
 
+Inputs: `ctx context.Context`, `payload []byte`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpdto/profile_recipes.go#http-dtos-3 -->
 ```go
-func decodeProfile(ctx context.Context, payload []byte) (UpdateProfile, error) {
-	limits := contract.JSONLimits{
-		Bytes:  4096,
-		Depth:  16,
-		Nodes:  500,
-		Steps:  2000,
-		Issues: 20,
-	}
-	request, err := ProfileBody.Decode(ctx, payload, limits)
-	return request, err
+limits := contract.JSONLimits{
+	Bytes:  4096,
+	Depth:  16,
+	Nodes:  500,
+	Steps:  2000,
+	Issues: 20,
 }
+request, err := ProfileBody.Decode(ctx, payload, limits)
 ```
 
 `contract` is Foundry's contract package. `request` has type `UpdateProfile`.

@@ -170,6 +170,10 @@ option's behavior. To keep channel level filtering and delivery counters, use
 `logging.WithHandler` in direct `logging.PrepareChannels` assembly. Declare the
 channel and its minimum level, and pass `nil` for the borrowed default logger:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `attribution`, `logging`.
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_logging.go#vendor-log-channel -->
 ```go
 func prepareVendorChannels(handler slog.Handler) (*logging.ChannelSet, error) {
@@ -217,15 +221,17 @@ objects still require explicit safe logging contracts. See
 to every record logged with it, under the reserved `context` group, next to the
 `correlation` group (`request_id`, `trace_id`, `span_id`):
 
-<!-- compiled-source: tests/fixtures/consumer/tooling/guide_logging.go#logging-2 -->
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_logging.go#tenant-log-identity -->
 ```go
 type tenantLogIdentity struct{ ID string }
+```
 
-func logTenant(ctx context.Context, logger *slog.Logger, tenant tenantLogIdentity) error {
-	ctx = logging.WithAttrs(ctx, slog.String("tenant", string(tenant.ID)), slog.String("route", "orders.show"))
-	logger.InfoContext(ctx, "order loaded") // {"msg":"order loaded","context":{"tenant":"t1","route":"orders.show"}}
-	return nil
-}
+Inputs: `ctx context.Context`, `logger *slog.Logger`, `tenant tenantLogIdentity`.
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_logging.go#logging-2 -->
+```go
+ctx = logging.WithAttrs(ctx, slog.String("tenant", string(tenant.ID)), slog.String("route", "orders.show"))
+logger.InfoContext(ctx, "order loaded") // {"msg":"order loaded","context":{"tenant":"t1","route":"orders.show"}}
 ```
 
 A later field replaces an earlier one with the same key. At most
@@ -241,25 +247,27 @@ record. `logging.AttrsFromContext(ctx)` returns an owned copy.
 Context values do not cross a queue. Snapshot them when dispatching and restore
 them in the handler:
 
-<!-- compiled-source: tests/fixtures/consumer/tooling/guide_logging.go#logging-3 -->
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_logging.go#invoice-log-identity -->
 ```go
 // InvoiceID is the application invoice key carried by its job payload.
 type InvoiceID string
+```
 
-func invoiceLog(ctx context.Context, logger *slog.Logger, id InvoiceID) error {
-	type SendInvoice struct {
-		InvoiceID InvoiceID             `json:"invoice_id"`
-		Request   attribution.RequestID `json:"request_id,omitempty"`
-		Log       logging.ContextFields `json:"log,omitzero"`
-	}
+Inputs: `ctx context.Context`, `logger *slog.Logger`, `id InvoiceID`.
 
-	payload := SendInvoice{InvoiceID: id, Request: attribution.FromContext(ctx).Request().ID, Log: logging.FieldsFromContext(ctx)}
-
-	// In the job handler:
-	ctx = payload.Log.Context(ctx)
-	logger.InfoContext(ctx, "sending invoice", slog.String("origin_request_id", string(payload.Request)))
-	return nil
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_logging.go#logging-3 -->
+```go
+type SendInvoice struct {
+	InvoiceID InvoiceID             `json:"invoice_id"`
+	Request   attribution.RequestID `json:"request_id,omitempty"`
+	Log       logging.ContextFields `json:"log,omitzero"`
 }
+
+payload := SendInvoice{InvoiceID: id, Request: attribution.FromContext(ctx).Request().ID, Log: logging.FieldsFromContext(ctx)}
+
+// In the job handler:
+ctx = payload.Log.Context(ctx)
+logger.InfoContext(ctx, "sending invoice", slog.String("origin_request_id", string(payload.Request)))
 ```
 
 `logging.ContextFields` is a bounded JSON object; decoding reapplies every limit

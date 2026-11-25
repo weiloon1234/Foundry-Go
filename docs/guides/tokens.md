@@ -29,9 +29,19 @@ or migrate. Register the binding's `Guard()` once alongside other auth declarati
 The [consumer example](../../tests/fixtures/consumer/authenticating/tokens.go)
 shows independent use verified by the milestone gate.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `clock`, `database`, `datatable`, `http` as `foundryhttp`, `model`, `schedule`, `secret`, `auth/token`, `auth/token/postgres` as `tokenpg`.
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#user-token-types -->
+```go
+type UserTokens = token.Tokens[models.User, model.ID[models.User]]
+type IssuedUserToken = token.Issued[models.User, model.ID[models.User]]
+```
+
+The application owns `models.User` and `Operator` and any generated tables or identities used below.
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#token-store -->
 ```go
-func APITokens(db *database.DB, provider auth.Provider[models.User, model.ID[models.User]], persistence tokenpg.Config, config token.Config, declared auth.AccessScopes[models.User]) (*token.Tokens[models.User, model.ID[models.User]], error) {
+func APITokens(db *database.DB, provider auth.Provider[models.User, model.ID[models.User]], persistence tokenpg.Config, config token.Config, declared auth.AccessScopes[models.User]) (*UserTokens, error) {
 	backend, err := tokenpg.New(db, persistence)
 	if err != nil {
 		return nil, err
@@ -61,7 +71,7 @@ validates the checks in its own transaction without blocking reads or writes.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#issue-token -->
 ```go
-func StartVerifiedToken(ctx context.Context, tokens *token.Tokens[models.User, model.ID[models.User]], proof auth.Proof[models.User, model.ID[models.User]], name string, renewable bool, granted auth.AccessScopes[models.User]) (token.Issued[models.User, model.ID[models.User]], error) {
+func StartVerifiedToken(ctx context.Context, tokens *UserTokens, proof auth.Proof[models.User, model.ID[models.User]], name string, renewable bool, granted auth.AccessScopes[models.User]) (IssuedUserToken, error) {
 	return tokens.Issue(ctx, proof, token.IssueOptions[models.User]{Name: name, Scopes: granted, Refresh: renewable})
 }
 ```
@@ -117,14 +127,14 @@ The refresh helper keeps the typed request boundary explicit:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/token_routes.go#refresh-from-body -->
 ```go
-func RefreshFromBody(ctx context.Context, tokens *token.Tokens[models.User, model.ID[models.User]], request foundryhttp.RefreshTokenRequest) (token.Issued[models.User, model.ID[models.User]], error) {
+func RefreshFromBody(ctx context.Context, tokens *UserTokens, request foundryhttp.RefreshTokenRequest) (IssuedUserToken, error) {
 	return tokens.Refresh(ctx, request.RefreshToken.Secret())
 }
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/token_routes.go#native-token-delivery -->
 ```go
-func TokenRoutes(tokens *token.Tokens[models.User, model.ID[models.User]], clock clock.Clock, verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error), scopes auth.AccessScopes[models.User]) (*foundryhttp.Router, error) {
+func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error), scopes auth.AccessScopes[models.User]) (*foundryhttp.Router, error) {
 	guard := tokens.Guard()
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration())
 	if err != nil {
@@ -142,10 +152,10 @@ func TokenRoutes(tokens *token.Tokens[models.User, model.ID[models.User]], clock
 	loginRoute := route("api.login", foundryhttp.POST, "/login", foundryhttp.Public)
 
 	login := foundryhttp.DefineEndpoint(loginRoute,
-		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (token.Issued[models.User, model.ID[models.User]], error) {
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (IssuedUserToken, error) {
 		proof, err := verify(ctx)
 		if err != nil {
-			return token.Issued[models.User, model.ID[models.User]]{}, err
+			return IssuedUserToken{}, err
 		}
 		return StartVerifiedToken(ctx, tokens, proof, "API client", true, scopes)
 	})
@@ -153,7 +163,7 @@ func TokenRoutes(tokens *token.Tokens[models.User, model.ID[models.User]], clock
 	refreshRoute := route("api.refresh", foundryhttp.POST, "/refresh", foundryhttp.Public)
 
 	refresh := foundryhttp.DefineEndpoint(refreshRoute,
-		foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenBody(), response).Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshTokenRequest]) (token.Issued[models.User, model.ID[models.User]], error) {
+		foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenBody(), response).Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshTokenRequest]) (IssuedUserToken, error) {
 		return RefreshFromBody(ctx, tokens, input.Body)
 	})
 	profileEndpointRoute := route("api.profile", foundryhttp.GET, "/profile", foundryhttp.Guarded)
@@ -228,7 +238,7 @@ var UserRefreshCookie = foundryhttp.DefineRefreshCookie("__Host-refresh-user", f
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/browser_tokens.go#browser-token-delivery -->
 ```go
-func browserTokenDelivery(tokens *token.Tokens[models.User, model.ID[models.User]], clock clock.Clock, verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error), cookie foundryhttp.RefreshCookie, name string, scopes auth.AccessScopes[models.User]) (foundryhttp.RouteRegistration, foundryhttp.RouteRegistration) {
+func browserTokenDelivery(tokens *UserTokens, clock clock.Clock, verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error), cookie foundryhttp.RefreshCookie, name string, scopes auth.AccessScopes[models.User]) (foundryhttp.RouteRegistration, foundryhttp.RouteRegistration) {
 	route := func(id string) foundryhttp.Route[foundryhttp.NoPath] {
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: foundryhttp.RouteID(name + "." + id), Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/"+name+"/"+id))
 	}
@@ -236,17 +246,17 @@ func browserTokenDelivery(tokens *token.Tokens[models.User, model.ID[models.User
 
 	loginRoute := route("login")
 
-	login := foundryhttp.DefineEndpoint(loginRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (token.Issued[models.User, model.ID[models.User]], error) {
+	login := foundryhttp.DefineEndpoint(loginRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (IssuedUserToken, error) {
 		proof, err := verify(ctx)
 		if err != nil {
-			return token.Issued[models.User, model.ID[models.User]]{}, err
+			return IssuedUserToken{}, err
 		}
 		return StartVerifiedToken(ctx, tokens, proof, "Browser", true, scopes)
 	})
 	// The handler is the same as for the JSON refresh body.
 	refreshRoute := route("refresh")
 
-	refresh := foundryhttp.DefineEndpoint(refreshRoute, foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), response).Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshTokenRequest]) (token.Issued[models.User, model.ID[models.User]], error) {
+	refresh := foundryhttp.DefineEndpoint(refreshRoute, foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), response).Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshTokenRequest]) (IssuedUserToken, error) {
 		return RefreshFromBody(ctx, tokens, input.Body)
 	})
 
@@ -273,7 +283,7 @@ does not prevent it. A missing, repeated or malformed cookie arrives as an absen
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/browser_tokens.go#browser-token-logout -->
 ```go
-func browserTokenLogout(tokens *token.Tokens[models.User, model.ID[models.User]], cookie foundryhttp.RefreshCookie, name string) foundryhttp.RouteRegistration {
+func browserTokenLogout(tokens *UserTokens, cookie foundryhttp.RefreshCookie, name string) foundryhttp.RouteRegistration {
 	logoutRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: foundryhttp.RouteID(name + ".logout"), Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/"+name+"/logout"))
 
 	logout := foundryhttp.DefineEndpoint(logoutRoute, foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookieLogout(cookie),
@@ -335,7 +345,7 @@ The request type aliases expose the same descriptor without a copied schema.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#refresh-token -->
 ```go
-func RefreshVerifiedToken(ctx context.Context, tokens *token.Tokens[models.User, model.ID[models.User]], raw secret.String) (token.Issued[models.User, model.ID[models.User]], error) {
+func RefreshVerifiedToken(ctx context.Context, tokens *UserTokens, raw secret.String) (IssuedUserToken, error) {
 	return tokens.Refresh(ctx, raw)
 }
 ```
@@ -386,7 +396,7 @@ can shorten its own, for example admins on the same store as users:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#token-lifetime -->
 ```go
-func ShortLivedTokens(store *token.Store, provider auth.Provider[models.User, model.ID[models.User]], scopes auth.AccessScopes[models.User]) (*token.Tokens[models.User, model.ID[models.User]], error) {
+func ShortLivedTokens(store *token.Store, provider auth.Provider[models.User, model.ID[models.User]], scopes auth.AccessScopes[models.User]) (*UserTokens, error) {
 	return token.New(store, "users.short", provider, "users.short.bearer", scopes,
 		token.WithLifetimes(token.Lifetimes{Renewable: token.Lifetime{
 			Access: 5 * time.Minute, RefreshIdle: 12 * time.Hour, Absolute: 24 * time.Hour,
@@ -443,7 +453,7 @@ single-use ticket for the token family that authenticated it:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#token-ticket -->
 ```go
-func TicketRoute(tokens *token.Tokens[models.User, model.ID[models.User]], binding foundryhttp.GuardBinding[models.User]) (foundryhttp.RouteRegistration, error) {
+func TicketRoute(tokens *UserTokens, binding foundryhttp.GuardBinding[models.User]) (foundryhttp.RouteRegistration, error) {
 	realtimeTicketRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "realtime.ticket", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/realtime/ticket"))
 	endpoint := foundryhttp.DefineEndpoint(
 		realtimeTicketRoute,
@@ -481,7 +491,7 @@ or refresh token. The response must be no-store and the URL must stay out of log
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/table_routes.go#tokens-example-1 -->
 ```go
-func NumericLevelTokenTickets(tokens *token.Tokens[Operator, model.ID[Operator]]) datatable.Tickets[Operator] {
+func OperatorTokenTickets(tokens *token.Tokens[Operator, model.ID[Operator]]) datatable.Tickets[Operator] {
 	return datatable.TokenTickets(tokens)
 }
 ```
@@ -500,14 +510,14 @@ lock rows remain after family deletion to avoid races with new issuance.
 `maxBatches`, honoring cancellation, and reports the removed families. Call it
 from a scheduler handler:
 
+Inputs: `calendar schedule.Calendar`, `api *UserTokens`.
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/pruning_recipes.go#prune-tokens-hourly -->
 ```go
-func pruneTokensHourly(calendar schedule.Calendar, api *token.Tokens[models.User, model.ID[models.User]]) (schedule.Declaration, error) {
-	return calendar.Hourly("auth.tokens.prune", func(ctx context.Context, _ schedule.Invocation) error {
-		_, err := api.PruneExpired(ctx, token.MaxPruneFamilies, 16)
-		return err
-	})
-}
+cleanup, err := calendar.Hourly("auth.tokens.prune", func(ctx context.Context, _ schedule.Invocation) error {
+	_, err := api.PruneExpired(ctx, token.MaxPruneFamilies, 16)
+	return err
+})
 ```
 
 Configured applications can instead return `application.PruneTokens(guard)` in

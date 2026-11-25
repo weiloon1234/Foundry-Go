@@ -12,31 +12,34 @@ contains compiling examples. A declaration retains its exact key type:
 
 `Member` is the application's model, with an `ID` of type `model.ID[Member]`.
 
+The application owns `Member` and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `keyspace`, `model`, `ratelimit`.
+
 <!-- compiled-source: tests/fixtures/consumer/limiting/members.go#member-limit-declaration -->
 ```go
 var MemberRequests = ratelimit.Define("member-requests", keyspace.TextKeys[model.ID[Member]](), ratelimit.PerMinute(60))
 ```
 
+Inputs: `ctx context.Context`, `client ratelimit.Backend`, `namespace keyspace.Namespace`, `member Member`, `handleBusy func(time.Duration) error`.
+
 <!-- compiled-source: tests/fixtures/consumer/limiting/guide_recipes.go#take-member-quota -->
 ```go
-func takeMemberQuota(ctx context.Context, client ratelimit.Backend, namespace keyspace.Namespace, member Member, handleBusy func(time.Duration) error) error {
-	store, err := ratelimit.NewStore(client, ratelimit.DefaultConfig(namespace))
-	if err != nil {
-		return err
-	}
-	limiter, err := MemberRequests.Bind(store)
-	if err != nil {
-		return err
-	}
-	decision, err := limiter.Take(ctx, member.ID, 5)
-	if err != nil {
-		return err
-	}
-	if !decision.Allowed {
-		// RetryAfter is relative to the authority's decision time.
-		return handleBusy(decision.RetryAfter)
-	}
-	return nil
+store, err := ratelimit.NewStore(client, ratelimit.DefaultConfig(namespace))
+if err != nil {
+	return err
+}
+limiter, err := MemberRequests.Bind(store)
+if err != nil {
+	return err
+}
+decision, err := limiter.Take(ctx, member.ID, 5)
+if err != nil {
+	return err
+}
+if !decision.Allowed {
+	// RetryAfter is relative to the authority's decision time.
+	return handleBusy(decision.RetryAfter)
 }
 ```
 
@@ -94,30 +97,29 @@ not an idempotency guarantee.
 
 ## Inspect, clear and attempt
 
+Inputs: `ctx context.Context`, `limiter ratelimit.Limiter[model.ID[Member]]`, `member Member`, `sendVerification func(context.Context, Member) error`.
+
 <!-- compiled-source: tests/fixtures/consumer/limiting/guide_recipes.go#inspect-member-quota -->
 ```go
-func inspectMemberQuota(ctx context.Context, limiter ratelimit.Limiter[model.ID[Member]], member Member, sendVerification func(context.Context, Member) error) (ratelimit.Decision, uint32, time.Duration, bool, error) {
-	decision, err := limiter.Peek(ctx, member.ID, 5)
-	if err != nil {
-		return decision, 0, 0, false, err
-	}
-	remaining, err := limiter.Remaining(ctx, member.ID)
-	if err != nil {
-		return decision, 0, 0, false, err
-	}
-	wait, err := limiter.AvailableIn(ctx, member.ID, 5)
-	if err != nil {
-		return decision, remaining, 0, false, err
-	}
-	cleared, err := limiter.Clear(ctx, member.ID)
-	if err != nil {
-		return decision, remaining, wait, false, err
-	}
-	decision, err = limiter.Attempt(ctx, member.ID, 1, func(ctx context.Context) error {
-		return sendVerification(ctx, member)
-	})
-	return decision, remaining, wait, cleared, err
+decision, err := limiter.Peek(ctx, member.ID, 5)
+if err != nil {
+	return decision, 0, 0, false, err
 }
+remaining, err := limiter.Remaining(ctx, member.ID)
+if err != nil {
+	return decision, 0, 0, false, err
+}
+wait, err := limiter.AvailableIn(ctx, member.ID, 5)
+if err != nil {
+	return decision, remaining, 0, false, err
+}
+cleared, err := limiter.Clear(ctx, member.ID)
+if err != nil {
+	return decision, remaining, wait, false, err
+}
+decision, err = limiter.Attempt(ctx, member.ID, 1, func(ctx context.Context) error {
+	return sendVerification(ctx, member)
+})
 ```
 
 `Peek` reports the decision a cost would receive now without consuming capacity
@@ -142,15 +144,15 @@ inspection output with `Decision.ValidatePeek`.
 
 ## HTTP middleware
 
+Inputs: `limiter ratelimit.Limiter[model.ID[Member]]`, `currentMemberID func(context.Context) (model.ID[Member], error)`.
+
 <!-- compiled-source: tests/fixtures/consumer/limiting/guide_recipes.go#member-rate-middleware -->
 ```go
-func memberRateMiddleware(limiter ratelimit.Limiter[model.ID[Member]], currentMemberID func(context.Context) (model.ID[Member], error)) foundryhttp.Middleware {
-	return foundryhttp.RateLimit(limiter,
-		func(r *http.Request) (model.ID[Member], error) {
-			return currentMemberID(r.Context())
-		},
-	)
-}
+middleware := foundryhttp.RateLimit(limiter,
+	func(r *http.Request) (model.ID[Member], error) {
+		return currentMemberID(r.Context())
+	},
+)
 ```
 
 The resolver is a typed domain boundary. Resolvers that need the authenticated

@@ -16,23 +16,27 @@ without binding a port. Only `app.Run(ctx, foundation.HTTP)` binds the listener,
 after all providers have booted. Selecting a worker or another kernel leaves the
 HTTP listener unopened.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `foundation`, `module root` as `foundry`, `http` as `foundryhttp`.
+
+Inputs: `ctx context.Context`, `handler http.Handler`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpkernel/server_recipe.go#http-kernel-1 -->
 ```go
-func serve(ctx context.Context, handler http.Handler) error {
-	serverKey := foundation.NewKey[*foundryhttp.Server]("app.http")
-	config := foundryhttp.DefaultServerConfig()
-	config.Address = "127.0.0.1:8080"
-	module := foundryhttp.Module("http", serverKey, config,
-		func(resolver foundation.Resolver) (http.Handler, error) {
-			return handler, nil
-		},
-	)
-	app, err := foundry.New().Register(module).Build(ctx)
-	if err != nil {
-		return err
-	}
-	return app.Run(ctx, foundation.HTTP)
+serverKey := foundation.NewKey[*foundryhttp.Server]("app.http")
+config := foundryhttp.DefaultServerConfig()
+config.Address = "127.0.0.1:8080"
+module := foundryhttp.Module("http", serverKey, config,
+	func(resolver foundation.Resolver) (http.Handler, error) {
+		return handler, nil
+	},
+)
+app, err := foundry.New().Register(module).Build(ctx)
+if err != nil {
+	return err
 }
+runErr := app.Run(ctx, foundation.HTTP)
 ```
 
 Here `foundryhttp` imports `github.com/weiloon1234/Foundry-Go/http`, `http` imports

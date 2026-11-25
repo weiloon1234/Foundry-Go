@@ -13,7 +13,7 @@ import (
 // ProfileViews is an evictable, approximate activity count, not durable accounting.
 // The first update sets a one-day TTL; later updates preserve the same expiry.
 // doc-example:begin caching-1
-var ProfileViews = cache.DefineCounter("profile-views-v1", keyspace.TextKeys[model.ID[Member]]())
+var ProfileViews = cache.DefineCounter("profile-views-v1", keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
 
 // doc-example:end caching-1
 

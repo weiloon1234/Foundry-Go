@@ -36,15 +36,14 @@ func preparedSubmission(authorizeSubmission func(context.Context, Submission) er
 
 // doc-example:end forms-request-lifecycle-2
 
-// doc-example:begin forms-request-lifecycle-3
 func authorizedSubmission(transport *foundryhttp.Authentication, accountGuard auth.Guard[Account], accountPolicy func(context.Context, Account, Submission) error) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
+	// doc-example:begin forms-request-lifecycle-3
 	form := formEndpoint(foundryhttp.Guarded)
 	prepared := foundryhttp.PrepareEndpoint(form, Prepare)
 	secured := foundryhttp.RequireAuthentication(prepared, transport, accountGuard)
 	secured = foundryhttp.AuthorizeActor(secured, func(ctx context.Context, actor Account, input Request) error {
 		return accountPolicy(ctx, actor, input.Body)
 	})
+	// doc-example:end forms-request-lifecycle-3
 	return secured
 }
-
-// doc-example:end forms-request-lifecycle-3

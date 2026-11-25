@@ -9,8 +9,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// doc-example:begin http-public-urls-1
 func publicHandler(router http.Handler, proxy foundryhttp.TrustedProxyConfig, security foundryhttp.SecurityHeadersConfig) (http.Handler, error) {
+	// doc-example:begin http-public-urls-1
 	public := foundryhttp.PublicURLConfig{
 		AllowedOrigins: []foundryhttp.Origin{
 			"https://app.example.test",
@@ -23,34 +23,34 @@ func publicHandler(router http.Handler, proxy foundryhttp.TrustedProxyConfig, se
 		foundryhttp.PublicURLs(public),
 		foundryhttp.SecurityHeaders(security),
 	)
+	// doc-example:end http-public-urls-1
 	return handler, err
 }
 
-// doc-example:end http-public-urls-1
-// doc-example:begin http-public-urls-2
 func tenantOrigins() foundryhttp.PublicURLConfig {
+	// doc-example:begin http-public-urls-2
 	public := foundryhttp.PublicURLConfig{
 		AllowedOrigins:  []foundryhttp.Origin{"https://app.example.com"},
 		AllowedPatterns: []foundryhttp.OriginPattern{"https://*.tenants.example.com"},
 		ExemptPaths:     []string{"/healthz", "/readyz"},
 	}
+	// doc-example:end http-public-urls-2
 	return public
 }
 
-// doc-example:end http-public-urls-2
-// doc-example:begin http-public-urls-3
 func absoluteURL(ctx context.Context, endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], path foundryhttp.NoPath, query foundryhttp.NoQuery) (string, error) {
+	// doc-example:begin http-public-urls-3
 	relative, err := endpoint.URL(ctx, path, query)
 	if err != nil {
 		return "", err
 	}
 	absolute, err := foundryhttp.PublicURL(ctx, relative)
+	// doc-example:end http-public-urls-3
 	return absolute, err
 }
 
-// doc-example:end http-public-urls-3
-// doc-example:begin http-public-urls-4
 func originProxy() foundryhttp.TrustedProxyConfig {
+	// doc-example:begin http-public-urls-4
 	proxy := foundryhttp.TrustedProxyConfig{
 		Proxies: []netip.Prefix{netip.MustParsePrefix("10.20.0.0/16")},
 		Headers: []foundryhttp.ProxyHeader{foundryhttp.ForwardedHeader()},
@@ -58,7 +58,6 @@ func originProxy() foundryhttp.TrustedProxyConfig {
 			foundryhttp.ForwardedOriginHeader(),
 		},
 	}
+	// doc-example:end http-public-urls-4
 	return proxy
 }
-
-// doc-example:end http-public-urls-4

@@ -10,8 +10,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
+// doc-example:begin update-endpoint-type
+type UpdateEndpoint = foundryhttp.Endpoint[routes.UserPath, filters.NearbyInput, dto.UpdateUser, dto.UserResponse]
+
+// doc-example:end update-endpoint-type
+
 // doc-example:begin validate-http-body
-func validatedUpdate(endpoint foundryhttp.Endpoint[routes.UserPath, filters.NearbyInput, dto.UpdateUser, dto.UserResponse]) foundryhttp.Endpoint[routes.UserPath, filters.NearbyInput, dto.UpdateUser, dto.UserResponse] {
+func validatedUpdate(endpoint UpdateEndpoint) UpdateEndpoint {
 	return foundryhttp.ValidateBody(endpoint,
 		validation.Rules(validation.WithLabel(dto.UpdateUserValidationFields().Email, "Email address"), validation.Optional(validation.NonBlank[string]())),
 		validation.Rules(validation.WithLabel(dto.UpdateUserValidationFields().Nickname, "Display name"), validation.Optional(validation.Nullable(validation.MinLength[string](2)))),

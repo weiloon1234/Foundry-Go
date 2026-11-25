@@ -9,8 +9,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/extensions"
 )
 
-// doc-example:begin countries-1
 func seedCountries(ctx context.Context, store *extensions.Store, database *database.DB) error {
+	// doc-example:begin countries-1
 	// Register countries.Migrations() in the ordinary migration registry first.
 	seeders, err := seed.New(countries.Seeder(store))
 	if err != nil {
@@ -29,9 +29,8 @@ func seedCountries(ctx context.Context, store *extensions.Store, database *datab
 	if err != nil {
 		return err
 	}
+	// doc-example:end countries-1
 	_ = result
 	_ = malaysia
 	return err
 }
-
-// doc-example:end countries-1

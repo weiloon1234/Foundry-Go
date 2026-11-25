@@ -2,6 +2,7 @@ package httpdto
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -34,8 +35,9 @@ func (k *WarehouseKey) UnmarshalText(data []byte) error {
 
 // JSONKeyContract describes the native key without exposing its stored fields.
 func (WarehouseKey) JSONKeyContract() contract.JSONKey[WarehouseKey] {
+	typ := reflect.TypeFor[WarehouseKey]()
 	return contract.DefineJSONKey(contract.DefineScalar[WarehouseKey](contract.Type{
-		ID: "foundry.test/consumer/httpdto.WarehouseKey", Kind: contract.StringKind,
+		ID: contract.TypeID(typ.PkgPath() + "." + typ.Name()), Kind: contract.StringKind,
 	}))
 }
 

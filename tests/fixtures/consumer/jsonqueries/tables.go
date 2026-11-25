@@ -46,3 +46,16 @@ var QuotedField = expr.JSONFieldOf(func(p *Profile) *string { return &p.Quoted }
 var OddField = expr.JSONFieldOf(func(p *Profile) *string { return &p.Odd })
 
 func policyKeyCodec() codec.Codec[value.JSON[PolicyKey]] { return codec.JSON[PolicyKey]() }
+
+// doc-example:begin validate-json-fields
+func validateJSONDeclarations() error {
+	if err := ProfileField.Validate(); err != nil {
+		return err
+	}
+	if err := NameField.Validate(); err != nil {
+		return err
+	}
+	return AgeField.Validate()
+}
+
+// doc-example:end validate-json-fields

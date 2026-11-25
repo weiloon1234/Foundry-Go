@@ -35,8 +35,8 @@ type SearchInput struct {
 
 type AvatarPath = httpkernel.AssetPath
 
-// doc-example:begin http-signed-urls-1
 func previewURL(ctx context.Context, keys foundryhttp.SigningKeys, applicationClock clock.Clock, publicOrigin foundryhttp.Origin, userID model.ID[models.User], expiresAt time.Time, Preview foundryhttp.Endpoint[UserPath, SearchInput, foundryhttp.NoBody, foundryhttp.NoContent]) (string, error) {
+	// doc-example:begin http-signed-urls-1
 	signer, err := foundryhttp.NewURLSigner(keys, applicationClock)
 	if err != nil {
 		return "", err
@@ -51,16 +51,15 @@ func previewURL(ctx context.Context, keys foundryhttp.SigningKeys, applicationCl
 		},
 		expiresAt,
 	)
+	// doc-example:end http-signed-urls-1
 	return link, err
 }
 
-// doc-example:end http-signed-urls-1
-// doc-example:begin http-signed-urls-2
 func avatarURL(ctx context.Context, signer foundryhttp.URLSigner, publicOrigin foundryhttp.Origin, path AvatarPath, AvatarRoute foundryhttp.Route[AvatarPath]) (string, error) {
+	// doc-example:begin http-signed-urls-2
 	avatar := foundryhttp.SignRoute(AvatarRoute, signer)
 	avatar = foundryhttp.ConfigureSignedRoute(avatar, foundryhttp.PermanentLinks())
 	link, err := foundryhttp.PermanentRouteURL(avatar, ctx, publicOrigin, path)
+	// doc-example:end http-signed-urls-2
 	return link, err
 }
-
-// doc-example:end http-signed-urls-2

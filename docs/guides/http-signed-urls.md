@@ -6,7 +6,13 @@ from an application name or environment global. Ordinary formatting redacts key
 material. Configure scope, middleware, validation and limits on a route/endpoint
 before binding its signer.
 
-Declare the path and query types constructed by the signed-link function:
+Declare the path and query types used to assemble signed links:
+
+The application owns `models.User` and any generated tables or identities used below.
+
+`models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `clock`, `http` as `foundryhttp`, `model`, `value`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpsigned/guide_recipes.go#signed-preview-inputs -->
 ```go
@@ -30,25 +36,24 @@ type SearchInput struct {
 Generate their descriptors and supply a configured `Preview` endpoint with these
 concrete input types:
 
+Inputs: `ctx context.Context`, `keys foundryhttp.SigningKeys`, `applicationClock clock.Clock`, `publicOrigin foundryhttp.Origin`, `userID model.ID[models.User]`, `expiresAt time.Time`, `Preview foundryhttp.Endpoint[UserPath, SearchInput, foundryhttp.NoBody, foundryhttp.NoContent]`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpsigned/guide_recipes.go#http-signed-urls-1 -->
 ```go
-func previewURL(ctx context.Context, keys foundryhttp.SigningKeys, applicationClock clock.Clock, publicOrigin foundryhttp.Origin, userID model.ID[models.User], expiresAt time.Time, Preview foundryhttp.Endpoint[UserPath, SearchInput, foundryhttp.NoBody, foundryhttp.NoContent]) (string, error) {
-	signer, err := foundryhttp.NewURLSigner(keys, applicationClock)
-	if err != nil {
-		return "", err
-	}
-	preview := foundryhttp.Signed(Preview, signer)
-	link, err := preview.URL(ctx, publicOrigin,
-		UserPath{User: userID},
-		SearchInput{
-			User:     userID,
-			Search:   value.Set("中文 + a/b"),
-			Statuses: []models.Status{models.StatusActive},
-		},
-		expiresAt,
-	)
-	return link, err
+signer, err := foundryhttp.NewURLSigner(keys, applicationClock)
+if err != nil {
+	return "", err
 }
+preview := foundryhttp.Signed(Preview, signer)
+link, err := preview.URL(ctx, publicOrigin,
+	UserPath{User: userID},
+	SearchInput{
+		User:     userID,
+		Search:   value.Set("中文 + a/b"),
+		Statuses: []models.Status{models.StatusActive},
+	},
+	expiresAt,
+)
 ```
 
 `preview.Handle` requires the same concrete path, query, body and response types as `Preview.Handle`.
@@ -93,14 +98,23 @@ when a link must stay on one host or tenant.
 
 Links without expiry require an explicit opt-in on the signed descriptor:
 
+`AvatarPath` aliases the following `httpkernel.AssetPath`; `AvatarRoute` is a route built with `AssetPathDescriptor()`.
+
+<!-- compiled-source: tests/fixtures/consumer/httpkernel/path_declarations.go#asset-path-declaration -->
+```go
+//foundry:path pattern=/assets/{file...}
+type AssetPath struct {
+	File string
+}
+```
+
+Inputs: `ctx context.Context`, `signer foundryhttp.URLSigner`, `publicOrigin foundryhttp.Origin`, `path AvatarPath`, `AvatarRoute foundryhttp.Route[AvatarPath]`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpsigned/guide_recipes.go#http-signed-urls-2 -->
 ```go
-func avatarURL(ctx context.Context, signer foundryhttp.URLSigner, publicOrigin foundryhttp.Origin, path AvatarPath, AvatarRoute foundryhttp.Route[AvatarPath]) (string, error) {
-	avatar := foundryhttp.SignRoute(AvatarRoute, signer)
-	avatar = foundryhttp.ConfigureSignedRoute(avatar, foundryhttp.PermanentLinks())
-	link, err := foundryhttp.PermanentRouteURL(avatar, ctx, publicOrigin, path)
-	return link, err
-}
+avatar := foundryhttp.SignRoute(AvatarRoute, signer)
+avatar = foundryhttp.ConfigureSignedRoute(avatar, foundryhttp.PermanentLinks())
+link, err := foundryhttp.PermanentRouteURL(avatar, ctx, publicOrigin, path)
 ```
 
 A permanent link omits `expires` and uses its own MAC purpose, so removing the

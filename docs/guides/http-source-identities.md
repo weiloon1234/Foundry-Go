@@ -10,6 +10,8 @@ namespace as well.
 
 Declare ordinary types and let generation supply the metadata:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
 <!-- compiled-source: tests/fixtures/consumer/httpquery/source_identity.go#priority-source-types -->
 ```go
 type Priority uint8

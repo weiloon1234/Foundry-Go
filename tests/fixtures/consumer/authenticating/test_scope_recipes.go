@@ -10,8 +10,8 @@ import (
 	authtest "github.com/weiloon1234/Foundry-Go/testkit/auth"
 )
 
-// doc-example:begin test-credential-scope
 func requireOrderInTest(t testing.TB, registry *auth.Registry, api auth.Guard[models.User], issued session.Issued[models.User, model.ID[models.User]], order models.Order) models.User {
+	// doc-example:begin test-credential-scope
 	scope := authtest.Scope(t, registry,
 		auth.Credential{Name: api.Source(), Secret: issued.Secret()},
 	)
@@ -20,7 +20,6 @@ func requireOrderInTest(t testing.TB, registry *auth.Registry, api auth.Guard[mo
 	if err := ReadOrder.Authorize(scope.Context(), api, order); err != nil {
 		t.Fatal(err)
 	}
+	// doc-example:end test-credential-scope
 	return user
 }
-
-// doc-example:end test-credential-scope

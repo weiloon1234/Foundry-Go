@@ -11,33 +11,30 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
-// doc-example:begin observability-1
-func observedBuilder(exportSpan observability.TraceExporter, reportFailure observability.Reporter) error {
+func observedBuilder(exportSpan observability.TraceExporter, reportFailure observability.Reporter) (*foundation.Builder, error) {
+	// doc-example:begin observability-1
 	config := observability.DefaultConfig()
 	config.TraceExporters = []observability.TraceExporter{exportSpan}
 	recorder, err := observability.New(config, reportFailure)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	builder := foundation.NewBuilder(foundation.WithObservability(recorder))
-	_ = builder
-	return err
+	// doc-example:end observability-1
+	return builder, nil
 }
 
-// doc-example:end observability-1
-
-// doc-example:begin observability-2
 func queueCollector(recorder *observability.Recorder, queue interface{ Len() int }) error {
+	// doc-example:begin observability-2
 	err := recorder.RegisterCollector("orders.queue", func(w *observability.MetricWriter) {
 		w.Gauge("orders_queue_depth", "Queued orders.", float64(queue.Len()), observability.Label{Name: "queue", Value: "default"})
 	})
 	if err != nil {
 		return err
 	}
+	// doc-example:end observability-2
 	return err
 }
-
-// doc-example:end observability-2
 
 // doc-example:begin otlp-builder
 func tracedBuilder(settings application.Settings, token string) (*application.Builder, error) {

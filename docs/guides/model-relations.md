@@ -22,6 +22,20 @@ use the application's `Office`, `Employee` and `Region` models and their generat
 tables and [relationship declarations](../../tests/fixtures/consumer/models/orm_relations.go)
 retain the concrete owners used by these functions.
 
+The application owns `models.User`, `models.Order`, `models.Group`, `models.Membership`, `Region`, `Office`, `Employee`, and `Note` and any generated tables or identities used below.
+
+`models` is your application model package. Its `UserLinks` groups the declared
+`Introducer` (belongs-to through `Users.IntroducerID`), `Referrals` (has-many
+through that same key), `Orders` (has-many through `Orders.BuyerID`), and `Groups`
+(through `Memberships`) relations. `GroupLinks.Owner` joins the group's owner to
+`Users.ID`; `MembershipLinks.Inviter` joins the pivot's inviter to `Users.ID`.
+These are application relation declarations built with `orm.BelongsToOf`,
+`orm.HasManyOf`, and `orm.ManyToManyOf` using the generated slots and key columns.
+
+`models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/lifecycle`, `model`, `database/orm`, `database/relation`, `value`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relations.go#model-relations-1 -->
 ```go
 var introducer = orm.BelongsToOf(models.Users.Introducer, models.Users.IntroducerID, models.Users.ID)
@@ -39,13 +53,12 @@ ordinary Go import-cycle rules still apply.
 
 ## Loading and reading values
 
+Inputs: `ctx context.Context`, `db database.Executor`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relations.go#model-relations-2 -->
 ```go
-func eagerUsers(ctx context.Context, db database.Executor) ([]models.User, error) {
-	users, err := orm.All(ctx, db, models.Users.Query().With(models.UserLinks.Introducer,
-		models.UserLinks.Orders.OrderBy(orm.Desc(models.Orders.TotalCents))))
-	return users, err
-}
+users, err := orm.All(ctx, db, models.Users.Query().With(models.UserLinks.Introducer,
+	models.UserLinks.Orders.OrderBy(orm.Desc(models.Orders.TotalCents))))
 ```
 
 `With` preserves the model query and its filters, ordering and terminals. Relations load after parent rows are closed, allowing the same executor to be a single-connection transaction. Count/Exists do not execute eager loads. Model writes reject eager-loading clauses.
@@ -118,14 +131,13 @@ Every morph target shares one key type (here a unique `Code`), because one store
 
 Apply related predicates explicitly with `Where`, and nested descriptors with `With`:
 
+Inputs: `ctx context.Context`, `db database.Executor`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relations.go#model-relations-6 -->
 ```go
-func activeIntroducers(ctx context.Context, db database.Executor) ([]models.User, error) {
-	introducer := models.UserLinks.Introducer.
-		Where(orm.Eq(models.Users.Status, models.StatusActive)).With(models.UserLinks.Introducer)
-	users, err := orm.All(ctx, db, models.Users.Query().With(introducer))
-	return users, err
-}
+introducer := models.UserLinks.Introducer.
+	Where(orm.Eq(models.Users.Status, models.StatusActive)).With(models.UserLinks.Introducer)
+users, err := orm.All(ctx, db, models.Users.Query().With(introducer))
 ```
 
 Predicates and nested descriptors must belong to the target model. A filtered-out target becomes loaded empty; it does not remove its parent. Parent scopes and related scopes are separate declarations. Automatic [soft-delete visibility](model-soft-deletes.md) applies independently to targets and pivots. Authentication remains a separate authorization concern.
@@ -138,18 +150,17 @@ No relation-global limit or offset is accepted because it would truncate a batch
 
 Declare a `relation.Through[Target, Pivot]` field. Both types are ordinary declared models; the [membership fixture](../../tests/fixtures/consumer/models/membership.go) uses a natural primary key for its pivot and a nullable named natural target key. `orm.ManyToManyOf(slot, orm.JoinKeys(sourceKey, pivotSourceKey), orm.JoinKeys(pivotTargetKey, targetKey))` checks both key pairs and the pivot owner at compilation. The same model can be the source and target.
 
+Inputs: `ctx context.Context`, `db database.Executor`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relations.go#model-relations-7 -->
 ```go
-func orderedMemberships(ctx context.Context, db database.Executor) ([]models.User, error) {
-	groups := models.UserLinks.Groups.
-		Where(orm.Eq(models.Groups.Name, "same")).
-		WherePivot(orm.Gt(models.Memberships.Priority, 0)).
-		OrderByPivot(orm.Asc(models.Memberships.Priority)).
-		OrderBy(orm.Desc(models.Groups.Code)).
-		With(models.GroupLinks.Owner).WithPivot(models.MembershipLinks.Inviter)
-	users, err := orm.All(ctx, db, models.Users.Query().With(groups))
-	return users, err
-}
+groups := models.UserLinks.Groups.
+	Where(orm.Eq(models.Groups.Name, "same")).
+	WherePivot(orm.Gt(models.Memberships.Priority, 0)).
+	OrderByPivot(orm.Asc(models.Memberships.Priority)).
+	OrderBy(orm.Desc(models.Groups.Code)).
+	With(models.GroupLinks.Owner).WithPivot(models.MembershipLinks.Inviter)
+users, err := orm.All(ctx, db, models.Users.Query().With(groups))
 ```
 
 `user.Groups.Get()` returns `([]relation.Link[Group, Membership], bool)`. Each link exposes a concrete `relation.Link.Model` and `Pivot`. The loaded flag distinguishes not loaded from loaded empty; retrieving the collection copies its slice. Target models shared by different parents never carry another parent's pivot data. Distinct pivot rows for the same target remain distinct links. If one pivot row matches several target rows, loading fails with `database.TooManyRows`; enforce target-key uniqueness in the database when required.

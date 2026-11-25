@@ -10,8 +10,11 @@ remain separate delivery mechanisms.
 The [consumer example](../../tests/fixtures/consumer/messaging/members.go) compiles
 from an independent module and deliberately selects the model getter:
 
-In these recipes, `Member` is the application model with its typed `ID` and
-`AccessEmail` accessor. `DisplayEmail` is the accessor's application-owned result type.
+`Member` has `ID model.ID[Member]` and an `AccessEmail() (DisplayEmail, error)` accessor; `DisplayEmail` is a string-backed application value.
+
+The application owns `Member` and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `keyspace`, `model`, `pubsub`, `redis`.
 
 <!-- compiled-source: tests/fixtures/consumer/messaging/members.go#pubsub-1 -->
 ```go
@@ -21,39 +24,35 @@ type MemberChange struct{ Email DisplayEmail }
 var MemberChanged = pubsub.Define[model.ID[Member], MemberChange]("member-changed", 1, keyspace.TextKeys[model.ID[Member]]())
 ```
 
+Inputs: `ctx context.Context`, `broker *pubsub.Broker`, `member Member`.
+
 <!-- compiled-source: tests/fixtures/consumer/messaging/guide_pubsub.go#pubsub-1 -->
 ```go
-func publishAndReceive(ctx context.Context, broker *pubsub.Broker, member Member) error {
-	topic, err := MemberChanged.Bind(broker)
-	if err != nil {
-		return err
-	}
-	subscription, err := topic.Subscribe(ctx, member.ID)
-	if err != nil {
-		return err
-	}
-	defer subscription.Close(context.Background())
+topic, err := MemberChanged.Bind(broker)
+if err != nil {
+	return err
+}
+subscription, err := topic.Subscribe(ctx, member.ID)
+if err != nil {
+	return err
+}
+defer subscription.Close(context.Background())
 
-	email, err := member.AccessEmail()
-	if err != nil {
-		return err
-	}
-	subscribers, err := topic.Publish(ctx, member.ID, MemberChange{Email: email})
-	if err != nil {
-		return err
-	}
-	change, err := subscription.Receive(ctx)
-	if err != nil {
-		return err
-	}
-	_ = subscribers
-	_ = change
+email, err := member.AccessEmail()
+if err != nil {
+	return err
+}
+subscribers, err := topic.Publish(ctx, member.ID, MemberChange{Email: email})
+if err != nil {
+	return err
+}
+change, err := subscription.Receive(ctx)
+if err != nil {
 	return err
 }
 ```
 
-`Member`, `DisplayEmail`, and the domain work belong to the application. In the
-consumer fixture these types live in `mutatorqueries`. The compiler rejects a
+`Member`, `DisplayEmail`, and the domain work belong to the application. The compiler rejects a
 different model's ID, a different payload struct, and a raw string where the getter
 returns a named presentation value. Publishing a model does not automatically make
 that model a transport DTO.
@@ -67,12 +66,11 @@ incompatible payload contract on a different physical channel.
 
 ## Broker construction and application ownership
 
+Inputs: `client *redis.Client`, `namespace keyspace.Namespace`.
+
 <!-- compiled-source: tests/fixtures/consumer/messaging/guide_pubsub.go#pubsub-2 -->
 ```go
-func redisBroker(client *redis.Client, namespace keyspace.Namespace) (*pubsub.Broker, error) {
-	broker, err := pubsub.NewBroker(client, pubsub.DefaultConfig(namespace))
-	return broker, err
-}
+broker, err := pubsub.NewBroker(client, pubsub.DefaultConfig(namespace))
 ```
 
 Here `client` is an existing `*redis.Client` and `namespace` is a shared
@@ -114,16 +112,15 @@ readiness. A failed initial attempt is reported the same way. Payloads published
 while `gap` runs are queued within the buffer limits and delivered afterwards, so
 `receive` must tolerate a change that the reconciliation already reflected.
 
+Inputs: `ctx context.Context`, `topic pubsub.Topic[model.ID[Member], MemberChange]`, `member Member`, `apply func(context.Context, MemberChange) error`, `reloadMember func(context.Context, model.ID[Member]) error`.
+
 <!-- compiled-source: tests/fixtures/consumer/messaging/guide_pubsub.go#pubsub-3 -->
 ```go
-func superviseMember(ctx context.Context, topic pubsub.Topic[model.ID[Member], MemberChange], member Member, apply func(context.Context, MemberChange) error, reloadMember func(context.Context, model.ID[Member]) error) error {
-	err := topic.Supervise(ctx, member.ID, pubsub.DefaultSupervisePolicy(),
-		func(ctx context.Context, change MemberChange) error { return apply(ctx, change) },
-		func(ctx context.Context, gap pubsub.Gap) error { return reloadMember(ctx, member.ID) },
-	)
-	if err != nil {
-		return err
-	}
+err := topic.Supervise(ctx, member.ID, pubsub.DefaultSupervisePolicy(),
+	func(ctx context.Context, change MemberChange) error { return apply(ctx, change) },
+	func(ctx context.Context, gap pubsub.Gap) error { return reloadMember(ctx, member.ID) },
+)
+if err != nil {
 	return err
 }
 ```

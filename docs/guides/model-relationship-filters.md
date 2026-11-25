@@ -8,22 +8,33 @@ The `models` namespace below is the application model package, with its generate
 tables and [typed relationship declarations](../../tests/fixtures/consumer/models/orm_relations.go).
 Pass any derived relation through the function parameter shown in the recipe.
 
+The application owns `models.User`, `models.Order`, `models.Group`, and `models.Membership` and any generated tables or identities used below.
+
+`models` is your application model package. Its `UserLinks` groups the declared
+`Introducer` (belongs-to through `Users.IntroducerID`), `Referrals` (has-many
+through that same key), `Orders` (has-many through `Orders.BuyerID`), and `Groups`
+(through `Memberships`) relations. `GroupLinks.Owner` joins the group's owner to
+`Users.ID`; `MembershipLinks.Inviter` joins the pivot's inviter to `Users.ID`.
+These are application relation declarations built with `orm.BelongsToOf`,
+`orm.HasManyOf`, and `orm.ManyToManyOf` using the generated slots and key columns.
+
+`models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`.
+
+Inputs: `ctx context.Context`, `db database.Executor`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_filters.go#model-relationship-filters-1 -->
 ```go
-func buyersAndOthers(ctx context.Context, db database.Executor) error {
-	orders := models.UserLinks.Orders.
-		Where(orm.Gte(models.Orders.TotalCents, 1000))
+orders := models.UserLinks.Orders.
+	Where(orm.Gte(models.Orders.TotalCents, 1000))
 
-	buyers, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(orders)))
-	if err != nil {
-		return err
-	}
-	others, err := orm.All(ctx, db, models.Users.Query().Where(orm.Not(orm.Has(orders))))
-	if err != nil {
-		return err
-	}
-	_ = buyers
-	_ = others
+buyers, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(orders)))
+if err != nil {
+	return err
+}
+others, err := orm.All(ctx, db, models.Users.Query().Where(orm.Not(orm.Has(orders))))
+if err != nil {
 	return err
 }
 ```
@@ -38,46 +49,43 @@ Existence asks whether any matching row exists. It does not hydrate a singular r
 
 `orm.Has(relation)` returns a predicate owned by the parent model. This integrates with the ordinary boolean query API:
 
+Inputs: `ctx context.Context`, `db database.Executor`, `orders orm.HasMany[models.User, models.Order]`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_filters.go#model-relationship-filters-2 -->
 ```go
-func buyersOrActive(ctx context.Context, db database.Executor, orders orm.HasMany[models.User, models.Order]) ([]models.User, error) {
-	u := models.Users
-	users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Or(
-		orm.Has(orders),
-		orm.Eq(u.Status, models.StatusActive),
-	)))
-	return users, err
-}
+u := models.Users
+users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Or(
+	orm.Has(orders),
+	orm.Eq(u.Status, models.StatusActive),
+)))
 ```
 
 Nested related filters use the same descriptors:
 
+Inputs: `ctx context.Context`, `db database.Executor`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_filters.go#model-relationship-filters-3 -->
 ```go
-func referralBuyers(ctx context.Context, db database.Executor) ([]models.User, error) {
-	referralsWithOrders := models.UserLinks.Referrals.
-		Where(orm.Has(models.UserLinks.Orders.
-			Where(orm.Gte(models.Orders.TotalCents, 1000))))
+referralsWithOrders := models.UserLinks.Referrals.
+	Where(orm.Has(models.UserLinks.Orders.
+		Where(orm.Gte(models.Orders.TotalCents, 1000))))
 
-	introducers, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(referralsWithOrders)))
-	return introducers, err
-}
+introducers, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(referralsWithOrders)))
 ```
 
 Each `Where` accepts the related model's predicates. Nested self-relations work without application alias tags or SQL strings. Foundry chooses deterministic aliases that avoid names in the complete supplied query tree, including [explicit correlated subqueries](model-correlations.md).
 
 ## Filter many-to-many targets and pivots
 
+Inputs: `ctx context.Context`, `db database.Executor`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_filters.go#model-relationship-filters-4 -->
 ```go
-func teamMembers(ctx context.Context, db database.Executor) ([]models.User, error) {
-	groups := models.UserLinks.Groups.
-		Where(orm.Like(models.Groups.Name, "team%")).
-		WherePivot(orm.Gte(models.Memberships.Priority, 2))
+groups := models.UserLinks.Groups.
+	Where(orm.Like(models.Groups.Name, "team%")).
+	WherePivot(orm.Gte(models.Memberships.Priority, 2))
 
-	members, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(groups)))
-	return members, err
-}
+members, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(groups)))
 ```
 
 Target and pivot predicates retain their separate model types. Both must match the same joined link. A pivot with a NULL key or absent target does not count as a related model. Duplicate links can satisfy existence without duplicating parents. Named natural keys retain their existing relation compatibility and codec contracts.
@@ -86,12 +94,11 @@ Target and pivot filters may themselves contain relationship predicates, such as
 
 ## Reuse a descriptor for loading
 
+Inputs: `ctx context.Context`, `db database.Executor`, `orders orm.HasMany[models.User, models.Order]`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_filters.go#model-relationship-filters-5 -->
 ```go
-func loadedBuyers(ctx context.Context, db database.Executor, orders orm.HasMany[models.User, models.Order]) ([]models.User, error) {
-	users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(orders)).With(orders))
-	return users, err
-}
+users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(orders)).With(orders))
 ```
 
 `orm.Has` filters parents; `With` loads the matching orders into those returned models. Existence alone leaves relation slots unloaded. A descriptor's ordering and eager-loading clauses do not contribute to its existence test. They remain intact for `With`; existence construction does not mutate the descriptor. Use nested `.Where(orm.Has(child))` to filter by a deeper relationship, rather than relying on `.With(child)`.

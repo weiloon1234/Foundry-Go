@@ -25,8 +25,8 @@ func run() error {
 	return runHTTP(ctx, *path)
 }
 
-// doc-example:begin application-bootstrap-1
 func runHTTP(ctx context.Context, configPath string) error {
+	// doc-example:begin application-bootstrap-1
 	settings, err := bootstrap.Load(configPath)
 	if err != nil {
 		return err
@@ -37,7 +37,7 @@ func runHTTP(ctx context.Context, configPath string) error {
 	}
 	// A signal is a graceful stop: Run drains within the application shutdown
 	// budget and returns nil, or the task/cleanup failures it observed.
-	return app.Run(ctx, foundation.HTTP)
+	runErr := app.Run(ctx, foundation.HTTP)
+	// doc-example:end application-bootstrap-1
+	return runErr
 }
-
-// doc-example:end application-bootstrap-1

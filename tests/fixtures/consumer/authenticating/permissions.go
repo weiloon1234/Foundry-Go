@@ -22,7 +22,7 @@ func CheckAccountPermission(ctx context.Context, guard auth.Guard[models.User]) 
 }
 
 // doc-example:begin configure-permission
-func PermissionProfile(endpoint http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent]) http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent] {
+func PermissionProfile(endpoint ProfileEndpoint) ProfileEndpoint {
 	return http.ConfigureAuthenticated(endpoint, http.Permissions(ViewAccount))
 }
 

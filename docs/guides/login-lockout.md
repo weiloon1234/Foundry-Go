@@ -13,6 +13,10 @@ Milestone 10 passed native acceptance. See the master roadmap for verification e
 <a id="recipe-password-lockout"></a>
 ## Configure the account's login policy
 
+The application owns `Account` and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `foundation`, `keyspace`, `auth/lockout`, `auth/mfa`, `model`, `redis`.
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#password-lockout -->
 ```go
 var PasswordAttempts = lockout.DefineLogin("password.accounts", keyspace.StringKeys[string](), lockout.DefaultLimits())
@@ -112,15 +116,14 @@ request quotas. The consumer test covers this composition.
 
 For another credential stage, such as MFA, the public typed operation is:
 
+Inputs: `ctx context.Context`, `throttle lockout.Throttle[model.ID[Account]]`, `key model.ID[Account]`, `submittedCode mfa.TOTPCode`, `verifyFactor func(context.Context, mfa.TOTPCode) (bool, error)`.
+
 <!-- compiled-source: tests/fixtures/consumer/multifactor/lockout_recipes.go#throttle-factor-check -->
 ```go
-func throttleFactorCheck(ctx context.Context, throttle lockout.Throttle[model.ID[Account]], key model.ID[Account], submittedCode mfa.TOTPCode, verifyFactor func(context.Context, mfa.TOTPCode) (bool, error)) (bool, error) {
-	verified, err := throttle.Run(ctx, key, func(op context.Context) (bool, error) {
-		return verifyFactor(op, submittedCode)
-	})
-	// Only a true result with no error may grant authority or issue credentials.
-	return verified, err
-}
+verified, err := throttle.Run(ctx, key, func(op context.Context) (bool, error) {
+	return verifyFactor(op, submittedCode)
+})
+// Only a true result with no error may grant authority or issue credentials.
 ```
 
 Do not issue credentials inside that callback: a final lock/expiry check remains.

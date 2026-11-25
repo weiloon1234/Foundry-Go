@@ -5,14 +5,18 @@ a route's middleware chain. The [independent consumer](../../tests/fixtures/cons
 adds this wrapper to an existing typed endpoint; its service and DTOs stay ordinary
 Go contracts.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`.
+
+Inputs: `router http.Handler`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpcompression/http_compression_recipes.go#http-compression-1 -->
 ```go
-func compressedHandler(router http.Handler) (http.Handler, error) {
-	return foundryhttp.ApplyMiddleware(
-		router,
-		foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
-	)
-}
+handler, err := foundryhttp.ApplyMiddleware(
+	router,
+	foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
+)
 ```
 
 The excerpt uses the consumer's imports and declarations. Runtime configuration
@@ -29,13 +33,10 @@ preference in declaration order. Construct them with:
 
 <!-- compiled-source: tests/fixtures/consumer/httpcompression/http_compression_recipes.go#http-compression-2 -->
 ```go
-func compressionConfig() foundryhttp.CompressionConfig {
-	config := foundryhttp.DefaultCompressionConfig()
-	config.Encoders = []foundryhttp.CompressionEncoder{
-		foundryhttp.GzipCompression(foundryhttp.GzipFastest),
-		foundryhttp.BrotliCompression(foundryhttp.BrotliQuality(4), foundryhttp.BrotliWindow(20)),
-	}
-	return config
+config := foundryhttp.DefaultCompressionConfig()
+config.Encoders = []foundryhttp.CompressionEncoder{
+	foundryhttp.GzipCompression(foundryhttp.GzipFastest),
+	foundryhttp.BrotliCompression(foundryhttp.BrotliQuality(4), foundryhttp.BrotliWindow(20)),
 }
 ```
 
@@ -97,15 +98,15 @@ after the first final `WriteHeader` cannot rewrite the response snapshot.
 
 When using automatic validators, declare `ETags` before `Compression`:
 
+Inputs: `router http.Handler`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpcompression/http_compression_recipes.go#http-compression-3 -->
 ```go
-func compressedETags(router http.Handler) (http.Handler, error) {
-	return foundryhttp.ApplyMiddleware(
-		router,
-		foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
-		foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
-	)
-}
+handler, err := foundryhttp.ApplyMiddleware(
+	router,
+	foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
+	foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
+)
 ```
 
 The first middleware is outermost. This matches Rust Foundry's priority order

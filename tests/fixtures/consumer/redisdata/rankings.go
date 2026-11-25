@@ -10,16 +10,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/redis/data"
 )
 
-type GroupRanking = data.SortedSet[model.ID[models.Group], model.ID[mutatorqueries.Member]]
-type RecentActivity = data.List[model.ID[models.Group], Activity]
+type GroupRanking = data.SortedSet[models.GroupCode, model.ID[mutatorqueries.Member]]
+type RecentActivity = data.List[models.GroupCode, Activity]
 
 // doc-example:begin redis-data-6
-var Rankings = data.DefineSortedSet[model.ID[models.Group], model.ID[Member]]("group-rankings", 1, keyspace.TextKeys[model.ID[models.Group]]())
+var Rankings = data.DefineSortedSet[models.GroupCode, model.ID[Member]]("group-rankings", 1, keyspace.StringKeys[models.GroupCode]())
 
 // doc-example:end redis-data-6
 
 // doc-example:begin redis-data-7
-var Recent = data.DefineList[model.ID[models.Group], Activity]("group-activity", 1, keyspace.TextKeys[model.ID[models.Group]]())
+var Recent = data.DefineList[models.GroupCode, Activity]("group-activity", 1, keyspace.StringKeys[models.GroupCode]())
 
 // doc-example:end redis-data-7
 
@@ -30,7 +30,7 @@ var Counts = data.DefineHash[model.ID[Member], ActivityKind, int64]("member-acti
 // doc-example:end redis-data-5
 
 // RecordView updates the three structures for one page view.
-func RecordView(ctx context.Context, rankings GroupRanking, recent RecentActivity, counts ActivityCounts, group model.ID[models.Group], member model.ID[mutatorqueries.Member]) error {
+func RecordView(ctx context.Context, rankings GroupRanking, recent RecentActivity, counts ActivityCounts, group models.GroupCode, member model.ID[mutatorqueries.Member]) error {
 	if _, err := rankings.Increment(ctx, group, member, 1); err != nil {
 		return err
 	}
@@ -46,7 +46,7 @@ func RecordView(ctx context.Context, rankings GroupRanking, recent RecentActivit
 }
 
 // TopMembers returns the highest-scored members of a group.
-func TopMembers(ctx context.Context, rankings GroupRanking, group model.ID[models.Group], count int) ([]data.Scored[model.ID[mutatorqueries.Member]], error) {
+func TopMembers(ctx context.Context, rankings GroupRanking, group models.GroupCode, count int) ([]data.Scored[model.ID[mutatorqueries.Member]], error) {
 	return rankings.Range(ctx, group, data.Last(count))
 }
 

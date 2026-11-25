@@ -6,15 +6,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/webhook"
 )
 
-// doc-example:begin webhooks-2
+// doc-example:begin repository-account-type
 // RepositoryAccountID identifies the configured repository owner.
 type RepositoryAccountID int64
 
-func repositoryVerifier(githubSecret secret.String) (*webhook.Verifier[RepositoryAccountID], error) {
+// doc-example:end repository-account-type
+
+func repositoryVerifier(githubSecret secret.String, account RepositoryAccountID) (*webhook.Verifier[RepositoryAccountID], error) {
+	// doc-example:begin webhooks-2
 	config := webhook.GitHubConfig("github") // or ShopifyConfig / SlackConfig
-	verifier, err := webhook.New(config, RepositoryAccountID(7),
+	verifier, err := webhook.New(config, account,
 		[]secret.String{githubSecret}, clock.System{})
+	// doc-example:end webhooks-2
 	return verifier, err
 }
-
-// doc-example:end webhooks-2

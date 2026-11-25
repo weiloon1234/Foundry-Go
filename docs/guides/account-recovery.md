@@ -10,6 +10,10 @@ The [independent consumer](../../tests/fixtures/consumer/recovering/recovery.go)
 shows ordinary Go models, ORM declarations and typed callbacks. Its model's
 stored password remains `password.Hash`; getters do not replace stored fields.
 
+The application owns `Account` and `Member` and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `auth/emailverification`, `model`, `database/orm`, `auth/password`, `auth/passwordreset`.
+
 <!-- compiled-source: tests/fixtures/goway/modelguide/auth_recipes.go#account-recovery-issue-reset -->
 ```go
 func issueReset(ctx context.Context, reset *passwordreset.Reset[Account, int64], account model.Reference[Account, int64]) (passwordreset.Issued[Account], error) {

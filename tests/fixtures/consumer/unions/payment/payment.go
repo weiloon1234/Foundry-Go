@@ -27,8 +27,8 @@ type PaymentMethodVariants struct {
 
 // doc-example:end payment-variants
 
-// doc-example:begin tagged-unions-2
 func paymentLabel(useToken func(string)) (string, error) {
+	// doc-example:begin tagged-unions-2
 	method, err := PaymentMethodFromCard(CardDTO{Token: "provider-token"})
 	if err != nil {
 		return "", err
@@ -41,7 +41,6 @@ func paymentLabel(useToken func(string)) (string, error) {
 		func(card CardDTO) (string, error) { return card.Token, nil },
 		func(bank BankDTO) (string, error) { return bank.Reference, nil },
 	)
+	// doc-example:end tagged-unions-2
 	return label, err
 }
-
-// doc-example:end tagged-unions-2

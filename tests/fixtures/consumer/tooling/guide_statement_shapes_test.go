@@ -9,9 +9,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/testkit/dbassert"
 )
 
-// doc-example:begin database-runtime-1
 func assertOperationShapes(t *testing.T, config postgres.Config, run func(context.Context, *database.DB) error) {
 	t.Helper()
+	// doc-example:begin database-runtime-1
 	detector, err := database.NewStatementDetector(database.DefaultStatementDetectorConfig())
 	if err != nil {
 		t.Fatal(err)
@@ -31,6 +31,5 @@ func assertOperationShapes(t *testing.T, config postgres.Config, run func(contex
 		t.Fatal(err)
 	}
 	dbassert.AssertStatementShapes(t, scope)
+	// doc-example:end database-runtime-1
 }
-
-// doc-example:end database-runtime-1

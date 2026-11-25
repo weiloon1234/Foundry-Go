@@ -28,6 +28,10 @@ previous value first. See [staged route declarations](flat-routes.md) for the
 rule and the application gate. Generated descriptors retain the application types throughout
 decoding, handler invocation, response encoding and inspection.
 
+`models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `model`, `validation`, `value`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/guide.go#compose-endpoint -->
 ```go
 type UpdateService interface {
@@ -84,7 +88,9 @@ Declare the headers an endpoint reads alongside its query fields. Both bind into
 `Input.Query`, so preparation, authorization, binding and validation receive the
 same concrete type without changing the handler signature.
 
-<!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#http-endpoints-2 -->
+The application owns `models.User` and `models.Order` and any generated tables or identities used below.
+
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#client-parameters-input -->
 ```go
 // ClientParameters combines URL search with application headers.
 type ClientParameters struct {
@@ -92,7 +98,10 @@ type ClientParameters struct {
 	Version string
 	Device  value.Optional[string]
 }
+```
 
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#http-endpoints-2 -->
+```go
 func clientParameters() foundryhttp.Query[ClientParameters] {
 	parameters := foundryhttp.DefineQuery(
 		foundryhttp.QueryParam("search", foundryhttp.StringQuery[string](), func(q *ClientParameters) *string { return &q.Search }),
@@ -104,7 +113,7 @@ func clientParameters() foundryhttp.Query[ClientParameters] {
 }
 ```
 
-Pass `parameters` as the query argument to `DefineEndpoint`. Header names match
+Pass `clientParameters()` as the query argument to `DefineEndpoint`. Header names match
 case-insensitively; inspection uses canonical casing such as `X-Device-Id`.
 Names must be ASCII HTTP tokens. A query field and a header may have the same
 wire spelling and bind different fields. Selectors must point to distinct fields
@@ -197,19 +206,18 @@ type MemberStore interface {
 }
 ```
 
+Inputs: `route foundryhttp.Route[foundryhttp.NoPath]`, `members MemberStore`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#http-endpoints-3 -->
 ```go
-func registerUpsert(route foundryhttp.Route[foundryhttp.NoPath], members MemberStore) foundryhttp.RouteRegistration {
-	var Upsert = foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), MemberBody(), foundryhttp.JSONResponses(MemberJSON(), 200, 201))
-	registration := Upsert.Handle(func(ctx context.Context, in Request) (foundryhttp.Statused[Member], error) {
-		member, created, err := members.Upsert(ctx, in.Body)
-		if created {
-			return foundryhttp.Statused[Member]{Status: 201, Value: member}, err
-		}
-		return foundryhttp.Statused[Member]{Value: member}, err
-	})
-	return registration
-}
+var Upsert = foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), MemberBody(), foundryhttp.JSONResponses(MemberJSON(), 200, 201))
+registration := Upsert.Handle(func(ctx context.Context, in Request) (foundryhttp.Statused[Member], error) {
+	member, created, err := members.Upsert(ctx, in.Body)
+	if created {
+		return foundryhttp.Statused[Member]{Status: 201, Value: member}, err
+	}
+	return foundryhttp.Statused[Member]{Value: member}, err
+})
 ```
 
 `RedirectResponse(303)` declares a bodiless redirect (301, 302, 303, 307 or 308),
@@ -238,13 +246,70 @@ must not read it. For large uploads raise `EndpointLimits.Raw.Bytes`, the route'
 media type, and the TypeScript client sends a `Blob`, `ArrayBuffer`, typed array
 or `ReadableStream`.
 
+The URL and validation recipes use these concrete transport declarations; run `foundry generate` after declaring them.
+
+`httpkernel` (called `routes` in validation) owns the path.
+
+<!-- compiled-source: tests/fixtures/consumer/httpkernel/path_declarations.go#user-path-declaration -->
+```go
+//foundry:path pattern=/users/{user}
+type UserPath struct {
+	User model.ID[models.User]
+}
+```
+
+`httpquery` (called `filters` in validation) owns the query.
+
+<!-- compiled-source: tests/fixtures/consumer/httpquery/floats.go#floating-url-types -->
+```go
+type Latitude float32
+type Distance float64
+type Distances []Distance
+
+//foundry:query
+type NearbyInput struct {
+	Latitude  Latitude
+	Maximum   value.Optional[Distance]
+	Distances Distances `query:"distance"`
+}
+
+//foundry:path pattern=/positions/{latitude}
+type PositionPath struct{ Latitude Latitude }
+```
+
+`httpdto` (called `dto` in validation) owns the request and response.
+
+<!-- compiled-source: tests/fixtures/consumer/httpdto/dto.go#patch-presence -->
+```go
+//foundry:dto http=body
+type UpdateUser struct {
+	Email    value.Optional[string]                 `json:"email,omitzero"`
+	Nickname value.Optional[value.Nullable[string]] `json:"nickname,omitzero"`
+	State    value.Optional[models.Status]          `json:"state,omitzero"`
+}
+```
+
+
+
+<!-- compiled-source: tests/fixtures/consumer/httpdto/dto.go#user-response-contract -->
+```go
+//foundry:dto http=response
+type UserResponse struct {
+	ID    model.ID[models.User] `json:"id"`
+	Email string                `json:"email"`
+	State models.Status         `json:"state"`
+}
+```
+
+Here `models.User` is your application model, and `models.Status` is its string-backed enum with the `StatusActive` member.
+`UserPath`, `NearbyInput`, `UpdateUser`, and `UserResponse` are same-package aliases for `httpkernel.UserPath`, `httpquery.NearbyInput`, `httpdto.UpdateUser`, and `httpdto.UserResponse`, respectively.
+
+Inputs: `ctx context.Context`, `Update foundryhttp.Endpoint[UserPath, NearbyInput, UpdateUser, UserResponse]`, `path UserPath`, `query NearbyInput`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#http-endpoints-4 -->
 ```go
-func updateURL(ctx context.Context, Update foundryhttp.Endpoint[UserPath, NearbyInput, UpdateUser, UserResponse], path UserPath, query NearbyInput) (string, error) {
-	scoped := foundryhttp.ConfigureEndpoint(Update, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
-	location, err := scoped.URL(ctx, path, query)
-	return location, err
-}
+scoped := foundryhttp.ConfigureEndpoint(Update, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
+location, err := scoped.URL(ctx, path, query)
 ```
 
 `URL` combines the existing path and query codecs, escaping each source using its
@@ -286,15 +351,14 @@ type OrderReply struct{ ID model.ID[models.Order] }
 type OrderPath struct{ Order model.ID[models.Order] }
 ```
 
+Inputs: `endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, OrderReply]`, `ShowOrder foundryhttp.Route[OrderPath]`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#http-endpoints-5 -->
 ```go
-func withLocation(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, OrderReply], ShowOrder foundryhttp.Route[OrderPath]) foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, OrderReply] {
-	created := foundryhttp.EndpointHeaders(endpoint, func(_ context.Context, order OrderReply) ([]foundryhttp.ResponseHeader, error) {
-		location, err := foundryhttp.RouteLocation(ShowOrder, OrderPath{Order: order.ID})
-		return []foundryhttp.ResponseHeader{location}, err
-	})
-	return created
-}
+created := foundryhttp.EndpointHeaders(endpoint, func(_ context.Context, order OrderReply) ([]foundryhttp.ResponseHeader, error) {
+	location, err := foundryhttp.RouteLocation(ShowOrder, OrderPath{Order: order.ID})
+	return []foundryhttp.ResponseHeader{location}, err
+})
 ```
 
 `Timeout(d)` replaces the kernel `RequestTimeout` for one endpoint's route,
@@ -307,20 +371,40 @@ route matching, are bounded by `MaxRouteTimeout` (24 hours) and `MaxRouteBodyByt
 and are reported by `RouteInfo.Timeout` and `RouteInfo.MaxBodyBytes`. They are
 server policy and are not exported to client manifests.
 
+The multipart example uses these declarations in its own upload package; `body` is `ProfileInputBody(directory)`, where `directory` is the temporary-upload directory.
+
+<!-- compiled-source: tests/fixtures/consumer/httpuploads/forms.go#multipart-input -->
+```go
+type Gallery []foundryhttp.UploadedFile
+
+type Settings struct {
+	Caption string                                 `json:"caption"`
+	Note    value.Optional[value.Nullable[string]] `json:"note,omitzero"`
+}
+
+//foundry:multipart http=body
+type ProfileInput struct {
+	Title      value.Optional[string]
+	Attachment foundryhttp.UploadedFile `form:"document"`
+	Photos     Gallery
+	Tags       []string                 `form:"tags[]"`
+	Settings   value.Optional[Settings] `form:",json"`
+}
+```
+
+Inputs: `route foundryhttp.Route[foundryhttp.NoPath]`, `body foundryhttp.Body[ProfileInput]`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpuploads/http_endpoints_recipe.go#http-endpoints-6 -->
 ```go
-func uploadEndpoint(route foundryhttp.Route[foundryhttp.NoPath], body foundryhttp.Body[ProfileInput]) foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, ProfileInput, foundryhttp.NoContent] {
-	limits := foundryhttp.DefaultEndpointLimits()
-	limits.Multipart.Bytes, limits.Multipart.FileBytes = 520<<20, 512<<20
+limits := foundryhttp.DefaultEndpointLimits()
+limits.Multipart.Bytes, limits.Multipart.FileBytes = 520<<20, 512<<20
 
-	upload := foundryhttp.DefineEndpoint(
-		route, foundryhttp.EmptyQuery(), body, foundryhttp.EmptyResponse(204),
-		foundryhttp.Limits(limits), // Allow multipart overhead beyond the 512 MiB file.
-		foundryhttp.BodyLimit(520<<20),
-		foundryhttp.Timeout(10*time.Minute),
-	)
-	return upload
-}
+upload := foundryhttp.DefineEndpoint(
+	route, foundryhttp.EmptyQuery(), body, foundryhttp.EmptyResponse(204),
+	foundryhttp.Limits(limits), // Allow multipart overhead beyond the 512 MiB file.
+	foundryhttp.BodyLimit(520<<20),
+	foundryhttp.Timeout(10*time.Minute),
+)
 ```
 
 JSON input requires one Content-Type declaration: `application/json` or an

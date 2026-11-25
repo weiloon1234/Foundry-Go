@@ -8,29 +8,30 @@ records the checks and operational limits.
 natural primary key `countries.Code`. Reference data is installed only through an
 explicit seeder invocation.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `countries`, `database`, `extensions`, `database/seed`.
+
+Inputs: `ctx context.Context`, `store *extensions.Store`, `database *database.DB`.
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_countries.go#countries-1 -->
 ```go
-func seedCountries(ctx context.Context, store *extensions.Store, database *database.DB) error {
-	// Register countries.Migrations() in the ordinary migration registry first.
-	seeders, err := seed.New(countries.Seeder(store))
-	if err != nil {
-		return err
-	}
-	result, err := seeders.Run(ctx, database, countries.SeederID)
-	if err != nil {
-		return err
-	}
+// Register countries.Migrations() in the ordinary migration registry first.
+seeders, err := seed.New(countries.Seeder(store))
+if err != nil {
+	return err
+}
+result, err := seeders.Run(ctx, database, countries.SeederID)
+if err != nil {
+	return err
+}
 
-	code, err := countries.ParseCode("my")
-	if err != nil {
-		return err
-	}
-	malaysia, err := countries.Find(ctx, store, code)
-	if err != nil {
-		return err
-	}
-	_ = result
-	_ = malaysia
+code, err := countries.ParseCode("my")
+if err != nil {
+	return err
+}
+malaysia, err := countries.Find(ctx, store, code)
+if err != nil {
 	return err
 }
 ```

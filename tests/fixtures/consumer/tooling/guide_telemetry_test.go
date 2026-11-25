@@ -9,8 +9,8 @@ import (
 	telemetrytest "github.com/weiloon1234/Foundry-Go/testkit/telemetry"
 )
 
-// doc-example:begin persisted-telemetry-3
 func assertBrowserIssue(t *testing.T, app *application.App) {
+	// doc-example:begin persisted-telemetry-3
 	engine, err := app.Resources().Telemetry()
 	if err != nil {
 		t.Fatal(err)
@@ -27,7 +27,5 @@ func assertBrowserIssue(t *testing.T, app *application.App) {
 	if issues.Total != 1 {
 		t.Fatalf("browser issues = %d, want 1", issues.Total)
 	}
-
+	// doc-example:end persisted-telemetry-3
 }
-
-// doc-example:end persisted-telemetry-3

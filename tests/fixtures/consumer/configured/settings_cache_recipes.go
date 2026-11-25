@@ -7,10 +7,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/settings"
 )
 
-// doc-example:begin cache-site-name
 func cachedSiteName(store *extensions.Store) (*settings.Manager, error) {
-	return settings.New(store,
+	// doc-example:begin cache-site-name
+	manager, err := settings.New(store,
 		SiteName.RegistrationWith(settings.Options[string]{Cache: 30 * time.Second}))
+	// doc-example:end cache-site-name
+	return manager, err
 }
-
-// doc-example:end cache-site-name

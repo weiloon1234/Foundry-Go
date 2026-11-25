@@ -18,6 +18,8 @@ Foundry provides immutable migration definitions, history inspection, an explici
 
 Handwritten Go models describe current application types. A `migrate.Definition` records a historical schema change: a typed origin and ID, the release that introduced it, ordered SQL statements, and typed prerequisites. The [consumer migration package](../../tests/fixtures/consumer/migrations/migrations.go) and its [test](../../tests/fixtures/consumer/migrations_test.go) demonstrate public usage.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `database`, `database/command` as `dbcommand`, `infrastructure`, `database/migrate`, `model`, `database/orm`, `database/seed`.
+
 <!-- compiled-source: tests/fixtures/consumer/migrations/migrations.go#migration-definitions -->
 ```go
 func Definitions() []migrate.Definition {
@@ -74,15 +76,15 @@ Failed lock cleanup discards the physical connection, releasing session-owned lo
 
 A definition may declare `Down` SQL that reverses it:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
 <!-- compiled-source: tests/fixtures/consumer/migrations/guide_rollback.go#reversible-migration -->
 ```go
-func reversibleMigration() migrate.Definition {
-	return migrate.Definition{
-		Key:     migrate.Key{Origin: "app", ID: "20260911000001_add_record_label"},
-		Version: "v0.1.0",
-		SQL:     []string{"ALTER TABLE records ADD COLUMN label text"},
-		Down:    []string{"ALTER TABLE records DROP COLUMN label"},
-	}
+definition := migrate.Definition{
+	Key:     migrate.Key{Origin: "app", ID: "20260911000001_add_record_label"},
+	Version: "v0.1.0",
+	SQL:     []string{"ALTER TABLE records ADD COLUMN label text"},
+	Down:    []string{"ALTER TABLE records DROP COLUMN label"},
 }
 ```
 

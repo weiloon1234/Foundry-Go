@@ -6,13 +6,15 @@ sorted sets for scored rankings and lists for bounded ordered sequences.
 These structures have their own addresses and are unaffected by cache invalidation.
 The [independent consumer](../../tests/fixtures/consumer/redisdata/members.go) is the
 compiling source for the examples below. No extra dependency is required.
-The fixture supplies `groupID` as a separate `model.ID[models.Group]` Redis key.
-It is not the database primary key of `models.Group`, which uses `Code`.
+`groupID` has the application group's `models.GroupCode` type, a string-backed natural key stored in its `Code` field; `models` is the application model package.
 
 ## Declare once, bind explicitly
 
-In these recipes, `Member` is the application model with its typed `ID` and
-`AccessEmail` accessor. `DisplayEmail` is the accessor's application-owned result type.
+`Member` has `ID model.ID[Member]` and an `AccessEmail() (DisplayEmail, error)` accessor; `DisplayEmail` is a string-backed application value.
+
+The application owns `Member` and the group keyed by `Code` and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `cache`, `redis/data`, `keyspace`, `model`, `redis`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/members.go#redis-data-1 -->
 ```go
@@ -25,30 +27,27 @@ type Profile struct {
 	Labels []string
 }
 type Profiles = data.Hash[model.ID[Member], ProfileField, Profile]
-type MemberGroups = data.Set[model.ID[Member], model.ID[models.Group]]
+type MemberGroups = data.Set[model.ID[Member], models.GroupCode]
 
 var ProfileHashes = data.DefineHash[model.ID[Member], ProfileField, Profile]("member-profiles", 1, keyspace.TextKeys[model.ID[Member]](), keyspace.StringKeys[ProfileField]())
-var Groups = data.DefineSet[model.ID[Member], model.ID[models.Group]]("member-groups", 1, keyspace.TextKeys[model.ID[Member]]())
+var Groups = data.DefineSet[model.ID[Member], models.GroupCode]("member-groups", 1, keyspace.TextKeys[model.ID[Member]]())
 ```
+
+Inputs: `client *redis.Client`, `namespace keyspace.Namespace`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-1 -->
 ```go
-func bindStructures(client *redis.Client, namespace keyspace.Namespace) error {
-	store, err := data.NewStore(client, data.DefaultConfig(namespace))
-	if err != nil {
-		return err
-	}
-	profiles, err := ProfileHashes.Bind(store)
-	if err != nil {
-		return err
-	}
-	groups, err := Groups.Bind(store)
-	if err != nil {
-		return err
-	}
-	_ = profiles
-	_ = groups
-	return err
+store, err := data.NewStore(client, data.DefaultConfig(namespace))
+if err != nil {
+	return Profiles{}, MemberGroups{}, err
+}
+profiles, err := ProfileHashes.Bind(store)
+if err != nil {
+	return Profiles{}, MemberGroups{}, err
+}
+groups, err := Groups.Bind(store)
+if err != nil {
+	return Profiles{}, MemberGroups{}, err
 }
 ```
 
@@ -70,35 +69,53 @@ return zero values, and operations requiring a store return an error.
 
 ## Read and write typed fields
 
+Inputs: `ctx context.Context`, `member Member`, `profiles Profiles`.
+
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-2 -->
 ```go
-func profileFields(ctx context.Context, member Member, profiles Profiles) error {
-	email, err := member.AccessEmail()
-	if err != nil {
-		return err
-	}
-	added, err := profiles.Set(ctx, member.ID, DisplayProfile,
-		Profile{Email: email, Labels: []string{"active"}})
-	if err != nil {
-		return err
-	}
-	profile, found, err := profiles.Get(ctx, member.ID, DisplayProfile)
-	if err != nil {
-		return err
-	}
-	removed, err := profiles.DeleteField(ctx, member.ID, DisplayProfile)
-	if err != nil {
-		return err
-	}
-	count, err := profiles.Count(ctx, member.ID)
-	if err != nil {
-		return err
-	}
-	_ = added
-	_ = profile
-	_ = found
-	_ = removed
-	_ = count
+email, err := member.AccessEmail()
+if err != nil {
+	return err
+}
+added, err := profiles.Set(ctx, member.ID, DisplayProfile,
+	Profile{Email: email, Labels: []string{"active"}})
+if err != nil {
+	return err
+}
+```
+
+Read the profile.
+
+Inputs: `ctx context.Context`, `member Member`, `profiles Profiles`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-2-read -->
+```go
+profile, found, err := profiles.Get(ctx, member.ID, DisplayProfile)
+if err != nil {
+	return err
+}
+```
+
+Delete the field.
+
+Inputs: `ctx context.Context`, `member Member`, `profiles Profiles`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-2-delete -->
+```go
+removed, err := profiles.DeleteField(ctx, member.ID, DisplayProfile)
+if err != nil {
+	return err
+}
+```
+
+Count the remaining fields.
+
+Inputs: `ctx context.Context`, `member Member`, `profiles Profiles`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-2-count -->
+```go
+count, err := profiles.Count(ctx, member.ID)
+if err != nil {
 	return err
 }
 ```
@@ -117,34 +134,60 @@ fixture verifies that a getter-selected email survives the hash round trip.
 
 ## Add, remove and enumerate members
 
+Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `groups MemberGroups`.
+
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-3 -->
 ```go
-func groupMembers(ctx context.Context, member Member, groupID model.ID[models.Group], groups MemberGroups) error {
-	added, err := groups.Add(ctx, member.ID, groupID)
-	if err != nil {
-		return err
-	}
-	present, err := groups.Contains(ctx, member.ID, groupID)
-	if err != nil {
-		return err
-	}
-	members, err := groups.Members(ctx, member.ID)
-	if err != nil {
-		return err
-	}
-	removed, err := groups.Remove(ctx, member.ID, groupID)
-	if err != nil {
-		return err
-	}
-	count, err := groups.Count(ctx, member.ID)
-	if err != nil {
-		return err
-	}
-	_ = added
-	_ = present
-	_ = members
-	_ = removed
-	_ = count
+added, err := groups.Add(ctx, member.ID, groupID)
+if err != nil {
+	return err
+}
+```
+
+Check membership.
+
+Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `groups MemberGroups`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-3-contains -->
+```go
+present, err := groups.Contains(ctx, member.ID, groupID)
+if err != nil {
+	return err
+}
+```
+
+Read the members.
+
+Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-3-members -->
+```go
+members, err := groups.Members(ctx, member.ID)
+if err != nil {
+	return err
+}
+```
+
+Remove one member.
+
+Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `groups MemberGroups`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-3-remove -->
+```go
+removed, err := groups.Remove(ctx, member.ID, groupID)
+if err != nil {
+	return err
+}
+```
+
+Count the members.
+
+Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-3-count -->
+```go
+count, err := groups.Count(ctx, member.ID)
+if err != nil {
 	return err
 }
 ```
@@ -158,18 +201,15 @@ This order is deterministic; apply native slice sorting for domain or numeric or
 
 ## Batch reads and exact counters
 
+Inputs: `ctx context.Context`, `member Member`, `profiles Profiles`.
+
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-4 -->
 ```go
-func manyProfiles(ctx context.Context, member Member, profiles Profiles) error {
-	values, err := profiles.GetMany(ctx, member.ID, DisplayProfile /*, more fields */)
-	if err != nil {
-		return err
-	}
-	display, found := values[0].Get() // value.Optional[Profile], in input order
-	_ = display
-	_ = found
+values, err := profiles.GetMany(ctx, member.ID, DisplayProfile /*, more fields */)
+if err != nil {
 	return err
 }
+display, found := values[0].Get() // value.Optional[Profile], in input order
 ```
 
 `GetMany` reads up to `Limits.Entries` fields in one atomic script. The result has
@@ -201,19 +241,24 @@ var Counts = data.DefineHash[model.ID[Member], ActivityKind, int64]("member-acti
 	WithFieldDecoder(func(text string) (ActivityKind, error) { return ActivityKind(text), nil })
 ```
 
+Inputs: `ctx context.Context`, `member Member`, `counts ActivityCounts`.
+
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-5 -->
 ```go
-func activityCounts(ctx context.Context, member Member, counts ActivityCounts) error {
-	entries, err := counts.GetAll(ctx, member.ID)
-	if err != nil {
-		return err
-	}
-	total, err := data.IncrementField(ctx, counts, member.ID, PageViews, 1)
-	if err != nil {
-		return err
-	}
-	_ = entries
-	_ = total
+entries, err := counts.GetAll(ctx, member.ID)
+if err != nil {
+	return err
+}
+```
+
+Increment the counter.
+
+Inputs: `ctx context.Context`, `member Member`, `counts ActivityCounts`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-5-increment -->
+```go
+total, err := data.IncrementField(ctx, counts, member.ID, PageViews, 1)
+if err != nil {
 	return err
 }
 ```
@@ -233,47 +278,87 @@ The value bound must allow 20 bytes.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/rankings.go#redis-data-6 -->
 ```go
-var Rankings = data.DefineSortedSet[model.ID[models.Group], model.ID[Member]]("group-rankings", 1, keyspace.TextKeys[model.ID[models.Group]]())
+var Rankings = data.DefineSortedSet[models.GroupCode, model.ID[Member]]("group-rankings", 1, keyspace.StringKeys[models.GroupCode]())
 ```
+
+Inputs: `store *data.Store`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6 -->
 ```go
-func rankedMembers(ctx context.Context, member Member, store *data.Store, groupID model.ID[models.Group]) error {
-	rankings, err := Rankings.Bind(store)
-	if err != nil {
-		return err
-	}
-	added, err := rankings.Add(ctx, groupID, member.ID, 1250)
-	if err != nil {
-		return err
-	}
-	score, err := rankings.Increment(ctx, groupID, member.ID, 25)
-	if err != nil {
-		return err
-	}
-	top, err := rankings.Range(ctx, groupID, data.Last(10)) // []data.Scored[model.ID[Member]]
-	if err != nil {
-		return err
-	}
-	rank, found, err := rankings.Rank(ctx, groupID, member.ID, data.Descending)
-	if err != nil {
-		return err
-	}
-	window, err := rankings.RangeByScore(ctx, groupID, data.Between(1000, 2000), data.First(20))
-	if err != nil {
-		return err
-	}
-	count, err := rankings.CountByScore(ctx, groupID, data.ScoreRange{Min: math.Inf(-1), Max: math.Inf(1)})
-	if err != nil {
-		return err
-	}
-	_ = added
-	_ = score
-	_ = top
-	_ = rank
-	_ = found
-	_ = window
-	_ = count
+rankings, err := Rankings.Bind(store)
+if err != nil {
+	return err
+}
+```
+
+Add a score.
+
+Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-add -->
+```go
+added, err := rankings.Add(ctx, groupID, member.ID, 1250)
+if err != nil {
+	return err
+}
+```
+
+Increment the score.
+
+Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-increment -->
+```go
+score, err := rankings.Increment(ctx, groupID, member.ID, 25)
+if err != nil {
+	return err
+}
+```
+
+Read the top ten members.
+
+Inputs: `ctx context.Context`, `groupID models.GroupCode`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-top -->
+```go
+top, err := rankings.Range(ctx, groupID, data.Last(10)) // []data.Scored[model.ID[Member]]
+if err != nil {
+	return err
+}
+```
+
+Read one member's rank.
+
+Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-rank -->
+```go
+rank, found, err := rankings.Rank(ctx, groupID, member.ID, data.Descending)
+if err != nil {
+	return err
+}
+```
+
+Read a bounded score window.
+
+Inputs: `ctx context.Context`, `groupID models.GroupCode`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-window -->
+```go
+window, err := rankings.RangeByScore(ctx, groupID, data.Between(1000, 2000), data.First(20))
+if err != nil {
+	return err
+}
+```
+
+Count the score range.
+
+Inputs: `ctx context.Context`, `groupID models.GroupCode`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-count -->
+```go
+count, err := rankings.CountByScore(ctx, groupID, data.ScoreRange{Min: math.Inf(-1), Max: math.Inf(1)})
+if err != nil {
 	return err
 }
 ```
@@ -292,40 +377,59 @@ missing member. Replies are checked for window size, order and payload bounds.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/rankings.go#redis-data-7 -->
 ```go
-var Recent = data.DefineList[model.ID[models.Group], Activity]("group-activity", 1, keyspace.TextKeys[model.ID[models.Group]]())
+var Recent = data.DefineList[models.GroupCode, Activity]("group-activity", 1, keyspace.StringKeys[models.GroupCode]())
 ```
+
+Inputs: `ctx context.Context`, `member Member`, `store *data.Store`, `groupID models.GroupCode`, `newest Activity`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-7 -->
 ```go
-func recentActivity(ctx context.Context, member Member, store *data.Store, groupID model.ID[models.Group], newest Activity) error {
-	recent, err := Recent.Bind(store)
-	if err != nil {
-		return err
-	}
-	err = recent.Trim(ctx, groupID, -99, -1) // keep the newest 99 before pushing
-	if err != nil {
-		return err
-	}
-	length, err := recent.Push(ctx, groupID, Activity{Member: member.ID, Kind: PageViews})
-	if err != nil {
-		return err
-	}
-	length, err = recent.PushFront(ctx, groupID, newest)
-	if err != nil {
-		return err
-	}
-	items, err := recent.Range(ctx, groupID, 0, -1)
-	if err != nil {
-		return err
-	}
-	item, found, err := recent.PopFront(ctx, groupID)
-	if err != nil {
-		return err
-	}
-	_ = length
-	_ = items
-	_ = item
-	_ = found
+recent, err := Recent.Bind(store)
+if err != nil {
+	return err
+}
+err = recent.Trim(ctx, groupID, -99, -1) // keep the newest 99 before pushing
+if err != nil {
+	return err
+}
+length, err := recent.Push(ctx, groupID, Activity{Member: member.ID, Kind: PageViews})
+if err != nil {
+	return err
+}
+```
+
+Prepend a supplied activity.
+
+Inputs: `ctx context.Context`, `groupID models.GroupCode`, `newest Activity`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-7-prepend -->
+```go
+length, err = recent.PushFront(ctx, groupID, newest)
+if err != nil {
+	return err
+}
+```
+
+Read the bounded list.
+
+Inputs: `ctx context.Context`, `groupID models.GroupCode`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-7-read -->
+```go
+items, err := recent.Range(ctx, groupID, 0, -1)
+if err != nil {
+	return err
+}
+```
+
+Pop the oldest activity.
+
+Inputs: `ctx context.Context`, `groupID models.GroupCode`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-7-pop -->
+```go
+item, found, err := recent.PopFront(ctx, groupID)
+if err != nil {
 	return err
 }
 ```
@@ -343,28 +447,48 @@ an element that then fails JSON decoding is reported as an error and stays remov
 Every handle exposes `Exists`, `Expire`, `.Count`, `Delete` and `DeleteMany` while
 retaining the declaration's resource key type:
 
+Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
+
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-8 -->
 ```go
-func groupLifetime(ctx context.Context, member Member, groups MemberGroups, firstMember, secondMember Member) error {
-	exists, err := groups.Exists(ctx, member.ID)
-	if err != nil {
-		return err
-	}
-	changed, err := groups.Expire(ctx, member.ID, cache.For(time.Hour))
-	if err != nil {
-		return err
-	}
-	changed, err = groups.Expire(ctx, member.ID, cache.Forever())
-	if err != nil {
-		return err
-	}
-	deleted, err := groups.DeleteMany(ctx, firstMember.ID, secondMember.ID)
-	if err != nil {
-		return err
-	}
-	_ = exists
-	_ = changed
-	_ = deleted
+exists, err := groups.Exists(ctx, member.ID)
+if err != nil {
+	return err
+}
+```
+
+Set a TTL.
+
+Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-8-expire -->
+```go
+changed, err := groups.Expire(ctx, member.ID, cache.For(time.Hour))
+if err != nil {
+	return err
+}
+```
+
+Remove the TTL.
+
+Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-8-persist -->
+```go
+changed, err = groups.Expire(ctx, member.ID, cache.Forever())
+if err != nil {
+	return err
+}
+```
+
+Delete the selected members' lists.
+
+Inputs: `ctx context.Context`, `groups MemberGroups`, `firstMember Member`, `secondMember Member`.
+
+<!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-8-delete -->
+```go
+deleted, err := groups.DeleteMany(ctx, firstMember.ID, secondMember.ID)
+if err != nil {
 	return err
 }
 ```

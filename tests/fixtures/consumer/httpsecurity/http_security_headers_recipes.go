@@ -8,8 +8,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// doc-example:begin http-security-headers-1
 func secureHandler(router http.Handler) (http.Handler, error) {
+	// doc-example:begin http-security-headers-1
 	config := foundryhttp.DefaultSecurityHeadersConfig()
 	config.Frame = foundryhttp.FrameSameOrigin
 	config.Referrer = foundryhttp.ReferrerNoReferrer
@@ -17,13 +17,12 @@ func secureHandler(router http.Handler) (http.Handler, error) {
 		MaxAge: 24 * time.Hour,
 	})
 	handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.SecurityHeaders(config))
+	// doc-example:end http-security-headers-1
 	return handler, err
 }
 
-// doc-example:end http-security-headers-1
-
-// doc-example:begin http-security-headers-2
 func isolationPolicy(config foundryhttp.SecurityHeadersConfig) foundryhttp.SecurityHeadersConfig {
+	// doc-example:begin http-security-headers-2
 	config.CrossOriginOpener = foundryhttp.OpenerSameOrigin      // Cross-Origin-Opener-Policy
 	config.CrossOriginEmbedder = foundryhttp.EmbedderRequireCORP // Cross-Origin-Embedder-Policy
 	config.CrossOriginResource = foundryhttp.ResourceSameSite    // Cross-Origin-Resource-Policy
@@ -33,17 +32,15 @@ func isolationPolicy(config foundryhttp.SecurityHeadersConfig) foundryhttp.Secur
 			Origins: []foundryhttp.Origin{"https://maps.example"}},
 		{Feature: foundryhttp.PermissionFullscreen, Any: true}, // fullscreen=*
 	}
+	// doc-example:end http-security-headers-2
 	return config
 }
 
-// doc-example:end http-security-headers-2
-
-// doc-example:begin http-security-headers-3
 func buildHeader(config foundryhttp.SecurityHeadersConfig) foundryhttp.SecurityHeadersConfig {
+	// doc-example:begin http-security-headers-3
 	config.Extra = []foundryhttp.ResponseHeader{
 		{Name: "X-Build", Value: "release-1"},
 	}
+	// doc-example:end http-security-headers-3
 	return config
 }
-
-// doc-example:end http-security-headers-3

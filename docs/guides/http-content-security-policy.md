@@ -4,22 +4,23 @@ Use `http.ContentSecurityPolicy` alongside [security headers](http-security-head
 It compiles explicit Go declarations at assembly and preserves native HTTP
 writers. Apply it around the router to cover fallback responses too.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `http` as `foundryhttp`, `value`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-1 -->
 ```go
-func noncePolicy() foundryhttp.Middleware {
-	policy := foundryhttp.CSPPolicy{
-		DefaultSrc:     []foundryhttp.CSPSource{foundryhttp.CSPNone()},
-		ScriptSrc:      []foundryhttp.CSPSource{foundryhttp.CSPNonceSource(), foundryhttp.CSPStrictDynamic()},
-		ImgSrc:         []foundryhttp.CSPSource{foundryhttp.CSPSelf(), foundryhttp.CSPSchemeSource("data")},
-		ConnectSrc:     []foundryhttp.CSPSource{foundryhttp.CSPHostSource("wss://events.example.test")},
-		BaseURI:        []foundryhttp.CSPSource{foundryhttp.CSPNone()},
-		FrameAncestors: []foundryhttp.CSPSource{foundryhttp.CSPNone()},
-	}
-	middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
-		Enforce: value.Set(policy),
-	})
-	return middleware
+policy := foundryhttp.CSPPolicy{
+	DefaultSrc:     []foundryhttp.CSPSource{foundryhttp.CSPNone()},
+	ScriptSrc:      []foundryhttp.CSPSource{foundryhttp.CSPNonceSource(), foundryhttp.CSPStrictDynamic()},
+	ImgSrc:         []foundryhttp.CSPSource{foundryhttp.CSPSelf(), foundryhttp.CSPSchemeSource("data")},
+	ConnectSrc:     []foundryhttp.CSPSource{foundryhttp.CSPHostSource("wss://events.example.test")},
+	BaseURI:        []foundryhttp.CSPSource{foundryhttp.CSPNone()},
+	FrameAncestors: []foundryhttp.CSPSource{foundryhttp.CSPNone()},
 }
+middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
+	Enforce: value.Set(policy),
+})
 ```
 
 `CSPConfig.ReportOnly` accepts an independent policy for monitoring. Neither policy
@@ -50,13 +51,10 @@ Add `http.CSPWasmUnsafeEval()` when a page compiles or instantiates WebAssembly:
 
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-2 -->
 ```go
-func wasmPolicy() foundryhttp.CSPPolicy {
-	policy := foundryhttp.CSPPolicy{
-		DefaultSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
-		ScriptSrc:  []foundryhttp.CSPSource{foundryhttp.CSPSelf(), foundryhttp.CSPWasmUnsafeEval()},
-		ConnectSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
-	}
-	return policy
+policy := foundryhttp.CSPPolicy{
+	DefaultSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+	ScriptSrc:  []foundryhttp.CSPSource{foundryhttp.CSPSelf(), foundryhttp.CSPWasmUnsafeEval()},
+	ConnectSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
 }
 ```
 
@@ -112,36 +110,35 @@ configured array clears the corresponding code default.
 
 With `application.Settings` directly, the equivalent code default is:
 
+Inputs: `settings application.Settings`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-3 -->
 ```go
-func analyticsSettings(settings application.Settings) application.Settings {
-	settings.HTTP.CSPAllowlist.Presets = []foundryhttp.CSPPreset{
-		foundryhttp.CSPPresetCloudflareWebAnalytics,
-	}
-	return settings
+settings.HTTP.CSPAllowlist.Presets = []foundryhttp.CSPPreset{
+	foundryhttp.CSPPresetCloudflareWebAnalytics,
 }
 ```
 
 Apply the loaded settings before constructing the middleware:
 
+Inputs: `settings application.Settings`, `router http.Handler`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-4 -->
 ```go
-func allowlistedHandler(settings application.Settings, router http.Handler) (http.Handler, error) {
-	policy, err := foundryhttp.ApplyCSPAllowlist(foundryhttp.CSPPolicy{
-		DefaultSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
-		ScriptSrc:  []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
-		ConnectSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
-		ImgSrc:     []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
-		FrameSrc:   []foundryhttp.CSPSource{foundryhttp.CSPNone()},
-	}, settings.HTTP.CSPAllowlist)
-	if err != nil {
-		return nil, err
-	}
-	middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
-		Enforce: value.Set(policy),
-	})
-	return foundryhttp.ApplyMiddleware(router, middleware)
+policy, err := foundryhttp.ApplyCSPAllowlist(foundryhttp.CSPPolicy{
+	DefaultSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+	ScriptSrc:  []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+	ConnectSrc: []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+	ImgSrc:     []foundryhttp.CSPSource{foundryhttp.CSPSelf()},
+	FrameSrc:   []foundryhttp.CSPSource{foundryhttp.CSPNone()},
+}, settings.HTTP.CSPAllowlist)
+if err != nil {
+	return nil, err
 }
+middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
+	Enforce: value.Set(policy),
+})
+handler, err := foundryhttp.ApplyMiddleware(router, middleware)
 ```
 
 `CSPPresetCloudflareWebAnalytics` allows `https://static.cloudflareinsights.com`
@@ -202,17 +199,18 @@ demonstrates the complete composition.
 middleware generates 32 cryptographically random bytes per request and exposes
 the base64 value through a concrete context accessor:
 
+Inputs: `writer http.ResponseWriter`, `request *http.Request`, `page *template.Template`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-5 -->
 ```go
-func renderPage(writer http.ResponseWriter, request *http.Request, page *template.Template) {
-	nonce, ok := foundryhttp.CSPNonceFromContext(request.Context())
-	if !ok {
-		// This handler requires a configured nonce policy.
-		return
-	}
-	data := struct{ Nonce string }{Nonce: nonce.String()}
-	_ = page.Execute(writer, data)
-
+nonce, ok := foundryhttp.CSPNonceFromContext(request.Context())
+if !ok {
+	// This handler requires a configured nonce policy.
+	return
+}
+data := struct{ Nonce string }{Nonce: nonce.String()}
+if err := page.Execute(writer, data); err != nil {
+	return
 }
 ```
 

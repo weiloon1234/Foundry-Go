@@ -9,8 +9,8 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-// doc-example:begin http-kernel-1
 func serve(ctx context.Context, handler http.Handler) error {
+	// doc-example:begin http-kernel-1
 	serverKey := foundation.NewKey[*foundryhttp.Server]("app.http")
 	config := foundryhttp.DefaultServerConfig()
 	config.Address = "127.0.0.1:8080"
@@ -23,7 +23,7 @@ func serve(ctx context.Context, handler http.Handler) error {
 	if err != nil {
 		return err
 	}
-	return app.Run(ctx, foundation.HTTP)
+	runErr := app.Run(ctx, foundation.HTTP)
+	// doc-example:end http-kernel-1
+	return runErr
 }
-
-// doc-example:end http-kernel-1

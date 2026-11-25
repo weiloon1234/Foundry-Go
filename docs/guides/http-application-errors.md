@@ -13,6 +13,10 @@ Further reading: [Localized messages](validation-messages.md).
 Declare a public error once and reuse the value in the endpoint and handler. The declaration owns a semantic `ErrorCode`, a status from 400 through
 599, and static public text. This is the same metadata the router exports.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `model`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/errors.go#declared-seat-error -->
 ```go
 var SeatUnavailable = foundryhttp.DefineError("seats.unavailable", 409, "The selected seat is no longer available.")

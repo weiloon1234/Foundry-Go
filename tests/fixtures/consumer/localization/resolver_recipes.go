@@ -15,8 +15,8 @@ type Recipient struct {
 
 // doc-example:end locale-recipient
 
-// doc-example:begin resolve-recipient-locale
 func resolveRecipientLocale(ctx context.Context, catalog *i18n.Catalog, recipient *Recipient) (context.Context, i18n.Resolution, error) {
+	// doc-example:begin resolve-recipient-locale
 	resolver, err := i18n.NewLocaleResolver(catalog,
 		i18n.ContextLocale[*Recipient](),
 		i18n.Preferred("user", func(ctx context.Context, r *Recipient) (i18n.LocaleID, bool, error) {
@@ -32,7 +32,7 @@ func resolveRecipientLocale(ctx context.Context, catalog *i18n.Catalog, recipien
 		return ctx, resolution, err
 	}
 	// WithResolvedLocale also attaches the supported locale to the context.
-	return resolver.WithResolvedLocale(ctx, recipient)
+	resolvedContext, resolution, err := resolver.WithResolvedLocale(ctx, recipient)
+	// doc-example:end resolve-recipient-locale
+	return resolvedContext, resolution, err
 }
-
-// doc-example:end resolve-recipient-locale

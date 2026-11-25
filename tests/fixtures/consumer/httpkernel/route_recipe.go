@@ -10,13 +10,16 @@ import (
 // Member reuses the fixture model identity.
 type Member = mutatorqueries.Member
 
-// doc-example:begin http-routing-1
+// doc-example:begin member-url-path
 // MemberPath binds the URL segment to the concrete member key.
 type MemberPath struct {
 	Member model.ID[Member]
 }
 
+// doc-example:end member-url-path
+
 func memberURL(member Member) (string, error) {
+	// doc-example:begin http-routing-1
 	MemberShow := foundryhttp.DefineRoute(
 		foundryhttp.RouteSpec{
 			ID:     "members.show",
@@ -32,7 +35,6 @@ func memberURL(member Member) (string, error) {
 
 	location, err := foundryhttp.RouteURL(MemberShow, MemberPath{Member: member.ID})
 	// /api/members/<member UUID>
+	// doc-example:end http-routing-1
 	return location, err
 }
-
-// doc-example:end http-routing-1
