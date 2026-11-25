@@ -41,22 +41,31 @@ func runModels(ctx context.Context, args []string, stdout, stderr io.Writer) (re
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	diagnostics, err := modelcheck.Check(ctx, *dir, flags.Args())
+	report, err := modelcheck.Check(ctx, *dir, flags.Args())
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 	if err != nil {
 		return err
 	}
-	if err := printFindings(stdout, *dir, diagnostics); err != nil {
+	if err := printFindings(stdout, *dir, report.Findings); err != nil {
 		return err
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if len(diagnostics) > 0 {
-		return safeerror.New(fmt.Sprintf("models check: %d finding(s); each names the guide that teaches its fix", len(diagnostics)))
+	if len(report.Findings) > 0 {
+		return safeerror.New(fmt.Sprintf("models check: %d finding(s); each names the guide that teaches its fix", len(report.Findings)))
 	}
-	_, err = fmt.Fprintln(stdout, "Model tables are declared through the generator, no CHECK constraint rejects a case of an enum column and every migration is registered.")
+	_, err = fmt.Fprintf(stdout, "Model tables are declared through the generator, %s and every migration is registered.\n", enumSummary(report))
 	return err
+}
+
+// enumSummary says what the enum list check compared, so a clean result is not read
+// as a claim about columns it did not examine.
+func enumSummary(report modelcheck.Report) string {
+	if report.EnumColumns == 0 {
+		return "there is no enum column to compare,"
+	}
+	return fmt.Sprintf("%d of %d enum columns were compared with their CHECK constraints and none rejects a case (the rest have none; foreign keys, triggers and tests across columns are not read),", report.EnumCompared, report.EnumColumns)
 }

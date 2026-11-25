@@ -12,21 +12,28 @@ import (
 // evaluator does not implement is unknown because it cannot be read, and says so.
 
 // truth says what the rows of a table can do with an expression once the column
-// is bound to one case: tAny and fAny that some row can make it true or false.
-// A test the rule cannot read has one value the rule cannot compute, the same
-// for every row; tAll and fAll say that a true or a false row exists whatever
-// that value is, which is what lets the other tests decide the result without
-// it. why is the reason a test could not be read.
+// is bound to one case. An expression is true, false or null for a row (SQL's
+// three values); tAny, fAny and nAny say that some row can give each. A test the
+// rule cannot read has one value the rule cannot compute, the same for every row;
+// the other flags say that a row with the outcome exists whatever that value is,
+// which is what lets the other tests decide the result without it: aT, aF and aN
+// for each outcome, aTN for a true or null one (the row passes a CHECK) and aFN
+// for a false or null one. why is the reason a test could not be read.
 type truth struct {
-	tAny, tAll, fAny, fAll bool
-	why                    string
+	tAny, fAny, nAny     bool
+	aT, aF, aN, aTN, aFN bool
+	why                  string
 }
 
 var (
-	truthTrue  = truth{tAny: true, tAll: true}
-	truthFalse = truth{fAny: true, fAll: true}
-	// truthOther is a test of other columns: some row makes it true, some false.
-	truthOther = truth{tAny: true, tAll: true, fAny: true, fAll: true}
+	truthTrue  = truth{tAny: true, aT: true, aTN: true}
+	truthFalse = truth{fAny: true, aF: true, aFN: true}
+	// truthNull is an expression that is NULL for every row: a constant NULL, a
+	// comparison with one, a CASE that takes no branch and has no ELSE.
+	truthNull = truth{nAny: true, aN: true, aTN: true, aFN: true}
+	// truthOther is a test of other columns: some row makes it true, some false,
+	// some null.
+	truthOther = truth{tAny: true, fAny: true, nAny: true, aT: true, aF: true, aN: true, aTN: true, aFN: true}
 )
 
 func truthOf(ok bool) truth {
@@ -36,17 +43,24 @@ func truthOf(ok bool) truth {
 	return truthFalse
 }
 
-func truthUnreadable(why string) truth { return truth{tAny: true, fAny: true, why: why} }
+func truthUnreadable(why string) truth { return truth{tAny: true, fAny: true, nAny: true, why: why} }
+
+// passAny reports that some row can satisfy a CHECK with the expression: it is true or null.
+func (t truth) passAny() bool { return t.tAny || t.nAny }
 
 // isFalse reports that no row can satisfy the expression: the case can never be stored.
-func (t truth) isFalse() bool { return !t.tAny }
+func (t truth) isFalse() bool { return !t.passAny() }
 
-// isTrue reports that every row satisfies the expression.
-func (t truth) isTrue() bool { return !t.fAny }
+// alwaysPasses reports that no row can fail the expression: it is true or null for
+// every row, and nothing in it is unknown.
+func (t truth) alwaysPasses() bool { return !t.fAny }
+
+// isNull reports that the expression is NULL for every row.
+func (t truth) isNull() bool { return t.nAny && !t.tAny && !t.fAny }
 
 // unreadable reports that whether a row can satisfy the expression depends on a
 // test the rule cannot read.
-func (t truth) unreadable() bool { return t.tAny && !t.tAll && t.why != "" }
+func (t truth) unreadable() bool { return t.passAny() && !t.aTN && t.why != "" }
 
 func firstWhy(a, b string) string {
 	if a != "" {
@@ -56,20 +70,55 @@ func firstWhy(a, b string) string {
 }
 
 func negate(a truth) truth {
-	return truth{tAny: a.fAny, tAll: a.fAll, fAny: a.tAny, fAll: a.tAll, why: a.why}
+	return truth{tAny: a.fAny, fAny: a.tAny, nAny: a.nAny, aT: a.aF, aF: a.aT, aN: a.aN, aTN: a.aFN, aFN: a.aTN, why: a.why}
 }
 
 func conjunction(a, b truth) truth {
-	return truth{tAny: a.tAny && b.tAny, tAll: a.tAll && b.tAll, fAny: a.fAny || b.fAny, fAll: a.fAll || b.fAll, why: firstWhy(a.why, b.why)}
+	return truth{
+		tAny: a.tAny && b.tAny, fAny: a.fAny || b.fAny,
+		nAny: a.nAny && (b.tAny || b.nAny) || b.nAny && (a.tAny || a.nAny),
+		aT:   a.aT && b.aT, aF: a.aF || b.aF,
+		aN:  a.aN && b.aTN || b.aN && a.aTN,
+		aTN: a.aTN && b.aTN, aFN: a.aFN || b.aFN,
+		why: firstWhy(a.why, b.why),
+	}
 }
 
 func disjunction(a, b truth) truth {
-	return truth{tAny: a.tAny || b.tAny, tAll: a.tAll || b.tAll, fAny: a.fAny && b.fAny, fAll: a.fAll && b.fAll, why: firstWhy(a.why, b.why)}
+	return truth{
+		tAny: a.tAny || b.tAny, fAny: a.fAny && b.fAny,
+		nAny: a.nAny && (b.fAny || b.nAny) || b.nAny && (a.fAny || a.nAny),
+		aT:   a.aT || b.aT, aF: a.aF && b.aF,
+		aN:  a.aN && b.aFN || b.aN && a.aFN,
+		aTN: a.aTN || b.aTN, aFN: a.aFN && b.aFN,
+		why: firstWhy(a.why, b.why),
+	}
 }
 
-// same is the truth of (a) = (b) over two conditions.
+// same is the truth of (a) = (b) over two conditions: NULL when either is NULL.
 func same(a, b truth) truth {
 	return disjunction(conjunction(a, b), conjunction(negate(a), negate(b)))
+}
+
+// isTest is the truth of x IS TRUE, FALSE or UNKNOWN, and of their negations: never null.
+func isTest(mode isMode, x truth) truth {
+	var result truth
+	switch mode {
+	case isTrue, isNotTrue:
+		result = truth{tAny: x.tAny, fAny: x.fAny || x.nAny, aT: x.aT, aF: x.aFN, aTN: x.aT, aFN: x.aFN}
+	case isFalse, isNotFalse:
+		result = truth{tAny: x.fAny, fAny: x.tAny || x.nAny, aT: x.aF, aF: x.aTN, aTN: x.aF, aFN: x.aTN}
+	default:
+		// Of a value that is true or false for some row and null for none, IS UNKNOWN
+		// is false for every row; the guarantees below are the ones that hold whatever
+		// the row.
+		result = truth{tAny: x.nAny, fAny: x.tAny || x.fAny, aT: x.aN, aF: x.aT || x.aF, aTN: x.aN, aFN: x.aT || x.aF}
+	}
+	result.why = x.why
+	if mode == isNotTrue || mode == isNotFalse || mode == isNotUnknown {
+		return negate(result)
+	}
+	return result
 }
 
 // binding is the value one evaluation gives a column. For a collection column
@@ -130,7 +179,10 @@ type predicate struct {
 	// operand is the column the test applies to; shape, when set, is the
 	// property of a JSON column that is compared: its "type" or its "length".
 	operand, shape string
-	// op is = <> < <= > >= between notbetween null notnull or contained;
+	// operandCast is what the casts on the column do together; litCast what the
+	// casts on the single literal on the right do.
+	operandCast, litCast castFamily
+	// op is = <> < <= > >= between notbetween null notnull contained or contains;
 	// quant is 'a' for ANY and IN and 'l' for ALL and NOT IN.
 	op    string
 	quant byte
@@ -191,7 +243,7 @@ func (p exprParser) unit(tokens []sqlToken) *expr {
 	case n >= 2 && tokens[0].punct("(") && matching(tokens, 0) == n-1:
 		return p.tree(tokens[1 : n-1])
 	}
-	if mode, cut, ok := isTest(tokens); ok {
+	if mode, cut, ok := trailingIs(tokens); ok {
 		return &expr{op: xIs, mode: mode, kids: []*expr{p.unit(tokens[:cut])}}
 	}
 	if left, right, op, ok := splitCondition(tokens); ok {
@@ -207,15 +259,15 @@ func (p exprParser) unit(tokens []sqlToken) *expr {
 		case tokens[0].word("false"):
 			return &expr{op: xConst, val: truthFalse}
 		case tokens[0].word("null"):
-			return &expr{op: xConst, val: truthOther}
+			return &expr{op: xConst, val: truthNull}
 		}
 	}
 	return &expr{op: xPred, pred: p.predicate(tokens)}
 }
 
-// isTest recognizes a trailing IS [NOT] TRUE, FALSE or UNKNOWN and returns the
+// trailingIs recognizes a trailing IS [NOT] TRUE, FALSE or UNKNOWN and returns the
 // index where the tested expression ends.
-func isTest(tokens []sqlToken) (isMode, int, bool) {
+func trailingIs(tokens []sqlToken) (isMode, int, bool) {
 	n := len(tokens)
 	if n < 3 {
 		return 0, 0, false
@@ -326,23 +378,23 @@ func (p exprParser) operandTest(operand, value []sqlToken) *predicate {
 	for column := range mentions(value) {
 		pr.columns[column] = true
 	}
-	column, next, ok := readColumn(operand, 0)
+	column, family, next, ok := readColumn(operand, 0)
 	if !ok || next != len(operand) {
 		pr.why = "the column is used in " + describeUnknown(operand) + ", which the rule does not read"
 		return pr
 	}
-	literal, end, why := readLiteral(value, 0)
-	if why != "" || end != len(value) {
+	literal, litFamily, end, why := readLiteral(value, 0)
+	if why != "" || end != len(value) || litFamily == castJSON {
 		pr.why = "the column is compared with something the rule cannot read (a CASE value that is not one literal)"
 		return pr
 	}
-	pr.operand, pr.op, pr.rhs = column, "=", []listValue{literal}
+	pr.operand, pr.operandCast, pr.op, pr.rhs = column, family, "=", []listValue{literal}
 	pr.readJSON(literal)
 	return pr
 }
 
 func (pr *predicate) readJSON(literal listValue) {
-	if !literal.integer {
+	if !literal.integer && !literal.null {
 		pr.hasJSON = true
 		pr.jsonElems, pr.jsonWhy = jsonElements(literal.text)
 	}
@@ -365,17 +417,17 @@ func (p exprParser) predicate(tokens []sqlToken) *predicate {
 	}
 	i := 0
 	if t := tokens[0]; t.kind == sqlWord && shapeFunctions[t.text] != "" && len(tokens) > 1 && tokens[1].punct("(") {
-		column, next, ok := readColumn(tokens, 2)
+		column, family, next, ok := readColumn(tokens, 2)
 		if !ok || next >= len(tokens) || !tokens[next].punct(")") || next+1 >= len(tokens) {
 			return unread(describeUnknown(tokens))
 		}
-		pr.operand, pr.shape, i = column, shapeFunctions[t.text], next+1
+		pr.operand, pr.operandCast, pr.shape, i = column, family, shapeFunctions[t.text], next+1
 	} else {
-		column, next, ok := readColumn(tokens, 0)
+		column, family, next, ok := readColumn(tokens, 0)
 		if !ok || next >= len(tokens) {
 			return unread(describeUnknown(tokens))
 		}
-		pr.operand, i = column, next
+		pr.operand, pr.operandCast, i = column, family, next
 	}
 	op := tokens[i]
 	switch {
@@ -400,12 +452,12 @@ func (p exprParser) predicate(tokens []sqlToken) *predicate {
 		if negated {
 			at++
 		}
-		low, next, why := readLiteral(tokens, at)
-		if why != "" || next >= len(tokens) || !tokens[next].word("and") {
+		low, lowCast, next, why := readLiteral(tokens, at)
+		if why != "" || lowCast == castJSON || next >= len(tokens) || !tokens[next].word("and") {
 			return cannot("BETWEEN is not followed by two literals")
 		}
-		high, end, why := readLiteral(tokens, next+1)
-		if why != "" || end != len(tokens) {
+		high, highCast, end, why := readLiteral(tokens, next+1)
+		if why != "" || highCast == castJSON || end != len(tokens) {
 			return cannot("BETWEEN is not followed by two literals")
 		}
 		pr.op, pr.rhs = "between", []listValue{low, high}
@@ -435,22 +487,29 @@ func (p exprParser) predicate(tokens []sqlToken) *predicate {
 			}
 			break
 		}
-		literal, end, why := readLiteral(tokens, next)
+		literal, family, end, why := readLiteral(tokens, next)
 		if why == "" && end == len(tokens) {
-			pr.rhs = []listValue{literal}
+			pr.rhs, pr.litCast = []listValue{literal}, family
 			pr.readJSON(literal)
 			break
 		}
-		if _, end, ok := readColumn(tokens, next); ok && end == len(tokens) {
+		if _, _, end, ok := readColumn(tokens, next); ok && end == len(tokens) {
 			pr.peer = true
 			return pr
 		}
 		return unread(describeUnknown(tokens))
-	case op.punct("<@"):
-		if i+1 >= len(tokens) || tokens[i+1].kind != sqlString || skipCasts(tokens, i+2) != len(tokens) {
-			return cannot("<@ is not followed by a JSON array literal")
+	case op.punct("<@") || op.punct("@>"):
+		family, end := castNone, i+2
+		if i+1 < len(tokens) {
+			family, end = readCasts(tokens, i+2, false)
+		}
+		if i+1 >= len(tokens) || tokens[i+1].kind != sqlString || end != len(tokens) || family != castNone && family != castJSON {
+			return cannot(op.text + " is not followed by a JSON array literal")
 		}
 		pr.op, pr.rhs = "contained", []listValue{{text: tokens[i+1].text}}
+		if op.punct("@>") {
+			pr.op = "contains"
+		}
 		pr.readJSON(pr.rhs[0])
 	case op.word("is") && i+2 == len(tokens) && tokens[i+1].word("null"):
 		pr.op = "null"
@@ -482,23 +541,7 @@ func (e *expr) eval(b binding) truth {
 		}
 		return result
 	case xIs:
-		inner := e.kids[0].eval(b)
-		switch e.mode {
-		case isTrue, isNotFalse:
-			return inner
-		case isFalse, isNotTrue:
-			return negate(inner)
-		case isUnknown:
-			if inner.tAny && inner.fAny {
-				return inner
-			}
-			return truthFalse
-		default:
-			if inner.tAny && inner.fAny {
-				return inner
-			}
-			return truthTrue
-		}
+		return isTest(e.mode, e.kids[0].eval(b))
 	case xSame:
 		return same(e.kids[0].eval(b), e.kids[1].eval(b))
 	case xDiffer:
@@ -507,9 +550,27 @@ func (e *expr) eval(b binding) truth {
 	return e.evalCase(b)
 }
 
-// evalCase joins the results of every branch that can be taken. When a
-// condition cannot be read, which branch is taken is itself unknown, so no
-// branch can guarantee a true or a false row.
+// join combines the results of the branches a CASE can take. When the branch is
+// chosen by a value the rule cannot compute, no outcome is guaranteed unless every
+// branch gives it; otherwise a row can take any branch, so one branch guarantees it.
+func join(a, b truth, choice bool) truth {
+	pick := func(x, y bool) bool {
+		if choice {
+			return x && y
+		}
+		return x || y
+	}
+	return truth{
+		tAny: a.tAny || b.tAny, fAny: a.fAny || b.fAny, nAny: a.nAny || b.nAny,
+		aT: pick(a.aT, b.aT), aF: pick(a.aF, b.aF), aN: pick(a.aN, b.aN), aTN: pick(a.aTN, b.aTN), aFN: pick(a.aFN, b.aFN),
+		why: firstWhy(a.why, b.why),
+	}
+}
+
+// evalCase joins the results of every branch that can be taken. A WHEN is taken
+// only when its condition is true; a condition that is false or null falls through,
+// and a CASE with no ELSE that falls through everywhere is NULL. When a condition
+// cannot be read, which branch is taken is itself unknown.
 func (e *expr) evalCase(b binding) truth {
 	var reached []truth
 	reachable, choice, why := true, false, ""
@@ -521,25 +582,21 @@ func (e *expr) evalCase(b binding) truth {
 		if cond.tAny {
 			reached = append(reached, branch.result.eval(b))
 		}
-		if cond.tAny && cond.fAny && cond.why != "" {
+		if cond.tAny && (cond.fAny || cond.nAny) && cond.why != "" {
 			choice, why = true, firstWhy(why, cond.why)
 		}
-		reachable = cond.fAny
+		reachable = cond.fAny || cond.nAny
 	}
 	if reachable {
 		if e.other != nil {
 			reached = append(reached, e.other.eval(b))
 		} else {
-			reached = append(reached, truthOther)
+			reached = append(reached, truthNull)
 		}
 	}
 	result := reached[0]
 	for _, t := range reached[1:] {
-		if choice {
-			result = truth{tAny: result.tAny || t.tAny, tAll: result.tAll && t.tAll, fAny: result.fAny || t.fAny, fAll: result.fAll && t.fAll, why: firstWhy(result.why, t.why)}
-		} else {
-			result = truth{tAny: result.tAny || t.tAny, tAll: result.tAll || t.tAll, fAny: result.fAny || t.fAny, fAll: result.fAll || t.fAll, why: firstWhy(result.why, t.why)}
-		}
+		result = join(result, t, choice)
 	}
 	result.why = firstWhy(result.why, why)
 	return result
@@ -562,16 +619,28 @@ func (p *predicate) eval(b binding) truth {
 	if p.operand != b.column {
 		return fail("the test names the column only as the value of another test")
 	}
+	if !p.castKeepsValue(b) {
+		return fail("a cast that can change the value being compared")
+	}
+	if p.litCast == castJSON && !b.collection {
+		return fail("a JSON cast on a literal compared with a column that is not a collection")
+	}
+	switch p.op {
+	case "=", "<>", "<", "<=", ">", ">=":
+		if p.quant == 0 && len(p.rhs) == 1 && p.rhs[0].null {
+			return truthNull
+		}
+	}
 	value := b.value
 	switch {
 	case p.shape != "":
 		if !b.collection {
 			return fail("jsonb_typeof and jsonb_array_length are read for collection columns only")
 		}
-		value = listValue{text: "array"}
 		if p.shape == "length" {
-			value = listValue{text: "1", integer: true}
+			return p.evalLength(fail)
 		}
+		value = listValue{text: "array"}
 	case b.collection:
 		return p.evalCollection(b.value, fail)
 	}
@@ -580,64 +649,177 @@ func (p *predicate) eval(b binding) truth {
 		return truthFalse
 	case "notnull":
 		return truthTrue
-	case "contained":
+	case "contained", "contains":
 		return fail("a JSON containment test on a column that is not a collection")
 	case "between", "notbetween":
-		atLeast, why := compareValues(value, ">=", p.rhs[0])
+		atLeast, why := compareTruth(value, ">=", p.rhs[0])
 		if why != "" {
 			return fail(why)
 		}
-		atMost, why := compareValues(value, "<=", p.rhs[1])
+		atMost, why := compareTruth(value, "<=", p.rhs[1])
 		if why != "" {
 			return fail(why)
 		}
-		inside := atLeast && atMost
+		inside := conjunction(atLeast, atMost)
 		if p.op == "notbetween" {
-			inside = !inside
+			return negate(inside)
 		}
-		return truthOf(inside)
+		return inside
 	}
-	anyHolds, allHold := false, true
-	for _, literal := range p.rhs {
-		holds, why := compareValues(value, p.op, literal)
+	var result truth
+	for k, literal := range p.rhs {
+		one, why := compareTruth(value, p.op, literal)
 		if why != "" {
 			return fail(why)
 		}
-		anyHolds = anyHolds || holds
-		allHold = allHold && holds
+		switch {
+		case k == 0:
+			result = one
+		case p.quant == 'l':
+			result = conjunction(result, one)
+		default:
+			result = disjunction(result, one)
+		}
 	}
-	if p.quant == 'l' {
-		return truthOf(allHold)
-	}
-	return truthOf(anyHolds)
+	return result
 }
 
-// evalCollection evaluates the test with the column holding the one-element
-// array of the value: membership in a JSON array literal, or equality with one.
+// castKeepsValue reports whether the casts on the column leave the value being
+// compared as it is for this binding.
+func (p *predicate) castKeepsValue(b binding) bool {
+	switch p.operandCast {
+	case castNone:
+		return true
+	case castText:
+		return !b.value.integer && !b.collection
+	case castInteger:
+		return b.value.integer && !b.collection
+	case castJSON:
+		return b.collection
+	}
+	return false
+}
+
+// evalCollection evaluates the test for a collection column. A case is storable
+// when some array holding it passes, so the column is read as "an array that
+// contains the value, and anything else": membership in a JSON array literal
+// decides <@, and equality with an array literal is true when the value is a
+// member of it. Whether another array passes is other data: <>, @> with more than
+// the value, and every length test.
 func (p *predicate) evalCollection(value listValue, fail func(string) truth) truth {
 	switch p.op {
 	case "null":
 		return truthFalse
 	case "notnull":
 		return truthTrue
-	case "contained", "=", "<>":
+	case "contained", "contains", "=", "<>":
 		if !p.hasJSON || p.quant != 0 {
 			break
 		}
 		if p.jsonWhy != "" {
 			return fail(p.jsonWhy)
 		}
-		if p.op == "contained" {
+		switch p.op {
+		case "contained", "=":
 			return truthOf(containsValue(p.jsonElems, value))
+		case "contains":
+			for _, element := range p.jsonElems {
+				if element != value {
+					return truthOther
+				}
+			}
+			return truthTrue
 		}
-		equal := len(p.jsonElems) == 1 && p.jsonElems[0] == value
-		return truthOf(equal == (p.op == "="))
+		return truthOther
 	}
-	return fail("a collection column is read through <@ or = with a JSON array literal, jsonb_typeof and jsonb_array_length only")
+	return fail("a collection column is read through <@, @> or = and <> with a JSON array literal, jsonb_typeof and jsonb_array_length only")
+}
+
+// evalLength evaluates a test of jsonb_array_length for a column that holds an
+// array containing the value, which has at least one element: a test that only an
+// empty array passes is false, and any other length test depends on the other
+// elements.
+func (p *predicate) evalLength(fail func(string) truth) truth {
+	if p.op == "null" {
+		return truthFalse
+	}
+	if p.op == "notnull" {
+		return truthTrue
+	}
+	numbers := make([]int64, len(p.rhs))
+	for k, literal := range p.rhs {
+		if literal.null {
+			continue
+		}
+		n, err := strconv.ParseInt(literal.text, 10, 64)
+		if err != nil || !literal.integer {
+			return fail("a length compared with something that is not an integer")
+		}
+		numbers[k] = n
+	}
+	// empties reports that a length of at least one cannot satisfy the comparison
+	// of the length with the member.
+	empties := func(op string, k int) bool {
+		if p.rhs[k].null {
+			return false
+		}
+		switch op {
+		case "=", "<=":
+			return numbers[k] < 1
+		case "<":
+			return numbers[k] <= 1
+		}
+		return false
+	}
+	switch p.op {
+	case "between":
+		if !p.rhs[0].null && !p.rhs[1].null && (numbers[1] < 1 || numbers[0] > numbers[1]) {
+			return truthFalse
+		}
+	case "=", "<>", "<", "<=", ">", ">=":
+		if p.quant == 'l' {
+			for k := range p.rhs {
+				if empties(p.op, k) {
+					return truthFalse
+				}
+			}
+			break
+		}
+		all := len(p.rhs) != 0
+		for k := range p.rhs {
+			all = all && empties(p.op, k)
+		}
+		if all {
+			return truthFalse
+		}
+	}
+	return truthOther
+}
+
+// compareTruth gives the truth of the bound value compared with one literal: null
+// when the literal is NULL.
+func compareTruth(v listValue, op string, literal listValue) (truth, string) {
+	if literal.null {
+		return truthNull, ""
+	}
+	holds, why := compareValues(v, op, literal)
+	if why != "" {
+		return truth{}, why
+	}
+	return truthOf(holds), ""
 }
 
 // compareValues compares a bound value with a literal.
 func compareValues(v listValue, op string, literal listValue) (bool, string) {
+	if v.other {
+		switch op {
+		case "=":
+			return false, ""
+		case "<>":
+			return true, ""
+		}
+		return false, "an ordering or range test of a value that is no literal of the constraint"
+	}
 	if !v.integer {
 		switch {
 		case literal.integer:
@@ -671,9 +853,16 @@ func compareValues(v listValue, op string, literal listValue) (bool, string) {
 	return false, fmt.Sprintf("the operator %s", op)
 }
 
+// appliesTo reports whether the constraint bears on the column: it mentions it, or
+// it mentions no column at all, as in CHECK (NULL IS TRUE), and then it bears on
+// every column of the table.
+func (c *checkConstraint) appliesTo(column string) bool {
+	return len(c.idents) == 0 || c.idents[column]
+}
+
 // evaluate gives the truth of the constraint for the bound column.
 func (c *checkConstraint) evaluate(b binding) truth {
-	if !c.idents[b.column] {
+	if !c.appliesTo(b.column) {
 		return truthOther
 	}
 	if c.refused != "" {
@@ -743,8 +932,10 @@ func (c *checkConstraint) comparedLiterals(column string, collection bool) []lis
 	return result
 }
 
+// literals collects the literals a positive membership test compares the column
+// with: =, IN, = ANY, a member of <@, and the equality of a CASE operand.
 func (p *predicate) literals(column string, collection bool, out *[]listValue) {
-	if p.why != "" || p.peer || p.operand != column || p.shape != "" || p.op == "null" || p.op == "notnull" {
+	if p.why != "" || p.peer || p.operand != column || p.shape != "" || p.quant == 'l' || p.op != "=" && p.op != "contained" {
 		return
 	}
 	values := p.rhs
@@ -755,7 +946,7 @@ func (p *predicate) literals(column string, collection bool, out *[]listValue) {
 		values = p.jsonElems
 	}
 	for _, v := range values {
-		if !containsValue(*out, v) {
+		if !v.null && !containsValue(*out, v) {
 			*out = append(*out, v)
 		}
 	}

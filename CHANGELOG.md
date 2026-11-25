@@ -43,10 +43,17 @@
   changes, `LIKE`/`INHERITS` table copies) is a finding that names the sub-expression and
   says it cannot be read, never silence. Tables are identified by schema and name and
   quoted names keep their case. A case a constraint rejects is a one-line `[enum-list]`
-  finding at the case that names the table, column, constraint (only when the migration
-  names it; an unnamed one is described by its file and line), the migration that last
-  wrote it, and two alternatives: a new migration that re-declares the constraint with
-  the printed list, or `values=` on the field plus `foundry generate`. A literal the
+  finding at the case that names the table, column, constraint (an unnamed one is
+  described by its file and line and dropped by PostgreSQL's default name, which the
+  finding prints), the migration that last wrote it, and two alternatives: a new
+  migration that re-declares the constraint with the printed list, or `values=` on the
+  field plus `foundry generate`. A `DROP CONSTRAINT` removes an unnamed constraint only
+  under that exact default name. SQL's three values are kept apart (a `CASE` with no
+  `ELSE`, `NULL` and a comparison with it are NULL, which a CHECK passes), casts count only
+  when they cannot change the value (`::text` on a text enum, an integer type on an integer
+  enum, `::jsonb`), a collection is storable when some array holding the case passes, a
+  `citext` column, and a `NOT ENFORCED` constraint are not read as lists, and
+  `models check` says how many enum columns it compared. A literal the
   database admits that is not a case and a run-time-built migration that names a model
   table are findings too. A column that holds fewer cases declares them with the new tag
   option `values=Case|Case`, and the constraints must then reject every other case. A migration function

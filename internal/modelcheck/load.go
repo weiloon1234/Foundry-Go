@@ -17,23 +17,32 @@ func Load(ctx context.Context, dir string, patterns []string) ([]*generate.Analy
 	return generate.LoadAnalysis(ctx, dir, patterns)
 }
 
+// Report is what Check found and what it examined.
+type Report struct {
+	Findings []diagnostic.Diagnostic
+	// EnumColumns is the number of enum columns of the models; EnumCompared those
+	// whose CHECK constraints the rule read and compared with the enum.
+	EnumColumns, EnumCompared int
+}
+
 // Check inspects packages below dir matching patterns for low-level table declarations.
-func Check(ctx context.Context, dir string, patterns []string) (result []diagnostic.Diagnostic, resultErr error) {
+func Check(ctx context.Context, dir string, patterns []string) (report Report, resultErr error) {
 	defer func() {
 		if ctx.Err() != nil {
-			result = nil
+			report = Report{}
 			resultErr = ctx.Err()
 		}
 	}()
+	var result []diagnostic.Diagnostic
 	pkgs, err := Load(ctx, dir, patterns)
 	if err != nil {
-		return nil, err
+		return Report{}, err
 	}
 	analyses := make([]*Analysis, len(pkgs))
 	nameParameters := make(map[declarationFunction][]int)
 	for i, pkg := range pkgs {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return Report{}, ctx.Err()
 		}
 		a := NewAnalysis(pkg.TypesInfo, pkg.Fset)
 		a.Package = pkg.Types
@@ -47,7 +56,7 @@ func Check(ctx context.Context, dir string, patterns []string) (result []diagnos
 	seen := make(map[string]bool)
 	for i, pkg := range pkgs {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return Report{}, ctx.Err()
 		}
 		a := analyses[i]
 		a.nameParameters = nameParameters
@@ -61,13 +70,14 @@ func Check(ctx context.Context, dir string, patterns []string) (result []diagnos
 	}
 	root, err := filepath.Abs(dir)
 	if err != nil {
-		return nil, err
+		return Report{}, err
 	}
 	analysisByPackage := make(map[*generate.AnalysisPackage]*Analysis, len(pkgs))
 	for i, pkg := range pkgs {
 		analysisByPackage[pkg] = analyses[i]
 	}
-	for _, d := range checkEnumLists(root, pkgs, analysisByPackage) {
+	enumFindings, stats := checkEnumLists(root, pkgs, analysisByPackage)
+	for _, d := range enumFindings {
 		key := d.String()
 		if !seen[key] {
 			seen[key] = true
@@ -87,5 +97,5 @@ func Check(ctx context.Context, dir string, patterns []string) (result []diagnos
 		}
 		return a.Subject < b.Subject
 	})
-	return result, nil
+	return Report{Findings: result, EnumColumns: stats.Fields, EnumCompared: stats.Compared}, nil
 }

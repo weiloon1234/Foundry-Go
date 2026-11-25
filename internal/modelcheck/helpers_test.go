@@ -56,10 +56,11 @@ var RuntimeUsers = dbutil.DefineTable[User](runtimeName())
 		want    int
 	}{{"./...", 1}, {"./users", 0}} {
 		t.Run(tc.pattern, func(t *testing.T) {
-			got, err := Check(t.Context(), dir, []string{tc.pattern})
+			report, err := Check(t.Context(), dir, []string{tc.pattern})
 			if err != nil {
 				t.Fatal(err)
 			}
+			got := report.Findings
 			if len(got) != tc.want {
 				t.Fatalf("findings: %v; want %d", got, tc.want)
 			}

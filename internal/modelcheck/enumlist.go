@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/internal/diagnostic"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
@@ -57,20 +58,16 @@ func distinctPackages(pkgs []*generate.AnalysisPackage) []*generate.AnalysisPack
 
 // enumListStats counts what the enum list check examined.
 type enumListStats struct {
-	// Fields is the number of enum-typed model fields, Compared those with a
-	// readable list in the migrations and Equal those whose list matched.
+	// Fields is the number of enum-typed model fields, Compared those whose CHECK
+	// constraints the rule read and compared with the enum, and Equal those
+	// among them without a finding.
 	Fields, Compared, Equal int
 }
 
-// checkEnumLists compares the value lists in the migrations' CHECK constraints
-// with the enums of the model fields they constrain, and finds migration
-// functions that are never registered.
-func checkEnumLists(root string, all []*generate.AnalysisPackage, analyses map[*generate.AnalysisPackage]*Analysis) []diagnostic.Diagnostic {
-	result, _ := analyzeEnumLists(root, all, analyses)
-	return result
-}
-
-func analyzeEnumLists(root string, all []*generate.AnalysisPackage, analyses map[*generate.AnalysisPackage]*Analysis) ([]diagnostic.Diagnostic, enumListStats) {
+// checkEnumLists compares the CHECK constraints in the migrations with the
+// enums of the model fields they constrain, and finds migration functions that
+// are never registered. It also counts the enum columns it compared.
+func checkEnumLists(root string, all []*generate.AnalysisPackage, analyses map[*generate.AnalysisPackage]*Analysis) ([]diagnostic.Diagnostic, enumListStats) {
 	var stats enumListStats
 	pkgs := distinctPackages(all)
 	byPath := make(map[string]*generate.AnalysisPackage, len(pkgs))
@@ -244,11 +241,8 @@ type unreadableReason struct {
 	// literal says the cause is a domain or database enum type: the advice is a
 	// literal CHECK list, not a rewrite of a constraint.
 	literal bool
-}
-
-// namePlaceholder stands for a constraint name the rule cannot know.
-func namePlaceholder(table string) string {
-	return "<constraint name, shown by \\d " + table + ">"
+	// inexact says the cause is a column type the rule does not compare exactly.
+	inexact bool
 }
 
 // sqlName renders a constraint name, quoted when it is not a plain lower-case name.
@@ -274,6 +268,18 @@ func canonical(v listValue, integerEnum bool) listValue {
 		return listValue{text: strconv.FormatInt(n, 10), integer: true}
 	}
 	return v
+}
+
+// maxListed bounds how many values one finding prints.
+const maxListed = 20
+
+// capped joins the values of a finding, naming how many more there are when it
+// would print more than maxListed.
+func capped(values []string) string {
+	if len(values) <= maxListed {
+		return strings.Join(values, ", ")
+	}
+	return fmt.Sprintf("%s, and %d more", strings.Join(values[:maxListed], ", "), len(values)-maxListed)
 }
 
 // plural picks the verb form for a list of values.
@@ -305,10 +311,21 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 		}
 		return false
 	}
-	scope := func(c *checkConstraint) string {
-		return fmt.Sprintf("%s on %s, last written at %s", c.describe(), subject, c.src.where(c.atOffset))
+	// migration is the advice to write the constraints again with the list. A
+	// constraint the migration did not name is dropped by PostgreSQL's default name.
+	migration := func(constraints ...*checkConstraint) string {
+		var drops []string
+		for _, c := range constraints {
+			if !c.known() {
+				drops = append(drops, fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s", f.table, sqlName(c.dropName())))
+			}
+		}
+		if len(drops) == 0 {
+			return "add a new migration that re-declares the constraint with this list: "
+		}
+		return fmt.Sprintf("add a new migration that drops the unnamed %s (%s, PostgreSQL's default %s for %s) and re-declares the constraint with this list: ",
+			plural(len(drops), "CHECK", "CHECKs"), strings.Join(drops, "; "), plural(len(drops), "name", "names"), plural(len(drops), "it", "them"))
 	}
-	const migration = "add a new migration that re-declares the constraint with this list: "
 	list := renderList(func() []listValue {
 		values := make([]listValue, len(f.expected))
 		for i, expected := range f.expected {
@@ -320,7 +337,7 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 	var tainted, unread, dynamic []unreadableReason
 	var live []*checkConstraint
 	for _, c := range table.checks {
-		if !c.idents[f.column] {
+		if !c.appliesTo(f.column) || c.notEnforced {
 			continue
 		}
 		if c.taint != "" {
@@ -338,6 +355,59 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 			reason = unreadableReason{text: where, literal: true}
 		}
 		dynamic = append(dynamic, reason)
+	}
+	if n, ok := table.padded[f.column]; ok {
+		// Padding changes no comparison when every value the column is compared with
+		// has at most n characters and no trailing space.
+		var values []listValue
+		for _, k := range f.cases {
+			values = append(values, f.value(k))
+		}
+		constrained := false
+		for _, c := range table.checks {
+			if c.idents[f.column] && !c.notEnforced && c.constrains(f.column) {
+				constrained = true
+				values = append(values, c.comparedLiterals(f.column, f.collection)...)
+			}
+		}
+		for _, v := range values {
+			if !constrained {
+				break
+			}
+			if v.integer || strings.HasSuffix(v.text, " ") || n > 0 && utf8.RuneCountInString(v.text) > n {
+				size := "unbounded"
+				if n > 0 {
+					size = strconv.Itoa(n) + " characters"
+				}
+				why := fmt.Sprintf("the column's type pads its values (%s), and %s is not a value that compares exactly: it has trailing spaces or more characters", size, v)
+				return unreadableFinding(f, subject, []unreadableReason{{text: why, inexact: true}}, table), false
+			}
+		}
+	}
+	if why := table.typed[f.column]; why != "" {
+		for _, c := range table.checks {
+			if c.idents[f.column] && !c.notEnforced && c.constrains(f.column) {
+				// The column's values are not compared as the constraints are
+				// evaluated, so no case can be called rejected or admitted.
+				return unreadableFinding(f, subject, []unreadableReason{{text: why, inexact: true}}, table), false
+			}
+		}
+	}
+
+	// Unnamed constraints written on one line are told apart by their order there.
+	sameLine := make(map[string][]*checkConstraint)
+	for _, c := range live {
+		if !c.known() {
+			where := c.src.where(c.atOffset)
+			sameLine[where] = append(sameLine[where], c)
+		}
+	}
+	scope := func(c *checkConstraint) string {
+		text := fmt.Sprintf("%s on %s, last written at %s", c.describe(), subject, c.src.where(c.atOffset))
+		if peers := sameLine[c.src.where(c.atOffset)]; !c.known() && len(peers) > 1 {
+			text += fmt.Sprintf(" (check %d of %d unnamed CHECKs on that line)", slices.Index(peers, c)+1, len(peers))
+		}
+		return text
 	}
 
 	// Each case is evaluated against every live constraint. A constraint that is
@@ -371,11 +441,23 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 	}
 	unreadable := append(append(tainted, unread...), dynamic...)
 
-	// A literal a constraint compares the column with that is no case, and that
-	// no constraint rejects, is a value the database admits.
+	// The column is closed to a list when some constraint rejects a value that
+	// equals none of the literals; otherwise the constraints do not restrict it to
+	// a list and no value is "held". Only a closed column reports a literal that is
+	// no case and that the constraints do not reject.
+	closed := false
+	someOther := binding{column: f.column, value: listValue{text: "\x00other", integer: integerEnum, other: true}, collection: f.collection}
+	for _, c := range live {
+		if c.evaluate(someOther).isFalse() {
+			closed = true
+		}
+	}
 	extras := make(map[*checkConstraint][]string)
 	extraCount := 0
 	for _, c := range live {
+		if !closed {
+			break
+		}
 		for _, literal := range c.comparedLiterals(f.column, f.collection) {
 			if isCase(literal) {
 				continue
@@ -383,7 +465,7 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 			value := canonical(literal, integerEnum)
 			stored := true
 			for _, other := range live {
-				if other.evaluate(bind(value)).isFalse() {
+				if result := other.evaluate(bind(value)); result.isFalse() || result.unreadable() {
 					stored = false
 				}
 			}
@@ -440,9 +522,9 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 		}
 		problem := fmt.Sprintf("case %s can never be stored: it is rejected by %s", names[0], by)
 		if len(missing) > 1 {
-			problem = fmt.Sprintf("cases %s can never be stored: they are rejected by %s", strings.Join(names, ", "), by)
+			problem = fmt.Sprintf("cases %s can never be stored: they are rejected by %s", capped(names), by)
 		}
-		advice := migration + list
+		advice := migration(g.by...) + list
 		var admittedNames []string
 		for _, k := range f.cases {
 			if !rejectedAnywhere[k.Name] {
@@ -460,9 +542,9 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 	}
 	for _, c := range live {
 		if values := extras[c]; len(values) != 0 {
-			problem := fmt.Sprintf("%s holds %s, which %s not %s", scope(c), strings.Join(values, ", "), plural(len(values), "is", "are"), plural(len(values), "an enum case", "enum cases"))
+			problem := fmt.Sprintf("%s holds %s, which %s not %s", scope(c), capped(values), plural(len(values), "is", "are"), plural(len(values), "an enum case", "enum cases"))
 			result = append(result, diagnostic.EnumList.At(at.Filename, at.Line, at.Column).
-				Say(f.model+"."+f.field, problem).To(migration+list))
+				Say(f.model+"."+f.field, problem).To(migration(c)+list))
 		}
 	}
 	if f.narrowed && len(live) != 0 {
@@ -474,7 +556,7 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 			}
 			every := true
 			for _, c := range live {
-				if !c.evaluate(bind(f.value(k))).isTrue() {
+				if !c.evaluate(bind(f.value(k))).alwaysPasses() {
 					every = false
 				}
 			}
@@ -483,28 +565,36 @@ func compareField(f enumField, h *history) (findings []diagnostic.Diagnostic, co
 			}
 		}
 		if len(admitted) != 0 {
-			problem := fmt.Sprintf("%s holds %s, which %s not among the cases named by values= on %s.%s", scope(live[0]), strings.Join(admitted, ", "), plural(len(admitted), "is", "are"), f.model, f.field)
+			problem := fmt.Sprintf("%s holds %s, which %s not among the cases named by values= on %s.%s", scope(live[0]), capped(admitted), plural(len(admitted), "is", "are"), f.model, f.field)
 			result = append(result, diagnostic.EnumList.At(at.Filename, at.Line, at.Column).
-				Say(f.model+"."+f.field, problem).To(migration+list))
+				Say(f.model+"."+f.field, problem).To(migration(live...)+list))
 		}
 	}
 
 	if len(unreadable) != 0 {
-		first := unreadable[0]
-		name := namePlaceholder(f.table)
-		if first.constraint != nil && first.constraint.known() {
-			name = sqlName(first.constraint.name)
-		}
-		fix := fmt.Sprintf("write the constraint again in a new migration as literal ALTER TABLE %s DROP CONSTRAINT %s and ALTER TABLE %s ADD CONSTRAINT %s CHECK (...) statements whose test only compares the column with literals, such as IN (...), = ANY (ARRAY[...]) or <@ '[...]'; the newest literal constraint is the one evaluated", f.table, name, f.table, name)
-		if name == namePlaceholder(f.table) {
-			fix += fmt.Sprintf("; read the constraint's name from psql's \\d %s", f.table)
-		}
-		if first.literal {
-			fix = fmt.Sprintf("constrain the column with a literal list in a new migration: ALTER TABLE %s ADD CONSTRAINT %s CHECK (%s IN (...)) listing every case; the rule compares CHECK constraints only", f.table, sqlName(f.table+"_"+f.column+"_check"), f.column)
-		}
-		result = append(result, diagnostic.EnumList.At(at.Filename, at.Line, at.Column).
-			Say(subject, "the CHECK constraints on this enum column cannot be read statically: "+first.text).To(fix))
-		return result, false
+		return append(result, unreadableFinding(f, subject, unreadable, table)...), false
 	}
 	return result, len(live) != 0
+}
+
+// unreadableFinding reports that the CHECK constraints on an enum column cannot be
+// read, with the first cause and the migration that ends it.
+func unreadableFinding(f enumField, subject string, unreadable []unreadableReason, table *tableState) []diagnostic.Diagnostic {
+	first := unreadable[0]
+	fix := ""
+	explicit := sqlName(table.freeName(declaredKey(f.table).name + "_" + f.column + "_values"))
+	switch c := first.constraint; {
+	case first.inexact:
+		fix = fmt.Sprintf("the rule compares the values of text, varchar, integer and jsonb columns only: give %s one of those types", subject)
+	case first.literal:
+		fix = fmt.Sprintf("constrain the column with a literal list in a new migration: ALTER TABLE %s ADD CONSTRAINT %s CHECK (%s IN (...)) listing every case; the rule compares CHECK constraints only", f.table, explicit, f.column)
+	case c != nil && c.known():
+		fix = fmt.Sprintf("write the constraint again in a new migration as literal ALTER TABLE %s DROP CONSTRAINT %s and ALTER TABLE %s ADD CONSTRAINT %s CHECK (...) statements whose test only compares the column with literals, such as IN (...), = ANY (ARRAY[...]) or <@ '[...]'; the rule then reads the column from the constraints that remain", f.table, sqlName(c.name), f.table, sqlName(c.name))
+	case c != nil:
+		fix = fmt.Sprintf("write the constraint again in a new migration with ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s (%s is PostgreSQL's default name for this unnamed CHECK, unless the schema already held a constraint of that name and PostgreSQL added a number to it; name constraints explicitly to remove the doubt) and, if the column should stay constrained, ALTER TABLE %s ADD CONSTRAINT %s CHECK (...) whose test only compares the column with literals, such as IN (...), = ANY (ARRAY[...]) or <@ '[...]'; the rule then reads the column from the constraints that remain", f.table, sqlName(c.dropName()), sqlName(c.dropName()), f.table, explicit)
+	default:
+		fix = fmt.Sprintf("constrain the column with a literal list in a new migration: ALTER TABLE %s ADD CONSTRAINT %s CHECK (%s IN (...)) listing every case; the rule then reads the column from it", f.table, explicit, f.column)
+	}
+	return []diagnostic.Diagnostic{diagnostic.EnumList.At(f.at.Filename, f.at.Line, f.at.Column).
+		Say(subject, "the CHECK constraints on this enum column cannot be read statically: "+first.text).To(fix)}
 }

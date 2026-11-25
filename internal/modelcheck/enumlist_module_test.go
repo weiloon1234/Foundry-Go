@@ -107,10 +107,11 @@ func source(files map[string]string) map[string]string {
 
 func TestEnumListWrongGuessMessage(t *testing.T) {
 	dir := enumModule(t, source(wrongGuessModule))
-	findings, err := Check(t.Context(), dir, []string{"./..."})
+	report, err := Check(t.Context(), dir, []string{"./..."})
 	if err != nil {
 		t.Fatal(err)
 	}
+	findings := report.Findings
 	if len(findings) != 1 {
 		t.Fatalf("%d findings: %v", len(findings), findings)
 	}
@@ -134,9 +135,12 @@ func TestEnumListWrongGuessFixedByANewMigration(t *testing.T) {
 
 func All()`, 1)
 	files["migrations.go"] = strings.ReplaceAll(strings.Replace(files["migrations.go"], "{CreateAdmins()}", "{CreateAdmins(), PagesExport()}", 1), "§", "`")
-	findings, err := Check(t.Context(), enumModule(t, files), []string{"./..."})
-	if err != nil || len(findings) != 0 {
+	report, err := Check(t.Context(), enumModule(t, files), []string{"./..."})
+	if findings := report.Findings; err != nil || len(findings) != 0 {
 		t.Fatalf("the newest literal list equals the enum: %v %v", findings, err)
+	}
+	if report.EnumColumns != 1 || report.EnumCompared != 1 {
+		t.Fatalf("the report counts the enum column it compared: %+v", report)
 	}
 }
 
@@ -262,23 +266,23 @@ func All() []migrate.Definition {
 
 func TestEnumListCases(t *testing.T) {
 	dir := enumModule(t, source(casesModule))
-	findings, err := Check(t.Context(), dir, []string{"./..."})
+	report, err := Check(t.Context(), dir, []string{"./..."})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var got []string
-	for _, d := range findings {
+	for _, d := range report.Findings {
 		got = append(got, strings.TrimPrefix(d.String(), dir+"/"))
 	}
 	const guide = ". Foundry guide: migrations-and-seeding#recipe-enum-lists"
 	wants := []string{
-		`enums.go:16:2: [enum-list] enum Phase: case "review" (Review) can never be stored: it is rejected by the unnamed CHECK on posts.stage, last written at migrations.go:13; either (a) the column should hold the case: add a new migration that re-declares the constraint with this list: 'draft', 'review'; or (b) the column should not hold it: remove it from values= on Post.Stage and run foundry generate` + guide,
+		`enums.go:16:2: [enum-list] enum Phase: case "review" (Review) can never be stored: it is rejected by the unnamed CHECK on posts.stage, last written at migrations.go:13; either (a) the column should hold the case: add a new migration that drops the unnamed CHECK (ALTER TABLE posts DROP CONSTRAINT IF EXISTS posts_stage_check, PostgreSQL's default name for it) and re-declares the constraint with this list: 'draft', 'review'; or (b) the column should not hold it: remove it from values= on Post.Stage and run foundry generate` + guide,
 		`migrations.go:34: [enum-list] migration: cannot be read by the enum list check: a SQL statement is built at run time, not written as a string constant; write the key and the SQL as constants, and a constraint as literal ALTER TABLE DROP CONSTRAINT and ADD CONSTRAINT statements` + guide,
 		`migrations.go:38:6: [migration-unregistered] migration Forgotten (app/006_forgotten): is never listed with the application's other migrations, so it never runs; add Forgotten() to the list of migrate.Definition values the application registers, or delete the file. Foundry guide: migrations-and-seeding#recipe-register-migration`,
-		`models.go:8:2: [enum-list] Ticket.Priority: the unnamed CHECK on tickets.priority, last written at migrations.go:7 holds "urgent", which is not an enum case; add a new migration that re-declares the constraint with this list: 'low', 'high'` + guide,
+		`models.go:8:2: [enum-list] Ticket.Priority: the unnamed CHECK on tickets.priority, last written at migrations.go:7 holds "urgent", which is not an enum case; add a new migration that drops the unnamed CHECK (ALTER TABLE tickets DROP CONSTRAINT IF EXISTS tickets_priority_check, PostgreSQL's default name for it) and re-declares the constraint with this list: 'low', 'high'` + guide,
 		`models.go:19:2: [enum-list] Post.Step: values names Missing, which is not a case of enum Phase; name only cases of the enum, written as their Go constant names separated by |` + guide,
 		`models.go:21:2: [enum-list] Post.Round: values names every case of enum Phase; remove the values option; it narrows a column to some cases` + guide,
-		`models.go:27:2: [enum-list] orders.mode: the CHECK constraints on this enum column cannot be read statically: the unnamed CHECK was added at migrations.go:19, and a DO block at migrations.go:20 may have changed it; write the constraint again in a new migration as literal ALTER TABLE orders DROP CONSTRAINT <constraint name, shown by \d orders> and ALTER TABLE orders ADD CONSTRAINT <constraint name, shown by \d orders> CHECK (...) statements whose test only compares the column with literals, such as IN (...), = ANY (ARRAY[...]) or <@ '[...]'; the newest literal constraint is the one evaluated; read the constraint's name from psql's \d orders` + guide,
+		`models.go:27:2: [enum-list] orders.mode: the CHECK constraints on this enum column cannot be read statically: the unnamed CHECK was added at migrations.go:19, and a DO block at migrations.go:20 may have changed it; write the constraint again in a new migration with ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_mode_check (orders_mode_check is PostgreSQL's default name for this unnamed CHECK, unless the schema already held a constraint of that name and PostgreSQL added a number to it; name constraints explicitly to remove the doubt) and, if the column should stay constrained, ALTER TABLE orders ADD CONSTRAINT orders_mode_values CHECK (...) whose test only compares the column with literals, such as IN (...), = ANY (ARRAY[...]) or <@ '[...]'; the rule then reads the column from the constraints that remain` + guide,
 	}
 	if strings.Join(got, "\n") != strings.Join(wants, "\n") {
 		t.Fatalf("findings\n got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(wants, "\n"))

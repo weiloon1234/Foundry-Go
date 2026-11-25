@@ -6,15 +6,18 @@ import (
 )
 
 // outcome names what a constraint decides for one bound value: false (no row can
-// be stored), true (every row passes), other (it depends on other columns) or
-// unreadable (it depends on a test the rule cannot read).
+// be stored), null (every row gives NULL, which a CHECK passes), true (every row
+// passes), other (it depends on other columns) or unreadable (it depends on a
+// test the rule cannot read).
 func outcome(t truth) string {
 	switch {
 	case t.isFalse():
 		return "false"
 	case t.unreadable():
 		return "unreadable"
-	case t.isTrue():
+	case t.isNull():
+		return "null"
+	case t.alwaysPasses():
 		return "true"
 	}
 	return "other"
@@ -111,7 +114,7 @@ func TestEvaluationDecidesEveryForm(t *testing.T) {
 		{"CASE with one WHEN per case", `CASE WHEN status = 'draft' THEN true WHEN status = 'paid' THEN true ELSE false END`, "status", false, status, "true true false"},
 		{"list beside a CASE that narrows it", `status IN (` + allThree + `) AND CASE WHEN status IN ('draft') THEN true ELSE false END`, "status", false, status, "true false false"},
 		{"CASE with an operand", `CASE status WHEN 'draft' THEN true WHEN 'paid' THEN true ELSE false END`, "status", false, status, "true true false"},
-		{"CASE without ELSE", `CASE WHEN status = 'draft' THEN false END`, "status", false, status, "false other other"},
+		{"CASE without ELSE", `CASE WHEN status = 'draft' THEN false END`, "status", false, status, "false null null"},
 		{"CASE of conditions on other columns", `CASE WHEN status IS NULL THEN level = 1 WHEN status = 'draft' THEN level = 2 ELSE false END`, "status", false, status, "other false false"},
 		{"CASE with a condition that cannot be read", `CASE WHEN lower(status) = 'draft' THEN true ELSE false END`, "status", false, status, "unreadable unreadable unreadable"},
 		{"CASE with an operand that cannot be read", `CASE lower(status) WHEN 'draft' THEN true ELSE false END`, "status", false, status, "unreadable unreadable unreadable"},
@@ -165,8 +168,8 @@ func TestEvaluationDecidesEveryForm(t *testing.T) {
 		{"collection list with a type guard", `jsonb_typeof(roles) = 'array' AND roles <@ ` + allPerms, "roles", true, perms, "true true true"},
 		{"collection list shorter than the enum", `jsonb_typeof(roles) = 'array' AND roles <@ '["a","b"]'::jsonb`, "roles", true, perms, "true true false"},
 		{"collection with the equality branch for all", `jsonb_typeof(p) = 'array' AND (p = '["*"]'::jsonb OR p <@ '["x","y"]'::jsonb)`, "p", true, strs("*", "x", "y", "z"), "true true true false"},
-		{"length guard that is neutral", `jsonb_array_length(roles) > 0 AND roles <@ ` + allPerms, "roles", true, perms, "true true true"},
-		{"length range guard that is neutral", `jsonb_array_length(roles) BETWEEN 1 AND 3 AND roles <@ ` + allPerms, "roles", true, perms, "true true true"},
+		{"length guard depends on the other elements", `jsonb_array_length(roles) > 0 AND roles <@ ` + allPerms, "roles", true, perms, "other other other"},
+		{"length range guard depends on the other elements", `jsonb_array_length(roles) BETWEEN 1 AND 3 AND roles <@ ` + allPerms, "roles", true, perms, "other other other"},
 		{"length guard of zero", `jsonb_array_length(roles) = 0 AND roles <@ ` + allPerms, "roles", true, perms, "false false false"},
 		{"length guard below one", `jsonb_array_length(roles) < 1 AND roles <@ ` + allPerms, "roles", true, perms, "false false false"},
 		{"length guard between zero and zero", `jsonb_array_length(roles) BETWEEN 0 AND 0 AND roles <@ ` + allPerms, "roles", true, perms, "false false false"},
@@ -174,16 +177,120 @@ func TestEvaluationDecidesEveryForm(t *testing.T) {
 		{"type guard for a string", `jsonb_typeof(roles) = 'string' AND roles <@ ` + allPerms, "roles", true, perms, "false false false"},
 		{"type guard <> array", `jsonb_typeof(roles) <> 'array' AND roles <@ ` + allPerms, "roles", true, perms, "false false false"},
 		{"collection equality chain", `p = '["a"]'::jsonb OR p = '["b"]'::jsonb`, "p", true, perms, "true true false"},
-		{"collection equality is whole-value", `p = '["a","b"]'::jsonb`, "p", true, perms, "false false false"},
-		{"collection <> of a whole value", `p <> '["a"]'::jsonb`, "p", true, perms, "false true true"},
+		{"collection equality holds for a member of the literal", `p = '["a","b"]'::jsonb`, "p", true, perms, "true true false"},
+		{"collection <> of a whole value depends on the other elements", `p <> '["a"]'::jsonb`, "p", true, perms, "other other other"},
 		{"collection integers", `levels <@ '[1,2]'::jsonb`, "levels", true, ints("1", "2", "3"), "true true false"},
-		{"collection containing a value", `roles @> '["a"]'::jsonb`, "roles", true, perms, "unreadable unreadable unreadable"},
+		{"collection containing a value", `roles @> '["a"]'::jsonb`, "roles", true, perms, "true other other"},
 		{"collection through a function", `jsonb_array_length(roles - 'x') > 0`, "roles", true, perms, "unreadable unreadable unreadable"},
 		{"collection with a JSON object literal", `roles <@ '{"a":1}'::jsonb`, "roles", true, perms, "unreadable unreadable unreadable"},
 		{"collection with fractional numbers", `roles <@ '[1.5]'::jsonb`, "roles", true, perms, "unreadable unreadable unreadable"},
 		{"collection compared with IN", `roles IN ('a')`, "roles", true, perms, "unreadable unreadable unreadable"},
 		{"JSON containment on a column that is not a collection", `status <@ '["draft"]'::jsonb`, "status", false, status, "unreadable unreadable unreadable"},
 		{"jsonb_typeof of a column that is not a collection", `jsonb_typeof(status) = 'array'`, "status", false, status, "unreadable unreadable unreadable"},
+
+		// The review's probes of the third-wave delta review, with the result the rulings give.
+		// A definite NULL is not other data (T01 to T06): IS TRUE, IS FALSE and IS UNKNOWN
+		// of an expression that is NULL for a case, and the constants.
+		{"T01 IS TRUE of a CASE with no ELSE", `(CASE WHEN status = 'draft' THEN true END) IS TRUE`, "status", false, status, "true false false"},
+		{"T02 IS FALSE of a CASE with no ELSE", `(CASE WHEN status = 'draft' THEN true END) IS FALSE`, "status", false, status, "false false false"},
+		{"T03 IS NOT TRUE of a CASE with no ELSE", `(CASE WHEN status = 'draft' THEN true END) IS NOT TRUE`, "status", false, status, "false true true"},
+		{"T04 IS UNKNOWN of a CASE with no ELSE", `(CASE WHEN status = 'draft' THEN true END) IS UNKNOWN`, "status", false, status, "false true true"},
+		{"T05 IS NOT UNKNOWN of a CASE with no ELSE", `(CASE WHEN status = 'draft' THEN true END) IS NOT UNKNOWN`, "status", false, status, "true false false"},
+		{"T06 IS TRUE of NULL rejects every row", `(NULL) IS TRUE`, "status", false, status, "false false false"},
+		{"a constraint that names no column and is true", `true`, "status", false, status, "true true true"},
+		{"a constraint that names no column and tests a constant", `1 = 1`, "status", false, status, "other other other"},
+		{"IS NOT FALSE of a CASE with no ELSE", `(CASE WHEN status = 'draft' THEN true END) IS NOT FALSE`, "status", false, status, "true true true"},
+		{"a constant NULL alone passes", `status IS NOT NULL AND NULL`, "status", false, status, "null null null"},
+		{"NULL IS TRUE is false", `status IS NOT NULL AND NULL IS TRUE`, "status", false, status, "false false false"},
+		{"NULL IS NOT TRUE is true", `status IS NOT NULL AND NULL IS NOT TRUE`, "status", false, status, "true true true"},
+		{"NULL IS FALSE is false", `status IS NOT NULL AND NULL IS FALSE`, "status", false, status, "false false false"},
+		{"NULL IS NOT FALSE is true", `status IS NOT NULL AND NULL IS NOT FALSE`, "status", false, status, "true true true"},
+		{"NULL IS UNKNOWN is true", `status IS NOT NULL AND NULL IS UNKNOWN`, "status", false, status, "true true true"},
+		{"NULL IS NOT UNKNOWN is false", `status IS NOT NULL AND NULL IS NOT UNKNOWN`, "status", false, status, "false false false"},
+		{"NOT NULL is NULL", `status IS NOT NULL AND NOT NULL`, "status", false, status, "null null null"},
+		{"NULL AND false is false", `status IS NOT NULL AND (NULL AND false)`, "status", false, status, "false false false"},
+		{"NULL AND true is NULL", `status IS NOT NULL AND (NULL AND true)`, "status", false, status, "null null null"},
+		{"NULL OR true is true", `status IS NOT NULL AND (NULL OR true)`, "status", false, status, "true true true"},
+		{"NULL OR false is NULL", `status IS NOT NULL AND (NULL OR false)`, "status", false, status, "null null null"},
+		{"a comparison with NULL is NULL", `status = NULL`, "status", false, status, "null null null"},
+		{"a comparison with NULL is NULL for every operator", `status <> NULL OR status != NULL`, "status", false, status, "null null null"},
+		{"NULL on an integer enum", `level >= NULL`, "level", false, levels, "null null null null"},
+		{"IN with a NULL member is true or NULL", `status IN ('draft', NULL)`, "status", false, status, "true null null"},
+		{"NOT IN with a NULL member is false or NULL", `status NOT IN ('draft', NULL)`, "status", false, status, "false null null"},
+		{"= ANY with a NULL member", `status = ANY (ARRAY['draft', NULL])`, "status", false, status, "true null null"},
+		{"<> ALL with a NULL member", `status <> ALL (ARRAY['draft', NULL])`, "status", false, status, "false null null"},
+		{"BETWEEN with a NULL end", `level BETWEEN NULL AND 1`, "level", false, levels, "null null false false"},
+		{"NULL equals nothing: an equality chain ending in NULL", `status = 'draft' OR status = NULL`, "status", false, status, "true null null"},
+		{"NULL beside a refusing list", `status IN ('draft') AND status = NULL`, "status", false, status, "null false false"},
+		{"IS UNKNOWN of a test of other columns is other data", `status IN ('draft') AND (other > 1) IS UNKNOWN`, "status", false, status, "other false false"},
+		{"IS UNKNOWN of a test the rule cannot read depends on it", `(lower(status) = 'draft') IS UNKNOWN`, "status", false, status, "unreadable unreadable unreadable"},
+		{"IS NOT TRUE of a test the rule cannot read depends on it", `(lower(status) = 'draft') IS NOT TRUE`, "status", false, status, "unreadable unreadable unreadable"},
+		{"a CASE that falls through beside a list keeps the list's refusals", `status IN ('draft') AND (CASE WHEN status = 'paid' THEN true END) IS NOT FALSE`, "status", false, status, "true false false"},
+		{"a CASE whose condition is NULL is not taken", `CASE WHEN status = NULL THEN false ELSE true END`, "status", false, status, "true true true"},
+
+		// Casts that cannot change the value are transparent; any other is unreadable (T21, T22, I02, I14).
+		{"T21 narrowing cast with a length", `status::varchar(3) IN ('dra','pai','voi')`, "status", false, status, "unreadable unreadable unreadable"},
+		{"T22 char(1) cast", `status::char(1) IN ('d','p','v')`, "status", false, status, "unreadable unreadable unreadable"},
+		{"I02 integer cast to text", `level::text IN ('00','1','2','4')`, "level", false, levels, "unreadable unreadable unreadable unreadable"},
+		{"I03 integer cast to text with the same digits", `level::text IN ('0','1','2','4')`, "level", false, levels, "unreadable unreadable unreadable unreadable"},
+		{"I14 integer cast to smallint", `level::smallint IN (0,1,2,4)`, "level", false, levels, "true true true true"},
+		{"integer cast to bigint and integer", `level::bigint IN (0, 1) AND level::integer <> 2 AND level::int4 <> 4`, "level", false, levels, "true true false false"},
+		{"text cast to integer", `status::integer = 1`, "status", false, status, "unreadable unreadable unreadable"},
+		{"text cast", `status::text IN ('draft')`, "status", false, status, "true false false"},
+		{"varchar cast without a length", `status::varchar IN ('draft')`, "status", false, status, "true false false"},
+		{"character varying cast without a length", `status::character varying IN ('draft')`, "status", false, status, "true false false"},
+		{"a cast chain inside the text family", `status::text::varchar IN ('draft')`, "status", false, status, "true false false"},
+		{"bpchar without a length is not transparent", `status::bpchar IN ('draft')`, "status", false, status, "unreadable unreadable unreadable"},
+		{"bpchar with a length is not transparent", `status::bpchar(5) IN ('draft')`, "status", false, status, "unreadable unreadable unreadable"},
+		{"character without varying is not transparent", `status::character IN ('draft')`, "status", false, status, "unreadable unreadable unreadable"},
+		{"a cast chain that leaves the family", `status::text::bpchar IN ('draft')`, "status", false, status, "unreadable unreadable unreadable"},
+		{"a cast with a precision", `level::numeric(3) IN (1)`, "level", false, levels, "unreadable unreadable unreadable unreadable"},
+		{"a cast on the column inside parentheses", `((status)::text) IN ('draft')`, "status", false, status, "true false false"},
+		{"a literal cast with a length", `status IN ('draft'::varchar(3))`, "status", false, status, "unreadable unreadable unreadable"},
+		{"a number cast to text", `level IN (1::text)`, "level", false, levels, "unreadable unreadable unreadable unreadable"},
+		{"a literal cast to text", `status = 'draft'::text`, "status", false, status, "true false false"},
+		{"an array cast with a length", `status = ANY (ARRAY['draft']::varchar(3)[])`, "status", false, status, "unreadable unreadable unreadable"},
+		{"an array of numbers cast to text", `level = ANY (ARRAY[1]::text[])`, "level", false, levels, "unreadable unreadable unreadable unreadable"},
+		{"an array cast to text", `status = ANY (ARRAY['draft']::text[])`, "status", false, status, "true false false"},
+		{"jsonb cast of a collection column", `roles::jsonb <@ '["a","b"]'::jsonb`, "roles", true, perms, "true true false"},
+		{"json cast of the literal", `roles <@ '["a","b"]'::json`, "roles", true, perms, "unreadable unreadable unreadable"},
+		{"text cast of a collection column", `roles::text <@ '["a","b"]'::jsonb`, "roles", true, perms, "unreadable unreadable unreadable"},
+		{"jsonb cast of a text column", `status::jsonb = '"draft"'`, "status", false, status, "unreadable unreadable unreadable"},
+		{"a JSON literal compared with a column that is not a collection", `status = '"draft"'::jsonb`, "status", false, status, "unreadable unreadable unreadable"},
+		{"jsonb cast inside jsonb_typeof", `jsonb_typeof(roles::jsonb) = 'array'`, "roles", true, perms, "true true true"},
+		{"a cast inside jsonb_typeof that changes the value", `jsonb_typeof(roles::text) = 'array'`, "roles", true, perms, "unreadable unreadable unreadable"},
+
+		// Collections: a case is storable when some array that holds it passes (C01 to C20).
+		{"C01 length = 2 beside the whole list", `jsonb_array_length(permissions) = 2 AND permissions <@ ` + allPerms, "permissions", true, perms, "other other other"},
+		{"C02 length >= 2 beside the whole list", `jsonb_array_length(permissions) >= 2 AND permissions <@ ` + allPerms, "permissions", true, perms, "other other other"},
+		{"C03 length between 2 and 5 beside the whole list", `jsonb_array_length(permissions) BETWEEN 2 AND 5 AND permissions <@ ` + allPerms, "permissions", true, perms, "other other other"},
+		{"C04 length <= 5", `jsonb_array_length(permissions) <= 5 AND permissions <@ ` + allPerms, "permissions", true, perms, "other other other"},
+		{"C08 equality with another array", `permissions <@ '["a","b"]'::jsonb OR permissions = '["c"]'::jsonb`, "permissions", true, perms, "true true true"},
+		{"C09 a case is a member of the array it is equal to", `permissions <@ '["a","b"]'::jsonb OR permissions = '["c","a"]'::jsonb`, "permissions", true, perms, "true true true"},
+		{"C19 inequality with an array literal", `permissions <@ ` + allPerms + ` AND permissions <> '["c"]'::jsonb`, "permissions", true, perms, "other other other"},
+		{"inequality with an array literal that does not hold the case", `permissions <> '["z"]'::jsonb`, "permissions", true, perms, "other other other"},
+		{"equality with an array that does not hold the case", `permissions = '["z","y"]'::jsonb`, "permissions", true, perms, "false false false"},
+		{"length = 0 forces the empty array", `jsonb_array_length(permissions) = 0`, "permissions", true, perms, "false false false"},
+		{"length < 1 forces the empty array", `jsonb_array_length(permissions) < 1`, "permissions", true, perms, "false false false"},
+		{"length <= 0 forces the empty array", `jsonb_array_length(permissions) <= 0`, "permissions", true, perms, "false false false"},
+		{"length between 0 and 0 forces the empty array", `jsonb_array_length(permissions) BETWEEN 0 AND 0`, "permissions", true, perms, "false false false"},
+		{"length IN (0) forces the empty array", `jsonb_array_length(permissions) IN (0)`, "permissions", true, perms, "false false false"},
+		{"length = ANY of zero forces the empty array", `jsonb_array_length(permissions) = ANY (ARRAY[0])`, "permissions", true, perms, "false false false"},
+		{"length = a negative number can never hold", `jsonb_array_length(permissions) = -1`, "permissions", true, perms, "false false false"},
+		{"length IN (0, 1) does not force it", `jsonb_array_length(permissions) IN (0, 1)`, "permissions", true, perms, "other other other"},
+		{"length <> 0 depends on the elements", `jsonb_array_length(permissions) <> 0`, "permissions", true, perms, "other other other"},
+		{"length NOT IN (0) depends on the elements", `jsonb_array_length(permissions) NOT IN (0)`, "permissions", true, perms, "other other other"},
+		{"length > 0 depends on the elements", `jsonb_array_length(permissions) > 0`, "permissions", true, perms, "other other other"},
+		{"length NOT BETWEEN 0 AND 0 depends on the elements", `jsonb_array_length(permissions) NOT BETWEEN 0 AND 0`, "permissions", true, perms, "other other other"},
+		{"length compared with NULL is NULL", `jsonb_array_length(permissions) = NULL`, "permissions", true, perms, "null null null"},
+		{"length compared with text cannot be read", `jsonb_array_length(permissions) = 'x'`, "permissions", true, perms, "unreadable unreadable unreadable"},
+		{"jsonb_typeof is array", `jsonb_typeof(permissions) = 'array'`, "permissions", true, perms, "true true true"},
+		{"jsonb_typeof IN a list holding array", `jsonb_typeof(permissions) IN ('array', 'object')`, "permissions", true, perms, "true true true"},
+		{"jsonb_typeof is any other type", `jsonb_typeof(permissions) = 'null'`, "permissions", true, perms, "false false false"},
+		{"@> with a literal the case alone covers", `permissions @> '[]'::jsonb`, "permissions", true, perms, "true true true"},
+		{"@> with more than the case", `permissions @> '["a","b"]'::jsonb`, "permissions", true, perms, "other other other"},
+		{"@> beside a list", `permissions @> '["a"]'::jsonb AND permissions <@ '["a","b"]'::jsonb`, "permissions", true, perms, "true other false"},
+		{"@> on a column that is not a collection", `status @> '["a"]'::jsonb`, "status", false, status, "unreadable unreadable unreadable"},
 
 		// Tests the evaluator does not implement are unreadable, not harmless.
 		{"SIMILAR TO", `status SIMILAR TO '(draft|paid)'`, "status", false, status, "unreadable unreadable unreadable"},

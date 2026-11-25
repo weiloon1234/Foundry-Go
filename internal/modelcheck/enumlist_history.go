@@ -2,6 +2,7 @@ package modelcheck
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -50,6 +51,14 @@ type tableState struct {
 	// written its constraints. A later constraint that compares the column with
 	// literals clears it.
 	dynamic map[string]string
+	// typed maps a column to why its type is one whose comparisons the rule does
+	// not read exactly. A literal CHECK does not clear it.
+	typed map[string]string
+	// padded maps a column of type character(n) or bpchar to n (-1 when unbounded):
+	// PostgreSQL pads its values and ignores trailing spaces when comparing them.
+	padded map[string]int
+	// exists says a statement the table must exist for has been seen.
+	exists bool
 }
 
 // history replays migration SQL in execution order and keeps the CHECK
@@ -183,7 +192,9 @@ func (h *history) create(src *sqlSource, tokens []sqlToken) {
 	if i >= len(tokens) || !tokens[i].word("table") {
 		return
 	}
-	i = skipWords(tokens, i+1, "if", "not", "exists")
+	start := i + 1
+	i = skipWords(tokens, start, "if", "not", "exists")
+	ifNotExists := i != start
 	schema, name, i, ok := qualifiedName(tokens, i)
 	if !ok {
 		return
@@ -192,7 +203,11 @@ func (h *history) create(src *sqlSource, tokens []sqlToken) {
 	if !ok {
 		return
 	}
-	state := &tableState{}
+	if existing := h.tables[key]; ifNotExists && existing != nil && existing.exists {
+		// CREATE TABLE IF NOT EXISTS of a table that exists changes nothing.
+		return
+	}
+	state := &tableState{exists: true}
 	h.tables[key] = state
 	where := src.where(tokens[0].start)
 	if i >= len(tokens) || !tokens[i].punct("(") {
@@ -252,12 +267,13 @@ func (h *history) createType(src *sqlSource, tokens []sqlToken, i int) {
 }
 
 // noteColumnType marks a watched column whose type is a domain or a database
-// enum type: its permitted values are not in a CHECK list the rule reads.
+// enum type (its permitted values are not in a CHECK list the rule reads), or a
+// type the rule does not compare exactly.
 func (h *history) noteColumnType(src *sqlSource, key tableKey, column string, typed []sqlToken) {
 	if !h.watch[key][column] || len(typed) == 0 {
 		return
 	}
-	schema, name, _, ok := qualifiedName(typed, 0)
+	schema, name, next, ok := qualifiedName(typed, 0)
 	if !ok {
 		return
 	}
@@ -273,9 +289,81 @@ func (h *history) noteColumnType(src *sqlSource, key tableKey, column string, ty
 	} else {
 		found = h.types[tableKey{defaultSchema, name}]
 	}
+	state := h.table(key)
 	if found != "" {
-		h.table(key).markDynamic(column, "the column's type "+name+" is "+found+", whose values the rule does not read")
+		state.markDynamic(column, "the column's type "+name+" is "+found+", whose values the rule does not read")
+		return
 	}
+	delete(state.padded, column)
+	if n, ok := paddedLength(typed, name, next); ok {
+		if state.padded == nil {
+			state.padded = make(map[string]int)
+		}
+		state.padded[column] = n
+		delete(state.typed, column)
+		return
+	}
+	if reason := inexactType(typed, name, next); reason != "" {
+		if state.typed == nil {
+			state.typed = make(map[string]string)
+		}
+		state.typed[column] = reason
+		return
+	}
+	delete(state.typed, column)
+}
+
+// exactTypes are the column types whose values the rule compares exactly: text
+// and integers by value, and jsonb for a collection.
+var exactTypes = map[string]bool{"text": true, "varchar": true, "smallint": true, "integer": true, "bigint": true, "int": true,
+	"int2": true, "int4": true, "int8": true, "serial": true, "bigserial": true, "smallserial": true, "jsonb": true, "json": true}
+
+// paddedLength reads character(n), char(n) and bpchar(n): the length n, -1 for
+// bpchar without one and 1 for character without one.
+func paddedLength(typed []sqlToken, name string, next int) (int, bool) {
+	if name != "char" && name != "character" && name != "bpchar" {
+		return 0, false
+	}
+	if next < len(typed) && typed[next].word("varying") {
+		return 0, false
+	}
+	for _, t := range typed[next:] {
+		if t.punct("[") {
+			return 0, false
+		}
+	}
+	if next+2 < len(typed) && typed[next].punct("(") && typed[next+1].kind == sqlNumber && typed[next+2].punct(")") {
+		if n, err := strconv.Atoi(typed[next+1].text); err == nil && n > 0 {
+			return n, true
+		}
+		return 0, false
+	}
+	if next < len(typed) && typed[next].punct("(") {
+		return 0, false
+	}
+	if name == "bpchar" {
+		return -1, true
+	}
+	return 1, true
+}
+
+// inexactType says why a column type is not one the rule compares exactly, or
+// returns "" when it is: citext compares without case, character(n) pads, an array
+// column is not a JSON array, and a type the rule does not know may do anything.
+func inexactType(typed []sqlToken, name string, next int) string {
+	known := exactTypes[name]
+	if name == "character" && next < len(typed) && typed[next].word("varying") {
+		known = true
+	}
+	for _, t := range typed[next:] {
+		if t.punct("[") {
+			known = false
+		}
+	}
+	if known {
+		return ""
+	}
+	return "the column's type " + name + " is not one whose values the rule compares exactly (text, varchar, integer and jsonb are)"
 }
 
 // element reads the CHECK constraints of a column definition or table constraint.
@@ -305,9 +393,13 @@ func (h *history) element(src *sqlSource, key tableKey, element []sqlToken) {
 		}
 		state := h.table(key)
 		c := parseCheck(key, key.name, name, explicit, src, element[k+2:closeAt], t.start)
+		if !explicit {
+			state.chooseName(c)
+		}
+		c.notEnforced = notEnforced(element[closeAt+1:])
 		state.checks = append(state.checks, c)
 		for column := range state.dynamic {
-			if c.decides(column) {
+			if !c.notEnforced && c.decides(column) {
 				delete(state.dynamic, column)
 			}
 		}
@@ -315,20 +407,55 @@ func (h *history) element(src *sqlSource, key tableKey, element []sqlToken) {
 	}
 }
 
-// matches reports whether DROP CONSTRAINT name removes c. A constraint whose
-// name is not certain is matched by every default name its columns could have
-// given it.
-func (c *checkConstraint) matches(name string) bool {
-	if c.known() {
-		return c.name == name
+// chooseName gives an unnamed constraint the first default name no constraint of
+// the table holds, as PostgreSQL does within one table.
+func (s *tableState) chooseName(c *checkConstraint) {
+	for pass := 0; ; pass++ {
+		c.defaultName = defaultCheckName(c.tableName, c.idents, pass)
+		taken := false
+		for _, other := range s.checks {
+			taken = taken || other.dropName() == c.defaultName
+		}
+		if !taken {
+			return
+		}
 	}
-	if name == c.tableName+"_check" {
-		return true
+}
+
+// freeName returns base, or base with a number after it, as the first name no
+// constraint of the table holds.
+func (s *tableState) freeName(base string) string {
+	for pass := 1; ; pass++ {
+		name := base
+		if pass > 1 {
+			name += strconv.Itoa(pass)
+		}
+		taken := false
+		for _, c := range s.checks {
+			taken = taken || c.dropName() == name
+		}
+		if !taken {
+			return name
+		}
 	}
-	if strings.HasPrefix(name, c.tableName+"_") && strings.HasSuffix(name, "_check") {
-		return c.idents[strings.TrimSuffix(strings.TrimPrefix(name, c.tableName+"_"), "_check")]
+}
+
+// notEnforced reports whether the words after a CHECK (...) say NOT ENFORCED.
+func notEnforced(rest []sqlToken) bool {
+	for k := 0; k+1 < len(rest); k++ {
+		if rest[k].word("not") && rest[k+1].word("enforced") {
+			return true
+		}
 	}
 	return false
+}
+
+// matches reports whether DROP CONSTRAINT name removes c: the name the migration
+// gave it, or for an unnamed constraint exactly the default name PostgreSQL gives
+// it. Any other name leaves it in place: with IF EXISTS PostgreSQL does nothing,
+// and without it the migration would fail.
+func (c *checkConstraint) matches(name string) bool {
+	return name == c.dropName()
 }
 
 func (h *history) alter(src *sqlSource, tokens []sqlToken) {
@@ -404,7 +531,7 @@ func (h *history) add(src *sqlSource, key tableKey, action []sqlToken) {
 	if len(element) == 0 {
 		return
 	}
-	h.table(key)
+	h.table(key).exists = true
 	if first := element[0]; first.name() && (hasColumn || !(first.kind == sqlWord && elementKeywords[first.text])) {
 		h.noteColumnType(src, key, first.text, element[1:])
 	}
@@ -414,6 +541,10 @@ func (h *history) add(src *sqlSource, key tableKey, action []sqlToken) {
 // alterColumn notices a column whose type becomes a domain or database enum type.
 func (h *history) alterColumn(src *sqlSource, key tableKey, action []sqlToken) {
 	j := 1
+	if j < len(action) && action[j].word("constraint") && j+1 < len(action) && action[j+1].name() {
+		h.alterConstraint(key, action[j+1].text, action[j+2:])
+		return
+	}
 	if j < len(action) && action[j].word("column") {
 		j++
 	}
@@ -424,6 +555,20 @@ func (h *history) alterColumn(src *sqlSource, key tableKey, action []sqlToken) {
 		if action[k].word("type") {
 			h.noteColumnType(src, key, action[j].text, action[k+1:])
 			return
+		}
+	}
+}
+
+// alterConstraint follows ALTER CONSTRAINT name [NOT] ENFORCED.
+func (h *history) alterConstraint(key tableKey, name string, rest []sqlToken) {
+	state := h.tables[key]
+	if state == nil || len(rest) == 0 || !rest[len(rest)-1].word("enforced") {
+		return
+	}
+	off := len(rest) >= 2 && rest[len(rest)-2].word("not")
+	for _, c := range state.checks {
+		if c.matches(name) {
+			c.notEnforced = off
 		}
 	}
 }
@@ -619,18 +764,10 @@ func (s *tableState) markDynamic(column, where string) {
 	s.dynamic[column] = where
 }
 
-// namedIn reports whether a word of the block is the constraint's name, or for a
-// constraint whose name is not certain, a name PostgreSQL could have given it.
+// namedIn reports whether a word of the block is the constraint's name, or for an
+// unnamed constraint the default name PostgreSQL gives it.
 func (c *checkConstraint) namedIn(words map[string]bool) bool {
-	if c.known() {
-		return words[c.name]
-	}
-	for word := range words {
-		if c.matches(word) {
-			return true
-		}
-	}
-	return false
+	return words[c.dropName()]
 }
 
 // containsAll reports whether the constraint's text holds every needle.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // listValue is one value a CHECK expression compares a column with: a string, or
@@ -13,9 +14,16 @@ import (
 type listValue struct {
 	text    string
 	integer bool
+	// null is the literal NULL, which no enum case equals and no comparison decides.
+	null bool
+	// other is a value that equals none of the literals of a constraint.
+	other bool
 }
 
 func (v listValue) sql() string {
+	if v.null {
+		return "NULL"
+	}
 	if v.integer {
 		return v.text
 	}
@@ -23,6 +31,9 @@ func (v listValue) sql() string {
 }
 
 func (v listValue) String() string {
+	if v.null {
+		return "NULL"
+	}
 	if v.integer {
 		return v.text
 	}
@@ -54,12 +65,15 @@ type checkConstraint struct {
 	// table is the key of the table; tableName its bare name.
 	table     tableKey
 	tableName string
-	// name is the constraint's name when the migration writes it. PostgreSQL
-	// chooses the name of an unnamed constraint over the whole schema, so the
-	// rule never guesses one.
-	name     string
-	explicit bool
-	src      *sqlSource
+	// name is the constraint's name when the migration writes it. For an
+	// unnamed constraint it is empty and defaultName is the name PostgreSQL gives
+	// it: the first of its default names that no other constraint of the table
+	// holds. A constraint of another table with the same name would make
+	// PostgreSQL choose a later one, which the rule does not follow.
+	name        string
+	defaultName string
+	explicit    bool
+	src         *sqlSource
 	// tokens is the expression between the parentheses of CHECK (...).
 	tokens   []sqlToken
 	atOffset int
@@ -70,17 +84,73 @@ type checkConstraint struct {
 	idents map[string]bool
 	// taint says that a later statement the rule cannot read may have rewritten it.
 	taint string
+	// notEnforced marks CHECK ... NOT ENFORCED: the database does not apply it.
+	notEnforced bool
 }
 
-// known reports whether the constraint's name is certain.
+// known reports whether the migration names the constraint.
 func (c *checkConstraint) known() bool { return c.explicit }
 
-// describe names the constraint for a message: its name, or where it is written.
+// describe names the constraint for a message: its name, or that it is unnamed.
 func (c *checkConstraint) describe() string {
 	if c.known() {
 		return "constraint " + c.name
 	}
 	return "the unnamed CHECK"
+}
+
+// dropName is the name a DROP CONSTRAINT uses for the constraint: the one the
+// migration gave it, or PostgreSQL's default for it.
+func (c *checkConstraint) dropName() string {
+	if c.known() {
+		return c.name
+	}
+	return c.defaultName
+}
+
+// maxIdentifier is the longest name PostgreSQL keeps, in bytes.
+const maxIdentifier = 63
+
+// defaultCheckName is the name PostgreSQL tries first for an unnamed CHECK
+// constraint: table_column_check when the expression uses exactly one column and
+// table_check otherwise, the table and column shortened, the longer first, to fit
+// an identifier. When that name is taken it tries the label with 1, 2, ... after
+// it; pass is that number, 0 for the first try.
+func defaultCheckName(table string, columns map[string]bool, pass int) string {
+	column := ""
+	if len(columns) == 1 {
+		for name := range columns {
+			column = name
+		}
+	}
+	label := "check"
+	if pass > 0 {
+		label += strconv.Itoa(pass)
+	}
+	overhead := len(label) + 1
+	if column != "" {
+		overhead++
+	}
+	room := maxIdentifier - overhead
+	n1, n2 := len(table), len(column)
+	for n1+n2 > room {
+		if n1 > n2 {
+			n1--
+		} else {
+			n2--
+		}
+	}
+	clip := func(text string, n int) string {
+		for n > 0 && n < len(text) && !utf8.RuneStart(text[n]) {
+			n--
+		}
+		return text[:n]
+	}
+	name := clip(table, n1)
+	if column != "" {
+		name += "_" + clip(column, n2)
+	}
+	return name + "_" + label
 }
 
 // parseCheck reads the expression tokens of one CHECK constraint.
@@ -177,34 +247,105 @@ func skipTypeName(tokens []sqlToken, i int) int {
 	return i
 }
 
-// skipCasts advances past any number of ::type suffixes.
-func skipCasts(tokens []sqlToken, i int) int {
+// castFamily says what a ::type cast does to the value it is applied to. Only a
+// cast that cannot change the value compared is transparent: a text type without
+// a length on a text value, an integer type on an integer value, jsonb on a JSON
+// value. Any other cast, with a length or precision or between families, makes the
+// test unreadable.
+type castFamily uint8
+
+const (
+	castNone castFamily = iota
+	castText
+	castInteger
+	castJSON
+	castOther
+)
+
+// then combines two casts applied one after the other.
+func (a castFamily) then(b castFamily) castFamily {
+	switch {
+	case a == castNone:
+		return b
+	case b == castNone || a == b && a != castOther:
+		return a
+	}
+	return castOther
+}
+
+var (
+	textTypes    = map[string]bool{"text": true, "varchar": true, "character varying": true}
+	integerTypes = map[string]bool{"smallint": true, "integer": true, "bigint": true, "int": true, "int2": true, "int4": true, "int8": true}
+)
+
+// castOf classifies the type name tokens of one cast. Array brackets are allowed
+// only for the array of an ARRAY[...] literal.
+func castOf(typed []sqlToken, arrays bool) castFamily {
+	var words []string
+collect:
+	for _, t := range typed {
+		switch {
+		case t.punct("."):
+			if len(words) != 1 || words[0] != "pg_catalog" {
+				return castOther
+			}
+			words = words[:0]
+		case t.punct("["):
+			if !arrays {
+				return castOther
+			}
+			break collect
+		case t.punct("("):
+			return castOther
+		case t.kind == sqlWord:
+			words = append(words, t.text)
+		default:
+			return castOther
+		}
+	}
+	switch name := strings.Join(words, " "); {
+	case textTypes[name]:
+		return castText
+	case integerTypes[name]:
+		return castInteger
+	case name == "jsonb":
+		return castJSON
+	}
+	return castOther
+}
+
+// readCasts reads any number of ::type suffixes at tokens[i] and returns what they
+// do together and the index after them.
+func readCasts(tokens []sqlToken, i int, arrays bool) (castFamily, int) {
+	family := castNone
 	for i < len(tokens) && tokens[i].punct("::") {
 		next := skipTypeName(tokens, i+1)
 		if next == i+1 {
-			return i
+			break
 		}
+		family = family.then(castOf(tokens[i+1:next], arrays))
 		i = next
 	}
-	return i
+	return family, i
 }
 
 // readColumn reads a column operand at tokens[i]: a possibly qualified name in
-// any number of parentheses and ::type casts. It returns the column and the index
-// after the operand.
-func readColumn(tokens []sqlToken, i int) (string, int, bool) {
+// any number of parentheses and ::type casts. It returns the column, what the
+// casts do together and the index after the operand.
+func readColumn(tokens []sqlToken, i int) (string, castFamily, int, bool) {
 	if i >= len(tokens) {
-		return "", i, false
+		return "", castNone, i, false
 	}
 	if tokens[i].punct("(") {
-		column, next, ok := readColumn(tokens, i+1)
+		column, inner, next, ok := readColumn(tokens, i+1)
 		if !ok || next >= len(tokens) || !tokens[next].punct(")") {
-			return "", i, false
+			return "", castNone, i, false
 		}
-		return column, skipCasts(tokens, next+1), true
+		outer, end := readCasts(tokens, next+1, false)
+		return column, inner.then(outer), end, true
 	}
 	if !tokens[i].name() || tokens[i].kind == sqlWord && notColumn[tokens[i].text] || i+1 < len(tokens) && tokens[i+1].punct("(") {
-		return "", i, false
+		return "", castNone, i, false
 	}
 	column := tokens[i].text
 	i++
@@ -212,7 +353,8 @@ func readColumn(tokens []sqlToken, i int) (string, int, bool) {
 		column = tokens[i+1].text
 		i += 2
 	}
-	return column, skipCasts(tokens, i), true
+	family, end := readCasts(tokens, i, false)
+	return column, family, end, true
 }
 
 // keywords are the words of a CHECK expression that never name a column.
@@ -279,9 +421,10 @@ func isInteger(text string) bool {
 	return err == nil
 }
 
-// readLiteral reads a string or integer literal with an optional sign and
-// ::type casts. It returns the value and the index after it.
-func readLiteral(tokens []sqlToken, i int) (listValue, int, string) {
+// readLiteral reads a string or integer literal, or NULL, with an optional sign
+// and ::type casts. It returns the value, what its casts do and the index after it.
+// A cast that can change the literal is refused.
+func readLiteral(tokens []sqlToken, i int) (listValue, castFamily, int, string) {
 	sign := ""
 	if i < len(tokens) && (tokens[i].punct("-") || tokens[i].punct("+")) {
 		if tokens[i].punct("-") {
@@ -289,22 +432,48 @@ func readLiteral(tokens []sqlToken, i int) (listValue, int, string) {
 		}
 		i++
 		if i >= len(tokens) || tokens[i].kind != sqlNumber {
-			return listValue{}, i, "a sign is not followed by a number"
+			return listValue{}, castNone, i, "a sign is not followed by a number"
 		}
 	}
 	if i >= len(tokens) {
-		return listValue{}, i, "a literal is missing"
+		return listValue{}, castNone, i, "a literal is missing"
 	}
-	switch tokens[i].kind {
-	case sqlString:
-		return listValue{text: tokens[i].text}, skipCasts(tokens, i+1), ""
-	case sqlNumber:
-		if !isInteger(tokens[i].text) {
-			return listValue{}, i, "a number that is not an integer"
+	switch {
+	case tokens[i].word("null") && sign == "":
+		_, end := readCasts(tokens, i+1, false)
+		return listValue{null: true}, castNone, end, ""
+	case tokens[i].kind == sqlString:
+		value := listValue{text: tokens[i].text}
+		family, end := readCasts(tokens, i+1, false)
+		if family != castNone && family != castText && family != castJSON {
+			return listValue{}, castNone, i, castRefusal
 		}
-		return listValue{text: sign + tokens[i].text, integer: true}, skipCasts(tokens, i+1), ""
+		return value, family, end, ""
+	case tokens[i].kind == sqlNumber:
+		if !isInteger(tokens[i].text) {
+			return listValue{}, castNone, i, "a number that is not an integer"
+		}
+		value := listValue{text: sign + tokens[i].text, integer: true}
+		family, end := readCasts(tokens, i+1, false)
+		if family != castNone && family != castInteger {
+			return listValue{}, castNone, i, castRefusal
+		}
+		return value, family, end, ""
 	}
-	return listValue{}, i, "not a string or integer literal"
+	return listValue{}, castNone, i, "not a string or integer literal"
+}
+
+const castRefusal = "a literal is cast to a type that can change its value"
+
+// memberCastOK reports whether a cast on a list member leaves its value as written.
+func memberCastOK(v listValue, family castFamily) bool {
+	switch {
+	case family == castNone || v.null:
+		return true
+	case v.integer:
+		return family == castInteger
+	}
+	return family == castText
 }
 
 // readMembers reads literal members from tokens[start:] until the closing
@@ -318,6 +487,9 @@ func readMembers(tokens []sqlToken, start int, closing string) (values []listVal
 		}
 		var v listValue
 		switch {
+		case tokens[i].word("null"):
+			v = listValue{null: true}
+			i++
 		case tokens[i].kind == sqlString:
 			v = listValue{text: tokens[i].text}
 			i++
@@ -331,9 +503,12 @@ func readMembers(tokens []sqlToken, start int, closing string) (values []listVal
 			return nil, 0, "a list member is not a string or integer literal"
 		}
 		if i < len(tokens) && tokens[i].punct("::") {
-			next := skipCasts(tokens, i)
+			family, next := readCasts(tokens, i, false)
 			if next == i {
 				return nil, 0, "a list member's cast is not a type name"
+			}
+			if !memberCastOK(v, family) {
+				return nil, 0, "a list member is cast to a type that can change its value"
 			}
 			i = next
 		}
@@ -376,6 +551,7 @@ func readAnyArray(tokens []sqlToken, open int) ([]listValue, int, string) {
 		return nil, 0, "ANY or ALL is not closed"
 	}
 	inner := tokens[open+1 : closeAt]
+	arrayCast := castNone
 	for len(inner) != 0 {
 		switch {
 		case inner[0].punct("(") && matching(inner, 0) == len(inner)-1:
@@ -400,6 +576,7 @@ func readAnyArray(tokens []sqlToken, open int) ([]listValue, int, string) {
 		if skipTypeName(inner, cast+1) != len(inner) || cast+1 == len(inner) {
 			return nil, 0, refusal
 		}
+		arrayCast = arrayCast.then(castOf(inner[cast+1:], true))
 		inner = inner[:cast]
 	}
 	if len(inner) < 3 || !inner[0].word("array") || !inner[1].punct("[") || matching(inner, 1) != len(inner)-1 {
@@ -412,12 +589,12 @@ func readAnyArray(tokens []sqlToken, open int) ([]listValue, int, string) {
 	if end != len(inner)-1 {
 		return nil, 0, refusal
 	}
+	for _, v := range values {
+		if !memberCastOK(v, arrayCast) {
+			return nil, 0, "the array is cast to a type that can change its members"
+		}
+	}
 	return values, closeAt + 1, ""
-}
-
-// isJSONCast reports whether the string at tokens[at] is cast to json or jsonb.
-func isJSONCast(tokens []sqlToken, at int) bool {
-	return at+2 < len(tokens) && tokens[at+1].punct("::") && (tokens[at+2].word("jsonb") || tokens[at+2].word("json"))
 }
 
 // jsonElements reads a JSON array of strings or integers, every element kept.

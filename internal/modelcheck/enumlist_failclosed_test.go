@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
 )
@@ -170,16 +171,54 @@ func TestUnnamedCheckNamesAreNeverGuessed(t *testing.T) {
 			t.Fatalf("%+v", c)
 		}
 	})
-	t.Run("a drop by any default name the constraint could have removes it", func(t *testing.T) {
-		for _, name := range []string{"t_check", "t_status_check"} {
-			h, _ := replay(nil, []string{`CREATE TABLE t (status text, paid int, CHECK (status IN ('a') AND paid > 0))`}, []string{`ALTER TABLE t DROP CONSTRAINT ` + name})
-			if len(tableOf(h, "t").checks) != 0 {
-				t.Fatalf("%s must drop the unnamed constraint", name)
+	t.Run("a drop removes an unnamed constraint only by its exact default name", func(t *testing.T) {
+		const oneColumn = `CREATE TABLE t (status text, paid int, CHECK (status IN ('a')))`
+		const twoColumns = `CREATE TABLE t (status text, paid int, CHECK (status IN ('a') AND paid > 0))`
+		for _, tc := range []struct {
+			name, create, drop string
+			kept               int
+		}{
+			{"one column, its default name", oneColumn, `DROP CONSTRAINT t_status_check`, 0},
+			{"one column, IF EXISTS and its default name", oneColumn, `DROP CONSTRAINT IF EXISTS t_status_check`, 0},
+			{"one column, the other default name (review X2)", oneColumn, `DROP CONSTRAINT IF EXISTS t_check`, 1},
+			{"two columns, its default name", twoColumns, `DROP CONSTRAINT t_check`, 0},
+			{"two columns, the single-column name (review X1)", twoColumns, `DROP CONSTRAINT IF EXISTS t_status_check`, 1},
+			{"two columns, a name over a column it does not use", twoColumns, `DROP CONSTRAINT IF EXISTS t_other_check`, 1},
+			{"a name that is not a default name at all", oneColumn, `DROP CONSTRAINT IF EXISTS keep_me`, 1},
+		} {
+			h, _ := replay(nil, []string{tc.create}, []string{`ALTER TABLE t ` + tc.drop})
+			if got := len(tableOf(h, "t").checks); got != tc.kept {
+				t.Fatalf("%s: %d constraints left, want %d", tc.name, got, tc.kept)
 			}
 		}
-		h, _ := replay(nil, []string{`CREATE TABLE t (status text, paid int, CHECK (status IN ('a') AND paid > 0))`}, []string{`ALTER TABLE t DROP CONSTRAINT t_other_check`})
-		if len(tableOf(h, "t").checks) != 1 {
-			t.Fatal("a name over a column the constraint does not use is not one of its names")
+		// Two unnamed checks and a drop of the name only one of them has (review X5).
+		h, _ := replay(nil, []string{`CREATE TABLE t (status text, paid int, CHECK (status IN ('a')), CHECK (status IN ('a') AND paid > 0))`}, []string{`ALTER TABLE t DROP CONSTRAINT IF EXISTS t_check`})
+		if checks := tableOf(h, "t").checks; len(checks) != 1 || checks[0].defaultName != "t_status_check" {
+			t.Fatalf("t_check is the name of the two-column check only: %+v", checks)
+		}
+		// Two unnamed single-column checks: PostgreSQL names the second t_status_check1
+		// (review X5), so a drop of t_check removes neither and a drop of
+		// t_status_check removes the first only.
+		const twoUnnamed = `CREATE TABLE t (status text, CHECK (status IN ('a')), CHECK (status IN ('a', 'b')))`
+		h, _ = replay(nil, []string{twoUnnamed}, []string{`ALTER TABLE t DROP CONSTRAINT IF EXISTS t_check`})
+		checks := tableOf(h, "t").checks
+		if len(checks) != 2 || checks[0].defaultName != "t_status_check" || checks[1].defaultName != "t_status_check1" {
+			t.Fatalf("%+v", checks)
+		}
+		h, _ = replay(nil, []string{twoUnnamed}, []string{`ALTER TABLE t DROP CONSTRAINT t_status_check`})
+		if checks := tableOf(h, "t").checks; len(checks) != 1 || checks[0].defaultName != "t_status_check1" {
+			t.Fatalf("%+v", checks)
+		}
+	})
+	t.Run("the default name is shortened as PostgreSQL does", func(t *testing.T) {
+		table := strings.Repeat("t", 40)
+		column := strings.Repeat("c", 40)
+		got := defaultCheckName(table, map[string]bool{column: true}, 0)
+		if len(got) != maxIdentifier || !strings.HasSuffix(got, "_check") || !strings.HasPrefix(got, strings.Repeat("t", 28)) {
+			t.Fatalf("%q (%d bytes)", got, len(got))
+		}
+		if multibyte := defaultCheckName(strings.Repeat("é", 40), nil, 0); !utf8.ValidString(multibyte) || len(multibyte) != 62 {
+			t.Fatalf("a shortened name stays whole characters: %q (%d bytes)", multibyte, len(multibyte))
 		}
 	})
 }
@@ -192,23 +231,25 @@ func TestUnnamedConstraintIsDescribedByItsPlace(t *testing.T) {
 		h, _ := replay(watch, []string{`ALTER TABLE admins ADD CHECK (permissions IN ('a'))`})
 		findings, _ := compareField(field, h)
 		if len(findings) != 1 || !strings.Contains(findings[0].Problem, "is rejected by the unnamed CHECK on admins.permissions, last written at m1.go:10") ||
-			strings.Contains(findings[0].Problem+findings[0].Fix, "admins_permissions_check") {
+			strings.Contains(findings[0].Problem, "admins_permissions_check") ||
+			!strings.Contains(findings[0].Fix, "add a new migration that drops the unnamed CHECK (ALTER TABLE admins DROP CONSTRAINT IF EXISTS admins_permissions_check, PostgreSQL's default name for it) and re-declares the constraint with this list: 'a', 'b'") {
 			t.Fatalf("%v", findings)
 		}
 	})
-	t.Run("an unreadable list gets a placeholder, not a guessed name", func(t *testing.T) {
+	t.Run("an unreadable list names PostgreSQL's default and never asks for a database", func(t *testing.T) {
 		h, _ := replay(watch, []string{`ALTER TABLE admins ADD CHECK (lower(permissions) IN ('a'))`})
 		findings, _ := compareField(field, h)
 		if len(findings) != 1 || !strings.Contains(findings[0].Problem, "the unnamed CHECK at m1.go:10: the column is used in a function call") ||
-			!strings.Contains(findings[0].Fix, `ALTER TABLE admins DROP CONSTRAINT <constraint name, shown by \d admins> and ALTER TABLE admins ADD CONSTRAINT <constraint name, shown by \d admins> CHECK (...)`) {
+			!strings.Contains(findings[0].Fix, `ALTER TABLE admins DROP CONSTRAINT IF EXISTS admins_permissions_check (admins_permissions_check is PostgreSQL's default name for this unnamed CHECK`) ||
+			!strings.Contains(findings[0].Fix, `ALTER TABLE admins ADD CONSTRAINT admins_permissions_values CHECK (...)`) ||
+			strings.Contains(findings[0].Problem+findings[0].Fix, `\d`) || strings.Contains(findings[0].Problem+findings[0].Fix, "psql") {
 			t.Fatalf("%v", findings)
 		}
 	})
-	t.Run("a name PostgreSQL would probably choose is still not printed", func(t *testing.T) {
-		h, _ := replay(watch, []string{`CREATE TABLE admins (permissions text, CHECK (lower(permissions) IN ('a')))`})
+	t.Run("a table constraint over two columns gets the table's default name", func(t *testing.T) {
+		h, _ := replay(watch, []string{`CREATE TABLE admins (permissions text, other int, CHECK (lower(permissions) IN ('a') AND other > 0))`})
 		findings, _ := compareField(field, h)
-		if len(findings) != 1 || !strings.Contains(findings[0].Problem, "the unnamed CHECK at m1.go:10") || strings.Contains(findings[0].Problem+findings[0].Fix, "admins_permissions_check") ||
-			!strings.Contains(findings[0].Fix, `read the constraint's name from psql's \d admins`) {
+		if len(findings) != 1 || !strings.Contains(findings[0].Fix, `DROP CONSTRAINT IF EXISTS admins_check (admins_check is PostgreSQL's default name`) {
 			t.Fatalf("%v", findings)
 		}
 	})
@@ -239,7 +280,7 @@ func TestTypesAndCopiedTablesAreUnreadable(t *testing.T) {
 			h, _ := replay(watch, tc.migrations...)
 			findings, compared := compareField(field, h)
 			if compared || len(findings) != 1 || !strings.Contains(findings[0].Problem, "cannot be read statically: the column's type st is "+tc.want) ||
-				!strings.Contains(findings[0].Fix, "constrain the column with a literal list in a new migration: ALTER TABLE t ADD CONSTRAINT t_status_check CHECK (status IN (...))") {
+				!strings.Contains(findings[0].Fix, "constrain the column with a literal list in a new migration: ALTER TABLE t ADD CONSTRAINT t_status_values CHECK (status IN (...))") {
 				t.Fatalf("%v", findings)
 			}
 		})
@@ -344,12 +385,12 @@ func All() []migrate.Definition {
 
 func TestMigrationRegistrationShapes(t *testing.T) {
 	dir := enumModule(t, source(registrationModule))
-	findings, err := Check(t.Context(), dir, []string{"./..."})
+	report, err := Check(t.Context(), dir, []string{"./..."})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var got []string
-	for _, d := range findings {
+	for _, d := range report.Findings {
 		got = append(got, strings.TrimPrefix(d.String(), dir+"/"))
 	}
 	want := []string{
@@ -378,7 +419,7 @@ func TestFindingsReadAsSentences(t *testing.T) {
 	}
 	watch := map[string]map[string]bool{"members": {"level": true}, "t": {"level": true}}
 	for _, tc := range []struct{ name, expr, want string }{
-		{"one value", `level BETWEEN 0 AND 5`, "holds 5, which is not an enum case"},
+		{"one value", `level IN (0, 1, 2, 4, 5)`, "holds 5, which is not an enum case"},
 		{"two values", `level IN (0, 1, 2, 3, 4, 5)`, "holds 3, 5, which are not enum cases"},
 		{"one value in a list", `level IN (0, 1, 2, 3, 4)`, "holds 3, which is not an enum case"},
 	} {
@@ -390,6 +431,12 @@ func TestFindingsReadAsSentences(t *testing.T) {
 			}
 		})
 	}
+	t.Run("a range is not a list, so the column is open and holds no value", func(t *testing.T) {
+		h, _ := replay(watch, []string{`CREATE TABLE members (level integer CHECK (level BETWEEN 0 AND 5))`})
+		if findings, _ := compareField(level("members"), h); len(findings) != 0 {
+			t.Fatalf("%v", findings)
+		}
+	})
 	t.Run("a range between cases is not a value the column holds", func(t *testing.T) {
 		h, _ := replay(watch, []string{`CREATE TABLE members (level integer CHECK (level BETWEEN 0 AND 4))`})
 		if findings, compared := compareField(level("members"), h); len(findings) != 0 || !compared {

@@ -144,8 +144,10 @@ func ArchivedStatus() migrate.Definition {
 ```
 
 The two statements drop the constraint and add it again with every case. Use the
-constraint's name from the finding; when the finding says the CHECK is unnamed,
-`\d table` in `psql` shows the name PostgreSQL gave it. With a worked example, for a
+constraint's name from the finding. When the finding says the CHECK is unnamed, it prints
+the name PostgreSQL gives such a constraint by default; drop it with
+`DROP CONSTRAINT IF EXISTS` under that name (see [unnamed constraints](#unnamed-check-names))
+and add the new one with an explicit name. With a worked example, for a
 `permissions` column that gained `pages.export`:
 
 ```sql
@@ -171,7 +173,8 @@ column, with the column set to that case's stored value, and decides one of four
 - **false**: no row can pass the constraint, so the case can never be stored. This is the
   finding "case X can never be stored"; a case several constraints reject is reported once,
   naming each of them.
-- **true**: every row passes. No finding.
+- **true**: every row passes. No finding. A CHECK also passes an expression that is NULL:
+  `CASE WHEN status = 'draft' THEN true END` is NULL for every other case, so it admits them.
 - **depends on other columns**: no finding. A part of the expression that does not mention
   the column (`paid_at IS NULL OR status IN (...)`, a transition table of
   `action = 'x' AND from_status = 'y'` branches, `(status IN ('paid')) = (paid_at IS NOT NULL)`)
@@ -181,18 +184,37 @@ column, with the column set to that case's stored value, and decides one of four
   expression or another constraint already decides the case without it. A test of the
   column the check does not evaluate is never passed in silence.
 
-The check evaluates the column compared with literals, with any casts, qualifiers and
-parentheses around the column: `=`, `<>`, `!=`, `IN`, `NOT IN`, `= ANY (ARRAY[...])` and
+The three SQL values are kept apart. An expression that is NULL for every row (a constant
+`NULL`, a comparison with `NULL`, a `CASE` that takes no branch and has no `ELSE`) is neither
+true nor false, and it is not "other data" either: a CHECK passes it, `IS TRUE` and
+`IS FALSE` of it are false, `IS NOT TRUE`, `IS NOT FALSE` and `IS UNKNOWN` of it are true,
+and `NOT`, `AND` and `OR` follow SQL's three-valued tables. So
+`(CASE WHEN status = 'draft' THEN true END) IS TRUE` rejects every case except `draft`.
+An `IN` or `ANY` list with a `NULL` member is true or NULL for a case and never false, a
+`NOT IN` or `ALL` list with one is false or NULL.
+
+The check evaluates the column compared with literals, with qualifiers, parentheses and
+casts that cannot change the value being compared around the column: `::text`, `::varchar`
+and `::character varying` without a length on a text enum, an integer type on an integer
+enum, and `::jsonb` on a collection column or a JSON literal. A cast with a length or
+precision (`status::varchar(3)`, `status::char(1)`, `::bpchar`, which pads) or between
+families (an integer column cast to `text`, text cast to an integer) can change what is
+compared, so it makes the test unreadable. The forms are `=`, `<>`, `!=`, `IN`, `NOT IN`, `= ANY (ARRAY[...])` and
 `<> ALL (ARRAY[...])` (hand-written or as `pg_dump` and `\d` print them,
 `((col)::text = ANY ((ARRAY['a'::character varying, ...])::text[]))`), `BETWEEN` and
 `NOT BETWEEN`, the ordering operators `<`, `<=`, `>` and `>=` for an integer-backed enum,
 `IS NULL` and `IS NOT NULL`, and `IS TRUE`, `IS FALSE`, `NOT`, `AND`, `OR` and `CASE` in both
 forms (`CASE WHEN ... END` and `CASE col WHEN ... END`) by evaluating their branches. A range
 is not enumerated, so no cost depends on its size. For a collection column (a slice, array
-or `value.JSON` of an enum, stored as a `jsonb` array) the column is the one-element array
-holding the case: `col <@ '["a","b"]'::jsonb` is decided by membership,
-`jsonb_typeof(col)` is `'array'`, `jsonb_array_length(col)` is 1, and
-`col = '["*"]'::jsonb`, the form an application uses for "all", is decided by equality.
+or `value.JSON` of an enum, stored as a `jsonb` array) a case is storable when some array
+that holds it passes, and the check evaluates under that meaning. `col <@ '["a","b"]'::jsonb`
+is decided by membership of the case in the literal; `col @> '["a"]'::jsonb` is true when the
+literal holds nothing but the case and depends on the other elements otherwise;
+`col = '["*"]'::jsonb`, the form an application uses for "all", is true when the case is a
+member of the literal; `col <> '[...]'::jsonb` depends on the other elements;
+`jsonb_typeof(col)` is `'array'`; and every `jsonb_array_length(col)` test depends on the
+other elements, except a test that only the empty array passes (`= 0`, `< 1`, `<= 0`,
+`BETWEEN 0 AND 0`), which is false because the array holds the case.
 
 Anything else that mentions the enum column cannot be read, and the finding says which
 part: a function applied to the column (`lower(col)`), a regular expression (`~`),
@@ -201,15 +223,25 @@ another column (`col = lower(other)`), the ordering of text (it depends on the c
 JSON test other than the two above, a list member that is not a string or integer literal,
 a number that does not fit in 64 bits, `E'...'` strings with an escape PostgreSQL rejects
 (the others are decoded as PostgreSQL does), and an expression nested more than 32 levels or
-with more than 500 `AND`, `OR`, `NOT`, `IS` and `WHEN` words. The fix is the same two
-statements in a new migration, written with tests that only compare the column with
-literals, such as a plain `IN (...)`, `= ANY (ARRAY[...])` or `<@ '[...]'`; the newest
-literal constraint is the one evaluated, so one such migration ends the finding.
+with more than 500 `AND`, `OR`, `NOT`, `IS` and `WHEN` words. The fix is a new migration that
+drops the constraint and writes it again with tests that only compare the column with
+literals, such as a plain `IN (...)`, `= ANY (ARRAY[...])` or `<@ '[...]'`. For a constraint
+the migrations named, the finding prints its name; for an unnamed one it prints
+PostgreSQL's default name for it (see [unnamed constraints](#unnamed-check-names)) in
+`DROP CONSTRAINT IF EXISTS`, and a name for the new constraint. Every live constraint is
+evaluated, so the finding ends when the constraints that remain can all be read: an
+unreadable constraint that the migration does not drop keeps it.
 
-The other direction is checked too. A literal a constraint compares the column with that
-is not an enum case, and that no constraint rejects, is a finding at the model field: "holds
-X, which is not an enum case". `col BETWEEN 0 AND 4` over the cases 0, 1, 2 and 4 holds no
-such value, because only its two ends are compared; `BETWEEN 0 AND 5` holds 5. A column that
+The other direction is checked too. The check first evaluates the column's constraints with
+the column set to a value that equals none of their literals (every `=`, `IN` and `<@`
+membership test is false for it, every `<>` and `NOT IN` true, an ordering or range test
+unreadable): unless that is definitely false the column is open, any value can be stored, and
+nothing is reported. When it is false the column is closed to a list, and each literal that
+a membership test compares it with, that is not an enum case, is a finding at the model
+field, "holds X, which is not an enum case", unless the constraints reject it or depend on a
+test the rule cannot read for it. So `status <> 'archived' OR n > 1` and
+`col BETWEEN 0 AND 5` hold nothing, and `status IN ('a', 'b', 'x') AND n > 0` holds `x`.
+A column that
 declares `values=` has its named cases checked as above, and every case it does not name
 must be rejected by some constraint: a case that every constraint passes is a finding.
 
@@ -227,7 +259,17 @@ enum column, the bounds of a partition (`PARTITION BY LIST` with
 database calls. A column whose type is a `CREATE DOMAIN` or `CREATE TYPE ... AS ENUM`
 created in the history is reported as unreadable, because the values live in the type: add
 a literal `CHECK` on the column. Such a constraint is never a finding when it is missing:
-the database constraint is optional.
+the database constraint is optional. A CHECK on a column whose type the check does not
+know to compare exactly is unreadable too: `citext` compares without case, an array column is not a JSON array. A `char(n)` or
+`bpchar` column is read exactly when every case value and every literal compared with it has
+at most n characters and no trailing space, because PostgreSQL pads its values and ignores
+trailing spaces when comparing them; otherwise it is unreadable. The types it compares exactly are `text`, `varchar`,
+the integer types and `jsonb`; give the column one of them. A `CHECK ... NOT ENFORCED`
+constraint (PostgreSQL 18) is not evaluated, because the database does not apply it, until
+`ALTER TABLE ... ALTER CONSTRAINT name ENFORCED` makes it count. A `CREATE TABLE IF NOT
+EXISTS` of a table the migrations already created changes nothing, as in PostgreSQL. A
+constraint that mentions no column (`CHECK (NULL IS TRUE)`) bears on every column of its
+table.
 
 The same "cannot be read" finding is made when a statement the check cannot follow may have
 written or changed a constraint that compares the column with literals: a `DO` block that
@@ -262,12 +304,32 @@ Other findings and what is not one:
   `DROP COLUMN`, `ALTER COLUMN ... TYPE`, `RENAME TO` and `DROP TABLE`. Each migration SQL
   string is limited to 1 MiB and a module to 10,000 migrations.
 
-A constraint is named in a finding only when the migration names it. PostgreSQL chooses
-the name of an unnamed `CHECK` over the whole schema and avoids the names other tables'
-constraints already hold, so the check never guesses one: the finding says "the unnamed
-CHECK" and names its file and line, and the statements it suggests carry the placeholder
-`<constraint name, shown by \d table>`. In `psql`, `\d table` lists every constraint of the
-table with the name PostgreSQL gave it; put that name in the placeholder's place.
+A clean run says how many enum columns it compared with their CHECK constraints; a column
+with no CHECK constraint on it is not one of them.
+
+<a id="unnamed-check-names"></a>
+### Unnamed constraints
+
+A finding names a constraint when the migration names it (`CONSTRAINT admins_permissions_check
+CHECK (...)`). For an unnamed `CHECK` it says "the unnamed CHECK" with its file and line,
+and where a statement has to drop it, it prints the name PostgreSQL gives such a
+constraint by default: `<table>_<column>_check` when the expression uses exactly one column
+and `<table>_check` otherwise. When a constraint of the same table already holds the name,
+PostgreSQL puts a number after `check` (`invoices_status_check1`), and the check does the
+same; both names are shortened to fit 63 bytes as PostgreSQL does. The name is the one for
+that statement, assuming the schema held no constraint of that name before: a constraint of
+another table with the same name makes PostgreSQL choose a numbered one, which the check
+cannot see. Naming constraints explicitly in your migrations removes the doubt.
+
+`DROP CONSTRAINT [IF EXISTS] name` removes an unnamed constraint from what the check reads
+only under that exact name. Any other name leaves the constraint in force: with `IF EXISTS`
+PostgreSQL does nothing, and without it the migration fails. So
+`DROP CONSTRAINT IF EXISTS invoices_status_check` does not drop an unnamed check over
+`status` and `n`, whose name is `invoices_check`, and the case it rejects is still found.
+A `DO` block that may have dropped an unnamed constraint (it looks the name up in
+`pg_constraint`) leaves the check unable to tell; `DROP CONSTRAINT IF EXISTS` under the
+default name removes the constraint from what the check reads whether or not the block
+already did, and a constraint written after the block does not.
 
 <a id="recipe-register-migration"></a>
 ## Register every migration
