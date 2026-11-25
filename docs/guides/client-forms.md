@@ -23,7 +23,7 @@ the UI library's own state.
 <a id="recipe-form-values"></a>
 ## Bind a form's values
 
-`sdk` is your application's generated client module: `import * as sdk from "./contracts_foundry.gen.js"` (the path of the generated file in your client source).
+`sdk` is your application's generated client module: `import * as sdk from "./contracts_foundry.gen.js"` (the path of the generated file in your client source). The operation, schema and field names in the blocks of this guide (`itemsEcho` and its fields) belong to the example application's generated client and stand for your own.
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#form-values -->
 ```typescript

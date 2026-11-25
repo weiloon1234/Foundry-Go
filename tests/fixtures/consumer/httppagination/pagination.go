@@ -25,6 +25,9 @@ type MemberResponse struct {
 	Nickname value.Nullable[mutatorqueries.DisplayNickname] `json:"nickname"`
 }
 
+// Member is the application's model; Query is its generated table.
+type Member = mutatorqueries.Member
+
 // doc-example:begin http-pagination-list-request
 type ListRequest = pagination.Request[foundryhttp.NoPath, MemberFilters]
 
@@ -46,11 +49,11 @@ func Router(service Service) (*foundryhttp.Router, error) {
 	return foundryhttp.NewRouter(pagination.Handle(List, service.List))
 }
 
-// DatabaseService uses the handwritten ORM declarations with the framework's parsed
-// page request. The endpoint owns page metadata, JSON contracts and links.
+// doc-example:begin http-pagination-example-2
+// DatabaseService reads pages with the handwritten ORM declarations and the framework's
+// parsed page request. The endpoint owns page metadata, JSON contracts and links.
 type DatabaseService struct{ DB database.Executor }
 
-// doc-example:begin http-pagination-example-2
 func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResult[MemberResponse], error) {
 	builder := memberQuery(in.Filters)
 	page, err := orm.Paginate(ctx, s.DB, builder, in.Page)

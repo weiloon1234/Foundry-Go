@@ -14,14 +14,20 @@
 
 Foundry composes native `net/http` wrappers with typed middleware identities.
 Declare dependencies in a constructor, then attach the result to a route or
-scope. This example is exercised in the independent `httpmiddleware` consumer:
+scope.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `http` as `foundryhttp`, `ratelimit`. Standard-library aliases: `net/http` as `stdhttp`.
+
+`UpdateEndpoint` is the application's typed endpoint for one route (`foundryhttp.Endpoint[Path, Query, Body, Response]` with its own concrete types) and `UpdateHandler` is its handler, `func(context.Context, foundryhttp.Input[Path, Query, Body]) (Response, error)`.
+
+Attach a scope's middleware to an endpoint and register it:
 
 <!-- compiled-source: tests/fixtures/consumer/httpmiddleware/router.go#middleware-scope -->
 ```go
-const RouteTrace foundryhttp.MiddlewareID = "fixture.route-trace"
+const RouteTrace foundryhttp.MiddlewareID = "app.route-trace"
 
-var trace = foundryhttp.DefineMiddleware(RouteTrace, func(next http.Handler) (http.Handler, error) {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+var trace = foundryhttp.DefineMiddleware(RouteTrace, func(next stdhttp.Handler) (stdhttp.Handler, error) {
+	return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		if matched, ok := foundryhttp.MatchedRoute(r.Context()); ok {
 			w.Header().Set("X-Matched-Route", string(matched.ID))
 		}
@@ -30,10 +36,10 @@ var trace = foundryhttp.DefineMiddleware(RouteTrace, func(next http.Handler) (ht
 })
 
 var API = foundryhttp.DefineScope("/api", "api").WithMiddleware(trace)
-var Update = foundryhttp.ConfigureEndpoint(httpendpoints.Update, foundryhttp.Within(API))
 
-func Router(service httpendpoints.Service) (*foundryhttp.Router, error) {
-	return foundryhttp.NewRouter(Update.Handle(service.Update))
+func Router(update UpdateEndpoint, handle UpdateHandler) (*foundryhttp.Router, error) {
+	scoped := foundryhttp.ConfigureEndpoint(update, foundryhttp.Within(API))
+	return foundryhttp.NewRouter(scoped.Handle(handle))
 }
 ```
 

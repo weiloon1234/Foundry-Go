@@ -9,22 +9,27 @@ model ownership and contract identities; `orm.CursorPaginate` and
 and an explicit response DTO. The original model or projection type remains the
 cursor owner after mapping; it is separate from the public DTO type.
 
-The [independent consumer](../../tests/fixtures/consumer/httppagination/cursor.go)
-contains this complete handler pattern:
+The application owns `Member`, `MemberFilters`, `MemberResponse`, their generated descriptors `MemberFiltersDescriptor` and `MemberResponseJSON`, `memberQuery(filters MemberFilters) orm.Query[Member]` and `PresentMember(Member) (MemberResponse, error)`, as in [numbered pages](http-pagination.md#recipe-numbered-page); `DatabaseService` holds a `DB database.Executor`.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/orm`, `http` as `foundryhttp`, `http/pagination`.
+
+Declare the cursor endpoint and its request and result types:
 
 <!-- compiled-source: tests/fixtures/consumer/httppagination/cursor.go#http-cursor-pagination-cursor-list-request -->
 ```go
-type CursorListRequest = pagination.CursorRequest[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member]
-type CursorListResult = pagination.CursorResult[mutatorqueries.Member, MemberResponse]
+type CursorListRequest = pagination.CursorRequest[foundryhttp.NoPath, MemberFilters, Member]
+type CursorListResult = pagination.CursorResult[Member, MemberResponse]
 
-var CursorList = func() pagination.CursorEndpoint[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member, MemberResponse] {
+var CursorList = func() pagination.CursorEndpoint[foundryhttp.NoPath, MemberFilters, Member, MemberResponse] {
 	membersCursorRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.cursor", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/cursor"))
-	return pagination.DefineCursor[mutatorqueries.Member](
+	return pagination.DefineCursor[Member](
 		membersCursorRoute,
 		MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultCursorConfig(),
 	)
 }()
 ```
+
+The service pages with the ORM cursor paginator and maps the page:
 
 <!-- compiled-source: tests/fixtures/consumer/httppagination/cursor.go#http-cursor-pagination-example-2 -->
 ```go

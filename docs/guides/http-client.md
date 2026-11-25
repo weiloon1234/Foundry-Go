@@ -16,7 +16,9 @@ the named client's header budget. See [observability](observability.md).
 <a id="recipe-named-http-client"></a>
 ## Resolve a client and bound the request
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `http` as `foundryhttp`, `httpclient`, `httpclient/capture` as `outboundcapture`, `secret`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `auth`, `http` as `foundryhttp`, `httpclient`, `httpclient/capture` as `outboundcapture`, `secret`.
+
+`Accounts` is the application's typed wrapper over one upstream client, `NewAccounts(client) *Accounts` builds it, and `AccountReceipt` is the response DTO; all three are written in [Requests and DTOs](#recipe-http-request).
 
 Construct one named client per upstream and inject it into domain services:
 
@@ -24,17 +26,17 @@ Construct one named client per upstream and inject it into domain services:
 ```go
 const AccountsClient httpclient.Name = "accounts.api"
 
-type AccountService struct{ accounts *outgoing.Accounts }
+type AccountService struct{ accounts *Accounts }
 
 func NewAccountService(services application.Services) (*AccountService, error) {
 	client, err := services.HTTPClients.Client(AccountsClient)
 	if err != nil {
 		return nil, err
 	}
-	return &AccountService{accounts: outgoing.NewAccounts(client)}, nil
+	return &AccountService{accounts: NewAccounts(client)}, nil
 }
 
-func (s *AccountService) Create(ctx context.Context, name string, token secret.String) (outgoing.AccountReceipt, error) {
+func (s *AccountService) Create(ctx context.Context, name string, token secret.String) (AccountReceipt, error) {
 	bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	return s.accounts.Create(bounded, name, token)
@@ -63,8 +65,14 @@ called again. A callback cannot wait for its own client shutdown.
 <a id="recipe-http-request"></a>
 ## Requests and DTOs
 
+`CreateAccount` (a `//foundry:dto http=body` struct with a `Name string`) and `AccountReceipt` (a `//foundry:dto http=response` struct with an `ID int64` encoded as a string and a `Name`) are the application's DTOs; `CreateAccountJSON()` and `AccountReceiptJSON()` are their generated descriptors. The wrapper holds the named client:
+
 <!-- compiled-source: tests/fixtures/consumer/outgoing/client.go#typed-http-request -->
 ```go
+type Accounts struct{ client *httpclient.Client }
+
+func NewAccounts(client *httpclient.Client) *Accounts { return &Accounts{client: client} }
+
 func (s *Accounts) Create(ctx context.Context, name string, token secret.String) (AccountReceipt, error) {
 	request, err := httpclient.JSON(ctx, s.client.Post("accounts").Bearer(token), CreateAccountJSON(), CreateAccount{Name: name})
 	if err != nil {
@@ -300,20 +308,12 @@ request ID, trace ID and route of the inbound request that made the call.
 Mount the viewer inside an existing guarded group with the store from
 `services.OutboundCaptures()`, behind the same developer gate as the webhook
 viewer. At least one access option is required and the routes send
-`Cache-Control: no-store`.
+`Cache-Control: no-store`. `Actor` is the application's authenticated model, `binding` the guard's `foundryhttp.GuardBinding[Actor]` and `viewCaptures` the application's developer-only `auth.Permission[Actor]`:
 
 <!-- compiled-source: tests/fixtures/consumer/teamworkflow/outbound_capture.go#outbound-capture-routes -->
 ```go
-func OutboundCaptureRoutes(captures *outboundcapture.Store) ([]foundryhttp.RouteRegistration, error) {
-	transport, guard, err := authfixture.Authentication(ReadCaptures.Registration())
-	if err != nil {
-		return nil, err
-	}
-	binding, err := foundryhttp.BindGuard(transport, guard)
-	if err != nil {
-		return nil, err
-	}
-	return outboundcapture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.Permissions(ReadCaptures))
+func OutboundCaptureRoutes(captures *outboundcapture.Store, binding foundryhttp.GuardBinding[Actor], viewCaptures auth.Permission[Actor]) ([]foundryhttp.RouteRegistration, error) {
+	return outboundcapture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.Permissions(viewCaptures))
 }
 ```
 

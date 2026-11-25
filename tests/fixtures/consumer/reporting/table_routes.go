@@ -7,16 +7,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// doc-example:begin datatable-7
 // NumericLevelRoutes uses framework-owned query, ticket and download contracts.
 // The caller supplies current authority and token-owned tickets.
 func NumericLevelRoutes(group foundryhttp.Scope, config datatable.RoutesConfig[Operator, Authority], read, export []foundryhttp.GuardOption[Operator]) ([]foundryhttp.RouteRegistration, error) {
-	// doc-example:begin datatable-7
 	return datatable.Routes(group, NumericLevels, config,
 		datatable.ReadAccess(read...),
 		datatable.ExportAccess(export...),
 	)
-	// doc-example:end datatable-7
 }
+
+// doc-example:end datatable-7
 
 // OperatorTokenTickets retains the same operator type as NumericLevelRoutes.
 // doc-example:begin tokens-example-1

@@ -13,7 +13,7 @@ Further reading: [Localized messages](validation-messages.md).
 Declare a public error once and reuse the value in the endpoint and handler. The declaration owns a semantic `ErrorCode`, a status from 400 through
 599, and static public text. This is the same metadata the router exports.
 
-These recipes need no application model; the transport and helper types they use are declared or described on this page.
+The application owns `models.User`, the string-backed enum `localization.Status` (the state of a member; any application enum works) and its service. The transport and helper types the recipes use are declared or described on this page.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `model`.
 
@@ -31,8 +31,7 @@ var Reserve = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuer
 }()
 ```
 
-The [consumer example](../../tests/fixtures/consumer/httpendpoints/errors.go)
-registers a thin handler calling a service. At the HTTP boundary, return `SeatUnavailable`
+A thin handler calls a service. At the HTTP boundary, return `SeatUnavailable`
 directly, or `SeatUnavailable.WithCause(err)` to retain an internal cause.
 `errors.Is(err, SeatUnavailable)` checks the declaration and ordinary
 `errors.As`/`errors.Is` can inspect wrapped causes. A cause's text never supplies
@@ -87,7 +86,7 @@ must be directly a non-nullable object. Alias, scalar, array, map, dynamic
 and nullable roots are refused. A details type cannot be the error envelope
 itself. Nested fields retain the normal DTO rules.
 
-[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/member_create.go).
+`MemberExistsDetails` and `MemberConflictState` are `//foundry:dto` structs, so `foundry generate` produces the `MemberExistsDetailsJSON` descriptor used below. The block also uses `errors` and `context` from the standard library, `localization.Status` and `models.User`.
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/member_create.go#http-application-errors-member-exists-details -->
 ```go
@@ -112,7 +111,7 @@ var RegistrationClosed = foundryhttp.DefineError(
 ```
 
 Run the normal [generator](typed-api-workflow.md) to produce the descriptor.
-The exact declarations belong to the endpoint's error contract:
+`CreateMember` is the application's request body (`//foundry:dto http=body` with a `Name string`), `MemberCreated` its response (`//foundry:dto http=response` with an `ID model.ID[models.User]`), and `CreateMemberBody` and `MemberCreatedResponse` their generated descriptors. The exact error declarations belong to the endpoint's error contract:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/member_create.go#declare-error-endpoint -->
 ```go
@@ -126,8 +125,7 @@ var MemberCreate = func() foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.N
 }()
 ```
 
-Map service errors at the HTTP boundary. The fixture entries are public;
-applications check current resource authorization before disclosing details.
+Map service errors at the HTTP boundary. `createMember(name)` is the application's service call: it returns `*existingMember` (with `ID`, `Name` and `State` fields) when the name exists and `registrationClosed` when registration is closed, both domain errors that know nothing of HTTP. The entries in this example are public; applications check current resource authorization before disclosing details.
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/member_create.go#map-domain-errors -->
 ```go
@@ -135,7 +133,7 @@ func HandleMemberCreate(_ context.Context, in foundryhttp.Input[foundryhttp.NoPa
 	id, err := createMember(in.Body.Name)
 	var existing *existingMember
 	if errors.As(err, &existing) {
-		// These fixture entries are public. Real handlers check current resource
+		// These entries are public. Real handlers check current resource
 		// authorization before exposing an existing member's identity or state.
 		return MemberCreated{}, MemberExists.New(MemberExistsDetails{ExistingMemberID: existing.ID, Existing: MemberConflictState{Name: existing.Name, State: existing.State}}).WithCause(err)
 	}
@@ -207,8 +205,7 @@ export async function createMember(api: sdk.API, name: string) {
 }
 ```
 
-The [compiled client example](../../tests/fixtures/consumer/clientcontracts/testdata/error-details.ts)
-imports `sdk` from the generated entry. A form's submit action catches the same
+`sdk` is the generated client entry, and the operation name `membersCreate` and its codes belong to the example application: they stand for the operations and codes of your own client. A form's submit action catches the same
 narrowable error. Missing or malformed required details produce
 `ResponseContractError`; tolerant enum decoding preserves newer server cases as
 `UnknownEnumValue`. The guard validates the current received envelope each time.

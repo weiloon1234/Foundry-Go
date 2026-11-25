@@ -21,8 +21,11 @@ Declare a paginated endpoint with the generated domain filters and an explicit
 response DTO. Foundry parses page inputs, applies defaults and bounds, and builds
 response metadata and navigation links. The service uses the normal ORM API.
 
-The independent [consumer](../../tests/fixtures/consumer/httppagination/pagination.go)
-contains the complete declarations and generated contracts for this example:
+The application owns `Member` (its model, with its generated table), `MemberFilters` (a `//foundry:query` struct with an optional `Email`), `MemberResponse` (a `//foundry:dto http=response` struct), their generated descriptors `MemberFiltersDescriptor` and `MemberResponseJSON`, `memberQuery(filters MemberFilters) orm.Query[Member]` (applies the filters) and `PresentMember(Member) (MemberResponse, error)` (maps a model).
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`, `http` as `foundryhttp`, `http/pagination`.
+
+Declare the endpoint and its request type:
 
 <!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#http-pagination-list-request -->
 ```go
@@ -37,8 +40,14 @@ var List = func() pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters,
 }()
 ```
 
+A service reads the page with the ORM and maps it:
+
 <!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#http-pagination-example-2 -->
 ```go
+// DatabaseService reads pages with the handwritten ORM declarations and the framework's
+// parsed page request. The endpoint owns page metadata, JSON contracts and links.
+type DatabaseService struct{ DB database.Executor }
+
 func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResult[MemberResponse], error) {
 	builder := memberQuery(in.Filters)
 	page, err := orm.Paginate(ctx, s.DB, builder, in.Page)
@@ -75,12 +84,12 @@ Declare the route with `Access: foundryhttp.Guarded`, configure pagination as
 usual, and pass its concrete `foundryhttp.GuardBinding[Actor]` to
 `pagination.Authenticated`, then register it with
 `pagination.HandleAuthenticated(secured, service.List)`. Numbered, simple and cursor endpoints use the same
-adapter and infer all types from the endpoint and binding:
+adapter and infer all types from the endpoint and binding. `Actor` is the application's authenticated actor model, `guarded` an endpoint declared with a `Guarded` route, and `binding` the guard's `GuardBinding[Actor]`:
 
 <!-- compiled-source: tests/fixtures/consumer/httppagination/authenticated.go#http-pagination-authenticated-numbered -->
 ```go
-func AuthenticatedNumbered(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
-	return pagination.Authenticated(GuardedList, binding)
+func AuthenticatedNumbered(guarded pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse], binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
+	return pagination.Authenticated(guarded, binding)
 }
 ```
 
@@ -89,8 +98,9 @@ The numbered/simple handler is
 `Page` remains `orm.PageResult[DTO]` or `orm.SimplePage[DTO]`. Cursor handlers use
 `pagination.CursorRequest[Path, Filters, Source]` and return
 `pagination.CursorResult[Source, DTO]`. Cursor source, actor and DTO ownership
-remain separate. The [independent consumer](../../tests/fixtures/consumer/httppagination/authenticated.go)
-also names the three exported `Authenticated*Endpoint` aliases in return types.
+remain separate. The three exported return types are
+`pagination.AuthenticatedNumberedEndpoint`, `pagination.AuthenticatedSimpleEndpoint`
+and `pagination.AuthenticatedCursorEndpoint`.
 
 Authentication, required scopes and current-model permissions run before input
 decoding. `pagination.AuthorizeActor` receives the actor and the decoded page request

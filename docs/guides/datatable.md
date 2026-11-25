@@ -21,15 +21,16 @@ field, its label, the SQL expression it selects and the capabilities it offers
 source, such as `rows.From(query)`, a join, or one of the four source functions
 below. The table builds its SELECT list and row scan from the columns, so a table
 has no separate `rows.Define` schema and no `rows.Select(…, rows.Map(…))` list.
-Members, Orders and Totals in the [reporting consumer](../../tests/fixtures/consumer/reporting/)
-cover model, joined and grouped sources.
+The members, orders and totals tables below cover model, joined and grouped sources.
 
 <a id="recipe-declare-table"></a>
 ## Declare one row and its columns
 
-Declare a row DTO:
+The application owns the models `Member` (with `ID`, `TenantID`, `Name`, `Nickname`, `State` and `Balance`) and `Order` (with `ID`, `TenantID`, `MemberID`, `Label` and `Amount`), their generated tables `MemberModels` and `OrderModels` and relations `MemberModelRelations` and `OrderModelRelations`, and `State`, a string-backed enum. It also owns `Operator`, the authenticated actor (with a `TenantID`); `Authority`, the value a table receives to authorize and build its source, which holds the current request's guard (`authority.subject(ctx)` returns the current `Operator`); `authorize`, the table's `Authorize` callback; the row DTOs and their generated `…JSON()` and `…Columns()` functions; and the label keys (`i18n.MessageKey` constants such as `MemberNameLabel`). `OrderScope` is the scope of the joined members-and-orders source declared under [Joined and grouped tables](#recipe-join-group-tables).
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/models.go):
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `database/orm`, `database/orm/expr`, `database/orm/rows`, `datatable`, `datatable/importer`, `decimal`, `http` as `foundryhttp`, `i18n`, `model`, `validation`, `value`.
+
+Declare a row DTO:
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/models.go#datatable -->
 ```go
@@ -129,8 +130,6 @@ selects the order's member key from the joined expression without displaying it,
 column is a `DynamicColumn` whose value depends on the caller. Its `SortBy` is
 the static member name:
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/examples_columns.go):
-
 <!-- compiled-source: tests/fixtures/consumer/reporting/examples_columns.go#dynamic-table -->
 ```go
 func orderLineSpec() datatable.Spec[OrderScope, OrderLineRow, Authority] {
@@ -152,7 +151,12 @@ func orderLineSpec() datatable.Spec[OrderScope, OrderLineRow, Authority] {
 		},
 		Dynamic: []datatable.DynamicBinding[OrderScope, Authority]{
 			datatable.BindDynamic(scope, func(ctx context.Context, authority Authority) expr.Selected[OrderScope, string] {
-				operator, _ := authority.subject(ctx) // Authorize has already run
+				operator, err := authority.subject(ctx)
+				if err != nil {
+					// Authorize has already run and a builder cannot return an error:
+					// an unresolved actor selects no tenant label.
+					return expr.AsSelected(expr.Constant[OrderScope](codec.String[string](), ""))
+				}
 				return expr.AsSelected(expr.Constant[OrderScope](codec.String[string](), fmt.Sprintf("tenant-%d", operator.TenantID)))
 			}),
 		},
@@ -315,6 +319,10 @@ column is a `datatable.Column` or `datatable.HiddenSelected` over an
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/orders.go#joined-table -->
 ```go
+type memberSide struct{}
+type orderSide struct{}
+type OrderScope = rows.Inner[rows.Alias[memberSide, Member], rows.Alias[orderSide, Order]]
+
 // orderJoin joins members to their orders and returns the joined source with a
 // scope for each side.
 func orderJoin() (rows.SelectionSource[OrderScope], expr.Scope[OrderScope, Member], expr.Scope[OrderScope, Order]) {
@@ -435,6 +443,10 @@ text operations and NULL semantics in both cases:
 
 <!-- compiled-source: tests/fixtures/consumer/reports/datatable_filters.go#outer-joined-text -->
 ```go
+type referralAlias struct{}
+type sponsorAlias struct{}
+type ReferralScope = rows.Left[rows.Alias[referralAlias, models.User], rows.Alias[sponsorAlias, models.User]]
+
 func ReferralTextFilters() (datatable.FilterSource[ReferralScope, value.Nullable[string]], datatable.FilterSource[ReferralScope, value.Nullable[string]]) {
 	referrals := rows.As[referralAlias](models.Users.Query(), "referral")
 	sponsors := rows.As[sponsorAlias](models.Users.Query(), "sponsor")
@@ -467,9 +479,8 @@ before execution. Authorization runs before source construction, locale/heading
 callbacks, temporary files and database work.
 
 An interactive service can pass an `auth.Guard[M]` and invoke a registered typed
-policy in its authorization callback. The consumer's private
-[Authority](../../tests/fixtures/consumer/reporting/authority.go) supports both
-authenticated requests and freshly resolved job actors. It shares the domain
+policy in its authorization callback. The application's private `Authority`
+supports both authenticated requests and freshly resolved job actors. It shares the domain
 permission decision and never accepts roles or authority in request JSON.
 
 Retain the current request guard in authority, including after ticket redemption.
@@ -528,7 +539,7 @@ The manager sets its configured schema as the transaction's search path on each
 request. With `testkit/postgres.Isolate`, pass the test scope's schema in the
 manager configuration:
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/goway/migration/pilot_test.go):
+`postgres` is the framework's `testkit/postgres` package:
 
 <!-- compiled-source: tests/fixtures/goway/migration/pilot_test.go#pilot-recipe-datatable-test -->
 ```go
@@ -561,15 +572,10 @@ exports. Authorization still applies, so the test needs a subject that the
 table authorizes. The returned `orm.Statement` values expose `SQL()` and
 `Arguments()`.
 
-<!-- compiled-source: tests/fixtures/consumer/reporting/examples_columns_test.go#compile-table -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/table_recipes.go#compile-table -->
 ```go
-authority := Authority{resolved: true, actor: Operator{TenantID: 7, Active: true, CanView: true, CanExport: true}}
-statements, err := datatable.Compile(t.Context(), Members, datatable.DefaultConfig(), authority, datatable.Request{Search: "Ada"})
-if err != nil {
-	t.Fatal(err)
-}
-if !strings.Contains(statements.Rows.SQL(), `ILIKE $2 ESCAPE '!'`) || !slices.Contains(statements.Rows.Arguments(), any("%Ada%")) {
-	t.Fatalf("search did not reach the page statement: %s %v", statements.Rows.SQL(), statements.Rows.Arguments())
+func CompileMemberSearch(ctx context.Context, authority Authority) (datatable.Statements, error) {
+	return datatable.Compile(ctx, Members, datatable.DefaultConfig(), authority, datatable.Request{Search: "Ada"})
 }
 ```
 
@@ -719,19 +725,17 @@ to `Config.TimeZone`, inherited from the [application timezone](application-time
 in configured assembly or UTC for a direct manager. Explicit per-export
 `Presentation.TimeZone` wins.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/reporting_postgres_test.go):
+`manager` is the application's `*datatable.Manager`, and `authority` the current subject's authority:
 
-<!-- compiled-source: tests/fixtures/consumer/reporting/reporting_postgres_test.go#datatable-2 -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/table_recipes.go#datatable-2 -->
 ```go
-artifact, err := reporting.Totals.Export(scope.Context(), f.manager, authority, datatable.Request{Filters: []datatable.Filter{{Op: datatable.Greater, Column: "total", Values: []string{"10"}}}}, datatable.ExportOptions{Format: datatable.CSV})
-if err != nil {
-	t.Fatal(err)
+func ExportTotals(ctx context.Context, manager *datatable.Manager, authority Authority) (*datatable.Artifact, error) {
+	request := datatable.Request{Filters: []datatable.Filter{{Op: datatable.Greater, Column: "total", Values: []string{"10"}}}}
+	return Totals.Export(ctx, manager, authority, request, datatable.ExportOptions{Format: datatable.CSV})
 }
-defer artifact.Close()
 ```
 
-The export excerpt uses the test's authenticated scope and manager; the test owns
-and closes the completed artifact. The manager streams query rows into that file.
+The caller owns the completed artifact and closes it (`defer artifact.Close()`). The manager streams query rows into that file.
 
 Export validates page settings but exports **all matching rows**, bounded by
 `MaxExportRows`. It streams one query into a private temporary file and returns
@@ -800,38 +804,39 @@ of these defaults; `Validate` checks custom limits before any I/O.
 ## Declare HTTP operation bindings
 
 Use `contract.TableID` for table identities. There is no `datatable.TableID` alias.
-Declare each association at its endpoint. A query endpoint (`h` is the
-Foundry-Go `http` package):
+Declare each association at its endpoint. Framework imports from `github.com/weiloon1234/Foundry-Go`: `contract`, `datatable`, `http` as `foundryhttp`, `http/pagination`. A query endpoint:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/table_bindings.go#datatable-3 -->
 ```go
-func tableQuery[S, R, A any](table datatable.Table[S, R, A], id h.RouteID, path string) h.RouteRegistration {
-	idRoute := h.DefineRoute(h.RouteSpec{ID: id, Method: h.POST, Access: h.Public}, h.StaticPath(path))
-	endpoint := datatable.QueryEndpoint(table, idRoute, h.EmptyQuery())
+func tableQuery[S, R, A any](table datatable.Table[S, R, A], id foundryhttp.RouteID, path string) foundryhttp.RouteRegistration {
+	idRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
+	endpoint := datatable.QueryEndpoint(table, idRoute, foundryhttp.EmptyQuery())
 
-	return endpoint.Handle(func(context.Context, h.Input[h.NoPath, h.NoQuery, datatable.Request]) (pagination.NumberedResponse[R], error) {
+	return endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, datatable.Request]) (pagination.NumberedResponse[R], error) {
 		return pagination.NumberedResponse[R]{Data: []R{}}, nil
 	})
 }
 ```
 
-Ticket export, download and direct file export bindings:
+Inputs: `members`, `totals` and `orders` (the tables declared above with `datatable.Define`).
+
+The application's ticket protocol is `TableExportRequest` (a `//foundry:dto http=body` with a `Format datatable.ExportFormat` and a `Request datatable.Request`), `TableExportResource` (its response, with a `URL`), `TableDownloadQuery` (a `//foundry:query` with `Ticket` and `Format`) and `TableFilePath` (a path with a `Key int64`); the functions `TableExportBody`, `TableExportResponse`, `TableExportRequestValidationFields`, `TableDownloadQueryDescriptor` and `TableFilePathDescriptor` are their generated descriptors. Ticket export, download and direct file export bindings:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/table_bindings.go#datatable-4 -->
 ```go
-issueReportRoute := h.DefineRoute(h.RouteSpec{ID: "issue.report", Method: h.POST, Access: h.Public}, h.StaticPath("/issue"))
-issueReportEndpoint := h.DefineEndpoint(issueReportRoute, h.EmptyQuery(), TableExportBody(), TableExportResponse(201))
-ticket := datatable.BindTicketExport(reporting.Members, issueReportEndpoint, TableExportRequestValidationFields().Request)
+issueReportRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "issue.report", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/issue"))
+issueReportEndpoint := foundryhttp.DefineEndpoint(issueReportRoute, foundryhttp.EmptyQuery(), TableExportBody(), TableExportResponse(201))
+ticket := datatable.BindTicketExport(members, issueReportEndpoint, TableExportRequestValidationFields().Request)
 
-filesOpenRoute := h.DefineRoute(h.RouteSpec{ID: "files.open", Method: h.GET, Access: h.Public}, h.StaticPath("/file"))
-download := datatable.DownloadEndpoint(reporting.Members, filesOpenRoute, TableDownloadQueryDescriptor(), h.DownloadResponse("text/csv"))
+filesOpenRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "files.open", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/file"))
+download := datatable.DownloadEndpoint(members, filesOpenRoute, TableDownloadQueryDescriptor(), foundryhttp.DownloadResponse("text/csv"))
 
-filesAggregateRoute := h.DefineRoute(h.RouteSpec{ID: "files.aggregate", Method: h.GET, Access: h.Public}, h.StaticPath("/aggregate"))
-aggregate := datatable.DownloadEndpoint(reporting.Totals, filesAggregateRoute, h.EmptyQuery(), h.DownloadResponse("text/csv"))
+filesAggregateRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "files.aggregate", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/aggregate"))
+aggregate := datatable.DownloadEndpoint(totals, filesAggregateRoute, foundryhttp.EmptyQuery(), foundryhttp.DownloadResponse("text/csv"))
 
-reportsDirectRoute := h.DefineRoute(h.RouteSpec{ID: "reports.direct", Method: h.GET, Access: h.Public}, TableFilePathDescriptor())
-reportsDirectEndpoint := h.DefineEndpoint(reportsDirectRoute, TableDownloadQueryDescriptor(), h.EmptyBody(), h.DownloadResponse("text/csv"))
-direct := datatable.BindFileExport(reporting.Orders, reportsDirectEndpoint)
+reportsDirectRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.direct", Method: foundryhttp.GET, Access: foundryhttp.Public}, TableFilePathDescriptor())
+reportsDirectEndpoint := foundryhttp.DefineEndpoint(reportsDirectRoute, TableDownloadQueryDescriptor(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv"))
+direct := datatable.BindFileExport(orders, reportsDirectEndpoint)
 ```
 
 A query route can use any ID, such as `admin.inventory` or a scoped
@@ -911,11 +916,9 @@ this package does not infer a second client schema.
 
 The `datatable/importer` package streams an uploaded table into a typed row
 struct. Declare each heading once with its scalar codec and a typed assignment,
-plus ordinary validation rules for the complete row. The
-[consumer member import](../../tests/fixtures/consumer/reporting/member_import.go)
-declares:
-
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/member_import.go):
+plus ordinary validation rules for the complete row. `MemberImport` is the
+application's transport row (`Name`, `Nickname`, `State`, `Balance`), not a
+persistence model. A member import declares:
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/member_import.go#datatable-5 -->
 ```go
@@ -934,18 +937,14 @@ func memberImports() importer.Definition[MemberImport] {
 }
 ```
 
-The test below retains its small input to inspect decoded values. In an application,
-process each bounded chunk in the handler without collecting the whole import:
+Process each bounded chunk in the handler without collecting the whole import
+(`upload` is the opened file):
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/member_import_test.go):
-
-<!-- compiled-source: tests/fixtures/consumer/reporting/member_import_test.go#datatable-6 -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/member_import.go#datatable-6 -->
 ```go
-var imported []importer.Row[reporting.MemberImport]
-report, err := reporting.MemberImports.Run(t.Context(), importer.CSVSource(strings.NewReader(upload)), func(_ context.Context, rows []importer.Row[reporting.MemberImport]) error {
-	imported = append(imported, rows...)
-	return nil
-})
+func ImportMembers(ctx context.Context, upload io.Reader, handle func(context.Context, []importer.Row[MemberImport]) error) (importer.Report, error) {
+	return MemberImports.Run(ctx, importer.CSVSource(upload), handle)
+}
 ```
 
 The heading row (the first row unless `HeadingRow` says otherwise) maps headings
@@ -1020,26 +1019,30 @@ as described in the [tooling guide](developer-tooling-and-testing.md).
 Use `datatable.Routes` to register a table's query, ticket-export and download
 routes in one call. The parent scope stays application-owned. The helper uses
 explicit Part A bindings, so generated clients derive their table operations
-from the registered endpoints.
+from the registered endpoints. `NumericLevels` is a table declared with `datatable.Define`, `group` the scope the routes live under, `config` the route configuration built next, and `read` and `export` the guard options for read and export access:
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/table_routes.go#datatable-7 -->
 ```go
-return datatable.Routes(group, NumericLevels, config,
-	datatable.ReadAccess(read...),
-	datatable.ExportAccess(export...),
-)
+// NumericLevelRoutes uses framework-owned query, ticket and download contracts.
+// The caller supplies current authority and token-owned tickets.
+func NumericLevelRoutes(group foundryhttp.Scope, config datatable.RoutesConfig[Operator, Authority], read, export []foundryhttp.GuardOption[Operator]) ([]foundryhttp.RouteRegistration, error) {
+	return datatable.Routes(group, NumericLevels, config,
+		datatable.ReadAccess(read...),
+		datatable.ExportAccess(export...),
+	)
+}
 ```
 
-Build one configuration per route group and reuse it for the group's tables:
+Build one configuration per route group and reuse it for the group's tables. `Operator` and `Authority` are the application's actor and authority types, `FromGuard(guard)` builds an `Authority` that retains the current guard, and `tokens` is the `*token.Tokens` of the operator model (framework imports also include `auth/token`, `clock` and `model`):
 
 <!-- compiled-source: tests/fixtures/consumer/reports/datatable_routes.go#table-routes-config -->
 ```go
-func TableRoutesConfig(manager *datatable.Manager, guard foundryhttp.GuardBinding[reporting.Operator], tokens *token.Tokens[reporting.Operator, model.ID[reporting.Operator]], clock clock.Clock, quota foundryhttp.Middleware) datatable.RoutesConfig[reporting.Operator, reporting.Authority] {
-	return datatable.RoutesConfig[reporting.Operator, reporting.Authority]{
+func TableRoutesConfig(manager *datatable.Manager, guard foundryhttp.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]], clock clock.Clock, quota foundryhttp.Middleware) datatable.RoutesConfig[Operator, Authority] {
+	return datatable.RoutesConfig[Operator, Authority]{
 		Manager: manager,
 		Guard:   guard,
-		Authority: func(context.Context, reporting.Operator) (reporting.Authority, error) {
-			return reporting.FromGuard(guard.Guard()), nil
+		Authority: func(context.Context, Operator) (Authority, error) {
+			return FromGuard(guard.Guard()), nil
 		},
 		Tickets: datatable.TokenTickets(tokens),
 		Clock:   clock,

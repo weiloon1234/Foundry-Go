@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/datatable"
-	h "github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 )
 
@@ -48,11 +48,11 @@ type TableIdentity struct {
 }
 
 // doc-example:begin datatable-3
-func tableQuery[S, R, A any](table datatable.Table[S, R, A], id h.RouteID, path string) h.RouteRegistration {
-	idRoute := h.DefineRoute(h.RouteSpec{ID: id, Method: h.POST, Access: h.Public}, h.StaticPath(path))
-	endpoint := datatable.QueryEndpoint(table, idRoute, h.EmptyQuery())
+func tableQuery[S, R, A any](table datatable.Table[S, R, A], id foundryhttp.RouteID, path string) foundryhttp.RouteRegistration {
+	idRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
+	endpoint := datatable.QueryEndpoint(table, idRoute, foundryhttp.EmptyQuery())
 
-	return endpoint.Handle(func(context.Context, h.Input[h.NoPath, h.NoQuery, datatable.Request]) (pagination.NumberedResponse[R], error) {
+	return endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, datatable.Request]) (pagination.NumberedResponse[R], error) {
 		return pagination.NumberedResponse[R]{Data: []R{}}, nil
 	})
 }
@@ -61,33 +61,34 @@ func tableQuery[S, R, A any](table datatable.Table[S, R, A], id h.RouteID, path 
 
 // TableBindingsManifest exercises ticket, direct-file, query-only and download-only tables.
 func TableBindingsManifest(ctx context.Context) (*manifest.Manifest, error) {
+	members, totals, orders := reporting.Members, reporting.Totals, reporting.Orders
 	// doc-example:begin datatable-4
-	issueReportRoute := h.DefineRoute(h.RouteSpec{ID: "issue.report", Method: h.POST, Access: h.Public}, h.StaticPath("/issue"))
-	issueReportEndpoint := h.DefineEndpoint(issueReportRoute, h.EmptyQuery(), TableExportBody(), TableExportResponse(201))
-	ticket := datatable.BindTicketExport(reporting.Members, issueReportEndpoint, TableExportRequestValidationFields().Request)
+	issueReportRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "issue.report", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/issue"))
+	issueReportEndpoint := foundryhttp.DefineEndpoint(issueReportRoute, foundryhttp.EmptyQuery(), TableExportBody(), TableExportResponse(201))
+	ticket := datatable.BindTicketExport(members, issueReportEndpoint, TableExportRequestValidationFields().Request)
 
-	filesOpenRoute := h.DefineRoute(h.RouteSpec{ID: "files.open", Method: h.GET, Access: h.Public}, h.StaticPath("/file"))
-	download := datatable.DownloadEndpoint(reporting.Members, filesOpenRoute, TableDownloadQueryDescriptor(), h.DownloadResponse("text/csv"))
+	filesOpenRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "files.open", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/file"))
+	download := datatable.DownloadEndpoint(members, filesOpenRoute, TableDownloadQueryDescriptor(), foundryhttp.DownloadResponse("text/csv"))
 
-	filesAggregateRoute := h.DefineRoute(h.RouteSpec{ID: "files.aggregate", Method: h.GET, Access: h.Public}, h.StaticPath("/aggregate"))
-	aggregate := datatable.DownloadEndpoint(reporting.Totals, filesAggregateRoute, h.EmptyQuery(), h.DownloadResponse("text/csv"))
+	filesAggregateRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "files.aggregate", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/aggregate"))
+	aggregate := datatable.DownloadEndpoint(totals, filesAggregateRoute, foundryhttp.EmptyQuery(), foundryhttp.DownloadResponse("text/csv"))
 
-	reportsDirectRoute := h.DefineRoute(h.RouteSpec{ID: "reports.direct", Method: h.GET, Access: h.Public}, TableFilePathDescriptor())
-	reportsDirectEndpoint := h.DefineEndpoint(reportsDirectRoute, TableDownloadQueryDescriptor(), h.EmptyBody(), h.DownloadResponse("text/csv"))
-	direct := datatable.BindFileExport(reporting.Orders, reportsDirectEndpoint)
+	reportsDirectRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.direct", Method: foundryhttp.GET, Access: foundryhttp.Public}, TableFilePathDescriptor())
+	reportsDirectEndpoint := foundryhttp.DefineEndpoint(reportsDirectRoute, TableDownloadQueryDescriptor(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv"))
+	direct := datatable.BindFileExport(orders, reportsDirectEndpoint)
 	// doc-example:end datatable-4
-	router, err := h.NewRouter(tableQuery(reporting.Members, "admin.inventory", "/members"), tableQuery(reporting.NumericLevels, "admin.levels", "/levels"),
-		ticket.Handle(func(context.Context, h.Input[h.NoPath, h.NoQuery, TableExportRequest]) (TableExportResource, error) {
+	router, err := foundryhttp.NewRouter(tableQuery(reporting.Members, "admin.inventory", "/members"), tableQuery(reporting.NumericLevels, "admin.levels", "/levels"),
+		ticket.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, TableExportRequest]) (TableExportResource, error) {
 			return TableExportResource{}, nil
 		}),
-		download.Handle(func(context.Context, h.Input[h.NoPath, TableDownloadQuery, h.NoBody]) (h.Download, error) {
-			return h.Download{}, nil
+		download.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, TableDownloadQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
+			return foundryhttp.Download{}, nil
 		}),
-		aggregate.Handle(func(context.Context, h.Input[h.NoPath, h.NoQuery, h.NoBody]) (h.Download, error) {
-			return h.Download{}, nil
+		aggregate.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
+			return foundryhttp.Download{}, nil
 		}),
-		direct.Handle(func(context.Context, h.Input[TableFilePath, TableDownloadQuery, h.NoBody]) (h.Download, error) {
-			return h.Download{}, nil
+		direct.Handle(func(context.Context, foundryhttp.Input[TableFilePath, TableDownloadQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
+			return foundryhttp.Download{}, nil
 		}),
 	)
 	if err != nil {

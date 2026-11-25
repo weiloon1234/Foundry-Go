@@ -167,7 +167,7 @@ func contractBaselineSource(t *testing.T, name string) (*manifest.Manifest, []ty
 	if err != nil {
 		t.Fatal(err)
 	}
-	return source, surfaces
+	return source, clientcontracts.PortalSurfaces
 }
 
 func assertContractBytes(t *testing.T, actual, baseline string) {

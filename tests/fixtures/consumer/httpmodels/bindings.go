@@ -15,8 +15,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+type UserPath = httpkernel.UserPath
+type UserResponse = httpdto.UserResponse
+
 // doc-example:begin http-model-binding-show-request
-type ShowRequest = modelbinding.Input[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User]
+type ShowRequest = modelbinding.Input[UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User]
 
 // doc-example:end http-model-binding-show-request
 
@@ -25,23 +28,23 @@ var Show = foundryhttp.DefineEndpoint(
 	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), httpdto.UserResponseResponse(200),
 )
 
-type Service interface {
-	Show(context.Context, ShowRequest) (httpdto.UserResponse, error)
-}
+type ShowEndpoint = foundryhttp.Endpoint[UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, UserResponse]
+
+type ShowHandler = func(context.Context, ShowRequest) (UserResponse, error)
 
 // doc-example:begin http-model-binding-user-by-id
-func UserByID(db database.Executor) modelbinding.Resolver[httpkernel.UserPath, models.User] {
+func UserByID(db database.Executor) modelbinding.Resolver[UserPath, models.User] {
 	return modelbinding.ByKey(db, orm.Keyed(models.Users.Query().Where(orm.Eq(models.Users.Status, models.StatusActive)), models.Users.Key()),
-		func(p httpkernel.UserPath) model.ID[models.User] { return p.User })
+		func(p UserPath) model.ID[models.User] { return p.User })
 }
 
-func Router(db database.Executor, service Service) (*foundryhttp.Router, error) {
-	showUserBinding := foundryhttp.ForBinding(Show)
+func Router(db database.Executor, show ShowEndpoint, handle ShowHandler) (*foundryhttp.Router, error) {
+	showUserBinding := foundryhttp.ForBinding(show)
 
 	showUserEndpoint := UserByID(db)
 	bound := modelbinding.Bind(showUserBinding, showUserEndpoint)
 
-	return foundryhttp.NewRouter(bound.Handle(service.Show))
+	return foundryhttp.NewRouter(bound.Handle(handle))
 }
 
 // doc-example:end http-model-binding-user-by-id
@@ -59,6 +62,7 @@ func CountryByCode(db database.Executor) modelbinding.Resolver[CountryPath, mode
 	return modelbinding.ByKey(db, orm.Keyed(models.Countries.Query(), models.Countries.Key()), func(p CountryPath) models.CountryCode { return p.Country })
 }
 
+// doc-example:begin http-model-binding-order-within-user
 // A child resolver supplies its domain ownership scope through ordinary typed
 // predicates. An existing child outside the supplied parent resolves as absent.
 type OrderPath struct {
@@ -66,7 +70,6 @@ type OrderPath struct {
 	Order model.ID[models.Order]
 }
 
-// doc-example:begin http-model-binding-order-within-user
 func OrderWithinUser(db database.Executor) modelbinding.Resolver[OrderPath, models.Order] {
 	return modelbinding.Define(func(ctx context.Context, p OrderPath) (value.Optional[models.Order], error) {
 		return orm.Keyed(models.Orders.Query().Where(orm.Eq(models.Orders.BuyerID, p.User)), models.Orders.Key()).Find(ctx, db, p.Order)

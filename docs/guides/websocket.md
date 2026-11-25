@@ -11,30 +11,55 @@
 
 ## Overview
 
-The [independent consumer](../../tests/fixtures/consumer/realtime/orders.go)
-shows typed declarations, a domain service and the WebSocket kernel. Distributed
+Typed declarations, a domain service and the WebSocket kernel make up a realtime
+feature. Distributed
 fan-out, TTL presence, revocation refresh and bounded replay are described in the
 [distributed runtime guide](websocket-distributed.md).
 
 <a id="recipe-declare-channel"></a>
 ## Declare channels and events once
 
+The application owns `models.Order` and `models.User` with their generated tables and identities, and `OrderResponse`, an order DTO (`//foundry:dto`) with its generated `OrderResponseJSON()` descriptor.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `auth`, `database`, `database/orm`, `http` as `foundryhttp`, `model`, `websocket`.
+
+Declare an owner type per channel, the channel, and its outgoing and incoming events:
+
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#channel-events -->
 ```go
+type OrdersOwner struct{}
+
 var Orders = websocket.Public[OrdersOwner]("orders", websocket.DefineRooms(foundryhttp.ModelIDPath[models.Order]())).WithReplay(websocket.ReplayConfig{Messages: 8, Bytes: 32 << 10, TTL: time.Minute})
-var OrderUpdated = websocket.DefineOutgoing(Orders, "updated", httpdto.OrderResponseJSON())
-var Inspect = websocket.DefineIncoming(Orders, "inspect", httpdto.OrderResponseJSON())
-var Relay = websocket.DefineIncoming(Orders, "relay", httpdto.OrderResponseJSON()).AcknowledgeAccepted()
+var OrderUpdated = websocket.DefineOutgoing(Orders, "updated", OrderResponseJSON())
+var Inspect = websocket.DefineIncoming(Orders, "inspect", OrderResponseJSON())
+var Relay = websocket.DefineIncoming(Orders, "relay", OrderResponseJSON()).AcknowledgeAccepted()
 ```
+
+Register the incoming handler and the outgoing events with a service the application supplies (`OrderService`, declared in the block). A policy callback runs after payload decoding on every message:
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#register-channel -->
 ```go
+type OrderService interface {
+	Inspect(context.Context, model.ID[models.Order], OrderResponse) error
+}
+
 func Registry(service OrderService) (*websocket.Registry, error) {
-	incoming := Inspect.Authorize(authorizeOrder).Handle(func(ctx context.Context, message websocket.MessageContext[model.ID[models.Order], websocket.Anonymous], input httpdto.OrderResponse) error {
-		room, _ := message.Target.Room.Get()
+	incoming := Inspect.Authorize(authorizeOrder).Handle(func(ctx context.Context, message websocket.MessageContext[model.ID[models.Order], websocket.Anonymous], input OrderResponse) error {
+		room, present := message.Target.Room.Get()
+		if !present {
+			return auth.Forbidden
+		}
 		return service.Inspect(ctx, room, input)
 	})
 	return websocket.NewRegistry(websocket.Register(Orders, incoming, OrderUpdated.Registration(), Relay.Authorize(authorizeOrder).Relay(OrderUpdated)))
+}
+
+func authorizeOrder(_ context.Context, message websocket.MessageContext[model.ID[models.Order], websocket.Anonymous], input OrderResponse) error {
+	room, present := message.Target.Room.Get()
+	if !present || room != input.ID {
+		return auth.Forbidden
+	}
+	return nil
 }
 ```
 
@@ -51,8 +76,8 @@ that channel's room, subject and payload types. `DefineOutgoing` declares server
 events. Pass incoming handler bindings and outgoing `Registration()` values to
 `Register(channel, events...)`, then `NewRegistry`. Construction starts no I/O.
 
-The [consumer](../../tests/fixtures/consumer/realtime/orders.go) uses existing
-generated `httpdto.OrderResponseJSON()` for both transport directions. DTOs own
+The example uses the existing
+generated `OrderResponseJSON()` for both transport directions. DTOs own
 their wire contract; persistence models do not become implicit payload schemas.
 Different directions use distinct event IDs. Registries reject duplicates,
 invalid descriptors and events from another nominal declaration, including a
@@ -65,16 +90,20 @@ no typed payload schema. Contract metadata marks them dynamic.
 <a id="recipe-publish-channel"></a>
 ## Publishing and routing
 
+Publish an event to one room of a channel declared above (`hub` is any `websocket.PublisherSource`, such as a hub or a publisher):
+
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#publish-room -->
 ```go
-func PublishOrder(ctx context.Context, hub websocket.PublisherSource, room model.ID[models.Order], reply httpdto.OrderResponse) (websocket.MessageID, error) {
+func PublishOrder(ctx context.Context, hub websocket.PublisherSource, room model.ID[models.Order], reply OrderResponse) (websocket.MessageID, error) {
 	return websocket.Publish(ctx, hub, Orders, room, OrderUpdated, reply)
 }
 ```
 
+`Inbox` holds a channel and its outgoing `updated` event; it is declared under [Authentication and room ownership](#recipe-authorize-rooms). Publish only when a transaction commits:
+
 <!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#publish-after-commit -->
 ```go
-func (inbox Inbox) AfterCommit(tx *database.Tx, publisher websocket.PublisherSource, user model.ID[models.User], reply httpdto.OrderResponse) error {
+func (inbox Inbox) AfterCommit(tx *database.Tx, publisher websocket.PublisherSource, user model.ID[models.User], reply OrderResponse) error {
 	return tx.AfterCommit(func(ctx context.Context) error {
 		_, err := websocket.Publish(ctx, publisher, inbox.channel, user, inbox.updated, reply)
 		return err
@@ -117,23 +146,29 @@ immediate capacity error.
 <a id="recipe-authorize-rooms"></a>
 ## Authentication and room ownership
 
+A channel for one user's own rooms needs an owner type of its own and the application's guard:
+
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#owned-rooms -->
 ```go
+type InboxOwner struct{}
+
 func UserInbox(guard auth.Guard[models.User]) websocket.Channel[InboxOwner, model.ID[models.User], models.User] {
 	return websocket.OwnedRooms[InboxOwner]("users.inbox", websocket.DefineRooms(foundryhttp.ModelIDPath[models.User]()), guard, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf((models.User{})))
 }
 ```
 
+Keep the channel and its event together so registration and publishing share them:
+
 <!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#owned-channel -->
 ```go
 type Inbox struct {
 	channel websocket.Channel[InboxOwner, model.ID[models.User], models.User]
-	updated websocket.Outgoing[InboxOwner, httpdto.OrderResponse]
+	updated websocket.Outgoing[InboxOwner, OrderResponse]
 }
 
 func NewInbox(guard auth.Guard[models.User]) Inbox {
 	channel := UserInbox(guard)
-	return Inbox{channel: channel, updated: websocket.DefineOutgoing(channel, "updated", httpdto.OrderResponseJSON())}
+	return Inbox{channel: channel, updated: websocket.DefineOutgoing(channel, "updated", OrderResponseJSON())}
 }
 
 func (inbox Inbox) Registration() websocket.Registration {
@@ -185,7 +220,7 @@ subscription.
 For user-scoped channels, use `OwnedRooms` with the guard and the typed reference from
 `orm.IdentityOf(table.Table, table.Key())`. It compares the room to the guard's verified stored
 key and forbids whole-channel subscription. Matching IDs from another guard do
-not establish authority. The consumer's `UserInbox` shows this composition.
+not establish authority. `UserInbox` above shows this composition.
 
 Browser applications pass `BrowserSessions.Authentication()`. Capture reuses its
 secure-cookie and credential validation. Session login/rotation remain ordinary
@@ -196,17 +231,10 @@ rejected.
 <a id="recipe-realtime-tickets"></a>
 ### Handshake tickets for bearer-token browsers
 
+Register the channels, the authentication adapter and the ticket redeemers (`authentication` is the application's `*foundryhttp.Authentication` and `tokens` its token guard's `auth.TicketRedeemer`):
+
 <!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#realtime-tickets -->
 ```go
-func SharedHubSettings(settings application.Settings, connection websocket.ConnectionName) application.Settings {
-	settings.HTTP.Enabled = true
-	settings.Realtime.Enabled = true
-	settings.Realtime.Shared = true
-	settings.Realtime.Publisher = false
-	settings.Realtime.Connection = connection
-	return settings
-}
-
 func ConfigureInbox(builder *application.Builder, inbox Inbox, authentication *foundryhttp.Authentication, tokens auth.TicketRedeemer) *application.Builder {
 	return builder.Realtime(func(application.Services) (application.RealtimeDeclarations, error) {
 		return application.RealtimeDeclarations{

@@ -25,14 +25,14 @@ previous value first. See [staged route declarations](flat-routes.md) for the
 rule and the application gate. Generated descriptors retain the application types throughout
 decoding, handler invocation, response encoding and inspection.
 
-`models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
+`models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package. `UserPath` (a `//foundry:path` struct with a `User` ID), `UpdateUser` (a `//foundry:dto http=body` struct of optional fields), `UserResponse` and their generated functions (`UserPathDescriptor`, `UpdateUserBody`, `UserResponseResponse`, `UpdateUserValidationFields`) are the application's own.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `model`, `validation`, `value`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/guide.go#compose-endpoint -->
 ```go
 type UpdateService interface {
-	UpdateValues(context.Context, model.ID[models.User], httpdto.UpdateUser) (httpdto.UserResponse, error)
+	UpdateValues(context.Context, model.ID[models.User], UpdateUser) (UserResponse, error)
 }
 
 func GuideRouter(service UpdateService) (*foundryhttp.Router, error) {
@@ -41,28 +41,26 @@ func GuideRouter(service UpdateService) (*foundryhttp.Router, error) {
 
 	route := foundryhttp.DefineRoute(
 		foundryhttp.RouteSpec{ID: "update", Method: foundryhttp.PATCH, Access: foundryhttp.Public},
-		httpkernel.UserPathDescriptor(),
+		UserPathDescriptor(),
 	)
 	route = foundryhttp.ConfigureRoute(route, foundryhttp.Within(users))
 
 	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(),
-		httpdto.UpdateUserBody(), httpdto.UserResponseResponse(200))
+		UpdateUserBody(), UserResponseResponse(200))
 	endpoint = foundryhttp.ValidateBody(endpoint,
-		validation.Rules(httpdto.UpdateUserValidationFields().Email, validation.Optional(validation.NonBlank[string]())))
-	endpoint = foundryhttp.PrepareEndpoint(endpoint, func(_ context.Context, in foundryhttp.Input[httpkernel.UserPath, foundryhttp.NoQuery, httpdto.UpdateUser]) (foundryhttp.NoQuery, httpdto.UpdateUser, error) {
+		validation.Rules(UpdateUserValidationFields().Email, validation.Optional(validation.NonBlank[string]())))
+	endpoint = foundryhttp.PrepareEndpoint(endpoint, func(_ context.Context, in foundryhttp.Input[UserPath, foundryhttp.NoQuery, UpdateUser]) (foundryhttp.NoQuery, UpdateUser, error) {
 		if email, present := in.Body.Email.Get(); present {
 			in.Body.Email = value.Set(strings.TrimSpace(email))
 		}
 		return in.Query, in.Body, nil
 	})
-	return foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, in foundryhttp.Input[httpkernel.UserPath, foundryhttp.NoQuery, httpdto.UpdateUser]) (httpdto.UserResponse, error) {
+	return foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, in foundryhttp.Input[UserPath, foundryhttp.NoQuery, UpdateUser]) (UserResponse, error) {
 		return service.UpdateValues(ctx, in.Path.User, in.Body)
 	}))
 }
 ```
 
-`httpkernel` and `httpdto` are the independent fixture's application packages.
-The [source in the matching GitHub tree](../../tests/fixtures/consumer/httpendpoints/guide.go) includes imports.
 The handler passes decoded values to an injected service. Services accept domain
 values and return domain errors; the HTTP adapter owns transport input and public error mapping.
 Preparation runs before validation. The

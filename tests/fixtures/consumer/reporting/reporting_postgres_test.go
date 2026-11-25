@@ -119,13 +119,11 @@ func TestPublicJoinedAndGroupedReportsKeepCountsAndFilterPhases(t *testing.T) {
 	if _, err := reporting.Totals.Query(scope.Context(), f.manager, authority, request); err == nil {
 		t.Fatal("mixed WHERE/HAVING OR accepted")
 	}
-	// doc-example:begin datatable-2
-	artifact, err := reporting.Totals.Export(scope.Context(), f.manager, authority, datatable.Request{Filters: []datatable.Filter{{Op: datatable.Greater, Column: "total", Values: []string{"10"}}}}, datatable.ExportOptions{Format: datatable.CSV})
+	artifact, err := reporting.ExportTotals(scope.Context(), f.manager, authority)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer artifact.Close()
-	// doc-example:end datatable-2
 	data, err := io.ReadAll(artifact)
 	if err != nil {
 		t.Fatal(err)

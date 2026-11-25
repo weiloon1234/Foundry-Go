@@ -27,7 +27,7 @@ func (service) Update(_ context.Context, input httpendpoints.UpdateRequest) (htt
 
 func TestScopedMiddlewareWithTypedEndpointOverHTTP(t *testing.T) {
 	t.Parallel()
-	router, err := httpmiddleware.Router(service{})
+	router, err := httpmiddleware.Router(httpendpoints.Update, service{}.Update)
 	if err != nil {
 		t.Fatal(err)
 	}

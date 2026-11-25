@@ -10,4 +10,4 @@ import (
 
 type OtherActor struct{ ID int64 }
 
-var _ = pagination.ConfigureAuthenticated[foundryhttp.NoPath, httppagination.MemberFilters, orm.PageRequest, httppagination.Actor, orm.PageResult[httppagination.MemberResponse], pagination.NumberedResponse[httppagination.MemberResponse]](httppagination.AuthenticatedNumbered(foundryhttp.GuardBinding[httppagination.Actor]{}), foundryhttp.Permissions(auth.Permission[OtherActor]{}))
+var _ = pagination.ConfigureAuthenticated[foundryhttp.NoPath, httppagination.MemberFilters, orm.PageRequest, httppagination.Actor, orm.PageResult[httppagination.MemberResponse], pagination.NumberedResponse[httppagination.MemberResponse]](httppagination.AuthenticatedNumbered(httppagination.GuardedList, foundryhttp.GuardBinding[httppagination.Actor]{}), foundryhttp.Permissions(auth.Permission[OtherActor]{}))

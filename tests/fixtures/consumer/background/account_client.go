@@ -10,20 +10,27 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
+type (
+	Accounts       = outgoing.Accounts
+	AccountReceipt = outgoing.AccountReceipt
+)
+
+var NewAccounts = outgoing.NewAccounts
+
 // doc-example:begin named-client-deadline
 const AccountsClient httpclient.Name = "accounts.api"
 
-type AccountService struct{ accounts *outgoing.Accounts }
+type AccountService struct{ accounts *Accounts }
 
 func NewAccountService(services application.Services) (*AccountService, error) {
 	client, err := services.HTTPClients.Client(AccountsClient)
 	if err != nil {
 		return nil, err
 	}
-	return &AccountService{accounts: outgoing.NewAccounts(client)}, nil
+	return &AccountService{accounts: NewAccounts(client)}, nil
 }
 
-func (s *AccountService) Create(ctx context.Context, name string, token secret.String) (outgoing.AccountReceipt, error) {
+func (s *AccountService) Create(ctx context.Context, name string, token secret.String) (AccountReceipt, error) {
 	bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	return s.accounts.Create(bounded, name, token)

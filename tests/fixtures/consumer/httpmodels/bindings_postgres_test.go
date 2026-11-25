@@ -42,7 +42,7 @@ func request(t *testing.T, ctx context.Context, handler http.Handler, url string
 func TestPostgresModelBindingHydratesUUIDOnceAndPreservesScope(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {
 		reader := &countedExecutor{Executor: tx}
-		r, err := httpmodels.Router(reader, httpmodels.Presenter{})
+		r, err := httpmodels.Router(reader, httpmodels.Show, httpmodels.Presenter{}.Show)
 		if err != nil {
 			return err
 		}

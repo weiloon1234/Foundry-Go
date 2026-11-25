@@ -10,11 +10,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin outer-joined-text
 type referralAlias struct{}
 type sponsorAlias struct{}
 type ReferralScope = rows.Left[rows.Alias[referralAlias, models.User], rows.Alias[sponsorAlias, models.User]]
 
-// doc-example:begin outer-joined-text
 func ReferralTextFilters() (datatable.FilterSource[ReferralScope, value.Nullable[string]], datatable.FilterSource[ReferralScope, value.Nullable[string]]) {
 	referrals := rows.As[referralAlias](models.Users.Query(), "referral")
 	sponsors := rows.As[sponsorAlias](models.Users.Query(), "sponsor")

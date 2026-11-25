@@ -17,33 +17,38 @@ Model binding resolves decoded path keys into concrete models before a domain
 handler runs. The original endpoint still owns parsing, validation, middleware,
 errors, URL generation and the explicit response DTO.
 
-The [independent consumer](../../tests/fixtures/consumer/httpmodels/bindings.go)
-uses a model directive with generated path and response contracts:
+The application owns `models.User` (a `//foundry:model` with a generated table `models.Users`, its `Status` field and the `models.StatusActive` value), `UserPath` (a generated path struct with one `User model.ID[models.User]` field), `UserResponse` (its response DTO with the generated `UserResponseResponse` descriptor) and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`, `http` as `foundryhttp`, `http/modelbinding`, `model`, `value`.
+
+The request type of a bound handler carries the original input and the loaded model:
 
 <!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go#http-model-binding-show-request -->
 ```go
-type ShowRequest = modelbinding.Input[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User]
+type ShowRequest = modelbinding.Input[UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User]
 ```
+
+A resolver loads the model from the path. `ShowEndpoint` is the application's ordinary typed endpoint for the user route (`foundryhttp.Endpoint[UserPath, NoQuery, NoBody, UserResponse]`) and `ShowHandler` the domain handler, `func(context.Context, ShowRequest) (UserResponse, error)`. Bind the resolver to the endpoint and register it:
 
 <!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go#http-model-binding-user-by-id -->
 ```go
-func UserByID(db database.Executor) modelbinding.Resolver[httpkernel.UserPath, models.User] {
+func UserByID(db database.Executor) modelbinding.Resolver[UserPath, models.User] {
 	return modelbinding.ByKey(db, orm.Keyed(models.Users.Query().Where(orm.Eq(models.Users.Status, models.StatusActive)), models.Users.Key()),
-		func(p httpkernel.UserPath) model.ID[models.User] { return p.User })
+		func(p UserPath) model.ID[models.User] { return p.User })
 }
 
-func Router(db database.Executor, service Service) (*foundryhttp.Router, error) {
-	showUserBinding := foundryhttp.ForBinding(Show)
+func Router(db database.Executor, show ShowEndpoint, handle ShowHandler) (*foundryhttp.Router, error) {
+	showUserBinding := foundryhttp.ForBinding(show)
 
 	showUserEndpoint := UserByID(db)
 	bound := modelbinding.Bind(showUserBinding, showUserEndpoint)
 
-	return foundryhttp.NewRouter(bound.Handle(service.Show))
+	return foundryhttp.NewRouter(bound.Handle(handle))
 }
 ```
 
-`Show` is an ordinary typed endpoint. Its response is the generated
-`httpdto.UserResponseJSON()` contract. `service.Show` receives `ShowRequest`:
+`show` is an ordinary typed endpoint. Its response is the generated
+`UserResponseResponse(200)` contract. `handle` receives `ShowRequest`:
 `in.Request` retains the original path/query/body values, and `in.Model` is the
 loaded `models.User`. There is no second lookup in the handler. Application
 assembly supplies the database; no global request or dependency container is
@@ -74,7 +79,7 @@ happen before any path decoding or model resolution.
 declared application error or a 410 for archived resources:
 
 Use `modelbinding.WithMissing(UserByID(db), handler)`, where `handler` has type
-`func(context.Context, httpkernel.UserPath) error` and returns a declared
+`func(context.Context, UserPath) error` and returns a declared
 application error.
 
 The callback receives the decoded path, runs in an owned callback (panics become
@@ -89,10 +94,17 @@ A later request resolves the model again; bindings retain no cross-request cache
 
 Use `Define` for a slug, tenant-aware query, alternate key or child route. The
 callback returns `value.Optional[Model]`, preserving the same missing/error rules.
-The consumer's child resolver uses ordinary typed predicates:
+A child resolver uses ordinary typed predicates (`models.Order` is the application's model with a `BuyerID` owner field):
 
 <!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go#http-model-binding-order-within-user -->
 ```go
+// A child resolver supplies its domain ownership scope through ordinary typed
+// predicates. An existing child outside the supplied parent resolves as absent.
+type OrderPath struct {
+	User  model.ID[models.User]
+	Order model.ID[models.Order]
+}
+
 func OrderWithinUser(db database.Executor) modelbinding.Resolver[OrderPath, models.Order] {
 	return modelbinding.Define(func(ctx context.Context, p OrderPath) (value.Optional[models.Order], error) {
 		return orm.Keyed(models.Orders.Query().Where(orm.Eq(models.Orders.BuyerID, p.User)), models.Orders.Key()).Find(ctx, db, p.Order)
@@ -161,8 +173,7 @@ its handler position determines when the resource resolves.
 
 Authentication, token scopes, permissions and signatures execute before decoding
 or model resolution. The shared resolver still runs once per request, at the
-binding stage before validation; resource policies remain explicit. See [authentication composition](authentication.md#signed-endpoints-and-bound-resources)
-and the [consumer](../../tests/fixtures/consumer/authenticating/composed_routes.go).
+binding stage before validation; resource policies remain explicit. See [authentication composition](authentication.md#signed-endpoints-and-bound-resources).
 
 
 Replay binding is explicit. Construct the HTTP replay descriptor with
@@ -184,7 +195,18 @@ required `HandleBound` capability directly.
 <a id="recipe-authenticated-binding"></a>
 ## Bind an authenticated resource
 
-The [compiled source and aliases](../../tests/fixtures/consumer/authenticating/composed_routes.go) supply the concrete actor, resource and transport types. Resource policy runs before domain behavior.
+Resource policy runs before domain behavior.
+
+The application owns `models.User`, `models.Order`, `OrderPath` (a path struct with one `Order model.ID[models.Order]` field) and `ReadOrder`, its `auth.Policy` of a user reading an order. Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `fault`, `http` as `foundryhttp`, `http/modelbinding`. The concrete types the route is built from are:
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/composed_routes.go#bound-order-aliases -->
+```go
+type OrderInput = modelbinding.Input[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Order]
+type OrderEndpoint = foundryhttp.AuthenticatedEndpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
+type OrderTransport = modelbinding.AuthenticatedTransport[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
+```
+
+Compose the authenticated transport with the resource and apply the policy before domain behavior:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/composed_routes.go#authenticated-resource -->
 ```go
@@ -209,13 +231,11 @@ or differently owned record is 404. The resource policy runs before the handler;
 a policy or lookup error denies access. Keep counts and validation lookups under
 the same actor or tenant constraint.
 
+`OrderEndpoint`, `OrderInput`, `OrderPath`, `ReadOrder` and the framework imports are those of [the authenticated resource above](#recipe-authenticated-binding); `endpoint` is the order route configured with its declared scopes and permission, and `binding` the guard's `foundryhttp.GuardBinding[models.User]`. Framework imports also include `database`, `database/orm` and `value`.
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#scoped-resource-policy -->
 ```go
-func ScopedOrderRoute(db database.Executor, binding foundryhttp.GuardBinding[models.User], read func(context.Context, models.User, models.Order) error) (foundryhttp.RouteRegistration, error) {
-	endpoint, err := SecuredOrder(binding)
-	if err != nil {
-		return foundryhttp.RouteRegistration{}, err
-	}
+func ScopedOrderRoute(db database.Executor, endpoint OrderEndpoint, binding foundryhttp.GuardBinding[models.User], read func(context.Context, models.User, models.Order) error) foundryhttp.RouteRegistration {
 	guard := binding.Guard()
 	resolver := modelbinding.Define(func(ctx context.Context, path OrderPath) (value.Optional[models.Order], error) {
 		actor, err := guard.Require(ctx)
@@ -233,7 +253,7 @@ func ScopedOrderRoute(db database.Executor, binding foundryhttp.GuardBinding[mod
 	})
 	return authorized.Handle(func(ctx context.Context, actor models.User, in OrderInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, read(ctx, actor, in.Model)
-	}), nil
+	})
 }
 ```
 

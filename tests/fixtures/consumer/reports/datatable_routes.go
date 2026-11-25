@@ -11,13 +11,20 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+type (
+	Operator  = reporting.Operator
+	Authority = reporting.Authority
+)
+
+var FromGuard = reporting.FromGuard
+
 // doc-example:begin table-routes-config
-func TableRoutesConfig(manager *datatable.Manager, guard foundryhttp.GuardBinding[reporting.Operator], tokens *token.Tokens[reporting.Operator, model.ID[reporting.Operator]], clock clock.Clock, quota foundryhttp.Middleware) datatable.RoutesConfig[reporting.Operator, reporting.Authority] {
-	return datatable.RoutesConfig[reporting.Operator, reporting.Authority]{
+func TableRoutesConfig(manager *datatable.Manager, guard foundryhttp.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]], clock clock.Clock, quota foundryhttp.Middleware) datatable.RoutesConfig[Operator, Authority] {
+	return datatable.RoutesConfig[Operator, Authority]{
 		Manager: manager,
 		Guard:   guard,
-		Authority: func(context.Context, reporting.Operator) (reporting.Authority, error) {
-			return reporting.FromGuard(guard.Guard()), nil
+		Authority: func(context.Context, Operator) (Authority, error) {
+			return FromGuard(guard.Guard()), nil
 		},
 		Tickets: datatable.TokenTickets(tokens),
 		Clock:   clock,

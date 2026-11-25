@@ -2,6 +2,8 @@ package teamworkflow
 
 import (
 	"context"
+
+	"foundry.test/consumer/internal/authfixture"
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
@@ -67,7 +69,15 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 		if err != nil {
 			return nil, err
 		}
-		calls, err := OutboundCaptureRoutes(outbound)
+		transport, guard, err := authfixture.Authentication(ReadCaptures.Registration())
+		if err != nil {
+			return nil, err
+		}
+		binding, err := http.BindGuard(transport, guard)
+		if err != nil {
+			return nil, err
+		}
+		calls, err := OutboundCaptureRoutes(outbound, binding, ReadCaptures)
 		return append(append(routes, viewer...), calls...), err
 	}).Build(ctx)
 }

@@ -95,15 +95,13 @@ For the earlier guard metadata change, see the
 
 ## Generate the client
 
-Generate into an existing, dedicated client directory:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `cli`, `contract`, `contract/manifest`, `datatable`, `enum`, `http` as `foundryhttp`, `i18n`, `notifications`, `openapi`, `typescript`, `websocket`.
+
+Generate into an existing, dedicated client directory, from the manifest built below:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/guide_export.go#export-contracts -->
 ```go
-func ExportClient(ctx context.Context, fixture Fixture, dir string) (typescript.Report, error) {
-	source, err := fixture.Manifest(ctx)
-	if err != nil {
-		return typescript.Report{}, err
-	}
+func ExportClient(ctx context.Context, source *manifest.Manifest, dir string) (typescript.Report, error) {
 	return typescript.Generate(ctx, source, typescript.Options{
 		Dir:     dir,
 		OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"},
@@ -111,18 +109,20 @@ func ExportClient(ctx context.Context, fixture Fixture, dir string) (typescript.
 }
 ```
 
-The fixture assembles all of its registered contract inputs in one source owner:
+Inputs: `ctx context.Context`, `router *foundryhttp.Router`, `realtime websocket.ClientDescription`, `notices *notifications.Registry`, `tables *datatable.Registry`, `catalog *i18n.Catalog`, `frontend fs.FS`, `publicConfig []manifest.PublicSetting`, `enumeration enum.Definition`, `permission auth.PermissionDescription`, `dynamic`, `labelSchema` and `ownerIndex` (each a `contract.Schema`).
+
+Pass every registered contract input to one build:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/contracts.go#manifest-sources -->
 ```go
 return manifest.Build(ctx, manifest.Sources{
-	HTTP:          f.Router,
+	HTTP:          router,
 	Realtime:      &realtime,
-	Notifications: f.Notifications,
-	Tables:        f.Tables,
+	Notifications: notices,
+	Tables:        tables,
 	Catalog:       catalog,
 	Frontend:      frontend,
-	PublicConfig:  configured.SettingsPublicConfig(),
+	PublicConfig:  publicConfig,
 	Enums:         []enum.Definition{enumeration},
 	Permissions:   []auth.PermissionDescription{permission},
 	Schemas:       []contract.Schema{dynamic, labelSchema, ownerIndex},
@@ -133,8 +133,7 @@ Export and freshness checks must use the same source selection and generation
 options. A partial registry produces a partial client; use a separate output
 directory when that is intentional.
 
-Imports are `github.com/weiloon1234/Foundry-Go/contract/manifest`, `/typescript`
-and `/openapi`. `typescript.Render(source)` and `openapi.Render(source, options)`
+`typescript.Render(source)` and `openapi.Render(source, options)`
 also return bytes without publishing. An application export command can save
 `source.JSON()` and use the framework CLI:
 
@@ -184,9 +183,9 @@ both encode and decode. Byte, depth and schema-work limits remain independent.
 An application with several portals declares one surface per portal, so each
 bundle carries only its own operations, channels and schemas:
 
-<!-- compiled-source: tests/fixtures/consumer/clientcontracts/contracts_test.go#portal-surfaces -->
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/surfaces.go#portal-surfaces -->
 ```go
-var surfaces = []typescript.Surface{
+var PortalSurfaces = []typescript.Surface{
 	{Name: "browser", Routes: []foundryhttp.RouteID{"browser"}, Auth: &typescript.SurfaceAuth{Guard: "browser_accounts", Login: "browser.login", Refresh: "browser.refresh", Logout: "browser.logout", Profile: "browser.profile", Identifier: "login_id"}},
 	{Name: "members", Paths: []string{"/members"}},
 	{Name: "live", Routes: []foundryhttp.RouteID{"account.show"}, Channels: []websocket.ChannelID{"updates"}, Guards: []auth.GuardName{"client_accounts"}},
@@ -277,30 +276,19 @@ the full entry's operation table.
 <a id="recipe-portal-entries"></a>
 ### Consume portal entries
 
-[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/surfaces.ts).
+`full` is the entry module `./contracts_foundry.gen.js` and `members` the portal entry `./contracts_members_foundry.gen.js` that the `members` surface above generates. The operation, schema and field names in the TypeScript blocks of this guide (`membersIndex`, `itemsEcho`, `Clientcontracts_Payload` and their fields) belong to the example application's generated client and stand for your own; `sdk` is its entry module, `import * as sdk from "./contracts_foundry.gen.js"` (the path of the generated file in your client source). A portal entry restricts the same API to its selection:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/surfaces.ts#portal-entries -->
 ```typescript
-export function surfaceConsumer(): void {
-  void memberAPI.membersIndex({});
-  // @ts-expect-error A surface exposes only its selected operations.
-  void memberAPI.accountShow({});
-  void liveAPI.accountShow({});
-  // @ts-expect-error Another portal's operation is not part of this surface.
-  void liveAPI.membersIndex({});
-  // Schemas keep their names and identity brands in every entry of a directory.
-  const shared: full.Operations["membersIndex"]["response"] = memberPage;
-  void shared;
+export function listMembers(api: members.API): Promise<full.Operations["membersIndex"]["response"]> {
+  // A surface exposes only its selected operations, and its schemas keep the
+  // full entry's names and identity brands.
+  return api.membersIndex({});
+}
+
+export function isAPIError(error: unknown): boolean {
   // Runtime classes come from the shared modules, so every entry has one class.
-  const apiError: typeof full.APIError = members.APIError;
-  void apiError;
-  // @ts-expect-error This portal declares no detailed operation errors.
-  void live.isOperationError;
-  void live.createRealtime;
-  // @ts-expect-error A surface without channels has no realtime client.
-  void members.createRealtime;
-  // @ts-expect-error A surface without Auth has no portal session helper.
-  void members.createPortalSession;
+  return error instanceof full.APIError && error instanceof members.APIError;
 }
 ```
 
@@ -399,8 +387,6 @@ locales against its current catalog. Received values keep `string` keys, because
 a newer server may support more locales than the client was generated with; a
 schema reachable from server output that contains such a map therefore has a
 `...Received` variant. OpenAPI keeps its open object keys.
-
-[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts).
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#wire-values -->
 ```typescript
@@ -518,8 +504,6 @@ the portal really uses. See the [manifest 9 migration](../compatibility.md#typed
 
 For example, a client can use a built-in code:
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts):
-
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#validation-error-code -->
 ```typescript
 export function isValidationFailure(error: unknown): boolean {
@@ -537,19 +521,17 @@ exists in every entry.
 <a id="recipe-table-bindings"></a>
 ### Typed datatable descriptors
 
-[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts).
-
-Generated entry modules export a frozen `tables` registry for surfaces that define datatables, together with typed identifiers and row helper types:
+Generated entry modules export a frozen `tables` registry for surfaces that define datatables, together with typed identifiers and row helper types. `api` is the generated client (`sdk.API`); the table IDs (`reports.members`, `reports.orders`) belong to the example application:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts#table-registries -->
 ```typescript
-export function query<Id extends sdk.QueryTableId>(id: Id, input: sdk.TableQueryInputs[Id]): Promise<sdk.TableQueryOutputs[Id]> {
+export function query<Id extends sdk.QueryTableId>(api: sdk.API, id: Id, input: sdk.TableQueryInputs[Id]): Promise<sdk.TableQueryOutputs[Id]> {
   return sdk.tableQueries[id](api, input);
 }
-export function exportTable<Id extends sdk.ExportTableId>(id: Id, input: sdk.TableExportInputs[Id]): Promise<sdk.TableExportOutputs[Id]> {
+export function exportTable<Id extends sdk.ExportTableId>(api: sdk.API, id: Id, input: sdk.TableExportInputs[Id]): Promise<sdk.TableExportOutputs[Id]> {
   return sdk.tableExports[id](api, input);
 }
-export function download<Id extends sdk.DownloadTableId>(id: Id, input: sdk.TableDownloadInputs[Id]): Promise<sdk.TableDownloadOutputs[Id]> {
+export function download<Id extends sdk.DownloadTableId>(api: sdk.API, id: Id, input: sdk.TableDownloadInputs[Id]): Promise<sdk.TableDownloadOutputs[Id]> {
   return sdk.tableDownloads[id](api, input);
 }
 ```
@@ -560,6 +542,8 @@ Each descriptor in `tables` carries:
 - `columns`: readonly array of `TableColumn<Row>` with `name` typed strictly as `keyof Row & string`, `kind` derived from Go `datatable.ColumnKind`, `nullable`, `sortable`, `searchable`, `exportable`, and declared filter `operators`. Enum columns carry `kind: "enum"` and reference the S1 enum value object through `enum`. Read allowed values from `column.enum.cases` and optional label keys from `column.enum.labels`. Integer enums use numbers up to 32 bits and decimal strings for wider integers. Without registered enum metadata, the value object carries schema-owned cases without labels.
 - `defaultSort`: readonly array of `TableSort<keyof Row & string>`.
 - `exports`: boolean flag indicating whether the table supports export operations.
+
+Read the allowed values and label keys of a table's enum columns:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts#table-enum-metadata -->
 ```typescript
@@ -616,11 +600,19 @@ A missing slot has no key in its operation registry. `tableExportKinds[id]` is
 application response; files and downloads return `FileResult`, whose caller owns
 `close()`.
 
+Request a ticket, download the file with it, and close the file when the caller is done:
+
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts#table-download -->
 ```typescript
-const ticket: TableExportResource = await sdk.tableExports["reports.members"](api, { body: { format: "csv", request: {} } });
-const file: sdk.FileResult = await sdk.tableDownloads["reports.members"](api, { query: { ticket: ticket.url, format: "csv" } });
-await file.close();
+export async function downloadMembers(api: sdk.API, use: (file: sdk.FileResult) => Promise<void>): Promise<void> {
+  const ticket = await sdk.tableExports["reports.members"](api, { body: { format: "csv", request: {} } });
+  const file = await sdk.tableDownloads["reports.members"](api, { query: { ticket: ticket.url, format: "csv" } });
+  try {
+    await use(file);
+  } finally {
+    await file.close();
+  }
+}
 ```
 
 Helpers retain the complete operation input, including required path and query
@@ -632,7 +624,7 @@ remain in the full client. `exports` describes server capability, so check opera
 availability in the selected client before offering an action.
 
 Uniform application adapters can use a checked optional export view without
-weakening the generated registries:
+weakening the generated registries. `api` is the generated client, `tableMemory` the application's own store of remembered table state, and the `ContractTypes` keys name the example application's Go types:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts#table-adapter -->
 ```typescript
@@ -653,9 +645,7 @@ type AdminExportTransports = {
   readonly [Id in sdk.QueryTableId]?: (client: sdk.API, input: { readonly body: TableExportRequest }, options?: sdk.CallOptions) => Promise<TableExportResource>;
 };
 const exportTransports: AdminExportTransports = sdk.tableExports;
-declare const api: sdk.API;
-declare const tableMemory: StoreApi<TableMemory>;
-export function adminTable<Id extends sdk.QueryTableId>(id: Id): TableSource<sdk.TableRow<Id>, sdk.TableReceivedRow<Id>> {
+export function adminTable<Id extends sdk.QueryTableId>(api: sdk.API, tableMemory: StoreApi<TableMemory>, id: Id): TableSource<sdk.TableRow<Id>, sdk.TableReceivedRow<Id>> {
   const descriptor = sdk.tables[id];
   const exportCall = exportTransports[id];
   return {
@@ -704,8 +694,7 @@ Declared application headers appear in the generated operation's `headers`
 member, using canonical wire names. The member is required when any header is
 required; optional fields preserve omission. Operations without declared headers
 keep their existing request signature. For the
-[consumer declaration](../../tests/fixtures/consumer/clientcontracts/request_headers.go),
-the generated request accepts:
+example endpoint that declares a `q` query field, an `X-App-Version` header and an `X-Sequence` header holding an int64, the generated request accepts:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#request-headers -->
 ```typescript
@@ -760,12 +749,14 @@ Streams are available.
 <a id="recipe-fetch-transport"></a>
 ### Connect Fetch
 
-[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/fetch-transport.ts).
+Pass the transport to `createClient`; the credentials option decides whether the browser sends cookies:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/fetch-transport.ts#fetch-client -->
 ```typescript
-const transport: HTTPTransport = fetchTransport;
-createClient(transport, { credentials: "include" });
+export function browserClient() {
+  const transport: HTTPTransport = fetchTransport;
+  return createClient(transport, { credentials: "include" });
+}
 ```
 
 ### Transport behavior
@@ -1342,14 +1333,20 @@ rules without a second implementation:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-typed-messages -->
 ```typescript
-void formatMessage(messages, "cart.items", { count: 2, name: "Ada" });
-void formatMessage(messages, "cart.items", { count: "2.5", name: "Ada" });
-void formatMessage(messages, "fields.name");
+export function cartMessages(messages: ValidationMessages) {
+  return [
+    formatMessage(messages, "cart.items", { count: 2, name: "Ada" }),
+    formatMessage(messages, "cart.items", { count: "2.5", name: "Ada" }),
+    formatMessage(messages, "fields.name"),
+  ];
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-text-message -->
 ```typescript
-void formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
+export function lockoutMessage(messages: ValidationMessages) {
+  return formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
+}
 ```
 
 - `catalogTranslations(files)` flattens one locale's catalog files under the Go
@@ -1366,9 +1363,13 @@ void formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" })
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-frontend-messages -->
 ```typescript
-void formatFrontendMessage(messages, "ui.welcome", { name: "Ada" });
-void formatFrontendMessage(messages, "ui.farewell");
-void formatFrontendMessage(messages, "auth.notice", { attempts: 3 });
+export function frontendMessages(messages: ValidationMessages) {
+  return [
+    formatFrontendMessage(messages, "ui.welcome", { name: "Ada" }),
+    formatFrontendMessage(messages, "ui.farewell"),
+    formatFrontendMessage(messages, "auth.notice", { attempts: 3 }),
+  ];
+}
 ```
 
 Frontend-only catalog discovery and plural signatures follow [frontend message metadata](#frontend-message-keys).
@@ -1464,8 +1465,6 @@ capabilities support UI presentation; server authorization still decides access.
 
 React and Vue can share the generated module and one transport adapter. Keep
 network ownership in each component's lifecycle:
-
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts):
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#request-lifecycle -->
 ```typescript

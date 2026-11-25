@@ -258,15 +258,16 @@ func (f Fixture) Manifest(ctx context.Context) (*manifest.Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	router, notices, tables, publicConfig := f.Router, f.Notifications, f.Tables, configured.SettingsPublicConfig()
 	// doc-example:begin manifest-sources
 	return manifest.Build(ctx, manifest.Sources{
-		HTTP:          f.Router,
+		HTTP:          router,
 		Realtime:      &realtime,
-		Notifications: f.Notifications,
-		Tables:        f.Tables,
+		Notifications: notices,
+		Tables:        tables,
 		Catalog:       catalog,
 		Frontend:      frontend,
-		PublicConfig:  configured.SettingsPublicConfig(),
+		PublicConfig:  publicConfig,
 		Enums:         []enum.Definition{enumeration},
 		Permissions:   []auth.PermissionDescription{permission},
 		Schemas:       []contract.Schema{dynamic, labelSchema, ownerIndex},
