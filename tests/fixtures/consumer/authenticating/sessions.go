@@ -38,10 +38,10 @@ func StartVerifiedSession(ctx context.Context, sessions *UserSessions, proof aut
 }
 
 // doc-example:begin sessions-listed-sessions
-func ListedSessions(ctx context.Context, sessions *UserSessions, user models.User) ([]UserSession, error) {
+func ListedSessions(ctx context.Context, sessions *session.Sessions[models.User, model.ID[models.User]], user models.User) ([]session.Info[models.User, model.ID[models.User]], error) {
 	return sessions.List(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user))
 }
-func RevokeListedSession(ctx context.Context, sessions *UserSessions, user models.User, id session.ID[models.User]) (bool, error) {
+func RevokeListedSession(ctx context.Context, sessions *session.Sessions[models.User, model.ID[models.User]], user models.User, id session.ID[models.User]) (bool, error) {
 	return sessions.RevokeID(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), id)
 }
 

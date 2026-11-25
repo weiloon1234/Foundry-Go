@@ -21,7 +21,8 @@ type Revocations = auth.Revocations[Member, model.ID[Member]]
 
 // CredentialRevocations registers all credential guards this domain uses. New
 // guards must be included here so every password reset invalidates them.
-func CredentialRevocations(provider Provider, sessions *Sessions, tokens *Tokens) (*Revocations, error) {
+// doc-example:begin credential-revocations
+func CredentialRevocations(users auth.Provider[Member, model.ID[Member]], sessions *session.Sessions[Member, model.ID[Member]], tokens *token.Tokens[Member, model.ID[Member]]) (*auth.Revocations[Member, model.ID[Member]], error) {
 	web, err := sessions.Revocation()
 	if err != nil {
 		return nil, err
@@ -30,8 +31,10 @@ func CredentialRevocations(provider Provider, sessions *Sessions, tokens *Tokens
 	if err != nil {
 		return nil, err
 	}
-	return auth.NewRevocations(provider, web, api)
+	return auth.NewRevocations(users, web, api)
 }
+
+// doc-example:end credential-revocations
 
 // NewLogin uses the same provider/model as recovery and the credential guards.
 // Lock is required: issuance rechecks the post-rehash model in its transaction.

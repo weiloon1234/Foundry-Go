@@ -47,7 +47,7 @@ func TestConditionalValidationAfterGeneratedJSONDecoding(t *testing.T) {
 
 func TestGeneratedConditionalConsumerRules(t *testing.T) {
 	rules := validationrules.Rules()
-	base := validationrules.Registration{Kind: validationrules.Business, Email: "Member@Example.test", Company: value.Set("Example"), Tags: []string{"one"}, Website: value.Set("https://example.test")}
+	base := validationrules.Registration{Kind: validationrules.Business, Email: "Member@Example.test", Company: value.Set("Example"), Tags: []string{"one"}}
 	if err := validation.Check(rules, t.Context(), base, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,6 @@ func TestGeneratedConditionalConsumerRules(t *testing.T) {
 		{"personal-company", "/company", func(input *validationrules.Registration) { input.Kind = validationrules.Personal }},
 		{"email", "/email", func(input *validationrules.Registration) { input.Email = "invalid" }},
 		{"tags", "/tags", func(input *validationrules.Registration) { input.Tags = []string{"one", "one"} }},
-		{"website", "/website", func(input *validationrules.Registration) { input.Website = value.Set("/relative") }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			input := base
@@ -85,5 +84,23 @@ func TestGeneratedConditionalConsumerRules(t *testing.T) {
 	info, err := validation.DescribeRule(rules)
 	if err != nil || !info.ServerOnly {
 		t.Fatal("consumer metadata lost server checks")
+	}
+}
+
+func TestGeneratedOptionalWebsiteRules(t *testing.T) {
+	rules := validationrules.WebsiteRules()
+	for _, input := range []validationrules.WebsiteInput{{}, {Website: value.Set("https://example.test")}} {
+		if err := validation.Check(rules, t.Context(), input, validation.DefaultLimits()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	input := validationrules.WebsiteInput{Website: value.Set("/relative")}
+	var failure *validation.Errors
+	if err := validation.Check(rules, t.Context(), input, validation.DefaultLimits()); !errors.As(err, &failure) {
+		t.Fatal(err)
+	}
+	issues := failure.Issues()
+	if len(issues) != 1 || issues[0].Path != "/website" {
+		t.Fatalf("consumer issues: %+v", issues)
 	}
 }

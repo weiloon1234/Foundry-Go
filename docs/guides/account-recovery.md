@@ -10,10 +10,10 @@ The [independent consumer](../../tests/fixtures/consumer/recovering/recovery.go)
 shows ordinary Go models, ORM declarations and typed callbacks. Its model's
 stored password remains `password.Hash`; getters do not replace stored fields.
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go#account-recovery-issue-reset -->
+<!-- compiled-source: tests/fixtures/goway/modelguide/auth_recipes.go#account-recovery-issue-reset -->
 ```go
-func issueReset(ctx context.Context, reset *passwordreset.Reset[Account, int64], account Account) (passwordreset.Issued[Account], error) {
-	return reset.Issue(ctx, AccountIdentity.ReferenceOf(account))
+func issueReset(ctx context.Context, reset *passwordreset.Reset[Account, int64], account model.Reference[Account, int64]) (passwordreset.Issued[Account], error) {
+	return reset.Issue(ctx, account)
 }
 ```
 
@@ -22,10 +22,10 @@ Deliver only to the current locked subject returned by `issued.Subject()`.
 tokens with `passwordreset.ParseToken[Account]` and pass the typed token and
 `password.Plaintext` to `Complete`; completion does not sign the account in.
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go#account-recovery-issue-verification -->
+<!-- compiled-source: tests/fixtures/goway/modelguide/auth_recipes.go#account-recovery-issue-verification -->
 ```go
-func issueVerification(ctx context.Context, verification *emailverification.Verification[Account, int64], account Account) (emailverification.Issued[Account], error) {
-	return verification.Issue(ctx, AccountIdentity.ReferenceOf(account))
+func issueVerification(ctx context.Context, verification *emailverification.Verification[Account, int64], account model.Reference[Account, int64]) (emailverification.Issued[Account], error) {
+	return verification.Issue(ctx, account)
 }
 ```
 
@@ -52,16 +52,18 @@ credential primitives; no additional dependency is installed.
 
 Declare the request body using the framework's actual input types:
 
+<!-- compiled-source: tests/fixtures/consumer/recovering/requests.go#recovery-request-inputs -->
 ```go
-//foundry:dto
+//
+//foundry:dto http=body
 type ResetRequest struct {
-    Token    passwordreset.Token[Member] `json:"token"`
-    Password password.Plaintext          `json:"password"`
+	Token    passwordreset.Token[Member] `json:"token"`
+	Password password.Plaintext          `json:"password" client:"kind=password"`
 }
 
-//foundry:dto
+//foundry:dto http=body
 type VerificationRequest struct {
-    Token emailverification.Token[Member] `json:"token"`
+	Token emailverification.Token[Member] `json:"token"`
 }
 ```
 

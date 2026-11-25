@@ -61,7 +61,11 @@ func TestTokenConsumerLoginRefreshReplayAndCurrentModel(t *testing.T) {
 	persistence := tokenpg.DefaultConfig()
 	persistence.Schema = schema
 	persistence.Clock = now
-	tokens, err := authenticating.APITokens(db, provider, persistence, token.DefaultConfig(keyspace.Namespace{Application: "token-consumer", Environment: "test"}))
+	scopes, err := authenticating.OrderReadScopes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := authenticating.APITokens(db, provider, persistence, token.DefaultConfig(keyspace.Namespace{Application: "token-consumer", Environment: "test"}), scopes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +73,7 @@ func TestTokenConsumerLoginRefreshReplayAndCurrentModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := authenticating.TokenRoutes(tokens, now, func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error) { return proof, nil })
+	router, err := authenticating.TokenRoutes(tokens, now, func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error) { return proof, nil }, scopes)
 	if err != nil {
 		t.Fatal(err)
 	}

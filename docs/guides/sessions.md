@@ -1,5 +1,8 @@
 # Typed persistent sessions
 
+In the examples, `models` is the application's model package. Its models and
+stored references come from the application's declarations and `foundry generate`.
+
 `auth/session` provides model-owned session credentials and a PostgreSQL backend.
 It uses the existing model-first guards and providers. The
 [consumer example](../../tests/fixtures/consumer/authenticating/sessions.go)
@@ -9,15 +12,28 @@ also passed focused races and full native regression. This guide describes crede
 
 ## Construct once, register explicitly
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/session_recipes.go#session-registry -->
 ```go
-backend, err := sessionpg.New(db, sessionpg.DefaultConfig())
-// Check err before continuing. db is an existing *database.DB.
-store, err := session.NewStore(backend, session.DefaultConfig(namespace))
-// Check err; namespace is a keyspace.Namespace for this application/environment.
-web, err := session.New(store, "users.web", users, "users.session")
-// Check err; users is the existing auth.Provider for the handwritten User model.
-guard := web.Guard()
-registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration())
+func sessionRegistry(db *database.DB, namespace keyspace.Namespace, users auth.Provider[models.User, model.ID[models.User]]) (*session.Sessions[models.User, model.ID[models.User]], *auth.Registry, error) {
+	backend, err := sessionpg.New(db, sessionpg.DefaultConfig())
+	if err != nil {
+		return nil, nil, err
+	}
+	store, err := session.NewStore(backend, session.DefaultConfig(namespace))
+	if err != nil {
+		return nil, nil, err
+	}
+	web, err := session.New(store, "users.web", users, "users.session")
+	if err != nil {
+		return nil, nil, err
+	}
+	guard := web.Guard()
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration())
+	if err != nil {
+		return nil, nil, err
+	}
+	return web, registry, nil
+}
 ```
 
 Construction performs no I/O. The pool remains owned by its application provider.
@@ -40,10 +56,17 @@ declaration for registration and resolution.
 
 ## Issue after verified authentication
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/session_recipes.go#remember-session -->
 ```go
-issued, err := web.Issue(ctx, verifiedProof, session.IssueOptions{Remember: true})
-// Check err before passing issued.Secret() to an approved transport boundary.
-info := issued.Info()
+func rememberSession(ctx context.Context, web *session.Sessions[models.User, model.ID[models.User]], verifiedProof auth.Proof[models.User, model.ID[models.User]]) (session.Issued[models.User, model.ID[models.User]], session.Info[models.User, model.ID[models.User]], error) {
+	issued, err := web.Issue(ctx, verifiedProof, session.IssueOptions{Remember: true})
+	if err != nil {
+		return session.Issued[models.User, model.ID[models.User]]{}, session.Info[models.User, model.ID[models.User]]{}, err
+	}
+	info := issued.Info()
+	// Publish issued.Secret() only through an approved transport boundary.
+	return issued, info, nil
+}
 ```
 
 `verifiedProof` has the concrete `auth.Proof[User, model.ID[User]]` type for this
@@ -90,8 +113,11 @@ pending MFA. Pending sessions cannot request remember-me or sliding expiry and
 cannot resolve an ordinary authenticated model. Remember-me selects server-side
 policy here; [browser integration](browser-sessions.md) applies the matching cookie expiry.
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/session_recipes.go#rotate-session -->
 ```go
-rotated, err := web.Rotate(ctx, currentSecret)
+func rotateSession(ctx context.Context, web *session.Sessions[models.User, model.ID[models.User]], currentSecret secret.String) (session.Issued[models.User, model.ID[models.User]], error) {
+	return web.Rotate(ctx, currentSecret)
+}
 ```
 
 Rotation atomically replaces the secret and invalidates the old one. It retains
@@ -112,10 +138,10 @@ stored activity backward; clock synchronization remains an operational concern.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/sessions.go#sessions-listed-sessions -->
 ```go
-func ListedSessions(ctx context.Context, sessions *UserSessions, user models.User) ([]UserSession, error) {
+func ListedSessions(ctx context.Context, sessions *session.Sessions[models.User, model.ID[models.User]], user models.User) ([]session.Info[models.User, model.ID[models.User]], error) {
 	return sessions.List(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user))
 }
-func RevokeListedSession(ctx context.Context, sessions *UserSessions, user models.User, id session.ID[models.User]) (bool, error) {
+func RevokeListedSession(ctx context.Context, sessions *session.Sessions[models.User, model.ID[models.User]], user models.User, id session.ID[models.User]) (bool, error) {
 	return sessions.RevokeID(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), id)
 }
 ```
@@ -172,15 +198,15 @@ future logins. Disable the account or change its credential policy separately.
 of one session binding act as a model of another, or the same, binding (for
 example support staff acting as a customer). `maximum` is at most 24 hours.
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go#sessions-impersonate -->
+<!-- compiled-source: tests/fixtures/goway/modelguide/auth_recipes.go#sessions-impersonate -->
 ```go
-func impersonate(ctx context.Context, web *session.Sessions[Account, int64], customer Account) (session.Issued[Account, int64], error) {
+func impersonate(ctx context.Context, web *session.Sessions[Account, int64], customer model.Reference[Account, int64]) (session.Issued[Account, int64], error) {
 	support, err := session.NewImpersonation(web, web, time.Hour)
 	if err != nil {
 		return session.Issued[Account, int64]{}, err
 	}
 	// The caller must authorize the actor against this target before starting.
-	return support.Start(ctx, AccountIdentity.ReferenceOf(customer), 30*time.Minute)
+	return support.Start(ctx, customer, 30*time.Minute)
 }
 ```
 
@@ -255,11 +281,14 @@ maxBatches)` prunes in batches until a short batch and reports the removed count
 Call it from a [scheduler](scheduler.md) handler; the auth packages do not import
 the scheduler:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/pruning_recipes.go#prune-sessions-hourly -->
 ```go
-cleanup, err := calendar.Hourly("auth.sessions.prune", func(ctx context.Context, _ schedule.Invocation) error {
-	_, err := web.PruneExpired(ctx, 1024, 16)
-	return err
-})
+func pruneSessionsHourly(calendar schedule.Calendar, web *session.Sessions[models.User, model.ID[models.User]]) (schedule.Declaration, error) {
+	return calendar.Hourly("auth.sessions.prune", func(ctx context.Context, _ schedule.Invocation) error {
+		_, err := web.PruneExpired(ctx, 1024, 16)
+		return err
+	})
+}
 ```
 
 Configured applications can instead return `application.PruneSessions(guard)` in

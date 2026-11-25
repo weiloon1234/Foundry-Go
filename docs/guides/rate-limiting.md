@@ -10,22 +10,33 @@ single-process use. Neither becomes a fallback for the other.
 The [independent consumer](../../tests/fixtures/consumer/limiting/members.go)
 contains compiling examples. A declaration retains its exact key type:
 
-```go
-var MemberRequests = ratelimit.Define(
-    "member-requests",
-    keyspace.TextKeys[model.ID[Member]](),
-    ratelimit.PerMinute(60),
-)
+`Member` is the application's model, with an `ID` of type `model.ID[Member]`.
 
-store, err := ratelimit.NewStore(client, ratelimit.DefaultConfig(namespace))
-if err != nil { return err }
-limiter, err := MemberRequests.Bind(store)
-if err != nil { return err }
-decision, err := limiter.Take(ctx, member.ID, 5)
-if err != nil { return err }
-if !decision.Allowed {
-    // RetryAfter is relative to the authority's decision time.
-    return handleBusy(decision.RetryAfter)
+<!-- compiled-source: tests/fixtures/consumer/limiting/members.go#member-limit-declaration -->
+```go
+var MemberRequests = ratelimit.Define("member-requests", keyspace.TextKeys[model.ID[Member]](), ratelimit.PerMinute(60))
+```
+
+<!-- compiled-source: tests/fixtures/consumer/limiting/guide_recipes.go#take-member-quota -->
+```go
+func takeMemberQuota(ctx context.Context, client ratelimit.Backend, namespace keyspace.Namespace, member Member, handleBusy func(time.Duration) error) error {
+	store, err := ratelimit.NewStore(client, ratelimit.DefaultConfig(namespace))
+	if err != nil {
+		return err
+	}
+	limiter, err := MemberRequests.Bind(store)
+	if err != nil {
+		return err
+	}
+	decision, err := limiter.Take(ctx, member.ID, 5)
+	if err != nil {
+		return err
+	}
+	if !decision.Allowed {
+		// RetryAfter is relative to the authority's decision time.
+		return handleBusy(decision.RetryAfter)
+	}
+	return nil
 }
 ```
 
@@ -83,14 +94,30 @@ not an idempotency guarantee.
 
 ## Inspect, clear and attempt
 
+<!-- compiled-source: tests/fixtures/consumer/limiting/guide_recipes.go#inspect-member-quota -->
 ```go
-decision, err := limiter.Peek(ctx, member.ID, 5)       // non-consuming Decision
-remaining, err := limiter.Remaining(ctx, member.ID)    // uint32
-wait, err := limiter.AvailableIn(ctx, member.ID, 5)    // time.Duration, 0 if it fits now
-cleared, err := limiter.Clear(ctx, member.ID)          // bool
-decision, err = limiter.Attempt(ctx, member.ID, 1, func(ctx context.Context) error {
-    return sendVerification(ctx, member)
-})
+func inspectMemberQuota(ctx context.Context, limiter ratelimit.Limiter[model.ID[Member]], member Member, sendVerification func(context.Context, Member) error) (ratelimit.Decision, uint32, time.Duration, bool, error) {
+	decision, err := limiter.Peek(ctx, member.ID, 5)
+	if err != nil {
+		return decision, 0, 0, false, err
+	}
+	remaining, err := limiter.Remaining(ctx, member.ID)
+	if err != nil {
+		return decision, 0, 0, false, err
+	}
+	wait, err := limiter.AvailableIn(ctx, member.ID, 5)
+	if err != nil {
+		return decision, remaining, 0, false, err
+	}
+	cleared, err := limiter.Clear(ctx, member.ID)
+	if err != nil {
+		return decision, remaining, wait, false, err
+	}
+	decision, err = limiter.Attempt(ctx, member.ID, 1, func(ctx context.Context) error {
+		return sendVerification(ctx, member)
+	})
+	return decision, remaining, wait, cleared, err
+}
 ```
 
 `Peek` reports the decision a cost would receive now without consuming capacity
@@ -115,12 +142,15 @@ inspection output with `Decision.ValidatePeek`.
 
 ## HTTP middleware
 
+<!-- compiled-source: tests/fixtures/consumer/limiting/guide_recipes.go#member-rate-middleware -->
 ```go
-middleware := foundryhttp.RateLimit(limiter,
-    func(r *http.Request) (model.ID[Member], error) {
-        return currentMemberID(r.Context())
-    },
-)
+func memberRateMiddleware(limiter ratelimit.Limiter[model.ID[Member]], currentMemberID func(context.Context) (model.ID[Member], error)) foundryhttp.Middleware {
+	return foundryhttp.RateLimit(limiter,
+		func(r *http.Request) (model.ID[Member], error) {
+			return currentMemberID(r.Context())
+		},
+	)
+}
 ```
 
 The resolver is a typed domain boundary. Resolvers that need the authenticated

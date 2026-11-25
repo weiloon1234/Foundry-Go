@@ -9,13 +9,19 @@ Milestone 10 passed native acceptance. See the master roadmap for verification e
 Bind sessions and tokens to the same `auth.Provider[M,K]` declaration used by
 password login and recovery. Each binding contributes a typed revocation action:
 
+<!-- compiled-source: tests/fixtures/consumer/recovering/credentials.go#credential-revocations -->
 ```go
-web, err := sessions.Revocation()
-// Check err: the backend must support joining a transaction.
-api, err := tokens.Revocation()
-// Check err.
-revocations, err := auth.NewRevocations(users, web, api)
-// Check err. Pass revocations.Invalidate as the reset model's Invalidate callback.
+func CredentialRevocations(users auth.Provider[Member, model.ID[Member]], sessions *session.Sessions[Member, model.ID[Member]], tokens *token.Tokens[Member, model.ID[Member]]) (*auth.Revocations[Member, model.ID[Member]], error) {
+	web, err := sessions.Revocation()
+	if err != nil {
+		return nil, err
+	}
+	api, err := tokens.Revocation()
+	if err != nil {
+		return nil, err
+	}
+	return auth.NewRevocations(users, web, api)
+}
 ```
 
 The [consumer composition](../../tests/fixtures/consumer/recovering/credentials.go)
@@ -66,11 +72,16 @@ deleted credential because they use the existing stable credential-subject locks
 An already-authorized in-flight request retains its request snapshot; revocation
 applies to new authorization scopes rather than undoing completed application work.
 
+<!-- compiled-source: tests/fixtures/consumer/recovering/credential_recipes.go#issue-password-session -->
 ```go
-result, err := login.Authenticate(ctx, email, passwordInput)
-// Check err and the required pending/full assurance mode.
-issued, err := sessions.Issue(ctx, result.Proof(), session.IssueOptions{})
-// Check err. The original proof carries the transaction check automatically.
+func issuePasswordSession(ctx context.Context, login *auth.PasswordLogin[Member, model.ID[Member], string], sessions *session.Sessions[Member, model.ID[Member]], email string, passwordInput password.Plaintext) (session.Issued[Member, model.ID[Member]], error) {
+	result, err := login.Authenticate(ctx, email, passwordInput)
+	if err != nil {
+		return session.Issued[Member, model.ID[Member]]{}, err
+	}
+	// Select the required pending or full assurance flow before issuance.
+	return sessions.Issue(ctx, result.Proof(), session.IssueOptions{})
+}
 ```
 
 Do not rebuild a password proof with `auth.NewProof(identity.ReferenceOf(result.Subject()),

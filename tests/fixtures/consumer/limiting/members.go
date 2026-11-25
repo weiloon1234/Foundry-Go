@@ -3,17 +3,24 @@ package limiting
 
 import (
 	"context"
+	stdhttp "net/http"
+	"net/netip"
+
 	"foundry.test/consumer/mutatorqueries"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
-	stdhttp "net/http"
-	"net/netip"
 )
 
+// Member identifies the application model used by these quotas.
+type Member = mutatorqueries.Member
+
 // MemberRequests is shared across explicitly selected member routes and kernels.
-var MemberRequests = ratelimit.Define("member-requests", keyspace.TextKeys[model.ID[mutatorqueries.Member]](), ratelimit.PerMinute(60))
+// doc-example:begin member-limit-declaration
+var MemberRequests = ratelimit.Define("member-requests", keyspace.TextKeys[model.ID[Member]](), ratelimit.PerMinute(60))
+
+// doc-example:end member-limit-declaration
 var LoginIPs = ratelimit.Define("login-ip", keyspace.TextKeys[netip.Addr](), ratelimit.PerMinute(10))
 
 type MemberLimiter = ratelimit.Limiter[model.ID[mutatorqueries.Member]]

@@ -163,6 +163,17 @@ See [generated browser message formatting](client-contracts.md#recipe-browser-me
 <a id="recipe-request-locale"></a>
 ## Resolution and fallback
 
+The application's `localization` package also declares the welcome message:
+
+<!-- compiled-source: tests/fixtures/consumer/localization/messages.go#welcome-message-input -->
+```go
+//
+//foundry:message key=welcome
+type WelcomeArgs struct {
+	Name string `json:"name"`
+}
+```
+
 <!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#request-message -->
 ```go
 func MessageCatalog(services application.Services) (*i18n.Catalog, error) {
@@ -232,18 +243,37 @@ order.
 an authenticated user or a notification recipient — from ordered steps, then the
 catalog default:
 
+This example uses an application-owned recipient:
+
+<!-- compiled-source: tests/fixtures/consumer/localization/resolver_recipes.go#locale-recipient -->
 ```go
-resolver, err := i18n.NewLocaleResolver(catalog,
-    i18n.ContextLocale[*Recipient](),
-    i18n.Preferred("user", func(ctx context.Context, r *Recipient) (i18n.LocaleID, bool, error) {
-        return r.Locale, r.Locale != "", nil // a stored, canonical preference
-    }),
-    i18n.AcceptLanguage(func(r *Recipient) string { return r.AcceptLanguage }),
-)
-resolution, err := resolver.Resolve(ctx, recipient)
-// resolution.Locale is supported; resolution.Source is "context", "user",
-// "accept_language" or "default".
-ctx, resolution, err = resolver.WithResolvedLocale(ctx, recipient)
+// Recipient supplies a saved preference and the request language header.
+type Recipient struct {
+	Locale         i18n.LocaleID
+	AcceptLanguage string
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/localization/resolver_recipes.go#resolve-recipient-locale -->
+```go
+func resolveRecipientLocale(ctx context.Context, catalog *i18n.Catalog, recipient *Recipient) (context.Context, i18n.Resolution, error) {
+	resolver, err := i18n.NewLocaleResolver(catalog,
+		i18n.ContextLocale[*Recipient](),
+		i18n.Preferred("user", func(ctx context.Context, r *Recipient) (i18n.LocaleID, bool, error) {
+			return r.Locale, r.Locale != "", nil
+		}),
+		i18n.AcceptLanguage(func(r *Recipient) string { return r.AcceptLanguage }),
+	)
+	if err != nil {
+		return ctx, i18n.Resolution{}, err
+	}
+	resolution, err := resolver.Resolve(ctx, recipient)
+	if err != nil {
+		return ctx, resolution, err
+	}
+	// WithResolvedLocale also attaches the supported locale to the context.
+	return resolver.WithResolvedLocale(ctx, recipient)
+}
 ```
 
 `ContextLocale` uses a locale recorded by `WithLocale`. `Preferred` adapts an

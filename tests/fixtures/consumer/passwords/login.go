@@ -27,20 +27,23 @@ func Accounts(db database.Executor) AccountProvider {
 	}, func(_ context.Context, account Account) (bool, error) { return account.Enabled, nil })
 }
 
-// NewLogin shares the provider used by session and token guards. MFA policy is
-// supplied by the domain; the multifactor fixture demonstrates stored factors.
+// The adapter uses the same provider as the session and token guards.
+// The application supplies its MFA policy.
 // doc-example:begin password-login
-func NewLogin(db AccountStore, provider AccountProvider, hasher *password.Hasher, requiresMFA func(context.Context, Account) (bool, error)) (*Login, error) {
+func passwordLogin(records AccountTable, db interface {
+	database.Executor
+	database.Transactor
+}, provider auth.Provider[Account, model.ID[Account]], hasher *password.Hasher, requiresMFA func(context.Context, Account) (bool, error)) (*auth.PasswordLogin[Account, model.ID[Account], string], error) {
 	return auth.NewPasswordLogin(provider, hasher, auth.PasswordModel[Account, string]{
 		Lock: func(ctx context.Context, tx *database.Tx, account Account) (value.Optional[Account], error) {
-			return orm.FirstLocked(ctx, tx, orm.Lock(AccountRecords.Query().Where(orm.Eq(AccountRecords.Key(), account.ID))))
+			return orm.FirstLocked(ctx, tx, orm.Lock(records.Query().Where(orm.Eq(records.Key(), account.ID))))
 		},
 		Lookup: func(ctx context.Context, email string) (value.Optional[Account], error) {
-			return orm.First(ctx, db, AccountRecords.Query().Where(orm.Eq(AccountRecords.Email, email)))
+			return orm.First(ctx, db, records.Query().Where(orm.Eq(records.Email, email)))
 		},
 		Hash: func(account Account) password.Hash { return account.Digest },
 		Rehash: func(ctx context.Context, account Account, old, next password.Hash) (value.Optional[Account], error) {
-			updated, err := orm.Update(ctx, db, AccountRecords.Query().Where(orm.Eq(AccountRecords.Digest, old)), AccountRecords.Key(), account.ID, orm.Set(AccountRecords.Digest, next))
+			updated, err := orm.Update(ctx, db, records.Query().Where(orm.Eq(records.Digest, old)), records.Key(), account.ID, orm.Set(records.Digest, next))
 			if errors.Is(err, database.NotFound) {
 				return value.Optional[Account]{}, nil
 			}
@@ -57,4 +60,9 @@ func NewLogin(db AccountStore, provider AccountProvider, hasher *password.Hasher
 
 func Authenticate(ctx context.Context, login *Login, request LoginRequest) (auth.PasswordResult[Account, model.ID[Account]], error) {
 	return login.Authenticate(ctx, request.Email, request.Password)
+}
+
+// NewLogin supplies this application's generated account table to its password adapter.
+func NewLogin(db AccountStore, provider AccountProvider, hasher *password.Hasher, requiresMFA func(context.Context, Account) (bool, error)) (*Login, error) {
+	return passwordLogin(AccountRecords, db, provider, hasher, requiresMFA)
 }

@@ -105,7 +105,11 @@ func TestBrowserRefreshCookieRotatesRevokesOnReplayAndClearsOnLogout(t *testing.
 	persistence := tokenpg.DefaultConfig()
 	persistence.Schema, persistence.Clock = schema, now
 	config := token.DefaultConfig(keyspace.Namespace{Application: "browser-consumer", Environment: "test"})
-	users, err := authenticating.APITokens(db, provider, persistence, config)
+	scopes, err := authenticating.OrderReadScopes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	users, err := authenticating.APITokens(db, provider, persistence, config, scopes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,10 +119,6 @@ func TestBrowserRefreshCookieRotatesRevokesOnReplayAndClearsOnLogout(t *testing.
 		t.Fatal(err)
 	}
 	store, err := token.NewStore(backend, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	scopes, err := authenticating.OrderReadScopes()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,11 +135,11 @@ func TestBrowserRefreshCookieRotatesRevokesOnReplayAndClearsOnLogout(t *testing.
 	verify := func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error) { return proof, nil }
 	csrf := foundryhttp.CSRFConfig{}
 	userCookie, adminCookie := foundryhttp.DefineRefreshCookie("__Host-refresh-user", csrf), foundryhttp.DefineRefreshCookie("__Host-refresh-admin", csrf)
-	userRoutes, err := authenticating.BrowserTokenRoutes(users, now, verify, userCookie, "web")
+	userRoutes, err := authenticating.BrowserTokenRoutes(users, now, verify, userCookie, "web", scopes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	adminRoutes, err := authenticating.BrowserTokenRoutes(admins, now, verify, adminCookie, "admin")
+	adminRoutes, err := authenticating.BrowserTokenRoutes(admins, now, verify, adminCookie, "admin", scopes)
 	if err != nil {
 		t.Fatal(err)
 	}

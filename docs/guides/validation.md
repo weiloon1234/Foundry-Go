@@ -29,12 +29,17 @@ Validation leaves input values unchanged.
 The [consumer HTTP validation fixture](../../tests/fixtures/consumer/httpvalidation/validation.go)
 adds rules to an existing typed endpoint:
 
+`dto`, `routes`, and `filters` below are application packages containing the request,
+response, path and query declarations. Pass the application endpoint explicitly.
+
 <!-- compiled-source: tests/fixtures/consumer/httpvalidation/validation.go#validate-http-body -->
 ```go
-var Update = foundryhttp.ValidateBody(httpendpoints.Update,
-	validation.Rules(validation.WithLabel(httpdto.UpdateUserValidationFields().Email, "Email address"), validation.Optional(validation.NonBlank[string]())),
-	validation.Rules(validation.WithLabel(httpdto.UpdateUserValidationFields().Nickname, "Display name"), validation.Optional(validation.Nullable(validation.MinLength[string](2)))),
-)
+func validatedUpdate(endpoint foundryhttp.Endpoint[routes.UserPath, filters.NearbyInput, dto.UpdateUser, dto.UserResponse]) foundryhttp.Endpoint[routes.UserPath, filters.NearbyInput, dto.UpdateUser, dto.UserResponse] {
+	return foundryhttp.ValidateBody(endpoint,
+		validation.Rules(validation.WithLabel(dto.UpdateUserValidationFields().Email, "Email address"), validation.Optional(validation.NonBlank[string]())),
+		validation.Rules(validation.WithLabel(dto.UpdateUserValidationFields().Nickname, "Display name"), validation.Optional(validation.Nullable(validation.MinLength[string](2)))),
+	)
+}
 ```
 
 `Email` remains `value.Optional[string]`; `Nickname` remains
@@ -85,10 +90,14 @@ validate declarations; `validation.CheckProhibitions` runs the prohibition phase
 Use `validation.Rules[Request, string]` or `validation.Check[Request]` as
 function values. To replace a bound method value, capture the descriptor once:
 
+<!-- compiled-source: tests/fixtures/consumer/validationrules/guide_recipes.go#bind-validation-rule -->
 ```go
-bound := rule
-check := func(ctx context.Context, input Request, limits validation.Limits) error {
-    return validation.Check(bound, ctx, input, limits)
+func bindRegistrationCheck(rule validation.Rule[Registration]) func(context.Context, Registration, validation.Limits) error {
+	bound := rule
+	check := func(ctx context.Context, input Registration, limits validation.Limits) error {
+		return validation.Check(bound, ctx, input, limits)
+	}
+	return check
 }
 ```
 
@@ -223,15 +232,29 @@ the carried value.
 
 A custom rule publishes its bounds by composing built-in rules, which clients
 read as [field limits](client-forms.md#recipe-field-facts) and the server enforces, so
-a published bound is always applied:
+a published bound is always applied.
 
+Declare the application message and generate `UsernameArgsMessage`. The validator supplies the bound field label as `attribute`:
+
+<!-- compiled-source: tests/fixtures/consumer/validationrules/username.go#username-message-arguments -->
 ```go
-func Username() validation.Rule[string] {
-	format := validation.WithTranslation(validation.Custom(spec, check), UsernameArgsMessage(), args)
+// UsernameArgs supplies the field label to the application's username-format message.
+//
+//foundry:message key=validation.username
+type UsernameArgs struct {
+	Attribute string `json:"attribute"`
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/validationrules/guide_recipes.go#publish-username-bounds -->
+```go
+func Username(spec validation.Spec, check func(context.Context, string) (bool, error)) validation.Rule[string] {
+	format := validation.WithTranslation(validation.Custom(spec, check), UsernameArgsMessage(), UsernameArgs{})
 	return validation.Bail(validation.NonBlank[string](), validation.LengthBetween[string](5, 24), format)
 }
 ```
 
+Supply the custom specification and format check to `Username`.
 `WithTranslation` wraps the custom leaf, not the composition. A bound failure
 then reports the built-in code and message (`foundry.min_length`), and the custom
 message remains for the format. A bound counts the submitted text, before any
@@ -259,25 +282,41 @@ validation does not cause domain side effects.
 
 The independent `validationrules` consumer composes generated fields:
 
-```go
-fields := RegistrationValidationFields()
-business := validation.Rules(fields.Kind, validation.OneOf(Business))
+Declare the application enum and request once, then generate their selectors:
 
-rules := validation.All(
-    validation.Rules(fields.Kind, validation.Enum(Business.EnumDescriptor())),
-    validation.Rules(fields.Email, validation.Email[string]()),
-    validation.When(business, validation.Rules(fields.Company, validation.Bail(
-        validation.Present[string](),
-        validation.Optional(validation.NonBlank[string]()),
-    ))),
-    validation.Unless(business, validation.Rules(fields.Company, validation.Absent[string]())),
-    validation.Rules(fields.Tags,
-        validation.MinItems[[]string](1),
-        validation.MaxItems[[]string](8),
-        validation.Distinct[[]string](),
-        validation.Each[[]string](validation.NonBlank[string]()),
-    ),
+<!-- compiled-source: tests/fixtures/consumer/validationrules/rules.go#registration-input -->
+```go
+//
+//foundry:enum
+type OrganizationKind string
+
+const (
+	Personal OrganizationKind = "personal"
+	Business OrganizationKind = "business"
 )
+
+//foundry:dto
+type Registration struct {
+	Kind    OrganizationKind       `json:"kind"`
+	Email   string                 `json:"email"`
+	Company value.Optional[string] `json:"company,omitzero"`
+	Tags    []string               `json:"tags"`
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/validationrules/rules.go#conditional-registration-rules -->
+```go
+func registrationRules() validation.Rule[Registration] {
+	fields := RegistrationValidationFields()
+	business := validation.Rules(fields.Kind, validation.OneOf(Business))
+	return validation.All(
+		validation.Rules(fields.Kind, validation.Enum(Business.EnumDescriptor())),
+		validation.Rules(fields.Email, validation.Email[string]()),
+		validation.When(business, validation.Rules(fields.Company, validation.Bail(validation.Present[string](), validation.Optional(validation.NonBlank[string]())))),
+		validation.Unless(business, validation.Rules(fields.Company, validation.Absent[string]())),
+		validation.Rules(fields.Tags, validation.MinItems[[]string](1), validation.MaxItems[[]string](8), validation.Distinct[[]string](), validation.Each[[]string](validation.NonBlank[string]())),
+	)
+}
 ```
 
 `Company` is `value.Optional[string]`. `Absent` rejects every supplied value,
@@ -341,9 +380,24 @@ For concrete temporal fields, `Before`, `BeforeOrEqual`, `After` and
 `AfterOrEqual` take same-type bounds. `BeforeField` and `AfterOrEqualField`
 compare generated fields directly:
 
+The application declares both temporal fields on one DTO:
+
+<!-- compiled-source: tests/fixtures/consumer/validationrules/window.go#window-input -->
 ```go
-fields := AvailabilityWindowValidationFields()
-rules := validation.BeforeField(fields.Start, fields.End)
+//
+//foundry:dto
+type AvailabilityWindow struct {
+	Start temporal.DateTime `json:"start"`
+	End   temporal.DateTime `json:"end"`
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/validationrules/window.go#compare-window-fields -->
+```go
+func WindowRules() validation.Rule[AvailabilityWindow] {
+	fields := AvailabilityWindowValidationFields()
+	return validation.BeforeField(fields.Start, fields.End)
+}
 ```
 
 Both fields retain `temporal.DateTime`. Mixing a date, local wall time or instant
@@ -361,9 +415,13 @@ value and do not read the current clock.
 
 Relative rules read the clock at every check:
 
+<!-- compiled-source: tests/fixtures/consumer/validationrules/guide_recipes.go#relative-time-rules -->
 ```go
-future := validation.AfterNow[temporal.DateTime](services.Time())
-dueDate := validation.AfterOrEqualToday[temporal.Date](services.Time())
+func relativeTimeRules(services application.Services) (validation.Rule[temporal.DateTime], validation.Rule[temporal.Date]) {
+	future := validation.AfterNow[temporal.DateTime](services.Time())
+	dueDate := validation.AfterOrEqualToday[temporal.Date](services.Time())
+	return future, dueDate
+}
 ```
 
 `AfterNow`, `BeforeNow` and `BeforeOrEqualNow` accept
@@ -384,17 +442,7 @@ rules are server-only and have their own message keys, such as
 For presence-sensitive input, use the existing `Optional` and `Nullable` field
 types. The rule retains those types and distinguishes their states:
 
-```go
-fields := PresenceInputValidationFields()
-
-rules := validation.All(
-    validation.Rules(fields.Label, validation.Required(validation.MaxLength[string](40))),
-    validation.Rules(fields.Nickname, validation.RequiredNullable(validation.MinLength[string](2))),
-    validation.Rules(fields.Count, validation.Required(validation.Min(0))),
-    validation.Rules(fields.Active, validation.Required[bool]()),
-    validation.Rules(fields.Forbidden, validation.ProhibitedNullable[string]()),
-)
-```
+See the compiled [presence-sensitive DTO and rules](http-presence.md#recipe-presence).
 
 `Required` accepts `Optional[T]`; `RequiredNullable` accepts
 `Optional[Nullable[T]]`. Both reject omission and empty content; the nullable
@@ -484,6 +532,46 @@ automatically from `JSONContract()` when the type also implements
 `NonEmpty: true` means the framework will reject `""` on every JSON, query,
 path, multipart text and header boundary before calling the application's codec:
 
+The application scalar and its text/JSON codec are:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/codec_required.go#sku-scalar-codec -->
+```go
+type AppSKU string
+
+func (s AppSKU) MarshalText() ([]byte, error) {
+	if !strings.HasPrefix(string(s), "SKU-") || len(s) < 5 {
+		return nil, fault.Invalid
+	}
+	return []byte(s), nil
+}
+
+func (s *AppSKU) UnmarshalText(data []byte) error {
+	text := string(data)
+	if !strings.HasPrefix(text, "SKU-") || len(text) < 5 {
+		return fault.Invalid
+	}
+	*s = AppSKU(text)
+	return nil
+}
+
+func (s AppSKU) MarshalJSON() ([]byte, error) {
+	text, err := s.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(text))
+}
+
+func (s *AppSKU) UnmarshalJSON(data []byte) error {
+	var text string
+	if err := json.Unmarshal(data, &text); err != nil {
+		return fault.Invalid
+	}
+	return s.UnmarshalText([]byte(text))
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/codec_required.go#nonempty-sku-contract -->
 ```go
 func (AppSKU) JSONContract() contract.JSON[AppSKU] {
 	typ := reflect.TypeFor[AppSKU]()
@@ -567,13 +655,16 @@ and dimensions, see [upload kind validation](http-uploads.md#match-extension-and
 
 Import `validation/imaging` as `imagingvalidation`:
 
+<!-- compiled-source: tests/fixtures/consumer/validationrules/upload_recipes.go#avatar-upload-rules -->
 ```go
-avatar := validation.Bail(
-    validation.FileMaxSize[foundryhttp.UploadedFile](5 << 20),
-    validation.FileContentTypes[foundryhttp.UploadedFile]("image/png", "image/jpeg"),
-    imagingvalidation.Dimensions[foundryhttp.UploadedFile](imaging.DefaultLimits(),
-        validation.DimensionConstraints{MinWidth: 128, MaxWidth: 4096, RatioWidth: 1, RatioHeight: 1}),
-)
+func avatarUploadRules() validation.Rule[foundryhttp.UploadedFile] {
+	return validation.Bail(
+		validation.FileMaxSize[foundryhttp.UploadedFile](5<<20),
+		validation.FileContentTypes[foundryhttp.UploadedFile]("image/png", "image/jpeg"),
+		imagingvalidation.Dimensions[foundryhttp.UploadedFile](imaging.DefaultLimits(),
+			validation.DimensionConstraints{MinWidth: 128, MaxWidth: 4096, RatioWidth: 1, RatioHeight: 1}),
+	)
+}
 ```
 
 The rule reads at most `Limits.InputBytes` of the captured file and uses
@@ -584,9 +675,12 @@ open/read failures are execution failures. `validation.Dimensions` accepts any
 
 To include the configured native codecs, borrow the application's image engine:
 
+<!-- compiled-source: tests/fixtures/consumer/validationrules/upload_recipes.go#engine-upload-dimensions -->
 ```go
-dimensions := imagingvalidation.DimensionsWithEngine[foundryhttp.UploadedFile](engine,
-    validation.DimensionConstraints{MaxWidth: 4096, MaxHeight: 4096})
+func engineUploadDimensions(engine *imaging.Engine) validation.Rule[foundryhttp.UploadedFile] {
+	return imagingvalidation.DimensionsWithEngine[foundryhttp.UploadedFile](engine,
+		validation.DimensionConstraints{MaxWidth: 4096, MaxHeight: 4096})
+}
 ```
 
 This uses the engine's inspection, limits and lifecycle, including HEIF, JPEG XL
@@ -685,13 +779,13 @@ from trusted route or actor data, never from an untrusted body field alone.
 `databasevalidation.Scoped(db, scope, field)` derives the whole model scope at
 every check, for example from typed request metadata:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#validation-enabled-accounts -->
+<!-- compiled-source: tests/fixtures/goway/modelguide/auth_recipes.go#validation-enabled-accounts -->
 ```go
-func enabledAccounts(db database.Executor, enabled func(context.Context) (bool, error)) validation.Rule[int64] {
+func enabledAccounts(db database.Executor, enabled func(context.Context) (bool, error), accounts AccountTable) validation.Rule[int64] {
 	lookup := databasevalidation.Scoped(db, func(ctx context.Context) (orm.Query[Account], error) {
 		value, err := enabled(ctx)
-		return Accounts.Query().Where(orm.Eq(Accounts.Enabled, value)), err
-	}, Accounts.Key())
+		return accounts.Query().Where(orm.Eq(accounts.Enabled, value)), err
+	}, accounts.Key())
 	return validation.Exists(lookup)
 }
 ```

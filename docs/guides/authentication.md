@@ -1,5 +1,8 @@
 # Model-first authentication
 
+In the examples, `models` is the application's model package. Its models and
+stored references come from the application's declarations and `foundry generate`.
+
 Typed providers, guards, permissions and policies resolve concrete models once per request. HTTP adapters retain model and resource ownership through ordinary, signed and native handlers.
 
 Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
@@ -27,19 +30,9 @@ Declare the account with the model directive. Its generated `FoundryIdentity`
 method satisfies the subject identity contract; the provider reuses the stored
 key codec.
 
-<!-- compiled-source: tests/fixtures/goway/modelguide/account.go -->
+<!-- compiled-source: tests/fixtures/goway/modelguide/account.go#account-provider -->
 ```go
-package modelguide
-
-import (
-	"context"
-
-	"github.com/weiloon1234/Foundry-Go/auth"
-	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/value"
-)
-
+//
 //foundry:model table=guide_accounts var=Accounts key=ID
 type Account struct {
 	ID      int64
@@ -47,7 +40,7 @@ type Account struct {
 }
 
 func AccountProvider(db database.Executor) auth.Provider[Account, int64] {
-	return auth.DefineProvider("accounts", accountsIdentity.Reference(0),
+	return auth.DefineProvider("accounts", (Account{}).FoundryReference(),
 		func(ctx context.Context, id int64) (value.Optional[Account], error) {
 			return orm.Find(ctx, db, Accounts.Table, id)
 		}, func(_ context.Context, account Account) (bool, error) { return account.Enabled, nil })
@@ -77,7 +70,7 @@ permission callbacks in the registry. Keep names stable across deployments.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#register-guards -->
 ```go
-func AccountGuards(provider UserProvider, token UserStrategy, session UserStrategy) (*auth.Registry, auth.Guard[models.User], auth.Guard[models.User], error) {
+func AccountGuards(provider auth.Provider[models.User, model.ID[models.User]], token auth.Strategy[models.User, model.ID[models.User]], session auth.Strategy[models.User, model.ID[models.User]]) (*auth.Registry, auth.Guard[models.User], auth.Guard[models.User], error) {
 	api := auth.DefineGuard("users.api", provider, token)
 	web := auth.DefineGuard("users.web", provider, session)
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), api.Registration(), web.Registration(), ReadOrder.Registration(), ViewAccount.Registration())
@@ -115,24 +108,33 @@ eligibility still apply. `token.Tokens` binds redeemed tickets this way.
 
 ## Request scopes and ownership
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/scope_recipes.go#manual-request-scope -->
 ```go
-registry, err := auth.NewRegistry(auth.DefaultConfig(),
-    api.Registration(), web.Registration(), readOrder.Registration())
-// Check err before use.
-scope, err := registry.NewScope(ctx, credentials)
-// Check err before use.
-defer scope.Close()
-ctx = scope.Context()
-user, err := api.Require(ctx)
+func manualRequestScope(ctx context.Context, api, web auth.Guard[models.User], credentials auth.Credentials, readOrder auth.Policy[models.User, models.Order]) (models.User, error) {
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), api.Registration(), web.Registration(), readOrder.Registration())
+	if err != nil {
+		return models.User{}, err
+	}
+	scope, err := registry.NewScope(ctx, credentials)
+	if err != nil {
+		return models.User{}, err
+	}
+	defer scope.Close()
+	ctx = scope.Context()
+	return api.Require(ctx)
+}
 ```
 
 With configured `application.New` assembly, contribute policies, permissions and
 hooks to the application-owned registry instead of building one:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/scope_recipes.go#configured-authorization -->
 ```go
-app, err := application.New(settings).Register(application.Authorization("app.authorization",
-    application.Authorize(ViewAccount), application.Authorize(readOrder),
-)).Build(ctx)
+func configuredAuthorization(ctx context.Context, settings application.Settings, readOrder auth.Policy[models.User, models.Order]) (*application.App, error) {
+	return application.New(settings).Register(application.Authorization("app.authorization",
+		application.Authorize(ViewAccount), application.Authorize(readOrder),
+	)).Build(ctx)
+}
 ```
 
 `application.NewBrowserGuard` and `application.NewTokenGuard` derive their
@@ -206,21 +208,29 @@ and maps to HTTP 403. To publish the code, wrap it in a declared endpoint error.
 Hooks run around every policy and permission for their model type in a registry
 that contains them:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/scope_recipes.go#policy-hooks -->
 ```go
-superAdmin := auth.DefineBefore("users.super_admin",
-    func(ctx context.Context, user User, policy auth.PolicyName) (auth.Verdict, error) {
-        if user.SuperAdmin {
-            return auth.Allow, nil
-        }
-        return auth.Abstain, nil
-    })
-readOnly := auth.DefineAfter("users.read_only",
-    func(ctx context.Context, user User, policy auth.PolicyName) (auth.Verdict, error) {
-        if readOnlyMode.Load() && policy != "orders.read" {
-            return auth.Deny, nil
-        }
-        return auth.Abstain, nil
-    })
+func policyHooks(isSuperAdmin func(context.Context, models.User) (bool, error), readOnlyMode *atomic.Bool) (auth.Before[models.User], auth.After[models.User]) {
+	superAdmin := auth.DefineBefore("users.super_admin",
+		func(ctx context.Context, user models.User, _ auth.PolicyName) (auth.Verdict, error) {
+			allowed, err := isSuperAdmin(ctx, user)
+			if err != nil {
+				return auth.Abstain, err
+			}
+			if allowed {
+				return auth.Allow, nil
+			}
+			return auth.Abstain, nil
+		})
+	readOnly := auth.DefineAfter("users.read_only",
+		func(_ context.Context, _ models.User, policy auth.PolicyName) (auth.Verdict, error) {
+			if readOnlyMode.Load() && policy != "orders.read" {
+				return auth.Deny, nil
+			}
+			return auth.Abstain, nil
+		})
+	return superAdmin, readOnly
+}
 ```
 
 `Before` hooks run in registration order; the first `Allow` or `Deny` decides
@@ -241,7 +251,7 @@ present.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#bind-token-guard -->
 ```go
-func TokenBinding(tokens *UserTokens) (foundryhttp.GuardBinding[models.User], error) {
+func TokenBinding(tokens *token.Tokens[models.User, model.ID[models.User]]) (foundryhttp.GuardBinding[models.User], error) {
 	guard := tokens.Guard()
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration(), ViewAccount.Registration(), ReadOrder.Registration())
 	if err != nil {
@@ -321,7 +331,7 @@ an error from the authority never becomes an allow decision.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/permissions.go#configure-permission -->
 ```go
-func PermissionProfile(endpoint ProfileEndpoint) ProfileEndpoint {
+func PermissionProfile(endpoint http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent]) http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent] {
 	return http.ConfigureAuthenticated(endpoint, http.Permissions(ViewAccount))
 }
 ```
@@ -344,7 +354,7 @@ contain the exact permission declarations, including those in later branches.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/any_of.go#editorial-alternatives -->
 ```go
-func EditorialProfile(endpoint ProfileEndpoint, writeScopes, approveScopes auth.AccessScopes[models.User], write, approve auth.Permission[models.User]) ProfileEndpoint {
+func EditorialProfile(endpoint http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent], writeScopes, approveScopes auth.AccessScopes[models.User], write, approve auth.Permission[models.User]) http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent] {
 	return http.ConfigureAuthenticated(endpoint, http.AnyOf(
 		http.AllOf(http.Scopes(writeScopes), http.Permissions(write)),
 		http.AllOf(http.Scopes(approveScopes), http.Permissions(approve)),
@@ -404,19 +414,26 @@ Share the stored-model provider with token and session authentication. The
 locked verification and compare-and-swap rehashing. Hash provisioning passwords
 before opening persistence transactions; see [password hashing](password-hashing.md).
 
+The password recipe accepts the application's generated `AccountTable` binding as
+`records`. Its `Account` declaration and password fields are shown in the
+[password-hashing guide](password-hashing.md).
+
 <!-- compiled-source: tests/fixtures/consumer/passwords/login.go#password-login -->
 ```go
-func NewLogin(db AccountStore, provider AccountProvider, hasher *password.Hasher, requiresMFA func(context.Context, Account) (bool, error)) (*Login, error) {
+func passwordLogin(records AccountTable, db interface {
+	database.Executor
+	database.Transactor
+}, provider auth.Provider[Account, model.ID[Account]], hasher *password.Hasher, requiresMFA func(context.Context, Account) (bool, error)) (*auth.PasswordLogin[Account, model.ID[Account], string], error) {
 	return auth.NewPasswordLogin(provider, hasher, auth.PasswordModel[Account, string]{
 		Lock: func(ctx context.Context, tx *database.Tx, account Account) (value.Optional[Account], error) {
-			return orm.FirstLocked(ctx, tx, orm.Lock(AccountRecords.Query().Where(orm.Eq(AccountRecords.Key(), account.ID))))
+			return orm.FirstLocked(ctx, tx, orm.Lock(records.Query().Where(orm.Eq(records.Key(), account.ID))))
 		},
 		Lookup: func(ctx context.Context, email string) (value.Optional[Account], error) {
-			return orm.First(ctx, db, AccountRecords.Query().Where(orm.Eq(AccountRecords.Email, email)))
+			return orm.First(ctx, db, records.Query().Where(orm.Eq(records.Email, email)))
 		},
 		Hash: func(account Account) password.Hash { return account.Digest },
 		Rehash: func(ctx context.Context, account Account, old, next password.Hash) (value.Optional[Account], error) {
-			updated, err := orm.Update(ctx, db, AccountRecords.Query().Where(orm.Eq(AccountRecords.Digest, old)), AccountRecords.Key(), account.ID, orm.Set(AccountRecords.Digest, next))
+			updated, err := orm.Update(ctx, db, records.Query().Where(orm.Eq(records.Digest, old)), records.Key(), account.ID, orm.Set(records.Digest, next))
 			if errors.Is(err, database.NotFound) {
 				return value.Optional[Account]{}, nil
 			}
@@ -448,10 +465,20 @@ guard result: no additional provider lookup, read getter or Actor hydration runs
 The identity comes from the verified result, not from later mutations to a returned
 model. An inherited system/model origin cannot replace the selected guard.
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/scope_recipes.go#attributed-operation -->
 ```go
-ctx, err = api.WithAttribution(ctx) // CLI/worker scope already explicitly verified.
-// Check err. Existing audit.RecordFor and Topic.Enqueue read this attribution.
-origin, err := api.Origin(ctx)     // Capture metadata for later processing.
+func attributedOperation(ctx context.Context, api auth.Guard[models.User]) (context.Context, attribution.Origin, error) {
+	ctx, err := api.WithAttribution(ctx) // CLI/worker scope already explicitly verified.
+	if err != nil {
+		return ctx, attribution.Origin{}, err
+	}
+	// Existing audit.RecordFor and Topic.Enqueue read this attribution.
+	origin, err := api.Origin(ctx)
+	if err != nil {
+		return ctx, attribution.Origin{}, err
+	}
+	return ctx, origin, nil
+}
 ```
 
 [A matching consumer example](../../tests/fixtures/consumer/authenticating/attribution.go)
@@ -473,13 +500,19 @@ creates an ordinary production scope and closes it through test cleanup.
 model. Both retain real verifier, eligibility and policy behavior; no model is
 injected directly into the auth cache.
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/test_scope_recipes.go#test-credential-scope -->
 ```go
-scope := authtest.Scope(t, registry,
-    auth.Credential{Name: "api.bearer", Secret: issued.Secret()},
-)
-user := authtest.Require(t, scope, api)
-// Check resource policy independently; authentication is not authorization.
-err := readOrder.Authorize(scope.Context(), api, order)
+func requireOrderInTest(t testing.TB, registry *auth.Registry, api auth.Guard[models.User], issued session.Issued[models.User, model.ID[models.User]], order models.Order) models.User {
+	scope := authtest.Scope(t, registry,
+		auth.Credential{Name: api.Source(), Secret: issued.Secret()},
+	)
+	user := authtest.Require(t, scope, api)
+	// Check resource policy independently; authentication is not authorization.
+	if err := ReadOrder.Authorize(scope.Context(), api, order); err != nil {
+		t.Fatal(err)
+	}
+	return user
+}
 ```
 
 Use the declared strategy's actual credential source name. For expected rejection
@@ -497,17 +530,28 @@ uses the helpers alongside its existing guard and permission declarations. The t
 
 Configure scopes, permissions and ordinary endpoint options, then call `SignedAuthenticated`:
 
+The application owns the path type. Pass its endpoint and resource resolver explicitly:
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/composed_routes.go#order-path -->
 ```go
-secured := http.RequireAuthentication(endpoint, authentication, api)
-secured = http.ConfigureAuthenticated(secured, http.Permissions(ViewAccount))
-signed := http.SignedAuthenticated(secured, signer)
-binding := http.ForSignedAuthenticatedBinding(signed)
-bound := modelbinding.BindAuthenticated(binding, orders)
-registration := bound.Handle(func(ctx context.Context, user User,
-    in modelbinding.Input[OrderPath, http.NoQuery, http.NoBody, Order],
-) (http.NoContent, error) {
-    return http.NoContent{}, readOrder.Authorize(ctx, api, in.Model)
-})
+// OrderPath carries the application order key parsed from the route.
+type OrderPath struct{ Order model.ID[models.Order] }
+```
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#signed-bound-order -->
+```go
+func signedBoundOrder(endpoint http.Endpoint[OrderPath, http.NoQuery, http.NoBody, http.NoContent], authentication *http.Authentication, api auth.Guard[models.User], signer http.URLSigner, orders modelbinding.Resolver[OrderPath, models.Order]) http.RouteRegistration {
+	secured := http.RequireAuthentication(endpoint, authentication, api)
+	secured = http.ConfigureAuthenticated(secured, http.Permissions(ViewAccount))
+	signed := http.SignedAuthenticated(secured, signer)
+	binding := http.ForSignedAuthenticatedBinding(signed)
+	bound := modelbinding.BindAuthenticated(binding, orders)
+	return bound.Handle(func(ctx context.Context, user models.User,
+		in modelbinding.Input[OrderPath, http.NoQuery, http.NoBody, models.Order],
+	) (http.NoContent, error) {
+		return http.NoContent{}, ReadOrder.Authorize(ctx, api, in.Model)
+	})
+}
 ```
 
 `SignedAuthenticatedEndpoint[P,Q,B,S,R]` keeps the handler subject separate from
@@ -534,14 +578,17 @@ resources never produce partially populated models for a handler.
 
 For native `net/http` integration, bind authentication to the typed route itself:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#authenticated-raw-route -->
 ```go
-secured := http.RequireRouteAuthentication(route, authentication, api)
-secured = http.ConfigureAuthenticatedRoute(secured, http.Permissions(ViewAccount))
-registration := http.HandleAuthenticatedRaw(secured, func(w stdhttp.ResponseWriter,
-    r *stdhttp.Request, user User, path OrderPath,
-) {
-    // Native request/response handling; user and path remain concrete.
-})
+func authenticatedRawRoute(route http.Route[OrderPath], authentication *http.Authentication, api auth.Guard[models.User], handle func(stdhttp.ResponseWriter, *stdhttp.Request, models.User, OrderPath)) http.RouteRegistration {
+	secured := http.RequireRouteAuthentication(route, authentication, api)
+	secured = http.ConfigureAuthenticatedRoute(secured, http.Permissions(ViewAccount))
+	return http.HandleAuthenticatedRaw(secured, func(w stdhttp.ResponseWriter,
+		r *stdhttp.Request, user models.User, path OrderPath,
+	) {
+		handle(w, r, user, path)
+	})
+}
 ```
 
 `OptionalRouteAuthentication` supplies `value.Optional[User]` and requires a Public
@@ -571,21 +618,46 @@ guard, access scopes and permissions, inside the request's auth scope, and reads
 the concrete model with `guard.Require(r.Context())` (or `Optional`) from the
 scope cache, without another provider lookup:
 
+The application owns its tenant identifier and request metadata helper:
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#tenant-request-metadata -->
 ```go
-tenant := http.DefineMiddleware("app.tenant", func(next stdhttp.Handler) (stdhttp.Handler, error) {
-    return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-        user, err := api.Require(r.Context())
-        if err != nil {
-            _ = http.WriteError(w, r, err)
-            return
-        }
-        next.ServeHTTP(w, r.WithContext(tenancy.With(r.Context(), user.TenantID)))
-    }), nil
-})
-limiter, err := ratelimit.Define("api.users", http.ActorKeys(), ratelimit.PerMinute(120)).Bind(store)
-// Check err.
-route := http.RequireAuthentication(endpoint, transport, api,
-    http.ActorMiddleware[User](http.RateLimitByActor(limiter, api), tenant))
+// TenantID identifies the tenant selected by application authorization.
+type TenantID string
+
+type tenantContextKey struct{}
+
+// WithTenant attaches the selected tenant to this request.
+func WithTenant(ctx context.Context, tenant TenantID) context.Context {
+	return context.WithValue(ctx, tenantContextKey{}, tenant)
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#actor-middleware-order -->
+```go
+func actorMiddlewareOrder(endpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, http.NoContent], transport *http.Authentication, api auth.Guard[models.User], store *ratelimit.Store, tenantOf func(context.Context, models.User) (TenantID, error)) (http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent], error) {
+	tenant := http.DefineMiddleware("app.tenant", func(next stdhttp.Handler) (stdhttp.Handler, error) {
+		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+			user, err := api.Require(r.Context())
+			if err != nil {
+				_ = http.WriteError(w, r, err)
+				return
+			}
+			tenantID, err := tenantOf(r.Context(), user)
+			if err != nil {
+				_ = http.WriteError(w, r, err)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(WithTenant(r.Context(), tenantID)))
+		}), nil
+	})
+	limiter, err := ratelimit.Define("api.users", http.ActorKeys(), ratelimit.PerMinute(120)).Bind(store)
+	if err != nil {
+		return http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent]{}, err
+	}
+	return http.RequireAuthentication(endpoint, transport, api,
+		http.ActorMiddleware[models.User](http.RateLimitByActor(limiter, api), tenant)), nil
+}
 ```
 
 `RateLimitByActor` keys a quota by a digest of the authenticated model identity,
@@ -593,7 +665,8 @@ so users behind one address do not share a budget. On optional routes, anonymous
 requests fall back to the client IP (IPv4 per address, IPv6 per /64;
 `RateLimitByActorWith` changes the grouping). Installed with `Use`,
 before authentication, it fails the request instead of silently limiting by IP.
-`tenancy.With` above stands for the application's typed request metadata.
+`WithTenant` above is application code, not a framework service.
+The injected `tenantOf` callback resolves the tenant from the authenticated user.
 
 ## The current credential
 
@@ -670,7 +743,9 @@ not declare `ticket`.
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/ticket_route.go#ticket-authentication -->
 ```go
-return http.TicketAuthenticated(endpoint, binding, tokens)
+func ticketAuthentication(endpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, http.Download], binding http.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]]) http.TicketEndpoint[http.NoPath, http.NoQuery, http.NoBody, Operator, http.Download] {
+	return http.TicketAuthenticated(endpoint, binding, tokens)
+}
 ```
 
 Issue a ticket inside an authenticated token scope, then deliver its URL through
@@ -679,7 +754,9 @@ boundary; ordinary formatting of `secret.String` never reveals the ticket.
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/ticket_route.go#authentication-example-3 -->
 ```go
-return MemberTicketEndpoint(binding, tokens).URL(ctx, http.NoPath{}, http.NoQuery{}, ticket)
+func ticketURL(ctx context.Context, endpoint http.TicketEndpoint[http.NoPath, http.NoQuery, http.NoBody, Operator, http.Download], ticket secret.String) (string, error) {
+	return endpoint.URL(ctx, http.NoPath{}, http.NoQuery{}, ticket)
+}
 ```
 
 The route reads only its ticket. Authorization headers and cookies do not

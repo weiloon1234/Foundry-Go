@@ -1,5 +1,8 @@
 # Typed credential access scopes
 
+In the examples, `models` is the application's model package. Its models and
+stored references come from the application's declarations and `foundry generate`.
+
 Access scopes place a typed ceiling on a credential and compose with current-model policies. See [tokens](tokens.md) for persistence and refresh rotation.
 
 Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
@@ -40,8 +43,11 @@ persistence/contract identifier; a scope does not register a permission or polic
 An authoritative strategy constructs a scoped proof only after verifying its
 credential and restoring the persisted grant:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#verified-scoped-user -->
 ```go
-verified, err := auth.NewScopedProof(user.FoundryReference(), auth.Authenticated, grants)
+func VerifiedScopedUser(user models.User, grants auth.AccessScopes[models.User]) (auth.Proof[models.User, model.ID[models.User]], error) {
+	return auth.NewScopedProof(user.FoundryReference(), auth.Authenticated, grants)
+}
 ```
 
 This constructor does not verify a submitted model ID or scope list. Never turn
@@ -52,10 +58,18 @@ scoped proof nor an ordinary unscoped proof satisfies a nonempty requirement.
 
 In an existing authentication request scope:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#read-scoped-order -->
 ```go
-user, err := api.RequireScopes(ctx, required)
-// Check err, then authorize the concrete resource with its current model policy.
-err = ReadOrder.Authorize(ctx, api, order)
+func ReadScopedOrder(ctx context.Context, api auth.Guard[models.User], readOrder auth.Policy[models.User, models.Order], required auth.AccessScopes[models.User], order models.Order) (models.User, error) {
+	user, err := api.RequireScopes(ctx, required)
+	if err != nil {
+		return models.User{}, err
+	}
+	if err := readOrder.Authorize(ctx, api, order); err != nil {
+		return models.User{}, err
+	}
+	return user, nil
+}
 ```
 
 `RequireScopes` returns the concrete model and checks every required scope. Empty
@@ -82,7 +96,7 @@ operations intended to enforce token capabilities.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#configure-scopes -->
 ```go
-func ScopedProfile(endpoint ProfileEndpoint, required auth.AccessScopes[models.User]) ProfileEndpoint {
+func ScopedProfile(endpoint http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent], required auth.AccessScopes[models.User]) http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent] {
 	return http.ConfigureAuthenticated(endpoint, http.Scopes(required))
 }
 ```
@@ -91,12 +105,8 @@ For a new endpoint, apply the same requirements with its bound guard:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#configure-bound-scopes -->
 ```go
-func SecuredOrder(binding foundryhttp.GuardBinding[models.User]) (OrderEndpoint, error) {
-	scopes, err := OrderReadScopes()
-	if err != nil {
-		return OrderEndpoint{}, err
-	}
-	return foundryhttp.Authenticated(showOrder, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(ViewAccount)), nil
+func securedProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], binding foundryhttp.GuardBinding[models.User], scopes auth.AccessScopes[models.User], viewAccount auth.Permission[models.User]) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent] {
+	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(viewAccount))
 }
 ```
 

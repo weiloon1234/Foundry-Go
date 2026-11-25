@@ -15,17 +15,20 @@ type Tokens = token.Tokens[Account, model.ID[Account]]
 
 // CompleteSession keeps pending credentials bound to the original web guard.
 // Transport must publish the returned credential through its protected boundary.
-func CompleteSession(ctx context.Context, factors *Factors, sessions *Sessions, pending secret.String, request TOTPRequest) (session.Issued[Account, model.ID[Account]], error) {
+// doc-example:begin complete-totp-session
+func CompleteSession(ctx context.Context, factors *mfa.Factors[Account, model.ID[Account]], sessions *session.Sessions[Account, model.ID[Account]], pending secret.String, request TOTPRequest) (session.Issued[Account, model.ID[Account]], error) {
 	response, err := mfa.TOTPResponse(request.Code)
 	if err != nil {
 		return session.Issued[Account, model.ID[Account]]{}, err
 	}
-	verifier, err := factors.Verifier(response)
+	factor, err := factors.Verifier(response)
 	if err != nil {
 		return session.Issued[Account, model.ID[Account]]{}, err
 	}
-	return sessions.CompleteMFA(ctx, pending, verifier, session.IssueOptions{})
+	return sessions.CompleteMFA(ctx, pending, factor, session.IssueOptions{})
 }
+
+// doc-example:end complete-totp-session
 
 // CompleteToken selects options from server login policy. Client payloads do not
 // select arbitrary scopes; the binding's declared ceiling is enforced as usual.

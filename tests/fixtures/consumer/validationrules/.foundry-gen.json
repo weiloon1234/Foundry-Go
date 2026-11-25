@@ -5,6 +5,8 @@
     "organization_kind_foundry.gen.go": "6ac3d8bcbf41b4a0feaba81f95404fca4b01cba8a0e303988e5daa2c5e243433",
     "presence_input_foundry.gen.go": "e0a1848ed22ba23b9b2fb9d8c13d82fde9148e140884cb5ffa5017c4783d5399",
     "profile_preferences_foundry.gen.go": "02baf1437aecdcccf03f75debf77485b906a88b31204a1b653a50c7c9b038693",
-    "registration_foundry.gen.go": "6152b95312b96c195c51806baf1217339326cb8c593b8a3c31bcd28f29feceb6"
+    "registration_foundry.gen.go": "050bf36e30b6ece3e7d790a7a9da263c5037f630f101529e60e329ca39d98aef",
+    "username_args_foundry.gen.go": "ebaa3d31fa9db826aa2ed5ac4609e9c42a4ceae91d9774de52d510bc82ad4438",
+    "website_input_foundry.gen.go": "0e46aa26b96d1768344250e780579518857b77f7031549868a26cbf675aa9e18"
   }
 }

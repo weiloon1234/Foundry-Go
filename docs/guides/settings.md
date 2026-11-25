@@ -87,9 +87,12 @@ Corrupt stored data, incompatible versions and invalid presentation return error
 
 Hot settings can opt into a per-process read cache owned by the manager:
 
+<!-- compiled-source: tests/fixtures/consumer/configured/settings_cache_recipes.go#cache-site-name -->
 ```go
-manager, err := settings.New(store,
-    SiteName.RegistrationWith(settings.Options[string]{Cache: 30 * time.Second}))
+func cachedSiteName(store *extensions.Store) (*settings.Manager, error) {
+	return settings.New(store,
+		SiteName.RegistrationWith(settings.Options[string]{Cache: 30 * time.Second}))
+}
 ```
 
 `Get`, `GetOr`, `Find` and `settings.Load` then serve a validated snapshot without a

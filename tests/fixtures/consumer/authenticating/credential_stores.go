@@ -3,10 +3,12 @@ package authenticating
 import (
 	"foundry.test/consumer/passwords"
 	"github.com/weiloon1234/Foundry-Go/application"
+	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/lockout"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
+	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 	"github.com/weiloon1234/Foundry-Go/redis"
 )
@@ -31,11 +33,14 @@ func CredentialStoreInventory(settings application.Settings, connection redis.Co
 
 // doc-example:end credential-store-inventory
 
+// PasswordAccount is the application model used by the password provider.
+type PasswordAccount = passwords.Account
+
 // doc-example:begin password-lockout
 var PasswordAttempts = lockout.DefineLogin("password.accounts", keyspace.StringKeys[string](), lockout.DefaultLimits())
 
-func ProtectPasswordLogin(resolver foundation.Resolver, login *passwords.Login) (*passwords.Login, error) {
-	store, err := foundation.Resolve(resolver, CredentialProtectionKey)
+func ProtectPasswordLogin(resolver foundation.Resolver, protectionKey foundation.Key[*lockout.Store], login *auth.PasswordLogin[PasswordAccount, model.ID[PasswordAccount], string]) (*auth.PasswordLogin[PasswordAccount, model.ID[PasswordAccount], string], error) {
+	store, err := foundation.Resolve(resolver, protectionKey)
 	if err != nil {
 		return nil, err
 	}
