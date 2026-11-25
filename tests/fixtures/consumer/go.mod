@@ -47,6 +47,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/redis/go-redis/v9 v9.22.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
+	github.com/yuin/goldmark v1.8.7 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/image v0.46.0 // indirect
