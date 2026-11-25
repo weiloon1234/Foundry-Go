@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -32,6 +33,15 @@ var NameField = expr.JSONFieldOf(func(p *Profile) *string { return &p.Name })
 var AgeField = expr.JSONFieldOf(func(p *Profile) *int64 { return &p.Age })
 
 // doc-example:end json-models
+
+// doc-example:begin json-models-2
+func ProfileAgeQuery() rows.Scalar[Document, value.Nullable[int64]] {
+	profile := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(Documents.Settings)), ProfileField))
+	age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, AgeField), codec.Signed[int64]()))
+	return rows.SelectScalar(rows.From(expr.Where(Documents.Query(), expr.NullableEq(age, 42))), expr.AsSelected(age))
+}
+
+// doc-example:end json-models-2
 
 var NicknameField = expr.JSONFieldOf(func(p *Profile) **string { return &p.Nickname })
 

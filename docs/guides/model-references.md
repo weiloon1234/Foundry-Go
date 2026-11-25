@@ -34,10 +34,12 @@ explicitly for presentation; identity remains a persistence boundary.
 
 ## Capturing provenance
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#model-references-with-origin -->
+`WithOrigin` records which stored model acted. `subject` is any generated model value, for example the application's `models.User`; `attribution`, `model` and `database` are framework packages:
+
+<!-- compiled-source: tests/fixtures/goway/guideadapters/guide_pages.go#model-references-with-origin -->
 ```go
-func withOrigin(ctx context.Context, account Account) (context.Context, error) {
-	origin, err := (attribution.Origin{}).WithModel(account)
+func WithOrigin(ctx context.Context, subject model.Identifiable) (context.Context, error) {
+	origin, err := (attribution.Origin{}).WithModel(subject)
 	if err != nil {
 		return nil, err
 	}

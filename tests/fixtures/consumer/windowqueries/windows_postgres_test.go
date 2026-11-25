@@ -38,15 +38,7 @@ func runWindows(t *testing.T, check func(*database.Tx, []models.User) error) {
 	})
 }
 
-func ranking() rows.Query[models.Order, windowqueries.RankingRow] {
-	// doc-example:begin model-windows
-	base := models.Orders.Query()
-	o := models.Orders
-	peers := expr.WindowFor(rows.ModelScope(base)).PartitionBy(expr.Group(expr.Value(o.BuyerID))).OrderBy(expr.Asc(expr.Value(o.TotalCents)))
-	ordered := peers.OrderBy(expr.Asc(expr.Value(o.ID)))
-	return rows.OrderBy(rows.Select(rows.From(base), windowqueries.Rankings, rows.MapSelected(windowqueries.Rankings.ID, expr.AsSelected(expr.Row(expr.Value(o.ID)))), rows.MapSelected(windowqueries.Rankings.BuyerID, expr.AsSelected(expr.Row(expr.Value(o.BuyerID)))), rows.MapSelected(windowqueries.Rankings.Number, expr.RowNumber(ordered)), rows.MapSelected(windowqueries.Rankings.Rank, expr.Rank(peers)), rows.MapSelected(windowqueries.Rankings.Dense, expr.DenseRank(peers)), rows.MapSelected(windowqueries.Rankings.Percent, expr.PercentRank(peers)), rows.MapSelected(windowqueries.Rankings.Cumulative, expr.CumeDist(peers)), rows.MapSelected(windowqueries.Rankings.Bucket, expr.NTile(2, ordered))), expr.Asc(expr.Value(o.BuyerID)), expr.Asc(expr.Value(o.TotalCents)), expr.Asc(expr.Value(o.ID)))
-	// doc-example:end model-windows
-}
+var ranking = windowqueries.Ranking
 
 func TestPostgresWindowRankingAndComposition(t *testing.T) {
 	runWindows(t, func(tx *database.Tx, users []models.User) error {

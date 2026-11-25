@@ -35,6 +35,7 @@ var Pairs = rows.Define(func(b rows.Builder[Pair], p *Pair) PairColumns {
 	return PairColumns{b.Row(), rows.NullableNumberOf(b, &p.Left), rows.NullableNumberOf(b, &p.Right)}
 })
 
+// doc-example:begin record-expressions
 // Each binding retains its original scope; joined/correlated scopes must be lifted
 // explicitly before these fields can be used in that query.
 type recordExpressions[S any] struct {
@@ -46,3 +47,5 @@ type recordExpressions[S any] struct {
 func recordAt[S any](scope expr.Scope[S, Record]) recordExpressions[S] {
 	return recordExpressions[S]{scope, expr.At(scope, Records.ID), expr.At(scope, Records.Name)}
 }
+
+// doc-example:end record-expressions

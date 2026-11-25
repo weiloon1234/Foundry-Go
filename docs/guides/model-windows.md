@@ -6,15 +6,17 @@ predicates. Filter a declared derived result to select rows by their computed ra
 
 ## Define and consume a window
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/windowqueries/windows_postgres_test.go):
+`models.Order` is the application's model, an order holding its buyer in `BuyerID` and an integer `TotalCents`; `RankingRow` is the result struct and `Rankings` its `rows.Define` schema with one field per mapped value below; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. `Ranking` ranks each buyer's orders:
 
-<!-- compiled-source: tests/fixtures/consumer/windowqueries/windows_postgres_test.go#model-windows -->
+<!-- compiled-source: tests/fixtures/consumer/windowqueries/guide_ranking.go#model-windows -->
 ```go
-base := models.Orders.Query()
-o := models.Orders
-peers := expr.WindowFor(rows.ModelScope(base)).PartitionBy(expr.Group(expr.Value(o.BuyerID))).OrderBy(expr.Asc(expr.Value(o.TotalCents)))
-ordered := peers.OrderBy(expr.Asc(expr.Value(o.ID)))
-return rows.OrderBy(rows.Select(rows.From(base), windowqueries.Rankings, rows.MapSelected(windowqueries.Rankings.ID, expr.AsSelected(expr.Row(expr.Value(o.ID)))), rows.MapSelected(windowqueries.Rankings.BuyerID, expr.AsSelected(expr.Row(expr.Value(o.BuyerID)))), rows.MapSelected(windowqueries.Rankings.Number, expr.RowNumber(ordered)), rows.MapSelected(windowqueries.Rankings.Rank, expr.Rank(peers)), rows.MapSelected(windowqueries.Rankings.Dense, expr.DenseRank(peers)), rows.MapSelected(windowqueries.Rankings.Percent, expr.PercentRank(peers)), rows.MapSelected(windowqueries.Rankings.Cumulative, expr.CumeDist(peers)), rows.MapSelected(windowqueries.Rankings.Bucket, expr.NTile(2, ordered))), expr.Asc(expr.Value(o.BuyerID)), expr.Asc(expr.Value(o.TotalCents)), expr.Asc(expr.Value(o.ID)))
+func Ranking() rows.Query[models.Order, RankingRow] {
+	base := models.Orders.Query()
+	o := models.Orders
+	peers := expr.WindowFor(rows.ModelScope(base)).PartitionBy(expr.Group(expr.Value(o.BuyerID))).OrderBy(expr.Asc(expr.Value(o.TotalCents)))
+	ordered := peers.OrderBy(expr.Asc(expr.Value(o.ID)))
+	return rows.OrderBy(rows.Select(rows.From(base), Rankings, rows.MapSelected(Rankings.ID, expr.AsSelected(expr.Row(expr.Value(o.ID)))), rows.MapSelected(Rankings.BuyerID, expr.AsSelected(expr.Row(expr.Value(o.BuyerID)))), rows.MapSelected(Rankings.Number, expr.RowNumber(ordered)), rows.MapSelected(Rankings.Rank, expr.Rank(peers)), rows.MapSelected(Rankings.Dense, expr.DenseRank(peers)), rows.MapSelected(Rankings.Percent, expr.PercentRank(peers)), rows.MapSelected(Rankings.Cumulative, expr.CumeDist(peers)), rows.MapSelected(Rankings.Bucket, expr.NTile(2, ordered))), expr.Asc(expr.Value(o.BuyerID)), expr.Asc(expr.Value(o.TotalCents)), expr.Asc(expr.Value(o.ID)))
+}
 ```
 
 `expr.WindowFor(rows.ModelScope(query))` binds a model scope; aliases and joins
@@ -22,8 +24,7 @@ supply their own scope. It does not inherit the query's ordering or window.
 `expr.Window[S]{}` is a valid empty window. Window order controls the calculation;
 query order controls returned row order. Include a unique tie-breaker for stable
 individual positions; omit it from a peer-ranking window when ties should share rank.
-The [complete example](../../tests/fixtures/consumer/windowqueries/windows_postgres_test.go)
-maps these expressions into a handwritten ranking schema.
+`Ranking` maps these expressions into the handwritten ranking schema.
 
 ## Functions and result types
 

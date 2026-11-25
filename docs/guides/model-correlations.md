@@ -15,19 +15,19 @@ its outer row. Lift each side through `rows.OuterScope` and `rows.InnerScope`;
 <a id="recipe-correlate-rows"></a>
 ## Find users with matching orders
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/correlations/correlations_postgres_test.go):
+`models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID` and an integer `TotalCents`; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. The block builds the correlated sources and two scalar subqueries in one scope:
 
-<!-- compiled-source: tests/fixtures/consumer/correlations/correlations_postgres_test.go#model-correlations -->
+<!-- compiled-source: tests/fixtures/consumer/correlations/guide_correlations.go#model-correlations -->
 ```go
-link := rowset.Correlate(rowset.From(models.Users.Query()), rowset.From(models.Orders.Query()))
-buyer := rowset.OuterScope(link, rowset.ModelScope(models.Users.Query()))
-order := rowset.InnerScope(link, rowset.ModelScope(models.Orders.Query()))
+link := rows.Correlate(rows.From(models.Users.Query()), rows.From(models.Orders.Query()))
+buyer := rows.OuterScope(link, rows.ModelScope(models.Users.Query()))
+order := rows.InnerScope(link, rows.ModelScope(models.Orders.Query()))
 matched := link.Where(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(buyer, models.Users.ID)))
-counts := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.CountFieldAt(order, models.Orders.ID)))
-totals := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.SumAt(order, models.Orders.TotalCents)))
+counts := rows.SelectCorrelatedScalar(matched, expr.AsSelected(expr.CountFieldAt(order, models.Orders.ID)))
+totals := rows.SelectCorrelatedScalar(matched, expr.AsSelected(expr.SumAt(order, models.Orders.TotalCents)))
 ```
 
-The `rowset` import is `database/orm/rows`. `matched.Exists()` is a predicate of
+`matched.Exists()` is a predicate of
 the outer user scope. Apply it with `expr.Where`; use `expr.Not` for NOT EXISTS.
 This is one SQL statement, not an application query per user. The outer argument
 supplies scope; keep outer filters on the executing outer query.
@@ -42,17 +42,18 @@ already nullable. A scalar COUNT yields a present zero over empty input,
 but the general scalar result stays nullable because a SELECT can yield no row.
 Multiple rows cause a database cardinality error; no implicit limit is added.
 
-<!-- compiled-source: tests/fixtures/consumer/correlations/correlations_postgres_test.go#embed-correlated-scalar -->
+`reports` is the application's package of result schemas: `reports.UserOrderStats` is the result struct with `ID`, `Email`, an `int64` `Orders` and a nullable decimal `Total`, and `reports.UserOrderStatsRows` its `rows.Define` schema.
+
+Inputs: `counts rows.CorrelatedScalar[models.User, models.Order, int64]`, `totals rows.CorrelatedScalar[models.User, models.Order, value.Nullable[decimal.Decimal]]`.
+
+<!-- compiled-source: tests/fixtures/consumer/correlations/guide_correlations.go#embed-correlated-scalar -->
 ```go
+u := models.Users
 r := reports.UserOrderStatsRows
-report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), r.Row,
-	rowset.Map(r.ID, expr.Value(u.ID)), rowset.Map(r.Email, expr.Value(u.Email)),
-	rowset.MapSelected(r.Orders, expr.AsSelected(rowset.CorrelatedScalarRowQuery(counts))),
-	rowset.MapSelected(r.Total, expr.AsSelected(rowset.CorrelatedScalarNullableRowQuery(totals)))), expr.Asc(expr.Value(u.Email)))
-rows, err := rowset.Read(report).All(t.Context(), tx)
-if err != nil {
-	return err
-}
+report := rows.OrderBy(rows.Select(rows.From(models.Users.Query()), r.Row,
+	rows.Map(r.ID, expr.Value(u.ID)), rows.Map(r.Email, expr.Value(u.Email)),
+	rows.MapSelected(r.Orders, expr.AsSelected(rows.CorrelatedScalarRowQuery(counts))),
+	rows.MapSelected(r.Total, expr.AsSelected(rows.CorrelatedScalarNullableRowQuery(totals)))), expr.Asc(expr.Value(u.Email)))
 ```
 
 `InCorrelatedQuery` and `InNullableCorrelatedQuery` retain exact value types and

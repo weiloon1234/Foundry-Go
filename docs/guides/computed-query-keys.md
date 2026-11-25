@@ -6,23 +6,21 @@ partitioning. Neither operation erases scope or makes an aggregate a row operand
 
 ## Group by a computed value
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/keyqueries/keys_test.go):
+`models.User` is the application's model with an integer `Age`, and `models.Users` its generated table. `BucketCount` is the result struct with `Bucket int` and `Count int64`, and `BucketCounts` its handwritten `rows.Define` schema. `Buckets` counts users by age bucket:
 
-<!-- compiled-source: tests/fixtures/consumer/keyqueries/keys_test.go#computed-query-keys -->
+<!-- compiled-source: tests/fixtures/consumer/keyqueries/guide_keys.go#computed-query-keys -->
 ```go
-func buckets() rowset.Query[models.User, keyqueries.BucketCount] {
+func Buckets() rows.Query[models.User, BucketCount] {
 	u := models.Users
 	bucket := expr.When(expr.ModelPredicate(orm.Gt(u.Age, 20)), expr.Param(u.Age, 1)).Else(expr.Param(u.Age, 0))
-	return rowset.OrderBy(rowset.GroupBy(rowset.Select(rowset.From(models.Users.Query()), keyqueries.BucketCounts.Row,
-		rowset.MapSelected(keyqueries.BucketCounts.Bucket, expr.AsSelected(bucket)),
-		rowset.MapSelected(keyqueries.BucketCounts.Count, expr.AsSelected(expr.Count[models.User]())),
+	return rows.OrderBy(rows.GroupBy(rows.Select(rows.From(models.Users.Query()), BucketCounts.Row,
+		rows.MapSelected(BucketCounts.Bucket, expr.AsSelected(bucket)),
+		rows.MapSelected(BucketCounts.Count, expr.AsSelected(expr.Count[models.User]())),
 	), expr.Group(bucket)), expr.Asc(bucket))
 }
 ```
 
-The `rowset` import above names `database/orm/rows`. The handwritten
-[BucketCounts schema](../../tests/fixtures/consumer/keyqueries/rows.go) maps the
-ordinary result struct. `rows.GroupBy` appends keys. Duplicate/zero keys and
+`rows.GroupBy` appends keys. Duplicate/zero keys and
 ungrouped selections fail compilation. Grouping by a CASE result does not make
 its input columns independently selectable; compiler validation does not infer
 functional dependencies from primary keys.

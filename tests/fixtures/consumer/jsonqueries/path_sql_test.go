@@ -2,9 +2,7 @@ package jsonqueries_test
 
 import (
 	"foundry.test/consumer/jsonqueries"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
 	"github.com/weiloon1234/Foundry-Go/tests/oracle"
@@ -17,11 +15,7 @@ func TestDeclaredJSONPathSQLParity(t *testing.T) {
 	if err := orm.Check(f, jsonqueries.Policies); err != nil {
 		t.Fatal(err)
 	}
-	// doc-example:begin json-models-2
-	profile := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(f.Settings)), jsonqueries.ProfileField))
-	age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, jsonqueries.AgeField), codec.Signed[int64]()))
-	selected := rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(f.Query(), expr.NullableEq(age, 42))), expr.AsSelected(age)))
-	// doc-example:end json-models-2
+	selected := rows.ReadScalar(jsonqueries.ProfileAgeQuery())
 	if err := rows.PreflightRead(t.Context(), selected); err != nil {
 		t.Fatal(err)
 	}

@@ -16,25 +16,14 @@ import (
 )
 
 type usersAlias struct{}
-type ordersAlias struct{}
+type ordersAlias = lateralqueries.OrdersAlias
 type latestAlias struct{}
 type statsAlias struct{}
-
-// doc-example:begin lateral-joins
-func userOrders[L any](outer rows.ScopeSource[L], scope expr.Scope[L, models.User]) (rows.CorrelatedSource[L, rows.Alias[ordersAlias, models.Order]], expr.Scope[rows.Correlation[L, rows.Alias[ordersAlias, models.Order]], models.Order]) {
-	orders := rows.As[ordersAlias](models.Orders.Query(), "orders_for_user")
-	c := rows.Correlate(outer, orders)
-	inner := rows.InnerScope(c, rows.Scope(orders))
-	u, o := rows.OuterScope(c, scope), inner
-	return c.Where(expr.Equal(expr.At(o, models.Orders.BuyerID), expr.At(u, models.Users.ID))), inner
-}
-
-// doc-example:end lateral-joins
 
 func TestPostgresLateralPerParentRecords(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {
 		outer := rows.As[usersAlias](models.Users.Query(), "buyer")
-		c, scope := userOrders(outer, rows.Scope(outer))
+		c, scope := lateralqueries.CorrelatedOrders(outer, rows.Scope(outer))
 		o := scope
 		record := rows.SelectCorrelatedRecord(c, scope).OrderBy(expr.Desc(expr.At(o, models.Orders.TotalCents)), expr.Asc(expr.At(o, models.Orders.ID)))
 		if n, err := rows.ReadRecord(rows.SelectRecord(outer, rows.Scope(outer)).Where(record.Exists())).Count(t.Context(), tx); err != nil || n != 2 {
@@ -123,7 +112,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 
 func TestLateralInvalidContractsBeforeIO(t *testing.T) {
 	outer := rows.As[usersAlias](models.Users.Query(), "buyer")
-	c, scope := userOrders(outer, rows.Scope(outer))
+	c, scope := lateralqueries.CorrelatedOrders(outer, rows.Scope(outer))
 	record := rows.SelectCorrelatedRecord(c, scope)
 	for _, source := range []rows.LateralSource[latestAlias, rows.Alias[usersAlias, models.User], models.Order]{
 		rows.AsLateral[latestAlias](record, "bad.name"),

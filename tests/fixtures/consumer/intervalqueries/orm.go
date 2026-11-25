@@ -1,6 +1,8 @@
 package intervalqueries
 
 import (
+	"time"
+
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -37,3 +39,24 @@ var Summaries = rows.Define(func(b rows.Builder[Summary], s *Summary) SummaryCol
 })
 
 func intervalCodec() codec.Codec[temporal.Interval] { return codec.Interval() }
+
+// doc-example:begin interval-queries-2
+func ShiftedStart(period temporal.Interval, zoneName string) (expr.Selected[Sample, time.Time], error) {
+	zone, err := expr.LoadTimeZone(zoneName)
+	if err != nil {
+		return expr.Selected[Sample, time.Time]{}, err
+	}
+	return expr.AsSelected(expr.ShiftInstant(expr.Value(Samples.Start), expr.Param(Samples.Period, period), zone)), nil
+}
+
+// doc-example:end interval-queries-2
+
+// doc-example:begin interval-queries-3
+func PeriodSummary() rows.Query[Sample, Summary] {
+	return rows.Select(rows.From(Samples.Query()), Summaries,
+		rows.MapSelected(Summaries.Total, expr.AsSelected(expr.SumInterval(Samples.Period))),
+		rows.MapSelected(Summaries.Average, expr.AsSelected(expr.AvgInterval(Samples.Period))),
+		rows.MapSelected(Summaries.Count, expr.AsSelected(expr.Count[Sample]())))
+}
+
+// doc-example:end interval-queries-3

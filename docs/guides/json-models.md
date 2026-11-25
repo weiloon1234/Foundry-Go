@@ -19,13 +19,11 @@ column's `Clear()` writes SQL NULL. Migrations must supply the physical JSONB ty
 
 ## Typed properties, arrays and maps
 
-Declare reusable field bindings beside the columns:
-
 `Preferences` is your JSON payload struct with a `Profile value.Optional[Profile]` field tagged `json:"profile,omitzero"`; its nested `Profile` has `Name string` tagged `json:"name"` and `Age int64` tagged `json:"age,string"`.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/codec`, `database/orm/expr`, `database/orm`, `database/orm/rows`, `value`.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/jsonqueries/tables.go):
+Declare reusable field bindings beside the columns:
 
 <!-- compiled-source: tests/fixtures/consumer/jsonqueries/tables.go#json-models -->
 ```go
@@ -42,16 +40,18 @@ that binding, preserving the parent payload type. A foreign field cannot be used
 on another payload. Optional, nullable, pointer and nested document layers use
 `JSONOptional`, `JSONNullable`, `JSONPointer` and `JSONDocument` explicitly.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/jsonqueries/path_sql_test.go):
+`Document` is the application's model whose `Settings` column holds `Preferences`, and `Documents` is its generated table; `expr`, `codec` and `rows` are framework packages. `ProfileAgeQuery` selects the profile age of the documents whose age is 42:
 
-<!-- compiled-source: tests/fixtures/consumer/jsonqueries/path_sql_test.go#json-models-2 -->
+<!-- compiled-source: tests/fixtures/consumer/jsonqueries/tables.go#json-models-2 -->
 ```go
-profile := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(f.Settings)), jsonqueries.ProfileField))
-age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, jsonqueries.AgeField), codec.Signed[int64]()))
-selected := rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(f.Query(), expr.NullableEq(age, 42))), expr.AsSelected(age)))
+func ProfileAgeQuery() rows.Scalar[Document, value.Nullable[int64]] {
+	profile := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(Documents.Settings)), ProfileField))
+	age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, AgeField), codec.Signed[int64]()))
+	return rows.SelectScalar(rows.From(expr.Where(Documents.Query(), expr.NullableEq(age, 42))), expr.AsSelected(age))
+}
 ```
 
-The linked test binds `f := jsonqueries.Documents`. `JSONRoot` starts a required
+`JSONRoot` starts a required
 document path; `JSONNullableRoot` preserves a SQL-null ancestor. `JSONMapKey`
 takes the map's exact key type; `JSONIndex` takes an `int32` slice index, including
 negative indices from the end. Fixed arrays use `JSONFixedArrayOf` with

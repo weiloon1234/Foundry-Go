@@ -23,17 +23,24 @@ These are predicates, separate from result DISTINCT clauses.
 
 ## Computed join conditions
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/comparisonqueries/joins_postgres_test.go):
+`models.User` is the application's model with an integer `Age`, and `models.Users` its generated table; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. Two empty tag types alias the same users table as the younger and older side:
 
-<!-- compiled-source: tests/fixtures/consumer/comparisonqueries/joins_postgres_test.go#value-comparisons-and-joins -->
+<!-- compiled-source: tests/fixtures/consumer/comparisonqueries/guide_joins.go#comparison-aliases -->
 ```go
-q := models.Users.Query()
-younger, older := rowset.As[youngerAlias](q, "younger"), rowset.As[olderAlias](q, "older")
-y, o := rowset.Scope(younger), rowset.Scope(older)
-adjacent := rowset.OnEqual(expr.Add(expr.At(y, models.Users.Age), expr.ParamOf(expr.AsSelected(expr.Row(expr.At(y, models.Users.Age))), 1)), expr.At(o, models.Users.Age))
+type YoungerAlias struct{}
+type OlderAlias struct{}
 ```
 
-The `rowset` import is `database/orm/rows`; alias tags are in the linked package.
+The block builds an ON condition that pairs each user with the user one year older:
+
+<!-- compiled-source: tests/fixtures/consumer/comparisonqueries/guide_joins.go#value-comparisons-and-joins -->
+```go
+q := models.Users.Query()
+younger, older := rows.As[YoungerAlias](q, "younger"), rows.As[OlderAlias](q, "older")
+y, o := rows.Scope(younger), rows.Scope(older)
+adjacent := rows.OnEqual(expr.Add(expr.At(y, models.Users.Age), expr.ParamOf(expr.AsSelected(expr.Row(expr.At(y, models.Users.Age))), 1)), expr.At(o, models.Users.Age))
+```
+
 `rows.OnEqual`, `OnNotEqual`, `OnLess`, `OnLessOrEqual`, `OnGreater`,
 `OnGreaterOrEqual` and `OnLike` retain distinct side scopes and matching value
 types. Nullable and NULL-aware families retain the same rules. Compose with

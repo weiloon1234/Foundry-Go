@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"foundry.test/consumer/internal/queryfixture"
+	"foundry.test/consumer/joinqueries/outer"
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -11,22 +12,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-type referralAlias struct{}
-type sponsorAlias struct{}
 type purchaseAlias struct{}
 
 func TestPostgresOuterAndChainedJoins(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {
 		counter := &queryfixture.QueryCounter{Executor: tx}
-		// doc-example:begin model-joins
-		referrals := rows.As[referralAlias](models.Users.Query(), "referral")
-		sponsors := rows.As[sponsorAlias](models.Users.Query(), "sponsor")
-		r := rows.Scope(referrals)
-		s := rows.Scope(sponsors)
-		joined := rows.LeftJoin(referrals, sponsors, rows.On(expr.At(r, models.Users.IntroducerID), expr.At(s, models.Users.ID)))
-		referralScope := rows.LeftScope(joined, rows.Scope(referrals))
-		sponsorScope := rows.NullableRightScope(joined, rows.Scope(sponsors))
-		// doc-example:end model-joins
+		referrals, sponsors, joined, referralScope, sponsorScope := outer.ReferralSponsors()
+		r, s := rows.Scope(referrals), rows.Scope(sponsors)
 		sponsor := sponsorScope
 		purchases := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
 		p := rows.Scope(purchases)

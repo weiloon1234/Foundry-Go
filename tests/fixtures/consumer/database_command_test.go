@@ -35,34 +35,12 @@ func Example_databaseCommand() {
 	_ = run
 }
 
-// A configured application declares its own history next to the framework
-// feature migrations and runs one database command without starting: only the
-// selected connection's primary pool is opened.
-// doc-example:begin application-migrations
+// A configured application runs one database command through the migrations
+// package's RunDatabaseCommand without starting.
 func Example_applicationDatabaseCommand() {
-	run := func(ctx context.Context, settings application.Settings, args []string, stdout, stderr io.Writer) error {
-		invocation, err := dbcommand.Parse(args, stderr)
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		app, err := application.New(settings).Migrations(infrastructure.MigrationTarget{Definitions: migrations.Definitions()}).Build(ctx)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), app.ShutdownTimeout())
-			defer cancel()
-			_ = app.Shutdown(shutdown)
-		}()
-		return app.RunDatabaseCommand(ctx, invocation, application.DatabaseCommandResources{}, stdout)
-	}
+	run := migrations.RunDatabaseCommand
 	_ = run
 }
-
-// doc-example:end application-migrations
 
 func TestDatabaseCommandHelpWithoutBootstrap(t *testing.T) {
 	var help bytes.Buffer

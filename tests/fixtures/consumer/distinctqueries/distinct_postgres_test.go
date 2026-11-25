@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"foundry.test/consumer/distinctqueries"
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
@@ -18,23 +19,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-type personAlias struct{}
-type purchaseAlias struct{}
+type personAlias = distinctqueries.PersonAlias
+type purchaseAlias = distinctqueries.PurchaseAlias
 type resultAlias struct{}
 
 func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
-		// doc-example:begin model-distinct
-		people := rows.As[personAlias](models.Users.Query(), "person")
-		orders := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
-		p, o := rows.Scope(people), rows.Scope(orders)
-		joined := rows.InnerJoin(people, orders, rows.On(expr.At(p, models.Users.ID), expr.At(o, models.Orders.BuyerID)))
-		scope := rows.LeftScope(joined, rows.Scope(people))
-		fields := scope
-		base := rows.SelectRecord(joined, scope).OrderBy(expr.Asc(expr.At(fields, models.Users.Email)))
-		unique := rows.DistinctRecord(base)
+		joined, fields, base, unique := distinctqueries.BuyerRecords()
 		items, err := rows.ReadRecord(unique).All(t.Context(), tx)
-		// doc-example:end model-distinct
 		if err != nil {
 			return err
 		}

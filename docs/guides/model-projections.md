@@ -19,13 +19,24 @@ concrete model IDs, enum types and `value.Nullable` wrappers.
 <a id="recipe-declare-rows"></a>
 ## Declare the result
 
-Declare the result struct, then bind its fields with `rows.Define`:
+Declare the result struct, then bind its fields with `rows.Define`. The `Email` field maps to the application's `contact_email` column:
+
+<!-- compiled-source: tests/fixtures/consumer/reports/projections.go#user-summary-record -->
+```go
+type UserSummary struct {
+	ID model.ID[models.User]
+	// Email is the buyer contact address selected for this report.
+	Email    string `foundry:"column=contact_email"`
+	Nickname value.Nullable[string]
+	Status   models.Status
+}
+```
 
 `models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `countries`, `database`, `decimal`, `database/orm/expr`, `model`, `database/orm`, `database/orm/rows`, `database/orm/rows` as `rowset`, `value`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `countries`, `database`, `decimal`, `database/orm/expr`, `model`, `database/orm`, `database/orm/rows`, `value`.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reports/rows.go):
+`UserSummaryColumns` names each field and `UserSummaries` binds them:
 
 <!-- compiled-source: tests/fixtures/consumer/reports/rows.go#user-summary -->
 ```go
@@ -80,6 +91,8 @@ Sources retain scopes, filters, ordering and limit/offset. A projection exposes
 no model mutations or eager loading. For a reusable query source, wrap it in
 `rows.RecordOf`, then `rows.AsRecord`; query output columns with `rows.At`.
 
+`SummaryPage` reads the schema declared above as one page; `models.Users` is the application's generated table, and `database` and `orm` are framework packages:
+
 <!-- compiled-source: tests/fixtures/consumer/reports/guide.go#paginate-projection -->
 ```go
 func SummaryPage(ctx context.Context, db database.Executor, page orm.PageRequest) (orm.PageResult[UserSummary], error) {
@@ -99,20 +112,25 @@ func SummaryPage(ctx context.Context, db database.Executor, page orm.PageRequest
 <a id="recipe-grouped-rows"></a>
 ## Grouped and scalar summaries
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go):
+`BuyerTotals` holds `BuyerID model.ID[models.User]`, `Total` and `Average` as
+`value.Nullable[decimal.Decimal]` and `Orders int64`; `BuyerTotalRows` binds those
+fields with `rows.Define` as above, and `models.Orders` is the application's order
+table. `BuyerTotalsByBuyer` groups orders by buyer:
 
-<!-- compiled-source: tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go#model-projections -->
+<!-- compiled-source: tests/fixtures/consumer/reports/guide_summaries.go#model-projections -->
 ```go
-o := models.Orders
-totals := rowset.GroupBy(rowset.Select(rowset.From(models.Orders.Query()), reports.BuyerTotalRows.Row,
-	rowset.Map(reports.BuyerTotalRows.BuyerID, expr.Value(o.BuyerID)),
-	rowset.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(expr.Sum(o.TotalCents))),
-	rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.AsSelected(expr.Count[models.Order]())),
-	rowset.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.Avg(o.TotalCents))),
-), expr.Group(expr.Value(o.BuyerID)))
+func BuyerTotalsByBuyer() rows.Query[models.Order, BuyerTotals] {
+	o := models.Orders
+	return rows.GroupBy(rows.Select(rows.From(models.Orders.Query()), BuyerTotalRows.Row,
+		rows.Map(BuyerTotalRows.BuyerID, expr.Value(o.BuyerID)),
+		rows.MapSelected(BuyerTotalRows.Total, expr.AsSelected(expr.Sum(o.TotalCents))),
+		rows.MapSelected(BuyerTotalRows.Orders, expr.AsSelected(expr.Count[models.Order]())),
+		rows.MapSelected(BuyerTotalRows.Average, expr.AsSelected(expr.Avg(o.TotalCents))),
+	), expr.Group(expr.Value(o.BuyerID)))
+}
 ```
 
-The `rowset` import names `database/orm/rows`. `rows.GroupBy` requires every selected
+`rows.GroupBy` requires every selected
 or ordered ordinary column to be grouped; it does not infer primary-key functional
 dependencies. Counts return `int64`; integer/decimal sums and averages return
 `value.Nullable[decimal.Decimal]`. An ungrouped aggregate over empty input yields
@@ -120,32 +138,39 @@ one record with zero counts and NULL summaries; grouped empty input yields no ro
 
 ### Scalar terminals and subqueries
 
-`rows.ReadScalar` keeps the selected value type through the terminal. This
-excerpt reads the email field from a joined projection in deterministic order:
+`rows.ReadScalar` keeps the selected value type through the terminal. `OrderedEmails`
+reads one selected column, here `[]string`, in deterministic order; a joined or
+derived source reads the same way:
 
-<!-- compiled-source: tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go#read-scalar -->
+<!-- compiled-source: tests/fixtures/consumer/reports/guide_summaries.go#read-scalar -->
 ```go
-if emails, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(again, expr.AsSelected(expr.Row(rowset.At(joinedFields, reports.UserOrderStatsRows.Email)))), expr.Asc(rowset.At(joinedFields, reports.UserOrderStatsRows.Email)))).All(t.Context(), tx); err != nil || len(emails) != 3 || emails[0] != users[0].Email {
-	t.Error("declared joined result could not be joined again", err)
+func OrderedEmails(ctx context.Context, db database.Executor) ([]string, error) {
+	users := models.Users
+	emails := rows.SelectScalar(rows.From(users.Query()), expr.AsSelected(expr.Row(expr.Value(users.Email))))
+	return rows.ReadScalar(rows.OrderScalar(emails, expr.Asc(expr.Value(users.Email)))).All(ctx, db)
 }
 ```
 
 Scalar subqueries become selected values through `expr.AsSelected`. Nullable
-subqueries keep their explicit nullable type:
+subqueries keep their explicit nullable type. `ScalarSummaryQuery` takes two scalar
+subqueries from the caller, `buyers` selecting `model.ID[models.User]` and `count`
+selecting `int64`, and the ID of the user whose nickname is looked up. It returns the
+query for `ScalarReport` rows, whose `BuyerID`, `Nickname` and `Orders` fields are
+`value.Nullable` because an empty subquery yields NULL; `ScalarReports` is their
+`rows.Define` schema:
 
-<!-- compiled-source: tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go#scalar-projection -->
+<!-- compiled-source: tests/fixtures/consumer/reports/guide_summaries.go#scalar-projection -->
 ```go
-last := rowset.LimitScalar(rowset.OrderScalar(buyers, expr.Desc(expr.Value(o.TotalCents))), 1)
-nicknames := rowset.SelectScalar(rowset.From(models.Users.Query().Where(orm.Eq(u.ID, users[1].ID))), expr.AsSelected(expr.Row(expr.Value(u.Nickname))))
-report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), reports.ScalarReports.Row,
-	rowset.Map(reports.ScalarReports.ID, expr.Value(u.ID)),
-	rowset.MapSelected(reports.ScalarReports.BuyerID, expr.AsSelected(rowset.ScalarRowQuery(rowset.From(models.Users.Query()), last))),
-	rowset.MapSelected(reports.ScalarReports.Nickname, expr.AsSelected(rowset.ScalarNullableRowQuery(rowset.From(models.Users.Query()), nicknames))),
-	rowset.MapSelected(reports.ScalarReports.Orders, expr.AsSelected(rowset.ScalarRowQuery(rowset.From(models.Users.Query()), count))),
-), expr.Asc(expr.Value(u.Email)))
-scalars, err := rowset.Read(report).All(t.Context(), tx)
-if err != nil {
-	return err
+func ScalarSummaryQuery(buyers rows.Scalar[models.Order, model.ID[models.User]], count rows.Scalar[models.Order, int64], nicknameOf model.ID[models.User]) rows.Query[models.User, ScalarReport] {
+	u, o := models.Users, models.Orders
+	last := rows.LimitScalar(rows.OrderScalar(buyers, expr.Desc(expr.Value(o.TotalCents))), 1)
+	nicknames := rows.SelectScalar(rows.From(models.Users.Query().Where(orm.Eq(u.ID, nicknameOf))), expr.AsSelected(expr.Row(expr.Value(u.Nickname))))
+	return rows.OrderBy(rows.Select(rows.From(models.Users.Query()), ScalarReports.Row,
+		rows.Map(ScalarReports.ID, expr.Value(u.ID)),
+		rows.MapSelected(ScalarReports.BuyerID, expr.AsSelected(rows.ScalarRowQuery(rows.From(models.Users.Query()), last))),
+		rows.MapSelected(ScalarReports.Nickname, expr.AsSelected(rows.ScalarNullableRowQuery(rows.From(models.Users.Query()), nicknames))),
+		rows.MapSelected(ScalarReports.Orders, expr.AsSelected(rows.ScalarRowQuery(rows.From(models.Users.Query()), count))),
+	), expr.Asc(expr.Value(u.Email)))
 }
 ```
 

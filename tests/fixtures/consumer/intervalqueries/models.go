@@ -10,7 +10,7 @@ import (
 )
 
 // doc-example:begin interval-queries
-//
+
 //foundry:model table=interval_samples var=Samples key=ID identity=false
 type Sample struct {
 	ID          int `foundry:"member=ID,key-role=lookup"`

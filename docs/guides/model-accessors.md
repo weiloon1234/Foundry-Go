@@ -10,14 +10,16 @@
 
 Call `Access<Field>` methods explicitly when mapping stored values into response DTOs. Model hydration, queries and JSON serialization do not call them automatically or replace stored fields with their results.
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#accessors-after -->
+`Member` is the application's model with a stored email and an `AccessEmail` method; `coremodels.EmailLink` is the application's presentation type. `emailLink` maps one member:
+
+<!-- compiled-source: tests/fixtures/goway/models/mutators/guide_examples.go#accessors-after -->
 ```go
-func accessor(member mutators.Member) (coremodels.EmailLink, error) {
+func emailLink(member Member) (coremodels.EmailLink, error) {
 	return member.AccessEmail()
 }
 ```
 
-The [compiled fixture](../../tests/fixtures/goway/models/mutators/models.go) keeps its stored email separate from the accessor's `EmailLink` result. Nullable accessors can return a concrete nullable presentation type, preserving NULL separately from an empty value. Accessors never replace relation keys, cursor values, identity or lifecycle snapshots.
+The model keeps its stored email separate from the accessor's `EmailLink` result. Nullable accessors can return a concrete nullable presentation type, preserving NULL separately from an empty value. Accessors never replace relation keys, cursor values, identity or lifecycle snapshots.
 
 ## Method contracts
 

@@ -11,6 +11,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin transaction-models
+
 //foundry:model table=records var=Records key=ID identity=false
 type Record struct {
 	ID   int64 `foundry:"member=ID,key-role=lookup"`
@@ -22,6 +24,8 @@ type Summary struct {
 	Name string
 }
 
+// doc-example:end transaction-models
+
 type Totals struct{ Count int64 }
 
 type Pair struct {
@@ -29,15 +33,20 @@ type Pair struct {
 	Right value.Nullable[int64]
 }
 
+// doc-example:begin transaction-aliases
 type claimedAlias struct{}
 type otherAlias struct{}
+
+// doc-example:end transaction-aliases
 
 // doc-example:begin transaction-query-composition
 func Claimed(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(Records.Query().OrderBy(orm.Asc(Records.ID)).Limit(1)).SkipLocked()))
 	source := rows.AsTransaction[claimedAlias](definition, "candidate")
-	fields := recordAt(rows.TransactionScope(source))
-	return rows.SelectTransaction(source, Summaries, rows.MapSelected(Summaries.ID, expr.AsSelected(expr.Row(fields.ID))), rows.MapSelected(Summaries.Name, expr.AsSelected(expr.Row(fields.Name)))).All(ctx, tx)
+	scope := rows.TransactionScope(source)
+	return rows.SelectTransaction(source, Summaries,
+		rows.MapSelected(Summaries.ID, expr.AsSelected(expr.Row(expr.At(scope, Records.ID)))),
+		rows.MapSelected(Summaries.Name, expr.AsSelected(expr.Row(expr.At(scope, Records.Name))))).All(ctx, tx)
 }
 
 // doc-example:end transaction-query-composition

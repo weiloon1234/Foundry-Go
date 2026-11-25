@@ -6,9 +6,32 @@ only executable result belongs to the enclosing transaction query.
 
 ## Declare the parent and child
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go):
+`Record` is the application's model with an `int64` `ID` and a text `Name`, and `Records` its generated table; `rows`, `expr` and `orm` are the framework's `database/orm/rows`, `database/orm/expr` and `database/orm` packages. Two empty tag types alias the parent and child sources, and `recordAt` lifts a scope into the record's field expressions:
 
-<!-- compiled-source: tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go#transaction-correlations -->
+<!-- compiled-source: tests/fixtures/consumer/transactionqueries/models.go#transaction-aliases -->
+```go
+type claimedAlias struct{}
+type otherAlias struct{}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/transactionqueries/orm.go#record-expressions -->
+```go
+// Each binding retains its original scope; joined/correlated scopes must be lifted
+// explicitly before these fields can be used in that query.
+type recordExpressions[S any] struct {
+	scope expr.Scope[S, Record]
+	ID    expr.Expression[S, int64, int64]
+	Name  expr.Expression[S, string, string]
+}
+
+func recordAt[S any](scope expr.Scope[S, Record]) recordExpressions[S] {
+	return recordExpressions[S]{scope, expr.At(scope, Records.ID), expr.At(scope, Records.Name)}
+}
+```
+
+The block declares a parent restricted to two records and a child over all records, correlates them and keeps children with a larger ID:
+
+<!-- compiled-source: tests/fixtures/consumer/transactionqueries/guide_correlation.go#transaction-correlations -->
 ```go
 parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.In(Records.ID, 1, 3)))), "parent")
 child := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "child")
@@ -17,7 +40,7 @@ p, f := recordAt(rows.TransactionOuterScope(c, rows.TransactionScope(parent))), 
 c = c.Where(expr.Greater(f.ID, p.ID))
 ```
 
-The linked package declares the aliases and `recordAt` helper. Lift inputs through
+Lift inputs through
 `TransactionOuterScope`/`TransactionInnerScope`; nullable equivalents preserve
 missing joined rows. A nested transaction correlation can explicitly capture its
 parent and grandparent. Plain predicates from an unlifted source are not substitutes

@@ -47,19 +47,20 @@ Those read handles call their required-first terminal `RequireFirst`.
 for large results. Ordinary in-memory Go slice operations issue no SQL; sorting a
 page after reading it does not order the full matching dataset.
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#reads-after -->
+`models.Order` is the application's model and `models.Orders` its generated table. The three terminals read a filtered list, one order by key and one required order:
+
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#reads-after -->
 ```go
-func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) error {
-	_, err := orm.All(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))
-	if err != nil {
-		return err
-	}
-	_, err = orm.Find(ctx, db, models.Orders.Table, id)
-	if err != nil {
-		return err
-	}
-	_, err = orm.Require(ctx, db, models.Orders.Query().Where(orm.Eq(models.Orders.ID, id)))
-	return err
+func largeOrders(ctx context.Context, db database.Executor) ([]models.Order, error) {
+	return orm.All(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))
+}
+
+func findOrder(ctx context.Context, db database.Executor, id model.ID[models.Order]) (value.Optional[models.Order], error) {
+	return orm.Find(ctx, db, models.Orders.Table, id)
+}
+
+func requireOrder(ctx context.Context, db database.Executor, id model.ID[models.Order]) (models.Order, error) {
+	return orm.Require(ctx, db, models.Orders.Query().Where(orm.Eq(models.Orders.ID, id)))
 }
 ```
 
@@ -100,21 +101,23 @@ the exact string type, scope, codec and SQL NULL semantics without applying
 `lower()`. Stored column metadata must grant text capability; string enums are
 rejected. Use `TextRow` or `TextNullableRow` for stored text columns.
 
-<!-- compiled-source: tests/fixtures/consumer/scalarqueries/text_row_test.go#computed-text -->
-```go
-type noteSide struct{}
+`Sample` is the application's model with a nullable text `Note` and an integer `ID`, `Samples` its generated table and `Label` its string-backed text type; `rows`, `expr` and `orm` are the framework's `database/orm/rows`, `database/orm/expr` and `database/orm` packages. `NoteSide` is an empty tag type naming the aliased source. `NoteSearch` finds samples whose note, read through a correlated scalar, contains the term:
 
-func noteSearch(term scalarqueries.Label) orm.Query[scalarqueries.Sample] {
-	source := rows.From(scalarqueries.Samples.Query())
-	lookup := rows.As[noteSide](scalarqueries.Samples.Query(), "note_lookup")
+<!-- compiled-source: tests/fixtures/consumer/scalarqueries/guide_calculations.go#computed-text -->
+```go
+type NoteSide struct{}
+
+func NoteSearch(term Label) orm.Query[Sample] {
+	source := rows.From(Samples.Query())
+	lookup := rows.As[NoteSide](Samples.Query(), "note_lookup")
 	correlation := rows.Correlate(source, lookup)
-	outer := rows.OuterScope(correlation, rows.ModelScope(scalarqueries.Samples.Query()))
+	outer := rows.OuterScope(correlation, rows.ModelScope(Samples.Query()))
 	inner := rows.InnerScope(correlation, rows.Scope(lookup))
 	scalar := rows.SelectCorrelatedScalar(correlation,
-		expr.AsSelected(expr.Row(expr.At(inner, scalarqueries.Samples.Note)))).
-		Where(expr.Equal(expr.At(inner, scalarqueries.Samples.ID), expr.At(outer, scalarqueries.Samples.ID))).Limit(1)
+		expr.AsSelected(expr.Row(expr.At(inner, Samples.Note)))).
+		Where(expr.Equal(expr.At(inner, Samples.ID), expr.At(outer, Samples.ID))).Limit(1)
 	text := expr.TextNullableRowValue(rows.CorrelatedScalarNullableRowQuery(scalar))
-	return expr.Where(scalarqueries.Samples.Query(), expr.NullableTextIContains(text, term))
+	return expr.Where(Samples.Query(), expr.NullableTextIContains(text, term))
 }
 ```
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"foundry.test/consumer/ctes"
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
@@ -18,8 +19,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-type eligibleAlias struct{}
-type otherAlias struct{}
+type eligibleAlias = ctes.EligibleAlias
+type otherAlias = ctes.OtherAlias
 type totalsAlias struct{}
 
 func TestPostgresTypedCTEs(t *testing.T) {
@@ -35,15 +36,7 @@ func TestPostgresTypedCTEs(t *testing.T) {
 }
 
 func checkSharedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
-	// doc-example:begin model-ctes
-	u := models.Users
-	eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.Gte(u.Age, 21)))).Materialized()
-	first, second := rowset.AsRecord[eligibleAlias](eligible, "first_user"), rowset.AsRecord[otherAlias](eligible, "second_user")
-	a, b := rowset.Scope(first), rowset.Scope(second)
-	joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, models.Users.ID), expr.At(b, models.Users.ID)))
-	fields := rowset.LeftScope(joined, rowset.Scope(first))
-	names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, models.Users.Email)))), expr.Asc(expr.At(fields, models.Users.Email)))
-	// doc-example:end model-ctes
+	eligible, names := ctes.SharedEligible()
 	s, err := rowset.CompileRead(rowset.ReadScalar(names))
 	if err != nil {
 		return err

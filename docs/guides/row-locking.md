@@ -13,7 +13,11 @@
 
 Use a locked read when domain work must inspect a row and then change it while excluding conflicting writers. Every locked terminal requires `*database.Tx`. Foundry does not open a short transaction around only the read: the caller owns the transaction containing the protected operation.
 
-<!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking_recipes_test.go#locked-write -->
+`models.User` and `models.Order` are the application's models, `models.Users` and `models.Orders` their generated tables; `Age` is an integer field of `User` and `BuyerID` the user key held by `Order`. Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/orm`, `database/orm/expr`, `database/orm/rows`, `model`.
+
+`incrementAge` locks one visible user, then updates it in the same transaction:
+
+<!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking.go#locked-write -->
 ```go
 func incrementAge(ctx context.Context, db *database.DB, visible orm.Query[models.User], id model.ID[models.User]) error {
 	return db.Transaction(ctx, func(tx *database.Tx) error {
@@ -39,7 +43,9 @@ func incrementAge(ctx context.Context, db *database.DB, visible orm.Query[models
 
 Waiting is the default. `NoWait()` returns the PostgreSQL lock error when a row cannot be locked immediately. `SkipLocked()` omits conflicting rows, which is useful for competing queue consumers. `Wait()` restores normal waiting; the last waiting modifier wins. These policies affect row locks, not every table lock required by PostgreSQL. Use a bounded context for the entire transaction and shorter operation contexts where appropriate.
 
-<!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking_recipes_test.go#skip-locked -->
+`claimUsers` takes the next 20 unlocked users inside the caller's transaction:
+
+<!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking.go#skip-locked -->
 ```go
 func claimUsers(ctx context.Context, tx *database.Tx, visible orm.Query[models.User]) ([]models.User, error) {
 	return orm.AllLocked(ctx, tx, orm.Lock(visible.OrderBy(orm.Asc(models.Users.Key())).Limit(20)).SkipLocked())
@@ -53,7 +59,17 @@ An empty `SkipLocked` result does not prove that no eligible rows exist. Locks p
 
 Locking a join normally locks contributing rows from all eligible input tables. Use `Of` with preserved source scopes to select which tables to lock. The nullable side of an outer join cannot be row-locked; its nullable scope cannot produce a `rows.LockTarget`. An unqualified lock on such a join is rejected before execution.
 
-<!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking_recipes_test.go#lock-joined-record -->
+A join aliases each side with a distinct empty type:
+
+<!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking.go#lock-aliases -->
+```go
+type lockedUserAlias struct{}
+type lockedOrderAlias struct{}
+```
+
+`lockBuyers` joins users to their orders and locks only the users:
+
+<!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking.go#lock-joined-record -->
 ```go
 func lockBuyers(ctx context.Context, tx *database.Tx) ([]models.User, error) {
 	users := rows.As[lockedUserAlias](models.Users.Query(), "u")
@@ -73,9 +89,9 @@ Ordinary derived sources propagate a lock to their underlying tables. Aggregate,
 <a id="recipe-lock-policies"></a>
 ## Different policies for joined tables
 
-Use `LockRows` on a complete record, projection or single-value selection to declare each table's lock policy. Both scopes must belong to the same query and be non-nullable:
+Use `LockRows` on a complete record, projection or single-value selection to declare each table's lock policy. Both scopes must belong to the same query and be non-nullable. `lockBuyerOrders` uses the aliases above, locks the users without waiting and the orders skipping locked rows:
 
-<!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking_recipes_test.go#independent-lock-policies -->
+<!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking.go#independent-lock-policies -->
 ```go
 func lockBuyerOrders(ctx context.Context, tx *database.Tx) ([]models.User, error) {
 	users := rows.As[lockedUserAlias](models.Users.Query(), "u")

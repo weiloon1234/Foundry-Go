@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"foundry.test/consumer/comparisonqueries"
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
@@ -14,18 +15,13 @@ import (
 	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-type youngerAlias struct{}
-type olderAlias struct{}
+type youngerAlias = comparisonqueries.YoungerAlias
+type olderAlias = comparisonqueries.OlderAlias
 type extraAlias struct{}
 
 func TestPostgresComputedJoinConditions(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {
-		// doc-example:begin value-comparisons-and-joins
-		q := models.Users.Query()
-		younger, older := rowset.As[youngerAlias](q, "younger"), rowset.As[olderAlias](q, "older")
-		y, o := rowset.Scope(younger), rowset.Scope(older)
-		adjacent := rowset.OnEqual(expr.Add(expr.At(y, models.Users.Age), expr.ParamOf(expr.AsSelected(expr.Row(expr.At(y, models.Users.Age))), 1)), expr.At(o, models.Users.Age))
-		// doc-example:end value-comparisons-and-joins
+		q, younger, older, y, o, adjacent := comparisonqueries.AdjacentAges()
 		for _, test := range []struct {
 			on    rowset.JoinOn[rowset.Alias[youngerAlias, models.User], rowset.Alias[olderAlias, models.User]]
 			count int64

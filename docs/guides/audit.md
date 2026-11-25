@@ -14,9 +14,9 @@ Audit is opt-in. Foundry records stored model changes through the actual write t
 <a id="recipe-register-audit"></a>
 ## Register models and storage
 
-The independent [audit consumer](../../tests/fixtures/consumer/auditqueries/domain.go) registers its recorder alongside its database provider:
+`hooks.Member` is the application's model and `hooks.Members` its generated table; `foundation`, `audit` and `record` are framework packages. `registerAudit` registers the recorder alongside the application's database provider. `pool` and `history` are the typed service keys of the database pool and the recorder:
 
-<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#audit-registration -->
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#audit-registration -->
 ```go
 func registerAudit(r *foundation.Registrar, pool foundation.Key[*database.DB], history foundation.Key[*audit.Recorder]) error {
 	f := hooks.Members

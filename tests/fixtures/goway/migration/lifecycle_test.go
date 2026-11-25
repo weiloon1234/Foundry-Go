@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"foundry.test/goway/migration"
 	"foundry.test/goway/models"
 	hooks "foundry.test/goway/models/hooks"
 	reads "foundry.test/goway/models/reads"
@@ -18,6 +19,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
+
+var memberHooks = migration.MemberHooks
 
 func writeOptions() []orm.Option {
 	return []orm.Option{orm.WithHooks(memberHooks)}
@@ -197,16 +200,6 @@ func analyzeOrders(ctx context.Context, tx *database.Tx) (orm.Plan, error) {
 
 // doc-example:end explain
 
-// doc-example:begin audit-registration
-func registerAudit(r *foundation.Registrar, pool foundation.Key[*database.DB], history foundation.Key[*audit.Recorder]) error {
-	f := hooks.Members
-	policy := orm.AuditPolicyOf(f.Table, orm.AuditField(f.Note, record.Exclude))
-	return audit.Register(r, pool, history,
-		audit.Config{Area: "accounts", RetentionDays: 90}, orm.Auditing(f.Table, policy))
-}
-
-// doc-example:end audit-registration
-
 // doc-example:begin audit-timeline
 func memberHistory(ctx context.Context, db database.Executor, recorder *audit.Recorder, member hooks.Member) error {
 	identity := orm.IdentityOf(hooks.Members.Table, hooks.Members.Key())
@@ -255,14 +248,6 @@ func approve(ctx context.Context, tx *database.Tx, recorder *audit.Recorder, mem
 }
 
 // doc-example:end audit-action
-
-// doc-example:begin insert-member
-func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
-	f := hooks.Members
-	return orm.Insert(ctx, tx, f.Table, orm.Set(f.Key(), id), orm.Set(f.Name, "Ada"), orm.Set(f.Body, []byte{}))
-}
-
-// doc-example:end insert-member
 
 // doc-example:begin upsert-user
 func upsertUser(ctx context.Context, tx *database.Tx) (value.Optional[models.User], error) {

@@ -71,22 +71,35 @@ All operands retain the owning model or query scope. These functions use the sha
 | `ShiftLocal(local, interval)` | `temporal.LocalDateTime` |
 | `ShiftInstant(instant, interval, zone)` | Same Go instant type |
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go):
+The dynamic examples below use this application model, with `Samples` as its generated table; `expr` is the framework's `database/orm/expr` package and `temporal` is `temporal`:
 
-<!-- compiled-source: tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go#interval-queries-2 -->
+<!-- compiled-source: tests/fixtures/consumer/intervalqueries/models.go#interval-queries -->
 ```go
-ny, err := expr.LoadTimeZone("America/New_York")
-if err != nil {
-	return err
+//foundry:model table=interval_samples var=Samples key=ID identity=false
+type Sample struct {
+	ID          int `foundry:"member=ID,key-role=lookup"`
+	Period      temporal.Interval
+	MaybePeriod value.Nullable[temporal.Interval]
+	Start       time.Time
+	End         temporal.DateTime
+	LocalStart  temporal.LocalDateTime
+	LocalEnd    temporal.LocalDateTime
+	ClockStart  temporal.Time
+	ClockEnd    temporal.Time
+	Date        temporal.Date
 }
-for _, test := range []struct {
-	period temporal.Interval
-	hours  time.Duration
-}{{temporal.Days(1), 23}, {interval(t, 0, 0, 24*time.Hour), 24}} {
-	got := intervalOne(t, tx, expr.AsSelected(expr.ShiftInstant(expr.Value(f.Start), expr.Param(f.Period, test.period), ny)))
-	if got.Sub(samples[0].Start) != test.hours*time.Hour {
-		t.Fatal(got, test.hours)
+```
+
+`ShiftedStart` shifts each sample's start instant by a caller-supplied interval in a named zone:
+
+<!-- compiled-source: tests/fixtures/consumer/intervalqueries/orm.go#interval-queries-2 -->
+```go
+func ShiftedStart(period temporal.Interval, zoneName string) (expr.Selected[Sample, time.Time], error) {
+	zone, err := expr.LoadTimeZone(zoneName)
+	if err != nil {
+		return expr.Selected[Sample, time.Time]{}, err
 	}
+	return expr.AsSelected(expr.ShiftInstant(expr.Value(Samples.Start), expr.Param(Samples.Period, period), zone)), nil
 }
 ```
 
@@ -98,14 +111,16 @@ PostgreSQL normalizes timestamp differences into 24-hour day components plus rem
 
 Use `expr.SumInterval`, `expr.AvgInterval`, `expr.Min`, `expr.Max`, counts and their filters/window adapters. `SumInterval` and `AvgInterval` return `value.Nullable[temporal.Interval]`, including NULL for empty or all-NULL input. PostgreSQL owns interval averaging and whole-microsecond rounding; fractional months can become days and fractional days can become elapsed time. Overflow remains an execution or decode error.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/intervalqueries/orm_test.go):
+`Summary` is the result struct with nullable `Total` and `Average` intervals and an `int64` count field, and `Summaries` is its `rows.Define` schema. `rows` is the framework's `database/orm/rows` package. `PeriodSummary` sums, averages and counts the periods:
 
-<!-- compiled-source: tests/fixtures/consumer/intervalqueries/orm_test.go#interval-queries-3 -->
+<!-- compiled-source: tests/fixtures/consumer/intervalqueries/orm.go#interval-queries-3 -->
 ```go
-projection := rows.Select(rows.From(Samples.Query()), Summaries,
-	rows.MapSelected(Summaries.Total, expr.AsSelected(expr.SumInterval(Samples.Period))),
-	rows.MapSelected(Summaries.Average, expr.AsSelected(expr.AvgInterval(Samples.Period))),
-	rows.MapSelected(Summaries.Count, expr.AsSelected(expr.Count[Sample]())))
+func PeriodSummary() rows.Query[Sample, Summary] {
+	return rows.Select(rows.From(Samples.Query()), Summaries,
+		rows.MapSelected(Summaries.Total, expr.AsSelected(expr.SumInterval(Samples.Period))),
+		rows.MapSelected(Summaries.Average, expr.AsSelected(expr.AvgInterval(Samples.Period))),
+		rows.MapSelected(Summaries.Count, expr.AsSelected(expr.Count[Sample]())))
+}
 ```
 
 Every calculation has `Nullable`, `Value` and `NullableValue` forms. Nullable binary operations require both operands to be nullable; use `NullableRow` or `Nullable` to widen the other operand explicitly. SQL NULL propagates. Selected forms retain aggregates and windows, for example `expr.IntervalMonthsNullableValue(expr.AsSelected(expr.SumInterval(f.Period)))`. They cannot silently become row predicates.

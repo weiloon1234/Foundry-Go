@@ -200,18 +200,19 @@ The [many-to-many PostgreSQL fixture](../../tests/fixtures/consumer/model_throug
 <a id="recipe-load-relations"></a>
 ## Load existing parents
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#relations-after -->
+`models.Order` and `models.User` are the application's models and `models.Orders.Buyer` the relation slot on `Order` that holds the buyer, keyed by `BuyerID`. `database` and `orm` are the framework's packages. `OrderBuyer` declares the relation; `ordersWithBuyers` eager-loads it, and `loadBuyers` loads it onto parents the caller already holds:
+
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#relations-after -->
 ```go
 var OrderBuyer = orm.BelongsToOf(models.Orders.Buyer, models.Orders.BuyerID, models.Users.ID)
 
-func relations(ctx context.Context, db database.Executor, existing []models.Order) error {
-	_, err := orm.All(ctx, db, models.Orders.Query().With(OrderBuyer))
-	if err != nil {
-		return err
-	}
-	_, err = orm.LoadFrom(ctx, db, models.Orders.Query().With(OrderBuyer), existing)
-	return err
+func ordersWithBuyers(ctx context.Context, db database.Executor) ([]models.Order, error) {
+	return orm.All(ctx, db, models.Orders.Query().With(OrderBuyer))
+}
+
+func loadBuyers(ctx context.Context, db database.Executor, existing []models.Order) ([]models.Order, error) {
+	return orm.LoadFrom(ctx, db, models.Orders.Query().With(OrderBuyer), existing)
 }
 ```
 
-Source and imports: [consumer migration fixture](../../tests/fixtures/goway/migration/examples_test.go). Query-based loading retains the same budgets for existing parents.
+Query-based loading retains the same budgets for existing parents.

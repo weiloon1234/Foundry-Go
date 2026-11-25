@@ -20,6 +20,20 @@ Handwritten Go models describe current application types. A `migrate.Definition`
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `database`, `database/command` as `dbcommand`, `infrastructure`, `database/migrate`, `model`, `database/orm`, `database/seed`.
 
+The application declares its origin, migration IDs and introducing version once as typed constants:
+
+<!-- compiled-source: tests/fixtures/consumer/migrations/migrations.go#migration-names -->
+```go
+const (
+	Origin         migrate.Origin  = "consumer"
+	CreateRecords  migrate.ID      = "20260911000000_create_records"
+	AddRecordLabel migrate.ID      = "20260911000001_add_record_label"
+	Introduced     migrate.Version = "v0.1.0"
+)
+```
+
+`Definitions` returns the historical definitions, the second depending on the first:
+
 <!-- compiled-source: tests/fixtures/consumer/migrations/migrations.go#migration-definitions -->
 ```go
 func Definitions() []migrate.Definition {
@@ -41,6 +55,8 @@ By default, each statement must be valid inside a PostgreSQL transaction. Use se
 ## History and explicit execution
 
 `registry.Inspect(history)` returns copied status entries and all detected problems. It validates record shape, checksum encoding, positive batch numbers, and timestamps. Changed or missing definitions and unapplied dependencies block `Report.Check` and `registry.Pending`. A caller-owned report is informative; it is never authorization to skip the runner's locked history check.
+
+`MigrationStatus` reads the history without changing it; `database` is the framework's `database` package:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/migration_recipes.go#inspect-migrations -->
 ```go
@@ -102,7 +118,8 @@ Call `orm.Insert` with that supplied transaction and typed assignments;
 the normal defaults and write lifecycle apply. The [ORM seeder example](../../tests/fixtures/goway/integrations/seeding/seeder.go)
 uses this path without a generated draft or changes to the seeder registry.
 For repeatable reference data, supply a stable key and preserve existing values
-with an explicit conflict policy:
+with an explicit conflict policy. `Author` is the application's model and `Authors`
+its generated table; `database` is the framework's `database` package. `AuthorSeeder` inserts one author if absent, and `SeedAuthors` runs it:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/seeding.go#seed-reference-data -->
 ```go
@@ -177,31 +194,28 @@ Keep each feature's database and schema settings when disabling it. They identif
 
 An available pending migration that requires an unapplied disabled migration reports `migrate.DependencyDisabled` and blocks execution. Foundry never enables a prerequisite implicitly. Applied prerequisites remain usable while their feature is disabled. Interrupted nontransactional migrations retain their progress and reconciliation requirements; disabling one does not resume its SQL. A reconciled disabled checkpoint does not lower the batch number of unrelated pending migrations. Re-enabling the feature resumes its own checkpoint at the recorded batch. An `Up` with no executable pending work creates no history or progress tables.
 
-For example, register application migrations as follows:
+`RunDatabaseCommand`, in the application's `migrations` package, registers its definitions and runs one parsed command. `settings` is the application's `application.Settings`, `args` the command-line arguments:
 
-<!-- compiled-source: tests/fixtures/consumer/database_command_test.go#application-migrations -->
+<!-- compiled-source: tests/fixtures/consumer/migrations/database_command.go#application-migrations -->
 ```go
-func Example_applicationDatabaseCommand() {
-	run := func(ctx context.Context, settings application.Settings, args []string, stdout, stderr io.Writer) error {
-		invocation, err := dbcommand.Parse(args, stderr)
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		app, err := application.New(settings).Migrations(infrastructure.MigrationTarget{Definitions: migrations.Definitions()}).Build(ctx)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), app.ShutdownTimeout())
-			defer cancel()
-			_ = app.Shutdown(shutdown)
-		}()
-		return app.RunDatabaseCommand(ctx, invocation, application.DatabaseCommandResources{}, stdout)
+func RunDatabaseCommand(ctx context.Context, settings application.Settings, args []string, stdout, stderr io.Writer) (err error) {
+	invocation, err := dbcommand.Parse(args, stderr)
+	if errors.Is(err, flag.ErrHelp) {
+		return nil
 	}
-	_ = run
+	if err != nil {
+		return err
+	}
+	app, err := application.New(settings).Migrations(infrastructure.MigrationTarget{Definitions: Definitions()}).Build(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), app.ShutdownTimeout())
+		defer cancel()
+		err = errors.Join(err, app.Shutdown(shutdown))
+	}()
+	return app.RunDatabaseCommand(ctx, invocation, application.DatabaseCommandResources{}, stdout)
 }
 ```
 
@@ -233,6 +247,8 @@ Protocol tests exercise apply-once history, drift, bounded history reads/growth,
 
 <a id="recipe-online-migration"></a>
 ## Concurrent indexes and nontransactional statements
+
+`OnlineMigrations` registers a table, then an index created concurrently with `Mode: migrate.NonTransactional`, which depends on the table:
 
 <!-- compiled-source: tests/fixtures/consumer/security/contracts.go#online-migrations -->
 ```go

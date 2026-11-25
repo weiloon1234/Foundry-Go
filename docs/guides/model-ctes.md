@@ -4,21 +4,28 @@
 `rows.ModelRecord(query)` for a complete model, or `rows.RecordOf(projection)` for
 a handwritten rows projection. Alias the definition with `rows.AsRecord[Tag]`.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/ctes/ctes_postgres_test.go):
+`models.User` is the application's model with an integer `Age` and a text `Email`; `orm`, `rows` and `expr` are the framework's `database/orm`, `database/orm/rows` and `database/orm/expr` packages. Two empty tag types name the aliases of one definition:
 
-<!-- compiled-source: tests/fixtures/consumer/ctes/ctes_postgres_test.go#model-ctes -->
+<!-- compiled-source: tests/fixtures/consumer/ctes/guide_ctes.go#cte-aliases -->
 ```go
-u := models.Users
-eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.Gte(u.Age, 21)))).Materialized()
-first, second := rowset.AsRecord[eligibleAlias](eligible, "first_user"), rowset.AsRecord[otherAlias](eligible, "second_user")
-a, b := rowset.Scope(first), rowset.Scope(second)
-joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, models.Users.ID), expr.At(b, models.Users.ID)))
-fields := rowset.LeftScope(joined, rowset.Scope(first))
-names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, models.Users.Email)))), expr.Asc(expr.At(fields, models.Users.Email)))
+type EligibleAlias struct{}
+type OtherAlias struct{}
 ```
 
-The `rowset` import names `database/orm/rows`; the linked package declares both
-alias tags. `expr.At` reads model columns through the alias scope. `rows.At` reads
+The block defines one materialized CTE, joins it to itself under both aliases and selects the ordered emails:
+
+<!-- compiled-source: tests/fixtures/consumer/ctes/guide_ctes.go#model-ctes -->
+```go
+u := models.Users
+eligible := rows.CTE("eligible_users", rows.ModelRecord(models.Users.Query().Where(orm.Gte(u.Age, 21)))).Materialized()
+first, second := rows.AsRecord[EligibleAlias](eligible, "first_user"), rows.AsRecord[OtherAlias](eligible, "second_user")
+a, b := rows.Scope(first), rows.Scope(second)
+joined := rows.InnerJoin(first, second, rows.On(expr.At(a, models.Users.ID), expr.At(b, models.Users.ID)))
+fields := rows.LeftScope(joined, rows.Scope(first))
+names := rows.OrderScalar(rows.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, models.Users.Email)))), expr.Asc(expr.At(fields, models.Users.Email)))
+```
+
+`expr.At` reads model columns through the alias scope. `rows.At` reads
 fields of a rows schema. Each alias preserves the complete result's type and codec.
 
 ## Definition ownership

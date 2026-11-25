@@ -7,15 +7,17 @@ Aggregates and windows cannot become WHERE predicates.
 
 ## Row values and NULL handling
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/expressionqueries/expressions_test.go):
+`models.User` is the application's model with an integer `Age` and text `Nickname` (nullable) and `Email`, and `models.Users` is its generated table; `rows` is the framework's `database/orm/rows` package and `orm` is `database/orm`. `LabelsByAge` selects a CASE label for each user with a display name, ordered by that label:
 
-<!-- compiled-source: tests/fixtures/consumer/expressionqueries/expressions_test.go#conditional-expressions -->
+<!-- compiled-source: tests/fixtures/consumer/expressionqueries/guide_expressions.go#conditional-expressions -->
 ```go
-u := models.Users
-display := expr.Coalesce(expr.Value(u.Nickname), expr.Value(u.Email))
-choice := expr.When(expr.ModelPredicate(orm.Gt(u.Age, 20)), expr.Param(u.Email, "older"))
-label := choice.When(expr.ModelPredicate(orm.Eq(u.Age, 20)), expr.Value(u.Email)).Else(expr.Param(u.Email, "unknown"))
-statement, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(expr.Where(models.Users.Query(), expr.Ne(display, ""))), expr.AsSelected(label)), expr.Asc(label))))
+func LabelsByAge() rows.Scalar[models.User, string] {
+	u := models.Users
+	display := expr.Coalesce(expr.Value(u.Nickname), expr.Value(u.Email))
+	choice := expr.When(expr.ModelPredicate(orm.Gt(u.Age, 20)), expr.Param(u.Email, "older"))
+	label := choice.When(expr.ModelPredicate(orm.Eq(u.Age, 20)), expr.Value(u.Email)).Else(expr.Param(u.Email, "unknown"))
+	return rows.OrderScalar(rows.SelectScalar(rows.From(expr.Where(models.Users.Query(), expr.Ne(display, ""))), expr.AsSelected(label)), expr.Asc(label))
+}
 ```
 
 `expr.Coalesce` takes a nullable value and a required fallback with the same base
@@ -45,13 +47,14 @@ with no branches fails validation even if an ELSE is supplied.
 column must still satisfy the enclosing SELECT's grouping rules. A window cannot
 be hidden inside a conditional to make it legal in HAVING.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/expressionqueries/expressions_test.go):
+`models.Order` is the application's model with an integer `TotalCents` column, whose `expr.Sum` is a nullable decimal. `TotalOrZero` selects that sum, or zero when it is NULL:
 
-<!-- compiled-source: tests/fixtures/consumer/expressionqueries/expressions_test.go#conditional-expressions-2 -->
+<!-- compiled-source: tests/fixtures/consumer/expressionqueries/guide_expressions.go#conditional-expressions-2 -->
 ```go
-orders := models.Orders.Query()
-total := expr.Sum(models.Orders.TotalCents)
-computed := expr.CoalesceValue(expr.AsSelected(total), expr.AsSelected(expr.ParamOf(total, decimal.FromInt64(0))))
+func TotalOrZero() expr.Selected[models.Order, decimal.Decimal] {
+	total := expr.Sum(models.Orders.TotalCents)
+	return expr.CoalesceValue(expr.AsSelected(total), expr.AsSelected(expr.ParamOf(total, decimal.FromInt64(0))))
+}
 ```
 
 ## Bound parameters and codecs

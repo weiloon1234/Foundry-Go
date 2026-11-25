@@ -56,44 +56,6 @@ var Users = orm.Define("users", func(b orm.Builder[User], u *User) UserTable {
 		deleted, orm.SoftDeletes(deleted)}
 })
 
-// doc-example:begin reads-after
-func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) error {
-	_, err := orm.All(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))
-	if err != nil {
-		return err
-	}
-	_, err = orm.Find(ctx, db, models.Orders.Table, id)
-	if err != nil {
-		return err
-	}
-	_, err = orm.Require(ctx, db, models.Orders.Query().Where(orm.Eq(models.Orders.ID, id)))
-	return err
-}
-
-// doc-example:end reads-after
-
-// doc-example:begin unique-column-lock
-func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
-	return db.Transaction(ctx, func(tx *database.Tx) error {
-		selected := hooks.Members.Table.Query().Where(orm.Eq(hooks.Members.Table.Key(), id))
-		if _, err := orm.RequireLocked(ctx, tx, orm.Lock(selected)); err != nil {
-			return err
-		}
-		_, err := orm.Update(ctx, tx, selected, hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "guest"))
-		return err
-	})
-}
-
-// doc-example:end unique-column-lock
-
-// doc-example:begin writes-after
-func write(ctx context.Context, tx *database.Tx, id int64) error {
-	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))
-	return err
-}
-
-// doc-example:end writes-after
-
 // doc-example:begin insert-after
 func insert(ctx context.Context, tx *database.Tx) error {
 	_, err := orm.Insert(ctx, tx, models.Users.Table, orm.Set(models.Users.Email, "ada@example.test"))
@@ -109,35 +71,6 @@ func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
 }
 
 // doc-example:end force-after
-
-// doc-example:begin relations-after
-var OrderBuyer = orm.BelongsToOf(models.Orders.Buyer, models.Orders.BuyerID, models.Users.ID)
-
-func relations(ctx context.Context, db database.Executor, existing []models.Order) error {
-	_, err := orm.All(ctx, db, models.Orders.Query().With(OrderBuyer))
-	if err != nil {
-		return err
-	}
-	_, err = orm.LoadFrom(ctx, db, models.Orders.Query().With(OrderBuyer), existing)
-	return err
-}
-
-// doc-example:end relations-after
-
-// doc-example:begin hooks-after
-func memberHooks() orm.Hooks[hooks.Member] {
-	return orm.Hooks[hooks.Member]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[hooks.Member]) error {
-		if !orm.WriteIsSet(draft, func() func(arg0 string) orm.Assignment[hooks.Member] {
-			receiver := hooks.Members.Name
-			return func(arg0 string) orm.Assignment[hooks.Member] { return orm.Set(receiver, arg0) }
-		}()) {
-			return orm.WriteSet(draft, orm.Set(hooks.Members.Name, "guest"))
-		}
-		return nil
-	}}
-}
-
-// doc-example:end hooks-after
 
 // doc-example:begin unset-after
 func unset(draft *orm.Write[hooks.Member]) error {
@@ -260,20 +193,6 @@ func scalar(ctx context.Context, db database.Executor) error {
 }
 
 // doc-example:end scalar-after
-
-// doc-example:begin inputs-after
-func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
-	return orm.Set(mutators.Members.Email, input)
-}
-
-// doc-example:end inputs-after
-
-// doc-example:begin accessors-after
-func accessor(member mutators.Member) (coremodels.EmailLink, error) {
-	return member.AccessEmail()
-}
-
-// doc-example:end accessors-after
 
 // doc-example:begin input-key-after
 func inputKey(id model.ID[mutators.KeyRecord]) orm.Assignment[mutators.KeyRecord] {

@@ -4,14 +4,14 @@ These APIs extend the [window-function contracts](model-windows.md), using the s
 
 ## Numeric distances
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/framequeries/ranges_postgres_test.go):
+`Sample` is the application's model with an integer `ID` and a `time.Time` field `At`, and `Samples` is its generated table; `expr` and `rows` are the framework's `database/orm/expr` and `database/orm/rows` packages. `IDRange` returns the range builder and a frame covering the previous ID and the current row:
 
-<!-- compiled-source: tests/fixtures/consumer/framequeries/ranges_postgres_test.go#window-ranges-and-names -->
+<!-- compiled-source: tests/fixtures/consumer/framequeries/guide_frames.go#window-ranges-and-names -->
 ```go
-q := framequeries.Samples.Query()
-f := framequeries.Samples
-r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.ID))))
-frameCounts(t, tx, r.Between(r.Preceding(1), r.CurrentRow()), []int64{1, 2, 2, 2})
+func IDRange() (expr.RangeWindow[Sample, int], expr.Window[Sample]) {
+	r := expr.NumericRange(expr.WindowFor(rows.ModelScope(Samples.Query())), expr.AsSelected(expr.Row(expr.Value(Samples.ID))))
+	return r, r.Between(r.Preceding(1), r.CurrentRow())
+}
 ```
 
 `NumericRange` retains the ordering expression's exact Go type in its distance API. An integer, exact decimal and floating-point value have different `Preceding`/`Following` arguments. `NullableNumericRange` accepts a nullable ordering expression while retaining non-nullable distances. Both support computed selected numeric values, including ordinary aggregates over grouped rows. Nested windows remain invalid at the same SELECT level.
@@ -24,14 +24,18 @@ Distances are encoded once, bound as parameters and explicitly cast using the co
 
 ## Calendar and elapsed distances
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/framequeries/ranges_postgres_test.go):
+`DayWindows` returns two frames over the `At` instant, one a calendar day back and one 24 elapsed hours back:
 
-<!-- compiled-source: tests/fixtures/consumer/framequeries/ranges_postgres_test.go#window-ranges-and-names-2 -->
+<!-- compiled-source: tests/fixtures/consumer/framequeries/guide_frames.go#window-ranges-and-names-2 -->
 ```go
-r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(f.At))))
-day, _ := temporal.Elapsed(24 * time.Hour)
-frameCounts(t, tx, r.Between(r.Preceding(temporal.Days(1)), r.CurrentRow()), []int64{1, 1, 2, 2})
-frameCounts(t, tx, r.Between(r.Preceding(day), r.CurrentRow()), []int64{1, 2, 2, 2})
+func DayWindows() (expr.Window[Sample], expr.Window[Sample], error) {
+	r := expr.TemporalRange(expr.WindowFor(rows.ModelScope(Samples.Query())), expr.AsSelected(expr.Row(expr.Value(Samples.At))))
+	day, err := temporal.Elapsed(24 * time.Hour)
+	if err != nil {
+		return expr.Window[Sample]{}, expr.Window[Sample]{}, err
+	}
+	return r.Between(r.Preceding(temporal.Days(1)), r.CurrentRow()), r.Between(r.Preceding(day), r.CurrentRow()), nil
+}
 ```
 
 `TemporalRange` supports `time.Time`, `temporal.DateTime`, `temporal.LocalDateTime`, `temporal.Date` and `temporal.Time`. `NullableTemporalRange` accepts their nullable expressions. Distances are immutable `temporal.Interval` values, with calendar months, calendar days and elapsed time kept separate. Use `Months`, `Days`, `Elapsed`, or `NewInterval(months, days, elapsed)` for combined signed components. Elapsed time must contain whole microseconds; finer precision is rejected. Its range is Go's `time.Duration`; calendar components use signed 32-bit counts.
@@ -46,15 +50,16 @@ For time-of-day ordering, calendar months/days are rejected because PostgreSQL o
 
 ## Reusable named definitions
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/framequeries/named_postgres_test.go):
+The block chains three named windows and counts rows over the last one. It builds on `Samples`; the statements are in one scope:
 
-<!-- compiled-source: tests/fixtures/consumer/framequeries/named_postgres_test.go#window-ranges-and-names-3 -->
+<!-- compiled-source: tests/fixtures/consumer/framequeries/guide_frames.go#window-ranges-and-names-3 -->
 ```go
-base := expr.WindowFor(rowset.ModelScope(q)).PartitionBy(expr.Group(expr.Param(f.ID, 1))).Named("all_samples")
-ordered := base.OrderBy(expr.Asc(expr.Value(f.ID))).Named("ordered")
+q := Samples.Query()
+base := expr.WindowFor(rows.ModelScope(q)).PartitionBy(expr.Group(expr.Param(Samples.ID, 1))).Named("all_samples")
+ordered := base.OrderBy(expr.Asc(expr.Value(Samples.ID))).Named("ordered")
 framed := ordered.RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
-count := expr.Over(expr.Count[framequeries.Sample](), framed)
-result := rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), count), expr.AscValue(expr.RowNumber(framed)))
+count := expr.Over(expr.Count[Sample](), framed)
+result := rows.OrderScalar(rows.SelectScalar(rows.From(q), count), expr.AscValue(expr.RowNumber(framed)))
 ```
 
 Each descriptor carries its definition. Reusing `framed` emits one WINDOW definition, with dependencies before dependents, and uses `OVER "framed"`. The scope remains typed. Define a name once and share the returned descriptor; different declarations with the same name in one SELECT are rejected. Names are validated and quoted at the declaration boundary. There are no string-based lookups when using a descriptor.

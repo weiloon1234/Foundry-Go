@@ -8,24 +8,28 @@ type, source boundary and codecs.
 
 Use `rows.FromModel` followed by `rows.Distinct` for a complete-model projection,
 `rows.Distinct` for a rows projection, or `rows.DistinctRecord` for a complete
-record selected from a join:
+record selected from a join. `models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID`; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. Two empty tag types alias the joined sources:
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/distinctqueries/distinct_postgres_test.go):
-
-<!-- compiled-source: tests/fixtures/consumer/distinctqueries/distinct_postgres_test.go#model-distinct -->
+<!-- compiled-source: tests/fixtures/consumer/distinctqueries/guide_distinct.go#distinct-aliases -->
 ```go
-people := rows.As[personAlias](models.Users.Query(), "person")
-orders := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
+type PersonAlias struct{}
+type PurchaseAlias struct{}
+```
+
+The block joins users to their orders, selects the ordered user records and removes duplicates:
+
+<!-- compiled-source: tests/fixtures/consumer/distinctqueries/guide_distinct.go#model-distinct -->
+```go
+people := rows.As[PersonAlias](models.Users.Query(), "person")
+orders := rows.As[PurchaseAlias](models.Orders.Query(), "purchase")
 p, o := rows.Scope(people), rows.Scope(orders)
 joined := rows.InnerJoin(people, orders, rows.On(expr.At(p, models.Users.ID), expr.At(o, models.Orders.BuyerID)))
 scope := rows.LeftScope(joined, rows.Scope(people))
-fields := scope
-base := rows.SelectRecord(joined, scope).OrderBy(expr.Asc(expr.At(fields, models.Users.Email)))
+base := rows.SelectRecord(joined, scope).OrderBy(expr.Asc(expr.At(scope, models.Users.Email)))
 unique := rows.DistinctRecord(base)
-items, err := rows.ReadRecord(unique).All(t.Context(), tx)
 ```
 
-The linked package declares `personAlias` and `purchaseAlias`. Distinctness covers
+Read the result with `rows.ReadRecord(unique).All(ctx, db)`. Distinctness covers
 all selected columns, including a complete model's primary key. Use a smaller
 rows schema or scalar selection to deduplicate fewer values. SQL NULL values
 compare as duplicates without changing hydration nullability. Eager-loading

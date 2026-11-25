@@ -8,12 +8,20 @@ constructing a second field set. For projected records use `rows.AsRecord` and
 
 ## Join typed inputs
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/joinqueries/outer/outer_postgres_test.go):
+`models.User` is the application's model, with a nullable `IntroducerID` naming the user who introduced it; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. Two empty tag types alias the same users table as referrals and sponsors:
 
-<!-- compiled-source: tests/fixtures/consumer/joinqueries/outer/outer_postgres_test.go#model-joins -->
+<!-- compiled-source: tests/fixtures/consumer/joinqueries/outer/guide_outer.go#join-aliases -->
 ```go
-referrals := rows.As[referralAlias](models.Users.Query(), "referral")
-sponsors := rows.As[sponsorAlias](models.Users.Query(), "sponsor")
+type ReferralAlias struct{}
+type SponsorAlias struct{}
+```
+
+The block left-joins each referral to its sponsor and lifts both sides into scopes, the sponsor's nullable:
+
+<!-- compiled-source: tests/fixtures/consumer/joinqueries/outer/guide_outer.go#model-joins -->
+```go
+referrals := rows.As[ReferralAlias](models.Users.Query(), "referral")
+sponsors := rows.As[SponsorAlias](models.Users.Query(), "sponsor")
 r := rows.Scope(referrals)
 s := rows.Scope(sponsors)
 joined := rows.LeftJoin(referrals, sponsors, rows.On(expr.At(r, models.Users.IntroducerID), expr.At(s, models.Users.ID)))
@@ -21,7 +29,7 @@ referralScope := rows.LeftScope(joined, rows.Scope(referrals))
 sponsorScope := rows.NullableRightScope(joined, rows.Scope(sponsors))
 ```
 
-The linked package declares the alias tags. `rows.On` accepts compatible keys,
+`rows.On` accepts compatible keys,
 including nullable keys. `OnEqual`, `OnLess`, `OnLike` and their comparison families
 accept computed row operands with distinct left/right scopes. See
 [value comparisons](value-comparisons-and-joins.md).

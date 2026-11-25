@@ -12,15 +12,26 @@ These values are ordinary Go types visible to the compiler and gopls. The [exter
 <a id="recipe-allocate-model-id"></a>
 ## Model identity
 
-Declare `ID model.ID[User]` on a `User` model. `model.NewIDAt[User](clock.Now())` generates an identity using explicit time for deterministic timestamp behavior. IDs remain comparable and usable as map keys even when the model contains slices or maps. An order ID cannot be passed as a user ID or converted directly between those instantiated ID types.
+Declare `ID model.ID[User]` on a `User` model, here the application's smallest one:
 
-<!-- compiled-source: tests/fixtures/consumer/values_test.go#allocate-model-id -->
+<!-- compiled-source: tests/fixtures/consumer/guide_values.go#model-id-user -->
 ```go
-id, err := model.NewIDAt[User](time.Now())
-if err != nil {
-	t.Fatal(err)
+type User struct{ ID model.ID[User] }
+```
+
+`model.NewIDAt[User](clock.Now())` generates an identity using explicit time for deterministic timestamp behavior. IDs remain comparable and usable as map keys even when the model contains slices or maps. An order ID cannot be passed as a user ID or converted directly between those instantiated ID types.
+
+`NewUser` takes the clock reading from its caller; `model` is the framework's `model` package:
+
+<!-- compiled-source: tests/fixtures/consumer/guide_values.go#allocate-model-id -->
+```go
+func NewUser(now time.Time) (User, error) {
+	id, err := model.NewIDAt[User](now)
+	if err != nil {
+		return User{}, err
+	}
+	return User{ID: id}, nil
 }
-user := User{ID: id}
 ```
 
 New identities use UUIDv7: millisecond timestamp plus cryptographic random bits. Ordering within a millisecond, after clock rollback, and between hosts is not promised. The representation follows [RFC 9562 section 5.7](https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7); randomness comes from [Go crypto/rand](https://pkg.go.dev/crypto/rand#Read).

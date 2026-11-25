@@ -5,6 +5,7 @@ import "time"
 import (
 	"testing"
 
+	"foundry.test/goway/guideadapters"
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -25,7 +26,7 @@ func TestGuideDeclarations(t *testing.T) {
 	if err != nil || restored.Key() != id {
 		t.Fatal("identity example did not preserve the key", err)
 	}
-	if _, err := withOrigin(t.Context(), Account{ID: 7, Enabled: true}); err != nil {
+	if _, err := guideadapters.WithOrigin(t.Context(), Account{ID: 7, Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
 	if err := accountProvider(nil).Validate(); err != nil {
