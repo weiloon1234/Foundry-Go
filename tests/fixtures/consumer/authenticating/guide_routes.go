@@ -40,11 +40,7 @@ func securedProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhtt
 // doc-example:end configure-bound-scopes
 
 // doc-example:begin scoped-resource-policy
-func ScopedOrderRoute(db database.Executor, binding foundryhttp.GuardBinding[models.User], read func(context.Context, models.User, models.Order) error) (foundryhttp.RouteRegistration, error) {
-	endpoint, err := SecuredOrder(binding)
-	if err != nil {
-		return foundryhttp.RouteRegistration{}, err
-	}
+func ScopedOrderRoute(db database.Executor, endpoint OrderEndpoint, binding foundryhttp.GuardBinding[models.User], read func(context.Context, models.User, models.Order) error) foundryhttp.RouteRegistration {
 	guard := binding.Guard()
 	resolver := modelbinding.Define(func(ctx context.Context, path OrderPath) (value.Optional[models.Order], error) {
 		actor, err := guard.Require(ctx)
@@ -62,7 +58,7 @@ func ScopedOrderRoute(db database.Executor, binding foundryhttp.GuardBinding[mod
 	})
 	return authorized.Handle(func(ctx context.Context, actor models.User, in OrderInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, read(ctx, actor, in.Model)
-	}), nil
+	})
 }
 
 // doc-example:end scoped-resource-policy

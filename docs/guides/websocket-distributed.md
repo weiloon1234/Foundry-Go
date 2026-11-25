@@ -11,10 +11,13 @@
 
 The local [channel/protocol guide](websocket.md) owns declarations, payload DTOs,
 room authorization and protocol version 1. This guide adds distributed behavior.
-The executable consumer is [realtime](../../tests/fixtures/consumer/realtime/orders.go).
 
 <a id="recipe-distributed-hub"></a>
 ## Assembly and ownership
+
+`models.User`, `OrderService`, `Registry(service)`, `Inbox` and `OrderResponse` are the application's declarations from the [channel guide](websocket.md#recipe-declare-channel). Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `model`, `websocket`.
+
+Build the distributed hub from the same registry as the local one, with a cluster backend borrowed from Redis:
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#distributed-hub -->
 ```go
@@ -26,6 +29,8 @@ func NewDistributedHub(service OrderService, config websocket.Config, backend we
 	return websocket.NewDistributed(r, nil, config, backend, cluster)
 }
 ```
+
+A job or HTTP process publishes without a hub; the registry needs no handler service there:
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#standalone-publisher -->
 ```go
@@ -64,6 +69,8 @@ a canceled wait does not release a callback that continues to run.
 <a id="recipe-realtime-publisher"></a>
 ## Configure a publishing process
 
+Set the process to publish only, then publish through the application's services (`connection` names the Redis realtime connection):
+
 <!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#configured-realtime-publisher -->
 ```go
 func PublisherSettings(settings application.Settings, connection websocket.ConnectionName) application.Settings {
@@ -88,7 +95,7 @@ func NewInboxPublisher(services application.Services, inbox Inbox) (*InboxPublis
 	return &InboxPublisher{inbox: inbox, publisher: publisher}, nil
 }
 
-func (p *InboxPublisher) Publish(ctx context.Context, user model.ID[models.User], reply httpdto.OrderResponse) (websocket.MessageID, error) {
+func (p *InboxPublisher) Publish(ctx context.Context, user model.ID[models.User], reply OrderResponse) (websocket.MessageID, error) {
 	return websocket.Publish(ctx, p.publisher, p.inbox.channel, user, p.inbox.updated, reply)
 }
 ```

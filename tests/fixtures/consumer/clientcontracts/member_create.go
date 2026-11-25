@@ -89,7 +89,7 @@ func HandleMemberCreate(_ context.Context, in foundryhttp.Input[foundryhttp.NoPa
 	id, err := createMember(in.Body.Name)
 	var existing *existingMember
 	if errors.As(err, &existing) {
-		// These fixture entries are public. Real handlers check current resource
+		// These entries are public. Real handlers check current resource
 		// authorization before exposing an existing member's identity or state.
 		return MemberCreated{}, MemberExists.New(MemberExistsDetails{ExistingMemberID: existing.ID, Existing: MemberConflictState{Name: existing.Name, State: existing.State}}).WithCause(err)
 	}

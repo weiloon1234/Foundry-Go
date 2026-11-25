@@ -20,11 +20,11 @@ type AccountReceipt struct {
 	Name string `json:"name"`
 }
 
+// doc-example:begin typed-http-request
 type Accounts struct{ client *httpclient.Client }
 
 func NewAccounts(client *httpclient.Client) *Accounts { return &Accounts{client: client} }
 
-// doc-example:begin typed-http-request
 func (s *Accounts) Create(ctx context.Context, name string, token secret.String) (AccountReceipt, error) {
 	request, err := httpclient.JSON(ctx, s.client.Post("accounts").Bearer(token), CreateAccountJSON(), CreateAccount{Name: name})
 	if err != nil {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/url"
 
-	"foundry.test/consumer/internal/authfixture"
+	"github.com/weiloon1234/Foundry-Go/auth"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/httpclient"
 	outboundcapture "github.com/weiloon1234/Foundry-Go/httpclient/capture"
@@ -13,16 +13,8 @@ import (
 // OutboundCaptureRoutes mounts the framework's outbound call viewer behind the
 // same developer gate as the webhook viewer.
 // doc-example:begin outbound-capture-routes
-func OutboundCaptureRoutes(captures *outboundcapture.Store) ([]foundryhttp.RouteRegistration, error) {
-	transport, guard, err := authfixture.Authentication(ReadCaptures.Registration())
-	if err != nil {
-		return nil, err
-	}
-	binding, err := foundryhttp.BindGuard(transport, guard)
-	if err != nil {
-		return nil, err
-	}
-	return outboundcapture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.Permissions(ReadCaptures))
+func OutboundCaptureRoutes(captures *outboundcapture.Store, binding foundryhttp.GuardBinding[Actor], viewCaptures auth.Permission[Actor]) ([]foundryhttp.RouteRegistration, error) {
+	return outboundcapture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.Permissions(viewCaptures))
 }
 
 // doc-example:end outbound-capture-routes

@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"foundry.test/consumer/clientcontracts"
-	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/openapi"
@@ -154,7 +153,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	}
 	dir := t.TempDir()
 	budgetHandler := memberErrorBudgetClients(t, dir)
-	options := typescript.Options{Dir: dir, OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"}, Surfaces: surfaces}
+	options := typescript.Options{Dir: dir, OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"}, Surfaces: clientcontracts.PortalSurfaces}
 	if _, err := clientcontracts.Export(t.Context(), source, options); err != nil {
 		t.Fatal(err)
 	}
@@ -329,16 +328,6 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	run("typed error details against real HTTP", filepath.Join(dir, "error-details.mjs"), entries[0], entries[1], filepath.Join(dir, "dist", "older-errors.js"), filepath.Join(dir, "dist", "error-details.js"), server.URL)
 	bundles(t, node, compiler, dir)
 }
-
-// surfaces select member pages, private realtime channels, and browser auth routes.
-// doc-example:begin portal-surfaces
-var surfaces = []typescript.Surface{
-	{Name: "browser", Routes: []foundryhttp.RouteID{"browser"}, Auth: &typescript.SurfaceAuth{Guard: "browser_accounts", Login: "browser.login", Refresh: "browser.refresh", Logout: "browser.logout", Profile: "browser.profile", Identifier: "login_id"}},
-	{Name: "members", Paths: []string{"/members"}},
-	{Name: "live", Routes: []foundryhttp.RouteID{"account.show"}, Channels: []websocket.ChannelID{"updates"}, Guards: []auth.GuardName{"client_accounts"}},
-}
-
-// doc-example:end portal-surfaces
 
 // bundles minifies application entry points with the development esbuild
 // beside the TypeScript compiler. Runtime features an application does not

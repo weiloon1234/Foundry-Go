@@ -14,10 +14,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/i18n"
 )
 
-type memberSide struct{}
-type orderSide struct{}
-type OrderScope = rows.Inner[rows.Alias[memberSide, Member], rows.Alias[orderSide, Order]]
-
 const (
 	OrderIDLabel i18n.MessageKey = "reports.order.id"
 	AmountLabel  i18n.MessageKey = "reports.order.amount"
@@ -29,6 +25,10 @@ var Orders = datatable.Define(orderSpec())
 var Totals = datatable.Define(totalSpec())
 
 // doc-example:begin joined-table
+type memberSide struct{}
+type orderSide struct{}
+type OrderScope = rows.Inner[rows.Alias[memberSide, Member], rows.Alias[orderSide, Order]]
+
 // orderJoin joins members to their orders and returns the joined source with a
 // scope for each side.
 func orderJoin() (rows.SelectionSource[OrderScope], expr.Scope[OrderScope, Member], expr.Scope[OrderScope, Order]) {

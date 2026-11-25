@@ -19,10 +19,15 @@ import (
 type OrderPath struct{ Order model.ID[models.Order] }
 
 // doc-example:end order-path
+
+// doc-example:begin bound-order-aliases
 type OrderInput = modelbinding.Input[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Order]
 type OrderEndpoint = foundryhttp.AuthenticatedEndpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
-type SignedOrderEndpoint = foundryhttp.SignedAuthenticatedEndpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 type OrderTransport = modelbinding.AuthenticatedTransport[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
+
+// doc-example:end bound-order-aliases
+
+type SignedOrderEndpoint = foundryhttp.SignedAuthenticatedEndpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 
 var showOrder = func() foundryhttp.Endpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent] {
 	ordersShowRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "orders.show", Method: foundryhttp.GET, Access: foundryhttp.Guarded},

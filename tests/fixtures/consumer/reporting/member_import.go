@@ -1,6 +1,9 @@
 package reporting
 
 import (
+	"context"
+	"io"
+
 	"github.com/weiloon1234/Foundry-Go/datatable/importer"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
@@ -37,3 +40,10 @@ func memberImports() importer.Definition[MemberImport] {
 }
 
 // doc-example:end datatable-5
+
+// doc-example:begin datatable-6
+func ImportMembers(ctx context.Context, upload io.Reader, handle func(context.Context, []importer.Row[MemberImport]) error) (importer.Report, error) {
+	return MemberImports.Run(ctx, importer.CSVSource(upload), handle)
+}
+
+// doc-example:end datatable-6

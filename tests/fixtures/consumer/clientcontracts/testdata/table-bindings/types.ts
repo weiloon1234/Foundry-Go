@@ -1,5 +1,7 @@
 import * as sdk from "./contracts_foundry.gen.js";
 
+declare const api: sdk.API;
+
 // doc-example:begin table-adapter
 type Request = sdk.ContractTypes["github.com/weiloon1234/Foundry-Go/datatable.Request"];
 type TableExportRequest = sdk.ContractTypes["foundry.test/consumer/clientcontracts.TableExportRequest"];
@@ -18,9 +20,7 @@ type AdminExportTransports = {
   readonly [Id in sdk.QueryTableId]?: (client: sdk.API, input: { readonly body: TableExportRequest }, options?: sdk.CallOptions) => Promise<TableExportResource>;
 };
 const exportTransports: AdminExportTransports = sdk.tableExports;
-declare const api: sdk.API;
-declare const tableMemory: StoreApi<TableMemory>;
-export function adminTable<Id extends sdk.QueryTableId>(id: Id): TableSource<sdk.TableRow<Id>, sdk.TableReceivedRow<Id>> {
+export function adminTable<Id extends sdk.QueryTableId>(api: sdk.API, tableMemory: StoreApi<TableMemory>, id: Id): TableSource<sdk.TableRow<Id>, sdk.TableReceivedRow<Id>> {
   const descriptor = sdk.tables[id];
   const exportCall = exportTransports[id];
   return {
@@ -32,22 +32,28 @@ export function adminTable<Id extends sdk.QueryTableId>(id: Id): TableSource<sdk
 }
 // doc-example:end table-adapter
 // doc-example:begin table-registries
-export function query<Id extends sdk.QueryTableId>(id: Id, input: sdk.TableQueryInputs[Id]): Promise<sdk.TableQueryOutputs[Id]> {
+export function query<Id extends sdk.QueryTableId>(api: sdk.API, id: Id, input: sdk.TableQueryInputs[Id]): Promise<sdk.TableQueryOutputs[Id]> {
   return sdk.tableQueries[id](api, input);
 }
-export function exportTable<Id extends sdk.ExportTableId>(id: Id, input: sdk.TableExportInputs[Id]): Promise<sdk.TableExportOutputs[Id]> {
+export function exportTable<Id extends sdk.ExportTableId>(api: sdk.API, id: Id, input: sdk.TableExportInputs[Id]): Promise<sdk.TableExportOutputs[Id]> {
   return sdk.tableExports[id](api, input);
 }
-export function download<Id extends sdk.DownloadTableId>(id: Id, input: sdk.TableDownloadInputs[Id]): Promise<sdk.TableDownloadOutputs[Id]> {
+export function download<Id extends sdk.DownloadTableId>(api: sdk.API, id: Id, input: sdk.TableDownloadInputs[Id]): Promise<sdk.TableDownloadOutputs[Id]> {
   return sdk.tableDownloads[id](api, input);
 }
 // doc-example:end table-registries
-export async function literalChecks(): Promise<void> {
 // doc-example:begin table-download
-  const ticket: TableExportResource = await sdk.tableExports["reports.members"](api, { body: { format: "csv", request: {} } });
-  const file: sdk.FileResult = await sdk.tableDownloads["reports.members"](api, { query: { ticket: ticket.url, format: "csv" } });
-  await file.close();
+export async function downloadMembers(api: sdk.API, use: (file: sdk.FileResult) => Promise<void>): Promise<void> {
+  const ticket = await sdk.tableExports["reports.members"](api, { body: { format: "csv", request: {} } });
+  const file = await sdk.tableDownloads["reports.members"](api, { query: { ticket: ticket.url, format: "csv" } });
+  try {
+    await use(file);
+  } finally {
+    await file.close();
+  }
+}
 // doc-example:end table-download
+export async function literalChecks(): Promise<void> {
   const kind: "ticket" = sdk.tableExportKinds["reports.members"];
   const fileKind: "file" = sdk.tableExportKinds["reports.orders"];
   void sdk.tableExports["reports.orders"](api, { path: { key: "1" }, query: { ticket: "a", format: "csv" } });

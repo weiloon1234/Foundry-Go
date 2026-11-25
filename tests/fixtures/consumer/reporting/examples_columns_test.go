@@ -15,16 +15,13 @@ func exampleAuthority() Authority {
 // TestMemberSearchSQL pins the statements a request compiles to. It is the
 // pattern the datatable guide shows for testing a table's SQL.
 func TestMemberSearchSQL(t *testing.T) {
-	// doc-example:begin compile-table
-	authority := Authority{resolved: true, actor: Operator{TenantID: 7, Active: true, CanView: true, CanExport: true}}
-	statements, err := datatable.Compile(t.Context(), Members, datatable.DefaultConfig(), authority, datatable.Request{Search: "Ada"})
+	statements, err := CompileMemberSearch(t.Context(), exampleAuthority())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(statements.Rows.SQL(), `ILIKE $2 ESCAPE '!'`) || !slices.Contains(statements.Rows.Arguments(), any("%Ada%")) {
 		t.Fatalf("search did not reach the page statement: %s %v", statements.Rows.SQL(), statements.Rows.Arguments())
 	}
-	// doc-example:end compile-table
 	if !strings.HasPrefix(statements.Count.SQL(), "SELECT COUNT(*)") {
 		t.Fatal(statements.Count.SQL())
 	}

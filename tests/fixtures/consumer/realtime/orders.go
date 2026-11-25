@@ -16,34 +16,49 @@ import (
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
-type OrdersOwner struct{}
-type InboxOwner struct{}
+// OrderResponse is the application's order DTO, with its generated JSON descriptor.
+type OrderResponse = httpdto.OrderResponse
+
+var OrderResponseJSON = httpdto.OrderResponseJSON
 
 // doc-example:begin channel-events
+type OrdersOwner struct{}
+
 var Orders = websocket.Public[OrdersOwner]("orders", websocket.DefineRooms(foundryhttp.ModelIDPath[models.Order]())).WithReplay(websocket.ReplayConfig{Messages: 8, Bytes: 32 << 10, TTL: time.Minute})
-var OrderUpdated = websocket.DefineOutgoing(Orders, "updated", httpdto.OrderResponseJSON())
-var Inspect = websocket.DefineIncoming(Orders, "inspect", httpdto.OrderResponseJSON())
-var Relay = websocket.DefineIncoming(Orders, "relay", httpdto.OrderResponseJSON()).AcknowledgeAccepted()
+var OrderUpdated = websocket.DefineOutgoing(Orders, "updated", OrderResponseJSON())
+var Inspect = websocket.DefineIncoming(Orders, "inspect", OrderResponseJSON())
+var Relay = websocket.DefineIncoming(Orders, "relay", OrderResponseJSON()).AcknowledgeAccepted()
 
 // doc-example:end channel-events
 var HubKey = foundation.NewKey[*websocket.Hub]("realtime.hub")
 
+// doc-example:begin register-channel
 type OrderService interface {
-	Inspect(context.Context, model.ID[models.Order], httpdto.OrderResponse) error
+	Inspect(context.Context, model.ID[models.Order], OrderResponse) error
 }
 
-// doc-example:begin register-channel
 func Registry(service OrderService) (*websocket.Registry, error) {
-	incoming := Inspect.Authorize(authorizeOrder).Handle(func(ctx context.Context, message websocket.MessageContext[model.ID[models.Order], websocket.Anonymous], input httpdto.OrderResponse) error {
-		room, _ := message.Target.Room.Get()
+	incoming := Inspect.Authorize(authorizeOrder).Handle(func(ctx context.Context, message websocket.MessageContext[model.ID[models.Order], websocket.Anonymous], input OrderResponse) error {
+		room, present := message.Target.Room.Get()
+		if !present {
+			return auth.Forbidden
+		}
 		return service.Inspect(ctx, room, input)
 	})
 	return websocket.NewRegistry(websocket.Register(Orders, incoming, OrderUpdated.Registration(), Relay.Authorize(authorizeOrder).Relay(OrderUpdated)))
 }
 
+func authorizeOrder(_ context.Context, message websocket.MessageContext[model.ID[models.Order], websocket.Anonymous], input OrderResponse) error {
+	room, present := message.Target.Room.Get()
+	if !present || room != input.ID {
+		return auth.Forbidden
+	}
+	return nil
+}
+
 // doc-example:end register-channel
 // doc-example:begin publish-room
-func PublishOrder(ctx context.Context, hub websocket.PublisherSource, room model.ID[models.Order], reply httpdto.OrderResponse) (websocket.MessageID, error) {
+func PublishOrder(ctx context.Context, hub websocket.PublisherSource, room model.ID[models.Order], reply OrderResponse) (websocket.MessageID, error) {
 	return websocket.Publish(ctx, hub, Orders, room, OrderUpdated, reply)
 }
 
@@ -55,6 +70,8 @@ func Module(service OrderService, config websocket.Config, server websocket.Serv
 // UserInbox is a separate authenticated channel with a different nominal owner.
 // The helper checks the guard and stored key; IDs alone never grant access.
 // doc-example:begin owned-rooms
+type InboxOwner struct{}
+
 func UserInbox(guard auth.Guard[models.User]) websocket.Channel[InboxOwner, model.ID[models.User], models.User] {
 	return websocket.OwnedRooms[InboxOwner]("users.inbox", websocket.DefineRooms(foundryhttp.ModelIDPath[models.User]()), guard, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf((models.User{})))
 }
@@ -97,12 +114,4 @@ func RevokeUser(ctx context.Context, source websocket.PublisherSource, guard aut
 }
 func Diagnostics(ctx context.Context, hub *websocket.Hub, guard auth.Guard[models.User], authorize func(context.Context, models.User) error) (websocket.Diagnostics, error) {
 	return websocket.Diagnose(ctx, hub, guard, authorize)
-}
-
-func authorizeOrder(_ context.Context, message websocket.MessageContext[model.ID[models.Order], websocket.Anonymous], input httpdto.OrderResponse) error {
-	room, present := message.Target.Room.Get()
-	if !present || room != input.ID {
-		return auth.Forbidden
-	}
-	return nil
 }

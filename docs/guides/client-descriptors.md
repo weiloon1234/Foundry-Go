@@ -20,6 +20,8 @@ consume them without runtime package dependencies. A form binds its fields
 through the [field binder](client-forms.md#recipe-form-values), which reads these
 descriptors.
 
+`sdk` is your application's generated client module: `import * as sdk from "./contracts_foundry.gen.js"` (the path of the generated file in your client source). The operation, schema and field names in the TypeScript blocks of this guide (`itemsEcho`, `unionsEcho`, `ExplicitLabels` and their fields) belong to the example application's generated client and stand for your own.
+
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#field-descriptors -->
 ```typescript
 export async function fieldDescriptors(api: sdk.API, request: sdk.Operations["itemsEcho"]["request"]) {
@@ -139,8 +141,8 @@ fields into transport. Generated validation selectors inherit the label key,
 so the same declaration can supply form labels and validation labels. Label/help
 keys use `i18n.MessageKey`; applications supply their locale messages.
 
-The excerpt is part of the fixture's public `Payload` DTO. Typed parameter
-bindings use the same presentation metadata:
+The lines are fields of a public DTO declared with `//foundry:dto`; `State` has the application's string-backed enum type. Typed parameter
+bindings use the same presentation metadata. `Member` is the application's own type with a `Display string` field, and the block uses the framework's `contract` and `http` (as `foundryhttp`) packages:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/presentation.go#parameter-presentation -->
 ```go

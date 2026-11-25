@@ -3,19 +3,18 @@ package httppagination
 import (
 	"context"
 
-	"foundry.test/consumer/mutatorqueries"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 )
 
 // doc-example:begin http-cursor-pagination-cursor-list-request
-type CursorListRequest = pagination.CursorRequest[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member]
-type CursorListResult = pagination.CursorResult[mutatorqueries.Member, MemberResponse]
+type CursorListRequest = pagination.CursorRequest[foundryhttp.NoPath, MemberFilters, Member]
+type CursorListResult = pagination.CursorResult[Member, MemberResponse]
 
-var CursorList = func() pagination.CursorEndpoint[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member, MemberResponse] {
+var CursorList = func() pagination.CursorEndpoint[foundryhttp.NoPath, MemberFilters, Member, MemberResponse] {
 	membersCursorRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.cursor", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/cursor"))
-	return pagination.DefineCursor[mutatorqueries.Member](
+	return pagination.DefineCursor[Member](
 		membersCursorRoute,
 		MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultCursorConfig(),
 	)

@@ -13,7 +13,7 @@ import (
 const BrowserOrigin foundryhttp.Origin = "https://console.example.test"
 
 func Handler(service httpendpoints.Service) (http.Handler, error) {
-	router, err := httpmiddleware.Router(service)
+	router, err := httpmiddleware.Router(httpendpoints.Update, service.Update)
 	if err != nil {
 		return nil, err
 	}

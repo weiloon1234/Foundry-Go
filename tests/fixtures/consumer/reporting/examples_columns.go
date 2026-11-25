@@ -54,7 +54,12 @@ func orderLineSpec() datatable.Spec[OrderScope, OrderLineRow, Authority] {
 		},
 		Dynamic: []datatable.DynamicBinding[OrderScope, Authority]{
 			datatable.BindDynamic(scope, func(ctx context.Context, authority Authority) expr.Selected[OrderScope, string] {
-				operator, _ := authority.subject(ctx) // Authorize has already run
+				operator, err := authority.subject(ctx)
+				if err != nil {
+					// Authorize has already run and a builder cannot return an error:
+					// an unresolved actor selects no tenant label.
+					return expr.AsSelected(expr.Constant[OrderScope](codec.String[string](), ""))
+				}
 				return expr.AsSelected(expr.Constant[OrderScope](codec.String[string](), fmt.Sprintf("tenant-%d", operator.TenantID)))
 			}),
 		},

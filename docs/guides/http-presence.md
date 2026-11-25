@@ -31,8 +31,9 @@ the value delivered to a domain handler.
 does not validate each element: `[""]` has one item and requires a separate
 element rule to reject its blank content.
 
-The [consumer DTO and rules](../../tests/fixtures/consumer/validationrules/presence.go)
-reuse generated JSON/validation declarations:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `model`, `validation`, `value`.
+
+`PresenceInputValidationFields` is generated for the DTO by `foundry generate`. A DTO and its rules reuse the generated JSON and validation declarations:
 
 <!-- compiled-source: tests/fixtures/consumer/validationrules/presence.go#presence-input-rules -->
 ```go
@@ -58,9 +59,6 @@ func PresenceRules() validation.Rule[PresenceInput] {
 	)
 }
 ```
-
-The [HTTP acceptance fixture](../../tests/fixtures/consumer/validationrules/presence_http_test.go)
-contains the complete endpoint assembly using only public framework imports.
 
 Query input uses the same Optional presence semantics, with the representations
 query strings actually support. `label` and `label=` supply an empty string;
@@ -91,6 +89,8 @@ cleanup](http-uploads.md) are also delivered.
 A PATCH DTO keeps omission separate from an explicit null or supplied value.
 Omitted fields leave stored values unchanged; map supplied values into the
 [typed write API](model-writes.md#recipe-write-models).
+
+The application owns `models.User` and `models.Status` (a string-backed `//foundry:enum`) and any generated tables or identities used below.
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/dto.go#patch-presence -->
 ```go

@@ -30,8 +30,8 @@ var GuardedCursorList = func() pagination.CursorEndpoint[foundryhttp.NoPath, Mem
 }()
 
 // doc-example:begin http-pagination-authenticated-numbered
-func AuthenticatedNumbered(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
-	return pagination.Authenticated(GuardedList, binding)
+func AuthenticatedNumbered(guarded pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse], binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
+	return pagination.Authenticated(guarded, binding)
 }
 
 // doc-example:end http-pagination-authenticated-numbered
@@ -49,7 +49,7 @@ type AuthenticatedService interface {
 }
 
 func AuthenticatedRouter(binding foundryhttp.GuardBinding[Actor], service AuthenticatedService) (*foundryhttp.Router, error) {
-	endpoint := AuthenticatedNumbered(binding)
+	endpoint := AuthenticatedNumbered(GuardedList, binding)
 
 	membersSecureSimpleEndpoint := AuthenticatedSimple(binding)
 	membersSecureCursorEndpoint := AuthenticatedCursor(binding)

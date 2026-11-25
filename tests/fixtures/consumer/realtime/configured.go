@@ -3,7 +3,6 @@ package realtime
 import (
 	"context"
 
-	"foundry.test/consumer/httpdto"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/auth"
@@ -16,12 +15,12 @@ import (
 // doc-example:begin owned-channel
 type Inbox struct {
 	channel websocket.Channel[InboxOwner, model.ID[models.User], models.User]
-	updated websocket.Outgoing[InboxOwner, httpdto.OrderResponse]
+	updated websocket.Outgoing[InboxOwner, OrderResponse]
 }
 
 func NewInbox(guard auth.Guard[models.User]) Inbox {
 	channel := UserInbox(guard)
-	return Inbox{channel: channel, updated: websocket.DefineOutgoing(channel, "updated", httpdto.OrderResponseJSON())}
+	return Inbox{channel: channel, updated: websocket.DefineOutgoing(channel, "updated", OrderResponseJSON())}
 }
 
 func (inbox Inbox) Registration() websocket.Registration {
@@ -46,7 +45,6 @@ func PrivateOrders(guard auth.Guard[models.User], authorize func(context.Context
 
 // doc-example:end private-resource-channel
 
-// doc-example:begin realtime-tickets
 func SharedHubSettings(settings application.Settings, connection websocket.ConnectionName) application.Settings {
 	settings.HTTP.Enabled = true
 	settings.Realtime.Enabled = true
@@ -56,6 +54,7 @@ func SharedHubSettings(settings application.Settings, connection websocket.Conne
 	return settings
 }
 
+// doc-example:begin realtime-tickets
 func ConfigureInbox(builder *application.Builder, inbox Inbox, authentication *foundryhttp.Authentication, tokens auth.TicketRedeemer) *application.Builder {
 	return builder.Realtime(func(application.Services) (application.RealtimeDeclarations, error) {
 		return application.RealtimeDeclarations{
@@ -69,7 +68,7 @@ func ConfigureInbox(builder *application.Builder, inbox Inbox, authentication *f
 // doc-example:end realtime-tickets
 
 // doc-example:begin publish-after-commit
-func (inbox Inbox) AfterCommit(tx *database.Tx, publisher websocket.PublisherSource, user model.ID[models.User], reply httpdto.OrderResponse) error {
+func (inbox Inbox) AfterCommit(tx *database.Tx, publisher websocket.PublisherSource, user model.ID[models.User], reply OrderResponse) error {
 	return tx.AfterCommit(func(ctx context.Context) error {
 		_, err := websocket.Publish(ctx, publisher, inbox.channel, user, inbox.updated, reply)
 		return err
@@ -101,7 +100,7 @@ func NewInboxPublisher(services application.Services, inbox Inbox) (*InboxPublis
 	return &InboxPublisher{inbox: inbox, publisher: publisher}, nil
 }
 
-func (p *InboxPublisher) Publish(ctx context.Context, user model.ID[models.User], reply httpdto.OrderResponse) (websocket.MessageID, error) {
+func (p *InboxPublisher) Publish(ctx context.Context, user model.ID[models.User], reply OrderResponse) (websocket.MessageID, error) {
 	return websocket.Publish(ctx, p.publisher, p.inbox.channel, user, p.inbox.updated, reply)
 }
 

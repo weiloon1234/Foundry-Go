@@ -5,7 +5,20 @@ import * as members from "./contracts_members_foundry.gen.js";
 declare const memberAPI: members.API;
 declare const liveAPI: live.API;
 declare const memberPage: members.Operations["membersIndex"]["response"];
+
 // doc-example:begin portal-entries
+export function listMembers(api: members.API): Promise<full.Operations["membersIndex"]["response"]> {
+  // A surface exposes only its selected operations, and its schemas keep the
+  // full entry's names and identity brands.
+  return api.membersIndex({});
+}
+
+export function isAPIError(error: unknown): boolean {
+  // Runtime classes come from the shared modules, so every entry has one class.
+  return error instanceof full.APIError && error instanceof members.APIError;
+}
+// doc-example:end portal-entries
+
 export function surfaceConsumer(): void {
   void memberAPI.membersIndex({});
   // @ts-expect-error A surface exposes only its selected operations.
@@ -27,4 +40,3 @@ export function surfaceConsumer(): void {
   // @ts-expect-error A surface without Auth has no portal session helper.
   void members.createPortalSession;
 }
-// doc-example:end portal-entries
