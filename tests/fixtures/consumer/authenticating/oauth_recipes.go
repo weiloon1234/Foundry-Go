@@ -18,8 +18,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
-// doc-example:begin social-providers
 func socialProviders(googleID string, googleSecret secret.String, githubID string, githubSecret secret.String) (oauth.Provider, oauth.Provider) {
+	// doc-example:begin social-providers
 	google := oauth.Google(oauth.Credentials{
 		ClientID:     googleID,
 		ClientSecret: googleSecret, // Loaded through the application's secret configuration.
@@ -30,13 +30,12 @@ func socialProviders(googleID string, googleSecret secret.String, githubID strin
 		ClientSecret: githubSecret,
 		RedirectURL:  "https://app.example/auth/github/callback",
 	})
+	// doc-example:end social-providers
 	return google, github
 }
 
-// doc-example:end social-providers
-
-// doc-example:begin social-client
 func socialClient(ctx context.Context, google oauth.Provider) (*oauth.Client, *httpclient.Client, error) {
+	// doc-example:begin social-client
 	policy, err := google.Destinations()
 	if err != nil {
 		return nil, nil, err
@@ -52,13 +51,12 @@ func socialClient(ctx context.Context, google oauth.Provider) (*oauth.Client, *h
 		return nil, nil, errors.Join(err, outbound.Close(ctx))
 	}
 	// The application owns outbound and closes it during shutdown.
+	// doc-example:end social-client
 	return client, outbound, nil
 }
 
-// doc-example:end social-client
-
-// doc-example:begin social-flow-routes
 func socialLoginRoutes(services application.Services, client *oauth.Client, web *http.BrowserSessions[models.User, model.ID[models.User]], handoffs SocialHandoffs) (*http.Router, error) {
+	// doc-example:begin social-flow-routes
 	encrypter, err := services.CookieEncrypter()
 	if err != nil {
 		return nil, err
@@ -73,7 +71,7 @@ func socialLoginRoutes(services application.Services, client *oauth.Client, web 
 	start := http.HandleRaw(startRoute, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
 		location, err := flow.Start(r.Context(), w)
 		if err != nil {
-			_ = http.WriteError(w, r, err)
+			http.WriteError(w, r, err)
 			return
 		}
 		stdhttp.Redirect(w, r, location, stdhttp.StatusFound)
@@ -82,37 +80,37 @@ func socialLoginRoutes(services application.Services, client *oauth.Client, web 
 	callback := http.HandleRaw(callbackRoute, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
 		profile, err := flow.Finish(w, r)
 		if err != nil {
-			_ = http.WriteError(w, r, err)
+			http.WriteError(w, r, err)
 			return
 		}
 		handoff, err := handoffs.Stage(r.Context(), profile)
 		if err != nil {
-			_ = http.WriteError(w, r, err)
+			http.WriteError(w, r, err)
 			return
 		}
 		if err := cookie.Set(r.Context(), w, handoff); err != nil {
-			_ = http.WriteError(w, r, err)
+			http.WriteError(w, r, err)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		_, _ = io.WriteString(w, `<form method="post" action="/auth/google/complete"><button>Continue signing in</button></form>`)
+		io.WriteString(w, `<form method="post" action="/auth/google/complete"><button>Continue signing in</button></form>`)
 	})
 	capture := http.DefineMiddleware("auth.google.handoff", func(next stdhttp.Handler) (stdhttp.Handler, error) {
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			supplied, err := cookie.Read(r)
 			if err != nil {
-				_ = http.WriteError(w, r, err)
+				http.WriteError(w, r, err)
 				return
 			}
 			handoff, present := supplied.Get()
 			if !present {
-				_ = http.WriteError(w, r, auth.Unauthenticated)
+				http.WriteError(w, r, auth.Unauthenticated)
 				return
 			}
 			if err := cookie.Clear(w); err != nil {
-				_ = http.WriteError(w, r, err)
+				http.WriteError(w, r, err)
 				return
 			}
 			ctx := context.WithValue(r.Context(), socialHandoffContextKey{}, handoff)
@@ -133,10 +131,10 @@ func socialLoginRoutes(services application.Services, client *oauth.Client, web 
 		_, err = web.Login(ctx, proof, session.IssueOptions{})
 		return http.NoContent{}, err
 	})
-	return http.NewRouter(start, callback, complete)
+	router, err := http.NewRouter(start, callback, complete)
+	// doc-example:end social-flow-routes
+	return router, err
 }
-
-// doc-example:end social-flow-routes
 
 // doc-example:begin social-handoff-state
 // SocialHandoffs is application-owned, bounded, expiring, single-use login state.

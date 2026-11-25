@@ -2,13 +2,16 @@
 
 Use `ETags(DefaultETagConfig())` through ordinary middleware assembly:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `value`.
+
+Inputs: `router http.Handler`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpetags/http_etags_recipes.go#http-etags-1 -->
 ```go
-func conditionalHandler(router http.Handler) (http.Handler, error) {
-	config := foundryhttp.DefaultETagConfig()
-	handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.ETags(config))
-	return handler, err
-}
+config := foundryhttp.DefaultETagConfig()
+handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.ETags(config))
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/httpetags/etags.go)
@@ -71,21 +74,20 @@ reading the complete body; automatic hashing requires producing the bytes.
 `CacheControl(policy)` declares a typed `Cache-Control` for GET and HEAD
 responses and composes with ETags, so clients revalidate cheaply with 304:
 
+Inputs: `router http.Handler`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpetags/http_etags_recipes.go#http-etags-2 -->
 ```go
-func cachedHandler(router http.Handler) (http.Handler, error) {
-	policy := foundryhttp.CachePolicy{
-		Visibility:           foundryhttp.CachePublic,
-		MaxAge:               time.Minute,
-		SharedMaxAge:         value.Set(5 * time.Minute), // s-maxage
-		StaleWhileRevalidate: 30 * time.Second,
-	}
-	handler, err := foundryhttp.ApplyMiddleware(router,
-		foundryhttp.CacheControl(policy),
-		foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
-	)
-	return handler, err
+policy := foundryhttp.CachePolicy{
+	Visibility:           foundryhttp.CachePublic,
+	MaxAge:               time.Minute,
+	SharedMaxAge:         value.Set(5 * time.Minute), // s-maxage
+	StaleWhileRevalidate: 30 * time.Second,
 }
+handler, err := foundryhttp.ApplyMiddleware(router,
+	foundryhttp.CacheControl(policy),
+	foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
+)
 ```
 
 `CachePrivate` limits storage to the requesting browser; `CachePublic` also

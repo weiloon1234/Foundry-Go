@@ -10,31 +10,33 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// doc-example:begin http-responses-1
 func encodeUser(ctx context.Context, userID model.ID[models.User], email string, activeState models.Status, limits contract.JSONLimits) ([]byte, error) {
+	// doc-example:begin http-responses-1
 	response := UserResponse{ID: userID, Email: email, State: activeState}
 	body, err := UserResponseJSON().Encode(ctx, response, limits)
+	// doc-example:end http-responses-1
 	return body, err
 }
 
-// doc-example:end http-responses-1
-
-// doc-example:begin http-responses-2
 func encodeUsers(ctx context.Context, response UserResponse, limits contract.JSONLimits) ([]byte, error) {
+	// doc-example:begin http-responses-2
 	users := contract.Slice(UserResponseJSON())
 	body, err := users.Encode(ctx, []UserResponse{response}, limits)
+	// doc-example:end http-responses-2
 	return body, err
 }
 
 func encodePresentUser(ctx context.Context, response UserResponse, limits contract.JSONLimits) ([]byte, error) {
+	// doc-example:begin http-responses-2-2
 	optionalUser := contract.Nullable(UserResponseJSON())
 	body, err := optionalUser.Encode(ctx, value.Of(response), limits)
+	// doc-example:end http-responses-2-2
 	return body, err
 }
 func encodeNullUser(ctx context.Context, limits contract.JSONLimits) ([]byte, error) {
+	// doc-example:begin http-responses-2-3
 	optionalUser := contract.Nullable(UserResponseJSON())
 	body, err := optionalUser.Encode(ctx, value.Null[UserResponse](), limits)
+	// doc-example:end http-responses-2-3
 	return body, err
 }
-
-// doc-example:end http-responses-2

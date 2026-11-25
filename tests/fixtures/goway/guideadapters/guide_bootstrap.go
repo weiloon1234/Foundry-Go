@@ -8,10 +8,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/application"
 )
 
-// doc-example:begin application-bootstrap-2
 func modelApplication(ctx context.Context, settings application.Settings) (*application.App, error) {
+	// doc-example:begin application-bootstrap-2
 	app, err := application.New(settings, application.WithTables(models.Tables()...)).Build(ctx)
+	// doc-example:end application-bootstrap-2
 	return app, err
 }
-
-// doc-example:end application-bootstrap-2

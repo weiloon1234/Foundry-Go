@@ -31,8 +31,8 @@ type ProfileTags struct {
 
 // doc-example:end http-dtos-2
 
-// doc-example:begin http-dtos-3
 func decodeProfile(ctx context.Context, payload []byte) (UpdateProfile, error) {
+	// doc-example:begin http-dtos-3
 	limits := contract.JSONLimits{
 		Bytes:  4096,
 		Depth:  16,
@@ -41,7 +41,6 @@ func decodeProfile(ctx context.Context, payload []byte) (UpdateProfile, error) {
 		Issues: 20,
 	}
 	request, err := ProfileBody.Decode(ctx, payload, limits)
+	// doc-example:end http-dtos-3
 	return request, err
 }
-
-// doc-example:end http-dtos-3

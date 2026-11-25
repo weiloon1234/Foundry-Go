@@ -26,10 +26,14 @@ type UserFeedPath struct {
 	Page   uint16
 }
 
+// doc-example:begin asset-path-declaration
+
 //foundry:path pattern=/assets/{file...}
 type AssetPath struct {
 	File string
 }
+
+// doc-example:end asset-path-declaration
 
 // ShowUser is intentionally handwritten and references a generated descriptor.
 // A fresh checkout must generate successfully before this symbol can compile.

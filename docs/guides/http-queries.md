@@ -15,22 +15,39 @@ queries for links. The consumer owns field types and names once.
 The [SearchInput declaration](http-presence.md#recipe-patch-query) owns the generated
 `SearchInputDescriptor()` used here.
 
+Declare the query in the same package and run `foundry generate`; `SearchInputDescriptor()` returns its typed query descriptor.
+
+`models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `model`, `value`.
+
+<!-- compiled-source: tests/fixtures/consumer/httpquery/query.go#query-presence -->
+```go
+//foundry:query
+type SearchInput struct {
+	User     model.ID[models.User]
+	Search   value.Optional[string] `query:"q"`
+	Statuses []models.Status        `query:"status"`
+}
+```
+
+The application owns `models.User` and any generated tables or identities used below.
+
+Inputs: `ctx context.Context`, `request *http.Request`, `parameters foundryhttp.Query[SearchInput]`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpquery/query_recipes.go#http-queries-1 -->
 ```go
-func normalizeQuery(ctx context.Context, request *http.Request, parameters foundryhttp.Query[SearchInput]) (string, error) {
-	limits := foundryhttp.QueryLimits{Bytes: 4096, Pairs: 64, Issues: 8}
+limits := foundryhttp.QueryLimits{Bytes: 4096, Pairs: 64, Issues: 8}
 
-	input, err := foundryhttp.DecodeQuery(parameters, ctx, request.URL.RawQuery, limits)
-	if err != nil {
-		return "", err
-	}
-
-	// input.User retains model.ID[models.User].
-	// input.Search distinguishes omission from an explicitly empty string.
-	// input.Statuses is an ordinary []models.Status.
-	encoded, err := foundryhttp.EncodeQuery(parameters, ctx, input, limits)
-	return encoded, err
+input, err := foundryhttp.DecodeQuery(parameters, ctx, request.URL.RawQuery, limits)
+if err != nil {
+	return "", err
 }
+
+// input.User retains model.ID[models.User].
+// input.Search distinguishes omission from an explicitly empty string.
+// input.Statuses is an ordinary []models.Status.
+encoded, err := foundryhttp.EncodeQuery(parameters, ctx, input, limits)
 ```
 
 Here `model`, `value` and `foundryhttp` are framework imports; `models` is the

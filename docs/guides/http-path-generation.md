@@ -7,6 +7,10 @@ gopls can navigate it in the consumer workspace. The
 and [route tests](../../tests/fixtures/consumer/httpkernel/generated_routes_test.go)
 show the complete usage.
 
+The application owns `models.User` and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `model`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpkernel/path_declarations.go#user-path-declaration -->
 ```go
 //foundry:path pattern=/users/{user}
@@ -15,17 +19,16 @@ type UserPath struct {
 }
 ```
 
+Inputs: `user models.User`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpkernel/path_recipe.go#generated-user-url -->
 ```go
-func userURL(user models.User) (string, error) {
-	ShowUser := foundryhttp.DefineRoute(
-		foundryhttp.RouteSpec{ID: "users.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
-		UserPathDescriptor(),
-	)
-	ShowUser = foundryhttp.ConfigureRoute(ShowUser, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
-	location, err := foundryhttp.RouteURL(ShowUser, UserPath{User: user.ID})
-	return location, err
-}
+ShowUser := foundryhttp.DefineRoute(
+	foundryhttp.RouteSpec{ID: "users.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
+	UserPathDescriptor(),
+)
+ShowUser = foundryhttp.ConfigureRoute(ShowUser, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
+location, err := foundryhttp.RouteURL(ShowUser, UserPath{User: user.ID})
 ```
 
 Here `models.User` is the application's model, `model` is Foundry's model package,

@@ -11,8 +11,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
 
-// doc-example:begin take-member-quota
 func takeMemberQuota(ctx context.Context, client ratelimit.Backend, namespace keyspace.Namespace, member Member, handleBusy func(time.Duration) error) error {
+	// doc-example:begin take-member-quota
 	store, err := ratelimit.NewStore(client, ratelimit.DefaultConfig(namespace))
 	if err != nil {
 		return err
@@ -29,13 +29,12 @@ func takeMemberQuota(ctx context.Context, client ratelimit.Backend, namespace ke
 		// RetryAfter is relative to the authority's decision time.
 		return handleBusy(decision.RetryAfter)
 	}
+	// doc-example:end take-member-quota
 	return nil
 }
 
-// doc-example:end take-member-quota
-
-// doc-example:begin inspect-member-quota
 func inspectMemberQuota(ctx context.Context, limiter ratelimit.Limiter[model.ID[Member]], member Member, sendVerification func(context.Context, Member) error) (ratelimit.Decision, uint32, time.Duration, bool, error) {
+	// doc-example:begin inspect-member-quota
 	decision, err := limiter.Peek(ctx, member.ID, 5)
 	if err != nil {
 		return decision, 0, 0, false, err
@@ -55,18 +54,17 @@ func inspectMemberQuota(ctx context.Context, limiter ratelimit.Limiter[model.ID[
 	decision, err = limiter.Attempt(ctx, member.ID, 1, func(ctx context.Context) error {
 		return sendVerification(ctx, member)
 	})
+	// doc-example:end inspect-member-quota
 	return decision, remaining, wait, cleared, err
 }
 
-// doc-example:end inspect-member-quota
-
-// doc-example:begin member-rate-middleware
 func memberRateMiddleware(limiter ratelimit.Limiter[model.ID[Member]], currentMemberID func(context.Context) (model.ID[Member], error)) foundryhttp.Middleware {
-	return foundryhttp.RateLimit(limiter,
+	// doc-example:begin member-rate-middleware
+	middleware := foundryhttp.RateLimit(limiter,
 		func(r *http.Request) (model.ID[Member], error) {
 			return currentMemberID(r.Context())
 		},
 	)
+	// doc-example:end member-rate-middleware
+	return middleware
 }
-
-// doc-example:end member-rate-middleware

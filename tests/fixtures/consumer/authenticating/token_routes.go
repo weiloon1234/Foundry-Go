@@ -5,7 +5,6 @@ import (
 
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
-	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -17,7 +16,7 @@ type RefreshInput = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, f
 // verify is the trusted credential verifier; submitted identity is never proof.
 // The response descriptor owns disclosure, TLS, cache and generated wire contracts.
 // doc-example:begin native-token-delivery
-func TokenRoutes(tokens *token.Tokens[models.User, model.ID[models.User]], clock clock.Clock, verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error), scopes auth.AccessScopes[models.User]) (*foundryhttp.Router, error) {
+func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error), scopes auth.AccessScopes[models.User]) (*foundryhttp.Router, error) {
 	guard := tokens.Guard()
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration())
 	if err != nil {
@@ -35,10 +34,10 @@ func TokenRoutes(tokens *token.Tokens[models.User, model.ID[models.User]], clock
 	loginRoute := route("api.login", foundryhttp.POST, "/login", foundryhttp.Public)
 
 	login := foundryhttp.DefineEndpoint(loginRoute,
-		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (token.Issued[models.User, model.ID[models.User]], error) {
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (IssuedUserToken, error) {
 		proof, err := verify(ctx)
 		if err != nil {
-			return token.Issued[models.User, model.ID[models.User]]{}, err
+			return IssuedUserToken{}, err
 		}
 		return StartVerifiedToken(ctx, tokens, proof, "API client", true, scopes)
 	})
@@ -46,7 +45,7 @@ func TokenRoutes(tokens *token.Tokens[models.User, model.ID[models.User]], clock
 	refreshRoute := route("api.refresh", foundryhttp.POST, "/refresh", foundryhttp.Public)
 
 	refresh := foundryhttp.DefineEndpoint(refreshRoute,
-		foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenBody(), response).Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshTokenRequest]) (token.Issued[models.User, model.ID[models.User]], error) {
+		foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenBody(), response).Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshTokenRequest]) (IssuedUserToken, error) {
 		return RefreshFromBody(ctx, tokens, input.Body)
 	})
 	profileEndpointRoute := route("api.profile", foundryhttp.GET, "/profile", foundryhttp.Guarded)
@@ -68,7 +67,7 @@ func TokenRoutes(tokens *token.Tokens[models.User, model.ID[models.User]], clock
 // doc-example:end native-token-delivery
 
 // doc-example:begin refresh-from-body
-func RefreshFromBody(ctx context.Context, tokens *token.Tokens[models.User, model.ID[models.User]], request foundryhttp.RefreshTokenRequest) (token.Issued[models.User, model.ID[models.User]], error) {
+func RefreshFromBody(ctx context.Context, tokens *UserTokens, request foundryhttp.RefreshTokenRequest) (IssuedUserToken, error) {
 	return tokens.Refresh(ctx, request.RefreshToken.Secret())
 }
 

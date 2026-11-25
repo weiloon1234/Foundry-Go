@@ -11,18 +11,21 @@ configuration from the application's normal secret loader:
 The `models` namespace in the read examples is the application model package;
 `Users` is its generated table declaration.
 
+The application owns `models.User` and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `foundation`, `database/orm`, `database/postgres`, `value`.
+
+Inputs: `primaryConfig postgres.Config`, `readConfig postgres.Config`, `DatabaseProvider foundation.ProviderID`, `DatabaseKey foundation.Key[*database.DB]`.
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_routing.go#database-routing-1 -->
 ```go
-func routedDatabase(primaryConfig, readConfig postgres.Config, DatabaseProvider foundation.ProviderID, DatabaseKey foundation.Key[*database.DB]) foundation.Module {
-	routing := postgres.RoutingConfig{
-		Primary:        primaryConfig,
-		Read:           value.Set(readConfig),
-		MaxConnections: 24,
-	}
-	module := postgres.RoutedModule(DatabaseProvider, DatabaseKey, routing)
-	// Register module through the ordinary application builder.
-	return module
+routing := postgres.RoutingConfig{
+	Primary:        primaryConfig,
+	Read:           value.Set(readConfig),
+	MaxConnections: 24,
 }
+module := postgres.RoutedModule(DatabaseProvider, DatabaseKey, routing)
+// Register module through the ordinary application builder.
 ```
 
 Set each endpoint's pool bounds to fit the total. The module keeps the existing
@@ -40,19 +43,16 @@ This dispatch is based on the already compiled operation, never SQL text.
 Without a configured replica, reads use the primary pool. A configured replica
 failure returns an error; it never silently falls back.
 
+Inputs: `ctx context.Context`, `db *database.DB`.
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_routing.go#database-routing-2 -->
 ```go
-func routedReads(ctx context.Context, db *database.DB) error {
-	recent, err := orm.All(ctx, db, models.Users.Query().Limit(10))
-	if err != nil {
-		return err
-	}
-	consistent, err := orm.All(ctx, db.Primary(), models.Users.Query().Limit(10))
-	if err != nil {
-		return err
-	}
-	_ = recent
-	_ = consistent
+recent, err := orm.All(ctx, db, models.Users.Query().Limit(10))
+if err != nil {
+	return err
+}
+consistent, err := orm.All(ctx, db.Primary(), models.Users.Query().Limit(10))
+if err != nil {
 	return err
 }
 ```

@@ -17,6 +17,8 @@ Milestone 10 passed native acceptance. See the master roadmap for verification e
 <a id="recipe-access-scopes"></a>
 ## Declare scopes and immutable sets
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `http` as `foundryhttp`, `http`.
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#declare-scopes -->
 ```go
 var OrderReadScope = auth.DefineAccessScope[models.User]("orders.read")
@@ -43,11 +45,13 @@ persistence/contract identifier; a scope does not register a permission or polic
 An authoritative strategy constructs a scoped proof only after verifying its
 credential and restoring the persisted grant:
 
+The application owns `models.User` and `models.Order` and any generated tables or identities used below.
+
+Inputs: `user models.User`, `grants auth.AccessScopes[models.User]`.
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#verified-scoped-user -->
 ```go
-func VerifiedScopedUser(user models.User, grants auth.AccessScopes[models.User]) (auth.Proof[models.User, model.ID[models.User]], error) {
-	return auth.NewScopedProof(user.FoundryReference(), auth.Authenticated, grants)
-}
+verified, err := auth.NewScopedProof(user.FoundryReference(), auth.Authenticated, grants)
 ```
 
 This constructor does not verify a submitted model ID or scope list. Never turn
@@ -58,17 +62,16 @@ scoped proof nor an ordinary unscoped proof satisfies a nonempty requirement.
 
 In an existing authentication request scope:
 
+Inputs: `ctx context.Context`, `api auth.Guard[models.User]`, `readOrder auth.Policy[models.User, models.Order]`, `required auth.AccessScopes[models.User]`, `order models.Order`.
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#read-scoped-order -->
 ```go
-func ReadScopedOrder(ctx context.Context, api auth.Guard[models.User], readOrder auth.Policy[models.User, models.Order], required auth.AccessScopes[models.User], order models.Order) (models.User, error) {
-	user, err := api.RequireScopes(ctx, required)
-	if err != nil {
-		return models.User{}, err
-	}
-	if err := readOrder.Authorize(ctx, api, order); err != nil {
-		return models.User{}, err
-	}
-	return user, nil
+user, err := api.RequireScopes(ctx, required)
+if err != nil {
+	return models.User{}, err
+}
+if err := readOrder.Authorize(ctx, api, order); err != nil {
+	return models.User{}, err
 }
 ```
 
@@ -94,9 +97,14 @@ operations intended to enforce token capabilities.
 <a id="recipe-http-scopes"></a>
 ## Require scopes at the HTTP boundary
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#profile-endpoint-type -->
+```go
+type ProfileEndpoint = foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
+```
+
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#configure-scopes -->
 ```go
-func ScopedProfile(endpoint http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent], required auth.AccessScopes[models.User]) http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent] {
+func ScopedProfile(endpoint ProfileEndpoint, required auth.AccessScopes[models.User]) ProfileEndpoint {
 	return http.ConfigureAuthenticated(endpoint, http.Scopes(required))
 }
 ```

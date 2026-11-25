@@ -15,8 +15,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// doc-example:begin result-cursor-pagination-1
 func paginateSummaries(ctx context.Context, db database.Executor, users models.UserTable, summaries reports.UserSummaryColumns) (orm.CursorPage[reports.UserSummary], error) {
+	// doc-example:begin result-cursor-pagination-1
 	u, r := users, summaries
 	report := rows.Select(rows.From(u.Query()), r.Row,
 		rows.Map(r.ID, expr.Value(u.Key())), rows.Map(r.Email, expr.Value(u.Email)),
@@ -25,28 +25,27 @@ func paginateSummaries(ctx context.Context, db database.Executor, users models.U
 	ordered := cursor.OrderBy(expr.Asc(rows.At(cursor.Scope(), r.Nickname))).
 		UniqueBy(expr.Group(rows.At(cursor.Scope(), r.ID)))
 	page, err := ordered.Paginate(ctx, db, orm.CursorRequest[reports.UserSummary]{Size: 20})
+	// doc-example:end result-cursor-pagination-1
 	return page, err
 }
 
-// doc-example:end result-cursor-pagination-1
-// doc-example:begin result-cursor-pagination-2
 func paginateNicknames(ctx context.Context, db database.Executor, users models.UserTable) (orm.CursorPage[value.Nullable[string]], error) {
+	// doc-example:begin result-cursor-pagination-2
 	values := rows.DistinctScalar(rows.SelectScalar(rows.From(users.Query()),
 		expr.AsSelected(expr.Row(expr.Value(users.Nickname)))))
 	cursor := rows.ValueCursorFor(rows.Values(values))
 	ordered := cursor.OrderBy(expr.Asc(cursor.Value())).UniqueBy(expr.Group(cursor.Value()))
 	page, err := ordered.Paginate(ctx, db, orm.CursorRequest[value.Nullable[string]]{Size: 20})
+	// doc-example:end result-cursor-pagination-2
 	return page, err
 }
 
-// doc-example:end result-cursor-pagination-2
-// doc-example:begin result-cursor-pagination-3
 func sortPageByEmail(page orm.CursorPage[reports.UserSummary]) []reports.UserSummary {
+	// doc-example:begin result-cursor-pagination-3
 	items := slices.Clone(page.Items)
 	slices.SortFunc(items, func(a, b reports.UserSummary) int {
 		return cmp.Compare(a.Email, b.Email)
 	})
+	// doc-example:end result-cursor-pagination-3
 	return items
 }
-
-// doc-example:end result-cursor-pagination-3

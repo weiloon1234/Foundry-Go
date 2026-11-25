@@ -7,6 +7,8 @@ owns milestone status.
 
 Declare ordinary payload DTOs and list their Go types once:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
 <!-- compiled-source: tests/fixtures/consumer/unions/payment/payment.go#payment-variants -->
 ```go
 // CardDTO carries a payment-provider token.
@@ -39,23 +41,22 @@ duplicate tags, payload fields named `kind`, invalid payloads and symbol collisi
 Payloads may be concrete instances of generic DTOs. Ordinary scalar enums remain
 separate. The first union representation is an internally tagged JSON object.
 
+Inputs: `useToken func(string)`.
+
 <!-- compiled-source: tests/fixtures/consumer/unions/payment/payment.go#tagged-unions-2 -->
 ```go
-func paymentLabel(useToken func(string)) (string, error) {
-	method, err := PaymentMethodFromCard(CardDTO{Token: "provider-token"})
-	if err != nil {
-		return "", err
-	}
-	card, selected := method.Card()
-	if selected {
-		useToken(card.Token)
-	}
-	label, err := MatchPaymentMethod(method,
-		func(card CardDTO) (string, error) { return card.Token, nil },
-		func(bank BankDTO) (string, error) { return bank.Reference, nil },
-	)
-	return label, err
+method, err := PaymentMethodFromCard(CardDTO{Token: "provider-token"})
+if err != nil {
+	return "", err
 }
+card, selected := method.Card()
+if selected {
+	useToken(card.Token)
+}
+label, err := MatchPaymentMethod(method,
+	func(card CardDTO) (string, error) { return card.Token, nil },
+	func(bank BankDTO) (string, error) { return bank.Reference, nil },
+)
 ```
 
 Constructors validate and capture an immutable JSON snapshot, following the existing

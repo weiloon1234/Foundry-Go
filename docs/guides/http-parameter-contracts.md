@@ -23,15 +23,48 @@ as generated JSON DTOs.
 Custom protocols need an explicit value contract. The [consumer example](../../tests/fixtures/consumer/httpquery/scalar_metadata.go)
 accepts the scalar declared with the [native TrackingCode methods](http-custom-json.md):
 
+The text codec and scalar metadata share this declaration. Use your application package path for the scalar identity.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `contract`, `fault`, `http` as `foundryhttp`.
+
+<!-- compiled-source: tests/fixtures/consumer/httpquery/scalar_metadata.go#tracking-scalar -->
+```go
+// TrackingCode is an application-owned text protocol. The scalar declaration
+// describes its wire value; the methods own its domain representation checks.
+type TrackingCode string
+
+func (v TrackingCode) MarshalText() ([]byte, error) {
+	if !strings.HasPrefix(string(v), "track_") {
+		return nil, fault.New(fault.Invalid, "invalid tracking code")
+	}
+	return []byte(v), nil
+}
+func (v *TrackingCode) UnmarshalText(data []byte) error {
+	candidate := TrackingCode(data)
+	if _, err := candidate.MarshalText(); err != nil {
+		return err
+	}
+	*v = candidate
+	return nil
+}
+
+var trackingType = reflect.TypeFor[TrackingCode]()
+
+var TrackingScalar = contract.DefineScalar[TrackingCode](contract.Type{
+	ID: contract.TypeID(trackingType.PkgPath() + "." + trackingType.Name()), Kind: contract.StringKind,
+})
+```
+
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Inputs: `TrackingScalar contract.Scalar[TrackingCode]`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpquery/codec_recipe.go#tracking-url-codec -->
 ```go
-func trackingCodec(TrackingScalar contract.Scalar[TrackingCode]) foundryhttp.QueryCodec[TrackingCode] {
-	codec := foundryhttp.DescribeURL(
-		foundryhttp.TextQuery[TrackingCode, *TrackingCode](),
-		TrackingScalar,
-	)
-	return codec
-}
+codec := foundryhttp.DescribeURL(
+	foundryhttp.TextQuery[TrackingCode, *TrackingCode](),
+	TrackingScalar,
+)
 ```
 
 The scalar descriptor and codec must use the same Go value type. Their private

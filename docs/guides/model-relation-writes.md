@@ -8,16 +8,18 @@ Here `models` is the application model package. Its `MemberLinks.Groups`
 relation and generated `Memberships` and `Groups` tables come from the
 [typed declarations](../../tests/fixtures/consumer/linkqueries/orm.go).
 
+The application owns `models.Member`, `models.Group`, `models.Membership`, `Document`, `Tag`, and `DocumentTag` and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `model`, `database/orm`, `value`.
+
+Inputs: `ctx context.Context`, `db *database.DB`, `member models.Member`, `group models.Group`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relation_writes.go#model-relation-writes-1 -->
 ```go
-func attachMembership(ctx context.Context, db *database.DB, member models.Member, group models.Group) error {
-	groups := models.MemberLinks.Groups
-	membership, err := orm.Attach(ctx, db, groups, member, group,
-		orm.Set(models.Memberships.Role, " ADMIN "))
-	if err != nil {
-		return err
-	}
-	_ = membership
+groups := models.MemberLinks.Groups
+membership, err := orm.Attach(ctx, db, groups, member, group,
+	orm.Set(models.Memberships.Role, " ADMIN "))
+if err != nil {
 	return err
 }
 ```
@@ -30,21 +32,18 @@ Repeated attachments create separate pivots unless a database constraint rejects
 
 ## Detach and force detach
 
+Inputs: `ctx context.Context`, `db *database.DB`, `member models.Member`, `group models.Group`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relation_writes.go#model-relation-writes-2 -->
 ```go
-func detachMembership(ctx context.Context, db *database.DB, member models.Member, group models.Group) error {
-	groups := models.MemberLinks.Groups
-	removed, err := orm.Detach(ctx, db, groups, member, group)
-	if err != nil {
-		return err
-	}
-	permanentlyRemoved, err := orm.ForceDetach(ctx, db, groups.WithTrashedPivot(),
-		models.Memberships.Soft, member, group)
-	if err != nil {
-		return err
-	}
-	_ = removed
-	_ = permanentlyRemoved
+groups := models.MemberLinks.Groups
+removed, err := orm.Detach(ctx, db, groups, member, group)
+if err != nil {
+	return err
+}
+permanentlyRemoved, err := orm.ForceDetach(ctx, db, groups.WithTrashedPivot(),
+	models.Memberships.Soft, member, group)
+if err != nil {
 	return err
 }
 ```
@@ -79,17 +78,15 @@ embeds `orm.Table[DocumentTag, model.ID[DocumentTag]]`, exposes the typed
 the managed timestamp roles. The function receives this generated table and the
 typed `DocumentLinks` relation explicitly; it never constructs a second table binding.
 
+Inputs: `ctx context.Context`, `db *database.DB`, `document Document`, `goTag Tag`, `sqlTag Tag`, `DocumentLinks orm.ThroughRelation[Document, Tag, DocumentTag]`, `DocumentTags DocumentTagTable`.
+
 <!-- compiled-source: tests/fixtures/consumer/tenantqueries/guide_sync.go#model-relation-writes-3 -->
 ```go
-func syncDocumentTags(ctx context.Context, db *database.DB, document Document, goTag, sqlTag Tag, DocumentLinks orm.ThroughRelation[Document, Tag, DocumentTag], DocumentTags DocumentTagTable) error {
-	tags := DocumentLinks
-	changes, err := orm.Sync(ctx, db, tags, document, []Tag{goTag, sqlTag},
-		[]orm.Assignment[DocumentTag]{orm.Set(DocumentTags.Weight, 1)},
-		[]orm.Assignment[DocumentTag]{orm.Set(DocumentTags.Weight, 5)})
-	if err != nil {
-		return err
-	}
-	_ = changes
+tags := DocumentLinks
+changes, err := orm.Sync(ctx, db, tags, document, []Tag{goTag, sqlTag},
+	[]orm.Assignment[DocumentTag]{orm.Set(DocumentTags.Weight, 1)},
+	[]orm.Assignment[DocumentTag]{orm.Set(DocumentTags.Weight, 5)})
+if err != nil {
 	return err
 }
 ```
@@ -111,18 +108,16 @@ Each call is one transaction (or one savepoint of the caller's). The source and 
 
 ## Filters, keys and bounded writes
 
+Inputs: `ctx context.Context`, `db *database.DB`, `member models.Member`, `group models.Group`.
+
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relation_writes.go#model-relation-writes-4 -->
 ```go
-func detachAdminMembership(ctx context.Context, db *database.DB, member models.Member, group models.Group) error {
-	adminGroups := models.MemberLinks.Groups.
-		Where(orm.Eq(models.Groups.Name, "staff")).
-		WherePivot(orm.Eq(models.Memberships.Role, "admin"))
-	adminGroups = orm.WithRelationWriteLimit(adminGroups, 50)
-	removed, err := orm.Detach(ctx, db, adminGroups, member, group)
-	if err != nil {
-		return err
-	}
-	_ = removed
+adminGroups := models.MemberLinks.Groups.
+	Where(orm.Eq(models.Groups.Name, "staff")).
+	WherePivot(orm.Eq(models.Memberships.Role, "admin"))
+adminGroups = orm.WithRelationWriteLimit(adminGroups, 50)
+removed, err := orm.Detach(ctx, db, adminGroups, member, group)
+if err != nil {
 	return err
 }
 ```

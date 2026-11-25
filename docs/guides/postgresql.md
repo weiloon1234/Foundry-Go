@@ -37,24 +37,25 @@ with three operations:
 
 For example, after migrations have created `app.order_status`:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/postgres`.
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_postgres.go#postgresql-1 -->
 ```go
-func enumConnection() postgres.Config {
-	type OrderStatus string
+type OrderStatus string
 
-	config := postgres.DefaultConfig()
-	// Supply endpoint and credentials from the application's typed configuration.
-	config.RegisterTypes = func(ctx context.Context, types *postgres.TypeRegistry) error {
-		status, err := types.LoadType(ctx, "app.order_status")
-		if err != nil {
-			return err
-		}
-		if err := types.RegisterType(status); err != nil {
-			return err
-		}
-		return types.RegisterDefaultPgType(OrderStatus(""), status.Name)
+config := postgres.DefaultConfig()
+// Supply endpoint and credentials from the application's typed configuration.
+config.RegisterTypes = func(ctx context.Context, types *postgres.TypeRegistry) error {
+	status, err := types.LoadType(ctx, "app.order_status")
+	if err != nil {
+		return err
 	}
-	return config
+	if err := types.RegisterType(status); err != nil {
+		return err
+	}
+	return types.RegisterDefaultPgType(OrderStatus(""), status.Name)
 }
 ```
 

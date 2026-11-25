@@ -12,6 +12,10 @@ its stored representation private. Its contract returns
 slice and inside `Optional[Nullable[StreamLabel]]`. No per-field codec
 registration is required.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `contract`, `fault`, `value`. Standard-library aliases: `encoding/json/v2` as `jsonv2`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpdto/stream.go#streaming-label -->
 ```go
 // StreamLabel owns its private representation and native streaming wire methods.

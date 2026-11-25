@@ -8,39 +8,36 @@ import (
 	"github.com/weiloon1234/Foundry-Go/redis/raw"
 )
 
-// doc-example:begin redis-commands-1
-func memberKey(ctx context.Context, client *redis.Client, namespace keyspace.Namespace, member Member) error {
+func memberKey(ctx context.Context, client *redis.Client, namespace keyspace.Namespace, member Member) (raw.Key, error) {
+	// doc-example:begin redis-commands-1
 	store, err := raw.NewStore(client, raw.DefaultConfig(namespace))
 	if err != nil {
-		return err
+		return raw.Key{}, err
 	}
 	keys, err := Visits.Bind(store)
 	if err != nil {
-		return err
+		return raw.Key{}, err
 	}
 	key, err := keys.For(ctx, member.ID)
 	if err != nil {
-		return err
+		return raw.Key{}, err
 	}
-	_ = key
-	return err
+	// doc-example:end redis-commands-1
+	return key, nil
 }
 
-// doc-example:end redis-commands-1
-
-// doc-example:begin redis-commands-2
 func rawRanking(ctx context.Context, store *raw.Store, scoreboardKey raw.Key) ([]string, error) {
+	// doc-example:begin redis-commands-2
 	command := raw.NewCommand("ZREVRANGE", raw.DecodeArray(raw.DecodeString())).
 		Key(scoreboardKey).
 		Arg(raw.Int64(0)).Arg(raw.Int64(9)).Arg(raw.Text("WITHSCORES"))
 	ranking, err := command.Run(ctx, store) // []string
+	// doc-example:end redis-commands-2
 	return ranking, err
 }
 
-// doc-example:end redis-commands-2
-
-// doc-example:begin redis-commands-3
 func visitPipeline(ctx context.Context, store *raw.Store, key raw.Key) error {
+	// doc-example:begin redis-commands-3
 	pipeline, err := raw.NewPipeline(raw.Transaction)
 	if err != nil {
 		return err
@@ -72,21 +69,19 @@ func visitPipeline(ctx context.Context, store *raw.Store, key raw.Key) error {
 	if err != nil {
 		return err
 	}
+	// doc-example:end redis-commands-3
 	_ = number
 	_ = text
 	return err
 }
 
-// doc-example:end redis-commands-3
-
-// doc-example:begin redis-commands-4
 func incrementScript(ctx context.Context, store *raw.Store, key raw.Key) (int64, error) {
+	// doc-example:begin redis-commands-4
 	script := raw.NewScript(
 		"return redis.call('INCRBY',KEYS[1],ARGV[1])",
 		key, raw.DecodeInt64(),
 	).Arg(raw.Int64(3))
 	count, err := script.Run(ctx, store)
+	// doc-example:end redis-commands-4
 	return count, err
 }
-
-// doc-example:end redis-commands-4

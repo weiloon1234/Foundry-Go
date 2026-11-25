@@ -7,22 +7,20 @@ import (
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
-// doc-example:begin storage-1
-func listReports(ctx context.Context, disk *storage.Disk) error {
+func listReports(ctx context.Context, disk *storage.Disk) (storage.Page, error) {
+	// doc-example:begin storage-1
 	prefix, err := storage.ParsePrefix("reports/")
 	if err != nil {
-		return err
+		return storage.Page{}, err
 	}
 	page, err := disk.List(ctx, storage.ListOptions{Prefix: prefix, Limit: 100})
 	if err != nil {
-		return err
+		return storage.Page{}, err
 	}
 	// Use page.Next unchanged with the same disk and prefix for the next page.
-	_ = page
-	return nil
+	// doc-example:end storage-1
+	return page, nil
 }
-
-// doc-example:end storage-1
 
 // doc-example:begin delete-prefix-page
 type prefixPageResult struct {

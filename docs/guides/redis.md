@@ -34,9 +34,9 @@ Explicit namespace overrides retain their configured application and environment
 Declare application rate-limit and credential-protection stores alongside the
 application settings so construction and inspection use the same declarations:
 
-In these recipes, `Member` is the application model with its typed `ID` and
-`AccessEmail` accessor. `DisplayEmail` is the accessor's application-owned result type.
 `Profile` is the application's cache snapshot DTO.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `cache`, `foundation`, `module root` as `foundry`, `infrastructure`, `keyspace`, `auth/lockout`, `model`, `ratelimit`, `redis`, `secret`.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#credential-stores -->
 ```go
@@ -99,44 +99,54 @@ their separately declared deployment policy. No existing key format changes.
 
 ## Application ownership
 
+The assembly owner keeps the returned application and cache handle alive for its callers, then calls `app.Shutdown(ctx)` after those callers stop.
+
+`mutatorqueries.Member` is the application model keyed by `model.ID[mutatorqueries.Member]`; `Profile` is an explicitly selected cache snapshot with `Email mutatorqueries.DisplayEmail` and `Labels []string`, where `DisplayEmail` is string-backed. `Profiles` aliases `cache.Cache[model.ID[mutatorqueries.Member], Profile]`; `ProfileEntries` is a `cache.Declaration` made with `cache.Define`, `keyspace.TextKeys[model.ID[mutatorqueries.Member]]()`, and `cache.JSON[Profile]()`.
+
+The application owns `mutatorqueries.Member` and any generated tables or identities used below.
+
+Inputs: `ctx context.Context`, `password string`, `ProfileEntries cache.Declaration[model.ID[mutatorqueries.Member], Profile]`.
+
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_redis.go#redis-1 -->
 ```go
-func redisProfiles(ctx context.Context, password string, ProfileEntries cache.Declaration[model.ID[Member], Profile]) error {
-	var RedisConnection = foundation.NewKey[*redis.Client]("app.redis")
-	config := redis.DefaultConfig()
-	config.Host = "redis.example.test"
-	config.User = "application"
-	config.Password = secret.New(password)
+var RedisConnection = foundation.NewKey[*redis.Client]("app.redis")
+config := redis.DefaultConfig()
+config.Host = "redis.example.test"
+config.User = "application"
+config.Password = secret.New(password)
 
-	app, err := foundry.New().Register(
-		redis.Module("app.redis", RedisConnection, config),
-	).Build(ctx)
-	if err != nil {
-		return err
-	}
-	defer app.Shutdown(context.Background())
-	// Start when the assembled application is ready; normal kernel execution shares
-	// the application's lifecycle. Module installs cleanup before its health probe.
-	if err := app.Start(ctx); err != nil {
-		return err
-	}
-	client, err := foundation.Resolve(app.Services(), RedisConnection)
-	if err != nil {
-		return err
-	}
-	store, err := cache.NewStore(client, cache.DefaultConfig(keyspace.Namespace{
-		Application: "example", Environment: "production",
-	}))
-	if err != nil {
-		return err
-	}
-	profiles, err := ProfileEntries.Bind(store)
-	if err != nil {
-		return err
-	}
-	_ = profiles
-	return err
+app, err := foundry.New().Register(
+	redis.Module("app.redis", RedisConnection, config),
+).Build(ctx)
+if err != nil {
+	return nil, Profiles{}, err
 }
+ready := false
+defer func() {
+	if !ready {
+		app.Shutdown(context.Background())
+	}
+}()
+// Start when the assembled application is ready; normal kernel execution shares
+// the application's lifecycle. Module installs cleanup before its health probe.
+if err := app.Start(ctx); err != nil {
+	return nil, Profiles{}, err
+}
+client, err := foundation.Resolve(app.Services(), RedisConnection)
+if err != nil {
+	return nil, Profiles{}, err
+}
+store, err := cache.NewStore(client, cache.DefaultConfig(keyspace.Namespace{
+	Application: "example", Environment: "production",
+}))
+if err != nil {
+	return nil, Profiles{}, err
+}
+profiles, err := ProfileEntries.Bind(store)
+if err != nil {
+	return nil, Profiles{}, err
+}
+ready = true
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/caching/redis.go) uses the
@@ -255,27 +265,25 @@ Bind the same tag declarations used with memory to the Redis-backed Store:
 [cache owner](../../tests/fixtures/consumer/caching/profiles.go). It retains a
 concrete model key and snapshot type; the `profiles` parameter is that bound cache.
 
+Inputs: `ctx context.Context`, `store *cache.Store`, `profiles Profiles`, `member mutatorqueries.Member`, `loadProfile func(context.Context) (Profile, error)`, `MemberChanges cache.TagDeclaration[model.ID[mutatorqueries.Member]]`.
+
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_redis.go#redis-2 -->
 ```go
-func taggedProfile(ctx context.Context, store *cache.Store, profiles Profiles, member Member, loadProfile func(context.Context) (Profile, error), MemberChanges cache.TagDeclaration[model.ID[Member]]) error {
-	tags, err := MemberChanges.Bind(store)
-	if err != nil {
-		return err
-	}
-	view, err := profiles.WithTags(tags.For(member.ID))
-	if err != nil {
-		return err
-	}
-	profile, err := view.Remember(ctx, member.ID, cache.For(5*time.Minute), loadProfile)
-	if err != nil {
-		return err
-	}
-	// After the corresponding domain change has committed:
-	err = tags.Invalidate(ctx, member.ID)
-	if err != nil {
-		return err
-	}
-	_ = profile
+tags, err := MemberChanges.Bind(store)
+if err != nil {
+	return err
+}
+view, err := profiles.WithTags(tags.For(member.ID))
+if err != nil {
+	return err
+}
+profile, err := view.Remember(ctx, member.ID, cache.For(5*time.Minute), loadProfile)
+if err != nil {
+	return err
+}
+// After the corresponding domain change has committed:
+err = tags.Invalidate(ctx, member.ID)
+if err != nil {
 	return err
 }
 ```

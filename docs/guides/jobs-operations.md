@@ -106,28 +106,32 @@ For a retained independent failed job:
 
 `Welcome` is the application's job payload type; `WelcomeJob` is its typed job definition.
 
+`Welcome` is your job payload struct; `WelcomeJob` is its `jobs.Definition[Welcome]`, registered on the `communications` connection. `id` is the retained `jobs.ID[Welcome]` of the job to inspect.
+
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `jobs`.
+
+Inputs: `ctx context.Context`, `dispatcher *jobs.Dispatcher`, `id jobs.ID[Welcome]`, `WelcomeJob jobs.Definition[Welcome]`.
+
 <!-- compiled-source: tests/fixtures/consumer/background/guide_retry.go#jobs-operations-1 -->
 ```go
-func inspectAndRetryWelcome(ctx context.Context, dispatcher *jobs.Dispatcher, id jobs.ID[Welcome], WelcomeJob jobs.Definition[Welcome]) error {
-	found, err := WelcomeJob.Inspect(ctx, dispatcher, id, "communications")
-	if err != nil {
-		return err
-	}
-	record, present := found.Get()
-	if !present {
-		return jobs.ErrNotRetryable
-	}
-	token, err := record.RetryToken()
-	if err != nil {
-		return err
-	}
-	// Save token before executing the operator-approved action.
-	changed, err := WelcomeJob.Retry(ctx, dispatcher, id, "communications", token)
-	if err != nil {
-		return err
-	}
-	_ = changed
-	return err
+found, err := WelcomeJob.Inspect(ctx, dispatcher, id, "communications")
+if err != nil {
+	return false, err
+}
+record, present := found.Get()
+if !present {
+	return false, jobs.ErrNotRetryable
+}
+token, err := record.RetryToken()
+if err != nil {
+	return false, err
+}
+// Save token before executing the operator-approved action.
+changed, err := WelcomeJob.Retry(ctx, dispatcher, id, "communications", token)
+if err != nil {
+	return false, err
 }
 ```
 

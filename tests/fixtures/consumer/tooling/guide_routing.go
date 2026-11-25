@@ -12,8 +12,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// doc-example:begin database-routing-1
 func routedDatabase(primaryConfig, readConfig postgres.Config, DatabaseProvider foundation.ProviderID, DatabaseKey foundation.Key[*database.DB]) foundation.Module {
+	// doc-example:begin database-routing-1
 	routing := postgres.RoutingConfig{
 		Primary:        primaryConfig,
 		Read:           value.Set(readConfig),
@@ -21,13 +21,12 @@ func routedDatabase(primaryConfig, readConfig postgres.Config, DatabaseProvider 
 	}
 	module := postgres.RoutedModule(DatabaseProvider, DatabaseKey, routing)
 	// Register module through the ordinary application builder.
+	// doc-example:end database-routing-1
 	return module
 }
 
-// doc-example:end database-routing-1
-
-// doc-example:begin database-routing-2
 func routedReads(ctx context.Context, db *database.DB) error {
+	// doc-example:begin database-routing-2
 	recent, err := orm.All(ctx, db, models.Users.Query().Limit(10))
 	if err != nil {
 		return err
@@ -36,9 +35,8 @@ func routedReads(ctx context.Context, db *database.DB) error {
 	if err != nil {
 		return err
 	}
+	// doc-example:end database-routing-2
 	_ = recent
 	_ = consistent
 	return err
 }
-
-// doc-example:end database-routing-2

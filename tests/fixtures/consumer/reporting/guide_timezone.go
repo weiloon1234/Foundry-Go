@@ -6,25 +6,23 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
-// doc-example:begin application-timezone-1
 func zoneSettings() application.Settings {
+	// doc-example:begin application-timezone-1
 	settings := application.DefaultSettings()
 	settings.TimeZone = "Asia/Kuala_Lumpur" // temporal.ZoneName
+	// doc-example:end application-timezone-1
 	return settings
 }
 
-// doc-example:end application-timezone-1
-
-// doc-example:begin application-timezone-2
 func reportService(s application.Services) *Reports {
+	// doc-example:begin application-timezone-2
 	reports := NewReports(s.Time())
+	// doc-example:end application-timezone-2
 	return reports
 }
 
-// doc-example:end application-timezone-2
-
-// doc-example:begin application-timezone-3
 func calendarDates(s application.Services) error {
+	// doc-example:begin application-timezone-3
 	dates := s.Time()
 	now, err := dates.Now() // UTC instant
 	if err != nil {
@@ -50,6 +48,7 @@ func calendarDates(s application.Services) error {
 	if err != nil {
 		return err
 	}
+	// doc-example:end application-timezone-3
 	_ = now
 	_ = today
 	_ = text
@@ -58,16 +57,13 @@ func calendarDates(s application.Services) error {
 	return err
 }
 
-// doc-example:end application-timezone-3
-
-// doc-example:begin application-timezone-4
 func dailyReport(s application.Services, handler schedule.Handler) (schedule.Declaration, error) {
+	// doc-example:begin application-timezone-4
 	calendar := s.Calendar()
 	daily, err := calendar.DailyAt("reports.daily", "09:00", handler)
+	// doc-example:end application-timezone-4
 	return daily, err
 }
-
-// doc-example:end application-timezone-4
 
 // doc-example:begin report-dates-constructor
 // Reports retains the application clock and zone for report dates.

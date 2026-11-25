@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/jobs"
 )
 
-// doc-example:begin supporting-services-1
+// doc-example:begin report-job-declaration
 // ReportID identifies the report requested by a queued task.
 type ReportID string
 
@@ -20,7 +20,10 @@ type ReportPayload struct {
 // ReportJob shares its identity between registration and dispatch.
 var ReportJob = jobs.Define[ReportPayload]("reports.build", 1, jobs.DefaultPolicy("reports"))
 
+// doc-example:end report-job-declaration
+
 func queueReport(ctx context.Context, services application.Services, id ReportID) error {
+	// doc-example:begin supporting-services-1
 	connection, err := services.JobConnection()
 	if err != nil {
 		return err
@@ -30,7 +33,6 @@ func queueReport(ctx context.Context, services application.Services, id ReportID
 		return err
 	}
 	_, err = work.Dispatch(ctx, ReportPayload{ReportID: id}, jobs.Options[ReportPayload]{})
+	// doc-example:end supporting-services-1
 	return err
 }
-
-// doc-example:end supporting-services-1

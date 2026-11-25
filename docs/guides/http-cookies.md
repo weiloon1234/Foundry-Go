@@ -3,29 +3,29 @@
 Declare one cookie with its name, concrete value codec and scope. Reuse the same
 declaration for reads, writes and removal:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `clock`, `encryption`, `http` as `foundryhttp`, `secret`.
+
+Inputs: `ctx context.Context`, `writer http.ResponseWriter`, `request *http.Request`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpcookies/guide_recipes.go#http-cookies-1 -->
 ```go
-func rememberPreference(ctx context.Context, writer http.ResponseWriter, request *http.Request) error {
-	options := foundryhttp.DefaultCookieOptions()
-	options.MaxAge = time.Hour
-	remember := foundryhttp.DefineCookie(
-		"remember",
-		foundryhttp.BoolCookie[bool](),
-		options,
-	)
+options := foundryhttp.DefaultCookieOptions()
+options.MaxAge = time.Hour
+remember := foundryhttp.DefineCookie(
+	"remember",
+	foundryhttp.BoolCookie[bool](),
+	options,
+)
 
-	choice, err := remember.Read(request)
-	if err != nil {
-		return err
-	}
-	if enabled, present := choice.Get(); present {
-		// enabled can be false while the cookie is present.
-		_ = enabled
-	}
-	if err := remember.Set(ctx, writer, true); err != nil {
-		return err
-	}
-	return nil
+choice, err := remember.Read(request)
+if err != nil {
+	return false, false, err
+}
+enabled, present := choice.Get() // false can be a present choice.
+if err := remember.Set(ctx, writer, true); err != nil {
+	return false, false, err
 }
 ```
 
@@ -87,25 +87,24 @@ including name and scope attributes, are limited to 4,096 bytes.
 Create a reusable rotation set using protected configuration values, then inject
 the application clock:
 
+Inputs: `ctx context.Context`, `writer http.ResponseWriter`, `configuredKey secret.String`, `applicationClock clock.Clock`, `remember foundryhttp.Cookie[bool]`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpcookies/guide_recipes.go#http-cookies-2 -->
 ```go
-func setSignedPreference(ctx context.Context, writer http.ResponseWriter, configuredKey secret.String, applicationClock clock.Clock, remember foundryhttp.Cookie[bool]) error {
-	keys, err := foundryhttp.NewSigningKeys(
-		foundryhttp.SigningKey{ID: "current", Secret: configuredKey},
-		// Optional previous keys remain valid during rotation.
-	)
-	if err != nil {
-		return err
-	}
-	signer, err := foundryhttp.NewCookieSigner(keys, applicationClock)
-	if err != nil {
-		return err
-	}
-	signedRemember := remember.Signed(signer)
-	if err := signedRemember.Set(ctx, writer, true); err != nil {
-		return err
-	}
-	return nil
+keys, err := foundryhttp.NewSigningKeys(
+	foundryhttp.SigningKey{ID: "current", Secret: configuredKey},
+	// Optional previous keys remain valid during rotation.
+)
+if err != nil {
+	return err
+}
+signer, err := foundryhttp.NewCookieSigner(keys, applicationClock)
+if err != nil {
+	return err
+}
+signedRemember := remember.Signed(signer)
+if err := signedRemember.Set(ctx, writer, true); err != nil {
+	return err
 }
 ```
 
@@ -137,18 +136,17 @@ authenticate a user or replace an authorization check.
 When a browser must not read the value, encrypt it with the application's
 [encryption keyring](../../encryption/doc.go) instead of signing it:
 
+Inputs: `ctx context.Context`, `writer http.ResponseWriter`, `keyring *encryption.Keyring`, `applicationClock clock.Clock`, `remember foundryhttp.Cookie[bool]`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpcookies/guide_recipes.go#http-cookies-3 -->
 ```go
-func setEncryptedPreference(ctx context.Context, writer http.ResponseWriter, keyring *encryption.Keyring, applicationClock clock.Clock, remember foundryhttp.Cookie[bool]) error {
-	encrypter, err := foundryhttp.NewCookieEncrypter(keyring, applicationClock)
-	if err != nil {
-		return err
-	}
-	private := remember.Encrypted(encrypter)
-	if err := private.Set(ctx, writer, true); err != nil {
-		return err
-	}
-	return nil
+encrypter, err := foundryhttp.NewCookieEncrypter(keyring, applicationClock)
+if err != nil {
+	return err
+}
+private := remember.Encrypted(encrypter)
+if err := private.Set(ctx, writer, true); err != nil {
+	return err
 }
 ```
 

@@ -6,8 +6,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 )
 
-// doc-example:begin postgresql-1
 func enumConnection() postgres.Config {
+	// doc-example:begin postgresql-1
 	type OrderStatus string
 
 	config := postgres.DefaultConfig()
@@ -22,7 +22,6 @@ func enumConnection() postgres.Config {
 		}
 		return types.RegisterDefaultPgType(OrderStatus(""), status.Name)
 	}
+	// doc-example:end postgresql-1
 	return config
 }
-
-// doc-example:end postgresql-1

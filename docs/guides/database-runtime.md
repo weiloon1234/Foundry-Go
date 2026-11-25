@@ -140,30 +140,33 @@ To assert statement shapes in a test, pass connection settings and an operation
 with the signature `func(context.Context, *database.DB) error`. This helper registers
 the detector on the pool it opens. The operation must close its rows before returning:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `testkit/dbassert`, `database/postgres`.
+
+Inputs: `t *testing.T`, `config postgres.Config`, `run func(context.Context, *database.DB) error`.
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_statement_shapes_test.go#database-runtime-1 -->
 ```go
-func assertOperationShapes(t *testing.T, config postgres.Config, run func(context.Context, *database.DB) error) {
-	t.Helper()
-	detector, err := database.NewStatementDetector(database.DefaultStatementDetectorConfig())
-	if err != nil {
-		t.Fatal(err)
-	}
-	db, err := postgres.Open(t.Context(), config, database.WithStatementDetector(detector))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(context.Background()); err != nil {
-			t.Error(err)
-		}
-	})
-	ctx, scope := detector.Begin(t.Context())
-	// The operation closes its rows before returning so the scope is complete.
-	if err := run(ctx, db); err != nil {
-		t.Fatal(err)
-	}
-	dbassert.AssertStatementShapes(t, scope)
+detector, err := database.NewStatementDetector(database.DefaultStatementDetectorConfig())
+if err != nil {
+	t.Fatal(err)
 }
+db, err := postgres.Open(t.Context(), config, database.WithStatementDetector(detector))
+if err != nil {
+	t.Fatal(err)
+}
+t.Cleanup(func() {
+	if err := db.Close(context.Background()); err != nil {
+		t.Error(err)
+	}
+})
+ctx, scope := detector.Begin(t.Context())
+// The operation closes its rows before returning so the scope is complete.
+if err := run(ctx, db); err != nil {
+	t.Fatal(err)
+}
+dbassert.AssertStatementShapes(t, scope)
 ```
 
 Import `testkit/dbassert` for the assertion. Only framework-compiled shapes are

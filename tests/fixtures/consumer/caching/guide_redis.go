@@ -2,6 +2,7 @@ package caching
 
 import (
 	"context"
+	"foundry.test/consumer/mutatorqueries"
 	"time"
 
 	foundry "github.com/weiloon1234/Foundry-Go"
@@ -13,8 +14,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
-// doc-example:begin redis-1
-func redisProfiles(ctx context.Context, password string, ProfileEntries cache.Declaration[model.ID[Member], Profile]) error {
+func redisProfiles(ctx context.Context, password string, ProfileEntries cache.Declaration[model.ID[mutatorqueries.Member], Profile]) (*foundation.App, Profiles, error) {
+	// doc-example:begin redis-1
 	var RedisConnection = foundation.NewKey[*redis.Client]("app.redis")
 	config := redis.DefaultConfig()
 	config.Host = "redis.example.test"
@@ -25,36 +26,40 @@ func redisProfiles(ctx context.Context, password string, ProfileEntries cache.De
 		redis.Module("app.redis", RedisConnection, config),
 	).Build(ctx)
 	if err != nil {
-		return err
+		return nil, Profiles{}, err
 	}
-	defer app.Shutdown(context.Background())
+	ready := false
+	defer func() {
+		if !ready {
+			app.Shutdown(context.Background())
+		}
+	}()
 	// Start when the assembled application is ready; normal kernel execution shares
 	// the application's lifecycle. Module installs cleanup before its health probe.
 	if err := app.Start(ctx); err != nil {
-		return err
+		return nil, Profiles{}, err
 	}
 	client, err := foundation.Resolve(app.Services(), RedisConnection)
 	if err != nil {
-		return err
+		return nil, Profiles{}, err
 	}
 	store, err := cache.NewStore(client, cache.DefaultConfig(keyspace.Namespace{
 		Application: "example", Environment: "production",
 	}))
 	if err != nil {
-		return err
+		return nil, Profiles{}, err
 	}
 	profiles, err := ProfileEntries.Bind(store)
 	if err != nil {
-		return err
+		return nil, Profiles{}, err
 	}
-	_ = profiles
-	return err
+	ready = true
+	// doc-example:end redis-1
+	return app, profiles, nil
 }
 
-// doc-example:end redis-1
-
-// doc-example:begin redis-2
-func taggedProfile(ctx context.Context, store *cache.Store, profiles Profiles, member Member, loadProfile func(context.Context) (Profile, error), MemberChanges cache.TagDeclaration[model.ID[Member]]) error {
+func taggedProfile(ctx context.Context, store *cache.Store, profiles Profiles, member mutatorqueries.Member, loadProfile func(context.Context) (Profile, error), MemberChanges cache.TagDeclaration[model.ID[mutatorqueries.Member]]) error {
+	// doc-example:begin redis-2
 	tags, err := MemberChanges.Bind(store)
 	if err != nil {
 		return err
@@ -72,8 +77,7 @@ func taggedProfile(ctx context.Context, store *cache.Store, profiles Profiles, m
 	if err != nil {
 		return err
 	}
+	// doc-example:end redis-2
 	_ = profile
 	return err
 }
-
-// doc-example:end redis-2

@@ -58,10 +58,7 @@ func TestDataConsumerRetainsGettersAndModelOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	group, err := model.NewIDAt[models.Group](time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
+	group := models.Group{Code: "team"}.Code
 	member := mutatorqueries.Member{ID: id, Email: "raw@example.test"}
 	if _, err := redisdata.SaveProfile(t.Context(), profiles, member); err != nil {
 		t.Fatal(err)

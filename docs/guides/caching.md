@@ -23,8 +23,9 @@ A declaration owns its name, key codec and payload codec. Binding it to an appli
 store preserves both Go types through every operation. The [independent consumer](../../tests/fixtures/consumer/caching/profiles.go)
 uses a model-owned ID and explicitly selects a getter when creating a cache snapshot:
 
-In these recipes, `Member` is the application model with its typed `ID` and
-`AccessEmail` accessor. `DisplayEmail` is the accessor's application-owned result type.
+In these recipes, `mutatorqueries.Member` is your application model with a typed `ID` and an `AccessEmail() (mutatorqueries.DisplayEmail, error)` accessor; `mutatorqueries.DisplayEmail` is its string-backed presentation value.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `cache`, `clock`, `keyspace`, `cache/memory`, `model`.
 
 <!-- compiled-source: tests/fixtures/consumer/caching/profiles.go#typed-cache -->
 ```go
@@ -249,22 +250,20 @@ model-owned member IDs:
 
 <!-- compiled-source: tests/fixtures/consumer/caching/counters.go#caching-1 -->
 ```go
-var ProfileViews = cache.DefineCounter("profile-views-v1", keyspace.TextKeys[model.ID[Member]]())
+var ProfileViews = cache.DefineCounter("profile-views-v1", keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
 ```
+
+Inputs: `ctx context.Context`, `store *cache.Store`, `memberID model.ID[mutatorqueries.Member]`.
 
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_operations.go#caching-1 -->
 ```go
-func incrementViews(ctx context.Context, store *cache.Store, memberID model.ID[Member]) error {
-	counts, err := ProfileViews.Bind(store)
-	if err != nil {
-		return err
-	}
-	views, err := counts.Increment(ctx, memberID, 1, cache.For(24*time.Hour))
-	if err != nil {
-		return err
-	}
-	_ = views
-	return err
+counts, err := ProfileViews.Bind(store)
+if err != nil {
+	return 0, err
+}
+views, err := counts.Increment(ctx, memberID, 1, cache.For(24*time.Hour))
+if err != nil {
+	return 0, err
 }
 ```
 
@@ -300,24 +299,20 @@ capability and passed real-service and full native acceptance.
 The [compiling consumer](../../tests/fixtures/consumer/caching/entries.go) keeps its
 model-owned keys through these operations:
 
+Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[mutatorqueries.Member]`, `memberA model.ID[mutatorqueries.Member]`, `memberB model.ID[mutatorqueries.Member]`.
+
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_operations.go#caching-2 -->
 ```go
-func entryLifetime(ctx context.Context, profiles Profiles, memberID model.ID[Member], memberA, memberB model.ID[Member]) error {
-	exists, err := profiles.Exists(ctx, memberID)
-	if err != nil {
-		return err
-	}
-	changed, err := profiles.Expire(ctx, memberID, cache.For(time.Hour))
-	if err != nil {
-		return err
-	}
-	removed, err := profiles.ForgetMany(ctx, memberA, memberB, memberA)
-	if err != nil {
-		return err
-	}
-	_ = exists
-	_ = changed
-	_ = removed
+exists, err := profiles.Exists(ctx, memberID)
+if err != nil {
+	return err
+}
+changed, err := profiles.Expire(ctx, memberID, cache.For(time.Hour))
+if err != nil {
+	return err
+}
+removed, err := profiles.ForgetMany(ctx, memberA, memberB, memberA)
+if err != nil {
 	return err
 }
 ```
@@ -398,26 +393,24 @@ wins the store's fill registration supplies the loader, context and TTL. Concurr
 followers for that key wait for the same serialized result; each caller decodes
 its own snapshot, including the owner. A loader returning zero or nil is cacheable.
 
+Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[mutatorqueries.Member]`, `loadMember func(context.Context, model.ID[mutatorqueries.Member]) (mutatorqueries.Member, error)`.
+
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_operations.go#caching-3 -->
 ```go
-func rememberMember(ctx context.Context, profiles Profiles, memberID model.ID[Member], loadMember func(context.Context, model.ID[Member]) (Member, error)) error {
-	profile, err := profiles.Remember(ctx, memberID, cache.For(5*time.Minute),
-		func(ctx context.Context) (Profile, error) {
-			member, err := loadMember(ctx, memberID)
-			if err != nil {
-				return Profile{}, err
-			}
-			email, err := member.AccessEmail()
-			if err != nil {
-				return Profile{}, err
-			}
-			return Profile{Email: email}, nil
-		})
-	if err != nil {
-		return err
-	}
-	_ = profile
-	return err
+profile, err := profiles.Remember(ctx, memberID, cache.For(5*time.Minute),
+	func(ctx context.Context) (Profile, error) {
+		member, err := loadMember(ctx, memberID)
+		if err != nil {
+			return Profile{}, err
+		}
+		email, err := member.AccessEmail()
+		if err != nil {
+			return Profile{}, err
+		}
+		return Profile{Email: email}, nil
+	})
+if err != nil {
+	return Profile{}, err
 }
 ```
 
@@ -474,15 +467,13 @@ and atomic conditional publication.
 `Flexible(ctx, key, fresh, stale, loader, options...)` is `Remember` that keeps
 serving an aging value while it is refreshed:
 
+Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[mutatorqueries.Member]`, `loadProfile func(context.Context) (Profile, error)`.
+
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_operations.go#caching-4 -->
 ```go
-func flexibleMember(ctx context.Context, profiles Profiles, memberID model.ID[Member], loadProfile func(context.Context) (Profile, error)) error {
-	profile, err := profiles.Flexible(ctx, memberID, time.Minute, 10*time.Minute, loadProfile)
-	if err != nil {
-		return err
-	}
-	_ = profile
-	return err
+profile, err := profiles.Flexible(ctx, memberID, time.Minute, 10*time.Minute, loadProfile)
+if err != nil {
+	return Profile{}, err
 }
 ```
 
@@ -524,23 +515,20 @@ memoized. Each result still decodes its own copy. `Flexible` is not memoized.
 Application assembly creates the backend and store. Domain services receive their
 bound typed cache; they do not format storage keys or serialize payloads.
 
+The application retains `store` and its `backend`; after all cache users stop, its shutdown closes `backend` with `Close(ctx)`. Setup failure closes the backend immediately.
+
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_operations.go#caching-5 -->
 ```go
-func memoryStore() error {
-	backend, err := memory.New(memory.DefaultConfig(), clock.System{})
-	if err != nil {
-		return err
-	}
-	defer backend.Close(context.Background())
-	store, err := cache.NewStore(backend, cache.DefaultConfig(keyspace.Namespace{
-		Application: "shop",
-		Environment: "development",
-	}))
-	if err != nil {
-		return err
-	}
-	_ = store
-	return nil
+backend, err := memory.New(memory.DefaultConfig(), clock.System{})
+if err != nil {
+	return nil, nil, err
+}
+store, err := cache.NewStore(backend, cache.DefaultConfig(keyspace.Namespace{
+	Application: "shop",
+	Environment: "development",
+}))
+if err != nil {
+	return nil, nil, errors.Join(err, backend.Close(context.Background()))
 }
 ```
 

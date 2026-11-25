@@ -15,27 +15,25 @@ var orders = orm.HasManyOf(models.Users.Orders, models.Users.ID, models.Orders.B
 
 // doc-example:end model-relations-1
 
-// doc-example:begin model-relations-2
 func eagerUsers(ctx context.Context, db database.Executor) ([]models.User, error) {
+	// doc-example:begin model-relations-2
 	users, err := orm.All(ctx, db, models.Users.Query().With(models.UserLinks.Introducer,
 		models.UserLinks.Orders.OrderBy(orm.Desc(models.Orders.TotalCents))))
+	// doc-example:end model-relations-2
 	return users, err
 }
 
-// doc-example:end model-relations-2
-
-// doc-example:begin model-relations-6
 func activeIntroducers(ctx context.Context, db database.Executor) ([]models.User, error) {
+	// doc-example:begin model-relations-6
 	introducer := models.UserLinks.Introducer.
 		Where(orm.Eq(models.Users.Status, models.StatusActive)).With(models.UserLinks.Introducer)
 	users, err := orm.All(ctx, db, models.Users.Query().With(introducer))
+	// doc-example:end model-relations-6
 	return users, err
 }
 
-// doc-example:end model-relations-6
-
-// doc-example:begin model-relations-7
 func orderedMemberships(ctx context.Context, db database.Executor) ([]models.User, error) {
+	// doc-example:begin model-relations-7
 	groups := models.UserLinks.Groups.
 		Where(orm.Eq(models.Groups.Name, "same")).
 		WherePivot(orm.Gt(models.Memberships.Priority, 0)).
@@ -43,7 +41,6 @@ func orderedMemberships(ctx context.Context, db database.Executor) ([]models.Use
 		OrderBy(orm.Desc(models.Groups.Code)).
 		With(models.GroupLinks.Owner).WithPivot(models.MembershipLinks.Inviter)
 	users, err := orm.All(ctx, db, models.Users.Query().With(groups))
+	// doc-example:end model-relations-7
 	return users, err
 }
-
-// doc-example:end model-relations-7

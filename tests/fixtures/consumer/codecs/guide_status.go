@@ -4,8 +4,8 @@ import (
 	"foundry.test/consumer/models"
 )
 
-// doc-example:begin database-codecs-1
 func statusCodecExample() error {
+	// doc-example:begin database-codecs-1
 	statusCodec := models.StatusCodec()
 	bound, err := statusCodec.Bind(models.StatusActive)
 	if err != nil {
@@ -15,9 +15,8 @@ func statusCodecExample() error {
 	var status models.Status
 	scanner := statusCodec.Scan(&status)
 	// Pass scanner as a scan destination for the matching column.
+	// doc-example:end database-codecs-1
 	_ = bound
 	_ = scanner
 	return err
 }
-
-// doc-example:end database-codecs-1

@@ -11,8 +11,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
-// doc-example:begin http-cookies-1
-func rememberPreference(ctx context.Context, writer http.ResponseWriter, request *http.Request) error {
+func rememberPreference(ctx context.Context, writer http.ResponseWriter, request *http.Request) (bool, bool, error) {
+	// doc-example:begin http-cookies-1
 	options := foundryhttp.DefaultCookieOptions()
 	options.MaxAge = time.Hour
 	remember := foundryhttp.DefineCookie(
@@ -23,21 +23,18 @@ func rememberPreference(ctx context.Context, writer http.ResponseWriter, request
 
 	choice, err := remember.Read(request)
 	if err != nil {
-		return err
+		return false, false, err
 	}
-	if enabled, present := choice.Get(); present {
-		// enabled can be false while the cookie is present.
-		_ = enabled
-	}
+	enabled, present := choice.Get() // false can be a present choice.
 	if err := remember.Set(ctx, writer, true); err != nil {
-		return err
+		return false, false, err
 	}
-	return nil
+	// doc-example:end http-cookies-1
+	return enabled, present, nil
 }
 
-// doc-example:end http-cookies-1
-// doc-example:begin http-cookies-2
 func setSignedPreference(ctx context.Context, writer http.ResponseWriter, configuredKey secret.String, applicationClock clock.Clock, remember foundryhttp.Cookie[bool]) error {
+	// doc-example:begin http-cookies-2
 	keys, err := foundryhttp.NewSigningKeys(
 		foundryhttp.SigningKey{ID: "current", Secret: configuredKey},
 		// Optional previous keys remain valid during rotation.
@@ -53,12 +50,12 @@ func setSignedPreference(ctx context.Context, writer http.ResponseWriter, config
 	if err := signedRemember.Set(ctx, writer, true); err != nil {
 		return err
 	}
+	// doc-example:end http-cookies-2
 	return nil
 }
 
-// doc-example:end http-cookies-2
-// doc-example:begin http-cookies-3
 func setEncryptedPreference(ctx context.Context, writer http.ResponseWriter, keyring *encryption.Keyring, applicationClock clock.Clock, remember foundryhttp.Cookie[bool]) error {
+	// doc-example:begin http-cookies-3
 	encrypter, err := foundryhttp.NewCookieEncrypter(keyring, applicationClock)
 	if err != nil {
 		return err
@@ -67,7 +64,6 @@ func setEncryptedPreference(ctx context.Context, writer http.ResponseWriter, key
 	if err := private.Set(ctx, writer, true); err != nil {
 		return err
 	}
+	// doc-example:end http-cookies-3
 	return nil
 }
-
-// doc-example:end http-cookies-3

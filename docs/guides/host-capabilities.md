@@ -1229,6 +1229,8 @@ with the journaled effective environment, not guessed from the profile.
 
 This consumer fixture loads the three HTTP-role bindings from the worked example:
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `deployment`, `fault`.
+
 <!-- compiled-source: tests/fixtures/consumer/hostcapabilities/bindings.go#host-capability-bindings -->
 ```go
 // RelayDependencies contains the relay addresses and tool used by the app.
@@ -2047,6 +2049,8 @@ One application binary runs HTTP, worker, scheduler, and console processes.
 Load bindings once during assembly and register the media preparation handler
 only when this process holds the grant. For example:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
 <!-- compiled-source: tests/fixtures/consumer/hostcapabilities/guide_workers.go#media-preparation-cache -->
 ```go
 func mediaPreparationCache() (deployment.SharedDirectory, bool, error) {
@@ -2310,23 +2314,24 @@ startup must wait for the provider; Unix consumers require their provider.
 
 `Bindings.Copies(name)` returns `[]deployment.Copy` ordered by `Ordinal`:
 
-<!-- compiled-source: tests/fixtures/consumer/hostcapabilities/guide_workers.go#host-capabilities-2 -->
+<!-- compiled-source: tests/fixtures/consumer/hostcapabilities/guide_workers.go#worker-client-contract -->
 ```go
 type workerClient interface{ Run(context.Context) error }
+```
 
-func rendererWorkers(bindings deployment.Bindings, NewWorkerClient func(int, deployment.Endpoint, string) workerClient) error {
-	var workers []workerClient
-	copies, err := bindings.Copies("renderers")
-	if err != nil {
-		return err
-	}
-	for _, copy := range copies {
-		// Pass these concrete values to the application-owned worker client.
-		client := NewWorkerClient(copy.Ordinal, copy.Endpoint, copy.SecretFile)
-		workers = append(workers, client)
-	}
-	_ = workers
-	return nil
+Inputs: `bindings deployment.Bindings`, `NewWorkerClient func(int, deployment.Endpoint, string) workerClient`.
+
+<!-- compiled-source: tests/fixtures/consumer/hostcapabilities/guide_workers.go#host-capabilities-2 -->
+```go
+var workers []workerClient
+copies, err := bindings.Copies("renderers")
+if err != nil {
+	return nil, err
+}
+for _, copy := range copies {
+	// Pass these concrete values to the application-owned worker client.
+	client := NewWorkerClient(copy.Ordinal, copy.Endpoint, copy.SecretFile)
+	workers = append(workers, client)
 }
 ```
 

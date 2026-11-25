@@ -59,10 +59,7 @@ func TestRankingsKeepModelOwnedMembersAndCounters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	group, err := model.NewIDAt[models.Group](time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
+	group := models.Group{Code: "team"}.Code
 	member, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)

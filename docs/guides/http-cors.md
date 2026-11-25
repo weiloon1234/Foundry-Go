@@ -5,19 +5,22 @@ around the router so preflights reach it before method matching, decoding or
 route authentication. The [consumer fixture](../../tests/fixtures/consumer/httpcors/router.go)
 applies this to an existing generated endpoint; it declares no OPTIONS route.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`.
+
+Inputs: `router http.Handler`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpcors/http_cors_recipes.go#http-cors-1 -->
 ```go
-func browserHandler(router http.Handler) (http.Handler, error) {
-	handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.CORS(foundryhttp.CORSConfig{
-		Origins:       []foundryhttp.Origin{"https://console.example.test"},
-		Methods:       []foundryhttp.Method{foundryhttp.PATCH},
-		Headers:       []foundryhttp.HeaderName{"Content-Type", "Authorization"},
-		ExposeHeaders: []foundryhttp.HeaderName{"X-Request-Id"},
-		Credentials:   true,
-		MaxAge:        10 * time.Minute,
-	}))
-	return handler, err
-}
+handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.CORS(foundryhttp.CORSConfig{
+	Origins:       []foundryhttp.Origin{"https://console.example.test"},
+	Methods:       []foundryhttp.Method{foundryhttp.PATCH},
+	Headers:       []foundryhttp.HeaderName{"Content-Type", "Authorization"},
+	ExposeHeaders: []foundryhttp.HeaderName{"X-Request-Id"},
+	Credentials:   true,
+	MaxAge:        10 * time.Minute,
+}))
 ```
 
 Configuration is copied when `CORS` is declared. Assembly rejects invalid
@@ -47,13 +50,10 @@ meaning is broader than one particular website.
 
 <!-- compiled-source: tests/fixtures/consumer/httpcors/http_cors_recipes.go#http-cors-2 -->
 ```go
-func browserOrigins() foundryhttp.CORSConfig {
-	return foundryhttp.CORSConfig{
-		Origins:        []foundryhttp.Origin{"https://console.example.com"},
-		OriginPatterns: []foundryhttp.OriginPattern{"capacitor://localhost", "https://*.tenants.example.com"},
-		Methods:        []foundryhttp.Method{foundryhttp.PATCH},
-	}
-
+config := foundryhttp.CORSConfig{
+	Origins:        []foundryhttp.Origin{"https://console.example.com"},
+	OriginPatterns: []foundryhttp.OriginPattern{"capacitor://localhost", "https://*.tenants.example.com"},
+	Methods:        []foundryhttp.Method{foundryhttp.PATCH},
 }
 ```
 
@@ -67,14 +67,11 @@ cannot nest further `Paths`:
 
 <!-- compiled-source: tests/fixtures/consumer/httpcors/http_cors_recipes.go#http-cors-3 -->
 ```go
-func publicPathPolicy() foundryhttp.CORSConfig {
-	return foundryhttp.CORSConfig{
-		Origins: []foundryhttp.Origin{"https://console.example.com"},
-		Paths: []foundryhttp.CORSPath{
-			{Prefix: "/public", Policy: foundryhttp.CORSConfig{AnyOrigin: true, AnyMethod: true}},
-		},
-	}
-
+config := foundryhttp.CORSConfig{
+	Origins: []foundryhttp.Origin{"https://console.example.com"},
+	Paths: []foundryhttp.CORSPath{
+		{Prefix: "/public", Policy: foundryhttp.CORSConfig{AnyOrigin: true, AnyMethod: true}},
+	},
 }
 ```
 

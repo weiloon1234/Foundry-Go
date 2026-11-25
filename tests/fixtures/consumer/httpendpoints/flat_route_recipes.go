@@ -47,15 +47,17 @@ func preparePage(_ context.Context, in pageRequest) (http.NoQuery, SavePageReque
 
 // doc-example:end page-contracts
 
-// doc-example:begin flat-routes-1
 func registerPage(adminGuard http.GuardBinding[Admin], manage auth.AccessScopes[Admin], service pageService) http.RouteRegistration {
+	// doc-example:begin page-stage-inputs
 	spec := http.RouteSpec{ID: "pages.create", Method: http.POST, Access: http.Guarded}
 	path := http.StaticPath("/pages")
 	adminScope := http.DefineScope("/admin", "admin")
 	query, body, response := http.EmptyQuery(), SavePageBody(), PageResponse(201)
 	pageRules := validation.Rules(SavePageRequestValidationFields().Title, validation.NonBlank[string]())
 	createPage := service.Create
+	// doc-example:end page-stage-inputs
 
+	// doc-example:begin flat-routes-1
 	route := http.DefineRoute(spec, path)
 	route = http.ConfigureRoute(route, http.Within(adminScope))
 	endpoint := http.DefineEndpoint(route, query, body, response)
@@ -64,22 +66,21 @@ func registerPage(adminGuard http.GuardBinding[Admin], manage auth.AccessScopes[
 	endpoint = http.ValidateBody(endpoint, pageRules)
 	admin := http.Authenticated(endpoint, adminGuard, http.Scopes(manage))
 	registration := admin.Handle(createPage)
+	// doc-example:end flat-routes-1
 	return registration
 }
 
-// doc-example:end flat-routes-1
-// doc-example:begin flat-routes-3
 func replayablePage(route http.Route[http.NoPath], access http.GuardBinding[Admin], store *idempotency.Store, definition idempotency.Definition) http.AuthenticatedIdempotentEndpoint[http.NoPath, http.NoQuery, SavePageRequest, Admin, PageResource] {
 	query, body, response := http.EmptyQuery(), SavePageBody(), PageResponse(201)
 
+	// doc-example:begin flat-routes-3
 	endpoint := http.DefineEndpoint(route, query, body, response)
 	secured := http.Authenticated(endpoint, access)
 	create := http.IdempotentAuthenticated(secured, store, definition)
+	// doc-example:end flat-routes-3
 	return create
 }
 
-// doc-example:end flat-routes-3
-// doc-example:begin flat-routes-4
 func pageRoutes(ctx context.Context, publicRoute http.Route[http.NoPath], guardedRoute http.Route[http.NoPath], adminGuard http.GuardBinding[Admin], service pageService) ([]http.RouteRegistration, string, error) {
 	route := publicRoute
 	query, body, response := http.EmptyQuery(), SavePageBody(), PageResponse(200)
@@ -87,18 +88,18 @@ func pageRoutes(ctx context.Context, publicRoute http.Route[http.NoPath], guarde
 	showPage, createPage := service.Show, service.Create
 	pathValue, queryValue := http.NoPath{}, http.NoQuery{}
 
+	// doc-example:begin flat-routes-4
 	public := http.DefineEndpoint(route, query, body, response).Handle(showPage)
 	admin := http.Authenticated(endpoint, adminGuard).Handle(createPage)
 	url, err := http.DefineEndpoint(route, query, body, response).URL(ctx, pathValue, queryValue)
+	// doc-example:end flat-routes-4
 	return []http.RouteRegistration{public, admin}, url, err
 }
 
-// doc-example:end flat-routes-4
-// doc-example:begin flat-routes-5
 func pageEndpoint(create http.Route[http.NoPath]) http.Endpoint[http.NoPath, http.NoQuery, SavePageRequest, PageResource] {
+	// doc-example:begin flat-routes-5
 	response := PageResponse(200)
 	endpoint := http.DefineEndpoint(create, http.EmptyQuery(), SavePageBody(), response)
+	// doc-example:end flat-routes-5
 	return endpoint
 }
-
-// doc-example:end flat-routes-5

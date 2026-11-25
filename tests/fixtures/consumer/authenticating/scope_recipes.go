@@ -10,8 +10,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 )
 
-// doc-example:begin manual-request-scope
 func manualRequestScope(ctx context.Context, api, web auth.Guard[models.User], credentials auth.Credentials, readOrder auth.Policy[models.User, models.Order]) (models.User, error) {
+	// doc-example:begin manual-request-scope
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), api.Registration(), web.Registration(), readOrder.Registration())
 	if err != nil {
 		return models.User{}, err
@@ -22,22 +22,22 @@ func manualRequestScope(ctx context.Context, api, web auth.Guard[models.User], c
 	}
 	defer scope.Close()
 	ctx = scope.Context()
-	return api.Require(ctx)
+	user, err := api.Require(ctx)
+	// doc-example:end manual-request-scope
+	return user, err
 }
 
-// doc-example:end manual-request-scope
-
-// doc-example:begin configured-authorization
 func configuredAuthorization(ctx context.Context, settings application.Settings, readOrder auth.Policy[models.User, models.Order]) (*application.App, error) {
-	return application.New(settings).Register(application.Authorization("app.authorization",
+	// doc-example:begin configured-authorization
+	app, err := application.New(settings).Register(application.Authorization("app.authorization",
 		application.Authorize(ViewAccount), application.Authorize(readOrder),
 	)).Build(ctx)
+	// doc-example:end configured-authorization
+	return app, err
 }
 
-// doc-example:end configured-authorization
-
-// doc-example:begin policy-hooks
 func policyHooks(isSuperAdmin func(context.Context, models.User) (bool, error), readOnlyMode *atomic.Bool) (auth.Before[models.User], auth.After[models.User]) {
+	// doc-example:begin policy-hooks
 	superAdmin := auth.DefineBefore("users.super_admin",
 		func(ctx context.Context, user models.User, _ auth.PolicyName) (auth.Verdict, error) {
 			allowed, err := isSuperAdmin(ctx, user)
@@ -56,13 +56,12 @@ func policyHooks(isSuperAdmin func(context.Context, models.User) (bool, error), 
 			}
 			return auth.Abstain, nil
 		})
+	// doc-example:end policy-hooks
 	return superAdmin, readOnly
 }
 
-// doc-example:end policy-hooks
-
-// doc-example:begin attributed-operation
 func attributedOperation(ctx context.Context, api auth.Guard[models.User]) (context.Context, attribution.Origin, error) {
+	// doc-example:begin attributed-operation
 	ctx, err := api.WithAttribution(ctx) // CLI/worker scope already explicitly verified.
 	if err != nil {
 		return ctx, attribution.Origin{}, err
@@ -72,7 +71,6 @@ func attributedOperation(ctx context.Context, api auth.Guard[models.User]) (cont
 	if err != nil {
 		return ctx, attribution.Origin{}, err
 	}
+	// doc-example:end attributed-operation
 	return ctx, origin, nil
 }
-
-// doc-example:end attributed-operation

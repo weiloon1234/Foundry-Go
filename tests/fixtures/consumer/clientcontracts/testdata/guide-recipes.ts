@@ -198,24 +198,20 @@ export function startRequest(
 // doc-example:end request-lifecycle
 
 // doc-example:begin form-state-provider
-export function bindFormOperations(issues: readonly sdk.Issue[]) {
-  type Draft = Required<Pick<sdk.FormValues<sdk.Operations["itemsEcho"]["request"]["body"]>, "amount">>;
-  const label = (key: sdk.FieldMessageKey): string => key;
-  let values: Draft = { amount: "0" };
-  const update: sdk.FormUpdate<Draft> = (next) => { values = next(values); };
+type Draft = Required<Pick<sdk.FormValues<sdk.Operations["itemsEcho"]["request"]["body"]>, "amount">>;
 
-  const singleState = sdk.formFieldState();
-  const singleFields = sdk.fieldBinder(label, () => singleState);
-  const single = singleFields(sdk.operation("itemsEcho"), values, update, issues);
-  sdk.commitFormFields(singleState);
-
-  const combinedState = sdk.formFieldState();
-  const combinedFields = sdk.fieldBinder(label, () => combinedState);
-  const [items, generic] = combinedFields(
+export function bindFormOperations(
+  state: ReturnType<typeof sdk.formFieldState>,
+  values: Draft,
+  update: sdk.FormUpdate<Draft>,
+  issues: readonly sdk.Issue[],
+  label: (key: sdk.FieldMessageKey) => string,
+) {
+  const fields = sdk.fieldBinder(label, () => state);
+  const [items, generic] = fields(
     [sdk.operation("itemsEcho"), sdk.operation("genericEcho")], values, update, issues,
   );
-  sdk.commitFormFields(combinedState);
-  return { single, items, generic };
+  return { items, generic };
 }
 // doc-example:end form-state-provider
 

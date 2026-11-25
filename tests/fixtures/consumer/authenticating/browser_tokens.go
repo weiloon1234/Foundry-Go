@@ -5,7 +5,6 @@ import (
 
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
-	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -25,7 +24,7 @@ func BrowserTokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLo
 }
 
 // doc-example:begin browser-token-delivery
-func browserTokenDelivery(tokens *token.Tokens[models.User, model.ID[models.User]], clock clock.Clock, verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error), cookie foundryhttp.RefreshCookie, name string, scopes auth.AccessScopes[models.User]) (foundryhttp.RouteRegistration, foundryhttp.RouteRegistration) {
+func browserTokenDelivery(tokens *UserTokens, clock clock.Clock, verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error), cookie foundryhttp.RefreshCookie, name string, scopes auth.AccessScopes[models.User]) (foundryhttp.RouteRegistration, foundryhttp.RouteRegistration) {
 	route := func(id string) foundryhttp.Route[foundryhttp.NoPath] {
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: foundryhttp.RouteID(name + "." + id), Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/"+name+"/"+id))
 	}
@@ -33,17 +32,17 @@ func browserTokenDelivery(tokens *token.Tokens[models.User, model.ID[models.User
 
 	loginRoute := route("login")
 
-	login := foundryhttp.DefineEndpoint(loginRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (token.Issued[models.User, model.ID[models.User]], error) {
+	login := foundryhttp.DefineEndpoint(loginRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (IssuedUserToken, error) {
 		proof, err := verify(ctx)
 		if err != nil {
-			return token.Issued[models.User, model.ID[models.User]]{}, err
+			return IssuedUserToken{}, err
 		}
 		return StartVerifiedToken(ctx, tokens, proof, "Browser", true, scopes)
 	})
 	// The handler is the same as for the JSON refresh body.
 	refreshRoute := route("refresh")
 
-	refresh := foundryhttp.DefineEndpoint(refreshRoute, foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), response).Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshTokenRequest]) (token.Issued[models.User, model.ID[models.User]], error) {
+	refresh := foundryhttp.DefineEndpoint(refreshRoute, foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), response).Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshTokenRequest]) (IssuedUserToken, error) {
 		return RefreshFromBody(ctx, tokens, input.Body)
 	})
 
@@ -53,7 +52,7 @@ func browserTokenDelivery(tokens *token.Tokens[models.User, model.ID[models.User
 // doc-example:end browser-token-delivery
 
 // doc-example:begin browser-token-logout
-func browserTokenLogout(tokens *token.Tokens[models.User, model.ID[models.User]], cookie foundryhttp.RefreshCookie, name string) foundryhttp.RouteRegistration {
+func browserTokenLogout(tokens *UserTokens, cookie foundryhttp.RefreshCookie, name string) foundryhttp.RouteRegistration {
 	logoutRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: foundryhttp.RouteID(name + ".logout"), Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/"+name+"/logout"))
 
 	logout := foundryhttp.DefineEndpoint(logoutRoute, foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookieLogout(cookie),

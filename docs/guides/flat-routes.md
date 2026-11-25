@@ -4,8 +4,31 @@ Declare a route one step per statement, passing the previous value first. Reuse
 the local when the result has the same type. Name a new local when authentication,
 signing, replay or model binding changes the type.
 
-The page DTOs are declared in [Generated HTTP pieces](#generated-http-pieces).
-The handlers use this actor and request contract:
+`Admin` is the application's actor model. The setup below supplies the concrete
+request, response, guard, scope and handler used by the eight stage statements.
+
+<details>
+<summary>Declarations and inputs for the stage sequence</summary>
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `http`, `idempotency`, `validation`.
+
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-6 -->
+```go
+// SavePageRequest carries the title submitted by an editor.
+//
+//foundry:dto http=body
+type SavePageRequest struct {
+	Title string `json:"title"`
+}
+
+// PageResource is the public representation returned after saving.
+//
+//foundry:dto role=response http=response
+type PageResource struct {
+	Slug  string `json:"slug"`
+	Title string `json:"title"`
+}
+```
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#page-contracts -->
 ```go
@@ -26,26 +49,36 @@ func preparePage(_ context.Context, in pageRequest) (http.NoQuery, SavePageReque
 }
 ```
 
+Run `foundry generate` for the DTOs. `SavePageBody()` and `PageResponse(status)`
+are their generated transport helpers. Supply `adminGuard http.GuardBinding[Admin]`,
+`manage auth.AccessScopes[Admin]`, and `service pageService` to assembly.
+
+Inputs: `service pageService`.
+
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#page-stage-inputs -->
+```go
+spec := http.RouteSpec{ID: "pages.create", Method: http.POST, Access: http.Guarded}
+path := http.StaticPath("/pages")
+adminScope := http.DefineScope("/admin", "admin")
+query, body, response := http.EmptyQuery(), SavePageBody(), PageResponse(201)
+pageRules := validation.Rules(SavePageRequestValidationFields().Title, validation.NonBlank[string]())
+createPage := service.Create
+```
+
+</details>
+
+Inputs: `adminGuard http.GuardBinding[Admin]`, `manage auth.AccessScopes[Admin]`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-1 -->
 ```go
-func registerPage(adminGuard http.GuardBinding[Admin], manage auth.AccessScopes[Admin], service pageService) http.RouteRegistration {
-	spec := http.RouteSpec{ID: "pages.create", Method: http.POST, Access: http.Guarded}
-	path := http.StaticPath("/pages")
-	adminScope := http.DefineScope("/admin", "admin")
-	query, body, response := http.EmptyQuery(), SavePageBody(), PageResponse(201)
-	pageRules := validation.Rules(SavePageRequestValidationFields().Title, validation.NonBlank[string]())
-	createPage := service.Create
-
-	route := http.DefineRoute(spec, path)
-	route = http.ConfigureRoute(route, http.Within(adminScope))
-	endpoint := http.DefineEndpoint(route, query, body, response)
-	endpoint = http.ConfigureEndpoint(endpoint, http.Errors(PageProtected))
-	endpoint = http.PrepareEndpoint(endpoint, preparePage)
-	endpoint = http.ValidateBody(endpoint, pageRules)
-	admin := http.Authenticated(endpoint, adminGuard, http.Scopes(manage))
-	registration := admin.Handle(createPage)
-	return registration
-}
+route := http.DefineRoute(spec, path)
+route = http.ConfigureRoute(route, http.Within(adminScope))
+endpoint := http.DefineEndpoint(route, query, body, response)
+endpoint = http.ConfigureEndpoint(endpoint, http.Errors(PageProtected))
+endpoint = http.PrepareEndpoint(endpoint, preparePage)
+endpoint = http.ValidateBody(endpoint, pageRules)
+admin := http.Authenticated(endpoint, adminGuard, http.Scopes(manage))
+registration := admin.Handle(createPage)
 ```
 
 The existing typed functions and handler contracts remain the API. The request
@@ -65,18 +98,18 @@ The checker derives their named type origins, so generic instantiation does not
 change the rule. There is no second list of stage types. A `datatable.Table` is a
 reusable declaration, not a route stage, so `datatable.Define(spec)` may stay inline.
 
-For example, bind authentication before declaring replay:
+Do not pass a call to `http.Authenticated` directly as the first argument of
+`http.IdempotentAuthenticated`, or nest `http.DefineEndpoint` inside either call.
+Assign each result first, as below. `query`, `body`, and `response` are
+`http.EmptyQuery()`, `SavePageBody()`, and `PageResponse(201)`.
+
+Inputs: `route http.Route[http.NoPath]`, `access http.GuardBinding[Admin]`, `store *idempotency.Store`, `definition idempotency.Definition`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-3 -->
 ```go
-func replayablePage(route http.Route[http.NoPath], access http.GuardBinding[Admin], store *idempotency.Store, definition idempotency.Definition) http.AuthenticatedIdempotentEndpoint[http.NoPath, http.NoQuery, SavePageRequest, Admin, PageResource] {
-	query, body, response := http.EmptyQuery(), SavePageBody(), PageResponse(201)
-
-	endpoint := http.DefineEndpoint(route, query, body, response)
-	secured := http.Authenticated(endpoint, access)
-	create := http.IdempotentAuthenticated(secured, store, definition)
-	return create
-}
+endpoint := http.DefineEndpoint(route, query, body, response)
+secured := http.Authenticated(endpoint, access)
+create := http.IdempotentAuthenticated(secured, store, definition)
 ```
 
 Descriptors (`XBody()`, `XResponse(...)`, `http.EmptyQuery()`), options
@@ -86,20 +119,15 @@ conversions cannot hide a nested stage call. Stage calls as statements,
 assignments or return operands are allowed. Terminal methods on call results
 are also allowed, including when the registration or URL is passed to another call:
 
+`route` is the public `http.Route[http.NoPath]`; `endpoint` is the guarded endpoint assembled above. Use `query = http.EmptyQuery()`, `body = SavePageBody()`, and `response = PageResponse(200)`. `showPage` and `createPage` are `service.Show` and `service.Create`; `pathValue` and `queryValue` are `http.NoPath{}` and `http.NoQuery{}`.
+
+Inputs: `ctx context.Context`, `adminGuard http.GuardBinding[Admin]`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-4 -->
 ```go
-func pageRoutes(ctx context.Context, publicRoute http.Route[http.NoPath], guardedRoute http.Route[http.NoPath], adminGuard http.GuardBinding[Admin], service pageService) ([]http.RouteRegistration, string, error) {
-	route := publicRoute
-	query, body, response := http.EmptyQuery(), SavePageBody(), PageResponse(200)
-	endpoint := http.DefineEndpoint(guardedRoute, query, body, response)
-	showPage, createPage := service.Show, service.Create
-	pathValue, queryValue := http.NoPath{}, http.NoQuery{}
-
-	public := http.DefineEndpoint(route, query, body, response).Handle(showPage)
-	admin := http.Authenticated(endpoint, adminGuard).Handle(createPage)
-	url, err := http.DefineEndpoint(route, query, body, response).URL(ctx, pathValue, queryValue)
-	return []http.RouteRegistration{public, admin}, url, err
-}
+public := http.DefineEndpoint(route, query, body, response).Handle(showPage)
+admin := http.Authenticated(endpoint, adminGuard).Handle(createPage)
+url, err := http.DefineEndpoint(route, query, body, response).URL(ctx, pathValue, queryValue)
 ```
 
 Use named stages before free-function terminals such as `pagination.Handle`.
@@ -110,13 +138,12 @@ inside a typed initializer function when several statements are necessary.
 
 Use the concrete helper beside a generated DTO declaration:
 
+Inputs: `create http.Route[http.NoPath]`.
+
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-5 -->
 ```go
-func pageEndpoint(create http.Route[http.NoPath]) http.Endpoint[http.NoPath, http.NoQuery, SavePageRequest, PageResource] {
-	response := PageResponse(200)
-	endpoint := http.DefineEndpoint(create, http.EmptyQuery(), SavePageBody(), response)
-	return endpoint
-}
+response := PageResponse(200)
+endpoint := http.DefineEndpoint(create, http.EmptyQuery(), SavePageBody(), response)
 ```
 
 The `http` directive key selects transport independently of validation role:

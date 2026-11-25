@@ -9,25 +9,26 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
-// doc-example:begin host-capabilities-2
+// doc-example:begin worker-client-contract
 type workerClient interface{ Run(context.Context) error }
 
-func rendererWorkers(bindings deployment.Bindings, NewWorkerClient func(int, deployment.Endpoint, string) workerClient) error {
+// doc-example:end worker-client-contract
+
+func rendererWorkers(bindings deployment.Bindings, NewWorkerClient func(int, deployment.Endpoint, string) workerClient) ([]workerClient, error) {
+	// doc-example:begin host-capabilities-2
 	var workers []workerClient
 	copies, err := bindings.Copies("renderers")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, copy := range copies {
 		// Pass these concrete values to the application-owned worker client.
 		client := NewWorkerClient(copy.Ordinal, copy.Endpoint, copy.SecretFile)
 		workers = append(workers, client)
 	}
-	_ = workers
-	return nil
+	// doc-example:end host-capabilities-2
+	return workers, nil
 }
-
-// doc-example:end host-capabilities-2
 
 // doc-example:begin media-preparation-cache
 func mediaPreparationCache() (deployment.SharedDirectory, bool, error) {

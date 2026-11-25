@@ -8,17 +8,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// doc-example:begin http-etags-1
 func conditionalHandler(router http.Handler) (http.Handler, error) {
+	// doc-example:begin http-etags-1
 	config := foundryhttp.DefaultETagConfig()
 	handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.ETags(config))
+	// doc-example:end http-etags-1
 	return handler, err
 }
 
-// doc-example:end http-etags-1
-
-// doc-example:begin http-etags-2
 func cachedHandler(router http.Handler) (http.Handler, error) {
+	// doc-example:begin http-etags-2
 	policy := foundryhttp.CachePolicy{
 		Visibility:           foundryhttp.CachePublic,
 		MaxAge:               time.Minute,
@@ -29,7 +28,6 @@ func cachedHandler(router http.Handler) (http.Handler, error) {
 		foundryhttp.CacheControl(policy),
 		foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
 	)
+	// doc-example:end http-etags-2
 	return handler, err
 }
-
-// doc-example:end http-etags-2

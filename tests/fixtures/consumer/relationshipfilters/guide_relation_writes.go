@@ -9,22 +9,21 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-// doc-example:begin model-relation-writes-1
 func attachMembership(ctx context.Context, db *database.DB, member models.Member, group models.Group) error {
+	// doc-example:begin model-relation-writes-1
 	groups := models.MemberLinks.Groups
 	membership, err := orm.Attach(ctx, db, groups, member, group,
 		orm.Set(models.Memberships.Role, " ADMIN "))
 	if err != nil {
 		return err
 	}
+	// doc-example:end model-relation-writes-1
 	_ = membership
 	return err
 }
 
-// doc-example:end model-relation-writes-1
-
-// doc-example:begin model-relation-writes-2
 func detachMembership(ctx context.Context, db *database.DB, member models.Member, group models.Group) error {
+	// doc-example:begin model-relation-writes-2
 	groups := models.MemberLinks.Groups
 	removed, err := orm.Detach(ctx, db, groups, member, group)
 	if err != nil {
@@ -35,15 +34,14 @@ func detachMembership(ctx context.Context, db *database.DB, member models.Member
 	if err != nil {
 		return err
 	}
+	// doc-example:end model-relation-writes-2
 	_ = removed
 	_ = permanentlyRemoved
 	return err
 }
 
-// doc-example:end model-relation-writes-2
-
-// doc-example:begin model-relation-writes-4
 func detachAdminMembership(ctx context.Context, db *database.DB, member models.Member, group models.Group) error {
+	// doc-example:begin model-relation-writes-4
 	adminGroups := models.MemberLinks.Groups.
 		Where(orm.Eq(models.Groups.Name, "staff")).
 		WherePivot(orm.Eq(models.Memberships.Role, "admin"))
@@ -52,8 +50,7 @@ func detachAdminMembership(ctx context.Context, db *database.DB, member models.M
 	if err != nil {
 		return err
 	}
+	// doc-example:end model-relation-writes-4
 	_ = removed
 	return err
 }
-
-// doc-example:end model-relation-writes-4

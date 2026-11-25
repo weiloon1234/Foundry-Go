@@ -22,10 +22,10 @@ type Profile struct {
 	Labels []string
 }
 type Profiles = data.Hash[model.ID[Member], ProfileField, Profile]
-type MemberGroups = data.Set[model.ID[Member], model.ID[models.Group]]
+type MemberGroups = data.Set[model.ID[Member], models.GroupCode]
 
 var ProfileHashes = data.DefineHash[model.ID[Member], ProfileField, Profile]("member-profiles", 1, keyspace.TextKeys[model.ID[Member]](), keyspace.StringKeys[ProfileField]())
-var Groups = data.DefineSet[model.ID[Member], model.ID[models.Group]]("member-groups", 1, keyspace.TextKeys[model.ID[Member]]())
+var Groups = data.DefineSet[model.ID[Member], models.GroupCode]("member-groups", 1, keyspace.TextKeys[model.ID[Member]]())
 
 // doc-example:end redis-data-1
 
@@ -39,10 +39,10 @@ func SaveProfile(ctx context.Context, profiles Profiles, member mutatorqueries.M
 func ReadProfile(ctx context.Context, profiles Profiles, id model.ID[mutatorqueries.Member]) (Profile, bool, error) {
 	return profiles.Get(ctx, id, DisplayProfile)
 }
-func AddGroup(ctx context.Context, groups MemberGroups, id model.ID[mutatorqueries.Member], group model.ID[models.Group]) (bool, error) {
+func AddGroup(ctx context.Context, groups MemberGroups, id model.ID[mutatorqueries.Member], group models.GroupCode) (bool, error) {
 	return groups.Add(ctx, id, group)
 }
-func ReadGroups(ctx context.Context, groups MemberGroups, id model.ID[mutatorqueries.Member]) ([]model.ID[models.Group], error) {
+func ReadGroups(ctx context.Context, groups MemberGroups, id model.ID[mutatorqueries.Member]) ([]models.GroupCode, error) {
 	return groups.Members(ctx, id)
 }
 func ExpireGroups(ctx context.Context, groups MemberGroups, id model.ID[mutatorqueries.Member], ttl cache.TTL) (bool, error) {

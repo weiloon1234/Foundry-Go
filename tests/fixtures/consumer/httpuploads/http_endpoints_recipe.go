@@ -6,8 +6,8 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-// doc-example:begin http-endpoints-6
 func uploadEndpoint(route foundryhttp.Route[foundryhttp.NoPath], body foundryhttp.Body[ProfileInput]) foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, ProfileInput, foundryhttp.NoContent] {
+	// doc-example:begin http-endpoints-6
 	limits := foundryhttp.DefaultEndpointLimits()
 	limits.Multipart.Bytes, limits.Multipart.FileBytes = 520<<20, 512<<20
 
@@ -17,7 +17,6 @@ func uploadEndpoint(route foundryhttp.Route[foundryhttp.NoPath], body foundryhtt
 		foundryhttp.BodyLimit(520<<20),
 		foundryhttp.Timeout(10*time.Minute),
 	)
+	// doc-example:end http-endpoints-6
 	return upload
 }
-
-// doc-example:end http-endpoints-6

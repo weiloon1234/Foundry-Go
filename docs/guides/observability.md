@@ -6,19 +6,21 @@ acceptance and verification evidence.
 
 Create one recorder and give it to one application:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `foundation`, `observability`, `secret`.
+
+Inputs: `exportSpan observability.TraceExporter`, `reportFailure observability.Reporter`.
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_observability.go#observability-1 -->
 ```go
-func observedBuilder(exportSpan observability.TraceExporter, reportFailure observability.Reporter) error {
-	config := observability.DefaultConfig()
-	config.TraceExporters = []observability.TraceExporter{exportSpan}
-	recorder, err := observability.New(config, reportFailure)
-	if err != nil {
-		return err
-	}
-	builder := foundation.NewBuilder(foundation.WithObservability(recorder))
-	_ = builder
-	return err
+config := observability.DefaultConfig()
+config.TraceExporters = []observability.TraceExporter{exportSpan}
+recorder, err := observability.New(config, reportFailure)
+if err != nil {
+	return nil, err
 }
+builder := foundation.NewBuilder(foundation.WithObservability(recorder))
 ```
 
 `TraceExporter` receives a completed `observability.Entry`; `TraceBatchExporter`
@@ -114,15 +116,14 @@ synchronously during each scrape inside callback isolation, so it must only read
 in-memory statistics. It emits samples through `MetricWriter.Gauge` and
 `MetricWriter.Counter` with typed `Label` values:
 
+Inputs: `recorder *observability.Recorder`, `queue interface{ Len() int }`.
+
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_observability.go#observability-2 -->
 ```go
-func queueCollector(recorder *observability.Recorder, queue interface{ Len() int }) error {
-	err := recorder.RegisterCollector("orders.queue", func(w *observability.MetricWriter) {
-		w.Gauge("orders_queue_depth", "Queued orders.", float64(queue.Len()), observability.Label{Name: "queue", Value: "default"})
-	})
-	if err != nil {
-		return err
-	}
+err := recorder.RegisterCollector("orders.queue", func(w *observability.MetricWriter) {
+	w.Gauge("orders_queue_depth", "Queued orders.", float64(queue.Len()), observability.Label{Name: "queue", Value: "default"})
+})
+if err != nil {
 	return err
 }
 ```

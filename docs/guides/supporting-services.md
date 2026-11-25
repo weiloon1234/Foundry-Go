@@ -60,7 +60,11 @@ Go settings/defaults and generated override keys remain the source of truth.
 
 ## Typed jobs and domain dependencies
 
-<!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_jobs.go#supporting-services-1 -->
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `jobs`.
+
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_jobs.go#report-job-declaration -->
 ```go
 // ReportID identifies the report requested by a queued task.
 type ReportID string
@@ -73,19 +77,21 @@ type ReportPayload struct {
 
 // ReportJob shares its identity between registration and dispatch.
 var ReportJob = jobs.Define[ReportPayload]("reports.build", 1, jobs.DefaultPolicy("reports"))
+```
 
-func queueReport(ctx context.Context, services application.Services, id ReportID) error {
-	connection, err := services.JobConnection()
-	if err != nil {
-		return err
-	}
-	work, err := ReportJob.On(connection)
-	if err != nil {
-		return err
-	}
-	_, err = work.Dispatch(ctx, ReportPayload{ReportID: id}, jobs.Options[ReportPayload]{})
+Inputs: `ctx context.Context`, `services application.Services`, `id ReportID`.
+
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_jobs.go#supporting-services-1 -->
+```go
+connection, err := services.JobConnection()
+if err != nil {
 	return err
 }
+work, err := ReportJob.On(connection)
+if err != nil {
+	return err
+}
+_, err = work.Dispatch(ctx, ReportPayload{ReportID: id}, jobs.Options[ReportPayload]{})
 ```
 
 An empty per-call queue uses the connection default. An explicit queue wins. The

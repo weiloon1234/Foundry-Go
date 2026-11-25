@@ -6,6 +6,10 @@ the complete declarations, handlers and shared rules below.
 
 ## Declare one concrete form
 
+The application owns `Account` and any generated tables or identities used below.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `http` as `foundryhttp`, `validation`, `value`.
+
 <!-- compiled-source: tests/fixtures/consumer/requestflow/forms.go#submission-form -->
 ```go
 //foundry:form
@@ -161,17 +165,16 @@ type Account struct {
 }
 ```
 
+Inputs: `transport *foundryhttp.Authentication`, `accountGuard auth.Guard[Account]`, `accountPolicy func(context.Context, Account, Submission) error`.
+
 <!-- compiled-source: tests/fixtures/consumer/requestflow/guide_recipes.go#forms-request-lifecycle-3 -->
 ```go
-func authorizedSubmission(transport *foundryhttp.Authentication, accountGuard auth.Guard[Account], accountPolicy func(context.Context, Account, Submission) error) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
-	form := formEndpoint(foundryhttp.Guarded)
-	prepared := foundryhttp.PrepareEndpoint(form, Prepare)
-	secured := foundryhttp.RequireAuthentication(prepared, transport, accountGuard)
-	secured = foundryhttp.AuthorizeActor(secured, func(ctx context.Context, actor Account, input Request) error {
-		return accountPolicy(ctx, actor, input.Body)
-	})
-	return secured
-}
+form := formEndpoint(foundryhttp.Guarded)
+prepared := foundryhttp.PrepareEndpoint(form, Prepare)
+secured := foundryhttp.RequireAuthentication(prepared, transport, accountGuard)
+secured = foundryhttp.AuthorizeActor(secured, func(ctx context.Context, actor Account, input Request) error {
+	return accountPolicy(ctx, actor, input.Body)
+})
 ```
 
 The route must declare Guarded access. A named guard chooses its concrete model

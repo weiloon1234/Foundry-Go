@@ -17,6 +17,8 @@ records the checks and operational limits.
 These settings are application data, with explicit typed declarations
 and migrations. They are separate from deployment configuration and secrets.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `contract`, `database`, `extensions`, `settings`.
+
 <!-- compiled-source: tests/fixtures/consumer/configured/runtime_settings.go#declare-runtime-setting -->
 ```go
 var SiteName = settings.Define("site.name", 1, contract.StringJSON[string](),
@@ -87,12 +89,14 @@ Corrupt stored data, incompatible versions and invalid presentation return error
 
 Hot settings can opt into a per-process read cache owned by the manager:
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Inputs: `store *extensions.Store`.
+
 <!-- compiled-source: tests/fixtures/consumer/configured/settings_cache_recipes.go#cache-site-name -->
 ```go
-func cachedSiteName(store *extensions.Store) (*settings.Manager, error) {
-	return settings.New(store,
-		SiteName.RegistrationWith(settings.Options[string]{Cache: 30 * time.Second}))
-}
+manager, err := settings.New(store,
+	SiteName.RegistrationWith(settings.Options[string]{Cache: 30 * time.Second}))
 ```
 
 `Get`, `GetOr`, `Find` and `settings.Load` then serve a validated snapshot without a

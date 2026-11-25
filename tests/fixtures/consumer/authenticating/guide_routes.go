@@ -17,7 +17,7 @@ import (
 )
 
 // doc-example:begin bind-token-guard
-func TokenBinding(tokens *token.Tokens[models.User, model.ID[models.User]]) (foundryhttp.GuardBinding[models.User], error) {
+func TokenBinding(tokens *UserTokens) (foundryhttp.GuardBinding[models.User], error) {
 	guard := tokens.Guard()
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration(), ViewAccount.Registration(), ReadOrder.Registration())
 	if err != nil {
@@ -68,7 +68,7 @@ func ScopedOrderRoute(db database.Executor, binding foundryhttp.GuardBinding[mod
 // doc-example:end scoped-resource-policy
 
 // doc-example:begin token-lifetime
-func ShortLivedTokens(store *token.Store, provider auth.Provider[models.User, model.ID[models.User]], scopes auth.AccessScopes[models.User]) (*token.Tokens[models.User, model.ID[models.User]], error) {
+func ShortLivedTokens(store *token.Store, provider auth.Provider[models.User, model.ID[models.User]], scopes auth.AccessScopes[models.User]) (*UserTokens, error) {
 	return token.New(store, "users.short", provider, "users.short.bearer", scopes,
 		token.WithLifetimes(token.Lifetimes{Renewable: token.Lifetime{
 			Access: 5 * time.Minute, RefreshIdle: 12 * time.Hour, Absolute: 24 * time.Hour,
@@ -78,7 +78,7 @@ func ShortLivedTokens(store *token.Store, provider auth.Provider[models.User, mo
 // doc-example:end token-lifetime
 
 // doc-example:begin token-ticket
-func TicketRoute(tokens *token.Tokens[models.User, model.ID[models.User]], binding foundryhttp.GuardBinding[models.User]) (foundryhttp.RouteRegistration, error) {
+func TicketRoute(tokens *UserTokens, binding foundryhttp.GuardBinding[models.User]) (foundryhttp.RouteRegistration, error) {
 	realtimeTicketRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "realtime.ticket", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/realtime/ticket"))
 	endpoint := foundryhttp.DefineEndpoint(
 		realtimeTicketRoute,

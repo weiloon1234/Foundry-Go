@@ -19,6 +19,8 @@ and Ed25519 public verification keys (`whpk_`). `webhook.Stripe` supports Stripe
 The same `whsec_` prefix has different key semantics in these protocols; select
 the provider's actual protocol rather than guessing from its key prefix.
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `webhook/capture`, `clock`, `database`, `encryption`, `http`, `httpclient`, `idempotency`, `jobs`, `webhook/outbound`, `secret`, `webhook`.
+
 <!-- compiled-source: tests/fixtures/consumer/security/contracts.go#webhook-verifier -->
 ```go
 func BillingWebhook(account BillingAccountID, key secret.String, source clock.Clock) (*webhook.Verifier[BillingAccountID], error) {
@@ -52,17 +54,21 @@ except `.` (it delimits the signed content) and `,`, so provider IDs such as
 
 ## Provider HMAC schemes
 
-<!-- compiled-source: tests/fixtures/consumer/security/provider_recipe.go#webhooks-2 -->
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+<!-- compiled-source: tests/fixtures/consumer/security/provider_recipe.go#repository-account-type -->
 ```go
 // RepositoryAccountID identifies the configured repository owner.
 type RepositoryAccountID int64
+```
 
-func repositoryVerifier(githubSecret secret.String) (*webhook.Verifier[RepositoryAccountID], error) {
-	config := webhook.GitHubConfig("github") // or ShopifyConfig / SlackConfig
-	verifier, err := webhook.New(config, RepositoryAccountID(7),
-		[]secret.String{githubSecret}, clock.System{})
-	return verifier, err
-}
+Inputs: `githubSecret secret.String`, `account RepositoryAccountID`.
+
+<!-- compiled-source: tests/fixtures/consumer/security/provider_recipe.go#webhooks-2 -->
+```go
+config := webhook.GitHubConfig("github") // or ShopifyConfig / SlackConfig
+verifier, err := webhook.New(config, account,
+	[]secret.String{githubSecret}, clock.System{})
 ```
 
 `HMACScheme` names the `SignatureHeader`, an optional `Prefix` (for example
@@ -105,6 +111,8 @@ is not current resource authorization; apply ordinary account/resource policy.
 
 <a id="recipe-webhook-deduplication"></a>
 ## Durable duplicate handling
+
+Inputs: `t *testing.T`.
 
 <!-- compiled-source: tests/fixtures/consumer/idempotenthttp/publication_test.go#verified-webhook-route -->
 ```go

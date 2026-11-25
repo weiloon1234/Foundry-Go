@@ -23,6 +23,10 @@ Declare reusable field bindings beside the columns:
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/jsonqueries/tables.go):
 
+`Preferences` is your JSON payload struct with a `Profile value.Optional[Profile]` field tagged `json:"profile,omitzero"`; its nested `Profile` has `Name string` tagged `json:"name"` and `Age int64` tagged `json:"age,string"`.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/codec`, `database/orm/expr`, `database/orm`, `database/orm/rows`, `value`.
+
 <!-- compiled-source: tests/fixtures/consumer/jsonqueries/tables.go#json-models -->
 ```go
 var ProfileField = expr.JSONFieldOf(func(p *Preferences) *value.Optional[Profile] { return &p.Profile })
@@ -125,13 +129,17 @@ SQL and [plans](query-plans.md) before choosing an index.
 Call each binding's `Validate()` before executor access; `orm.Check` only checks
 table declarations, not unattached JSON fields. Go checks the payload and result
 types, while startup validation checks pointer ownership, JSON tags and custom
-encoding constraints. [Compiled excerpt, imports and enclosing context](../../tests/fixtures/goway/migration/pilot2_test.go):
+encoding constraints. [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/jsonqueries/tables.go):
 
-<!-- compiled-source: tests/fixtures/goway/migration/pilot2_test.go#pilot2-json-startup -->
+<!-- compiled-source: tests/fixtures/consumer/jsonqueries/tables.go#validate-json-fields -->
 ```go
 func validateJSONDeclarations() error {
-	// JSONFieldOf already resolved the selector; surface its stored error at startup.
-	// orm.Check validates tables, not standalone JSON field bindings.
-	return Theme.Validate()
+	if err := ProfileField.Validate(); err != nil {
+		return err
+	}
+	if err := NameField.Validate(); err != nil {
+		return err
+	}
+	return AgeField.Validate()
 }
 ```

@@ -7,8 +7,8 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-// doc-example:begin http-queries-1
 func normalizeQuery(ctx context.Context, request *http.Request, parameters foundryhttp.Query[SearchInput]) (string, error) {
+	// doc-example:begin http-queries-1
 	limits := foundryhttp.QueryLimits{Bytes: 4096, Pairs: 64, Issues: 8}
 
 	input, err := foundryhttp.DecodeQuery(parameters, ctx, request.URL.RawQuery, limits)
@@ -20,7 +20,6 @@ func normalizeQuery(ctx context.Context, request *http.Request, parameters found
 	// input.Search distinguishes omission from an explicitly empty string.
 	// input.Statuses is an ordinary []models.Status.
 	encoded, err := foundryhttp.EncodeQuery(parameters, ctx, input, limits)
+	// doc-example:end http-queries-1
 	return encoded, err
 }
-
-// doc-example:end http-queries-1

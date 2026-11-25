@@ -28,8 +28,8 @@ type ReportSource interface {
 
 // doc-example:end report-stream-contracts
 
-// doc-example:begin http-streams-1
 func registerReportExport(reports ReportSource) foundryhttp.RouteRegistration {
+	// doc-example:begin http-streams-1
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
 		ID: "reports.export", Method: foundryhttp.GET, Access: foundryhttp.Public,
 	}, UserPathDescriptor())
@@ -46,10 +46,9 @@ func registerReportExport(reports ReportSource) foundryhttp.RouteRegistration {
 			}, err
 		}), nil
 	})
+	// doc-example:end http-streams-1
 	return registration
 }
-
-// doc-example:end http-streams-1
 
 // doc-example:begin order-event-contracts
 // OrderEvent carries one order transition to a subscriber.
@@ -70,8 +69,8 @@ type orderWatcher interface {
 
 // doc-example:end order-event-contracts
 
-// doc-example:begin http-streams-2
 func registerRawEvents(orders orderWatcher) foundryhttp.RouteRegistration {
+	// doc-example:begin http-streams-2
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
 		ID: "orders.events", Method: foundryhttp.GET, Access: foundryhttp.Public,
 	}, foundryhttp.StaticPath("/orders/events"))
@@ -87,14 +86,17 @@ func registerRawEvents(orders orderWatcher) foundryhttp.RouteRegistration {
 				}
 				return nil
 			})
-		_ = err // The stream is committed; log a redacted diagnostic if needed.
+		if err != nil {
+			// The stream is committed; do not write a second response.
+			return
+		}
 	})
+	// doc-example:end http-streams-2
 	return registration
 }
 
-// doc-example:end http-streams-2
-// doc-example:begin http-streams-3
 func registerOrderEvents(orders orderWatcher) foundryhttp.RouteRegistration {
+	// doc-example:begin http-streams-3
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "orders.events", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/orders/events"))
 
 	orderEvents := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
@@ -112,7 +114,6 @@ func registerOrderEvents(orders orderWatcher) foundryhttp.RouteRegistration {
 			return nil
 		}), nil
 	})
+	// doc-example:end http-streams-3
 	return registration
 }
-
-// doc-example:end http-streams-3

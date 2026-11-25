@@ -23,6 +23,8 @@ records the checks and operational limits.
 
 Construct one named client per upstream and inject it into domain services:
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `http`, `httpclient`, `httpclient/capture` as `outboundcapture`, `secret`.
+
 <!-- compiled-source: tests/fixtures/consumer/background/account_client.go#named-client-deadline -->
 ```go
 const AccountsClient httpclient.Name = "accounts.api"
@@ -150,20 +152,21 @@ application request; attempt counts describe RoundTrip invocations.
 `Text()` requires valid UTF-8. `EnsureSuccess()` accepts 2xx statuses. Other statuses
 remain available for explicit application handling, including redirects.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Inputs: `ctx context.Context`, `client *httpclient.Client`, `destination io.Writer`.
+
 <!-- compiled-source: tests/fixtures/consumer/outgoing/guide_recipes.go#http-client-3 -->
 ```go
-func exportAccounts(ctx context.Context, client *httpclient.Client, destination io.Writer) error {
-	err := client.Stream(ctx, client.Get("accounts/export"),
-		func(ctx context.Context, response *httpclient.StreamResponse) error {
-			if err := response.EnsureSuccess(); err != nil {
-				return err
-			}
-			_, err := io.Copy(destination, response)
+err := client.Stream(ctx, client.Get("accounts/export"),
+	func(ctx context.Context, response *httpclient.StreamResponse) error {
+		if err := response.EnsureSuccess(); err != nil {
 			return err
-		},
-	)
-	return err
-}
+		}
+		_, err := io.Copy(destination, response)
+		return err
+	},
+)
 ```
 
 The callback receives the attempt deadline and operation ownership context. Once
@@ -235,13 +238,10 @@ previews/imports or other untrusted URLs, opt into an enforced destination polic
 
 <!-- compiled-source: tests/fixtures/consumer/outgoing/guide_recipes.go#http-client-4 -->
 ```go
-func publicClient() (*httpclient.Client, error) {
-	settings := httpclient.DefaultConfig("preview")
-	settings.Destination = httpclient.PublicDestinations()      // HTTPS, port 443
-	settings.Destination.Hosts = []string{"images.example.com"} // optional exact names
-	client, err := httpclient.New(settings, nil)
-	return client, err
-}
+settings := httpclient.DefaultConfig("preview")
+settings.Destination = httpclient.PublicDestinations()      // HTTPS, port 443
+settings.Destination.Hosts = []string{"images.example.com"} // optional exact names
+client, err := httpclient.New(settings, nil)
 ```
 
 `Destination` is also part of configured named HTTP-client settings. The policy

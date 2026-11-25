@@ -13,8 +13,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
-// doc-example:begin session-registry
 func sessionRegistry(db *database.DB, namespace keyspace.Namespace, users auth.Provider[models.User, model.ID[models.User]]) (*session.Sessions[models.User, model.ID[models.User]], *auth.Registry, error) {
+	// doc-example:begin session-registry
 	backend, err := sessionpg.New(db, sessionpg.DefaultConfig())
 	if err != nil {
 		return nil, nil, err
@@ -32,27 +32,25 @@ func sessionRegistry(db *database.DB, namespace keyspace.Namespace, users auth.P
 	if err != nil {
 		return nil, nil, err
 	}
+	// doc-example:end session-registry
 	return web, registry, nil
 }
 
-// doc-example:end session-registry
-
-// doc-example:begin remember-session
 func rememberSession(ctx context.Context, web *session.Sessions[models.User, model.ID[models.User]], verifiedProof auth.Proof[models.User, model.ID[models.User]]) (session.Issued[models.User, model.ID[models.User]], session.Info[models.User, model.ID[models.User]], error) {
+	// doc-example:begin remember-session
 	issued, err := web.Issue(ctx, verifiedProof, session.IssueOptions{Remember: true})
 	if err != nil {
 		return session.Issued[models.User, model.ID[models.User]]{}, session.Info[models.User, model.ID[models.User]]{}, err
 	}
 	info := issued.Info()
 	// Publish issued.Secret() only through an approved transport boundary.
+	// doc-example:end remember-session
 	return issued, info, nil
 }
 
-// doc-example:end remember-session
-
-// doc-example:begin rotate-session
 func rotateSession(ctx context.Context, web *session.Sessions[models.User, model.ID[models.User]], currentSecret secret.String) (session.Issued[models.User, model.ID[models.User]], error) {
-	return web.Rotate(ctx, currentSecret)
+	// doc-example:begin rotate-session
+	rotated, err := web.Rotate(ctx, currentSecret)
+	// doc-example:end rotate-session
+	return rotated, err
 }
-
-// doc-example:end rotate-session
