@@ -2,18 +2,18 @@
 
 Row calculations preserve their model or alias scope and compose with generated column declarations, [conditional values](conditional-expressions.md), predicates and ordering. Values and patterns are bound through their codecs; callers never supply SQL function or operator names.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/scalarqueries/scalars_postgres_test.go):
+`Sample` is the application's model with an `int16` `Quantity` and a text `Name` of the string-backed type `Label`, and `Samples` is its generated table; `orm` and `expr` are the framework's `database/orm` and `database/orm/expr` packages. `IncrementedAtLeast` filters on a computed quantity:
 
-<!-- compiled-source: tests/fixtures/consumer/scalarqueries/scalars_postgres_test.go#scalar-calculations -->
+<!-- compiled-source: tests/fixtures/consumer/scalarqueries/guide_calculations.go#scalar-calculations -->
 ```go
-quantity := expr.Value(f.Quantity)
-incremented := expr.Add(quantity, expr.Param(f.Quantity, 1))
-if rows, err := orm.All(t.Context(), tx, expr.Where(scalarqueries.Samples.Query(), expr.Gte(incremented, 3))); err != nil || len(rows) != 2 {
-	t.Fatal("typed arithmetic predicate", rows, err)
+func IncrementedAtLeast(minimum int16) orm.Query[Sample] {
+	quantity := expr.Value(Samples.Quantity)
+	incremented := expr.Add(quantity, expr.Param(Samples.Quantity, 1))
+	return expr.Where(Samples.Query(), expr.Gte(incremented, minimum))
 }
 ```
 
-The linked example binds `f := scalarqueries.Samples` and executes inside its fixture transaction. These calculations run in PostgreSQL before hydration. For in-memory slice operations, see [model queries](model-queries.md).
+These calculations run in PostgreSQL before hydration. For in-memory slice operations, see [model queries](model-queries.md).
 
 ## Numeric values
 
@@ -64,12 +64,14 @@ Nullable, validated and adapted codecs retain the original capability.
 When SQL resolves a result type from multiple inputs, any non-collatable input makes the composed result non-collatable.
 Parameters and constants explicitly cast to SQL `text` remain collatable while retaining their codec's binding and decoding.
 
-[Compiled example](../../tests/fixtures/consumer/scalarqueries/collation_test.go):
+`SamplesByName` orders the samples by their name under the Unicode collation:
 
-<!-- compiled-source: tests/fixtures/consumer/scalarqueries/collation_test.go#collated-ordering -->
+<!-- compiled-source: tests/fixtures/consumer/scalarqueries/guide_calculations.go#collated-ordering -->
 ```go
-name := expr.Collate(expr.Value(f.Name), expr.CollationUnicode)
-query := expr.OrderBy(f.Query(), expr.Asc(name))
+func SamplesByName() orm.Query[Sample] {
+	name := expr.Collate(expr.Value(Samples.Name), expr.CollationUnicode)
+	return expr.OrderBy(Samples.Query(), expr.Asc(name))
+}
 ```
 
 `CollationC` (`"C"`) uses byte order and is always present. `CollationUnicode` (`"und-x-icu"`) uses language-neutral Unicode ordering on ICU-enabled PostgreSQL. `ICUCollation("en-US")` names the predefined `"en-US-x-icu"` collation imported at initdb. Applications can use `expr.Collation("custom_name")` for collations created by their SQL migrations. No cluster locale change or schema builder is needed.

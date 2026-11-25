@@ -5,24 +5,28 @@ a step callback. The callback receives `rows.RecursiveSelf[R]` and must return t
 same complete record type. The ordinary struct and rows/model declaration own
 column order, nullability and codecs; no model generator is involved.
 
-A step can join children to the current self input:
+`models.User` is the application's model, with a nullable `IntroducerID` naming the parent user; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. Two empty tag types alias the current rows and the next level:
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/recursivequeries/recursive_postgres_test.go):
-
-<!-- compiled-source: tests/fixtures/consumer/recursivequeries/recursive_postgres_test.go#model-recursive-ctes -->
+<!-- compiled-source: tests/fixtures/consumer/recursivequeries/guide_recursive.go#recursive-aliases -->
 ```go
-func descendants(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
-	parent := rowset.AsRecord[parentAlias](self, "parent")
-	child := rowset.As[childAlias](models.Users.Query(), "child")
-	p, c := rowset.Scope(parent), rowset.Scope(child)
-	joined := rowset.InnerJoin(child, parent, rowset.OnEqual(expr.At(c, models.Users.IntroducerID), expr.NullableRow(expr.At(p, models.Users.ID))))
-	return rowset.SelectRecord(joined, rowset.LeftScope(joined, rowset.Scope(child)))
+type ParentAlias struct{}
+type ChildAlias struct{}
+```
+
+A step can join children to the current self input. `Descendants` is that step:
+
+<!-- compiled-source: tests/fixtures/consumer/recursivequeries/guide_recursive.go#model-recursive-ctes -->
+```go
+func Descendants(self rows.RecursiveSelf[models.User]) rows.RecordSource[models.User] {
+	parent := rows.AsRecord[ParentAlias](self, "parent")
+	child := rows.As[ChildAlias](models.Users.Query(), "child")
+	p, c := rows.Scope(parent), rows.Scope(child)
+	joined := rows.InnerJoin(child, parent, rows.OnEqual(expr.At(c, models.Users.IntroducerID), expr.NullableRow(expr.At(p, models.Users.ID))))
+	return rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child)))
 }
 ```
 
-The `rowset` import is `database/orm/rows`; alias tags are declared in the linked
-package. The [complete consumer](../../tests/fixtures/consumer/recursivequeries/recursive_postgres_test.go)
-shows anchors, construction, derived sources and execution.
+Pass `Descendants` to `rows.RecursiveCTE(name, anchor, step)` with `rows.ModelRecord(anchorQuery)` as the anchor, then read the definition through `rows.AsRecord`.
 
 ## Recursive scope and termination
 

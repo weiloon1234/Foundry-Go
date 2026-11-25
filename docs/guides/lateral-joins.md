@@ -7,12 +7,14 @@ helpers require that owner as their left input.
 
 ## Select records per parent
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/lateralqueries/records_postgres_test.go):
+`models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID`; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. `OrdersAlias` is an empty type that names the aliased orders source, and `CorrelatedOrders` correlates it with an outer users source:
 
-<!-- compiled-source: tests/fixtures/consumer/lateralqueries/records_postgres_test.go#lateral-joins -->
+<!-- compiled-source: tests/fixtures/consumer/lateralqueries/guide_lateral.go#lateral-joins -->
 ```go
-func userOrders[L any](outer rows.ScopeSource[L], scope expr.Scope[L, models.User]) (rows.CorrelatedSource[L, rows.Alias[ordersAlias, models.Order]], expr.Scope[rows.Correlation[L, rows.Alias[ordersAlias, models.Order]], models.Order]) {
-	orders := rows.As[ordersAlias](models.Orders.Query(), "orders_for_user")
+type OrdersAlias struct{}
+
+func CorrelatedOrders[L any](outer rows.ScopeSource[L], scope expr.Scope[L, models.User]) (rows.CorrelatedSource[L, rows.Alias[OrdersAlias, models.Order]], expr.Scope[rows.Correlation[L, rows.Alias[OrdersAlias, models.Order]], models.Order]) {
+	orders := rows.As[OrdersAlias](models.Orders.Query(), "orders_for_user")
 	c := rows.Correlate(outer, orders)
 	inner := rows.InnerScope(c, rows.Scope(orders))
 	u, o := rows.OuterScope(c, scope), inner
@@ -20,7 +22,7 @@ func userOrders[L any](outer rows.ScopeSource[L], scope expr.Scope[L, models.Use
 }
 ```
 
-The linked package uses `SelectCorrelatedRecord(c, scope)` with an order and
+Use `SelectCorrelatedRecord(c, scope)` with an order and
 `Limit(1)`, then `AsLateral` and `LeftJoinLateral` to select one order per user.
 `CrossJoinLateral`/`InnerJoinLateral` drop parents without an inner result;
 `LeftJoinLateral` retains them with nullable right fields. Use `LateralScope` and

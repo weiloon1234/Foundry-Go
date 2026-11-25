@@ -70,7 +70,7 @@ coverage so the rest of the skill does not disappear from the inventory.
 | 29–44: concrete fields, table binding, timestamps, soft deletion | [Declare tables](../guides/model-declarations.md#recipe-declare-table), [soft deletion](../guides/model-declarations.md#recipe-soft-delete) | `goway/migration/examples_test.go#roles-after`, `#force-after`; pilot retained |
 | 50–60, 186–190: stored identity and complete table registration | [Register tables](../guides/model-declarations.md#recipe-register-tables) | `goway/migration/examples_test.go#application-after`, `#identity-after`; `consumer/productionprofile/queries.go#check-table-registry` |
 | 63–67: scoped reads, optional and required keyed terminals | [Read models](../guides/model-queries.md#recipe-read-models) | `goway/migration/examples_test.go#reads-after`; pilot retained |
-| 68–71, 82–89: locks and writes in one transaction | [Lock models](../guides/row-locking.md#recipe-lock-models), [waiting](../guides/row-locking.md#recipe-lock-waiting) | `consumer/advancedqueries/locking_recipes_test.go#locked-write`, `#skip-locked` |
+| 68–71, 82–89: locks and writes in one transaction | [Lock models](../guides/row-locking.md#recipe-lock-models), [waiting](../guides/row-locking.md#recipe-lock-waiting) | `consumer/advancedqueries/locking.go#locked-write`, `#skip-locked` |
 | 68–71: joined lock targets and per-table policies | [Lock joins](../guides/row-locking.md#recipe-lock-joins), [lock policies](../guides/row-locking.md#recipe-lock-policies) | Same file: `#lock-joined-record`, `#independent-lock-policies` |
 | 82–89, 108–113: transaction-required composition | [Locked CTE](../guides/transaction-query-composition.md#recipe-locked-cte) | Existing `consumer/transactionqueries/models.go#transaction-query-composition` |
 | 72–81, 85–96: writes, assignments, presence and unique-column locking | [Write models](../guides/model-writes.md#recipe-write-models), [lock before a unique-column change](../guides/model-writes.md#recipe-lock-write) | Pilot `goway/migration/lifecycle_test.go#insert-member`; `goway/migration/examples_test.go#writes-after`, `#unique-column-lock` |
@@ -303,7 +303,7 @@ functions and marker-only edits; no DTO, enum, manifest or generated file change
 - [docs/guides/transaction-query-composition.md](../../docs/guides/transaction-query-composition.md)
 - [docs/guides/websocket-distributed.md](../../docs/guides/websocket-distributed.md)
 - [docs/guides/websocket.md](../../docs/guides/websocket.md)
-- [tests/fixtures/consumer/advancedqueries/locking_recipes_test.go](../../tests/fixtures/consumer/advancedqueries/locking_recipes_test.go)
+- [tests/fixtures/consumer/advancedqueries/locking.go](../../tests/fixtures/consumer/advancedqueries/locking.go)
 - [tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go](../../tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go)
 - [tests/fixtures/consumer/articles/attachment_recipes.go](../../tests/fixtures/consumer/articles/attachment_recipes.go)
 - [tests/fixtures/consumer/articles/http.go](../../tests/fixtures/consumer/articles/http.go)

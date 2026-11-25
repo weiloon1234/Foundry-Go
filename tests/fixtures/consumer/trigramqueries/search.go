@@ -9,9 +9,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
+// doc-example:begin trigram-aliases
 type nameSide struct{}
 type entitySide struct{}
 type addressSide struct{}
+
+// doc-example:end trigram-aliases
 
 // FindDuplicates reproduces the bounded name/entity/address search. Exact decimal
 // hydration replaces the application's latitude::text and longitude::text casts.

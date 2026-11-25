@@ -20,20 +20,11 @@ import (
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-type parentAlias struct{}
-type childAlias struct{}
+type parentAlias = recursivequeries.ParentAlias
+type childAlias = recursivequeries.ChildAlias
 type resultAlias struct{}
 
-// doc-example:begin model-recursive-ctes
-func descendants(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
-	parent := rowset.AsRecord[parentAlias](self, "parent")
-	child := rowset.As[childAlias](models.Users.Query(), "child")
-	p, c := rowset.Scope(parent), rowset.Scope(child)
-	joined := rowset.InnerJoin(child, parent, rowset.OnEqual(expr.At(c, models.Users.IntroducerID), expr.NullableRow(expr.At(p, models.Users.ID))))
-	return rowset.SelectRecord(joined, rowset.LeftScope(joined, rowset.Scope(child)))
-}
-
-// doc-example:end model-recursive-ctes
+var descendants = recursivequeries.Descendants
 
 func readUsers(t *testing.T, tx database.Executor, definition rowset.CommonTable[models.User]) []models.User {
 	t.Helper()

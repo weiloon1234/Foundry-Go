@@ -4,18 +4,20 @@
 all calculations; `rows.Having` filters completed groups. Adapt model predicates
 with `expr.ModelPredicate`; aliased operands already produce expression predicates.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go):
+`models.Order` is the application's model with an integer `TotalCents`, and `models.Orders` its generated table. `OrderSummary` is the result struct with a nullable decimal `Total` and an `int64` count field, and `OrderSummaries` its `rows.Define` schema. `FilteredOrderSummary` filters each aggregate to orders with a positive total and keeps groups where all three hold:
 
-<!-- compiled-source: tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go#model-aggregate-filters -->
+<!-- compiled-source: tests/fixtures/consumer/reports/guide_summaries.go#model-aggregate-filters -->
 ```go
-predicate := expr.ModelPredicate(orm.Gt(models.Orders.TotalCents, 0))
-total := expr.Filter(expr.Sum(models.Orders.TotalCents), predicate)
-count := expr.Filter(expr.Count[models.Order](), predicate)
-exists := expr.Filter(expr.Exists[models.Order](), predicate)
-selected := rows.Select(rows.From(models.Orders.Query()), reports.OrderSummaries,
-	rows.MapSelected(reports.OrderSummaries.Total, expr.AsSelected(total)),
-	rows.MapSelected(reports.OrderSummaries.Count, expr.AsSelected(count)))
-got, err := rows.CompileRead(rows.Read(rows.Having(selected, expr.HavingAnd(expr.GtValue(count, 0), expr.GtValue(total, decimal.FromInt64(1)), expr.EqValue(exists, true)))))
+func FilteredOrderSummary() rows.Query[models.Order, OrderSummary] {
+	predicate := expr.ModelPredicate(orm.Gt(models.Orders.TotalCents, 0))
+	total := expr.Filter(expr.Sum(models.Orders.TotalCents), predicate)
+	count := expr.Filter(expr.Count[models.Order](), predicate)
+	exists := expr.Filter(expr.Exists[models.Order](), predicate)
+	selected := rows.Select(rows.From(models.Orders.Query()), OrderSummaries,
+		rows.MapSelected(OrderSummaries.Total, expr.AsSelected(total)),
+		rows.MapSelected(OrderSummaries.Count, expr.AsSelected(count)))
+	return rows.Having(selected, expr.HavingAnd(expr.GtValue(count, 0), expr.GtValue(total, decimal.FromInt64(1)), expr.EqValue(exists, true)))
+}
 ```
 
 Chained `Filter` calls append with AND, leaving previous descriptors unchanged.
@@ -44,4 +46,4 @@ group. There is no general aggregate DISTINCT API beyond `CountDistinctField`.
 Filters preserve subquery/CTE discovery and explicit correlation. A measured
 field must belong to the aggregate's SELECT. Count/Exists filters that capture
 outer data must also reference their own input; outer-only aggregates are rejected
-before execution. See the [compiled consumer](../../tests/fixtures/consumer/filterqueries/filters_postgres_test.go).
+before execution. 

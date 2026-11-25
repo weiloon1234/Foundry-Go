@@ -6,7 +6,9 @@ Handwritten ORM queries provide numbered and count-free simple pages; `orm.Curso
 
 This is the database counterpart of Laravel's `paginate`: Foundry computes the offset, matching total, page count and typed items. [HTTP pagination adapters](http-pagination.md) parse request parameters and build response links through these typed page contracts. The same database API remains usable from CLI and worker code.
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#model-pagination-numbered -->
+`models.User` is the application's model with an integer `Age` and a text `Email`, and `models.Users` its generated table. `database` and `orm` are the framework's `database` and `database/orm` packages. `numbered` reads the first page of 20 adult users with a total, and `simple` reads it without one:
+
+<!-- compiled-source: tests/fixtures/goway/guideadapters/guide_pages.go#model-pagination-numbered -->
 ```go
 func numbered(ctx context.Context, db database.Executor) (orm.PageResult[models.User], error) {
 	return orm.Paginate(ctx, db, models.Users.Query().Where(orm.Gte(models.Users.Age, 18)), orm.Page(1, 20))
@@ -45,7 +47,9 @@ An existing limit or nonzero offset on the level being paginated is rejected. De
 
 ## Cursor pages
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#model-pagination-cursor-page -->
+`cursorPage` pages the same users by email; `request` carries the cursor and size:
+
+<!-- compiled-source: tests/fixtures/goway/guideadapters/guide_pages.go#model-pagination-cursor-page -->
 ```go
 func cursorPage(ctx context.Context, db database.Executor, request orm.CursorRequest[models.User]) (orm.CursorPage[models.User], error) {
 	q := models.Users.Query().OrderBy(orm.Asc(models.Users.Email))

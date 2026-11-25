@@ -5,12 +5,12 @@
 model or `rows.RecordOf` for a projection. Inputs can have different query scopes,
 but must return the same record type and compatible column/codec declarations.
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/setqueries/editor_examples_test.go):
+`models.User` and `models.Order` are the application's models, an order holding its buyer in `BuyerID`; `BuyerTotals` is the result struct and `BuyerTotalRows` its `rows.Define` schema, with `BuyerID`, `Total`, `Orders` and `Average` fields; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. `DerivedReports` unions two reports of the same record type:
 
-<!-- compiled-source: tests/fixtures/consumer/setqueries/editor_examples_test.go#model-set-operations -->
+<!-- compiled-source: tests/fixtures/consumer/reports/guide_summaries.go#model-set-operations -->
 ```go
-func derivedReports() rows.SetQuery[reports.BuyerTotals] {
-	u, o, r := models.Users, models.Orders, reports.BuyerTotalRows
+func DerivedReports() rows.SetQuery[BuyerTotals] {
+	u, o, r := models.Users, models.Orders, BuyerTotalRows
 	// Both reports return BuyerTotals while selecting from different model scopes.
 	orders := rows.GroupBy(rows.Select(rows.From(o.Query()), r.Row,
 		rows.Map(r.BuyerID, expr.Value(o.BuyerID)), rows.MapSelected(r.Total, expr.AsSelected(expr.Sum(o.TotalCents))),

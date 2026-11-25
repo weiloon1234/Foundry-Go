@@ -8,15 +8,17 @@ PostgreSQL 18 is the tested backend for these operations, including its explicit
 
 Calendar extraction accepts dates or local date-times. Clock extraction accepts times or local date-times. For an instant, use `expr.LocalAt(input, zone)` to select the timezone before extracting calendar or clock components. This example groups a date field by year:
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/temporalqueries/orm_test.go):
+`Sample` is the application's model with a `temporal.Date` field `Date`, and `Samples` is its generated table. `CalendarSummary` is the result struct with `Year` and `Rows` as `int64` and `Latest` as the latest date, and `CalendarSummaries` its `rows.Define` schema; `rows` and `expr` are the framework's `database/orm/rows` and `database/orm/expr` packages. `YearlySummary` groups the samples by year:
 
-<!-- compiled-source: tests/fixtures/consumer/temporalqueries/orm_test.go#temporal-calculations -->
+<!-- compiled-source: tests/fixtures/consumer/temporalqueries/orm.go#temporal-calculations -->
 ```go
-year := expr.Year(expr.Value(Samples.Date))
-report := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, expr.AsSelected(year)), rows.MapSelected(CalendarSummaries.Rows, expr.AsSelected(expr.Count[Sample]())), rows.MapSelected(CalendarSummaries.Latest, expr.AsSelected(expr.Max(Samples.Date)))), expr.Group(year)), expr.Asc(year))
+func YearlySummary() rows.Query[Sample, CalendarSummary] {
+	year := expr.Year(expr.Value(Samples.Date))
+	return rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, expr.AsSelected(year)), rows.MapSelected(CalendarSummaries.Rows, expr.AsSelected(expr.Count[Sample]())), rows.MapSelected(CalendarSummaries.Latest, expr.AsSelected(expr.Max(Samples.Date)))), expr.Group(year)), expr.Asc(year))
+}
 ```
 
-The example is a grouped rows projection over the handwritten `Samples` declaration. Extraction and ordering run in PostgreSQL; sorting an already-loaded slice is a separate Go operation.
+`YearlySummary` is a grouped rows projection over the handwritten `Samples` declaration. Extraction and ordering run in PostgreSQL; sorting an already-loaded slice is a separate Go operation.
 
 Calendar functions include `Year`, `Month`, `Day`, `DayOfWeek`, `ISODayOfWeek`, `DayOfYear`, `ISOWeek`, `ISOYear`, `Quarter`, `Century`, `Decade`, `Millennium` and `JulianDay`. Clock functions include `Hour`, `Minute`, `Second`, `Milliseconds` and `Microseconds`. Weekdays use Sunday = 0 for `DayOfWeek` and Monday = 1 for `ISODayOfWeek`; ISO week-years can differ from calendar years.
 

@@ -5,6 +5,7 @@ import (
 
 	"testing"
 
+	"foundry.test/consumer/lateralqueries"
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
@@ -14,7 +15,7 @@ import (
 
 func TestCorrelatedRecordClauseSQLParity(t *testing.T) {
 	outer := rows.As[usersAlias](models.Users.Query(), "buyer")
-	c, scope := userOrders(outer, rows.Scope(outer))
+	c, scope := lateralqueries.CorrelatedOrders(outer, rows.Scope(outer))
 	count := expr.CountFieldAt(scope, models.Orders.ID)
 	record := rows.ProjectCorrelated(c, reports.OrderSummaries, rows.MapSelected(reports.OrderSummaries.Total, expr.AsSelected(expr.SumAt(scope, models.Orders.TotalCents))), rows.MapSelected(reports.OrderSummaries.Count, expr.AsSelected(count)))
 	record = rows.DistinctCorrelatedRecord(rows.HavingCorrelatedRecord(record, expr.GtValue(count, 0)))

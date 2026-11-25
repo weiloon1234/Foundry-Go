@@ -10,17 +10,15 @@
 
 Further reading: [Callback contracts](#callback-contracts).
 
-Declare a per-write factory returning `orm.Hooks[M]` and name it with `hooks=memberHooks` on the model directive.
+Declare a per-write factory returning `orm.Hooks[M]` and name it with `hooks=memberHooks` on the model directive. `hooks.Member` is the application's model in its `hooks` package and `hooks.Members` its generated table; `database` and `orm` are the framework's packages. This factory gives a new member the name `guest` when the write supplies none:
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#hooks-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#hooks-after -->
 ```go
 func memberHooks() orm.Hooks[hooks.Member] {
 	return orm.Hooks[hooks.Member]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[hooks.Member]) error {
-		if !orm.WriteIsSet(draft, func() func(arg0 string) orm.Assignment[hooks.Member] {
-			receiver := hooks.Members.Name
-			return func(arg0 string) orm.Assignment[hooks.Member] { return orm.Set(receiver, arg0) }
-		}()) {
-			return orm.WriteSet(draft, orm.Set(hooks.Members.Name, "guest"))
+		setName := func(name string) orm.Assignment[hooks.Member] { return orm.Set(hooks.Members.Name, name) }
+		if !orm.WriteIsSet(draft, setName) {
+			return orm.WriteSet(draft, setName("guest"))
 		}
 		return nil
 	}}

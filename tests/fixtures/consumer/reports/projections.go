@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin user-summary-record
 type UserSummary struct {
 	ID model.ID[models.User]
 	// Email is the buyer contact address selected for this report.
@@ -15,6 +16,8 @@ type UserSummary struct {
 	Nickname value.Nullable[string]
 	Status   models.Status
 }
+
+// doc-example:end user-summary-record
 
 type BuyerTotals struct {
 	BuyerID model.ID[models.User]

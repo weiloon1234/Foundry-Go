@@ -20,7 +20,7 @@ type matchInputAlias struct{}
 func TestPostgresLateralAggregateAndWindowReports(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, _ []models.User) error {
 		outer := rows.As[usersAlias](models.Users.Query(), "buyer")
-		c, scope := userOrders(outer, rows.Scope(outer))
+		c, scope := lateralqueries.CorrelatedOrders(outer, rows.Scope(outer))
 		o := scope
 		selected := rows.ProjectCorrelated(c, reports.OrderSummaries, rows.MapSelected(reports.OrderSummaries.Total, expr.AsSelected(expr.SumAt(o, models.Orders.TotalCents))), rows.MapSelected(reports.OrderSummaries.Count, expr.AsSelected(expr.CountFieldAt(o, models.Orders.ID))))
 		stats := rows.AsLateral[statsAlias](selected, "stats")
@@ -81,7 +81,7 @@ func TestPostgresLateralAggregateAndWindowReports(t *testing.T) {
 func TestPostgresLateralChainedNullableScopes(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, _ []models.User) error {
 		outer := rows.As[usersAlias](models.Users.Query(), "buyer")
-		c, scope := userOrders(outer, rows.Scope(outer))
+		c, scope := lateralqueries.CorrelatedOrders(outer, rows.Scope(outer))
 		o := scope
 		latest := rows.AsLateral[latestAlias](rows.SelectCorrelatedRecord(c, scope).OrderBy(expr.Desc(expr.At(o, models.Orders.TotalCents))).Limit(1), "latest")
 		first := rows.LeftJoinLateral(outer, latest)

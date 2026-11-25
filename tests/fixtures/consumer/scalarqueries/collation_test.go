@@ -13,10 +13,8 @@ import (
 
 func TestCollatedTextComposition(t *testing.T) {
 	f := scalarqueries.Samples
-	// doc-example:begin collated-ordering
 	name := expr.Collate(expr.Value(f.Name), expr.CollationUnicode)
-	query := expr.OrderBy(f.Query(), expr.Asc(name))
-	// doc-example:end collated-ordering
+	query := scalarqueries.SamplesByName()
 	if _, err := rows.CompileRead(rows.Read(rows.FromModel(query))); err != nil {
 		t.Fatal(err)
 	}

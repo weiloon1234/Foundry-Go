@@ -1,25 +1,17 @@
 package expressionqueries_test
 
-import orm "github.com/weiloon1234/Foundry-Go/database/orm"
-
 import (
 	"strings"
 	"testing"
 
+	"foundry.test/consumer/expressionqueries"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/decimal"
 )
 
 func TestTypedConditionalSQL(t *testing.T) {
-	// doc-example:begin conditional-expressions
-	u := models.Users
-	display := expr.Coalesce(expr.Value(u.Nickname), expr.Value(u.Email))
-	choice := expr.When(expr.ModelPredicate(orm.Gt(u.Age, 20)), expr.Param(u.Email, "older"))
-	label := choice.When(expr.ModelPredicate(orm.Eq(u.Age, 20)), expr.Value(u.Email)).Else(expr.Param(u.Email, "unknown"))
-	statement, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(expr.Where(models.Users.Query(), expr.Ne(display, ""))), expr.AsSelected(label)), expr.Asc(label))))
-	// doc-example:end conditional-expressions
+	statement, err := rows.CompileRead(rows.ReadScalar(expressionqueries.LabelsByAge()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,11 +20,8 @@ func TestTypedConditionalSQL(t *testing.T) {
 			t.Fatal("missing computed SQL", want, statement.SQL())
 		}
 	}
-	// doc-example:begin conditional-expressions-2
 	orders := models.Orders.Query()
-	total := expr.Sum(models.Orders.TotalCents)
-	computed := expr.CoalesceValue(expr.AsSelected(total), expr.AsSelected(expr.ParamOf(total, decimal.FromInt64(0))))
-	// doc-example:end conditional-expressions-2
+	computed := expressionqueries.TotalOrZero()
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(orders), computed))); err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,5 @@
-package advancedqueries_test
+// Package advancedqueries holds the locking examples of the row-locking guide.
+package advancedqueries
 
 import (
 	"context"
@@ -32,8 +33,11 @@ func claimUsers(ctx context.Context, tx *database.Tx, visible orm.Query[models.U
 
 // doc-example:end skip-locked
 
+// doc-example:begin lock-aliases
 type lockedUserAlias struct{}
 type lockedOrderAlias struct{}
+
+// doc-example:end lock-aliases
 
 // doc-example:begin lock-joined-record
 func lockBuyers(ctx context.Context, tx *database.Tx) ([]models.User, error) {

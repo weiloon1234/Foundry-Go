@@ -15,9 +15,9 @@ Further reading: [Transaction outcomes](#transaction-ownership-and-failures).
 <a id="recipe-write-models"></a>
 ## Create and update
 
-[Source and imports in the matching GitHub tree](../../tests/fixtures/goway/migration/examples_test.go).
+`hooks.Member` is the application's model in its `hooks` package, with an `int64` key `ID`, a `Name`, a nullable `Note` and a `Body` of bytes; `hooks.Members` is its generated table. `database` and `orm` are the framework's packages. `insertMember` creates one member with explicit key and name:
 
-<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#insert-member -->
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#insert-member -->
 ```go
 func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
 	f := hooks.Members
@@ -25,11 +25,12 @@ func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member,
 }
 ```
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#writes-after -->
+`updateMember` renames a member by key and writes SQL NULL to its note:
+
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#writes-after -->
 ```go
-func write(ctx context.Context, tx *database.Tx, id int64) error {
-	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))
-	return err
+func updateMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
+	return orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))
 }
 ```
 
@@ -56,9 +57,9 @@ For all hooked or observed models, the before-image read uses `FOR NO KEY UPDATE
 
 The ORM cannot infer which other columns are unique. When an update changes a UNIQUE column after reading the row with `NO KEY UPDATE`, PostgreSQL may upgrade its row lock during the UPDATE. This applies to hooked or observed updates and to `UpdateEach` and `UpdateOrCreate` on models without hooks or observers. If another transaction inserted a child referencing that parent and then tries to update it, the two can deadlock: PostgreSQL aborts one with SQLSTATE `40P01`. No retry is automatic.
 
-When changing such a column, acquire `FOR UPDATE` first, in the same transaction, before the operation reads candidates or the before-image. The model API uses `orm.Lock` for `FOR UPDATE`:
+When changing such a column, acquire `FOR UPDATE` first, in the same transaction, before the operation reads candidates or the before-image. The model API uses `orm.Lock` for `FOR UPDATE`. `changeUniqueColumn` locks the member, then updates it in the same transaction:
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#unique-column-lock -->
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#unique-column-lock -->
 ```go
 func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
 	return db.Transaction(ctx, func(tx *database.Tx) error {

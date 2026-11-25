@@ -2,15 +2,16 @@
 
 Tag creation and update fields with `foundry:"role=created-at"` and `foundry:"role=updated-at"`. Their carriers retain ordinary stored-time predicates, ordering and expression support. Both fields must be non-null, non-primary `time.Time` or `temporal.DateTime` values. The [typed declaration example](model-declarations.md) shows the complete table.
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#writes-after -->
+`hooks.Member` is the application's model in its `hooks` package, and `hooks.Members` its generated table. `updateMember` updates one member:
+
+<!-- compiled-source: tests/fixtures/goway/migration/guide_examples.go#writes-after -->
 ```go
-func write(ctx context.Context, tx *database.Tx, id int64) error {
-	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))
-	return err
+func updateMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
+	return orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.Set(hooks.Members.Name, "Ada"), orm.SetNull(hooks.Members.Note))
 }
 ```
 
-The [member table](../../tests/fixtures/goway/models/hooks/models.go) used here has both roles. Insert supplies creation time when omitted and always supplies update time. Update always assigns update time; it preserves creation time unless explicitly assigned. An otherwise empty update can therefore become a timestamp-only write. Caller assignments remain unchanged.
+The member model has both roles. Insert supplies creation time when omitted and always supplies update time. Update always assigns update time; it preserves creation time unless explicitly assigned. An otherwise empty update can therefore become a timestamp-only write. Caller assignments remain unchanged.
 
 Both roles must form a valid pair. An active conventional pair requires both managed roles, or `timestamps=none` on the directive with timestamp role tags removed. The opt-out conflicts with explicit managed roles. Managed fields reject mutators and database defaults; put business transformations in hooks or ordinary input fields.
 

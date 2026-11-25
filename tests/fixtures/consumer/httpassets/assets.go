@@ -17,8 +17,11 @@ import (
 //go:embed public/*
 var public embed.FS
 
+// doc-example:begin asset-keys
 var AssetsKey = foundation.NewKey[*foundryhttp.Assets]("consumer.web.assets")
 var ServerKey = foundation.NewKey[*foundryhttp.Server]("consumer.web.server")
+
+// doc-example:end asset-keys
 
 func EmbeddedSource() (foundryhttp.AssetSource, error) {
 	files, err := fs.Sub(public, "public")
@@ -46,7 +49,9 @@ func Build(ctx context.Context, source foundryhttp.AssetSource) (*foundation.App
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(stdhttp.StatusNotFound)
 				if r.Method != stdhttp.MethodHead {
-					_, _ = io.WriteString(w, "<main>Page not found</main>")
+					if _, err := io.WriteString(w, "<main>Page not found</main>"); err != nil {
+						return
+					}
 				}
 			}))
 

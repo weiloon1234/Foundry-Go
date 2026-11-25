@@ -50,21 +50,19 @@ func TestPostgresIntervalCalculations(t *testing.T) {
 		if got := intervalOne(t, tx, expr.AsSelected(expr.ShiftLocal(expr.Value(f.LocalStart), expr.Param(f.Period, temporal.Days(1))))).String(); got != "2024-03-10T12:00:00" {
 			t.Fatal(got)
 		}
-		// doc-example:begin interval-queries-2
-		ny, err := expr.LoadTimeZone("America/New_York")
-		if err != nil {
-			return err
-		}
 		for _, test := range []struct {
 			period temporal.Interval
 			hours  time.Duration
 		}{{temporal.Days(1), 23}, {interval(t, 0, 0, 24*time.Hour), 24}} {
-			got := intervalOne(t, tx, expr.AsSelected(expr.ShiftInstant(expr.Value(f.Start), expr.Param(f.Period, test.period), ny)))
+			shifted, err := intervalqueries.ShiftedStart(test.period, "America/New_York")
+			if err != nil {
+				return err
+			}
+			got := intervalOne(t, tx, shifted)
 			if got.Sub(samples[0].Start) != test.hours*time.Hour {
 				t.Fatal(got, test.hours)
 			}
 		}
-		// doc-example:end interval-queries-2
 		early, err := temporal.ParseLocalDateTime("0001-01-01T00:00:00")
 		if err != nil {
 			return err

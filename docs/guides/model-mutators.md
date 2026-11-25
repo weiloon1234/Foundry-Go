@@ -12,16 +12,16 @@ Further reading: [Bulk writes](#set-based-and-conflict-writes).
 
 A mutation input column separates the value accepted by writes from the value stored in the model. An input assignment retains input until persistence; reads and predicates use the stored type. Declare `input=Type` even when input and stored types are identical.
 
-The [complete declaration](model-declarations.md) uses a distinct `SlugInput` with a value-receiver `MutateSlug` method. This fixture uses distinct input and stored types:
+The [complete declaration](model-declarations.md) uses a distinct `SlugInput` with a value-receiver `MutateSlug` method. `Member` is the application's model; `Members` is its generated table; `coremodels` is the application's package declaring `EmailInput`, the input type of `Member.Email`, which is stored as a different type. `orm` is the framework's `database/orm` package. `emailInput` builds the assignment:
 
-<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#inputs-after -->
+<!-- compiled-source: tests/fixtures/goway/models/mutators/guide_examples.go#inputs-after -->
 ```go
-func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
-	return orm.Set(mutators.Members.Email, input)
+func emailInput(input coremodels.EmailInput) orm.Assignment[Member] {
+	return orm.Set(Members.Email, input)
 }
 ```
 
-The [mutator declaration](../../tests/fixtures/goway/models/mutators/models.go) binds input, codec and accessor types. With `input=Type`, the generator selects the matching value-receiver `Mutate<Field>` method. To use an explicit transform, add `mutate=name` for a package-local `func(Input) (Stored, error)`. Do not declare both.
+The model declaration binds input, codec and accessor types. With `input=Type`, the generator selects the matching value-receiver `Mutate<Field>` method. To use an explicit transform, add `mutate=name` for a package-local `func(Input) (Stored, error)`. Do not declare both.
 
 ## Declaration validation
 

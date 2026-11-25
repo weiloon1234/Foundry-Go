@@ -98,6 +98,17 @@ Applications can format those decimal values at their output boundary.
 <a id="recipe-trigram-search"></a>
 ## Search within a transaction
 
+`Tables` is the application's struct of handwritten table handles: `Entities` (with a `Country`), `Names` (with `EntityID` and a `Normalized` text), `Addresses` (with `EntityID` and decimal `Latitude` and `Longitude`) and `Reviews` (with a text `Body`), each keyed by `Key()`. `Normalized` is a string-backed text type. `Duplicate` is the result struct, with `ID`, `Normalized`, a `float64` `Similarity` and the two decimals, and `Duplicates` its `rows.Define` schema. `database`, `orm`, `expr` and `rows` are the framework's `database`, `database/orm`, `database/orm/expr` and `database/orm/rows` packages. Three empty tag types alias the joined sources:
+
+<!-- compiled-source: tests/fixtures/consumer/trigramqueries/search.go#trigram-aliases -->
+```go
+type nameSide struct{}
+type entitySide struct{}
+type addressSide struct{}
+```
+
+`FindDuplicates` joins names, entities and addresses and returns the matches above the threshold:
+
 <!-- compiled-source: tests/fixtures/consumer/trigramqueries/search.go#find-duplicates -->
 ```go
 func FindDuplicates(ctx context.Context, tx *database.Tx, tables Tables, search Normalized, country string, except int64) ([]Duplicate, error) {
@@ -138,6 +149,8 @@ func FindDuplicates(ctx context.Context, tx *database.Tx, tables Tables, search 
 ```
 
 The second query reuses that transaction threshold.
+
+`SimilarReviews` searches review bodies on the same transaction:
 
 <!-- compiled-source: tests/fixtures/consumer/trigramqueries/search.go#similar-reviews -->
 ```go

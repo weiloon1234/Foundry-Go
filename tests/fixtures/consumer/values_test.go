@@ -6,24 +6,20 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/weiloon1234/Foundry-Go/model"
+	"foundry.test/consumer"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-type User struct{ ID model.ID[User] }
 type ProfilePatch struct {
 	Birthday value.Optional[value.Nullable[temporal.Date]] `json:"birthday,omitzero"`
 }
 
 func TestPublicValuesPreserveOwnershipAndPatchMeaning(t *testing.T) {
-	// doc-example:begin allocate-model-id
-	id, err := model.NewIDAt[User](time.Now())
+	user, err := consumer.NewUser(time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	user := User{ID: id}
-	// doc-example:end allocate-model-id
 	if user.ID.IsZero() {
 		t.Fatal("generated identity is zero")
 	}

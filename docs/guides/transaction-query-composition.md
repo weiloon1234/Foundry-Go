@@ -16,20 +16,43 @@ are shared with ordinary reads.
 <a id="recipe-locked-cte"></a>
 ## Lock inside a CTE
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/transactionqueries/models.go):
+The application declares its model and the result struct, and one empty tag type for the alias; `Summaries` is the result struct's handwritten `rows.Define` schema. `database`, `orm`, `rows` and `expr` are the framework's `database`, `database/orm`, `database/orm/rows` and `database/orm/expr` packages:
+
+<!-- compiled-source: tests/fixtures/consumer/transactionqueries/models.go#transaction-models -->
+```go
+//foundry:model table=records var=Records key=ID identity=false
+type Record struct {
+	ID   int64 `foundry:"member=ID,key-role=lookup"`
+	Name string
+}
+
+type Summary struct {
+	ID   int64
+	Name string
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/transactionqueries/models.go#transaction-aliases -->
+```go
+type claimedAlias struct{}
+type otherAlias struct{}
+```
+
+`Claimed` locks and returns the first unlocked record inside the caller's transaction:
 
 <!-- compiled-source: tests/fixtures/consumer/transactionqueries/models.go#transaction-query-composition -->
 ```go
 func Claimed(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(Records.Query().OrderBy(orm.Asc(Records.ID)).Limit(1)).SkipLocked()))
 	source := rows.AsTransaction[claimedAlias](definition, "candidate")
-	fields := recordAt(rows.TransactionScope(source))
-	return rows.SelectTransaction(source, Summaries, rows.MapSelected(Summaries.ID, expr.AsSelected(expr.Row(fields.ID))), rows.MapSelected(Summaries.Name, expr.AsSelected(expr.Row(fields.Name)))).All(ctx, tx)
+	scope := rows.TransactionScope(source)
+	return rows.SelectTransaction(source, Summaries,
+		rows.MapSelected(Summaries.ID, expr.AsSelected(expr.Row(expr.At(scope, Records.ID)))),
+		rows.MapSelected(Summaries.Name, expr.AsSelected(expr.Row(expr.At(scope, Records.Name))))).All(ctx, tx)
 }
 ```
 
-The linked package owns `Records`, `Summaries`, alias tags and the `recordAt`
-helper. `rows.LockedRecord` adapts a locked model; `rows.TransactionCTE` retains
+`rows.LockedRecord` adapts a locked model; `rows.TransactionCTE` retains
 its inner lock. `rows.TransactionOf(rows.ModelRecord(query))` explicitly admits an
 ordinary record into transaction-required composition. `AsTransaction` accepts
 transaction sources; `TransactionScope` exposes their typed fields.

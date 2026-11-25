@@ -15,7 +15,9 @@ response writer. Foundry opens the representation after successful input and
 handler execution, validates its declared media, handles conditions/ranges and
 closes every transferred reader after the response finishes.
 
-The minimal consumer registers a PDF response and returns a deferred local file:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`. `root` is the application's `*os.Root` over its report directory.
+
+`ReportRoute` registers a PDF response and returns a deferred local file:
 
 <!-- compiled-source: tests/fixtures/consumer/httpdownloads/example.go#local-download -->
 ```go

@@ -30,6 +30,8 @@ type ProfileInput struct {
 
 // doc-example:end multipart-input
 
+// doc-example:begin upload-service
+
 //foundry:dto http=response
 type UploadReply struct {
 	Name         string `json:"name"`
@@ -42,6 +44,8 @@ type UploadReply struct {
 type Service interface {
 	Save(context.Context, ProfileInput) (UploadReply, error)
 }
+
+// doc-example:end upload-service
 
 // doc-example:begin multipart-endpoint
 func Router(directory string, service Service) (*foundryhttp.Router, error) {

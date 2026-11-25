@@ -34,15 +34,7 @@ func TestPostgresTypedSubqueries(t *testing.T) {
 }
 
 func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) error {
-	// doc-example:begin model-projections
-	o := models.Orders
-	totals := rowset.GroupBy(rowset.Select(rowset.From(models.Orders.Query()), reports.BuyerTotalRows.Row,
-		rowset.Map(reports.BuyerTotalRows.BuyerID, expr.Value(o.BuyerID)),
-		rowset.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(expr.Sum(o.TotalCents))),
-		rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.AsSelected(expr.Count[models.Order]())),
-		rowset.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.Avg(o.TotalCents))),
-	), expr.Group(expr.Value(o.BuyerID)))
-	// doc-example:end model-projections
+	totals := reports.BuyerTotalsByBuyer()
 	// Grouping, HAVING and a selected window remain inside the derived source.
 	source := rowset.AsRecord[totalsAlias](rowset.RecordOf(rowset.Limit(rowset.OrderBy(rowset.Having(totals, expr.GteValue(expr.Count[models.Order](), 2)), expr.DescValue(expr.Count[models.Order]())), 1)), "totals")
 	fields := rowset.Scope(source)
@@ -86,11 +78,9 @@ func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) err
 	df := rowset.Scope(derived)
 	again := rowset.InnerJoin(u, derived, rowset.OnEqual(expr.At(rowset.Scope(u), models.Users.ID), rowset.At(df, reports.UserOrderStatsRows.ID)))
 	joinedFields := rowset.RightScope(again, rowset.Scope(derived))
-	// doc-example:begin read-scalar
 	if emails, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(again, expr.AsSelected(expr.Row(rowset.At(joinedFields, reports.UserOrderStatsRows.Email)))), expr.Asc(rowset.At(joinedFields, reports.UserOrderStatsRows.Email)))).All(t.Context(), tx); err != nil || len(emails) != 3 || emails[0] != users[0].Email {
 		t.Error("declared joined result could not be joined again", err)
 	}
-	// doc-example:end read-scalar
 	// Derived enum fields retain enum operators and decoders, including output aliases.
 	base := models.Users
 	summary := rowset.Select(rowset.From(models.Users.Query()), reports.UserSummaries.Row,
@@ -144,20 +134,11 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 	if n, err := orm.Count(t.Context(), tx, expr.Where(models.Users.Query(), rowset.ExistsQuery(rowset.From(models.Users.Query()), rowset.HavingScalar(count, expr.GtValue(expr.Count[models.Order](), 0))))); err != nil || n != 0 {
 		t.Error("EXISTS lost HAVING", err)
 	}
-	// doc-example:begin scalar-projection
-	last := rowset.LimitScalar(rowset.OrderScalar(buyers, expr.Desc(expr.Value(o.TotalCents))), 1)
-	nicknames := rowset.SelectScalar(rowset.From(models.Users.Query().Where(orm.Eq(u.ID, users[1].ID))), expr.AsSelected(expr.Row(expr.Value(u.Nickname))))
-	report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), reports.ScalarReports.Row,
-		rowset.Map(reports.ScalarReports.ID, expr.Value(u.ID)),
-		rowset.MapSelected(reports.ScalarReports.BuyerID, expr.AsSelected(rowset.ScalarRowQuery(rowset.From(models.Users.Query()), last))),
-		rowset.MapSelected(reports.ScalarReports.Nickname, expr.AsSelected(rowset.ScalarNullableRowQuery(rowset.From(models.Users.Query()), nicknames))),
-		rowset.MapSelected(reports.ScalarReports.Orders, expr.AsSelected(rowset.ScalarRowQuery(rowset.From(models.Users.Query()), count))),
-	), expr.Asc(expr.Value(u.Email)))
+	report := reports.ScalarSummaryQuery(buyers, count, users[1].ID)
 	scalars, err := rowset.Read(report).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
-	// doc-example:end scalar-projection
 	if len(scalars) != 3 {
 		t.Fatal("scalar expressions changed outer cardinality")
 	}
@@ -177,6 +158,7 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 	if err != nil || len(result) != 3 || !result[0].IsNull() {
 		t.Error("empty scalar did not become NULL", err)
 	}
+	nicknames := rowset.SelectScalar(rowset.From(models.Users.Query().Where(orm.Eq(u.ID, users[1].ID))), expr.AsSelected(expr.Row(expr.Value(u.Nickname))))
 	nullNickname := rowset.SelectScalar(rowset.From(models.Users.Query().Where(orm.Eq(u.ID, users[0].ID))), expr.AsSelected(expr.Row(expr.Value(u.Nickname))))
 	for _, nullableInput := range []rowset.Scalar[models.User, value.Nullable[string]]{nullNickname, rowset.LimitScalar(nicknames, 0)} {
 		result, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), expr.AsSelected(rowset.ScalarNullableRowQuery(rowset.From(models.Users.Query()), nullableInput)))).All(t.Context(), tx)

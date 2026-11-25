@@ -18,6 +18,8 @@ Foundry generator to produce the descriptor and typed validation fields.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `imaging`, `validation/imaging` as `imagingvalidation`, `validation`, `value`.
 
+`ProfileInput` accepts a title, one document, a gallery of photos, tags and a JSON settings part:
+
 <!-- compiled-source: tests/fixtures/consumer/httpuploads/forms.go#multipart-input -->
 ```go
 type Gallery []foundryhttp.UploadedFile
@@ -74,8 +76,28 @@ models and uploaded files do not implicitly become JSON objects.
 Declare `//foundry:multipart http=body` and use `ProfileInputBody(directory)`
 in an ordinary typed endpoint.
 The handler receives `request.Body` as ProfileInput and returns its separately
-declared response DTO. The [independent consumer](../../tests/fixtures/consumer/httpuploads/forms.go)
-illustrates descriptor assembly, validation and an injected domain service.
+declared response DTO. The application declares that DTO and the domain service
+the handler calls; `foundry generate` produces `UploadReplyResponse` and
+`ProfileInputBody`:
+
+<!-- compiled-source: tests/fixtures/consumer/httpuploads/forms.go#upload-service -->
+```go
+//foundry:dto http=response
+type UploadReply struct {
+	Name         string `json:"name"`
+	Bytes        int64  `json:"bytes"`
+	DetectedType string `json:"detected_type"`
+}
+
+// Service owns the domain operation. Transport decoding, file validation and
+// temporary-file cleanup stay inside Foundry's endpoint lifecycle.
+type Service interface {
+	Save(context.Context, ProfileInput) (UploadReply, error)
+}
+```
+
+`Router` assembles the descriptor, validation and the injected service. `directory`
+is the directory for temporary upload files:
 
 <!-- compiled-source: tests/fixtures/consumer/httpuploads/forms.go#multipart-endpoint -->
 ```go
@@ -187,7 +209,7 @@ storage and model-extension integration.
 Use `FileKinds` when a file's extension must agree with its detected content.
 Independent `FileExtensions` and `FileContentTypes` lists do not enforce that
 relationship. For example, both lists can accept a PNG renamed to `.pdf` when
-PNG and PDF are allowed.
+PNG and PDF are allowed. `DocumentRule` accepts a PDF, a text file or a `.docx` ZIP container, and only when extension and content agree:
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/upload_rules.go#document-kinds -->
 ```go

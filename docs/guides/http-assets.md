@@ -12,6 +12,18 @@
 <a id="recipe-serve-assets"></a>
 ## Serve static assets and SPA navigation
 
+Framework imports from `github.com/weiloon1234/Foundry-Go`: the root package as `foundry`, `application`, `foundation`, and `http` as `foundryhttp` (with `net/http` as `stdhttp`). `source` is a `foundryhttp.AssetSource` the application builds with `DirectoryAssets` or `FilesystemAssets`; `models` and other domain types are not needed here.
+
+The application declares one typed service key for the assets and one for the server:
+
+<!-- compiled-source: tests/fixtures/consumer/httpassets/assets.go#asset-keys -->
+```go
+var AssetsKey = foundation.NewKey[*foundryhttp.Assets]("consumer.web.assets")
+var ServerKey = foundation.NewKey[*foundryhttp.Server]("consumer.web.server")
+```
+
+`Build` registers both services and serves the assets under `/assets`:
+
 <!-- compiled-source: tests/fixtures/consumer/httpassets/assets.go#asset-lifecycle -->
 ```go
 func Build(ctx context.Context, source foundryhttp.AssetSource) (*foundation.App, error) {
@@ -28,7 +40,9 @@ func Build(ctx context.Context, source foundryhttp.AssetSource) (*foundation.App
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(stdhttp.StatusNotFound)
 				if r.Method != stdhttp.MethodHead {
-					_, _ = io.WriteString(w, "<main>Page not found</main>")
+					if _, err := io.WriteString(w, "<main>Page not found</main>"); err != nil {
+						return
+					}
 				}
 			}))
 
@@ -54,9 +68,6 @@ Declare `DirectoryAssets(path)` or `FilesystemAssets(fsys)` in
 `DefaultAssetsConfig`, resolve the typed `*Assets` service while constructing
 HTTP routes, and register `assets.Mount(routeID, prefix).Register()`.
 `AssetMount.URL(AssetPath)` uses that same prefix for escaped file/directory URLs.
-The [independent consumer](../../tests/fixtures/consumer/httpassets/assets.go)
-shows complete application assembly with embedded or local assets; it is a
-framework fixture, not a starter project.
 
 `AssetsModule` first opens the local `os.Root` during provider boot. Directory
 sources check the configured path's identity on demand, at most once per second,
@@ -144,9 +155,11 @@ it does not check existence or exclusions.
 
 Move root public assets and development proxies out of native catch-all routes.
 Keep explicit APIs and specific hashed-bundle mounts in ordinary routing.
-This configured example serves root public files and a `/account` development
-proxy together. Supply a handler from `SPARuntime.WrapProxy` for runtime injection
-and an application-rendered `lost` handler for B30 navigation misses.
+Supply a handler from `SPARuntime.WrapProxy` for runtime injection and an
+application-rendered `lost` handler for navigation misses. `application` is the
+framework's `application` package.
+
+`DeclareFallbacks` serves root public files and a `/account` development proxy together:
 
 <!-- compiled-source: tests/fixtures/consumer/httpassets/fallback.go#configured-fallbacks -->
 ```go
@@ -216,13 +229,11 @@ redirects. Asset metadata includes file media, prefix, index and fallback
 exclusions, without exposing local paths or fabricating a JSON DTO. Download
 and stream response guides describe the shared transfer and cleanup behavior.
 
-Runtime, lifecycle, independent-consumer, compiler and actual-gopls checks passed.
-
 <a id="recipe-declare-spa"></a>
 ## SPA fallbacks with application.New
 
 `application.New` builds the router itself, so declare SPAs on the builder with
-the same `SPAConfig`, naming the `*Assets` key an `AssetsModule` provides:
+the same `SPAConfig`, naming the `*Assets` key (`AssetsKey` above) an `AssetsModule` provides. `runtimeData` is the `SPARuntime` that [Inject public runtime data](#recipe-spa-runtime) builds:
 
 <!-- compiled-source: tests/fixtures/consumer/httpassets/runtime.go#configured-spa -->
 ```go
@@ -253,6 +264,8 @@ The application supplies its public DTO, generated `contract.JSON[T]` codec and
 loader. The framework owns document reads, encoding, escaping and response headers.
 Keep secrets and server configuration out of this DTO.
 
+The application declares the public DTO; `foundry generate` produces `PortalRuntimeJSON()`:
+
 <!-- compiled-source: tests/fixtures/consumer/httpassets/runtime.go#portal-runtime-dto -->
 ```go
 //foundry:dto
@@ -260,6 +273,8 @@ type PortalRuntime struct {
 	SiteName string `json:"site_name"`
 }
 ```
+
+`Runtime` defines the descriptor from that codec and a loader:
 
 <!-- compiled-source: tests/fixtures/consumer/httpassets/runtime.go#portal-runtime -->
 ```go
@@ -339,7 +354,8 @@ upstream Close runs in callback isolation and finishes before admission is relea
 ## Wrap an existing development proxy
 
 Keep the application's `httputil.ReverseProxy`, upstream URL and route exclusions.
-Wrap the proxy once during route construction and propagate construction errors:
+Wrap the proxy once during route construction and propagate construction errors.
+`navigation` selects the requests that may be documents:
 
 <!-- compiled-source: tests/fixtures/consumer/httpassets/runtime.go#runtime-proxy -->
 ```go

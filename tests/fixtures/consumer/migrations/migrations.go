@@ -4,12 +4,15 @@ package migrations
 
 import "github.com/weiloon1234/Foundry-Go/database/migrate"
 
+// doc-example:begin migration-names
 const (
 	Origin         migrate.Origin  = "consumer"
 	CreateRecords  migrate.ID      = "20260911000000_create_records"
 	AddRecordLabel migrate.ID      = "20260911000001_add_record_label"
 	Introduced     migrate.Version = "v0.1.0"
 )
+
+// doc-example:end migration-names
 
 // Definitions returns fresh historical definitions for Registry or an
 // application migration target.

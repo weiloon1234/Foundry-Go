@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"foundry.test/consumer/correlations"
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
-	"foundry.test/consumer/reports"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
@@ -24,25 +24,11 @@ func TestPostgresTypedCorrelations(t *testing.T) {
 
 func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) error {
 	u := models.Users
-	// doc-example:begin model-correlations
-	link := rowset.Correlate(rowset.From(models.Users.Query()), rowset.From(models.Orders.Query()))
-	buyer := rowset.OuterScope(link, rowset.ModelScope(models.Users.Query()))
-	order := rowset.InnerScope(link, rowset.ModelScope(models.Orders.Query()))
-	matched := link.Where(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(buyer, models.Users.ID)))
-	counts := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.CountFieldAt(order, models.Orders.ID)))
-	totals := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.SumAt(order, models.Orders.TotalCents)))
-	// doc-example:end model-correlations
-	// doc-example:begin embed-correlated-scalar
-	r := reports.UserOrderStatsRows
-	report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), r.Row,
-		rowset.Map(r.ID, expr.Value(u.ID)), rowset.Map(r.Email, expr.Value(u.Email)),
-		rowset.MapSelected(r.Orders, expr.AsSelected(rowset.CorrelatedScalarRowQuery(counts))),
-		rowset.MapSelected(r.Total, expr.AsSelected(rowset.CorrelatedScalarNullableRowQuery(totals)))), expr.Asc(expr.Value(u.Email)))
+	link, matched, buyer, order, _, _, report := correlations.BuyerOrderQueries()
 	rows, err := rowset.Read(report).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
-	// doc-example:end embed-correlated-scalar
 	if len(rows) != 3 {
 		t.Fatal("correlated aggregates changed outer row cardinality")
 	}
