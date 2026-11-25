@@ -19,7 +19,7 @@ func TestTelemetryConsumerAPIInventory(t *testing.T) {
 		"AlertPolicy": false, "AlertPolicy.Validate": false,
 		"RetentionPolicy": false, "RetentionPolicy.Validate": false,
 		"ReadLimits": false, "ReadLimits.Validate": false,
-		"Config": false, "Config.Validate": false,
+		"Config": false, "Config.Validate": false, "Config.ValidateWith": false,
 		"Migrations": false, "PruneResult": false,
 		"Dependencies": false, "Engine": false, "New": false, "KernelModule": false,
 		"Engine.Run": false, "Engine.Close": false, "Engine.Done": false, "Engine.Flush": false,

@@ -362,7 +362,7 @@ option. A message not listed has the same shape: what is wrong, then what to cha
 | Repeat an inferred role | `role=enum is inferred from the field type; remove it` |
 | Name a case that does not exist in `values` | `[enum-list]` from `foundry models check`: `values names Missing, which is not a case of enum Phase` |
 | Name every case in `values` | `[enum-list]` from `foundry models check`: `values names every case of enum Phase; remove the values option` |
-| Put `values` on a field that holds no enum | `values applies only to an enum field or a collection of enums; remove the values option` |
+| Put `values` on a field that holds no enum | `values applies only to an enum field or a collection of enums; mark the field's type with //foundry:enum, or remove the values option` |
 | Omit a decimal role | `decimal field requires role=column or role=number; declare one of them` |
 | Omit managed roles on an eligible conventional pair | `CreatedAt and UpdatedAt are conventional timestamp names; declare role=created-at on CreatedAt and role=updated-at on UpdatedAt, or use timestamps=none on the model and remove timestamp role tags` |
 | Omit an eligible conventional deletion role | `DeletedAt is a conventional deletion name; declare role=soft-delete on DeletedAt, or use softdeletes=none on the model and remove its role tag` |

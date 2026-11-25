@@ -40,6 +40,7 @@ const Enabled State="enabled"
 		{"input bool column role", "ID int; Flag bool `foundry:\"role=column,input=bool\"`", "", "func(Account) MutateFlag(v bool)(bool,error){return v,nil}", "role=column is inferred from the field type; remove it"},
 		{"enum role", "ID int; State State `foundry:\"role=enum\"`", "", "", "role=enum is inferred from the field type; remove it"},
 		{"values on a text field", "ID int; Name string `foundry:\"values=Enabled\"`", "", "", "values applies only to an enum field or a collection of enums"},
+		{"values on a type without the enum directive", "ID int; Kind Plain `foundry:\"values=PlainOn\"`", "", "type Plain string\nconst PlainOn Plain=\"on\"", "mark the field's type with //foundry:enum, or remove the values option"},
 		{"values on a slot", "ID int; Files attachments.Many[Account] `foundry:\"values=Enabled\"`", "", "", "values applies only to an enum field or a collection of enums"},
 		{"json role", "ID int; Data value.JSON[string] `foundry:\"role=json\"`", "", "", "role=json is inferred from the field type; remove it"},
 		{"interval role", "ID int; Duration temporal.Interval `foundry:\"role=interval\"`", "", "", "role=interval is inferred from the field type; remove it"},

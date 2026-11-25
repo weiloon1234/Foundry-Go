@@ -126,7 +126,7 @@ func discoverModelField(p *packageInput, d *modelDeclaration, field *types.Var, 
 		}
 	}
 	if len(tag.Values) != 0 && modelmeta.FieldEnum(f.stored, func(named *types.Named) bool { return p.enumTypes[named] || hasEnumDescriptor(named) }) == nil {
-		return fail("values applies only to an enum field or a collection of enums; remove the values option")
+		return fail("values applies only to an enum field or a collection of enums; mark the field's type with //foundry:enum, or remove the values option")
 	}
 	if f.slot {
 		if f.nullable {

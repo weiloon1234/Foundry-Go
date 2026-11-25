@@ -34,8 +34,9 @@
 - Breaking (startup): a telemetry configuration whose `Alerts.Thresholds.AuthFailures` is
   above half of the collector's `MaxEvents` is refused at startup (and by `telemetry.New`)
   instead of building an authentication burst rule that can never fire: a capture holds at
-  most `MaxEvents/2` security issues. `MaxEvents` 1 holds none, so an enabled alert policy
-  needs `MaxEvents` of at least 2. `telemetry.Config.ValidateWith(collector)` is the one
+  most `MaxEvents/2` security issues. The refusal applies whenever a threshold is supplied,
+  including when the alert policy is disabled or its rules omit the burst rule. `MaxEvents` 1
+  holds none, so a supplied `AuthFailures` (at least 1) needs `MaxEvents` of at least 2. `telemetry.Config.ValidateWith(collector)` is the one
   check. Fix: lower `features.telemetry.config.alerts.thresholds.auth_failures` or raise
   `features.telemetry.collector.max_events` (the error names `AuthFailures` and `MaxEvents`).
 - Breaking (gate): an application whose constraint rejects a case of its enum fails
@@ -113,7 +114,7 @@
   and in an application also `(skill: name)` for each skill that declares that
   token in a `Foundry guides:` line. It covers `foundry routes check`,
   `models check`, `lint --no-raw` (which now names the symbol and column),
-  `generate --check` (one line per stale file, then one `scope:` line) and `generate` declaration errors,
+  `generate --check` (one line per stale file, then one `scope:` line) and `generate` declaration errors (including a name that collides with handwritten code),
   `docs check` and the framework's `make docs-check`. `:0` is never printed. Rule IDs
   are stable and listed in the developer tooling guide; the framework's docs check
   fails when a rule names a missing guide anchor. Fix: update any parser of the old
@@ -194,8 +195,6 @@
   lists each rule's teaching reference only (the `Check` column is removed); the
   retired-names check reports an empty or malformed recorded release file as a
   `ledger-shape` finding; `apicomments` prints its success count without a rule tag.
-  `foundry generate` prints every model-declaration error, including a name that
-  collides with handwritten code, in the finding shape with a correction.
 
 ## v0.52.0 — 2026-11-25
 
