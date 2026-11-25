@@ -283,6 +283,169 @@ func TestDocsRenderRefusesWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestDocsRenderIsAllOrNothing(t *testing.T) {
+	for _, test := range []struct {
+		name, path, text, want string
+	}{
+		{"unbound fence in another document", ".claude/skills/other/SKILL.md", "# Other\n\n```go\nfunc one() {}\n```\n", "other/SKILL.md:3: [doc-binding] Go block has no compiled source"},
+		{"unknown tag", ".claude/skills/other/SKILL.md", "# Other\n\n```rust\nfn main() {}\n```\n", "[doc-binding] fenced block has no supported language tag"},
+		{"indented code", ".claude/skills/other/SKILL.md", "# Other\n\n    func one() {}\n", "[doc-binding] indented code is unsupported"},
+		{"empty worked-example", ".claude/skills/other/SKILL.md", "# Other\n\n" + exampleBegin + exampleEnd, "[doc-worked-example] worked-example region is empty"},
+		{"vague worked-example", ".claude/skills/other/SKILL.md", "# Other\n\n" + exampleBegin + "Soon.\n" + exampleEnd, "[doc-worked-example] worked-example region neither binds a block"},
+		{"path outside the policy", ".claude/skills/other/SKILL.md", "<!-- compiled-source: portals.go#x -->\n```go\n```\n", "[doc-marker] source \"portals.go\" is not bindable"},
+		{"missing source", ".claude/skills/other/SKILL.md", "<!-- compiled-source: internal/missing.go#x -->\n```go\n```\n", "[doc-marker] compiled source cannot be read"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			b := newBoundApplication(t)
+			// A stale block elsewhere would be rendered if the run went ahead.
+			putDocumentation(t, b.app, "internal/pages/page.go", "package pages\n\n// doc-example:begin page\nfunc Page() int { return 2 }\n// doc-example:end page\n")
+			putDocumentation(t, b.app, test.path, test.text)
+			before := documentationSnapshot(t, b.app)
+			var stdout, stderr bytes.Buffer
+			err := run(t.Context(), []string{"docs", "render", "--dir", b.app}, &stdout, &stderr)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("want %q, got %v", test.want, err)
+			}
+			if strings.Contains(stdout.String(), "rendered") {
+				t.Fatalf("printed success: %q", stdout.String())
+			}
+			for name, value := range documentationSnapshot(t, b.app) {
+				if before[name] != value {
+					t.Fatalf("%s changed although a document had a binding finding", name)
+				}
+			}
+		})
+	}
+}
+
+func TestDocsRenderWritesNothingWhenADocumentCannotBeWritten(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("a read-only file is writable for root")
+	}
+	b := newBoundApplication(t)
+	putDocumentation(t, b.app, "internal/pages/page.go", "package pages\n\n// doc-example:begin page\nfunc Page() int { return 2 }\n// doc-example:end page\n")
+	putDocumentation(t, b.app, "web/AGENTS.md", "Foundry guides: `orm#agent-entry`\n\n<!-- compiled-source: internal/pages/page.go#page -->\n```go\nold\n```\n")
+	nested := filepath.Join(b.app, "web/AGENTS.md")
+	if err := os.Chmod(nested, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(nested, 0o644) })
+	before := documentationSnapshot(t, b.app)
+	var stdout bytes.Buffer
+	err := run(t.Context(), []string{"docs", "render", "--dir", b.app}, &stdout, &stdout)
+	if err == nil || !strings.Contains(err.Error(), "web/AGENTS.md: [doc-file] document: cannot be opened for writing; make it writable") || strings.Contains(err.Error(), "restore read access") {
+		t.Fatalf("%v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("printed %q", stdout.String())
+	}
+	for name, value := range documentationSnapshot(t, b.app) {
+		if before[name] != value {
+			t.Fatalf("%s changed although another document could not be written", name)
+		}
+	}
+}
+
+func TestDocsBindingsRefusesWhileADocumentHasABindingFinding(t *testing.T) {
+	for name, test := range map[string]struct{ path, text, want string }{
+		"unbound fence":        {".claude/skills/other/SKILL.md", "# Other\n\n```typescript\nconst one = 1;\n```\n", "[doc-binding] TypeScript block has no compiled source"},
+		"empty worked-example": {".claude/skills/other/SKILL.md", "# Other\n\n" + exampleBegin + exampleEnd, "[doc-worked-example] worked-example region is empty"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			b := newBoundApplication(t)
+			putDocumentation(t, b.app, test.path, test.text)
+			var stdout, stderr bytes.Buffer
+			err := run(t.Context(), []string{"docs", "bindings", "--language", "typescript", "--dir", b.app}, &stdout, &stderr)
+			if err == nil || !strings.Contains(err.Error(), test.want) || stdout.Len() != 0 {
+				t.Fatalf("stdout %q: %v", stdout.String(), err)
+			}
+		})
+	}
+}
+
+func TestDocsCheckNamesTheCauseWhenThePackagesCannotBeListed(t *testing.T) {
+	b := newBoundApplication(t)
+	t.Setenv("FOUNDRY_TEST_GO_LIST", filepath.Join(t.TempDir(), "absent"))
+	err := b.check(t)
+	const sentence = "The packages of the application module could not be listed. Check --dir and that `go list ./...` works offline in the module: cat: "
+	if err == nil || !strings.Contains(err.Error(), sentence) || !strings.Contains(err.Error(), "No such file or directory") {
+		t.Fatalf("%v", err)
+	}
+	for _, line := range strings.Split(err.Error(), "\n") {
+		if strings.Contains(line, "could not be listed") && len(line) > 400 {
+			t.Fatalf("unbounded line: %q", line)
+		}
+	}
+}
+
+func TestDocsFindingsTeachTheApplicationRecipe(t *testing.T) {
+	const application = "Foundry guide: developer-tooling-and-testing#recipe-application-documents"
+	b := newBoundApplication(t)
+	putDocumentation(t, b.app, "internal/pages/page.go", "package pages\n\n// doc-example:begin page\nfunc Page() int { return 2 }\n// doc-example:end page\n")
+	putDocumentation(t, b.app, ".claude/skills/one/SKILL.md", "# One\n\n```go\nfunc one() {}\n```\n")
+	putDocumentation(t, b.app, ".claude/skills/two/SKILL.md", "<!-- compiled-source: portals.go#x -->\n```go\n```\n")
+	putDocumentation(t, b.app, ".claude/skills/three/SKILL.md", "<!-- compiled-source: internal/pages/page.go#nowhere -->\n```go\n```\n")
+	err := b.check(t)
+	if err == nil {
+		t.Fatal("no findings")
+	}
+	for _, rule := range []string{"doc-binding", "doc-rendered", "doc-marker", "doc-region"} {
+		found := false
+		for _, line := range strings.Split(err.Error(), "\n") {
+			if strings.Contains(line, "["+rule+"]") {
+				found = true
+				if !strings.Contains(line, application) {
+					t.Errorf("%s does not teach the application recipe: %s", rule, line)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("no %s finding in %v", rule, err)
+		}
+	}
+}
+
+func TestDocsTextFenceThatLooksLikeCodeNamesBothWaysOut(t *testing.T) {
+	b := newBoundApplication(t)
+	putDocumentation(t, b.app, "AGENTS.md", "Foundry guides: `orm`\n\n```text\nfunc one() {}\n```\n")
+	err := b.check(t)
+	const want = "AGENTS.md:3: [doc-binding] Executable block has no compiled source; move the code into a handwritten file under internal/, cmd/, examples/, web/ or client/tests/ and bind it with <!-- compiled-source: path#region -->, then run go tool foundry docs render --dir . If it is not code, retag it sh or json, or write it as prose. Foundry guide:"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestDocsRefusesSymlinkedAndNoCheckTypeScriptSources(t *testing.T) {
+	for name, test := range map[string]struct {
+		mutate func(t *testing.T, b boundApplication)
+		want   string
+	}{
+		"symlinked directory": {func(t *testing.T, b boundApplication) {
+			if err := os.Symlink(filepath.Join(b.app, "web/shared"), filepath.Join(b.app, "web/linked")); err != nil {
+				t.Fatal(err)
+			}
+			putDocumentation(t, b.app, "AGENTS.md", "Foundry guides: `orm`\n\n<!-- compiled-source: web/linked/request-body.ts#request-body -->\n```typescript\n```\n")
+		}, `source "web/linked/request-body.ts" is not bindable: web/linked is a symbolic link; bind the real file`},
+		"dangling symlinked directory": {func(t *testing.T, b boundApplication) {
+			if err := os.Symlink(filepath.Join(b.app, "web/gone"), filepath.Join(b.app, "web/linked")); err != nil {
+				t.Fatal(err)
+			}
+			putDocumentation(t, b.app, "AGENTS.md", "Foundry guides: `orm`\n\n<!-- compiled-source: web/linked/request-body.ts#request-body -->\n```typescript\n```\n")
+		}, `web/linked is a symbolic link; bind the real file`},
+		"ts-nocheck": {func(t *testing.T, b boundApplication) {
+			putDocumentation(t, b.app, "web/shared/request-body.ts", "// @ts-nocheck\n// doc-example:begin request-body\nexport const body = 1;\n// doc-example:end request-body\n")
+		}, `source "web/shared/request-body.ts" is not bindable: it contains @ts-nocheck`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			b := newBoundApplication(t)
+			test.mutate(t, b)
+			if err := b.check(t); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("want %q, got %v", test.want, err)
+			}
+		})
+	}
+}
+
 func TestDocsBindingsListsSourcesOnePathPerLine(t *testing.T) {
 	b := newBoundApplication(t)
 	for language, want := range map[string]string{

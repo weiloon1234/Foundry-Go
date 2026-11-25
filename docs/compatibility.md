@@ -709,21 +709,24 @@ rules. Before upgrading, an application's documents must satisfy:
   `<!-- compiled-source: path#region -->` directive and equals that region of a
   handwritten file under `internal/`, `cmd/` or `examples/` (Go) or `web/` or
   `client/tests/` (TypeScript and TSX); generated files, `*.d.ts`, `testdata`,
-  `deploy`, `config`, nested modules and symlinks are refused, and a test file is
-  bindable only from the `testing` skill;
+  `deploy`, `config`, nested modules, paths through a symlink and TypeScript files
+  with `@ts-nocheck` are refused (directory and `.env` names compare without regard to
+  case), and a test file (`_test.go`, `*.test.ts(x)`, `*.spec.ts(x)`, any TypeScript
+  file below a `tests` directory) is bindable only from the `testing` skill;
 - a Go source is a file of a package of the module that the default build compiles;
 - every fence carries a tag of the closed list (`go`, `typescript`, `tsx`, `sh`, `toml`,
   `json`, `sql`, `text`, `ini`, `markdown`, `yaml`, `makefile`), and a `text` or
   `markdown` fence holds no code that looks executable;
 - the documents contain no indented code block and no HTML `pre` or `code` element;
 - the size and shape limits above hold;
-- a skill with a `worked-example` app-owned region holds a bound block there, or the
-  explicit statement and a `Foundry guides:` line of the guide's rule, never an empty or
-  vague region.
+- a skill with a `worked-example` app-owned region holds a bound block with a line of
+  code there, or exactly the explicit statement and a `Foundry guides:` line of the
+  guide's rule, never an empty, comment-only or vague region.
 
 Quoted code that is not a binding (a route sketch, a directory tree whose text looks
 like a call) becomes prose, an `sh` or `json` fence, or a bound region. `go tool foundry
-docs render --dir .` writes bound blocks from their sources, `docs render --check`
+docs render --dir .` writes bound blocks from their sources (all or nothing: it
+writes nothing while any document has another binding finding), `docs render --check`
 compares, and `docs bindings --language typescript --dir .` lists the TypeScript files
 an application's own convention test asserts are type-checked. The checks change no
 runtime, wire, persisted-data or generated-client format. Rolling back to an earlier pin

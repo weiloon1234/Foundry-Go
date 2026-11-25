@@ -16,7 +16,13 @@ const (
 
 func workedExampleFindings(t *testing.T, text string) string {
 	t.Helper()
-	src := source{language: "go", regions: map[string]excerpt{"example": {text: "x := 1\n", first: 1, last: 1}}}
+	src := source{language: "go", regions: map[string]excerpt{
+		"example": {text: "x := 1\n", first: 1, last: 1},
+		"blank":   {text: "\n\n", first: 1, last: 2},
+		"comment": {text: "// only a note\n", first: 1, last: 1},
+		"block":   {text: "/* a\n b */\n\n// c\n", first: 1, last: 4},
+		"mixed":   {text: "// a note\n/* block */ x := 1\n", first: 1, last: 2},
+	}}
 	document, err := parseDocument(ApplicationPolicy(), nil, ".claude/skills/model/SKILL.md", []byte(text), func(string) (source, error) { return src, nil })
 	if err != nil {
 		t.Fatal(err)
@@ -45,6 +51,14 @@ func TestWorkedExampleRegionStates(t *testing.T) {
 		{"two guides", exampleBegin + exampleNone + "Foundry guides: `orm#recipe-other`\n" + exampleEnd, "neither binds a block nor makes the explicit statement"},
 		{"extra prose with the statement", exampleBegin + exampleNone + "\nSee later.\n" + exampleEnd, "neither binds a block nor makes the explicit statement"},
 		{"statement beside a bound block", exampleBegin + exampleNone + "\n" + bound + exampleEnd, "holds a bound block and also says there is no worked example"},
+		{"bound region of blank lines", exampleBegin + "<!-- compiled-source: internal/a/a.go#blank -->\n```go\n```\n" + exampleEnd, "binds a block that holds no code"},
+		{"bound region of one comment", exampleBegin + "<!-- compiled-source: internal/a/a.go#comment -->\n```go\n// only a note\n```\n" + exampleEnd, "binds a block that holds no code"},
+		{"bound region of block comments", exampleBegin + "<!-- compiled-source: internal/a/a.go#block -->\n```go\n```\n" + exampleEnd, "binds a block that holds no code"},
+		{"bound region with a comment and code", exampleBegin + "<!-- compiled-source: internal/a/a.go#mixed -->\n```go\n```\n" + exampleEnd, ""},
+		{"hollow block beside a code block", exampleBegin + "<!-- compiled-source: internal/a/a.go#comment -->\n```go\n```\n\n" + bound + exampleEnd, ""},
+		{"none with a text fence", exampleBegin + exampleNone + "\n```text\nany words at all\n```\n" + exampleEnd, "holds a fence that is not bound"},
+		{"none with a sh fence", exampleBegin + "```sh\nmake x\n```\n\n" + exampleNone + exampleEnd, "holds a fence that is not bound"},
+		{"only a text fence", exampleBegin + "```text\nx\n```\n" + exampleEnd, "holds a fence that is not bound"},
 		{"unbound fence only", exampleBegin + "```go\nx := 1\n```\n" + exampleEnd, "Go block has no compiled source"},
 		{"duplicate region", exampleBegin + bound + exampleEnd + exampleBegin + bound + exampleEnd, "duplicate worked-example region"},
 		{"end without begin", exampleEnd, "ends without a matching begin marker"},
@@ -131,5 +145,66 @@ func TestApplicationDocumentsBindAndRender(t *testing.T) {
 	}
 	if got := Bindings(documents, "typescript"); strings.Join(got, ",") != "web/page.tsx" {
 		t.Fatalf("typescript bindings %v", got)
+	}
+}
+
+func TestHasCodeIgnoresBlanksAndComments(t *testing.T) {
+	for text, want := range map[string]bool{
+		"":                        false,
+		"\n  \n":                  false,
+		"// a\n//\n":              false,
+		"/* a */\n":               false,
+		"/* a\n * b\n */\n// c\n": false,
+		"/* a */ /* b */\n":       false,
+		"x := 1\n":                true,
+		"// a\nx := 1\n":          true,
+		"/* a */ x := 1\n":        true,
+		"/* a\n b */ x := 1\n":    true,
+		"\tfunc F() {}\n":         true,
+		"/* a\n// b\nx := 1\n":    false,
+		"/* a\n b */\nexport x\n": true,
+	} {
+		if got := hasCode(text); got != want {
+			t.Errorf("hasCode(%q) = %v", text, got)
+		}
+	}
+}
+
+func TestRenderWritesNothingWhenATargetCannotBeWritten(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("a read-only file is writable for root")
+	}
+	root := t.TempDir()
+	writeApplicationFile(t, root, "internal/pages/page.go", "package pages\n\n// doc-example:begin page\nvar x = 1\n// doc-example:end page\n")
+	stale := "<!-- compiled-source: internal/pages/page.go#page -->\n```go\nold\n```\n"
+	writeApplicationFile(t, root, "AGENTS.md", stale)
+	writeApplicationFile(t, root, "web/AGENTS.md", stale)
+	names := []string{"AGENTS.md", "web/AGENTS.md"}
+	documents, err := LoadDocuments(ApplicationPolicy(), root, names, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(root, "web/AGENTS.md"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	err = Render(root, documents)
+	if err == nil || !strings.Contains(err.Error(), "web/AGENTS.md: [doc-file] document: cannot be opened for writing; make it writable") || strings.Contains(err.Error(), "restore read access") {
+		t.Fatalf("a read-only target: %v", err)
+	}
+	for _, name := range names {
+		if got, _ := os.ReadFile(filepath.Join(root, name)); string(got) != stale {
+			t.Fatalf("%s changed although another target could not be written: %q", name, got)
+		}
+	}
+	if err := os.Chmod(filepath.Join(root, "web/AGENTS.md"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Render(root, documents); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		if got, _ := os.ReadFile(filepath.Join(root, name)); !strings.Contains(string(got), "```go\nvar x = 1\n```") {
+			t.Fatalf("%s not rendered: %q", name, got)
+		}
 	}
 }

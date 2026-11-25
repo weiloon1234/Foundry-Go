@@ -34,6 +34,16 @@ var sectionAnchor = regexp.MustCompile(`^<a id="(agent-entry|recipe-[a-z0-9-]+)"
 
 var taskLink = regexp.MustCompile(`^(?:- )?(?:[^\[\]<>\x60.!?]+: )?\[[^\]]+\]\([^\s)]+\)(?:, \[[^\]]+\]\([^\s)]+\))*$`)
 
+// finding starts a finding of rule at a document line; an application's findings
+// teach the rule's application reference.
+func finding(policy Policy, rule diagnostic.Rule, path string, line int) diagnostic.Diagnostic {
+	found := rule.At(path, line, 0)
+	if policy.words().application {
+		found = found.InApplication()
+	}
+	return found
+}
+
 // Inclusion locates a source excerpt and its rendered document block.
 type Inclusion struct {
 	Document       string
@@ -104,7 +114,7 @@ func LoadDocuments(policy Policy, root string, names []string, cache *markdown.C
 			if cached, ok := sources[name]; ok {
 				return cached, nil
 			}
-			value, err := loadSource(root, name, language)
+			value, err := loadSource(policy, root, name, language)
 			if _, statErr := os.Lstat(filepath.Join(root, filepath.FromSlash(name))); errors.Is(statErr, fs.ErrNotExist) && policy.words().rebind != "" {
 				// A source the application removed or renamed: say how to re-point the binding.
 				return source{}, safeerror.New("compiled source cannot be read; restore the source file" + policy.words().rebind)
@@ -140,15 +150,31 @@ func Check(documents []Document) error {
 			if len(doc.StaleLines) > 0 {
 				line = doc.StaleLines[0]
 			}
-			failures = append(failures, diagnostic.DocRendered.At(doc.Path, line, 0).Text("", "compiled source differs from the displayed block; "+doc.policyOrFramework().words().renderFix).Err())
+			failures = append(failures, finding(doc.policyOrFramework(), diagnostic.DocRendered, doc.Path, line).Text("", "compiled source differs from the displayed block; "+doc.policyOrFramework().words().renderFix).Err())
 		}
 	}
 	return safeerror.Join("documentation check failed", failures...)
 }
 
 // Render rewrites each document whose bound blocks differ from their sources,
-// byte for byte outside the replaced block bodies, and writes nothing else.
+// byte for byte outside the replaced block bodies, and writes nothing else. It
+// opens every target for writing before it writes any, so a target that cannot be
+// written leaves every document unchanged. A failure while writing names the
+// documents already written and the one that failed.
 func Render(root string, documents []Document) error {
+	type target struct {
+		path string
+		data []byte
+		file *os.File
+	}
+	var targets []target
+	defer func() {
+		for _, t := range targets {
+			if t.file != nil {
+				t.file.Close()
+			}
+		}
+	}()
 	for _, document := range documents {
 		if bytes.Equal(document.Original, document.Rendered) {
 			continue
@@ -157,17 +183,28 @@ func Render(root string, documents []Document) error {
 		if err != nil {
 			return err
 		}
-		err = file.Truncate(0)
+		targets = append(targets, target{document.Path, document.Rendered, file})
+	}
+	var written []string
+	for i := range targets {
+		t := &targets[i]
+		err := t.file.Truncate(0)
 		if err == nil {
-			_, err = file.Write(document.Rendered)
+			_, err = t.file.Write(t.data)
 		}
-		closeErr := file.Close()
+		closeErr := t.file.Close()
+		t.file = nil
+		if err == nil {
+			err = closeErr
+		}
 		if err != nil {
-			return err
+			already := "no other document was written"
+			if len(written) > 0 {
+				already = "already written: " + strings.Join(written, ", ")
+			}
+			return diagnostic.DocFile.At(t.path, 0, 0).Say("document", "could not be written").To("make it writable and run render again; " + already).Caused(err)
 		}
-		if closeErr != nil {
-			return closeErr
-		}
+		written = append(written, t.path)
 	}
 	return nil
 }
@@ -194,7 +231,7 @@ func documentPaths(root string) ([]string, error) {
 		relative = filepath.ToSlash(relative)
 		owned := teachingPath(relative)
 		// An owned tree has no name-based exclusions. Never open secret inputs.
-		if strings.HasPrefix(entry.Name(), ".env") {
+		if strings.HasPrefix(strings.ToLower(entry.Name()), ".env") {
 			if owned {
 				return diagnostic.DocFile.At(relative, 0, 0).Say("secret input", "found inside a teaching directory").To("move it outside the teaching tree").Err()
 			}
@@ -298,10 +335,10 @@ func parseDocument(policy Policy, cache *markdown.Cache, name string, data []byt
 	for _, block := range parsed.Blocks {
 		trimmed := strings.TrimSpace(block.Text)
 		fail := func(rule diagnostic.Rule, message string) (Document, error) {
-			return Document{}, rule.At(name, block.First, 0).Text("", message).Err()
+			return Document{}, finding(policy, rule, name, block.First).Text("", message).Err()
 		}
 		binding := func(message string) {
-			result.BindingErrors = append(result.BindingErrors, diagnostic.DocBinding.At(name, block.First, 0).Text("", message).Err())
+			result.BindingErrors = append(result.BindingErrors, finding(policy, diagnostic.DocBinding, name, block.First).Text("", message).Err())
 		}
 		if block.Kind == markdown.Comment {
 			if strings.HasPrefix(trimmed, "<!-- go-source:") || trimmed == "<!-- compiled-examples -->" || strings.HasPrefix(trimmed, "<!-- orm-example:") {
@@ -410,7 +447,11 @@ func parseDocument(policy Policy, cache *markdown.Cache, name string, data []byt
 				if block.Info == "typescript" || block.Info == "tsx" {
 					label = "TypeScript"
 				}
-				binding(label + " block has no compiled source; " + words.bindHint)
+				message := label + " block has no compiled source; " + words.bindHint
+				if !executable(block.Info) {
+					message += " If it is not code, retag it sh or json, or write it as prose."
+				}
+				binding(message)
 			}
 			continue
 		}
@@ -443,7 +484,7 @@ func parseDocument(policy Policy, cache *markdown.Cache, name string, data []byt
 		if source.language != block.Info {
 			return fail(diagnostic.DocMarker, "compiled source language differs from the fence tag; use the source language tag.")
 		}
-		example.bound()
+		example.bound(selected.text)
 		result.Inclusions = append(result.Inclusions, Inclusion{Document: name, Line: previous.First, Source: match[1], Region: match[2], First: selected.first, Last: selected.last})
 		// Body lines keep the document's own line ending and the opener's
 		// container prefix; an empty line carries no trailing whitespace.
@@ -503,7 +544,7 @@ func parseDocument(policy Policy, cache *markdown.Cache, name string, data []byt
 	for _, inline := range parsed.Inlines {
 		if inline.Kind == markdown.HTML && markdown.HasCodeElement(inline.Text) && !reported[inline.First] {
 			reported[inline.First] = true
-			result.BindingErrors = append(result.BindingErrors, diagnostic.DocBinding.At(name, inline.First, 0).Text("", "inline <pre> or <code> HTML in prose is unsupported; use backticks for a code span or a fenced block with a language tag").Err())
+			result.BindingErrors = append(result.BindingErrors, finding(policy, diagnostic.DocBinding, name, inline.First).Text("", "inline <pre> or <code> HTML in prose is unsupported; use backticks for a code span or a fenced block with a language tag").Err())
 		}
 	}
 	example.finish(&result, name)
@@ -546,14 +587,50 @@ func executableTeaching(name, code string) bool {
 type exampleRegion struct {
 	open, seen bool
 	begin      int
-	blocks     int
-	lines      []string
+	// fences counts every fence of the region, blocks those that are bound, and
+	// code the bound blocks that hold a line of code.
+	fences, blocks, code int
+	lines                []string
 }
 
-func (r *exampleRegion) bound() {
+// bound records a bound block; text is the source region it displays.
+func (r *exampleRegion) bound(text string) {
 	if r.open {
 		r.blocks++
+		if hasCode(text) {
+			r.code++
+		}
 	}
+}
+
+// hasCode reports whether text has a line that is neither blank nor only a comment
+// (Go, TypeScript and TSX share // and /* */ comments).
+func hasCode(text string) bool {
+	inBlock := false
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		for line != "" {
+			if inBlock {
+				end := strings.Index(line, "*/")
+				if end < 0 {
+					line = ""
+					break
+				}
+				inBlock = false
+				line = strings.TrimSpace(line[end+2:])
+				continue
+			}
+			if strings.HasPrefix(line, "//") {
+				line = ""
+			} else if strings.HasPrefix(line, "/*") {
+				inBlock = true
+				line = line[2:]
+			} else {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (r *exampleRegion) fail(result *Document, name string, line int, message string) {
@@ -570,7 +647,7 @@ func (r *exampleRegion) observe(result *Document, name string, block markdown.No
 			case match[1] == "begin" && (r.open || r.seen):
 				r.fail(result, name, block.First, "duplicate "+workedExample+" region; keep one region per skill.")
 			case match[1] == "begin":
-				r.open, r.seen, r.begin, r.blocks, r.lines = true, true, block.First, 0, nil
+				*r = exampleRegion{open: true, seen: true, begin: block.First}
 			case !r.open:
 				r.fail(result, name, block.First, workedExample+" region ends without a matching begin marker; add the begin marker above the region.")
 			default:
@@ -579,6 +656,9 @@ func (r *exampleRegion) observe(result *Document, name string, block markdown.No
 			}
 			return true
 		}
+	}
+	if r.open && block.Kind == markdown.Fence {
+		r.fences++
 	}
 	if !r.open || block.Kind == markdown.Fence || block.Kind == markdown.Comment && strings.HasPrefix(trimmed, "<!-- compiled-source") {
 		return false
@@ -599,7 +679,11 @@ func (r *exampleRegion) check(result *Document, name string, end int) {
 	switch {
 	case r.blocks > 0 && statement:
 		r.fail(result, name, r.begin, workedExample+" region holds a bound block and also says there is no worked example; remove the statement.")
+	case r.code > 0:
 	case r.blocks > 0:
+		r.fail(result, name, r.begin, workedExample+" region binds a block that holds no code, only blank lines or comments; bind a region with a declaration or statement from the application's own code.")
+	case r.fences > 0:
+		r.fail(result, name, r.begin, workedExample+" region holds a fence that is not bound; bind it with <!-- compiled-source: path#region -->, or remove it so the region holds exactly the statement \""+noWorkedExample+"\" and one Foundry guides line.")
 	case len(r.lines) == 0:
 		r.fail(result, name, r.begin, workedExample+" region is empty; bind a block from the application's own code with <!-- compiled-source: path#region -->, or write \""+noWorkedExample+"\" followed by a Foundry guides line naming one recipe anchor.")
 	case len(r.lines) == 2 && r.lines[0] == noWorkedExample && noWorkedExampleGuide.MatchString(r.lines[1]):

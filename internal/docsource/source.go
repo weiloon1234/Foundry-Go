@@ -2,6 +2,7 @@
 package docsource
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -33,14 +34,17 @@ func readSource(policy Policy, root, document, name string) (source, error) {
 	if err != nil {
 		return source{}, err
 	}
-	return loadSource(root, name, language)
+	return loadSource(policy, root, name, language)
 }
 
 // loadSource reads an approved file and parses its regions.
-func loadSource(root, name, language string) (source, error) {
+func loadSource(policy Policy, root, name, language string) (source, error) {
 	data, err := markdown.ReadFile(root, name, markdown.MaxSourceBytes)
 	if err != nil {
 		return source{}, err
+	}
+	if policy.words().application && (language == "typescript" || language == "tsx") && bytes.Contains(data, []byte("@ts-nocheck")) {
+		return source{}, safeerror.New(fmt.Sprintf("source %q is not bindable: it contains @ts-nocheck, which would hide the file from the application's type-check; remove it or bind another file", name))
 	}
 	parsed, err := parseSource(string(data), language)
 	if err != nil {
@@ -49,7 +53,7 @@ func loadSource(root, name, language string) (source, error) {
 			line, _ = strconv.Atoi(match[1])
 			message = match[2]
 		}
-		return source{}, diagnostic.DocRegion.At(name, line, 0).Text("", message).Err()
+		return source{}, finding(policy, diagnostic.DocRegion, name, line).Text("", message).Err()
 	}
 	parsed.bytes = len(data)
 	return parsed, nil

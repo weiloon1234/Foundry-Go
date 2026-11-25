@@ -8,16 +8,22 @@
   region; the closed fence-tag list, the no-indented-code rule and the shape limits
   apply. Go sources are bindable under `internal/`, `cmd/` and `examples/`, TypeScript
   and TSX under `web/` and `client/tests/`; generated files, `*.d.ts`, `node_modules`,
-  `dist`, `testdata`, `deploy`, `config`, nested modules, symlinks and `.env*` are
-  refused, and a test file only from the `testing` skill. A Go source must belong to a
+  `dist`, `testdata`, `deploy`, `config`, nested modules, symlinks, `.env*` and
+  TypeScript files with `@ts-nocheck` are refused (names compare without regard to case),
+  and a test file (`_test.go`, `*.test.ts(x)`, `*.spec.ts(x)`, TypeScript below a `tests`
+  directory) only from the `testing` skill. A Go source must belong to a
   package of the module (one offline `go list -find` per run, only when a document binds
-  Go). A skill's app-owned `worked-example` region holds a bound block or the explicit
-  statement that the application has no such code with a `Foundry guides:` recipe
+  Go). A skill's app-owned `worked-example` region holds a bound block with a line of code,
+  or exactly the explicit statement that the application has no such code with a `Foundry guides:` recipe
   reference; an empty or vague region is a `doc-worked-example` finding. TSX regions
   wrap whole declarations; a marker inside JSX is refused. New commands:
-  `foundry docs render [--check] [--dir .]` writes the bound blocks and nothing else,
-  and `foundry docs bindings --language go|typescript` lists the bound sources, one
-  module-relative path per line, for the application's TypeScript convention test.
+  `foundry docs render [--check] [--dir .]` writes the bound blocks and nothing else
+  (all or nothing: any other binding finding, or a target that cannot be written, stops
+  it before a file changes), and `foundry docs bindings --language go|typescript` lists
+  the bound sources, one module-relative path per line, for the application's TypeScript
+  convention test, and exits non-zero with the findings when a document has one. A finding
+  raised for an application points at the application recipe of the tooling guide, and a
+  failed `go list` prints the first line of its message.
   Application effect at the next pin: see the compatibility policy.
 - Retired-names ledger completeness: `make generate` records the exported API of
   the importable packages (`internal/retirement/exported-surface.txt`; an alias lists

@@ -330,10 +330,14 @@ An application binds only its own handwritten code:
 
 Refused: generated files (`*_foundry.gen.*`, `client/generated`), `*.d.ts`, anything
 below a `node_modules`, `dist`, `testdata`, `deploy` or `config` directory, a file of
-a nested Go module, a symlink, a path starting `.env`, and any path outside the
-application root. A test file (`_test.go`, `*.test.ts`, `*.test.tsx`) is bindable only
+a nested Go module, a path that is or passes through a symlink, a path segment starting
+`.env`, a TypeScript or TSX file that contains `@ts-nocheck`, and any path outside the
+application root. Directory and `.env` names compare without regard to case, because
+the file systems these repositories live on ignore it. A test file is bindable only
 from the `testing` skill (`.claude/skills/testing/`), because a test is the lesson of
-exactly one task; every other skill binds the code under test.
+exactly one task; every other skill binds the code under test. Test files are
+`_test.go`, `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx` and any TypeScript or
+TSX file below a `tests` directory (so `client/tests/` belongs to the testing skill).
 
 A Go source must belong to a package of the module that the default build compiles.
 `docs check` lists the module once per run with `go list -find` in the same offline
@@ -358,15 +362,36 @@ go tool foundry docs bindings --language typescript --dir .
 ```
 
 `docs render` writes the bound blocks of the application's documents from their source
-regions, byte for byte outside the replaced block bodies, and nothing else. It writes
-nothing when any document is refused. `docs render --check` reports what `docs check`
-reports for bindings (path policy, regions, equality, the worked-example region, Go
-membership) and changes nothing. `docs bindings --language go|typescript` prints the
-source files the documents bind in that language (`typescript` includes TSX): one
-module-root-relative, slash-separated path per line, sorted, without duplicates, a
-newline after each, and nothing else on standard output; it prints nothing when there
-are none. A refusal prints its finding on standard error, exits non-zero and prints no
-path.
+regions, byte for byte outside the replaced block bodies, and nothing else. It is all or
+nothing. It first runs the binding check of `docs check` without the toolchain, and when
+any document has any finding other than a block that differs from its source (an unbound
+fence, an unknown tag, indented code, a refused or unreadable source, a missing region,
+an empty or invalid `worked-example` region) it writes nothing, prints every finding and
+exits non-zero. It then prepares the new content of every document and opens every
+target for writing, a regular file inside the module, before it writes the first; a
+target that cannot be written stops it with nothing changed. A failure while writing,
+which no check can exclude across several files, names the documents already written and
+the one that failed; running it again finishes the work. It prints "rendered" only after
+every document was written. `docs render --check` reports what `docs check` reports for
+bindings (path policy, regions, equality, the worked-example region, Go membership) and
+changes nothing. `docs bindings --language go|typescript` prints the source files the
+documents bind in that language (`typescript` includes TSX): one module-root-relative,
+slash-separated path per line, sorted, without duplicates, a newline after each, and
+nothing else on standard output; it prints nothing when there are none. When any
+document has a binding finding (the same set as `render`) it prints the findings on
+standard error, exits non-zero and prints no path.
+
+The walk that finds the application's documents reads `AGENTS.md` files and the Markdown
+below `.claude/skills`. It does not visit the `.agents/skills` mirror (a symlink to
+`.claude/skills` for other agents, so each document would be read twice), nested Go
+modules (a directory with its own `go.mod` is another application), the directories
+`.git`, `.cache`, `.codex`, `node_modules`, `vendor`, `bin`, `build`, `dist`, `target`,
+`coverage`, `__pycache__`, `.next`, `.nuxt`, `.output`, `.venv`, `testdata`, `.npm`,
+`.yarn`, `.pnpm-store`, `.turbo`, `.parcel-cache`, `.pytest_cache` and `.mypy_cache`, or
+any file or directory whose name contains a `YYYYMMDD` or `YYYY-MM-DD` date (dated
+records). A fence in a document under one of these is not checked. A file that some
+other tool generated cannot be recognised by its name, so only the names above are
+refused: keep generated code out of the roots a skill binds.
 
 <a id="worked-example"></a>
 A skill can carry an app-owned region named `worked-example`, delimited by the two
@@ -384,8 +409,9 @@ region is the application's baseline's decision, not the command's.
 <!-- app-owned:end worked-example -->
 ````
 
-The first state holds at least one bound block; a lead sentence may stand beside it. The
-second says that the application has no such code yet:
+The first state holds at least one bound block whose region has a line that is neither
+blank nor only a comment; a lead sentence may stand beside it. The second says that the
+application has no such code yet:
 
 ````markdown
 <!-- app-owned:begin worked-example -->
@@ -397,24 +423,64 @@ Foundry guides: `model-declarations#recipe-declare-table`
 
 The statement is exactly that sentence and one `Foundry guides:` line naming one
 `guide#recipe-*` anchor, which `docs check` resolves in the pinned framework like any
-other reference. An empty region, any other text, a second guide, an anchor that is not
-a recipe, or the statement beside a bound block is a `doc-worked-example` finding. The
-marker lines and the bound block belong to the application: re-point the directive at the
-application's own file and region, then run `docs render`.
+other reference; the region holds nothing else, no fence of any tag and no other prose. An
+empty region, a bound block whose region is blank or only comments, any other text, a
+fence beside the statement, a second guide, an anchor that is not a recipe, or the
+statement beside a bound block is a `doc-worked-example` finding. The marker lines and
+the bound block belong to the application: re-point the directive at the application's
+own file and region, then run `docs render`.
 
 For TypeScript and TSX, `docs check` proves the path policy, that the file is a regular
-file inside the module, that the markers are real line comments outside JSX and
-literals, and that the block equals its region. It does not prove that the file
-type-checks or that a tsconfig covers it: Go does not read tsconfig files and never runs
-Node. An application with TypeScript bindings therefore owns a convention test in its
+file inside the module without a symlink on its path, that it does not contain
+`@ts-nocheck`, that the markers are real line comments outside JSX and literals, and that
+the block equals its region. It does not prove that the file type-checks or that a
+tsconfig covers it: Go does not read tsconfig files and never runs Node, and a
+malformed TSX file with a valid marker still binds. An application with TypeScript bindings therefore owns a convention test in its
 TypeScript suite. The test runs `go tool foundry docs bindings --language typescript --dir <module root>`,
 fails when the command exits non-zero, splits standard output into its paths, and asserts
 that every path is among the source files of the application's type-checked program (the
-union of the programs its type-check gate builds, read with the TypeScript compiler API).
+union of the programs its type-check gate builds, read with the TypeScript compiler API),
+and that the gate that runs those programs is part of the application's verification.
 A bound file that no program loads would otherwise show code the compiler never saw.
 
 Findings use the rules `doc-binding`, `doc-marker`, `doc-region`, `doc-rendered`,
-`doc-inputs` and `doc-worked-example` of [Read a check finding](#diagnostic-rules).
+`doc-inputs` and `doc-worked-example` of [Read a check finding](#diagnostic-rules). A
+finding raised for an application's documents points at this recipe; the same rule
+raised for the framework's own guides points at the framework-author recipe. Each
+finding and its fix:
+
+- `doc-binding`, "block has no compiled source": a `go`, `typescript` or `tsx` fence has
+  no directive. Move the code into a handwritten file under `internal/`, `cmd/`,
+  `examples/`, `web/` or `client/tests/`, mark the lines to show with
+  `// doc-example:begin name` and `// doc-example:end name`, put
+  `<!-- compiled-source: path#name -->` directly above the fence, and run `docs render`.
+  A `text` or `markdown` fence that looks like code gets the same finding: bind it as
+  code, or if it is not code, retag it `sh` or `json`, or write it as prose. An unknown
+  tag, indented code and an HTML `pre` or `code` element are also `doc-binding`
+  findings: use a fence with a tag of the closed list.
+- `doc-rendered`, "differs from the displayed block": the source changed after the block
+  was written, or someone edited the block by hand. Run `docs render`; never edit a
+  bound block.
+- `doc-marker`, "is not bindable" or "cannot be read": the directive names a path the
+  policy refuses (outside the roots, generated, a declaration file, a refused
+  directory, a test file outside the `testing` skill, a secret input, a nested module,
+  a symlink, a file with `@ts-nocheck`) or a file that is gone. Bind a handwritten
+  file the policy allows, or restore the file. A directive must stand alone on its
+  line directly above a fence of the source's language.
+- `doc-region`, "missing source region" or a marker finding in the source: the region
+  name does not exist in the file, or its markers are wrong. Markers are standalone
+  `// doc-example:begin name` and `// doc-example:end name` line comments, outside
+  string and template literals and block comments. In TSX a line comment cannot sit
+  inside JSX, so wrap whole declarations, a component or hook function or the
+  statements before its `return`.
+- `doc-inputs`, "not a compiler input": a bound Go file is not in a package of this
+  module that the default build compiles (a build tag, a platform suffix, a
+  directory without a package). Bind a file the default build compiles. When `go list`
+  itself fails (for example two package names in one directory), the command prints a
+  plain error that ends with the first line of go's message; fix the package it names.
+- `doc-worked-example`: the `worked-example` region is empty, holds a bound block with
+  no code, holds text other than the explicit statement, or holds a fence beside the
+  statement. Fix it to one of the two states above.
 
 <a id="recipe-declare-command"></a>
 ## Commands and bootstrap
@@ -753,47 +819,50 @@ The rule IDs are stable output. `foundry routes check`, `foundry models check`,
 `foundry docs check`, the framework's `make docs-check` and
 `go run ./internal/cmd/exportsurface` (the `make generate-check` step that checks the
 retired-names ledger) print these rules, and a
-rule's guide and anchor are validated by `make docs-check`:
+rule's guide and anchor are validated by `make docs-check`. The last column names the
+anchor that a finding raised for an application's own documents teaches when it differs
+from the framework's; the table must state it exactly and `make docs-check` refuses a
+mismatch:
 
-| Rule | Check | Teaching |
-| --- | --- | --- |
-| `route-nesting` | `routes check` | `flat-routes#staged-routes` |
-| `route-helper` | `routes check` | `flat-routes#generated-helpers` |
-| `route-helper-missing` | `routes check` | `flat-routes#generated-helpers` |
-| `model-table` | `models check` | `model-declarations#recipe-declare-table` |
-| `raw-sql` | `lint --no-raw` | `database-runtime#no-raw-policy` |
-| `generated-stale` | `generate --check` | `model-declarations#recipe-stale-declarations` |
-| `generate-declaration` | `generate` | `model-declarations#diagnose-declarations` |
-| `guides-declaration` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
-| `anchor-invalid` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
-| `anchor-duplicate` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
-| `anchor-missing` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
-| `guide-name` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
-| `guide-missing` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |
-| `retired-command` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
-| `retired-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
-| `ambiguous-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
-| `ledger-shape` | `exportsurface` | `developer-tooling-and-testing#retired-names` |
-| `removal-unledgered` | `exportsurface` | `developer-tooling-and-testing#retired-names` |
-| `ledger-entry-lost` | `exportsurface` | `developer-tooling-and-testing#retired-names` |
-| `surface-stale` | `exportsurface` | `developer-tooling-and-testing#retired-names` |
-| `doc-limit` | `docs check` | `developer-tooling-and-testing#document-limits` |
-| `doc-file` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |
-| `doc-comment` | `docs check` | `developer-tooling-and-testing#document-limits` |
-| `doc-rendered` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-marker` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-region` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-binding` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-section-anchor` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-agent-entry` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-inputs` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-worked-example` | `docs check` | `developer-tooling-and-testing#recipe-application-documents` |
-| `doc-link` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-milestone` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |
-| `doc-model-example` | `checkdocs` | `model-declarations#recipe-declare-table` |
-| `fixture-go-version` | `checkdocs` | `developer-tooling-and-testing#documentation-gate` |
-| `blueprint-numbered` | `checkdocs` | `developer-tooling-and-testing#documentation-gate` |
-| `rule-catalogue` | `checkdocs` | `developer-tooling-and-testing#diagnostic-rules` |
+| Rule | Check | Teaching | In an application |
+| --- | --- | --- | --- |
+| `route-nesting` | `routes check` | `flat-routes#staged-routes` |  |
+| `route-helper` | `routes check` | `flat-routes#generated-helpers` |  |
+| `route-helper-missing` | `routes check` | `flat-routes#generated-helpers` |  |
+| `model-table` | `models check` | `model-declarations#recipe-declare-table` |  |
+| `raw-sql` | `lint --no-raw` | `database-runtime#no-raw-policy` |  |
+| `generated-stale` | `generate --check` | `model-declarations#recipe-stale-declarations` |  |
+| `generate-declaration` | `generate` | `model-declarations#diagnose-declarations` |  |
+| `guides-declaration` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |  |
+| `anchor-invalid` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |  |
+| `anchor-duplicate` | `docs check` | `developer-tooling-and-testing#recipe-author-examples` |  |
+| `anchor-missing` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |  |
+| `guide-name` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |  |
+| `guide-missing` | `docs check` | `developer-tooling-and-testing#recipe-reference-guides` |  |
+| `retired-command` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
+| `retired-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
+| `ambiguous-api` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
+| `ledger-shape` | `exportsurface` | `developer-tooling-and-testing#retired-names` |  |
+| `removal-unledgered` | `exportsurface` | `developer-tooling-and-testing#retired-names` |  |
+| `ledger-entry-lost` | `exportsurface` | `developer-tooling-and-testing#retired-names` |  |
+| `surface-stale` | `exportsurface` | `developer-tooling-and-testing#retired-names` |  |
+| `doc-limit` | `docs check` | `developer-tooling-and-testing#document-limits` |  |
+| `doc-file` | `docs check` | `developer-tooling-and-testing#pinned-documentation-checks` |  |
+| `doc-comment` | `docs check` | `developer-tooling-and-testing#document-limits` |  |
+| `doc-rendered` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-marker` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-region` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-binding` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-section-anchor` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |  |
+| `doc-agent-entry` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |  |
+| `doc-inputs` | `checkdocs`, `docs check` | `developer-tooling-and-testing#recipe-author-examples` | `developer-tooling-and-testing#recipe-application-documents` |
+| `doc-worked-example` | `docs check` | `developer-tooling-and-testing#recipe-application-documents` |  |
+| `doc-link` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |  |
+| `doc-milestone` | `checkdocs` | `developer-tooling-and-testing#recipe-author-examples` |  |
+| `doc-model-example` | `checkdocs` | `model-declarations#recipe-declare-table` |  |
+| `fixture-go-version` | `checkdocs` | `developer-tooling-and-testing#documentation-gate` |  |
+| `blueprint-numbered` | `checkdocs` | `developer-tooling-and-testing#documentation-gate` |  |
+| `rule-catalogue` | `checkdocs` | `developer-tooling-and-testing#diagnostic-rules` |  |
 
 <a id="documentation-gate"></a>
 ### Framework-only documentation rules

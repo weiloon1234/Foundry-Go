@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -31,7 +32,7 @@ func TestModulePackagesFillsFileListsAndHonoursBuildTags(t *testing.T) {
 	write("internal/pages/tagged.go", "//go:build neverselected\n\npackage pages\n")
 	write("nested/go.mod", "module example.test/nested\n\ngo 1.22\n")
 	write("nested/nested.go", "package nested\n")
-	data, err := ModulePackages(context.Background(), Options{Dir: root, Timeout: time.Minute})
+	data, _, err := ModulePackages(context.Background(), Options{Dir: root, Timeout: time.Minute})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +55,43 @@ func TestModulePackagesFillsFileListsAndHonoursBuildTags(t *testing.T) {
 }
 
 func TestModulePackagesReportsAnUnlistableModule(t *testing.T) {
-	if _, err := ModulePackages(context.Background(), Options{Dir: t.TempDir(), Timeout: time.Minute}); err == nil {
+	if _, _, err := ModulePackages(context.Background(), Options{Dir: t.TempDir(), Timeout: time.Minute}); err == nil {
 		t.Fatal("listed a directory without a module")
+	}
+}
+
+func TestModulePackagesReportsTheFirstLineOfThePackageError(t *testing.T) {
+	root := t.TempDir()
+	for name, text := range map[string]string{
+		"go.mod":              "module example.test/app\n\ngo 1.22\n",
+		"internal/p/one.go":   "package one\n",
+		"internal/p/two.go":   "package two\n",
+		"internal/ok/page.go": "package ok\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name), []byte(text), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, first, err := ModulePackages(context.Background(), Options{Dir: root, Timeout: time.Minute})
+	if err == nil || !strings.Contains(first, "found packages one") || strings.Contains(first, "\n") {
+		t.Fatalf("%v: %q", err, first)
+	}
+}
+
+func TestFirstLineIsBoundedAndPrintable(t *testing.T) {
+	for name, test := range map[string]struct{ in, want string }{
+		"empty":        {"", ""},
+		"blank lines":  {"\n \n", ""},
+		"first only":   {"one\ntwo\n", "one"},
+		"skips blanks": {"\n\n  two  \nthree", "two"},
+		"controls":     {"a\x1b[31mb\x00c\td", "a[31mbcd"},
+		"long":         {strings.Repeat("x", 500), strings.Repeat("x", maxListDiagnosticBytes) + "..."},
+	} {
+		if got := firstLine([]byte(test.in)); got != test.want {
+			t.Errorf("%s: %q, want %q", name, got, test.want)
+		}
 	}
 }

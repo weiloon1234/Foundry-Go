@@ -98,7 +98,9 @@ func renderDocs(ctx context.Context, dir, goBinary string, check bool, stdout io
 		_, err := fmt.Fprintln(stdout, "Bound documentation blocks equal their source regions.")
 		return err
 	}
-	documents, err := docsource.LoadDocuments(docsource.ApplicationPolicy(), root, names, markdown.NewCache())
+	// Render is all or nothing: any binding finding except a block that differs
+	// from its source (what render fixes) stops it before a file is touched.
+	documents, err := boundDocuments(root, names, markdown.NewCache())
 	if err != nil {
 		return err
 	}
@@ -128,7 +130,7 @@ func runDocsBindings(ctx context.Context, args []string, stdout, stderr io.Write
 	if err != nil {
 		return err
 	}
-	documents, err := docsource.LoadDocuments(docsource.ApplicationPolicy(), root, names, markdown.NewCache())
+	documents, err := boundDocuments(root, names, markdown.NewCache())
 	if err != nil {
 		return err
 	}
@@ -186,19 +188,38 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 // application's own source: path policy, regions, equality with the rendered
 // block, the worked-example region, and Go membership in a package of the module.
 func checkBindings(ctx context.Context, root, goBinary string, names []string, cache *markdown.Cache) error {
-	documents, loadErr := docsource.LoadDocuments(docsource.ApplicationPolicy(), root, names, cache)
-	failures := []error{loadErr, docsource.CheckBindings(documents), docsource.Check(documents)}
+	documents, err := boundDocuments(root, names, cache)
+	failures := []error{err, docsource.Check(documents)}
 	if len(docsource.Bindings(documents, "go")) > 0 {
 		// One offline listing per run proves Go membership; a document that binds
 		// no Go source needs no toolchain.
-		listing, err := doctor.ModulePackages(ctx, doctor.Options{Dir: root, Go: goBinary, Timeout: time.Minute})
+		listing, toolMessage, err := doctor.ModulePackages(ctx, doctor.Options{Dir: root, Go: goBinary, Timeout: time.Minute})
 		if err != nil {
-			failures = append(failures, err)
+			failures = append(failures, packageListFailure(toolMessage))
 		} else {
 			failures = append(failures, docsource.CheckGoInputs(root, documents, bytes.NewReader(listing)))
 		}
 	}
 	return safeerror.Join("documentation check failed", failures...)
+}
+
+// boundDocuments loads the documents and reports every binding finding that needs
+// no toolchain and that a render cannot fix: an unbound or malformed block, a
+// source that is refused or cannot be read, a region, the worked-example region.
+// It does not report a block that differs from its source, which render repairs.
+func boundDocuments(root string, names []string, cache *markdown.Cache) ([]docsource.Document, error) {
+	documents, loadErr := docsource.LoadDocuments(docsource.ApplicationPolicy(), root, names, cache)
+	return documents, safeerror.Join("documentation check failed", loadErr, docsource.CheckBindings(documents))
+}
+
+// packageListFailure words a failed package listing for the docs commands, with
+// the first line of the tool's own message when it gave one.
+func packageListFailure(toolMessage string) error {
+	message := "The packages of the application module could not be listed. Check --dir and that `go list ./...` works offline in the module"
+	if toolMessage != "" {
+		message += ": " + toolMessage
+	}
+	return safeerror.New(message)
 }
 
 // activeDocuments lists the module-relative, slash-separated names of the

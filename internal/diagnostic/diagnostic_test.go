@@ -12,7 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-var rule = Rule{"sample-rule", "sample-guide", "sample-anchor"}
+var rule = Rule{"sample-rule", "sample-guide", "sample-anchor", ""}
 
 func TestFindingShape(t *testing.T) {
 	for _, test := range []struct {
@@ -41,6 +41,31 @@ func TestFindingShape(t *testing.T) {
 		if strings.Contains(test.d.String(), ":0") {
 			t.Errorf("%s prints a zero location: %q", test.name, test.d)
 		}
+	}
+}
+
+func TestApplicationFindingsTeachTheApplicationReference(t *testing.T) {
+	both := Rule{"both-rule", "sample-guide", "sample-anchor", "app-anchor"}
+	skills := Skills{"sample-guide#app-anchor": {"web"}, "sample-guide#sample-anchor": {"author"}}
+	for _, test := range []struct {
+		name string
+		d    Diagnostic
+		want string
+	}{
+		{"framework", both.At("a.md", 1, 0).Say("x", "bad").To("fix"), "a.md:1: [both-rule] x: bad; fix. Foundry guide: sample-guide#sample-anchor"},
+		{"application", both.At("a.md", 1, 0).Say("x", "bad").To("fix").InApplication(), "a.md:1: [both-rule] x: bad; fix. Foundry guide: sample-guide#app-anchor"},
+		{"application skills", both.At("a.md", 1, 0).Say("x", "bad").To("fix").InApplication().WithSkills(skills), "a.md:1: [both-rule] x: bad; fix. Foundry guide: sample-guide#app-anchor (skill: web)"},
+		{"framework skills", both.At("a.md", 1, 0).Say("x", "bad").To("fix").WithSkills(skills), "a.md:1: [both-rule] x: bad; fix. Foundry guide: sample-guide#sample-anchor (skill: author)"},
+		{"no application anchor", rule.At("a.md", 1, 0).Say("x", "bad").To("fix").InApplication(), "a.md:1: [sample-rule] x: bad; fix. Foundry guide: sample-guide#sample-anchor"},
+	} {
+		if got := test.d.String(); got != test.want {
+			t.Errorf("%s: got %q, want %q", test.name, got, test.want)
+		}
+	}
+	// The mark survives the error round trip that commands print from.
+	found, _ := Findings(both.At("a.md", 1, 0).Say("x", "bad").InApplication().Err())
+	if len(found) != 1 || found[0].Reference() != "sample-guide#app-anchor" {
+		t.Fatalf("lost the application mark: %+v", found)
 	}
 }
 
@@ -92,7 +117,7 @@ func TestRuleCatalogueIsComplete(t *testing.T) {
 	name := regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 	seen := map[string]bool{}
 	for _, r := range Rules() {
-		if !name.MatchString(r.ID) || !name.MatchString(r.Guide) || !name.MatchString(r.Anchor) || seen[r.ID] {
+		if !name.MatchString(r.ID) || !name.MatchString(r.Guide) || !name.MatchString(r.Anchor) || r.Application != "" && (!name.MatchString(r.Application) || r.Application == r.Anchor) || seen[r.ID] {
 			t.Errorf("invalid or repeated rule %+v", r)
 		}
 		seen[r.ID] = true

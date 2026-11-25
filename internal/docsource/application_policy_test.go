@@ -1,6 +1,7 @@
 package docsource
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,12 +32,31 @@ func TestApplicationPolicyApprovesOnlyHandwrittenApplicationCode(t *testing.T) {
 		{"examples/projects/project_model.go", skill, "go", ""},
 		{"web/portals/admin/src/CountriesPage.tsx", skill, "tsx", ""},
 		{"web/shared/forms/request-body.ts", skill, "typescript", ""},
-		{"client/tests/types.ts", skill, "typescript", ""},
+		{"client/tests/types.ts", ".claude/skills/testing/SKILL.md", "typescript", ""},
+		{"web/tests/browser/admin-editor.spec.ts", ".claude/skills/testing/SKILL.md", "typescript", ""},
+		{"web/portals/admin/src/Page.spec.tsx", ".claude/skills/testing/SKILL.md", "tsx", ""},
 		{"internal/policies/admin_policy_test.go", ".claude/skills/testing/SKILL.md", "go", ""},
 		{"web/shared/forms/form-feedback.test.ts", ".claude/skills/testing/SKILL.md", "typescript", ""},
 		{"internal/policies/admin_policy_test.go", skill, "", "only from the testing skill"},
 		{"web/shared/forms/form-feedback.test.ts", skill, "", "only from the testing skill"},
 		{"web/shared/forms/form.test.tsx", skill, "", "only from the testing skill"},
+		{"client/tests/types.ts", skill, "", "only from the testing skill"},
+		{"web/tests/browser/admin-editor.spec.ts", skill, "", "only from the testing skill"},
+		{"web/shared/forms/form.spec.ts", skill, "", "only from the testing skill"},
+		{"web/portals/admin/src/Page.spec.tsx", skill, "", "only from the testing skill"},
+		{"web/tests/helpers.ts", skill, "", "only from the testing skill"},
+		{"web/shared/forms/Form.TEST.ts", skill, "", "only from the testing skill"},
+		{"internal/policies/Admin_Test.go", skill, "", "only from the testing skill"},
+		{"web/DIST/o.ts", skill, "", "dist"},
+		{"web/Node_Modules/lib/index.ts", skill, "", "files under node_modules"},
+		{"internal/Testdata/page.go", skill, "", "testdata"},
+		{"internal/Deploy/steps.go", skill, "", "deploy"},
+		{"internal/Config/settings.go", skill, "", "config"},
+		{"internal/.ENV.go", skill, "", "secret input"},
+		{"internal/.Env/x.go", skill, "", "secret input"},
+		{"client/Generated/contracts.ts", skill, "", "generated output"},
+		{"internal/models/page_model_FOUNDRY.GEN.go", skill, "", "generated output"},
+		{"web/shared/Types.D.TS", skill, "", "declaration file"},
 		{"portals.go", skill, "", "Go sources are bindable under internal/, cmd/ and examples/ only"},
 		{"web/portals/main.go", skill, "", "Go sources are bindable under internal/, cmd/ and examples/ only"},
 		{"internal/pages/page.ts", skill, "", "TypeScript and TSX sources are bindable under web/ and client/tests/ only"},
@@ -133,5 +153,87 @@ export const generic = <T,>(value: T) => value;
 	// Plain TypeScript never has JSX: a type assertion-like text is not an element.
 	if _, err := parseSource("const a = <T,>(x: T) => x;\n// doc-example:begin ok\nconst e = 1;\n// doc-example:end ok\n", "typescript"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestApplicationPolicyRefusesSymlinksAndNoCheck(t *testing.T) {
+	root := t.TempDir()
+	writeApplicationFile(t, root, "internal/pages/page.go", "package pages\n")
+	writeApplicationFile(t, root, "web/src/real/z.ts", "export const z = 1;\n")
+	writeApplicationFile(t, root, "web/src/loose.ts", "// @ts-nocheck\nexport const loose: number = 'x';\n")
+	writeApplicationFile(t, root, "web/src/loose-block.tsx", "/* @ts-nocheck */\nexport const view = <p />;\n")
+	if err := os.Symlink(filepath.Join(root, "internal/pages/page.go"), filepath.Join(root, "internal/pages/alias.go")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "web/src/real"), filepath.Join(root, "web/src/lnk")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "web/src/gone"), filepath.Join(root, "web/src/dangling")); err != nil {
+		t.Fatal(err)
+	}
+	policy := ApplicationPolicy()
+	const skill = ".claude/skills/model/SKILL.md"
+	for name, want := range map[string]string{
+		"internal/pages/alias.go":  `internal/pages/alias.go is a symbolic link; bind the real file`,
+		"web/src/lnk/z.ts":         `web/src/lnk is a symbolic link; bind the real file`,
+		"web/src/dangling/z.ts":    `web/src/dangling is a symbolic link; bind the real file`,
+		"internal/pages/page.go":   "",
+		"web/src/real/z.ts":        "",
+		"web/src/never/missing.ts": "",
+	} {
+		_, err := policy.approve(root, skill, name)
+		if want == "" && err != nil || want != "" && (err == nil || !strings.Contains(err.Error(), want)) {
+			t.Errorf("%s: %v; want %q", name, err, want)
+		}
+	}
+	for _, name := range []string{"web/src/loose.ts", "web/src/loose-block.tsx"} {
+		language, err := policy.approve(root, skill, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := loadSource(policy, root, name, language); err == nil || !strings.Contains(err.Error(), "contains @ts-nocheck, which would hide the file from the application's type-check") {
+			t.Errorf("%s: %v", name, err)
+		}
+		// The framework policy is unchanged: it does not read application TypeScript.
+		if _, err := loadSource(FrameworkPolicy(), root, name, language); err != nil {
+			t.Errorf("%s under the framework policy: %v", name, err)
+		}
+	}
+	if _, err := loadSource(policy, root, "web/src/real/z.ts", "typescript"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestApplicationFindingsTeachTheApplicationRecipe(t *testing.T) {
+	const (
+		application = "Foundry guide: developer-tooling-and-testing#recipe-application-documents"
+		author      = "Foundry guide: developer-tooling-and-testing#recipe-author-examples"
+	)
+	root := t.TempDir()
+	writeApplicationFile(t, root, "internal/pages/page.go", "package pages\n\n// doc-example:begin page\nvar x = 1\n// doc-example:end page\n")
+	for name, text := range map[string]string{
+		"doc-binding":  "```go\nvar x = 1\n```\n",
+		"doc-marker":   "<!-- compiled-source: portals.go#x -->\n```go\n```\n",
+		"doc-region":   "<!-- compiled-source: internal/pages/page.go#nowhere -->\n```go\n```\n",
+		"doc-rendered": "<!-- compiled-source: internal/pages/page.go#page -->\n```go\nold\n```\n",
+	} {
+		writeApplicationFile(t, root, ".claude/skills/a/SKILL.md", text)
+		documents, err := LoadDocuments(ApplicationPolicy(), root, []string{".claude/skills/a/SKILL.md"}, nil)
+		failure := errors.Join(err, CheckBindings(documents), Check(documents)).Error()
+		if !strings.Contains(failure, "["+name+"]") || !strings.Contains(failure, application) || strings.Contains(failure, author) {
+			t.Errorf("%s in an application: %s", name, failure)
+		}
+	}
+	// The framework policy keeps the framework-author recipe.
+	for name, text := range map[string]string{
+		"doc-binding": "```go\nvar x = 1\n```\n",
+		"doc-marker":  "<!-- compiled-source: internal/x.go#x -->\n```go\n```\n",
+	} {
+		writeApplicationFile(t, root, "docs/guides/a.md", text)
+		documents, err := LoadDocuments(FrameworkPolicy(), root, []string{"docs/guides/a.md"}, nil)
+		failure := errors.Join(err, CheckBindings(documents)).Error()
+		if !strings.Contains(failure, "["+name+"]") || !strings.Contains(failure, author) || strings.Contains(failure, application) {
+			t.Errorf("%s in the framework: %s", name, failure)
+		}
 	}
 }

@@ -91,7 +91,8 @@ func CheckGoInputs(root string, documents []Document, input io.Reader) error {
 	if err != nil {
 		return err
 	}
-	words := policyOf(documents).words()
+	policy := policyOf(documents)
+	words := policy.words()
 	data, err := markdown.ReadAll(words.inputs, input, markdown.MaxManifestBytes)
 	if err != nil {
 		return err
@@ -109,10 +110,10 @@ func CheckGoInputs(root string, documents []Document, input io.Reader) error {
 			break
 		}
 		if err != nil {
-			return diagnostic.DocInputs.At(words.inputs, 0, 0).Say("JSON", fmt.Sprintf("invalid near byte %d", decoder.InputOffset())).To("regenerate the list with go list -json in the module").Caused(err)
+			return finding(policy, diagnostic.DocInputs, words.inputs, 0).Say("JSON", fmt.Sprintf("invalid near byte %d", decoder.InputOffset())).To("regenerate the list with go list -json in the module").Caused(err)
 		}
 		if pkg.Incomplete || pkg.Error != nil || !filepath.IsAbs(pkg.Dir) {
-			return diagnostic.DocInputs.At(words.inputs, 0, 0).Say(fmt.Sprintf("package %q", pkg.Dir), "incomplete").To("regenerate the input list with go list -json in the module").Err()
+			return finding(policy, diagnostic.DocInputs, words.inputs, 0).Say(fmt.Sprintf("package %q", pkg.Dir), "incomplete").To("regenerate the input list with go list -json in the module").Err()
 		}
 		for _, group := range [][]string{pkg.GoFiles, pkg.CgoFiles, pkg.TestGoFiles, pkg.XTestGoFiles} {
 			for _, file := range group {
@@ -131,7 +132,7 @@ func checkInputs(documents []Document, extension string, inputs map[string]bool)
 	for _, document := range documents {
 		for _, inclusion := range document.Inclusions {
 			if strings.HasSuffix(inclusion.Source, extension) && !inputs[inclusion.Source] {
-				return diagnostic.DocInputs.At(inclusion.Document, inclusion.Line, 0).Say(inclusion.Source+"#"+inclusion.Region, "not a compiler input").To(document.policyOrFramework().words().inputsFix).Err()
+				return finding(document.policyOrFramework(), diagnostic.DocInputs, inclusion.Document, inclusion.Line).Say(inclusion.Source+"#"+inclusion.Region, "not a compiler input").To(document.policyOrFramework().words().inputsFix).Err()
 			}
 		}
 	}
